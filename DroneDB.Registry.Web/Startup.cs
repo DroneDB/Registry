@@ -73,8 +73,6 @@ namespace DroneDB.Registry.Web
                 .AllowAnyMethod()
                 .AllowAnyHeader());
 
-            app.UseHttpsRedirection();
-
             app.UseRouting();
 
             app.UseAuthentication();
