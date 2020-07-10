@@ -2,7 +2,7 @@
 using System.Security.Cryptography;
 using System.Text;
 
-namespace DroneDB.Registry.Common
+namespace Registry.Common
 {
     public static class Utils
     {

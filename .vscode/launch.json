@@ -10,9 +10,9 @@
             "request": "launch",
             "preLaunchTask": "build",
             // If you have changed target frameworks, make sure to update the program path.
-            "program": "${workspaceFolder}/DroneDB.Registry.Web/bin/Debug/netcoreapp3.1/DroneDB.Registry.Web.dll",
+            "program": "${workspaceFolder}/Registry.Web/bin/Debug/netcoreapp3.1/Registry.Web.dll",
             "args": [],
-            "cwd": "${workspaceFolder}/DroneDB.Registry.Web",
+            "cwd": "${workspaceFolder}/Registry.Web",
             "stopAtEntry": false,
             // Enable launching a web browser when ASP.NET Core starts. For more information: https://aka.ms/VSCode-CS-LaunchJson-WebBrowser
             "serverReadyAction": {

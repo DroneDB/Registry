@@ -17,7 +17,7 @@
         "ASPNETCORE_ENVIRONMENT": "Development"
       }
     },
-    "DroneDB.Registry.Web": {
+    "Registry.Web": {
       "commandName": "Project",
       "launchBrowser": true,
       "launchUrl": "weatherforecast",
