@@ -21,7 +21,12 @@ dotnet build
 ```
 dotnet run --project DroneDB.Registry.Web
 ```
-It will start a web server listening on two endpoints: `https://localhost:5001` and `http://localhost:5000`
+It will start a web server listening on two endpoints: `https://localhost:5001` and `http://localhost:5000`. 
+You can change the endpoints using the `urls` parameter:
+
+```
+dotnet run --project DroneDB.Registry.Web --urls="http://0.0.0.0:6000;https://0.0.0.0:6001"
+```
 
 ## Note
 
