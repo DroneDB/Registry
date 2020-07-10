@@ -14,5 +14,9 @@
     <PackageReference Include="System.IdentityModel.Tokens.Jwt" Version="6.7.1" />
   </ItemGroup>
 
+  <ItemGroup>
+    <ProjectReference Include="..\DroneDB.Registry.Common\DroneDB.Registry.Common.csproj" />
+  </ItemGroup>
+
 
 </Project>
