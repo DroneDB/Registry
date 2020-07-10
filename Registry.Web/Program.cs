@@ -21,9 +21,8 @@ namespace Registry.Web
         
         public static void Main(string[] args)
         {
-
             // We could use a library to perform command line parsing, but this is sufficient so far
-            if (args.Length == 1 && string.Compare(args[0], "--help", StringComparison.OrdinalIgnoreCase) == 0)
+            if (args.Any(a => string.Compare(a, "--help", StringComparison.OrdinalIgnoreCase) == 0 || string.Compare(a, "-h", StringComparison.OrdinalIgnoreCase) == 0))
             {
                 ShowHelp();
                 return;
@@ -38,22 +37,22 @@ namespace Registry.Web
             CreateHostBuilder(args).Build().Run();
         }
 
-        private static void ShowHelp()
+        public static void ShowHelp()
         {
             var appVersion = typeof(Program).Assembly
                 .GetCustomAttribute<AssemblyFileVersionAttribute>()
                 ?.Version;
+            var appName = System.AppDomain.CurrentDomain.FriendlyName;
 
-            Console.WriteLine();
-            Console.WriteLine($" *** Registry.Web - v{appVersion} - Help ***");
-            Console.WriteLine();
+            Console.WriteLine($"{appName} - v{appVersion}");
 
             Console.WriteLine("Hosts the API of the DroneDB Registry");
             Console.WriteLine();
-            Console.WriteLine("Supported command line switches:");
+            Console.WriteLine($"Usage: {appName} [flags]");
             Console.WriteLine();
-            Console.WriteLine("\t--urls=\"https://host:https_port;http://host:http_port\"");
-            Console.WriteLine("\tSpecifies the listening endpoints");
+            Console.WriteLine("Flags:");
+            Console.WriteLine("\t--urls\t\"https://host:https_port;http://host:http_port\"");
+            Console.WriteLine("\t\tAddresses to bind to. Defaults to \"http://localhost:5000;https://localhost:5001\"");
             Console.WriteLine();
 
         }
@@ -101,7 +100,7 @@ namespace Registry.Web
 
         }
 
-        public static IHostBuilder CreateHostBuilder(string[] args) =>
+        private static IHostBuilder CreateHostBuilder(string[] args) =>
             Host.CreateDefaultBuilder(args)
                 .ConfigureWebHostDefaults(webBuilder =>
                 {
