@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Reflection;
 using System.Threading.Tasks;
 using Registry.Common;
 using Microsoft.AspNetCore.Hosting;
@@ -21,6 +22,13 @@ namespace Registry.Web
         public static void Main(string[] args)
         {
 
+            // We could use a library to perform command line parsing, but this is sufficient so far
+            if (args.Length == 1 && string.Compare(args[0], "--help", StringComparison.OrdinalIgnoreCase) == 0)
+            {
+                ShowHelp();
+                return;
+            }
+
             if (!CheckConfig())
             {
                 Console.WriteLine(" ?> Errors occurred during config validation. Check console to find out what's wrong.");
@@ -30,6 +38,26 @@ namespace Registry.Web
             CreateHostBuilder(args).Build().Run();
         }
 
+        private static void ShowHelp()
+        {
+            var appVersion = typeof(Program).Assembly
+                .GetCustomAttribute<AssemblyFileVersionAttribute>()
+                ?.Version;
+
+            Console.WriteLine();
+            Console.WriteLine($" *** Registry.Web - v{appVersion} - Help ***");
+            Console.WriteLine();
+
+            Console.WriteLine("Hosts the API of the DroneDB Registry");
+            Console.WriteLine();
+            Console.WriteLine("Supported command line switches:");
+            Console.WriteLine();
+            Console.WriteLine("\t--urls=\"https://host:https_port;http://host:http_port\"");
+            Console.WriteLine("\tSpecifies the listening endpoints");
+            Console.WriteLine();
+
+        }
+        
         private static bool CheckConfig()
         {
 
