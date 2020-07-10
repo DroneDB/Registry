@@ -5,6 +5,7 @@ using System.Threading.Tasks;
 using DroneDB.Registry.Web.Models;
 using DroneDB.Registry.Web.Services;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 
 namespace DroneDB.Registry.Web.Controllers
@@ -28,7 +29,7 @@ namespace DroneDB.Registry.Web.Controllers
             var response = _userService.Authenticate(model);
 
             if (response == null)
-                return BadRequest(new { message = "Username or password is incorrect" });
+                return Problem(title: "Username or password is incorrect", statusCode: StatusCodes.Status403Forbidden); 
 
             return Ok(response);
         }
