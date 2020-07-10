@@ -4,7 +4,7 @@ using System.Linq;
 using System.Text.Json.Serialization;
 using System.Threading.Tasks;
 
-namespace DroneDB.Registry.Web.Models
+namespace Registry.Web.Models
 {
     /// <summary>
     /// This class represents an user

@@ -1,6 +1,6 @@
 using System;
 
-namespace DroneDB.Registry.Web.Models
+namespace Registry.Web.Models
 {
 
     // Example object to test service authentication

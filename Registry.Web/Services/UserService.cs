@@ -4,11 +4,11 @@ using System.IdentityModel.Tokens.Jwt;
 using System.Linq;
 using System.Security.Claims;
 using System.Text;
-using DroneDB.Registry.Web.Models;
+using Registry.Web.Models;
 using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
 
-namespace DroneDB.Registry.Web.Services
+namespace Registry.Web.Services
 {
     public class UserService : IUserService
     {

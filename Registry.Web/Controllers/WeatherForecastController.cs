@@ -2,12 +2,12 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
-using DroneDB.Registry.Web.Models;
+using Registry.Web.Models;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
 
-namespace DroneDB.Registry.Web.Controllers
+namespace Registry.Web.Controllers
 {
     [ApiController]
     [Authorize]

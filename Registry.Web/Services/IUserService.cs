@@ -1,7 +1,7 @@
 ﻿using System.Collections.Generic;
-using DroneDB.Registry.Web.Models;
+using Registry.Web.Models;
 
-namespace DroneDB.Registry.Web.Services
+namespace Registry.Web.Services
 {
     public interface IUserService
     {
