@@ -24,7 +24,7 @@ namespace Registry.Web.Controllers
 
         [AllowAnonymous]
         [HttpPost("authenticate")]
-        public IActionResult Authenticate([FromBody]AuthenticateRequest model)
+        public IActionResult Authenticate([FromForm]AuthenticateRequest model)
         {
             var response = _userService.Authenticate(model);
 
