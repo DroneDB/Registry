@@ -5,13 +5,14 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using Registry.Web.Models;
-using Registry.Web.Services;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.HttpsPolicy;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.FileProviders;
@@ -35,6 +36,14 @@ namespace Registry.Web
             services.AddCors();
             services.AddControllers();
 
+            services.AddDbContext<ApplicationDbContext>(options =>
+                options.UseMySql(
+                    Configuration.GetConnectionString("IdentityConnection")));
+
+            services.AddIdentityCore<User>()
+                .AddEntityFrameworkStores<ApplicationDbContext>()
+                .AddSignInManager();
+            
             // Let's use a strongly typed class for settings
             var appSettingsSection = Configuration.GetSection("AppSettings");
             services.Configure<AppSettings>(appSettingsSection);
@@ -60,7 +69,27 @@ namespace Registry.Web
                     };
                 });
 
-            services.AddScoped<IUserService, UserService>();
+            services.Configure<IdentityOptions>(options =>
+            {
+                // Password settings.
+                options.Password.RequireDigit = false;
+                options.Password.RequireLowercase = false;
+                options.Password.RequireNonAlphanumeric = false;
+                options.Password.RequireUppercase = false;
+                options.Password.RequiredLength = 1;
+                options.Password.RequiredUniqueChars = 0;
+
+                // Lockout settings.
+                options.Lockout.DefaultLockoutTimeSpan = TimeSpan.FromMinutes(5);
+                options.Lockout.MaxFailedAccessAttempts = 5;
+                options.Lockout.AllowedForNewUsers = true;
+
+                // User settings.
+                options.User.AllowedUserNameCharacters =
+                    "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-._@+";
+                options.User.RequireUniqueEmail = false;
+            });
+
         }
 
         public void Configure(IApplicationBuilder app, IWebHostEnvironment env)
@@ -79,7 +108,7 @@ namespace Registry.Web
             app.UseRouting();
 
             app.UseAuthentication();
-            app.UseAuthorization();
+            app.UseAuthorization(); 
 
             app.UseDefaultFiles();
             app.UseStaticFiles();
@@ -87,10 +116,7 @@ namespace Registry.Web
             app.UseEndpoints(endpoints =>
             {
                 endpoints.MapControllers();
-                /*endpoints.MapGet("/", context =>
-                {
-                    return context.Response.WriteAsync("Hello world");
-                });*/
+
             });
 
         }
