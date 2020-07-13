@@ -47,7 +47,7 @@ namespace Registry.Web.Controllers
         
         [AllowAnonymous]
         [HttpPost("authenticate")]
-        public async Task<IActionResult> Authenticate([FromBody]AuthenticateRequest model)
+        public async Task<IActionResult> Authenticate([FromForm]AuthenticateRequest model)
         {
 
             var response = await GetAutentication(model);
