@@ -81,7 +81,7 @@ namespace Registry.Web.Controllers
             var query = from user in _usersManager.Users
                 select new UserDto
                 {
-                    Email = user.NormalizedEmail,
+                    Email = user.Email,
                     FirstName = user.FirstName,
                     LastName = user.LastName,
                     UserName = user.UserName,
