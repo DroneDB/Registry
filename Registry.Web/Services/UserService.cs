@@ -15,7 +15,7 @@ namespace Registry.Web.Services
         // Testing
         private readonly List<User> _users = new List<User>
         {
-            new User { Id = 1, FirstName = "Test", LastName = "User", Username = "admin", Password = "password" }
+            new User { Id = 1, Username = "admin", Password = "password" }
         };
 
         private readonly AppSettings _appSettings;
