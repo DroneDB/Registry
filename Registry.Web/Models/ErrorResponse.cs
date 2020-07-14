@@ -24,18 +24,18 @@ namespace Registry.Web.Models
                 {
                     foreach (var error in errors)
                     {
-                        Console.WriteLine(error.ErrorMessage);
                         if (!string.IsNullOrEmpty(error.ErrorMessage))
                         {
-                            Error += error.ErrorMessage + ", ";
+                            Error += error.ErrorMessage + "|";
                         }
                     }
-                    if (Error.EndsWith(", ")){
-                        Error = Error.Substring(0, Error.Length - 3);
-                    }
+                    
                 }
             }
 
+            if (Error.EndsWith("|")){
+                Error = Error.Substring(0, Error.Length - 1);
+            }
             if (Error == "") Error = "Invalid";
         }
     }
