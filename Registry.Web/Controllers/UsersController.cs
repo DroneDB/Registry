@@ -29,7 +29,7 @@ namespace Registry.Web.Controllers
             var response = _userService.Authenticate(model);
 
             if (response == null)
-                return Problem(title: "Username or password is incorrect", statusCode: StatusCodes.Status403Forbidden); 
+                return StatusCode(401, new ErrorResponse("Unauthorized"));
 
             return Ok(response);
         }
