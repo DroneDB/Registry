@@ -90,6 +90,13 @@ namespace Registry.Web
                 options.User.RequireUniqueEmail = false;
             });
 
+            // Error messages that make sense
+            services.Configure<ApiBehaviorOptions>(o =>
+            {
+                o.InvalidModelStateResponseFactory = actionContext =>
+                    new BadRequestObjectResult(new ErrorResponse(actionContext.ModelState));
+            });
+
         }
 
         public void Configure(IApplicationBuilder app, IWebHostEnvironment env)
