@@ -61,6 +61,13 @@ namespace Registry.Web
                 });
 
             services.AddScoped<IUserService, UserService>();
+
+            // Error messages that make sense
+            services.Configure<ApiBehaviorOptions>(o =>
+            {
+                o.InvalidModelStateResponseFactory = actionContext => 
+                    new BadRequestObjectResult(new ErrorResponse(actionContext.ModelState));
+            });
         }
 
         public void Configure(IApplicationBuilder app, IWebHostEnvironment env)
