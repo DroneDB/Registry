@@ -82,8 +82,6 @@ namespace Registry.Web.Controllers
                 select new UserDto
                 {
                     Email = user.Email,
-                    FirstName = user.FirstName,
-                    LastName = user.LastName,
                     UserName = user.UserName,
                     Id = user.Id
                 };

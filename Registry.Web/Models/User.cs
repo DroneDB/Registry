@@ -12,9 +12,6 @@ namespace Registry.Web.Models
     /// </summary>
     public class User : IdentityUser
     {
-
-        public string FirstName { get; set; }
-        public string LastName { get; set; }
-
+        
     }
 }
