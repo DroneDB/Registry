@@ -29,11 +29,12 @@ namespace Registry.Web.Models
                             Error += error.ErrorMessage + "|";
                         }
                     }
-                    
+
                 }
             }
 
-            if (Error.EndsWith("|")){
+            if (Error.EndsWith("|"))
+            {
                 Error = Error.Substring(0, Error.Length - 1);
             }
             if (Error == "") Error = "Invalid";

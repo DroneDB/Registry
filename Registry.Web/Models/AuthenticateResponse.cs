@@ -5,9 +5,10 @@ using System.Threading.Tasks;
 
 namespace Registry.Web.Models
 {
+    
     public class AuthenticateResponse
     {
-        public int Id { get; set; }
+        public string Id { get; set; }
         public string Token { get; set; }
 
 
