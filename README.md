@@ -1,6 +1,6 @@
 # DroneDB Registry
 
-![license](https://img.shields.io/github/license/DroneDB/registry) ![commits](https://img.shields.io/github/commit-activity/m/DroneDB/registry) ![languages](https://img.shields.io/github/languages/top/DroneDB/registry) ![.NET Core](https://github.com/DroneDB/Registry/workflows/.NET%20Core/badge.svg?branch=master)
+![commits](https://img.shields.io/github/commit-activity/m/DroneDB/registry) ![languages](https://img.shields.io/github/languages/top/DroneDB/registry) ![.NET Core](https://github.com/DroneDB/Registry/workflows/.NET%20Core/badge.svg?branch=master)
 
 DroneDB Registry is a useful tool to remotely store DroneDB datasets. It features JWT authentication and implements a full REST API. 
 
