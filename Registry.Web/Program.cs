@@ -22,8 +22,9 @@ namespace Registry.Web
         public static void Main(string[] args)
         {
             // We could use a library to perform command line parsing, but this is sufficient so far
-            if (args.Any(a => string.Compare(a, "--help", StringComparison.OrdinalIgnoreCase) == 0 ||
-                              string.Compare(a, "-h", StringComparison.OrdinalIgnoreCase) == 0))
+            if (args.Any(a => 
+                    string.Equals(a, "--help", StringComparison.OrdinalIgnoreCase) ||
+                    string.Equals(a, "-h", StringComparison.OrdinalIgnoreCase)))
             {
                 ShowHelp();
                 return;
@@ -43,7 +44,7 @@ namespace Registry.Web
             var appVersion = typeof(Program).Assembly
                 .GetCustomAttribute<AssemblyFileVersionAttribute>()
                 ?.Version;
-            var appName = System.AppDomain.CurrentDomain.FriendlyName;
+            var appName = AppDomain.CurrentDomain.FriendlyName;
 
             Console.WriteLine($"{appName} - v{appVersion}");
 
