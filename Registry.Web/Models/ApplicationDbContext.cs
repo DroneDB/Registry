@@ -13,18 +13,10 @@ namespace Registry.Web.Models
     public sealed class ApplicationDbContext : IdentityDbContext<User>
     {
 
-        private static bool _created = false;
-
-
         public ApplicationDbContext(DbContextOptions<ApplicationDbContext> options)
             : base(options)
         {
-            if (!_created)
-            {
-                Database.EnsureCreated();
 
-                _created = true;
-            }
         }
 
         protected override void OnModelCreating(ModelBuilder builder)

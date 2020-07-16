@@ -18,11 +18,12 @@ namespace Registry.Web
     {
 
         const string ConfigFilePath = "appsettings.json";
-        
+
         public static void Main(string[] args)
         {
             // We could use a library to perform command line parsing, but this is sufficient so far
-            if (args.Any(a => string.Compare(a, "--help", StringComparison.OrdinalIgnoreCase) == 0 || string.Compare(a, "-h", StringComparison.OrdinalIgnoreCase) == 0))
+            if (args.Any(a => string.Compare(a, "--help", StringComparison.OrdinalIgnoreCase) == 0 ||
+                              string.Compare(a, "-h", StringComparison.OrdinalIgnoreCase) == 0))
             {
                 ShowHelp();
                 return;
@@ -37,7 +38,7 @@ namespace Registry.Web
             CreateHostBuilder(args).Build().Run();
         }
 
-        public static void ShowHelp()
+        private static void ShowHelp()
         {
             var appVersion = typeof(Program).Assembly
                 .GetCustomAttribute<AssemblyFileVersionAttribute>()
@@ -56,7 +57,7 @@ namespace Registry.Web
             Console.WriteLine();
 
         }
-        
+
         private static bool CheckConfig()
         {
 
@@ -66,7 +67,7 @@ namespace Registry.Web
                 Console.WriteLine(" -> Generating default config");
 
                 File.WriteAllText(ConfigFilePath, DefaultConfig);
-                
+
             }
 
             var jObject = JsonConvert.DeserializeObject<JObject>(File.ReadAllText(ConfigFilePath));
@@ -93,8 +94,32 @@ namespace Registry.Web
                 Console.WriteLine($" -> Generated secret: '{str}'");
 
                 File.WriteAllText(ConfigFilePath, JsonConvert.SerializeObject(jObject, Formatting.Indented));
-                
+
             }
+
+            var connectionStrings = jObject["ConnectionStrings"];
+
+            if (connectionStrings == null)
+            {
+                Console.WriteLine(" !> Cannot find ConnectionStrings section in config file");
+                return false;
+            }
+
+            var identityConnection = connectionStrings["IdentityConnection"];
+
+            if (identityConnection == null || string.IsNullOrWhiteSpace(identityConnection.Value<string>()))
+            {
+                Console.WriteLine(" !> Cannot find IdentityConnection");
+
+                connectionStrings["IdentityConnection"] = DefaultSqliteConnectionString;
+
+                Console.WriteLine(" -> Setting IdentityConnection to Sqlite default");
+                Console.WriteLine($" ?> {DefaultSqliteConnectionString}");
+
+                File.WriteAllText(ConfigFilePath, JsonConvert.SerializeObject(jObject, Formatting.Indented));
+
+            }
+
 
             return true;
 
@@ -107,22 +132,27 @@ namespace Registry.Web
                     webBuilder.UseStartup<Startup>();
                 });
 
-        private const string DefaultConfig = @"{
-  ""AppSettings"": {
+
+        private const string DefaultSqliteConnectionString = "Data Source=App_Data/identity.db;Mode=ReadWriteCreate";
+
+        private static readonly string DefaultConfig = $@"{{
+  ""AppSettings"": {{
     ""Secret"": """",
-    ""TokenExpirationInDays"": 7 
-  },
-  ""Logging"": {
-    ""LogLevel"": {
+    ""TokenExpirationInDays"": 7,
+    ""AuthProvider"": ""Sqlite""
+  }},
+  ""Logging"": {{
+    ""LogLevel"": {{
       ""Default"": ""Information"",
       ""Microsoft"": ""Warning"",
       ""Microsoft.Hosting.Lifetime"": ""Information""
-    }
-  },
+    }}
+  }},
   ""AllowedHosts"": ""*"",
-  ""ConnectionStrings"": {
-  }
-}";
+  ""ConnectionStrings"": {{
+        ""IdentityConnection"": ""{DefaultSqliteConnectionString}""
+  }}
+}}";
 
     }
 }

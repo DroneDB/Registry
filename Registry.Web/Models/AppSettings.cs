@@ -9,5 +9,14 @@ namespace Registry.Web.Models
     {
         public string Secret { get; set; }
         public int TokenExpirationInDays { get; set; }
+
+        public AuthProvider AuthProvider  {get; set;}
+    }
+
+    public enum AuthProvider
+    {
+        Sqlite,
+        Mysql,
+        Mssql
     }
 }
