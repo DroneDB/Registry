@@ -24,6 +24,8 @@ namespace Registry.Web
 {
     public class Startup
     {
+        private const string IdentityConnectionName = "IdentityConnection";
+
         public Startup(IConfiguration configuration)
         {
             Configuration = configuration;
@@ -108,21 +110,21 @@ namespace Registry.Web
 
                     services.AddDbContext<ApplicationDbContext>(options =>
                         options.UseSqlite(
-                            Configuration.GetConnectionString("IdentityConnection")));
+                            Configuration.GetConnectionString(IdentityConnectionName)));
 
                     break;
                 case AuthProvider.Mysql:
 
                     services.AddDbContext<ApplicationDbContext>(options =>
                         options.UseMySql(
-                            Configuration.GetConnectionString("IdentityConnection")));
+                            Configuration.GetConnectionString(IdentityConnectionName)));
 
                     break;
                 case AuthProvider.Mssql:
 
                     services.AddDbContext<ApplicationDbContext>(options =>
                         options.UseSqlServer(
-                            Configuration.GetConnectionString("IdentityConnection")));
+                            Configuration.GetConnectionString(IdentityConnectionName)));
 
                     break;
                 default:
@@ -161,7 +163,7 @@ namespace Registry.Web
 
         }
 
-        private static void UpdateDatabase(IApplicationBuilder app)
+        private void UpdateDatabase(IApplicationBuilder app)
         {
             using var serviceScope = app.ApplicationServices
                 .GetRequiredService<IServiceScopeFactory>()
@@ -169,8 +171,38 @@ namespace Registry.Web
             using var context = serviceScope.ServiceProvider.GetService<ApplicationDbContext>();
 
             // NOTE: We support migrations only for sqlite
-            if (context.Database.ProviderName == "Microsoft.EntityFrameworkCore.Sqlite") {
+            if (context.Database.ProviderName == "Microsoft.EntityFrameworkCore.Sqlite")
+            {
+
+                EnsureFolderCreated(Configuration.GetConnectionString(IdentityConnectionName));
+
                 context.Database.Migrate();
+            }
+        }
+
+        /// <summary>
+        /// Ensures that the sqlite database folder exists 
+        /// </summary>
+        /// <param name="connstr"></param>
+        private void EnsureFolderCreated(string connstr)
+        {
+            var segments = connstr.Split(';', StringSplitOptions.RemoveEmptyEntries);
+
+            foreach (var segment in segments)
+            {
+                var fields = segment.Split('=');
+
+                if (string.Equals(fields[0], "Data Source", StringComparison.OrdinalIgnoreCase))
+                {
+                    var dbPath = fields[1];
+
+                    var folder = Path.GetDirectoryName(dbPath);
+
+                    if (!Directory.Exists(folder))
+                    {
+                        Directory.CreateDirectory(folder);
+                    }
+                }
             }
         }
     }
