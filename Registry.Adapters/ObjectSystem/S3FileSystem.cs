@@ -45,9 +45,9 @@ namespace Registry.Adapters.ObjectSystem
             throw new NotImplementedException();
         }
 
-        public void DeleteObject(string bucket, string path)
+        public async Task DeleteObject(string bucket, string path, CancellationToken cancellationToken)
         {
-            throw new NotImplementedException();
+            await _client.RemoveObjectAsync(bucket, path, cancellationToken);
         }
 
         public bool DirectoryExists(string bucket, string path)
@@ -65,9 +65,17 @@ namespace Registry.Adapters.ObjectSystem
             throw new NotImplementedException();
         }
 
-        public bool ObjectExists(string bucket, string path)
+        public async Task<bool> ObjectExists(string bucket, string path, CancellationToken cancellationToken = default)
         {
-            throw new NotImplementedException();
+            
+            try {
+                var res = await _client.StatObjectAsync(bucket, path, null, cancellationToken);
+                return res != null;
+            // Check docs: MinioException
+            } catch (Exception e) {
+                return false;
+            }
+            
         }
 
         public string ReadAllText(string bucket, string path, Encoding encoding)

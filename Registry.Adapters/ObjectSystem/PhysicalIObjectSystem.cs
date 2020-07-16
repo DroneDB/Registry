@@ -41,12 +41,18 @@ namespace Registry.Adapters.ObjectSystem
                 throw new InvalidOperationException("Parent path separator is not supported");
         }
 
-        public void DeleteObject(string bucket, string path)
+        public Task DeleteObject(string bucket, string path, CancellationToken cancellationToken) 
         {
 
-            CheckPath(path);
+            return new Task(() => {
+                CheckPath(path);
 
-            File.Delete(Path.Combine(_baseFolder, bucket, path));
+                File.Delete(Path.Combine(_baseFolder, bucket, path));
+            
+            });
+               
+
+            
         }
 
         public bool DirectoryExists(string bucket, string path)
@@ -62,11 +68,6 @@ namespace Registry.Adapters.ObjectSystem
         public IEnumerable<string> EnumerateFolders(string bucket, string path, string searchPattern, SearchOption searchOption)
         {
             return Directory.EnumerateDirectories(Path.Combine(_baseFolder, bucket, path), searchPattern, searchOption);
-        }
-
-        public bool ObjectExists(string bucket, string path)
-        {
-            return File.Exists(Path.Combine(_baseFolder, bucket, path));
         }
 
         public string ReadAllText(string bucket, string path, Encoding encoding)
@@ -116,6 +117,13 @@ namespace Registry.Adapters.ObjectSystem
             }, cancellationToken);
             
 
+        }
+
+        public Task<bool> ObjectExists(string bucket, string path, CancellationToken cancellationToken = default)
+        {
+            return new Task<bool>(() => {
+                return File.Exists(Path.Combine(_baseFolder, bucket, path));
+            }, cancellationToken);
         }
     }
 }
