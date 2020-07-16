@@ -13,4 +13,8 @@
     <ProjectReference Include="..\Registry.Ports\Registry.Ports.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <PackageReference Include="minio" Version="3.1.13" />
+  </ItemGroup>
+
 </Project>

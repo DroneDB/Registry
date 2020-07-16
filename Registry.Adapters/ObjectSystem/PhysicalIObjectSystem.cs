@@ -1,11 +1,15 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Text;
-using Registry.Ports.FileSystem;
+using System.Threading;
+using System.Threading.Tasks;
+using Registry.Ports.FileSystem.Model;
 using Registry.Ports.ObjectSystem;
+using Registry.Ports.ObjectSystem.Model;
 
-namespace Registry.Adapters.FileSystem
+namespace Registry.Adapters.ObjectSystem
 {
     /// <summary>
     /// Physical implementation of filesystem interface
@@ -19,9 +23,9 @@ namespace Registry.Adapters.FileSystem
             _baseFolder = baseFolder;
         }
 
-        public IEnumerable<string> EnumerateBuckets(string searchPattern, SearchOption searchOption)
+        public Task<bool> BucketExistsAsync(string bucket, CancellationToken cancellationToken = default)
         {
-            return Directory.EnumerateDirectories(_baseFolder, searchPattern, searchOption);
+            return new Task<bool>(() => Directory.Exists(Path.Combine(_baseFolder, bucket)), cancellationToken);
         }
 
         public void CreateDirectory(string bucket, string path)
@@ -90,7 +94,28 @@ namespace Registry.Adapters.FileSystem
             File.WriteAllBytes(Path.Combine(_baseFolder, bucket, path), contents);
         }
 
-        
+        public Task<EnumerateBucketsResult> EnumerateBucketsAsync(CancellationToken cancellationToken = default)
+        {
 
+            return new Task<EnumerateBucketsResult>(() =>
+            {
+                var directories =  Directory.EnumerateDirectories(_baseFolder);
+
+                return new EnumerateBucketsResult
+                {
+                    // NOTE: We could create a .owner file that contains the owner of the folder to "simulate" the S3 filesystem
+                    // Better: We can create a .info file that contains the metadata and the owner of the folder
+                    Owner = "",
+                    Buckets = directories.Select(dir => new BucketInfo
+                    {
+                        Name = Path.GetDirectoryName(dir),
+                        CreationDate = Directory.GetCreationTime(dir)
+                    })
+                };
+
+            }, cancellationToken);
+            
+
+        }
     }
 }

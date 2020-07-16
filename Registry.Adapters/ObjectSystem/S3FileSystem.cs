@@ -1,17 +1,43 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Text;
-using Registry.Ports.FileSystem;
+using System.Threading;
+using System.Threading.Tasks;
+using Minio;
+using Registry.Ports.FileSystem.Model;
 using Registry.Ports.ObjectSystem;
+using Registry.Ports.ObjectSystem.Model;
 
-namespace Registry.Adapters.FileSystem
+namespace Registry.Adapters.ObjectSystem
 {
     public class S3ObjectSystem : IObjectSystem
     {
-        public IEnumerable<string> EnumerateBuckets(string searchPattern, SearchOption searchOption)
+
+        private readonly MinioClient _client;
+
+        public S3ObjectSystem(string endpoint, string accessKey = "", string secretKey = "", string region = "",
+            string sessionToken = "")
         {
-            throw new NotImplementedException();
+            _client = new MinioClient(endpoint, accessKey, secretKey, region, sessionToken);
+        }
+
+        public async Task<bool> BucketExistsAsync(string bucket, CancellationToken cancellationToken = default(CancellationToken))
+        {
+            return await _client.BucketExistsAsync(bucket, cancellationToken);
+        }
+
+        public async Task<EnumerateBucketsResult> EnumerateBucketsAsync(CancellationToken cancellationToken = default(CancellationToken))
+        {
+
+            var res = await _client.ListBucketsAsync(cancellationToken);
+
+            return new EnumerateBucketsResult
+            {
+                Buckets = res.Buckets.Select(item => new BucketInfo { CreationDate = item.CreationDateDateTime, Name = item.Name })
+            };
+
         }
 
         public void CreateDirectory(string bucket, string path)
