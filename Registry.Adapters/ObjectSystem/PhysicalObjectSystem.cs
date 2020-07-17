@@ -14,11 +14,11 @@ namespace Registry.Adapters.ObjectSystem
     /// <summary>
     /// Physical implementation of filesystem interface
     /// </summary>
-    public class PhysicalIObjectSystem : IObjectSystem
+    public class PhysicalObjectSystem : IObjectSystem
     {
         private readonly string _baseFolder;
 
-        public PhysicalIObjectSystem(string baseFolder)
+        public PhysicalObjectSystem(string baseFolder)
         {
             _baseFolder = baseFolder;
         }
