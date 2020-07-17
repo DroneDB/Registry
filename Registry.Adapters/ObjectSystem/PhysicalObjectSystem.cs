@@ -23,9 +23,99 @@ namespace Registry.Adapters.ObjectSystem
             _baseFolder = baseFolder;
         }
 
+        public async Task GetObjectAsync(string bucketName, string objectName, Action<Stream> callback, IServerEncryption sse = null,
+            CancellationToken cancellationToken = default)
+        {
+            throw new NotImplementedException();
+        }
+
+        public async Task GetObjectAsync(string bucketName, string objectName, long offset, long length, Action<Stream> cb,
+            IServerEncryption sse = null, CancellationToken cancellationToken = default)
+        {
+            throw new NotImplementedException();
+        }
+
+        public async Task PutObjectAsync(string bucketName, string objectName, Stream data, long size, string contentType = null,
+            Dictionary<string, string> metaData = null, IServerEncryption sse = null, CancellationToken cancellationToken = default)
+        {
+            throw new NotImplementedException();
+        }
+
+        public async Task RemoveObjectAsync(string bucketName, string objectName, CancellationToken cancellationToken = default)
+        {
+            throw new NotImplementedException();
+        }
+
+        public async Task<ObjectInfo> GetObjectInfoAsync(string bucketName, string objectName, IServerEncryption sse = null,
+            CancellationToken cancellationToken = default)
+        {
+            throw new NotImplementedException();
+        }
+
+        public IObservable<ObjectUpload> ListIncompleteUploads(string bucketName, string prefix = "", bool recursive = false,
+            CancellationToken cancellationToken = default)
+        {
+            throw new NotImplementedException();
+        }
+
+        public async Task RemoveIncompleteUploadAsync(string bucketName, string objectName, CancellationToken cancellationToken = default)
+        {
+            throw new NotImplementedException();
+        }
+
+        public async Task CopyObjectAsync(string bucketName, string objectName, string destBucketName, string destObjectName = null,
+            IReadOnlyDictionary<string, string> copyConditions = null, Dictionary<string, string> metadata = null, IServerEncryption sseSrc = null,
+            IServerEncryption sseDest = null, CancellationToken cancellationToken = default)
+        {
+            throw new NotImplementedException();
+        }
+
+        public async Task PutObjectAsync(string bucketName, string objectName, string filePath, string contentType = null,
+            Dictionary<string, string> metaData = null, IServerEncryption sse = null, CancellationToken cancellationToken = default)
+        {
+            throw new NotImplementedException();
+        }
+
+        public async Task GetObjectAsync(string bucketName, string objectName, string filePath, IServerEncryption sse = null,
+            CancellationToken cancellationToken = default)
+        {
+            throw new NotImplementedException();
+        }
+
+        public async Task MakeBucketAsync(string bucketName, string location, CancellationToken cancellationToken = default)
+        {
+            throw new NotImplementedException();
+        }
+
+        public async Task<ListBucketsResult> ListBucketsAsync(CancellationToken cancellationToken = default)
+        {
+            throw new NotImplementedException();
+        }
+
         public Task<bool> BucketExistsAsync(string bucket, CancellationToken cancellationToken = default)
         {
             return new Task<bool>(() => Directory.Exists(Path.Combine(_baseFolder, bucket)), cancellationToken);
+        }
+
+        public async Task RemoveBucketAsync(string bucketName, CancellationToken cancellationToken = default)
+        {
+            throw new NotImplementedException();
+        }
+
+        public IObservable<ItemInfo> ListObjectsAsync(string bucketName, string prefix = null, bool recursive = false,
+            CancellationToken cancellationToken = default)
+        {
+            throw new NotImplementedException();
+        }
+
+        public async Task<string> GetPolicyAsync(string bucketName, CancellationToken cancellationToken = default)
+        {
+            throw new NotImplementedException();
+        }
+
+        public async Task SetPolicyAsync(string bucketName, string policyJson, CancellationToken cancellationToken = default)
+        {
+            throw new NotImplementedException();
         }
 
         public void CreateDirectory(string bucket, string path)
@@ -95,14 +185,14 @@ namespace Registry.Adapters.ObjectSystem
             File.WriteAllBytes(Path.Combine(_baseFolder, bucket, path), contents);
         }
 
-        public Task<EnumerateBucketsResult> EnumerateBucketsAsync(CancellationToken cancellationToken = default)
+        public Task<ListBucketsResult> EnumerateBucketsAsync(CancellationToken cancellationToken = default)
         {
 
-            return new Task<EnumerateBucketsResult>(() =>
+            return new Task<ListBucketsResult>(() =>
             {
                 var directories =  Directory.EnumerateDirectories(_baseFolder);
 
-                return new EnumerateBucketsResult
+                return new ListBucketsResult
                 {
                     // NOTE: We could create a .owner file that contains the owner of the folder to "simulate" the S3 filesystem
                     // Better: We can create a .info file that contains the metadata and the owner of the folder

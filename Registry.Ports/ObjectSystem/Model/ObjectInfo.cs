@@ -14,7 +14,8 @@ namespace Registry.Ports.ObjectSystem.Model
         /// <param name="etag">Unique entity tag for the object</param>
         /// <param name="contentType">Object content type</param>
         /// <param name="metadata"></param>
-        public ObjectInfo(string objectName, long size, DateTime lastModified, string etag, string contentType, Dictionary<string, string> metadata)
+        public ObjectInfo(string objectName, long size, DateTime lastModified, string etag, string contentType,
+            Dictionary<string, string> metadata)
         {
             ObjectName = objectName;
             Size = size;
@@ -35,6 +36,5 @@ namespace Registry.Ports.ObjectSystem.Model
         {
             return $"{ObjectName} : Size({Size}) LastModified({LastModified}) ETag({ETag}) Content-Type({ContentType})";
         }
-
     }
 }
