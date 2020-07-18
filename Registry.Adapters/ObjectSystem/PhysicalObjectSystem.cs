@@ -16,11 +16,30 @@ namespace Registry.Adapters.ObjectSystem
     /// </summary>
     public class PhysicalObjectSystem : IObjectSystem
     {
+        public bool UseStrictNamingConvention { get; }
         private readonly string _baseFolder;
+        private const string InfoFolder = ".info";
 
-        public PhysicalObjectSystem(string baseFolder)
+        private readonly string _infoFolderPath;
+
+        public PhysicalObjectSystem(string baseFolder, bool useStrictNamingConvention = false)
         {
+            // We are not there yet
+            if (useStrictNamingConvention) 
+                throw new NotImplementedException("UseStrictNamingConvention is not implemented yet");
+
+            UseStrictNamingConvention = useStrictNamingConvention;
             _baseFolder = baseFolder;
+
+            if (!Directory.Exists(_baseFolder))
+                throw new ArgumentException($"'{_baseFolder}' does not exists");
+
+            _infoFolderPath = Path.Combine(_baseFolder, InfoFolder);
+
+            // Let's ensure that the info folder exists
+            if (!Directory.Exists(_infoFolderPath))
+                Directory.CreateDirectory(_infoFolderPath);
+
         }
 
         public async Task GetObjectAsync(string bucketName, string objectName, Action<Stream> callback, IServerEncryption sse = null,
@@ -92,9 +111,9 @@ namespace Registry.Adapters.ObjectSystem
             throw new NotImplementedException();
         }
 
-        public Task<bool> BucketExistsAsync(string bucket, CancellationToken cancellationToken = default)
+        public async Task<bool> BucketExistsAsync(string bucket, CancellationToken cancellationToken = default)
         {
-            return new Task<bool>(() => Directory.Exists(Path.Combine(_baseFolder, bucket)), cancellationToken);
+            return Directory.Exists(Path.Combine(_baseFolder, bucket));
         }
 
         public async Task RemoveBucketAsync(string bucketName, CancellationToken cancellationToken = default)
@@ -117,103 +136,104 @@ namespace Registry.Adapters.ObjectSystem
         {
             throw new NotImplementedException();
         }
-
-        public void CreateDirectory(string bucket, string path)
-        {
-            CheckPath(path);
-
-            Directory.CreateDirectory(Path.Combine(_baseFolder, bucket, path));
-        }
-
         private void CheckPath(string path)
         {
             if (path.Contains(".."))
                 throw new InvalidOperationException("Parent path separator is not supported");
         }
+        /*
+        public void CreateDirectory(string bucket, string path)
+        {
+           CheckPath(path);
+
+           Directory.CreateDirectory(Path.Combine(_baseFolder, bucket, path));
+        }
+
+
 
         public Task DeleteObject(string bucket, string path, CancellationToken cancellationToken) 
         {
 
-            return new Task(() => {
-                CheckPath(path);
+           return new Task(() => {
+               CheckPath(path);
 
-                File.Delete(Path.Combine(_baseFolder, bucket, path));
-            
-            });
-               
+               File.Delete(Path.Combine(_baseFolder, bucket, path));
 
-            
+           });
+
+
+
         }
 
         public bool DirectoryExists(string bucket, string path)
         {
-            return Directory.Exists(Path.Combine(_baseFolder, bucket, path));
+           return Directory.Exists(Path.Combine(_baseFolder, bucket, path));
         }
 
         public IEnumerable<string> EnumerateObjects(string bucket, string path, string searchPattern, SearchOption searchOption)
         {
-            return Directory.EnumerateFiles(Path.Combine(_baseFolder, bucket, path), searchPattern, searchOption);
+           return Directory.EnumerateFiles(Path.Combine(_baseFolder, bucket, path), searchPattern, searchOption);
         }
 
         public IEnumerable<string> EnumerateFolders(string bucket, string path, string searchPattern, SearchOption searchOption)
         {
-            return Directory.EnumerateDirectories(Path.Combine(_baseFolder, bucket, path), searchPattern, searchOption);
+           return Directory.EnumerateDirectories(Path.Combine(_baseFolder, bucket, path), searchPattern, searchOption);
         }
 
         public string ReadAllText(string bucket, string path, Encoding encoding)
         {
-            return File.ReadAllText(Path.Combine(_baseFolder, bucket, path), encoding);
+           return File.ReadAllText(Path.Combine(_baseFolder, bucket, path), encoding);
         }
 
         public byte[] ReadAllBytes(string bucket, string path)
         {
-            return File.ReadAllBytes(Path.Combine(_baseFolder, bucket, path));
+           return File.ReadAllBytes(Path.Combine(_baseFolder, bucket, path));
         }
 
         public void RemoveDirectory(string bucket, string path, bool recursive)
         {
-            Directory.Delete(Path.Combine(_baseFolder, bucket, path), recursive);
+           Directory.Delete(Path.Combine(_baseFolder, bucket, path), recursive);
         }
 
         public void WriteAllText(string bucket, string path, string contents, Encoding encoding)
         {
-            File.WriteAllText(Path.Combine(_baseFolder, bucket, path), contents, encoding);
+           File.WriteAllText(Path.Combine(_baseFolder, bucket, path), contents, encoding);
         }
 
         public void WriteAllBytes(string bucket, string path, byte[] contents)
         {
-            File.WriteAllBytes(Path.Combine(_baseFolder, bucket, path), contents);
+           File.WriteAllBytes(Path.Combine(_baseFolder, bucket, path), contents);
         }
 
         public Task<ListBucketsResult> EnumerateBucketsAsync(CancellationToken cancellationToken = default)
         {
 
-            return new Task<ListBucketsResult>(() =>
-            {
-                var directories =  Directory.EnumerateDirectories(_baseFolder);
+           return new Task<ListBucketsResult>(() =>
+           {
+               var directories =  Directory.EnumerateDirectories(_baseFolder);
 
-                return new ListBucketsResult
-                {
-                    // NOTE: We could create a .owner file that contains the owner of the folder to "simulate" the S3 filesystem
-                    // Better: We can create a .info file that contains the metadata and the owner of the folder
-                    Owner = "",
-                    Buckets = directories.Select(dir => new BucketInfo
-                    {
-                        Name = Path.GetDirectoryName(dir),
-                        CreationDate = Directory.GetCreationTime(dir)
-                    })
-                };
+               return new ListBucketsResult
+               {
+                   // NOTE: We could create a .owner file that contains the owner of the folder to "simulate" the S3 filesystem
+                   // Better: We can create a .info file that contains the metadata and the owner of the folder
+                   Owner = "",
+                   Buckets = directories.Select(dir => new BucketInfo
+                   {
+                       Name = Path.GetDirectoryName(dir),
+                       CreationDate = Directory.GetCreationTime(dir)
+                   })
+               };
 
-            }, cancellationToken);
-            
+           }, cancellationToken);
+
 
         }
 
         public Task<bool> ObjectExists(string bucket, string path, CancellationToken cancellationToken = default)
         {
-            return new Task<bool>(() => {
-                return File.Exists(Path.Combine(_baseFolder, bucket, path));
-            }, cancellationToken);
-        }
+           return new Task<bool>(() => {
+               return File.Exists(Path.Combine(_baseFolder, bucket, path));
+           }, cancellationToken);
+        }*/
     }
 }
