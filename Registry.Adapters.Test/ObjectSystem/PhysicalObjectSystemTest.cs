@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Text;
@@ -7,13 +8,18 @@ using System.Threading.Tasks;
 using FluentAssertions;
 using NUnit.Framework;
 using Registry.Adapters.ObjectSystem;
+using System.IO.Compression;
+using Microsoft.VisualBasic.CompilerServices;
+using Registry.Common;
 
 namespace Registry.Adapters.Test.ObjectSystem
 {
+    [TestFixture]
     public class PhysicalObjectSystemTest
     {
 
-        private readonly string _physicalPathTest1 = Path.Combine("Data", "Test1");
+        public const string BaseTestFolder = "PhysicalObjectSystemTest";
+        public const string TestArchivesPath = "Data";
 
         [Test]
         public void Ctor_InvalidFolder_Exception()
@@ -42,26 +48,28 @@ namespace Registry.Adapters.Test.ObjectSystem
         [Test]
         public void Ctor_ExistingFolder_CreatedOk()
         {
-            
+            using var fs = new TestFS(Path.Combine(TestArchivesPath, "Test1.zip"), BaseTestFolder);
+
             try
             {
 
-                new PhysicalObjectSystem(_physicalPathTest1);
+                new PhysicalObjectSystem(fs.TestFolder);
 
             }
             catch (Exception ex)
             {
                 Assert.Fail("This path should exist");
             }
-
         }
 
         [Test]
         public async Task BucketExistsAsync_MissingBucket_False()
         {
+            using var test = new TestFS(Path.Combine(TestArchivesPath, "Test1.zip"), BaseTestFolder);
+
             const string missingBucketName = "wuiohfniwugfnuiweggrweerg";
 
-            var fs = new PhysicalObjectSystem(_physicalPathTest1);
+            var fs = new PhysicalObjectSystem(test.TestFolder);
 
             var res = await fs.BucketExistsAsync(missingBucketName);
 
@@ -72,9 +80,11 @@ namespace Registry.Adapters.Test.ObjectSystem
         [Test]
         public async Task BucketExistsAsync_ExistingBucket_True()
         {
+            using var test = new TestFS(Path.Combine(TestArchivesPath, "Test1.zip"), BaseTestFolder);
+
             const string existingBucketName = "bucket1";
 
-            var fs = new PhysicalObjectSystem(_physicalPathTest1);
+            var fs = new PhysicalObjectSystem(test.TestFolder);
 
             var res = await fs.BucketExistsAsync(existingBucketName);
 
@@ -100,6 +110,14 @@ namespace Registry.Adapters.Test.ObjectSystem
 
         }*/
 
+        [OneTimeTearDown]
+        public void Cleanup()
+        {
+            Debug.WriteLine("Removing orphaned test folders");
+            Directory.Delete(Path.Combine(Path.GetTempPath(), BaseTestFolder), true);
+        }
+
+        
 
     }
 }

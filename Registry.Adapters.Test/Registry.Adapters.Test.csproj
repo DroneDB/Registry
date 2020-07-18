@@ -15,9 +15,13 @@
 
   <ItemGroup>
     <ProjectReference Include="..\Registry.Adapters\Registry.Adapters.csproj" />
+    <ProjectReference Include="..\Registry.Common\Registry.Common.csproj" />
   </ItemGroup>
 
   <ItemGroup>
+    <None Update="Data\Test1.zip">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
     <None Update="Data\Test1\bucket1\box.png">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>

@@ -4,7 +4,7 @@ using System.Text;
 
 namespace Registry.Common
 {
-    public static class Utils
+    public static class CommonUtils
     {
         public static string RandomString(int length)
         {
@@ -24,5 +24,6 @@ namespace Registry.Common
 
             return res.ToString();
         }
+
     }
 }
