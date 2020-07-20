@@ -1,5 +1,4 @@
 ﻿using System.Collections.Generic;
-using Registry.Ports.FileSystem.Model;
 
 namespace Registry.Ports.ObjectSystem.Model
 {

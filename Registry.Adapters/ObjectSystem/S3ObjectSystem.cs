@@ -8,7 +8,6 @@ using System.Threading;
 using System.Threading.Tasks;
 using Minio;
 using Minio.DataModel;
-using Registry.Ports.FileSystem.Model;
 using Registry.Ports.ObjectSystem;
 using Registry.Ports.ObjectSystem.Model;
 

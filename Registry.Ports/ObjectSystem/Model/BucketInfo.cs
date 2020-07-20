@@ -1,6 +1,6 @@
 ﻿using System;
 
-namespace Registry.Ports.FileSystem.Model
+namespace Registry.Ports.ObjectSystem.Model
 {
     public class BucketInfo
     {

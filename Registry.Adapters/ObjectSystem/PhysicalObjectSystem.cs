@@ -2,12 +2,15 @@
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Reactive.Linq;
 using System.Text;
+using System.Text.Json.Serialization;
 using System.Threading;
 using System.Threading.Tasks;
-using Registry.Ports.FileSystem.Model;
+using Newtonsoft.Json.Linq;
 using Registry.Ports.ObjectSystem;
 using Registry.Ports.ObjectSystem.Model;
+using RestSharp;
 
 namespace Registry.Adapters.ObjectSystem
 {
@@ -18,14 +21,16 @@ namespace Registry.Adapters.ObjectSystem
     {
         public bool UseStrictNamingConvention { get; }
         private readonly string _baseFolder;
-        private const string InfoFolder = ".info";
+        public const string InfoFolder = ".info";
+        public const string MetadataSuffix = "meta";
+        public const string PolicySuffix = "policy";
 
         private readonly string _infoFolderPath;
 
         public PhysicalObjectSystem(string baseFolder, bool useStrictNamingConvention = false)
         {
             // We are not there yet
-            if (useStrictNamingConvention) 
+            if (useStrictNamingConvention)
                 throw new NotImplementedException("UseStrictNamingConvention is not implemented yet");
 
             UseStrictNamingConvention = useStrictNamingConvention;
@@ -103,44 +108,215 @@ namespace Registry.Adapters.ObjectSystem
 
         public async Task MakeBucketAsync(string bucketName, string location, CancellationToken cancellationToken = default)
         {
-            throw new NotImplementedException();
+            await EnsureBucketDoesNotExistAsync(bucketName, cancellationToken);
+
+            Directory.CreateDirectory(Path.Combine(_baseFolder, bucketName));
+
         }
 
         public async Task<ListBucketsResult> ListBucketsAsync(CancellationToken cancellationToken = default)
         {
-            throw new NotImplementedException();
+
+            return await Task.Run(() =>
+            {
+                var folders = Directory.EnumerateDirectories(_baseFolder);
+
+                return new ListBucketsResult
+                {
+                    Buckets = folders.Where(item => !item.EndsWith(InfoFolder)).Select(item => new BucketInfo
+                    {
+                        Name = Path.GetFileName(item),
+                        CreationDate = Directory.GetCreationTime(item)
+                    })
+                };
+
+            }, cancellationToken);
+
+
         }
 
         public async Task<bool> BucketExistsAsync(string bucket, CancellationToken cancellationToken = default)
+        {
+            return await Task.Run(() => BucketExists(bucket), cancellationToken);
+        }
+
+        private bool BucketExists(string bucket)
         {
             return Directory.Exists(Path.Combine(_baseFolder, bucket));
         }
 
         public async Task RemoveBucketAsync(string bucketName, CancellationToken cancellationToken = default)
         {
-            throw new NotImplementedException();
+            await EnsureBucketExistsAsync(bucketName, cancellationToken);
+
+            var fullPath = Path.Combine(_baseFolder, bucketName);
+
+            Directory.Delete(fullPath, true);
+
+            var bucketPolicyPath = GetBucketPolicyPath(bucketName);
+
+            if (File.Exists(bucketPolicyPath))
+                File.Delete(bucketPolicyPath);
+
+            var bucketMetadataPath = GetBucketMetadataPath(bucketName);
+
+            if (File.Exists(bucketMetadataPath))
+                File.Delete(bucketMetadataPath);
         }
 
         public IObservable<ItemInfo> ListObjectsAsync(string bucketName, string prefix = null, bool recursive = false,
             CancellationToken cancellationToken = default)
         {
-            throw new NotImplementedException();
+
+            EnsureBucketExists(bucketName);
+
+            var bucketPath = GetBucketPath(bucketName);
+            var searchOption = recursive ? SearchOption.AllDirectories : SearchOption.TopDirectoryOnly;
+
+            return Observable.Create<ItemInfo>(obs =>
+            {
+
+                var path = prefix != null ? Path.Combine(bucketPath, prefix) : bucketPath;
+
+                var files = Directory.EnumerateFiles(path, "*", searchOption);
+
+                foreach (var file in files)
+                {
+
+                    var info = new FileInfo(file);
+
+                    var obj = new ItemInfo
+                    {
+                        Key = Path.GetFileName(file),
+                        Size = (ulong)info.Length,
+                        LastModified = info.LastWriteTime,
+                        IsDir = false
+                    };
+
+                    obs.OnNext(obj);
+                }
+
+                var folders = Directory.EnumerateDirectories(path, "*", searchOption);
+
+                foreach (var folder in folders)
+                {
+
+                    var obj = new ItemInfo
+                    {
+                        Key = Path.GetFileName(folder),
+                        Size = 0,
+                        LastModified = Directory.GetLastWriteTime(folder),
+                        IsDir = true
+                    };
+
+                    obs.OnNext(obj);
+                }
+
+                obs.OnCompleted();
+
+                // Cold observable
+                return () => { };
+
+            });
+
         }
 
         public async Task<string> GetPolicyAsync(string bucketName, CancellationToken cancellationToken = default)
         {
-            throw new NotImplementedException();
+
+            await EnsureBucketExistsAsync(bucketName, cancellationToken);
+
+            var bucketPolicyPath = GetBucketPolicyPath(bucketName);
+
+            if (File.Exists(bucketPolicyPath))
+            {
+                return await File.ReadAllTextAsync(bucketPolicyPath, Encoding.UTF8, cancellationToken);
+            }
+
+            return null;
+
         }
+        
 
         public async Task SetPolicyAsync(string bucketName, string policyJson, CancellationToken cancellationToken = default)
         {
-            throw new NotImplementedException();
+
+            await EnsureBucketExistsAsync(bucketName, cancellationToken);
+
+            var bucketPolicyPath = GetBucketPolicyPath(bucketName);
+
+            try
+            {
+                JObject.Parse(policyJson);
+            }
+            catch (Exception ex)
+            {
+                throw new ArgumentException("Invalid policy json", ex);
+            }
+
+            await File.WriteAllTextAsync(bucketPolicyPath, policyJson, Encoding.UTF8, cancellationToken);
+            
         }
+
+        #region Utils
+
         private void CheckPath(string path)
         {
             if (path.Contains(".."))
                 throw new InvalidOperationException("Parent path separator is not supported");
         }
+        private string GetBucketPolicyPath(string bucketName)
+        {
+            return Path.Combine(_infoFolderPath, $"{bucketName}-{PolicySuffix}.json");
+        }        
+        
+        private string GetBucketMetadataPath(string bucketName)
+        {
+            return Path.Combine(_infoFolderPath, $"{bucketName}-{MetadataSuffix}.json");
+        }
+
+        private string GetBucketPath(string bucketName)
+        {
+            return Path.Combine(_baseFolder, bucketName);
+        }
+
+        private async Task EnsureBucketExistsAsync(string bucketName, CancellationToken cancellationToken = default)
+        {
+            var bucketExists = await BucketExistsAsync(bucketName, cancellationToken);
+
+            if (!bucketExists)
+                throw new ArgumentException($"Bucket '{bucketName}' does not exist");
+
+        }
+
+        private async Task EnsureBucketDoesNotExistAsync(string bucketName, CancellationToken cancellationToken = default)
+        {
+            var bucketExists = await BucketExistsAsync(bucketName, cancellationToken);
+
+            if (bucketExists)
+                throw new ArgumentException($"Bucket '{bucketName}' already existing");
+
+        }
+
+        private void EnsureBucketExists(string bucketName)
+        {
+            var bucketExists = BucketExists(bucketName);
+
+            if (!bucketExists)
+                throw new ArgumentException($"Bucket '{bucketName}' does not exist");
+
+        }
+
+        private void EnsureBucketDoesNotExist(string bucketName)
+        {
+            var bucketExists = BucketExists(bucketName);
+
+            if (bucketExists)
+                throw new ArgumentException($"Bucket '{bucketName}' already existing");
+
+        }
+
+        #endregion
         /*
         public void CreateDirectory(string bucket, string path)
         {
