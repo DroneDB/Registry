@@ -46,6 +46,8 @@ namespace Registry.Adapters.ObjectSystem
 
         }
 
+        #region Objects
+
         public async Task GetObjectAsync(string bucketName, string objectName, Action<Stream> callback, IServerEncryption sse = null,
             CancellationToken cancellationToken = default)
         {
@@ -94,119 +96,6 @@ namespace Registry.Adapters.ObjectSystem
 
         }
 
-        /// <summary>
-        /// Updates bucket info cache
-        /// </summary>
-        /// <param name="bucketName"></param>
-        /// <returns></returns>
-        private BucketInfoDto UpdateBucketInfo(string bucketName)
-        {
-            var bucketInfo = GenerateBucketInfo(bucketName);
-
-            var bucketInfoPath = GetBucketInfoPath(bucketName);
-
-            File.WriteAllText(bucketInfoPath, JsonConvert.SerializeObject(bucketInfo, Formatting.Indented));
-
-            return bucketInfo;
-        }
-
-        /// <summary>
-        /// Updates object info
-        /// </summary>
-        /// <param name="bucketName"></param>
-        /// <param name="objectName"></param>
-        /// <returns></returns>
-        private ObjectInfoDto UpdateObjectInfo(string bucketName, string objectName)
-        {
-            var objectInfo = GenerateObjectInfo(bucketName, objectName);
-
-            var bucketInfo = GetBucketInfo(bucketName);
-            var bucketInfoPath = GetBucketInfoPath(bucketName);
-
-            bucketInfo.Objects = bucketInfo.Objects.Where(item => item.Name != objectName).Concat(new[] { objectInfo }).ToArray();
-
-            File.WriteAllText(bucketInfoPath,JsonConvert.SerializeObject(bucketInfo, Formatting.Indented));
-
-            return objectInfo;
-
-        }
-
-        private string GetObjectPath(string bucketName, string objectName)
-        {
-            return Path.Combine(_baseFolder, bucketName, objectName);
-        }
-
-        private ObjectInfoDto GenerateObjectInfo(string bucketName, string objectName)
-        {
-            var objectPath = GetObjectPath(bucketName, objectName);
-
-            var fileInfo = new FileInfo(objectPath);
-
-            var objectInfo = new ObjectInfoDto
-            {
-                ContentType = MimeUtility.GetMimeMapping(objectPath),
-                ETag = CalculateETag(objectPath, fileInfo),
-                LastModified = File.GetLastWriteTime(objectPath),
-                Size = fileInfo.Length,
-                Name = objectName,
-                MetaData = new Dictionary<string, string>()
-            };
-
-            return objectInfo;
-
-        }
-
-        private string CalculateETag(string filePath, FileInfo info)
-        {
-            // 5GB
-            var chunkSize = 5L * 1024 * 1024 * 1024;
-
-            var parts = (int)Math.Ceiling((double)info.Length / chunkSize);
-
-            return AdaptersUtils.CalculateMultipartEtag(File.ReadAllBytes(filePath), parts);
-
-        }
-
-        private string CalculateETag(string filePath)
-        {
-            return CalculateETag(filePath, new FileInfo(filePath));
-        }
-
-        private BucketInfoDto GenerateBucketInfo(string bucketName)
-        {
-            return new BucketInfoDto
-            {
-                Name = bucketName,
-                Objects = new ObjectInfoDto[0],
-                Owner = null
-            };
-        }
-        private BucketInfoDto GetBucketInfo(string bucketName)
-        {
-
-            var path = GetBucketInfoPath(bucketName);
-
-            return !File.Exists(path) ? null : JsonConvert.DeserializeObject<BucketInfoDto>(File.ReadAllText(path, Encoding.UTF8));
-        }
-
-
-        private class BucketInfoDto
-        {
-            public string Name { get; set; }
-            public string Owner { get; set; }
-            public ObjectInfoDto[] Objects { get; set; }
-        }
-
-        private class ObjectInfoDto
-        {
-            public string Name { get; set; }
-            public long Size { get; set; }
-            public DateTime LastModified { get; set; }
-            public string ETag { get; set; }
-            public string ContentType { get; set; }
-            public Dictionary<string, string> MetaData { get; set; }
-        }
-
         public IObservable<ObjectUpload> ListIncompleteUploads(string bucketName, string prefix = "", bool recursive = false,
             CancellationToken cancellationToken = default)
         {
@@ -235,64 +124,6 @@ namespace Registry.Adapters.ObjectSystem
             CancellationToken cancellationToken = default)
         {
             throw new NotImplementedException();
-        }
-
-        public async Task MakeBucketAsync(string bucketName, string location, CancellationToken cancellationToken = default)
-        {
-            await EnsureBucketDoesNotExistAsync(bucketName, cancellationToken);
-
-            Directory.CreateDirectory(Path.Combine(_baseFolder, bucketName));
-
-        }
-
-        public async Task<ListBucketsResult> ListBucketsAsync(CancellationToken cancellationToken = default)
-        {
-
-            return await Task.Run(() =>
-            {
-                var folders = Directory.EnumerateDirectories(_baseFolder);
-
-                return new ListBucketsResult
-                {
-                    Buckets = folders.Where(item => !item.EndsWith(InfoFolder)).Select(item => new BucketInfo
-                    {
-                        Name = Path.GetFileName(item),
-                        CreationDate = Directory.GetCreationTime(item)
-                    })
-                };
-
-            }, cancellationToken);
-
-
-        }
-
-        public async Task<bool> BucketExistsAsync(string bucket, CancellationToken cancellationToken = default)
-        {
-            return await Task.Run(() => BucketExists(bucket), cancellationToken);
-        }
-
-        private bool BucketExists(string bucket)
-        {
-            return Directory.Exists(Path.Combine(_baseFolder, bucket));
-        }
-
-        public async Task RemoveBucketAsync(string bucketName, CancellationToken cancellationToken = default)
-        {
-            await EnsureBucketExistsAsync(bucketName, cancellationToken);
-
-            var fullPath = Path.Combine(_baseFolder, bucketName);
-
-            Directory.Delete(fullPath, true);
-
-            var bucketPolicyPath = GetBucketPolicyPath(bucketName);
-
-            if (File.Exists(bucketPolicyPath))
-                File.Delete(bucketPolicyPath);
-
-            var bucketInfoPath = GetBucketInfoPath(bucketName);
-
-            if (File.Exists(bucketInfoPath))
-                File.Delete(bucketInfoPath);
         }
 
         public IObservable<ItemInfo> ListObjectsAsync(string bucketName, string prefix = null, bool recursive = false,
@@ -352,6 +183,68 @@ namespace Registry.Adapters.ObjectSystem
 
         }
 
+        #endregion
+
+        #region Buckets
+
+        public async Task MakeBucketAsync(string bucketName, string location, CancellationToken cancellationToken = default)
+        {
+            await EnsureBucketDoesNotExistAsync(bucketName, cancellationToken);
+
+            Directory.CreateDirectory(Path.Combine(_baseFolder, bucketName));
+
+        }
+
+        public async Task<ListBucketsResult> ListBucketsAsync(CancellationToken cancellationToken = default)
+        {
+
+            return await Task.Run(() =>
+            {
+                var folders = Directory.EnumerateDirectories(_baseFolder);
+
+                return new ListBucketsResult
+                {
+                    Buckets = folders.Where(item => !item.EndsWith(InfoFolder)).Select(item => new BucketInfo
+                    {
+                        Name = Path.GetFileName(item),
+                        CreationDate = Directory.GetCreationTime(item)
+                    })
+                };
+
+            }, cancellationToken);
+
+
+        }
+
+        public async Task<bool> BucketExistsAsync(string bucket, CancellationToken cancellationToken = default)
+        {
+            return await Task.Run(() => BucketExists(bucket), cancellationToken);
+        }
+
+        private bool BucketExists(string bucket)
+        {
+            return Directory.Exists(Path.Combine(_baseFolder, bucket));
+        }
+
+        public async Task RemoveBucketAsync(string bucketName, CancellationToken cancellationToken = default)
+        {
+            await EnsureBucketExistsAsync(bucketName, cancellationToken);
+
+            var fullPath = Path.Combine(_baseFolder, bucketName);
+
+            Directory.Delete(fullPath, true);
+
+            var bucketPolicyPath = GetBucketPolicyPath(bucketName);
+
+            if (File.Exists(bucketPolicyPath))
+                File.Delete(bucketPolicyPath);
+
+            var bucketInfoPath = GetBucketInfoPath(bucketName);
+
+            if (File.Exists(bucketInfoPath))
+                File.Delete(bucketInfoPath);
+        }
+
         public async Task<string> GetPolicyAsync(string bucketName, CancellationToken cancellationToken = default)
         {
 
@@ -389,7 +282,108 @@ namespace Registry.Adapters.ObjectSystem
 
         }
 
+
+        #endregion
+
         #region Utils
+
+
+        /// <summary>
+        /// Updates bucket info cache
+        /// </summary>
+        /// <param name="bucketName"></param>
+        /// <returns></returns>
+        private BucketInfoDto UpdateBucketInfo(string bucketName)
+        {
+            var bucketInfo = GenerateBucketInfo(bucketName);
+
+            var bucketInfoPath = GetBucketInfoPath(bucketName);
+
+            File.WriteAllText(bucketInfoPath, JsonConvert.SerializeObject(bucketInfo, Formatting.Indented));
+
+            return bucketInfo;
+        }
+
+
+        private BucketInfoDto GenerateBucketInfo(string bucketName)
+        {
+            return new BucketInfoDto
+            {
+                Name = bucketName,
+                Objects = new ObjectInfoDto[0],
+                Owner = null
+            };
+        }
+        private BucketInfoDto GetBucketInfo(string bucketName)
+        {
+
+            var path = GetBucketInfoPath(bucketName);
+
+            return !File.Exists(path) ? null : JsonConvert.DeserializeObject<BucketInfoDto>(File.ReadAllText(path, Encoding.UTF8));
+        }
+
+        /// <summary>
+        /// Updates object info
+        /// </summary>
+        /// <param name="bucketName"></param>
+        /// <param name="objectName"></param>
+        /// <returns></returns>
+        private ObjectInfoDto UpdateObjectInfo(string bucketName, string objectName)
+        {
+            var objectInfo = GenerateObjectInfo(bucketName, objectName);
+
+            var bucketInfo = GetBucketInfo(bucketName);
+            var bucketInfoPath = GetBucketInfoPath(bucketName);
+
+            // Replace object
+            bucketInfo.Objects = bucketInfo.Objects.Where(item => item.Name != objectName).Concat(new[] { objectInfo }).ToArray();
+
+            File.WriteAllText(bucketInfoPath, JsonConvert.SerializeObject(bucketInfo, Formatting.Indented));
+
+            return objectInfo;
+
+        }
+
+        private string GetObjectPath(string bucketName, string objectName)
+        {
+            return Path.Combine(_baseFolder, bucketName, objectName);
+        }
+
+        private ObjectInfoDto GenerateObjectInfo(string bucketName, string objectName)
+        {
+            var objectPath = GetObjectPath(bucketName, objectName);
+
+            var fileInfo = new FileInfo(objectPath);
+
+            var objectInfo = new ObjectInfoDto
+            {
+                ContentType = MimeUtility.GetMimeMapping(objectPath),
+                ETag = CalculateETag(objectPath, fileInfo),
+                LastModified = File.GetLastWriteTime(objectPath),
+                Size = fileInfo.Length,
+                Name = objectName,
+                MetaData = new Dictionary<string, string>()
+            };
+
+            return objectInfo;
+
+        }
+
+        private string CalculateETag(string filePath, FileInfo info)
+        {
+            // 5GB
+            var chunkSize = 5L * 1024 * 1024 * 1024;
+
+            var parts = (int)Math.Ceiling((double)info.Length / chunkSize);
+
+            return AdaptersUtils.CalculateMultipartEtag(File.ReadAllBytes(filePath), parts);
+
+        }
+
+        private string CalculateETag(string filePath)
+        {
+            return CalculateETag(filePath, new FileInfo(filePath));
+        }
 
         private void CheckPath(string path)
         {
@@ -454,100 +448,25 @@ namespace Registry.Adapters.ObjectSystem
 
         }
 
+
+        private class BucketInfoDto
+        {
+            public string Name { get; set; }
+            public string Owner { get; set; }
+            public ObjectInfoDto[] Objects { get; set; }
+        }
+
+        private class ObjectInfoDto
+        {
+            public string Name { get; set; }
+            public long Size { get; set; }
+            public DateTime LastModified { get; set; }
+            public string ETag { get; set; }
+            public string ContentType { get; set; }
+            public Dictionary<string, string> MetaData { get; set; }
+        }
+
         #endregion
-        /*
-        public void CreateDirectory(string bucket, string path)
-        {
-           CheckPath(path);
 
-           Directory.CreateDirectory(Path.Combine(_baseFolder, bucket, path));
-        }
-
-
-
-        public Task DeleteObject(string bucket, string path, CancellationToken cancellationToken) 
-        {
-
-           return new Task(() => {
-               CheckPath(path);
-
-               File.Delete(Path.Combine(_baseFolder, bucket, path));
-
-           });
-
-
-
-        }
-
-        public bool DirectoryExists(string bucket, string path)
-        {
-           return Directory.Exists(Path.Combine(_baseFolder, bucket, path));
-        }
-
-        public IEnumerable<string> EnumerateObjects(string bucket, string path, string searchPattern, SearchOption searchOption)
-        {
-           return Directory.EnumerateFiles(Path.Combine(_baseFolder, bucket, path), searchPattern, searchOption);
-        }
-
-        public IEnumerable<string> EnumerateFolders(string bucket, string path, string searchPattern, SearchOption searchOption)
-        {
-           return Directory.EnumerateDirectories(Path.Combine(_baseFolder, bucket, path), searchPattern, searchOption);
-        }
-
-        public string ReadAllText(string bucket, string path, Encoding encoding)
-        {
-           return File.ReadAllText(Path.Combine(_baseFolder, bucket, path), encoding);
-        }
-
-        public byte[] ReadAllBytes(string bucket, string path)
-        {
-           return File.ReadAllBytes(Path.Combine(_baseFolder, bucket, path));
-        }
-
-        public void RemoveDirectory(string bucket, string path, bool recursive)
-        {
-           Directory.Delete(Path.Combine(_baseFolder, bucket, path), recursive);
-        }
-
-        public void WriteAllText(string bucket, string path, string contents, Encoding encoding)
-        {
-           File.WriteAllText(Path.Combine(_baseFolder, bucket, path), contents, encoding);
-        }
-
-        public void WriteAllBytes(string bucket, string path, byte[] contents)
-        {
-           File.WriteAllBytes(Path.Combine(_baseFolder, bucket, path), contents);
-        }
-
-        public Task<ListBucketsResult> EnumerateBucketsAsync(CancellationToken cancellationToken = default)
-        {
-
-           return new Task<ListBucketsResult>(() =>
-           {
-               var directories =  Directory.EnumerateDirectories(_baseFolder);
-
-               return new ListBucketsResult
-               {
-                   // NOTE: We could create a .owner file that contains the owner of the folder to "simulate" the S3 filesystem
-                   // Better: We can create a .info file that contains the metadata and the owner of the folder
-                   Owner = "",
-                   Buckets = directories.Select(dir => new BucketInfo
-                   {
-                       Name = Path.GetDirectoryName(dir),
-                       CreationDate = Directory.GetCreationTime(dir)
-                   })
-               };
-
-           }, cancellationToken);
-
-
-        }
-
-        public Task<bool> ObjectExists(string bucket, string path, CancellationToken cancellationToken = default)
-        {
-           return new Task<bool>(() => {
-               return File.Exists(Path.Combine(_baseFolder, bucket, path));
-           }, cancellationToken);
-        }*/
     }
 }
