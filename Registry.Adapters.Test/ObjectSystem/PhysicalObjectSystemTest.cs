@@ -32,38 +32,28 @@ namespace Registry.Adapters.Test.ObjectSystem
 
             const string missingPath = "/wfwefwe/fwefwef/rthtrhtrh";
 
-            try
+            FluentActions.Invoking(() =>
             {
-
                 var fs = new PhysicalObjectSystem(missingPath);
+            }).Should().Throw<ArgumentException>();
 
-                Assert.Fail("No exception was thrown with invalid folder");
-            }
-            catch (ArgumentException ex)
-            {
-                Assert.Pass();
-            }
-            catch (Exception ex)
-            {
-                Assert.Fail("Wrong exception type thrown: expected ArgumentException");
-            }
 
         }
 
         [Test]
         public void Ctor_ExistingFolder_CreatedOk()
         {
-            using var fs = new TestFS(Path.Combine(TestArchivesPath, "Test1.zip"), BaseTestFolder);
+            using var test = new TestFS(Path.Combine(TestArchivesPath, "Test1.zip"), BaseTestFolder);
 
             try
             {
 
-                new PhysicalObjectSystem(fs.TestFolder);
+                var fs = new PhysicalObjectSystem(test.TestFolder);
 
             }
             catch (Exception ex)
             {
-                Assert.Fail("This path should exist");
+                Assert.Fail("This path should exist, instead: " + ex.Message);
             }
         }
 
@@ -312,7 +302,8 @@ namespace Registry.Adapters.Test.ObjectSystem
 
             var fs = new PhysicalObjectSystem(test.TestFolder);
 
-            FluentActions.Invoking(() =>{
+            FluentActions.Invoking(() =>
+            {
                 fs.ListObjectsAsync(missingBucket);
             }).Should().Throw<ArgumentException>();
 
@@ -348,11 +339,10 @@ namespace Registry.Adapters.Test.ObjectSystem
             objects.Select(item => item.Size).OrderBy(item => item).Should().BeEquivalentTo(expectedObjectSizes);
             objects.Select(item => item.IsDir).OrderBy(item => item).Should().BeEquivalentTo(expectedObjectIsDir);
 
-
         }
 
         [Test]
-        public async Task GetObjectInfoAsync_MissingBucket_ArgumentException()
+        public void GetObjectInfoAsync_MissingBucket_ArgumentException()
         {
             using var test = new TestFS(Path.Combine(TestArchivesPath, "Test4.zip"), BaseTestFolder);
 
@@ -361,10 +351,107 @@ namespace Registry.Adapters.Test.ObjectSystem
 
             var fs = new PhysicalObjectSystem(test.TestFolder);
 
-            FluentActions.Invoking(async () => {
+            FluentActions.Invoking(async () =>
+            {
                 await fs.GetObjectInfoAsync(missingBucket, objectName);
             }).Should().Throw<ArgumentException>();
 
+        }
+
+        [Test]
+        public void GetObjectInfoAsync_MissingObject_ArgumentException()
+        {
+            using var test = new TestFS(Path.Combine(TestArchivesPath, "Test4.zip"), BaseTestFolder);
+
+            const string existingBucket = "bucket1";
+            const string missingObjectName = "flag-itaaaaaaaa.jpg";
+
+            var fs = new PhysicalObjectSystem(test.TestFolder);
+
+            FluentActions.Invoking(async () =>
+            {
+                await fs.GetObjectInfoAsync(existingBucket, missingObjectName);
+            }).Should().Throw<ArgumentException>();
+
+        }
+
+
+        [Test]
+        public async Task GetObjectInfoAsync_ExistingObjectWithInfo_ObjectInfo()
+        {
+            using var test = new TestFS(Path.Combine(TestArchivesPath, "Test4.zip"), BaseTestFolder);
+
+            const string bucketName = "bucket1";
+            const string objectName = "flag-ita.jpg";
+
+            const string expectedContentType = "image/jpeg";
+            const string expectedEtag = "38a5a1eb86fc84e97ae7a67566420d12-1";
+            const long expectedSize = 16401;
+            const string expectedMetadataKey = "key";
+            const string expectedMetadataValue = "value";
+
+            var fs = new PhysicalObjectSystem(test.TestFolder);
+
+            var info = await fs.GetObjectInfoAsync(bucketName, objectName);
+
+            info.Size.Should().Be(expectedSize);
+            info.ContentType.Should().Be(expectedContentType);
+            info.ObjectName.Should().Be(objectName);
+            info.ETag.Should().Be(expectedEtag);
+
+            info.MetaData.Count.Should().Be(1);
+            info.MetaData.ContainsKey(expectedMetadataKey).Should().BeTrue();
+            info.MetaData[expectedMetadataKey].Should().Be(expectedMetadataValue);
+
+        }
+
+
+        [Test]
+        public async Task GetObjectInfoAsync_ExistingObjectWithoutInfo_ObjectInfo()
+        {
+            using var test = new TestFS(Path.Combine(TestArchivesPath, "Test4.zip"), BaseTestFolder);
+
+            const string bucketName = "bucket1";
+            const string objectName = "lock.png";
+
+            const string expectedContentType = "image/png";
+            const string expectedEtag = "fc9f0320d52ff371200b7b0767424fc8-1";
+            const long expectedSize = 3282;
+            
+            var fs = new PhysicalObjectSystem(test.TestFolder);
+
+            var info = await fs.GetObjectInfoAsync(bucketName, objectName);
+
+            info.Size.Should().Be(expectedSize);
+            info.ContentType.Should().Be(expectedContentType);
+            info.ObjectName.Should().Be(objectName);
+            info.ETag.Should().Be(expectedEtag);
+
+            info.MetaData.Count.Should().Be(0);
+        }
+
+        [Test]
+        public async Task GetObjectInfoAsync_ExistingObjectWithoutBucketInfo_ObjectInfo()
+        {
+            using var test = new TestFS(Path.Combine(TestArchivesPath, "Test4.zip"), BaseTestFolder);
+
+            const string bucketName = "bucket2";
+            const string objectName = "milano-bg.jpg";
+
+            const string expectedContentType = "image/jpeg";
+            const string expectedEtag = "18412d191bf153548ce03a1d1c65a073-1";
+            const long expectedSize = 225302;
+
+            var fs = new PhysicalObjectSystem(test.TestFolder);
+
+            var info = await fs.GetObjectInfoAsync(bucketName, objectName);
+
+            info.Size.Should().Be(expectedSize);
+            info.ContentType.Should().Be(expectedContentType);
+            info.ObjectName.Should().Be(objectName);
+            info.ETag.Should().Be(expectedEtag);
+
+            info.MetaData.Count.Should().Be(0);
         }
 
         #endregion
@@ -377,7 +464,7 @@ namespace Registry.Adapters.Test.ObjectSystem
             Directory.Delete(Path.Combine(Path.GetTempPath(), BaseTestFolder), true);
         }
 
-
+        
 
     }
 }

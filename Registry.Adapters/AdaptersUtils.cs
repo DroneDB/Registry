@@ -53,33 +53,39 @@ namespace Registry.Adapters
             var chunkSize = 1024 * 1024 * chunkCount;
             var splitCount = array.Length / chunkSize;
             var mod = array.Length - chunkSize * splitCount;
-            IEnumerable<byte> concatHash = new byte[] { };
+            var concatHash = new List<byte>();
 
-            using (var md5 = MD5.Create())
+            using var md5 = MD5.Create();
+
+            for (var i = 0; i < splitCount; i++)
             {
-                for (var i = 0; i < splitCount; i++)
-                {
-                    var offset = i == 0 ? 0 : chunkSize * i;
-                    var chunk = GetSegment(array, offset, chunkSize);
-                    var hash = chunk.ToArray().GetHash(md5);
-                    concatHash = concatHash.Concat(hash);
-                    multipartSplitCount++;
-                }
-                if (mod != 0)
-                {
-                    var chunk = GetSegment(array, chunkSize * splitCount, mod);
-                    var hash = chunk.ToArray().GetHash(md5);
-                    concatHash = concatHash.Concat(hash);
-                    multipartSplitCount++;
-                }
-                var multipartHash = concatHash.ToArray().GetHash(md5).ToHexString();
-                return multipartHash + "-" + multipartSplitCount;
+                var offset = i == 0 ? 0 : chunkSize * i;
+                var chunk = GetSegment(array, offset, chunkSize);
+                var hash = chunk.ToArray().GetHash(md5);
+                concatHash.AddRange(hash);
+                multipartSplitCount++;
             }
+            if (mod != 0)
+            {
+                var chunk = GetSegment(array, chunkSize * splitCount, mod);
+                var hash = chunk.ToArray().GetHash(md5);
+                concatHash.AddRange(hash);
+                multipartSplitCount++;
+            }
+
+            string multipartHash = BitConverter.ToString(concatHash.ToArray())
+                // without dashes
+                .Replace("-", string.Empty)
+                // make lowercase
+                .ToLower();
+
+            //var multipartHash = concatHash.ToArray().GetHash(md5).ToHexString();
+            return multipartHash + "-" + multipartSplitCount;
         }
 
         private static ArraySegment<T> GetSegment<T>(this T[] array, int offset, int? count = null)
         {
-            if (count == null) { count = array.Length - offset; }
+            count ??= array.Length - offset;
             return new ArraySegment<T>(array, offset, count.Value);
         }
 
