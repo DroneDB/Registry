@@ -24,6 +24,7 @@ namespace Registry.Adapters.ObjectSystem
         public const string InfoFolder = ".info";
         public const string MetadataSuffix = "meta";
         public const string PolicySuffix = "policy";
+        public const string InfoSuffix = "info";
 
         private readonly string _infoFolderPath;
 
@@ -70,10 +71,36 @@ namespace Registry.Adapters.ObjectSystem
             throw new NotImplementedException();
         }
 
+        
         public async Task<ObjectInfo> GetObjectInfoAsync(string bucketName, string objectName, IServerEncryption sse = null,
             CancellationToken cancellationToken = default)
         {
-            throw new NotImplementedException();
+            await EnsureBucketExistsAsync(bucketName, cancellationToken);
+
+            var bucketPath = GetBucketPath(bucketName);
+            var objectPath = Path.Combine(bucketPath, objectName);
+
+            EnsurePathExists(objectPath);
+
+            var objectInfoPath = GetObjectInfoPath(bucketName, objectName);
+
+            /*
+            if (!File.Exists(objectInfoPath))
+            {
+                ObjectInfo info = GenerateObjectInfo(bucketName, objectName);
+
+                return info;
+            }
+
+            */
+
+            return null;
+
+        }
+
+        private string GetObjectInfoPath(string bucketName, string objectName)
+        {
+            return Path.Combine(_infoFolderPath, bucketName, $"{objectName}-{InfoSuffix}.jpg");
         }
 
         public IObservable<ObjectUpload> ListIncompleteUploads(string bucketName, string prefix = "", bool recursive = false,
@@ -286,6 +313,13 @@ namespace Registry.Adapters.ObjectSystem
 
             if (!bucketExists)
                 throw new ArgumentException($"Bucket '{bucketName}' does not exist");
+
+        }
+
+        private void EnsurePathExists(string path)
+        {
+            if (!File.Exists(path))
+                throw new ArgumentException($"Object '{Path.GetFileName(path)}' does not exist");
 
         }
 

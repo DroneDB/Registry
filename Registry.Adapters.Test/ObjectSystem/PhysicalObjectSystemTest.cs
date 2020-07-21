@@ -351,6 +351,22 @@ namespace Registry.Adapters.Test.ObjectSystem
 
         }
 
+        [Test]
+        public async Task GetObjectInfoAsync_MissingBucket_ArgumentException()
+        {
+            using var test = new TestFS(Path.Combine(TestArchivesPath, "Test4.zip"), BaseTestFolder);
+
+            const string missingBucket = "bucket3";
+            const string objectName = "flag-ita.jpg";
+
+            var fs = new PhysicalObjectSystem(test.TestFolder);
+
+            FluentActions.Invoking(async () => {
+                await fs.GetObjectInfoAsync(missingBucket, objectName);
+            }).Should().Throw<ArgumentException>();
+
+        }
+
         #endregion
 
 
