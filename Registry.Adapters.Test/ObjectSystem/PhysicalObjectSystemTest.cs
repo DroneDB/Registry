@@ -431,6 +431,30 @@ namespace Registry.Adapters.Test.ObjectSystem
         }
 
         [Test]
+        public async Task GetObjectInfoAsync_ExistingObjectWithoutInfoInSubdirectory_ObjectInfo()
+        {
+            using var test = new TestFS(Path.Combine(TestArchivesPath, "Test4.zip"), BaseTestFolder);
+
+            const string bucketName = "bucket1";
+            const string objectName = "rep/phone.png";
+
+            const string expectedContentType = "image/png";
+            const string expectedEtag = "5319fbb9c487037d5c605db4a384869b-1";
+            const long expectedSize = 3490;
+
+            var fs = new PhysicalObjectSystem(test.TestFolder);
+
+            var info = await fs.GetObjectInfoAsync(bucketName, objectName);
+
+            info.Size.Should().Be(expectedSize);
+            info.ContentType.Should().Be(expectedContentType);
+            info.ObjectName.Should().Be(objectName);
+            info.ETag.Should().Be(expectedEtag);
+
+            info.MetaData.Count.Should().Be(0);
+        }
+
+        [Test]
         public async Task GetObjectInfoAsync_ExistingObjectWithoutBucketInfo_ObjectInfo()
         {
             using var test = new TestFS(Path.Combine(TestArchivesPath, "Test4.zip"), BaseTestFolder);
@@ -485,6 +509,89 @@ namespace Registry.Adapters.Test.ObjectSystem
             {
                 await fs.RemoveObjectAsync(bucketName, missingObject);
             }).Should().Throw<ArgumentException>();
+
+        }
+
+        [Test]
+        public async Task RemoveObjectAsync_ExistingObject_ObjectRemoved()
+        {
+            using var test = new TestFS(Path.Combine(TestArchivesPath, "Test4.zip"), BaseTestFolder);
+
+            const string bucketName = "bucket1";
+            const string objectName = "flag-ita.jpg";
+
+            var fs = new PhysicalObjectSystem(test.TestFolder);
+
+            fs.ListObjectsAsync(bucketName).ToEnumerable().Select(item => item.Key).Should().Contain(objectName);
+
+            await fs.RemoveObjectAsync(bucketName, objectName);
+
+            FluentActions.Invoking(async () =>
+            {
+                var res = await fs.GetObjectInfoAsync(bucketName, objectName);
+            }).Should().Throw<ArgumentException>();
+
+            fs.ListObjectsAsync(bucketName).ToEnumerable().Select(item => item.Key).Should().NotContain(objectName);
+
+        }
+
+        [Test]
+        public void GetObjectAsync_File_MissingBucket_ArgumentException()
+        {
+            using var test = new TestFS(Path.Combine(TestArchivesPath, "Test4.zip"), BaseTestFolder);
+
+            const string missingBucket = "bucket3";
+            const string objectName = "flag-ita.jpg";
+
+            var fs = new PhysicalObjectSystem(test.TestFolder);
+
+            FluentActions.Invoking(async () =>
+            {
+                await fs.GetObjectAsync(missingBucket, objectName, Path.Combine(Path.GetTempPath(), objectName));
+            }).Should().Throw<ArgumentException>();
+
+        }
+
+        [Test]
+        public void GetObjectAsync_File_MissingObject_ArgumentException()
+        {
+            using var test = new TestFS(Path.Combine(TestArchivesPath, "Test4.zip"), BaseTestFolder);
+
+            const string bucketName = "bucket1";
+            const string missingObject = "flag-itaaaaaa.jpg";
+
+            var fs = new PhysicalObjectSystem(test.TestFolder);
+
+            FluentActions.Invoking(async () =>
+            {
+                await fs.GetObjectAsync(bucketName, missingObject, Path.Combine(Path.GetTempPath(), missingObject));
+            }).Should().Throw<ArgumentException>();
+
+        }
+
+        [Test]
+        public async Task GetObjectAsync_File_ExistingObject_ObjectCopied()
+        {
+            using var test = new TestFS(Path.Combine(TestArchivesPath, "Test4.zip"), BaseTestFolder);
+
+            const string bucketName = "bucket1";
+            const string objectName = "flag-ita.jpg";
+
+            var fs = new PhysicalObjectSystem(test.TestFolder);
+
+            var newFilePath = Path.Combine(Path.GetTempPath(), objectName);
+
+            await fs.GetObjectAsync(bucketName, objectName, newFilePath);
+
+            File.Exists(newFilePath).Should().BeTrue();
+
+            var etag = AdaptersUtils.CalculateMultipartEtag(await File.ReadAllBytesAsync(newFilePath), 1);
+
+            var info = await fs.GetObjectInfoAsync(bucketName, objectName);
+
+            info.ETag.Should().Be(etag);
+
+            File.Delete(newFilePath);
 
         }
 

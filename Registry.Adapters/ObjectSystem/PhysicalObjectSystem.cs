@@ -69,7 +69,12 @@ namespace Registry.Adapters.ObjectSystem
         public async Task RemoveObjectAsync(string bucketName, string objectName, CancellationToken cancellationToken = default)
         {
             EnsureBucketExists(bucketName);
-            EnsureObjectExists(bucketName, objectName);
+            var objectPath = EnsureObjectExists(bucketName, objectName);
+
+            File.Delete(objectPath);
+
+            // Remove from bucket json
+            RemoveObjectInfoInternal(bucketName, objectName);
 
         }
 
@@ -78,10 +83,8 @@ namespace Registry.Adapters.ObjectSystem
             CancellationToken cancellationToken = default)
         {
             EnsureBucketExists(bucketName);
-
-            var objectPath = GetObjectPath(bucketName, objectName);
-            EnsurePathExists(objectPath);
-
+            EnsureObjectExists(bucketName, objectName);
+            
             var bucketInfo = GetBucketInfo(bucketName) ?? UpdateBucketInfo(bucketName);
 
             var objectInfo = bucketInfo.Objects.FirstOrDefault(item => item.Name == objectName) ?? 
@@ -125,7 +128,11 @@ namespace Registry.Adapters.ObjectSystem
         public async Task GetObjectAsync(string bucketName, string objectName, string filePath, IServerEncryption sse = null,
             CancellationToken cancellationToken = default)
         {
-            throw new NotImplementedException();
+            EnsureBucketExists(bucketName);
+            var objectPath = EnsureObjectExists(bucketName, objectName);
+
+            File.Copy(objectPath, filePath, true);
+            
         }
 
         public IObservable<ItemInfo> ListObjectsAsync(string bucketName, string prefix = null, bool recursive = false,
@@ -291,9 +298,11 @@ namespace Registry.Adapters.ObjectSystem
         #region Utils
 
 
-        private void EnsureObjectExists(string bucketName, string objectName)
+        private string EnsureObjectExists(string bucketName, string objectName)
         {
-            EnsurePathExists(GetObjectPath(bucketName, objectName));
+            var objectPath = GetObjectPath(bucketName, objectName);
+            EnsurePathExists(objectPath);
+            return objectPath;
         }
 
         /// <summary>
@@ -324,10 +333,33 @@ namespace Registry.Adapters.ObjectSystem
         }
         private BucketInfoDto GetBucketInfo(string bucketName)
         {
-
             var path = GetBucketInfoPath(bucketName);
 
             return !File.Exists(path) ? null : JsonConvert.DeserializeObject<BucketInfoDto>(File.ReadAllText(path, Encoding.UTF8));
+        }
+
+        private void AddOrReplaceObjectInfoInternal(string bucketName, ObjectInfoDto objectInfo)
+        {
+            var bucketInfo = GetBucketInfo(bucketName);
+            var bucketInfoPath = GetBucketInfoPath(bucketName);
+
+            // Replace object
+            bucketInfo.Objects = bucketInfo.Objects.Where(item => item.Name != objectInfo.Name).Concat(new[] { objectInfo }).ToArray();
+
+            File.WriteAllText(bucketInfoPath, JsonConvert.SerializeObject(bucketInfo, Formatting.Indented));
+
+        }
+
+        private void RemoveObjectInfoInternal(string bucketName, string objectName)
+        {
+            var bucketInfo = GetBucketInfo(bucketName);
+            var bucketInfoPath = GetBucketInfoPath(bucketName);
+
+            // Remove object
+            bucketInfo.Objects = bucketInfo.Objects.Where(item => item.Name != objectName).ToArray();
+
+            File.WriteAllText(bucketInfoPath, JsonConvert.SerializeObject(bucketInfo, Formatting.Indented));
+
         }
 
         /// <summary>
@@ -340,13 +372,7 @@ namespace Registry.Adapters.ObjectSystem
         {
             var objectInfo = GenerateObjectInfo(bucketName, objectName);
 
-            var bucketInfo = GetBucketInfo(bucketName);
-            var bucketInfoPath = GetBucketInfoPath(bucketName);
-
-            // Replace object
-            bucketInfo.Objects = bucketInfo.Objects.Where(item => item.Name != objectName).Concat(new[] { objectInfo }).ToArray();
-
-            File.WriteAllText(bucketInfoPath, JsonConvert.SerializeObject(bucketInfo, Formatting.Indented));
+            AddOrReplaceObjectInfoInternal(bucketName, objectInfo);
 
             return objectInfo;
 

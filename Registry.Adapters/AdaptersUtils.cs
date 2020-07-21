@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Security.Cryptography;
 using System.Text;
@@ -86,7 +87,7 @@ namespace Registry.Adapters
             count ??= array.Length - offset;
             return new ArraySegment<T>(array, offset, count.Value);
         }
-        
+
 
         #endregion
     }
