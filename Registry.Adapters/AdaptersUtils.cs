@@ -74,10 +74,8 @@ namespace Registry.Adapters
             }
 
             string multipartHash = BitConverter.ToString(concatHash.ToArray())
-                // without dashes
                 .Replace("-", string.Empty)
-                // make lowercase
-                .ToLower();
+                .ToLowerInvariant();
 
             //var multipartHash = concatHash.ToArray().GetHash(md5).ToHexString();
             return multipartHash + "-" + multipartSplitCount;
@@ -88,33 +86,7 @@ namespace Registry.Adapters
             count ??= array.Length - offset;
             return new ArraySegment<T>(array, offset, count.Value);
         }
-
-        public static string ToHashString(this byte[] hash)
-        {
-            return BitConverter.ToString(hash).Replace("-", "").ToLower();
-        }
-
-        public static string ToHexString(this byte[] bytes)
-        {
-            var chars = new char[bytes.Length * 2 + 2];
-
-            for (int i = 0; i < bytes.Length; i++)
-            {
-                chars[2 * i + 2] = ToHexDigit(bytes[i] / 16);
-                chars[2 * i + 3] = ToHexDigit(bytes[i] % 16);
-            }
-
-            return new string(chars).ToLower();
-        }
-
-        private static char ToHexDigit(int i)
-        {
-            if (i < 10)
-            {
-                return (char)(i + '0');
-            }
-            return (char)(i - 10 + 'A');
-        }
+        
 
         #endregion
     }

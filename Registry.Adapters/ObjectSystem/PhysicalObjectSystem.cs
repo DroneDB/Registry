@@ -22,9 +22,7 @@ namespace Registry.Adapters.ObjectSystem
         public bool UseStrictNamingConvention { get; }
         private readonly string _baseFolder;
         public const string InfoFolder = ".info";
-        //public const string MetadataSuffix = "meta";
         public const string PolicySuffix = "policy";
-        //public const string InfoSuffix = "info";
 
         private readonly string _infoFolderPath;
 
@@ -172,7 +170,6 @@ namespace Registry.Adapters.ObjectSystem
         private string CalculateETag(string filePath)
         {
             return CalculateETag(filePath, new FileInfo(filePath));
-
         }
 
         private BucketInfoDto GenerateBucketInfo(string bucketName)
@@ -184,7 +181,6 @@ namespace Registry.Adapters.ObjectSystem
                 Owner = null
             };
         }
-
         private BucketInfoDto GetBucketInfo(string bucketName)
         {
 
@@ -194,14 +190,14 @@ namespace Registry.Adapters.ObjectSystem
         }
 
 
-        public class BucketInfoDto
+        private class BucketInfoDto
         {
             public string Name { get; set; }
             public string Owner { get; set; }
             public ObjectInfoDto[] Objects { get; set; }
         }
 
-        public class ObjectInfoDto
+        private class ObjectInfoDto
         {
             public string Name { get; set; }
             public long Size { get; set; }
