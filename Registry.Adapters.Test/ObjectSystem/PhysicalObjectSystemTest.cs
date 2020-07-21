@@ -454,6 +454,40 @@ namespace Registry.Adapters.Test.ObjectSystem
             info.MetaData.Count.Should().Be(0);
         }
 
+        [Test]
+        public void RemoveObjectAsync_MissingBucket_ArgumentException()
+        {
+            using var test = new TestFS(Path.Combine(TestArchivesPath, "Test4.zip"), BaseTestFolder);
+
+            const string missingBucket = "bucket3";
+            const string objectName = "flag-ita.jpg";
+
+            var fs = new PhysicalObjectSystem(test.TestFolder);
+
+            FluentActions.Invoking(async () =>
+            {
+                await fs.RemoveObjectAsync(missingBucket, objectName);
+            }).Should().Throw<ArgumentException>();
+
+        }
+
+        [Test]
+        public void RemoveObjectAsync_MissingObject_ArgumentException()
+        {
+            using var test = new TestFS(Path.Combine(TestArchivesPath, "Test4.zip"), BaseTestFolder);
+
+            const string bucketName = "bucket1";
+            const string missingObject = "flag-itaaaaaa.jpg";
+
+            var fs = new PhysicalObjectSystem(test.TestFolder);
+
+            FluentActions.Invoking(async () =>
+            {
+                await fs.RemoveObjectAsync(bucketName, missingObject);
+            }).Should().Throw<ArgumentException>();
+
+        }
+
         #endregion
 
 

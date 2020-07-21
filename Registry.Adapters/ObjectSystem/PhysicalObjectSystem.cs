@@ -68,14 +68,16 @@ namespace Registry.Adapters.ObjectSystem
 
         public async Task RemoveObjectAsync(string bucketName, string objectName, CancellationToken cancellationToken = default)
         {
-            throw new NotImplementedException();
+            EnsureBucketExists(bucketName);
+            EnsureObjectExists(bucketName, objectName);
+
         }
 
 
         public async Task<ObjectInfo> GetObjectInfoAsync(string bucketName, string objectName, IServerEncryption sse = null,
             CancellationToken cancellationToken = default)
         {
-            await EnsureBucketExistsAsync(bucketName, cancellationToken);
+            EnsureBucketExists(bucketName);
 
             var objectPath = GetObjectPath(bucketName, objectName);
             EnsurePathExists(objectPath);
@@ -189,7 +191,7 @@ namespace Registry.Adapters.ObjectSystem
 
         public async Task MakeBucketAsync(string bucketName, string location, CancellationToken cancellationToken = default)
         {
-            await EnsureBucketDoesNotExistAsync(bucketName, cancellationToken);
+            EnsureBucketDoesNotExist(bucketName, cancellationToken);
 
             Directory.CreateDirectory(Path.Combine(_baseFolder, bucketName));
 
@@ -216,9 +218,9 @@ namespace Registry.Adapters.ObjectSystem
 
         }
 
-        public async Task<bool> BucketExistsAsync(string bucket, CancellationToken cancellationToken = default)
+        public Task<bool> BucketExistsAsync(string bucketName, CancellationToken cancellationToken = default)
         {
-            return await Task.Run(() => BucketExists(bucket), cancellationToken);
+            return Task.Run(() => BucketExists(bucketName), cancellationToken);
         }
 
         private bool BucketExists(string bucket)
@@ -228,7 +230,7 @@ namespace Registry.Adapters.ObjectSystem
 
         public async Task RemoveBucketAsync(string bucketName, CancellationToken cancellationToken = default)
         {
-            await EnsureBucketExistsAsync(bucketName, cancellationToken);
+            EnsureBucketExists(bucketName);
 
             var fullPath = Path.Combine(_baseFolder, bucketName);
 
@@ -243,12 +245,13 @@ namespace Registry.Adapters.ObjectSystem
 
             if (File.Exists(bucketInfoPath))
                 File.Delete(bucketInfoPath);
+
         }
 
         public async Task<string> GetPolicyAsync(string bucketName, CancellationToken cancellationToken = default)
         {
 
-            await EnsureBucketExistsAsync(bucketName, cancellationToken);
+            EnsureBucketExists(bucketName);
 
             var bucketPolicyPath = GetBucketPolicyPath(bucketName);
 
@@ -265,7 +268,7 @@ namespace Registry.Adapters.ObjectSystem
         public async Task SetPolicyAsync(string bucketName, string policyJson, CancellationToken cancellationToken = default)
         {
 
-            await EnsureBucketExistsAsync(bucketName, cancellationToken);
+            EnsureBucketExists(bucketName);
 
             var bucketPolicyPath = GetBucketPolicyPath(bucketName);
 
@@ -287,6 +290,11 @@ namespace Registry.Adapters.ObjectSystem
 
         #region Utils
 
+
+        private void EnsureObjectExists(string bucketName, string objectName)
+        {
+            EnsurePathExists(GetObjectPath(bucketName, objectName));
+        }
 
         /// <summary>
         /// Updates bucket info cache
@@ -405,25 +413,15 @@ namespace Registry.Adapters.ObjectSystem
             return Path.Combine(_baseFolder, bucketName);
         }
 
-        private async Task EnsureBucketExistsAsync(string bucketName, CancellationToken cancellationToken = default)
-        {
-            var bucketExists = await BucketExistsAsync(bucketName, cancellationToken);
-
-            if (!bucketExists)
-                throw new ArgumentException($"Bucket '{bucketName}' does not exist");
-
-        }
-
         private void EnsurePathExists(string path)
         {
             if (!File.Exists(path))
                 throw new ArgumentException($"Object '{Path.GetFileName(path)}' does not exist");
-
         }
 
-        private async Task EnsureBucketDoesNotExistAsync(string bucketName, CancellationToken cancellationToken = default)
+        private void EnsureBucketDoesNotExist(string bucketName, CancellationToken cancellationToken = default)
         {
-            var bucketExists = await BucketExistsAsync(bucketName, cancellationToken);
+            var bucketExists = BucketExists(bucketName);
 
             if (bucketExists)
                 throw new ArgumentException($"Bucket '{bucketName}' already existing");
