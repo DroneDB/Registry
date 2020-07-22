@@ -297,9 +297,11 @@ namespace Registry.Adapters.ObjectSystem
 
         public async Task MakeBucketAsync(string bucketName, string location, CancellationToken cancellationToken = default)
         {
-            EnsureBucketDoesNotExist(bucketName, cancellationToken);
+            EnsureBucketDoesNotExist(bucketName);
 
             Directory.CreateDirectory(Path.Combine(_baseFolder, bucketName));
+
+            SaveBucketInfo(GenerateBucketInfo(bucketName));
 
         }
 
@@ -560,15 +562,6 @@ namespace Registry.Adapters.ObjectSystem
         {
             if (!File.Exists(path))
                 throw new ArgumentException($"File '{Path.GetFileName(path)}' does not exist");
-        }
-
-        private void EnsureBucketDoesNotExist(string bucketName, CancellationToken cancellationToken = default)
-        {
-            var bucketExists = BucketExists(bucketName);
-
-            if (bucketExists)
-                throw new ArgumentException($"Bucket '{bucketName}' already existing");
-
         }
 
         private void EnsureBucketExists(string bucketName)
