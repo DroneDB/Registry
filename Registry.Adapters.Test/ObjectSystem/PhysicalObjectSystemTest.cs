@@ -726,7 +726,7 @@ namespace Registry.Adapters.Test.ObjectSystem
             info.ETag.Should().Be(etag);
 
             File.Delete(newFilePath);
-            
+
             // Test with different content
             await fs.GetObjectAsync(bucketName, objectName, 0, 100, s =>
             {
@@ -819,7 +819,7 @@ namespace Registry.Adapters.Test.ObjectSystem
             const string missingBucket = "bucket1";
 
             var fs = new PhysicalObjectSystem(test.TestFolder);
-            
+
             fs.ListIncompleteUploads(missingBucket).ToEnumerable().Should().BeEmpty();
 
         }
@@ -900,8 +900,121 @@ namespace Registry.Adapters.Test.ObjectSystem
 
         }
 
-        // Test di CopyObjectAsync
-        // Test di PutObjectAsync
+        [Test]
+        public async Task CopyObjectAsync_ExistingSourceObject_FileCopied()
+        {
+            using var test = new TestFS(Path.Combine(TestArchivesPath, "Test4.zip"), BaseTestFolder);
+
+            const string bucketName = "bucket1";
+            const string objectName = "flag-ita.jpg";
+
+            const string destBucketName = "bucket2";
+
+            var fs = new PhysicalObjectSystem(test.TestFolder);
+
+            var sourceFileInfo = await fs.GetObjectInfoAsync(bucketName, objectName);
+
+            await fs.CopyObjectAsync(bucketName, objectName, destBucketName);
+
+            var destFileInfo = await fs.GetObjectInfoAsync(destBucketName, objectName);
+
+            destFileInfo.Should().BeEquivalentTo(sourceFileInfo);
+
+        }
+
+        [Test]
+        public void PutObjectAsync_MissingObject_ArgumentException()
+        {
+            using var test = new TestFS(Path.Combine(TestArchivesPath, "Test4.zip"), BaseTestFolder);
+
+            const string missingBucket = "bucket3";
+            const string objectName = "new.txt";
+
+            const string fileContent = "Hello World";
+
+            using var memoryStream = new MemoryStream(Encoding.UTF8.GetBytes(fileContent));
+
+            var fs = new PhysicalObjectSystem(test.TestFolder);
+
+            FluentActions.Invoking(async () =>
+            {
+                await fs.PutObjectAsync(missingBucket, objectName, memoryStream, fileContent.Length);
+            }).Should().Throw<ArgumentException>();
+        }
+
+        [Test]
+        public async Task PutObjectAsync_ExistingObject_ObjectCreated()
+        {
+            using var test = new TestFS(Path.Combine(TestArchivesPath, "Test4.zip"), BaseTestFolder);
+
+            const string bucketName = "bucket1";
+            const string objectName = "new.txt";
+
+            const string fileContent = "Hello World";
+
+            const int expectedObjectSize = 11;
+            const string expectedObjectContentType = "text/plain";
+            const string expectedETag = "b10a8db164e0754105b7a99be72e3fe5-1";
+            
+            await using var memoryStream = new MemoryStream(Encoding.UTF8.GetBytes(fileContent));
+
+            var fs = new PhysicalObjectSystem(test.TestFolder);
+            
+            await fs.PutObjectAsync(bucketName, objectName, memoryStream, fileContent.Length);
+
+            var info = await fs.GetObjectInfoAsync(bucketName, objectName);
+
+            info.ObjectName.Should().Be(objectName);
+            info.ContentType.Should().Be(expectedObjectContentType);
+            info.ETag.Should().Be(expectedETag);
+            info.Size.Should().Be(expectedObjectSize);
+            info.MetaData.Should().BeEmpty();
+
+            var newFilePath = Path.Combine(Path.GetTempPath(), objectName);
+
+            if (File.Exists(newFilePath)) File.Delete(newFilePath);
+
+            await fs.GetObjectAsync(bucketName, objectName, newFilePath);
+
+            File.Exists(newFilePath).Should().BeTrue();
+
+            var etag = AdaptersUtils.CalculateMultipartEtag(await File.ReadAllBytesAsync(newFilePath), 1);
+
+            etag.Should().Be(info.ETag);
+
+        }
+
+        [Test]
+        public async Task PutObjectAsync_ExistingObjectWithMetadataAndContentType_ObjectCreated()
+        {
+            using var test = new TestFS(Path.Combine(TestArchivesPath, "Test4.zip"), BaseTestFolder);
+
+            const string bucketName = "bucket1";
+            const string objectName = "new.txt";
+
+            const string fileContent = "Hello World";
+
+            const int expectedObjectSize = 11;
+            const string expectedObjectContentType = "text/css";
+            const string expectedETag = "b10a8db164e0754105b7a99be72e3fe5-1";
+
+            var metadata = new Dictionary<string, string> {{"test", "hello"}};
+
+            await using var memoryStream = new MemoryStream(Encoding.UTF8.GetBytes(fileContent));
+
+            var fs = new PhysicalObjectSystem(test.TestFolder);
+
+            await fs.PutObjectAsync(bucketName, objectName, memoryStream, fileContent.Length, "text/css", metadata);
+
+            var info = await fs.GetObjectInfoAsync(bucketName, objectName);
+
+            info.ObjectName.Should().Be(objectName);
+            info.ContentType.Should().Be(expectedObjectContentType);
+            info.ETag.Should().Be(expectedETag);
+            info.Size.Should().Be(expectedObjectSize);
+            info.MetaData.Should().BeEquivalentTo(metadata);
+
+        }
 
 
         #endregion

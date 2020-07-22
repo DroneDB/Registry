@@ -15,15 +15,16 @@ using Registry.Ports.ObjectSystem.Model;
 namespace Registry.Adapters.ObjectSystem
 {
     /// <summary>
-    /// Physical implementation of filesystem interface
+    /// Physical implementation of object system interface
     /// </summary>
     public class PhysicalObjectSystem : IObjectSystem
     {
         public bool UseStrictNamingConvention { get; }
         private readonly string _baseFolder;
+
+        private const string ContentTypeKey = "Content-Type";
         public const string InfoFolder = ".info";
         public const string PolicySuffix = "policy";
-        private const string ContentTypeKey = "Content-Type";
 
         private readonly string _infoFolderPath;
 
@@ -58,7 +59,7 @@ namespace Registry.Adapters.ObjectSystem
             await using var stream = File.OpenRead(objectPath);
 
             callback(stream);
-            
+
         }
 
         public async Task GetObjectAsync(string bucketName, string objectName, long offset, long length, Action<Stream> callback,
@@ -97,12 +98,11 @@ namespace Registry.Adapters.ObjectSystem
         {
             EnsureBucketExists(bucketName);
             EnsureObjectExists(bucketName, objectName);
-            
-            var bucketInfo = GetBucketInfo(bucketName) ?? UpdateBucketInfo(bucketName);
 
-            var objectInfo = bucketInfo.Objects.FirstOrDefault(item => item.Name == objectName) ?? 
+            var bucketInfo = GetOrGenerateBucketInfo(bucketName);
+
+            var objectInfo = bucketInfo.Objects.FirstOrDefault(item => item.Name == objectName) ??
                              UpdateObjectInfo(bucketName, objectName);
-
 
             return new ObjectInfo(
                 objectInfo.Name,
@@ -140,7 +140,7 @@ namespace Registry.Adapters.ObjectSystem
 
             EnsureBucketExists(destBucketName);
 
-            // TODO: Implement
+            // TODO: Implement copy condition
             if (copyConditions != null)
                 throw new NotImplementedException("Copy conditions are not supported");
 
@@ -155,35 +155,73 @@ namespace Registry.Adapters.ObjectSystem
 
             File.Copy(objectPath, destPath, true);
 
-            if (metadata != null)
+            var info = await GetObjectInfoAsync(bucketName, objectName, sseSrc, cancellationToken);
+
+            var newInfo = new ObjectInfoDto
             {
-                var info = await GetObjectInfoAsync(bucketName, objectName, sseSrc, cancellationToken);
-
-                var newInfo = new ObjectInfoDto
-                {
-                    Name = info.ObjectName,
-                    Size = info.Size,
-                    LastModified = info.LastModified,
-                    ETag = info.ETag,
-                    ContentType = info.ContentType,
-                    MetaData = metadata
-                };
-
-                AddOrReplaceObjectInfoInternal(destBucketName, newInfo);
-                
-            }
+                Name = info.ObjectName,
+                Size = info.Size,
+                LastModified = info.LastModified,
+                ETag = info.ETag,
+                ContentType = info.ContentType,
+                MetaData = info.MetaData ?? metadata ?? new Dictionary<string, string>()
+            };
+            
+            AddOrReplaceObjectInfoInternal(destBucketName, newInfo);
 
         }
         public async Task PutObjectAsync(string bucketName, string objectName, Stream data, long size, string contentType = null,
             Dictionary<string, string> metaData = null, IServerEncryption sse = null, CancellationToken cancellationToken = default)
         {
-            throw new NotImplementedException();
+            EnsureBucketExists(bucketName);
+
+            var objectPath = GetObjectPath(bucketName, objectName);
+            var fileDirectory = Path.GetDirectoryName(objectPath);
+
+            if (!Directory.Exists(fileDirectory))
+                Directory.CreateDirectory(fileDirectory);
+
+            await using var writer = File.OpenWrite(objectPath);
+
+            await data.CopyToAsync(writer, cancellationToken);
+
+            writer.Close();
+
+            if (contentType != null || metaData != null) {
+
+                var objectInfo = await GetObjectInfoAsync(bucketName, objectName, cancellationToken: cancellationToken);
+
+                var newInfo = new ObjectInfoDto
+                {
+                    ContentType = contentType ?? objectInfo.ContentType,
+                    ETag = objectInfo.ETag,
+                    LastModified = objectInfo.LastModified,
+                    MetaData = metaData ?? objectInfo.MetaData ?? new Dictionary<string, string>(),
+                    Name = objectName,
+                    Size = objectInfo.Size
+                };
+
+                AddOrReplaceObjectInfoInternal(bucketName, newInfo);
+            }
+            else
+            {
+                UpdateObjectInfo(bucketName, objectName);
+            }
+
+
         }
 
         public async Task PutObjectAsync(string bucketName, string objectName, string filePath, string contentType = null,
             Dictionary<string, string> metaData = null, IServerEncryption sse = null, CancellationToken cancellationToken = default)
         {
-            throw new NotImplementedException();
+
+            EnsureFileExists(filePath);
+
+            await using var reader = File.OpenRead(filePath);
+
+            await PutObjectAsync(bucketName, objectName, reader, new FileInfo(filePath).Length, contentType, metaData,
+                sse, cancellationToken);
+
         }
 
         public async Task GetObjectAsync(string bucketName, string objectName, string filePath, IServerEncryption sse = null,
@@ -193,7 +231,7 @@ namespace Registry.Adapters.ObjectSystem
             var objectPath = EnsureObjectExists(bucketName, objectName);
 
             File.Copy(objectPath, filePath, true);
-            
+
         }
 
         public IObservable<ItemInfo> ListObjectsAsync(string bucketName, string prefix = null, bool recursive = false,
@@ -362,7 +400,7 @@ namespace Registry.Adapters.ObjectSystem
         private string EnsureObjectExists(string bucketName, string objectName)
         {
             var objectPath = GetObjectPath(bucketName, objectName);
-            EnsurePathExists(objectPath);
+            EnsureFileExists(objectPath);
             return objectPath;
         }
 
@@ -399,23 +437,34 @@ namespace Registry.Adapters.ObjectSystem
             return !File.Exists(path) ? null : JsonConvert.DeserializeObject<BucketInfoDto>(File.ReadAllText(path, Encoding.UTF8));
         }
 
+        private BucketInfoDto GetOrGenerateBucketInfo(string bucketName)
+        {
+            return GetBucketInfo(bucketName) ?? GenerateBucketInfo(bucketName);
+        }
+
+        private void SaveBucketInfo(BucketInfoDto bucketInfo)
+        {
+            var bucketInfoPath = GetBucketInfoPath(bucketInfo.Name);
+            File.WriteAllText(bucketInfoPath, JsonConvert.SerializeObject(bucketInfo, Formatting.Indented));
+        }
+
         private void AddOrReplaceObjectInfoInternal(string bucketName, ObjectInfoDto objectInfo)
         {
-            var bucketInfo = GetBucketInfo(bucketName);
-            var bucketInfoPath = GetBucketInfoPath(bucketName);
+            var bucketInfo = GetOrGenerateBucketInfo(bucketName);
 
             // Content type is a system-defined object metadata
             if (objectInfo.MetaData.ContainsKey(ContentTypeKey))
             {
                 objectInfo.ContentType = objectInfo.MetaData[ContentTypeKey];
-                objectInfo.MetaData.Remove(ContentTypeKey);
+                var temp = new Dictionary<string, string>(objectInfo.MetaData);
+                temp.Remove(ContentTypeKey);
+                objectInfo.MetaData = temp;
             }
 
             // Replace object
             bucketInfo.Objects = bucketInfo.Objects.Where(item => item.Name != objectInfo.Name).Concat(new[] { objectInfo }).ToArray();
 
-            File.WriteAllText(bucketInfoPath, JsonConvert.SerializeObject(bucketInfo, Formatting.Indented));
-
+            SaveBucketInfo(bucketInfo);
         }
 
         private void RemoveObjectInfoInternal(string bucketName, string objectName)
@@ -507,10 +556,10 @@ namespace Registry.Adapters.ObjectSystem
             return Path.Combine(_baseFolder, bucketName);
         }
 
-        private void EnsurePathExists(string path)
+        private void EnsureFileExists(string path)
         {
             if (!File.Exists(path))
-                throw new ArgumentException($"Object '{Path.GetFileName(path)}' does not exist");
+                throw new ArgumentException($"File '{Path.GetFileName(path)}' does not exist");
         }
 
         private void EnsureBucketDoesNotExist(string bucketName, CancellationToken cancellationToken = default)
@@ -555,7 +604,7 @@ namespace Registry.Adapters.ObjectSystem
             public DateTime LastModified { get; set; }
             public string ETag { get; set; }
             public string ContentType { get; set; }
-            public Dictionary<string, string> MetaData { get; set; }
+            public IReadOnlyDictionary<string, string> MetaData { get; set; }
         }
 
         #endregion

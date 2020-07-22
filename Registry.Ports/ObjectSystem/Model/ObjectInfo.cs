@@ -15,7 +15,7 @@ namespace Registry.Ports.ObjectSystem.Model
         /// <param name="contentType">Object content type</param>
         /// <param name="metadata"></param>
         public ObjectInfo(string objectName, long size, DateTime lastModified, string etag, string contentType,
-            Dictionary<string, string> metadata)
+            IReadOnlyDictionary<string, string> metadata)
         {
             ObjectName = objectName;
             Size = size;
