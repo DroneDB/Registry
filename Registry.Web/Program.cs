@@ -88,7 +88,7 @@ namespace Registry.Web
             {
                 Console.WriteLine(" !> Secret not found in config");
 
-                var str = Utils.RandomString(64);
+                var str = CommonUtils.RandomString(64);
 
                 appSettings["Secret"] = str;
 
