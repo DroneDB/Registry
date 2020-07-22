@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Reactive.Linq;
+using System.Reflection;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
@@ -74,7 +75,7 @@ namespace Registry.Adapters.ObjectSystem
                 Key = item.Key,
                 UploadId = item.UploadId
             });
-            
+
         }
 
         public async Task RemoveIncompleteUploadAsync(string bucketName, string objectName, CancellationToken cancellationToken = default)
@@ -86,8 +87,14 @@ namespace Registry.Adapters.ObjectSystem
             IReadOnlyDictionary<string, string> copyConditions = null, Dictionary<string, string> metadata = null, IServerEncryption sseSrc = null,
             IServerEncryption sseDest = null, CancellationToken cancellationToken = default)
         {
-            // TODO: Find out how to implement CopyCondition
-            throw new NotImplementedException();
+
+            // TODO: Implement
+            if (copyConditions != null)
+                throw new NotImplementedException("Copy conditions are not supported");
+
+            await _client.CopyObjectAsync(bucketName, objectName, destBucketName, destObjectName, null, metadata,
+                sseSrc.ToSSE(), sseDest.ToSSE(), cancellationToken);
+
         }
 
         public async Task PutObjectAsync(string bucketName, string objectName, string filePath, string contentType = null,

@@ -30,7 +30,7 @@ namespace Registry.Ports.ObjectSystem.Model
         public DateTime LastModified { get; }
         public string ETag { get; }
         public string ContentType { get; }
-        public Dictionary<string, string> MetaData { get; }
+        public IReadOnlyDictionary<string, string> MetaData { get; }
 
         public override string ToString()
         {

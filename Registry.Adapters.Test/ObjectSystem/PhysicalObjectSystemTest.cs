@@ -417,7 +417,7 @@ namespace Registry.Adapters.Test.ObjectSystem
             const string expectedContentType = "image/png";
             const string expectedEtag = "fc9f0320d52ff371200b7b0767424fc8-1";
             const long expectedSize = 3282;
-            
+
             var fs = new PhysicalObjectSystem(test.TestFolder);
 
             var info = await fs.GetObjectInfoAsync(bucketName, objectName);
@@ -570,7 +570,7 @@ namespace Registry.Adapters.Test.ObjectSystem
         }
 
         [Test]
-        public async Task GetObjectAsync_File_ExistingObject_ObjectCopied()
+        public async Task GetObjectAsync_File_ExistingObject_FileMatch()
         {
             using var test = new TestFS(Path.Combine(TestArchivesPath, "Test4.zip"), BaseTestFolder);
 
@@ -595,6 +595,315 @@ namespace Registry.Adapters.Test.ObjectSystem
 
         }
 
+        [Test]
+        public void GetObjectAsync_Stream_MissingBucket_ArgumentException()
+        {
+            using var test = new TestFS(Path.Combine(TestArchivesPath, "Test4.zip"), BaseTestFolder);
+
+            const string missingBucket = "bucket3";
+            const string objectName = "flag-ita.jpg";
+
+            var fs = new PhysicalObjectSystem(test.TestFolder);
+
+            FluentActions.Invoking(async () =>
+            {
+                await fs.GetObjectAsync(missingBucket, objectName, s => { });
+            }).Should().Throw<ArgumentException>();
+
+        }
+
+        [Test]
+        public void GetObjectAsync_Stream_MissingObject_ArgumentException()
+        {
+            using var test = new TestFS(Path.Combine(TestArchivesPath, "Test4.zip"), BaseTestFolder);
+
+            const string bucketName = "bucket1";
+            const string missingObject = "flag-itaaaaaa.jpg";
+
+            var fs = new PhysicalObjectSystem(test.TestFolder);
+
+            FluentActions.Invoking(async () =>
+            {
+                await fs.GetObjectAsync(bucketName, missingObject, s => { });
+            }).Should().Throw<ArgumentException>();
+
+        }
+
+        [Test]
+        public async Task GetObjectAsync_Stream_ExistingObject_FileMatch()
+        {
+            using var test = new TestFS(Path.Combine(TestArchivesPath, "Test4.zip"), BaseTestFolder);
+
+            const string bucketName = "bucket1";
+            const string objectName = "flag-ita.jpg";
+
+            var fs = new PhysicalObjectSystem(test.TestFolder);
+
+            var newFilePath = Path.Combine(Path.GetTempPath(), objectName);
+
+            if (File.Exists(newFilePath)) File.Delete(newFilePath);
+
+            await fs.GetObjectAsync(bucketName, objectName, s =>
+            {
+                using var writer = File.OpenWrite(newFilePath);
+                s.CopyTo(writer);
+            });
+
+            File.Exists(newFilePath).Should().BeTrue();
+
+            var etag = AdaptersUtils.CalculateMultipartEtag(await File.ReadAllBytesAsync(newFilePath), 1);
+
+            var info = await fs.GetObjectInfoAsync(bucketName, objectName);
+
+            info.ETag.Should().Be(etag);
+
+            File.Delete(newFilePath);
+
+        }
+
+        [Test]
+        public void GetObjectAsync_StreamChunk_MissingBucket_ArgumentException()
+        {
+            using var test = new TestFS(Path.Combine(TestArchivesPath, "Test4.zip"), BaseTestFolder);
+
+            const string missingBucket = "bucket3";
+            const string objectName = "flag-ita.jpg";
+
+            var fs = new PhysicalObjectSystem(test.TestFolder);
+
+            FluentActions.Invoking(async () =>
+            {
+                await fs.GetObjectAsync(missingBucket, objectName, 0, 4000, s => { });
+            }).Should().Throw<ArgumentException>();
+
+        }
+
+        [Test]
+        public void GetObjectAsync_StreamChunk_MissingObject_ArgumentException()
+        {
+            using var test = new TestFS(Path.Combine(TestArchivesPath, "Test4.zip"), BaseTestFolder);
+
+            const string bucketName = "bucket1";
+            const string missingObject = "flag-itaaaaaa.jpg";
+
+            var fs = new PhysicalObjectSystem(test.TestFolder);
+
+            FluentActions.Invoking(async () =>
+            {
+                await fs.GetObjectAsync(bucketName, missingObject, 0, 4000, s => { });
+            }).Should().Throw<ArgumentException>();
+
+        }
+
+        [Test]
+        public async Task GetObjectAsync_StreamChunk_ExistingObject_FileMatch()
+        {
+            using var test = new TestFS(Path.Combine(TestArchivesPath, "Test4.zip"), BaseTestFolder);
+
+            const string bucketName = "bucket1";
+            const string objectName = "flag-ita.jpg";
+
+            var fs = new PhysicalObjectSystem(test.TestFolder);
+
+            var newFilePath = Path.Combine(Path.GetTempPath(), objectName);
+
+            var objectInfo = await fs.GetObjectInfoAsync(bucketName, objectName);
+
+            if (File.Exists(newFilePath)) File.Delete(newFilePath);
+
+            await fs.GetObjectAsync(bucketName, objectName, 0, objectInfo.Size, s =>
+            {
+                using var writer = File.OpenWrite(newFilePath);
+                s.CopyTo(writer);
+            });
+
+            File.Exists(newFilePath).Should().BeTrue();
+
+            var etag = AdaptersUtils.CalculateMultipartEtag(await File.ReadAllBytesAsync(newFilePath), 1);
+
+            var info = await fs.GetObjectInfoAsync(bucketName, objectName);
+
+            info.ETag.Should().Be(etag);
+
+            File.Delete(newFilePath);
+            
+            // Test with different content
+            await fs.GetObjectAsync(bucketName, objectName, 0, 100, s =>
+            {
+                using var writer = File.OpenWrite(newFilePath);
+                s.CopyTo(writer);
+            });
+
+            File.Exists(newFilePath).Should().BeTrue();
+
+            etag = AdaptersUtils.CalculateMultipartEtag(await File.ReadAllBytesAsync(newFilePath), 1);
+
+            info.ETag.Should().NotBe(etag);
+
+            File.Delete(newFilePath);
+
+        }
+
+        [Test]
+        public void RemoveIncompleteUploadAsync_MissingBucket_ArgumentException()
+        {
+            using var test = new TestFS(Path.Combine(TestArchivesPath, "Test4.zip"), BaseTestFolder);
+
+            const string missingBucket = "bucket3";
+            const string objectName = "flag-ita.jpg";
+
+            var fs = new PhysicalObjectSystem(test.TestFolder);
+
+            FluentActions.Invoking(async () =>
+            {
+                await fs.RemoveIncompleteUploadAsync(missingBucket, objectName);
+            }).Should().Throw<ArgumentException>();
+
+        }
+
+        [Test]
+        public void RemoveIncompleteUploadAsync_MissingObject_ArgumentException()
+        {
+            using var test = new TestFS(Path.Combine(TestArchivesPath, "Test4.zip"), BaseTestFolder);
+
+            const string bucketName = "bucket1";
+            const string missingObject = "flag-itaaaaaa.jpg";
+
+            var fs = new PhysicalObjectSystem(test.TestFolder);
+
+            FluentActions.Invoking(async () =>
+            {
+                await fs.RemoveIncompleteUploadAsync(bucketName, missingObject);
+            }).Should().Throw<ArgumentException>();
+
+        }
+
+        [Test]
+        public void RemoveIncompleteUploadAsync_ExistingObject_NotSupportedException()
+        {
+            using var test = new TestFS(Path.Combine(TestArchivesPath, "Test4.zip"), BaseTestFolder);
+
+            const string bucketName = "bucket1";
+            const string missingObject = "flag-ita.jpg";
+
+            var fs = new PhysicalObjectSystem(test.TestFolder);
+
+            FluentActions.Invoking(async () =>
+            {
+                await fs.RemoveIncompleteUploadAsync(bucketName, missingObject);
+            }).Should().Throw<NotSupportedException>();
+
+        }
+
+        [Test]
+        public void ListIncompleteUploads_MissingBucket_ArgumentException()
+        {
+            using var test = new TestFS(Path.Combine(TestArchivesPath, "Test4.zip"), BaseTestFolder);
+
+            const string missingBucket = "bucket3";
+
+            var fs = new PhysicalObjectSystem(test.TestFolder);
+
+            FluentActions.Invoking(async () =>
+            {
+                await fs.ListIncompleteUploads(missingBucket);
+            }).Should().Throw<ArgumentException>();
+
+        }
+
+        [Test]
+        public void ListIncompleteUploads_ExistingBucket_EmptyObservable()
+        {
+            using var test = new TestFS(Path.Combine(TestArchivesPath, "Test4.zip"), BaseTestFolder);
+
+            const string missingBucket = "bucket1";
+
+            var fs = new PhysicalObjectSystem(test.TestFolder);
+            
+            fs.ListIncompleteUploads(missingBucket).ToEnumerable().Should().BeEmpty();
+
+        }
+
+        [Test]
+        public void CopyObjectAsync_MissingSourceBucket_ArgumentException()
+        {
+            using var test = new TestFS(Path.Combine(TestArchivesPath, "Test4.zip"), BaseTestFolder);
+
+            const string missingBucket = "bucket3";
+            const string sourceObjectName = "flag-ita.jpg";
+
+            const string destBucket = "bucket2";
+
+            var fs = new PhysicalObjectSystem(test.TestFolder);
+
+            FluentActions.Invoking(async () =>
+            {
+                await fs.CopyObjectAsync(missingBucket, sourceObjectName, destBucket);
+            }).Should().Throw<ArgumentException>();
+
+        }
+
+        [Test]
+        public void CopyObjectAsync_MissingObject_ArgumentException()
+        {
+            using var test = new TestFS(Path.Combine(TestArchivesPath, "Test4.zip"), BaseTestFolder);
+
+            const string bucketName = "bucket1";
+            const string missingObject = "flag-itaaaaaa.jpg";
+
+            const string destBucket = "bucket2";
+
+            var fs = new PhysicalObjectSystem(test.TestFolder);
+
+            FluentActions.Invoking(async () =>
+            {
+                await fs.CopyObjectAsync(bucketName, missingObject, destBucket);
+            }).Should().Throw<ArgumentException>();
+
+        }
+
+        [Test]
+        public void CopyObjectAsync_MissingDestBucket_ArgumentException()
+        {
+            using var test = new TestFS(Path.Combine(TestArchivesPath, "Test4.zip"), BaseTestFolder);
+
+            const string bucketName = "bucket1";
+            const string objectName = "flag-itaaaaaa.jpg";
+
+            const string missingBucket = "bucket3";
+
+            var fs = new PhysicalObjectSystem(test.TestFolder);
+
+            FluentActions.Invoking(async () =>
+            {
+                await fs.CopyObjectAsync(bucketName, objectName, missingBucket);
+            }).Should().Throw<ArgumentException>();
+
+        }
+
+        [Test]
+        public void CopyObjectAsync_CopyConditions_NotImplemented()
+        {
+            using var test = new TestFS(Path.Combine(TestArchivesPath, "Test4.zip"), BaseTestFolder);
+
+            const string bucketName = "bucket1";
+            const string objectName = "flag-ita.jpg";
+
+            const string destBucketName = "bucket2";
+
+            var fs = new PhysicalObjectSystem(test.TestFolder);
+
+            FluentActions.Invoking(async () =>
+            {
+                await fs.CopyObjectAsync(bucketName, objectName, destBucketName, null, new Dictionary<string, string>());
+            }).Should().Throw<NotImplementedException>();
+
+        }
+
+        // Test di CopyObjectAsync
+        // Test di PutObjectAsync
+
+
         #endregion
 
 
@@ -605,7 +914,7 @@ namespace Registry.Adapters.Test.ObjectSystem
             Directory.Delete(Path.Combine(Path.GetTempPath(), BaseTestFolder), true);
         }
 
-        
+
 
     }
 }
