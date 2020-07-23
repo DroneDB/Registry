@@ -23,32 +23,54 @@ namespace Registry.Web.Controllers
     [Route("[controller]")]
     public class UsersController : ControllerBase
     {
-       
+
         private readonly ApplicationDbContext _context;
+        private readonly RoleManager<IdentityRole> _roleManager;
         private readonly SignInManager<User> _signInManager;
         private readonly UserManager<User> _usersManager;
         private readonly AppSettings _appSettings;
 
-        public UsersController(IOptions<AppSettings> appSettings, SignInManager<User> signInManager, UserManager<User> usersManager, ApplicationDbContext context)
+        public UsersController(
+            IOptions<AppSettings> appSettings,
+            SignInManager<User> signInManager,
+            UserManager<User> usersManager,
+            ApplicationDbContext context,
+            RoleManager<IdentityRole> roleManager)
         {
             _context = context;
+            _roleManager = roleManager;
             _signInManager = signInManager;
             _usersManager = usersManager;
             _appSettings = appSettings.Value;
 
+            CreateDefaultAdmin().Wait();
+            
+
+        }
+
+        private async Task CreateDefaultAdmin()
+        {
             // If no users in database, let's create the default admin
             if (!_usersManager.Users.Any())
             {
+                // first we create Admin rool    
+                var role = new IdentityRole { Name = "Admin" };
+                await _roleManager.CreateAsync(role);
+
                 var defaultAdmin = _appSettings.DefaultAdmin;
                 var user = new User { Email = defaultAdmin.Email, UserName = defaultAdmin.UserName };
-                _usersManager.CreateAsync(user, defaultAdmin.Password).Wait();
-            }
 
+                var usrRes = await _usersManager.CreateAsync(user, defaultAdmin.Password);
+                if (usrRes.Succeeded)
+                {
+                    var res = await _usersManager.AddToRoleAsync(user, "Admin");
+                }
+            }
         }
-        
+
         [AllowAnonymous]
         [HttpPost("authenticate")]
-        public async Task<IActionResult> Authenticate([FromForm]AuthenticateRequest model)
+        public async Task<IActionResult> Authenticate([FromForm] AuthenticateRequest model)
         {
 
             var response = await GetAutentication(model);
@@ -80,12 +102,12 @@ namespace Registry.Web.Controllers
         {
 
             var query = from user in _usersManager.Users
-                select new UserDto
-                {
-                    Email = user.Email,
-                    UserName = user.UserName,
-                    Id = user.Id
-                };
+                        select new UserDto
+                        {
+                            Email = user.Email,
+                            UserName = user.UserName,
+                            Id = user.Id
+                        };
 
 
             return Ok(query.ToArray());
