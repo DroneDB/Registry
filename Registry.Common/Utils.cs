@@ -38,7 +38,7 @@ namespace Registry.Common
             if (first.Length != second.Length)
                 return false;
 
-            if (string.Equals(first.FullName, second.FullName, StringComparison.OrdinalIgnoreCase))
+            if (string.Equals(first.FullName, second.FullName, StringComparison.Ordinal))
                 return true;
 
             var iterations = (int)Math.Ceiling((double)first.Length / BytesToRead);
