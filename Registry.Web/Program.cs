@@ -18,6 +18,7 @@ namespace Registry.Web
     {
 
         const string ConfigFilePath = "appsettings.json";
+        const string DefaultConfigFilePath = "appsettings-default.json";
 
         public static void Main(string[] args)
         {
@@ -65,10 +66,9 @@ namespace Registry.Web
             if (!File.Exists(ConfigFilePath))
             {
                 Console.WriteLine($" !> Cannot find {ConfigFilePath}");
-                Console.WriteLine(" -> Generating default config");
+                Console.WriteLine(" -> Copying default config");
 
-                File.WriteAllText(ConfigFilePath, DefaultConfig);
-
+                File.Copy(DefaultConfigFilePath, ConfigFilePath, true);
             }
 
             var jObject = JsonConvert.DeserializeObject<JObject>(File.ReadAllText(ConfigFilePath));
@@ -136,24 +136,6 @@ namespace Registry.Web
 
         private const string DefaultSqliteConnectionString = "Data Source=App_Data/identity.db;Mode=ReadWriteCreate";
 
-        private static readonly string DefaultConfig = $@"{{
-  ""AppSettings"": {{
-    ""Secret"": """",
-    ""TokenExpirationInDays"": 7,
-    ""AuthProvider"": ""Sqlite""
-  }},
-  ""Logging"": {{
-    ""LogLevel"": {{
-      ""Default"": ""Information"",
-      ""Microsoft"": ""Warning"",
-      ""Microsoft.Hosting.Lifetime"": ""Information""
-    }}
-  }},
-  ""AllowedHosts"": ""*"",
-  ""ConnectionStrings"": {{
-        ""IdentityConnection"": ""{DefaultSqliteConnectionString}""
-  }}
-}}";
 
     }
 }

@@ -173,7 +173,6 @@ namespace Registry.Web
             // NOTE: We support migrations only for sqlite
             if (context.Database.ProviderName == "Microsoft.EntityFrameworkCore.Sqlite")
             {
-
                 EnsureFolderCreated(Configuration.GetConnectionString(IdentityConnectionName));
 
                 context.Database.Migrate();
