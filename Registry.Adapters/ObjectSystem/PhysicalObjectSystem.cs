@@ -85,10 +85,13 @@ namespace Registry.Adapters.ObjectSystem
             EnsureBucketExists(bucketName);
             var objectPath = EnsureObjectExists(bucketName, objectName);
 
-            File.Delete(objectPath);
+            await Task.Run(() =>
+            {
+                File.Delete(objectPath);
 
-            // Remove from bucket json
-            RemoveObjectInfoInternal(bucketName, objectName);
+                // Remove from bucket json
+                RemoveObjectInfoInternal(bucketName, objectName);
+            }, cancellationToken);
 
         }
 
@@ -99,18 +102,22 @@ namespace Registry.Adapters.ObjectSystem
             EnsureBucketExists(bucketName);
             EnsureObjectExists(bucketName, objectName);
 
-            var bucketInfo = GetOrGenerateBucketInfo(bucketName);
+            return await Task.Run(() =>
+            {
+                var bucketInfo = GetOrGenerateBucketInfo(bucketName);
 
-            var objectInfo = bucketInfo.Objects.FirstOrDefault(item => item.Name == objectName) ??
-                             UpdateObjectInfo(bucketName, objectName);
+                var objectInfo = bucketInfo.Objects.FirstOrDefault(item => item.Name == objectName) ??
+                                 UpdateObjectInfo(bucketName, objectName);
 
-            return new ObjectInfo(
-                objectInfo.Name,
-                objectInfo.Size,
-                objectInfo.LastModified,
-                objectInfo.ETag,
-                objectInfo.ContentType,
-                objectInfo.MetaData);
+                return new ObjectInfo(
+                    objectInfo.Name,
+                    objectInfo.Size,
+                    objectInfo.LastModified,
+                    objectInfo.ETag,
+                    objectInfo.ContentType,
+                    objectInfo.MetaData);
+
+            }, cancellationToken);
 
         }
 
@@ -123,7 +130,9 @@ namespace Registry.Adapters.ObjectSystem
             return new ObjectUpload[0].ToObservable();
         }
 
+#pragma warning disable 1998
         public async Task RemoveIncompleteUploadAsync(string bucketName, string objectName, CancellationToken cancellationToken = default)
+#pragma warning restore 1998
         {
             EnsureBucketExists(bucketName);
             EnsureObjectExists(bucketName, objectName);
@@ -166,7 +175,7 @@ namespace Registry.Adapters.ObjectSystem
                 ContentType = info.ContentType,
                 MetaData = info.MetaData ?? metadata ?? new Dictionary<string, string>()
             };
-            
+
             AddOrReplaceObjectInfoInternal(destBucketName, newInfo);
 
         }
@@ -187,7 +196,8 @@ namespace Registry.Adapters.ObjectSystem
 
             writer.Close();
 
-            if (contentType != null || metaData != null) {
+            if (contentType != null || metaData != null)
+            {
 
                 var objectInfo = await GetObjectInfoAsync(bucketName, objectName, cancellationToken: cancellationToken);
 
@@ -230,7 +240,10 @@ namespace Registry.Adapters.ObjectSystem
             EnsureBucketExists(bucketName);
             var objectPath = EnsureObjectExists(bucketName, objectName);
 
-            File.Copy(objectPath, filePath, true);
+            await Task.Run(() =>
+            {
+                File.Copy(objectPath, filePath, true);
+            }, cancellationToken);
 
         }
 
@@ -299,9 +312,13 @@ namespace Registry.Adapters.ObjectSystem
         {
             EnsureBucketDoesNotExist(bucketName);
 
-            Directory.CreateDirectory(Path.Combine(_baseFolder, bucketName));
+            await Task.Run(() =>
+            {
+                Directory.CreateDirectory(Path.Combine(_baseFolder, bucketName));
 
-            SaveBucketInfo(GenerateBucketInfo(bucketName));
+                UpdateBucketInfo(bucketName);
+
+            }, cancellationToken);
 
         }
 
@@ -340,20 +357,23 @@ namespace Registry.Adapters.ObjectSystem
         {
             EnsureBucketExists(bucketName);
 
-            var fullPath = Path.Combine(_baseFolder, bucketName);
+            await Task.Run(() =>
+            {
+                var fullPath = GetBucketPath(bucketName);
 
-            Directory.Delete(fullPath, true);
+                Directory.Delete(fullPath, true);
 
-            var bucketPolicyPath = GetBucketPolicyPath(bucketName);
+                var bucketPolicyPath = GetBucketPolicyPath(bucketName);
 
-            if (File.Exists(bucketPolicyPath))
-                File.Delete(bucketPolicyPath);
+                if (File.Exists(bucketPolicyPath))
+                    File.Delete(bucketPolicyPath);
 
-            var bucketInfoPath = GetBucketInfoPath(bucketName);
+                var bucketInfoPath = GetBucketInfoPath(bucketName);
 
-            if (File.Exists(bucketInfoPath))
-                File.Delete(bucketInfoPath);
+                if (File.Exists(bucketInfoPath))
+                    File.Delete(bucketInfoPath);
 
+            }, cancellationToken);
         }
 
         public async Task<string> GetPolicyAsync(string bucketName, CancellationToken cancellationToken = default)
@@ -371,8 +391,7 @@ namespace Registry.Adapters.ObjectSystem
             return null;
 
         }
-
-
+        
         public async Task SetPolicyAsync(string bucketName, string policyJson, CancellationToken cancellationToken = default)
         {
 
@@ -401,27 +420,11 @@ namespace Registry.Adapters.ObjectSystem
 
         private string EnsureObjectExists(string bucketName, string objectName)
         {
+            CheckPath(objectName);
             var objectPath = GetObjectPath(bucketName, objectName);
             EnsureFileExists(objectPath);
             return objectPath;
         }
-
-        /// <summary>
-        /// Updates bucket info cache
-        /// </summary>
-        /// <param name="bucketName"></param>
-        /// <returns></returns>
-        private BucketInfoDto UpdateBucketInfo(string bucketName)
-        {
-            var bucketInfo = GenerateBucketInfo(bucketName);
-
-            var bucketInfoPath = GetBucketInfoPath(bucketName);
-
-            File.WriteAllText(bucketInfoPath, JsonConvert.SerializeObject(bucketInfo, Formatting.Indented));
-
-            return bucketInfo;
-        }
-
 
         private BucketInfoDto GenerateBucketInfo(string bucketName)
         {
@@ -442,6 +445,20 @@ namespace Registry.Adapters.ObjectSystem
         private BucketInfoDto GetOrGenerateBucketInfo(string bucketName)
         {
             return GetBucketInfo(bucketName) ?? GenerateBucketInfo(bucketName);
+        }
+
+        /// <summary>
+        /// Updates bucket info cache
+        /// </summary>
+        /// <param name="bucketName"></param>
+        /// <returns></returns>
+        private BucketInfoDto UpdateBucketInfo(string bucketName)
+        {
+            var bucketInfo = GenerateBucketInfo(bucketName);
+            
+            SaveBucketInfo(bucketInfo);
+
+            return bucketInfo;
         }
 
         private void SaveBucketInfo(BucketInfoDto bucketInfo)
@@ -541,8 +558,9 @@ namespace Registry.Adapters.ObjectSystem
         private void CheckPath(string path)
         {
             if (path.Contains(".."))
-                throw new InvalidOperationException("Parent path separator is not supported");
+                throw new ArgumentException("Parent path separator is not supported");
         }
+
         private string GetBucketPolicyPath(string bucketName)
         {
             return Path.Combine(_infoFolderPath, $"{bucketName}-{PolicySuffix}.json");
