@@ -10,12 +10,21 @@ namespace Registry.Web.Models
         public string Secret { get; set; }
         public int TokenExpirationInDays { get; set; }
         public AuthProvider AuthProvider  {get; set;}
+        public StorageProvider StorageProvider { get; set; }
+        public AdminInfo DefaultAdmin { get; set; }
     }
 
     public class StorageProvider
     {
         public StorageType Type { get; set; }
         public Dictionary<string, string> Settings { get; set; }
+    }
+
+    public class AdminInfo
+    {
+        public string Email { get; set; }
+        public string UserName { get; set; }
+        public string Password { get; set; }
     }
 
     public enum StorageType

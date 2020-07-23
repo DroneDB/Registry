@@ -39,8 +39,9 @@ namespace Registry.Web.Controllers
             // If no users in database, let's create the default admin
             if (!_usersManager.Users.Any())
             {
-                var user = new User() { Email = "admin@example.com", UserName = "admin" };
-                _usersManager.CreateAsync(user, "password").Wait();
+                var defaultAdmin = _appSettings.DefaultAdmin;
+                var user = new User { Email = defaultAdmin.Email, UserName = defaultAdmin.UserName };
+                _usersManager.CreateAsync(user, defaultAdmin.Password).Wait();
             }
 
         }

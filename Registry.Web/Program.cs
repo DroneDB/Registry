@@ -67,13 +67,15 @@ namespace Registry.Web
             {
                 Console.WriteLine($" !> Cannot find {ConfigFilePath}");
                 Console.WriteLine(" -> Copying default config");
-
+                
                 File.Copy(DefaultConfigFilePath, ConfigFilePath, true);
             }
 
-            var jObject = JsonConvert.DeserializeObject<JObject>(File.ReadAllText(ConfigFilePath));
+            var defaultConfig = JsonConvert.DeserializeObject<JObject>(File.ReadAllText(DefaultConfigFilePath));
+            var config = JsonConvert.DeserializeObject<JObject>(File.ReadAllText(ConfigFilePath));
 
-            var appSettings = jObject["AppSettings"];
+            var defaultAppSettings = defaultConfig["AppSettings"];
+            var appSettings = config["AppSettings"];
 
             if (appSettings == null)
             {
@@ -94,11 +96,11 @@ namespace Registry.Web
 
                 Console.WriteLine($" -> Generated secret: '{str}'");
 
-                File.WriteAllText(ConfigFilePath, JsonConvert.SerializeObject(jObject, Formatting.Indented));
+                File.WriteAllText(ConfigFilePath, JsonConvert.SerializeObject(config, Formatting.Indented));
 
             }
 
-            var connectionStrings = jObject["ConnectionStrings"];
+            var connectionStrings = config["ConnectionStrings"];
 
             if (connectionStrings == null)
             {
@@ -112,12 +114,44 @@ namespace Registry.Web
             {
                 Console.WriteLine(" !> Cannot find IdentityConnection");
 
-                connectionStrings["IdentityConnection"] = DefaultSqliteConnectionString;
+                var defaultConnectionStrings = defaultConfig["ConnectionStrings"];
+                if (defaultConnectionStrings == null)
+                {
+                    Console.WriteLine(" !> Cannot find connection strings in default config");
+                    return false;
+                }
+
+                var defaultIdentityConnection = defaultConnectionStrings["IdentityConnection"];
+                if (defaultIdentityConnection == null || string.IsNullOrWhiteSpace(defaultIdentityConnection.Value<string>()))
+                {
+                    Console.WriteLine(" !> Cannot copy identity connection from default config");
+                    return false;
+                }
+
+                connectionStrings["IdentityConnection"] = defaultConnectionStrings["IdentityConnection"];
 
                 Console.WriteLine(" -> Setting IdentityConnection to Sqlite default");
-                Console.WriteLine($" ?> {DefaultSqliteConnectionString}");
+                Console.WriteLine($" ?> {connectionStrings["IdentityConnection"]}");
 
-                File.WriteAllText(ConfigFilePath, JsonConvert.SerializeObject(jObject, Formatting.Indented));
+                File.WriteAllText(ConfigFilePath, JsonConvert.SerializeObject(config, Formatting.Indented));
+
+            }
+
+            var defaultAdmin = appSettings["DefaultAdmin"];
+
+            if (defaultAdmin == null)
+            {
+                Console.WriteLine("Cannot find default admin info, copying from default config");
+
+                if (defaultAppSettings == null)
+                {
+                    Console.WriteLine("Cannot find default admin in default config");
+                    return false;
+                }
+
+                appSettings["DefaultAdmin"] = defaultAppSettings["DefaultAdmin"];
+
+                File.WriteAllText(ConfigFilePath, JsonConvert.SerializeObject(config, Formatting.Indented));
 
             }
 
@@ -132,9 +166,6 @@ namespace Registry.Web
                 {
                     webBuilder.UseStartup<Startup>();
                 });
-
-
-        private const string DefaultSqliteConnectionString = "Data Source=App_Data/identity.db;Mode=ReadWriteCreate";
 
 
     }
