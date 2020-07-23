@@ -9,7 +9,8 @@ namespace Registry.Web.Models
     {
         public string Secret { get; set; }
         public int TokenExpirationInDays { get; set; }
-        public AuthProvider AuthProvider  {get; set;}
+        public DbProvider AuthProvider  {get; set;}
+        public DbProvider RegistryProvider { get; set; }
         public StorageProvider StorageProvider { get; set; }
         public AdminInfo DefaultAdmin { get; set; }
     }
@@ -33,7 +34,7 @@ namespace Registry.Web.Models
         S3
     }
 
-    public enum AuthProvider
+    public enum DbProvider
     {
         Sqlite,
         Mysql,

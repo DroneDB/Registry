@@ -23,7 +23,7 @@ namespace Registry.Web
         public static void Main(string[] args)
         {
             // We could use a library to perform command line parsing, but this is sufficient so far
-            if (args.Any(a => 
+            if (args.Any(a =>
                     string.Equals(a, "--help", StringComparison.OrdinalIgnoreCase) ||
                     string.Equals(a, "-h", StringComparison.OrdinalIgnoreCase)))
             {
@@ -67,7 +67,7 @@ namespace Registry.Web
             {
                 Console.WriteLine($" !> Cannot find {ConfigFilePath}");
                 Console.WriteLine(" -> Copying default config");
-                
+
                 File.Copy(DefaultConfigFilePath, ConfigFilePath, true);
             }
 
@@ -96,8 +96,6 @@ namespace Registry.Web
 
                 Console.WriteLine($" -> Generated secret: '{str}'");
 
-                File.WriteAllText(ConfigFilePath, JsonConvert.SerializeObject(config, Formatting.Indented));
-
             }
 
             var connectionStrings = config["ConnectionStrings"];
@@ -108,34 +106,10 @@ namespace Registry.Web
                 return false;
             }
 
-            var identityConnection = connectionStrings["IdentityConnection"];
+            var defaultConnectionStrings = defaultConfig["ConnectionStrings"];
 
-            if (identityConnection == null || string.IsNullOrWhiteSpace(identityConnection.Value<string>()))
-            {
-                Console.WriteLine(" !> Cannot find IdentityConnection");
-
-                var defaultConnectionStrings = defaultConfig["ConnectionStrings"];
-                if (defaultConnectionStrings == null)
-                {
-                    Console.WriteLine(" !> Cannot find connection strings in default config");
-                    return false;
-                }
-
-                var defaultIdentityConnection = defaultConnectionStrings["IdentityConnection"];
-                if (defaultIdentityConnection == null || string.IsNullOrWhiteSpace(defaultIdentityConnection.Value<string>()))
-                {
-                    Console.WriteLine(" !> Cannot copy identity connection from default config");
-                    return false;
-                }
-
-                connectionStrings["IdentityConnection"] = defaultConnectionStrings["IdentityConnection"];
-
-                Console.WriteLine(" -> Setting IdentityConnection to Sqlite default");
-                Console.WriteLine($" ?> {connectionStrings["IdentityConnection"]}");
-
-                File.WriteAllText(ConfigFilePath, JsonConvert.SerializeObject(config, Formatting.Indented));
-
-            }
+            if (!CheckConnection(connectionStrings, defaultConnectionStrings, "IdentityConnection")) return false;
+            if (!CheckConnection(connectionStrings, defaultConnectionStrings, "RegistryConnection")) return false;
 
             var defaultAdmin = appSettings["DefaultAdmin"];
 
@@ -151,13 +125,43 @@ namespace Registry.Web
 
                 appSettings["DefaultAdmin"] = defaultAppSettings["DefaultAdmin"];
 
-                File.WriteAllText(ConfigFilePath, JsonConvert.SerializeObject(config, Formatting.Indented));
-
             }
 
+            // Update config
+            File.WriteAllText(ConfigFilePath, JsonConvert.SerializeObject(config, Formatting.Indented));
 
             return true;
 
+        }
+
+        private static bool CheckConnection(JToken connectionStrings, JToken defaultConnectionStrings, string connectionName)
+        {
+            var connection = connectionStrings[connectionName];
+
+            if (connection == null || string.IsNullOrWhiteSpace(connection.Value<string>()))
+            {
+                Console.WriteLine(" !> Cannot find " + connectionName);
+
+                if (defaultConnectionStrings == null)
+                {
+                    Console.WriteLine(" !> Cannot find connection strings in default config");
+                    return false;
+                }
+
+                var defaultConnection = defaultConnectionStrings[connectionName];
+                if (defaultConnection == null || string.IsNullOrWhiteSpace(defaultConnection.Value<string>()))
+                {
+                    Console.WriteLine(" !> Cannot copy " + connectionName + " from default config");
+                    return false;
+                }
+
+                connectionStrings[connectionName] = defaultConnectionStrings[connectionName];
+
+                Console.WriteLine(" -> Setting " + connectionName + " to default");
+                Console.WriteLine($" ?> {connectionStrings[connectionName]}");
+            }
+
+            return true;
         }
 
         private static IHostBuilder CreateHostBuilder(string[] args) =>

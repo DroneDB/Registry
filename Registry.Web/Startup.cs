@@ -4,6 +4,8 @@ using System.IO;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
+using Microsoft.AspNet.OData.Builder;
+using Microsoft.AspNet.OData.Extensions;
 using Registry.Web.Models;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Builder;
@@ -19,12 +21,17 @@ using Microsoft.Extensions.FileProviders;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.IdentityModel.Tokens;
+using Microsoft.OData.Edm;
+using Registry.Web.Data;
+using Registry.Web.Data.Models;
+using Registry.Web.Models.DTO;
 
 namespace Registry.Web
 {
     public class Startup
     {
         private const string IdentityConnectionName = "IdentityConnection";
+        private const string RegistryConnectionName = "RegistryConnection";
 
         public Startup(IConfiguration configuration)
         {
@@ -44,12 +51,14 @@ namespace Registry.Web
 
             var appSettings = appSettingsSection.Get<AppSettings>();
 
-            ConfigureAuthProvider(services, appSettings.AuthProvider);
+            ConfigureProvider<ApplicationDbContext>(services, appSettings.AuthProvider, IdentityConnectionName);
 
             services.AddIdentityCore<User>()
+                .AddRoles<IdentityRole>()
                 .AddEntityFrameworkStores<ApplicationDbContext>()
                 .AddSignInManager();
 
+            ConfigureProvider<RegistryContext>(services, appSettings.RegistryProvider, RegistryConnectionName);
 
             var key = Encoding.ASCII.GetBytes(appSettings.Secret);
             services.AddAuthentication(auth =>
@@ -98,37 +107,40 @@ namespace Registry.Web
                     new BadRequestObjectResult(new ErrorResponse(actionContext.ModelState));
             });
 
+            // services.AddOData();
+
         }
 
-        private void ConfigureAuthProvider(IServiceCollection services, AuthProvider authProvider)
+        private void ConfigureProvider<T>(IServiceCollection services, DbProvider provider, string connectionStringName) where T : DbContext
         {
-            switch (authProvider)
+            switch (provider)
             {
-                case AuthProvider.Sqlite:
+                case DbProvider.Sqlite:
 
-
-
-                    services.AddDbContext<ApplicationDbContext>(options =>
+                    services.AddDbContext<T>(options =>
                         options.UseSqlite(
-                            Configuration.GetConnectionString(IdentityConnectionName)));
+                            Configuration.GetConnectionString(connectionStringName)));
 
                     break;
-                case AuthProvider.Mysql:
 
-                    services.AddDbContext<ApplicationDbContext>(options =>
+                case DbProvider.Mysql:
+
+                    services.AddDbContext<T>(options =>
                         options.UseMySql(
-                            Configuration.GetConnectionString(IdentityConnectionName)));
+                            Configuration.GetConnectionString(connectionStringName)));
 
                     break;
-                case AuthProvider.Mssql:
 
-                    services.AddDbContext<ApplicationDbContext>(options =>
+                case DbProvider.Mssql:
+
+                    services.AddDbContext<T>(options =>
                         options.UseSqlServer(
-                            Configuration.GetConnectionString(IdentityConnectionName)));
+                            Configuration.GetConnectionString(connectionStringName)));
 
                     break;
+
                 default:
-                    throw new ArgumentOutOfRangeException($"Unrecognised auth provider: '{authProvider}'");
+                    throw new ArgumentOutOfRangeException($"Unrecognised provider: '{provider}'");
             }
         }
 
@@ -156,11 +168,18 @@ namespace Registry.Web
             app.UseEndpoints(endpoints =>
             {
                 endpoints.MapControllers();
-
+                // endpoints.MapODataRoute("odata", "odata", GetEdmModel());
             });
 
             UpdateDatabase(app);
 
+        }
+        IEdmModel GetEdmModel()
+        {
+            var odataBuilder = new ODataConventionModelBuilder();
+            odataBuilder.EntitySet<OrganizationDto>("Organizations");
+
+            return odataBuilder.GetEdmModel();
         }
 
         private void UpdateDatabase(IApplicationBuilder app)
@@ -168,15 +187,26 @@ namespace Registry.Web
             using var serviceScope = app.ApplicationServices
                 .GetRequiredService<IServiceScopeFactory>()
                 .CreateScope();
-            using var context = serviceScope.ServiceProvider.GetService<ApplicationDbContext>();
+            using var applicationDbContext = serviceScope.ServiceProvider.GetService<ApplicationDbContext>();
 
             // NOTE: We support migrations only for sqlite
-            if (context.Database.ProviderName == "Microsoft.EntityFrameworkCore.Sqlite")
+            if (applicationDbContext.Database.ProviderName == "Microsoft.EntityFrameworkCore.Sqlite")
             {
                 EnsureFolderCreated(Configuration.GetConnectionString(IdentityConnectionName));
 
-                context.Database.Migrate();
+                applicationDbContext.Database.Migrate();
             }
+
+            using var registryDbContext = serviceScope.ServiceProvider.GetService<RegistryContext>();
+
+            // NOTE: We support migrations only for sqlite
+            if (registryDbContext.Database.ProviderName == "Microsoft.EntityFrameworkCore.Sqlite")
+            {
+                EnsureFolderCreated(Configuration.GetConnectionString(RegistryConnectionName));
+
+                registryDbContext.Database.Migrate();
+            }
+
         }
 
         /// <summary>
