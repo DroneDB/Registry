@@ -21,7 +21,7 @@ namespace Registry.Web.Controllers
     [Authorize]
     [ApiController]
     [Route("[controller]")]
-    public class UsersController : ControllerBase
+    public class UsersController : ControllerBaseEx
     {
 
         private readonly ApplicationDbContext _context;
@@ -35,7 +35,7 @@ namespace Registry.Web.Controllers
             SignInManager<User> signInManager,
             UserManager<User> usersManager,
             ApplicationDbContext context,
-            RoleManager<IdentityRole> roleManager)
+            RoleManager<IdentityRole> roleManager) : base(usersManager)
         {
             _context = context;
             _roleManager = roleManager;
@@ -44,7 +44,6 @@ namespace Registry.Web.Controllers
             _appSettings = appSettings.Value;
 
             CreateDefaultAdmin().Wait();
-            
 
         }
 
@@ -53,17 +52,21 @@ namespace Registry.Web.Controllers
             // If no users in database, let's create the default admin
             if (!_usersManager.Users.Any())
             {
-                // first we create Admin rool    
-                var role = new IdentityRole { Name = "Admin" };
+                // first we create Admin role  
+                var role = new IdentityRole { Name = ApplicationDbContext.AdminRoleName };
                 await _roleManager.CreateAsync(role);
 
                 var defaultAdmin = _appSettings.DefaultAdmin;
-                var user = new User { Email = defaultAdmin.Email, UserName = defaultAdmin.UserName };
+                var user = new User
+                {
+                    Email = defaultAdmin.Email, 
+                    UserName = defaultAdmin.UserName
+                };
 
                 var usrRes = await _usersManager.CreateAsync(user, defaultAdmin.Password);
                 if (usrRes.Succeeded)
                 {
-                    var res = await _usersManager.AddToRoleAsync(user, "Admin");
+                    var res = await _usersManager.AddToRoleAsync(user, ApplicationDbContext.AdminRoleName);
                 }
             }
         }
@@ -92,36 +95,44 @@ namespace Registry.Web.Controllers
             if (!res.Succeeded) return null;
 
             // authentication successful so generate jwt token
-            var token = GenerateJwtToken(user);
+            var token = await GenerateJwtToken(user);
 
             return new AuthenticateResponse(user, token);
         }
 
         [HttpGet]
-        public IActionResult GetAll()
+        public async Task<IActionResult> GetAll()
         {
 
-            var query = from user in _usersManager.Users
-                        select new UserDto
-                        {
-                            Email = user.Email,
-                            UserName = user.UserName,
-                            Id = user.Id
-                        };
+            if (await IsUserAdmin())
+            {
+                var query = from user in _usersManager.Users
+                    select new UserDto
+                    {
+                        Email = user.Email,
+                        UserName = user.UserName,
+                        Id = user.Id
+                    };
 
 
-            return Ok(query.ToArray());
+                return Ok(query.ToArray());
+            }
+
+            return Unauthorized();
+            
         }
-        private string GenerateJwtToken(User user)
+        private async Task<string> GenerateJwtToken(User user)
         {
             // generate token
             var tokenHandler = new JwtSecurityTokenHandler();
             var key = Encoding.ASCII.GetBytes(_appSettings.Secret);
+
             var tokenDescriptor = new SecurityTokenDescriptor
             {
                 Subject = new ClaimsIdentity(new[]
                 {
-                    new Claim(ClaimTypes.Name, user.Id.ToString())
+                    new Claim(ClaimTypes.Name, user.Id),
+                    new Claim(ApplicationDbContext.AdminRoleName.ToLowerInvariant(), (await _usersManager.IsInRoleAsync(user, ApplicationDbContext.AdminRoleName)).ToString()), 
                 }),
                 Expires = DateTime.UtcNow.AddDays(_appSettings.TokenExpirationInDays),
                 SigningCredentials = new SigningCredentials(new SymmetricSecurityKey(key), SecurityAlgorithms.HmacSha256Signature)
