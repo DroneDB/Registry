@@ -9,6 +9,7 @@ namespace Registry.Web.Models
     {
         public string Secret { get; set; }
         public int TokenExpirationInDays { get; set; }
+        public string[] RevokedTokens { get; set; }
         public DbProvider AuthProvider  {get; set;}
         public DbProvider RegistryProvider { get; set; }
         public StorageProvider StorageProvider { get; set; }

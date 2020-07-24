@@ -25,6 +25,7 @@ using Microsoft.OData.Edm;
 using Registry.Web.Data;
 using Registry.Web.Data.Models;
 using Registry.Web.Models.DTO;
+using Registry.Web.Services;
 
 namespace Registry.Web
 {
@@ -107,6 +108,10 @@ namespace Registry.Web
                     new BadRequestObjectResult(new ErrorResponse(actionContext.ModelState));
             });
 
+            services.AddTransient<TokenManagerMiddleware>();
+            services.AddTransient<ITokenManager, TokenManager>();
+            services.AddSingleton<IHttpContextAccessor, HttpContextAccessor>();
+            services.AddDistributedMemoryCache();
             // services.AddOData();
 
         }
@@ -162,6 +167,8 @@ namespace Registry.Web
             app.UseAuthentication();
             app.UseAuthorization();
 
+            app.UseMiddleware<TokenManagerMiddleware>();
+
             app.UseDefaultFiles();
             app.UseStaticFiles();
 
@@ -174,7 +181,7 @@ namespace Registry.Web
             UpdateDatabase(app);
 
         }
-        IEdmModel GetEdmModel()
+        private IEdmModel GetEdmModel()
         {
             var odataBuilder = new ODataConventionModelBuilder();
             odataBuilder.EntitySet<OrganizationDto>("Organizations");
