@@ -89,8 +89,6 @@ namespace Registry.Web.Controllers
                    };
         }
 
-        // This is not triggered but instead DatasetsController
-
         // GET: ddb/
         [HttpGet("ddb/{id:alpha}",Name = "Get")]
         public async Task<IActionResult> Get(string id)

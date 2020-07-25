@@ -18,6 +18,6 @@ namespace Registry.Web.Data.Models
         public string OwnerId { get; set; }
         public bool IsPublic { get; set; }
 
-        public List<Models.Dataset> Datasets { get; set; }
+        public List<Dataset> Datasets { get; set; }
     }
 }

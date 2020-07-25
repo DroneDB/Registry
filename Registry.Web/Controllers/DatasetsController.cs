@@ -18,7 +18,7 @@ namespace Registry.Web.Controllers
 
     [Authorize]
     [ApiController]
-    [Route("ddb/{orgId:alpha}")]
+    [Route("ddb/{orgId:alpha}/ds")]
     public class DatasetsController : ControllerBase
     {
         private readonly IOptions<AppSettings> _appSettings;
