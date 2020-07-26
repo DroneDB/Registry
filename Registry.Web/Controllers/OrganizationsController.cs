@@ -11,6 +11,7 @@ using Registry.Web.Data;
 using Registry.Web.Data.Models;
 using Registry.Web.Models;
 using Registry.Web.Models.DTO;
+using Registry.Web.Services;
 
 namespace Registry.Web.Controllers
 {
@@ -22,18 +23,18 @@ namespace Registry.Web.Controllers
         private readonly IOptions<AppSettings> _appSettings;
         private readonly UserManager<User> _usersManager;
         private readonly RegistryContext _context;
-        private readonly RoleManager<IdentityRole> _roleManager;
+        private readonly IUtils _utils;
 
         public OrganizationsController(
             IOptions<AppSettings> appSettings,
             UserManager<User> usersManager,
             RegistryContext context,
-            RoleManager<IdentityRole> roleManager) : base(usersManager)
+            IUtils utils) : base(usersManager)
         {
             _appSettings = appSettings;
             _usersManager = usersManager;
             _context = context;
-            _roleManager = roleManager;
+            _utils = utils;
 
             // If no organizations in database, let's create the public one
             if (!_context.Organizations.Any())
@@ -110,12 +111,13 @@ namespace Registry.Web.Controllers
             return Ok(new OrganizationDto(res));
         }
 
-        // TODO: Enforce id lowercase with dashes
-
         // POST: ddb/
         [HttpPost]
         public async Task<ActionResult<OrganizationDto>> Post([FromBody] OrganizationDto organization)
         {
+
+            if (!_utils.IsOrganizationNameValid(organization.Id))
+                return BadRequest(new ErrorResponse("Invalid organization id"));
 
             var existingOrg = _context.Organizations.FirstOrDefault(item => item.Id == organization.Id);
 
@@ -157,7 +159,6 @@ namespace Registry.Web.Controllers
             await _context.Organizations.AddAsync(org);
             await _context.SaveChangesAsync();
 
-            // This does not work
             return CreatedAtRoute(nameof(Get), new { id = org.Id }, org);
 
         }

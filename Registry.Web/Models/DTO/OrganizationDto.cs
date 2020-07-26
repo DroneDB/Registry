@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.ComponentModel.DataAnnotations;
 using System.Linq;
 using System.Security.Cryptography;
 using System.Threading.Tasks;
@@ -9,7 +10,10 @@ namespace Registry.Web.Models.DTO
 {
     public class OrganizationDto : Dto<Organization>
     {
+        [Required]
         public string Id { get; set; }
+
+        [Required]
         public string Name { get; set; }
         public string Description { get; set; }
         public DateTime CreationDate { get; set; }
@@ -44,6 +48,7 @@ namespace Registry.Web.Models.DTO
                 IsPublic = IsPublic,
         };
         }
+
     }
 
 }
