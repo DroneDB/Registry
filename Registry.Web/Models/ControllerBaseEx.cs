@@ -30,7 +30,7 @@ namespace Registry.Web.Models
         protected async Task<bool> IsUserInRole(string roleName)
         {
             var currentUser = await GetCurrentUser();
-            return await UsersManager.IsInRoleAsync(currentUser, roleName);
+            return currentUser != null && await UsersManager.IsInRoleAsync(currentUser, roleName);
         }
 
         protected async Task<bool> IsUserAdmin()

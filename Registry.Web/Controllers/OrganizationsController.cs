@@ -6,6 +6,7 @@ using Microsoft.AspNet.OData;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 using Registry.Web.Data;
 using Registry.Web.Data.Models;
@@ -162,6 +163,63 @@ namespace Registry.Web.Controllers
             return CreatedAtRoute(nameof(Get), new { id = org.Id }, org);
 
         }
+
+        // POST: ddb/
+        [HttpPut("{id}")]
+        public async Task<ActionResult<OrganizationDto>> Put(string id, [FromBody] OrganizationDto organization)
+        {
+
+            if (id != organization.Id)
+                return BadRequest(new ErrorResponse("Ids don't match"));
+            
+            if (!_utils.IsOrganizationNameValid(organization.Id))
+                return BadRequest(new ErrorResponse("Invalid organization id"));
+
+            var existingOrg = _context.Organizations.FirstOrDefault(item => item.Id == id);
+
+            if (existingOrg == null)
+                return NotFound(new ErrorResponse("Cannot find organization with this id"));
+
+            // TODO: I don't know why sometimes we can't get the current user. It happens when we add a new method and we didn't re-authenticate
+            var currentUser = await GetCurrentUser();
+
+            if (!await IsUserAdmin())
+            {
+
+                // If the owner is specified it should be the current user
+                if (organization.Owner != null && organization.Owner != currentUser.Id)
+                    return Unauthorized(new ErrorResponse("Cannot create a new organization that belongs to a different user"));
+
+                // The current user is the owner
+                organization.Owner = currentUser.Id;
+
+            }
+            else
+            {
+                // If no owner specified, the owner is the current user
+                if (organization.Owner == null)
+                    organization.Owner = currentUser.Id;
+                else
+                {
+                    // Otherwise check if user exists
+                    var user = await _usersManager.FindByIdAsync(organization.Owner);
+
+                    if (user == null)
+                        return BadRequest(new ErrorResponse($"Cannot find user with id '{organization.Owner}'"));
+
+                }
+            }
+
+            existingOrg.IsPublic = organization.IsPublic;
+            existingOrg.Name = organization.Name;
+            existingOrg.Description = organization.Description;
+
+            await _context.SaveChangesAsync();
+
+            return NoContent();
+
+        }
+
 
     }
 }
