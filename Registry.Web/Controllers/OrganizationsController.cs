@@ -66,8 +66,8 @@ namespace Registry.Web.Controllers
         }
 
         // GET: ddb/
-        [HttpGet(Name = "GetAll")]
-        public async Task<IQueryable<OrganizationDto>> Get()
+        [HttpGet(Name = nameof(GetAll))]
+        public async Task<IQueryable<OrganizationDto>> GetAll()
         {
             var query = from org in _context.Organizations select org;
 
@@ -90,7 +90,7 @@ namespace Registry.Web.Controllers
         }
 
         // GET: ddb/
-        [HttpGet("ddb/{id:alpha}",Name = "Get")]
+        [HttpGet("{id}", Name = nameof(Get))]
         public async Task<IActionResult> Get(string id)
         {
             var query = from org in _context.Organizations
@@ -105,26 +105,50 @@ namespace Registry.Web.Controllers
 
             var res = query.FirstOrDefault();
 
-            if (res == null) return NotFound();
+            if (res == null) return NotFound(new ErrorResponse("Organization not found"));
 
             return Ok(new OrganizationDto(res));
         }
+
+        // TODO: Enforce id lowercase with dashes
 
         // POST: ddb/
         [HttpPost]
         public async Task<ActionResult<OrganizationDto>> Post([FromBody] OrganizationDto organization)
         {
 
+            var existingOrg = _context.Organizations.FirstOrDefault(item => item.Id == organization.Id);
+
+            if (existingOrg != null)
+                return Conflict(new ErrorResponse("The organization already exists"));
+
+            var currentUser = await GetCurrentUser();
+
             if (!await IsUserAdmin())
             {
-                var currentUser = await GetCurrentUser();
 
+                // If the owner is specified it should be the current user
                 if (organization.Owner != null && organization.Owner != currentUser.Id)
-                    return Unauthorized();
+                    return Unauthorized(new ErrorResponse("Cannot create a new organization that belongs to a different user"));
 
                 // The current user is the owner
                 organization.Owner = currentUser.Id;
 
+            }
+            else
+            {
+                // If no owner specified, the owner is the current user
+                if (organization.Owner == null)
+                    organization.Owner = currentUser.Id;
+                else
+                {
+                    // Otherwise check if user exists
+                    var user = await _usersManager.FindByIdAsync(organization.Owner);
+
+                    if (user == null)
+                        return BadRequest(new ErrorResponse($"Cannot find user with id '{organization.Owner}'"));
+
+                }
             }
 
             var org = organization.ToEntity();
@@ -133,7 +157,8 @@ namespace Registry.Web.Controllers
             await _context.Organizations.AddAsync(org);
             await _context.SaveChangesAsync();
 
-            return CreatedAtRoute("Get", new { org.Id }, org);
+            // This does not work
+            return CreatedAtRoute(nameof(Get), new { id = org.Id }, org);
 
         }
 

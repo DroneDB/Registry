@@ -32,6 +32,8 @@ namespace Registry.Web.Controllers
             _context = context;
         }
 
+        // The dataset should have a unique ID in the DB plus a unique slug inside the organization. Because
+        // Because multiple organizations could have datasets with the same dataset
         [HttpGet]
         public IActionResult Get([FromRoute]string orgId)
         {
