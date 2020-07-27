@@ -43,7 +43,7 @@ namespace Registry.Web.Controllers
         }
 
         // GET: ddb/
-        [HttpGet(Name = nameof(GetAll))]
+        [HttpGet(Name = nameof(OrganizationsController)+"."+nameof(GetAll))]
         public async Task<IActionResult> GetAll()
         {
             var query = from org in _context.Organizations select org;
@@ -71,7 +71,7 @@ namespace Registry.Web.Controllers
         }
 
         // GET: ddb/
-        [HttpGet("{id}", Name = nameof(Get))]
+        [HttpGet("{id}", Name = nameof(OrganizationsController) + "." + nameof(Get))]
         public async Task<IActionResult> Get(string id)
         {
             var query = from org in _context.Organizations
@@ -146,7 +146,7 @@ namespace Registry.Web.Controllers
             await _context.Organizations.AddAsync(org);
             await _context.SaveChangesAsync();
 
-            return CreatedAtRoute(nameof(Get), new { id = org.Id }, org);
+            return CreatedAtRoute(nameof(OrganizationsController) + "." + nameof(Get), new { id = org.Id }, org);
 
         }
         

@@ -2,10 +2,11 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
+using Registry.Web.Data.Models;
 
 namespace Registry.Web.Models.DTO
 {
-    public class DatasetDto
+    public class DatasetDto : Dto<Dataset>
     {
         public int Id { get; set; }
         public string Slug { get; set; }
@@ -17,6 +18,43 @@ namespace Registry.Web.Models.DTO
         public int ObjectsCount { get; set; }
         public DateTime LastEdit { get; set; }
         public string Meta { get; set; }
+        public bool IsPublic { get; set; }
 
+        public DatasetDto()
+        {
+            //
+        }
+
+        public DatasetDto(Dataset ds)
+        {
+            Id = ds.Id;
+            Slug = ds.Slug;
+            CreationDate = ds.CreationDate;
+            Description = ds.Description;
+            LastEdit = ds.LastEdit;
+            Name = ds.Name;
+            License = ds.License;
+            Meta = ds.Meta;
+            ObjectsCount = ds.ObjectsCount;
+            Size = ds.Size;
+        }
+
+        public override Dataset ToEntity()
+        {
+            return new Dataset
+            {
+                Id = Id,
+                Slug = Slug,
+                CreationDate = CreationDate,
+                Description = Description,
+                LastEdit = LastEdit,
+                Name = Name,
+                License = License,
+                Meta = Meta,
+                ObjectsCount = ObjectsCount,
+                Size = Size,
+                IsPublic = IsPublic
+            };
+        }
     }
 }
