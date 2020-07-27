@@ -12,6 +12,21 @@ namespace Registry.Web.Data
 
         }
 
+        protected override void OnModelCreating(ModelBuilder modelBuilder)
+        {
+            modelBuilder.Entity<Dataset>()
+                .HasIndex(ds => ds.Slug);
+        }
+
+        protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
+        {
+            base.OnConfiguring(optionsBuilder);
+
+#if DEBUG
+            optionsBuilder.EnableSensitiveDataLogging();
+#endif
+        }
+
         public DbSet<Organization> Organizations { get; set; }
         public DbSet<Dataset> Datasets { get; set; }
     }

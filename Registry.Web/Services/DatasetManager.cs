@@ -27,7 +27,7 @@ namespace Registry.Web.Services
             // TODO: Implement
         }
 
-        public void RemoveDataset(string id)
+        public void RemoveDataset(int id)
         {
             // TODO: Implement
         }

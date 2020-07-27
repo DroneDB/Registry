@@ -5,9 +5,12 @@ using System.Threading.Tasks;
 
 namespace Registry.Web
 {
+    
+    // This class is the definition of a bad idea
     public static class MagicStrings
     {
         public const string PublicOrganizationId = "public";
-        public const string DefaultDatasetId = "default";
+        public const string DefaultDatasetSlug = "default";
+        public const string SqlLiteProviderName = "Microsoft.EntityFrameworkCore.Sqlite";
     }
 }

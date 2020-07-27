@@ -6,8 +6,11 @@ namespace Registry.Web.Data.Models
 {
     public class Dataset
     {
+        public string Slug { get; set; }
+        
         [Key]
-        public string Id { get; set; }
+        public int Id { get; set; }
+
         [Required]
         public string Name { get; set; }
         public string Description { get; set; }

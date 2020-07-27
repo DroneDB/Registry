@@ -32,21 +32,20 @@ namespace Registry.Web.Controllers
             _context = context;
         }
 
-        // The dataset should have a unique ID in the DB plus a unique slug inside the organization. Because
-        // Because multiple organizations could have datasets with the same dataset
         [HttpGet]
         public IActionResult Get([FromRoute]string orgId)
         {
             var org = _context.Organizations.Include(item => item.Datasets).FirstOrDefault(item => item.Id == orgId);
 
             if (org == null)
-                return StatusCode(404, new ErrorResponse("Organization not found"));
+                return NotFound(new ErrorResponse("Organization not found"));
 
             var query = from ds in org.Datasets
 
                 select new DatasetDto
                 {
                     Id = ds.Id,
+                    Slug = ds.Slug,
                     CreationDate = ds.CreationDate,
                     Description = ds.Description,
                     LastEdit = ds.LastEdit,

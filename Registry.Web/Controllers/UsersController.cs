@@ -43,32 +43,6 @@ namespace Registry.Web.Controllers
             _usersManager = usersManager;
             _appSettings = appSettings.Value;
 
-            CreateDefaultAdmin().Wait();
-
-        }
-
-        private async Task CreateDefaultAdmin()
-        {
-            // If no users in database, let's create the default admin
-            if (!_usersManager.Users.Any())
-            {
-                // first we create Admin role  
-                var role = new IdentityRole { Name = ApplicationDbContext.AdminRoleName };
-                await _roleManager.CreateAsync(role);
-
-                var defaultAdmin = _appSettings.DefaultAdmin;
-                var user = new User
-                {
-                    Email = defaultAdmin.Email, 
-                    UserName = defaultAdmin.UserName
-                };
-
-                var usrRes = await _usersManager.CreateAsync(user, defaultAdmin.Password);
-                if (usrRes.Succeeded)
-                {
-                    var res = await _usersManager.AddToRoleAsync(user, ApplicationDbContext.AdminRoleName);
-                }
-            }
         }
 
         [AllowAnonymous]
@@ -79,7 +53,7 @@ namespace Registry.Web.Controllers
             var response = await GetAutentication(model);
 
             if (response == null)
-                return StatusCode(401, new ErrorResponse("Unauthorized"));
+                return Unauthorized(new ErrorResponse("Unauthorized"));
 
             return Ok(response);
         }

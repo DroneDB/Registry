@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
+using Registry.Common;
 
 namespace Registry.Web.Models
 {
@@ -19,7 +20,7 @@ namespace Registry.Web.Models
     public class StorageProvider
     {
         public StorageType Type { get; set; }
-        public Dictionary<string, string> Settings { get; set; }
+        public DictionaryEx<string, string> Settings { get; set; }
     }
 
     public class AdminInfo

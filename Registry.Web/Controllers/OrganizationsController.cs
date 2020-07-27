@@ -39,50 +39,26 @@ namespace Registry.Web.Controllers
             _context = context;
             _utils = utils;
             _datasetManager = datasetManager;
-
-            // If no organizations in database, let's create the public one
-            if (!_context.Organizations.Any())
-            {
-                var entity = new Organization
-                {
-                    Id = MagicStrings.PublicOrganizationId,
-                    Name = "Public",
-                    CreationDate = DateTime.Now,
-                    Description = "Public organization",
-                    IsPublic = true,
-                    // I don't think this is a good idea
-                    OwnerId = usersManager.Users.First().Id
-                };
-                var ds = new Dataset
-                {
-                    Id = MagicStrings.DefaultDatasetId,
-                    Name = "Default",
-                    Description = "Default dataset",
-                    IsPublic = true,
-                    CreationDate = DateTime.Now,
-                    LastEdit = DateTime.Now
-                };
-                entity.Datasets = new List<Dataset> { ds };
-
-                _context.Organizations.Add(entity);
-                _context.SaveChanges();
-            }
-
+            
         }
 
         // GET: ddb/
         [HttpGet(Name = nameof(GetAll))]
-        public async Task<IQueryable<OrganizationDto>> GetAll()
+        public async Task<IActionResult> GetAll()
         {
             var query = from org in _context.Organizations select org;
 
             if (!await IsUserAdmin())
             {
                 var currentUser = await GetCurrentUser();
-                query = query.Where(item => item.Id == currentUser.Id || item.IsPublic);
+
+                if (currentUser == null)
+                    return Unauthorized(new ErrorResponse("Invalid user"));
+
+                query = query.Where(item => item.OwnerId == currentUser.Id || item.OwnerId == null || item.IsPublic);
             }
 
-            return from org in query
+            return Ok(from org in query
                    select new OrganizationDto
                    {
                        CreationDate = org.CreationDate,
@@ -91,7 +67,7 @@ namespace Registry.Web.Controllers
                        Name = org.Name,
                        Owner = org.OwnerId,
                        IsPublic = org.IsPublic
-                   };
+                   });
         }
 
         // GET: ddb/
@@ -105,7 +81,11 @@ namespace Registry.Web.Controllers
             if (!await IsUserAdmin())
             {
                 var currentUser = await GetCurrentUser();
-                query = query.Where(item => item.Id == currentUser.Id || item.IsPublic);
+
+                if (currentUser == null)
+                    return Unauthorized(new ErrorResponse("Invalid user"));
+
+                query = query.Where(item => item.OwnerId == currentUser.Id || item.IsPublic || item.OwnerId == null);
             }
 
             var res = query.FirstOrDefault();
@@ -129,6 +109,9 @@ namespace Registry.Web.Controllers
                 return Conflict(new ErrorResponse("The organization already exists"));
 
             var currentUser = await GetCurrentUser();
+
+            if (currentUser == null)
+                return Unauthorized(new ErrorResponse("Invalid user"));
 
             if (!await IsUserAdmin())
             {
@@ -166,9 +149,7 @@ namespace Registry.Web.Controllers
             return CreatedAtRoute(nameof(Get), new { id = org.Id }, org);
 
         }
-
         
-
         // POST: ddb/
         [HttpPut("{id}")]
         public async Task<ActionResult<OrganizationDto>> Put(string id, [FromBody] OrganizationDto organization)
@@ -185,8 +166,14 @@ namespace Registry.Web.Controllers
             if (existingOrg == null)
                 return NotFound(new ErrorResponse("Cannot find organization with this id"));
 
-            // TODO: I don't know why sometimes we can't get the current user. It happens when we add a new method and we didn't re-authenticate
+            // NOTE: Is this a good idea? If activated there will be no way to change the public organization details
+            // if (organization.Id == MagicStrings.PublicOrganizationId)
+            //    return Unauthorized(new ErrorResponse("Cannot edit the public organization"));
+
             var currentUser = await GetCurrentUser();
+
+            if (currentUser == null)
+                return Unauthorized(new ErrorResponse("Invalid user"));
 
             if (!await IsUserAdmin())
             {
@@ -225,20 +212,24 @@ namespace Registry.Web.Controllers
 
         }
 
-        // POST: ddb/
+        // DELETE: ddb/id
         [HttpDelete("{id}")]
         public async Task<IActionResult> Delete(string id)
         {
             if (!_utils.IsOrganizationNameValid(id))
                 return BadRequest(new ErrorResponse("Invalid organization id"));
 
-            var org = _context.Organizations.Include(org => org.Datasets).FirstOrDefault(item => item.Id == id);
+            var org = _context.Organizations.Include(item => item.Datasets)
+                .FirstOrDefault(item => item.Id == id);
 
             if (org == null)
                 return NotFound(new ErrorResponse("Cannot find organization with this id"));
 
             var currentUser = await GetCurrentUser();
 
+            if (currentUser == null)
+                return Unauthorized(new ErrorResponse("Invalid user"));
+            
             if (!await IsUserAdmin())
             {
                 if (org.OwnerId != currentUser.Id)

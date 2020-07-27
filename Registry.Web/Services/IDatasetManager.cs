@@ -11,7 +11,7 @@ namespace Registry.Web.Services
     public interface IDatasetManager
     {
         void CreateDataset(DatasetDto ds);
-        void RemoveDataset(string id);
+        void RemoveDataset(int id);
 
     }
 }
