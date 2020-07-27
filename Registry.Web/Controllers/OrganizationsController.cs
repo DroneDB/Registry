@@ -25,24 +25,27 @@ namespace Registry.Web.Controllers
         private readonly UserManager<User> _usersManager;
         private readonly RegistryContext _context;
         private readonly IUtils _utils;
+        private readonly IDatasetManager _datasetManager;
 
         public OrganizationsController(
             IOptions<AppSettings> appSettings,
             UserManager<User> usersManager,
             RegistryContext context,
-            IUtils utils) : base(usersManager)
+            IUtils utils,
+            IDatasetManager datasetManager) : base(usersManager)
         {
             _appSettings = appSettings;
             _usersManager = usersManager;
             _context = context;
             _utils = utils;
+            _datasetManager = datasetManager;
 
             // If no organizations in database, let's create the public one
             if (!_context.Organizations.Any())
             {
                 var entity = new Organization
                 {
-                    Id = "public",
+                    Id = MagicStrings.PublicOrganizationId,
                     Name = "Public",
                     CreationDate = DateTime.Now,
                     Description = "Public organization",
@@ -52,7 +55,7 @@ namespace Registry.Web.Controllers
                 };
                 var ds = new Dataset
                 {
-                    Id = "default",
+                    Id = MagicStrings.DefaultDatasetId,
                     Name = "Default",
                     Description = "Default dataset",
                     IsPublic = true,
@@ -164,6 +167,8 @@ namespace Registry.Web.Controllers
 
         }
 
+        
+
         // POST: ddb/
         [HttpPut("{id}")]
         public async Task<ActionResult<OrganizationDto>> Put(string id, [FromBody] OrganizationDto organization)
@@ -220,6 +225,42 @@ namespace Registry.Web.Controllers
 
         }
 
+        // POST: ddb/
+        [HttpDelete("{id}")]
+        public async Task<IActionResult> Delete(string id)
+        {
+            if (!_utils.IsOrganizationNameValid(id))
+                return BadRequest(new ErrorResponse("Invalid organization id"));
+
+            var org = _context.Organizations.Include(org => org.Datasets).FirstOrDefault(item => item.Id == id);
+
+            if (org == null)
+                return NotFound(new ErrorResponse("Cannot find organization with this id"));
+
+            var currentUser = await GetCurrentUser();
+
+            if (!await IsUserAdmin())
+            {
+                if (org.OwnerId != currentUser.Id)
+                    return Unauthorized(new ErrorResponse("The current user is not the owner of the organization"));
+            }
+            else
+            {
+                if (org.Id == MagicStrings.PublicOrganizationId)
+                    return Unauthorized(new ErrorResponse("Cannot remove the default public organization"));
+            }
+
+            foreach (var ds in org.Datasets.ToArray()) {
+
+                _datasetManager.RemoveDataset(ds.Id);
+                _context.Datasets.Remove(ds);
+            }
+
+            _context.Organizations.Remove(org);
+            await _context.SaveChangesAsync();
+
+            return NoContent();
+        }
 
     }
 }

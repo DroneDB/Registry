@@ -111,9 +111,10 @@ namespace Registry.Web
             services.AddTransient<TokenManagerMiddleware>();
             services.AddTransient<ITokenManager, TokenManager>();
             services.AddSingleton<IHttpContextAccessor, HttpContextAccessor>();
-            services.AddDistributedMemoryCache();
+            services.AddMemoryCache();
 
             services.AddSingleton<IUtils, Utils>();
+            services.AddScoped<IDatasetManager, DatasetManager>();            
 
             // services.AddOData();
 
