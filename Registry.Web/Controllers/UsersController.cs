@@ -15,6 +15,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
 using Registry.Web.Models.DTO;
+using Registry.Web.Services.Ports;
 
 namespace Registry.Web.Controllers
 {
@@ -24,8 +25,11 @@ namespace Registry.Web.Controllers
     public class UsersController : ControllerBaseEx
     {
 
+        // TODO: Abstract and test as soon as possible
+
         private readonly ApplicationDbContext _context;
         private readonly RoleManager<IdentityRole> _roleManager;
+        private readonly IAuthManager _authManager;
         private readonly SignInManager<User> _signInManager;
         private readonly UserManager<User> _usersManager;
         private readonly AppSettings _appSettings;
@@ -35,10 +39,12 @@ namespace Registry.Web.Controllers
             SignInManager<User> signInManager,
             UserManager<User> usersManager,
             ApplicationDbContext context,
-            RoleManager<IdentityRole> roleManager) : base(usersManager)
+            RoleManager<IdentityRole> roleManager,
+            IAuthManager authManager)
         {
             _context = context;
             _roleManager = roleManager;
+            _authManager = authManager;
             _signInManager = signInManager;
             _usersManager = usersManager;
             _appSettings = appSettings.Value;
@@ -78,7 +84,7 @@ namespace Registry.Web.Controllers
         public async Task<IActionResult> GetAll()
         {
 
-            if (await IsUserAdmin())
+            if (await _authManager.IsUserAdmin())
             {
                 var query = from user in _usersManager.Users
                     select new UserDto

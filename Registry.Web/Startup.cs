@@ -121,7 +121,9 @@ namespace Registry.Web
             services.AddMemoryCache();
 
             services.AddSingleton<IUtils, WebUtils>();
-            services.AddScoped<IDatasetManager, DatasetManager>();
+            services.AddScoped<IAuthManager, AuthManager>();
+            services.AddScoped<IOrganizationsManager, OrganizationsManager>();
+            services.AddScoped<IDatasetsManager, DatasetsManager>();
 
             switch (appSettings.StorageProvider.Type)
             {

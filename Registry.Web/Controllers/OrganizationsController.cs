@@ -22,194 +22,74 @@ namespace Registry.Web.Controllers
     [Route("ddb")]
     public class OrganizationsController : ControllerBaseEx
     {
-        private readonly IOptions<AppSettings> _appSettings;
-        private readonly UserManager<User> _usersManager;
-        private readonly RegistryContext _context;
-        private readonly IUtils _utils;
-        private readonly IDatasetManager _datasetManager;
+        private readonly IOrganizationsManager _organizationsManager;
 
-        public OrganizationsController(
-            IOptions<AppSettings> appSettings,
-            UserManager<User> usersManager,
-            RegistryContext context,
-            IUtils utils,
-            IDatasetManager datasetManager) : base(usersManager)
+        public OrganizationsController(IOrganizationsManager organizationsManager)
         {
-            _appSettings = appSettings;
-            _usersManager = usersManager;
-            _context = context;
-            _utils = utils;
-            _datasetManager = datasetManager;
-            
+            _organizationsManager = organizationsManager;
         }
 
         // GET: ddb/
-        [HttpGet(Name = nameof(OrganizationsController)+"."+nameof(GetAll))]
+        [HttpGet(Name = nameof(OrganizationsController) + "." + nameof(GetAll))]
         public async Task<IActionResult> GetAll()
         {
-            var query = from org in _context.Organizations select org;
-
-            if (!await IsUserAdmin())
+            try
             {
-                var currentUser = await GetCurrentUser();
-
-                if (currentUser == null)
-                    return Unauthorized(new ErrorResponse("Invalid user"));
-
-                query = query.Where(item => item.OwnerId == currentUser.Id || item.OwnerId == null || item.IsPublic);
+                return Ok(await _organizationsManager.GetAll());
             }
-
-            return Ok(from org in query
-                   select new OrganizationDto
-                   {
-                       CreationDate = org.CreationDate,
-                       Description = org.Description,
-                       Id = org.Id,
-                       Name = org.Name,
-                       Owner = org.OwnerId,
-                       IsPublic = org.IsPublic
-                   });
+            catch (Exception ex)
+            {
+                return ExceptionResult(ex);
+            }
         }
 
-        // GET: ddb/
+        // GET: ddb/id
         [HttpGet("{id}", Name = nameof(OrganizationsController) + "." + nameof(Get))]
         public async Task<IActionResult> Get(string id)
         {
-            var query = from org in _context.Organizations
-                        where org.Id == id
-                        select org;
-
-            if (!await IsUserAdmin())
+            try
             {
-                var currentUser = await GetCurrentUser();
-
-                if (currentUser == null)
-                    return Unauthorized(new ErrorResponse("Invalid user"));
-
-                query = query.Where(item => item.OwnerId == currentUser.Id || item.IsPublic || item.OwnerId == null);
+                return Ok(await _organizationsManager.Get(id));
+            }
+            catch (Exception ex)
+            {
+                return ExceptionResult(ex);
             }
 
-            var res = query.FirstOrDefault();
-
-            if (res == null) return NotFound(new ErrorResponse("Organization not found"));
-
-            return Ok(new OrganizationDto(res));
         }
 
         // POST: ddb/
         [HttpPost]
-        public async Task<ActionResult<OrganizationDto>> Post([FromBody] OrganizationDto organization)
+        public async Task<IActionResult> Post([FromBody] OrganizationDto organization)
         {
 
-            if (!_utils.IsOrganizationNameValid(organization.Id))
-                return BadRequest(new ErrorResponse("Invalid organization id"));
-
-            var existingOrg = _context.Organizations.FirstOrDefault(item => item.Id == organization.Id);
-
-            if (existingOrg != null)
-                return Conflict(new ErrorResponse("The organization already exists"));
-
-            var currentUser = await GetCurrentUser();
-
-            if (currentUser == null)
-                return Unauthorized(new ErrorResponse("Invalid user"));
-
-            if (!await IsUserAdmin())
+            try
             {
-
-                // If the owner is specified it should be the current user
-                if (organization.Owner != null && organization.Owner != currentUser.Id)
-                    return Unauthorized(new ErrorResponse("Cannot create a new organization that belongs to a different user"));
-
-                // The current user is the owner
-                organization.Owner = currentUser.Id;
-
+                var newOrg = await _organizationsManager.AddNew(organization);
+                return CreatedAtRoute(nameof(OrganizationsController) + "." + nameof(Get), new {id = newOrg.Id},
+                    newOrg);
             }
-            else
+            catch (Exception ex)
             {
-                // If no owner specified, the owner is the current user
-                if (organization.Owner == null)
-                    organization.Owner = currentUser.Id;
-                else
-                {
-                    // Otherwise check if user exists
-                    var user = await _usersManager.FindByIdAsync(organization.Owner);
-
-                    if (user == null)
-                        return BadRequest(new ErrorResponse($"Cannot find user with id '{organization.Owner}'"));
-
-                }
+                return ExceptionResult(ex);
             }
-
-            var org = organization.ToEntity();
-            org.CreationDate = DateTime.Now;
-
-            await _context.Organizations.AddAsync(org);
-            await _context.SaveChangesAsync();
-
-            return CreatedAtRoute(nameof(OrganizationsController) + "." + nameof(Get), new { id = org.Id }, org);
 
         }
-        
+
         // POST: ddb/
         [HttpPut("{id}")]
-        public async Task<ActionResult<OrganizationDto>> Put(string id, [FromBody] OrganizationDto organization)
+        public async Task<IActionResult> Put(string id, [FromBody] OrganizationDto organization)
         {
-
-            if (id != organization.Id)
-                return BadRequest(new ErrorResponse("Ids don't match"));
             
-            if (!_utils.IsOrganizationNameValid(organization.Id))
-                return BadRequest(new ErrorResponse("Invalid organization id"));
-
-            var existingOrg = _context.Organizations.FirstOrDefault(item => item.Id == id);
-
-            if (existingOrg == null)
-                return NotFound(new ErrorResponse("Cannot find organization with this id"));
-
-            // NOTE: Is this a good idea? If activated there will be no way to change the public organization details
-            // if (organization.Id == MagicStrings.PublicOrganizationId)
-            //    return Unauthorized(new ErrorResponse("Cannot edit the public organization"));
-
-            var currentUser = await GetCurrentUser();
-
-            if (currentUser == null)
-                return Unauthorized(new ErrorResponse("Invalid user"));
-
-            if (!await IsUserAdmin())
+            try
             {
-
-                // If the owner is specified it should be the current user
-                if (organization.Owner != null && organization.Owner != currentUser.Id)
-                    return Unauthorized(new ErrorResponse("Cannot create a new organization that belongs to a different user"));
-
-                // The current user is the owner
-                organization.Owner = currentUser.Id;
-
+                await _organizationsManager.Edit(id, organization);
+                return NoContent();
             }
-            else
+            catch (Exception ex)
             {
-                // If no owner specified, the owner is the current user
-                if (organization.Owner == null)
-                    organization.Owner = currentUser.Id;
-                else
-                {
-                    // Otherwise check if user exists
-                    var user = await _usersManager.FindByIdAsync(organization.Owner);
-
-                    if (user == null)
-                        return BadRequest(new ErrorResponse($"Cannot find user with id '{organization.Owner}'"));
-
-                }
+                return ExceptionResult(ex);
             }
-
-            existingOrg.IsPublic = organization.IsPublic;
-            existingOrg.Name = organization.Name;
-            existingOrg.Description = organization.Description;
-
-            await _context.SaveChangesAsync();
-
-            return NoContent();
 
         }
 
@@ -217,41 +97,17 @@ namespace Registry.Web.Controllers
         [HttpDelete("{id}")]
         public async Task<IActionResult> Delete(string id)
         {
-            if (!_utils.IsOrganizationNameValid(id))
-                return BadRequest(new ErrorResponse("Invalid organization id"));
 
-            var org = _context.Organizations.Include(item => item.Datasets)
-                .FirstOrDefault(item => item.Id == id);
-
-            if (org == null)
-                return NotFound(new ErrorResponse("Cannot find organization with this id"));
-
-            var currentUser = await GetCurrentUser();
-
-            if (currentUser == null)
-                return Unauthorized(new ErrorResponse("Invalid user"));
-            
-            if (!await IsUserAdmin())
+            try
             {
-                if (org.OwnerId != currentUser.Id)
-                    return Unauthorized(new ErrorResponse("The current user is not the owner of the organization"));
+                await _organizationsManager.Delete(id);
+                return NoContent();
             }
-            else
+            catch (Exception ex)
             {
-                if (org.Id == MagicStrings.PublicOrganizationId)
-                    return Unauthorized(new ErrorResponse("Cannot remove the default public organization"));
+                return ExceptionResult(ex);
             }
 
-            foreach (var ds in org.Datasets.ToArray()) {
-
-                _datasetManager.RemoveDataset(ds.Id);
-                _context.Datasets.Remove(ds);
-            }
-
-            _context.Organizations.Remove(org);
-            await _context.SaveChangesAsync();
-
-            return NoContent();
         }
 
     }
