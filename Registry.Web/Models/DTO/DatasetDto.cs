@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.ComponentModel.DataAnnotations;
 using System.Linq;
 using System.Threading.Tasks;
 using Registry.Web.Data.Models;
@@ -9,7 +10,9 @@ namespace Registry.Web.Models.DTO
     public class DatasetDto : Dto<Dataset>
     {
         public int Id { get; set; }
+        [Required]
         public string Slug { get; set; }
+        [Required]
         public string Name { get; set; }
         public string Description { get; set; }
         public DateTime CreationDate { get; set; }
@@ -51,8 +54,8 @@ namespace Registry.Web.Models.DTO
                 Name = Name,
                 License = License,
                 Meta = Meta,
-                ObjectsCount = ObjectsCount,
-                Size = Size,
+                // ObjectsCount = ObjectsCount,
+                // Size = Size,
                 IsPublic = IsPublic
             };
         }

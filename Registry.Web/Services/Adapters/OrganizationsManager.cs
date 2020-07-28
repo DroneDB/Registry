@@ -21,7 +21,6 @@ namespace Registry.Web.Services.Adapters
 
         // TODO: Add extensive logging
         // TODO: Add extensive testing
-
         public OrganizationsManager(
             IAuthManager authManager,
             RegistryContext context,
@@ -88,6 +87,12 @@ namespace Registry.Web.Services.Adapters
 
         public async Task<OrganizationDto> AddNew(OrganizationDto organization)
         {
+            // TODO: To change when implementing anonymous users
+            var currentUser = await _authManager.GetCurrentUser();
+
+            if (currentUser == null)
+                throw new UnauthorizedException("Invalid user");
+
             if (!_utils.IsOrganizationNameValid(organization.Id))
                 throw new BadRequestException("Invalid organization id");
 
@@ -95,11 +100,6 @@ namespace Registry.Web.Services.Adapters
 
             if (existingOrg != null)
                 throw new ConflictException("The organization already exists");
-
-            var currentUser = await _authManager.GetCurrentUser();
-
-            if (currentUser == null)
-                throw new UnauthorizedException("Invalid user");
 
             if (!await _authManager.IsUserAdmin())
             {
@@ -137,6 +137,13 @@ namespace Registry.Web.Services.Adapters
 
         public async Task Edit(string id, OrganizationDto organization)
         {
+
+            // TODO: To change when implementing anonymous users
+            var currentUser = await _authManager.GetCurrentUser();
+
+            if (currentUser == null)
+                throw new UnauthorizedException("Invalid user");
+
             if (id != organization.Id)
                 throw new BadRequestException("Ids don't match");
 
@@ -151,12 +158,7 @@ namespace Registry.Web.Services.Adapters
             // NOTE: Is this a good idea? If activated there will be no way to change the public organization details
             // if (organization.Id == MagicStrings.PublicOrganizationId)
             //    return Unauthorized(new ErrorResponse("Cannot edit the public organization"));
-
-            var currentUser = await _authManager.GetCurrentUser();
-
-            if (currentUser == null)
-                throw new UnauthorizedException("Invalid user");
-
+            
             if (!await _authManager.IsUserAdmin())
             {
 
@@ -192,6 +194,13 @@ namespace Registry.Web.Services.Adapters
 
         public async Task Delete(string id)
         {
+
+            // TODO: To change when implementing anonymous users
+            var currentUser = await _authManager.GetCurrentUser();
+
+            if (currentUser == null)
+                throw new UnauthorizedException("Invalid user");
+            
             if (!_utils.IsOrganizationNameValid(id))
                 throw new BadRequestException("Invalid organization id");
 
@@ -200,11 +209,6 @@ namespace Registry.Web.Services.Adapters
 
             if (org == null)
                 throw new NotFoundException("Cannot find organization with this id");
-
-            var currentUser = await _authManager.GetCurrentUser();
-
-            if (currentUser == null)
-                throw new UnauthorizedException("Invalid user");
 
             if (!await _authManager.IsUserAdmin())
             {
@@ -220,7 +224,8 @@ namespace Registry.Web.Services.Adapters
             foreach (var ds in org.Datasets.ToArray())
             {
 
-                await _datasetManager.Delete(org.Id, ds.Slug);
+                // TODO: This is not the right method, we should have another abstraction and / or a direct access to IObjectSystem
+                // await _datasetManager.Delete(org.Id, ds.Slug);
                 _context.Datasets.Remove(ds);
             }
 

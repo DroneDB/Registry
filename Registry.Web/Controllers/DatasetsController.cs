@@ -55,12 +55,55 @@ namespace Registry.Web.Controllers
             }
         }
 
-        /*
+
         [HttpPost]
-        public async Task<IActionResult> Post([FromBody] DatasetDto dataset)
+        public async Task<IActionResult> Post([FromRoute] string orgId, [FromBody] DatasetDto dataset)
         {
-            return null;
-        }*/
+            try
+            {
+                var newDs = await _datasetsManager.AddNew(orgId, dataset);
+                return CreatedAtRoute(nameof(DatasetsController) + "." + nameof(Get), new { id = newDs.Id },
+                    newDs);
+            }
+            catch (Exception ex)
+            {
+                return ExceptionResult(ex);
+            }
+        }
+
+        // POST: ddb/
+        [HttpPut("{id}")]
+        public async Task<IActionResult> Put([FromRoute] string orgId, string id, [FromBody] DatasetDto dataset)
+        {
+
+            try
+            {
+                await _datasetsManager.Edit(orgId, id, dataset);
+                return NoContent();
+            }
+            catch (Exception ex)
+            {
+                return ExceptionResult(ex);
+            }
+
+        }
+
+        // DELETE: ddb/id
+        [HttpDelete("{id}")]
+        public async Task<IActionResult> Delete([FromRoute] string orgId, string id)
+        {
+
+            try
+            {
+                await _datasetsManager.Delete(orgId, id);
+                return NoContent();
+            }
+            catch (Exception ex)
+            {
+                return ExceptionResult(ex);
+            }
+
+        }
 
 
     }
