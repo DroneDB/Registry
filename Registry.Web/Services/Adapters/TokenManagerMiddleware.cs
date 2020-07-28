@@ -1,8 +1,9 @@
 ﻿using System.Net;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Http;
+using Registry.Web.Services.Ports;
 
-namespace Registry.Web.Services
+namespace Registry.Web.Services.Adapters
 {
     public class TokenManagerMiddleware : IMiddleware
     {

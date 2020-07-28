@@ -1,13 +1,10 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Threading.Tasks;
-using Microsoft.Extensions.Logging;
+﻿using Microsoft.Extensions.Logging;
 using Registry.Ports.ObjectSystem;
 using Registry.Web.Data;
 using Registry.Web.Models.DTO;
+using Registry.Web.Services.Ports;
 
-namespace Registry.Web.Services
+namespace Registry.Web.Services.Adapters
 {
     public class DatasetManager : IDatasetManager
     {

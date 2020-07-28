@@ -1,8 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-using Microsoft.Extensions.Caching.Distributed;
-
-namespace Registry.Web.Services
+﻿namespace Registry.Web.Services.Ports
 {
     /// <summary>
     /// Manages the JWT tokens

@@ -3,8 +3,9 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Options;
 using Microsoft.Extensions.Primitives;
 using Registry.Web.Models;
+using Registry.Web.Services.Ports;
 
-namespace Registry.Web.Services
+namespace Registry.Web.Services.Adapters
 {
     public class TokenManager : ITokenManager
     {
