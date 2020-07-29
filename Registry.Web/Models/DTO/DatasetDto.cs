@@ -54,6 +54,7 @@ namespace Registry.Web.Models.DTO
                 Name = Name,
                 License = License,
                 Meta = Meta,
+                // TODO: These should be calculated
                 // ObjectsCount = ObjectsCount,
                 // Size = Size,
                 IsPublic = IsPublic

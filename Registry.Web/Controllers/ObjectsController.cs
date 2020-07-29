@@ -35,8 +35,8 @@ namespace Registry.Web.Controllers
         {
             try
             {
-                Debug.WriteLine(orgId);
-                return Ok();
+                var res = await _objectsManager.Get(orgId, dsId, path);
+                return Ok(res);
             }
             catch (Exception ex)
             {
