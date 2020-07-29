@@ -124,6 +124,7 @@ namespace Registry.Web
             services.AddScoped<IAuthManager, AuthManager>();
             services.AddScoped<IOrganizationsManager, OrganizationsManager>();
             services.AddScoped<IDatasetsManager, DatasetsManager>();
+            services.AddScoped<IObjectsController, ObjectsController>();
 
             switch (appSettings.StorageProvider.Type)
             {

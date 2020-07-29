@@ -13,7 +13,9 @@ Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Registry.Adapters", "Regist
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Registry.Adapters.Test", "Registry.Adapters.Test\Registry.Adapters.Test.csproj", "{20CB6C88-2802-47DA-94E0-AB0A556B2426}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Registry.Web.Data", "Registry.Web.Data\Registry.Web.Data.csproj", "{184F2162-DEAB-46A9-8865-7914FAFB669F}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Registry.Web.Data", "Registry.Web.Data\Registry.Web.Data.csproj", "{184F2162-DEAB-46A9-8865-7914FAFB669F}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Registry.Web.Test", "Registry.Web.Test\Registry.Web.Test.csproj", "{50248260-DA34-47A1-8AF3-922D2981C010}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -45,6 +47,10 @@ Global
 		{184F2162-DEAB-46A9-8865-7914FAFB669F}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{184F2162-DEAB-46A9-8865-7914FAFB669F}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{184F2162-DEAB-46A9-8865-7914FAFB669F}.Release|Any CPU.Build.0 = Release|Any CPU
+		{50248260-DA34-47A1-8AF3-922D2981C010}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{50248260-DA34-47A1-8AF3-922D2981C010}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{50248260-DA34-47A1-8AF3-922D2981C010}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{50248260-DA34-47A1-8AF3-922D2981C010}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
