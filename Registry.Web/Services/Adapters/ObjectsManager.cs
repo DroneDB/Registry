@@ -6,7 +6,7 @@ using Registry.Web.Services.Ports;
 
 namespace Registry.Web.Services.Adapters
 {
-    public class ObjectsController : IObjectsController
+    public class ObjectsManager : IObjectsManager
     {
     }
 }

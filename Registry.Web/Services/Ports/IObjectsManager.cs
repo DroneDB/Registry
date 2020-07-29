@@ -5,7 +5,7 @@ using System.Threading.Tasks;
 
 namespace Registry.Web.Services.Ports
 {
-    public interface IObjectsController
+    public interface IObjectsManager
     {
     }
 }

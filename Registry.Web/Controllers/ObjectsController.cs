@@ -23,11 +23,11 @@ namespace Registry.Web.Controllers
     [Route("ddb/{orgId:alpha}/ds/{dsId:alpha}/obj")]
     public class ObjectsController : ControllerBaseEx
     {
-        private readonly IObjectsController _objectsController;
+        private readonly IObjectsManager _objectsManager;
 
-        public ObjectsController(IObjectsController datasetsManager)
+        public ObjectsController(IObjectsManager datasetsManager)
         {
-            _objectsController = datasetsManager;
+            _objectsManager = datasetsManager;
         }
         
         [HttpGet("{**path}", Name = nameof(ObjectsController) + "." + nameof(Get))]
@@ -45,12 +45,12 @@ namespace Registry.Web.Controllers
         }
         /*
 
-        [HttpGet("{id}", Name = nameof(ObjectsController) + "." + nameof(Get))]
+        [HttpGet("{id}", Name = nameof(ObjectsManager) + "." + nameof(Get))]
         public async Task<IActionResult> Get([FromRoute] string orgId, string id)
         {
             try
             {
-                return Ok(await _objectsController.Get(orgId, id));
+                return Ok(await _objectsManager.Get(orgId, id));
             }
             catch (Exception ex)
             {
@@ -64,7 +64,7 @@ namespace Registry.Web.Controllers
         {
             try
             {
-                var newDs = await _objectsController.AddNew(orgId, dataset);
+                var newDs = await _objectsManager.AddNew(orgId, dataset);
                 return CreatedAtRoute(nameof(DatasetsController) + "." + nameof(Get), new { id = newDs.Id },
                     newDs);
             }
@@ -81,7 +81,7 @@ namespace Registry.Web.Controllers
 
             try
             {
-                await _objectsController.Edit(orgId, id, dataset);
+                await _objectsManager.Edit(orgId, id, dataset);
                 return NoContent();
             }
             catch (Exception ex)
@@ -98,7 +98,7 @@ namespace Registry.Web.Controllers
 
             try
             {
-                await _objectsController.Delete(orgId, id);
+                await _objectsManager.Delete(orgId, id);
                 return NoContent();
             }
             catch (Exception ex)
