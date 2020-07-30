@@ -90,7 +90,7 @@ namespace Registry.Web.Services.Adapters
             if (dataset == null)
                 throw new NotFoundException("Cannot find dataset");
 
-            return new DatasetDto(dataset);
+            return dataset.ToDto();
         }
 
         public async Task<DatasetDto> AddNew(string orgId, DatasetDto dataset)
@@ -116,7 +116,7 @@ namespace Registry.Web.Services.Adapters
 
             await _context.SaveChangesAsync();
 
-            return new DatasetDto(ds);
+            return ds.ToDto();
 
         }
 

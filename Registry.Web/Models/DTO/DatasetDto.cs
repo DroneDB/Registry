@@ -7,7 +7,7 @@ using Registry.Web.Data.Models;
 
 namespace Registry.Web.Models.DTO
 {
-    public class DatasetDto : Dto<Dataset>
+    public class DatasetDto
     {
         public int Id { get; set; }
         [Required]
@@ -23,42 +23,5 @@ namespace Registry.Web.Models.DTO
         public string Meta { get; set; }
         public bool IsPublic { get; set; }
 
-        public DatasetDto()
-        {
-            //
-        }
-
-        public DatasetDto(Dataset ds)
-        {
-            Id = ds.Id;
-            Slug = ds.Slug;
-            CreationDate = ds.CreationDate;
-            Description = ds.Description;
-            LastEdit = ds.LastEdit;
-            Name = ds.Name;
-            License = ds.License;
-            Meta = ds.Meta;
-            ObjectsCount = ds.ObjectsCount;
-            Size = ds.Size;
-        }
-
-        public override Dataset ToEntity()
-        {
-            return new Dataset
-            {
-                Id = Id,
-                Slug = Slug,
-                CreationDate = CreationDate,
-                Description = Description,
-                LastEdit = LastEdit,
-                Name = Name,
-                License = License,
-                Meta = Meta,
-                // TODO: These should be calculated
-                // ObjectsCount = ObjectsCount,
-                // Size = Size,
-                IsPublic = IsPublic
-            };
-        }
     }
 }

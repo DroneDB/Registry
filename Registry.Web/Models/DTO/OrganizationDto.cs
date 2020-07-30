@@ -8,7 +8,7 @@ using Registry.Web.Data.Models;
 
 namespace Registry.Web.Models.DTO
 {
-    public class OrganizationDto : Dto<Organization>
+    public class OrganizationDto
     {
         [Required]
         public string Id { get; set; }
@@ -21,33 +21,6 @@ namespace Registry.Web.Models.DTO
 
         public bool IsPublic { get; set; }
 
-        public OrganizationDto()
-        {
-
-        }
-
-        public OrganizationDto(Organization org)
-        {
-            Id = org.Id;
-            Name = org.Name;
-            Description = org.Description;
-            CreationDate = org.CreationDate;
-            Owner = org.OwnerId;
-            IsPublic = org.IsPublic;
-        }
-
-        public override Organization ToEntity()
-        {
-            return new Organization
-            {
-                Id = Id,
-                Name = Name,
-                Description = Description,
-                CreationDate = CreationDate,
-                OwnerId = Owner,
-                IsPublic = IsPublic,
-        };
-        }
 
     }
 

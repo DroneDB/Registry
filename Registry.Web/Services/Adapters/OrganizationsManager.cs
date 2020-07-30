@@ -82,7 +82,7 @@ namespace Registry.Web.Services.Adapters
             if (res == null) 
                 throw new NotFoundException("Organization not found");
 
-            return new OrganizationDto(res);
+            return res.ToDto();
         }
 
         public async Task<OrganizationDto> AddNew(OrganizationDto organization)
@@ -132,7 +132,7 @@ namespace Registry.Web.Services.Adapters
             await _context.Organizations.AddAsync(org);
             await _context.SaveChangesAsync();
 
-            return new OrganizationDto(org);
+            return org.ToDto();
         }
 
         public async Task Edit(string id, OrganizationDto organization)
