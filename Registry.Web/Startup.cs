@@ -122,10 +122,20 @@ namespace Registry.Web
 
             services.AddSingleton<IUtils, WebUtils>();
             services.AddScoped<IAuthManager, AuthManager>();
+
             services.AddScoped<IOrganizationsManager, OrganizationsManager>();
             services.AddScoped<IDatasetsManager, DatasetsManager>();
             services.AddScoped<IObjectsManager, ObjectsManager>();
 
+            RegisterStorageProvider(services, appSettings);
+
+            // TODO: Enable when needed. Should check return object structure
+            // services.AddOData();
+
+        }
+
+        private static void RegisterStorageProvider(IServiceCollection services, AppSettings appSettings)
+        {
             switch (appSettings.StorageProvider.Type)
             {
                 case StorageType.Physical:
@@ -158,12 +168,9 @@ namespace Registry.Web
                         secretKey, region, sessionToken, tmp, appName, appVersion));
                     break;
                 default:
-                    throw new InvalidOperationException($"Unsupported storage provider: '{(int)appSettings.StorageProvider.Type}'");
+                    throw new InvalidOperationException(
+                        $"Unsupported storage provider: '{(int) appSettings.StorageProvider.Type}'");
             }
-
-            // TODO: Enable when needed. Should check return object structure
-            // services.AddOData();
-
         }
 
         private void ConfigureDbProvider<T>(IServiceCollection services, DbProvider provider, string connectionStringName) where T : DbContext

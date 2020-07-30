@@ -9,13 +9,16 @@ namespace Registry.Web.Test
     public class OrganizationManagerTest
     {
 
-        private Mock<ILogger<OrganizationsManager>> _loggerMock = new Mock<ILogger<OrganizationsManager>>();
-        private Mock<IDatasetsManager> _datasetsManagerMock = new Mock<IDatasetsManager>();
-        private IUtils _utils = new WebUtils();
+        private Mock<ILogger<OrganizationsManager>> _loggerMock;
+        private Mock<IDatasetsManager> _datasetsManagerMock;
+        private IUtils _utils;
 
         [SetUp]
         public void Setup()
         {
+            _loggerMock = new Mock<ILogger<OrganizationsManager>>();
+            _datasetsManagerMock = new Mock<IDatasetsManager>();
+            _utils = new WebUtils();
         }
 
         [Test]
