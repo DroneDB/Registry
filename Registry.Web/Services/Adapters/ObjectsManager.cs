@@ -5,6 +5,7 @@ using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using Registry.Ports.ObjectSystem;
 using Registry.Web.Data;
+using Registry.Web.Models;
 using Registry.Web.Models.DTO;
 using Registry.Web.Services.Ports;
 
@@ -23,7 +24,22 @@ namespace Registry.Web.Services.Adapters
             _context = context;
         }
 
-        public Task<IEnumerable<ObjectDto>> Get(string orgId, string dsId, string path)
+        public async Task<IEnumerable<ObjectDto>> List(string orgId, string dsId, string path)
+        {
+            throw new NotImplementedException();
+        }
+
+        public async Task<ObjectRes> Get(string orgId, string dsId, string path)
+        {
+            throw new NotImplementedException();
+        }
+
+        public async Task<ObjectDto> AddNew(string orgId, string dsId, string path)
+        {
+            throw new NotImplementedException();
+        }
+
+        public async Task Delete(string orgId, string dsId, string path)
         {
             throw new NotImplementedException();
         }

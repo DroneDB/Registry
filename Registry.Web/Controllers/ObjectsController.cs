@@ -20,7 +20,7 @@ namespace Registry.Web.Controllers
 
     [Authorize]
     [ApiController]
-    [Route("ddb/{orgId:alpha}/ds/{dsId:alpha}/obj")]
+    [Route("ddb/{orgId:alpha}/ds/{dsId:alpha}")]
     public class ObjectsController : ControllerBaseEx
     {
         private readonly IObjectsManager _objectsManager;
@@ -30,12 +30,27 @@ namespace Registry.Web.Controllers
             _objectsManager = datasetsManager;
         }
         
-        [HttpGet("{**path}", Name = nameof(ObjectsController) + "." + nameof(Get))]
+        [HttpGet("obj/{**path}", Name = nameof(ObjectsController) + "." + nameof(Get))]
         public async Task<IActionResult> Get([FromRoute] string orgId, [FromRoute] string dsId, string path)
         {
             try
             {
                 var res = await _objectsManager.Get(orgId, dsId, path);
+                return File(res.Data, res.ContentType, res.Name);
+            }
+            catch (Exception ex)
+            {
+                return ExceptionResult(ex);
+            }
+        }
+
+        [HttpGet("info/{**path}", Name = nameof(ObjectsController) + "." + nameof(Get))]
+        public async Task<IActionResult> GetInfo([FromRoute] string orgId, [FromRoute] string dsId, string path)
+        {
+            try
+            {
+
+                var res = await _objectsManager.List(orgId, dsId, path);
                 return Ok(res);
             }
             catch (Exception ex)
@@ -43,62 +58,31 @@ namespace Registry.Web.Controllers
                 return ExceptionResult(ex);
             }
         }
-        /*
 
-        [HttpGet("{id}", Name = nameof(ObjectsManager) + "." + nameof(Get))]
-        public async Task<IActionResult> Get([FromRoute] string orgId, string id)
+        [HttpPost("obj/{**path}")]
+        public async Task<IActionResult> Post([FromRoute] string orgId, [FromRoute] string dsId, string path)
         {
             try
             {
-                return Ok(await _objectsManager.Get(orgId, id));
+
+                var newObj = await _objectsManager.AddNew(orgId, dsId, path);
+                return CreatedAtRoute(nameof(ObjectsController) + "." + nameof(GetInfo), new { path = newObj.Path },
+                    newObj);
             }
             catch (Exception ex)
             {
                 return ExceptionResult(ex);
             }
-        }
-
-
-        [HttpPost]
-        public async Task<IActionResult> Post([FromRoute] string orgId, [FromBody] DatasetDto dataset)
-        {
-            try
-            {
-                var newDs = await _objectsManager.AddNew(orgId, dataset);
-                return CreatedAtRoute(nameof(DatasetsController) + "." + nameof(Get), new { id = newDs.Id },
-                    newDs);
-            }
-            catch (Exception ex)
-            {
-                return ExceptionResult(ex);
-            }
-        }
-
-        // POST: ddb/
-        [HttpPut("{id}")]
-        public async Task<IActionResult> Put([FromRoute] string orgId, string id, [FromBody] DatasetDto dataset)
-        {
-
-            try
-            {
-                await _objectsManager.Edit(orgId, id, dataset);
-                return NoContent();
-            }
-            catch (Exception ex)
-            {
-                return ExceptionResult(ex);
-            }
-
         }
 
         // DELETE: ddb/id
-        [HttpDelete("{id}")]
-        public async Task<IActionResult> Delete([FromRoute] string orgId, string id)
+        [HttpDelete("obj/{**path}")]
+        public async Task<IActionResult> Delete([FromRoute] string orgId, [FromRoute] string dsId, string path)
         {
 
             try
             {
-                await _objectsManager.Delete(orgId, id);
+                await _objectsManager.Delete(orgId, dsId, path);
                 return NoContent();
             }
             catch (Exception ex)
@@ -108,6 +92,6 @@ namespace Registry.Web.Controllers
 
         }
 
-        */
+        
     }
 }
