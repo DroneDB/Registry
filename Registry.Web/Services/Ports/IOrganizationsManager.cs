@@ -10,7 +10,7 @@ namespace Registry.Web.Services.Ports
 {
     public interface IOrganizationsManager 
     {
-        public Task<IEnumerable<OrganizationDto>> GetAll();
+        public Task<IEnumerable<OrganizationDto>> List();
         public Task<OrganizationDto> Get(string id);
         public Task<OrganizationDto> AddNew(OrganizationDto dataset);
         public Task Edit(string id, OrganizationDto dataset);

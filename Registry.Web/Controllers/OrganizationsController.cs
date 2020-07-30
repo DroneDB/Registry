@@ -35,7 +35,7 @@ namespace Registry.Web.Controllers
         {
             try
             {
-                return Ok(await _organizationsManager.GetAll());
+                return Ok(await _organizationsManager.List());
             }
             catch (Exception ex)
             {

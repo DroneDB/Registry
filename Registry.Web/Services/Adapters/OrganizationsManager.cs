@@ -35,7 +35,7 @@ namespace Registry.Web.Services.Adapters
             _logger = logger;
         }
 
-        public async Task<IEnumerable<OrganizationDto>> GetAll()
+        public async Task<IEnumerable<OrganizationDto>> List()
         {
             var query = from org in _context.Organizations select org;
 

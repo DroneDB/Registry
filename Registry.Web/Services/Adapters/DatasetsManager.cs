@@ -34,7 +34,7 @@ namespace Registry.Web.Services.Adapters
             _logger = logger;
         }
 
-        public async Task<IEnumerable<DatasetDto>> GetAll(string orgId)
+        public async Task<IEnumerable<DatasetDto>> List(string orgId)
         {
             var currentUser = await _authManager.GetCurrentUser();
 

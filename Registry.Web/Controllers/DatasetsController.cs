@@ -34,7 +34,7 @@ namespace Registry.Web.Controllers
         {
             try
             {
-                return Ok(await _datasetsManager.GetAll(orgId));
+                return Ok(await _datasetsManager.List(orgId));
             }
             catch (Exception ex)
             {
