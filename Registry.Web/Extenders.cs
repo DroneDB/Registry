@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
+using Registry.Ports.DroneDB.Model;
 using Registry.Web.Data.Models;
 using Registry.Web.Models.DTO;
 
@@ -71,5 +72,22 @@ namespace Registry.Web
             };
         }
 
+        public static ObjectDto ToDto(this DdbObject obj)
+        {
+            return new ObjectDto
+            {
+                Creationdate = obj.CreationDate,
+                Depth = obj.Depth,
+                Hash = obj.Hash,
+                Id = obj.Id,
+                Meta = obj.Meta,
+                ModifiedTime = obj.ModifiedTime,
+                Path = obj.Path,
+                PointGeometry = obj.PointGeometry,
+                PoligonGeometry = obj.PoligonGeometry,
+                Size = obj.Size,
+                Type = obj.Type
+            };
+        }
     }
 }

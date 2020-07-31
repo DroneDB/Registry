@@ -54,22 +54,7 @@ namespace Registry.Web.Services.Adapters
 
             var files = ddb.Search(path);
 
-            // TODO: This logic is better suited for a .ToDto() method
-            var query = from file in files
-                select new ObjectDto
-                {
-                    Creationdate = file.CreationDate,
-                    Depth = file.Depth,
-                    Hash = file.Hash,
-                    Id = file.Id,
-                    Meta = file.Meta,
-                    ModifiedTime = file.ModifiedTime,
-                    Path = file.Path,
-                    PointGeometry = file.PointGeometry,
-                    PoligonGeometry = file.PoligonGeometry,
-                    Size = file.Size,
-                    Type = file.Type
-                };
+            var query = files.Select(file => file.ToDto());
 
             return query;
         }
