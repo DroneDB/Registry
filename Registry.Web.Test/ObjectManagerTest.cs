@@ -28,8 +28,10 @@ namespace Registry.Web.Test
         private Mock<ILogger<ObjectsManager>> _loggerMock;
         private Mock<IObjectSystem> _objectSystemMock;
         private Mock<IOptions<AppSettings>> _appSettingsMock;
-        
-        private IUtils _utils = new WebUtils();
+        private Mock<IDdbFactory> _ddbFactoryMock;
+        private Mock<IAuthManager> _authManagerMock;
+
+        //private IUtils _utils;
 
         const string PublicOrganizationId = "public";
         const string DefaultDatasetId = "default";
@@ -40,6 +42,8 @@ namespace Registry.Web.Test
             _loggerMock = new Mock<ILogger<ObjectsManager>>();
             _objectSystemMock = new Mock<IObjectSystem>();
             _appSettingsMock = new Mock<IOptions<AppSettings>>();
+            _ddbFactoryMock = new Mock<IDdbFactory>();
+            _authManagerMock = new Mock<IAuthManager>();
         }
 
         [Test]
@@ -47,13 +51,15 @@ namespace Registry.Web.Test
         {
             using var context = GetTest1Context();
             _appSettingsMock.Setup(o => o.Value).Returns(_settings);
+            _authManagerMock.Setup(o => o.IsUserAdmin()).Returns(Task.FromResult(true));
 
-            var objectManager = new ObjectsManager(_loggerMock.Object, context, _objectSystemMock.Object, _appSettingsMock.Object);
+            var objectManager = new ObjectsManager(_loggerMock.Object, context, _objectSystemMock.Object, _appSettingsMock.Object, 
+                _ddbFactoryMock.Object, _authManagerMock.Object, new WebUtils(_authManagerMock.Object, context));
 
-            objectManager.Invoking(item => item.List(null, "test", "test")).Should().Throw<BadRequestException>();
-            objectManager.Invoking(item => item.List("test", null, "test")).Should().Throw<BadRequestException>();
-            objectManager.Invoking(item => item.List(string.Empty, "test", "test")).Should().Throw<BadRequestException>();
-            objectManager.Invoking(item => item.List("test", string.Empty, "test")).Should().Throw<BadRequestException>();
+            objectManager.Invoking(item => item.List(null, DefaultDatasetId, "test")).Should().Throw<BadRequestException>();
+            objectManager.Invoking(item => item.List(PublicOrganizationId, null, "test")).Should().Throw<BadRequestException>();
+            objectManager.Invoking(item => item.List(string.Empty, DefaultDatasetId, "test")).Should().Throw<BadRequestException>();
+            objectManager.Invoking(item => item.List(PublicOrganizationId, string.Empty, "test")).Should().Throw<BadRequestException>();
         }
 
         [Ignore("Not implemented yet")]
@@ -67,7 +73,8 @@ namespace Registry.Web.Test
             _objectSystemMock.Setup(item => item.BucketExistsAsync(It.IsAny<string>(), default))
                 .Returns(Task.FromResult(false));
 
-            var objectManager = new ObjectsManager(_loggerMock.Object, context, _objectSystemMock.Object, _appSettingsMock.Object);
+            var objectManager = new ObjectsManager(_loggerMock.Object, context, _objectSystemMock.Object, _appSettingsMock.Object,
+                _ddbFactoryMock.Object, _authManagerMock.Object, new WebUtils(_authManagerMock.Object, context));
 
             objectManager.Invoking(o => o.List(PublicOrganizationId, DefaultDatasetId, null)).Should()
                 .Throw<NotFoundException>();

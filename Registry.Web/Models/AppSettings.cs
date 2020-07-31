@@ -15,6 +15,8 @@ namespace Registry.Web.Models
         public DbProvider RegistryProvider { get; set; }
         public StorageProvider StorageProvider { get; set; }
         public AdminInfo DefaultAdmin { get; set; }
+
+        public string DdbStoragePath { get; set; }
     }
 
     public class StorageProvider

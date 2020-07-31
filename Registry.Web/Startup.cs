@@ -24,8 +24,10 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OData.Edm;
+using Registry.Adapters.DroneDB;
 using Registry.Adapters.ObjectSystem;
 using Registry.Common;
+using Registry.Ports.DroneDB;
 using Registry.Ports.ObjectSystem;
 using Registry.Web.Data;
 using Registry.Web.Data.Models;
@@ -126,6 +128,7 @@ namespace Registry.Web
             services.AddScoped<IOrganizationsManager, OrganizationsManager>();
             services.AddScoped<IDatasetsManager, DatasetsManager>();
             services.AddScoped<IObjectsManager, ObjectsManager>();
+            services.AddScoped<IDdbFactory, DdbFactory>();
 
             RegisterStorageProvider(services, appSettings);
 

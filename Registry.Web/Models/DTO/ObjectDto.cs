@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
+using GeoJSON.Net;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 
@@ -29,9 +30,9 @@ namespace Registry.Web.Models.DTO
         [JsonProperty("meta")]
         public JObject Meta { get; set; }
         [JsonProperty("point_geom")]
-        public JObject PointGeometry { get; set; }
+        public GeoJSONObject PointGeometry { get; set; }
         [JsonProperty("polygon_geom")]
-        public JObject PoligonGeometry { get; set; }
+        public GeoJSONObject PoligonGeometry { get; set; }
     }
 
     /*
