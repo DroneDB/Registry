@@ -49,31 +49,28 @@ namespace Registry.Web.Services.Adapters
 
             await _utils.GetOrganizationAndCheck(orgId);
             await _utils.GetDatasetAndCheck(orgId, dsId);
-            
 
-            using (var ddb = _ddbFactory.GetDdb(orgId, dsId))
-            {
-                var files = ddb.Search(path);
+            using var ddb = _ddbFactory.GetDdb(orgId, dsId);
 
-                var query = from file in files
-                            select new ObjectDto
-                            {
-                                Creationdate = file.CreationDate,
-                                Depth = file.Depth,
-                                Hash = file.Hash,
-                                Id = file.Id,
-                                Meta = file.Meta,
-                                ModifiedTime = file.ModifiedTime,
-                                Path = file.Path,
-                                PointGeometry = file.PointGeometry,
-                                PoligonGeometry = file.PoligonGeometry,
-                                Size = file.Size,
-                                Type = file.Type
-                            };
+            var files = ddb.Search(path);
 
-                return query;
-            }
+            var query = from file in files
+                select new ObjectDto
+                {
+                    Creationdate = file.CreationDate,
+                    Depth = file.Depth,
+                    Hash = file.Hash,
+                    Id = file.Id,
+                    Meta = file.Meta,
+                    ModifiedTime = file.ModifiedTime,
+                    Path = file.Path,
+                    PointGeometry = file.PointGeometry,
+                    PoligonGeometry = file.PoligonGeometry,
+                    Size = file.Size,
+                    Type = file.Type
+                };
 
+            return query;
         }
 
         public async Task<ObjectRes> Get(string orgId, string dsId, string path)

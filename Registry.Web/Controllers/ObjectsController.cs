@@ -44,7 +44,7 @@ namespace Registry.Web.Controllers
             }
         }
 
-        [HttpGet("info/{**path}", Name = nameof(ObjectsController) + "." + nameof(Get))]
+        [HttpGet("info/{**path}", Name = nameof(ObjectsController) + "." + nameof(GetInfo))]
         public async Task<IActionResult> GetInfo([FromRoute] string orgId, [FromRoute] string dsId, string path)
         {
             try

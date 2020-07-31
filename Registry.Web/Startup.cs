@@ -122,7 +122,7 @@ namespace Registry.Web
             services.AddSingleton<IHttpContextAccessor, HttpContextAccessor>();
             services.AddMemoryCache();
 
-            services.AddSingleton<IUtils, WebUtils>();
+            services.AddScoped<IUtils, WebUtils>();
             services.AddScoped<IAuthManager, AuthManager>();
 
             services.AddScoped<IOrganizationsManager, OrganizationsManager>();

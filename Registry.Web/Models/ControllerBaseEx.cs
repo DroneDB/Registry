@@ -15,13 +15,16 @@ namespace Registry.Web.Models
 
         protected IActionResult ExceptionResult(Exception ex)
         {
+
+            var err = new ErrorResponse(ex.Message);
+
             return ex switch
             {
-                UnauthorizedException e => Unauthorized(e.Message),
-                ConflictException e => Conflict(e.Message),
-                NotFoundException e => NotFound(e.Message),
-                BadRequestException e => BadRequest(e.Message),
-                _ => BadRequest(ex.Message)
+                UnauthorizedException _ => Unauthorized(err),
+                ConflictException _ => Conflict(err),
+                NotFoundException _ => NotFound(err),
+                BadRequestException _ => BadRequest(err),
+                _ => BadRequest(err)
             };
         }
  
