@@ -63,26 +63,9 @@ namespace Registry.Web.Services.Adapters
 
         public async Task<OrganizationDto> Get(string id)
         {
-            var query = from org in _context.Organizations
-                where org.Id == id
-                select org;
+            var org = await _utils.GetOrganizationAndCheck(id);
 
-            if (!await _authManager.IsUserAdmin())
-            {
-                var currentUser = await _authManager.GetCurrentUser();
-
-                if (currentUser == null)
-                    throw new UnauthorizedException("Invalid user");
-
-                query = query.Where(item => item.OwnerId == currentUser.Id || item.IsPublic || item.OwnerId == null);
-            }
-
-            var res = query.FirstOrDefault();
-
-            if (res == null) 
-                throw new NotFoundException("Organization not found");
-
-            return res.ToDto();
+            return org.ToDto();
         }
 
         public async Task<OrganizationDto> AddNew(OrganizationDto organization)
@@ -138,22 +121,10 @@ namespace Registry.Web.Services.Adapters
         public async Task Edit(string id, OrganizationDto organization)
         {
 
+            var org = await _utils.GetOrganizationAndCheck(id);
+
             // TODO: To change when implementing anonymous users
             var currentUser = await _authManager.GetCurrentUser();
-
-            if (currentUser == null)
-                throw new UnauthorizedException("Invalid user");
-
-            if (id != organization.Id)
-                throw new BadRequestException("Ids don't match");
-
-            if (!_utils.IsOrganizationNameValid(organization.Id))
-                throw new BadRequestException("Invalid organization id");
-
-            var existingOrg = _context.Organizations.FirstOrDefault(item => item.Id == id);
-
-            if (existingOrg == null)
-                throw new NotFoundException("Cannot find organization with this id");
 
             // NOTE: Is this a good idea? If activated there will be no way to change the public organization details
             // if (organization.Id == MagicStrings.PublicOrganizationId)
@@ -184,9 +155,9 @@ namespace Registry.Web.Services.Adapters
                 }
             }
 
-            existingOrg.IsPublic = organization.IsPublic;
-            existingOrg.Name = organization.Name;
-            existingOrg.Description = organization.Description;
+            org.IsPublic = organization.IsPublic;
+            org.Name = organization.Name;
+            org.Description = organization.Description;
 
             await _context.SaveChangesAsync();
 
@@ -195,23 +166,15 @@ namespace Registry.Web.Services.Adapters
         public async Task Delete(string id)
         {
 
-            // TODO: To change when implementing anonymous users
-            var currentUser = await _authManager.GetCurrentUser();
-
-            if (currentUser == null)
-                throw new UnauthorizedException("Invalid user");
-            
-            if (!_utils.IsOrganizationNameValid(id))
-                throw new BadRequestException("Invalid organization id");
-
-            var org = _context.Organizations.Include(item => item.Datasets)
-                .FirstOrDefault(item => item.Id == id);
+            var org = await _utils.GetOrganizationAndCheck(id);
 
             if (org == null)
                 throw new NotFoundException("Cannot find organization with this id");
 
             if (!await _authManager.IsUserAdmin())
             {
+                var currentUser = await _authManager.GetCurrentUser();
+
                 if (org.OwnerId != currentUser.Id)
                     throw new UnauthorizedException("The current user is not the owner of the organization");
             }

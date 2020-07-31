@@ -11,14 +11,14 @@ namespace Registry.Web.Test
 
         private Mock<ILogger<OrganizationsManager>> _loggerMock;
         private Mock<IDatasetsManager> _datasetsManagerMock;
-        private IUtils _utils;
+        private Mock<IUtils> _utilsMock;
 
         [SetUp]
         public void Setup()
         {
             _loggerMock = new Mock<ILogger<OrganizationsManager>>();
             _datasetsManagerMock = new Mock<IDatasetsManager>();
-            _utils = new WebUtils();
+            _utilsMock = new Mock<IUtils>();
         }
 
         [Test]

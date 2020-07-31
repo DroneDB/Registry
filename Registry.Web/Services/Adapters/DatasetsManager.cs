@@ -36,18 +36,7 @@ namespace Registry.Web.Services.Adapters
 
         public async Task<IEnumerable<DatasetDto>> List(string orgId)
         {
-            var currentUser = await _authManager.GetCurrentUser();
-
-            if (currentUser == null)
-                throw new UnauthorizedException("Invalid user");
-
-            var org = _context.Organizations.Include(item => item.Datasets).FirstOrDefault(item => item.Id == orgId);
-
-            if (org == null)
-                throw new NotFoundException("Organization not found");
-
-            if (!await _authManager.IsUserAdmin() && !(currentUser.Id == org.OwnerId || org.OwnerId == null))
-                throw new UnauthorizedException("This organization does not belong to the current user");
+            var org = await _utils.GetOrganizationAndCheck(orgId);
 
             var query = from ds in org.Datasets
 
@@ -71,24 +60,7 @@ namespace Registry.Web.Services.Adapters
         public async Task<DatasetDto> Get(string orgId, string ds)
         {
 
-            // TODO: To change when implementing anonymous users
-            var currentUser = await _authManager.GetCurrentUser();
-
-            if (currentUser == null)
-                throw new UnauthorizedException("Invalid user");
-
-            var org = _context.Organizations.Include(item => item.Datasets).FirstOrDefault(item => item.Id == orgId);
-
-            if (org == null)
-                throw new NotFoundException("Organization not found");
-
-            if (!await _authManager.IsUserAdmin() && !(currentUser.Id == org.OwnerId || org.OwnerId == null))
-                throw new UnauthorizedException("This organization does not belong to the current user");
-
-            var dataset = org.Datasets.FirstOrDefault(item => item.Slug == ds);
-
-            if (dataset == null)
-                throw new NotFoundException("Cannot find dataset");
+            var dataset = await _utils.GetDatasetAndCheck(orgId, ds);
 
             return dataset.ToDto();
         }
@@ -96,19 +68,7 @@ namespace Registry.Web.Services.Adapters
         public async Task<DatasetDto> AddNew(string orgId, DatasetDto dataset)
         {
 
-            // TODO: To change when implementing anonymous users
-            var currentUser = await _authManager.GetCurrentUser();
-
-            if (currentUser == null)
-                throw new UnauthorizedException("Invalid user");
-
-            var org = _context.Organizations.Include(item => item.Datasets).FirstOrDefault(item => item.Id == orgId);
-
-            if (org == null)
-                throw new NotFoundException("Organization not found");
-            
-            if (!await _authManager.IsUserAdmin() && currentUser.Id != org.OwnerId) 
-                throw new UnauthorizedException("This organization does not belong to this user");
+            var org = await _utils.GetOrganizationAndCheck(orgId);
 
             var ds = dataset.ToEntity();
 
@@ -122,19 +82,7 @@ namespace Registry.Web.Services.Adapters
 
         public async Task Edit(string orgId, string ds, DatasetDto dataset)
         {
-            // TODO: To change when implementing anonymous users
-            var currentUser = await _authManager.GetCurrentUser();
-
-            if (currentUser == null)
-                throw new UnauthorizedException("Invalid user");
-
-            var org = _context.Organizations.Include(item => item.Datasets).FirstOrDefault(item => item.Id == orgId);
-
-            if (org == null)
-                throw new NotFoundException("Organization not found");
-
-            if (!await _authManager.IsUserAdmin() && currentUser.Id != org.OwnerId)
-                throw new UnauthorizedException("This organization does not belong to this user");
+            var org = await _utils.GetOrganizationAndCheck(orgId);
 
             var entity = org.Datasets.FirstOrDefault(item => item.Slug == ds);
 
@@ -154,20 +102,8 @@ namespace Registry.Web.Services.Adapters
 
         public async Task Delete(string orgId, string ds)
         {
-            // TODO: To change when implementing anonymous users
-            var currentUser = await _authManager.GetCurrentUser();
-
-            if (currentUser == null)
-                throw new UnauthorizedException("Invalid user");
-
-            var org = _context.Organizations.Include(item => item.Datasets).FirstOrDefault(item => item.Id == orgId);
-
-            if (org == null)
-                throw new NotFoundException("Organization not found");
-
-            if (!await _authManager.IsUserAdmin() && currentUser.Id != org.OwnerId)
-                throw new UnauthorizedException("This organization does not belong to this user");
-
+            var org = await _utils.GetOrganizationAndCheck(orgId);
+            
             var entity = org.Datasets.FirstOrDefault(item => item.Slug == ds);
 
             if (entity == null)
