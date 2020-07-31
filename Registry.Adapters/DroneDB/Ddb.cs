@@ -9,6 +9,7 @@ namespace Registry.Adapters.DroneDB
     public class Ddb : IDdb
     {
 
+        // TODO: This class should connect to ddb sqlite database and extract info
         public Ddb(string dbPath)
         {
 

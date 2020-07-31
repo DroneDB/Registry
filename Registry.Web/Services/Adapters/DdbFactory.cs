@@ -20,6 +20,8 @@ namespace Registry.Web.Services.Adapters
             _settings = settings.Value;
         }
 
+        // NOTE: This logic is separated from the managers classes because it is used in multiple places and it could be subject to change
+        
         public IDdb GetDdb(string orgId, string dsId)
         {
             var ddbPath = Path.Combine(_settings.DdbStoragePath, $"{orgId}-{dsId}", ".ddb");

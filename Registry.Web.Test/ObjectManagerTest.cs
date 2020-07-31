@@ -31,11 +31,6 @@ namespace Registry.Web.Test
         private Mock<IDdbFactory> _ddbFactoryMock;
         private Mock<IAuthManager> _authManagerMock;
 
-        //private IUtils _utils;
-
-        const string PublicOrganizationId = "public";
-        const string DefaultDatasetId = "default";
-
         [SetUp]
         public void Setup()
         {
@@ -56,10 +51,10 @@ namespace Registry.Web.Test
             var objectManager = new ObjectsManager(_loggerMock.Object, context, _objectSystemMock.Object, _appSettingsMock.Object, 
                 _ddbFactoryMock.Object, _authManagerMock.Object, new WebUtils(_authManagerMock.Object, context));
 
-            objectManager.Invoking(item => item.List(null, DefaultDatasetId, "test")).Should().Throw<BadRequestException>();
-            objectManager.Invoking(item => item.List(PublicOrganizationId, null, "test")).Should().Throw<BadRequestException>();
-            objectManager.Invoking(item => item.List(string.Empty, DefaultDatasetId, "test")).Should().Throw<BadRequestException>();
-            objectManager.Invoking(item => item.List(PublicOrganizationId, string.Empty, "test")).Should().Throw<BadRequestException>();
+            objectManager.Invoking(item => item.List(null, MagicStrings.DefaultDatasetSlug, "test")).Should().Throw<BadRequestException>();
+            objectManager.Invoking(item => item.List(MagicStrings.PublicOrganizationId, null, "test")).Should().Throw<BadRequestException>();
+            objectManager.Invoking(item => item.List(string.Empty, MagicStrings.DefaultDatasetSlug, "test")).Should().Throw<BadRequestException>();
+            objectManager.Invoking(item => item.List(MagicStrings.PublicOrganizationId, string.Empty, "test")).Should().Throw<BadRequestException>();
         }
 
         [Ignore("Not implemented yet")]
@@ -76,7 +71,7 @@ namespace Registry.Web.Test
             var objectManager = new ObjectsManager(_loggerMock.Object, context, _objectSystemMock.Object, _appSettingsMock.Object,
                 _ddbFactoryMock.Object, _authManagerMock.Object, new WebUtils(_authManagerMock.Object, context));
 
-            objectManager.Invoking(o => o.List(PublicOrganizationId, DefaultDatasetId, null)).Should()
+            objectManager.Invoking(o => o.List(MagicStrings.PublicOrganizationId, MagicStrings.DefaultDatasetSlug, null)).Should()
                 .Throw<NotFoundException>();
 
         }

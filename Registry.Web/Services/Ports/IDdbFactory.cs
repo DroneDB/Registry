@@ -6,6 +6,9 @@ using Registry.Ports.DroneDB;
 
 namespace Registry.Web.Services.Ports
 {
+    /// <summary>
+    /// Creates new instances of IDdb
+    /// </summary>
     public interface IDdbFactory
     {
         IDdb GetDdb(string orgId, string dsId);

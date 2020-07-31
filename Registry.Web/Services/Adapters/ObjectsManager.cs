@@ -54,6 +54,7 @@ namespace Registry.Web.Services.Adapters
 
             var files = ddb.Search(path);
 
+            // TODO: This logic is better suited for a .ToDto() method
             var query = from file in files
                 select new ObjectDto
                 {
@@ -73,6 +74,7 @@ namespace Registry.Web.Services.Adapters
             return query;
         }
 
+        // NOTE: This method should download the file in a temp folder and pass it to the caller
         public async Task<ObjectRes> Get(string orgId, string dsId, string path)
         {
             /*

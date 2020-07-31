@@ -9,6 +9,11 @@ using Registry.Web.Services.Ports;
 
 namespace Registry.Web.Services.Adapters
 {
+
+    // NOTE: This class is a fundamental piece of the architecture because 
+    // it encapsulates all the validation logic of the organizations and datasets
+    // The logic is centralized here because it could be subject to change
+
     public class WebUtils : IUtils
     {
         private readonly IAuthManager _authManager;

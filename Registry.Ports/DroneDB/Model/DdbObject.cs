@@ -6,7 +6,6 @@ namespace Registry.Ports.DroneDB.Model
 {
     public class DdbObject
     {
-        
         public int Id { get; set; }
         public string Path { get; set; }
         public int CreationDate { get; set; }
