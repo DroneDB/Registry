@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Reactive.Linq;
 using System.Runtime.CompilerServices;
@@ -27,10 +28,12 @@ namespace Registry.Web.Services.Adapters
         private readonly RegistryContext _context;
         private readonly AppSettings _settings;
 
-        public ObjectsManager(ILogger<ObjectsManager> logger, 
-            RegistryContext context, 
-            IObjectSystem objectSystem, 
-            IOptions<AppSettings> settings, 
+        private const string BucketNameFormat = "{0}-{1}";
+
+        public ObjectsManager(ILogger<ObjectsManager> logger,
+            RegistryContext context,
+            IObjectSystem objectSystem,
+            IOptions<AppSettings> settings,
             IDdbFactory ddbFactory,
             IAuthManager authManager,
             IUtils utils)
@@ -59,37 +62,40 @@ namespace Registry.Web.Services.Adapters
             return query;
         }
 
-        // NOTE: This method should download the file in a temp folder and pass it to the caller
         public async Task<ObjectRes> Get(string orgId, string dsId, string path)
         {
-            /*
-                var bucketName = string.Format(orgId, dsId);
 
-                var bucketExists = await _objectSystem.BucketExistsAsync(bucketName);
+            await _utils.GetOrganizationAndCheck(orgId);
+            await _utils.GetDatasetAndCheck(orgId, dsId);
 
-                if (!bucketExists)
-                {
-                    var region = _settings.StorageProvider.Settings.SafeGetValue("region");
-                    if (region == null)
-                        _logger.LogWarning("No region specified in storage provider config");
+            var bucketName = string.Format(BucketNameFormat, orgId, dsId);
 
-                    await _objectSystem.MakeBucketAsync(bucketName, region);
-                }
+            var bucketExists = await _objectSystem.BucketExistsAsync(bucketName);
 
-                var list = _objectSystem.ListObjectsAsync(bucketName, path, true).ToEnumerable();
+            if (!bucketExists)
+            {
+                var region = _settings.StorageProvider.Settings.SafeGetValue("region");
+                if (region == null)
+                    _logger.LogWarning("No region specified in storage provider config");
 
+                await _objectSystem.MakeBucketAsync(bucketName, region);
+            }
 
-                var query = from item in list
-                            let info = _ddb.GetObjectInfo(item.)
-                */
-            /*
-            var query = from item in list
-                select new ObjectDto
-                {
-                    Size = item.Size,
+            // TODO: Check for existance
 
-                };*/
-            throw new NotImplementedException();
+            var objInfo = await _objectSystem.GetObjectInfoAsync(bucketName, path);
+
+            await using var memory = new MemoryStream();
+
+            await _objectSystem.GetObjectAsync(bucketName, path, stream => stream.CopyTo(memory));
+
+            return new ObjectRes
+            {
+                ContentType = objInfo.ContentType,
+                Name = objInfo.ObjectName,
+                Data = memory.ToArray()
+            };
+
         }
 
         public async Task<ObjectDto> AddNew(string orgId, string dsId, string path)
