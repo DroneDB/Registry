@@ -15,6 +15,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
 using Registry.Web.Models.DTO;
+using Registry.Web.Services.Adapters;
 using Registry.Web.Services.Ports;
 
 namespace Registry.Web.Controllers
