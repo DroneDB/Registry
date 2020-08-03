@@ -108,5 +108,20 @@ namespace Registry.Web.Services.Adapters
             throw new NotImplementedException();
         }
 
+        public async Task DeleteAll(string orgId, string dsId)
+        {
+            await _utils.GetOrganizationAndCheck(orgId);
+            await _utils.GetDatasetAndCheck(orgId, dsId);
+
+            var bucketName = string.Format(BucketNameFormat, orgId, dsId);
+
+            var bucketExists = await _objectSystem.BucketExistsAsync(bucketName);
+
+            if (!bucketExists)
+                return;
+
+            await _objectSystem.RemoveBucketAsync(bucketName);
+
+        }
     }
 }

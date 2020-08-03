@@ -50,15 +50,15 @@ namespace Registry.Web.Services.Adapters
             }
 
             return from org in query
-                select new OrganizationDto
-                {
-                    CreationDate = org.CreationDate,
-                    Description = org.Description,
-                    Id = org.Id,
-                    Name = org.Name,
-                    Owner = org.OwnerId,
-                    IsPublic = org.IsPublic
-                };
+                   select new OrganizationDto
+                   {
+                       CreationDate = org.CreationDate,
+                       Description = org.Description,
+                       Id = org.Id,
+                       Name = org.Name,
+                       Owner = org.OwnerId,
+                       IsPublic = org.IsPublic
+                   };
         }
 
         public async Task<OrganizationDto> Get(string id)
@@ -129,7 +129,7 @@ namespace Registry.Web.Services.Adapters
             // NOTE: Is this a good idea? If activated there will be no way to change the public organization details
             // if (organization.Id == MagicStrings.PublicOrganizationId)
             //    return Unauthorized(new ErrorResponse("Cannot edit the public organization"));
-            
+
             if (!await _authManager.IsUserAdmin())
             {
 
@@ -188,7 +188,7 @@ namespace Registry.Web.Services.Adapters
             {
 
                 // TODO: This is not the right method, we should have another abstraction and / or a direct access to IObjectSystem
-                // await _datasetManager.Delete(org.Id, ds.Slug);
+                await _datasetManager.Delete(org.Id, ds.Slug);
                 _context.Datasets.Remove(ds);
             }
 

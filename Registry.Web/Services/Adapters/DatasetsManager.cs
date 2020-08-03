@@ -18,6 +18,7 @@ namespace Registry.Web.Services.Adapters
         private readonly RegistryContext _context;
         private readonly IUtils _utils;
         private readonly ILogger<DatasetsManager> _logger;
+        private readonly IObjectsManager _objectsManager;
 
         // TODO: Add extensive logging
         // TODO: Add extensive testing
@@ -26,12 +27,14 @@ namespace Registry.Web.Services.Adapters
             IAuthManager authManager,
             RegistryContext context,
             IUtils utils,
-            ILogger<DatasetsManager> logger)
+            ILogger<DatasetsManager> logger,
+            IObjectsManager objectsManager)
         {
             _authManager = authManager;
             _context = context;
             _utils = utils;
             _logger = logger;
+            this._objectsManager = objectsManager;
         }
 
         public async Task<IEnumerable<DatasetDto>> List(string orgId)
@@ -110,6 +113,8 @@ namespace Registry.Web.Services.Adapters
                 throw new NotFoundException("Dataset not found");
 
             _context.Datasets.Remove(entity);
+
+            await _objectsManager.DeleteAll(orgId, ds);
 
             await _context.SaveChangesAsync();
         }

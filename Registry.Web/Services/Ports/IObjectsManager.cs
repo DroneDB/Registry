@@ -14,5 +14,6 @@ namespace Registry.Web.Services.Ports
         Task<ObjectDto> AddNew(string orgId, string dsId, string path);
         Task Delete(string orgId, string dsId, string path);
 
+        Task DeleteAll(string orgId, string dsId);
     }
 }
