@@ -187,7 +187,7 @@ namespace Registry.Web.Services.Adapters
             foreach (var ds in org.Datasets.ToArray())
             {
 
-                // TODO: This is not the right method, we should have another abstraction and / or a direct access to IObjectSystem
+                // TODO: To check and re-check and re-check and re-check
                 await _datasetManager.Delete(org.Id, ds.Slug);
                 _context.Datasets.Remove(ds);
             }

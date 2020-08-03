@@ -1,10 +1,12 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.AspNet.OData;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -59,13 +61,34 @@ namespace Registry.Web.Controllers
             }
         }
 
+        /*
+         *[HttpPost]
+        public async Task<IActionResult> Upload(IFormFile uploadedFile)
+        {
+            if (uploadedFile == null || uploadedFile.Length == 0)
+                return Content("file not selected");
+
+            var path = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", uploadedFile.FileName);
+
+            using (var stream = new FileStream(path, FileMode.Create))
+            {
+                await uploadedFile.CopyToAsync(stream);
+            }
+
+            return Ok();
+        }
+         *
+         */
+
         [HttpPost("obj/{**path}")]
-        public async Task<IActionResult> Post([FromRoute] string orgId, [FromRoute] string dsId, string path)
+        public async Task<IActionResult> Post([FromRoute] string orgId, [FromRoute] string dsId, string path, IFormFile file)
         {
             try
             {
+                await using var memory = new MemoryStream();
+                await file.CopyToAsync(memory);
 
-                var newObj = await _objectsManager.AddNew(orgId, dsId, path);
+                var newObj = await _objectsManager.AddNew(orgId, dsId, path, memory.ToArray());
                 return CreatedAtRoute(nameof(ObjectsController) + "." + nameof(GetInfo), new { path = newObj.Path },
                     newObj);
             }

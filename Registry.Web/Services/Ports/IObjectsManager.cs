@@ -11,7 +11,7 @@ namespace Registry.Web.Services.Ports
     {
         Task<IEnumerable<ObjectDto>> List(string orgId, string dsId, string path);
         Task<ObjectRes> Get(string orgId, string dsId, string path);
-        Task<ObjectDto> AddNew(string orgId, string dsId, string path);
+        Task<UploadedObjectDto> AddNew(string orgId, string dsId, string path, byte[] data);
         Task Delete(string orgId, string dsId, string path);
 
         Task DeleteAll(string orgId, string dsId);

@@ -50,7 +50,6 @@ namespace Registry.Web.Services.Adapters
         public async Task<IEnumerable<ObjectDto>> List(string orgId, string dsId, string path)
         {
 
-            await _utils.GetOrganizationAndCheck(orgId);
             await _utils.GetDatasetAndCheck(orgId, dsId);
 
             using var ddb = _ddbFactory.GetDdb(orgId, dsId);
@@ -65,7 +64,6 @@ namespace Registry.Web.Services.Adapters
         public async Task<ObjectRes> Get(string orgId, string dsId, string path)
         {
 
-            await _utils.GetOrganizationAndCheck(orgId);
             await _utils.GetDatasetAndCheck(orgId, dsId);
 
             var bucketName = string.Format(BucketNameFormat, orgId, dsId);
@@ -81,10 +79,11 @@ namespace Registry.Web.Services.Adapters
                 await _objectSystem.MakeBucketAsync(bucketName, region);
             }
 
-            // TODO: Check for existance
-
             var objInfo = await _objectSystem.GetObjectInfoAsync(bucketName, path);
 
+            if (objInfo == null)
+                throw new NotFoundException($"Cannot find '{path}'");
+            
             await using var memory = new MemoryStream();
 
             await _objectSystem.GetObjectAsync(bucketName, path, stream => stream.CopyTo(memory));
@@ -98,19 +97,8 @@ namespace Registry.Web.Services.Adapters
 
         }
 
-        public async Task<ObjectDto> AddNew(string orgId, string dsId, string path)
+        public async Task<UploadedObjectDto> AddNew(string orgId, string dsId, string path, byte[] data)
         {
-            throw new NotImplementedException();
-        }
-
-        public async Task Delete(string orgId, string dsId, string path)
-        {
-            throw new NotImplementedException();
-        }
-
-        public async Task DeleteAll(string orgId, string dsId)
-        {
-            await _utils.GetOrganizationAndCheck(orgId);
             await _utils.GetDatasetAndCheck(orgId, dsId);
 
             var bucketName = string.Format(BucketNameFormat, orgId, dsId);
@@ -118,8 +106,58 @@ namespace Registry.Web.Services.Adapters
             var bucketExists = await _objectSystem.BucketExistsAsync(bucketName);
 
             if (!bucketExists)
-                return;
+                throw new BadRequestException($"Cannot find bucket '{bucketName}'");
 
+            // TODO: We should do something with DDB to add the file
+            // using var ddb = _ddbFactory.GetDdb(orgId, dsId);
+            // var file = ddb.Search(path).FirstOrDefault();
+            // ddb.Add ?
+
+            await using var memory = new MemoryStream(data);
+
+            // TODO: I highly doubt the robustness of this 
+            var contentType = MimeTypes.GetMimeType(path);
+
+            // TODO: No metadata / encryption ?
+            await _objectSystem.PutObjectAsync(bucketName, path, memory, data.Length, contentType);
+
+            var obj = new UploadedObjectDto
+            {
+                Path = path,
+                ContentType = contentType,
+                Size = data.Length
+            };
+            
+            return obj;
+        }
+
+        public async Task Delete(string orgId, string dsId, string path)
+        {
+            await _utils.GetDatasetAndCheck(orgId, dsId);
+
+            var bucketName = string.Format(BucketNameFormat, orgId, dsId);
+
+            var bucketExists = await _objectSystem.BucketExistsAsync(bucketName);
+
+            if (!bucketExists)
+                throw new BadRequestException($"Cannot find bucket '{bucketName}'");
+
+            await _objectSystem.RemoveObjectAsync(bucketName, path);
+
+        }
+
+        public async Task DeleteAll(string orgId, string dsId)
+        {
+            await _utils.GetDatasetAndCheck(orgId, dsId);
+
+            var bucketName = string.Format(BucketNameFormat, orgId, dsId);
+
+            var bucketExists = await _objectSystem.BucketExistsAsync(bucketName);
+
+            if (!bucketExists) {
+                _logger.LogWarning($"Asked to remove non-existing bucket '{bucketName}'");
+                return;
+            }
             await _objectSystem.RemoveBucketAsync(bucketName);
 
         }
