@@ -1,11 +1,11 @@
 ﻿using System;
-using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
-using System.Text;
+using NetTopologySuite.Geometries;
 
-namespace Registry.Adapters.DroneDB.Model
+namespace Registry.Adapters.DroneDB.Models
 {
+    [Table("entries")]
     public class Entry
     {
         [Key]
@@ -23,6 +23,12 @@ namespace Registry.Adapters.DroneDB.Model
         public int Size { get; set; }
         [Column("depth", TypeName = "INTEGER")]
         public int Depth { get; set; }
+
+        [Column("point_geom", TypeName = "POINTZ")]
+        public Point PointGeometry { get; set; }
+
+        [Column("polygon_geom", TypeName = "POLYGONZ")]
+        public Polygon PolygonGeometry { get; set; }
 
         /*
          * path TEXT,

@@ -1,15 +1,16 @@
-﻿using System.Collections.Generic;
+﻿using System;
 using GeoJSON.Net;
 using Newtonsoft.Json.Linq;
 
-namespace Registry.Ports.DroneDB.Model
+namespace Registry.Ports.DroneDB.Models
 {
     public class DdbObject
     {
         public int Id { get; set; }
         public string Path { get; set; }
-        public int CreationDate { get; set; }
-        public int ModifiedTime { get; set; }
+        // TODO: Where it is?
+        public DateTime CreationDate { get; set; }
+        public DateTime ModifiedTime { get; set; }
         public string Hash { get; set; }
         public int Depth { get; set; }
         public int Size { get; set; }

@@ -1,7 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Text;
-using Registry.Ports.DroneDB.Model;
+using Registry.Ports.DroneDB.Models;
 
 namespace Registry.Ports.DroneDB
 {
@@ -10,7 +10,7 @@ namespace Registry.Ports.DroneDB
     /// </summary>
     public interface IDdb : IDisposable
     {
-        public DdbObject GetObjectInfo(int id);
+        // public DdbObject GetObjectInfo(int id);
         IEnumerable<DdbObject> Search(string path);
     }
 }
