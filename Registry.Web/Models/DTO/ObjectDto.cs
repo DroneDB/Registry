@@ -34,7 +34,7 @@ namespace Registry.Web.Models.DTO
         [JsonProperty("point_geom")]
         public GeoJSONObject PointGeometry { get; set; }
         [JsonProperty("polygon_geom")]
-        public GeoJSONObject PoligonGeometry { get; set; }
+        public GeoJSONObject PolygonGeometry { get; set; }
     }
 
     /*

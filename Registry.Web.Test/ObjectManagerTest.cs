@@ -30,6 +30,7 @@ namespace Registry.Web.Test
         private Mock<IOptions<AppSettings>> _appSettingsMock;
         private Mock<IDdbFactory> _ddbFactoryMock;
         private Mock<IAuthManager> _authManagerMock;
+        private Mock<IUtils> _utilsMock;
 
         [SetUp]
         public void Setup()
@@ -39,6 +40,7 @@ namespace Registry.Web.Test
             _appSettingsMock = new Mock<IOptions<AppSettings>>();
             _ddbFactoryMock = new Mock<IDdbFactory>();
             _authManagerMock = new Mock<IAuthManager>();
+            _utilsMock = new Mock<IUtils>();
         }
 
         [Test]
@@ -57,7 +59,8 @@ namespace Registry.Web.Test
             objectManager.Invoking(item => item.List(MagicStrings.PublicOrganizationId, string.Empty, "test")).Should().Throw<BadRequestException>();
         }
 
-        [Ignore("Not implemented yet")]
+        /*
+        //[Ignore("Not implemented yet")]
         [Test]
         public void List_Uninitialized_NotFoundException()
         {
@@ -67,6 +70,9 @@ namespace Registry.Web.Test
 
             _objectSystemMock.Setup(item => item.BucketExistsAsync(It.IsAny<string>(), default))
                 .Returns(Task.FromResult(false));
+            _utilsMock.Setup(o =>
+                    o.GetDatasetAndCheck(MagicStrings.PublicOrganizationId, MagicStrings.DefaultDatasetSlug))
+                .Returns(Task.FromResult<Dataset>(null));
 
             var objectManager = new ObjectsManager(_loggerMock.Object, context, _objectSystemMock.Object, _appSettingsMock.Object,
                 _ddbFactoryMock.Object, _authManagerMock.Object, new WebUtils(_authManagerMock.Object, context));
@@ -74,7 +80,7 @@ namespace Registry.Web.Test
             objectManager.Invoking(o => o.List(MagicStrings.PublicOrganizationId, MagicStrings.DefaultDatasetSlug, null)).Should()
                 .Throw<NotFoundException>();
 
-        }
+        }*/
 
         #region Test Data
 

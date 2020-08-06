@@ -17,7 +17,7 @@ namespace Registry.Ports.DroneDB.Models
         public int Type { get; set; }
         public JObject Meta { get; set; }
         public GeoJSONObject PointGeometry { get; set; }
-        public GeoJSONObject PoligonGeometry { get; set; }
+        public GeoJSONObject PolygonGeometry { get; set; }
     }
 
 }

@@ -64,7 +64,7 @@ namespace Registry.Adapters.DroneDB
         {
 
             optionsBuilder.UseSqlite($"Data Source={_dbPath};Mode=ReadWriteCreate");
-
+            
 #if DEBUG
             optionsBuilder.EnableSensitiveDataLogging();
 #endif

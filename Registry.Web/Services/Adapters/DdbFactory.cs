@@ -26,7 +26,10 @@ namespace Registry.Web.Services.Adapters
         {
             var ddbPath = Path.Combine(_settings.DdbStoragePath, $"{orgId}-{dsId}", ".ddb");
 
-            return new Ddb(ddbPath);
+            var res = new Ddb(ddbPath);
+            res.Database.EnsureCreated();
+
+            return res;
         }
     }
 }

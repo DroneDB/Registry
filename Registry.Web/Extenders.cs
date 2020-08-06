@@ -84,7 +84,7 @@ namespace Registry.Web
                 ModifiedTime = obj.ModifiedTime,
                 Path = obj.Path,
                 PointGeometry = obj.PointGeometry,
-                PoligonGeometry = obj.PoligonGeometry,
+                PolygonGeometry = obj.PolygonGeometry,
                 Size = obj.Size,
                 Type = obj.Type
             };
