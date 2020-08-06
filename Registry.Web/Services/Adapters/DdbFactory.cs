@@ -14,6 +14,8 @@ namespace Registry.Web.Services.Adapters
     public class DdbFactory : IDdbFactory
     {
         private readonly AppSettings _settings;
+        private const string DefaultDdbFolder = ".ddb";
+        private const string DefaultDdbSqliteName = "dbase.sqlite";
 
         public DdbFactory(IOptions<AppSettings> settings)
         {
@@ -21,12 +23,13 @@ namespace Registry.Web.Services.Adapters
         }
 
         // NOTE: This logic is separated from the managers classes because it is used in multiple places and it could be subject to change
-        
+
         public IDdb GetDdb(string orgId, string dsId)
         {
-            var ddbPath = Path.Combine(_settings.DdbStoragePath, $"{orgId}-{dsId}", ".ddb");
+            var ddbPath = Path.Combine(_settings.DdbStoragePath, orgId, dsId, DefaultDdbFolder, DefaultDdbSqliteName);
 
             var res = new Ddb(ddbPath);
+            
             res.Database.EnsureCreated();
 
             return res;

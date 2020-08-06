@@ -103,7 +103,8 @@ namespace Registry.Web.Test
       ""Email"": ""admin@example.com"",
       ""UserName"": ""admin"",
       ""Password"": ""password""
-    }
+    },
+    ""DdbStoragePath"": ""./ddbstore""
   },
   ""Logging"": {
     ""LogLevel"": {

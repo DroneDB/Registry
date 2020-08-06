@@ -25,4 +25,10 @@
     <ProjectReference Include="..\Registry.Web\Registry.Web.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <None Include="Data\Ddb\public\default\.ddb\dbase.sqlite">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
+
 </Project>
