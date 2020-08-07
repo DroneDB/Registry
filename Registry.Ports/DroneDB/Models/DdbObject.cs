@@ -1,5 +1,7 @@
 ﻿using System;
 using GeoJSON.Net;
+using GeoJSON.Net.Feature;
+using GeoJSON.Net.Geometry;
 using Newtonsoft.Json.Linq;
 
 namespace Registry.Ports.DroneDB.Models
@@ -14,8 +16,8 @@ namespace Registry.Ports.DroneDB.Models
         public int Size { get; set; }
         public int Type { get; set; }
         public JObject Meta { get; set; }
-        public GeoJSONObject PointGeometry { get; set; }
-        public GeoJSONObject PolygonGeometry { get; set; }
+        public Point PointGeometry { get; set; }
+        public Feature PolygonGeometry { get; set; }
     }
 
 }

@@ -3,6 +3,9 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text;
+using GeoJSON.Net;
+using GeoJSON.Net.CoordinateReferenceSystem;
+using GeoJSON.Net.Feature;
 using GeoJSON.Net.Geometry;
 using Microsoft.EntityFrameworkCore;
 using NetTopologySuite.Geometries;
@@ -11,7 +14,10 @@ using Newtonsoft.Json.Linq;
 using Registry.Adapters.DroneDB.Models;
 using Registry.Ports.DroneDB;
 using Registry.Ports.DroneDB.Models;
+using SQLitePCL;
+using LineString = GeoJSON.Net.Geometry.LineString;
 using Point = GeoJSON.Net.Geometry.Point;
+using Polygon = GeoJSON.Net.Geometry.Polygon;
 
 namespace Registry.Adapters.DroneDB
 {
@@ -33,34 +39,63 @@ namespace Registry.Adapters.DroneDB
             var tmp = Entries.ToArray();
 
             var query = from item in (from entry in Entries
-                where entry.Path.StartsWith(path)
-                        select entry).ToArray()
-                select new DdbObject
-                {
-                    Depth = item.Depth,
-                    Hash = item.Hash,
-                    Meta = JsonConvert.DeserializeObject<JObject>(item.Meta),
-                    ModifiedTime = item.ModifiedTime,
-                    Path = item.Path,
-                    Size = item.Size,
-                    Type = item.Type,
-
-                    // TODO: convert pointgeom e polygongeom from spatial types to geojson
-                    // https://github.com/GeoJSON-Net/GeoJSON.Net
-                };
+                                      where entry.Path.EndsWith(path)
+                                      select entry).ToArray()
+                        select new DdbObject
+                        {
+                            Depth = item.Depth,
+                            Hash = item.Hash,
+                            Meta = JsonConvert.DeserializeObject<JObject>(item.Meta),
+                            ModifiedTime = item.ModifiedTime,
+                            Path = item.Path,
+                            Size = item.Size,
+                            Type = item.Type,
+                            PointGeometry = GetPoint(item.PointGeometry),
+                            PolygonGeometry = GetFeature(item.PolygonGeometry)
+                        };
 
             return query.ToArray();
+        }
+
+        private Point GetPoint(NetTopologySuite.Geometries.Point point)
+        {
+            var res = new Point(new Position(point.Y, point.X, point.Z))
+            {
+                // TODO: Is this always the case?
+                CRS = new NamedCRS("EPSG:4326")
+            };
+
+            return res;
+        }
+
+        private Feature GetFeature(NetTopologySuite.Geometries.Polygon poly)
+        {
+
+            if (poly == null) return null;
+
+            var polygon = new Polygon(new[]
+            {
+                new LineString(poly.Coordinates.Select(item => new Position(item.Y, item.X, item.Z)))
+            });
+
+            var feature = new Feature(polygon)
+            {
+                // TODO: Is this always the case?
+                CRS = new NamedCRS("EPSG:4326")
+            };
+
+            return feature;
+
         }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
 
-            modelBuilder.Entity<Entry>(entity => {
+            modelBuilder.Entity<Entry>(entity =>
+            {
                 entity.ToTable("entries").HasNoKey();
             });
 
-            //modelBuilder.Entity<Entry>()
-            //    .HasIndex(ds => ds.Depth);
             modelBuilder
                 .Entity<Entry>()
                 .Property(e => e.ModifiedTime)
@@ -75,16 +110,16 @@ namespace Registry.Adapters.DroneDB
             modelBuilder.Entity<Entry>().Property(c => c.PolygonGeometry)
                 .HasSrid(4326).HasGeometricDimension(Ordinates.XYZ);
 
-            
+
 
         }
 
         protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
         {
 
-            optionsBuilder.UseSqlite($"Data Source={_dbPath};Mode=ReadWriteCreate", 
+            optionsBuilder.UseSqlite($"Data Source={_dbPath};Mode=ReadWriteCreate",
                     z => z.UseNetTopologySuite());
-            
+
 #if DEBUG
             optionsBuilder.EnableSensitiveDataLogging();
 #endif

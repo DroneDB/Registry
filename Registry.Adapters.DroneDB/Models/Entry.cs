@@ -38,10 +38,10 @@ namespace Registry.Adapters.DroneDB.Models
         [Column("depth", TypeName = "INTEGER")]
         public int Depth { get; set; }
 
-        [Column("point_geom", TypeName = "POINT")]
+        [Column("point_geom")]
         public Point PointGeometry { get; set; }
 
-        [Column("polygon_geom", TypeName = "POLYGON")]
+        [Column("polygon_geom")]
         public Polygon PolygonGeometry { get; set; }
 
         /*
