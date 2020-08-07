@@ -8,8 +8,6 @@ namespace Registry.Ports.DroneDB.Models
     {
         public int Id { get; set; }
         public string Path { get; set; }
-        // TODO: Where it is?
-        public DateTime CreationDate { get; set; }
         public DateTime ModifiedTime { get; set; }
         public string Hash { get; set; }
         public int Depth { get; set; }

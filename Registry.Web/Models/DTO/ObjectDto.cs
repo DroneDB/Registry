@@ -15,10 +15,6 @@ namespace Registry.Web.Models.DTO
         public int Id { get; set; }
         [JsonProperty("path")]
         public string Path { get; set; }
-        [JsonProperty("cdate")]
-
-        // TODO: Change format to unix timestamp
-        public DateTime Creationdate { get; set; }
         [JsonProperty("mdate")]
         public DateTime ModifiedTime { get; set; }
         [JsonProperty("hash")]

@@ -76,7 +76,6 @@ namespace Registry.Web
         {
             return new ObjectDto
             {
-                Creationdate = obj.CreationDate,
                 Depth = obj.Depth,
                 Hash = obj.Hash,
                 Id = obj.Id,
