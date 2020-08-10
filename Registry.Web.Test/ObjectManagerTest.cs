@@ -32,6 +32,9 @@ namespace Registry.Web.Test
         private Mock<IAuthManager> _authManagerMock;
         private Mock<IUtils> _utilsMock;
 
+        private const string TestDataFolder = @"Data/Ddb";
+
+
         [SetUp]
         public void Setup()
         {
@@ -59,10 +62,25 @@ namespace Registry.Web.Test
             objectManager.Invoking(item => item.List(MagicStrings.PublicOrganizationId, string.Empty, "test")).Should().Throw<BadRequestException>();
         }
 
+        [Test]
+        public async Task List_PublicDefault_ListObjects()
+        {
+            await using var context = GetTest1Context();
+            _appSettingsMock.Setup(o => o.Value).Returns(_settings);
+            _authManagerMock.Setup(o => o.IsUserAdmin()).Returns(Task.FromResult(true));
+
+            var objectManager = new ObjectsManager(_loggerMock.Object, context, _objectSystemMock.Object, _appSettingsMock.Object,
+                new DdbFactory(_appSettingsMock.Object), _authManagerMock.Object, new WebUtils(_authManagerMock.Object, context));
+
+            var res = await objectManager.List(MagicStrings.PublicOrganizationId, MagicStrings.DefaultDatasetSlug, null);
+
+            res.Should().HaveCount(26);
+
+        }
+
         #region Test Data
 
         private readonly AppSettings _settings = JsonConvert.DeserializeObject<AppSettings>(@"{
-  ""AppSettings"": {
     ""Secret"": ""a2780070a24cfcaf5a4a43f931200ba0d19d8b86b3a7bd5123d9ad75b125f480fcce1f9b7f41a53abe2ba8456bd142d38c455302e0081e5139bc3fc9bf614497"",
     ""TokenExpirationInDays"": 7,
     ""RevokedTokens"": [
@@ -81,22 +99,9 @@ namespace Registry.Web.Test
       ""UserName"": ""admin"",
       ""Password"": ""password""
     },
-    ""DdbStoragePath"": ""./ddbstore""
-  },
-  ""Logging"": {
-    ""LogLevel"": {
-      ""Default"": ""Information"",
-      ""Microsoft"": ""Warning"",
-      ""Microsoft.Hosting.Lifetime"": ""Information""
-    }
-  },
-  ""AllowedHosts"": ""*"",
-  ""ConnectionStrings"": {
-    ""IdentityConnection"": ""Data Source=App_Data/identity.db;Mode=ReadWriteCreate"",
-    ""RegistryConnection"": ""Data Source=App_Data/registry.db;Mode=ReadWriteCreate""
-  },
-  ""DefaultAdmin"": null
-}");
+    ""DdbStoragePath"": ""./Data/Ddb""
+  }
+  ");
 
         #endregion
         

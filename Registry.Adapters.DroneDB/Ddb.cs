@@ -36,11 +36,16 @@ namespace Registry.Adapters.DroneDB
 
         public IEnumerable<DdbObject> Search(string path)
         {
-            var tmp = Entries.ToArray();
 
-            var query = from item in (from entry in Entries
-                                      where entry.Path.EndsWith(path)
-                                      select entry).ToArray()
+            var tmp = from entry in Entries select entry;
+
+            // Filter only if necessary
+            if (!string.IsNullOrEmpty(path))
+                tmp = from item in tmp
+                      where item.Path.EndsWith(path)
+                      select item;
+
+            var query = from item in tmp.ToArray()
                         select new DdbObject
                         {
                             Depth = item.Depth,
@@ -59,6 +64,9 @@ namespace Registry.Adapters.DroneDB
 
         private Point GetPoint(NetTopologySuite.Geometries.Point point)
         {
+
+            if (point == null) return null;
+
             var res = new Point(new Position(point.Y, point.X, point.Z))
             {
                 // TODO: Is this always the case?
