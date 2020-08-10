@@ -66,6 +66,13 @@ namespace Registry.Web.Services.Adapters
 
             await _utils.GetDatasetAndCheck(orgId, dsId);
 
+            using var ddb = _ddbFactory.GetDdb(orgId, dsId);
+
+            var res = ddb.Search(path).FirstOrDefault();
+
+            if (res == null)
+                throw new NotFoundException($"Cannot find '{path}'");
+
             var bucketName = string.Format(BucketNameFormat, orgId, dsId);
 
             var bucketExists = await _objectSystem.BucketExistsAsync(bucketName);
@@ -82,17 +89,19 @@ namespace Registry.Web.Services.Adapters
             var objInfo = await _objectSystem.GetObjectInfoAsync(bucketName, path);
 
             if (objInfo == null)
-                throw new NotFoundException($"Cannot find '{path}'");
+                throw new NotFoundException($"Cannot find '{path}' in storage provider");
             
             await using var memory = new MemoryStream();
 
             await _objectSystem.GetObjectAsync(bucketName, path, stream => stream.CopyTo(memory));
-
+            
             return new ObjectRes
             {
                 ContentType = objInfo.ContentType,
                 Name = objInfo.ObjectName,
-                Data = memory.ToArray()
+                Data = memory.ToArray(),
+                // TODO: We can add more fields from DDB if we need them
+                Type = (ObjectType)(int)res.Type
             };
 
         }
