@@ -26,7 +26,7 @@ namespace Registry.Adapters.DroneDB.Models
         [Column("hash", TypeName = "TEXT")]
         public string Hash { get; set; }
         [Column("type", TypeName = "INTEGER")]
-        public int Type { get; set; }
+        public EntryType Type { get; set; }
         [Column("meta", TypeName = "TEXT")]
         public string Meta { get; set; }
 
@@ -53,5 +53,17 @@ namespace Registry.Adapters.DroneDB.Models
          * size  INTEGER,
          * depth INTEGER
          */
+    }
+
+    public enum EntryType
+    {
+        Undefined = 0,
+        Directory = 1,
+        Generic = 2,
+        GeoImage = 3,
+        GeoRaster = 4,
+        PointCloud = 5,
+        Image = 6,
+        DroneDb = 7
     }
 }

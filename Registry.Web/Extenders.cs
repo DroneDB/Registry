@@ -85,7 +85,7 @@ namespace Registry.Web
                 PointGeometry = obj.PointGeometry,
                 PolygonGeometry = obj.PolygonGeometry,
                 Size = obj.Size,
-                Type = obj.Type
+                Type = (ObjectType)(int)obj.Type
             };
         }
     }

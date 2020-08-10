@@ -14,10 +14,22 @@ namespace Registry.Ports.DroneDB.Models
         public string Hash { get; set; }
         public int Depth { get; set; }
         public int Size { get; set; }
-        public int Type { get; set; }
+        public DdbObjectType Type { get; set; }
         public JObject Meta { get; set; }
         public Point PointGeometry { get; set; }
         public Feature PolygonGeometry { get; set; }
+    }
+
+    public enum DdbObjectType
+    {
+        Undefined = 0,
+        Directory = 1,
+        Generic = 2,
+        GeoImage = 3,
+        GeoRaster = 4,
+        PointCloud = 5,
+        Image = 6,
+        DroneDb = 7
     }
 
 }
