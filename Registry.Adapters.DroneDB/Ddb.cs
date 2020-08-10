@@ -37,12 +37,13 @@ namespace Registry.Adapters.DroneDB
         public IEnumerable<DdbObject> Search(string path)
         {
 
-            var tmp = from entry in Entries select entry;
+            var tmp = from entry in Entries
+                select entry;
 
             // Filter only if necessary
             if (!string.IsNullOrEmpty(path))
                 tmp = from item in tmp
-                      where item.Path.EndsWith(path)
+                      where item.Path.StartsWith(path)
                       select item;
 
             var query = from item in tmp.ToArray()
@@ -54,12 +55,22 @@ namespace Registry.Adapters.DroneDB
                             ModifiedTime = item.ModifiedTime,
                             Path = item.Path,
                             Size = item.Size,
-                            Type = item.Type,
+                            Type = (DdbObjectType)(int)item.Type,
                             PointGeometry = GetPoint(item.PointGeometry),
                             PolygonGeometry = GetFeature(item.PolygonGeometry)
                         };
 
             return query.ToArray();
+        }
+
+        public void Add(string path, byte[] data)
+        {
+            // TODO: Implement
+        }
+
+        public void Remove(string path)
+        {
+            // TODO: Implement
         }
 
         private Point GetPoint(NetTopologySuite.Geometries.Point point)
@@ -117,8 +128,6 @@ namespace Registry.Adapters.DroneDB
                 .HasSrid(4326).HasGeometricDimension(Ordinates.XYZ); ;
             modelBuilder.Entity<Entry>().Property(c => c.PolygonGeometry)
                 .HasSrid(4326).HasGeometricDimension(Ordinates.XYZ);
-
-
 
         }
 

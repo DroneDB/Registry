@@ -76,6 +76,10 @@ namespace Registry.Web.Test
 
             res.Should().HaveCount(26);
 
+            res = await objectManager.List(MagicStrings.PublicOrganizationId, MagicStrings.DefaultDatasetSlug, "Sub");
+
+            res.Should().HaveCount(8);
+
         }
 
         #region Test Data

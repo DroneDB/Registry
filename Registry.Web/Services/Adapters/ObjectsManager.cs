@@ -30,6 +30,8 @@ namespace Registry.Web.Services.Adapters
 
         private const string BucketNameFormat = "{0}-{1}";
 
+        // TODO: Add sqlite db sync to backing server
+
         public ObjectsManager(ILogger<ObjectsManager> logger,
             RegistryContext context,
             IObjectSystem objectSystem,
@@ -56,9 +58,7 @@ namespace Registry.Web.Services.Adapters
 
             var files = ddb.Search(path);
 
-            var query = files.Select(file => file.ToDto());
-
-            return query;
+            return files.Select(file => file.ToDto()); ;
         }
 
         public async Task<ObjectRes> Get(string orgId, string dsId, string path)
@@ -108,11 +108,6 @@ namespace Registry.Web.Services.Adapters
             if (!bucketExists)
                 throw new BadRequestException($"Cannot find bucket '{bucketName}'");
 
-            // TODO: We should do something with DDB to add the file
-            // using var ddb = _ddbFactory.GetDdb(orgId, dsId);
-            // var file = ddb.Search(path).FirstOrDefault();
-            // ddb.Add ?
-
             await using var memory = new MemoryStream(data);
 
             // TODO: I highly doubt the robustness of this 
@@ -121,6 +116,10 @@ namespace Registry.Web.Services.Adapters
             // TODO: No metadata / encryption ?
             await _objectSystem.PutObjectAsync(bucketName, path, memory, data.Length, contentType);
 
+            // Add to DDB
+            using var ddb = _ddbFactory.GetDdb(orgId, dsId);
+            ddb.Add(path, data);
+            
             var obj = new UploadedObjectDto
             {
                 Path = path,
@@ -144,6 +143,10 @@ namespace Registry.Web.Services.Adapters
 
             await _objectSystem.RemoveObjectAsync(bucketName, path);
 
+            // Remove from DDB
+            using var ddb = _ddbFactory.GetDdb(orgId, dsId);
+            ddb.Remove(path);
+            
         }
 
         public async Task DeleteAll(string orgId, string dsId)
@@ -160,6 +163,15 @@ namespace Registry.Web.Services.Adapters
             }
             await _objectSystem.RemoveBucketAsync(bucketName);
 
+            // Remove all from DDB
+            using var ddb = _ddbFactory.GetDdb(orgId, dsId);
+
+            var res = ddb.Search(null);
+            foreach(var item in res)
+                ddb.Remove(item.Path);
+
+            // TODO: Maybe it's more clever to remove the entire sqlite database instead of performing a per-file delete. Just my 2 cents
+            
         }
     }
 }

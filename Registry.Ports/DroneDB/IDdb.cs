@@ -12,5 +12,7 @@ namespace Registry.Ports.DroneDB
     {
         // public DdbObject GetObjectInfo(int id);
         IEnumerable<DdbObject> Search(string path);
+        void Add(string path, byte[] data);
+        void Remove(string path);
     }
 }
