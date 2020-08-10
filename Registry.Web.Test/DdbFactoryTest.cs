@@ -122,7 +122,6 @@ namespace Registry.Web.Test
             const double expectedLongitude = -91.994052;
             const double expectedAltitude = 198.51;
 
-            //var expectedCoordinates = JsonConvert.DeserializeObject<Location[]>("[{ \"Altitude\":158.51,\"Latitude\":46.84331124079,\"Longitude\":-91.99418833907},{ \"Altitude\":158.51,\"Latitude\":46.84305823778,\"Longitude\":-91.99457061483},{ \"Altitude\":158.51,\"Latitude\":46.84259192571,\"Longitude\":-91.99391510716},{ \"Altitude\":158.51,\"Latitude\":46.84284492654,\"Longitude\":-91.9935328317},{ \"Altitude\":158.51,\"Latitude\":46.84331124079,\"Longitude\":-91.99418833907}]");
             IPosition[] expectedCoordinates = {
                 new Position( 46.843311240786406, -91.99418833907131,158.51),
                 new Position( 46.843058237783886, -91.99457061482893,158.51),

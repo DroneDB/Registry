@@ -59,29 +59,6 @@ namespace Registry.Web.Test
             objectManager.Invoking(item => item.List(MagicStrings.PublicOrganizationId, string.Empty, "test")).Should().Throw<BadRequestException>();
         }
 
-        /*
-        //[Ignore("Not implemented yet")]
-        [Test]
-        public void List_Uninitialized_NotFoundException()
-        {
-
-            using var context = GetTest1Context();
-            _appSettingsMock.Setup(o => o.Value).Returns(_settings);
-
-            _objectSystemMock.Setup(item => item.BucketExistsAsync(It.IsAny<string>(), default))
-                .Returns(Task.FromResult(false));
-            _utilsMock.Setup(o =>
-                    o.GetDatasetAndCheck(MagicStrings.PublicOrganizationId, MagicStrings.DefaultDatasetSlug))
-                .Returns(Task.FromResult<Dataset>(null));
-
-            var objectManager = new ObjectsManager(_loggerMock.Object, context, _objectSystemMock.Object, _appSettingsMock.Object,
-                _ddbFactoryMock.Object, _authManagerMock.Object, new WebUtils(_authManagerMock.Object, context));
-
-            objectManager.Invoking(o => o.List(MagicStrings.PublicOrganizationId, MagicStrings.DefaultDatasetSlug, null)).Should()
-                .Throw<NotFoundException>();
-
-        }*/
-
         #region Test Data
 
         private readonly AppSettings _settings = JsonConvert.DeserializeObject<AppSettings>(@"{
