@@ -43,6 +43,8 @@ namespace Registry.Web.Test
         private const string TestStorageFolder = @"Data/Storage";
         private const string TestDatasetFolder = "public-default";
 
+        private const string BrightonBeachDatasetUrl = "https://github.com/pierotofy/drone_dataset_brighton_beach/archive/master.zip";
+
         [OneTimeSetUp]
         public void TestSetup()
         {
@@ -63,7 +65,7 @@ namespace Registry.Web.Test
 
             Debug.WriteLine("Downloading test dataset");
 
-            cli.DownloadFile("https://github.com/pierotofy/drone_dataset_brighton_beach/archive/master.zip", temp);
+            cli.DownloadFile(BrightonBeachDatasetUrl, temp);
 
             Debug.WriteLine("Extracting test dataset");
 
@@ -158,7 +160,10 @@ namespace Registry.Web.Test
             _appSettingsMock.Setup(o => o.Value).Returns(_settings);
             _authManagerMock.Setup(o => o.IsUserAdmin()).Returns(Task.FromResult(true));
 
-            var objectManager = new ObjectsManager(_loggerMock.Object, context, new PhysicalObjectSystem(TestStorageFolder), _appSettingsMock.Object,
+            var sys = new PhysicalObjectSystem(TestStorageFolder);
+            sys.SyncBucket($"{MagicStrings.PublicOrganizationId}-{MagicStrings.DefaultDatasetSlug}");
+
+            var objectManager = new ObjectsManager(_loggerMock.Object, context, sys, _appSettingsMock.Object,
                 new DdbFactory(_appSettingsMock.Object), _authManagerMock.Object, new WebUtils(_authManagerMock.Object, context));
 
             var obj = await objectManager.Get(MagicStrings.PublicOrganizationId, MagicStrings.DefaultDatasetSlug,
@@ -168,8 +173,36 @@ namespace Registry.Web.Test
             obj.Type.Should().Be(expectedObjectType);
             obj.ContentType.Should().Be(expectedContentType);
             MD5.Create().ComputeHash(obj.Data).Should().BeEquivalentTo(expectedHash);
-
+            
         }
+
+        /*
+        [Test]
+        public async Task AddNew_File_FileRes()
+        {
+            
+            //const string expectedName = "DJI_0019.JPG";
+            //const ObjectType expectedObjectType = ObjectType.GeoImage;
+            //const string expectedContentType = "image/jpeg";
+            const string newFileName = "test.jpg";
+
+            await using var context = GetTest1Context();
+            _appSettingsMock.Setup(o => o.Value).Returns(_settings);
+            _authManagerMock.Setup(o => o.IsUserAdmin()).Returns(Task.FromResult(true));
+
+            var objectManager = new ObjectsManager(_loggerMock.Object, context, new PhysicalObjectSystem(TestStorageFolder), _appSettingsMock.Object,
+                new DdbFactory(_appSettingsMock.Object), _authManagerMock.Object, new WebUtils(_authManagerMock.Object, context));
+
+            var obj = await objectManager.AddNew(MagicStrings.PublicOrganizationId, MagicStrings.DefaultDatasetSlug, newFileName,
+                await File.ReadAllBytesAsync(Path.Combine(TestDataFolder, newFileName)));
+            
+
+            //obj.Name.Should().Be(expectedName);
+            //obj.Type.Should().Be(expectedObjectType);
+            //obj.ContentType.Should().Be(expectedContentType);
+            //MD5.Create().ComputeHash(obj.Data).Should().BeEquivalentTo(expectedHash);
+
+        }*/
 
         #region Test Data
 
@@ -203,7 +236,7 @@ namespace Registry.Web.Test
         private static RegistryContext GetTest1Context()
         {
             var options = new DbContextOptionsBuilder<RegistryContext>()
-                .UseInMemoryDatabase(databaseName: "RegistryDatabase")
+                .UseInMemoryDatabase(databaseName: "RegistryDatabase-" + Guid.NewGuid())
                 .Options;
 
             // Insert seed data into the database using one instance of the context
