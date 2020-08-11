@@ -19,6 +19,7 @@ using Moq;
 using Newtonsoft.Json;
 using NUnit.Framework;
 using Registry.Adapters.ObjectSystem;
+using Registry.Common;
 using Registry.Ports.ObjectSystem;
 using Registry.Web.Data;
 using Registry.Web.Data.Models;
@@ -39,48 +40,14 @@ namespace Registry.Web.Test
         private Mock<IAuthManager> _authManagerMock;
         private Mock<IUtils> _utilsMock;
 
+        // TODO: Make this point to temp folder of test and remove from repo
         private const string TestDataFolder = @"Data/Ddb";
+
         private const string TestStorageFolder = @"Data/Storage";
-        private const string TestDatasetFolder = "public-default";
 
-        private const string BrightonBeachDatasetUrl = "https://github.com/pierotofy/drone_dataset_brighton_beach/archive/master.zip";
+        public const string BaseTestFolder = "ObjectManagerTest";
 
-        [OneTimeSetUp]
-        public void TestSetup()
-        {
-            var cli = new WebClient();
-            var temp = Path.GetTempFileName();
-
-            var destFolder = Path.Combine(TestStorageFolder, TestDatasetFolder);
-            if (!Directory.Exists(destFolder))
-                Directory.CreateDirectory(destFolder);
-
-            var count = Directory.EnumerateFiles(destFolder);
-
-            if (count.Count() == 19)
-            {
-                Debug.WriteLine("Test dataset already existing, nothing to do");
-                return;
-            }
-
-            Debug.WriteLine("Downloading test dataset");
-
-            cli.DownloadFile(BrightonBeachDatasetUrl, temp);
-
-            Debug.WriteLine("Extracting test dataset");
-
-            ZipFile.ExtractToDirectory(temp, TestStorageFolder, true);
-
-            foreach (var file in Directory.EnumerateFiles(Path.Combine(TestStorageFolder, "drone_dataset_brighton_beach-master")))
-                File.Move(file, Path.Combine(destFolder, Path.GetFileName(file)));
-
-            Directory.Delete(Path.Combine(TestStorageFolder, "drone_dataset_brighton_beach-master"));
-
-            File.Delete(temp);
-
-            Debug.WriteLine("Test data is ready");
-
-        }
+        private const string Test1ArchiveUrl = "https://digipa.it/wp-content/uploads/2020/08/Test1.zip";
 
         [SetUp]
         public void Setup()
@@ -135,11 +102,15 @@ namespace Registry.Web.Test
         [Test]
         public async Task Get_MissingFile_NotFound()
         {
+
+            using var test = new TestFS(Test1ArchiveUrl, BaseTestFolder);
+
             await using var context = GetTest1Context();
+
             _appSettingsMock.Setup(o => o.Value).Returns(_settings);
             _authManagerMock.Setup(o => o.IsUserAdmin()).Returns(Task.FromResult(true));
 
-            var objectManager = new ObjectsManager(_loggerMock.Object, context, new PhysicalObjectSystem(TestStorageFolder), _appSettingsMock.Object,
+            var objectManager = new ObjectsManager(_loggerMock.Object, context, new PhysicalObjectSystem(Path.Combine(test.TestFolder, "Storage")), _appSettingsMock.Object,
                 new DdbFactory(_appSettingsMock.Object), _authManagerMock.Object, new WebUtils(_authManagerMock.Object, context));
 
             objectManager.Invoking(async x => await x.Get(MagicStrings.PublicOrganizationId, MagicStrings.DefaultDatasetSlug, "weriufbgeiughegr"))
@@ -155,12 +126,14 @@ namespace Registry.Web.Test
             const string expectedName = "DJI_0019.JPG";
             const ObjectType expectedObjectType = ObjectType.GeoImage;
             const string expectedContentType = "image/jpeg";
-            
+
+            using var test = new TestFS(Test1ArchiveUrl, BaseTestFolder);
+
             await using var context = GetTest1Context();
             _appSettingsMock.Setup(o => o.Value).Returns(_settings);
             _authManagerMock.Setup(o => o.IsUserAdmin()).Returns(Task.FromResult(true));
 
-            var sys = new PhysicalObjectSystem(TestStorageFolder);
+            var sys = new PhysicalObjectSystem(Path.Combine(test.TestFolder, "Storage"));
             sys.SyncBucket($"{MagicStrings.PublicOrganizationId}-{MagicStrings.DefaultDatasetSlug}");
 
             var objectManager = new ObjectsManager(_loggerMock.Object, context, sys, _appSettingsMock.Object,

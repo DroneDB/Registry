@@ -2,6 +2,7 @@
 using System.Diagnostics;
 using System.IO;
 using System.IO.Compression;
+using System.Linq;
 using System.Net;
 
 namespace Registry.Common
@@ -43,15 +44,27 @@ namespace Registry.Common
 
             if (!IsLocalPath(testArchivePath))
             {
-
-                Debug.WriteLine($"Archive path is an url, downloading it");
+                var uri = new Uri(testArchivePath);
+                
+                Debug.WriteLine($"Archive path is an url");
 
                 var client = new WebClient();
-                var tempPath = Path.GetTempPath();
-                client.DownloadFile(testArchivePath, tempPath);
+                var tempPath = Path.Combine(Path.GetTempPath(), uri.Segments.Last());
+
+                if (File.Exists(tempPath))
+                {
+                    Debug.WriteLine("No need to download, using cached one");
+                }
+                else
+                {
+                    Debug.WriteLine("Downloading archive");
+                    client.DownloadFile(testArchivePath, tempPath);
+                }
 
                 ZipFile.ExtractToDirectory(tempPath, TestFolder);
-                File.Delete(tempPath);
+                
+                // NOTE: Let's leverage the temp folder
+                // File.Delete(tempPath);
 
             }
             else
