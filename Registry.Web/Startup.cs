@@ -128,6 +128,7 @@ namespace Registry.Web
             services.AddScoped<IOrganizationsManager, OrganizationsManager>();
             services.AddScoped<IDatasetsManager, DatasetsManager>();
             services.AddScoped<IObjectsManager, ObjectsManager>();
+            services.AddScoped<IShareManager, ShareManager>();
             services.AddScoped<IDdbFactory, DdbFactory>();
 
             RegisterStorageProvider(services, appSettings);
