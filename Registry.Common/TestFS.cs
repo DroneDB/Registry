@@ -2,10 +2,11 @@
 using System.Diagnostics;
 using System.IO;
 using System.IO.Compression;
+using System.Net;
 
 namespace Registry.Common
 {
- 
+
     /// <summary>
     /// This class is used to setup a test file system contained in a zip file
     /// </summary>
@@ -40,14 +41,36 @@ namespace Registry.Common
 
             Directory.CreateDirectory(TestFolder);
 
-            ZipFile.ExtractToDirectory(TestArchivePath, TestFolder);
+            if (!IsLocalPath(testArchivePath))
+            {
+
+                Debug.WriteLine($"Archive path is an url, downloading it");
+
+                var client = new WebClient();
+                var tempPath = Path.GetTempPath();
+                client.DownloadFile(testArchivePath, tempPath);
+
+                ZipFile.ExtractToDirectory(tempPath, TestFolder);
+                File.Delete(tempPath);
+
+            }
+            else
+                ZipFile.ExtractToDirectory(TestArchivePath, TestFolder);
+            
 
             Debug.WriteLine($"Created test FS '{TestArchivePath}' in '{TestFolder}'");
+
         }
         public void Dispose()
         {
             Debug.WriteLine($"Disposing test FS '{TestArchivePath}' in '{TestFolder}");
             Directory.Delete(TestFolder, true);
+        }
+
+        private static bool IsLocalPath(string path)
+        {
+            return path.StartsWith("file:/") ||
+                   !path.StartsWith("http://") && (!path.StartsWith("https://") && !path.StartsWith("ftp://"));
         }
 
     }
