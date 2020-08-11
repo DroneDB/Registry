@@ -40,12 +40,11 @@ namespace Registry.Web.Test
         private Mock<IAuthManager> _authManagerMock;
         private Mock<IUtils> _utilsMock;
 
-        // TODO: Make this point to temp folder of test and remove from repo
-        private const string TestDataFolder = @"Data/Ddb";
-
         private const string TestStorageFolder = @"Data/Storage";
+        private const string StorageFolder = "Storage";
+        private const string DdbFolder = "Ddb";
 
-        public const string BaseTestFolder = "ObjectManagerTest";
+        private const string BaseTestFolder = "ObjectManagerTest";
 
         private const string Test1ArchiveUrl = "https://digipa.it/wp-content/uploads/2020/08/Test1.zip";
 
@@ -82,7 +81,10 @@ namespace Registry.Web.Test
         [Test]
         public async Task List_PublicDefault_ListObjects()
         {
+            using var test = new TestFS(Test1ArchiveUrl, BaseTestFolder);
             await using var context = GetTest1Context();
+
+            _settings.DdbStoragePath = Path.Combine(test.TestFolder, DdbFolder);
             _appSettingsMock.Setup(o => o.Value).Returns(_settings);
             _authManagerMock.Setup(o => o.IsUserAdmin()).Returns(Task.FromResult(true));
 
@@ -104,13 +106,13 @@ namespace Registry.Web.Test
         {
 
             using var test = new TestFS(Test1ArchiveUrl, BaseTestFolder);
-
             await using var context = GetTest1Context();
 
+            _settings.DdbStoragePath = Path.Combine(test.TestFolder, DdbFolder);
             _appSettingsMock.Setup(o => o.Value).Returns(_settings);
             _authManagerMock.Setup(o => o.IsUserAdmin()).Returns(Task.FromResult(true));
 
-            var objectManager = new ObjectsManager(_loggerMock.Object, context, new PhysicalObjectSystem(Path.Combine(test.TestFolder, "Storage")), _appSettingsMock.Object,
+            var objectManager = new ObjectsManager(_loggerMock.Object, context, new PhysicalObjectSystem(Path.Combine(test.TestFolder, StorageFolder)), _appSettingsMock.Object,
                 new DdbFactory(_appSettingsMock.Object), _authManagerMock.Object, new WebUtils(_authManagerMock.Object, context));
 
             objectManager.Invoking(async x => await x.Get(MagicStrings.PublicOrganizationId, MagicStrings.DefaultDatasetSlug, "weriufbgeiughegr"))
@@ -130,10 +132,11 @@ namespace Registry.Web.Test
             using var test = new TestFS(Test1ArchiveUrl, BaseTestFolder);
 
             await using var context = GetTest1Context();
+            _settings.DdbStoragePath = Path.Combine(test.TestFolder, DdbFolder);
             _appSettingsMock.Setup(o => o.Value).Returns(_settings);
             _authManagerMock.Setup(o => o.IsUserAdmin()).Returns(Task.FromResult(true));
 
-            var sys = new PhysicalObjectSystem(Path.Combine(test.TestFolder, "Storage"));
+            var sys = new PhysicalObjectSystem(Path.Combine(test.TestFolder, StorageFolder));
             sys.SyncBucket($"{MagicStrings.PublicOrganizationId}-{MagicStrings.DefaultDatasetSlug}");
 
             var objectManager = new ObjectsManager(_loggerMock.Object, context, sys, _appSettingsMock.Object,
