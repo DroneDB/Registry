@@ -10,6 +10,7 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Registry.Web.Data;
 using Registry.Web.Data.Models;
@@ -26,10 +27,12 @@ namespace Registry.Web.Controllers
     public class ObjectsController : ControllerBaseEx
     {
         private readonly IObjectsManager _objectsManager;
+        private readonly ILogger<ObjectsController> _logger;
 
-        public ObjectsController(IObjectsManager datasetsManager)
+        public ObjectsController(IObjectsManager datasetsManager, ILogger<ObjectsController> logger)
         {
             _objectsManager = datasetsManager;
+            _logger = logger;
         }
         
         [HttpGet("obj/{**path}", Name = nameof(ObjectsController) + "." + nameof(Get))]
@@ -37,11 +40,15 @@ namespace Registry.Web.Controllers
         {
             try
             {
+                _logger.LogDebug($"Objects controller Get('{orgId}', '{dsId}', '{path}')");
+
                 var res = await _objectsManager.Get(orgId, dsId, path);
                 return File(res.Data, res.ContentType, res.Name);
             }
             catch (Exception ex)
             {
+                _logger.LogError(ex, $"Exception in Objects controller Get('{orgId}', '{dsId}', '{path}')");
+
                 return ExceptionResult(ex);
             }
         }
@@ -51,40 +58,29 @@ namespace Registry.Web.Controllers
         {
             try
             {
+                _logger.LogDebug($"Objects controller GetInfo('{orgId}', '{dsId}', '{path}')");
 
                 var res = await _objectsManager.List(orgId, dsId, path);
                 return Ok(res);
             }
             catch (Exception ex)
             {
+                _logger.LogError(ex, $"Exception in Objects controller GetInfo('{orgId}', '{dsId}', '{path}')");
+
                 return ExceptionResult(ex);
             }
         }
-
-        /*
-         *[HttpPost]
-        public async Task<IActionResult> Upload(IFormFile uploadedFile)
-        {
-            if (uploadedFile == null || uploadedFile.Length == 0)
-                return Content("file not selected");
-
-            var path = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", uploadedFile.FileName);
-
-            using (var stream = new FileStream(path, FileMode.Create))
-            {
-                await uploadedFile.CopyToAsync(stream);
-            }
-
-            return Ok();
-        }
-         *
-         */
 
         [HttpPost("obj/{**path}")]
         public async Task<IActionResult> Post([FromRoute] string orgId, [FromRoute] string dsId, string path, IFormFile file)
         {
             try
             {
+                _logger.LogDebug($"Objects controller Post('{orgId}', '{dsId}', '{path}', '{file?.FileName}')");
+
+                if (file == null)
+                    return BadRequest(new ErrorResponse("No file uploaded"));
+
                 await using var memory = new MemoryStream();
                 await file.CopyToAsync(memory);
 
@@ -94,6 +90,8 @@ namespace Registry.Web.Controllers
             }
             catch (Exception ex)
             {
+                _logger.LogError(ex, $"Exception in Objects controller Post('{orgId}', '{dsId}', '{path}', '{file?.FileName}')");
+
                 return ExceptionResult(ex);
             }
         }
@@ -105,11 +103,15 @@ namespace Registry.Web.Controllers
 
             try
             {
+                _logger.LogDebug($"Objects controller Delete('{orgId}', '{dsId}', '{path}')");
+
                 await _objectsManager.Delete(orgId, dsId, path);
                 return NoContent();
             }
             catch (Exception ex)
             {
+                _logger.LogError(ex, $"Exception in Objects controller Delete('{orgId}', '{dsId}', '{path}')");
+
                 return ExceptionResult(ex);
             }
 

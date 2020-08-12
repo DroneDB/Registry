@@ -7,6 +7,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Registry.Web.Data;
 using Registry.Web.Data.Models;
@@ -23,10 +24,12 @@ namespace Registry.Web.Controllers
     public class DatasetsController : ControllerBaseEx
     {
         private readonly IDatasetsManager _datasetsManager;
+        private readonly ILogger<DatasetsController> _logger;
 
-        public DatasetsController(IDatasetsManager datasetsManager)
+        public DatasetsController(IDatasetsManager datasetsManager, ILogger<DatasetsController> logger)
         {
             _datasetsManager = datasetsManager;
+            _logger = logger;
         }
 
         [HttpGet(Name = nameof(DatasetsController) + "." + nameof(GetAll))]
@@ -34,10 +37,12 @@ namespace Registry.Web.Controllers
         {
             try
             {
+                _logger.LogDebug($"Dataset controller GetAll('{orgId}')");
                 return Ok(await _datasetsManager.List(orgId));
             }
             catch (Exception ex)
             {
+                _logger.LogError(ex, $"Exception in Dataset controller GetAll('{orgId}')");
                 return ExceptionResult(ex);
             }
         }
@@ -47,10 +52,13 @@ namespace Registry.Web.Controllers
         {
             try
             {
+                _logger.LogDebug($"Dataset controller Get('{orgId}', '{id}')");
+
                 return Ok(await _datasetsManager.Get(orgId, id));
             }
             catch (Exception ex)
             {
+                _logger.LogError(ex, $"Exception in Dataset controller Get('{orgId}', '{id}')");
                 return ExceptionResult(ex);
             }
         }
@@ -61,12 +69,15 @@ namespace Registry.Web.Controllers
         {
             try
             {
+                _logger.LogDebug($"Dataset controller Post('{orgId}', '{dataset?.Slug}')");
+
                 var newDs = await _datasetsManager.AddNew(orgId, dataset);
                 return CreatedAtRoute(nameof(DatasetsController) + "." + nameof(Get), new { id = newDs.Id },
                     newDs);
             }
             catch (Exception ex)
             {
+                _logger.LogError(ex, $"Exception in Dataset controller Post('{orgId}', '{dataset?.Slug}')");
                 return ExceptionResult(ex);
             }
         }
@@ -78,11 +89,14 @@ namespace Registry.Web.Controllers
 
             try
             {
+                _logger.LogDebug($"Dataset controller Put('{orgId}', '{id}', '{dataset?.Slug}')");
+
                 await _datasetsManager.Edit(orgId, id, dataset);
                 return NoContent();
             }
             catch (Exception ex)
             {
+                _logger.LogError(ex, $"Exception in Dataset controller Put('{orgId}', '{id}', '{dataset?.Slug}')");
                 return ExceptionResult(ex);
             }
 
@@ -95,11 +109,15 @@ namespace Registry.Web.Controllers
 
             try
             {
+                _logger.LogDebug($"Dataset controller Delete('{orgId}', '{id}')");
+
                 await _datasetsManager.Delete(orgId, id);
                 return NoContent();
             }
             catch (Exception ex)
             {
+                _logger.LogError(ex, $"Exception in Dataset controller Delete('{orgId}', '{id}')");
+
                 return ExceptionResult(ex);
             }
 

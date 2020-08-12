@@ -7,6 +7,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Registry.Web.Data;
 using Registry.Web.Data.Models;
@@ -23,10 +24,12 @@ namespace Registry.Web.Controllers
     public class OrganizationsController : ControllerBaseEx
     {
         private readonly IOrganizationsManager _organizationsManager;
+        private readonly ILogger<OrganizationsController> _logger;
 
-        public OrganizationsController(IOrganizationsManager organizationsManager)
+        public OrganizationsController(IOrganizationsManager organizationsManager, ILogger<OrganizationsController> _logger)
         {
             _organizationsManager = organizationsManager;
+            this._logger = _logger;
         }
 
         // GET: ddb/
@@ -35,10 +38,14 @@ namespace Registry.Web.Controllers
         {
             try
             {
+                _logger.LogDebug($"Organizations controller GetAll()");
+
                 return Ok(await _organizationsManager.List());
             }
             catch (Exception ex)
             {
+                _logger.LogError(ex, $"Exception in Organizations controller GetAll()");
+
                 return ExceptionResult(ex);
             }
         }
@@ -49,10 +56,14 @@ namespace Registry.Web.Controllers
         {
             try
             {
+                _logger.LogDebug($"Organizations controller Get('{id}')");
+
                 return Ok(await _organizationsManager.Get(id));
             }
             catch (Exception ex)
             {
+                _logger.LogError(ex, $"Exception in Organizations controller Get('{id}')");
+
                 return ExceptionResult(ex);
             }
 
@@ -65,12 +76,16 @@ namespace Registry.Web.Controllers
 
             try
             {
+                _logger.LogDebug($"Organizations controller Post('{organization?.Id}')");
+
                 var newOrg = await _organizationsManager.AddNew(organization);
                 return CreatedAtRoute(nameof(OrganizationsController) + "." + nameof(Get), new {id = newOrg.Id},
                     newOrg);
             }
             catch (Exception ex)
             {
+                _logger.LogError(ex, $"Exception in Organizations controller Post('{organization?.Id}')");
+
                 return ExceptionResult(ex);
             }
 
@@ -83,11 +98,15 @@ namespace Registry.Web.Controllers
             
             try
             {
+                _logger.LogDebug($"Organizations controller Put('{id}', {organization?.Id}')");
+
                 await _organizationsManager.Edit(id, organization);
                 return NoContent();
             }
             catch (Exception ex)
             {
+                _logger.LogError(ex, $"Exception in Organizations controller Put('{id}', {organization?.Id}')");
+
                 return ExceptionResult(ex);
             }
 
@@ -100,11 +119,15 @@ namespace Registry.Web.Controllers
 
             try
             {
+                _logger.LogDebug($"Organizations controller Delete('{id}')");
+
                 await _organizationsManager.Delete(id);
                 return NoContent();
             }
             catch (Exception ex)
             {
+                _logger.LogError(ex, $"Exception in Organizations controller Delete('{id}')");
+
                 return ExceptionResult(ex);
             }
 
