@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
+using Registry.Web.Exceptions;
 using Registry.Web.Models.DTO;
 using Registry.Web.Services.Ports;
 
@@ -26,6 +27,11 @@ namespace Registry.Web.Services.Adapters
 
         public async Task<string> Initialize(ShareInitDto parameters)
         {
+            
+            if (parameters?.Dataset == null || parameters.Organization == null)
+                throw new BadRequestException("Invalid parameters");
+
+
             throw new NotImplementedException();
         }
 

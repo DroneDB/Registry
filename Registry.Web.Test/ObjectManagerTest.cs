@@ -14,6 +14,7 @@ using FluentAssertions;
 using Microsoft.CodeAnalysis.Options;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Console;
 using Microsoft.Extensions.Options;
 using Moq;
 using Newtonsoft.Json;
@@ -33,7 +34,8 @@ namespace Registry.Web.Test
 {
     public class ObjectManagerTest
     {
-        private Mock<ILogger<ObjectsManager>> _loggerMock;
+        private Logger<DdbFactory> _ddbFactoryLogger;
+        private Logger<ObjectsManager> _objectManagerLogger;
         private Mock<IObjectSystem> _objectSystemMock;
         private Mock<IOptions<AppSettings>> _appSettingsMock;
         private Mock<IDdbFactory> _ddbFactoryMock;
@@ -51,7 +53,6 @@ namespace Registry.Web.Test
         [SetUp]
         public void Setup()
         {
-            _loggerMock = new Mock<ILogger<ObjectsManager>>();
             _objectSystemMock = new Mock<IObjectSystem>();
             _appSettingsMock = new Mock<IOptions<AppSettings>>();
             _ddbFactoryMock = new Mock<IDdbFactory>();
@@ -60,6 +61,9 @@ namespace Registry.Web.Test
 
             if (!Directory.Exists(TestStorageFolder))
                 Directory.CreateDirectory(TestStorageFolder);
+
+            _ddbFactoryLogger = new Logger<DdbFactory>(LoggerFactory.Create(builder => builder.AddConsole()));
+            _objectManagerLogger = new Logger<ObjectsManager>(LoggerFactory.Create(builder => builder.AddConsole()));
         }
 
         [Test]
@@ -69,7 +73,7 @@ namespace Registry.Web.Test
             _appSettingsMock.Setup(o => o.Value).Returns(_settings);
             _authManagerMock.Setup(o => o.IsUserAdmin()).Returns(Task.FromResult(true));
 
-            var objectManager = new ObjectsManager(_loggerMock.Object, context, _objectSystemMock.Object, _appSettingsMock.Object,
+            var objectManager = new ObjectsManager(_objectManagerLogger, context, _objectSystemMock.Object, _appSettingsMock.Object,
                 _ddbFactoryMock.Object, _authManagerMock.Object, new WebUtils(_authManagerMock.Object, context));
 
             objectManager.Invoking(item => item.List(null, MagicStrings.DefaultDatasetSlug, "test")).Should().Throw<BadRequestException>();
@@ -88,8 +92,8 @@ namespace Registry.Web.Test
             _appSettingsMock.Setup(o => o.Value).Returns(_settings);
             _authManagerMock.Setup(o => o.IsUserAdmin()).Returns(Task.FromResult(true));
 
-            var objectManager = new ObjectsManager(_loggerMock.Object, context, _objectSystemMock.Object, _appSettingsMock.Object,
-                new DdbFactory(_appSettingsMock.Object), _authManagerMock.Object, new WebUtils(_authManagerMock.Object, context));
+            var objectManager = new ObjectsManager(_objectManagerLogger, context, _objectSystemMock.Object, _appSettingsMock.Object,
+                new DdbFactory(_appSettingsMock.Object, _ddbFactoryLogger), _authManagerMock.Object, new WebUtils(_authManagerMock.Object, context));
 
             var res = await objectManager.List(MagicStrings.PublicOrganizationId, MagicStrings.DefaultDatasetSlug, null);
 
@@ -112,8 +116,8 @@ namespace Registry.Web.Test
             _appSettingsMock.Setup(o => o.Value).Returns(_settings);
             _authManagerMock.Setup(o => o.IsUserAdmin()).Returns(Task.FromResult(true));
 
-            var objectManager = new ObjectsManager(_loggerMock.Object, context, new PhysicalObjectSystem(Path.Combine(test.TestFolder, StorageFolder)), _appSettingsMock.Object,
-                new DdbFactory(_appSettingsMock.Object), _authManagerMock.Object, new WebUtils(_authManagerMock.Object, context));
+            var objectManager = new ObjectsManager(_objectManagerLogger, context, new PhysicalObjectSystem(Path.Combine(test.TestFolder, StorageFolder)), _appSettingsMock.Object,
+                new DdbFactory(_appSettingsMock.Object, _ddbFactoryLogger), _authManagerMock.Object, new WebUtils(_authManagerMock.Object, context));
 
             objectManager.Invoking(async x => await x.Get(MagicStrings.PublicOrganizationId, MagicStrings.DefaultDatasetSlug, "weriufbgeiughegr"))
                 .Should().Throw<NotFoundException>();
@@ -139,8 +143,8 @@ namespace Registry.Web.Test
             var sys = new PhysicalObjectSystem(Path.Combine(test.TestFolder, StorageFolder));
             sys.SyncBucket($"{MagicStrings.PublicOrganizationId}-{MagicStrings.DefaultDatasetSlug}");
 
-            var objectManager = new ObjectsManager(_loggerMock.Object, context, sys, _appSettingsMock.Object,
-                new DdbFactory(_appSettingsMock.Object), _authManagerMock.Object, new WebUtils(_authManagerMock.Object, context));
+            var objectManager = new ObjectsManager(_objectManagerLogger, context, sys, _appSettingsMock.Object,
+                new DdbFactory(_appSettingsMock.Object, _ddbFactoryLogger), _authManagerMock.Object, new WebUtils(_authManagerMock.Object, context));
 
             var obj = await objectManager.Get(MagicStrings.PublicOrganizationId, MagicStrings.DefaultDatasetSlug,
                 "DJI_0019.JPG");
@@ -166,7 +170,7 @@ namespace Registry.Web.Test
             _appSettingsMock.Setup(o => o.Value).Returns(_settings);
             _authManagerMock.Setup(o => o.IsUserAdmin()).Returns(Task.FromResult(true));
 
-            var objectManager = new ObjectsManager(_loggerMock.Object, context, new PhysicalObjectSystem(TestStorageFolder), _appSettingsMock.Object,
+            var objectManager = new ObjectsManager(_objectsManagerLoggerMock.Object, context, new PhysicalObjectSystem(TestStorageFolder), _appSettingsMock.Object,
                 new DdbFactory(_appSettingsMock.Object), _authManagerMock.Object, new WebUtils(_authManagerMock.Object, context));
 
             var obj = await objectManager.AddNew(MagicStrings.PublicOrganizationId, MagicStrings.DefaultDatasetSlug, newFileName,

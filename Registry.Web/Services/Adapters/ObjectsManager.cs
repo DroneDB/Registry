@@ -54,17 +54,23 @@ namespace Registry.Web.Services.Adapters
 
             await _utils.GetDatasetAndCheck(orgId, dsId);
 
+            _logger.LogInformation($"In '{orgId}/{dsId}'");
+
             using var ddb = _ddbFactory.GetDdb(orgId, dsId);
+
+            _logger.LogInformation($"Searching in '{path}'");
 
             var files = ddb.Search(path);
 
-            return files.Select(file => file.ToDto()); ;
+            return files.Select(file => file.ToDto());
         }
 
         public async Task<ObjectRes> Get(string orgId, string dsId, string path)
         {
 
             await _utils.GetDatasetAndCheck(orgId, dsId);
+
+            _logger.LogInformation($"In '{orgId}/{dsId}'");
 
             using var ddb = _ddbFactory.GetDdb(orgId, dsId);
 
@@ -75,15 +81,22 @@ namespace Registry.Web.Services.Adapters
 
             var bucketName = string.Format(BucketNameFormat, orgId, dsId);
 
+            _logger.LogInformation($"Using bucket '{bucketName}'");
+
             var bucketExists = await _objectSystem.BucketExistsAsync(bucketName);
 
             if (!bucketExists)
             {
+                _logger.LogInformation("Bucket does not exist, creating it");
+
                 var region = _settings.StorageProvider.Settings.SafeGetValue("region");
                 if (region == null)
                     _logger.LogWarning("No region specified in storage provider config");
 
                 await _objectSystem.MakeBucketAsync(bucketName, region);
+
+                _logger.LogInformation("Bucket created");
+
             }
 
             var objInfo = await _objectSystem.GetObjectInfoAsync(bucketName, path);
@@ -92,6 +105,8 @@ namespace Registry.Web.Services.Adapters
                 throw new NotFoundException($"Cannot find '{path}' in storage provider");
             
             await using var memory = new MemoryStream();
+
+            _logger.LogInformation($"Getting object '{path}' in bucket '{bucketName}'");
 
             await _objectSystem.GetObjectAsync(bucketName, path, stream => stream.CopyTo(memory));
             
@@ -110,7 +125,11 @@ namespace Registry.Web.Services.Adapters
         {
             await _utils.GetDatasetAndCheck(orgId, dsId);
 
+            _logger.LogInformation($"In '{orgId}/{dsId}'");
+
             var bucketName = string.Format(BucketNameFormat, orgId, dsId);
+
+            _logger.LogInformation($"Using bucket '{bucketName}'");
 
             var bucketExists = await _objectSystem.BucketExistsAsync(bucketName);
 
@@ -122,13 +141,19 @@ namespace Registry.Web.Services.Adapters
             // TODO: I highly doubt the robustness of this 
             var contentType = MimeTypes.GetMimeType(path);
 
+            _logger.LogInformation($"Uploading '{path}' (size {data.Length}) to bucket '{bucketName}'");
+
             // TODO: No metadata / encryption ?
             await _objectSystem.PutObjectAsync(bucketName, path, memory, data.Length, contentType);
+
+            _logger.LogInformation("File uploaded, adding to DDB");
 
             // Add to DDB
             using var ddb = _ddbFactory.GetDdb(orgId, dsId);
             ddb.Add(path, data);
-            
+
+            _logger.LogInformation("Added to DDB");
+
             var obj = new UploadedObjectDto
             {
                 Path = path,
@@ -143,18 +168,28 @@ namespace Registry.Web.Services.Adapters
         {
             await _utils.GetDatasetAndCheck(orgId, dsId);
 
+            _logger.LogInformation($"In '{orgId}/{dsId}'");
+
             var bucketName = string.Format(BucketNameFormat, orgId, dsId);
+
+            _logger.LogInformation($"Using bucket '{bucketName}'");
 
             var bucketExists = await _objectSystem.BucketExistsAsync(bucketName);
 
             if (!bucketExists)
                 throw new BadRequestException($"Cannot find bucket '{bucketName}'");
 
+            _logger.LogInformation($"Deleting '{path}'");
+
             await _objectSystem.RemoveObjectAsync(bucketName, path);
+
+            _logger.LogInformation($"File deleted, removing from DDB");
 
             // Remove from DDB
             using var ddb = _ddbFactory.GetDdb(orgId, dsId);
             ddb.Remove(path);
+
+            _logger.LogInformation("Removed from DDB");
             
         }
 
@@ -162,7 +197,11 @@ namespace Registry.Web.Services.Adapters
         {
             await _utils.GetDatasetAndCheck(orgId, dsId);
 
+            _logger.LogInformation($"In '{orgId}/{dsId}'");
+
             var bucketName = string.Format(BucketNameFormat, orgId, dsId);
+
+            _logger.LogInformation($"Using bucket '{bucketName}'");
 
             var bucketExists = await _objectSystem.BucketExistsAsync(bucketName);
 
@@ -170,14 +209,21 @@ namespace Registry.Web.Services.Adapters
                 _logger.LogWarning($"Asked to remove non-existing bucket '{bucketName}'");
                 return;
             }
+
+            _logger.LogInformation($"Deleting bucket");
+
             await _objectSystem.RemoveBucketAsync(bucketName);
 
+            _logger.LogInformation($"Bucket deleted, removing all files from DDB ");
+            
             // Remove all from DDB
             using var ddb = _ddbFactory.GetDdb(orgId, dsId);
 
             var res = ddb.Search(null);
             foreach(var item in res)
                 ddb.Remove(item.Path);
+
+            _logger.LogInformation("Removed all from DDB");
 
             // TODO: Maybe it's more clever to remove the entire sqlite database instead of performing a per-file delete. Just my 2 cents
             

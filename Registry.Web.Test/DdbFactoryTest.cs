@@ -7,6 +7,7 @@ using FluentAssertions;
 using GeoAPI.Geometries;
 using GeoJSON.Net.Feature;
 using GeoJSON.Net.Geometry;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Moq;
 using Newtonsoft.Json;
@@ -21,6 +22,7 @@ namespace Registry.Web.Test
     public class DdbFactoryTest
     {
         private Mock<IOptions<AppSettings>> _appSettingsMock;
+        private Logger<DdbFactory> _ddbFactoryLogger;
 
         private const string TestDataFolder = @"Data/Ddb";
 
@@ -30,14 +32,14 @@ namespace Registry.Web.Test
             _appSettingsMock = new Mock<IOptions<AppSettings>>();
             _settings.DdbStoragePath = TestDataFolder;
             _appSettingsMock.Setup(o => o.Value).Returns(_settings);
-
+            _ddbFactoryLogger = new Logger<DdbFactory>(LoggerFactory.Create(builder => builder.AddConsole()));
         }
 
         [Test]
         public void Ctor_ExistingDatabase_Ok()
         {
 
-            var factory = new DdbFactory(_appSettingsMock.Object);
+            var factory = new DdbFactory(_appSettingsMock.Object, _ddbFactoryLogger);
 
             var ddb = factory.GetDdb(MagicStrings.PublicOrganizationId, MagicStrings.DefaultDatasetSlug);
             
@@ -46,7 +48,7 @@ namespace Registry.Web.Test
         [Test]
         public void Ctor_MissingDatabase_IOException()
         {
-            var factory = new DdbFactory(_appSettingsMock.Object);
+            var factory = new DdbFactory(_appSettingsMock.Object, _ddbFactoryLogger);
 
             factory.Invoking(x => x.GetDdb("vlwefwef", MagicStrings.DefaultDatasetSlug))
                 .Should().Throw<IOException>();
@@ -56,7 +58,7 @@ namespace Registry.Web.Test
         [Test]
         public void Search_MissingEntry_Empty()
         {
-            var factory = new DdbFactory(_appSettingsMock.Object);
+            var factory = new DdbFactory(_appSettingsMock.Object, _ddbFactoryLogger);
 
             var ddb = factory.GetDdb(MagicStrings.PublicOrganizationId, MagicStrings.DefaultDatasetSlug);
 
@@ -83,7 +85,7 @@ namespace Registry.Web.Test
             const double expectedLongitude = 10.60667;
             const double expectedAltitude = 141;
 
-            var factory = new DdbFactory(_appSettingsMock.Object);
+            var factory = new DdbFactory(_appSettingsMock.Object, _ddbFactoryLogger);
 
             var ddb = factory.GetDdb(MagicStrings.PublicOrganizationId, MagicStrings.DefaultDatasetSlug);
             
@@ -130,7 +132,7 @@ namespace Registry.Web.Test
                 new Position( 46.843311240786406, -91.99418833907131,158.51),
             };
 
-            var factory = new DdbFactory(_appSettingsMock.Object);
+            var factory = new DdbFactory(_appSettingsMock.Object, _ddbFactoryLogger);
 
             var ddb = factory.GetDdb(MagicStrings.PublicOrganizationId, MagicStrings.DefaultDatasetSlug);
 

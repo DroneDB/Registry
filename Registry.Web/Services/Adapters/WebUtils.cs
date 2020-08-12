@@ -43,7 +43,7 @@ namespace Registry.Web.Services.Adapters
                 throw new BadRequestException("Missing organization id");
 
             if (!IsOrganizationNameValid(orgId))
-                throw new BadRequestException("Invalid organization name");
+                throw new BadRequestException("Invalid organization id");
             
             var org = _context.Organizations.Include(item => item.Datasets).FirstOrDefault(item => item.Id == orgId);
 
@@ -70,7 +70,7 @@ namespace Registry.Web.Services.Adapters
                 throw new BadRequestException("Missing dataset id");
 
             if (!IsDatasetNameValid(dsId))
-                throw new BadRequestException("Invalid dataset name");
+                throw new BadRequestException("Invalid dataset id");
 
             var org = await GetOrganizationAndCheck(orgId);
 

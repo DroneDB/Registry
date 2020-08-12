@@ -20,7 +20,6 @@ namespace Registry.Web.Services.Adapters
         private readonly ILogger<DatasetsManager> _logger;
         private readonly IObjectsManager _objectsManager;
 
-        // TODO: Add extensive logging
         // TODO: Add extensive testing
         
         public DatasetsManager(

@@ -36,39 +36,39 @@ namespace Registry.Web
             };
         }
 
-        public static Dataset ToEntity(this DatasetDto organization)
+        public static Dataset ToEntity(this DatasetDto dataset)
         {
             return new Dataset
             {
-                Id = organization.Id,
-                Slug = organization.Slug,
-                CreationDate = organization.CreationDate,
-                Description = organization.Description,
-                LastEdit = organization.LastEdit,
-                Name = organization.Name,
-                License = organization.License,
-                Meta = organization.Meta,
+                Id = dataset.Id,
+                Slug = dataset.Slug,
+                CreationDate = dataset.CreationDate,
+                Description = dataset.Description,
+                LastEdit = dataset.LastEdit,
+                Name = dataset.Name,
+                License = dataset.License,
+                Meta = dataset.Meta,
                 // TODO: These should be calculated
                 // ObjectsCount = ObjectsCount,
                 // Size = Size,
-                IsPublic = organization.IsPublic
+                IsPublic = dataset.IsPublic
             };
         }
 
-        public static DatasetDto ToDto(this Dataset organization)
+        public static DatasetDto ToDto(this Dataset dataset)
         {
             return new DatasetDto
             {
-                Id = organization.Id,
-                Slug = organization.Slug,
-                CreationDate = organization.CreationDate,
-                Description = organization.Description,
-                LastEdit = organization.LastEdit,
-                Name = organization.Name,
-                License = organization.License,
-                Meta = organization.Meta,
-                ObjectsCount = organization.ObjectsCount,
-                Size = organization.Size
+                Id = dataset.Id,
+                Slug = dataset.Slug,
+                CreationDate = dataset.CreationDate,
+                Description = dataset.Description,
+                LastEdit = dataset.LastEdit,
+                Name = dataset.Name,
+                License = dataset.License,
+                Meta = dataset.Meta,
+                ObjectsCount = dataset.ObjectsCount,
+                Size = dataset.Size
             };
         }
 
