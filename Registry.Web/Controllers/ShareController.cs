@@ -6,6 +6,7 @@ using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Logging;
 using Registry.Web.Models;
 using Registry.Web.Models.DTO;
 using Registry.Web.Services.Ports;
@@ -18,10 +19,12 @@ namespace Registry.Web.Controllers
     public class ShareController : ControllerBaseEx
     {
         private readonly IShareManager _shareManager;
+        private readonly ILogger<ShareController> _logger;
 
-        public ShareController(IShareManager shareManager)
+        public ShareController(IShareManager shareManager, ILogger<ShareController> logger)
         {
             _shareManager = shareManager;
+            _logger = logger;
         }
 
 
@@ -30,6 +33,8 @@ namespace Registry.Web.Controllers
         {
             try
             {
+                _logger.LogDebug($"Share controller Init('{parameters?.Organization?.Id}', '{parameters?.Dataset?.Slug}')");
+
                 var token = await _shareManager.Initialize(parameters);
 
                 return Ok(new ShareInitResDto { Token = token });
@@ -37,6 +42,8 @@ namespace Registry.Web.Controllers
             }
             catch (Exception ex)
             {
+                _logger.LogError(ex, $"Exception in Share controller Init('{parameters?.Organization?.Id}', '{parameters?.Dataset?.Slug}')");
+
                 return ExceptionResult(ex);
             }
         }
@@ -47,6 +54,11 @@ namespace Registry.Web.Controllers
             try
             {
 
+                _logger.LogDebug($"Share controller Upload('{token}', '{path}', '{file?.FileName}')");
+
+                if (file == null)
+                    return BadRequest(new ErrorResponse("No file uploaded"));
+                
                 await using var memory = new MemoryStream();
                 await file.CopyToAsync(memory);
                 
@@ -57,6 +69,8 @@ namespace Registry.Web.Controllers
             }
             catch (Exception ex)
             {
+                _logger.LogError(ex, $"Exception in Share controller Upload('{token}', '{path}', '{file?.FileName}')");
+
                 return ExceptionResult(ex);
             }
         }
@@ -66,7 +80,9 @@ namespace Registry.Web.Controllers
         {
             try
             {
-                
+
+                _logger.LogDebug($"Share controller Commit('{token}')");
+
                 await _shareManager.Commit(token);
 
                 return Ok();
@@ -74,6 +90,8 @@ namespace Registry.Web.Controllers
             }
             catch (Exception ex)
             {
+                _logger.LogError(ex, $"Exception in Share controller Commit('{token}')");
+
                 return ExceptionResult(ex);
             }
         }
