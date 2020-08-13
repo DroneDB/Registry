@@ -33,7 +33,7 @@ namespace Registry.Web.Services.Adapters
 
             _logger.LogInformation($"Opening ddb in '{ddbPath}'");
 
-            var ddb = new Ddb(ddbPath);
+            var ddb = new Ddb(ddbPath, _settings.DdbPath);
 
             var res = ddb.Database.EnsureCreated();
 

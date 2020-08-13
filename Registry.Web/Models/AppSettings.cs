@@ -8,15 +8,50 @@ namespace Registry.Web.Models
 {
     public class AppSettings
     {
+        /// <summary>
+        /// Secret to generate JWT tokens
+        /// </summary>
         public string Secret { get; set; }
+
+        /// <summary>
+        /// JWT token expiration in days
+        /// </summary>
         public int TokenExpirationInDays { get; set; }
+
+        /// <summary>
+        /// List of JWT revoked tokens
+        /// </summary>
         public string[] RevokedTokens { get; set; }
-        public DbProvider AuthProvider  {get; set;}
+
+        /// <summary>
+        /// Provider for authentication database
+        /// </summary>
+        public DbProvider AuthProvider { get; set; }
+
+        /// <summary>
+        /// Provider for registry database
+        /// </summary>
         public DbProvider RegistryProvider { get; set; }
+
+        /// <summary>
+        /// Storage provider settings
+        /// </summary>
         public StorageProvider StorageProvider { get; set; }
+
+        /// <summary>
+        /// Default admin details
+        /// </summary>
         public AdminInfo DefaultAdmin { get; set; }
 
+        /// <summary>
+        /// Storage path for Ddb databases
+        /// </summary>
         public string DdbStoragePath { get; set; }
+
+        /// <summary>
+        /// Path to Ddb installation
+        /// </summary>
+        public string DdbPath { get; set; }
     }
 
     public class StorageProvider

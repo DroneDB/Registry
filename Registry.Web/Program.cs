@@ -1,11 +1,14 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.IO.Compression;
 using System.Linq;
+using System.Net;
 using System.Reflection;
 using System.Threading.Tasks;
 using Registry.Common;
 using Microsoft.AspNetCore.Hosting;
+using Microsoft.Data.SqlClient;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
@@ -19,6 +22,11 @@ namespace Registry.Web
 
         const string ConfigFilePath = "appsettings.json";
         const string DefaultConfigFilePath = "appsettings-default.json";
+
+        public static readonly Version SupportedDdbVersion = new Version(0,9,2);
+
+        private const string DdbReleaseDownloadUrl =
+            "https://github.com/DroneDB/DroneDB/releases/download/v{0}.{1}.{2}/ddb-{0}.{1}.{2}-{3}.zip";
 
         public static void Main(string[] args)
         {
@@ -98,6 +106,27 @@ namespace Registry.Web
 
             }
 
+            // TODO: Check
+            var ddbPath = appSettings["DdbPath"];
+
+            if (ddbPath == null || string.IsNullOrWhiteSpace(ddbPath.Value<string>()))
+            {
+                Console.WriteLine(" !> Ddb path not found in config");
+                appSettings["DdbPath"] = defaultAppSettings["DdbPath"];
+                ddbPath = defaultAppSettings["DdbPath"];
+                Console.WriteLine($" -> Copied from default config");
+            }
+
+            var ddbPathVal = ddbPath.Value<string>();
+
+            if (!Directory.Exists(ddbPathVal))
+            {
+                Console.WriteLine(" !> Ddb path does not exist, downloading latest");
+
+                DownloadDdb(ddbPathVal);
+                
+            }
+
             var connectionStrings = config["ConnectionStrings"];
 
             if (connectionStrings == null)
@@ -115,11 +144,11 @@ namespace Registry.Web
 
             if (defaultAdmin == null)
             {
-                Console.WriteLine("Cannot find default admin info, copying from default config");
+                Console.WriteLine(" !> Cannot find default admin info, copying from default config");
 
                 if (defaultAppSettings == null)
                 {
-                    Console.WriteLine("Cannot find default admin in default config");
+                    Console.WriteLine(" !> Cannot find default admin in default config");
                     return false;
                 }
 
@@ -132,6 +161,25 @@ namespace Registry.Web
 
             return true;
 
+        }
+
+        private static void DownloadDdb(string path)
+        {
+            Console.WriteLine($" -> Downloading DDB v{SupportedDdbVersion} in '{path}'");
+
+            var downloadUrl = string.Format(DdbReleaseDownloadUrl, SupportedDdbVersion.Major, SupportedDdbVersion.Minor,
+                SupportedDdbVersion.Revision, OperatingSystemInfo.PlatformName);
+
+            using var client = new WebClient();
+
+            var tempPath = Path.GetTempFileName();
+                
+            client.DownloadFile(downloadUrl, tempPath);
+
+            // TODO: TGZ are not supported
+            ZipFile.ExtractToDirectory(tempPath, path, true);
+
+            File.Delete(tempPath);
         }
 
         private static bool CheckConnection(JToken connectionStrings, JToken defaultConnectionStrings, string connectionName)

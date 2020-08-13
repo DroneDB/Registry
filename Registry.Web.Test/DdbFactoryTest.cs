@@ -42,7 +42,8 @@ namespace Registry.Web.Test
             var factory = new DdbFactory(_appSettingsMock.Object, _ddbFactoryLogger);
 
             var ddb = factory.GetDdb(MagicStrings.PublicOrganizationId, MagicStrings.DefaultDatasetSlug);
-            
+
+            ddb.Should().NotBeNull();
         }
 
         [Test]
