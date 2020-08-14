@@ -168,7 +168,7 @@ namespace Registry.Web
             Console.WriteLine($" -> Downloading DDB v{SupportedDdbVersion} in '{path}'");
 
             var downloadUrl = string.Format(DdbReleaseDownloadUrl, SupportedDdbVersion.Major, SupportedDdbVersion.Minor,
-                SupportedDdbVersion.Revision, OperatingSystemInfo.PlatformName);
+                SupportedDdbVersion.Build, OperatingSystemInfo.PlatformName);
 
             using var client = new WebClient();
 
@@ -176,10 +176,13 @@ namespace Registry.Web
                 
             client.DownloadFile(downloadUrl, tempPath);
 
-            // TODO: TGZ are not supported
-            ZipFile.ExtractToDirectory(tempPath, path, true);
+            Console.WriteLine($" -> Extracting to '{path}'");
+
+            CommonUtils.SmartExtractFolder(tempPath, path);
 
             File.Delete(tempPath);
+
+            Console.WriteLine(" ?> All ok");
         }
 
         private static bool CheckConnection(JToken connectionStrings, JToken defaultConnectionStrings, string connectionName)

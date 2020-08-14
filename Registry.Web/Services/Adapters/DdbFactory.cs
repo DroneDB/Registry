@@ -19,6 +19,10 @@ namespace Registry.Web.Services.Adapters
         private const string DefaultDdbFolder = ".ddb";
         private const string DefaultDdbSqliteName = "dbase.sqlite";
 
+        private const string WindowsExeName = "ddbcmd.exe";
+        private const string LinuxExeName = "ddb";
+
+
         public DdbFactory(IOptions<AppSettings> settings, ILogger<DdbFactory> logger)
         {
             _logger = logger;
@@ -32,14 +36,30 @@ namespace Registry.Web.Services.Adapters
             var ddbPath = Path.Combine(_settings.DdbStoragePath, orgId, dsId, DefaultDdbFolder, DefaultDdbSqliteName);
 
             _logger.LogInformation($"Opening ddb in '{ddbPath}'");
-
-            var ddb = new Ddb(ddbPath, _settings.DdbPath);
+            
+            var ddb = new Ddb(ddbPath, CalculateExePath());
 
             var res = ddb.Database.EnsureCreated();
 
             _logger.LogInformation(res ? "Database created" : "Database already existing");
 
             return ddb;
+        }
+
+        private string CalculateExePath()
+        {
+            var winPath = Path.Combine(_settings.DdbPath, WindowsExeName);
+
+            if (File.Exists(winPath))
+                return winPath;
+
+            var linuxPath = Path.Combine(_settings.DdbPath, LinuxExeName);
+
+            if (File.Exists(linuxPath))
+                return linuxPath;
+
+            throw new ArgumentException("Cannot find DDB executable in path");
+
         }
     }
 }

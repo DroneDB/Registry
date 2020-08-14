@@ -43,6 +43,7 @@ namespace Registry.Web.Test
         private Mock<IUtils> _utilsMock;
 
         private const string TestStorageFolder = @"Data/Storage";
+        private const string DdbTestDataFolder = @"Data/DdbTest";
         private const string StorageFolder = "Storage";
         private const string DdbFolder = "Ddb";
 
@@ -61,6 +62,15 @@ namespace Registry.Web.Test
 
             if (!Directory.Exists(TestStorageFolder))
                 Directory.CreateDirectory(TestStorageFolder);
+
+            if (!Directory.Exists(DdbTestDataFolder))
+            {
+                Directory.CreateDirectory(DdbTestDataFolder);
+                File.WriteAllText(Path.Combine(DdbTestDataFolder, "ddbcmd.exe"), string.Empty);
+            }
+
+            _settings.DdbPath = DdbTestDataFolder;
+
 
             _ddbFactoryLogger = new Logger<DdbFactory>(LoggerFactory.Create(builder => builder.AddConsole()));
             _objectManagerLogger = new Logger<ObjectsManager>(LoggerFactory.Create(builder => builder.AddConsole()));
@@ -205,7 +215,8 @@ namespace Registry.Web.Test
       ""UserName"": ""admin"",
       ""Password"": ""password""
     },
-    ""DdbStoragePath"": ""./Data/Ddb""
+    ""DdbStoragePath"": ""./Data/Ddb"",
+    ""DdbPath"": ""./ddb""
   }
   ");
 

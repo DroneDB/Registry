@@ -3,6 +3,10 @@ using System.Collections.Generic;
 using System.IO;
 using System.Security.Cryptography;
 using System.Text;
+using ICSharpCode.SharpZipLib.GZip;
+using ICSharpCode.SharpZipLib.Tar;
+using ICSharpCode.SharpZipLib.Zip;
+using ZipFile = System.IO.Compression.ZipFile;
 
 namespace Registry.Common
 {
@@ -100,6 +104,31 @@ namespace Registry.Common
                     }
                 }
             }
+        }
+
+        public static void SmartExtractFolder(string archive, string dest, bool overwrite = true)
+        {
+
+            var ext = Path.GetExtension(archive).ToLowerInvariant();
+
+            if (ext == ".tar.gz" || ext == ".tgz")
+                ExtractTGZ(archive, dest);
+            else
+                ZipFile.ExtractToDirectory(archive, dest, overwrite);
+
+        }
+
+        public static void ExtractTGZ(string archive, string destFolder)
+        {
+            using Stream inStream = File.OpenRead(archive);
+            using Stream gzipStream = new GZipInputStream(inStream);
+
+            var tarArchive = TarArchive.CreateInputTarArchive(gzipStream);
+            tarArchive.ExtractContents(destFolder);
+            tarArchive.Close();
+
+            gzipStream.Close();
+            inStream.Close();
         }
     }
 }

@@ -25,46 +25,22 @@ namespace Registry.Adapters.DroneDB
     public class Ddb : DbContext, IDdb
     {
         private readonly string _dbPath;
-        private readonly string _ddbPath;
-        private string _ddbExePath;
+        private readonly string _ddbExePath;
 
         // TODO: Maybe all this "stuff" can be put in the config
-        private const string WindowsExeName = "ddbcmd.exe";
-        private const string LinuxExeName = "ddb";
         private const string InfoCommand = "info -f json";
         private const int MaxWaitTime = 5000;
 
-        public Ddb(string dbPath, string ddbPath)
+        public Ddb(string dbPath, string ddbExePath)
         {
 
             if (!File.Exists(dbPath))
                 throw new IOException("Sqlite database not found");
 
             _dbPath = dbPath;
-
-            if (!Directory.Exists(ddbPath))
-                throw new IOException("Ddb folder does not exist");
-
-            _ddbPath = ddbPath;
-            _ddbExePath = CalculateExePath();
+            _ddbExePath = ddbExePath;
         }
-
-        private string CalculateExePath()
-        {
-            var winPath = Path.Combine(_ddbPath, WindowsExeName);
-
-            if (File.Exists(winPath))
-                return winPath;
-
-            var linuxPath = Path.Combine(_ddbPath, LinuxExeName);
-
-            if (File.Exists(linuxPath))
-                return linuxPath;
-
-            throw new ArgumentException("Cannot find DDB executable in path");
-
-        }
-
+        
         public IEnumerable<DdbObject> Search(string path)
         {
 
