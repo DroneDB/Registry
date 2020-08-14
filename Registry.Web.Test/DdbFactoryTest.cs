@@ -180,11 +180,13 @@ namespace Registry.Web.Test
 
 
         [Test]
-        [Ignore("Waiting for sqlite primary key")]
         public void Add_RemoveImageAddNewImage_Ok()
         {
 
             var factory = new DdbFactory(_appSettingsMock.Object, _ddbFactoryLogger);
+
+            // TODO: Extract Ddb exec provider and use it here to download latest version
+            // TODO: Isolate using TestFS
 
             var ddb = factory.GetDdb(MagicStrings.PublicOrganizationId, MagicStrings.DefaultDatasetSlug);
 

@@ -178,7 +178,8 @@ namespace Registry.Adapters.DroneDB
 
             modelBuilder.Entity<Entry>(entity =>
             {
-                entity.ToTable("entries").HasNoKey();
+                // TODO: This is specified here but the underlying DB hasn't got one. Maybe add it?
+                entity.ToTable("entries").HasKey(item => item.Path);
             });
 
             modelBuilder
@@ -188,6 +189,9 @@ namespace Registry.Adapters.DroneDB
                     v => new DateTimeOffset(v).ToUnixTimeSeconds(),
                     v => DateTimeOffset.FromUnixTimeSeconds(v)
                         .DateTime.ToLocalTime());
+
+            modelBuilder.Entity<Entry>().Property(item => item.Type)
+                .HasConversion<int>();
 
             // We need to explicitly set these properties
             modelBuilder.Entity<Entry>().Property(c => c.PointGeometry)
