@@ -10,7 +10,7 @@ using Registry.Ports.DroneDB;
 
 namespace Registry.Adapters.DroneDB
 {
-    public class DdbProvider : IDdbProvider
+    public class DdbPackageProvider : IDdbPackageProvider
     {
         public string DdbPath { get; }
         public PackageVersion Version { get; }
@@ -20,7 +20,7 @@ namespace Registry.Adapters.DroneDB
         private const string DdbReleaseDownloadUrl =
             "https://github.com/DroneDB/DroneDB/releases/download/v{0}.{1}.{2}/ddb-{0}.{1}.{2}-{3}.zip";
 
-        public DdbProvider(string ddbPath, PackageVersion version)
+        public DdbPackageProvider(string ddbPath, PackageVersion version)
         {
             DdbPath = ddbPath;
             Version = version;

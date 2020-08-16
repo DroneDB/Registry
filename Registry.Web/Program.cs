@@ -118,13 +118,13 @@ namespace Registry.Web
 
             var ddbPathVal = ddbPath.Value<string>();
 
-            IDdbProvider ddbProvider = new DdbProvider(ddbPathVal, appSettings["SupportedDdbVersion"]?.Value<PackageVersion>() ?? SupportedDdbVersion);
+            IDdbPackageProvider ddbPackageProvider = new DdbPackageProvider(ddbPathVal, appSettings["SupportedDdbVersion"]?.Value<PackageVersion>() ?? SupportedDdbVersion);
 
-            if (!ddbProvider.IsDdbReady()) 
+            if (!ddbPackageProvider.IsDdbReady()) 
             {
                 Console.WriteLine(" !> Ddb is not ready, downloading it");
 
-                ddbProvider.DownloadDdb();
+                ddbPackageProvider.DownloadDdb();
                 
             }
 
