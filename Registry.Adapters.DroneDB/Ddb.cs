@@ -86,10 +86,21 @@ namespace Registry.Adapters.DroneDB
             using var p = new Process
             {
                 StartInfo = new ProcessStartInfo(_ddbExePath, $"{InfoCommand} \"{tempFile}\"")
+                {
+                    RedirectStandardOutput = true,
+                    RedirectStandardError = true,
+                    CreateNoWindow = true,
+                    UseShellExecute = false
+                }
             };
 
-            p.Start();
+            p.StartInfo.EnvironmentVariables.Add("PROJ_LIB", Path.GetDirectoryName(Path.GetFullPath(_ddbExePath)));
 
+            Debug.WriteLine("Running command:");
+            Debug.WriteLine($"{Path.GetFullPath(_ddbExePath)} {p.StartInfo.Arguments}");
+
+            p.Start();
+            
             if (!p.WaitForExit(MaxWaitTime))
                 throw new IOException("Tried to start ddb process but it's taking too long to complete");
 
@@ -121,6 +132,7 @@ namespace Registry.Adapters.DroneDB
             var polygon = (Polygon)obj.PolygonGeometry.Geometry;
             //var coords = polygon.Coordinates[0].Coordinates.Select(item => new Coordinate(item.)).ToArray();
 
+            // TODO: Convert feature/polygon and check if PointGeometry is a Feature
             /*entry.PolygonGeometry = new NetTopologySuite.Geometries.Polygon(
                 new LinearRing(coords));*/
 

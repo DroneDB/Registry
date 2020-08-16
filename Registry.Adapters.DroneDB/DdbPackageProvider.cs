@@ -63,7 +63,7 @@ namespace Registry.Adapters.DroneDB
 
         private static readonly Dictionary<string, string> DdbExeNameMapper = new Dictionary<string, string>
         {
-            { "windows", "ddb.bat"},
+            { "windows", "ddbcmd.exe"},
             { "linux", "ddb"},
             { "macosx", "ddb"}
         };

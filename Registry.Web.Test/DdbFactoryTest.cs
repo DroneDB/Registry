@@ -14,6 +14,7 @@ using Moq;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using NUnit.Framework;
+using Registry.Adapters.DroneDB;
 using Registry.Common;
 using Registry.Web.Models;
 using Registry.Web.Services.Adapters;
@@ -30,6 +31,7 @@ namespace Registry.Web.Test
         private const string DdbTestDataFolder = @"Data/DdbTest";
         private const string BaseTestFolder = "DdbFactoryTest";
         private const string DdbFolder = "Ddb";
+        public static readonly Version SupportedDdbVersion = new Version(0, 9, 2);
 
         private const string Test1ArchiveUrl = "https://digipa.it/wp-content/uploads/2020/08/Test1.zip";
 
@@ -180,12 +182,16 @@ namespace Registry.Web.Test
 
 
         [Test]
+        [Ignore("Still working on ddb integration")]
         public void Add_RemoveImageAddNewImage_Ok()
         {
 
+            var provider = new DdbPackageProvider(_appSettingsMock.Object.Value.DdbPath, _appSettingsMock.Object.Value.SupportedDdbVersion);
+
+            provider.EnsureDdb();
+
             var factory = new DdbFactory(_appSettingsMock.Object, _ddbFactoryLogger);
 
-            // TODO: Extract Ddb exec provider and use it here to download latest version
             // TODO: Isolate using TestFS
 
             var ddb = factory.GetDdb(MagicStrings.PublicOrganizationId, MagicStrings.DefaultDatasetSlug);
@@ -198,7 +204,7 @@ namespace Registry.Web.Test
 
             if (!File.Exists(path)) {
                 using var client = new WebClient();
-                client.DownloadFile("https://github.com/pierotofy/drone_dataset_brighton_beach/blob/master/DJI_0028.JPG", path);
+                client.DownloadFile("https://github.com/pierotofy/drone_dataset_brighton_beach/raw/master/" + fileName, path);
             }
 
             ddb.Add(fileName, File.ReadAllBytes(path));
@@ -229,7 +235,9 @@ namespace Registry.Web.Test
       ""Password"": ""password""
     },
     ""DdbStoragePath"": ""./Data/Ddb"",
-    ""DdbPath"": ""./ddb""
+    ""DdbPath"": ""./ddb"",
+    ""SupportedDdbVersion"":  { ""Major"": 0, ""Minor"": 9, ""Build"": 2 } 
+
   }
   ");
 
