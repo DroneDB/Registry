@@ -118,7 +118,7 @@ namespace Registry.Web
 
             var ddbPathVal = ddbPath.Value<string>();
 
-            IDdbPackageProvider ddbPackageProvider = new DdbPackageProvider(ddbPathVal, appSettings["SupportedDdbVersion"]?.Value<PackageVersion>() ?? SupportedDdbVersion);
+            IDdbPackageProvider ddbPackageProvider = new DdbPackageProvider(ddbPathVal, appSettings["SupportedDdbVersion"]?.ToObject<PackageVersion>() ?? SupportedDdbVersion);
 
             if (!ddbPackageProvider.IsDdbReady()) 
             {
