@@ -14,6 +14,8 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
+using Registry.Adapters.DroneDB;
+using Registry.Ports.DroneDB;
 
 namespace Registry.Web
 {
@@ -23,10 +25,7 @@ namespace Registry.Web
         const string ConfigFilePath = "appsettings.json";
         const string DefaultConfigFilePath = "appsettings-default.json";
 
-        public static readonly Version SupportedDdbVersion = new Version(0,9,2);
-
-        private const string DdbReleaseDownloadUrl =
-            "https://github.com/DroneDB/DroneDB/releases/download/v{0}.{1}.{2}/ddb-{0}.{1}.{2}-{3}.zip";
+        public static readonly PackageVersion SupportedDdbVersion = new PackageVersion(0,9,2);
 
         public static void Main(string[] args)
         {
@@ -119,11 +118,13 @@ namespace Registry.Web
 
             var ddbPathVal = ddbPath.Value<string>();
 
-            if (!Directory.Exists(ddbPathVal))
-            {
-                Console.WriteLine(" !> Ddb path does not exist, downloading latest");
+            IDdbProvider ddbProvider = new DdbProvider(ddbPathVal, appSettings["SupportedDdbVersion"]?.Value<PackageVersion>() ?? SupportedDdbVersion);
 
-                DownloadDdb(ddbPathVal);
+            if (!ddbProvider.IsDdbReady()) 
+            {
+                Console.WriteLine(" !> Ddb is not ready, downloading it");
+
+                ddbProvider.DownloadDdb();
                 
             }
 
@@ -161,28 +162,6 @@ namespace Registry.Web
 
             return true;
 
-        }
-
-        private static void DownloadDdb(string path)
-        {
-            Console.WriteLine($" -> Downloading DDB v{SupportedDdbVersion} in '{path}'");
-
-            var downloadUrl = string.Format(DdbReleaseDownloadUrl, SupportedDdbVersion.Major, SupportedDdbVersion.Minor,
-                SupportedDdbVersion.Build, OperatingSystemInfo.PlatformName);
-
-            using var client = new WebClient();
-
-            var tempPath = Path.GetTempFileName();
-                
-            client.DownloadFile(downloadUrl, tempPath);
-
-            Console.WriteLine($" -> Extracting to '{path}'");
-
-            CommonUtils.SmartExtractFolder(tempPath, path);
-
-            File.Delete(tempPath);
-
-            Console.WriteLine(" ?> All ok");
         }
 
         private static bool CheckConnection(JToken connectionStrings, JToken defaultConnectionStrings, string connectionName)
