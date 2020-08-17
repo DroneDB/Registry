@@ -34,7 +34,8 @@ namespace Registry.Web.Test
         public static readonly Version SupportedDdbVersion = new Version(0, 9, 2);
 
         private const string Test1ArchiveUrl = "https://digipa.it/wp-content/uploads/2020/08/Test1.zip";
-
+        private const string DbTest1ArchiveUrl = "https://digipa.it/wp-content/uploads/2020/08/testdb1.zip";
+        
         [SetUp]
         public void Setup()
         {
@@ -186,7 +187,12 @@ namespace Registry.Web.Test
         public void Add_RemoveImageAddNewImage_Ok()
         {
 
-            var provider = new DdbPackageProvider(_appSettingsMock.Object.Value.DdbPath, _appSettingsMock.Object.Value.SupportedDdbVersion);
+            using var fs = new TestFS(DbTest1ArchiveUrl, nameof(DdbFactoryTest));
+
+            _settings.DdbStoragePath = fs.TestFolder;
+            _appSettingsMock.Setup(o => o.Value).Returns(_settings);
+
+            var provider = new DdbPackageProvider(_settings.DdbPath, _settings.SupportedDdbVersion);
 
             provider.EnsureDdb();
 
