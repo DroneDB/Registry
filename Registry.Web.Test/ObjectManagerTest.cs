@@ -32,6 +32,7 @@ using Registry.Web.Services.Ports;
 
 namespace Registry.Web.Test
 {
+    [TestFixture]
     public class ObjectManagerTest
     {
         private Logger<DdbFactory> _ddbFactoryLogger;

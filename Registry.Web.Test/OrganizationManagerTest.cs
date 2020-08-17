@@ -6,6 +6,7 @@ using Registry.Web.Services.Ports;
 
 namespace Registry.Web.Test
 {
+    [TestFixture]
     public class OrganizationManagerTest
     {
 
