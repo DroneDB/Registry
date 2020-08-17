@@ -19,7 +19,7 @@ namespace Registry.Adapters.DroneDB.Models
         [JsonProperty("path")]
         public string Path { get; set; }
         [JsonProperty("point_geom")]
-        public Point PointGeometry { get; set; }
+        public Feature PointGeometry { get; set; }
         [JsonProperty("polygon_geom")]
         public Feature PolygonGeometry { get; set; }
         [JsonProperty("size")]
