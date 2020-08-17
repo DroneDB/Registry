@@ -130,5 +130,26 @@ namespace Registry.Common
             gzipStream.Close();
             inStream.Close();
         }
+
+        public static string ComputeSha256Hash(string str)
+        {
+            return ComputeSha256Hash(Encoding.UTF8.GetBytes(str));
+        }
+
+        public static string ComputeSha256Hash(byte[] rawData)
+        {
+            // Create a SHA256   
+            using var sha256Hash = SHA256.Create();
+            // ComputeHash - returns byte array  
+            var bytes = sha256Hash.ComputeHash(rawData);
+
+            // Convert byte array to a string   
+            var builder = new StringBuilder();
+            foreach (var t in bytes)
+                builder.Append(t.ToString("x2"));
+            
+            return builder.ToString();
+        }
+
     }
 }
