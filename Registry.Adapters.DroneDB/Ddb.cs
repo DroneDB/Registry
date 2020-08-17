@@ -9,10 +9,14 @@ using GeoJSON.Net.CoordinateReferenceSystem;
 using GeoJSON.Net.Feature;
 using GeoJSON.Net.Geometry;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
+using NetTopologySuite;
 using NetTopologySuite.Geometries;
+using NetTopologySuite.Geometries.Implementation;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using Registry.Adapters.DroneDB.Models;
+using Registry.Common;
 using Registry.Ports.DroneDB;
 using Registry.Ports.DroneDB.Models;
 using SQLitePCL;
@@ -30,6 +34,7 @@ namespace Registry.Adapters.DroneDB
         // TODO: Maybe all this "stuff" can be put in the config
         private const string InfoCommand = "info -f json";
         private const int MaxWaitTime = 5000;
+        private const int Srid = 4326;
 
         public Ddb(string dbPath, string ddbExePath)
         {
@@ -40,7 +45,7 @@ namespace Registry.Adapters.DroneDB
             _dbPath = dbPath;
             _ddbExePath = ddbExePath;
         }
-        
+
         public IEnumerable<DdbObject> Search(string path)
         {
 
@@ -63,8 +68,8 @@ namespace Registry.Adapters.DroneDB
                             Path = item.Path,
                             Size = item.Size,
                             Type = (DdbObjectType)(int)item.Type,
-                            PointGeometry = GetPoint(item.PointGeometry),
-                            PolygonGeometry = GetFeature(item.PolygonGeometry)
+                            PointGeometry = GetPoint((NetTopologySuite.Geometries.Point)item.PointGeometry),
+                            PolygonGeometry = GetFeature((NetTopologySuite.Geometries.Polygon)item.PolygonGeometry)
                         };
 
             return query.ToArray();
@@ -100,7 +105,7 @@ namespace Registry.Adapters.DroneDB
             Debug.WriteLine($"{Path.GetFullPath(_ddbExePath)} {p.StartInfo.Arguments}");
 
             p.Start();
-            
+
             if (!p.WaitForExit(MaxWaitTime))
                 throw new IOException("Tried to start ddb process but it's taking too long to complete");
 
@@ -121,21 +126,48 @@ namespace Registry.Adapters.DroneDB
                 Meta = obj.Meta.ToString(),
                 ModifiedTime = DateTimeOffset.FromUnixTimeSeconds(obj.ModifiedTime).DateTime.ToLocalTime(),
                 Path = path,
-                PointGeometry = new NetTopologySuite.Geometries.Point(
-                    obj.PointGeometry.Coordinates.Latitude, 
-                    obj.PointGeometry.Coordinates.Latitude, 
-                    obj.PointGeometry.Coordinates.Altitude ?? 0),
                 Size = obj.Size,
-                Type = (EntryType)(int)obj.Type
+                Type = (EntryType)(int)obj.Type,
+                Hash = CommonUtils.ComputeSha256Hash(data)
             };
 
-            var polygon = (Polygon)obj.PolygonGeometry.Geometry;
-            //var coords = polygon.Coordinates[0].Coordinates.Select(item => new Coordinate(item.)).ToArray();
+            var pointGeometry = obj.PointGeometry.Geometry as Point;
 
-            // TODO: Convert feature/polygon and check if PointGeometry is a Feature
-            /*entry.PolygonGeometry = new NetTopologySuite.Geometries.Polygon(
-                new LinearRing(coords));*/
+            if (pointGeometry == null)
+                throw new InvalidOperationException("Expected point_geometry to be a Point");
 
+            var factory = NtsGeometryServices.Instance.CreateGeometryFactory(Srid);
+
+            entry.PointGeometry = factory.CreatePoint(new CoordinateArraySequence(new Coordinate[]
+            {
+                new CoordinateZ(
+                    pointGeometry.Coordinates.Latitude,
+                    pointGeometry.Coordinates.Latitude,
+                    pointGeometry.Coordinates.Altitude ?? 0)
+            }));
+
+            var polygonGeometry = obj.PolygonGeometry?.Geometry;
+
+            if (polygonGeometry != null)
+            {
+                var polygon = polygonGeometry as Polygon;
+
+                if (polygon == null)
+                    throw new InvalidOperationException("Expected polygon_geometry to be a Polygon");
+
+                var set = polygon.Coordinates.FirstOrDefault();
+
+                if (set == null)
+                    throw new InvalidOperationException("Expected polygon_geometry to be specified");
+
+                var coords = set.Coordinates.Select(item => 
+                        new CoordinateZ(item.Latitude, item.Longitude, item.Altitude ?? 0))
+                    .Cast<Coordinate>().ToArray();
+
+                entry.PolygonGeometry = factory.CreatePolygon(new LinearRing(coords));
+
+            }
+            
             Entries.Add(entry);
             SaveChanges();
         }
@@ -159,7 +191,7 @@ namespace Registry.Adapters.DroneDB
             var res = new Point(new Position(point.Y, point.X, point.Z))
             {
                 // TODO: Is this always the case?
-                CRS = new NamedCRS("EPSG:4326")
+                CRS = new NamedCRS("EPSG:" + Srid)
             };
 
             return res;
@@ -178,7 +210,7 @@ namespace Registry.Adapters.DroneDB
             var feature = new Feature(polygon)
             {
                 // TODO: Is this always the case?
-                CRS = new NamedCRS("EPSG:4326")
+                CRS = new NamedCRS("EPSG:" + Srid)
             };
 
             return feature;
@@ -206,10 +238,16 @@ namespace Registry.Adapters.DroneDB
                 .HasConversion<int>();
 
             // We need to explicitly set these properties
+            //modelBuilder.Entity<Entry>().Property(c => c.PointGeometry)
+            //    .HasSrid(Srid).HasGeometricDimension(Ordinates.XYZ); ;
+            //modelBuilder.Entity<Entry>().Property(c => c.PolygonGeometry)
+            //    .HasSrid(Srid).HasGeometricDimension(Ordinates.XYZ);
+
+
             modelBuilder.Entity<Entry>().Property(c => c.PointGeometry)
-                .HasSrid(4326).HasGeometricDimension(Ordinates.XYZ); ;
+                .HasColumnType("POINTZ").HasSrid(4326).HasGeometricDimension(Ordinates.XYZ); 
             modelBuilder.Entity<Entry>().Property(c => c.PolygonGeometry)
-                .HasSrid(4326).HasGeometricDimension(Ordinates.XYZ);
+                .HasColumnType("POLYGONZ").HasSrid(4326).HasGeometricDimension(Ordinates.XYZ);
 
         }
 
@@ -217,9 +255,10 @@ namespace Registry.Adapters.DroneDB
         {
 
             optionsBuilder.UseSqlite($"Data Source={_dbPath};Mode=ReadWriteCreate",
-                    z => z.UseNetTopologySuite());
-
+                    z => z.UseNetTopologySuite())
 #if DEBUG
+                .UseLoggerFactory(LoggerFactory.Create(builder => builder.AddConsole()));
+
             optionsBuilder.EnableSensitiveDataLogging();
 #endif
         }
