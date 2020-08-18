@@ -116,6 +116,9 @@ namespace Registry.Web.Services.Adapters
             if (batch == null)
                 throw new NotFoundException("Cannot find batch");
 
+            if (batch.End != null)
+                throw new BadRequestException("Cannot upload file to closed batch");
+
             var currentUserName = await _authManager.SafeGetCurrentUserName();
 
             if (!(await _authManager.IsUserAdmin() || batch.UserName == currentUserName))
@@ -164,12 +167,17 @@ namespace Registry.Web.Services.Adapters
             if (batch == null)
                 throw new NotFoundException("Cannot find batch");
 
+            if (batch.End != null)
+                throw new BadRequestException("Cannot commit a closed batch");
+
             var currentUserName = await _authManager.SafeGetCurrentUserName();
 
             if (!(await _authManager.IsUserAdmin() || batch.UserName == currentUserName))
                 throw new BadRequestException("This batch does not belong to you");
 
             batch.End = DateTime.Now;
+
+            // TODO: Commit?
 
             await _context.SaveChangesAsync();
 
