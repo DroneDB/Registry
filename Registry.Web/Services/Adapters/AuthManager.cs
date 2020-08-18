@@ -28,6 +28,11 @@ namespace Registry.Web.Services.Adapters
             return await _usersManager.FindByIdAsync(userId);
         }
 
+        public async Task<string> SafeGetCurrentUserName()
+        {
+            return (await GetCurrentUser())?.UserName ?? MagicStrings.AnonymousUserName;
+        }
+
         public async Task<bool> IsUserInRole(string roleName)
         {
             var currentUser = await GetCurrentUser();
