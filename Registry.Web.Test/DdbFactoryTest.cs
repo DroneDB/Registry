@@ -29,9 +29,6 @@ namespace Registry.Web.Test
 
         private const string TestDataFolder = @"Data/Ddb";
         private const string DdbTestDataFolder = @"Data/DdbTest";
-        private const string BaseTestFolder = "DdbFactoryTest";
-        private const string DdbFolder = "Ddb";
-        public static readonly Version SupportedDdbVersion = new Version(0, 9, 2);
 
         private const string Test1ArchiveUrl = "https://digipa.it/wp-content/uploads/2020/08/Test1.zip";
         private const string DbTest1ArchiveUrl = "https://digipa.it/wp-content/uploads/2020/08/testdb1.zip";
@@ -197,8 +194,6 @@ namespace Registry.Web.Test
             provider.EnsureDdb();
 
             var factory = new DdbFactory(_appSettingsMock.Object, _ddbFactoryLogger);
-
-            // TODO: Isolate using TestFS
 
             var ddb = factory.GetDdb(MagicStrings.PublicOrganizationId, MagicStrings.DefaultDatasetSlug);
 
