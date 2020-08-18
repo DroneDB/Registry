@@ -36,7 +36,7 @@ namespace Registry.Web.Services.Adapters
             return _safeNameRegex.IsMatch(name);
         }
 
-        public async Task<Organization> GetOrganizationAndCheck(string orgId)
+        public async Task<Organization> GetOrganizationAndCheck(string orgId, bool safe = false)
         {
 
             if (string.IsNullOrWhiteSpace(orgId))
@@ -48,7 +48,11 @@ namespace Registry.Web.Services.Adapters
             var org = _context.Organizations.Include(item => item.Datasets).FirstOrDefault(item => item.Id == orgId);
 
             if (org == null)
+            {
+                if (safe) return null;
+
                 throw new NotFoundException("Organization not found");
+            }
 
             if (!await _authManager.IsUserAdmin())
             {
@@ -64,7 +68,7 @@ namespace Registry.Web.Services.Adapters
             return org;
         }
 
-        public async Task<Dataset> GetDatasetAndCheck(string orgId, string dsId)
+        public async Task<Dataset> GetDatasetAndCheck(string orgId, string dsId, bool safe = false)
         {
             if (string.IsNullOrWhiteSpace(dsId))
                 throw new BadRequestException("Missing dataset id");
@@ -77,7 +81,10 @@ namespace Registry.Web.Services.Adapters
             var dataset = org.Datasets.FirstOrDefault(item => item.Slug == dsId);
 
             if (dataset == null)
+            {
+                if (safe) return null;
                 throw new NotFoundException("Cannot find dataset");
+            }
 
             return dataset;
         }
