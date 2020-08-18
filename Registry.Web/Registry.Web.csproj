@@ -5,6 +5,13 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <Compile Remove="ddb\**" />
+    <Content Remove="ddb\**" />
+    <EmbeddedResource Remove="ddb\**" />
+    <None Remove="ddb\**" />
+  </ItemGroup>
+
+  <ItemGroup>
     <None Include="wwwroot\index.html" />
   </ItemGroup>
 

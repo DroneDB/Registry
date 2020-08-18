@@ -29,5 +29,8 @@ namespace Registry.Web.Data
 
         public DbSet<Organization> Organizations { get; set; }
         public DbSet<Dataset> Datasets { get; set; }
+
+        public DbSet<Batch> Batches { get; set; }
+        public DbSet<Entry> Entries { get; set; }
     }
 }

@@ -16,6 +16,8 @@ namespace Registry.Web.Data.Models
         [Required]
         public DateTime CreationDate { get; set; }
         public string OwnerId { get; set; }
+
+        [Required]
         public bool IsPublic { get; set; }
 
         public List<Dataset> Datasets { get; set; }

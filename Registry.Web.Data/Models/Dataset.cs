@@ -21,7 +21,12 @@ namespace Registry.Web.Data.Models
         public int ObjectsCount { get; set; }
         public DateTime LastEdit { get; set; }
         public string Meta { get; set; }
+        
+        [Required]
         public bool IsPublic { get; set; }
+
+        [Required]
+        public Organization Organization { get; set; }
 
     }
 }
