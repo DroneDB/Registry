@@ -9,6 +9,7 @@ namespace Registry.Web.Models
         public string ContentType { get; set; }
 
         public ObjectType Type { get; set; }
-
+        public string Hash { get; set; }
+        public int Size { get; set; }
     }
 }

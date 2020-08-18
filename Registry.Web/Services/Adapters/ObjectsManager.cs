@@ -116,7 +116,9 @@ namespace Registry.Web.Services.Adapters
                 Name = objInfo.ObjectName,
                 Data = memory.ToArray(),
                 // TODO: We can add more fields from DDB if we need them
-                Type = (ObjectType)(int)res.Type
+                Type = (ObjectType)(int)res.Type,
+                Hash = res.Hash,
+                Size = res.Size
             };
 
         }
