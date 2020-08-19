@@ -28,6 +28,26 @@ namespace Registry.Web.Controllers
         }
 
 
+        [HttpPost("batches")]
+        public async Task<IActionResult> Batches(string orgId, string dsId)
+        {
+            try
+            {
+                _logger.LogDebug($"Share controller Batches('{orgId}', '{dsId}')");
+
+                var lst = await _shareManager.List(orgId, dsId);
+
+                return Ok(lst);
+
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, $"Exception in Share controller Batches('{orgId}', '{dsId}')");
+
+                return ExceptionResult(ex);
+            }
+        }
+
         [HttpPost("init")]
         public async Task<IActionResult> Init(ShareInitDto parameters)
         {

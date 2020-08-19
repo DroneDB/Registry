@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
 
@@ -27,6 +28,8 @@ namespace Registry.Web.Data.Models
 
         [Required]
         public Organization Organization { get; set; }
+
+        public virtual ICollection<Batch> Batches { get; set; }
 
     }
 }

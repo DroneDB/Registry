@@ -20,6 +20,6 @@ namespace Registry.Web.Data.Models
         [Required]
         public bool IsPublic { get; set; }
 
-        public List<Dataset> Datasets { get; set; }
+        public virtual ICollection<Dataset> Datasets { get; set; }
     }
 }

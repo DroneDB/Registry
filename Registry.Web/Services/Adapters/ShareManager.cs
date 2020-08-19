@@ -44,6 +44,38 @@ namespace Registry.Web.Services.Adapters
             _context = context;
         }
 
+        public async Task<IEnumerable<BatchDto>> List(string orgId, string dsSlug)
+        {
+            await _utils.GetOrganizationAndCheck(orgId);
+            var dataset = await _utils.GetDatasetAndCheck(orgId, dsSlug);
+
+            _logger.LogInformation($"Listing batches of '{orgId}/{dsSlug}'");
+
+            var batches = from batch in _context.Batches
+                    .Include(x => x.Entries)
+                    .Include(x => x.Dataset)
+                where batch.Dataset.Id == dataset.Id
+                select new BatchDto
+                {
+                    End = batch.End,
+                    Start = batch.Start,
+                    Token = batch.Token,
+                    UserName = batch.UserName,
+                    Entries = from entry in batch.Entries
+                        select new EntryDto
+                        {
+                            Hash = entry.Hash,
+                            Type = entry.Type,
+                            Size = entry.Size,
+                            AddedOn = entry.AddedOn,
+                            Path = entry.Path
+                        }
+                };
+
+            
+            return batches;
+        }
+
         public async Task<string> Initialize(ShareInitDto parameters)
         {
 
@@ -61,26 +93,46 @@ namespace Registry.Web.Services.Adapters
                 throw new BadRequestException("Dataset slug not provided");
 
             var org = await _utils.GetOrganizationAndCheck(orgId, true);
+            
             Dataset dataset;
 
             // Create org if not exists
             if (org == null)
             {
-
+                _logger.LogInformation($"Tuple '{orgId}/{dsSlug}' does not exist, creating it");
                 await _organizationsManager.AddNew(parameters.Organization);
+
                 await _datasetsManager.AddNew(orgId, parameters.Dataset);
 
                 dataset = await _utils.GetDatasetAndCheck(orgId, dsSlug);
 
+                _logger.LogInformation("Organization and dataset created");
+
             }
             else
             {
+                _logger.LogInformation("Organization already exists");
+
                 // Create dataset if not exists
                 dataset = await _utils.GetDatasetAndCheck(orgId, dsSlug);
 
                 if (dataset == null) {
+
+                    _logger.LogInformation($"Dataset '{dsSlug}' not found, creating it");
+
                     await _datasetsManager.AddNew(orgId, parameters.Dataset);
                     dataset = await _utils.GetDatasetAndCheck(orgId, dsSlug);
+
+                    _logger.LogInformation("Dataset created");
+
+                } else {
+                    _logger.LogInformation("Dataset and organization already existing, checking for running batches");
+
+                    if (dataset.Batches.Any(item => item.End == null))
+                    {
+                        _logger.LogInformation("Found already running batches, cannot start a new one");
+                        throw new BadRequestException("Cannot start a new batch if there are others already running");
+                    }
                 }
 
             }
@@ -93,8 +145,12 @@ namespace Registry.Web.Services.Adapters
                 UserName = await _authManager.SafeGetCurrentUserName()
             };
 
+            _logger.LogInformation($"Adding new batch for user '{batch.UserName}' with token '{batch.Token}'");
+
             await _context.Batches.AddAsync(batch);
             await _context.SaveChangesAsync();
+
+            _logger.LogInformation("Batch created, it is now possible to upload files");
 
             return batch.Token;
         }
@@ -128,7 +184,8 @@ namespace Registry.Web.Services.Adapters
 
             if (entry != null)
                 throw new BadRequestException("Entry already uploaded");
-           
+
+            _logger.LogInformation($"Adding '{path}' in batch '{batch.Token}'");
 
             var orgId = batch.Dataset.Organization.Id;
             var dsSlug = batch.Dataset.Slug;
@@ -152,7 +209,11 @@ namespace Registry.Web.Services.Adapters
 
             await _context.AddAsync(entry);
 
+            _logger.LogInformation("Entry added");
+            
             await _context.SaveChangesAsync();
+
+            _logger.LogInformation("Changes commited");
 
         }
 
@@ -177,6 +238,8 @@ namespace Registry.Web.Services.Adapters
 
             batch.End = DateTime.Now;
 
+            _logger.LogInformation($"Committing batch '{token}' @ {batch.End.Value.ToLongDateString()} {batch.End.Value.ToLongTimeString()}");
+            
             // TODO: Commit?
 
             await _context.SaveChangesAsync();

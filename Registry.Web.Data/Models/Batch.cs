@@ -21,7 +21,7 @@ namespace Registry.Web.Data.Models
         public DateTime Start { get; set; }
         public DateTime? End { get; set; }
 
-        public List<Entry> Entries { get; set; }
+        public virtual ICollection<Entry> Entries { get; set; }
         
     }
 
