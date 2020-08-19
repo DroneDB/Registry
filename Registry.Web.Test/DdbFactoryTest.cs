@@ -180,7 +180,6 @@ namespace Registry.Web.Test
 
 
         [Test]
-        [Ignore("Still working on ddb integration")]
         public void Add_RemoveImageAddNewImage_Ok()
         {
 

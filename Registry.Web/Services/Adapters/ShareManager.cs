@@ -26,6 +26,7 @@ namespace Registry.Web.Services.Adapters
 
         private const int TokenLength = 32;
 
+        // TODO: Implement queue
         public ShareManager(
             ILogger<ShareManager> logger, 
             IObjectsManager objectsManager, 

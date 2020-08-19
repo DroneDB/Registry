@@ -39,6 +39,7 @@ namespace Registry.Adapters.DroneDB
         public Ddb(string dbPath, string ddbExePath)
         {
 
+            // TODO: Create DB if not existing
             if (!File.Exists(dbPath))
                 throw new IOException("Sqlite database not found");
 
@@ -68,8 +69,8 @@ namespace Registry.Adapters.DroneDB
                             Path = item.Path,
                             Size = item.Size,
                             Type = (DdbObjectType)(int)item.Type,
-                            PointGeometry = GetPoint((NetTopologySuite.Geometries.Point)item.PointGeometry),
-                            PolygonGeometry = GetFeature((NetTopologySuite.Geometries.Polygon)item.PolygonGeometry)
+                            PointGeometry = GetPoint(item.PointGeometry),
+                            PolygonGeometry = GetFeature(item.PolygonGeometry)
                         };
 
             return query.ToArray();
@@ -160,17 +161,44 @@ namespace Registry.Adapters.DroneDB
                 if (set == null)
                     throw new InvalidOperationException("Expected polygon_geometry to be specified");
 
-                var coords = set.Coordinates.Select(item => 
+                var coords = set.Coordinates.Select(item =>
                         new CoordinateZ(item.Latitude, item.Longitude, item.Altitude ?? 0))
                     .Cast<Coordinate>().ToArray();
 
                 entry.PolygonGeometry = factory.CreatePolygon(new LinearRing(coords));
-                
+
 
             }
-            
-            Entries.Add(entry);
+
+            RawAddEntry(entry);
+
             SaveChanges();
+        }
+
+
+        private void RawAddEntry(Entry entry)
+        {
+            FormattableString query =
+                $@"INSERT INTO entries (path, hash, type, meta, mtime, size, depth, point_geom, polygon_geom) VALUES 
+                ({entry.Path}, {entry.Hash}, {(int) entry.Type}, {entry.Meta}, 
+                {new DateTimeOffset(entry.ModifiedTime).ToUnixTimeSeconds()}, {entry.Size}, {entry.Depth}, 
+                GeomFromText({GetWkt(entry.PointGeometry)}, 4326), GeomFromText({GetWkt(entry.PolygonGeometry)}, 4326))";
+
+            var res = Database.ExecuteSqlInterpolated(query);
+        }
+
+        private string GetWkt(NetTopologySuite.Geometries.Point point)
+        {
+            return point == null ? 
+                string.Empty : 
+                $"POINT Z ({point.X:F13} {point.Y:F13} {point.Z:F13})";
+        }
+
+        private string GetWkt(NetTopologySuite.Geometries.Polygon polygon)
+        {
+            return polygon == null ? 
+                string.Empty : 
+                $"POLYGONZ (( {string.Join(", ", polygon.Coordinates.Select(item => $"{item.X:F13} {item.Y:F13} {item.Z:F13}"))} ))";
         }
 
         public void Remove(string path)
@@ -239,16 +267,10 @@ namespace Registry.Adapters.DroneDB
                 .HasConversion<int>();
 
             // We need to explicitly set these properties
-            //modelBuilder.Entity<Entry>().Property(c => c.PointGeometry)
-            //    .HasSrid(Srid).HasGeometricDimension(Ordinates.XYZ); ;
-            //modelBuilder.Entity<Entry>().Property(c => c.PolygonGeometry)
-            //    .HasSrid(Srid).HasGeometricDimension(Ordinates.XYZ);
-
-
             modelBuilder.Entity<Entry>().Property(c => c.PointGeometry)
-                .HasColumnType("POINTZ"); 
+                .HasSrid(Srid).HasGeometricDimension(Ordinates.XYZ); ;
             modelBuilder.Entity<Entry>().Property(c => c.PolygonGeometry)
-                .HasColumnType("POLYGONZ");
+                .HasSrid(Srid).HasGeometricDimension(Ordinates.XYZ);
 
         }
 
