@@ -142,9 +142,9 @@ namespace Registry.Adapters.DroneDB
             {
                 new CoordinateZ(
                     pointGeometry.Coordinates.Latitude,
-                    pointGeometry.Coordinates.Latitude,
+                    pointGeometry.Coordinates.Longitude,
                     pointGeometry.Coordinates.Altitude ?? 0)
-            }));
+            }, 3, 0));
 
             var polygonGeometry = obj.PolygonGeometry?.Geometry;
 
@@ -165,6 +165,7 @@ namespace Registry.Adapters.DroneDB
                     .Cast<Coordinate>().ToArray();
 
                 entry.PolygonGeometry = factory.CreatePolygon(new LinearRing(coords));
+                
 
             }
             
@@ -245,9 +246,9 @@ namespace Registry.Adapters.DroneDB
 
 
             modelBuilder.Entity<Entry>().Property(c => c.PointGeometry)
-                .HasColumnType("POINTZ").HasSrid(4326).HasGeometricDimension(Ordinates.XYZ); 
+                .HasColumnType("POINTZ"); 
             modelBuilder.Entity<Entry>().Property(c => c.PolygonGeometry)
-                .HasColumnType("POLYGONZ").HasSrid(4326).HasGeometricDimension(Ordinates.XYZ);
+                .HasColumnType("POLYGONZ");
 
         }
 
