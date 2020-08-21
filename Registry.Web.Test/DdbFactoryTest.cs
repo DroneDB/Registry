@@ -236,7 +236,7 @@ namespace Registry.Web.Test
     },
     ""DdbStoragePath"": ""./Data/Ddb"",
     ""DdbPath"": ""./ddb"",
-    ""SupportedDdbVersion"":  { ""Major"": 0, ""Minor"": 9, ""Build"": 2 } 
+    ""SupportedDdbVersion"":  { ""Major"": 0, ""Minor"": 9, ""Build"": 3 } 
 
   }
   ");

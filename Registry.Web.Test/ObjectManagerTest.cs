@@ -217,8 +217,13 @@ namespace Registry.Web.Test
       ""Password"": ""password""
     },
     ""DdbStoragePath"": ""./Data/Ddb"",
-    ""DdbPath"": ""./ddb""
-  }
+    ""DdbPath"": ""./ddb"",
+""SupportedDdbVersion"": {
+      ""Major"": 0,
+      ""Minor"": 9,
+      ""Build"": 3
+    }
+}
   ");
 
         #endregion
