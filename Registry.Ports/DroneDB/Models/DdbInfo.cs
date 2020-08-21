@@ -1,16 +1,10 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Text;
-using GeoJSON.Net;
-using GeoJSON.Net.Feature;
-using GeoJSON.Net.Geometry;
+﻿using GeoJSON.Net.Feature;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
-using Newtonsoft.Json.Serialization;
 
-namespace Registry.Adapters.DroneDB.Models
+namespace Registry.Ports.DroneDB.Models
 {
-    class DdbInfoDto
+    public class DdbInfo
     {
         [JsonProperty("meta")]
         public JObject Meta { get; set; }

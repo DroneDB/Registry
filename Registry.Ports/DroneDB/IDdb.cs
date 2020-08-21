@@ -5,14 +5,8 @@ using Registry.Ports.DroneDB.Models;
 
 namespace Registry.Ports.DroneDB
 {
-    /// <summary>
-    /// Abstracts the drone db operations
-    /// </summary>
-    public interface IDdb : IDisposable
+    public interface IDdb
     {
-        // public DdbObject GetObjectInfo(int id);
-        IEnumerable<DdbObject> Search(string path);
-        void Add(string path, byte[] data);
-        void Remove(string path);
+        IEnumerable<DdbInfo> Info(string path);
     }
 }

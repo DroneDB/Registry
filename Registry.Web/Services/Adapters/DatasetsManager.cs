@@ -19,6 +19,7 @@ namespace Registry.Web.Services.Adapters
         private readonly IUtils _utils;
         private readonly ILogger<DatasetsManager> _logger;
         private readonly IObjectsManager _objectsManager;
+        private readonly IDdbFactory _ddbFactory;
 
         // TODO: Add extensive testing
         
@@ -27,13 +28,15 @@ namespace Registry.Web.Services.Adapters
             RegistryContext context,
             IUtils utils,
             ILogger<DatasetsManager> logger,
-            IObjectsManager objectsManager)
+            IObjectsManager objectsManager,
+            IDdbFactory ddbFactory)
         {
             _authManager = authManager;
             _context = context;
             _utils = utils;
             _logger = logger;
             this._objectsManager = objectsManager;
+            _ddbFactory = ddbFactory;
         }
 
         public async Task<IEnumerable<DatasetDto>> List(string orgId)
@@ -77,6 +80,8 @@ namespace Registry.Web.Services.Adapters
             org.Datasets.Add(ds);
 
             await _context.SaveChangesAsync();
+
+            
 
             return ds.ToDto();
 
