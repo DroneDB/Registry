@@ -30,16 +30,25 @@ namespace Registry.Web.Services.Adapters
         public IDdbStorage GetDdb(string orgId, string dsId)
         {
             var ddbPath = Path.Combine(_settings.DdbStoragePath, orgId, dsId, DefaultDdbFolder, DefaultDdbSqliteName);
+            
+            IDdb ddb = new Ddb(Path.Combine(_settings.DdbPath, DdbPackageProvider.GetExeName()));
+            
+            if (!File.Exists(ddbPath))
+            {
+                _logger.LogInformation($"Database not found, creating new in '{ddbPath}'");
+                ddb.CreateDatabase(ddbPath);
+                _logger.LogInformation("Empty database created");
+            }
 
             _logger.LogInformation($"Opening ddb in '{ddbPath}'");
 
-            var ddb = new DdbStorage(ddbPath, new Ddb(Path.Combine(_settings.DdbPath, DdbPackageProvider.GetExeName())));
+            var ddbStorage = new DdbStorage(ddbPath, ddb);
 
-            var res = ddb.Database.EnsureCreated();
+            var res = ddbStorage.Database.EnsureCreated();
 
             _logger.LogInformation(res ? "Database created" : "Database already existing");
 
-            return ddb;
+            return ddbStorage;
         }
 
     }

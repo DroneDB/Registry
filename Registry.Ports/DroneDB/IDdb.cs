@@ -8,5 +8,6 @@ namespace Registry.Ports.DroneDB
     public interface IDdb
     {
         IEnumerable<DdbInfo> Info(string path);
+        void CreateDatabase(string path);
     }
 }

@@ -12,6 +12,9 @@ namespace Registry.Adapters.DroneDB
 {
     public class DdbPackageProvider : IDdbPackageProvider
     {
+
+        // TODO: Add working linux replicating (or downloading) https://get.dronedb.app
+
         public string DdbPath { get; }
         public PackageVersion Version { get; }
 

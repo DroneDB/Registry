@@ -15,7 +15,8 @@ namespace Registry.Adapters.DroneDB
         private readonly string _ddbExePath;
 
         // TODO: Maybe all this "stuff" can be put in the config
-        private const string InfoCommand = "info -f json";
+        private const string InfoCommand = "info";
+        private const string InitCommand = "init";
         private const int MaxWaitTime = 5000;
 
         public Ddb(string ddbExePath)
@@ -27,11 +28,43 @@ namespace Registry.Adapters.DroneDB
             _ddbExePath = ddbExePath;
         }
 
+       
         public IEnumerable<DdbInfo> Info(string path)
+        {
+
+            var res = RunCommand($"{InfoCommand} -f json \"{path}\"");
+
+            var lst = JsonConvert.DeserializeObject<DdbInfo[]>(res);
+
+            if (lst == null || lst.Length == 0)
+                throw new InvalidOperationException("Cannot parse ddb output");
+
+            return lst;
+        }
+
+        public void CreateDatabase(string path)
+        {
+            var tempPath = Path.Combine(Path.GetTempPath(), "Ddb");
+
+            Directory.CreateDirectory(tempPath);
+
+            var destFolder = Path.GetDirectoryName(path);
+            Directory.CreateDirectory(destFolder);
+
+            var res = RunCommand($"{InitCommand} -d \"{tempPath}\"");
+
+            // This way we preserve the ACL
+            File.WriteAllBytes(path, File.ReadAllBytes(Path.Combine(tempPath, ".ddb", "dbase.sqlite")));
+
+            Directory.Delete(tempPath, true);
+
+        }
+
+        private string RunCommand(string parameters)
         {
             using var p = new Process
             {
-                StartInfo = new ProcessStartInfo(_ddbExePath, $"{InfoCommand} \"{path}\"")
+                StartInfo = new ProcessStartInfo(_ddbExePath, parameters)
                 {
                     RedirectStandardOutput = true,
                     RedirectStandardError = true,
@@ -43,21 +76,15 @@ namespace Registry.Adapters.DroneDB
             p.StartInfo.EnvironmentVariables.Add("PROJ_LIB", Path.GetDirectoryName(Path.GetFullPath(_ddbExePath)));
 
             Debug.WriteLine("Running command:");
-            Debug.WriteLine($"{Path.GetFullPath(_ddbExePath)} {p.StartInfo.Arguments}");
+            Debug.WriteLine($"{_ddbExePath} {parameters}");
 
             p.Start();
 
             if (!p.WaitForExit(MaxWaitTime))
                 throw new IOException("Tried to start ddb process but it's taking too long to complete");
 
-            var res = p.StandardOutput.ReadToEnd();
-
-            var lst = JsonConvert.DeserializeObject<DdbInfo[]>(res);
-
-            if (lst == null || lst.Length == 0)
-                throw new InvalidOperationException("Cannot parse ddb output");
-
-            return lst;
+            return p.StandardOutput.ReadToEnd();
         }
+
     }
 }
