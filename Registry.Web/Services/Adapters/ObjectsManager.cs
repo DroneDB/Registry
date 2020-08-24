@@ -28,8 +28,10 @@ namespace Registry.Web.Services.Adapters
         private readonly RegistryContext _context;
         private readonly AppSettings _settings;
 
-        private const string BucketNameFormat = "{0}-{1}";
+        private const string LocationKey = "location";
 
+        private const string BucketNameFormat = "{0}-{1}";
+        
         // TODO: Add sqlite db sync to backing server
 
         public ObjectsManager(ILogger<ObjectsManager> logger,
@@ -60,9 +62,11 @@ namespace Registry.Web.Services.Adapters
 
             _logger.LogInformation($"Searching in '{path}'");
 
-            var files = ddb.Search(path);
+            var files = ddb.Search(path).Select(file => file.ToDto()).ToArray();
 
-            return files.Select(file => file.ToDto());
+            _logger.LogInformation($"Found {files.Length} objects");
+
+            return files;
         }
 
         public async Task<ObjectRes> Get(string orgId, string dsId, string path)
@@ -133,10 +137,16 @@ namespace Registry.Web.Services.Adapters
 
             _logger.LogInformation($"Using bucket '{bucketName}'");
 
-            var bucketExists = await _objectSystem.BucketExistsAsync(bucketName);
+            // If the bucket does not exist, let's create it
+            if (!await _objectSystem.BucketExistsAsync(bucketName))
+            {
 
-            if (!bucketExists)
-                throw new BadRequestException($"Cannot find bucket '{bucketName}'");
+                _logger.LogInformation($"Bucket '{bucketName}' does not exist, creating it");
+
+                await _objectSystem.MakeBucketAsync(bucketName, _settings.StorageProvider.Settings.SafeGetValue(LocationKey));
+
+                _logger.LogInformation("Bucket created");
+            }
 
             await using var memory = new MemoryStream(data);
 

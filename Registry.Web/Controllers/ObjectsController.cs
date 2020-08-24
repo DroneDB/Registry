@@ -85,7 +85,12 @@ namespace Registry.Web.Controllers
                 await file.CopyToAsync(memory);
 
                 var newObj = await _objectsManager.AddNew(orgId, dsId, path, memory.ToArray());
-                return CreatedAtRoute(nameof(ObjectsController) + "." + nameof(GetInfo), new { path = newObj.Path },
+                return CreatedAtRoute(nameof(ObjectsController) + "." + nameof(GetInfo), new
+                    {
+                        orgId,
+                        dsId,
+                        path = newObj.Path
+                    },
                     newObj);
             }
             catch (Exception ex)

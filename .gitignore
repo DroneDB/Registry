@@ -340,3 +340,4 @@ ASALocalRun/
 healthchecksdb
 /Registry.Web/ddb
 /Registry.Web/ddbstore/public/default/.ddb
+/Registry.Web/temp

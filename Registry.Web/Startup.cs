@@ -55,6 +55,8 @@ namespace Registry.Web
             services.AddCors();
             services.AddControllers();
 
+            services.AddMvcCore().AddNewtonsoftJson();
+
             // Let's use a strongly typed class for settings
             var appSettingsSection = Configuration.GetSection("AppSettings");
             services.Configure<AppSettings>(appSettingsSection);
