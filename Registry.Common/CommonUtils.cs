@@ -1,6 +1,8 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
+using System.Net;
 using System.Security.Cryptography;
 using System.Text;
 using ICSharpCode.SharpZipLib.GZip;
@@ -147,6 +149,54 @@ namespace Registry.Common
                 builder.Append(t.ToString("x2"));
             
             return builder.ToString();
+        }
+
+        private const string SmartFileCacheFolder = "SmartFileCache";
+
+        /// <summary>
+        /// Downloads a file using a rudimentary cache in temp folder
+        /// </summary>
+        /// <param name="url"></param>
+        /// <param name="path"></param>
+        public static void SmartDownloadFile(string url, string path)
+        {
+            var uri = new Uri(url);
+            var fileName = uri.Segments.Last();
+
+            var smartFileCacheFolder = Path.Combine(Path.GetTempPath(), SmartFileCacheFolder);
+
+            if (!Directory.Exists(smartFileCacheFolder))
+                Directory.CreateDirectory(smartFileCacheFolder);
+
+            var cachedFilePath = Path.Combine(smartFileCacheFolder, fileName);
+
+            if (!File.Exists(cachedFilePath))
+            {
+                var client = new WebClient();
+                client.DownloadFile(url, cachedFilePath);
+            }
+
+            File.Copy(cachedFilePath, path, true);
+
+        }
+
+        /// <summary>
+        /// Downloads a file using a rudimentary cache in temp folder
+        /// </summary>
+        /// <param name="url"></param>
+        public static byte[] SmartDownloadData(string url)
+        {
+
+            var tmp = Path.GetTempFileName();
+
+            SmartDownloadFile(url, tmp);
+
+            var data = File.ReadAllBytes(tmp);
+
+            File.Delete(tmp);
+
+            return data;
+
         }
 
     }

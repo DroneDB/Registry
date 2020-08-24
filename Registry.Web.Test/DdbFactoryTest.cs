@@ -201,12 +201,10 @@ namespace Registry.Web.Test
             ddb.Remove(fileName);
 
             var path = Path.Combine(TestDataFolder, fileName);
-
-            if (!File.Exists(path)) {
-                using var client = new WebClient();
-                client.DownloadFile("https://github.com/pierotofy/drone_dataset_brighton_beach/raw/master/" + fileName, path);
-            }
-
+            
+            if (!File.Exists(path))
+                CommonUtils.SmartDownloadFile("https://github.com/pierotofy/drone_dataset_brighton_beach/raw/master/" + fileName, path);
+            
             ddb.Add(fileName, File.ReadAllBytes(path));
 
             ddb.Search(fileName).Should().HaveCount(1);

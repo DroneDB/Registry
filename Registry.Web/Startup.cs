@@ -253,7 +253,7 @@ namespace Registry.Web
             return odataBuilder.GetEdmModel();
         }
 
-        // NOTE: Maybe put all this login as stated in https://stackoverflow.com/a/55707949
+        // NOTE: Maybe put all this as stated in https://stackoverflow.com/a/55707949
         private void SetupDatabase(IApplicationBuilder app)
         {
             using var serviceScope = app.ApplicationServices

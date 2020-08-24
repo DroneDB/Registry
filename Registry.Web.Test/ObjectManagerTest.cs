@@ -43,6 +43,7 @@ namespace Registry.Web.Test
         private Mock<IAuthManager> _authManagerMock;
         private Mock<IUtils> _utilsMock;
 
+        private const string DataFolder = "Data";
         private const string TestStorageFolder = @"Data/Storage";
         private const string DdbTestDataFolder = @"Data/DdbTest";
         private const string StorageFolder = "Storage";
@@ -167,33 +168,50 @@ namespace Registry.Web.Test
             
         }
 
-        /*
+        
         [Test]
         public async Task AddNew_File_FileRes()
         {
             
-            //const string expectedName = "DJI_0019.JPG";
-            //const ObjectType expectedObjectType = ObjectType.GeoImage;
-            //const string expectedContentType = "image/jpeg";
-            const string newFileName = "test.jpg";
+            const string fileName = "DJI_0028.JPG";
 
             await using var context = GetTest1Context();
             _appSettingsMock.Setup(o => o.Value).Returns(_settings);
             _authManagerMock.Setup(o => o.IsUserAdmin()).Returns(Task.FromResult(true));
 
-            var objectManager = new ObjectsManager(_objectsManagerLoggerMock.Object, context, new PhysicalObjectSystem(TestStorageFolder), _appSettingsMock.Object,
-                new DdbFactory(_appSettingsMock.Object), _authManagerMock.Object, new WebUtils(_authManagerMock.Object, context));
+            using var test = new TestFS(Test1ArchiveUrl, BaseTestFolder);
 
-            var obj = await objectManager.AddNew(MagicStrings.PublicOrganizationId, MagicStrings.DefaultDatasetSlug, newFileName,
-                await File.ReadAllBytesAsync(Path.Combine(TestDataFolder, newFileName)));
-            
+            var sys = new PhysicalObjectSystem(Path.Combine(test.TestFolder, StorageFolder));
+            sys.SyncBucket($"{MagicStrings.PublicOrganizationId}-{MagicStrings.DefaultDatasetSlug}");
 
-            //obj.Name.Should().Be(expectedName);
-            //obj.Type.Should().Be(expectedObjectType);
-            //obj.ContentType.Should().Be(expectedContentType);
-            //MD5.Create().ComputeHash(obj.Data).Should().BeEquivalentTo(expectedHash);
+            var objectManager = new ObjectsManager(_objectManagerLogger, context, sys, _appSettingsMock.Object,
+                new DdbFactory(_appSettingsMock.Object, _ddbFactoryLogger), _authManagerMock.Object, new WebUtils(_authManagerMock.Object, context));
 
-        }*/
+            var res = await objectManager.List(MagicStrings.PublicOrganizationId, MagicStrings.DefaultDatasetSlug,
+                fileName);
+
+            res.Should().HaveCount(1);
+
+            await objectManager.Delete(MagicStrings.PublicOrganizationId, MagicStrings.DefaultDatasetSlug, fileName);
+
+            res = await objectManager.List(MagicStrings.PublicOrganizationId, MagicStrings.DefaultDatasetSlug,
+                fileName);
+
+            res.Should().HaveCount(0);
+
+            var newFileUrl = "https://github.com/pierotofy/drone_dataset_brighton_beach/raw/master/" + fileName;
+
+            var ret = await objectManager.AddNew(MagicStrings.PublicOrganizationId, MagicStrings.DefaultDatasetSlug,
+                fileName, CommonUtils.SmartDownloadData(newFileUrl));
+
+            res = await objectManager.List(MagicStrings.PublicOrganizationId, MagicStrings.DefaultDatasetSlug,
+                fileName);
+
+            res.Should().HaveCount(1);
+
+            // TODO: Should check why geometry is null
+
+        }
 
         #region Test Data
 
