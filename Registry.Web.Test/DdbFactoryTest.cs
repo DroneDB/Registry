@@ -63,12 +63,12 @@ namespace Registry.Web.Test
         }
 
         [Test]
-        public void Ctor_MissingDatabase_IOException()
+        public void Ctor_MissingDatabase_NoException()
         {
             var factory = new DdbFactory(_appSettingsMock.Object, _ddbFactoryLogger);
 
             factory.Invoking(x => x.GetDdb("vlwefwef", MagicStrings.DefaultDatasetSlug))
-                .Should().Throw<IOException>();
+                .Should().NotThrow<IOException>();
 
         }
 
