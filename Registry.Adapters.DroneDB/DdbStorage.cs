@@ -257,8 +257,11 @@ namespace Registry.Adapters.DroneDB
 #if DEBUG
                 .UseLoggerFactory(LoggerFactory.Create(builder => builder.AddConsole()));
 
-            optionsBuilder.EnableSensitiveDataLogging();
+            optionsBuilder.EnableSensitiveDataLogging()
+
 #endif
+                
+                ;
         }
 
         public DbSet<Entry> Entries { get; set; }
