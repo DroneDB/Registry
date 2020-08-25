@@ -167,7 +167,9 @@ namespace Registry.Web.Services.Adapters
             if (data == null || data.Length == 0)
                 throw new BadRequestException("Missing data");
 
-            var batch = _context.Batches.Include(x => x.Dataset.Organization)
+            var batch = _context.Batches
+                .Include(x => x.Dataset.Organization)
+                .Include(x => x.Entries)
                 .FirstOrDefault(item => item.Token == token);
 
             if (batch == null)

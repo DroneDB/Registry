@@ -24,12 +24,35 @@ namespace Registry.Web.Controllers
     public class DatasetsController : ControllerBaseEx
     {
         private readonly IDatasetsManager _datasetsManager;
+        private readonly IShareManager _shareManager;
         private readonly ILogger<DatasetsController> _logger;
 
-        public DatasetsController(IDatasetsManager datasetsManager, ILogger<DatasetsController> logger)
+        public DatasetsController(IDatasetsManager datasetsManager, IShareManager shareManager, ILogger<DatasetsController> logger)
         {
             _datasetsManager = datasetsManager;
+            _shareManager = shareManager;
             _logger = logger;
+        }
+
+        
+        [HttpGet("{dsId}/batches")]
+        public async Task<IActionResult> Batches([FromRoute] string orgId, string dsId)
+        {
+            try
+            {
+                _logger.LogDebug($"Dataset controller Batches('{orgId}', '{dsId}')");
+
+                var lst = await _shareManager.List(orgId, dsId);
+
+                return Ok(lst);
+
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, $"Exception in Dataset controller Batches('{orgId}', '{dsId}')");
+
+                return ExceptionResult(ex);
+            }
         }
 
         [HttpGet(Name = nameof(DatasetsController) + "." + nameof(GetAll))]

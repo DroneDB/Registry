@@ -27,27 +27,6 @@ namespace Registry.Web.Controllers
             _logger = logger;
         }
 
-
-        [HttpPost("batches")]
-        public async Task<IActionResult> Batches(string orgId, string dsId)
-        {
-            try
-            {
-                _logger.LogDebug($"Share controller Batches('{orgId}', '{dsId}')");
-
-                var lst = await _shareManager.List(orgId, dsId);
-
-                return Ok(lst);
-
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, $"Exception in Share controller Batches('{orgId}', '{dsId}')");
-
-                return ExceptionResult(ex);
-            }
-        }
-
         [HttpPost("init")]
         public async Task<IActionResult> Init(ShareInitDto parameters)
         {
@@ -68,7 +47,7 @@ namespace Registry.Web.Controllers
             }
         }
 
-        [HttpPost("upload")]
+        [HttpPost("upload/{token}/{**path}")]
         public async Task<IActionResult> Upload(string token, string path, IFormFile file)
         {
             try
@@ -95,7 +74,7 @@ namespace Registry.Web.Controllers
             }
         }
 
-        [HttpPost("commit")]
+        [HttpPost("commit/{token}")]
         public async Task<IActionResult> Commit(string token)
         {
             try

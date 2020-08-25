@@ -106,20 +106,21 @@ namespace Registry.Adapters.DroneDB
                 Hash = CommonUtils.ComputeSha256Hash(data)
             };
 
-            var pointGeometry = obj.PointGeometry.Geometry as Point;
-
-            if (pointGeometry == null)
-                throw new InvalidOperationException("Expected point_geometry to be a Point");
-
             var factory = NtsGeometryServices.Instance.CreateGeometryFactory(Srid);
 
-            entry.PointGeometry = factory.CreatePoint(new CoordinateArraySequence(new Coordinate[]
+            var pointGeometry = obj.PointGeometry?.Geometry as Point;
+
+            if (pointGeometry != null)
             {
+                entry.PointGeometry = factory.CreatePoint(new CoordinateArraySequence(new Coordinate[]
+                {
                 new CoordinateZ(
                     pointGeometry.Coordinates.Latitude,
                     pointGeometry.Coordinates.Longitude,
                     pointGeometry.Coordinates.Altitude ?? 0)
-            }, 3, 0));
+                }, 3, 0));
+
+            }
 
             var polygonGeometry = obj.PolygonGeometry?.Geometry;
 
@@ -154,7 +155,7 @@ namespace Registry.Adapters.DroneDB
         {
             FormattableString query =
                 $@"INSERT INTO entries (path, hash, type, meta, mtime, size, depth, point_geom, polygon_geom) VALUES 
-                ({entry.Path}, {entry.Hash}, {(int) entry.Type}, {entry.Meta}, 
+                ({entry.Path}, {entry.Hash}, {(int)entry.Type}, {entry.Meta}, 
                 {new DateTimeOffset(entry.ModifiedTime).ToUnixTimeSeconds()}, {entry.Size}, {entry.Depth}, 
                 GeomFromText({GetWkt(entry.PointGeometry)}, 4326), GeomFromText({GetWkt(entry.PolygonGeometry)}, 4326))";
 
@@ -163,15 +164,15 @@ namespace Registry.Adapters.DroneDB
 
         private string GetWkt(NetTopologySuite.Geometries.Point point)
         {
-            return point == null ? 
-                string.Empty : 
+            return point == null ?
+                string.Empty :
                 $"POINT Z ({point.X:F13} {point.Y:F13} {point.Z:F13})";
         }
 
         private string GetWkt(NetTopologySuite.Geometries.Polygon polygon)
         {
-            return polygon == null ? 
-                string.Empty : 
+            return polygon == null ?
+                string.Empty :
                 $"POLYGONZ (( {string.Join(", ", polygon.Coordinates.Select(item => $"{item.X:F13} {item.Y:F13} {item.Z:F13}"))} ))";
         }
 

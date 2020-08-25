@@ -339,5 +339,5 @@ ASALocalRun/
 # BeatPulse healthcheck temp database
 healthchecksdb
 /Registry.Web/ddb
-/Registry.Web/ddbstore/public/default/.ddb
+/Registry.Web/ddbstore
 /Registry.Web/temp
