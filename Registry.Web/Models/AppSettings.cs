@@ -2,18 +2,83 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
+using Registry.Common;
 
 namespace Registry.Web.Models
 {
     public class AppSettings
     {
+        /// <summary>
+        /// Secret to generate JWT tokens
+        /// </summary>
         public string Secret { get; set; }
+
+        /// <summary>
+        /// JWT token expiration in days
+        /// </summary>
         public int TokenExpirationInDays { get; set; }
 
-        public AuthProvider AuthProvider  {get; set;}
+        /// <summary>
+        /// List of JWT revoked tokens
+        /// </summary>
+        public string[] RevokedTokens { get; set; }
+
+        /// <summary>
+        /// Provider for authentication database
+        /// </summary>
+        public DbProvider AuthProvider { get; set; }
+
+        /// <summary>
+        /// Provider for registry database
+        /// </summary>
+        public DbProvider RegistryProvider { get; set; }
+
+        /// <summary>
+        /// Storage provider settings
+        /// </summary>
+        public StorageProvider StorageProvider { get; set; }
+
+        /// <summary>
+        /// Default admin details
+        /// </summary>
+        public AdminInfo DefaultAdmin { get; set; }
+
+        /// <summary>
+        /// Storage path for Ddb databases
+        /// </summary>
+        public string DdbStoragePath { get; set; }
+
+        /// <summary>
+        /// Path to Ddb installation
+        /// </summary>
+        public string DdbPath { get; set; }
+
+        /// <summary>
+        /// Supported Ddb version
+        /// </summary>
+        public PackageVersion SupportedDdbVersion { get; set; }
     }
 
-    public enum AuthProvider
+    public class StorageProvider
+    {
+        public StorageType Type { get; set; }
+        public DictionaryEx<string, string> Settings { get; set; }
+    }
+
+    public class AdminInfo
+    {
+        public string Email { get; set; }
+        public string UserName { get; set; }
+        public string Password { get; set; }
+    }
+
+    public enum StorageType
+    {
+        Physical,
+        S3
+    }
+
+    public enum DbProvider
     {
         Sqlite,
         Mysql,

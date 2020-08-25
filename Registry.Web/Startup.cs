@@ -4,6 +4,8 @@ using System.IO;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
+using Microsoft.AspNet.OData.Builder;
+using Microsoft.AspNet.OData.Extensions;
 using Registry.Web.Models;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Builder;
@@ -12,19 +14,34 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.HttpsPolicy;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.CodeAnalysis.Options;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.FileProviders;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
+using Microsoft.OData.Edm;
+using Registry.Adapters.DroneDB;
+using Registry.Adapters.ObjectSystem;
+using Registry.Common;
+using Registry.Ports.DroneDB;
+using Registry.Ports.ObjectSystem;
+using Registry.Web.Data;
+using Registry.Web.Data.Models;
+using Registry.Web.Models.DTO;
+using Registry.Web.Services;
+using Registry.Web.Services.Adapters;
+using Registry.Web.Services.Ports;
 
 namespace Registry.Web
 {
     public class Startup
     {
         private const string IdentityConnectionName = "IdentityConnection";
+        private const string RegistryConnectionName = "RegistryConnection";
 
         public Startup(IConfiguration configuration)
         {
@@ -38,18 +55,22 @@ namespace Registry.Web
             services.AddCors();
             services.AddControllers();
 
+            services.AddMvcCore().AddNewtonsoftJson();
+
             // Let's use a strongly typed class for settings
             var appSettingsSection = Configuration.GetSection("AppSettings");
             services.Configure<AppSettings>(appSettingsSection);
 
             var appSettings = appSettingsSection.Get<AppSettings>();
 
-            ConfigureAuthProvider(services, appSettings.AuthProvider);
+            ConfigureDbProvider<ApplicationDbContext>(services, appSettings.AuthProvider, IdentityConnectionName);
 
             services.AddIdentityCore<User>()
+                .AddRoles<IdentityRole>()
                 .AddEntityFrameworkStores<ApplicationDbContext>()
                 .AddSignInManager();
 
+            ConfigureDbProvider<RegistryContext>(services, appSettings.RegistryProvider, RegistryConnectionName);
 
             var key = Encoding.ASCII.GetBytes(appSettings.Secret);
             services.AddAuthentication(auth =>
@@ -98,37 +119,96 @@ namespace Registry.Web
                     new BadRequestObjectResult(new ErrorResponse(actionContext.ModelState));
             });
 
+            services.AddTransient<TokenManagerMiddleware>();
+            services.AddTransient<ITokenManager, TokenManager>();
+            services.AddSingleton<IHttpContextAccessor, HttpContextAccessor>();
+            services.AddMemoryCache();
+
+            services.AddScoped<IUtils, WebUtils>();
+            services.AddScoped<IAuthManager, AuthManager>();
+
+            services.AddScoped<IOrganizationsManager, OrganizationsManager>();
+            services.AddScoped<IDatasetsManager, DatasetsManager>();
+            services.AddScoped<IObjectsManager, ObjectsManager>();
+            services.AddScoped<IShareManager, ShareManager>();
+            services.AddScoped<IDdbFactory, DdbFactory>();
+
+            RegisterStorageProvider(services, appSettings);
+
+            // TODO: Enable when needed. Should check return object structure
+            // services.AddOData();
+
         }
 
-        private void ConfigureAuthProvider(IServiceCollection services, AuthProvider authProvider)
+        private static void RegisterStorageProvider(IServiceCollection services, AppSettings appSettings)
         {
-            switch (authProvider)
+            switch (appSettings.StorageProvider.Type)
             {
-                case AuthProvider.Sqlite:
+                case StorageType.Physical:
+                    var basePath = appSettings.StorageProvider.Settings["path"];
 
+                    if (!Directory.Exists(basePath))
+                        Directory.CreateDirectory(basePath);
 
-
-                    services.AddDbContext<ApplicationDbContext>(options =>
-                        options.UseSqlite(
-                            Configuration.GetConnectionString(IdentityConnectionName)));
-
+                    services.AddScoped<IObjectSystem>(provider => new PhysicalObjectSystem(basePath));
                     break;
-                case AuthProvider.Mysql:
+                case StorageType.S3:
 
-                    services.AddDbContext<ApplicationDbContext>(options =>
-                        options.UseMySql(
-                            Configuration.GetConnectionString(IdentityConnectionName)));
+                    // TODO: Need test and maybe validation. Better to create a S3ObjectSystemConfig with this fields
+                    var endpoint = appSettings.StorageProvider.Settings.SafeGetValue("endpoint");
+                    var accessKey = appSettings.StorageProvider.Settings.SafeGetValue("accessKey");
+                    var secretKey = appSettings.StorageProvider.Settings.SafeGetValue("secretKey");
+                    var region = appSettings.StorageProvider.Settings.SafeGetValue("region");
+                    var sessionToken = appSettings.StorageProvider.Settings.SafeGetValue("sessionToken");
+                    var useSsl = appSettings.StorageProvider.Settings.SafeGetValue("useSsl");
 
-                    break;
-                case AuthProvider.Mssql:
+                    if (!bool.TryParse(useSsl, out var tmp))
+                    {
+                        tmp = false;
+                    }
 
-                    services.AddDbContext<ApplicationDbContext>(options =>
-                        options.UseSqlServer(
-                            Configuration.GetConnectionString(IdentityConnectionName)));
+                    var appName = appSettings.StorageProvider.Settings.SafeGetValue("appName");
+                    var appVersion = appSettings.StorageProvider.Settings.SafeGetValue("appVersion");
 
+                    services.AddScoped<IObjectSystem, S3ObjectSystem>(provider => new S3ObjectSystem(endpoint, accessKey,
+                        secretKey, region, sessionToken, tmp, appName, appVersion));
                     break;
                 default:
-                    throw new ArgumentOutOfRangeException($"Unrecognised auth provider: '{authProvider}'");
+                    throw new InvalidOperationException(
+                        $"Unsupported storage provider: '{(int) appSettings.StorageProvider.Type}'");
+            }
+        }
+
+        private void ConfigureDbProvider<T>(IServiceCollection services, DbProvider provider, string connectionStringName) where T : DbContext
+        {
+            switch (provider)
+            {
+                case DbProvider.Sqlite:
+
+                    services.AddDbContext<T>(options =>
+                        options.UseSqlite(
+                            Configuration.GetConnectionString(connectionStringName)));
+
+                    break;
+
+                case DbProvider.Mysql:
+
+                    services.AddDbContext<T>(options =>
+                        options.UseMySql(
+                            Configuration.GetConnectionString(connectionStringName)));
+
+                    break;
+
+                case DbProvider.Mssql:
+
+                    services.AddDbContext<T>(options =>
+                        options.UseSqlServer(
+                            Configuration.GetConnectionString(connectionStringName)));
+
+                    break;
+
+                default:
+                    throw new ArgumentOutOfRangeException($"Unrecognised provider: '{provider}'");
             }
         }
 
@@ -150,60 +230,116 @@ namespace Registry.Web
             app.UseAuthentication();
             app.UseAuthorization();
 
+            app.UseMiddleware<TokenManagerMiddleware>();
+
             app.UseDefaultFiles();
             app.UseStaticFiles();
 
             app.UseEndpoints(endpoints =>
             {
                 endpoints.MapControllers();
-
+                // TODO: Enable when needed
+                // endpoints.MapODataRoute("odata", "odata", GetEdmModel());
             });
 
-            UpdateDatabase(app);
+            SetupDatabase(app);
 
         }
+        private IEdmModel GetEdmModel()
+        {
+            var odataBuilder = new ODataConventionModelBuilder();
+            odataBuilder.EntitySet<OrganizationDto>("Organizations");
 
-        private void UpdateDatabase(IApplicationBuilder app)
+            return odataBuilder.GetEdmModel();
+        }
+
+        // NOTE: Maybe put all this as stated in https://stackoverflow.com/a/55707949
+        private void SetupDatabase(IApplicationBuilder app)
         {
             using var serviceScope = app.ApplicationServices
                 .GetRequiredService<IServiceScopeFactory>()
                 .CreateScope();
-            using var context = serviceScope.ServiceProvider.GetService<ApplicationDbContext>();
+            using var applicationDbContext = serviceScope.ServiceProvider.GetService<ApplicationDbContext>();
 
-            // NOTE: We support migrations only for sqlite
-            if (context.Database.ProviderName == "Microsoft.EntityFrameworkCore.Sqlite")
+            if (applicationDbContext.Database.IsSqlite())
+                CommonUtils.EnsureFolderCreated(Configuration.GetConnectionString(IdentityConnectionName));
+            
+            applicationDbContext.Database.EnsureCreated();
+
+            CreateDefaultAdmin(serviceScope.ServiceProvider).Wait();
+
+            using var registryDbContext = serviceScope.ServiceProvider.GetService<RegistryContext>();
+
+            if (registryDbContext.Database.IsSqlite())
+                CommonUtils.EnsureFolderCreated(Configuration.GetConnectionString(RegistryConnectionName));
+            
+            registryDbContext.Database.EnsureCreated();
+
+            CreateInitialData(registryDbContext);
+
+        }
+
+        private void CreateInitialData(RegistryContext context)
+        {
+            // If no organizations in database, let's create the public one
+            if (!context.Organizations.Any())
             {
 
-                EnsureFolderCreated(Configuration.GetConnectionString(IdentityConnectionName));
+                var entity = new Organization
+                {
+                    Id = MagicStrings.PublicOrganizationId,
+                    Name = "Public",
+                    CreationDate = DateTime.Now,
+                    Description = "Public organization",
+                    IsPublic = true,
+                    // NOTE: Maybe this is a good idea to flag this org as "system"
+                    OwnerId = null
+                };
+                var ds = new Dataset
+                {
+                    Slug = MagicStrings.DefaultDatasetSlug,
+                    Name = "Default",
+                    Description = "Default dataset",
+                    IsPublic = true,
+                    CreationDate = DateTime.Now,
+                    LastEdit = DateTime.Now
+                };
+                entity.Datasets = new List<Dataset> { ds };
 
-                context.Database.Migrate();
+                context.Organizations.Add(entity);
+                context.SaveChanges();
             }
         }
 
-        /// <summary>
-        /// Ensures that the sqlite database folder exists 
-        /// </summary>
-        /// <param name="connstr"></param>
-        private void EnsureFolderCreated(string connstr)
+        private async Task CreateDefaultAdmin(IServiceProvider provider)
         {
-            var segments = connstr.Split(';', StringSplitOptions.RemoveEmptyEntries);
 
-            foreach (var segment in segments)
+            var usersManager = provider.GetService<UserManager<User>>();
+            var roleManager = provider.GetService<RoleManager<IdentityRole>>();
+            var appSettings = provider.GetService<IOptions<AppSettings>>();
+
+            // If no users in database, let's create the default admin
+            if (!usersManager.Users.Any())
             {
-                var fields = segment.Split('=');
+                // first we create Admin role  
+                var role = new IdentityRole { Name = ApplicationDbContext.AdminRoleName };
+                await roleManager.CreateAsync(role);
 
-                if (string.Equals(fields[0], "Data Source", StringComparison.OrdinalIgnoreCase))
+                var defaultAdmin = appSettings.Value.DefaultAdmin;
+                var user = new User
                 {
-                    var dbPath = fields[1];
+                    Email = defaultAdmin.Email,
+                    UserName = defaultAdmin.UserName
+                };
 
-                    var folder = Path.GetDirectoryName(dbPath);
-
-                    if (!Directory.Exists(folder))
-                    {
-                        Directory.CreateDirectory(folder);
-                    }
+                var usrRes = await usersManager.CreateAsync(user, defaultAdmin.Password);
+                if (usrRes.Succeeded)
+                {
+                    var res = await usersManager.AddToRoleAsync(user, ApplicationDbContext.AdminRoleName);
                 }
             }
         }
+
+
     }
 }

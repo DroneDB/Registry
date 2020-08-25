@@ -1,0 +1,90 @@
+﻿using System;
+using System.Collections.Generic;
+using System.Diagnostics;
+using System.IO;
+using System.Text;
+using Newtonsoft.Json;
+using Registry.Adapters.DroneDB.Models;
+using Registry.Ports.DroneDB;
+using Registry.Ports.DroneDB.Models;
+
+namespace Registry.Adapters.DroneDB
+{
+    public class Ddb : IDdb
+    {
+        private readonly string _ddbExePath;
+
+        // TODO: Maybe all this "stuff" can be put in the config
+        private const string InfoCommand = "info";
+        private const string InitCommand = "init";
+        private const int MaxWaitTime = 5000;
+
+        public Ddb(string ddbExePath)
+        {
+
+            if (!File.Exists(ddbExePath))
+                throw new ArgumentException("Cannot find ddb executable");
+
+            _ddbExePath = ddbExePath;
+        }
+
+       
+        public IEnumerable<DdbInfo> Info(string path)
+        {
+
+            var res = RunCommand($"{InfoCommand} -f json \"{path}\"");
+
+            var lst = JsonConvert.DeserializeObject<DdbInfo[]>(res);
+
+            if (lst == null || lst.Length == 0)
+                throw new InvalidOperationException("Cannot parse ddb output");
+
+            return lst;
+        }
+
+        public void CreateDatabase(string path)
+        {
+            var tempPath = Path.Combine(Path.GetTempPath(), "Ddb");
+
+            Directory.CreateDirectory(tempPath);
+
+            var destFolder = Path.GetDirectoryName(path);
+            Directory.CreateDirectory(destFolder);
+
+            var res = RunCommand($"{InitCommand} -d \"{tempPath}\"");
+
+            // This way we preserve the ACL
+            File.WriteAllBytes(path, File.ReadAllBytes(Path.Combine(tempPath, ".ddb", "dbase.sqlite")));
+
+            Directory.Delete(tempPath, true);
+
+        }
+
+        private string RunCommand(string parameters)
+        {
+            using var p = new Process
+            {
+                StartInfo = new ProcessStartInfo(_ddbExePath, parameters)
+                {
+                    RedirectStandardOutput = true,
+                    RedirectStandardError = true,
+                    CreateNoWindow = true,
+                    UseShellExecute = false
+                }
+            };
+
+            p.StartInfo.EnvironmentVariables.Add("PROJ_LIB", Path.GetDirectoryName(Path.GetFullPath(_ddbExePath)));
+
+            Debug.WriteLine("Running command:");
+            Debug.WriteLine($"{_ddbExePath} {parameters}");
+
+            p.Start();
+
+            if (!p.WaitForExit(MaxWaitTime))
+                throw new IOException("Tried to start ddb process but it's taking too long to complete");
+
+            return p.StandardOutput.ReadToEnd();
+        }
+
+    }
+}

@@ -48,6 +48,22 @@ namespace Registry.Adapters.ObjectSystem
 
         }
 
+        public void SyncBucket(string bucketName)
+        {
+            EnsureBucketExists(bucketName);
+
+            var bucketPath = GetBucketPath(bucketName); 
+
+            foreach (var file in Directory.EnumerateFiles(bucketPath, "*.*", SearchOption.AllDirectories))
+            {
+
+                var objectName = file.Replace(bucketPath, string.Empty);
+                if (objectName.StartsWith('/') || objectName.StartsWith('\\')) objectName = objectName.Substring(1);
+
+                UpdateObjectInfo(bucketName, objectName);
+            }
+        }
+
         #region Objects
 
         public async Task GetObjectAsync(string bucketName, string objectName, Action<Stream> callback, IServerEncryption sse = null,
