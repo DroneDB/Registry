@@ -190,7 +190,8 @@ namespace Registry.Web.Test
 
             var provider = new DdbPackageProvider(_settings.DdbPath, _settings.SupportedDdbVersion);
 
-            provider.EnsureDdb();
+            if (!provider.IsDdbReady())
+                Assert.Inconclusive("Ddb is not ready");
 
             var factory = new DdbFactory(_appSettingsMock.Object, _ddbFactoryLogger);
 

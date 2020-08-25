@@ -120,12 +120,13 @@ namespace Registry.Web
 
             IDdbPackageProvider ddbPackageProvider = new DdbPackageProvider(ddbPathVal, appSettings["SupportedDdbVersion"]?.ToObject<PackageVersion>() ?? SupportedDdbVersion);
 
+            // TODO: Add config parameter to ignore ddb version match
+
             if (!ddbPackageProvider.IsDdbReady()) 
             {
-                Console.WriteLine(" !> Ddb is not ready, downloading it");
+                Console.WriteLine(" !> Ddb is not ready. Follow these instruction to install it: https://github.com/DroneDB/Registry/wiki ");
 
-                ddbPackageProvider.DownloadDdb();
-                
+                return false;
             }
 
             var connectionStrings = config["ConnectionStrings"];

@@ -13,33 +13,31 @@ namespace Registry.Adapters.DroneDB
     public class DdbPackageProvider : IDdbPackageProvider
     {
 
-        // TODO: Add working linux replicating (or downloading) https://get.dronedb.app
-
         public string DdbPath { get; }
-        public PackageVersion Version { get; }
+        public PackageVersion ExpectedVersion { get; }
 
         private const int MaxWaitTime = 5000;
 
-        private const string DdbReleaseDownloadUrl =
-            "https://github.com/DroneDB/DroneDB/releases/download/v{0}.{1}.{2}/ddb-{0}.{1}.{2}-{3}.zip";
-
-        public DdbPackageProvider(string ddbPath, PackageVersion version)
+        public DdbPackageProvider(string ddbPath, PackageVersion expectedVersion)
         {
             DdbPath = ddbPath;
-            Version = version;
+            ExpectedVersion = expectedVersion;
         }
 
-        public bool IsDdbReady()
+        public bool IsDdbReady(bool ignoreVersion = false)
         {
-            if (!Directory.Exists(DdbPath) || (!File.Exists(Path.Combine(DdbPath, "ddbcmd.exe")) &&
-                                               !File.Exists(Path.Combine(DdbPath, "ddb")))) return false;
+
+            var path = Path.Combine(DdbPath, GetExeName());
+
+            if (!File.Exists(path))
+                return false;
 
             try
             {
 
                 var proc = new Process
                 {
-                    StartInfo = new ProcessStartInfo(Path.Combine(DdbPath, DdbExeNameMapper.SafeGetValue(OperatingSystemInfo.PlatformName)), "--version")
+                    StartInfo = new ProcessStartInfo(path, "--version")
                     {
                         RedirectStandardOutput = true,
                         RedirectStandardError = true,
@@ -49,10 +47,16 @@ namespace Registry.Adapters.DroneDB
                 };
 
                 proc.Start();
+
                 if (!proc.WaitForExit(MaxWaitTime))
                     throw new IOException("Tried to start ddb process but it's taking too long to complete");
-                
-                Debug.WriteLine("DroneDB version: " + proc.StandardOutput.ReadToEnd());
+
+                var version = new PackageVersion(proc.StandardOutput.ReadToEnd());
+
+                Debug.WriteLine("DroneDB version: " + version);
+
+                if (!ignoreVersion && version != ExpectedVersion)
+                    throw new InvalidOperationException($"Need ddb version {ExpectedVersion}, but found {version}");
 
                 return true;
 
@@ -74,38 +78,6 @@ namespace Registry.Adapters.DroneDB
         public static string GetExeName()
         {
             return DdbExeNameMapper.SafeGetValue(OperatingSystemInfo.PlatformName) ?? "ddb";
-        }
-
-        public void DownloadDdb()
-        {
-            Console.WriteLine($" -> Downloading DDB v{Version} in '{DdbPath}'");
-
-            var downloadUrl = string.Format(DdbReleaseDownloadUrl, Version.Major, Version.Minor,
-                Version.Build, OperatingSystemInfo.PlatformName);
-
-            using var client = new WebClient();
-
-            var tempPath = Path.GetTempFileName();
-
-            client.DownloadFile(downloadUrl, tempPath);
-
-            Console.WriteLine($" -> Extracting to '{DdbPath}'");
-
-            CommonUtils.SmartExtractFolder(tempPath, DdbPath);
-
-            File.Delete(tempPath);
-
-            Console.WriteLine(" ?> All ok");
-        }
-
-        public void EnsureDdb()
-        {
-            if (IsDdbReady()) return;
-
-            DownloadDdb();
-                
-            if (!IsDdbReady())
-                throw new InvalidOperationException("Downloaded copy of ddb does not work");
         }
     }
 }

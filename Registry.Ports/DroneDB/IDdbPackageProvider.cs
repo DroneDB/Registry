@@ -6,8 +6,6 @@ namespace Registry.Ports.DroneDB
 {
     public interface IDdbPackageProvider
     {
-        public bool IsDdbReady();
-        public void DownloadDdb();
-        public void EnsureDdb();
+        public bool IsDdbReady(bool ignoreVersion = false);
     }
 }
