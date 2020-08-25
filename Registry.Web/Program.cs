@@ -124,8 +124,8 @@ namespace Registry.Web
 
             if (!ddbPackageProvider.IsDdbReady()) 
             {
-                Console.WriteLine(" !> Ddb is not ready. Follow these instruction to install it: https://github.com/DroneDB/Registry/wiki ");
-
+                Console.WriteLine($" !> Ddb not ready in path '{ddbPathVal}' ");
+                Console.WriteLine(" ?> Follow these instruction to install it: https://github.com/DroneDB/Registry/wiki");
                 return false;
             }
 
