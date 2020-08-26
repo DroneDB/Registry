@@ -175,6 +175,7 @@ namespace Registry.Web.Services.Adapters
             {
                 var currentUser = await _authManager.GetCurrentUser();
 
+                // This seems a repeated check but it prevents the case in which a user tries to delete a public org without being the owner
                 if (org.OwnerId != currentUser.Id)
                     throw new UnauthorizedException("The current user is not the owner of the organization");
             }
