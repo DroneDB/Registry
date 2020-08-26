@@ -77,12 +77,13 @@ namespace Registry.Web.Services.Adapters
 
             var ds = dataset.ToEntity();
 
+            ds.LastEdit = DateTime.Now;
+            ds.CreationDate = ds.LastEdit;
+            
             org.Datasets.Add(ds);
 
             await _context.SaveChangesAsync();
-
             
-
             return ds.ToDto();
 
         }
