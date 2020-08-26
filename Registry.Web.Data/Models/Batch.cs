@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 using System.Data;
 using System.Text;
+using Registry.Common;
 
 namespace Registry.Web.Data.Models
 {
@@ -43,15 +44,4 @@ namespace Registry.Web.Data.Models
         public Batch Batch { get; set; }
     }
 
-    public enum EntryType
-    {
-        Undefined = 0,
-        Directory = 1,
-        Generic = 2,
-        GeoImage = 3,
-        GeoRaster = 4,
-        PointCloud = 5,
-        Image = 6,
-        DroneDb = 7
-    }
 }

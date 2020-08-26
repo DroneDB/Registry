@@ -1,4 +1,5 @@
-﻿using Registry.Web.Models.DTO;
+﻿using Registry.Common;
+using Registry.Web.Models.DTO;
 
 namespace Registry.Web.Models
 {
@@ -8,7 +9,7 @@ namespace Registry.Web.Models
         public string Name { get; set; }
         public string ContentType { get; set; }
 
-        public ObjectType Type { get; set; }
+        public EntryType Type { get; set; }
         public string Hash { get; set; }
         public int Size { get; set; }
     }

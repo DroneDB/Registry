@@ -1,6 +1,7 @@
 ﻿using GeoJSON.Net.Feature;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
+using Registry.Common;
 
 namespace Registry.Ports.DroneDB.Models
 {
@@ -19,19 +20,7 @@ namespace Registry.Ports.DroneDB.Models
         [JsonProperty("size")]
         public int Size { get; set; }
         [JsonProperty("type")]
-        public DdbInfoType Type { get; set; }
-    }
-
-    public enum DdbInfoType
-    {
-        Undefined = 0,
-        Directory = 1,
-        Generic = 2,
-        GeoImage = 3,
-        GeoRaster = 4,
-        PointCloud = 5,
-        Image = 6,
-        DroneDb = 7
+        public EntryType Type { get; set; }
     }
 
     //public class Meta

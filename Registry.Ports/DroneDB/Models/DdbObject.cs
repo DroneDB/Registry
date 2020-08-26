@@ -3,6 +3,7 @@ using GeoJSON.Net;
 using GeoJSON.Net.Feature;
 using GeoJSON.Net.Geometry;
 using Newtonsoft.Json.Linq;
+using Registry.Common;
 
 namespace Registry.Ports.DroneDB.Models
 {
@@ -14,22 +15,10 @@ namespace Registry.Ports.DroneDB.Models
         public string Hash { get; set; }
         public int Depth { get; set; }
         public int Size { get; set; }
-        public DdbObjectType Type { get; set; }
+        public EntryType Type { get; set; }
         public JObject Meta { get; set; }
         public Point PointGeometry { get; set; }
         public Feature PolygonGeometry { get; set; }
-    }
-
-    public enum DdbObjectType
-    {
-        Undefined = 0,
-        Directory = 1,
-        Generic = 2,
-        GeoImage = 3,
-        GeoRaster = 4,
-        PointCloud = 5,
-        Image = 6,
-        DroneDb = 7
     }
 
 }
