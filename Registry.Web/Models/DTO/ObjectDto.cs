@@ -5,6 +5,8 @@ using System.Threading.Tasks;
 using GeoJSON.Net;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
+using Registry.Adapters.DroneDB.Models;
+using Registry.Common;
 
 namespace Registry.Web.Models.DTO
 {
@@ -24,25 +26,13 @@ namespace Registry.Web.Models.DTO
         [JsonProperty("size")]
         public int Size { get; set; }
         [JsonProperty("type")]
-        public ObjectType Type { get; set; }
+        public EntryType Type { get; set; }
         [JsonProperty("meta")]
         public JObject Meta { get; set; }
         [JsonProperty("point_geom")]
         public GeoJSONObject PointGeometry { get; set; }
         [JsonProperty("polygon_geom")]
         public GeoJSONObject PolygonGeometry { get; set; }
-    }
-
-    public enum ObjectType
-    {
-        Undefined = 0,
-        Directory = 1,
-        Generic = 2,
-        GeoImage = 3,
-        GeoRaster = 4,
-        PointCloud = 5,
-        Image = 6,
-        DroneDb = 7
     }
 
     /*

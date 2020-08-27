@@ -65,7 +65,7 @@ namespace Registry.Adapters.DroneDB
                             ModifiedTime = item.ModifiedTime,
                             Path = item.Path,
                             Size = item.Size,
-                            Type = (DdbObjectType)(int)item.Type,
+                            Type = item.Type,
                             PointGeometry = GetPoint(item.PointGeometry),
                             PolygonGeometry = GetFeature(item.PolygonGeometry)
                         };
@@ -194,7 +194,6 @@ namespace Registry.Adapters.DroneDB
 
             var res = new Point(new Position(point.Y, point.X, point.Z))
             {
-                // TODO: Is this always the case?
                 CRS = new NamedCRS("EPSG:" + Srid)
             };
 
@@ -213,7 +212,6 @@ namespace Registry.Adapters.DroneDB
 
             var feature = new Feature(polygon)
             {
-                // TODO: Is this always the case?
                 CRS = new NamedCRS("EPSG:" + Srid)
             };
 

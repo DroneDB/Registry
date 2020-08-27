@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
+using Registry.Common;
 using Registry.Web.Data.Models;
 
 namespace Registry.Web.Models.DTO

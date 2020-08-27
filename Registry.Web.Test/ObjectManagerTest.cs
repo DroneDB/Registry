@@ -142,7 +142,7 @@ namespace Registry.Web.Test
             var expectedHash = new byte[] { 152, 110, 79, 250, 177, 15, 101, 187, 24, 23, 34, 217, 117, 168, 119, 124 };
 
             const string expectedName = "DJI_0019.JPG";
-            const ObjectType expectedObjectType = ObjectType.GeoImage;
+            const EntryType expectedObjectType = EntryType.GeoImage;
             const string expectedContentType = "image/jpeg";
 
             using var test = new TestFS(Test1ArchiveUrl, BaseTestFolder);
