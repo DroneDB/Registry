@@ -17,10 +17,12 @@ jobs:
       uses: actions/setup-dotnet@v1
       with:
         dotnet-version: 3.1.101
-    - name: setup utils
-      run: apt-get update && apt-get install curl
-    - name: download and install ddb
-      run: curl -fsSL https://get.dronedb.app -o get-ddb.sh && sh get-ddb.sh
+    - name: download ddb
+      uses: wei/curl@master
+      with:
+        args: -fsSL https://get.dronedb.app -o get-ddb.sh
+    - name: install ddb
+      run: sh get-ddb.sh
     - name: Install dependencies
       run: dotnet restore
     - name: Build
