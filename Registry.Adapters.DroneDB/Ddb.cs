@@ -44,20 +44,9 @@ namespace Registry.Adapters.DroneDB
 
         public void CreateDatabase(string path)
         {
-            var tempPath = Path.Combine(Path.GetTempPath(), "Ddb");
 
-            Directory.CreateDirectory(tempPath);
-
-            var destFolder = Path.GetDirectoryName(path);
-            Directory.CreateDirectory(destFolder);
-
-            var res = RunCommand($"{InitCommand} -d \"{tempPath}\"");
-
-            // This way we preserve the ACL
-            File.WriteAllBytes(path, File.ReadAllBytes(Path.Combine(tempPath, ".ddb", "dbase.sqlite")));
-
-            Directory.Delete(tempPath, true);
-
+            var res = RunCommand($"{InitCommand} -d \"{path}\"");
+            
         }
 
         private string RunCommand(string parameters)
