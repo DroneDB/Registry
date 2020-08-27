@@ -30,8 +30,7 @@ namespace Registry.Web.Test
         private const string TestDataFolder = @"Data/Ddb";
         private const string DdbTestDataFolder = @"Data/DdbTest";
 
-        private const string Test1ArchiveUrl = "https://digipa.it/wp-content/uploads/2020/08/Test1.zip";
-        private const string DbTest1ArchiveUrl = "https://digipa.it/wp-content/uploads/2020/08/testdb1.zip";
+        private const string DbTest1ArchiveUrl = "https://github.com/DroneDB/test_data/raw/master/registry/DdbFactoryTest/testdb1.zip";
         
         [SetUp]
         public void Setup()

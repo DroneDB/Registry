@@ -51,7 +51,7 @@ namespace Registry.Web.Test
 
         private const string BaseTestFolder = "ObjectManagerTest";
 
-        private const string Test1ArchiveUrl = "https://digipa.it/wp-content/uploads/2020/08/Test1.zip";
+        private const string Test1ArchiveUrl = "https://github.com/DroneDB/test_data/raw/master/registry/Test1.zip";
 
         [SetUp]
         public void Setup()
