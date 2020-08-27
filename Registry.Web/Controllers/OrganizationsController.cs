@@ -71,7 +71,7 @@ namespace Registry.Web.Controllers
 
         // POST: ddb/
         [HttpPost]
-        public async Task<IActionResult> Post([FromBody] OrganizationDto organization)
+        public async Task<IActionResult> Post([FromForm] OrganizationDto organization)
         {
 
             try
@@ -93,7 +93,7 @@ namespace Registry.Web.Controllers
 
         // POST: ddb/
         [HttpPut("{id}")]
-        public async Task<IActionResult> Put(string id, [FromBody] OrganizationDto organization)
+        public async Task<IActionResult> Put(string id, [FromForm] OrganizationDto organization)
         {
             
             try

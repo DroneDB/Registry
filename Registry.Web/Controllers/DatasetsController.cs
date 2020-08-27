@@ -88,7 +88,7 @@ namespace Registry.Web.Controllers
 
 
         [HttpPost]
-        public async Task<IActionResult> Post([FromRoute] string orgId, [FromBody] DatasetDto dataset)
+        public async Task<IActionResult> Post([FromRoute] string orgId, [FromForm] DatasetDto dataset)
         {
             try
             {
@@ -107,7 +107,7 @@ namespace Registry.Web.Controllers
 
         // POST: ddb/
         [HttpPut("{id}")]
-        public async Task<IActionResult> Put([FromRoute] string orgId, string id, [FromBody] DatasetDto dataset)
+        public async Task<IActionResult> Put([FromRoute] string orgId, string id, [FromForm] DatasetDto dataset)
         {
 
             try

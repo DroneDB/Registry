@@ -28,7 +28,7 @@ namespace Registry.Web.Controllers
         }
 
         [HttpPost("init")]
-        public async Task<IActionResult> Init(ShareInitDto parameters)
+        public async Task<IActionResult> Init([FromForm]ShareInitDto parameters)
         {
             try
             {
