@@ -23,7 +23,7 @@ namespace Registry.Web.Controllers
 
     [Authorize]
     [ApiController]
-    [Route("ddb/{orgId:alpha}/ds/{dsId:alpha}")]
+    [Route("ddb/{orgId:regex([[\\w-]]+)}/ds/{dsId:regex([[\\w-]]+)}")]
     public class ObjectsController : ControllerBaseEx
     {
         private readonly IObjectsManager _objectsManager;

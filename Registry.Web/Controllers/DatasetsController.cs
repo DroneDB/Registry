@@ -20,7 +20,7 @@ namespace Registry.Web.Controllers
 
     [Authorize]
     [ApiController]
-    [Route("ddb/{orgId:alpha}/ds")]
+    [Route("ddb/{orgId:regex([[\\w-]]+)}/ds")]
     public class DatasetsController : ControllerBaseEx
     {
         private readonly IDatasetsManager _datasetsManager;
@@ -35,7 +35,7 @@ namespace Registry.Web.Controllers
         }
 
         
-        [HttpGet("{dsId}/batches")]
+        [HttpGet("{dsId:regex([[\\w-]]+)}/batches")]
         public async Task<IActionResult> Batches([FromRoute] string orgId, string dsId)
         {
             try
@@ -70,7 +70,7 @@ namespace Registry.Web.Controllers
             }
         }
 
-        [HttpGet("{id}", Name = nameof(DatasetsController) + "." + nameof(Get))]
+        [HttpGet("{id:regex([[\\w-]]+)}", Name = nameof(DatasetsController) + "." + nameof(Get))]
         public async Task<IActionResult> Get([FromRoute] string orgId, string id)
         {
             try
@@ -106,7 +106,7 @@ namespace Registry.Web.Controllers
         }
 
         // POST: ddb/
-        [HttpPut("{id}")]
+        [HttpPut("{id:regex([[\\w-]]+)}")]
         public async Task<IActionResult> Put([FromRoute] string orgId, string id, [FromForm] DatasetDto dataset)
         {
 
@@ -126,7 +126,7 @@ namespace Registry.Web.Controllers
         }
 
         // DELETE: ddb/id
-        [HttpDelete("{id}")]
+        [HttpDelete("{id:regex([[\\w-]]+)}")]
         public async Task<IActionResult> Delete([FromRoute] string orgId, string id)
         {
 

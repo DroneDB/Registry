@@ -51,7 +51,7 @@ namespace Registry.Web.Controllers
         }
 
         // GET: ddb/id
-        [HttpGet("{id}", Name = nameof(OrganizationsController) + "." + nameof(Get))]
+        [HttpGet("{id:regex([[\\w-]]+)}", Name = nameof(OrganizationsController) + "." + nameof(Get))]
         public async Task<IActionResult> Get(string id)
         {
             try
@@ -92,7 +92,7 @@ namespace Registry.Web.Controllers
         }
 
         // POST: ddb/
-        [HttpPut("{id}")]
+        [HttpPut("{id:regex([[\\w-]]+)}")]
         public async Task<IActionResult> Put(string id, [FromForm] OrganizationDto organization)
         {
             
@@ -113,7 +113,7 @@ namespace Registry.Web.Controllers
         }
 
         // DELETE: ddb/id
-        [HttpDelete("{id}")]
+        [HttpDelete("{id:regex([[\\w-]]+)}")]
         public async Task<IActionResult> Delete(string id)
         {
 
