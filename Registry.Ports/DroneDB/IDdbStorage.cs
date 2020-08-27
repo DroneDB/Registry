@@ -11,7 +11,7 @@ namespace Registry.Ports.DroneDB
     public interface IDdbStorage : IDisposable
     {
         // public DdbObject GetObjectInfo(int id);
-        IEnumerable<DdbObject> Search(string path);
+        IEnumerable<DdbEntry> Search(string path);
         void Add(string path, byte[] data);
         void Remove(string path);
     }

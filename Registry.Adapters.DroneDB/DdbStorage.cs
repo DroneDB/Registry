@@ -44,7 +44,7 @@ namespace Registry.Adapters.DroneDB
             _ddb = ddb;
         }
 
-        public IEnumerable<DdbObject> Search(string path)
+        public IEnumerable<DdbEntry> Search(string path)
         {
 
             var tmp = from entry in Entries
@@ -57,7 +57,7 @@ namespace Registry.Adapters.DroneDB
                       select item;
 
             var query = from item in tmp.ToArray()
-                        select new DdbObject
+                        select new DdbEntry
                         {
                             Depth = item.Depth,
                             Hash = item.Hash,

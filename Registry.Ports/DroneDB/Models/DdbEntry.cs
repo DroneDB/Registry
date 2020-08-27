@@ -7,7 +7,7 @@ using Registry.Common;
 
 namespace Registry.Ports.DroneDB.Models
 {
-    public class DdbObject
+    public class DdbEntry
     {
         public int Id { get; set; }
         public string Path { get; set; }

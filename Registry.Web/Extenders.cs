@@ -72,7 +72,7 @@ namespace Registry.Web
             };
         }
 
-        public static ObjectDto ToDto(this DdbObject obj)
+        public static ObjectDto ToDto(this DdbEntry obj)
         {
             return new ObjectDto
             {
