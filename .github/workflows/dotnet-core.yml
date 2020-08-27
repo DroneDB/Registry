@@ -18,7 +18,7 @@ jobs:
       with:
         dotnet-version: 3.1.101
     - name: setup utils
-      run: apt update && apt install curl
+      run: apt-get update && apt-get install curl
     - name: download and install ddb
       run: curl -fsSL https://get.dronedb.app -o get-ddb.sh && sh get-ddb.sh
     - name: Install dependencies
