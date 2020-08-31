@@ -27,25 +27,21 @@ namespace Registry.Web.Services.Adapters
 
         // Only lowercase letters, numbers, - and _. Max length 255
         private readonly Regex _safeNameRegex = new Regex(@"^[a-z\d\-_]{1,255}$", RegexOptions.Compiled | RegexOptions.Singleline);
-        public bool IsOrganizationNameValid(string name)
-        {
-            return _safeNameRegex.IsMatch(name);
-        }
-        public bool IsDatasetNameValid(string name)
+        public bool IsSlugValid(string name)
         {
             return _safeNameRegex.IsMatch(name);
         }
 
-        public async Task<Organization> GetOrganizationAndCheck(string orgId, bool safe = false)
+        public async Task<Organization> GetOrganizationAndCheck(string orgSlug, bool safe = false)
         {
 
-            if (string.IsNullOrWhiteSpace(orgId))
+            if (string.IsNullOrWhiteSpace(orgSlug))
                 throw new BadRequestException("Missing organization id");
 
-            if (!IsOrganizationNameValid(orgId))
+            if (!IsSlugValid(orgSlug))
                 throw new BadRequestException("Invalid organization id");
             
-            var org = _context.Organizations.Include(item => item.Datasets).FirstOrDefault(item => item.Id == orgId);
+            var org = _context.Organizations.Include(item => item.Datasets).FirstOrDefault(item => item.Slug == orgSlug);
 
             if (org == null)
             {
@@ -68,17 +64,17 @@ namespace Registry.Web.Services.Adapters
             return org;
         }
 
-        public async Task<Dataset> GetDatasetAndCheck(string orgId, string dsId, bool safe = false)
+        public async Task<Dataset> GetDatasetAndCheck(string orgSlug, string dsSlug, bool safe = false)
         {
-            if (string.IsNullOrWhiteSpace(dsId))
+            if (string.IsNullOrWhiteSpace(dsSlug))
                 throw new BadRequestException("Missing dataset id");
 
-            if (!IsDatasetNameValid(dsId))
+            if (!IsSlugValid(dsSlug))
                 throw new BadRequestException("Invalid dataset id");
 
-            var org = await GetOrganizationAndCheck(orgId);
+            var org = await GetOrganizationAndCheck(orgSlug);
 
-            var dataset = org.Datasets.FirstOrDefault(item => item.Slug == dsId);
+            var dataset = org.Datasets.FirstOrDefault(item => item.Slug == dsSlug);
 
             if (dataset == null)
             {

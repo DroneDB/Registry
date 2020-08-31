@@ -134,7 +134,7 @@ namespace Registry.Web.Test
 
                 var entity = new Organization
                 {
-                    Id = MagicStrings.PublicOrganizationId,
+                    Slug = MagicStrings.PublicOrganizationSlug,
                     Name = "Public",
                     CreationDate = DateTime.Now,
                     Description = "Public organization",

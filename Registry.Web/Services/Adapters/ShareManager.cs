@@ -83,9 +83,9 @@ namespace Registry.Web.Services.Adapters
             if (parameters?.Dataset == null || parameters.Organization == null)
                 throw new BadRequestException("Invalid parameters");
             
-            var orgId = parameters.Organization?.Id;
+            var orgSlug = parameters.Organization?.Slug;
 
-            if (orgId == null)
+            if (orgSlug == null)
                 throw new BadRequestException("Organization id not provided");
 
             var dsSlug = parameters.Dataset?.Slug;
@@ -93,19 +93,19 @@ namespace Registry.Web.Services.Adapters
             if (dsSlug == null)
                 throw new BadRequestException("Dataset slug not provided");
 
-            var org = await _utils.GetOrganizationAndCheck(orgId, true);
+            var org = await _utils.GetOrganizationAndCheck(orgSlug, true);
             
             Dataset dataset;
 
             // Create org if not exists
             if (org == null)
             {
-                _logger.LogInformation($"Tuple '{orgId}/{dsSlug}' does not exist, creating it");
+                _logger.LogInformation($"Tuple '{orgSlug}/{dsSlug}' does not exist, creating it");
                 await _organizationsManager.AddNew(parameters.Organization);
 
-                await _datasetsManager.AddNew(orgId, parameters.Dataset);
+                await _datasetsManager.AddNew(orgSlug, parameters.Dataset);
 
-                dataset = await _utils.GetDatasetAndCheck(orgId, dsSlug);
+                dataset = await _utils.GetDatasetAndCheck(orgSlug, dsSlug);
 
                 _logger.LogInformation("Organization and dataset created");
 
@@ -115,14 +115,14 @@ namespace Registry.Web.Services.Adapters
                 _logger.LogInformation("Organization already exists");
 
                 // Create dataset if not exists
-                dataset = await _utils.GetDatasetAndCheck(orgId, dsSlug);
+                dataset = await _utils.GetDatasetAndCheck(orgSlug, dsSlug);
 
                 if (dataset == null) {
 
                     _logger.LogInformation($"Dataset '{dsSlug}' not found, creating it");
 
-                    await _datasetsManager.AddNew(orgId, parameters.Dataset);
-                    dataset = await _utils.GetDatasetAndCheck(orgId, dsSlug);
+                    await _datasetsManager.AddNew(orgSlug, parameters.Dataset);
+                    dataset = await _utils.GetDatasetAndCheck(orgSlug, dsSlug);
 
                     _logger.LogInformation("Dataset created");
 
@@ -190,7 +190,7 @@ namespace Registry.Web.Services.Adapters
 
             _logger.LogInformation($"Adding '{path}' in batch '{batch.Token}'");
 
-            var orgId = batch.Dataset.Organization.Id;
+            var orgId = batch.Dataset.Organization.Slug;
             var dsSlug = batch.Dataset.Slug;
 
             await _objectsManager.AddNew(orgId, dsSlug, path, data);

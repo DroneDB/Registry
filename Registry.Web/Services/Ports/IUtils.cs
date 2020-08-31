@@ -5,10 +5,9 @@ namespace Registry.Web.Services.Ports
 {
     public interface IUtils
     {
-        bool IsOrganizationNameValid(string name);
+        bool IsSlugValid(string name);
 
-        Task<Organization> GetOrganizationAndCheck(string orgId, bool safe = false);
-        Task<Dataset> GetDatasetAndCheck(string orgId, string dsId, bool safe = false);
-        bool IsDatasetNameValid(string name);
+        Task<Organization> GetOrganizationAndCheck(string orgSlug, bool safe = false);
+        Task<Dataset> GetDatasetAndCheck(string orgSlug, string dsSlug, bool safe = false);
     }
 }

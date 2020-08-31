@@ -32,7 +32,7 @@ namespace Registry.Web.Controllers
         {
             try
             {
-                _logger.LogDebug($"Share controller Init('{parameters?.Organization?.Id}', '{parameters?.Dataset?.Slug}')");
+                _logger.LogDebug($"Share controller Init('{parameters?.Organization?.Slug}', '{parameters?.Dataset?.Slug}')");
 
                 var token = await _shareManager.Initialize(parameters);
 
@@ -41,7 +41,7 @@ namespace Registry.Web.Controllers
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, $"Exception in Share controller Init('{parameters?.Organization?.Id}', '{parameters?.Dataset?.Slug}')");
+                _logger.LogError(ex, $"Exception in Share controller Init('{parameters?.Organization?.Slug}', '{parameters?.Dataset?.Slug}')");
 
                 return ExceptionResult(ex);
             }

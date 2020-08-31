@@ -14,7 +14,7 @@ namespace Registry.Web
         {
             return new Organization
             {
-                Id = organization.Id,
+                Slug = organization.Slug,
                 Name = organization.Name,
                 Description = organization.Description,
                 CreationDate = organization.CreationDate,
@@ -27,7 +27,7 @@ namespace Registry.Web
         {
             return new OrganizationDto
             {
-                Id = organization.Id,
+                Slug = organization.Slug,
                 Name = organization.Name,
                 Description = organization.Description,
                 CreationDate = organization.CreationDate,

@@ -76,15 +76,15 @@ namespace Registry.Web.Controllers
 
             try
             {
-                _logger.LogDebug($"Organizations controller Post('{organization?.Id}')");
+                _logger.LogDebug($"Organizations controller Post('{organization?.Slug}')");
 
                 var newOrg = await _organizationsManager.AddNew(organization);
-                return CreatedAtRoute(nameof(OrganizationsController) + "." + nameof(Get), new {id = newOrg.Id},
+                return CreatedAtRoute(nameof(OrganizationsController) + "." + nameof(Get), new {id = newOrg.Slug},
                     newOrg);
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, $"Exception in Organizations controller Post('{organization?.Id}')");
+                _logger.LogError(ex, $"Exception in Organizations controller Post('{organization?.Slug}')");
 
                 return ExceptionResult(ex);
             }
@@ -98,14 +98,14 @@ namespace Registry.Web.Controllers
             
             try
             {
-                _logger.LogDebug($"Organizations controller Put('{id}', {organization?.Id}')");
+                _logger.LogDebug($"Organizations controller Put('{id}', {organization?.Slug}')");
 
                 await _organizationsManager.Edit(id, organization);
                 return NoContent();
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, $"Exception in Organizations controller Put('{id}', {organization?.Id}')");
+                _logger.LogError(ex, $"Exception in Organizations controller Put('{id}', {organization?.Slug}')");
 
                 return ExceptionResult(ex);
             }

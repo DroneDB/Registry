@@ -54,7 +54,7 @@ namespace Registry.Web.Services.Adapters
                    {
                        CreationDate = org.CreationDate,
                        Description = org.Description,
-                       Id = org.Id,
+                       Slug = org.Slug,
                        Name = org.Name,
                        Owner = org.OwnerId,
                        IsPublic = org.IsPublic
@@ -76,10 +76,10 @@ namespace Registry.Web.Services.Adapters
             if (currentUser == null)
                 throw new UnauthorizedException("Invalid user");
 
-            if (!_utils.IsOrganizationNameValid(organization.Id))
+            if (!_utils.IsSlugValid(organization.Slug))
                 throw new BadRequestException("Invalid organization id");
 
-            var existingOrg = _context.Organizations.FirstOrDefault(item => item.Id == organization.Id);
+            var existingOrg = _context.Organizations.FirstOrDefault(item => item.Slug == organization.Slug);
 
             if (existingOrg != null)
                 throw new ConflictException("The organization already exists");
@@ -127,7 +127,7 @@ namespace Registry.Web.Services.Adapters
             var currentUser = await _authManager.GetCurrentUser();
 
             // NOTE: Is this a good idea? If activated there will be no way to change the public organization details
-            // if (organization.Id == MagicStrings.PublicOrganizationId)
+            // if (organization.Id == MagicStrings.PublicOrganizationSlug)
             //    return Unauthorized(new ErrorResponse("Cannot edit the public organization"));
 
             if (!await _authManager.IsUserAdmin())
@@ -181,7 +181,7 @@ namespace Registry.Web.Services.Adapters
             }
             else
             {
-                if (org.Id == MagicStrings.PublicOrganizationId)
+                if (org.Slug == MagicStrings.PublicOrganizationSlug)
                     throw new UnauthorizedException("Cannot remove the default public organization");
             }
 
@@ -189,7 +189,7 @@ namespace Registry.Web.Services.Adapters
             {
 
                 // TODO: To check and re-check and re-check and re-check
-                await _datasetManager.Delete(org.Id, ds.Slug);
+                await _datasetManager.Delete(org.Slug, ds.Slug);
                 _context.Datasets.Remove(ds);
             }
 

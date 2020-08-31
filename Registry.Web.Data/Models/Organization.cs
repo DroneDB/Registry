@@ -9,7 +9,7 @@ namespace Registry.Web.Data.Models
     public class Organization
     {
         [Key]
-        public string Id { get; set; }
+        public string Slug { get; set; }
         [Required]
         public string Name { get; set; }
         public string Description { get; set; }

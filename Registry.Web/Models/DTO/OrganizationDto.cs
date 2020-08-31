@@ -11,7 +11,7 @@ namespace Registry.Web.Models.DTO
     public class OrganizationDto
     {
         [Required]
-        public string Id { get; set; }
+        public string Slug { get; set; }
 
         [Required]
         public string Name { get; set; }

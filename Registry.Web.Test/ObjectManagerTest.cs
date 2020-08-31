@@ -89,9 +89,9 @@ namespace Registry.Web.Test
                 _ddbFactoryMock.Object, _authManagerMock.Object, new WebUtils(_authManagerMock.Object, context));
 
             objectManager.Invoking(item => item.List(null, MagicStrings.DefaultDatasetSlug, "test")).Should().Throw<BadRequestException>();
-            objectManager.Invoking(item => item.List(MagicStrings.PublicOrganizationId, null, "test")).Should().Throw<BadRequestException>();
+            objectManager.Invoking(item => item.List(MagicStrings.PublicOrganizationSlug, null, "test")).Should().Throw<BadRequestException>();
             objectManager.Invoking(item => item.List(string.Empty, MagicStrings.DefaultDatasetSlug, "test")).Should().Throw<BadRequestException>();
-            objectManager.Invoking(item => item.List(MagicStrings.PublicOrganizationId, string.Empty, "test")).Should().Throw<BadRequestException>();
+            objectManager.Invoking(item => item.List(MagicStrings.PublicOrganizationSlug, string.Empty, "test")).Should().Throw<BadRequestException>();
         }
 
         [Test]
@@ -107,11 +107,11 @@ namespace Registry.Web.Test
             var objectManager = new ObjectsManager(_objectManagerLogger, context, _objectSystemMock.Object, _appSettingsMock.Object,
                 new DdbFactory(_appSettingsMock.Object, _ddbFactoryLogger), _authManagerMock.Object, new WebUtils(_authManagerMock.Object, context));
 
-            var res = await objectManager.List(MagicStrings.PublicOrganizationId, MagicStrings.DefaultDatasetSlug, null);
+            var res = await objectManager.List(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug, null);
 
             res.Should().HaveCount(26);
 
-            res = await objectManager.List(MagicStrings.PublicOrganizationId, MagicStrings.DefaultDatasetSlug, "Sub");
+            res = await objectManager.List(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug, "Sub");
 
             res.Should().HaveCount(8);
 
@@ -131,7 +131,7 @@ namespace Registry.Web.Test
             var objectManager = new ObjectsManager(_objectManagerLogger, context, new PhysicalObjectSystem(Path.Combine(test.TestFolder, StorageFolder)), _appSettingsMock.Object,
                 new DdbFactory(_appSettingsMock.Object, _ddbFactoryLogger), _authManagerMock.Object, new WebUtils(_authManagerMock.Object, context));
 
-            objectManager.Invoking(async x => await x.Get(MagicStrings.PublicOrganizationId, MagicStrings.DefaultDatasetSlug, "weriufbgeiughegr"))
+            objectManager.Invoking(async x => await x.Get(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug, "weriufbgeiughegr"))
                 .Should().Throw<NotFoundException>();
 
         }
@@ -153,12 +153,12 @@ namespace Registry.Web.Test
             _authManagerMock.Setup(o => o.IsUserAdmin()).Returns(Task.FromResult(true));
 
             var sys = new PhysicalObjectSystem(Path.Combine(test.TestFolder, StorageFolder));
-            sys.SyncBucket($"{MagicStrings.PublicOrganizationId}-{MagicStrings.DefaultDatasetSlug}");
+            sys.SyncBucket($"{MagicStrings.PublicOrganizationSlug}-{MagicStrings.DefaultDatasetSlug}");
 
             var objectManager = new ObjectsManager(_objectManagerLogger, context, sys, _appSettingsMock.Object,
                 new DdbFactory(_appSettingsMock.Object, _ddbFactoryLogger), _authManagerMock.Object, new WebUtils(_authManagerMock.Object, context));
 
-            var obj = await objectManager.Get(MagicStrings.PublicOrganizationId, MagicStrings.DefaultDatasetSlug,
+            var obj = await objectManager.Get(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug,
                 "DJI_0019.JPG");
 
             obj.Name.Should().Be(expectedName);
@@ -182,29 +182,29 @@ namespace Registry.Web.Test
             using var test = new TestFS(Test1ArchiveUrl, BaseTestFolder);
 
             var sys = new PhysicalObjectSystem(Path.Combine(test.TestFolder, StorageFolder));
-            sys.SyncBucket($"{MagicStrings.PublicOrganizationId}-{MagicStrings.DefaultDatasetSlug}");
+            sys.SyncBucket($"{MagicStrings.PublicOrganizationSlug}-{MagicStrings.DefaultDatasetSlug}");
 
             var objectManager = new ObjectsManager(_objectManagerLogger, context, sys, _appSettingsMock.Object,
                 new DdbFactory(_appSettingsMock.Object, _ddbFactoryLogger), _authManagerMock.Object, new WebUtils(_authManagerMock.Object, context));
 
-            var res = await objectManager.List(MagicStrings.PublicOrganizationId, MagicStrings.DefaultDatasetSlug,
+            var res = await objectManager.List(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug,
                 fileName);
 
             res.Should().HaveCount(1);
 
-            await objectManager.Delete(MagicStrings.PublicOrganizationId, MagicStrings.DefaultDatasetSlug, fileName);
+            await objectManager.Delete(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug, fileName);
 
-            res = await objectManager.List(MagicStrings.PublicOrganizationId, MagicStrings.DefaultDatasetSlug,
+            res = await objectManager.List(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug,
                 fileName);
 
             res.Should().HaveCount(0);
 
             var newFileUrl = "https://github.com/pierotofy/drone_dataset_brighton_beach/raw/master/" + fileName;
 
-            var ret = await objectManager.AddNew(MagicStrings.PublicOrganizationId, MagicStrings.DefaultDatasetSlug,
+            var ret = await objectManager.AddNew(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug,
                 fileName, CommonUtils.SmartDownloadData(newFileUrl));
 
-            res = await objectManager.List(MagicStrings.PublicOrganizationId, MagicStrings.DefaultDatasetSlug,
+            res = await objectManager.List(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug,
                 fileName);
 
             res.Should().HaveCount(1);
@@ -260,7 +260,7 @@ namespace Registry.Web.Test
 
                 var entity = new Organization
                 {
-                    Id = MagicStrings.PublicOrganizationId,
+                    Slug = MagicStrings.PublicOrganizationSlug,
                     Name = "Public",
                     CreationDate = DateTime.Now,
                     Description = "Public organization",

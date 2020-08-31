@@ -56,7 +56,7 @@ namespace Registry.Web.Test
 
             var factory = new DdbFactory(_appSettingsMock.Object, _ddbFactoryLogger);
 
-            var ddb = factory.GetDdb(MagicStrings.PublicOrganizationId, MagicStrings.DefaultDatasetSlug);
+            var ddb = factory.GetDdb(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug);
 
             ddb.Should().NotBeNull();
         }
@@ -76,7 +76,7 @@ namespace Registry.Web.Test
         {
             var factory = new DdbFactory(_appSettingsMock.Object, _ddbFactoryLogger);
 
-            var ddb = factory.GetDdb(MagicStrings.PublicOrganizationId, MagicStrings.DefaultDatasetSlug);
+            var ddb = factory.GetDdb(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug);
 
             var res = ddb.Search("asasdadas.jpg");
 
@@ -103,7 +103,7 @@ namespace Registry.Web.Test
 
             var factory = new DdbFactory(_appSettingsMock.Object, _ddbFactoryLogger);
 
-            var ddb = factory.GetDdb(MagicStrings.PublicOrganizationId, MagicStrings.DefaultDatasetSlug);
+            var ddb = factory.GetDdb(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug);
             
             var list = ddb.Search(fileName).ToArray();
 
@@ -150,7 +150,7 @@ namespace Registry.Web.Test
 
             var factory = new DdbFactory(_appSettingsMock.Object, _ddbFactoryLogger);
 
-            var ddb = factory.GetDdb(MagicStrings.PublicOrganizationId, MagicStrings.DefaultDatasetSlug);
+            var ddb = factory.GetDdb(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug);
 
             var list = ddb.Search(fileName).ToArray();
 
@@ -194,7 +194,7 @@ namespace Registry.Web.Test
 
             var factory = new DdbFactory(_appSettingsMock.Object, _ddbFactoryLogger);
 
-            var ddb = factory.GetDdb(MagicStrings.PublicOrganizationId, MagicStrings.DefaultDatasetSlug);
+            var ddb = factory.GetDdb(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug);
 
             const string fileName = "DJI_0028.JPG";
 

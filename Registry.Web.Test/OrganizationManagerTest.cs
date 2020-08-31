@@ -55,11 +55,11 @@ namespace Registry.Web.Test
             var pub = list.First();
 
             const string expectedDescription = "Public organization";
-            const string expectedId = MagicStrings.PublicOrganizationId;
+            const string expectedSlug = MagicStrings.PublicOrganizationSlug;
             const string expectedName = "Public";
 
             pub.Description.Should().Be(expectedDescription);
-            pub.Id.Should().Be(expectedId);
+            pub.Slug.Should().Be(expectedSlug);
             pub.IsPublic.Should().BeTrue();
             pub.Owner.Should().BeNull();
             pub.Name.Should().Be(expectedName);
@@ -114,7 +114,7 @@ namespace Registry.Web.Test
 
                 var entity = new Organization
                 {
-                    Id = MagicStrings.PublicOrganizationId,
+                    Slug = MagicStrings.PublicOrganizationSlug,
                     Name = "Public",
                     CreationDate = DateTime.Now,
                     Description = "Public organization",
