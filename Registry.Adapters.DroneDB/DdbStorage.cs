@@ -36,7 +36,6 @@ namespace Registry.Adapters.DroneDB
         public DdbStorage(string dbPath, IDdb ddb)
         {
 
-            // TODO: Create DB if not existing
             if (!File.Exists(dbPath))
                 throw new IOException("Sqlite database not found");
 
