@@ -23,5 +23,7 @@ namespace Registry.Web.Models.DTO
         public string Meta { get; set; }
         public bool IsPublic { get; set; }
 
+        public string Password { get; set; }
+
     }
 }

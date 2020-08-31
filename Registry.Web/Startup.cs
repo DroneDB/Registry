@@ -132,6 +132,7 @@ namespace Registry.Web
             services.AddScoped<IObjectsManager, ObjectsManager>();
             services.AddScoped<IShareManager, ShareManager>();
             services.AddScoped<IDdbFactory, DdbFactory>();
+            services.AddSingleton<IPasswordHasher, PasswordHasher>();
 
             RegisterStorageProvider(services, appSettings);
 

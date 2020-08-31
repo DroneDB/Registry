@@ -4,6 +4,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
+using Registry.Common;
 using Registry.Ports.ObjectSystem;
 using Registry.Web.Data;
 using Registry.Web.Exceptions;
@@ -20,6 +21,7 @@ namespace Registry.Web.Services.Adapters
         private readonly ILogger<DatasetsManager> _logger;
         private readonly IObjectsManager _objectsManager;
         private readonly IDdbFactory _ddbFactory;
+        private readonly IPasswordHasher _passwordHasher;
 
         // TODO: Add extensive testing
         
@@ -29,14 +31,16 @@ namespace Registry.Web.Services.Adapters
             IUtils utils,
             ILogger<DatasetsManager> logger,
             IObjectsManager objectsManager,
-            IDdbFactory ddbFactory)
+            IDdbFactory ddbFactory,
+            IPasswordHasher passwordHasher)
         {
             _authManager = authManager;
             _context = context;
             _utils = utils;
             _logger = logger;
-            this._objectsManager = objectsManager;
+            _objectsManager = objectsManager;
             _ddbFactory = ddbFactory;
+            _passwordHasher = passwordHasher;
         }
 
         public async Task<IEnumerable<DatasetDto>> List(string orgId)
@@ -79,7 +83,10 @@ namespace Registry.Web.Services.Adapters
 
             ds.LastEdit = DateTime.Now;
             ds.CreationDate = ds.LastEdit;
-            
+
+            if (!string.IsNullOrEmpty(dataset.Password)) 
+                ds.PasswordHash = _passwordHasher.Hash(dataset.Password);
+
             org.Datasets.Add(ds);
 
             await _context.SaveChangesAsync();
@@ -103,6 +110,9 @@ namespace Registry.Web.Services.Adapters
             entity.License = dataset.License;
             entity.Meta = dataset.Meta;
             entity.Name = dataset.Name;
+
+            if (!string.IsNullOrEmpty(dataset.Password))
+                entity.PasswordHash = _passwordHasher.Hash(dataset.Password);
 
             await _context.SaveChangesAsync();
 
