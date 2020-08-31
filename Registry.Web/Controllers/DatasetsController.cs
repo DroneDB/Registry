@@ -42,7 +42,7 @@ namespace Registry.Web.Controllers
             {
                 _logger.LogDebug($"Dataset controller Batches('{orgId}', '{dsId}')");
 
-                var lst = await _shareManager.List(orgId, dsId);
+                var lst = await _shareManager.ListBatches(orgId, dsId);
 
                 return Ok(lst);
 

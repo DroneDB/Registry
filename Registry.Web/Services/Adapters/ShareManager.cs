@@ -45,7 +45,7 @@ namespace Registry.Web.Services.Adapters
             _context = context;
         }
 
-        public async Task<IEnumerable<BatchDto>> List(string orgId, string dsSlug)
+        public async Task<IEnumerable<BatchDto>> ListBatches(string orgId, string dsSlug)
         {
             await _utils.GetOrganizationAndCheck(orgId);
             var dataset = await _utils.GetDatasetAndCheck(orgId, dsSlug);
