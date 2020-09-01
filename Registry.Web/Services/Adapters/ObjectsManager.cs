@@ -126,7 +126,7 @@ namespace Registry.Web.Services.Adapters
 
         public async Task<UploadedObjectDto> AddNew(string orgId, string dsId, string path, byte[] data)
         {
-            await _utils.GetDatasetAndCheck(orgId, dsId);
+            var dataset = await _utils.GetDatasetAndCheck(orgId, dsId);
 
             _logger.LogInformation($"In '{orgId}/{dsId}'");
 
@@ -163,6 +163,10 @@ namespace Registry.Web.Services.Adapters
 
             _logger.LogInformation("Added to DDB");
 
+            // Refresh objects count and total size
+            dataset.UpdateStatistics(ddb);
+            await _context.SaveChangesAsync();
+            
             var obj = new UploadedObjectDto
             {
                 Path = path,
@@ -175,7 +179,7 @@ namespace Registry.Web.Services.Adapters
 
         public async Task Delete(string orgId, string dsId, string path)
         {
-            await _utils.GetDatasetAndCheck(orgId, dsId);
+            var dataset = await _utils.GetDatasetAndCheck(orgId, dsId);
 
             _logger.LogInformation($"In '{orgId}/{dsId}'");
 
@@ -198,13 +202,17 @@ namespace Registry.Web.Services.Adapters
             using var ddb = _ddbFactory.GetDdb(orgId, dsId);
             ddb.Remove(path);
 
+            // Refresh objects count and total size
+            dataset.UpdateStatistics(ddb);
+            await _context.SaveChangesAsync();
+
             _logger.LogInformation("Removed from DDB");
             
         }
 
         public async Task DeleteAll(string orgId, string dsId)
         {
-            await _utils.GetDatasetAndCheck(orgId, dsId);
+            var dataset = await _utils.GetDatasetAndCheck(orgId, dsId);
 
             _logger.LogInformation($"In '{orgId}/{dsId}'");
 
@@ -232,6 +240,10 @@ namespace Registry.Web.Services.Adapters
             foreach(var item in res)
                 ddb.Remove(item.Path);
 
+            // Refresh objects count and total size
+            dataset.UpdateStatistics(ddb);
+            await _context.SaveChangesAsync();
+            
             _logger.LogInformation("Removed all from DDB");
 
             // TODO: Maybe it's more clever to remove the entire sqlite database instead of performing a per-file delete. Just my 2 cents

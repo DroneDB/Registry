@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
+using Registry.Ports.DroneDB;
 using Registry.Ports.DroneDB.Models;
 using Registry.Web.Data.Models;
 using Registry.Web.Models.DTO;
@@ -48,9 +49,8 @@ namespace Registry.Web
                 Name = dataset.Name,
                 License = dataset.License,
                 Meta = dataset.Meta,
-                // TODO: These should be calculated
-                // ObjectsCount = ObjectsCount,
-                // Size = Size,
+                ObjectsCount = dataset.ObjectsCount,
+                Size = dataset.Size,
                 IsPublic = dataset.IsPublic
             };
         }
@@ -87,6 +87,15 @@ namespace Registry.Web
                 Size = obj.Size,
                 Type = obj.Type
             };
+        }
+
+        public static void UpdateStatistics(this Dataset ds, IDdbStorage ddb)
+        {
+            var objs = ddb.Search(null).ToArray();
+
+            ds.ObjectsCount = objs.Length;
+            ds.Size = objs.Sum(item => item.Size);
+            
         }
     }
 }
