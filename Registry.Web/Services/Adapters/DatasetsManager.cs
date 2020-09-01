@@ -15,7 +15,6 @@ namespace Registry.Web.Services.Adapters
 {
     public class DatasetsManager : IDatasetsManager
     {
-        private readonly IAuthManager _authManager;
         private readonly RegistryContext _context;
         private readonly IUtils _utils;
         private readonly ILogger<DatasetsManager> _logger;
@@ -26,7 +25,6 @@ namespace Registry.Web.Services.Adapters
         // TODO: Add extensive testing
         
         public DatasetsManager(
-            IAuthManager authManager,
             RegistryContext context,
             IUtils utils,
             ILogger<DatasetsManager> logger,
@@ -34,7 +32,6 @@ namespace Registry.Web.Services.Adapters
             IDdbFactory ddbFactory,
             IPasswordHasher passwordHasher)
         {
-            _authManager = authManager;
             _context = context;
             _utils = utils;
             _logger = logger;

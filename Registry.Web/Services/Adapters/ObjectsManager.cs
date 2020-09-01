@@ -23,7 +23,6 @@ namespace Registry.Web.Services.Adapters
         private readonly ILogger<ObjectsManager> _logger;
         private readonly IObjectSystem _objectSystem;
         private readonly IDdbFactory _ddbFactory;
-        private readonly IAuthManager _authManager;
         private readonly IUtils _utils;
         private readonly RegistryContext _context;
         private readonly AppSettings _settings;
@@ -39,14 +38,12 @@ namespace Registry.Web.Services.Adapters
             IObjectSystem objectSystem,
             IOptions<AppSettings> settings,
             IDdbFactory ddbFactory,
-            IAuthManager authManager,
             IUtils utils)
         {
             _logger = logger;
             _context = context;
             _objectSystem = objectSystem;
             _ddbFactory = ddbFactory;
-            _authManager = authManager;
             _utils = utils;
             _settings = settings.Value;
         }
