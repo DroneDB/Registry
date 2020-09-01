@@ -80,8 +80,8 @@ namespace Registry.Web.Test
 
             manager.Invoking(x => x.Initialize(null)).Should().Throw<BadRequestException>();
             manager.Invoking(x => x.Initialize(new ShareInitDto())).Should().Throw<BadRequestException>();
-            manager.Invoking(x => x.Initialize(new ShareInitDto { Dataset = new DatasetDto() })).Should().Throw<BadRequestException>();
-            manager.Invoking(x => x.Initialize(new ShareInitDto { Organization = new OrganizationDto()})).Should().Throw<BadRequestException>();
+            manager.Invoking(x => x.Initialize(new ShareInitDto { OrganizationName = "Test", OrganizationSlug = "test"})).Should().Throw<BadRequestException>();
+            manager.Invoking(x => x.Initialize(new ShareInitDto { DatasetName = "Test", DatasetSlug = "test" })).Should().Throw<BadRequestException>();
 
         }
 

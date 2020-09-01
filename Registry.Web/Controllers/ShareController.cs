@@ -1,15 +1,13 @@
-﻿using System;
-using System.Collections.Generic;
-using System.IO;
-using System.Linq;
-using System.Threading.Tasks;
-using Microsoft.AspNetCore.Authorization;
+﻿using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
 using Registry.Web.Models;
 using Registry.Web.Models.DTO;
 using Registry.Web.Services.Ports;
+using System;
+using System.IO;
+using System.Threading.Tasks;
 
 namespace Registry.Web.Controllers
 {
@@ -32,7 +30,7 @@ namespace Registry.Web.Controllers
         {
             try
             {
-                _logger.LogDebug($"Share controller Init('{parameters?.Organization?.Slug}', '{parameters?.Dataset?.Slug}')");
+                _logger.LogDebug($"Share controller Init('{parameters}')");
 
                 var token = await _shareManager.Initialize(parameters);
 
@@ -41,7 +39,7 @@ namespace Registry.Web.Controllers
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, $"Exception in Share controller Init('{parameters?.Organization?.Slug}', '{parameters?.Dataset?.Slug}')");
+                _logger.LogError(ex, $"Exception in Share controller Init('{parameters}')");
 
                 return ExceptionResult(ex);
             }

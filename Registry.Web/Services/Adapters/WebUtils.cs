@@ -1,4 +1,5 @@
 ﻿using System.Linq;
+using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
@@ -31,6 +32,19 @@ namespace Registry.Web.Services.Adapters
         {
             return _safeNameRegex.IsMatch(name);
         }
+
+        // Fast and dirty
+        public string MakeSlug(string name)
+        {
+            // NOTE: Needs to call Encoding.RegisterProvider(CodePagesEncodingProvider.Instance) of System.Text.Encoding.CodePages nuget package
+            var tempBytes = Encoding.GetEncoding("ISO-8859-8").GetBytes(name);
+            var tmp = Encoding.UTF8.GetString(tempBytes);
+
+            var res = new string(tmp.Select(c => char.IsSeparator(c) ? '-' : c).ToArray());
+
+            return res.ToLowerInvariant();
+        }
+
 
         public async Task<Organization> GetOrganizationAndCheck(string orgSlug, bool safe = false)
         {

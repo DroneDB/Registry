@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
@@ -28,10 +29,10 @@ namespace Registry.Web.Services.Adapters
 
         // TODO: Implement queue
         public ShareManager(
-            ILogger<ShareManager> logger, 
-            IObjectsManager objectsManager, 
-            IDatasetsManager datasetsManager, 
-            IOrganizationsManager organizationsManager, 
+            ILogger<ShareManager> logger,
+            IObjectsManager objectsManager,
+            IDatasetsManager datasetsManager,
+            IOrganizationsManager organizationsManager,
             IUtils utils,
             IAuthManager authManager,
             RegistryContext context)
@@ -55,55 +56,70 @@ namespace Registry.Web.Services.Adapters
             var batches = from batch in _context.Batches
                     .Include(x => x.Entries)
                     .Include(x => x.Dataset)
-                where batch.Dataset.Id == dataset.Id
-                select new BatchDto
-                {
-                    End = batch.End,
-                    Start = batch.Start,
-                    Token = batch.Token,
-                    UserName = batch.UserName,
-                    Entries = from entry in batch.Entries
-                        select new EntryDto
-                        {
-                            Hash = entry.Hash,
-                            Type = entry.Type,
-                            Size = entry.Size,
-                            AddedOn = entry.AddedOn,
-                            Path = entry.Path
-                        }
-                };
+                          where batch.Dataset.Id == dataset.Id
+                          select new BatchDto
+                          {
+                              End = batch.End,
+                              Start = batch.Start,
+                              Token = batch.Token,
+                              UserName = batch.UserName,
+                              Entries = from entry in batch.Entries
+                                        select new EntryDto
+                                        {
+                                            Hash = entry.Hash,
+                                            Type = entry.Type,
+                                            Size = entry.Size,
+                                            AddedOn = entry.AddedOn,
+                                            Path = entry.Path
+                                        }
+                          };
 
-            
+
             return batches;
         }
 
         public async Task<string> Initialize(ShareInitDto parameters)
         {
-
-            if (parameters?.Dataset == null || parameters.Organization == null)
+            if (parameters == null)
                 throw new BadRequestException("Invalid parameters");
-            
-            var orgSlug = parameters.Organization?.Slug;
+
+            if (parameters.DatasetName == null && parameters.DatasetSlug == null)
+                throw new BadRequestException("Invalid dataset");
+
+            if (parameters.OrganizationName == null && parameters.OrganizationSlug == null)
+                throw new BadRequestException("Invalid organization");
+
+            var orgSlug = parameters.OrganizationSlug ?? _utils.MakeSlug(parameters.OrganizationName);
 
             if (orgSlug == null)
                 throw new BadRequestException("Organization id not provided");
 
-            var dsSlug = parameters.Dataset?.Slug;
-            
+            var dsSlug = parameters.DatasetSlug ?? _utils.MakeSlug(parameters.DatasetName);
+
             if (dsSlug == null)
                 throw new BadRequestException("Dataset slug not provided");
 
             var org = await _utils.GetOrganizationAndCheck(orgSlug, true);
-            
+
             Dataset dataset;
 
             // Create org if not exists
             if (org == null)
             {
-                _logger.LogInformation($"Tuple '{orgSlug}/{dsSlug}' does not exist, creating it");
-                await _organizationsManager.AddNew(parameters.Organization);
+                _logger.LogInformation($"Tag '{orgSlug}/{dsSlug}' does not exist, creating it");
+                await _organizationsManager.AddNew(new OrganizationDto
+                {
+                    Name = parameters.OrganizationName,
+                    Slug = orgSlug
+                });
 
-                await _datasetsManager.AddNew(orgSlug, parameters.Dataset);
+                await _datasetsManager.AddNew(orgSlug, new DatasetDto
+                {
+                    Name = parameters.DatasetName,
+                    Slug = dsSlug,
+                    // TODO: Should check it somehow
+                    Password = parameters.Password
+                });
 
                 dataset = await _utils.GetDatasetAndCheck(orgSlug, dsSlug);
 
@@ -117,16 +133,23 @@ namespace Registry.Web.Services.Adapters
                 // Create dataset if not exists
                 dataset = await _utils.GetDatasetAndCheck(orgSlug, dsSlug);
 
-                if (dataset == null) {
+                if (dataset == null)
+                {
 
                     _logger.LogInformation($"Dataset '{dsSlug}' not found, creating it");
 
-                    await _datasetsManager.AddNew(orgSlug, parameters.Dataset);
+                    await _datasetsManager.AddNew(orgSlug, new DatasetDto
+                    {
+                        Name = parameters.DatasetName,
+                        Slug = parameters.DatasetSlug
+                    });
                     dataset = await _utils.GetDatasetAndCheck(orgSlug, dsSlug);
 
                     _logger.LogInformation("Dataset created");
 
-                } else {
+                }
+                else
+                {
                     _logger.LogInformation("Dataset and organization already existing, checking for running batches");
 
                     if (dataset.Batches.Any(item => item.End == null))
@@ -156,6 +179,7 @@ namespace Registry.Web.Services.Adapters
             return batch.Token;
         }
 
+        
         public async Task Upload(string token, string path, byte[] data)
         {
             if (string.IsNullOrWhiteSpace(token))
@@ -182,7 +206,7 @@ namespace Registry.Web.Services.Adapters
 
             if (!(await _authManager.IsUserAdmin() || batch.UserName == currentUserName))
                 throw new BadRequestException("This batch does not belong to you");
-            
+
             var entry = batch.Entries.FirstOrDefault(item => item.Path == path);
 
             if (entry != null)
@@ -213,7 +237,7 @@ namespace Registry.Web.Services.Adapters
             await _context.AddAsync(entry);
 
             _logger.LogInformation("Entry added");
-            
+
             await _context.SaveChangesAsync();
 
             _logger.LogInformation("Changes commited");
@@ -242,7 +266,7 @@ namespace Registry.Web.Services.Adapters
             batch.End = DateTime.Now;
 
             _logger.LogInformation($"Committing batch '{token}' @ {batch.End.Value.ToLongDateString()} {batch.End.Value.ToLongTimeString()}");
-            
+
             // TODO: Commit?
 
             await _context.SaveChangesAsync();

@@ -1,10 +1,12 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Net;
 using System.Security.Cryptography;
 using System.Text;
+using System.Text.RegularExpressions;
 using ICSharpCode.SharpZipLib.GZip;
 using ICSharpCode.SharpZipLib.Tar;
 using ICSharpCode.SharpZipLib.Zip;
@@ -25,7 +27,7 @@ namespace Registry.Common
             {
                 rng.GetBytes(uintBuffer);
                 var num = BitConverter.ToUInt32(uintBuffer, 0);
-                res.Append(valid[(int)(num % (uint)valid.Length)]);
+                res.Append(valid[(int) (num % (uint) valid.Length)]);
             }
 
             return res.ToString();
@@ -46,7 +48,7 @@ namespace Registry.Common
             if (string.Equals(first.FullName, second.FullName, StringComparison.OrdinalIgnoreCase))
                 return true;
 
-            var iterations = (int)Math.Ceiling((double)first.Length / BytesToRead);
+            var iterations = (int) Math.Ceiling((double) first.Length / BytesToRead);
 
             using var fs1 = first.OpenRead();
             using var fs2 = second.OpenRead();
@@ -73,11 +75,12 @@ namespace Registry.Common
             return !dictionary.TryGetValue(key, out value) ? default(TValue) : value;
         }
 
-        public static TValueOut? SafeGetValue<TKey, TValue, TValueOut>(this IDictionary<TKey, TValue> dictionary, TKey key, Func<TValue, TValueOut> selector) where TValueOut : struct
+        public static TValueOut? SafeGetValue<TKey, TValue, TValueOut>(this IDictionary<TKey, TValue> dictionary,
+            TKey key, Func<TValue, TValueOut> selector) where TValueOut : struct
         {
             TValue value;
 
-            return !dictionary.TryGetValue(key, out value) ? null : (TValueOut?)selector(value);
+            return !dictionary.TryGetValue(key, out value) ? null : (TValueOut?) selector(value);
         }
 
         /// <summary>
@@ -147,7 +150,7 @@ namespace Registry.Common
             var builder = new StringBuilder();
             foreach (var t in bytes)
                 builder.Append(t.ToString("x2"));
-            
+
             return builder.ToString();
         }
 
@@ -200,4 +203,6 @@ namespace Registry.Common
         }
 
     }
+
+
 }
