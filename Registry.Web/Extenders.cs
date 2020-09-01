@@ -16,7 +16,7 @@ namespace Registry.Web
             return new Organization
             {
                 Slug = organization.Slug,
-                Name = organization.Name,
+                Name = string.IsNullOrEmpty(organization.Name) ? organization.Slug : organization.Name,
                 Description = organization.Description,
                 CreationDate = organization.CreationDate,
                 OwnerId = organization.Owner,
@@ -46,7 +46,7 @@ namespace Registry.Web
                 CreationDate = dataset.CreationDate,
                 Description = dataset.Description,
                 LastEdit = dataset.LastEdit,
-                Name = dataset.Name,
+                Name = string.IsNullOrEmpty(dataset.Name) ? dataset.Slug : dataset.Name,
                 License = dataset.License,
                 Meta = dataset.Meta,
                 ObjectsCount = dataset.ObjectsCount,
