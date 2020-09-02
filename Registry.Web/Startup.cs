@@ -215,8 +215,6 @@ namespace Registry.Web
 
         public void Configure(IApplicationBuilder app, IWebHostEnvironment env)
         {
-            // Needed to use the ISO-8859-8 encoding
-            Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
             
             if (env.IsDevelopment())
             {

@@ -1,4 +1,5 @@
-﻿using System.Linq;
+﻿using System;
+using System.Linq;
 using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
@@ -36,8 +37,21 @@ namespace Registry.Web.Services.Adapters
         // Fast and dirty
         public string MakeSlug(string name)
         {
-            // NOTE: Needs to call Encoding.RegisterProvider(CodePagesEncodingProvider.Instance) of System.Text.Encoding.CodePages nuget package
-            var tempBytes = Encoding.GetEncoding("ISO-8859-8").GetBytes(name);
+
+            Encoding enc;
+
+            try
+            {
+                enc = Encoding.GetEncoding("ISO-8859-8");
+            }
+            catch (ArgumentException)
+            {
+                // Needed to use the ISO-8859-8 encoding
+                Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
+                enc = Encoding.GetEncoding("ISO-8859-8");
+            }
+
+            var tempBytes = enc.GetBytes(name);
             var tmp = Encoding.UTF8.GetString(tempBytes);
 
             var res = new string(tmp.Select(c => char.IsSeparator(c) ? '-' : c).ToArray());
