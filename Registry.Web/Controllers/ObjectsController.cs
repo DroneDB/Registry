@@ -87,8 +87,8 @@ namespace Registry.Web.Controllers
                 var newObj = await _objectsManager.AddNew(orgSlug, dsSlug, path, memory.ToArray());
                 return CreatedAtRoute(nameof(ObjectsController) + "." + nameof(GetInfo), new
                     {
-                        orgId = orgSlug,
-                        dsId = dsSlug,
+                        orgSlug = orgSlug,
+                        dsSlug = dsSlug,
                         path = newObj.Path
                     },
                     newObj);

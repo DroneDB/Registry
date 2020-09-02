@@ -11,6 +11,6 @@ namespace Registry.Web.Services.Ports
     /// </summary>
     public interface IDdbFactory
     {
-        IDdbStorage GetDdb(string orgId, string dsId);
+        IDdbStorage GetDdb(string orgSlug, string dsSlug);
     }
 }

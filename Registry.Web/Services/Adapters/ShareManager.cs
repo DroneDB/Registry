@@ -214,12 +214,12 @@ namespace Registry.Web.Services.Adapters
 
             _logger.LogInformation($"Adding '{path}' in batch '{batch.Token}'");
 
-            var orgId = batch.Dataset.Organization.Slug;
+            var orgSlug = batch.Dataset.Organization.Slug;
             var dsSlug = batch.Dataset.Slug;
 
-            await _objectsManager.AddNew(orgId, dsSlug, path, data);
+            await _objectsManager.AddNew(orgSlug, dsSlug, path, data);
 
-            var info = (await _objectsManager.List(orgId, dsSlug, path)).FirstOrDefault();
+            var info = (await _objectsManager.List(orgSlug, dsSlug, path)).FirstOrDefault();
 
             if (info == null)
                 throw new BadRequestException("Underlying object storage is not working correctly: cannot find object after adding it");

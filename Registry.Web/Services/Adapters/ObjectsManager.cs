@@ -48,14 +48,14 @@ namespace Registry.Web.Services.Adapters
             _settings = settings.Value;
         }
 
-        public async Task<IEnumerable<ObjectDto>> List(string orgId, string dsId, string path)
+        public async Task<IEnumerable<ObjectDto>> List(string orgSlug, string dsSlug, string path)
         {
 
-            await _utils.GetDatasetAndCheck(orgId, dsId);
+            await _utils.GetDatasetAndCheck(orgSlug, dsSlug);
 
-            _logger.LogInformation($"In '{orgId}/{dsId}'");
+            _logger.LogInformation($"In '{orgSlug}/{dsSlug}'");
 
-            using var ddb = _ddbFactory.GetDdb(orgId, dsId);
+            using var ddb = _ddbFactory.GetDdb(orgSlug, dsSlug);
 
             _logger.LogInformation($"Searching in '{path}'");
 
@@ -66,21 +66,21 @@ namespace Registry.Web.Services.Adapters
             return files;
         }
 
-        public async Task<ObjectRes> Get(string orgId, string dsId, string path)
+        public async Task<ObjectRes> Get(string orgSlug, string dsSlug, string path)
         {
 
-            await _utils.GetDatasetAndCheck(orgId, dsId);
+            await _utils.GetDatasetAndCheck(orgSlug, dsSlug);
 
-            _logger.LogInformation($"In '{orgId}/{dsId}'");
+            _logger.LogInformation($"In '{orgSlug}/{dsSlug}'");
 
-            using var ddb = _ddbFactory.GetDdb(orgId, dsId);
+            using var ddb = _ddbFactory.GetDdb(orgSlug, dsSlug);
 
             var res = ddb.Search(path).FirstOrDefault();
 
             if (res == null)
                 throw new NotFoundException($"Cannot find '{path}'");
 
-            var bucketName = string.Format(BucketNameFormat, orgId, dsId);
+            var bucketName = string.Format(BucketNameFormat, orgSlug, dsSlug);
 
             _logger.LogInformation($"Using bucket '{bucketName}'");
 
@@ -124,13 +124,13 @@ namespace Registry.Web.Services.Adapters
 
         }
 
-        public async Task<UploadedObjectDto> AddNew(string orgId, string dsId, string path, byte[] data)
+        public async Task<UploadedObjectDto> AddNew(string orgSlug, string dsSlug, string path, byte[] data)
         {
-            var dataset = await _utils.GetDatasetAndCheck(orgId, dsId);
+            var dataset = await _utils.GetDatasetAndCheck(orgSlug, dsSlug);
 
-            _logger.LogInformation($"In '{orgId}/{dsId}'");
+            _logger.LogInformation($"In '{orgSlug}/{dsSlug}'");
 
-            var bucketName = string.Format(BucketNameFormat, orgId, dsId);
+            var bucketName = string.Format(BucketNameFormat, orgSlug, dsSlug);
 
             _logger.LogInformation($"Using bucket '{bucketName}'");
 
@@ -158,7 +158,7 @@ namespace Registry.Web.Services.Adapters
             _logger.LogInformation("File uploaded, adding to DDB");
 
             // Add to DDB
-            using var ddb = _ddbFactory.GetDdb(orgId, dsId);
+            using var ddb = _ddbFactory.GetDdb(orgSlug, dsSlug);
             ddb.Add(path, data);
 
             _logger.LogInformation("Added to DDB");
@@ -177,13 +177,13 @@ namespace Registry.Web.Services.Adapters
             return obj;
         }
 
-        public async Task Delete(string orgId, string dsId, string path)
+        public async Task Delete(string orgSlug, string dsSlug, string path)
         {
-            var dataset = await _utils.GetDatasetAndCheck(orgId, dsId);
+            var dataset = await _utils.GetDatasetAndCheck(orgSlug, dsSlug);
 
-            _logger.LogInformation($"In '{orgId}/{dsId}'");
+            _logger.LogInformation($"In '{orgSlug}/{dsSlug}'");
 
-            var bucketName = string.Format(BucketNameFormat, orgId, dsId);
+            var bucketName = string.Format(BucketNameFormat, orgSlug, dsSlug);
 
             _logger.LogInformation($"Using bucket '{bucketName}'");
 
@@ -199,7 +199,7 @@ namespace Registry.Web.Services.Adapters
             _logger.LogInformation($"File deleted, removing from DDB");
 
             // Remove from DDB
-            using var ddb = _ddbFactory.GetDdb(orgId, dsId);
+            using var ddb = _ddbFactory.GetDdb(orgSlug, dsSlug);
             ddb.Remove(path);
 
             // Refresh objects count and total size
@@ -210,13 +210,13 @@ namespace Registry.Web.Services.Adapters
             
         }
 
-        public async Task DeleteAll(string orgId, string dsId)
+        public async Task DeleteAll(string orgSlug, string dsSlug)
         {
-            var dataset = await _utils.GetDatasetAndCheck(orgId, dsId);
+            var dataset = await _utils.GetDatasetAndCheck(orgSlug, dsSlug);
 
-            _logger.LogInformation($"In '{orgId}/{dsId}'");
+            _logger.LogInformation($"In '{orgSlug}/{dsSlug}'");
 
-            var bucketName = string.Format(BucketNameFormat, orgId, dsId);
+            var bucketName = string.Format(BucketNameFormat, orgSlug, dsSlug);
 
             _logger.LogInformation($"Using bucket '{bucketName}'");
 
@@ -234,7 +234,7 @@ namespace Registry.Web.Services.Adapters
             _logger.LogInformation($"Bucket deleted, removing all files from DDB ");
             
             // Remove all from DDB
-            using var ddb = _ddbFactory.GetDdb(orgId, dsId);
+            using var ddb = _ddbFactory.GetDdb(orgSlug, dsSlug);
 
             var res = ddb.Search(null);
             foreach(var item in res)

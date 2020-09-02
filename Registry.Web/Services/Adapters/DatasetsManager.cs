@@ -71,10 +71,10 @@ namespace Registry.Web.Services.Adapters
             return dataset.ToDto();
         }
 
-        public async Task<DatasetDto> AddNew(string orgId, DatasetDto dataset)
+        public async Task<DatasetDto> AddNew(string orgSlug, DatasetDto dataset)
         {
 
-            var org = await _utils.GetOrganizationAndCheck(orgId);
+            var org = await _utils.GetOrganizationAndCheck(orgSlug);
 
             var ds = dataset.ToEntity();
 

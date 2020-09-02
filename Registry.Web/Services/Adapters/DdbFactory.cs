@@ -27,9 +27,9 @@ namespace Registry.Web.Services.Adapters
 
         // NOTE: This logic is separated from the manager classes because it is used in multiple places and it could be subject to change
 
-        public IDdbStorage GetDdb(string orgId, string dsId)
+        public IDdbStorage GetDdb(string orgSlug, string dsSlug)
         {
-            var baseDdbPath = Path.Combine(_settings.DdbStoragePath, orgId, dsId);
+            var baseDdbPath = Path.Combine(_settings.DdbStoragePath, orgSlug, dsSlug);
 
             var ddbPath = Path.Combine(baseDdbPath, DefaultDdbFolder, DefaultDdbSqliteName);
             

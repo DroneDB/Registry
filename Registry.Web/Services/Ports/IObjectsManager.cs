@@ -9,11 +9,11 @@ namespace Registry.Web.Services.Ports
 {
     public interface IObjectsManager
     {
-        Task<IEnumerable<ObjectDto>> List(string orgId, string dsId, string path);
-        Task<ObjectRes> Get(string orgId, string dsId, string path);
-        Task<UploadedObjectDto> AddNew(string orgId, string dsId, string path, byte[] data);
-        Task Delete(string orgId, string dsId, string path);
+        Task<IEnumerable<ObjectDto>> List(string orgSlug, string dsSlug, string path);
+        Task<ObjectRes> Get(string orgSlug, string dsSlug, string path);
+        Task<UploadedObjectDto> AddNew(string orgSlug, string dsSlug, string path, byte[] data);
+        Task Delete(string orgSlug, string dsSlug, string path);
 
-        Task DeleteAll(string orgId, string dsId);
+        Task DeleteAll(string orgSlug, string dsSlug);
     }
 }
