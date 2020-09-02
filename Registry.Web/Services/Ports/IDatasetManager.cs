@@ -6,10 +6,10 @@ namespace Registry.Web.Services.Ports
 {
     public interface IDatasetsManager
     {
-        public Task<IEnumerable<DatasetDto>> List(string orgId);
-        public Task<DatasetDto> Get(string orgId, string ds);
+        public Task<IEnumerable<DatasetDto>> List(string orgSlug);
+        public Task<DatasetDto> Get(string orgSlug, string dsSlug);
         public Task<DatasetDto> AddNew(string orgId, DatasetDto dataset);
-        public Task Edit(string orgId, string ds, DatasetDto dataset);
-        public Task Delete(string orgId, string ds);
+        public Task Edit(string orgSlug, string dsSlug, DatasetDto dataset);
+        public Task Delete(string orgSlug, string dsSlug);
     }
 }

@@ -46,12 +46,12 @@ namespace Registry.Web.Services.Adapters
             _context = context;
         }
 
-        public async Task<IEnumerable<BatchDto>> ListBatches(string orgId, string dsSlug)
+        public async Task<IEnumerable<BatchDto>> ListBatches(string orgSlug, string dsSlug)
         {
-            await _utils.GetOrganizationAndCheck(orgId);
-            var dataset = await _utils.GetDatasetAndCheck(orgId, dsSlug);
+            await _utils.GetOrganizationAndCheck(orgSlug);
+            var dataset = await _utils.GetDatasetAndCheck(orgSlug, dsSlug);
 
-            _logger.LogInformation($"Listing batches of '{orgId}/{dsSlug}'");
+            _logger.LogInformation($"Listing batches of '{orgSlug}/{dsSlug}'");
 
             var batches = from batch in _context.Batches
                     .Include(x => x.Entries)

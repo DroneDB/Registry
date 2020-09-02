@@ -61,9 +61,9 @@ namespace Registry.Web.Services.Adapters
                    };
         }
 
-        public async Task<OrganizationDto> Get(string id)
+        public async Task<OrganizationDto> Get(string orgSlug)
         {
-            var org = await _utils.GetOrganizationAndCheck(id);
+            var org = await _utils.GetOrganizationAndCheck(orgSlug);
 
             return org.ToDto();
         }
@@ -77,7 +77,7 @@ namespace Registry.Web.Services.Adapters
                 throw new UnauthorizedException("Invalid user");
 
             if (!_utils.IsSlugValid(organization.Slug))
-                throw new BadRequestException("Invalid organization id");
+                throw new BadRequestException("Invalid organization orgSlug");
 
             var existingOrg = _context.Organizations.FirstOrDefault(item => item.Slug == organization.Slug);
 
@@ -104,7 +104,7 @@ namespace Registry.Web.Services.Adapters
                 {
                     // Otherwise check if user exists
                     if (!await _authManager.UserExists(organization.Owner))
-                        throw new BadRequestException($"Cannot find user with id '{organization.Owner}'");
+                        throw new BadRequestException($"Cannot find user with orgSlug '{organization.Owner}'");
 
                 }
             }
@@ -118,10 +118,10 @@ namespace Registry.Web.Services.Adapters
             return org.ToDto();
         }
 
-        public async Task Edit(string id, OrganizationDto organization)
+        public async Task Edit(string orgSlug, OrganizationDto organization)
         {
 
-            var org = await _utils.GetOrganizationAndCheck(id);
+            var org = await _utils.GetOrganizationAndCheck(orgSlug);
 
             // TODO: To change when implementing anonymous users
             var currentUser = await _authManager.GetCurrentUser();
@@ -150,7 +150,7 @@ namespace Registry.Web.Services.Adapters
                 {
                     // Otherwise check if user exists
                     if (!await _authManager.UserExists(organization.Owner))
-                        throw new BadRequestException($"Cannot find user with id '{organization.Owner}'");
+                        throw new BadRequestException($"Cannot find user with orgSlug '{organization.Owner}'");
 
                 }
             }
@@ -163,13 +163,13 @@ namespace Registry.Web.Services.Adapters
 
         }
 
-        public async Task Delete(string id)
+        public async Task Delete(string orgSlug)
         {
 
-            var org = await _utils.GetOrganizationAndCheck(id);
+            var org = await _utils.GetOrganizationAndCheck(orgSlug);
 
             if (org == null)
-                throw new NotFoundException("Cannot find organization with this id");
+                throw new NotFoundException("Cannot find organization with this orgSlug");
 
             if (!await _authManager.IsUserAdmin())
             {

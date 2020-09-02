@@ -23,7 +23,7 @@ namespace Registry.Web.Controllers
 
     [Authorize]
     [ApiController]
-    [Route("ddb/{orgId:regex([[\\w-]]+)}/ds/{dsId:regex([[\\w-]]+)}")]
+    [Route("ddb/{orgSlug:regex([[\\w-]]+)}/ds/{dsSlug:regex([[\\w-]]+)}")]
     public class ObjectsController : ControllerBaseEx
     {
         private readonly IObjectsManager _objectsManager;
@@ -36,47 +36,47 @@ namespace Registry.Web.Controllers
         }
         
         [HttpGet("obj/{**path}", Name = nameof(ObjectsController) + "." + nameof(Get))]
-        public async Task<IActionResult> Get([FromRoute] string orgId, [FromRoute] string dsId, string path)
+        public async Task<IActionResult> Get([FromRoute] string orgSlug, [FromRoute] string dsSlug, string path)
         {
             try
             {
-                _logger.LogDebug($"Objects controller Get('{orgId}', '{dsId}', '{path}')");
+                _logger.LogDebug($"Objects controller Get('{orgSlug}', '{dsSlug}', '{path}')");
 
-                var res = await _objectsManager.Get(orgId, dsId, path);
+                var res = await _objectsManager.Get(orgSlug, dsSlug, path);
                 return File(res.Data, res.ContentType, res.Name);
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, $"Exception in Objects controller Get('{orgId}', '{dsId}', '{path}')");
+                _logger.LogError(ex, $"Exception in Objects controller Get('{orgSlug}', '{dsSlug}', '{path}')");
 
                 return ExceptionResult(ex);
             }
         }
 
         [HttpGet("info/{**path}", Name = nameof(ObjectsController) + "." + nameof(GetInfo))]
-        public async Task<IActionResult> GetInfo([FromRoute] string orgId, [FromRoute] string dsId, string path)
+        public async Task<IActionResult> GetInfo([FromRoute] string orgSlug, [FromRoute] string dsSlug, string path)
         {
             try
             {
-                _logger.LogDebug($"Objects controller GetInfo('{orgId}', '{dsId}', '{path}')");
+                _logger.LogDebug($"Objects controller GetInfo('{orgSlug}', '{dsSlug}', '{path}')");
 
-                var res = await _objectsManager.List(orgId, dsId, path);
+                var res = await _objectsManager.List(orgSlug, dsSlug, path);
                 return Ok(res);
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, $"Exception in Objects controller GetInfo('{orgId}', '{dsId}', '{path}')");
+                _logger.LogError(ex, $"Exception in Objects controller GetInfo('{orgSlug}', '{dsSlug}', '{path}')");
 
                 return ExceptionResult(ex);
             }
         }
 
         [HttpPost("obj/{**path}")]
-        public async Task<IActionResult> Post([FromRoute] string orgId, [FromRoute] string dsId, string path, IFormFile file)
+        public async Task<IActionResult> Post([FromRoute] string orgSlug, [FromRoute] string dsSlug, string path, IFormFile file)
         {
             try
             {
-                _logger.LogDebug($"Objects controller Post('{orgId}', '{dsId}', '{path}', '{file?.FileName}')");
+                _logger.LogDebug($"Objects controller Post('{orgSlug}', '{dsSlug}', '{path}', '{file?.FileName}')");
 
                 if (file == null)
                     return BadRequest(new ErrorResponse("No file uploaded"));
@@ -84,18 +84,18 @@ namespace Registry.Web.Controllers
                 await using var memory = new MemoryStream();
                 await file.CopyToAsync(memory);
 
-                var newObj = await _objectsManager.AddNew(orgId, dsId, path, memory.ToArray());
+                var newObj = await _objectsManager.AddNew(orgSlug, dsSlug, path, memory.ToArray());
                 return CreatedAtRoute(nameof(ObjectsController) + "." + nameof(GetInfo), new
                     {
-                        orgId,
-                        dsId,
+                        orgId = orgSlug,
+                        dsId = dsSlug,
                         path = newObj.Path
                     },
                     newObj);
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, $"Exception in Objects controller Post('{orgId}', '{dsId}', '{path}', '{file?.FileName}')");
+                _logger.LogError(ex, $"Exception in Objects controller Post('{orgSlug}', '{dsSlug}', '{path}', '{file?.FileName}')");
 
                 return ExceptionResult(ex);
             }
@@ -103,19 +103,19 @@ namespace Registry.Web.Controllers
 
         // DELETE: ddb/id
         [HttpDelete("obj/{**path}")]
-        public async Task<IActionResult> Delete([FromRoute] string orgId, [FromRoute] string dsId, string path)
+        public async Task<IActionResult> Delete([FromRoute] string orgSlug, [FromRoute] string dsSlug, string path)
         {
 
             try
             {
-                _logger.LogDebug($"Objects controller Delete('{orgId}', '{dsId}', '{path}')");
+                _logger.LogDebug($"Objects controller Delete('{orgSlug}', '{dsSlug}', '{path}')");
 
-                await _objectsManager.Delete(orgId, dsId, path);
+                await _objectsManager.Delete(orgSlug, dsSlug, path);
                 return NoContent();
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, $"Exception in Objects controller Delete('{orgId}', '{dsId}', '{path}')");
+                _logger.LogError(ex, $"Exception in Objects controller Delete('{orgSlug}', '{dsSlug}', '{path}')");
 
                 return ExceptionResult(ex);
             }

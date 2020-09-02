@@ -50,19 +50,19 @@ namespace Registry.Web.Controllers
             }
         }
 
-        // GET: ddb/id
-        [HttpGet("{id:regex([[\\w-]]+)}", Name = nameof(OrganizationsController) + "." + nameof(Get))]
-        public async Task<IActionResult> Get(string id)
+        // GET: ddb/orgSlug
+        [HttpGet("{orgSlug:regex([[\\w-]]+)}", Name = nameof(OrganizationsController) + "." + nameof(Get))]
+        public async Task<IActionResult> Get(string orgSlug)
         {
             try
             {
-                _logger.LogDebug($"Organizations controller Get('{id}')");
+                _logger.LogDebug($"Organizations controller Get('{orgSlug}')");
 
-                return Ok(await _organizationsManager.Get(id));
+                return Ok(await _organizationsManager.Get(orgSlug));
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, $"Exception in Organizations controller Get('{id}')");
+                _logger.LogError(ex, $"Exception in Organizations controller Get('{orgSlug}')");
 
                 return ExceptionResult(ex);
             }
@@ -79,7 +79,7 @@ namespace Registry.Web.Controllers
                 _logger.LogDebug($"Organizations controller Post('{organization?.Slug}')");
 
                 var newOrg = await _organizationsManager.AddNew(organization);
-                return CreatedAtRoute(nameof(OrganizationsController) + "." + nameof(Get), new {id = newOrg.Slug},
+                return CreatedAtRoute(nameof(OrganizationsController) + "." + nameof(Get), new { orgSlug = newOrg.Slug },
                     newOrg);
             }
             catch (Exception ex)
@@ -92,41 +92,41 @@ namespace Registry.Web.Controllers
         }
 
         // POST: ddb/
-        [HttpPut("{id:regex([[\\w-]]+)}")]
-        public async Task<IActionResult> Put(string id, [FromForm] OrganizationDto organization)
+        [HttpPut("{orgSlug:regex([[\\w-]]+)}")]
+        public async Task<IActionResult> Put(string orgSlug, [FromForm] OrganizationDto organization)
         {
-            
+
             try
             {
-                _logger.LogDebug($"Organizations controller Put('{id}', {organization?.Slug}')");
+                _logger.LogDebug($"Organizations controller Put('{orgSlug}', {organization?.Slug}')");
 
-                await _organizationsManager.Edit(id, organization);
+                await _organizationsManager.Edit(orgSlug, organization);
                 return NoContent();
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, $"Exception in Organizations controller Put('{id}', {organization?.Slug}')");
+                _logger.LogError(ex, $"Exception in Organizations controller Put('{orgSlug}', {organization?.Slug}')");
 
                 return ExceptionResult(ex);
             }
 
         }
 
-        // DELETE: ddb/id
-        [HttpDelete("{id:regex([[\\w-]]+)}")]
-        public async Task<IActionResult> Delete(string id)
+        // DELETE: ddb/orgSlug
+        [HttpDelete("{orgSlug:regex([[\\w-]]+)}")]
+        public async Task<IActionResult> Delete(string orgSlug)
         {
 
             try
             {
-                _logger.LogDebug($"Organizations controller Delete('{id}')");
+                _logger.LogDebug($"Organizations controller Delete('{orgSlug}')");
 
-                await _organizationsManager.Delete(id);
+                await _organizationsManager.Delete(orgSlug);
                 return NoContent();
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, $"Exception in Organizations controller Delete('{id}')");
+                _logger.LogError(ex, $"Exception in Organizations controller Delete('{orgSlug}')");
 
                 return ExceptionResult(ex);
             }

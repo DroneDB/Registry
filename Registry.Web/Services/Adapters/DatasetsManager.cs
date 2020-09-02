@@ -40,9 +40,9 @@ namespace Registry.Web.Services.Adapters
             _passwordHasher = passwordHasher;
         }
 
-        public async Task<IEnumerable<DatasetDto>> List(string orgId)
+        public async Task<IEnumerable<DatasetDto>> List(string orgSlug)
         {
-            var org = await _utils.GetOrganizationAndCheck(orgId);
+            var org = await _utils.GetOrganizationAndCheck(orgSlug);
 
             var query = from ds in org.Datasets
 
@@ -63,10 +63,10 @@ namespace Registry.Web.Services.Adapters
             return query;
         }
 
-        public async Task<DatasetDto> Get(string orgId, string ds)
+        public async Task<DatasetDto> Get(string orgSlug, string dsSlug)
         {
 
-            var dataset = await _utils.GetDatasetAndCheck(orgId, ds);
+            var dataset = await _utils.GetDatasetAndCheck(orgSlug, dsSlug);
 
             return dataset.ToDto();
         }
@@ -92,11 +92,11 @@ namespace Registry.Web.Services.Adapters
 
         }
 
-        public async Task Edit(string orgId, string ds, DatasetDto dataset)
+        public async Task Edit(string orgSlug, string dsSlug, DatasetDto dataset)
         {
-            var org = await _utils.GetOrganizationAndCheck(orgId);
+            var org = await _utils.GetOrganizationAndCheck(orgSlug);
 
-            var entity = org.Datasets.FirstOrDefault(item => item.Slug == ds);
+            var entity = org.Datasets.FirstOrDefault(item => item.Slug == dsSlug);
 
             if (entity == null)
                 throw new NotFoundException("Dataset not found");
@@ -115,18 +115,18 @@ namespace Registry.Web.Services.Adapters
 
         }
 
-        public async Task Delete(string orgId, string ds)
+        public async Task Delete(string orgSlug, string dsSlug)
         {
-            var org = await _utils.GetOrganizationAndCheck(orgId);
+            var org = await _utils.GetOrganizationAndCheck(orgSlug);
             
-            var entity = org.Datasets.FirstOrDefault(item => item.Slug == ds);
+            var entity = org.Datasets.FirstOrDefault(item => item.Slug == dsSlug);
 
             if (entity == null)
                 throw new NotFoundException("Dataset not found");
 
             _context.Datasets.Remove(entity);
 
-            await _objectsManager.DeleteAll(orgId, ds);
+            await _objectsManager.DeleteAll(orgSlug, dsSlug);
 
             await _context.SaveChangesAsync();
         }
