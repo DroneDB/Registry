@@ -21,10 +21,6 @@ namespace Registry.Adapters.DroneDB
 
         public Ddb(string ddbExePath)
         {
-
-            if (!File.Exists(ddbExePath))
-                throw new ArgumentException("Cannot find ddb executable");
-
             _ddbExePath = ddbExePath;
         }
 
@@ -45,7 +41,7 @@ namespace Registry.Adapters.DroneDB
         public void CreateDatabase(string path)
         {
 
-            var res = RunCommand($"{InitCommand} -d \"{path}\"");
+            var res = RunCommand($"{InitCommand} -d \"{Path.GetFullPath(path)}\"");
             
         }
 
@@ -62,7 +58,7 @@ namespace Registry.Adapters.DroneDB
                 }
             };
 
-            p.StartInfo.EnvironmentVariables.Add("PROJ_LIB", Path.GetDirectoryName(Path.GetFullPath(_ddbExePath)));
+            //p.StartInfo.EnvironmentVariables.Add("PROJ_LIB", Path.GetDirectoryName(Path.GetFullPath(_ddbExePath)));
 
             Debug.WriteLine("Running command:");
             Debug.WriteLine($"{_ddbExePath} {parameters}");

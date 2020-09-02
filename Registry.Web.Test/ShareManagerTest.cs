@@ -44,7 +44,7 @@ namespace Registry.Web.Test
         private Mock<IDatasetsManager> _datasetsManagerMock;
 
         private const string TestStorageFolder = @"Data/Storage";
-        private const string DdbTestDataFolder = @"Data/DdbTest";
+        //private const string DdbTestDataFolder = @"Data/DdbTest";
         private const string StorageFolder = "Storage";
         private const string DdbFolder = "Ddb";
 
@@ -71,16 +71,15 @@ namespace Registry.Web.Test
             _organizationsManagerMock = new Mock<IOrganizationsManager>();
             _datasetsManagerMock = new Mock<IDatasetsManager>();
 
-            if (!Directory.Exists(TestStorageFolder))
-                Directory.CreateDirectory(TestStorageFolder);
+            //if (!Directory.Exists(TestStorageFolder))
+            //    Directory.CreateDirectory(TestStorageFolder);
 
-            if (!Directory.Exists(DdbTestDataFolder))
-            {
-                Directory.CreateDirectory(DdbTestDataFolder);
-                File.WriteAllText(Path.Combine(DdbTestDataFolder, "ddbcmd.exe"), string.Empty);
-            }
+            //if (!Directory.Exists(DdbTestDataFolder))
+            //{
+            //    Directory.CreateDirectory(DdbTestDataFolder);
+            //    File.WriteAllText(Path.Combine(DdbTestDataFolder, "ddbcmd.exe"), string.Empty);
+            //}
 
-            _settings.DdbPath = DdbTestDataFolder;
             _passwordHasher = new PasswordHasher();
 
 
@@ -107,8 +106,11 @@ namespace Registry.Web.Test
         }
 
         [Test]
+        [Ignore]
         public async Task EndToEnd_HappyPath()
         {
+
+            const string fileName = "DJI_0028.JPG";
 
             using var test = new TestFS(Test1ArchiveUrl, BaseTestFolder);
             await using var context = GetTest1Context();
@@ -120,6 +122,7 @@ namespace Registry.Web.Test
                 UserName = "admin",
                 Email = "admin@example.com"
             }));
+            _authManagerMock.Setup(o => o.SafeGetCurrentUserName()).Returns(Task.FromResult("admin"));
             
             var sys = new PhysicalObjectSystem(Path.Combine(test.TestFolder, StorageFolder));
             sys.SyncBucket($"{MagicStrings.PublicOrganizationSlug}-{MagicStrings.DefaultDatasetSlug}");
@@ -128,6 +131,7 @@ namespace Registry.Web.Test
             var webUtils = new WebUtils(_authManagerMock.Object, context);
 
             var objectManager = new ObjectsManager(_objectManagerLogger, context, sys, _appSettingsMock.Object, ddbFactory, webUtils);
+           
             var datasetManager = new DatasetsManager(context, webUtils, _datasetsManagerLogger, objectManager, ddbFactory, _passwordHasher);
             var organizationsManager = new OrganizationsManager(_authManagerMock.Object, context, webUtils, datasetManager, _organizationsManagerLogger);
 
@@ -144,6 +148,7 @@ namespace Registry.Web.Test
 
             const string testPassword = "ciaoatutti";
 
+            // Initialize
             var token = await shareManager.Initialize(new ShareInitDto
             {
                 DatasetName = datasetTestName,
@@ -156,6 +161,10 @@ namespace Registry.Web.Test
             batches = (await shareManager.ListBatches(organizationTestSlug, datasetTestSlug)).ToArray();
 
             batches.Should().HaveCount(1);
+
+            var newFileUrl = "https://github.com/pierotofy/drone_dataset_brighton_beach/raw/master/" + fileName;
+
+            await shareManager.Upload(token, fileName, CommonUtils.SmartDownloadData(newFileUrl));
 
             await shareManager.Commit(token);
 
@@ -194,7 +203,7 @@ namespace Registry.Web.Test
       ""Password"": ""password""
     },
     ""DdbStoragePath"": ""./Data/Ddb"",
-    ""DdbPath"": ""./ddb"",
+    ""DdbPath"": """",
 ""SupportedDdbVersion"": {
       ""Major"": 0,
       ""Minor"": 9,
