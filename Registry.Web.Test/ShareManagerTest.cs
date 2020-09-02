@@ -1,7 +1,9 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Text;
+using System.Threading.Tasks;
 using FluentAssertions;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
@@ -9,6 +11,8 @@ using Microsoft.Extensions.Options;
 using Moq;
 using Newtonsoft.Json;
 using NUnit.Framework;
+using Registry.Adapters.ObjectSystem;
+using Registry.Common;
 using Registry.Ports.ObjectSystem;
 using Registry.Web.Data;
 using Registry.Web.Data.Models;
@@ -20,10 +24,16 @@ using Registry.Web.Services.Ports;
 
 namespace Registry.Web.Test
 {
-    class ShareControllerTest
+    class ShareManagerTest
     {
         private Logger<ShareManager> _shareManagerLogger;
         private Logger<ObjectsManager> _objectManagerLogger;
+        private Logger<DdbFactory> _ddbFactoryLogger;
+        private Logger<DatasetsManager> _datasetsManagerLogger;
+        private Logger<OrganizationsManager> _organizationsManagerLogger;
+
+        private IPasswordHasher _passwordHasher;
+
         private Mock<IObjectSystem> _objectSystemMock;
         private Mock<IOptions<AppSettings>> _appSettingsMock;
         private Mock<IDdbFactory> _ddbFactoryMock;
@@ -38,9 +48,15 @@ namespace Registry.Web.Test
         private const string StorageFolder = "Storage";
         private const string DdbFolder = "Ddb";
 
-        private const string BaseTestFolder = "ShareControllerTest";
+        private const string BaseTestFolder = "ShareManagerTest";
 
         private const string Test1ArchiveUrl = "https://github.com/DroneDB/test_data/raw/master/registry/Test1.zip";
+
+
+        public ShareManagerTest()
+        {
+            //
+        }
 
         [SetUp]
         public void Setup()
@@ -65,10 +81,15 @@ namespace Registry.Web.Test
             }
 
             _settings.DdbPath = DdbTestDataFolder;
+            _passwordHasher = new PasswordHasher();
 
 
             _shareManagerLogger = new Logger<ShareManager>(LoggerFactory.Create(builder => builder.AddConsole()));
             _objectManagerLogger = new Logger<ObjectsManager>(LoggerFactory.Create(builder => builder.AddConsole()));
+            _ddbFactoryLogger = new Logger<DdbFactory>(LoggerFactory.Create(builder => builder.AddConsole()));
+            _organizationsManagerLogger = new Logger<OrganizationsManager>(LoggerFactory.Create(builder => builder.AddConsole()));
+            _datasetsManagerLogger = new Logger<DatasetsManager>(LoggerFactory.Create(builder => builder.AddConsole()));
+
         }
 
         [Test]
@@ -82,6 +103,70 @@ namespace Registry.Web.Test
             manager.Invoking(x => x.Initialize(new ShareInitDto())).Should().Throw<BadRequestException>();
             manager.Invoking(x => x.Initialize(new ShareInitDto { OrganizationName = "Test", OrganizationSlug = "test"})).Should().Throw<BadRequestException>();
             manager.Invoking(x => x.Initialize(new ShareInitDto { DatasetName = "Test", DatasetSlug = "test" })).Should().Throw<BadRequestException>();
+
+        }
+
+        [Test]
+        public async Task EndToEnd_HappyPath()
+        {
+
+            using var test = new TestFS(Test1ArchiveUrl, BaseTestFolder);
+            await using var context = GetTest1Context();
+
+            _appSettingsMock.Setup(o => o.Value).Returns(_settings);
+            _authManagerMock.Setup(o => o.IsUserAdmin()).Returns(Task.FromResult(true));
+            _authManagerMock.Setup(o => o.GetCurrentUser()).Returns(Task.FromResult(new User
+            {
+                UserName = "admin",
+                Email = "admin@example.com"
+            }));
+            
+            var sys = new PhysicalObjectSystem(Path.Combine(test.TestFolder, StorageFolder));
+            sys.SyncBucket($"{MagicStrings.PublicOrganizationSlug}-{MagicStrings.DefaultDatasetSlug}");
+
+            var ddbFactory = new DdbFactory(_appSettingsMock.Object, _ddbFactoryLogger);
+            var webUtils = new WebUtils(_authManagerMock.Object, context);
+
+            var objectManager = new ObjectsManager(_objectManagerLogger, context, sys, _appSettingsMock.Object, ddbFactory, webUtils);
+            var datasetManager = new DatasetsManager(context, webUtils, _datasetsManagerLogger, objectManager, ddbFactory, _passwordHasher);
+            var organizationsManager = new OrganizationsManager(_authManagerMock.Object, context, webUtils, datasetManager, _organizationsManagerLogger);
+
+            var shareManager = new ShareManager(_shareManagerLogger, objectManager, datasetManager, organizationsManager, webUtils, _authManagerMock.Object, context);
+
+            var batches = (await shareManager.ListBatches(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug)).ToArray();
+
+            batches.Should().BeEmpty();
+
+            const string organizationTestName = "Test";
+            const string datasetTestName = "First";
+            const string organizationTestSlug = "test";
+            const string datasetTestSlug = "first";
+
+            const string testPassword = "ciaoatutti";
+
+            var token = await shareManager.Initialize(new ShareInitDto
+            {
+                DatasetName = datasetTestName,
+                OrganizationName = organizationTestName,
+                Password = testPassword
+            });
+
+            token.Should().NotBeNullOrWhiteSpace();
+
+            batches = (await shareManager.ListBatches(organizationTestSlug, datasetTestSlug)).ToArray();
+
+            batches.Should().HaveCount(1);
+
+            await shareManager.Commit(token);
+
+            batches = (await shareManager.ListBatches(organizationTestSlug, datasetTestSlug)).ToArray();
+
+            batches.Should().HaveCount(1);
+            var batch = batches.First();
+            batch.Token.Should().Be(token);
+            batch.UserName.Should().Be("admin");
+            batch.Entries.Should().BeEmpty();
+            batch.End.Should().NotBeNull();
 
         }
 
@@ -117,6 +202,11 @@ namespace Registry.Web.Test
     }
 }
   ");
+
+        public ShareManagerTest(IPasswordHasher passwordHasher)
+        {
+            this._passwordHasher = passwordHasher;
+        }
 
         #endregion
 
