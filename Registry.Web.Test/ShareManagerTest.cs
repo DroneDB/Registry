@@ -105,8 +105,8 @@ namespace Registry.Web.Test
 
         }
 
-        [Test]
-        [Ignore]
+        [Test] 
+        [Ignore("Waiting for ddb .net bindings")]
         public async Task EndToEnd_HappyPath()
         {
 

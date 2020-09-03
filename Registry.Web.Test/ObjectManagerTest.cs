@@ -170,6 +170,7 @@ namespace Registry.Web.Test
 
         
         [Test]
+        [Ignore("Waiting for ddb .net bindings")]
         public async Task AddNew_File_FileRes()
         {
             
