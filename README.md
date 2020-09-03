@@ -10,13 +10,24 @@ To learn more check the wiki article: [REST Interface Specification](https://git
 
 ![dronedb-registry-architecture](https://user-images.githubusercontent.com/7868983/87065148-f4c46b80-c210-11ea-9f68-3e2dd13687bf.jpg)
 
-## Building
+## Running
+
+You can use docker to setup Registry:
+
+```
+git clone https://github.com/DroneDB/Registry
+cd Registry
+docker build . -t dronedb/registry
+docker run -ti -p 5000:5000 -p 5001:5001 dronedb/registry
+```
+
+## Building Natively
 
 ```
 dotnet build
 ```
 
-## Running
+## Running Natively
 
 ```
 dotnet run --project Registry.Web
