@@ -83,82 +83,52 @@ namespace Registry.Web.Services.Adapters
             if (parameters == null)
                 throw new BadRequestException("Invalid parameters");
 
-            if (parameters.DatasetName == null && parameters.DatasetSlug == null)
-                throw new BadRequestException("Invalid dataset");
+            var orgSlug = _utils.OrganizationSlugFromTag(parameters.Tag);
 
-            if (parameters.OrganizationName == null && parameters.OrganizationSlug == null)
-                throw new BadRequestException("Invalid organization");
-
-            var orgSlug = parameters.OrganizationSlug ?? _utils.MakeSlug(parameters.OrganizationName);
-
-            if (orgSlug == null)
+            if (orgSlug == String.Empty)
                 throw new BadRequestException("Organization id not provided");
 
-            var dsSlug = parameters.DatasetSlug ?? _utils.MakeSlug(parameters.DatasetName);
+            var dsSlug = _utils.DatasetSlugFromTag(parameters.Tag);
 
-            if (dsSlug == null)
+            if (dsSlug == String.Empty)
                 throw new BadRequestException("Dataset slug not provided");
 
             var org = await _utils.GetOrganizationAndCheck(orgSlug, true);
 
             Dataset dataset;
 
-            // Create org if not exists
+            // Org must exist
             if (org == null)
             {
-                _logger.LogInformation($"Tag '{orgSlug}/{dsSlug}' does not exist, creating it");
-                await _organizationsManager.AddNew(new OrganizationDto
-                {
-                    Name = parameters.OrganizationName,
-                    Slug = orgSlug
-                });
+               throw new BadRequestException($"Organization '{orgSlug}' does not exist");
+            }
+
+            _logger.LogInformation("Organization found");
+
+            // Create dataset if not exists
+            dataset = await _utils.GetDatasetAndCheck(orgSlug, dsSlug, true);
+
+            if (dataset == null)
+            {
+                _logger.LogInformation($"Dataset '{dsSlug}' not found, creating it");
 
                 await _datasetsManager.AddNew(orgSlug, new DatasetDto
                 {
-                    Name = parameters.DatasetName,
-                    Slug = dsSlug,
-                    // TODO: Should check it somehow
-                    Password = parameters.Password
+                    Slug = dsSlug
                 });
-
                 dataset = await _utils.GetDatasetAndCheck(orgSlug, dsSlug);
 
-                _logger.LogInformation("Organization and dataset created");
-
+                _logger.LogInformation("Dataset created");
             }
             else
             {
-                _logger.LogInformation("Organization already exists");
+                _logger.LogInformation("Dataset and organization already existing, checking for running batches");
 
-                // Create dataset if not exists
-                dataset = await _utils.GetDatasetAndCheck(orgSlug, dsSlug);
-
-                if (dataset == null)
+                if (dataset.Batches.Any(item => item.End == null))
                 {
-
-                    _logger.LogInformation($"Dataset '{dsSlug}' not found, creating it");
-
-                    await _datasetsManager.AddNew(orgSlug, new DatasetDto
-                    {
-                        Name = parameters.DatasetName,
-                        Slug = parameters.DatasetSlug
-                    });
-                    dataset = await _utils.GetDatasetAndCheck(orgSlug, dsSlug);
-
-                    _logger.LogInformation("Dataset created");
-
+                    _logger.LogInformation("Found already running batches, cannot start a new one");
+                    throw new BadRequestException("Cannot start a new batch if there are others already running");
                 }
-                else
-                {
-                    _logger.LogInformation("Dataset and organization already existing, checking for running batches");
-
-                    if (dataset.Batches.Any(item => item.End == null))
-                    {
-                        _logger.LogInformation("Found already running batches, cannot start a new one");
-                        throw new BadRequestException("Cannot start a new batch if there are others already running");
-                    }
-                }
-
             }
 
             var batch = new Batch

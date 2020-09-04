@@ -59,10 +59,20 @@ namespace Registry.Web.Services.Adapters
             return res.ToLowerInvariant();
         }
 
+        public string DatasetSlugFromTag(string tag){
+            if (tag == String.Empty) return String.Empty;
+            if (!tag.Contains("/")) return tag;
+            else return tag.Substring(tag.IndexOf("/") + 1); 
+        }
+
+        public string OrganizationSlugFromTag(string tag){
+            if (tag == String.Empty) return String.Empty;
+            if (!tag.Contains("/")) return String.Empty;
+            else return tag.Substring(0, Math.Max(0, tag.Length - tag.IndexOf("/") - 2));
+        }
 
         public async Task<Organization> GetOrganizationAndCheck(string orgSlug, bool safe = false)
         {
-
             if (string.IsNullOrWhiteSpace(orgSlug))
                 throw new BadRequestException("Missing organization id");
 
@@ -92,7 +102,7 @@ namespace Registry.Web.Services.Adapters
             return org;
         }
 
-        public async Task<Dataset> GetDatasetAndCheck(string orgSlug, string dsSlug, bool safe = false)
+        public async Task<Dataset> GetDatasetAndCheck(string orgSlug, string dsSlug, bool retNullIfNotFound = false)
         {
             if (string.IsNullOrWhiteSpace(dsSlug))
                 throw new BadRequestException("Missing dataset id");
@@ -106,7 +116,7 @@ namespace Registry.Web.Services.Adapters
 
             if (dataset == null)
             {
-                if (safe) return null;
+                if (retNullIfNotFound) return null;
                 throw new NotFoundException("Cannot find dataset");
             }
 

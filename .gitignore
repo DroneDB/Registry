@@ -341,3 +341,6 @@ healthchecksdb
 /Registry.Web/ddb
 /Registry.Web/ddbstore
 /Registry.Web/temp
+
+# DB
+Registry.Web/App_Data/registry.db
