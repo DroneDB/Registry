@@ -99,7 +99,7 @@ namespace Registry.Web.Controllers
                 return Ok(query.ToArray());
             }
 
-            return Unauthorized();
+            return Unauthorized(new ErrorResponse("Unauthorized"));
             
         }
         private async Task<string> GenerateJwtToken(User user)
