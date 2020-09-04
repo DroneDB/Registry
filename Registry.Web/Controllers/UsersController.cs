@@ -15,45 +15,52 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
 using Registry.Web.Models.DTO;
+using Registry.Web.Services.Adapters;
+using Registry.Web.Services.Ports;
 
 namespace Registry.Web.Controllers
 {
     [Authorize]
     [ApiController]
     [Route("[controller]")]
-    public class UsersController : ControllerBase
+    public class UsersController : ControllerBaseEx
     {
-       
+
+        // TODO: Abstract and test as soon as possible
+
         private readonly ApplicationDbContext _context;
+        private readonly RoleManager<IdentityRole> _roleManager;
+        private readonly IAuthManager _authManager;
         private readonly SignInManager<User> _signInManager;
         private readonly UserManager<User> _usersManager;
         private readonly AppSettings _appSettings;
 
-        public UsersController(IOptions<AppSettings> appSettings, SignInManager<User> signInManager, UserManager<User> usersManager, ApplicationDbContext context)
+        public UsersController(
+            IOptions<AppSettings> appSettings,
+            SignInManager<User> signInManager,
+            UserManager<User> usersManager,
+            ApplicationDbContext context,
+            RoleManager<IdentityRole> roleManager,
+            IAuthManager authManager)
         {
             _context = context;
+            _roleManager = roleManager;
+            _authManager = authManager;
             _signInManager = signInManager;
             _usersManager = usersManager;
             _appSettings = appSettings.Value;
 
-            // If no users in database, let's create the default admin
-            if (!_usersManager.Users.Any())
-            {
-                var user = new User() { Email = "admin@example.com", UserName = "admin" };
-                _usersManager.CreateAsync(user, "password").Wait();
-            }
-
         }
-        
+
         [AllowAnonymous]
         [HttpPost("authenticate")]
-        public async Task<IActionResult> Authenticate([FromForm]AuthenticateRequest model)
+        public async Task<IActionResult> Authenticate([FromForm] AuthenticateRequest model)
         {
 
             var response = await GetAutentication(model);
 
             if (response == null)
-                return StatusCode(401, new ErrorResponse("Unauthorized"));
+                return Unauthorized(new ErrorResponse("Unauthorized"));
 
             return Ok(response);
         }
@@ -69,36 +76,44 @@ namespace Registry.Web.Controllers
             if (!res.Succeeded) return null;
 
             // authentication successful so generate jwt token
-            var token = GenerateJwtToken(user);
+            var token = await GenerateJwtToken(user);
 
             return new AuthenticateResponse(user, token);
         }
 
         [HttpGet]
-        public IActionResult GetAll()
+        public async Task<IActionResult> GetAll()
         {
 
-            var query = from user in _usersManager.Users
-                select new UserDto
-                {
-                    Email = user.Email,
-                    UserName = user.UserName,
-                    Id = user.Id
-                };
+            if (await _authManager.IsUserAdmin())
+            {
+                var query = from user in _usersManager.Users
+                    select new UserDto
+                    {
+                        Email = user.Email,
+                        UserName = user.UserName,
+                        Id = user.Id
+                    };
 
 
-            return Ok(query.ToArray());
+                return Ok(query.ToArray());
+            }
+
+            return Unauthorized(new ErrorResponse("Unauthorized"));
+            
         }
-        private string GenerateJwtToken(User user)
+        private async Task<string> GenerateJwtToken(User user)
         {
             // generate token
             var tokenHandler = new JwtSecurityTokenHandler();
             var key = Encoding.ASCII.GetBytes(_appSettings.Secret);
+
             var tokenDescriptor = new SecurityTokenDescriptor
             {
                 Subject = new ClaimsIdentity(new[]
                 {
-                    new Claim(ClaimTypes.Name, user.Id.ToString())
+                    new Claim(ClaimTypes.Name, user.Id),
+                    new Claim(ApplicationDbContext.AdminRoleName.ToLowerInvariant(), (await _usersManager.IsInRoleAsync(user, ApplicationDbContext.AdminRoleName)).ToString()), 
                 }),
                 Expires = DateTime.UtcNow.AddDays(_appSettings.TokenExpirationInDays),
                 SigningCredentials = new SigningCredentials(new SymmetricSecurityKey(key), SecurityAlgorithms.HmacSha256Signature)

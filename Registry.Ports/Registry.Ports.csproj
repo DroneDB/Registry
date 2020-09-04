@@ -9,6 +9,10 @@
   </ItemGroup>
 
   <ItemGroup>
+    <PackageReference Include="GeoJSON.Net" Version="1.2.19" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\Registry.Common\Registry.Common.csproj" />
   </ItemGroup>
 
