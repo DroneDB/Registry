@@ -115,7 +115,7 @@ namespace Registry.Web.Controllers
                 _logger.LogDebug($"Dataset controller Put('{orgSlug}', '{dsSlug}', '{dataset?.Slug}')");
 
                 await _datasetsManager.Edit(orgSlug, dsSlug, dataset);
-                return NoContent();
+                return new OkObjectResult(new SuccessResponse());
             }
             catch (Exception ex)
             {
@@ -135,7 +135,7 @@ namespace Registry.Web.Controllers
                 _logger.LogDebug($"Dataset controller Delete('{orgSlug}', '{dsSlug}')");
 
                 await _datasetsManager.Delete(orgSlug, dsSlug);
-                return NoContent();
+                return new OkObjectResult(new SuccessResponse());
             }
             catch (Exception ex)
             {
