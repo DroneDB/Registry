@@ -83,40 +83,45 @@ namespace Registry.Web.Services.Adapters
             if (parameters == null)
                 throw new BadRequestException("Invalid parameters");
 
-            var orgSlug = _utils.OrganizationSlugFromTag(parameters.Tag);
+            TagDto tag;
 
-            if (orgSlug == String.Empty)
-                throw new BadRequestException("Organization id not provided");
+            try
+            {
+                tag = parameters.Tag.ToTag();
+            }
+            catch (FormatException ex)
+            {
+                throw new BadRequestException($"Invalid tag: {ex.Message}");
+            }
 
-            var dsSlug = _utils.DatasetSlugFromTag(parameters.Tag);
+            // Let's fill the names if not provided
+            parameters.OrganizationName ??= tag.OrganizationSlug;
+            parameters.DatasetName ??= tag.DatasetSlug;
 
-            if (dsSlug == String.Empty)
-                throw new BadRequestException("Dataset slug not provided");
-
-            var org = await _utils.GetOrganizationAndCheck(orgSlug, true);
-
-            Dataset dataset;
+            var org = await _utils.GetOrganizationAndCheck(tag.OrganizationSlug, true);
 
             // Org must exist
             if (org == null)
             {
-               throw new BadRequestException($"Organization '{orgSlug}' does not exist");
+                throw new BadRequestException($"Organization '{tag.OrganizationSlug}' does not exist");
             }
 
             _logger.LogInformation("Organization found");
 
             // Create dataset if not exists
-            dataset = await _utils.GetDatasetAndCheck(orgSlug, dsSlug, true);
+            var dataset = await _utils.GetDatasetAndCheck(tag.OrganizationSlug, tag.DatasetSlug, true);
 
             if (dataset == null)
             {
-                _logger.LogInformation($"Dataset '{dsSlug}' not found, creating it");
+                _logger.LogInformation($"Dataset '{tag.DatasetSlug}' not found, creating it");
 
-                await _datasetsManager.AddNew(orgSlug, new DatasetDto
+                await _datasetsManager.AddNew(tag.DatasetSlug, new DatasetDto
                 {
-                    Slug = dsSlug
+                    Slug = tag.DatasetSlug,
+                    Name = parameters.DatasetName,
+                    Description = parameters.DatasetDescription
                 });
-                dataset = await _utils.GetDatasetAndCheck(orgSlug, dsSlug);
+                dataset = await _utils.GetDatasetAndCheck(tag.OrganizationSlug, tag.DatasetSlug);
 
                 _logger.LogInformation("Dataset created");
             }
@@ -149,7 +154,7 @@ namespace Registry.Web.Services.Adapters
             return batch.Token;
         }
 
-        
+
         public async Task Upload(string token, string path, byte[] data)
         {
             if (string.IsNullOrWhiteSpace(token))

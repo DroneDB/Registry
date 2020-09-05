@@ -76,7 +76,7 @@ namespace Registry.Web.Services.Adapters
             if (currentUser == null)
                 throw new UnauthorizedException("Invalid user");
 
-            if (!_utils.IsSlugValid(organization.Slug))
+            if (!organization.Slug.IsValidSlug())
                 throw new BadRequestException("Invalid organization orgSlug");
 
             var existingOrg = _context.Organizations.FirstOrDefault(item => item.Slug == organization.Slug);

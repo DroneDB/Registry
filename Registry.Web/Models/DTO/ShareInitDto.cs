@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
+using Registry.Web.Services.Ports;
 
 namespace Registry.Web.Models.DTO
 {
@@ -11,9 +12,10 @@ namespace Registry.Web.Models.DTO
 
         public string Password { get; set; }
 
-        public override string ToString()
-        {
-            return Tag;
-        }
+        public string OrganizationName { get; set; }
+        public string DatasetName { get; set; }
+        public string OrganizationDescription { get; set; }
+        public string DatasetDescription { get; set; }
+        
     }
 }

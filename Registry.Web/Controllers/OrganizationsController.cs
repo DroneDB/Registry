@@ -101,7 +101,7 @@ namespace Registry.Web.Controllers
                 _logger.LogDebug($"Organizations controller Put('{orgSlug}', {organization?.Slug}')");
 
                 await _organizationsManager.Edit(orgSlug, organization);
-                return new OkObjectResult(new SuccessResponse());
+                return NoContent();
             }
             catch (Exception ex)
             {
@@ -122,7 +122,7 @@ namespace Registry.Web.Controllers
                 _logger.LogDebug($"Organizations controller Delete('{orgSlug}')");
 
                 await _organizationsManager.Delete(orgSlug);
-                return new OkObjectResult(new SuccessResponse());
+                return NoContent();
             }
             catch (Exception ex)
             {

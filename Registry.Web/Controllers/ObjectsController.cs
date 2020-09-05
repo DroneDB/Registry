@@ -111,7 +111,7 @@ namespace Registry.Web.Controllers
                 _logger.LogDebug($"Objects controller Delete('{orgSlug}', '{dsSlug}', '{path}')");
 
                 await _objectsManager.Delete(orgSlug, dsSlug, path);
-                return new OkObjectResult(new SuccessResponse());
+                return NoContent();
             }
             catch (Exception ex)
             {
