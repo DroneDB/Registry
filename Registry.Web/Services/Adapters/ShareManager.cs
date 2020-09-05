@@ -95,7 +95,6 @@ namespace Registry.Web.Services.Adapters
             }
 
             // Let's fill the names if not provided
-            parameters.OrganizationName ??= tag.OrganizationSlug;
             parameters.DatasetName ??= tag.DatasetSlug;
 
             var org = await _utils.GetOrganizationAndCheck(tag.OrganizationSlug, true);

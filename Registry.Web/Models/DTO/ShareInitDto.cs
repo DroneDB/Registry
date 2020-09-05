@@ -12,9 +12,7 @@ namespace Registry.Web.Models.DTO
 
         public string Password { get; set; }
 
-        public string OrganizationName { get; set; }
         public string DatasetName { get; set; }
-        public string OrganizationDescription { get; set; }
         public string DatasetDescription { get; set; }
         
     }

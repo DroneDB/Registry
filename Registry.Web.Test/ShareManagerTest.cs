@@ -140,7 +140,7 @@ namespace Registry.Web.Test
 
             batches.Should().BeEmpty();
 
-            const string organizationTestName = "Test";
+            const string organizationTestName = "test";
             const string datasetTestName = "First";
             const string organizationTestSlug = "test";
             const string datasetTestSlug = "first";
@@ -150,8 +150,8 @@ namespace Registry.Web.Test
             // Initialize
             var token = await shareManager.Initialize(new ShareInitDto
             {
-                DatasetName = datasetTestName,
-                OrganizationName = organizationTestName,
+                Tag = "test/first",
+                DatasetName = "First",
                 Password = testPassword
             });
 
