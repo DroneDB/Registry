@@ -112,7 +112,8 @@ namespace Registry.Web.Test
             var res = list.First();
 
             res.Path.Should().Be(fileName);
-            res.ModifiedTime.Should().Be(expectedModifiedTime);
+            // TODO: Handle different timezones
+            res.ModifiedTime.Should().BeCloseTo(expectedModifiedTime, new TimeSpan(6, 0, 0));
             res.Hash.Should().Be(expectedHash);
             res.Depth.Should().Be(expectedDepth);
             res.Size.Should().Be(expectedSize);
@@ -159,7 +160,8 @@ namespace Registry.Web.Test
             var res = list.First();
 
             res.Path.Should().Be(fileName);
-            res.ModifiedTime.Should().Be(expectedModifiedTime);
+            // TODO: Handle different timezones
+            res.ModifiedTime.Should().BeCloseTo(expectedModifiedTime, new TimeSpan(6, 0, 0));
             res.Hash.Should().Be(expectedHash);
             res.Depth.Should().Be(expectedDepth);
             res.Size.Should().Be(expectedSize);

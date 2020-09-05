@@ -232,8 +232,7 @@ namespace Registry.Adapters.DroneDB
                 .Property(e => e.ModifiedTime)
                 .HasConversion(
                     v => new DateTimeOffset(v).ToUnixTimeSeconds(),
-                    v => DateTimeOffset.FromUnixTimeSeconds(v)
-                        .DateTime.ToLocalTime());
+                    v => DateTimeOffset.FromUnixTimeSeconds(v).DateTime);
 
             modelBuilder.Entity<Entry>().Property(item => item.Type)
                 .HasConversion<int>();
