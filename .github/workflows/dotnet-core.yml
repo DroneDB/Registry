@@ -18,7 +18,7 @@ jobs:
       with:
         dotnet-version: 3.1.101
     - name: setup utils
-      run: apt update && apt install -y spatialite-bin
+      run: sudo apt-get update && sugo apt-get install -y spatialite-bin
     - name: download ddb
       uses: wei/curl@master
       with:
