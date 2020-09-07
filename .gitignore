@@ -344,3 +344,4 @@ healthchecksdb
 
 # DB
 Registry.Web/App_Data/registry.db
+/Registry.Web/logs
