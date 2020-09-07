@@ -114,7 +114,7 @@ namespace Registry.Web.Services.Adapters
             {
                 _logger.LogInformation($"Dataset '{tag.DatasetSlug}' not found, creating it");
 
-                await _datasetsManager.AddNew(tag.DatasetSlug, new DatasetDto
+                await _datasetsManager.AddNew(tag.OrganizationSlug, new DatasetDto
                 {
                     Slug = tag.DatasetSlug,
                     Name = parameters.DatasetName,
