@@ -45,8 +45,8 @@ namespace Registry.Web.Controllers
             }
         }
 
-        [HttpPost("upload/{token}/{**path}")]
-        public async Task<IActionResult> Upload(string token, string path, IFormFile file)
+        [HttpPost("upload/{token}")]
+        public async Task<IActionResult> Upload(string token, [FromForm] string path, IFormFile file)
         {
             try
             {

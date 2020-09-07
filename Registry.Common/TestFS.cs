@@ -35,6 +35,7 @@ namespace Registry.Common
         /// </summary>
         /// <param name="testArchivePath">The path of the test archive</param>
         /// <param name="baseTestFolder">The base test folder for test grouping</param>
+        /// <param name="setCurrentDirectory">If it should set the current directory to the test directory</param>
         public TestFS(string testArchivePath, string baseTestFolder = "TestFS", bool setCurrentDirectory = false)
         {
             TestArchivePath = testArchivePath;
