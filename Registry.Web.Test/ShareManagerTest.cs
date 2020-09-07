@@ -95,6 +95,7 @@ namespace Registry.Web.Test
         }
 
         [Test] 
+        [Explicit("Cannot run in CI")]
         public async Task EndToEnd_HappyPath()
         {
 
