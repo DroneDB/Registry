@@ -343,4 +343,4 @@ healthchecksdb
 /Registry.Web/temp
 
 # DB
-Registry.Web/App_Data/registry.db
+Registry.Web/App_Data/*.db
