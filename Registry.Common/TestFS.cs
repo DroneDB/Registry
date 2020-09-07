@@ -28,12 +28,14 @@ namespace Registry.Common
         /// </summary>
         public string BaseTestFolder { get; }
 
+        private readonly string _oldCurrentDirectory = null;
+
         /// <summary>
         /// Creates a new instance of TestFS
         /// </summary>
         /// <param name="testArchivePath">The path of the test archive</param>
         /// <param name="baseTestFolder">The base test folder for test grouping</param>
-        public TestFS(string testArchivePath, string baseTestFolder = "TestFS")
+        public TestFS(string testArchivePath, string baseTestFolder = "TestFS", bool setCurrentDirectory = false)
         {
             TestArchivePath = testArchivePath;
             BaseTestFolder = baseTestFolder;
@@ -45,7 +47,7 @@ namespace Registry.Common
             if (!IsLocalPath(testArchivePath))
             {
                 var uri = new Uri(testArchivePath);
-                
+
                 Debug.WriteLine($"Archive path is an url");
 
                 var client = new WebClient();
@@ -62,20 +64,34 @@ namespace Registry.Common
                 }
 
                 ZipFile.ExtractToDirectory(tempPath, TestFolder);
-                
+
                 // NOTE: Let's leverage the temp folder
                 // File.Delete(tempPath);
 
             }
             else
                 ZipFile.ExtractToDirectory(TestArchivePath, TestFolder);
-            
 
             Debug.WriteLine($"Created test FS '{TestArchivePath}' in '{TestFolder}'");
+
+            if (setCurrentDirectory)
+            {
+                _oldCurrentDirectory = Environment.CurrentDirectory;
+                Environment.CurrentDirectory = TestFolder;
+
+                Debug.WriteLine($"Set current directory to '{TestFolder}'");
+            }
 
         }
         public void Dispose()
         {
+
+            if (_oldCurrentDirectory != null)
+            {
+                Environment.CurrentDirectory = _oldCurrentDirectory;
+                Debug.WriteLine($"Restored current directory to '{_oldCurrentDirectory}'");
+            }
+
             Debug.WriteLine($"Disposing test FS '{TestArchivePath}' in '{TestFolder}");
             Directory.Delete(TestFolder, true);
         }

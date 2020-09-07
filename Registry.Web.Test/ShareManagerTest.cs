@@ -71,18 +71,8 @@ namespace Registry.Web.Test
             _organizationsManagerMock = new Mock<IOrganizationsManager>();
             _datasetsManagerMock = new Mock<IDatasetsManager>();
 
-            //if (!Directory.Exists(TestStorageFolder))
-            //    Directory.CreateDirectory(TestStorageFolder);
-
-            //if (!Directory.Exists(DdbTestDataFolder))
-            //{
-            //    Directory.CreateDirectory(DdbTestDataFolder);
-            //    File.WriteAllText(Path.Combine(DdbTestDataFolder, "ddbcmd.exe"), string.Empty);
-            //}
-
             _passwordHasher = new PasswordHasher();
-
-
+            
             _shareManagerLogger = new Logger<ShareManager>(LoggerFactory.Create(builder => builder.AddConsole()));
             _objectManagerLogger = new Logger<ObjectsManager>(LoggerFactory.Create(builder => builder.AddConsole()));
             _ddbFactoryLogger = new Logger<DdbFactory>(LoggerFactory.Create(builder => builder.AddConsole()));
@@ -105,13 +95,13 @@ namespace Registry.Web.Test
         }
 
         [Test] 
-        [Ignore("Waiting for ddb .net bindings")]
         public async Task EndToEnd_HappyPath()
         {
 
             const string fileName = "DJI_0028.JPG";
 
-            using var test = new TestFS(Test1ArchiveUrl, BaseTestFolder);
+            using var test = new TestFS(Test1ArchiveUrl, BaseTestFolder, true);
+            
             await using var context = GetTest1Context();
 
             _appSettingsMock.Setup(o => o.Value).Returns(_settings);
@@ -145,13 +135,21 @@ namespace Registry.Web.Test
             const string organizationTestSlug = "test";
             const string datasetTestSlug = "first";
 
+            var res = await organizationsManager.AddNew(new OrganizationDto
+            {
+                Name = organizationTestName,
+                IsPublic = true,
+                Slug = organizationTestSlug
+            });
+
+            
             const string testPassword = "ciaoatutti";
 
             // Initialize
             var token = await shareManager.Initialize(new ShareInitDto
             {
-                Tag = "test/first",
-                DatasetName = "First",
+                Tag = $"{organizationTestSlug}/{datasetTestSlug}",
+                DatasetName = datasetTestName,
                 Password = testPassword
             });
 
@@ -173,7 +171,7 @@ namespace Registry.Web.Test
             var batch = batches.First();
             batch.Token.Should().Be(token);
             batch.UserName.Should().Be("admin");
-            batch.Entries.Should().BeEmpty();
+            batch.Entries.Should().HaveCount(1);
             batch.End.Should().NotBeNull();
 
         }
