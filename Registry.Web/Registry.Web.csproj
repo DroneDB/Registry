@@ -6,12 +6,16 @@
 
   <ItemGroup>
     <Compile Remove="ddb\**" />
+    <Compile Remove="logs\**" />
     <Compile Remove="temp\**" />
     <Content Remove="ddb\**" />
+    <Content Remove="logs\**" />
     <Content Remove="temp\**" />
     <EmbeddedResource Remove="ddb\**" />
+    <EmbeddedResource Remove="logs\**" />
     <EmbeddedResource Remove="temp\**" />
     <None Remove="ddb\**" />
+    <None Remove="logs\**" />
     <None Remove="temp\**" />
   </ItemGroup>
 

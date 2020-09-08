@@ -40,8 +40,8 @@ namespace Registry.Adapters.DroneDB
 
         public void CreateDatabase(string path)
         {
-            if (!Directory.Exists(path))
-                Directory.CreateDirectory(path);
+            
+            Directory.CreateDirectory(path);
 
             var res = RunCommand($"{InitCommand} -d \"{Path.GetFullPath(path)}\"");
             
@@ -60,7 +60,7 @@ namespace Registry.Adapters.DroneDB
                 }
             };
 
-            //p.StartInfo.EnvironmentVariables.Add("PROJ_LIB", Path.GetDirectoryName(Path.GetFullPath(_ddbExePath)));
+            p.StartInfo.EnvironmentVariables.Add("PROJ_LIB", Path.GetDirectoryName(Path.GetFullPath(_ddbExePath)));
 
             Debug.WriteLine("Running command:");
             Debug.WriteLine($"{_ddbExePath} {parameters}");

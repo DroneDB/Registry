@@ -9,8 +9,8 @@ namespace Registry.Web.Services.Ports
     public interface IShareManager
     {
         public Task<string> Initialize(ShareInitDto parameters);
-        public Task Upload(string token, string path, byte[] data);
-        public Task Commit(string token);
+        public Task<UploadResultDto> Upload(string token, string path, byte[] data);
+        public Task<CommitResultDto> Commit(string token);
         Task<IEnumerable<BatchDto>> ListBatches(string orgSlug, string dsSlug);
     }
 }

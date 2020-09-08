@@ -59,9 +59,9 @@ namespace Registry.Web.Controllers
                 await using var memory = new MemoryStream();
                 await file.CopyToAsync(memory);
                 
-                await _shareManager.Upload(token, path, memory.ToArray());
+                var res = await _shareManager.Upload(token, path, memory.ToArray());
 
-                return Ok();
+                return Ok(res);
 
             }
             catch (Exception ex)
@@ -80,9 +80,9 @@ namespace Registry.Web.Controllers
 
                 _logger.LogDebug($"Share controller Commit('{token}')");
 
-                await _shareManager.Commit(token);
+                var res = await _shareManager.Commit(token);
 
-                return Ok();
+                return Ok(res);
 
             }
             catch (Exception ex)

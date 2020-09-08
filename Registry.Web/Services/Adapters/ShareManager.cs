@@ -128,6 +128,8 @@ namespace Registry.Web.Services.Adapters
             {
                 _logger.LogInformation("Dataset and organization already existing, checking for running batches");
 
+                await _context.Entry(dataset).Collection(item => item.Batches).LoadAsync();
+
                 if (dataset.Batches.Any(item => item.End == null))
                 {
                     _logger.LogInformation("Found already running batches, cannot start a new one");
@@ -154,7 +156,7 @@ namespace Registry.Web.Services.Adapters
         }
 
 
-        public async Task Upload(string token, string path, byte[] data)
+        public async Task<UploadResultDto> Upload(string token, string path, byte[] data)
         {
             if (string.IsNullOrWhiteSpace(token))
                 throw new BadRequestException("Missing token");
@@ -216,9 +218,16 @@ namespace Registry.Web.Services.Adapters
 
             _logger.LogInformation("Changes commited");
 
+            return new UploadResultDto
+            {
+                Hash = entry.Hash,
+                Size = entry.Size,
+                Path = entry.Path
+            };
+
         }
 
-        public async Task Commit(string token)
+        public async Task<CommitResultDto> Commit(string token)
         {
 
             if (string.IsNullOrWhiteSpace(token))
@@ -244,6 +253,16 @@ namespace Registry.Web.Services.Adapters
             // TODO: Commit?
 
             await _context.SaveChangesAsync();
+
+            await _context.Entry(batch).Collection(item => item.Entries).LoadAsync();
+
+            return new CommitResultDto
+            {
+                End = batch.End.Value,
+                Start = batch.Start,
+                ObjectsCount = batch.Entries.Count,
+                TotalSize = batch.Entries.Sum(item => item.Size)
+            };
 
         }
     }

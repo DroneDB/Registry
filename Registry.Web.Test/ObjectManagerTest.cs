@@ -170,7 +170,7 @@ namespace Registry.Web.Test
 
         
         [Test]
-        [Ignore("Waiting for ddb .net bindings")]
+        [Explicit("Does not run in CI")]
         public async Task AddNew_File_FileRes()
         {
             
