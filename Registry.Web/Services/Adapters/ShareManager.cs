@@ -252,7 +252,7 @@ namespace Registry.Web.Services.Adapters
 
             await _context.SaveChangesAsync();
 
-            await _context.Entry(batch).Reference(item => item.Entries).LoadAsync();
+            await _context.Entry(batch).Collection(item => item.Entries).LoadAsync();
 
             return new CommitResultDto
             {
