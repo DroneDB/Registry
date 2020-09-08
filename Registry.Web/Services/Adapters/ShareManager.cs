@@ -128,6 +128,8 @@ namespace Registry.Web.Services.Adapters
             {
                 _logger.LogInformation("Dataset and organization already existing, checking for running batches");
 
+                await _context.Entry(dataset).Collection(item => item.Batches).LoadAsync();
+
                 if (dataset.Batches.Any(item => item.End == null))
                 {
                     _logger.LogInformation("Found already running batches, cannot start a new one");
