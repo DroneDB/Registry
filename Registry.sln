@@ -17,7 +17,7 @@ Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Registry.Web.Data", "Regist
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Registry.Web.Test", "Registry.Web.Test\Registry.Web.Test.csproj", "{50248260-DA34-47A1-8AF3-922D2981C010}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Registry.Adapters.DroneDB", "Registry.Adapters.DroneDB\Registry.Adapters.DroneDB.csproj", "{01CB680D-8778-4C7C-AED2-AC9A4905A32B}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Registry.Adapters.DroneDB", "Registry.Adapters.DroneDB\Registry.Adapters.DroneDB.csproj", "{01CB680D-8778-4C7C-AED2-AC9A4905A32B}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution

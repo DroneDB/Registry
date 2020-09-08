@@ -35,8 +35,8 @@ namespace Registry.Web.Controllers
             _logger = logger;
         }
         
-        [HttpGet("obj/{**path}", Name = nameof(ObjectsController) + "." + nameof(Get))]
-        public async Task<IActionResult> Get([FromRoute] string orgSlug, [FromRoute] string dsSlug, string path)
+        [HttpGet("obj", Name = nameof(ObjectsController) + "." + nameof(Get))]
+        public async Task<IActionResult> Get([FromRoute] string orgSlug, [FromRoute] string dsSlug, [FromForm] string path)
         {
             try
             {
@@ -53,8 +53,8 @@ namespace Registry.Web.Controllers
             }
         }
 
-        [HttpGet("info/{**path}", Name = nameof(ObjectsController) + "." + nameof(GetInfo))]
-        public async Task<IActionResult> GetInfo([FromRoute] string orgSlug, [FromRoute] string dsSlug, string path)
+        [HttpGet("info", Name = nameof(ObjectsController) + "." + nameof(GetInfo))]
+        public async Task<IActionResult> GetInfo([FromRoute] string orgSlug, [FromRoute] string dsSlug, [FromForm] string path)
         {
             try
             {
@@ -71,8 +71,8 @@ namespace Registry.Web.Controllers
             }
         }
 
-        [HttpPost("obj/{**path}")]
-        public async Task<IActionResult> Post([FromRoute] string orgSlug, [FromRoute] string dsSlug, string path, IFormFile file)
+        [HttpPost("obj")]
+        public async Task<IActionResult> Post([FromRoute] string orgSlug, [FromRoute] string dsSlug, [FromForm] string path, IFormFile file)
         {
             try
             {
@@ -102,8 +102,8 @@ namespace Registry.Web.Controllers
         }
 
         // DELETE: ddb/id
-        [HttpDelete("obj/{**path}")]
-        public async Task<IActionResult> Delete([FromRoute] string orgSlug, [FromRoute] string dsSlug, string path)
+        [HttpDelete("obj")]
+        public async Task<IActionResult> Delete([FromRoute] string orgSlug, [FromRoute] string dsSlug, [FromForm] string path)
         {
 
             try

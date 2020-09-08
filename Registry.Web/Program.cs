@@ -197,6 +197,11 @@ namespace Registry.Web
 
         private static IHostBuilder CreateHostBuilder(string[] args) =>
             Host.CreateDefaultBuilder(args)
+                .ConfigureLogging((hostingContext, builder) =>
+                {
+                    builder.AddFile("logs/registry-{Date}.txt");
+                    builder.AddConsole();
+                })
                 .ConfigureWebHostDefaults(webBuilder =>
                 {
                     webBuilder.UseStartup<Startup>();
