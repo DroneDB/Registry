@@ -230,7 +230,6 @@ namespace Registry.Web
             app.UseRouting();
 
             app.UseAuthentication();
-             app.UseMiddleware<AuthenticationMiddleware>();
             app.UseAuthorization();
 
             app.UseMiddleware<TokenManagerMiddleware>();

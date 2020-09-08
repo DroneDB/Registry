@@ -345,3 +345,5 @@ healthchecksdb
 # DB
 Fix/Registry.Web/[Aa]pp_[Dd]ata/
 /Registry.Web/logs
+/Registry.Web/App_Data/registry.db
+/Registry.Web/App_Data/identity.db
