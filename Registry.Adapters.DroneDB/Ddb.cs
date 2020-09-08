@@ -40,8 +40,8 @@ namespace Registry.Adapters.DroneDB
 
         public void CreateDatabase(string path)
         {
-            if (!Directory.Exists(path))
-                Directory.CreateDirectory(path);
+            
+            Directory.CreateDirectory(path);
 
             var res = RunCommand($"{InitCommand} -d \"{Path.GetFullPath(path)}\"");
             
