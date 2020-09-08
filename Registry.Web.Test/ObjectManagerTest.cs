@@ -170,6 +170,7 @@ namespace Registry.Web.Test
 
         
         [Test]
+        [Explicit("Does not run in CI")]
         public async Task AddNew_File_FileRes()
         {
             
