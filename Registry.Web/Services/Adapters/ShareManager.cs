@@ -137,7 +137,8 @@ namespace Registry.Web.Services.Adapters
                 {
                     _logger.LogInformation($"Found '{runningBatches.Length}' running batch(es), stopping and rolling back before starting a new one");
 
-                    Array.ForEach(runningBatches, RollbackBatch);
+                    foreach (var b in runningBatches)
+                        await RollbackBatch(b);
 
                 }
             }
@@ -161,30 +162,28 @@ namespace Registry.Web.Services.Adapters
             return batch.Token;
         }
 
-        private void RollbackBatch(Batch batch)
+        private async Task RollbackBatch(Batch batch)
         {
             _logger.LogInformation($"Rolling back batch '{batch.Token}'");
             
-            // I know we will have concurrency problems because we could be in the middle of the rollback when another client calls for it
-            // To mitigate this we are going to commit the status change of the batch as soon as possible
+            // I know we will have concurrency problems here because we could be in the middle of the rollback when another client calls for another one
+            // To mitigate this issue we are going to commit the status change of the batch as soon as possible
 
             batch.Status = BatchStatus.Rolledback;
-            _context.SaveChanges();
+            batch.End = DateTime.Now;
+            await _context.SaveChangesAsync();
 
-            _context.Entry(batch).Collection(item => item.Entries).Load();
-            _context.Entry(batch).Reference(item => item.Dataset).Load();
+            await _context.Entry(batch).Collection(item => item.Entries).LoadAsync();
+            await _context.Entry(batch).Reference(item => item.Dataset).LoadAsync();
             
             var ds = batch.Dataset;
             
-            _context.Entry(ds).Reference(item => item.Organization).Load();
+            await _context.Entry(ds).Reference(item => item.Organization).LoadAsync();
             var org = ds.Organization;
 
             foreach (var entry in batch.Entries)
-            {
-                _objectsManager.Delete(org.Slug, ds.Slug, entry.Path);
-            }
+                await _objectsManager.Delete(org.Slug, ds.Slug, entry.Path);
             
-
         }
 
 
