@@ -2,7 +2,7 @@
 
 ![commits](https://img.shields.io/github/commit-activity/m/DroneDB/registry) ![languages](https://img.shields.io/github/languages/top/DroneDB/registry) ![.NET Core](https://github.com/DroneDB/Registry/workflows/.NET%20Core/badge.svg?branch=master)
 
-DroneDB Registry is a simple, user-friendly aerial data management and storage application and API . It features JWT authentication and implements a full REST API. 
+DroneDB Registry is a simple, user-friendly aerial data management and storage application . It features JWT authentication and implements a full REST API. 
 
 To learn more check the wiki article: [REST Interface Specification](https://github.com/DroneDB/registry/wiki/REST-Interface-Specification)
 
