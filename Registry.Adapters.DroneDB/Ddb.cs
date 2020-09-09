@@ -16,6 +16,7 @@ namespace Registry.Adapters.DroneDB
 
         // TODO: Maybe all this "stuff" can be put in the config
         private const string InfoCommand = "info";
+        private const string RemoveCommand = "remove";
         private const string InitCommand = "init";
         private const int MaxWaitTime = 5000;
 
@@ -24,7 +25,7 @@ namespace Registry.Adapters.DroneDB
             _ddbExePath = ddbExePath;
         }
 
-       
+
         public IEnumerable<DdbInfo> Info(string path)
         {
 
@@ -38,13 +39,21 @@ namespace Registry.Adapters.DroneDB
             return lst;
         }
 
+        public void Remove(string ddbPath, string path)
+        {
+
+            var res = RunCommand($"{RemoveCommand} -d \"{ddbPath}\" -p \"{path}\"");
+            
+            return;
+        }
+
         public void CreateDatabase(string path)
         {
-            
+
             Directory.CreateDirectory(path);
 
             var res = RunCommand($"{InitCommand} -d \"{Path.GetFullPath(path)}\"");
-            
+
         }
 
         private string RunCommand(string parameters)
@@ -60,8 +69,12 @@ namespace Registry.Adapters.DroneDB
                 }
             };
 
-            p.StartInfo.EnvironmentVariables.Add("PROJ_LIB", Path.GetDirectoryName(Path.GetFullPath(_ddbExePath)));
+            if (!p.StartInfo.EnvironmentVariables.ContainsKey("PROJ_LIB"))
+            {
+                p.StartInfo.EnvironmentVariables.Add("PROJ_LIB", Path.GetDirectoryName(Path.GetFullPath(_ddbExePath)));
+            }
 
+            Debug.WriteLine($"PROJ_LIB = '{p.StartInfo.EnvironmentVariables["PROJ_LIB"]}'");
             Debug.WriteLine("Running command:");
             Debug.WriteLine($"{_ddbExePath} {parameters}");
 

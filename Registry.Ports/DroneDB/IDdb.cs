@@ -9,5 +9,6 @@ namespace Registry.Ports.DroneDB
     {
         IEnumerable<DdbInfo> Info(string path);
         void CreateDatabase(string path);
+        void Remove(string ddbPath, string path);
     }
 }
