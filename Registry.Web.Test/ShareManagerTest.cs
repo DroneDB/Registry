@@ -137,7 +137,7 @@ namespace Registry.Web.Test
             const string organizationTestSlug = "test";
             const string datasetTestSlug = "first";
             const string testPassword = "ciaoatutti";
-            const string newFileUrl = "https://github.com/pierotofy/drone_dataset_brighton_beach/raw/master/" + fileName;
+            const string newFileUrl = "https://github.com/DroneDB/test_data/raw/master/test-datasets/drone_dataset_brighton_beach/" + fileName;
 
             // ListBatches
             var batches = (await shareManager.ListBatches(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug)).ToArray();
@@ -249,7 +249,7 @@ namespace Registry.Web.Test
             const string organizationTestSlug = "test";
             const string datasetTestSlug = "first";
             const string testPassword = "ciaoatutti";
-            const string newFileUrl = "https://github.com/pierotofy/drone_dataset_brighton_beach/raw/master/" + fileName;
+            const string newFileUrl = "https://github.com/DroneDB/test_data/raw/master/test-datasets/drone_dataset_brighton_beach/" + fileName;
 
             // ListBatches
             var batches = (await shareManager.ListBatches(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug)).ToArray();

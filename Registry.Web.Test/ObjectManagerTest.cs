@@ -199,8 +199,8 @@ namespace Registry.Web.Test
                 fileName);
 
             res.Should().HaveCount(0);
-
-            var newFileUrl = "https://github.com/pierotofy/drone_dataset_brighton_beach/raw/master/" + fileName;
+            
+            var newFileUrl = "https://github.com/DroneDB/test_data/raw/master/test-datasets/drone_dataset_brighton_beach/" + fileName;
 
             var ret = await objectManager.AddNew(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug,
                 fileName, CommonUtils.SmartDownloadData(newFileUrl));
