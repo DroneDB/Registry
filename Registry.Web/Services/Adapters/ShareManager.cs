@@ -283,7 +283,7 @@ namespace Registry.Web.Services.Adapters
             {
                 _logger.LogInformation($"Rolling back batch '{token}' @ {batch.End.Value.ToLongDateString()} {batch.End.Value.ToLongTimeString()}");
 
-                RollbackBatch(batch);
+                await RollbackBatch(batch);
 
                 _logger.LogInformation($"Batch '{token}' rolled back");
 

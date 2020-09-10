@@ -199,11 +199,12 @@ namespace Registry.Web.Services.Adapters
             _logger.LogInformation($"File deleted, removing from DDB");
 
             // Remove from DDB
-            using var ddb = _ddbFactory.GetDdb(orgSlug, dsSlug);
-            ddb.Remove(path);
+            using (var ddb = _ddbFactory.GetDdb(orgSlug, dsSlug)) {
+                ddb.Remove(path);
+                dataset.UpdateStatistics(ddb);
+            }
 
             // Refresh objects count and total size
-            dataset.UpdateStatistics(ddb);
             await _context.SaveChangesAsync();
 
             _logger.LogInformation("Removed from DDB");
