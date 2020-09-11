@@ -1,34 +1,42 @@
-FROM ubuntu:20.04
+FROM debian:buster
 MAINTAINER Piero Toffanin <pt@uav4geo.com>
 ENV DEBIAN_FRONTEND noninteractive
+ENV DOTNET_CLI_TELEMETRY_OPTOUT 1
 
 #install dependencies
-RUN apt update && apt install  -y --fix-missing --no-install-recommends\
-    build-essential \
+RUN apt-get update && apt-get install  -y --fix-missing --no-install-recommends\
+    apt-transport-https \	
+	build-essential \
     ca-certificates \
-    apt-transport-https \
     cmake \
     git \
     sqlite3 \
     spatialite-bin \
+	libsqlite3-mod-spatialite \
     exiv2 \
     libexiv2-dev \
     libgeos-dev \
     libgdal-dev \
-    wget
+    wget \
+	python \
+	python-pip \
+	python-setuptools \
+	python-wheel \
+	python-dev \
+	curl
 
 # Install dotnet
 
 RUN wget https://packages.microsoft.com/config/debian/10/packages-microsoft-prod.deb -O /tmp/packages-microsoft-prod.deb && \
     dpkg -i /tmp/packages-microsoft-prod.deb && \
-    apt update && \
-    apt install -y dotnet-sdk-3.1
+    apt-get update && \
+    apt-get install -y dotnet-sdk-3.1
 
-RUN git clone --recurse-submodules https://github.com/DroneDB/DroneDB /ddb && \
-    cd /ddb && \
-    mkdir build && \
-    cd build && \
-    cmake .. && make -j$(nproc) && make install
+# Exodus
+RUN pip install --user exodus wheel setuptools
+
+# Instal ddb
+RUN curl -fsSL https://get.dronedb.app -o get-ddb.sh && sh get-ddb.sh
 
 COPY . /registry
 
@@ -36,9 +44,9 @@ COPY . /registry
 # I shouldn't have to modify /registry/Registry.Web/appsettings.json
 # let's improve this.
 
-RUN rm /registry/Registry.Web/appsettings.json && ln -s /registry/docker/appsettings.json /registry/Registry.Web/appsettings.json
+#RUN rm /registry/Registry.Web/appsettings.json && ln -s /registry/docker/appsettings.json /registry/Registry.Web/appsettings.json
 WORKDIR /registry
 
-RUN apt clean && rm -r /tmp/*
+RUN apt-get clean && rm -r /tmp/*
 
 ENTRYPOINT ["/usr/bin/dotnet", "run", "--project", "Registry.Web"]
