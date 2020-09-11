@@ -10,7 +10,7 @@ namespace Registry.Web.Services.Ports
     {
         public Task<string> Initialize(ShareInitDto parameters);
         public Task<UploadResultDto> Upload(string token, string path, byte[] data);
-        public Task<CommitResultDto> Commit(string token);
+        public Task<CommitResultDto> Commit(string token, bool rollback = false);
         Task<IEnumerable<BatchDto>> ListBatches(string orgSlug, string dsSlug);
     }
 }

@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
+using Registry.Web.Data.Models;
 
 namespace Registry.Web.Models.DTO
 {
@@ -19,5 +20,6 @@ namespace Registry.Web.Models.DTO
         public DateTime End { get; set; }
         public long TotalSize { get; set; }
         public int ObjectsCount { get; set; }
+        public BatchStatus Status { get; set; }
     }
 }

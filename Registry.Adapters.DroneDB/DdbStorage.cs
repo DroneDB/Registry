@@ -177,6 +177,7 @@ namespace Registry.Adapters.DroneDB
 
         public void Remove(string path)
         {
+            //_ddb.Remove(_dbPath, path);
             var entry = Entries.FirstOrDefault(item => item.Path == path);
 
             if (entry == null)

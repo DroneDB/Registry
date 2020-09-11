@@ -14,6 +14,7 @@ namespace Registry.Web.Models.DTO
         public DateTime Start { get; set; }
         public DateTime? End { get; set; }
 
+        public BatchStatus Status { get; set; }
         public IEnumerable<EntryDto> Entries { get; set; }
     }
 

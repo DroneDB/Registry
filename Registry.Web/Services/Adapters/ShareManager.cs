@@ -63,6 +63,7 @@ namespace Registry.Web.Services.Adapters
                               Start = batch.Start,
                               Token = batch.Token,
                               UserName = batch.UserName,
+                              Status = batch.Status,
                               Entries = from entry in batch.Entries
                                         select new EntryDto
                                         {
@@ -130,10 +131,15 @@ namespace Registry.Web.Services.Adapters
 
                 await _context.Entry(dataset).Collection(item => item.Batches).LoadAsync();
 
-                if (dataset.Batches.Any(item => item.End == null))
+                var runningBatches = dataset.Batches.Where(item => item.End == null).ToArray();
+
+                if (runningBatches.Any())
                 {
-                    _logger.LogInformation("Found already running batches, cannot start a new one");
-                    throw new BadRequestException("Cannot start a new batch if there are others already running");
+                    _logger.LogInformation($"Found '{runningBatches.Length}' running batch(es), stopping and rolling back before starting a new one");
+
+                    foreach (var b in runningBatches)
+                        await RollbackBatch(b);
+
                 }
             }
 
@@ -142,7 +148,8 @@ namespace Registry.Web.Services.Adapters
                 Dataset = dataset,
                 Start = DateTime.Now,
                 Token = CommonUtils.RandomString(TokenLength),
-                UserName = await _authManager.SafeGetCurrentUserName()
+                UserName = await _authManager.SafeGetCurrentUserName(),
+                Status = BatchStatus.Running
             };
 
             _logger.LogInformation($"Adding new batch for user '{batch.UserName}' with token '{batch.Token}'");
@@ -153,6 +160,30 @@ namespace Registry.Web.Services.Adapters
             _logger.LogInformation("Batch created, it is now possible to upload files");
 
             return batch.Token;
+        }
+
+        private async Task RollbackBatch(Batch batch)
+        {
+            _logger.LogInformation($"Rolling back batch '{batch.Token}'");
+            
+            // I know we will have concurrency problems here because we could be in the middle of the rollback when another client calls for another one
+            // To mitigate this issue we are going to commit the status change of the batch as soon as possible
+
+            batch.Status = BatchStatus.Rolledback;
+            batch.End = DateTime.Now;
+            await _context.SaveChangesAsync();
+
+            await _context.Entry(batch).Collection(item => item.Entries).LoadAsync();
+            await _context.Entry(batch).Reference(item => item.Dataset).LoadAsync();
+            
+            var ds = batch.Dataset;
+            
+            await _context.Entry(ds).Reference(item => item.Organization).LoadAsync();
+            var org = ds.Organization;
+
+            foreach (var entry in batch.Entries)
+                await _objectsManager.Delete(org.Slug, ds.Slug, entry.Path);
+            
         }
 
 
@@ -175,7 +206,7 @@ namespace Registry.Web.Services.Adapters
             if (batch == null)
                 throw new NotFoundException("Cannot find batch");
 
-            if (batch.End != null)
+            if (batch.Status != BatchStatus.Running)
                 throw new BadRequestException("Cannot upload file to closed batch");
 
             var currentUserName = await _authManager.SafeGetCurrentUserName();
@@ -227,7 +258,7 @@ namespace Registry.Web.Services.Adapters
 
         }
 
-        public async Task<CommitResultDto> Commit(string token)
+        public async Task<CommitResultDto> Commit(string token, bool rollback = false)
         {
 
             if (string.IsNullOrWhiteSpace(token))
@@ -238,7 +269,7 @@ namespace Registry.Web.Services.Adapters
             if (batch == null)
                 throw new NotFoundException("Cannot find batch");
 
-            if (batch.End != null)
+            if (batch.Status != BatchStatus.Running)
                 throw new BadRequestException("Cannot commit a closed batch");
 
             var currentUserName = await _authManager.SafeGetCurrentUserName();
@@ -248,9 +279,27 @@ namespace Registry.Web.Services.Adapters
 
             batch.End = DateTime.Now;
 
-            _logger.LogInformation($"Committing batch '{token}' @ {batch.End.Value.ToLongDateString()} {batch.End.Value.ToLongTimeString()}");
+            if (rollback)
+            {
+                _logger.LogInformation($"Rolling back batch '{token}' @ {batch.End.Value.ToLongDateString()} {batch.End.Value.ToLongTimeString()}");
 
-            // TODO: Commit?
+                await RollbackBatch(batch);
+
+                _logger.LogInformation($"Batch '{token}' rolled back");
+
+                batch.Status = BatchStatus.Rolledback;
+            }
+            else
+            {
+                _logger.LogInformation($"Committing batch '{token}' @ {batch.End.Value.ToLongDateString()} {batch.End.Value.ToLongTimeString()}");
+
+                batch.Status = BatchStatus.Committed;
+
+                // TODO: Are we supposed to do more operations here?
+
+                _logger.LogInformation($"Batch '{token}' committed");
+
+            }
 
             await _context.SaveChangesAsync();
 
@@ -261,7 +310,8 @@ namespace Registry.Web.Services.Adapters
                 End = batch.End.Value,
                 Start = batch.Start,
                 ObjectsCount = batch.Entries.Count,
-                TotalSize = batch.Entries.Sum(item => item.Size)
+                TotalSize = batch.Entries.Sum(item => item.Size),
+                Status = batch.Status
             };
 
         }

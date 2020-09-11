@@ -98,8 +98,8 @@ namespace Registry.Web.Test
         [Explicit("Cannot run in CI")]
         public async Task EndToEnd_HappyPath()
         {
-
-            const string fileName = "DJI_0028.JPG";
+            /* INITIALIZATION & SETUP */
+            const string userName = "admin";
 
             using var test = new TestFS(Test1ArchiveUrl, BaseTestFolder, true);
             
@@ -109,10 +109,10 @@ namespace Registry.Web.Test
             _authManagerMock.Setup(o => o.IsUserAdmin()).Returns(Task.FromResult(true));
             _authManagerMock.Setup(o => o.GetCurrentUser()).Returns(Task.FromResult(new User
             {
-                UserName = "admin",
+                UserName = userName,
                 Email = "admin@example.com"
             }));
-            _authManagerMock.Setup(o => o.SafeGetCurrentUserName()).Returns(Task.FromResult("admin"));
+            _authManagerMock.Setup(o => o.SafeGetCurrentUserName()).Returns(Task.FromResult(userName));
             
             var sys = new PhysicalObjectSystem(Path.Combine(test.TestFolder, StorageFolder));
             sys.SyncBucket($"{MagicStrings.PublicOrganizationSlug}-{MagicStrings.DefaultDatasetSlug}");
@@ -127,15 +127,22 @@ namespace Registry.Web.Test
 
             var shareManager = new ShareManager(_shareManagerLogger, objectManager, datasetManager, organizationsManager, webUtils, _authManagerMock.Object, context);
 
-            var batches = (await shareManager.ListBatches(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug)).ToArray();
+            /* TEST */
 
-            batches.Should().BeEmpty();
-
+            const string fileName = "DJI_0028.JPG";
+            const int fileSize = 3140384;
+            const string fileHash = "7cf58d0a06c56092aa5d6e108e385ad942225c75b462406cdf50d66f829572d3";
             const string organizationTestName = "test";
             const string datasetTestName = "First";
             const string organizationTestSlug = "test";
             const string datasetTestSlug = "first";
+            const string testPassword = "ciaoatutti";
+            const string newFileUrl = "https://github.com/DroneDB/test_data/raw/master/test-datasets/drone_dataset_brighton_beach/" + fileName;
 
+            // ListBatches
+            var batches = (await shareManager.ListBatches(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug)).ToArray();
+            batches.Should().BeEmpty();
+            
             var res = await organizationsManager.AddNew(new OrganizationDto
             {
                 Name = organizationTestName,
@@ -143,9 +150,11 @@ namespace Registry.Web.Test
                 Slug = organizationTestSlug
             });
 
+            res.Description.Should().BeNull();
+            res.IsPublic.Should().BeTrue();
+            res.Slug.Should().Be(organizationTestSlug);
+            res.Name.Should().Be(organizationTestName);
             
-            const string testPassword = "ciaoatutti";
-
             // Initialize
             var token = await shareManager.Initialize(new ShareInitDto
             {
@@ -156,26 +165,191 @@ namespace Registry.Web.Test
 
             token.Should().NotBeNullOrWhiteSpace();
 
+            // ListBatches
             batches = (await shareManager.ListBatches(organizationTestSlug, datasetTestSlug)).ToArray();
 
             batches.Should().HaveCount(1);
 
-            var newFileUrl = "https://github.com/pierotofy/drone_dataset_brighton_beach/raw/master/" + fileName;
-
-            await shareManager.Upload(token, fileName, CommonUtils.SmartDownloadData(newFileUrl));
-
-            await shareManager.Commit(token);
-
-            batches = (await shareManager.ListBatches(organizationTestSlug, datasetTestSlug)).ToArray();
-
-            batches.Should().HaveCount(1);
             var batch = batches.First();
+
+            batch.UserName.Should().Be(userName);
+            batch.Status.Should().Be(BatchStatus.Running);
+            batch.End.Should().BeNull();
+
+            // Upload
+            var uploadRes = await shareManager.Upload(token, fileName, CommonUtils.SmartDownloadData(newFileUrl));
+
+            uploadRes.Path.Should().Be(fileName);
+            uploadRes.Size.Should().Be(fileSize);
+            uploadRes.Hash.Should().Be(fileHash);
+
+            // Commit
+            var commitRes = await shareManager.Commit(token);
+
+            commitRes.TotalSize.Should().Be(fileSize);
+            commitRes.ObjectsCount.Should().Be(1);
+            commitRes.Status.Should().Be(BatchStatus.Committed);
+
+            // ListBatches
+            batches = (await shareManager.ListBatches(organizationTestSlug, datasetTestSlug)).ToArray();
+
+            batches.Should().HaveCount(1);
+
+            batch = batches.First();
+
             batch.Token.Should().Be(token);
-            batch.UserName.Should().Be("admin");
-            batch.Entries.Should().HaveCount(1);
+            batch.UserName.Should().Be(userName);
             batch.End.Should().NotBeNull();
+            batch.Status.Should().Be(BatchStatus.Committed);
+            batch.Entries.Should().HaveCount(1);
 
         }
+
+        [Test]
+        [Explicit("Cannot run in CI")]
+        public async Task EndToEnd_ShareInit_After_ShareInit()
+        {
+
+            /* INITIALIZATION & SETUP */
+            const string userName = "admin";
+
+            using var test = new TestFS(Test1ArchiveUrl, BaseTestFolder, true);
+
+            await using var context = GetTest1Context();
+
+            _appSettingsMock.Setup(o => o.Value).Returns(_settings);
+            _authManagerMock.Setup(o => o.IsUserAdmin()).Returns(Task.FromResult(true));
+            _authManagerMock.Setup(o => o.GetCurrentUser()).Returns(Task.FromResult(new User
+            {
+                UserName = userName,
+                Email = "admin@example.com"
+            }));
+            _authManagerMock.Setup(o => o.SafeGetCurrentUserName()).Returns(Task.FromResult(userName));
+
+            var sys = new PhysicalObjectSystem(Path.Combine(test.TestFolder, StorageFolder));
+            sys.SyncBucket($"{MagicStrings.PublicOrganizationSlug}-{MagicStrings.DefaultDatasetSlug}");
+
+            var ddbFactory = new DdbFactory(_appSettingsMock.Object, _ddbFactoryLogger);
+            var webUtils = new WebUtils(_authManagerMock.Object, context);
+
+            var objectManager = new ObjectsManager(_objectManagerLogger, context, sys, _appSettingsMock.Object, ddbFactory, webUtils);
+
+            var datasetManager = new DatasetsManager(context, webUtils, _datasetsManagerLogger, objectManager, ddbFactory, _passwordHasher);
+            var organizationsManager = new OrganizationsManager(_authManagerMock.Object, context, webUtils, datasetManager, _organizationsManagerLogger);
+
+            var shareManager = new ShareManager(_shareManagerLogger, objectManager, datasetManager, organizationsManager, webUtils, _authManagerMock.Object, context);
+
+            /* TEST */
+
+            const string fileName = "DJI_0028.JPG";
+            const int fileSize = 3140384;
+            const string fileHash = "7cf58d0a06c56092aa5d6e108e385ad942225c75b462406cdf50d66f829572d3";
+            const string organizationTestName = "test";
+            const string datasetTestName = "First";
+            const string organizationTestSlug = "test";
+            const string datasetTestSlug = "first";
+            const string testPassword = "ciaoatutti";
+            const string newFileUrl = "https://github.com/DroneDB/test_data/raw/master/test-datasets/drone_dataset_brighton_beach/" + fileName;
+
+            // ListBatches
+            var batches = (await shareManager.ListBatches(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug)).ToArray();
+            batches.Should().BeEmpty();
+
+            await organizationsManager.AddNew(new OrganizationDto
+            {
+                Name = organizationTestName,
+                IsPublic = true,
+                Slug = organizationTestSlug
+            });
+            
+            // Initialize
+            var token = await shareManager.Initialize(new ShareInitDto
+            {
+                Tag = $"{organizationTestSlug}/{datasetTestSlug}",
+                DatasetName = datasetTestName,
+                Password = testPassword
+            });
+
+            token.Should().NotBeNullOrWhiteSpace();
+
+            // ListBatches
+            batches = (await shareManager.ListBatches(organizationTestSlug, datasetTestSlug)).ToArray();
+
+            batches.Should().HaveCount(1);
+
+
+            // Upload
+            await shareManager.Upload(token, fileName, CommonUtils.SmartDownloadData(newFileUrl));
+
+            // Initialize
+            var newToken = await shareManager.Initialize(new ShareInitDto
+            {
+                Tag = $"{organizationTestSlug}/{datasetTestSlug}",
+                DatasetName = datasetTestName,
+                Password = testPassword
+            });
+
+            token.Should().NotBeNullOrWhiteSpace();
+
+            // ListBatches
+            batches = (await shareManager.ListBatches(organizationTestSlug, datasetTestSlug)).ToArray();
+
+            batches.Should().HaveCount(2);
+
+            var oldBatch = batches.FirstOrDefault(item => item.Token == token);
+            oldBatch.Should().NotBeNull();
+
+            // ReSharper disable once PossibleNullReferenceException
+            oldBatch.End.Should().NotBeNull();
+            oldBatch.Status.Should().Be(BatchStatus.Rolledback);
+
+            var newBatch = batches.FirstOrDefault(item => item.Token == newToken);
+            newBatch.Should().NotBeNull();
+
+            // ReSharper disable once PossibleNullReferenceException
+            newBatch.End.Should().BeNull();
+            newBatch.Status.Should().Be(BatchStatus.Running);
+
+            // Upload to old batch -> Exception
+            shareManager.Invoking(async x => await x.Upload(token, fileName, CommonUtils.SmartDownloadData(newFileUrl)))
+                .Should().Throw<BadRequestException>();
+
+            // Commit old batch -> Exception
+            shareManager.Invoking(async x => await shareManager.Commit(token))
+                .Should().Throw<BadRequestException>();
+
+            // Fix
+            context.Set<Entry>().Local.Clear();
+            
+            // Upload to new batch
+            var uploadRes = await shareManager.Upload(newToken, fileName, CommonUtils.SmartDownloadData(newFileUrl));
+            uploadRes.Path.Should().Be(fileName);
+            uploadRes.Size.Should().Be(fileSize);
+            uploadRes.Hash.Should().Be(fileHash);
+
+            // Commit
+            var commitRes = await shareManager.Commit(newToken);
+
+            commitRes.TotalSize.Should().Be(fileSize);
+            commitRes.ObjectsCount.Should().Be(1);
+            commitRes.Status.Should().Be(BatchStatus.Committed);
+
+            // ListBatches
+            batches = (await shareManager.ListBatches(organizationTestSlug, datasetTestSlug)).ToArray();
+
+            batches.Should().HaveCount(2);
+
+            //batches = (await shareManager.ListBatches(organizationTestSlug, datasetTestSlug)).ToArray();
+
+            //batches.Should().HaveCount(1);
+            //var batch = batches.First();
+            //batch.Token.Should().Be(token);
+            //batch.UserName.Should().Be("admin");
+            //batch.Entries.Should().HaveCount(1);
+            //batch.End.Should().NotBeNull();
+
+        }
+
 
 
 
