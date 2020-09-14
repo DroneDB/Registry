@@ -16,8 +16,8 @@ namespace Registry.Web.Services.Adapters
     {
         private readonly ILogger<DdbFactory> _logger;
         private readonly AppSettings _settings;
-        private const string DefaultDdbFolder = ".ddb";
-        private const string DefaultDdbSqliteName = "dbase.sqlite";
+        //private const string DefaultDdbFolder = ".ddb";
+        //private const string DefaultDdbSqliteName = "dbase.sqlite";
 
         public DdbFactory(IOptions<AppSettings> settings, ILogger<DdbFactory> logger)
         {
@@ -27,30 +27,28 @@ namespace Registry.Web.Services.Adapters
 
         // NOTE: This logic is separated from the manager classes because it is used in multiple places and it could be subject to change
 
-        public IDdbStorage GetDdb(string orgSlug, string dsSlug)
+        public IDdb GetDdb(string orgSlug, string dsSlug)
         {
             var baseDdbPath = Path.Combine(_settings.DdbStoragePath, orgSlug, dsSlug);
 
-            var ddbPath = Path.Combine(baseDdbPath, DefaultDdbFolder, DefaultDdbSqliteName);
+            //var ddbPath = Path.Combine(baseDdbPath, DefaultDdbFolder, DefaultDdbSqliteName);
             
-            IDdb ddb = new Ddb(Path.Combine(_settings.DdbPath, DdbPackageProvider.GetExeName()));
+            //_logger.LogInformation($"Opening ddb in '{ddbPath}'");
+
+            var ddb = new Ddb(baseDdbPath);
             
-            if (!File.Exists(ddbPath))
-            {
-                _logger.LogInformation($"Database not found, creating new in '{baseDdbPath}'");
-                ddb.CreateDatabase(baseDdbPath);
-                _logger.LogInformation("Empty database created");
-            }
+            //if (!File.Exists(ddbPath))
+            //{
+            //    _logger.LogInformation($"Database not found, creating new in '{baseDdbPath}'");
+            //    ddbStorage.CreateDatabase(baseDdbPath);
+            //    _logger.LogInformation("Empty database created");
+            //}
+            
+            //var res = ddb.Database.EnsureCreated();
 
-            _logger.LogInformation($"Opening ddb in '{ddbPath}'");
+            //_logger.LogInformation(res ? "Database created" : "Database already existing");
 
-            var ddbStorage = new DdbStorage(ddbPath, ddb);
-
-            var res = ddbStorage.Database.EnsureCreated();
-
-            _logger.LogInformation(res ? "Database created" : "Database already existing");
-
-            return ddbStorage;
+            return ddb;
         }
 
     }

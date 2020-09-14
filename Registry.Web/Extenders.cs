@@ -92,7 +92,7 @@ namespace Registry.Web
             };
         }
 
-        public static void UpdateStatistics(this Dataset ds, IDdbStorage ddb)
+        public static void UpdateStatistics(this Dataset ds, IDdb ddb)
         {
             var objs = ddb.Search(null).ToArray();
 

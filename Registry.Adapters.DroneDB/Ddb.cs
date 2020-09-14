@@ -2,89 +2,112 @@
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
+using System.Linq;
 using System.Text;
+using GeoJSON.Net;
+using GeoJSON.Net.CoordinateReferenceSystem;
+using GeoJSON.Net.Feature;
+using GeoJSON.Net.Geometry;
+using NetTopologySuite;
+using NetTopologySuite.Geometries.Implementation;
 using Newtonsoft.Json;
-using Registry.Adapters.DroneDB.Models;
+using Newtonsoft.Json.Linq;
+using Registry.Common;
 using Registry.Ports.DroneDB;
 using Registry.Ports.DroneDB.Models;
+using SQLitePCL;
+using LineString = GeoJSON.Net.Geometry.LineString;
+using Point = GeoJSON.Net.Geometry.Point;
+using Polygon = GeoJSON.Net.Geometry.Polygon;
 
 namespace Registry.Adapters.DroneDB
 {
+
     public class Ddb : IDdb
     {
-        private readonly string _ddbExePath;
+        private readonly string _dbPath;
+        private readonly string _baseDdbPath;
 
-        // TODO: Maybe all this "stuff" can be put in the config
-        private const string InfoCommand = "info";
-        private const string RemoveCommand = "remove";
-        private const string InitCommand = "init";
-        private const int MaxWaitTime = 5000;
+        private const int Srid = 4326;
 
-        public Ddb(string ddbExePath)
-        {
-            _ddbExePath = ddbExePath;
-        }
-
-
-        public IEnumerable<DdbInfo> Info(string path)
+        public Ddb(string baseDdbPath)
         {
 
-            var res = RunCommand($"{InfoCommand} -f json \"{path}\"");
+            Directory.CreateDirectory(baseDdbPath);
 
-            var lst = JsonConvert.DeserializeObject<DdbInfo[]>(res);
-
-            if (lst == null || lst.Length == 0)
-                throw new InvalidOperationException("Cannot parse ddb output");
-
-            return lst;
-        }
-
-        public void Remove(string ddbPath, string path)
-        {
-
-            var res = RunCommand($"{RemoveCommand} -d \"{ddbPath}\" -p \"{path}\"");
-            
-            return;
-        }
-
-        public void CreateDatabase(string path)
-        {
-
-            Directory.CreateDirectory(path);
-
-            var res = RunCommand($"{InitCommand} -d \"{Path.GetFullPath(path)}\"");
-
-        }
-
-        private string RunCommand(string parameters)
-        {
-            using var p = new Process
+            // TODO: It would be nice if we could use the bindings to check this
+            if (!Directory.Exists(".ddb"))
             {
-                StartInfo = new ProcessStartInfo(_ddbExePath, parameters)
-                {
-                    RedirectStandardOutput = true,
-                    RedirectStandardError = true,
-                    CreateNoWindow = true,
-                    UseShellExecute = false
-                }
-            };
-
-            if (!p.StartInfo.EnvironmentVariables.ContainsKey("PROJ_LIB"))
-            {
-                p.StartInfo.EnvironmentVariables.Add("PROJ_LIB", Path.GetDirectoryName(Path.GetFullPath(_ddbExePath)));
+                var res = DDB.Bindings.DroneDB.Init(baseDdbPath);
             }
-
-            Debug.WriteLine($"PROJ_LIB = '{p.StartInfo.EnvironmentVariables["PROJ_LIB"]}'");
-            Debug.WriteLine("Running command:");
-            Debug.WriteLine($"{_ddbExePath} {parameters}");
-
-            p.Start();
-
-            if (!p.WaitForExit(MaxWaitTime))
-                throw new IOException("Tried to start ddb process but it's taking too long to complete");
-
-            return p.StandardOutput.ReadToEnd();
+            _baseDdbPath = baseDdbPath;
         }
 
+        public IEnumerable<DdbEntry> Search(string path)
+        {
+
+            //var res = DDB.Bindings.DroneDB.Info(path)
+
+            return null;
+            //using var entities = new DdbContext(_dbPath);
+
+            //var tmp = from entry in entities.Entries
+            //    select entry;
+
+            //// Filter only if necessary
+            //if (!string.IsNullOrEmpty(path))
+            //    tmp = from item in tmp
+            //        where item.Path.StartsWith(path)
+            //        select item;
+
+            //var query = from item in tmp.ToArray()
+            //    select new DdbEntry
+            //    {
+            //        Depth = item.Depth,
+            //        Hash = item.Hash,
+            //        Meta = JsonConvert.DeserializeObject<JObject>(item.Meta),
+            //        ModifiedTime = item.ModifiedTime,
+            //        Path = item.Path,
+            //        Size = item.Size,
+            //        Type = item.Type,
+            //        PointGeometry = GetPoint(item.PointGeometry),
+            //        PolygonGeometry = GetFeature(item.PolygonGeometry)
+            //    };
+
+            //return query.ToArray();
+        }
+
+        public void Add(string path, byte[] data)
+        {
+            using var entities = new DdbContext(_dbPath);
+
+            var entry = entities.Entries.FirstOrDefault(item => item.Path == path);
+
+            if (entry != null)
+                throw new InvalidOperationException($"Entry with path '{path}' already existing in database");
+
+            var fileName = Path.GetFileName(path);
+            var tempFile = Path.Combine(_baseDdbPath, fileName);
+
+            File.WriteAllBytes(tempFile, data);
+
+            DDB.Bindings.DroneDB.Add(_dbPath, tempFile);
+
+            //entry = Entries.FirstOrDefault(item => item.Path == tempFile);
+
+            //if (entry == null) 
+            //    throw new InvalidOperationException($"Added temp entry '{tempFile}' using ddb bindings but I cannot find it");
+
+            //entry.Path = path;
+            //SaveChanges();
+
+            File.Delete(tempFile);
+
+        }
+
+        public void Remove(string path)
+        {
+            DDB.Bindings.DroneDB.Remove(_dbPath, path);
+        }
     }
 }
