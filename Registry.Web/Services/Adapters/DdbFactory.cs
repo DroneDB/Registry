@@ -16,8 +16,6 @@ namespace Registry.Web.Services.Adapters
     {
         private readonly ILogger<DdbFactory> _logger;
         private readonly AppSettings _settings;
-        //private const string DefaultDdbFolder = ".ddb";
-        //private const string DefaultDdbSqliteName = "dbase.sqlite";
 
         public DdbFactory(IOptions<AppSettings> settings, ILogger<DdbFactory> logger)
         {
@@ -30,23 +28,12 @@ namespace Registry.Web.Services.Adapters
         public IDdb GetDdb(string orgSlug, string dsSlug)
         {
             var baseDdbPath = Path.Combine(_settings.DdbStoragePath, orgSlug, dsSlug);
-
-            //var ddbPath = Path.Combine(baseDdbPath, DefaultDdbFolder, DefaultDdbSqliteName);
             
-            //_logger.LogInformation($"Opening ddb in '{ddbPath}'");
+            _logger.LogInformation($"Opening ddb in '{baseDdbPath}'");
 
             var ddb = new Ddb(baseDdbPath);
             
-            //if (!File.Exists(ddbPath))
-            //{
-            //    _logger.LogInformation($"Database not found, creating new in '{baseDdbPath}'");
-            //    ddbStorage.CreateDatabase(baseDdbPath);
-            //    _logger.LogInformation("Empty database created");
-            //}
             
-            //var res = ddb.Database.EnsureCreated();
-
-            //_logger.LogInformation(res ? "Database created" : "Database already existing");
 
             return ddb;
         }

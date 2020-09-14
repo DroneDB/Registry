@@ -4,6 +4,7 @@ using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Text;
+using DDB.Bindings;
 using GeoJSON.Net;
 using GeoJSON.Net.CoordinateReferenceSystem;
 using GeoJSON.Net.Feature;
@@ -25,26 +26,34 @@ namespace Registry.Adapters.DroneDB
 
     public class Ddb : IDdb
     {
-        private readonly string _dbPath;
         private readonly string _baseDdbPath;
-
-        private const int Srid = 4326;
 
         public Ddb(string baseDdbPath)
         {
 
+            _baseDdbPath = baseDdbPath;
+
             Directory.CreateDirectory(baseDdbPath);
 
             // TODO: It would be nice if we could use the bindings to check this
-            if (!Directory.Exists(".ddb"))
+            if (!Directory.Exists(Path.Combine(baseDdbPath, ".ddb")))
             {
-                var res = DDB.Bindings.DroneDB.Init(baseDdbPath);
+                try
+                {
+                    var res = DDB.Bindings.DroneDB.Init(baseDdbPath);
+                    Debug.WriteLine(res);
+                }
+                catch (DDBException ex)
+                {
+                    throw new InvalidOperationException($"Cannot initialize ddb in folder '{baseDdbPath}'", ex);
+                }
             }
-            _baseDdbPath = baseDdbPath;
         }
 
         public IEnumerable<DdbEntry> Search(string path)
         {
+
+            //var info = DDB.Bindings.DroneDB.Info()
 
             //var res = DDB.Bindings.DroneDB.Info(path)
 
@@ -79,35 +88,39 @@ namespace Registry.Adapters.DroneDB
 
         public void Add(string path, byte[] data)
         {
-            using var entities = new DdbContext(_dbPath);
+            string filePath = null;
 
-            var entry = entities.Entries.FirstOrDefault(item => item.Path == path);
+            try
+            {
 
-            if (entry != null)
-                throw new InvalidOperationException($"Entry with path '{path}' already existing in database");
+                filePath = Path.Combine(_baseDdbPath, path);
 
-            var fileName = Path.GetFileName(path);
-            var tempFile = Path.Combine(_baseDdbPath, fileName);
+                File.WriteAllBytes(filePath, data);
 
-            File.WriteAllBytes(tempFile, data);
+                DDB.Bindings.DroneDB.Add(_baseDdbPath, filePath);
 
-            DDB.Bindings.DroneDB.Add(_dbPath, tempFile);
-
-            //entry = Entries.FirstOrDefault(item => item.Path == tempFile);
-
-            //if (entry == null) 
-            //    throw new InvalidOperationException($"Added temp entry '{tempFile}' using ddb bindings but I cannot find it");
-
-            //entry.Path = path;
-            //SaveChanges();
-
-            File.Delete(tempFile);
-
+            }
+            catch (DDBException ex)
+            {
+                throw new InvalidOperationException($"Cannot add '{path}' to ddb '{_baseDdbPath}'", ex);
+            }
+            finally
+            {
+                if (filePath != null && File.Exists(filePath))
+                    File.Delete(filePath);
+            }
         }
 
         public void Remove(string path)
         {
-            DDB.Bindings.DroneDB.Remove(_dbPath, path);
+            try
+            {
+                DDB.Bindings.DroneDB.Remove(_baseDdbPath, path);
+            }
+            catch (DDBException ex)
+            {
+                throw new InvalidOperationException($"Cannot remove '{path}' from ddb '{_baseDdbPath}'", ex);
+            }
         }
     }
 }
