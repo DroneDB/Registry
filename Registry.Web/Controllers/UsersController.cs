@@ -12,6 +12,7 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
 using Registry.Web.Models.DTO;
@@ -25,31 +26,13 @@ namespace Registry.Web.Controllers
     [Route("[controller]")]
     public class UsersController : ControllerBaseEx
     {
-
-        // TODO: Abstract and test as soon as possible
-
-        private readonly ApplicationDbContext _context;
-        private readonly RoleManager<IdentityRole> _roleManager;
-        private readonly IAuthManager _authManager;
-        private readonly SignInManager<User> _signInManager;
-        private readonly UserManager<User> _usersManager;
-        private readonly AppSettings _appSettings;
-
-        public UsersController(
-            IOptions<AppSettings> appSettings,
-            SignInManager<User> signInManager,
-            UserManager<User> usersManager,
-            ApplicationDbContext context,
-            RoleManager<IdentityRole> roleManager,
-            IAuthManager authManager)
+        private readonly IUsersManager _usersManager;
+        private readonly ILogger<UsersController> _logger;
+        
+        public UsersController(IUsersManager usersManager, ILogger<UsersController> logger)
         {
-            _context = context;
-            _roleManager = roleManager;
-            _authManager = authManager;
-            _signInManager = signInManager;
             _usersManager = usersManager;
-            _appSettings = appSettings.Value;
-
+            _logger = logger;
         }
 
         [AllowAnonymous]
@@ -57,69 +40,47 @@ namespace Registry.Web.Controllers
         public async Task<IActionResult> Authenticate([FromForm] AuthenticateRequest model)
         {
 
-            var response = await GetAutentication(model);
+            try
+            {
+                _logger.LogDebug($"Users controller Authenticate('{model.Username}')");
 
-            if (response == null)
-                return Unauthorized(new ErrorResponse("Unauthorized"));
+                var res = await _usersManager.Authenticate(model);
 
-            return Ok(response);
-        }
+                if (res == null)
+                    return Unauthorized(new ErrorResponse("Unauthorized"));
 
-        private async Task<AuthenticateResponse> GetAutentication(AuthenticateRequest model)
-        {
-            var user = await _usersManager.FindByNameAsync(model.Username);
+                return Ok(res);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, $"Exception in Users controller Authenticate('{model.Username}')");
 
-            if (user == null) return null;
+                return ExceptionResult(ex);
+            }
 
-            var res = await _signInManager.CheckPasswordSignInAsync(user, model.Password, false);
-
-            if (!res.Succeeded) return null;
-
-            // authentication successful so generate jwt token
-            var token = await GenerateJwtToken(user);
-
-            return new AuthenticateResponse(user, token);
         }
 
         [HttpGet]
         public async Task<IActionResult> GetAll()
         {
 
-            if (await _authManager.IsUserAdmin())
+            try
             {
-                var query = from user in _usersManager.Users
-                    select new UserDto
-                    {
-                        Email = user.Email,
-                        UserName = user.UserName,
-                        Id = user.Id
-                    };
+                _logger.LogDebug($"Users controller GetAll()");
 
+                var res = await _usersManager.GetAll();
 
-                return Ok(query.ToArray());
+                return Ok(res);
             }
-
-            return Unauthorized(new ErrorResponse("Unauthorized"));
-            
-        }
-        private async Task<string> GenerateJwtToken(User user)
-        {
-            // generate token
-            var tokenHandler = new JwtSecurityTokenHandler();
-            var key = Encoding.ASCII.GetBytes(_appSettings.Secret);
-
-            var tokenDescriptor = new SecurityTokenDescriptor
+            catch (Exception ex)
             {
-                Subject = new ClaimsIdentity(new[]
-                {
-                    new Claim(ClaimTypes.Name, user.Id),
-                    new Claim(ApplicationDbContext.AdminRoleName.ToLowerInvariant(), (await _usersManager.IsInRoleAsync(user, ApplicationDbContext.AdminRoleName)).ToString()), 
-                }),
-                Expires = DateTime.UtcNow.AddDays(_appSettings.TokenExpirationInDays),
-                SigningCredentials = new SigningCredentials(new SymmetricSecurityKey(key), SecurityAlgorithms.HmacSha256Signature)
-            };
-            var token = tokenHandler.CreateToken(tokenDescriptor);
-            return tokenHandler.WriteToken(token);
+                _logger.LogError(ex, $"Exception in Users controller GetAll()");
+
+                return ExceptionResult(ex);
+            }
+            
+
         }
+
     }
 }
