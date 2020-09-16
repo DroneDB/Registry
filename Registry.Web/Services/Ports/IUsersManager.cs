@@ -10,7 +10,9 @@ namespace Registry.Web.Services.Ports
 {
     public interface IUsersManager
     {
-        Task<AuthenticateResponse> Authenticate(AuthenticateRequest model);
+        Task<AuthenticateResponse> Authenticate(string userName, string password);
         Task<IEnumerable<UserDto>> GetAll();
+        Task CreateUser(string userName, string email, string password);
+        Task DeleteUser(string userName);
     }
 }

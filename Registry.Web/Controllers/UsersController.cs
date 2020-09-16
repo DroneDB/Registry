@@ -44,7 +44,7 @@ namespace Registry.Web.Controllers
             {
                 _logger.LogDebug($"Users controller Authenticate('{model.Username}')");
 
-                var res = await _usersManager.Authenticate(model);
+                var res = await _usersManager.Authenticate(model.Username, model.Password);
 
                 if (res == null)
                     return Unauthorized(new ErrorResponse("Unauthorized"));
@@ -54,6 +54,48 @@ namespace Registry.Web.Controllers
             catch (Exception ex)
             {
                 _logger.LogError(ex, $"Exception in Users controller Authenticate('{model.Username}')");
+
+                return ExceptionResult(ex);
+            }
+
+        }
+
+        [HttpPost]
+        public async Task<IActionResult> CreateUser([FromForm] CreateUserRequest model)
+        {
+
+            try
+            {
+                _logger.LogDebug($"Users controller CreateUser('{model.Username}', '{model.Email}')");
+
+                await _usersManager.CreateUser(model.Username, model.Email, model.Password);
+
+                return Ok();
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, $"Exception in Users controller CreateUser()");
+
+                return ExceptionResult(ex);
+            }
+
+        }
+
+        [HttpDelete]
+        public async Task<IActionResult> DeleteUser([FromForm] string userName)
+        {
+
+            try
+            {
+                _logger.LogDebug($"Users controller DeleteUser('{userName}')");
+
+                await _usersManager.DeleteUser(userName);
+
+                return Ok();
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, $"Exception in Users controller DeleteUser()");
 
                 return ExceptionResult(ex);
             }
@@ -78,7 +120,6 @@ namespace Registry.Web.Controllers
 
                 return ExceptionResult(ex);
             }
-            
 
         }
 

@@ -8,6 +8,7 @@ using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
 using Registry.Web.Exceptions;
@@ -22,39 +23,35 @@ namespace Registry.Web.Services.Adapters
 
         private readonly RoleManager<IdentityRole> _roleManager;
         private readonly IAuthManager _authManager;
+        private readonly ILogger<UsersManager> _logger;
         private readonly SignInManager<User> _signInManager;
-        private readonly UserManager<User> _usersManager;
+        private readonly UserManager<User> _userManager;
         private readonly AppSettings _appSettings;
 
         public UsersManager(
             IOptions<AppSettings> appSettings,
             SignInManager<User> signInManager,
-            UserManager<User> usersManager,
+            UserManager<User> userManager,
             RoleManager<IdentityRole> roleManager,
-            IAuthManager authManager)
+            IAuthManager authManager,
+            ILogger<UsersManager> logger)
         {
             _roleManager = roleManager;
             _authManager = authManager;
+            _logger = logger;
             _signInManager = signInManager;
-            _usersManager = usersManager;
+            _userManager = userManager;
             _appSettings = appSettings.Value;
 
         }
 
-        public async Task<AuthenticateResponse> Authenticate(AuthenticateRequest model)
+        public async Task<AuthenticateResponse> Authenticate(string userName, string password)
         {
-            var res = await GetAutentication(model);
-
-            return res;
-        }
-
-        public async Task<AuthenticateResponse> GetAutentication(AuthenticateRequest model)
-        {
-            var user = await _usersManager.FindByNameAsync(model.Username);
+            var user = await _userManager.FindByNameAsync(userName);
 
             if (user == null) return null;
 
-            var res = await _signInManager.CheckPasswordSignInAsync(user, model.Password, false);
+            var res = await _signInManager.CheckPasswordSignInAsync(user, password, false);
 
             if (!res.Succeeded) return null;
 
@@ -64,12 +61,58 @@ namespace Registry.Web.Services.Adapters
             return new AuthenticateResponse(user, token);
         }
 
+        public async Task CreateUser(string userName, string email, string password)
+        {
+
+            if (!await _authManager.IsUserAdmin())
+                throw new UnauthorizedException("Only admins can create new users");
+
+            var user = await _userManager.FindByNameAsync(userName);
+
+            if (user != null)
+                throw new InvalidOperationException("User already exists");
+
+            var res = await _userManager.CreateAsync(new User {UserName = userName, Email = email}, password);
+
+            if (!res.Succeeded)
+            {
+                var errors = string.Join(";", res.Errors.Select(item => $"{item.Code} - {item.Description}"));
+                _logger.LogWarning("Error in creating user");
+                _logger.LogWarning(errors);
+
+                throw new InvalidOperationException("Error in creating user");
+            }
+
+        }
+
+        public async Task DeleteUser(string userName)
+        {
+            if (!await _authManager.IsUserAdmin())
+                throw new UnauthorizedException("Only admins can delete users");
+
+            var user = await _userManager.FindByNameAsync(userName);
+
+            if (user == null)
+                throw new BadRequestException("User does not exist");
+
+            var res = await _userManager.DeleteAsync(user);
+
+            if (!res.Succeeded)
+            {
+                var errors = string.Join(";", res.Errors.Select(item => $"{item.Code} - {item.Description}"));
+                _logger.LogWarning("Error in deleting user");
+                _logger.LogWarning(errors);
+
+            }
+            
+        }
+
         public async Task<IEnumerable<UserDto>> GetAll()
         {
             if (!await _authManager.IsUserAdmin()) 
                 throw new UnauthorizedException("User is not admin");
 
-            var query = from user in _usersManager.Users
+            var query = from user in _userManager.Users
                 select new UserDto
                 {
                     Email = user.Email,
@@ -92,7 +135,7 @@ namespace Registry.Web.Services.Adapters
                 Subject = new ClaimsIdentity(new[]
                 {
                     new Claim(ClaimTypes.Name, user.Id),
-                    new Claim(ApplicationDbContext.AdminRoleName.ToLowerInvariant(), (await _usersManager.IsInRoleAsync(user, ApplicationDbContext.AdminRoleName)).ToString()),
+                    new Claim(ApplicationDbContext.AdminRoleName.ToLowerInvariant(), (await _userManager.IsInRoleAsync(user, ApplicationDbContext.AdminRoleName)).ToString()),
                 }),
                 Expires = DateTime.UtcNow.AddDays(_appSettings.TokenExpirationInDays),
                 SigningCredentials = new SigningCredentials(new SymmetricSecurityKey(key), SecurityAlgorithms.HmacSha256Signature)
