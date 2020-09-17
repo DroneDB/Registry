@@ -85,10 +85,37 @@ namespace Registry.Web.Services.Adapters
 
         }
 
+        public async Task ChangePassword(string userName, string oldPassword, string newPassword)
+        {
+            var user = await _userManager.FindByNameAsync(userName);
+
+            if (user == null)
+                throw new BadRequestException("User does not exist");
+
+            var res = await _userManager.ChangePasswordAsync(user, oldPassword, newPassword);
+
+            if (!res.Succeeded)
+            {
+                var errors = string.Join(";", res.Errors.Select(item => $"{item.Code} - {item.Description}"));
+                _logger.LogWarning("Error in changing user password");
+                _logger.LogWarning(errors);
+
+                throw new InvalidOperationException("Cannot change user password: " + errors);
+
+            }
+
+        }
+
         public async Task DeleteUser(string userName)
         {
             if (!await _authManager.IsUserAdmin())
                 throw new UnauthorizedException("Only admins can delete users");
+
+            if (userName == MagicStrings.AnonymousUserName)
+                throw new UnauthorizedException("Cannot delete the anonymous user");
+
+            if (userName == _appSettings.DefaultAdmin.UserName)
+                throw new UnauthorizedException("Cannot delete the default admin");
 
             var user = await _userManager.FindByNameAsync(userName);
 
@@ -103,6 +130,7 @@ namespace Registry.Web.Services.Adapters
                 _logger.LogWarning("Error in deleting user");
                 _logger.LogWarning(errors);
 
+                throw new InvalidOperationException("Cannot delete user: " + errors);
             }
             
         }
