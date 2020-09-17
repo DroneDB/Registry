@@ -66,15 +66,36 @@ namespace Registry.Web.Controllers
 
             try
             {
-                _logger.LogDebug($"Users controller CreateUser('{model.Username}', '{model.Email}')");
+                _logger.LogDebug($"Users controller CreateUser('{model.UserName}', '{model.Email}')");
 
-                await _usersManager.CreateUser(model.Username, model.Email, model.Password);
+                await _usersManager.CreateUser(model.UserName, model.Email, model.Password);
 
                 return Ok();
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, $"Exception in Users controller CreateUser()");
+
+                return ExceptionResult(ex);
+            }
+
+        }
+
+        [HttpPost]
+        public async Task<IActionResult> ChangePassword([FromForm] ChangeUserPasswordRequest model)
+        {
+
+            try
+            {
+                _logger.LogDebug($"Users controller ChangePassword('{model.UserName}')");
+
+                await _usersManager.ChangePassword(model.UserName, model.CurrentPassword, model.NewPassword);
+
+                return Ok();
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, $"Exception in Users controller ChangePassword()");
 
                 return ExceptionResult(ex);
             }

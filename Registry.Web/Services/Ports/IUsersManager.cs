@@ -14,6 +14,6 @@ namespace Registry.Web.Services.Ports
         Task<IEnumerable<UserDto>> GetAll();
         Task CreateUser(string userName, string email, string password);
         Task DeleteUser(string userName);
-        Task ChangePassword(string userName, string oldPassword, string newPassword);
+        Task ChangePassword(string userName, string currentPassword, string newPassword);
     }
 }

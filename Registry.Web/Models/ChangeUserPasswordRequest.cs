@@ -2,16 +2,16 @@
 
 namespace Registry.Web.Models
 {
-    public class CreateUserRequest
+    public class ChangeUserPasswordRequest
     {
         [Required]
         public string UserName { get; set; }
 
         [Required]
-        public string Password { get; set; }
+        public string CurrentPassword { get; set; }
 
         [Required]
-        public string Email { get; set; }
+        public string NewPassword { get; set; }
 
     }
 }

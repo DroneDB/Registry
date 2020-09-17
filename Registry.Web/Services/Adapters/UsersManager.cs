@@ -85,14 +85,14 @@ namespace Registry.Web.Services.Adapters
 
         }
 
-        public async Task ChangePassword(string userName, string oldPassword, string newPassword)
+        public async Task ChangePassword(string userName, string currentPassword, string newPassword)
         {
             var user = await _userManager.FindByNameAsync(userName);
 
             if (user == null)
                 throw new BadRequestException("User does not exist");
 
-            var res = await _userManager.ChangePasswordAsync(user, oldPassword, newPassword);
+            var res = await _userManager.ChangePasswordAsync(user, currentPassword, newPassword);
 
             if (!res.Succeeded)
             {
@@ -108,8 +108,12 @@ namespace Registry.Web.Services.Adapters
 
         public async Task DeleteUser(string userName)
         {
+            
             if (!await _authManager.IsUserAdmin())
                 throw new UnauthorizedException("Only admins can delete users");
+
+            if (string.IsNullOrWhiteSpace(userName))
+                throw new UnauthorizedException("userName should not be empty");
 
             if (userName == MagicStrings.AnonymousUserName)
                 throw new UnauthorizedException("Cannot delete the anonymous user");
