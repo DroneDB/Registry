@@ -13,7 +13,7 @@ namespace Registry.Web.Controllers
 {
     [Authorize]
     [ApiController]
-    [Route("ddb/share")]
+    [Route("share")]
     public class ShareController : ControllerBaseEx
     {
         private readonly IShareManager _shareManager;

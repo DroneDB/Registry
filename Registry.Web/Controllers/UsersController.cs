@@ -23,7 +23,7 @@ namespace Registry.Web.Controllers
 {
     [Authorize]
     [ApiController]
-    [Route("[controller]")]
+    [Route("users")]
     public class UsersController : ControllerBaseEx
     {
         private readonly IUsersManager _usersManager;
