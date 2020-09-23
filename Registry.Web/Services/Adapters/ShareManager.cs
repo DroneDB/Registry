@@ -251,8 +251,6 @@ namespace Registry.Web.Services.Adapters
 
             return new UploadResultDto
             {
-                Hash = entry.Hash,
-                Size = entry.Size,
                 Path = entry.Path
             };
 
