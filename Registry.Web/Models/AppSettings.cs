@@ -57,6 +57,11 @@ namespace Registry.Web.Models
         /// Supported Ddb version
         /// </summary>
         public PackageVersion SupportedDdbVersion { get; set; }
+
+        /// <summary>
+        /// Max request body size
+        /// </summary>
+        public long MaxRequestBodySize { get; set; }
     }
 
     public class StorageProvider

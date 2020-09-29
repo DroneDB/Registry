@@ -11,6 +11,7 @@ using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Http.Features;
 using Microsoft.AspNetCore.HttpsPolicy;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
@@ -136,6 +137,13 @@ namespace Registry.Web
             services.AddSingleton<IPasswordHasher, PasswordHasher>();
 
             RegisterStorageProvider(services, appSettings);
+
+            services.Configure<FormOptions>(options =>
+            {
+                // See https://docs.microsoft.com/it-it/aspnet/core/fundamentals/servers/kestrel?view=aspnetcore-3.1#maximum-client-connections
+                // We could put this in config "Kestrel->Limits" section
+                options.MultipartBodyLengthLimit = appSettings.MaxRequestBodySize;
+            });
 
             // TODO: Enable when needed. Should check return object structure
             // services.AddOData();

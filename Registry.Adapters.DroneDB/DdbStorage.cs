@@ -60,7 +60,7 @@ namespace Registry.Adapters.DroneDB
                         {
                             Depth = item.Depth,
                             Hash = item.Hash,
-                            Meta = JsonConvert.DeserializeObject<JObject>(item.Meta),
+                            Meta = item.Meta != null ? JsonConvert.DeserializeObject<JObject>(item.Meta) : null,
                             ModifiedTime = item.ModifiedTime,
                             Path = item.Path,
                             Size = item.Size,
@@ -97,7 +97,7 @@ namespace Registry.Adapters.DroneDB
             entry = new Entry
             {
                 Depth = path.Count(item => item == '/'),
-                Meta = obj.Meta.ToString(),
+                Meta = obj.Meta?.ToString(),
                 ModifiedTime = DateTimeOffset.FromUnixTimeSeconds(obj.ModifiedTime).DateTime.ToLocalTime(),
                 Path = path,
                 Size = obj.Size,
@@ -257,7 +257,7 @@ namespace Registry.Adapters.DroneDB
             optionsBuilder.EnableSensitiveDataLogging()
 
 #endif
-                
+
                 ;
         }
 
