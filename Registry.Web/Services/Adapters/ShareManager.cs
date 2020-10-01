@@ -195,7 +195,7 @@ namespace Registry.Web.Services.Adapters
             if (string.IsNullOrWhiteSpace(path))
                 throw new BadRequestException("Missing path");
 
-            if (data == null || data.Length == 0)
+            if (data == null)
                 throw new BadRequestException("Missing data");
 
             var batch = _context.Batches
