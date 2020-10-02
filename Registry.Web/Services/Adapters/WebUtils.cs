@@ -3,6 +3,7 @@ using System.Linq;
 using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Registry.Web.Data;
 using Registry.Web.Data.Models;
@@ -80,6 +81,26 @@ namespace Registry.Web.Services.Adapters
 
             return dataset;
         }
-        
+
+        public string GetFreeOrganizationSlug(string orgName)
+        {
+            if (string.IsNullOrWhiteSpace(orgName))
+                throw new BadRequestException("Empty organization name");
+
+            var slug = orgName.ToSlug();
+
+            var res = slug;
+
+            for (var n = 1;; n++)
+            {
+                var org = _context.Organizations.FirstOrDefault(item => item.Slug == res);
+
+                if (org == null) return res;
+
+                res = slug + "-" + n;
+
+            }
+
+        }
     }
 }
