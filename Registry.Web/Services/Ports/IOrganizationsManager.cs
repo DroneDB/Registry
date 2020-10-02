@@ -12,8 +12,8 @@ namespace Registry.Web.Services.Ports
     {
         public Task<IEnumerable<OrganizationDto>> List();
         public Task<OrganizationDto> Get(string orgSlug);
-        public Task<OrganizationDto> AddNew(OrganizationDto dataset);
-        public Task Edit(string orgSlug, OrganizationDto dataset);
+        public Task<OrganizationDto> AddNew(OrganizationDto organization);
+        public Task Edit(string orgSlug, OrganizationDto organization);
         public Task Delete(string orgSlug);
     }
 }
