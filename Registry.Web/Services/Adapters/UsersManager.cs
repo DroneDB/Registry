@@ -23,6 +23,8 @@ namespace Registry.Web.Services.Adapters
 
         private readonly RoleManager<IdentityRole> _roleManager;
         private readonly IAuthManager _authManager;
+        private readonly IOrganizationsManager _organizationsManager;
+        private readonly IUtils _utils;
         private readonly ILogger<UsersManager> _logger;
         private readonly SignInManager<User> _signInManager;
         private readonly UserManager<User> _userManager;
@@ -34,10 +36,14 @@ namespace Registry.Web.Services.Adapters
             UserManager<User> userManager,
             RoleManager<IdentityRole> roleManager,
             IAuthManager authManager,
+            IOrganizationsManager organizationsManager,
+            IUtils utils,
             ILogger<UsersManager> logger)
         {
             _roleManager = roleManager;
             _authManager = authManager;
+            _organizationsManager = organizationsManager;
+            _utils = utils;
             _logger = logger;
             _signInManager = signInManager;
             _userManager = userManager;
@@ -72,7 +78,13 @@ namespace Registry.Web.Services.Adapters
             if (user != null)
                 throw new InvalidOperationException("User already exists");
 
-            var res = await _userManager.CreateAsync(new User {UserName = userName, Email = email}, password);
+            user = new User
+            {
+                UserName = userName,
+                Email = email
+            };
+
+            var res = await _userManager.CreateAsync(user, password);
 
             if (!res.Succeeded)
             {
@@ -83,6 +95,18 @@ namespace Registry.Web.Services.Adapters
                 throw new InvalidOperationException("Error in creating user");
             }
 
+            var orgSlug = _utils.GetFreeOrganizationSlug(userName);
+
+            // Create a default organization for the user
+            await _organizationsManager.AddNew(new OrganizationDto
+            {
+                Name = userName,
+                IsPublic = false,
+                CreationDate = DateTime.Now,
+                Owner = user.Id,
+                Slug = orgSlug
+            });
+            
         }
 
         public async Task ChangePassword(string userName, string currentPassword, string newPassword)
