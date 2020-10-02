@@ -95,18 +95,22 @@ namespace Registry.Web.Services.Adapters
                 throw new InvalidOperationException("Error in creating user");
             }
 
-            var orgSlug = _utils.GetFreeOrganizationSlug(userName);
-
             // Create a default organization for the user
+            await CreateUserDefaultOrganization(user);
+        }
+
+        private async Task CreateUserDefaultOrganization(User user)
+        {
+            var orgSlug = _utils.GetFreeOrganizationSlug(user.UserName);
+
             await _organizationsManager.AddNew(new OrganizationDto
             {
-                Name = userName,
+                Name = user.UserName,
                 IsPublic = false,
                 CreationDate = DateTime.Now,
                 Owner = user.Id,
                 Slug = orgSlug
             });
-            
         }
 
         public async Task ChangePassword(string userName, string currentPassword, string newPassword)

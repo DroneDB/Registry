@@ -94,6 +94,11 @@ namespace Registry.Web.Test
 
         }
 
+        //public async Task Initialize_WithoutTag_GeneratedTag()
+        //{
+
+        //}
+
         [Test] 
         [Explicit("Cannot run in CI")]
         public async Task EndToEnd_HappyPath()
@@ -186,7 +191,7 @@ namespace Registry.Web.Test
             // Commit
             var commitRes = await shareManager.Commit(token);
 
-            commitRes.Url.Should().Be(String.Format("/r/{0}/{1}", organizationTestSlug, datasetTestSlug));
+            commitRes.Url.Should().Be($"/r/{organizationTestSlug}/{datasetTestSlug}");
 
             // ListBatches
             batches = (await shareManager.ListBatches(organizationTestSlug, datasetTestSlug)).ToArray();

@@ -9,6 +9,7 @@ using Registry.Common;
 using Registry.Web.Data;
 using Registry.Web.Data.Models;
 using Registry.Web.Exceptions;
+using Registry.Web.Models;
 using Registry.Web.Models.DTO;
 using Registry.Web.Services.Ports;
 
@@ -25,7 +26,9 @@ namespace Registry.Web.Services.Adapters
         private readonly IAuthManager _authManager;
         private readonly RegistryContext _context;
 
+        // TODO: These could be put in config
         private const int TokenLength = 32;
+        private const int GeneratedDatasetSlugLength = 16;
 
         // TODO: Implement queue
         public ShareManager(
@@ -84,62 +87,129 @@ namespace Registry.Web.Services.Adapters
             if (parameters == null)
                 throw new BadRequestException("Invalid parameters");
 
-            TagDto tag;
+            var currentUser = await _authManager.GetCurrentUser(); ;
+            if (currentUser == null)
+                throw new UnauthorizedException("Invalid user");
 
-            try
+            Dataset dataset = null;
+
+            if (parameters.Tag == null)
             {
-                tag = parameters.Tag.ToTag();
-            }
-            catch (FormatException ex)
-            {
-                throw new BadRequestException($"Invalid tag: {ex.Message}");
-            }
 
-            // Let's fill the names if not provided
-            parameters.DatasetName ??= tag.DatasetSlug;
+                _logger.LogInformation("No tag provided, generating a new one");
 
-            var org = await _utils.GetOrganizationAndCheck(tag.OrganizationSlug, true);
+                var nameSlug = currentUser.UserName.ToSlug();
+                
+                // We start from the principle that a default user organization begins with the username in slug form
+                // If we notice that this strategy is weak we have to add a new field to the db entry
+                var userOrganizations = _context.Organizations.Where(item => item.OwnerId == currentUser.Id && item.Name.StartsWith(nameSlug)).ToArray();
 
-            // Org must exist
-            if (org == null)
-            {
-                throw new BadRequestException($"Organization '{tag.OrganizationSlug}' does not exist");
-            }
+                string orgSlug;
 
-            _logger.LogInformation("Organization found");
-
-            // Create dataset if not exists
-            var dataset = await _utils.GetDatasetAndCheck(tag.OrganizationSlug, tag.DatasetSlug, true);
-
-            if (dataset == null)
-            {
-                _logger.LogInformation($"Dataset '{tag.DatasetSlug}' not found, creating it");
-
-                await _datasetsManager.AddNew(tag.OrganizationSlug, new DatasetDto
+                // Some idiot removed its own organization, maybe we should prevent this, btw nevermind: let's take care of it
+                if (!userOrganizations.Any())
                 {
-                    Slug = tag.DatasetSlug,
+
+                    // This section of code can be extracted and put in a separated utils method
+                    orgSlug = _utils.GetFreeOrganizationSlug(currentUser.UserName);
+
+                    _logger.LogInformation($"No default user organization found, adding a new one: '{orgSlug}'");
+
+                    var org = await _organizationsManager.AddNew(new OrganizationDto
+                    {
+                        Name = currentUser.UserName,
+                        IsPublic = false,
+                        CreationDate = DateTime.Now,
+                        Owner = currentUser.Id,
+                        Slug = orgSlug
+                    });
+                }
+
+                orgSlug = userOrganizations.First().Slug;
+
+                _logger.LogInformation($"Using default user organization '{orgSlug}'");
+                
+                // We are pretty sure this is unique but ALWAYS CHECK
+                string dsSlug;
+                do
+                {
+                    dsSlug = CommonUtils.RandomString(GeneratedDatasetSlugLength);
+                } while (_context.Datasets.FirstOrDefault(item => item.Slug == dsSlug) != null);
+
+                _logger.LogInformation($"Generated unique dataset slug '{dsSlug}'");
+                
+                await _datasetsManager.AddNew(orgSlug, new DatasetDto
+                {
+                    Slug = dsSlug,
                     Name = parameters.DatasetName,
                     Description = parameters.DatasetDescription
                 });
-                dataset = await _utils.GetDatasetAndCheck(tag.OrganizationSlug, tag.DatasetSlug);
 
-                _logger.LogInformation("Dataset created");
+                dataset = await _utils.GetDatasetAndCheck(orgSlug, dsSlug);
+
+                _logger.LogInformation($"Created new dataset '{dsSlug}', creating batch");
+
             }
             else
             {
-                _logger.LogInformation("Dataset and organization already existing, checking for running batches");
 
-                await _context.Entry(dataset).Collection(item => item.Batches).LoadAsync();
+                TagDto tag;
 
-                var runningBatches = dataset.Batches.Where(item => item.End == null).ToArray();
-
-                if (runningBatches.Any())
+                try
                 {
-                    _logger.LogInformation($"Found '{runningBatches.Length}' running batch(es), stopping and rolling back before starting a new one");
+                    tag = parameters.Tag.ToTag();
+                }
+                catch (FormatException ex)
+                {
+                    throw new BadRequestException($"Invalid tag: {ex.Message}");
+                }
 
-                    foreach (var b in runningBatches)
-                        await RollbackBatch(b);
+                // Let's fill the names if not provided
+                parameters.DatasetName ??= tag.DatasetSlug;
 
+                var org = await _utils.GetOrganizationAndCheck(tag.OrganizationSlug, true);
+
+                // Org must exist
+                if (org == null)
+                {
+                    throw new BadRequestException($"Organization '{tag.OrganizationSlug}' does not exist");
+                }
+
+                _logger.LogInformation("Organization found");
+
+                // Create dataset if not exists
+                dataset = await _utils.GetDatasetAndCheck(tag.OrganizationSlug, tag.DatasetSlug, true);
+
+                if (dataset == null)
+                {
+                    _logger.LogInformation($"Dataset '{tag.DatasetSlug}' not found, creating it");
+
+                    await _datasetsManager.AddNew(tag.OrganizationSlug, new DatasetDto
+                    {
+                        Slug = tag.DatasetSlug,
+                        Name = parameters.DatasetName,
+                        Description = parameters.DatasetDescription
+                    });
+                    dataset = await _utils.GetDatasetAndCheck(tag.OrganizationSlug, tag.DatasetSlug);
+
+                    _logger.LogInformation("Dataset created");
+                }
+                else
+                {
+                    _logger.LogInformation("Dataset and organization already existing, checking for running batches");
+
+                    await _context.Entry(dataset).Collection(item => item.Batches).LoadAsync();
+
+                    var runningBatches = dataset.Batches.Where(item => item.End == null).ToArray();
+
+                    if (runningBatches.Any())
+                    {
+                        _logger.LogInformation($"Found '{runningBatches.Length}' running batch(es), stopping and rolling back before starting a new one");
+
+                        foreach (var b in runningBatches)
+                            await RollbackBatch(b);
+
+                    }
                 }
             }
 
@@ -165,7 +235,7 @@ namespace Registry.Web.Services.Adapters
         private async Task RollbackBatch(Batch batch)
         {
             _logger.LogInformation($"Rolling back batch '{batch.Token}'");
-            
+
             // I know we will have concurrency problems here because we could be in the middle of the rollback when another client calls for another one
             // To mitigate this issue we are going to commit the status change of the batch as soon as possible
 
@@ -175,15 +245,15 @@ namespace Registry.Web.Services.Adapters
 
             await _context.Entry(batch).Collection(item => item.Entries).LoadAsync();
             await _context.Entry(batch).Reference(item => item.Dataset).LoadAsync();
-            
+
             var ds = batch.Dataset;
-            
+
             await _context.Entry(ds).Reference(item => item.Organization).LoadAsync();
             var org = ds.Organization;
 
             foreach (var entry in batch.Entries)
                 await _objectsManager.Delete(org.Slug, ds.Slug, entry.Path);
-            
+
         }
 
 
