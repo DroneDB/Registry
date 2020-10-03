@@ -84,12 +84,24 @@ namespace Registry.Web.Test
         [Test]
         public void Initialize_NullParameters_BadRequest()
         {
+            const string userName = "admin";
+
+            _appSettingsMock.Setup(o => o.Value).Returns(_settings);
+            _authManagerMock.Setup(o => o.IsUserAdmin()).Returns(Task.FromResult(true));
+            _authManagerMock.Setup(o => o.GetCurrentUser()).Returns(Task.FromResult(new User
+            {
+                UserName = userName,
+                Email = "admin@example.com"
+            }));
+            _authManagerMock.Setup(o => o.SafeGetCurrentUserName()).Returns(Task.FromResult(userName));
+
 
             var manager = new ShareManager(_shareManagerLogger, _objectsManagerMock.Object, _datasetsManagerMock.Object,
                 _organizationsManagerMock.Object, _utilsMock.Object, _authManagerMock.Object, GetTest1Context());
 
             manager.Invoking(x => x.Initialize(null)).Should().Throw<BadRequestException>();
-            manager.Invoking(x => x.Initialize(new ShareInitDto())).Should().Throw<BadRequestException>();
+            // Now empty tag is supported
+            //manager.Invoking(x => x.Initialize(new ShareInitDto())).Should().Throw<BadRequestException>();
             manager.Invoking(x => x.Initialize(new ShareInitDto { Tag = "ciao"})).Should().Throw<BadRequestException>();
 
         }
