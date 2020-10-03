@@ -82,7 +82,7 @@ namespace Registry.Web.Services.Adapters
             return batches;
         }
 
-        public async Task<string> Initialize(ShareInitDto parameters)
+        public async Task<ShareInitResultDto> Initialize(ShareInitDto parameters)
         {
             if (parameters == null)
                 throw new BadRequestException("Invalid parameters");
@@ -92,6 +92,7 @@ namespace Registry.Web.Services.Adapters
                 throw new UnauthorizedException("Invalid user");
 
             Dataset dataset = null;
+            TagDto tag = null;
 
             if (parameters.Tag == null)
             {
@@ -102,12 +103,12 @@ namespace Registry.Web.Services.Adapters
                 
                 // We start from the principle that a default user organization begins with the username in slug form
                 // If we notice that this strategy is weak we have to add a new field to the db entry
-                var userOrganizations = _context.Organizations.Where(item => item.OwnerId == currentUser.Id && item.Name.StartsWith(nameSlug)).ToArray();
+                var userOrganization = _context.Organizations.FirstOrDefault(item => item.OwnerId == currentUser.Id && item.Name.StartsWith(nameSlug));
 
                 string orgSlug;
 
                 // Some idiot removed its own organization, maybe we should prevent this, btw nevermind: let's take care of it
-                if (!userOrganizations.Any())
+                if (userOrganization == null)
                 {
 
                     // This section of code can be extracted and put in a separated utils method
@@ -123,9 +124,11 @@ namespace Registry.Web.Services.Adapters
                         Owner = currentUser.Id,
                         Slug = orgSlug
                     });
+
+                    userOrganization = _context.Organizations.First(item => item.Slug == orgSlug);
                 }
 
-                orgSlug = userOrganizations.First().Slug;
+                orgSlug = userOrganization.Slug;
 
                 _logger.LogInformation($"Using default user organization '{orgSlug}'");
                 
@@ -133,7 +136,8 @@ namespace Registry.Web.Services.Adapters
                 string dsSlug;
                 do
                 {
-                    dsSlug = CommonUtils.RandomString(GeneratedDatasetSlugLength);
+                    // NOTE: We could generate a more language friendly slug, like docker does for its running containers
+                    dsSlug = CommonUtils.RandomString(GeneratedDatasetSlugLength).ToLowerInvariant();
                 } while (_context.Datasets.FirstOrDefault(item => item.Slug == dsSlug) != null);
 
                 _logger.LogInformation($"Generated unique dataset slug '{dsSlug}'");
@@ -149,11 +153,11 @@ namespace Registry.Web.Services.Adapters
 
                 _logger.LogInformation($"Created new dataset '{dsSlug}', creating batch");
 
+                tag = new TagDto(orgSlug, dsSlug);
+
             }
             else
             {
-
-                TagDto tag;
 
                 try
                 {
@@ -229,7 +233,11 @@ namespace Registry.Web.Services.Adapters
 
             _logger.LogInformation("Batch created, it is now possible to upload files");
 
-            return batch.Token;
+            return new ShareInitResultDto
+            {
+                Token = batch.Token, 
+                Tag = tag
+            };
         }
 
         private async Task RollbackBatch(Batch batch)

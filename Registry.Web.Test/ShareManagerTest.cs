@@ -106,10 +106,84 @@ namespace Registry.Web.Test
 
         }
 
-        //public async Task Initialize_WithoutTag_GeneratedTag()
-        //{
+        [Test]
+        public async Task Initialize_WithoutTag_GeneratedTag()
+        {
+            /* INITIALIZATION & SETUP */
+            const string userName = "admin";
 
-        //}
+            using var test = new TestFS(Test1ArchiveUrl, BaseTestFolder, true);
+
+            await using var context = GetTest1Context();
+
+            _appSettingsMock.Setup(o => o.Value).Returns(_settings);
+            _authManagerMock.Setup(o => o.IsUserAdmin()).Returns(Task.FromResult(true));
+            var user = new User
+            {
+                UserName = userName,
+                Email = "admin@example.com",
+                Id = Guid.NewGuid().ToString()
+            };
+            _authManagerMock.Setup(o => o.GetCurrentUser()).Returns(Task.FromResult(user));
+            _authManagerMock.Setup(o => o.UserExists(user.Id)).Returns(Task.FromResult(true));
+            _authManagerMock.Setup(o => o.SafeGetCurrentUserName()).Returns(Task.FromResult(userName));
+
+            var sys = new PhysicalObjectSystem(Path.Combine(test.TestFolder, StorageFolder));
+            sys.SyncBucket($"{MagicStrings.PublicOrganizationSlug}-{MagicStrings.DefaultDatasetSlug}");
+
+            var ddbFactory = new DdbFactory(_appSettingsMock.Object, _ddbFactoryLogger);
+            var webUtils = new WebUtils(_authManagerMock.Object, context);
+
+            var objectManager = new ObjectsManager(_objectManagerLogger, context, sys, _appSettingsMock.Object, ddbFactory, webUtils);
+
+            var datasetManager = new DatasetsManager(context, webUtils, _datasetsManagerLogger, objectManager, ddbFactory, _passwordHasher);
+            var organizationsManager = new OrganizationsManager(_authManagerMock.Object, context, webUtils, datasetManager, _organizationsManagerLogger);
+
+            var shareManager = new ShareManager(_shareManagerLogger, objectManager, datasetManager, organizationsManager, webUtils, _authManagerMock.Object, context);
+
+            /* TEST */
+
+            // ListBatches
+            var batches = (await shareManager.ListBatches(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug)).ToArray();
+            batches.Should().BeEmpty();
+
+            // Initialize
+            var initRes = await shareManager.Initialize(new ShareInitDto());
+
+            initRes.Should().NotBeNull();
+            initRes.Token.Should().NotBeNullOrWhiteSpace();
+            //initRes.Tag.DatasetSlug.Should().Be(datasetTestSlug);
+            initRes.Tag.OrganizationSlug.Should().Be(userName);
+
+            // ListBatches
+            batches = (await shareManager.ListBatches(initRes.Tag.OrganizationSlug, initRes.Tag.DatasetSlug)).ToArray();
+
+            batches.Should().HaveCount(1);
+
+            var batch = batches.First();
+
+            batch.UserName.Should().Be(userName);
+            batch.Status.Should().Be(BatchStatus.Running);
+            batch.End.Should().BeNull();
+
+            // Commit
+            var commitRes = await shareManager.Commit(initRes.Token);
+
+            commitRes.Url.Should().Be($"/r/{initRes.Tag.OrganizationSlug}/{initRes.Tag.DatasetSlug}");
+
+            // ListBatches
+            batches = (await shareManager.ListBatches(initRes.Tag.OrganizationSlug, initRes.Tag.DatasetSlug)).ToArray();
+
+            batches.Should().HaveCount(1);
+
+            batch = batches.First();
+
+            batch.Token.Should().Be(initRes.Token);
+            batch.UserName.Should().Be(userName);
+            batch.End.Should().NotBeNull();
+            batch.Status.Should().Be(BatchStatus.Committed);
+            batch.Entries.Should().HaveCount(0);
+        }
 
         [Test] 
         [Explicit("Cannot run in CI")]
@@ -173,15 +247,18 @@ namespace Registry.Web.Test
             res.Name.Should().Be(organizationTestName);
             
             // Initialize
-            var token = await shareManager.Initialize(new ShareInitDto
+            var initRes = await shareManager.Initialize(new ShareInitDto
             {
                 Tag = $"{organizationTestSlug}/{datasetTestSlug}",
                 DatasetName = datasetTestName,
                 Password = testPassword
             });
 
-            token.Should().NotBeNullOrWhiteSpace();
-
+            initRes.Should().NotBeNull();
+            initRes.Token.Should().NotBeNullOrWhiteSpace();
+            initRes.Tag.DatasetSlug.Should().Be(datasetTestSlug);
+            initRes.Tag.OrganizationSlug.Should().Be(organizationTestSlug);
+            
             // ListBatches
             batches = (await shareManager.ListBatches(organizationTestSlug, datasetTestSlug)).ToArray();
 
@@ -194,14 +271,14 @@ namespace Registry.Web.Test
             batch.End.Should().BeNull();
 
             // Upload
-            var uploadRes = await shareManager.Upload(token, fileName, CommonUtils.SmartDownloadData(newFileUrl));
+            var uploadRes = await shareManager.Upload(initRes.Token, fileName, CommonUtils.SmartDownloadData(newFileUrl));
 
             uploadRes.Path.Should().Be(fileName);
             uploadRes.Size.Should().Be(fileSize);
             uploadRes.Hash.Should().Be(fileHash);
 
             // Commit
-            var commitRes = await shareManager.Commit(token);
+            var commitRes = await shareManager.Commit(initRes.Token);
 
             commitRes.Url.Should().Be($"/r/{organizationTestSlug}/{datasetTestSlug}");
 
@@ -212,7 +289,7 @@ namespace Registry.Web.Test
 
             batch = batches.First();
 
-            batch.Token.Should().Be(token);
+            batch.Token.Should().Be(initRes.Token);
             batch.UserName.Should().Be(userName);
             batch.End.Should().NotBeNull();
             batch.Status.Should().Be(BatchStatus.Committed);
@@ -278,14 +355,17 @@ namespace Registry.Web.Test
             });
             
             // Initialize
-            var token = await shareManager.Initialize(new ShareInitDto
+            var initRes = await shareManager.Initialize(new ShareInitDto
             {
                 Tag = $"{organizationTestSlug}/{datasetTestSlug}",
                 DatasetName = datasetTestName,
                 Password = testPassword
             });
 
-            token.Should().NotBeNullOrWhiteSpace();
+            initRes.Should().NotBeNull();
+            initRes.Token.Should().NotBeNullOrWhiteSpace();
+            initRes.Tag.DatasetSlug.Should().Be(datasetTestSlug);
+            initRes.Tag.OrganizationSlug.Should().Be(organizationTestSlug);
 
             // ListBatches
             batches = (await shareManager.ListBatches(organizationTestSlug, datasetTestSlug)).ToArray();
@@ -294,31 +374,31 @@ namespace Registry.Web.Test
 
 
             // Upload
-            await shareManager.Upload(token, fileName, CommonUtils.SmartDownloadData(newFileUrl));
+            await shareManager.Upload(initRes.Token, fileName, CommonUtils.SmartDownloadData(newFileUrl));
 
             // Initialize
-            var newToken = await shareManager.Initialize(new ShareInitDto
+            var newInitRes = await shareManager.Initialize(new ShareInitDto
             {
                 Tag = $"{organizationTestSlug}/{datasetTestSlug}",
                 DatasetName = datasetTestName,
                 Password = testPassword
             });
 
-            token.Should().NotBeNullOrWhiteSpace();
+            initRes.Token.Should().NotBeNullOrWhiteSpace();
 
             // ListBatches
             batches = (await shareManager.ListBatches(organizationTestSlug, datasetTestSlug)).ToArray();
 
             batches.Should().HaveCount(2);
 
-            var oldBatch = batches.FirstOrDefault(item => item.Token == token);
+            var oldBatch = batches.FirstOrDefault(item => item.Token == initRes.Token);
             oldBatch.Should().NotBeNull();
 
             // ReSharper disable once PossibleNullReferenceException
             oldBatch.End.Should().NotBeNull();
             oldBatch.Status.Should().Be(BatchStatus.Rolledback);
 
-            var newBatch = batches.FirstOrDefault(item => item.Token == newToken);
+            var newBatch = batches.FirstOrDefault(item => item.Token == newInitRes.Token);
             newBatch.Should().NotBeNull();
 
             // ReSharper disable once PossibleNullReferenceException
@@ -326,26 +406,26 @@ namespace Registry.Web.Test
             newBatch.Status.Should().Be(BatchStatus.Running);
 
             // Upload to old batch -> Exception
-            shareManager.Invoking(async x => await x.Upload(token, fileName, CommonUtils.SmartDownloadData(newFileUrl)))
+            shareManager.Invoking(async x => await x.Upload(initRes.Token, fileName, CommonUtils.SmartDownloadData(newFileUrl)))
                 .Should().Throw<BadRequestException>();
 
             // Commit old batch -> Exception
-            shareManager.Invoking(async x => await shareManager.Commit(token))
+            shareManager.Invoking(async x => await shareManager.Commit(initRes.Token))
                 .Should().Throw<BadRequestException>();
 
             // Fix
             context.Set<Entry>().Local.Clear();
             
             // Upload to new batch
-            var uploadRes = await shareManager.Upload(newToken, fileName, CommonUtils.SmartDownloadData(newFileUrl));
+            var uploadRes = await shareManager.Upload(newInitRes.Token, fileName, CommonUtils.SmartDownloadData(newFileUrl));
             uploadRes.Path.Should().Be(fileName);
             uploadRes.Size.Should().Be(fileSize);
             uploadRes.Hash.Should().Be(fileHash);
 
             // Commit
-            var commitRes = await shareManager.Commit(newToken);
+            var commitRes = await shareManager.Commit(newInitRes.Token);
 
-            commitRes.Url.Should().Be(String.Format("/r/{0}/{1}", organizationTestSlug, datasetTestSlug));
+            commitRes.Url.Should().Be($"/r/{organizationTestSlug}/{datasetTestSlug}");
 
             // ListBatches
             batches = (await shareManager.ListBatches(organizationTestSlug, datasetTestSlug)).ToArray();

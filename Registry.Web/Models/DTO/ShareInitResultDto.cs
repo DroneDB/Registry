@@ -5,8 +5,10 @@ using System.Threading.Tasks;
 
 namespace Registry.Web.Models.DTO
 {
-    public class ShareInitResDto
+    public class ShareInitResultDto
     {
         public string Token { get; set; }
+        public TagDto Tag { get; set; }
+
     }
 }
