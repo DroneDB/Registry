@@ -81,7 +81,7 @@ namespace Registry.Web.Controllers
 
         }
 
-        [HttpPost]
+        [HttpPut]
         public async Task<IActionResult> ChangePassword([FromForm] ChangeUserPasswordRequest model)
         {
 

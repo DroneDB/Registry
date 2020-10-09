@@ -10,5 +10,6 @@ namespace Registry.Web.Services.Ports
 
         Task<Organization> GetOrganizationAndCheck(string orgSlug, bool safe = false);
         Task<Dataset> GetDatasetAndCheck(string orgSlug, string dsSlug, bool safe = false);
+        string GetFreeOrganizationSlug(string orgName);
     }
 }
