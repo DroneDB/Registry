@@ -236,7 +236,9 @@ namespace Registry.Web.Services.Adapters
             return new ShareInitResultDto
             {
                 Token = batch.Token, 
-                Tag = tag
+
+                // NOTE: Maybe useful in the future
+                // Tag = tag
             };
         }
 
@@ -388,7 +390,8 @@ namespace Registry.Web.Services.Adapters
 
             return new CommitResultDto
             {
-                Url = "/r/" + batch.Dataset.Organization.Slug + "/" + batch.Dataset.Slug
+                Url = "/r/" + batch.Dataset.Organization.Slug + "/" + batch.Dataset.Slug,
+                Tag = new TagDto(batch.Dataset.Organization.Slug, batch.Dataset.Slug)
             };
         }
     }

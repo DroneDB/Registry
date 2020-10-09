@@ -153,30 +153,30 @@ namespace Registry.Web.Test
             initRes.Should().NotBeNull();
             initRes.Token.Should().NotBeNullOrWhiteSpace();
             //initRes.Tag.DatasetSlug.Should().Be(datasetTestSlug);
-            initRes.Tag.OrganizationSlug.Should().Be(userName);
+            //initRes.Tag.OrganizationSlug.Should().Be(userName);
 
             // ListBatches
-            batches = (await shareManager.ListBatches(initRes.Tag.OrganizationSlug, initRes.Tag.DatasetSlug)).ToArray();
+            //batches = (await shareManager.ListBatches(initRes.Tag.OrganizationSlug, initRes.Tag.DatasetSlug)).ToArray();
 
-            batches.Should().HaveCount(1);
+            //batches.Should().HaveCount(1);
 
-            var batch = batches.First();
+            //var batch = batches.First();
 
-            batch.UserName.Should().Be(userName);
-            batch.Status.Should().Be(BatchStatus.Running);
-            batch.End.Should().BeNull();
+            //batch.UserName.Should().Be(userName);
+            //batch.Status.Should().Be(BatchStatus.Running);
+            //batch.End.Should().BeNull();
 
             // Commit
             var commitRes = await shareManager.Commit(initRes.Token);
 
-            commitRes.Url.Should().Be($"/r/{initRes.Tag.OrganizationSlug}/{initRes.Tag.DatasetSlug}");
+            commitRes.Url.Should().Be($"/r/{commitRes.Tag.OrganizationSlug}/{commitRes.Tag.DatasetSlug}");
 
             // ListBatches
-            batches = (await shareManager.ListBatches(initRes.Tag.OrganizationSlug, initRes.Tag.DatasetSlug)).ToArray();
+            batches = (await shareManager.ListBatches(commitRes.Tag.OrganizationSlug, commitRes.Tag.DatasetSlug)).ToArray();
 
             batches.Should().HaveCount(1);
 
-            batch = batches.First();
+            var batch = batches.First();
 
             batch.Token.Should().Be(initRes.Token);
             batch.UserName.Should().Be(userName);
@@ -256,8 +256,8 @@ namespace Registry.Web.Test
 
             initRes.Should().NotBeNull();
             initRes.Token.Should().NotBeNullOrWhiteSpace();
-            initRes.Tag.DatasetSlug.Should().Be(datasetTestSlug);
-            initRes.Tag.OrganizationSlug.Should().Be(organizationTestSlug);
+            //initRes.Tag.DatasetSlug.Should().Be(datasetTestSlug);
+            //initRes.Tag.OrganizationSlug.Should().Be(organizationTestSlug);
             
             // ListBatches
             batches = (await shareManager.ListBatches(organizationTestSlug, datasetTestSlug)).ToArray();
@@ -281,6 +281,8 @@ namespace Registry.Web.Test
             var commitRes = await shareManager.Commit(initRes.Token);
 
             commitRes.Url.Should().Be($"/r/{organizationTestSlug}/{datasetTestSlug}");
+            commitRes.Tag.OrganizationSlug.Should().Be(organizationTestSlug);
+            commitRes.Tag.DatasetSlug.Should().Be(datasetTestSlug);
 
             // ListBatches
             batches = (await shareManager.ListBatches(organizationTestSlug, datasetTestSlug)).ToArray();
@@ -364,8 +366,8 @@ namespace Registry.Web.Test
 
             initRes.Should().NotBeNull();
             initRes.Token.Should().NotBeNullOrWhiteSpace();
-            initRes.Tag.DatasetSlug.Should().Be(datasetTestSlug);
-            initRes.Tag.OrganizationSlug.Should().Be(organizationTestSlug);
+            //initRes.Tag.DatasetSlug.Should().Be(datasetTestSlug);
+            //initRes.Tag.OrganizationSlug.Should().Be(organizationTestSlug);
 
             // ListBatches
             batches = (await shareManager.ListBatches(organizationTestSlug, datasetTestSlug)).ToArray();
@@ -426,6 +428,8 @@ namespace Registry.Web.Test
             var commitRes = await shareManager.Commit(newInitRes.Token);
 
             commitRes.Url.Should().Be($"/r/{organizationTestSlug}/{datasetTestSlug}");
+            commitRes.Tag.OrganizationSlug.Should().Be(organizationTestSlug);
+            commitRes.Tag.DatasetSlug.Should().Be(datasetTestSlug);
 
             // ListBatches
             batches = (await shareManager.ListBatches(organizationTestSlug, datasetTestSlug)).ToArray();
