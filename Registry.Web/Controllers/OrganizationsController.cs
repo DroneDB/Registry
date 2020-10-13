@@ -20,7 +20,7 @@ namespace Registry.Web.Controllers
 {
     [Authorize]
     [ApiController]
-    [Route("ddb")]
+    [Route("orgs")]
     public class OrganizationsController : ControllerBaseEx
     {
         private readonly IOrganizationsManager _organizationsManager;
@@ -32,7 +32,6 @@ namespace Registry.Web.Controllers
             this._logger = _logger;
         }
 
-        // GET: ddb/
         [HttpGet(Name = nameof(OrganizationsController) + "." + nameof(GetAll))]
         public async Task<IActionResult> GetAll()
         {
@@ -50,7 +49,6 @@ namespace Registry.Web.Controllers
             }
         }
 
-        // GET: ddb/orgSlug
         [HttpGet("{orgSlug:regex([[\\w-]]+)}", Name = nameof(OrganizationsController) + "." + nameof(Get))]
         public async Task<IActionResult> Get(string orgSlug)
         {
@@ -69,7 +67,6 @@ namespace Registry.Web.Controllers
 
         }
 
-        // POST: ddb/
         [HttpPost]
         public async Task<IActionResult> Post([FromForm] OrganizationDto organization)
         {
@@ -91,7 +88,6 @@ namespace Registry.Web.Controllers
 
         }
 
-        // POST: ddb/
         [HttpPut("{orgSlug:regex([[\\w-]]+)}")]
         public async Task<IActionResult> Put(string orgSlug, [FromForm] OrganizationDto organization)
         {
@@ -112,7 +108,6 @@ namespace Registry.Web.Controllers
 
         }
 
-        // DELETE: ddb/orgSlug
         [HttpDelete("{orgSlug:regex([[\\w-]]+)}")]
         public async Task<IActionResult> Delete(string orgSlug)
         {

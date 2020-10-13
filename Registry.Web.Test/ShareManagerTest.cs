@@ -185,9 +185,7 @@ namespace Registry.Web.Test
             // Commit
             var commitRes = await shareManager.Commit(token);
 
-            commitRes.TotalSize.Should().Be(fileSize);
-            commitRes.ObjectsCount.Should().Be(1);
-            commitRes.Status.Should().Be(BatchStatus.Committed);
+            commitRes.Url.Should().Be(String.Format("/r/{0}/{1}", organizationTestSlug, datasetTestSlug));
 
             // ListBatches
             batches = (await shareManager.ListBatches(organizationTestSlug, datasetTestSlug)).ToArray();
@@ -328,9 +326,7 @@ namespace Registry.Web.Test
             // Commit
             var commitRes = await shareManager.Commit(newToken);
 
-            commitRes.TotalSize.Should().Be(fileSize);
-            commitRes.ObjectsCount.Should().Be(1);
-            commitRes.Status.Should().Be(BatchStatus.Committed);
+            commitRes.Url.Should().Be(String.Format("/r/{0}/{1}", organizationTestSlug, datasetTestSlug));
 
             // ListBatches
             batches = (await shareManager.ListBatches(organizationTestSlug, datasetTestSlug)).ToArray();

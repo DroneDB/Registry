@@ -195,7 +195,7 @@ namespace Registry.Web.Services.Adapters
             if (string.IsNullOrWhiteSpace(path))
                 throw new BadRequestException("Missing path");
 
-            if (data == null || data.Length == 0)
+            if (data == null)
                 throw new BadRequestException("Missing data");
 
             var batch = _context.Batches
@@ -264,7 +264,10 @@ namespace Registry.Web.Services.Adapters
             if (string.IsNullOrWhiteSpace(token))
                 throw new BadRequestException("Missing token");
 
-            var batch = _context.Batches.FirstOrDefault(item => item.Token == token);
+            var batch = _context.Batches
+                .Include(x => x.Dataset)
+                .Include(x => x.Dataset.Organization)
+                .FirstOrDefault(item => item.Token == token);
 
             if (batch == null)
                 throw new NotFoundException("Cannot find batch");
@@ -307,13 +310,8 @@ namespace Registry.Web.Services.Adapters
 
             return new CommitResultDto
             {
-                End = batch.End.Value,
-                Start = batch.Start,
-                ObjectsCount = batch.Entries.Count,
-                TotalSize = batch.Entries.Sum(item => item.Size),
-                Status = batch.Status
+                Url = "/r/" + batch.Dataset.Organization.Slug + "/" + batch.Dataset.Slug
             };
-
         }
     }
 }

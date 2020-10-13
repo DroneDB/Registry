@@ -20,7 +20,7 @@ namespace Registry.Web.Controllers
 
     [Authorize]
     [ApiController]
-    [Route("ddb/{orgSlug:regex([[\\w-]]+)}/ds")]
+    [Route("orgs/{orgSlug:regex([[\\w-]]+)}/ds")]
     public class DatasetsController : ControllerBaseEx
     {
         private readonly IDatasetsManager _datasetsManager;
