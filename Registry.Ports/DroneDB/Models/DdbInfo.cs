@@ -1,4 +1,6 @@
-﻿using GeoJSON.Net.Feature;
+﻿using System;
+using System.Collections.Generic;
+using GeoJSON.Net.Feature;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using Registry.Common;
@@ -8,9 +10,9 @@ namespace Registry.Ports.DroneDB.Models
     public class DdbInfo
     {
         [JsonProperty("meta")]
-        public JObject Meta { get; set; }
+        public Dictionary<string, string> Meta { get; set; }
         [JsonProperty("mtime")]
-        public int ModifiedTime { get; set; }
+        public DateTime ModifiedTime { get; set; }
         [JsonProperty("path")]
         public string Path { get; set; }
         [JsonProperty("point_geom")]

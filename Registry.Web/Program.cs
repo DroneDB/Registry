@@ -105,29 +105,8 @@ namespace Registry.Web
 
             }
 
-            // TODO: Check
-            var ddbPath = appSettings["DdbPath"];
-
-            if (ddbPath == null || string.IsNullOrWhiteSpace(ddbPath.Value<string>()))
-            {
-                Console.WriteLine(" !> Ddb path not found in config");
-                appSettings["DdbPath"] = defaultAppSettings["DdbPath"];
-                ddbPath = defaultAppSettings["DdbPath"];
-                Console.WriteLine($" -> Copied from default config");
-            }
-
-            var ddbPathVal = ddbPath.Value<string>();
-
-            IDdbPackageProvider ddbPackageProvider = new DdbPackageProvider(ddbPathVal, appSettings["SupportedDdbVersion"]?.ToObject<PackageVersion>() ?? SupportedDdbVersion);
-
-            // TODO: Add config parameter to ignore ddb version match
-
-            if (!ddbPackageProvider.IsDdbReady()) 
-            {
-                Console.WriteLine($" !> Ddb not ready in path '{ddbPathVal}' ");
-                Console.WriteLine(" ?> Follow these instruction to install it: https://github.com/DroneDB/Registry/wiki");
-                return false;
-            }
+            // TODO: Check if ddb command exists
+            
 
             var connectionStrings = config["ConnectionStrings"];
 

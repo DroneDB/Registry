@@ -44,7 +44,6 @@ namespace Registry.Web.Test
                 File.WriteAllText(Path.Combine(DdbTestDataFolder, "ddbcmd.exe"), string.Empty);
             }
 
-            _settings.DdbPath = DdbTestDataFolder;
             _settings.DdbStoragePath = TestDataFolder;
             _appSettingsMock.Setup(o => o.Value).Returns(_settings);
 
@@ -188,11 +187,6 @@ namespace Registry.Web.Test
 
             _settings.DdbStoragePath = fs.TestFolder;
             _appSettingsMock.Setup(o => o.Value).Returns(_settings);
-
-            var provider = new DdbPackageProvider(_settings.DdbPath, _settings.SupportedDdbVersion);
-
-            if (!provider.IsDdbReady())
-                Assert.Inconclusive("Ddb is not ready");
 
             var factory = new DdbFactory(_appSettingsMock.Object, _ddbFactoryLogger);
 
