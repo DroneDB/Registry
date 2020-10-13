@@ -8,7 +8,9 @@ using Microsoft.EntityFrameworkCore;
 using Registry.Ports.DroneDB;
 using Registry.Ports.DroneDB.Models;
 using Registry.Web.Data.Models;
+using Registry.Web.Models;
 using Registry.Web.Models.DTO;
+using Registry.Web.Services.Ports;
 
 namespace Registry.Web
 {
@@ -173,6 +175,7 @@ namespace Registry.Web
             return new TagDto(org, ds);
 
         }
+
         
     }
 }

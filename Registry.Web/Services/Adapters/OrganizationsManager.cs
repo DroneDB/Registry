@@ -104,7 +104,7 @@ namespace Registry.Web.Services.Adapters
                 {
                     // Otherwise check if user exists
                     if (!await _authManager.UserExists(organization.Owner))
-                        throw new BadRequestException($"Cannot find user with orgSlug '{organization.Owner}'");
+                        throw new BadRequestException($"Cannot find user with name '{organization.Owner}'");
 
                 }
             }
