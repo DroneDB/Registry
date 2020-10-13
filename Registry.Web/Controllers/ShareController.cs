@@ -32,9 +32,9 @@ namespace Registry.Web.Controllers
             {
                 _logger.LogDebug($"Share controller Init('{parameters}')");
 
-                var token = await _shareManager.Initialize(parameters);
+                var initRes = await _shareManager.Initialize(parameters);
 
-                return Ok(new ShareInitResDto { Token = token });
+                return Ok(initRes);
 
             }
             catch (Exception ex)

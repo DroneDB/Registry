@@ -347,3 +347,5 @@ Fix/Registry.Web/[Aa]pp_[Dd]ata/
 
 # Configuration
 appsettings.json
+/Registry.Web/temp
+/Registry.Web/ddbstore/

@@ -39,9 +39,9 @@ namespace Registry.Web.Services.Adapters
             return currentUser != null && await _usersManager.IsInRoleAsync(currentUser, roleName);
         }
 
-        public async Task<bool> UserExists(string id)
+        public async Task<bool> UserExists(string userId)
         {
-            var user = await _usersManager.FindByIdAsync(id);
+            var user = await _usersManager.FindByIdAsync(userId);
             
             return user != null;
         }
