@@ -23,7 +23,7 @@ namespace Registry.Web.Controllers
 
     [Authorize]
     [ApiController]
-    [Route("ddb/{orgSlug:regex([[\\w-]]+)}/ds/{dsSlug:regex([[\\w-]]+)}")]
+    [Route("orgs/{orgSlug:regex([[\\w-]]+)}/ds/{dsSlug:regex([[\\w-]]+)}")]
     public class ObjectsController : ControllerBaseEx
     {
         private readonly IObjectsManager _objectsManager;
@@ -101,7 +101,6 @@ namespace Registry.Web.Controllers
             }
         }
 
-        // DELETE: ddb/id
         [HttpDelete("obj")]
         public async Task<IActionResult> Delete([FromRoute] string orgSlug, [FromRoute] string dsSlug, [FromForm] string path)
         {

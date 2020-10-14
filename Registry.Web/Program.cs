@@ -44,6 +44,15 @@ namespace Registry.Web
                 return;
             }
 
+            try
+            {
+                Console.WriteLine(" !> Using DDB version " + DDB.Bindings.DroneDB.GetVersion());
+            }catch(Exception e)
+            {
+                Console.WriteLine(" !> Error while invoking DDB bindings. Did you make sure to place the DDB DLLs? " + e.Message);
+                return;
+            }
+
             CreateHostBuilder(args).Build().Run();
         }
 

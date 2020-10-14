@@ -339,11 +339,13 @@ ASALocalRun/
 # BeatPulse healthcheck temp database
 healthchecksdb
 /Registry.Web/ddb
-/Registry.Web/ddbstore
-/Registry.Web/temp
 
 # DB
 Fix/Registry.Web/[Aa]pp_[Dd]ata/
 /Registry.Web/logs
-/Registry.Web/App_Data/registry.db
-/Registry.Web/App_Data/identity.db
+/Registry.Web/App_Data/*
+
+# Configuration
+appsettings.json
+/Registry.Web/temp
+/Registry.Web/ddbstore/

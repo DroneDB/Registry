@@ -16,10 +16,8 @@ namespace Registry.Web.Models.DTO
 
     public class CommitResultDto
     {
-        public DateTime Start { get; set; }
-        public DateTime End { get; set; }
-        public long TotalSize { get; set; }
-        public int ObjectsCount { get; set; }
-        public BatchStatus Status { get; set; }
+        public string Url { get; set; }
+
+        public TagDto Tag { get; set; }
     }
 }

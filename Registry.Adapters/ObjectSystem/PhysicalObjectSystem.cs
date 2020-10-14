@@ -560,7 +560,7 @@ namespace Registry.Adapters.ObjectSystem
             // 5GB
             var chunkSize = 5L * 1024 * 1024 * 1024;
 
-            var parts = (int)Math.Ceiling((double)info.Length / chunkSize);
+            var parts = info.Length == 0 ? 1 : (int)Math.Ceiling((double)info.Length / chunkSize);
 
             return AdaptersUtils.CalculateMultipartEtag(File.ReadAllBytes(filePath), parts);
 
