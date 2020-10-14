@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 using GeoJSON.Net;
 using GeoJSON.Net.Feature;
 using GeoJSON.Net.Geometry;
@@ -16,7 +17,7 @@ namespace Registry.Ports.DroneDB.Models
         public int Depth { get; set; }
         public int Size { get; set; }
         public EntryType Type { get; set; }
-        public JObject Meta { get; set; }
+        public Dictionary<string, string> Meta { get; set; }
         public Point PointGeometry { get; set; }
         public Feature PolygonGeometry { get; set; }
     }

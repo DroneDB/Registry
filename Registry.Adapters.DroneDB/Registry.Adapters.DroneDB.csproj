@@ -5,7 +5,7 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="DDB.Bindings" Version="1.0.3" />
+    <PackageReference Include="DDB.Bindings" Version="1.0.4" />
     <PackageReference Include="GeoJSON.Net" Version="1.2.19" />
     <PackageReference Include="Microsoft.Extensions.Logging" Version="3.1.9" />
     <PackageReference Include="Microsoft.Extensions.Logging.Console" Version="3.1.9" />

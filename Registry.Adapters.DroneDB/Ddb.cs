@@ -50,37 +50,34 @@ namespace Registry.Adapters.DroneDB
         public IEnumerable<DdbEntry> Search(string path)
         {
 
-            //var info = DDB.Bindings.DroneDB.Info()
+            try
+            {
 
-            //var res = DDB.Bindings.DroneDB.Info(path)
+                var info = DDB.Bindings.DroneDB.List(_baseDdbPath, path);
 
-            return null;
-            //using var entities = new DdbContext(_dbPath);
+                var query = from item in info.ToArray()
+                            select new DdbEntry
+                            {
+                                Depth = item.Depth,
+                                Hash = item.Hash,
+                                Meta = item.Meta,
+                                ModifiedTime = item.ModifiedTime,
+                                Path = item.Path,
+                                Size = item.Size,
+                                Type = (Common.EntryType)(int)item.Type,
+                                PointGeometry = JsonConvert.DeserializeObject<Point>(item.PointGeometry),
+                                PolygonGeometry = JsonConvert.DeserializeObject<Feature>(item.PointGeometry)
+                            };
 
-            //var tmp = from entry in entities.Entries
-            //    select entry;
 
-            //// Filter only if necessary
-            //if (!string.IsNullOrEmpty(path))
-            //    tmp = from item in tmp
-            //        where item.Path.StartsWith(path)
-            //        select item;
+                return query.ToArray();
+            }
+            catch (DDBException ex)
+            {
+                throw new InvalidOperationException($"Cannot list '{path}' to ddb '{_baseDdbPath}'", ex);
+            }
 
-            //var query = from item in tmp.ToArray()
-            //    select new DdbEntry
-            //    {
-            //        Depth = item.Depth,
-            //        Hash = item.Hash,
-            //        Meta = JsonConvert.DeserializeObject<JObject>(item.Meta),
-            //        ModifiedTime = item.ModifiedTime,
-            //        Path = item.Path,
-            //        Size = item.Size,
-            //        Type = item.Type,
-            //        PointGeometry = GetPoint(item.PointGeometry),
-            //        PolygonGeometry = GetFeature(item.PolygonGeometry)
-            //    };
 
-            //return query.ToArray();
         }
 
         public void Add(string path, byte[] data)
