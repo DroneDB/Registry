@@ -24,9 +24,6 @@ namespace Registry.Web
 
         const string ConfigFilePath = "appsettings.json";
         const string DefaultConfigFilePath = "appsettings-default.json";
-
-        public static readonly PackageVersion SupportedDdbVersion = new PackageVersion(0,9,2);
-
         public static void Main(string[] args)
         {
             // We could use a library to perform command line parsing, but this is sufficient so far
@@ -47,7 +44,8 @@ namespace Registry.Web
             try
             {
                 Console.WriteLine(" !> Using DDB version " + DDB.Bindings.DroneDB.GetVersion());
-            }catch(Exception e)
+            }
+            catch (Exception e)
             {
                 Console.WriteLine(" !> Error while invoking DDB bindings. Did you make sure to place the DDB DLLs? " + e.Message);
                 return;
@@ -115,7 +113,7 @@ namespace Registry.Web
             }
 
             // TODO: Check if ddb command exists
-            
+
 
             var connectionStrings = config["ConnectionStrings"];
 
