@@ -38,11 +38,11 @@ namespace Registry.Web.Test
             _appSettingsMock = new Mock<IOptions<AppSettings>>();
             _ddbFactoryLogger = new Logger<DdbFactory>(LoggerFactory.Create(builder => builder.AddConsole()));
 
-            if (!Directory.Exists(DdbTestDataFolder))
-            {
-                Directory.CreateDirectory(DdbTestDataFolder);
-                File.WriteAllText(Path.Combine(DdbTestDataFolder, "ddbcmd.exe"), string.Empty);
-            }
+            //if (!Directory.Exists(DdbTestDataFolder))
+            //{
+            //    Directory.CreateDirectory(DdbTestDataFolder);
+            //    File.WriteAllText(Path.Combine(DdbTestDataFolder, "ddbcmd.exe"), string.Empty);
+            //}
 
             _settings.DdbStoragePath = TestDataFolder;
             _appSettingsMock.Setup(o => o.Value).Returns(_settings);
@@ -73,6 +73,12 @@ namespace Registry.Web.Test
         [Test]
         public void Search_MissingEntry_Empty()
         {
+
+            using var fs = new TestFS(DbTest1ArchiveUrl, nameof(DdbFactoryTest));
+
+            _settings.DdbStoragePath = fs.TestFolder;
+            _appSettingsMock.Setup(o => o.Value).Returns(_settings);
+
             var factory = new DdbFactory(_appSettingsMock.Object, _ddbFactoryLogger);
 
             var ddb = factory.GetDdb(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug);
@@ -87,6 +93,11 @@ namespace Registry.Web.Test
         [Test]
         public void Search_ExistingEntry_Entry1()
         {
+
+            using var fs = new TestFS(DbTest1ArchiveUrl, nameof(DdbFactoryTest));
+
+            _settings.DdbStoragePath = fs.TestFolder;
+            _appSettingsMock.Setup(o => o.Value).Returns(_settings);
 
             const string fileName = "Sub/20200610_144436.jpg";
             const int expectedDepth = 1;
@@ -127,6 +138,11 @@ namespace Registry.Web.Test
         [Test]
         public void Search_ExistingEntry_Entry2()
         {
+
+            using var fs = new TestFS(DbTest1ArchiveUrl, nameof(DdbFactoryTest));
+
+            _settings.DdbStoragePath = fs.TestFolder;
+            _appSettingsMock.Setup(o => o.Value).Returns(_settings);
 
             const string fileName = "DJI_0022.JPG";
             const int expectedDepth = 0;
