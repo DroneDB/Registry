@@ -53,6 +53,9 @@ namespace Registry.Adapters.DroneDB
             try
             {
 
+                // If the path is not absolute let's rebase it on ddbPath
+                if (!Path.IsPathRooted(path)) path = Path.Combine(_baseDdbPath, path);
+
                 var info = DDB.Bindings.DroneDB.List(_baseDdbPath, path);
 
                 var query = from item in info.ToArray()
@@ -86,7 +89,7 @@ namespace Registry.Adapters.DroneDB
 
             try
             {
-
+                
                 filePath = Path.Combine(_baseDdbPath, path);
 
                 File.WriteAllBytes(filePath, data);
@@ -109,6 +112,10 @@ namespace Registry.Adapters.DroneDB
         {
             try
             {
+
+                // If the path is not absolute let's rebase it on ddbPath
+                if (!Path.IsPathRooted(path)) path = Path.Combine(_baseDdbPath, path);
+                
                 DDB.Bindings.DroneDB.Remove(_baseDdbPath, path);
             }
             catch (DDBException ex)
