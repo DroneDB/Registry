@@ -58,7 +58,12 @@ namespace Registry.Adapters.DroneDB
 
                 var info = DDB.Bindings.DroneDB.List(_baseDdbPath, path);
 
-                var query = from item in info.ToArray()
+                if (info == null) {
+                    Debug.WriteLine("Strange null return value");
+                    return new DdbEntry[0];
+                }
+
+                var query = from item in info
                             select new DdbEntry
                             {
                                 Depth = item.Depth,
@@ -68,8 +73,8 @@ namespace Registry.Adapters.DroneDB
                                 Path = item.Path,
                                 Size = item.Size,
                                 Type = (Common.EntryType)(int)item.Type,
-                                PointGeometry = JsonConvert.DeserializeObject<Point>(item.PointGeometry),
-                                PolygonGeometry = JsonConvert.DeserializeObject<Feature>(item.PointGeometry)
+                                PointGeometry = item.PointGeometry != null ? JsonConvert.DeserializeObject<Point>(item.PointGeometry) : null,
+                                PolygonGeometry = item.PolygonGeometry != null ? JsonConvert.DeserializeObject<Feature>(item.PolygonGeometry) : null
                             };
 
 
