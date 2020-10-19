@@ -73,8 +73,8 @@ namespace Registry.Adapters.DroneDB
                                 Path = item.Path,
                                 Size = item.Size,
                                 Type = (Common.EntryType)(int)item.Type,
-                                PointGeometry = item.PointGeometry != null ? JsonConvert.DeserializeObject<Point>(item.PointGeometry) : null,
-                                PolygonGeometry = item.PolygonGeometry != null ? JsonConvert.DeserializeObject<Feature>(item.PolygonGeometry) : null
+                                PointGeometry = item.PointGeometry?.ToObject<Point>(),
+                                PolygonGeometry = item.PolygonGeometry?.ToObject<Feature>()
                             };
 
 
@@ -98,7 +98,7 @@ namespace Registry.Adapters.DroneDB
                 filePath = Path.Combine(_baseDdbPath, path);
 
                 File.WriteAllBytes(filePath, data);
-
+                
                 DDB.Bindings.DroneDB.Add(_baseDdbPath, filePath);
 
             }

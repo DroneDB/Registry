@@ -150,7 +150,7 @@ namespace Registry.Web.Test
             const int expectedType = 3;
             const string expectedHash = "e6e57187a33951a27f51e3a86cc66c6ce43d555f0d51ba3c715fc7b707ce1477";
             var expectedModifiedTime = new DateTime(2017, 04, 2, 20, 01, 27);
-            var expectedMeta = JsonConvert.DeserializeObject<JObject>(
+            var expectedMeta = JsonConvert.DeserializeObject<Dictionary<string, string>>(
                 "{\"cameraPitch\":-90.0,\"cameraRoll\":0.0,\"cameraYaw\":45.29999923706055,\"captureTime\":1466699547000.0,\"focalLength\":3.4222222222222225,\"focalLength35\":20.0,\"height\":2250,\"make\":\"DJI\",\"model\":\"FC300S\",\"orientation\":1,\"sensor\":\"dji fc300s\",\"sensorHeight\":3.4650000000000003,\"sensorWidth\":6.16,\"width\":4000}");
             const double expectedLatitude = 46.842952;
             const double expectedLongitude = -91.994052;
