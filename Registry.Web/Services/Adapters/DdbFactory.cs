@@ -38,5 +38,6 @@ namespace Registry.Web.Services.Adapters
             return ddb;
         }
 
+
     }
 }

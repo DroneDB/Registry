@@ -47,6 +47,15 @@ namespace Registry.Adapters.DroneDB
             }
         }
 
+        static Ddb()
+        {
+#if DEBUG
+            DDB.Bindings.DroneDB.RegisterProcess(true);
+#else
+            DDB.Bindings.DroneDB.RegisterProcess(false);
+#endif
+        }
+
         public IEnumerable<DdbEntry> Search(string path)
         {
 
@@ -54,7 +63,8 @@ namespace Registry.Adapters.DroneDB
             {
 
                 // If the path is not absolute let's rebase it on ddbPath
-                if (!Path.IsPathRooted(path)) path = Path.Combine(_baseDdbPath, path);
+                if (path != null && !Path.IsPathRooted(path)) 
+                    path = Path.Combine(_baseDdbPath, path);
 
                 var info = DDB.Bindings.DroneDB.List(_baseDdbPath, path);
 

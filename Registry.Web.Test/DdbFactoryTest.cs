@@ -38,12 +38,6 @@ namespace Registry.Web.Test
             _appSettingsMock = new Mock<IOptions<AppSettings>>();
             _ddbFactoryLogger = new Logger<DdbFactory>(LoggerFactory.Create(builder => builder.AddConsole()));
 
-            //if (!Directory.Exists(DdbTestDataFolder))
-            //{
-            //    Directory.CreateDirectory(DdbTestDataFolder);
-            //    File.WriteAllText(Path.Combine(DdbTestDataFolder, "ddbcmd.exe"), string.Empty);
-            //}
-
             _settings.DdbStoragePath = TestDataFolder;
             _appSettingsMock.Setup(o => o.Value).Returns(_settings);
 
