@@ -66,7 +66,10 @@ namespace Registry.Adapters.DroneDB
                 if (path != null && !Path.IsPathRooted(path)) 
                     path = Path.Combine(_baseDdbPath, path);
 
-                var info = DDB.Bindings.DroneDB.List(_baseDdbPath, path);
+                // If path is null we leverage the recursive parameter
+                var info = path != null ? 
+                    DDB.Bindings.DroneDB.List(_baseDdbPath, path) : 
+                    DDB.Bindings.DroneDB.List(_baseDdbPath, _baseDdbPath, true);
 
                 if (info == null) {
                     Debug.WriteLine("Strange null return value");
@@ -83,10 +86,11 @@ namespace Registry.Adapters.DroneDB
                                 Path = item.Path,
                                 Size = item.Size,
                                 Type = (Common.EntryType)(int)item.Type,
-                                PointGeometry = item.PointGeometry?.ToObject<Point>(),
-                                PolygonGeometry = item.PolygonGeometry?.ToObject<Feature>()
-                            };
 
+                                PointGeometry = (Point)item.PointGeometry?.ToObject<Feature>()?.Geometry,
+                                PolygonGeometry = (Polygon)item.PolygonGeometry?.ToObject<Feature>()?.Geometry
+                            };
+                
 
                 return query.ToArray();
             }

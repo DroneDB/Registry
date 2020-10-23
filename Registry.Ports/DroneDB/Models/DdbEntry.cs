@@ -19,7 +19,7 @@ namespace Registry.Ports.DroneDB.Models
         public EntryType Type { get; set; }
         public Dictionary<string, string> Meta { get; set; }
         public Point PointGeometry { get; set; }
-        public Feature PolygonGeometry { get; set; }
+        public Polygon PolygonGeometry { get; set; }
     }
 
 }

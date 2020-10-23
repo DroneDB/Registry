@@ -99,7 +99,7 @@ namespace Registry.Web.Test
             const int expectedType = 3;
             const string expectedHash = "f27ddc96daf9aeff3c026de8292681296c3e9d952b647235878c50f2b7b39e94";
             var expectedModifiedTime = new DateTime(2020, 06, 10, 14, 44, 36);
-            var expectedMeta = JsonConvert.DeserializeObject<JObject>(
+            var expectedMeta = JsonConvert.DeserializeObject<Dictionary<string,string>>(
                 "{\"captureTime\":1591800276004.8,\"focalLength\":4.16,\"focalLength35\":26.0,\"height\":3024,\"make\":\"samsung\",\"model\":\"SM-G950F\",\"orientation\":1,\"sensor\":\"samsung sm-g950f\",\"sensorHeight\":4.32,\"sensorWidth\":5.76,\"width\":4032}");
             const double expectedLatitude = 45.50027;
             const double expectedLongitude = 10.60667;
@@ -125,7 +125,7 @@ namespace Registry.Web.Test
             res.Meta.Should().BeEquivalentTo(expectedMeta);
             res.PointGeometry.Coordinates.Latitude.Should().BeApproximately(expectedLatitude, 0.00001);
             res.PointGeometry.Coordinates.Longitude.Should().BeApproximately(expectedLongitude, 0.00001);
-            res.PointGeometry.Coordinates.Altitude.Should().Be(expectedAltitude);
+            res.PointGeometry.Coordinates.Altitude.Should().BeApproximately(expectedAltitude, 0.1);
 
         }
 
@@ -178,9 +178,9 @@ namespace Registry.Web.Test
             res.Meta.Should().BeEquivalentTo(expectedMeta);
             res.PointGeometry.Coordinates.Latitude.Should().BeApproximately(expectedLatitude, 0.00001);
             res.PointGeometry.Coordinates.Longitude.Should().BeApproximately(expectedLongitude, 0.00001);
-            res.PointGeometry.Coordinates.Altitude.Should().Be(expectedAltitude);
+            res.PointGeometry.Coordinates.Altitude.Should().BeApproximately(expectedAltitude, 0.1);
 
-            var polygon = (Polygon) res.PolygonGeometry.Geometry;
+            var polygon = res.PolygonGeometry;
             
             var coords = polygon.Coordinates[0].Coordinates;
 
