@@ -33,4 +33,6 @@ jobs:
       run: |        
         export PATH="$HOME/.local/ddb/bin:$PATH"
         echo $PATH
+        ls -l ~/.local/ddb/bin
+        ls -l $HOME/.local/ddb/bin
         dotnet test --no-restore --verbosity minimal
