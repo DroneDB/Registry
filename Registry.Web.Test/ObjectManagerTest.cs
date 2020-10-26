@@ -110,7 +110,8 @@ namespace Registry.Web.Test
 
             res = await objectManager.List(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug, "Sub");
 
-            res.Should().HaveCount(8);
+            // We dont consider the naked folder 'Sub'
+            res.Should().HaveCount(7);
 
         }
 
