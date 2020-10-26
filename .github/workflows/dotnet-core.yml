@@ -30,6 +30,7 @@ jobs:
     - name: Build
       run: dotnet build --configuration Release --no-restore
     - name: Test
-      run: |
+      run: |        
+        export PATH="$HOME/.local/ddb/bin:$PATH"
         echo $PATH
         dotnet test --no-restore --verbosity minimal
