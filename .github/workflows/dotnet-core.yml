@@ -13,26 +13,33 @@ jobs:
 
     steps:
     - uses: actions/checkout@v2
+      with:
+        path: registry
+    - uses: actions/checkout@v2
+      with:
+        repository: DroneDB/DroneDB
+        submodules: "recursive"
+        path: ddb
     - name: Setup .NET Core
       uses: actions/setup-dotnet@v1
       with:
-        dotnet-version: 3.1.101
+        dotnet-version: '3.1.x'
     - name: setup utils
       run: sudo apt-get update && sudo apt-get install -y spatialite-bin libsqlite3-mod-spatialite
-    - name: download ddb
-      uses: wei/curl@master
-      with:
-        args: -fsSL https://get.dronedb.app -o get-ddb.sh
-    - name: install ddb
-      run: sh get-ddb.sh
+    - name: Build C++ lib
+      run: |
+          cd ddb
+          scripts/ubuntu_deps.sh
+          mkdir -p build
+          cd build
+          cmake -DBUILD_TESTING=OFF ..
+          make -j$(nproc) ddb
+          sudo make install
+          sudo ldconfig          
     - name: Install dependencies
-      run: dotnet restore
-    - name: Build
-      run: dotnet build --configuration Release --no-restore
-    - name: Test
-      run: |        
-        export PATH="$HOME/.local/ddb/bin:$PATH"
+      run: |
+        cd registry
+        ls -l $HOME/ddb/build
+        export PATH="$HOME/ddb/build:$PATH"
         echo $PATH
-        ls -l ~/.local/ddb/bin
-        ls -l $HOME/.local/ddb/bin
-        dotnet test --no-restore --verbosity minimal
+        dotnet test -c Release --verbosity minimal
