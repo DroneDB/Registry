@@ -30,7 +30,7 @@ namespace Registry.Web.Services.Adapters
         private const string LocationKey = "location";
 
         private const string BucketNameFormat = "{0}-{1}";
-        
+
         // TODO: Add sqlite db sync to backing server
 
         public ObjectsManager(ILogger<ObjectsManager> logger,
@@ -55,7 +55,7 @@ namespace Registry.Web.Services.Adapters
 
             _logger.LogInformation($"In '{orgSlug}/{dsSlug}'");
 
-            using var ddb = _ddbFactory.GetDdb(orgSlug, dsSlug);
+            var ddb = _ddbFactory.GetDdb(orgSlug, dsSlug);
 
             _logger.LogInformation($"Searching in '{path}'");
 
@@ -73,7 +73,7 @@ namespace Registry.Web.Services.Adapters
 
             _logger.LogInformation($"In '{orgSlug}/{dsSlug}'");
 
-            using var ddb = _ddbFactory.GetDdb(orgSlug, dsSlug);
+            var ddb = _ddbFactory.GetDdb(orgSlug, dsSlug);
 
             var res = ddb.Search(path).FirstOrDefault();
 
@@ -104,13 +104,13 @@ namespace Registry.Web.Services.Adapters
 
             if (objInfo == null)
                 throw new NotFoundException($"Cannot find '{path}' in storage provider");
-            
+
             await using var memory = new MemoryStream();
 
             _logger.LogInformation($"Getting object '{path}' in bucket '{bucketName}'");
 
             await _objectSystem.GetObjectAsync(bucketName, path, stream => stream.CopyTo(memory));
-            
+
             return new ObjectRes
             {
                 ContentType = objInfo.ContentType,
@@ -158,7 +158,7 @@ namespace Registry.Web.Services.Adapters
             _logger.LogInformation("File uploaded, adding to DDB");
 
             // Add to DDB
-            using var ddb = _ddbFactory.GetDdb(orgSlug, dsSlug);
+            var ddb = _ddbFactory.GetDdb(orgSlug, dsSlug);
             ddb.Add(path, data);
 
             _logger.LogInformation("Added to DDB");
@@ -166,14 +166,14 @@ namespace Registry.Web.Services.Adapters
             // Refresh objects count and total size
             dataset.UpdateStatistics(ddb);
             await _context.SaveChangesAsync();
-            
+
             var obj = new UploadedObjectDto
             {
                 Path = path,
                 ContentType = contentType,
                 Size = data.Length
             };
-            
+
             return obj;
         }
 
@@ -199,16 +199,16 @@ namespace Registry.Web.Services.Adapters
             _logger.LogInformation($"File deleted, removing from DDB");
 
             // Remove from DDB
-            using (var ddb = _ddbFactory.GetDdb(orgSlug, dsSlug)) {
-                ddb.Remove(path);
-                dataset.UpdateStatistics(ddb);
-            }
+            var ddb = _ddbFactory.GetDdb(orgSlug, dsSlug);
+
+            ddb.Remove(path);
+            dataset.UpdateStatistics(ddb);
 
             // Refresh objects count and total size
             await _context.SaveChangesAsync();
 
             _logger.LogInformation("Removed from DDB");
-            
+
         }
 
         public async Task DeleteAll(string orgSlug, string dsSlug)
@@ -223,7 +223,8 @@ namespace Registry.Web.Services.Adapters
 
             var bucketExists = await _objectSystem.BucketExistsAsync(bucketName);
 
-            if (!bucketExists) {
+            if (!bucketExists)
+            {
                 _logger.LogWarning($"Asked to remove non-existing bucket '{bucketName}'");
                 return;
             }
@@ -233,22 +234,22 @@ namespace Registry.Web.Services.Adapters
             await _objectSystem.RemoveBucketAsync(bucketName);
 
             _logger.LogInformation($"Bucket deleted, removing all files from DDB ");
-            
+
             // Remove all from DDB
-            using var ddb = _ddbFactory.GetDdb(orgSlug, dsSlug);
+            var ddb = _ddbFactory.GetDdb(orgSlug, dsSlug);
 
             var res = ddb.Search(null);
-            foreach(var item in res)
+            foreach (var item in res)
                 ddb.Remove(item.Path);
 
             // Refresh objects count and total size
             dataset.UpdateStatistics(ddb);
             await _context.SaveChangesAsync();
-            
+
             _logger.LogInformation("Removed all from DDB");
 
             // TODO: Maybe it's more clever to remove the entire sqlite database instead of performing a per-file delete. Just my 2 cents
-            
+
         }
     }
 }

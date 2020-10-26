@@ -24,9 +24,6 @@ namespace Registry.Web
 
         const string ConfigFilePath = "appsettings.json";
         const string DefaultConfigFilePath = "appsettings-default.json";
-
-        public static readonly PackageVersion SupportedDdbVersion = new PackageVersion(0,9,2);
-
         public static void Main(string[] args)
         {
             // We could use a library to perform command line parsing, but this is sufficient so far
@@ -41,6 +38,16 @@ namespace Registry.Web
             if (!CheckConfig())
             {
                 Console.WriteLine(" ?> Errors occurred during config validation. Check console to find out what's wrong.");
+                return;
+            }
+
+            try
+            {
+                Console.WriteLine(" !> Using DDB version " + DDB.Bindings.DroneDB.GetVersion());
+            }
+            catch (Exception e)
+            {
+                Console.WriteLine(" !> Error while invoking DDB bindings. Did you make sure to place the DDB DLLs? " + e.Message);
                 return;
             }
 
@@ -105,29 +112,8 @@ namespace Registry.Web
 
             }
 
-            // TODO: Check
-            var ddbPath = appSettings["DdbPath"];
+            // TODO: Check if ddb command exists
 
-            if (ddbPath == null || string.IsNullOrWhiteSpace(ddbPath.Value<string>()))
-            {
-                Console.WriteLine(" !> Ddb path not found in config");
-                appSettings["DdbPath"] = defaultAppSettings["DdbPath"];
-                ddbPath = defaultAppSettings["DdbPath"];
-                Console.WriteLine($" -> Copied from default config");
-            }
-
-            var ddbPathVal = ddbPath.Value<string>();
-
-            IDdbPackageProvider ddbPackageProvider = new DdbPackageProvider(ddbPathVal, appSettings["SupportedDdbVersion"]?.ToObject<PackageVersion>() ?? SupportedDdbVersion);
-
-            // TODO: Add config parameter to ignore ddb version match
-
-            if (!ddbPackageProvider.IsDdbReady()) 
-            {
-                Console.WriteLine($" !> Ddb not ready in path '{ddbPathVal}' ");
-                Console.WriteLine(" ?> Follow these instruction to install it: https://github.com/DroneDB/Registry/wiki");
-                return false;
-            }
 
             var connectionStrings = config["ConnectionStrings"];
 

@@ -38,13 +38,6 @@ namespace Registry.Web.Test
             _appSettingsMock = new Mock<IOptions<AppSettings>>();
             _ddbFactoryLogger = new Logger<DdbFactory>(LoggerFactory.Create(builder => builder.AddConsole()));
 
-            if (!Directory.Exists(DdbTestDataFolder))
-            {
-                Directory.CreateDirectory(DdbTestDataFolder);
-                File.WriteAllText(Path.Combine(DdbTestDataFolder, "ddbcmd.exe"), string.Empty);
-            }
-
-            _settings.DdbPath = DdbTestDataFolder;
             _settings.DdbStoragePath = TestDataFolder;
             _appSettingsMock.Setup(o => o.Value).Returns(_settings);
 
@@ -74,6 +67,12 @@ namespace Registry.Web.Test
         [Test]
         public void Search_MissingEntry_Empty()
         {
+
+            using var fs = new TestFS(DbTest1ArchiveUrl, nameof(DdbFactoryTest));
+
+            _settings.DdbStoragePath = fs.TestFolder;
+            _appSettingsMock.Setup(o => o.Value).Returns(_settings);
+
             var factory = new DdbFactory(_appSettingsMock.Object, _ddbFactoryLogger);
 
             var ddb = factory.GetDdb(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug);
@@ -89,13 +88,18 @@ namespace Registry.Web.Test
         public void Search_ExistingEntry_Entry1()
         {
 
+            using var fs = new TestFS(DbTest1ArchiveUrl, nameof(DdbFactoryTest));
+
+            _settings.DdbStoragePath = fs.TestFolder;
+            _appSettingsMock.Setup(o => o.Value).Returns(_settings);
+
             const string fileName = "Sub/20200610_144436.jpg";
             const int expectedDepth = 1;
             const int expectedSize = 8248241;
             const int expectedType = 3;
             const string expectedHash = "f27ddc96daf9aeff3c026de8292681296c3e9d952b647235878c50f2b7b39e94";
             var expectedModifiedTime = new DateTime(2020, 06, 10, 14, 44, 36);
-            var expectedMeta = JsonConvert.DeserializeObject<JObject>(
+            var expectedMeta = JsonConvert.DeserializeObject<Dictionary<string,string>>(
                 "{\"captureTime\":1591800276004.8,\"focalLength\":4.16,\"focalLength35\":26.0,\"height\":3024,\"make\":\"samsung\",\"model\":\"SM-G950F\",\"orientation\":1,\"sensor\":\"samsung sm-g950f\",\"sensorHeight\":4.32,\"sensorWidth\":5.76,\"width\":4032}");
             const double expectedLatitude = 45.50027;
             const double expectedLongitude = 10.60667;
@@ -121,7 +125,7 @@ namespace Registry.Web.Test
             res.Meta.Should().BeEquivalentTo(expectedMeta);
             res.PointGeometry.Coordinates.Latitude.Should().BeApproximately(expectedLatitude, 0.00001);
             res.PointGeometry.Coordinates.Longitude.Should().BeApproximately(expectedLongitude, 0.00001);
-            res.PointGeometry.Coordinates.Altitude.Should().Be(expectedAltitude);
+            res.PointGeometry.Coordinates.Altitude.Should().BeApproximately(expectedAltitude, 0.1);
 
         }
 
@@ -129,13 +133,18 @@ namespace Registry.Web.Test
         public void Search_ExistingEntry_Entry2()
         {
 
+            using var fs = new TestFS(DbTest1ArchiveUrl, nameof(DdbFactoryTest));
+
+            _settings.DdbStoragePath = fs.TestFolder;
+            _appSettingsMock.Setup(o => o.Value).Returns(_settings);
+
             const string fileName = "DJI_0022.JPG";
             const int expectedDepth = 0;
             const int expectedSize = 3872682;
             const int expectedType = 3;
             const string expectedHash = "e6e57187a33951a27f51e3a86cc66c6ce43d555f0d51ba3c715fc7b707ce1477";
             var expectedModifiedTime = new DateTime(2017, 04, 2, 20, 01, 27);
-            var expectedMeta = JsonConvert.DeserializeObject<JObject>(
+            var expectedMeta = JsonConvert.DeserializeObject<Dictionary<string, string>>(
                 "{\"cameraPitch\":-90.0,\"cameraRoll\":0.0,\"cameraYaw\":45.29999923706055,\"captureTime\":1466699547000.0,\"focalLength\":3.4222222222222225,\"focalLength35\":20.0,\"height\":2250,\"make\":\"DJI\",\"model\":\"FC300S\",\"orientation\":1,\"sensor\":\"dji fc300s\",\"sensorHeight\":3.4650000000000003,\"sensorWidth\":6.16,\"width\":4000}");
             const double expectedLatitude = 46.842952;
             const double expectedLongitude = -91.994052;
@@ -169,9 +178,9 @@ namespace Registry.Web.Test
             res.Meta.Should().BeEquivalentTo(expectedMeta);
             res.PointGeometry.Coordinates.Latitude.Should().BeApproximately(expectedLatitude, 0.00001);
             res.PointGeometry.Coordinates.Longitude.Should().BeApproximately(expectedLongitude, 0.00001);
-            res.PointGeometry.Coordinates.Altitude.Should().Be(expectedAltitude);
+            res.PointGeometry.Coordinates.Altitude.Should().BeApproximately(expectedAltitude, 0.1);
 
-            var polygon = (Polygon) res.PolygonGeometry.Geometry;
+            var polygon = res.PolygonGeometry;
             
             var coords = polygon.Coordinates[0].Coordinates;
 
@@ -188,11 +197,6 @@ namespace Registry.Web.Test
 
             _settings.DdbStoragePath = fs.TestFolder;
             _appSettingsMock.Setup(o => o.Value).Returns(_settings);
-
-            var provider = new DdbPackageProvider(_settings.DdbPath, _settings.SupportedDdbVersion);
-
-            if (!provider.IsDdbReady())
-                Assert.Inconclusive("Ddb is not ready");
 
             var factory = new DdbFactory(_appSettingsMock.Object, _ddbFactoryLogger);
 

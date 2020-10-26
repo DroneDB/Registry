@@ -126,7 +126,7 @@ namespace Registry.Common
             using Stream inStream = File.OpenRead(archive);
             using Stream gzipStream = new GZipInputStream(inStream);
 
-            var tarArchive = TarArchive.CreateInputTarArchive(gzipStream);
+            var tarArchive = TarArchive.CreateInputTarArchive(gzipStream, Encoding.Default);
             tarArchive.ExtractContents(destFolder);
             tarArchive.Close();
 
