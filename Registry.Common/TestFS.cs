@@ -94,7 +94,15 @@ namespace Registry.Common
             }
 
             Debug.WriteLine($"Disposing test FS '{TestArchivePath}' in '{TestFolder}");
-            Directory.Delete(TestFolder, true);
+            try
+            {
+                Directory.Delete(TestFolder, true);
+            }
+            catch (IOException ex)
+            {
+                Debug.WriteLine($"Cannot recursive delete temp folder: {ex.Message}");
+                Debug.WriteLine($"Consider manual cleanup of folder '{TestFolder}'");
+            }
         }
 
         private static bool IsLocalPath(string path)

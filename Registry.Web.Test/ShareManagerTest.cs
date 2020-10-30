@@ -186,7 +186,6 @@ namespace Registry.Web.Test
         }
 
         [Test] 
-        [Explicit("Cannot run in CI")]
         public async Task EndToEnd_HappyPath()
         {
             /* INITIALIZATION & SETUP */
@@ -300,7 +299,6 @@ namespace Registry.Web.Test
         }
 
         [Test]
-        [Explicit("Cannot run in CI")]
         public async Task EndToEnd_ShareInit_After_ShareInit()
         {
 

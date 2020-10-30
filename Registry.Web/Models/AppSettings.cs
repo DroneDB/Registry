@@ -49,11 +49,6 @@ namespace Registry.Web.Models
         public string DdbStoragePath { get; set; }
 
         /// <summary>
-        /// Path to Ddb installation
-        /// </summary>
-        public string DdbPath { get; set; }
-
-        /// <summary>
         /// Supported Ddb version
         /// </summary>
         public PackageVersion SupportedDdbVersion { get; set; }

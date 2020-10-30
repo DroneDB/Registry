@@ -71,9 +71,6 @@ namespace Registry.Web.Test
                 File.WriteAllText(Path.Combine(DdbTestDataFolder, "ddbcmd.exe"), string.Empty);
             }
 
-            _settings.DdbPath = DdbTestDataFolder;
-
-
             _ddbFactoryLogger = new Logger<DdbFactory>(LoggerFactory.Create(builder => builder.AddConsole()));
             _objectManagerLogger = new Logger<ObjectsManager>(LoggerFactory.Create(builder => builder.AddConsole()));
         }
@@ -113,7 +110,8 @@ namespace Registry.Web.Test
 
             res = await objectManager.List(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug, "Sub");
 
-            res.Should().HaveCount(8);
+            // We dont consider the naked folder 'Sub'
+            res.Should().HaveCount(7);
 
         }
 
@@ -170,7 +168,6 @@ namespace Registry.Web.Test
 
         
         [Test]
-        [Explicit("Does not run in CI")]
         public async Task AddNew_File_FileRes()
         {
             

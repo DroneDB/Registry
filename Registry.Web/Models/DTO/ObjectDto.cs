@@ -28,7 +28,7 @@ namespace Registry.Web.Models.DTO
         [JsonProperty("type")]
         public EntryType Type { get; set; }
         [JsonProperty("meta")]
-        public JObject Meta { get; set; }
+        public Dictionary<string, string> Meta { get; set; }
         [JsonProperty("point_geom")]
         public GeoJSONObject PointGeometry { get; set; }
         [JsonProperty("polygon_geom")]
