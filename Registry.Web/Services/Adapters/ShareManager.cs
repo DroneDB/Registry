@@ -285,6 +285,9 @@ namespace Registry.Web.Services.Adapters
             if (stream == null)
                 throw new BadRequestException("Missing data stream");
 
+            if (!stream.CanRead)
+                throw new BadRequestException("Cannot read from data stream");
+
             var batch = _context.Batches
                 .Include(x => x.Dataset.Organization)
                 .Include(x => x.Entries)

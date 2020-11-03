@@ -26,7 +26,7 @@ namespace Registry.Web.Controllers
         }
 
         [HttpPost("init")]
-        public async Task<IActionResult> Init([FromForm]ShareInitDto parameters)
+        public async Task<IActionResult> Init([FromForm] ShareInitDto parameters)
         {
             try
             {
@@ -55,14 +55,10 @@ namespace Registry.Web.Controllers
 
                 if (file == null)
                     return BadRequest(new ErrorResponse("No file uploaded"));
-                
-                await using var memory = new MemoryStream();
-                await file.CopyToAsync(memory);
-                
-                var res = await _shareManager.Upload(token, path, memory.ToArray());
 
+                await using var stream = file.OpenReadStream();
+                var res = await _shareManager.Upload(token, path, stream);
                 return Ok(res);
-
             }
             catch (Exception ex)
             {

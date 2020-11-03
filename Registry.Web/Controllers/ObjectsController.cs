@@ -81,10 +81,9 @@ namespace Registry.Web.Controllers
                 if (file == null)
                     return BadRequest(new ErrorResponse("No file uploaded"));
 
-                await using var memory = new MemoryStream();
-                await file.CopyToAsync(memory);
+                await using var stream = file.OpenReadStream();
 
-                var newObj = await _objectsManager.AddNew(orgSlug, dsSlug, path, memory.ToArray());
+                var newObj = await _objectsManager.AddNew(orgSlug, dsSlug, path, stream);
                 return CreatedAtRoute(nameof(ObjectsController) + "." + nameof(GetInfo), new
                     {
                         orgSlug = orgSlug,
