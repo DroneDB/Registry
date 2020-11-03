@@ -21,6 +21,13 @@
   </ItemGroup>
 
   <ItemGroup>
+    <None Remove="ddb-log.1.csv" />
+    <None Remove="ddb-log.2.csv" />
+    <None Remove="ddb-log.3.csv" />
+    <None Remove="ddb-log.csv" />
+  </ItemGroup>
+
+  <ItemGroup>
     <None Include="wwwroot\index.html" />
   </ItemGroup>
 
