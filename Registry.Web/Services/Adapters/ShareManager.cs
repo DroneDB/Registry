@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
@@ -269,14 +270,20 @@ namespace Registry.Web.Services.Adapters
 
         public async Task<UploadResultDto> Upload(string token, string path, byte[] data)
         {
+            await using var stream = new MemoryStream(data);
+            return await Upload(token, path, stream);
+        }
+
+        public async Task<UploadResultDto> Upload(string token, string path, Stream stream)
+        {
             if (string.IsNullOrWhiteSpace(token))
                 throw new BadRequestException("Missing token");
 
             if (string.IsNullOrWhiteSpace(path))
                 throw new BadRequestException("Missing path");
 
-            if (data == null)
-                throw new BadRequestException("Missing data");
+            if (stream == null)
+                throw new BadRequestException("Missing data stream");
 
             var batch = _context.Batches
                 .Include(x => x.Dataset.Organization)
@@ -304,7 +311,7 @@ namespace Registry.Web.Services.Adapters
             var orgSlug = batch.Dataset.Organization.Slug;
             var dsSlug = batch.Dataset.Slug;
 
-            await _objectsManager.AddNew(orgSlug, dsSlug, path, data);
+            await _objectsManager.AddNew(orgSlug, dsSlug, path, stream);
 
             var info = (await _objectsManager.List(orgSlug, dsSlug, path)).FirstOrDefault();
 
@@ -335,7 +342,6 @@ namespace Registry.Web.Services.Adapters
                 Size = entry.Size,
                 Path = entry.Path
             };
-
         }
 
         public async Task<CommitResultDto> Commit(string token, bool rollback = false)

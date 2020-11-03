@@ -126,6 +126,13 @@ namespace Registry.Web.Services.Adapters
 
         public async Task<UploadedObjectDto> AddNew(string orgSlug, string dsSlug, string path, byte[] data)
         {
+            await using var stream = new MemoryStream(data);
+            stream.Reset();
+            return await AddNew(orgSlug, dsSlug, path, stream);
+        }
+
+        public async Task<UploadedObjectDto> AddNew(string orgSlug, string dsSlug, string path, Stream stream)
+        {
             var dataset = await _utils.GetDatasetAndCheck(orgSlug, dsSlug);
 
             _logger.LogInformation($"In '{orgSlug}/{dsSlug}'");
@@ -145,21 +152,19 @@ namespace Registry.Web.Services.Adapters
                 _logger.LogInformation("Bucket created");
             }
 
-            await using var memory = new MemoryStream(data);
-
             // TODO: I highly doubt the robustness of this 
             var contentType = MimeTypes.GetMimeType(path);
 
-            _logger.LogInformation($"Uploading '{path}' (size {data.Length}) to bucket '{bucketName}'");
+            _logger.LogInformation($"Uploading '{path}' (size {stream.Length}) to bucket '{bucketName}'");
 
             // TODO: No metadata / encryption ?
-            await _objectSystem.PutObjectAsync(bucketName, path, memory, data.Length, contentType);
+            await _objectSystem.PutObjectAsync(bucketName, path, stream, stream.Length, contentType);
 
             _logger.LogInformation("File uploaded, adding to DDB");
 
             // Add to DDB
             var ddb = _ddbFactory.GetDdb(orgSlug, dsSlug);
-            ddb.Add(path, data);
+            ddb.Add(path, stream);
 
             _logger.LogInformation("Added to DDB");
 
@@ -171,7 +176,7 @@ namespace Registry.Web.Services.Adapters
             {
                 Path = path,
                 ContentType = contentType,
-                Size = data.Length
+                Size = stream.Length
             };
 
             return obj;
