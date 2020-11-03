@@ -57,6 +57,11 @@ namespace Registry.Web.Models
         /// Max request body size
         /// </summary>
         public long MaxRequestBodySize { get; set; }
+
+        /// <summary>
+        /// Max upload chunk size
+        /// </summary>
+        public long MaxUploadChunkSize { get; set; }
     }
 
     public class StorageProvider
