@@ -26,10 +26,10 @@ namespace Registry.Web.Controllers
         private readonly IOrganizationsManager _organizationsManager;
         private readonly ILogger<OrganizationsController> _logger;
 
-        public OrganizationsController(IOrganizationsManager organizationsManager, ILogger<OrganizationsController> _logger)
+        public OrganizationsController(IOrganizationsManager organizationsManager, ILogger<OrganizationsController> logger)
         {
             _organizationsManager = organizationsManager;
-            this._logger = _logger;
+            _logger = logger;
         }
 
         [HttpGet(Name = nameof(OrganizationsController) + "." + nameof(GetAll))]

@@ -93,8 +93,8 @@ namespace Registry.Web.Services.Adapters
             if (currentUser == null)
                 throw new UnauthorizedException("Invalid user");
 
-            Dataset dataset = null;
-            TagDto tag = null;
+            Dataset dataset;
+            TagDto tag;
 
             if (parameters.Tag == null)
             {
@@ -238,6 +238,7 @@ namespace Registry.Web.Services.Adapters
             return new ShareInitResultDto
             {
                 Token = batch.Token, 
+                
 
                 // NOTE: Maybe useful in the future
                 // Tag = tag
