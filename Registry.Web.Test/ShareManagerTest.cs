@@ -105,7 +105,7 @@ namespace Registry.Web.Test
             _authManagerMock.Setup(o => o.SafeGetCurrentUserName()).Returns(Task.FromResult(userName));
 
 
-            var manager = new ShareManager(_shareManagerLogger, _objectsManagerMock.Object, _datasetsManagerMock.Object,
+            var manager = new ShareManager(_appSettingsMock.Object, _shareManagerLogger, _objectsManagerMock.Object, _datasetsManagerMock.Object,
                 _organizationsManagerMock.Object, _utilsMock.Object, _authManagerMock.Object, _batchTokenGenerator, _nameGenerator, GetTest1Context());
 
             manager.Invoking(x => x.Initialize(null)).Should().Throw<BadRequestException>();
@@ -147,7 +147,7 @@ namespace Registry.Web.Test
             var datasetManager = new DatasetsManager(context, webUtils, _datasetsManagerLogger, objectManager, _passwordHasher);
             var organizationsManager = new OrganizationsManager(_authManagerMock.Object, context, webUtils, datasetManager, _organizationsManagerLogger);
 
-            var shareManager = new ShareManager(_shareManagerLogger, objectManager, datasetManager, organizationsManager, webUtils, _authManagerMock.Object,
+            var shareManager = new ShareManager(_appSettingsMock.Object, _shareManagerLogger, objectManager, datasetManager, organizationsManager, webUtils, _authManagerMock.Object,
                 _batchTokenGenerator, _nameGenerator, context);
 
             /* TEST */
@@ -223,7 +223,7 @@ namespace Registry.Web.Test
             var datasetManager = new DatasetsManager(context, webUtils, _datasetsManagerLogger, objectManager, _passwordHasher);
             var organizationsManager = new OrganizationsManager(_authManagerMock.Object, context, webUtils, datasetManager, _organizationsManagerLogger);
 
-            var shareManager = new ShareManager(_shareManagerLogger, objectManager, datasetManager, organizationsManager, webUtils, _authManagerMock.Object,
+            var shareManager = new ShareManager(_appSettingsMock.Object, _shareManagerLogger, objectManager, datasetManager, organizationsManager, webUtils, _authManagerMock.Object,
                 _batchTokenGenerator, _nameGenerator, context);
 
             /* TEST */
@@ -337,7 +337,7 @@ namespace Registry.Web.Test
             var datasetManager = new DatasetsManager(context, webUtils, _datasetsManagerLogger, objectManager, _passwordHasher);
             var organizationsManager = new OrganizationsManager(_authManagerMock.Object, context, webUtils, datasetManager, _organizationsManagerLogger);
 
-            var shareManager = new ShareManager(_shareManagerLogger, objectManager, datasetManager, organizationsManager, webUtils, _authManagerMock.Object,
+            var shareManager = new ShareManager(_appSettingsMock.Object, _shareManagerLogger, objectManager, datasetManager, organizationsManager, webUtils, _authManagerMock.Object,
                 _batchTokenGenerator, _nameGenerator, context);
 
             /* TEST */

@@ -6,6 +6,7 @@ using System.Text;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 using Registry.Common;
 using Registry.Web.Data;
 using Registry.Web.Data.Models;
@@ -22,6 +23,7 @@ namespace Registry.Web.Services.Adapters
         private readonly IOrganizationsManager _organizationsManager;
         private readonly IDatasetsManager _datasetsManager;
         private readonly IObjectsManager _objectsManager;
+        private readonly IOptions<AppSettings> _settings;
         private readonly ILogger<ShareManager> _logger;
         private readonly IUtils _utils;
         private readonly IAuthManager _authManager;
@@ -30,6 +32,7 @@ namespace Registry.Web.Services.Adapters
         private readonly RegistryContext _context;
 
         public ShareManager(
+            IOptions<AppSettings> settings,
             ILogger<ShareManager> logger,
             IObjectsManager objectsManager,
             IDatasetsManager datasetsManager,
@@ -40,6 +43,7 @@ namespace Registry.Web.Services.Adapters
             INameGenerator nameGenerator,
             RegistryContext context)
         {
+            _settings = settings;
             _logger = logger;
             _objectsManager = objectsManager;
             _datasetsManager = datasetsManager;
@@ -238,7 +242,7 @@ namespace Registry.Web.Services.Adapters
             return new ShareInitResultDto
             {
                 Token = batch.Token, 
-                
+                MaxUploadChunkSize = _settings.Value.MaxUploadChunkSize,
 
                 // NOTE: Maybe useful in the future
                 // Tag = tag
