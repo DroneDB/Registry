@@ -25,13 +25,10 @@ namespace Registry.Web.Services.Adapters
         private readonly ILogger<ShareManager> _logger;
         private readonly IUtils _utils;
         private readonly IAuthManager _authManager;
+        private readonly IBatchTokenGenerator _batchTokenGenerator;
+        private readonly INameGenerator _nameGenerator;
         private readonly RegistryContext _context;
 
-        // TODO: These could be put in config
-        private const int TokenLength = 32;
-        private const int GeneratedDatasetSlugLength = 16;
-
-        // TODO: Implement queue
         public ShareManager(
             ILogger<ShareManager> logger,
             IObjectsManager objectsManager,
@@ -39,6 +36,8 @@ namespace Registry.Web.Services.Adapters
             IOrganizationsManager organizationsManager,
             IUtils utils,
             IAuthManager authManager,
+            IBatchTokenGenerator batchTokenGenerator,
+            INameGenerator nameGenerator,
             RegistryContext context)
         {
             _logger = logger;
@@ -47,6 +46,8 @@ namespace Registry.Web.Services.Adapters
             _organizationsManager = organizationsManager;
             _utils = utils;
             _authManager = authManager;
+            _batchTokenGenerator = batchTokenGenerator;
+            _nameGenerator = nameGenerator;
             _context = context;
         }
 
@@ -138,7 +139,7 @@ namespace Registry.Web.Services.Adapters
                 do
                 {
                     // NOTE: We could generate a more language friendly slug, like docker does for its running containers
-                    dsSlug = CommonUtils.RandomString(GeneratedDatasetSlugLength).ToLowerInvariant();
+                    dsSlug = _nameGenerator.GenerateName().ToSlug();
                 } while (_context.Datasets.FirstOrDefault(item => item.Slug == dsSlug) != null);
 
                 _logger.LogInformation($"Generated unique dataset slug '{dsSlug}'");
@@ -222,7 +223,7 @@ namespace Registry.Web.Services.Adapters
             {
                 Dataset = dataset,
                 Start = DateTime.Now,
-                Token = CommonUtils.RandomString(TokenLength),
+                Token = _batchTokenGenerator.GenerateToken(),
                 UserName = await _authManager.SafeGetCurrentUserName(),
                 Status = BatchStatus.Running
             };
