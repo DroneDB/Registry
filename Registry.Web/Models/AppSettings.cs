@@ -72,6 +72,11 @@ namespace Registry.Web.Models
         /// Length of the random generated dataset name
         /// </summary>
         public int RandomDatasetNameLength { get; set; }
+
+        /// <summary>
+        /// Temp folder where to store uploaded chunks
+        /// </summary>
+        public string UploadPath { get; set; }
     }
 
     public class StorageProvider
