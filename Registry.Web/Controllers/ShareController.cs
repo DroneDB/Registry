@@ -76,116 +76,113 @@ namespace Registry.Web.Controllers
             }
         }
 
-        [HttpPost("uploadchunk/{token}")]
-        public async Task<IActionResult> UploadChunk(string token, [FromForm] string path, IFormFile file, [FromForm] int index, [FromForm] int totalCount)
-        {
-            if (index > totalCount - 1 || index < 0 || totalCount < 1)
-                return BadRequest("index out of range");
+        //[HttpPost("uploadchunk/{token}")]
+        //public async Task<IActionResult> UploadChunk(string token, [FromForm] string path, IFormFile file, [FromForm] int index, [FromForm] int totalCount)
+        //{
 
-            if (file == null)
-                return BadRequest(nameof(file) + " is null");
+        //}
 
-            var tempPath = Path.Combine(Path.GetTempPath(), TempUploadFolderName);
+        //private async Task HandleChunkUpload(Stream chunk, string fileName, int index, int totalCount, Action<Stream> handler)
+        //{
+        //    if (index > totalCount - 1 || index < 0 || totalCount < 1)
+        //        throw new IndexOutOfRangeException("Index out of range");
 
-            if (!Directory.Exists(tempPath))
-                Directory.CreateDirectory(tempPath);
-            else
-                RemoveTempFilesAfterDelay(tempPath);
+        //    if (chunk == null)
+        //        throw new InvalidOperationException(nameof(chunk) + " is null");
 
-            try
-            {
-                var tempFilePath = Path.Combine(tempPath, $"{file.FileName}.{index}.tmp");
+        //    var tempPath = Path.Combine(Path.GetTempPath(), TempUploadFolderName);
 
-                Debug.WriteLine("Temp file: " + tempFilePath);
+        //    if (!Directory.Exists(tempPath))
+        //        Directory.CreateDirectory(tempPath);
+        //    else
+        //        RemoveTempFilesAfterDelay(tempPath);
 
-                // Overwrite existing chunk
-                if (System.IO.File.Exists(tempFilePath))
-                    System.IO.File.Delete(tempFilePath);
+        //    var tempFilePath = Path.Combine(tempPath, $"{fileName}.{index}.tmp");
 
-                // Overwrite existing chunk signal
-                if (System.IO.File.Exists(tempFilePath + "-OK"))
-                    System.IO.File.Delete(tempFilePath + "-OK");
+        //    Debug.WriteLine("Temp file: " + tempFilePath);
 
-                using (var stream = new FileStream(tempFilePath, FileMode.CreateNew, FileAccess.Write))
-                {
-                    file.CopyTo(stream);
-                }
+        //    // Overwrite existing chunk
+        //    if (System.IO.File.Exists(tempFilePath))
+        //        System.IO.File.Delete(tempFilePath);
 
-                // Write signal file
-                System.IO.File.WriteAllText(tempFilePath + "-OK", string.Empty);
+        //    // Overwrite existing chunk signal
+        //    if (System.IO.File.Exists(tempFilePath + "-OK"))
+        //        System.IO.File.Delete(tempFilePath + "-OK");
 
-                Debug.WriteLine("Temp file created, trying to merge chunks ");
+        //    await using (var stream = new FileStream(tempFilePath, FileMode.CreateNew, FileAccess.Write))
+        //    {
+        //        await chunk.CopyToAsync(stream);
+        //    }
 
-                // Verify that all chunks were uploaded
-                var chunksPaths = Enumerable.Range(0, totalCount).Select(item => Path.Combine(tempPath, $"{file.FileName}.{item}.tmp")).ToArray();
+        //    // Write signal file
+        //    await System.IO.File.WriteAllTextAsync(tempFilePath + "-OK", string.Empty);
 
-                if (chunksPaths.Any(chunk => !System.IO.File.Exists(chunk + "-OK")))
-                {
-                    Debug.WriteLine("Not enough chunks");
-                    return Ok();
-                }
+        //    Debug.WriteLine("Temp file created, trying to merge chunks ");
 
-                MergeChunks(file.FileName, chunksPaths);
-            }
-            catch (Exception ex)
-            {
-                return BadRequest(ex.Message);
-            }
+        //    // Verify that all chunks were uploaded
+        //    var chunksPaths = Enumerable.Range(0, totalCount).Select(item => Path.Combine(tempPath, $"{fileName}.{item}.tmp")).ToArray();
 
-            return Ok();
-        }
+        //    if (chunksPaths.Any(cnk => !System.IO.File.Exists(cnk + "-OK")))
+        //    {
+        //        Debug.WriteLine("Not enough chunks");
+        //        return;
+        //    }
 
-        private static void MergeChunks(string fileName, string[] chunksPaths)
-        {
+        //    MergeChunks(fileName, chunksPaths, handler);
 
-            var targetFile = Path.Combine(UploadFolderName, fileName);
+        //}
 
-            Debug.WriteLine("Target file: " + targetFile);
+        //private static void MergeChunks(string fileName, string[] chunksPaths, Action<Stream> handler)
+        //{
 
-            if (System.IO.File.Exists(targetFile))
-            {
-                Debug.WriteLine("Preventing race contition");
-                return;
-            }
+        //    var targetSignalFile = Path.Combine(TempUploadFolderName, fileName + "-OK");
 
-            try
-            {
-                // Merge chunks
-                using var writer = System.IO.File.OpenWrite(targetFile);
-                foreach (var chunk in chunksPaths)
-                {
-                    Debug.WriteLine("Merging chunk: " + chunk);
+        //    //Debug.WriteLine("Target file: " + targetFile);
 
-                    using var reader = System.IO.File.OpenRead(chunk);
-                    reader.CopyTo(writer);
-                }
+        //    if (System.IO.File.Exists(targetSignalFile))
+        //    {
+        //        Debug.WriteLine("Preventing race contition");
+        //        return;
+        //    }
 
-                foreach (var chunk in chunksPaths)
-                {
-                    Debug.WriteLine("Deleting chunk: " + chunk);
-                    System.IO.File.Delete(chunk);
-                    System.IO.File.Delete(chunk + "-OK");
-                }
+        //    try
+        //    {
+        //        // Merge chunks
+        //        using var writer = System.IO.File.OpenWrite(targetFile);
+        //        foreach (var chunk in chunksPaths)
+        //        {
+        //            Debug.WriteLine("Merging chunk: " + chunk);
 
-            }
-            catch (IOException ex)
-            {
-                Debug.WriteLine("Preventing race contition: " + ex.Message);
-            }
-        }
+        //            using var reader = System.IO.File.OpenRead(chunk);
+        //            reader.CopyTo(writer);
+        //        }
 
-        private void RemoveTempFilesAfterDelay(string path)
-        {
-            var dir = new DirectoryInfo(path);
+        //        foreach (var chunk in chunksPaths)
+        //        {
+        //            Debug.WriteLine("Deleting chunk: " + chunk);
+        //            System.IO.File.Delete(chunk);
+        //            System.IO.File.Delete(chunk + "-OK");
+        //        }
 
-            if (!dir.Exists) return;
+        //    }
+        //    catch (IOException ex)
+        //    {
+        //        Debug.WriteLine("Preventing race contition: " + ex.Message);
+        //    }
+        //}
 
-            foreach (var file in dir.GetFiles("*.tmp").Where(f => f.LastWriteTimeUtc.Add(DeleteDelay) < DateTime.UtcNow))
-                file.Delete();
+        //private void RemoveTempFilesAfterDelay(string path)
+        //{
+        //    var dir = new DirectoryInfo(path);
 
-            foreach (var file in dir.GetFiles("*.tmp-OK").Where(f => f.LastWriteTimeUtc.Add(DeleteDelay) < DateTime.UtcNow))
-                file.Delete();
-        }
+        //    if (!dir.Exists) return;
+
+        //    foreach (var file in dir.GetFiles("*.tmp").Where(f => f.LastWriteTimeUtc.Add(DeleteDelay) < DateTime.UtcNow))
+        //        file.Delete();
+
+        //    foreach (var file in dir.GetFiles("*.tmp-OK").Where(f => f.LastWriteTimeUtc.Add(DeleteDelay) < DateTime.UtcNow))
+        //        file.Delete();
+        //}
 
         [HttpPost("commit/{token}")]
         public async Task<IActionResult> Commit(string token)

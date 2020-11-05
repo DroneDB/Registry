@@ -33,5 +33,8 @@ namespace Registry.Web.Data
         public DbSet<Batch> Batches { get; set; }
         public DbSet<Entry> Entries { get; set; }
 
+        public DbSet<UploadSession> UploadSessions { get; set; }
+        public DbSet<FileChunk> FileChunks { get; set; }
+
     }
 }
