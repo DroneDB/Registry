@@ -76,7 +76,7 @@ namespace Registry.Web.Services.Adapters
             using var mutex = new Mutex(true, $"ChunkedUploadSession-Upload-{sessionId}");
             if (!mutex.WaitOne(TimeSpan.FromMinutes(1)))
                 throw new InvalidOperationException($"Multiple call overlap of Upload with id {sessionId} on index {index}");
-            
+
             var session = _context.UploadSessions.FirstOrDefault(item => item.Id == sessionId);
 
             if (session == null)
@@ -144,7 +144,7 @@ namespace Registry.Web.Services.Adapters
 
             if (session.EndedOn != null)
                 throw new ArgumentException("Session already closed");
-            
+
             _context.Entry(session).Collection(item => item.Chunks).Load();
 
             var chunks = session.Chunks.OrderBy(chunk => chunk.Index).ToArray();
@@ -179,16 +179,49 @@ namespace Registry.Web.Services.Adapters
 
             return targetFilePath;
 
-            }
-            finally
-            {
-                session.EndedOn = null;
-                _context.SaveChanges();
-            }
         }
+
+        public void RemoveTimedoutSessions()
+        {
+            var now = DateTime.Now;
+
+            // The expired sessions are:
+            // 1) Sessions without chunks started a long time ago
+            // 2) Sessions with chunks where their newest chunk is expired
+            var sessions = _context.UploadSessions
+                .Include(session => session.Chunks)
+                .Where(session =>
+                    (session.Chunks.Count == 0 && session.StartedOn + _settings.ChunkedUploadSessionTimeout > now) ||
+                    (session.Chunks.Count > 0 && session.Chunks.OrderByDescending(chunk => chunk.Date).First().Date + _settings.ChunkedUploadSessionTimeout > now))
+                .ToArray();
+
+            _logger.LogInformation($"Found {sessions.Length} timed out sessions");
+
+            foreach (var session in sessions)
+            {
+                _logger.LogInformation($"Removing session {session.Id} of '{session.FileName}' started on {session.StartedOn}");
+                _context.UploadSessions.Remove(session);
+            }
+
+            _context.SaveChanges();
+
+        }
+
+        public void RemoveClosedSessions()
+        {
+            var sessions = _context.UploadSessions.Where(item => item.EndedOn != null).ToArray();
+
+            _logger.LogInformation($"Found {sessions.Length} closed sessions");
+
+            foreach (var session in sessions)
+            {
+                _logger.LogInformation($"Removing session {session.Id} of '{session.FileName}' started on {session.StartedOn}");
+                _context.UploadSessions.Remove(session);
+            }
 
             _context.SaveChanges();
         }
 
     }
+
 }
