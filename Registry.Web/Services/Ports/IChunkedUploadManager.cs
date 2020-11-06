@@ -12,5 +12,8 @@ namespace Registry.Web.Services.Ports
         public void Upload(int sessionId, Stream chunkStream, int index);
         public string CloseSession(int sessionId);
 
+        public void RemoveTimedoutSessions();
+        public void RemoveClosedSessions();
+
     }
 }

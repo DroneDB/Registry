@@ -2,7 +2,9 @@
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Registry.Web.Data;
@@ -26,10 +28,8 @@ namespace Registry.Web.Services.Adapters
             _context = context;
             _settings = settings.Value;
             _logger = logger;
-        }
 
-        // Add code to cleanup closed sessions 
-        // Add code to close timed out sessions
+        }
 
         public int InitSession(string fileName, int chunks, long size)
         {
@@ -184,6 +184,46 @@ namespace Registry.Web.Services.Adapters
             }
         }
 
+        public void RemoveTimedoutSessions()
+        {
+            var now = DateTime.Now;
+
+            // The expired sessions are:
+            // 1) Sessions without chunks started a long time ago
+            // 2) Sessions with chunks where their newest chunk is expired
+            var sessions = _context.UploadSessions
+                .Include(session => session.Chunks)
+                .Where(session =>
+                    (session.Chunks.Count == 0 && session.StartedOn + _settings.ChunkedUploadSessionTimeout > now) ||
+                    (session.Chunks.Count > 0 && session.Chunks.OrderByDescending(chunk => chunk.Date).First().Date + _settings.ChunkedUploadSessionTimeout > now))
+                .ToArray();
+
+            _logger.LogInformation($"Found {sessions.Length} timed out sessions");
+
+            foreach (var session in sessions)
+            {
+                _logger.LogInformation($"Removing session {session.Id} of '{session.FileName}' started on {session.StartedOn}");
+                _context.UploadSessions.Remove(session);
+            }
+
+            _context.SaveChanges();
+
+        }
+
+        public void RemoveClosedSessions()
+        {
+            var sessions = _context.UploadSessions.Where(item => item.EndedOn != null).ToArray();
+
+            _logger.LogInformation($"Found {sessions.Length} closed sessions");
+
+            foreach (var session in sessions)
+            {
+                _logger.LogInformation($"Removing session {session.Id} of '{session.FileName}' started on {session.StartedOn}");
+                _context.UploadSessions.Remove(session);
+            }
+
+            _context.SaveChanges();
+        }
 
     }
 }
