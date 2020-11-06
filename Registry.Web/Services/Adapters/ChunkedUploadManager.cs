@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -27,9 +28,6 @@ namespace Registry.Web.Services.Adapters
             _settings = settings.Value;
             _logger = logger;
         }
-
-        // Add code to cleanup closed sessions 
-        // Add code to close timed out sessions
 
         public int InitSession(string fileName, int chunks, long size)
         {
@@ -72,6 +70,11 @@ namespace Registry.Web.Services.Adapters
             if (!chunkStream.CanRead)
                 throw new ArgumentException("Cannot read from stream");
 
+            // Safety net
+            using var mutex = new Mutex(true, $"ChunkedUploadSession-Upload-{sessionId}");
+            if (!mutex.WaitOne(TimeSpan.FromMinutes(1)))
+                throw new InvalidOperationException($"Multiple call overlap of Upload with id {sessionId} on index {index}");
+            
             var session = _context.UploadSessions.FirstOrDefault(item => item.Id == sessionId);
 
             if (session == null)
@@ -127,6 +130,11 @@ namespace Registry.Web.Services.Adapters
 
         public string CloseSession(int sessionId)
         {
+            // Safety net
+            using var mutex = new Mutex(true, $"ChunkedUploadSession-Close-{sessionId}");
+            if (!mutex.WaitOne(TimeSpan.FromMinutes(1)))
+                throw new InvalidOperationException($"Multiple call overlap of CloseSession with id {sessionId}");
+
             var session = _context.UploadSessions.FirstOrDefault(item => item.Id == sessionId);
 
             if (session == null)
@@ -134,54 +142,42 @@ namespace Registry.Web.Services.Adapters
 
             if (session.EndedOn != null)
                 throw new ArgumentException("Session already closed");
+            
+            _context.Entry(session).Collection(item => item.Chunks).Load();
 
-            // Close session as soon as possible to mitigate concurrency problems
+            var chunks = session.Chunks.OrderBy(chunk => chunk.Index).ToArray();
+
+            if (chunks.Length != session.ChunksCount)
+                throw new InvalidOperationException($"Expected {session.ChunksCount} chunks but got only {chunks}");
+
+            _logger.LogInformation($"Closing session {sessionId} of file {session.FileName}");
+
+            // All this only to check if the indexes are a contiguous non-repetitive sequence starting from 0
+            if (Enumerable.Range(0, session.ChunksCount).Any(index => chunks.All(chunk => chunk.Index != index)))
+                throw new InvalidOperationException(
+                    $"Expected chunks from 0 to {session.ChunksCount - 1} but got {string.Join(" ", chunks.Select(chunk => chunk.Index.ToString()))}");
+
+            var targetFilePath = Path.Combine(_settings.UploadPath, session.FileName);
+
+            _logger.LogInformation($"Destination file path '{targetFilePath}'");
+
+            using var dest = File.OpenWrite(targetFilePath);
+            foreach (var chunk in chunks)
+            {
+                var tempFileName = string.Format(TempFileNameFormat, sessionId, session.FileName, chunk.Index);
+                var tempFilePath = Path.Combine(_settings.UploadPath, tempFileName);
+
+                // Copy content of temp file to dest file
+                using var tmp = File.OpenRead(tempFilePath);
+                tmp.CopyTo(dest);
+            }
+
             session.EndedOn = DateTime.Now;
             _context.SaveChanges();
 
-            try
-            {
+            return targetFilePath;
 
-                _context.Entry(session).Collection(item => item.Chunks).Load();
 
-                var chunks = session.Chunks.OrderBy(chunk => chunk.Index).ToArray();
-
-                if (chunks.Length != session.ChunksCount)
-                    throw new InvalidOperationException($"Expected {session.ChunksCount} chunks but got only {chunks}");
-
-                _logger.LogInformation($"Closing session {sessionId} of file {session.FileName}");
-
-                // All this only to check if the indexes are a contiguous non-repetitive sequence starting from 0
-                if (Enumerable.Range(0, session.ChunksCount).Any(index => chunks.All(chunk => chunk.Index != index)))
-                    throw new InvalidOperationException(
-                        $"Expected chunks from 0 to {session.ChunksCount - 1} but got {string.Join(" ", chunks.Select(chunk => chunk.Index.ToString()))}");
-
-                var targetFilePath = Path.Combine(_settings.UploadPath, session.FileName);
-
-                _logger.LogInformation($"Destination file path '{targetFilePath}'");
-
-                using var dest = File.OpenWrite(targetFilePath);
-                foreach (var chunk in chunks)
-                {
-                    var tempFileName = string.Format(TempFileNameFormat, sessionId, session.FileName, chunk.Index);
-                    var tempFilePath = Path.Combine(_settings.UploadPath, tempFileName);
-
-                    // Copy content of temp file to dest file
-                    using var tmp = File.OpenRead(tempFilePath);
-                    tmp.CopyTo(dest);
-                }
-
-                session.EndedOn = DateTime.Now;
-                _context.SaveChanges();
-
-                return targetFilePath;
-
-            }
-            finally
-            {
-                session.EndedOn = null;
-                _context.SaveChanges();
-            }
         }
 
 
