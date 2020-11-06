@@ -4,6 +4,7 @@ using System.IO;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Registry.Web.Data;
@@ -27,6 +28,7 @@ namespace Registry.Web.Services.Adapters
             _context = context;
             _settings = settings.Value;
             _logger = logger;
+
         }
 
         public int InitSession(string fileName, int chunks, long size)
@@ -177,9 +179,16 @@ namespace Registry.Web.Services.Adapters
 
             return targetFilePath;
 
-
+            }
+            finally
+            {
+                session.EndedOn = null;
+                _context.SaveChanges();
+            }
         }
 
+            _context.SaveChanges();
+        }
 
     }
 }

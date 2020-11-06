@@ -135,6 +135,8 @@ namespace Registry.Web
             services.AddScoped<IShareManager, ShareManager>();
             services.AddScoped<IDdbFactory, DdbFactory>();
             services.AddSingleton<IPasswordHasher, PasswordHasher>();
+            services.AddSingleton<IBatchTokenGenerator, BatchTokenGenerator>();
+            services.AddSingleton<INameGenerator, NameGenerator>();
 
             RegisterStorageProvider(services, appSettings);
 

@@ -16,6 +16,13 @@ namespace Registry.Web.Data
         {
             modelBuilder.Entity<Dataset>()
                 .HasIndex(ds => ds.Slug);
+
+            modelBuilder.Entity<FileChunk>()
+                .HasOne(chunk => chunk.Session)
+                .WithMany(session => session.Chunks)
+                .IsRequired(true)
+                .OnDelete(DeleteBehavior.Cascade);
+
         }
 
         protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
