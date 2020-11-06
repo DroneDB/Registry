@@ -495,7 +495,7 @@ namespace Registry.Web.Test
 
         public ShareManagerTest(IPasswordHasher passwordHasher)
         {
-            this._passwordHasher = passwordHasher;
+            _passwordHasher = passwordHasher;
         }
 
         #endregion
