@@ -77,6 +77,12 @@ namespace Registry.Web.Models
         /// Temp folder where to store uploaded chunks
         /// </summary>
         public string UploadPath { get; set; }
+
+        /// <summary>
+        /// Timeout of the chunked upload sessions
+        /// </summary>
+        public TimeSpan ChunkedUploadSessionTimeout { get; set; }
+
     }
 
     public class StorageProvider
