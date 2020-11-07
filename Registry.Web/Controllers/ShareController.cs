@@ -10,6 +10,7 @@ using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
+using Registry.Common;
 
 namespace Registry.Web.Controllers
 {
@@ -19,18 +20,15 @@ namespace Registry.Web.Controllers
     public class ShareController : ControllerBaseEx
     {
         private readonly IShareManager _shareManager;
+        private readonly IChunkedUploadManager _chunkedUploadManager;
+
         private readonly ILogger<ShareController> _logger;
 
-        // TODO: Move to config
-        private const string TempUploadFolderName = "uploads";
-        private const string UploadFolderName = "uploads";
-        private readonly TimeSpan DeleteDelay = new TimeSpan(0, 10, 0);
-
-
-        public ShareController(IShareManager shareManager, ILogger<ShareController> logger)
+        public ShareController(IShareManager shareManager, ILogger<ShareController> logger, IChunkedUploadManager chunkedUploadManager)
         {
             _shareManager = shareManager;
             _logger = logger;
+            _chunkedUploadManager = chunkedUploadManager;
         }
 
         [HttpPost("init")]
@@ -76,113 +74,106 @@ namespace Registry.Web.Controllers
             }
         }
 
-        //[HttpPost("uploadchunk/{token}")]
-        //public async Task<IActionResult> UploadChunk(string token, [FromForm] string path, IFormFile file, [FromForm] int index, [FromForm] int totalCount)
-        //{
+        [HttpPost("upload/{token}/session")]
+        public async Task<IActionResult> NewUploadSession(string token, [FromForm] int chunks, [FromForm] long size)
+        {
+            try
+            {
 
-        //}
+                _logger.LogDebug($"Share controller NewUploadSession('{token}', {chunks}, {size})");
 
-        //private async Task HandleChunkUpload(Stream chunk, string fileName, int index, int totalCount, Action<Stream> handler)
-        //{
-        //    if (index > totalCount - 1 || index < 0 || totalCount < 1)
-        //        throw new IndexOutOfRangeException("Index out of range");
+                var res = await _shareManager.IsBatchReady(token);
 
-        //    if (chunk == null)
-        //        throw new InvalidOperationException(nameof(chunk) + " is null");
+                if (!res.IsReady)
+                    return BadRequest($"Batch '{token}' is not ready");
 
-        //    var tempPath = Path.Combine(Path.GetTempPath(), TempUploadFolderName);
+                var fileName = $"{token}-{CommonUtils.RandomString(16)}";
 
-        //    if (!Directory.Exists(tempPath))
-        //        Directory.CreateDirectory(tempPath);
-        //    else
-        //        RemoveTempFilesAfterDelay(tempPath);
+                _logger.LogDebug($"Generated '{fileName}' as temp file name");
 
-        //    var tempFilePath = Path.Combine(tempPath, $"{fileName}.{index}.tmp");
+                var sessionId = _chunkedUploadManager.InitSession(fileName, chunks, size);
 
-        //    Debug.WriteLine("Temp file: " + tempFilePath);
+                return Ok(new UploadNewSessionResultDto
+                {
+                    SessionId = sessionId
+                });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, $"Exception in Share controller NewUploadSession('{token}', {chunks}, {size})");
 
-        //    // Overwrite existing chunk
-        //    if (System.IO.File.Exists(tempFilePath))
-        //        System.IO.File.Delete(tempFilePath);
+                return ExceptionResult(ex);
+            }
+        }
 
-        //    // Overwrite existing chunk signal
-        //    if (System.IO.File.Exists(tempFilePath + "-OK"))
-        //        System.IO.File.Delete(tempFilePath + "-OK");
+        [HttpPost("upload/{token}/session/{sessionId}/chunk/{index}")]
+        public async Task<IActionResult> UploadToSession(string token, int sessionId, int index, IFormFile file)
+        {
+            try
+            {
 
-        //    await using (var stream = new FileStream(tempFilePath, FileMode.CreateNew, FileAccess.Write))
-        //    {
-        //        await chunk.CopyToAsync(stream);
-        //    }
+                _logger.LogDebug($"Share controller UploadToSession('{token}', {index}, '{file?.FileName}')");
 
-        //    // Write signal file
-        //    await System.IO.File.WriteAllTextAsync(tempFilePath + "-OK", string.Empty);
+                if (file == null)
+                    return BadRequest("No file uploaded");
 
-        //    Debug.WriteLine("Temp file created, trying to merge chunks ");
+                var res = await _shareManager.IsBatchReady(token);
 
-        //    // Verify that all chunks were uploaded
-        //    var chunksPaths = Enumerable.Range(0, totalCount).Select(item => Path.Combine(tempPath, $"{fileName}.{item}.tmp")).ToArray();
+                if (!res.IsReady)
+                    return BadRequest($"Batch '{token}' is not ready");
 
-        //    if (chunksPaths.Any(cnk => !System.IO.File.Exists(cnk + "-OK")))
-        //    {
-        //        Debug.WriteLine("Not enough chunks");
-        //        return;
-        //    }
+                await using var stream = file.OpenReadStream();
 
-        //    MergeChunks(fileName, chunksPaths, handler);
+                _chunkedUploadManager.Upload(sessionId, stream, index);
 
-        //}
+                return Ok();
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, $"Exception in Share controller UploadToSession('{token}', {index}, '{file?.FileName}')");
 
-        //private static void MergeChunks(string fileName, string[] chunksPaths, Action<Stream> handler)
-        //{
+                return ExceptionResult(ex);
+            }
+        }
 
-        //    var targetSignalFile = Path.Combine(TempUploadFolderName, fileName + "-OK");
+        [HttpPost("upload/{token}/session/{sessionId}/close")]
+        public async Task<IActionResult> CloseSession(string token, int sessionId, int index, [FromForm] string path, IFormFile file)
+        {
+            try
+            {
 
-        //    //Debug.WriteLine("Target file: " + targetFile);
+                _logger.LogDebug($"Share controller UploadToSession('{token}', {index}, '{file?.FileName}')");
 
-        //    if (System.IO.File.Exists(targetSignalFile))
-        //    {
-        //        Debug.WriteLine("Preventing race contition");
-        //        return;
-        //    }
+                if (file == null)
+                    return BadRequest("Missing file");
 
-        //    try
-        //    {
-        //        // Merge chunks
-        //        using var writer = System.IO.File.OpenWrite(targetFile);
-        //        foreach (var chunk in chunksPaths)
-        //        {
-        //            Debug.WriteLine("Merging chunk: " + chunk);
+                var res = await _shareManager.IsPathAllowed(token, path);
 
-        //            using var reader = System.IO.File.OpenRead(chunk);
-        //            reader.CopyTo(writer);
-        //        }
+                if (!res)
+                    return BadRequest($"Batch '{token}' is not ready or path '{path}' is not allowed");
 
-        //        foreach (var chunk in chunksPaths)
-        //        {
-        //            Debug.WriteLine("Deleting chunk: " + chunk);
-        //            System.IO.File.Delete(chunk);
-        //            System.IO.File.Delete(chunk + "-OK");
-        //        }
+                var tempFilePath = _chunkedUploadManager.CloseSession(sessionId);
 
-        //    }
-        //    catch (IOException ex)
-        //    {
-        //        Debug.WriteLine("Preventing race contition: " + ex.Message);
-        //    }
-        //}
+                UploadResultDto ret;
 
-        //private void RemoveTempFilesAfterDelay(string path)
-        //{
-        //    var dir = new DirectoryInfo(path);
+                await using (var fileStream = System.IO.File.OpenRead(tempFilePath))
+                {
+                    ret = await _shareManager.Upload(token, path, fileStream);
+                }
 
-        //    if (!dir.Exists) return;
+                System.IO.File.Delete(tempFilePath);
 
-        //    foreach (var file in dir.GetFiles("*.tmp").Where(f => f.LastWriteTimeUtc.Add(DeleteDelay) < DateTime.UtcNow))
-        //        file.Delete();
+                return Ok(ret);
 
-        //    foreach (var file in dir.GetFiles("*.tmp-OK").Where(f => f.LastWriteTimeUtc.Add(DeleteDelay) < DateTime.UtcNow))
-        //        file.Delete();
-        //}
+
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, $"Exception in Share controller UploadToSession('{token}', {index}, '{file?.FileName}')");
+
+                return ExceptionResult(ex);
+            }
+        }
 
         [HttpPost("commit/{token}")]
         public async Task<IActionResult> Commit(string token)
