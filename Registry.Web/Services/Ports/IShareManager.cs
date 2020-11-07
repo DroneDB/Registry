@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
+using Registry.Web.Data.Models;
 using Registry.Web.Models.DTO;
 
 namespace Registry.Web.Services.Ports
@@ -14,5 +15,7 @@ namespace Registry.Web.Services.Ports
         public Task<UploadResultDto> Upload(string token, string path, Stream stream);
         public Task<CommitResultDto> Commit(string token, bool rollback = false);
         Task<IEnumerable<BatchDto>> ListBatches(string orgSlug, string dsSlug);
+        public Task<bool> IsPathAllowed(string token, string path);
+        public Task<IsBatchReadyResult> IsBatchReady(string token);
     }
 }

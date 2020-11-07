@@ -88,6 +88,63 @@ namespace Registry.Web.Services.Adapters
             return batches;
         }
 
+        public async Task<bool> IsPathAllowed(string token, string path)
+        {
+
+            var res = await IsBatchReady(token);
+
+            if (!res.IsReady)
+            {
+                _logger.LogDebug($"The batch '{token}' is not ready");
+                return false;
+            }
+            
+            var entry = res.Batch.Entries.FirstOrDefault(item => item.Path == path);
+
+            if (entry != null)
+            {
+                _logger.LogDebug($"The batch '{token}' already contains path '{path}'");
+                return false;
+            }
+
+            return true;
+        }
+
+        public async Task<IsBatchReadyResult> IsBatchReady(string token)
+        {
+            if (string.IsNullOrWhiteSpace(token))
+                throw new BadRequestException("Missing token");
+
+            var batch = _context.Batches
+                .Include(x => x.Dataset.Organization)
+                .Include(x => x.Entries)
+                .FirstOrDefault(item => item.Token == token);
+
+            if (batch == null)
+            {
+                _logger.LogDebug($"Cannot find batch '{token}'");
+                return IsBatchReadyResult.NotReady;
+            }
+
+            if (batch.Status != BatchStatus.Running)
+            {
+                _logger.LogDebug($"Cannot upload file to closed batch '{token}'");
+                return IsBatchReadyResult.NotReady;
+            }
+
+            var currentUserName = await _authManager.SafeGetCurrentUserName();
+
+            if (!(await _authManager.IsUserAdmin() || batch.UserName == currentUserName))
+            {
+                _logger.LogDebug($"The batch '{token}' does not belong to you");
+                return IsBatchReadyResult.NotReady;
+            }
+
+            return new IsBatchReadyResult(true, batch);
+            
+        }
+
+
         public async Task<ShareInitResultDto> Initialize(ShareInitDto parameters)
         {
             if (parameters == null)
