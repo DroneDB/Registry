@@ -43,7 +43,7 @@ namespace Registry.Web.Services.Adapters
             if (size <= 0)
                 throw new ArgumentException($"Size cannot be lower than 0 ({size})");
 
-            _logger.LogInformation($"Starting upload session of '{fileName}' with size {size} in {chunks} chunks");
+            _logger.LogDebug($"Starting upload session of '{fileName}' with size {size} in {chunks} chunks");
 
             var session = new UploadSession
             {
@@ -91,24 +91,24 @@ namespace Registry.Web.Services.Adapters
                 if (index >= session.ChunksCount)
                     throw new ArgumentException($"Invalid chunk index {index}, range [0, {session.ChunksCount - 1}]");
 
-                _logger.LogInformation($"In session {session.Id} uploading chunk {index} out of {session.ChunksCount}");
+                _logger.LogDebug($"In session {session.Id} uploading chunk {index} out of {session.ChunksCount}");
 
                 var tempFileName = string.Format(TempFileNameFormat, sessionId, session.FileName, index);
                 var tempFilePath = Path.Combine(_settings.UploadPath, tempFileName);
-                _logger.LogInformation($"Temp file '{tempFilePath}' in '{Path.GetFullPath(tempFilePath)}'");
+                _logger.LogDebug($"Temp file '{tempFilePath}' in '{Path.GetFullPath(tempFilePath)}'");
 
                 _context.Entry(session).Collection(item => item.Chunks).Load();
                 var fileChunk = session.Chunks.FirstOrDefault(item => item.Index == index);
 
                 if (fileChunk != null)
                 {
-                    _logger.LogInformation($"Chunk {index} already existing, replacing it");
+                    _logger.LogDebug($"Chunk {index} already existing, replacing it");
                     fileChunk.Date = DateTime.Now;
                     fileChunk.Size = chunkStream.Length;
                 }
                 else
                 {
-                    _logger.LogInformation($"Chunk {index} does not exist, creating it");
+                    _logger.LogDebug($"Chunk {index} does not exist, creating it");
                     fileChunk = new FileChunk
                     {
                         Date = DateTime.Now,
@@ -122,11 +122,11 @@ namespace Registry.Web.Services.Adapters
 
                 if (File.Exists(tempFilePath))
                 {
-                    _logger.LogInformation("Temp file exists, removing it");
+                    _logger.LogDebug("Temp file exists, removing it");
                     File.Delete(tempFilePath);
                 }
                 else
-                    _logger.LogInformation("Temp file does not exist");
+                    _logger.LogDebug("Temp file does not exist");
 
                 // Write temp file
                 using var tmpFile = File.OpenWrite(tempFilePath);
@@ -163,7 +163,7 @@ namespace Registry.Web.Services.Adapters
                 if (chunks.Length != session.ChunksCount)
                     throw new InvalidOperationException($"Expected {session.ChunksCount} chunks but got only {chunks}");
 
-                _logger.LogInformation($"Closing session {sessionId} of file {session.FileName}");
+                _logger.LogDebug($"Closing session {sessionId} of file {session.FileName}");
 
                 // All this only to check if the indexes are a contiguous non-repetitive sequence starting from 0
                 if (Enumerable.Range(0, session.ChunksCount).Any(index => chunks.All(chunk => chunk.Index != index)))
@@ -172,7 +172,7 @@ namespace Registry.Web.Services.Adapters
 
                 var targetFilePath = Path.Combine(_settings.UploadPath, session.FileName);
 
-                _logger.LogInformation($"Destination file path '{targetFilePath}'");
+                _logger.LogDebug($"Destination file path '{targetFilePath}'");
 
                 using (var dest = File.OpenWrite(targetFilePath))
                 {
@@ -218,11 +218,11 @@ namespace Registry.Web.Services.Adapters
                     (session.Chunks.Count > 0 && session.Chunks.OrderByDescending(chunk => chunk.Date).First().Date + _settings.ChunkedUploadSessionTimeout > now))
                 .ToArray();
 
-            _logger.LogInformation($"Found {sessions.Length} timed out sessions");
+            _logger.LogDebug($"Found {sessions.Length} timed out sessions");
 
             foreach (var session in sessions)
             {
-                _logger.LogInformation($"Removing session {session.Id} of '{session.FileName}' started on {session.StartedOn}");
+                _logger.LogDebug($"Removing session {session.Id} of '{session.FileName}' started on {session.StartedOn}");
                 _context.UploadSessions.Remove(session);
             }
 
@@ -234,11 +234,11 @@ namespace Registry.Web.Services.Adapters
         {
             var sessions = _context.UploadSessions.Where(item => item.EndedOn != null).ToArray();
 
-            _logger.LogInformation($"Found {sessions.Length} closed sessions");
+            _logger.LogDebug($"Found {sessions.Length} closed sessions");
 
             foreach (var session in sessions)
             {
-                _logger.LogInformation($"Removing session {session.Id} of '{session.FileName}' started on {session.StartedOn}");
+                _logger.LogDebug($"Removing session {session.Id} of '{session.FileName}' started on {session.StartedOn}");
                 _context.UploadSessions.Remove(session);
             }
 
