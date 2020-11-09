@@ -12,8 +12,10 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using Registry.Common;
 using Registry.Web.Data;
 using Registry.Web.Data.Models;
+using Registry.Web.Exceptions;
 using Registry.Web.Models;
 using Registry.Web.Models.DTO;
 using Registry.Web.Services.Ports;
@@ -79,7 +81,7 @@ namespace Registry.Web.Controllers
                 _logger.LogDebug($"Objects controller Post('{orgSlug}', '{dsSlug}', '{path}', '{file?.FileName}')");
 
                 if (file == null)
-                    return BadRequest(new ErrorResponse("No file uploaded"));
+                    throw new ArgumentException("No file uploaded");
 
                 await using var stream = file.OpenReadStream();
 
@@ -95,6 +97,82 @@ namespace Registry.Web.Controllers
             catch (Exception ex)
             {
                 _logger.LogError(ex, $"Exception in Objects controller Post('{orgSlug}', '{dsSlug}', '{path}', '{file?.FileName}')");
+
+                return ExceptionResult(ex);
+            }
+        }
+
+        [HttpPost("obj/session")]
+        public async Task<IActionResult> PostNewSession([FromRoute] string orgSlug, [FromRoute] string dsSlug, [FromForm] int chunks, [FromForm] long size)
+        {
+            try
+            {
+               
+                _logger.LogDebug($"Objects controller PostNewSession('{orgSlug}', '{dsSlug}', {chunks}, {size})");
+                
+                var sessionId = await _objectsManager.AddNewSession(orgSlug, dsSlug, chunks, size);
+
+                return Ok(new UploadNewSessionResultDto
+                {
+                    SessionId = sessionId
+                });
+
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, $"Exception in Objects controller PostNewSession('{orgSlug}', '{dsSlug}', {chunks}, {size})");
+
+                return ExceptionResult(ex);
+            }
+        }
+
+        [HttpPost("obj/session/{sessionId}/chunk/{index}")]
+        public async Task<IActionResult> UploadToSession([FromRoute] string orgSlug, [FromRoute] string dsSlug, int sessionId, int index, IFormFile file)
+        {
+            try
+            {
+
+                _logger.LogDebug($"Objects controller UploadToSession('{orgSlug}', '{dsSlug}', {sessionId}, {index}, '{file?.FileName}')");
+
+                if (file == null)
+                    throw new ArgumentException("No file uploaded");
+                
+                await using var stream = file.OpenReadStream();
+
+                await _objectsManager.AddToSession(orgSlug, dsSlug, sessionId, index, stream);
+
+                return Ok();
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, $"Exception in Objects controller UploadToSession('{orgSlug}', '{dsSlug}', {sessionId}, {index}, '{file?.FileName}')");
+
+                return ExceptionResult(ex);
+            }
+        }
+
+        [HttpPost("obj/session/{sessionId}/close")]
+        public async Task<IActionResult> CloseSession([FromRoute] string orgSlug, [FromRoute] string dsSlug, int sessionId, [FromForm] string path)
+        {
+            try
+            {
+
+                _logger.LogDebug($"Objects controller CloseSession('{orgSlug}', '{dsSlug}', {sessionId}, '{path}')");
+
+                var newObj = await _objectsManager.CloseSession(orgSlug, dsSlug, sessionId, path);
+                
+                return CreatedAtRoute(nameof(ObjectsController) + "." + nameof(GetInfo), new
+                    {
+                        orgSlug = orgSlug,
+                        dsSlug = dsSlug,
+                        path = newObj.Path
+                    },
+                    newObj);
+
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, $"Exception in Objects controller CloseSession('{orgSlug}', '{dsSlug}', {sessionId}, '{path}')");
 
                 return ExceptionResult(ex);
             }
