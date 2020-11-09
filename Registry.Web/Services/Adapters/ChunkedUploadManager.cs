@@ -138,7 +138,7 @@ namespace Registry.Web.Services.Adapters
             }
         }
 
-        public string CloseSession(int sessionId)
+        public string CloseSession(int sessionId, bool performCleanup = true)
         {
             // Safety net
             using var mutex = new Mutex(false, $"ChunkedUploadSession-Close-{sessionId}");
@@ -148,6 +148,7 @@ namespace Registry.Web.Services.Adapters
 
             try
             {
+
                 var session = _context.UploadSessions.FirstOrDefault(item => item.Id == sessionId);
 
                 if (session == null)
@@ -194,6 +195,9 @@ namespace Registry.Web.Services.Adapters
 
                 session.EndedOn = DateTime.Now;
                 _context.SaveChanges();
+
+                if (performCleanup)
+                    CleanupSession(sessionId);
 
                 return targetFilePath;
             }
@@ -245,6 +249,29 @@ namespace Registry.Web.Services.Adapters
             _context.SaveChanges();
         }
 
+        public void CleanupSession(int sessionId)
+        {
+            var session = _context.UploadSessions.FirstOrDefault(item => item.Id == sessionId);
+
+            if (session == null)
+                throw new ArgumentException($"Cannot find upload session {sessionId}");
+
+            _logger.LogDebug($"Cleaning up session {sessionId}");
+
+            var chunks = session.Chunks.ToArray();
+
+            foreach (var chunk in chunks)
+            {
+                var tempFileName = string.Format(TempFileNameFormat, sessionId, session.FileName, chunk.Index);
+                var tempFilePath = Path.Combine(_settings.UploadPath, tempFileName);
+
+                _logger.LogDebug($"Removing temp file '{Path.GetFullPath(tempFilePath)}'");
+
+                File.Delete(tempFilePath);
+                
+            }
+
+        }
     }
 
 }

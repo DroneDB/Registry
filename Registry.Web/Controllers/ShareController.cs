@@ -149,7 +149,7 @@ namespace Registry.Web.Controllers
                 if (!res)
                     throw new ArgumentException($"Batch '{token}' is not ready or path '{path}' is not allowed");
 
-                var tempFilePath = _chunkedUploadManager.CloseSession(sessionId);
+                var tempFilePath = _chunkedUploadManager.CloseSession(sessionId, false);
 
                 UploadResultDto ret;
 
@@ -157,6 +157,8 @@ namespace Registry.Web.Controllers
                 {
                     ret = await _shareManager.Upload(token, path, fileStream);
                 }
+
+                _chunkedUploadManager.CleanupSession(sessionId);
 
                 System.IO.File.Delete(tempFilePath);
 
