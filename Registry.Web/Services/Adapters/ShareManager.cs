@@ -23,6 +23,7 @@ namespace Registry.Web.Services.Adapters
         private readonly IOrganizationsManager _organizationsManager;
         private readonly IDatasetsManager _datasetsManager;
         private readonly IObjectsManager _objectsManager;
+        private readonly IChunkedUploadManager _chunkedUploadManager;
         private readonly IOptions<AppSettings> _settings;
         private readonly ILogger<ShareManager> _logger;
         private readonly IUtils _utils;
@@ -37,6 +38,7 @@ namespace Registry.Web.Services.Adapters
             IObjectsManager objectsManager,
             IDatasetsManager datasetsManager,
             IOrganizationsManager organizationsManager,
+            IChunkedUploadManager chunkedUploadManager,
             IUtils utils,
             IAuthManager authManager,
             IBatchTokenGenerator batchTokenGenerator,
@@ -53,6 +55,7 @@ namespace Registry.Web.Services.Adapters
             _batchTokenGenerator = batchTokenGenerator;
             _nameGenerator = nameGenerator;
             _context = context;
+            _chunkedUploadManager = chunkedUploadManager;
         }
 
         public async Task<IEnumerable<BatchDto>> ListBatches(string orgSlug, string dsSlug)
@@ -142,6 +145,63 @@ namespace Registry.Web.Services.Adapters
 
             return new IsBatchReadyResult(true, batch);
             
+        }
+
+        public async Task<int> StartUploadSession(string token, int chunks, long size)
+        {
+            var res = await IsBatchReady(token);
+
+            if (!res.IsReady)
+                throw new ArgumentException($"Batch '{token}' is not ready");
+
+            var fileName = $"{token}-{CommonUtils.RandomString(16)}";
+
+            _logger.LogDebug($"Generated '{fileName}' as temp file name");
+
+            var sessionId = _chunkedUploadManager.InitSession(fileName, chunks, size);
+
+            return sessionId;
+        }
+
+        public async Task UploadToSession(string token, int sessionId, int index, Stream stream)
+        {
+            var res = await IsBatchReady(token);
+
+            if (!res.IsReady)
+                throw new ArgumentException($"Batch '{token}' is not ready");
+
+            _chunkedUploadManager.Upload(sessionId, stream, index);
+
+        }
+
+        public async Task UploadToSession(string token, int sessionId, int index, byte[] data)
+        {
+            await using var memory = new MemoryStream();
+            memory.Reset();
+            await UploadToSession(token, sessionId, index, memory);
+        }
+
+        public async Task<UploadResultDto> CloseUploadSession(string token, int sessionId, string path)
+        {
+            var res = await IsPathAllowed(token, path);
+
+            if (!res)
+                throw new ArgumentException($"Batch '{token}' is not ready or path '{path}' is not allowed");
+
+            var tempFilePath = _chunkedUploadManager.CloseSession(sessionId, false);
+
+            UploadResultDto ret;
+
+            await using (var fileStream = File.OpenRead(tempFilePath))
+            {
+                ret = await Upload(token, path, fileStream);
+            }
+
+            _chunkedUploadManager.CleanupSession(sessionId);
+
+            File.Delete(tempFilePath);
+
+            return ret;
         }
 
 

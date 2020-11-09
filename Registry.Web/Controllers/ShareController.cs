@@ -82,16 +82,7 @@ namespace Registry.Web.Controllers
 
                 _logger.LogDebug($"Share controller NewUploadSession('{token}', {chunks}, {size})");
 
-                var res = await _shareManager.IsBatchReady(token);
-
-                if (!res.IsReady)
-                    throw new ArgumentException($"Batch '{token}' is not ready");
-
-                var fileName = $"{token}-{CommonUtils.RandomString(16)}";
-
-                _logger.LogDebug($"Generated '{fileName}' as temp file name");
-
-                var sessionId = _chunkedUploadManager.InitSession(fileName, chunks, size);
+                var sessionId = await _shareManager.StartUploadSession(token, chunks, size);
 
                 return Ok(new UploadNewSessionResultDto
                 {
@@ -112,63 +103,41 @@ namespace Registry.Web.Controllers
             try
             {
 
-                _logger.LogDebug($"Share controller UploadToSession('{token}', {index}, '{file?.FileName}')");
+                _logger.LogDebug($"Share controller UploadToSession('{token}', {sessionId}, {index}, '{file?.FileName}')");
 
                 if (file == null)
                     throw new ArgumentException("No file uploaded");
 
-                var res = await _shareManager.IsBatchReady(token);
-
-                if (!res.IsReady)
-                    throw new ArgumentException($"Batch '{token}' is not ready");
-
                 await using var stream = file.OpenReadStream();
 
-                _chunkedUploadManager.Upload(sessionId, stream, index);
+                await _shareManager.UploadToSession(token, sessionId, index, stream);
 
                 return Ok();
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, $"Exception in Share controller UploadToSession('{token}', {index}, '{file?.FileName}')");
+                _logger.LogError(ex, $"Exception in Share controller UploadToSession('{token}', {sessionId}, {index}, '{file?.FileName}')");
 
                 return ExceptionResult(ex);
             }
         }
 
         [HttpPost("upload/{token}/session/{sessionId}/close")]
-        public async Task<IActionResult> CloseSession(string token, int sessionId, int index, [FromForm] string path)
+        public async Task<IActionResult> CloseSession(string token, int sessionId, [FromForm] string path)
         {
             try
             {
 
-                _logger.LogDebug($"Share controller CloseSession('{token}', {sessionId}, {index}, '{path}')");
+                _logger.LogDebug($"Share controller CloseSession('{token}', {sessionId}, '{path}')");
 
-                var res = await _shareManager.IsPathAllowed(token, path);
-
-                if (!res)
-                    throw new ArgumentException($"Batch '{token}' is not ready or path '{path}' is not allowed");
-
-                var tempFilePath = _chunkedUploadManager.CloseSession(sessionId, false);
-
-                UploadResultDto ret;
-
-                await using (var fileStream = System.IO.File.OpenRead(tempFilePath))
-                {
-                    ret = await _shareManager.Upload(token, path, fileStream);
-                }
-
-                _chunkedUploadManager.CleanupSession(sessionId);
-
-                System.IO.File.Delete(tempFilePath);
+                var ret = _shareManager.CloseUploadSession(token, sessionId, path);
 
                 return Ok(ret);
-
-
+                
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, $"Exception in Share controller CloseSession('{token}', {sessionId}, {index}, '{path}')");
+                _logger.LogError(ex, $"Exception in Share controller CloseSession('{token}', {sessionId}, '{path}')");
 
                 return ExceptionResult(ex);
             }
