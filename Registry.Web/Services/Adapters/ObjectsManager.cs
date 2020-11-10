@@ -22,6 +22,7 @@ namespace Registry.Web.Services.Adapters
     {
         private readonly ILogger<ObjectsManager> _logger;
         private readonly IObjectSystem _objectSystem;
+        private readonly IChunkedUploadManager _chunkedUploadManager;
         private readonly IDdbFactory _ddbFactory;
         private readonly IUtils _utils;
         private readonly RegistryContext _context;
@@ -36,6 +37,7 @@ namespace Registry.Web.Services.Adapters
         public ObjectsManager(ILogger<ObjectsManager> logger,
             RegistryContext context,
             IObjectSystem objectSystem,
+            IChunkedUploadManager chunkedUploadManager,
             IOptions<AppSettings> settings,
             IDdbFactory ddbFactory,
             IUtils utils)
@@ -43,6 +45,7 @@ namespace Registry.Web.Services.Adapters
             _logger = logger;
             _context = context;
             _objectSystem = objectSystem;
+            _chunkedUploadManager = chunkedUploadManager;
             _ddbFactory = ddbFactory;
             _utils = utils;
             _settings = settings.Value;
@@ -126,6 +129,13 @@ namespace Registry.Web.Services.Adapters
 
         public async Task<UploadedObjectDto> AddNew(string orgSlug, string dsSlug, string path, byte[] data)
         {
+            await using var stream = new MemoryStream(data);
+            stream.Reset();
+            return await AddNew(orgSlug, dsSlug, path, stream);
+        }
+
+        public async Task<UploadedObjectDto> AddNew(string orgSlug, string dsSlug, string path, Stream stream)
+        {
             var dataset = await _utils.GetDatasetAndCheck(orgSlug, dsSlug);
 
             _logger.LogInformation($"In '{orgSlug}/{dsSlug}'");
@@ -145,21 +155,19 @@ namespace Registry.Web.Services.Adapters
                 _logger.LogInformation("Bucket created");
             }
 
-            await using var memory = new MemoryStream(data);
-
             // TODO: I highly doubt the robustness of this 
             var contentType = MimeTypes.GetMimeType(path);
 
-            _logger.LogInformation($"Uploading '{path}' (size {data.Length}) to bucket '{bucketName}'");
+            _logger.LogInformation($"Uploading '{path}' (size {stream.Length}) to bucket '{bucketName}'");
 
             // TODO: No metadata / encryption ?
-            await _objectSystem.PutObjectAsync(bucketName, path, memory, data.Length, contentType);
+            await _objectSystem.PutObjectAsync(bucketName, path, stream, stream.Length, contentType);
 
             _logger.LogInformation("File uploaded, adding to DDB");
 
             // Add to DDB
             var ddb = _ddbFactory.GetDdb(orgSlug, dsSlug);
-            ddb.Add(path, data);
+            ddb.Add(path, stream);
 
             _logger.LogInformation("Added to DDB");
 
@@ -171,7 +179,7 @@ namespace Registry.Web.Services.Adapters
             {
                 Path = path,
                 ContentType = contentType,
-                Size = data.Length
+                Size = stream.Length
             };
 
             return obj;
@@ -250,6 +258,53 @@ namespace Registry.Web.Services.Adapters
 
             // TODO: Maybe it's more clever to remove the entire sqlite database instead of performing a per-file delete. Just my 2 cents
 
+        }
+
+        public async Task<int> AddNewSession(string orgSlug, string dsSlug, int chunks, long size)
+        {
+            await _utils.GetDatasetAndCheck(orgSlug, dsSlug);
+
+            var fileName = $"{orgSlug.ToSlug()}-{dsSlug.ToSlug()}-{CommonUtils.RandomString(16)}";
+
+            _logger.LogDebug($"Generated '{fileName}' as temp file name");
+
+            var sessionId = _chunkedUploadManager.InitSession(fileName, chunks, size);
+
+            return sessionId;
+        }
+
+        public async Task AddToSession(string orgSlug, string dsSlug, int sessionId, int index, Stream stream)
+        {
+            await _utils.GetDatasetAndCheck(orgSlug, dsSlug);
+
+            _chunkedUploadManager.Upload(sessionId, stream, index);
+        }
+
+        public async Task AddToSession(string orgSlug, string dsSlug, int sessionId, int index, byte[] data)
+        {
+            await using var memory = new MemoryStream(data);
+            memory.Reset();
+            await AddToSession(orgSlug, dsSlug, sessionId, index, memory);
+        }
+
+        public async Task<UploadedObjectDto> CloseSession(string orgSlug, string dsSlug, int sessionId, string path)
+        {
+            await _utils.GetDatasetAndCheck(orgSlug, dsSlug);
+
+            var tempFilePath = _chunkedUploadManager.CloseSession(sessionId, false);
+
+            UploadedObjectDto newObj;
+
+            await using (var fileStream = File.OpenRead(tempFilePath))
+            {
+                newObj = await AddNew(orgSlug, dsSlug, path, fileStream);
+            }
+
+            _chunkedUploadManager.CleanupSession(sessionId);
+
+            File.Delete(tempFilePath);
+
+            return newObj;
         }
     }
 }

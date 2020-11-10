@@ -19,7 +19,6 @@ namespace Registry.Web.Services.Adapters
         private readonly IUtils _utils;
         private readonly ILogger<DatasetsManager> _logger;
         private readonly IObjectsManager _objectsManager;
-        private readonly IDdbFactory _ddbFactory;
         private readonly IPasswordHasher _passwordHasher;
 
         // TODO: Add extensive testing
@@ -29,14 +28,12 @@ namespace Registry.Web.Services.Adapters
             IUtils utils,
             ILogger<DatasetsManager> logger,
             IObjectsManager objectsManager,
-            IDdbFactory ddbFactory,
             IPasswordHasher passwordHasher)
         {
             _context = context;
             _utils = utils;
             _logger = logger;
             _objectsManager = objectsManager;
-            _ddbFactory = ddbFactory;
             _passwordHasher = passwordHasher;
         }
 

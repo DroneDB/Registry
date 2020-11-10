@@ -9,6 +9,7 @@ using System.Threading.Tasks;
 using MimeMapping;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
+using Registry.Common;
 using Registry.Ports.ObjectSystem;
 using Registry.Ports.ObjectSystem.Model;
 
@@ -208,6 +209,7 @@ namespace Registry.Adapters.ObjectSystem
 
             await using var writer = File.OpenWrite(objectPath);
 
+            data.Reset();
             await data.CopyToAsync(writer, cancellationToken);
 
             writer.Close();

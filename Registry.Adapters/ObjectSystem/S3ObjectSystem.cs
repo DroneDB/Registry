@@ -9,6 +9,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Minio;
 using Minio.DataModel;
+using Registry.Common;
 using Registry.Ports.ObjectSystem;
 using Registry.Ports.ObjectSystem.Model;
 
@@ -46,6 +47,8 @@ namespace Registry.Adapters.ObjectSystem
         public async Task PutObjectAsync(string bucketName, string objectName, Stream data, long size, string contentType = null,
             Dictionary<string, string> metaData = null, IServerEncryption sse = null, CancellationToken cancellationToken = default)
         {
+            data.Reset();
+
             await _client.PutObjectAsync(bucketName, objectName, data, size, contentType, metaData, sse?.ToSSE(),
                 cancellationToken);
         }
