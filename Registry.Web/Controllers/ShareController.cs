@@ -130,7 +130,7 @@ namespace Registry.Web.Controllers
 
                 _logger.LogDebug($"Share controller CloseSession('{token}', {sessionId}, '{path}')");
 
-                var ret = _shareManager.CloseUploadSession(token, sessionId, path);
+                var ret = await _shareManager.CloseUploadSession(token, sessionId, path);
 
                 return Ok(ret);
                 
