@@ -20,15 +20,13 @@ namespace Registry.Web.Controllers
     public class ShareController : ControllerBaseEx
     {
         private readonly IShareManager _shareManager;
-        private readonly IChunkedUploadManager _chunkedUploadManager;
 
         private readonly ILogger<ShareController> _logger;
 
-        public ShareController(IShareManager shareManager, ILogger<ShareController> logger, IChunkedUploadManager chunkedUploadManager)
+        public ShareController(IShareManager shareManager, ILogger<ShareController> logger)
         {
             _shareManager = shareManager;
             _logger = logger;
-            _chunkedUploadManager = chunkedUploadManager;
         }
 
         [HttpPost("init")]
