@@ -74,9 +74,9 @@ namespace Registry.Web.Services.Adapters
 
             // Safety net
             using var mutex = new Mutex(false, $"ChunkedUploadSession-Upload-{sessionId}");
-
             if (!mutex.WaitOne(TimeSpan.FromMinutes(1)))
                 throw new InvalidOperationException($"Multiple call overlap of Upload with id {sessionId} on index {index}");
+
             try
             {
 
@@ -142,7 +142,6 @@ namespace Registry.Web.Services.Adapters
         {
             // Safety net
             using var mutex = new Mutex(false, $"ChunkedUploadSession-Close-{sessionId}");
-
             if (!mutex.WaitOne(TimeSpan.FromMinutes(1)))
                 throw new InvalidOperationException($"Multiple call overlap of CloseSession with id {sessionId}");
 
