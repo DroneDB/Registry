@@ -2,20 +2,25 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
+using Newtonsoft.Json;
+using Newtonsoft.Json.Converters;
 
 namespace Registry.Web.Models
 {
     
     public class AuthenticateResponse
     {
-        public string Id { get; set; }
-        public string Token { get; set; }
+        public string Id { get; }
+        public string Token { get; }
 
-
-        public AuthenticateResponse(User user, string token)
+        [JsonConverter(typeof(UnixDateTimeConverter))]
+        public DateTime Expires { get; }
+        
+        public AuthenticateResponse(User user, string token, DateTime expires)
         {
             Id = user.Id;
             Token = token;
+            Expires = expires;
         }
     }
 }

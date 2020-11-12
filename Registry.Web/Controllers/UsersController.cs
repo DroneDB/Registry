@@ -60,6 +60,30 @@ namespace Registry.Web.Controllers
 
         }
 
+        [HttpPost("authenticate/refresh")]
+        public async Task<IActionResult> Refresh()
+        {
+
+            try
+            {
+                _logger.LogDebug($"Users controller Refresh()");
+
+                var res = await _usersManager.Refresh();
+
+                if (res == null)
+                    return Unauthorized(new ErrorResponse("Unauthorized"));
+
+                return Ok(res);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, $"Exception in Users controller Refresh()");
+
+                return ExceptionResult(ex);
+            }
+
+        }
+
         [HttpPost]
         public async Task<IActionResult> CreateUser([FromForm] CreateUserRequest model)
         {
