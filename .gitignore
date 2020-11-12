@@ -349,3 +349,4 @@ Fix/Registry.Web/[Aa]pp_[Dd]ata/
 appsettings.json
 /Registry.Web/temp
 /Registry.Web/ddbstore/
+/Registry.Web/ddb-log*

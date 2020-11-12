@@ -57,6 +57,32 @@ namespace Registry.Web.Models
         /// Max request body size
         /// </summary>
         public long MaxRequestBodySize { get; set; }
+
+        /// <summary>
+        /// Max upload chunk size
+        /// </summary>
+        public long MaxUploadChunkSize { get; set; }
+
+        /// <summary>
+        /// Lenght of batch tokens
+        /// </summary>
+        public int BatchTokenLength { get; set; }
+
+        /// <summary>
+        /// Length of the random generated dataset name
+        /// </summary>
+        public int RandomDatasetNameLength { get; set; }
+
+        /// <summary>
+        /// Temp folder where to store uploaded chunks
+        /// </summary>
+        public string UploadPath { get; set; }
+
+        /// <summary>
+        /// Timeout of the chunked upload sessions
+        /// </summary>
+        public TimeSpan ChunkedUploadSessionTimeout { get; set; }
+
     }
 
     public class StorageProvider

@@ -48,11 +48,10 @@ namespace Registry.Web.Test
             await using var context = GetTest1Context();
             _appSettingsMock.Setup(o => o.Value).Returns(_settings);
             _authManagerMock.Setup(o => o.IsUserAdmin()).Returns(Task.FromResult(true));
-
+            
             var utils = new WebUtils(_authManagerMock.Object, context);
 
-            var datasetsManager = new DatasetsManager(context, utils, _datasetsManagerLogger, _objectsManagerMock.Object,
-                _ddbFactoryMock.Object, _passwordHasher);
+            var datasetsManager = new DatasetsManager(context, utils, _datasetsManagerLogger, _objectsManagerMock.Object, _passwordHasher);
 
             var list = (await datasetsManager.List(MagicStrings.PublicOrganizationSlug)).ToArray();
 

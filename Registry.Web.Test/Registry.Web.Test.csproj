@@ -33,6 +33,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <Folder Include="Data\Chunks\" />
     <Folder Include="Data\Storage\" />
   </ItemGroup>
 

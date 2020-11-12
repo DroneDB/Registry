@@ -62,9 +62,9 @@ namespace Registry.Web.Services.Adapters
             if (!res.Succeeded) return null;
 
             // authentication successful so generate jwt token
-            var token = await GenerateJwtToken(user);
+            var tokenDescriptor = await GenerateJwtToken(user);
 
-            return new AuthenticateResponse(user, token);
+            return new AuthenticateResponse(user, tokenDescriptor.Token, tokenDescriptor.ExpiresOn);
         }
 
         public async Task CreateUser(string userName, string email, string password)
@@ -134,6 +134,19 @@ namespace Registry.Web.Services.Adapters
 
         }
 
+        public async Task<AuthenticateResponse> Refresh()
+        {
+            var user = await _authManager.GetCurrentUser();
+
+            if (user == null)
+                throw new BadRequestException("User does not exist");
+
+            var tokenDescriptor = await GenerateJwtToken(user);
+
+            return new AuthenticateResponse(user, tokenDescriptor.Token, tokenDescriptor.ExpiresOn);
+
+        }
+
         public async Task DeleteUser(string userName)
         {
             
@@ -184,11 +197,13 @@ namespace Registry.Web.Services.Adapters
             return query.ToArray();
 
         }
-        private async Task<string> GenerateJwtToken(User user)
+        private async Task<JwtDescriptor> GenerateJwtToken(User user)
         {
             // generate token
             var tokenHandler = new JwtSecurityTokenHandler();
             var key = Encoding.ASCII.GetBytes(_appSettings.Secret);
+
+            var expiresOn = DateTime.UtcNow.AddDays(_appSettings.TokenExpirationInDays);
 
             var tokenDescriptor = new SecurityTokenDescriptor
             {
@@ -197,11 +212,16 @@ namespace Registry.Web.Services.Adapters
                     new Claim(ClaimTypes.Name, user.Id),
                     new Claim(ApplicationDbContext.AdminRoleName.ToLowerInvariant(), (await _userManager.IsInRoleAsync(user, ApplicationDbContext.AdminRoleName)).ToString()),
                 }),
-                Expires = DateTime.UtcNow.AddDays(_appSettings.TokenExpirationInDays),
+                Expires = expiresOn,
                 SigningCredentials = new SigningCredentials(new SymmetricSecurityKey(key), SecurityAlgorithms.HmacSha256Signature)
             };
             var token = tokenHandler.CreateToken(tokenDescriptor);
-            return tokenHandler.WriteToken(token);
+
+            return new JwtDescriptor
+            {
+                Token = tokenHandler.WriteToken(token), 
+                ExpiresOn = expiresOn
+            };
         }
 
     }

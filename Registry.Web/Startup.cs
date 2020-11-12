@@ -120,14 +120,29 @@ namespace Registry.Web
                     new BadRequestObjectResult(new ErrorResponse(actionContext.ModelState));
             });
 
+            services.AddMemoryCache();
+
+            /*
+             * NOTE about services lifetime:
+             *
+             * - A type should be registered as a "Singleton" only when it is fully thread-safe and is not dependent on other services or types.
+             * - Scoped services are bound under a scope (request), and a new instance is created and reused inside a created "scope".
+             * - If a service is defined as Transient, it is instantiated whenever invoked within a request.
+             *   It is almost similar to creating an instance of the same type using "new" keyword and using it.
+             *   It is also the safest option among all other service types, since we don't need to bother about the thread-safety and memory leaks.
+             *
+             * = In terms of lifetime, the singleton object gets the highest life per instantiation,
+             *   followed by a Scoped service object and the least by a Transient object.
+             */
+
             services.AddTransient<TokenManagerMiddleware>();
             services.AddTransient<ITokenManager, TokenManager>();
             services.AddSingleton<IHttpContextAccessor, HttpContextAccessor>();
-            services.AddMemoryCache();
 
             services.AddScoped<IUtils, WebUtils>();
             services.AddScoped<IAuthManager, AuthManager>();
 
+            services.AddScoped<IChunkedUploadManager, ChunkedUploadManager>();
             services.AddScoped<IUsersManager, UsersManager>();
             services.AddScoped<IOrganizationsManager, OrganizationsManager>();
             services.AddScoped<IDatasetsManager, DatasetsManager>();
@@ -135,6 +150,8 @@ namespace Registry.Web
             services.AddScoped<IShareManager, ShareManager>();
             services.AddScoped<IDdbFactory, DdbFactory>();
             services.AddSingleton<IPasswordHasher, PasswordHasher>();
+            services.AddSingleton<IBatchTokenGenerator, BatchTokenGenerator>();
+            services.AddSingleton<INameGenerator, NameGenerator>();
 
             RegisterStorageProvider(services, appSettings);
 

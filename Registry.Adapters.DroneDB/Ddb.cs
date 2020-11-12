@@ -63,15 +63,16 @@ namespace Registry.Adapters.DroneDB
             {
 
                 // If the path is not absolute let's rebase it on ddbPath
-                if (path != null && !Path.IsPathRooted(path)) 
+                if (path != null && !Path.IsPathRooted(path))
                     path = Path.Combine(_baseDdbPath, path);
 
                 // If path is null we leverage the recursive parameter
-                var info = path != null ? 
-                    DDB.Bindings.DroneDB.List(_baseDdbPath, path) : 
+                var info = path != null ?
+                    DDB.Bindings.DroneDB.List(_baseDdbPath, path) :
                     DDB.Bindings.DroneDB.List(_baseDdbPath, _baseDdbPath, true);
 
-                if (info == null) {
+                if (info == null)
+                {
                     Debug.WriteLine("Strange null return value");
                     return new DdbEntry[0];
                 }
@@ -90,7 +91,7 @@ namespace Registry.Adapters.DroneDB
                                 PointGeometry = (Point)item.PointGeometry?.ToObject<Feature>()?.Geometry,
                                 PolygonGeometry = (Polygon)item.PolygonGeometry?.ToObject<Feature>()?.Geometry
                             };
-                
+
 
                 return query.ToArray();
             }
@@ -104,15 +105,42 @@ namespace Registry.Adapters.DroneDB
 
         public void Add(string path, byte[] data)
         {
+            using var stream = new MemoryStream(data);
+            Add(path, stream);
+        }
+
+        public void Remove(string path)
+        {
+            try
+            {
+
+                // If the path is not absolute let's rebase it on ddbPath
+                if (!Path.IsPathRooted(path)) path = Path.Combine(_baseDdbPath, path);
+
+                DDB.Bindings.DroneDB.Remove(_baseDdbPath, path);
+            }
+            catch (DDBException ex)
+            {
+                throw new InvalidOperationException($"Cannot remove '{path}' from ddb '{_baseDdbPath}'", ex);
+            }
+        }
+
+        public void Add(string path, Stream stream)
+        {
             string filePath = null;
 
             try
             {
-                
-                filePath = Path.Combine(_baseDdbPath, path);
 
-                File.WriteAllBytes(filePath, data);
+                filePath = Path.Combine(_baseDdbPath, path);
                 
+                stream.Reset();
+
+                using (var writer = File.OpenWrite(filePath))
+                {
+                    stream.CopyTo(writer);
+                }
+
                 DDB.Bindings.DroneDB.Add(_baseDdbPath, filePath);
 
             }
@@ -124,22 +152,6 @@ namespace Registry.Adapters.DroneDB
             {
                 if (filePath != null && File.Exists(filePath))
                     File.Delete(filePath);
-            }
-        }
-
-        public void Remove(string path)
-        {
-            try
-            {
-
-                // If the path is not absolute let's rebase it on ddbPath
-                if (!Path.IsPathRooted(path)) path = Path.Combine(_baseDdbPath, path);
-                
-                DDB.Bindings.DroneDB.Remove(_baseDdbPath, path);
-            }
-            catch (DDBException ex)
-            {
-                throw new InvalidOperationException($"Cannot remove '{path}' from ddb '{_baseDdbPath}'", ex);
             }
         }
     }

@@ -13,11 +13,4 @@ namespace Registry.Web.Models.DTO
         public long Size { get; set; }
         
     }
-
-    public class CommitResultDto
-    {
-        public string Url { get; set; }
-
-        public TagDto Tag { get; set; }
-    }
 }

@@ -1,10 +1,12 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 using Registry.Common;
 using Registry.Web.Data;
 using Registry.Web.Data.Models;
@@ -21,32 +23,39 @@ namespace Registry.Web.Services.Adapters
         private readonly IOrganizationsManager _organizationsManager;
         private readonly IDatasetsManager _datasetsManager;
         private readonly IObjectsManager _objectsManager;
+        private readonly IChunkedUploadManager _chunkedUploadManager;
+        private readonly IOptions<AppSettings> _settings;
         private readonly ILogger<ShareManager> _logger;
         private readonly IUtils _utils;
         private readonly IAuthManager _authManager;
+        private readonly IBatchTokenGenerator _batchTokenGenerator;
+        private readonly INameGenerator _nameGenerator;
         private readonly RegistryContext _context;
 
-        // TODO: These could be put in config
-        private const int TokenLength = 32;
-        private const int GeneratedDatasetSlugLength = 16;
-
-        // TODO: Implement queue
         public ShareManager(
+            IOptions<AppSettings> settings,
             ILogger<ShareManager> logger,
             IObjectsManager objectsManager,
             IDatasetsManager datasetsManager,
             IOrganizationsManager organizationsManager,
+            IChunkedUploadManager chunkedUploadManager,
             IUtils utils,
             IAuthManager authManager,
+            IBatchTokenGenerator batchTokenGenerator,
+            INameGenerator nameGenerator,
             RegistryContext context)
         {
+            _settings = settings;
             _logger = logger;
             _objectsManager = objectsManager;
             _datasetsManager = datasetsManager;
             _organizationsManager = organizationsManager;
             _utils = utils;
             _authManager = authManager;
+            _batchTokenGenerator = batchTokenGenerator;
+            _nameGenerator = nameGenerator;
             _context = context;
+            _chunkedUploadManager = chunkedUploadManager;
         }
 
         public async Task<IEnumerable<BatchDto>> ListBatches(string orgSlug, string dsSlug)
@@ -82,6 +91,120 @@ namespace Registry.Web.Services.Adapters
             return batches;
         }
 
+        public async Task<bool> IsPathAllowed(string token, string path)
+        {
+
+            var res = await IsBatchReady(token);
+
+            if (!res.IsReady)
+            {
+                _logger.LogDebug($"The batch '{token}' is not ready");
+                return false;
+            }
+            
+            var entry = res.Batch.Entries.FirstOrDefault(item => item.Path == path);
+
+            if (entry != null)
+            {
+                _logger.LogDebug($"The batch '{token}' already contains path '{path}'");
+                return false;
+            }
+
+            return true;
+        }
+
+        public async Task<IsBatchReadyResult> IsBatchReady(string token)
+        {
+            if (string.IsNullOrWhiteSpace(token))
+                throw new BadRequestException("Missing token");
+
+            var batch = _context.Batches
+                .Include(x => x.Dataset.Organization)
+                .Include(x => x.Entries)
+                .FirstOrDefault(item => item.Token == token);
+
+            if (batch == null)
+            {
+                _logger.LogDebug($"Cannot find batch '{token}'");
+                return IsBatchReadyResult.NotReady;
+            }
+
+            if (batch.Status != BatchStatus.Running)
+            {
+                _logger.LogDebug($"Cannot upload file to closed batch '{token}'");
+                return IsBatchReadyResult.NotReady;
+            }
+
+            var currentUserName = await _authManager.SafeGetCurrentUserName();
+
+            if (!(await _authManager.IsUserAdmin() || batch.UserName == currentUserName))
+            {
+                _logger.LogDebug($"The batch '{token}' does not belong to you");
+                return IsBatchReadyResult.NotReady;
+            }
+
+            return new IsBatchReadyResult(true, batch);
+            
+        }
+
+        public async Task<int> StartUploadSession(string token, int chunks, long size)
+        {
+            var res = await IsBatchReady(token);
+
+            if (!res.IsReady)
+                throw new ArgumentException($"Batch '{token}' is not ready");
+
+            var fileName = $"{token}-{CommonUtils.RandomString(16)}";
+
+            _logger.LogDebug($"Generated '{fileName}' as temp file name");
+
+            var sessionId = _chunkedUploadManager.InitSession(fileName, chunks, size);
+
+            return sessionId;
+        }
+
+        public async Task UploadToSession(string token, int sessionId, int index, Stream stream)
+        {
+            var res = await IsBatchReady(token);
+
+            if (!res.IsReady)
+                throw new ArgumentException($"Batch '{token}' is not ready");
+
+            _chunkedUploadManager.Upload(sessionId, stream, index);
+
+        }
+
+        public async Task UploadToSession(string token, int sessionId, int index, byte[] data)
+        {
+            await using var memory = new MemoryStream();
+            memory.Reset();
+            await UploadToSession(token, sessionId, index, memory);
+        }
+
+        public async Task<UploadResultDto> CloseUploadSession(string token, int sessionId, string path)
+        {
+            var res = await IsPathAllowed(token, path);
+
+            if (!res)
+                throw new ArgumentException($"Batch '{token}' is not ready or path '{path}' is not allowed");
+
+            var tempFilePath = _chunkedUploadManager.CloseSession(sessionId, false);
+
+            UploadResultDto ret;
+
+            await using (var fileStream = File.OpenRead(tempFilePath))
+            {
+                ret = await Upload(token, path, fileStream);
+            }
+
+            _chunkedUploadManager.CleanupSession(sessionId);
+
+            File.Delete(tempFilePath);
+
+            return ret;
+        }
+
+
         public async Task<ShareInitResultDto> Initialize(ShareInitDto parameters)
         {
             if (parameters == null)
@@ -91,8 +214,8 @@ namespace Registry.Web.Services.Adapters
             if (currentUser == null)
                 throw new UnauthorizedException("Invalid user");
 
-            Dataset dataset = null;
-            TagDto tag = null;
+            Dataset dataset;
+            TagDto tag;
 
             if (parameters.Tag == null)
             {
@@ -137,7 +260,7 @@ namespace Registry.Web.Services.Adapters
                 do
                 {
                     // NOTE: We could generate a more language friendly slug, like docker does for its running containers
-                    dsSlug = CommonUtils.RandomString(GeneratedDatasetSlugLength).ToLowerInvariant();
+                    dsSlug = _nameGenerator.GenerateName().ToSlug();
                 } while (_context.Datasets.FirstOrDefault(item => item.Slug == dsSlug) != null);
 
                 _logger.LogInformation($"Generated unique dataset slug '{dsSlug}'");
@@ -221,7 +344,7 @@ namespace Registry.Web.Services.Adapters
             {
                 Dataset = dataset,
                 Start = DateTime.Now,
-                Token = CommonUtils.RandomString(TokenLength),
+                Token = _batchTokenGenerator.GenerateToken(),
                 UserName = await _authManager.SafeGetCurrentUserName(),
                 Status = BatchStatus.Running
             };
@@ -236,6 +359,7 @@ namespace Registry.Web.Services.Adapters
             return new ShareInitResultDto
             {
                 Token = batch.Token, 
+                MaxUploadChunkSize = _settings.Value.MaxUploadChunkSize,
 
                 // NOTE: Maybe useful in the future
                 // Tag = tag
@@ -269,14 +393,23 @@ namespace Registry.Web.Services.Adapters
 
         public async Task<UploadResultDto> Upload(string token, string path, byte[] data)
         {
+            await using var stream = new MemoryStream(data);
+            return await Upload(token, path, stream);
+        }
+
+        public async Task<UploadResultDto> Upload(string token, string path, Stream stream)
+        {
             if (string.IsNullOrWhiteSpace(token))
                 throw new BadRequestException("Missing token");
 
             if (string.IsNullOrWhiteSpace(path))
                 throw new BadRequestException("Missing path");
 
-            if (data == null)
-                throw new BadRequestException("Missing data");
+            if (stream == null)
+                throw new BadRequestException("Missing data stream");
+
+            if (!stream.CanRead)
+                throw new BadRequestException("Cannot read from data stream");
 
             var batch = _context.Batches
                 .Include(x => x.Dataset.Organization)
@@ -304,7 +437,7 @@ namespace Registry.Web.Services.Adapters
             var orgSlug = batch.Dataset.Organization.Slug;
             var dsSlug = batch.Dataset.Slug;
 
-            await _objectsManager.AddNew(orgSlug, dsSlug, path, data);
+            await _objectsManager.AddNew(orgSlug, dsSlug, path, stream);
 
             var info = (await _objectsManager.List(orgSlug, dsSlug, path)).FirstOrDefault();
 
@@ -335,7 +468,6 @@ namespace Registry.Web.Services.Adapters
                 Size = entry.Size,
                 Path = entry.Path
             };
-
         }
 
         public async Task<CommitResultDto> Commit(string token, bool rollback = false)
