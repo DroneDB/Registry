@@ -55,7 +55,7 @@ namespace Registry.Web.Controllers
             }
         }
 
-        [HttpGet("info", Name = nameof(ObjectsController) + "." + nameof(GetInfo))]
+        [HttpPost("list", Name = nameof(ObjectsController) + "." + nameof(GetInfo))]
         public async Task<IActionResult> GetInfo([FromRoute] string orgSlug, [FromRoute] string dsSlug, [FromForm] string path)
         {
             try
