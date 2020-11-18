@@ -273,13 +273,13 @@ namespace Registry.Web
             SetupDatabase(app);
 
         }
-        private IEdmModel GetEdmModel()
-        {
-            var odataBuilder = new ODataConventionModelBuilder();
-            odataBuilder.EntitySet<OrganizationDto>("Organizations");
+        //private IEdmModel GetEdmModel()
+        //{
+        //    var odataBuilder = new ODataConventionModelBuilder();
+        //    odataBuilder.EntitySet<OrganizationDto>("Organizations");
 
-            return odataBuilder.GetEdmModel();
-        }
+        //    return odataBuilder.GetEdmModel();
+        //}
 
         // NOTE: Maybe put all this as stated in https://stackoverflow.com/a/55707949
         private void SetupDatabase(IApplicationBuilder app)

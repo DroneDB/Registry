@@ -14,6 +14,7 @@ using Registry.Web.Exceptions;
 using Registry.Web.Models;
 using Registry.Web.Models.DTO;
 using Registry.Web.Services.Ports;
+using Registry.Web.Utilities;
 
 namespace Registry.Web.Services.Adapters
 {
@@ -170,7 +171,7 @@ namespace Registry.Web.Services.Adapters
             if (!res.IsReady)
                 throw new ArgumentException($"Batch '{token}' is not ready");
 
-            _chunkedUploadManager.Upload(sessionId, stream, index);
+            await _chunkedUploadManager.Upload(sessionId, stream, index);
 
         }
 
