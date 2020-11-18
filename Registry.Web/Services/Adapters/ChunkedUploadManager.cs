@@ -60,7 +60,7 @@ namespace Registry.Web.Services.Adapters
 
         }
 
-        public void Upload(int sessionId, Stream chunkStream, int index)
+        public async Task Upload(int sessionId, Stream chunkStream, int index)
         {
 
             if (chunkStream == null)
@@ -72,70 +72,70 @@ namespace Registry.Web.Services.Adapters
             if (!chunkStream.CanRead)
                 throw new ArgumentException("Cannot read from stream");
 
-            // Safety net
-            using var mutex = new Mutex(false, $"ChunkedUploadSession-Upload-{sessionId}");
-            if (!mutex.WaitOne(TimeSpan.FromMinutes(1)))
-                throw new InvalidOperationException($"Multiple call overlap of Upload with id {sessionId} on index {index}");
+            //// Safety net
+            //using var mutex = new Mutex(false, $"ChunkedUploadSession-Upload-{sessionId}");
+            //if (!mutex.WaitOne(TimeSpan.FromMinutes(1)))
+            //    throw new InvalidOperationException($"Multiple call overlap of Upload with id {sessionId} on index {index}");
 
-            try
+            //try
+            //{
+
+            var session = _context.UploadSessions.FirstOrDefault(item => item.Id == sessionId);
+
+            if (session == null)
+                throw new ArgumentException($"Cannot find upload session {sessionId}");
+
+            if (session.EndedOn != null)
+                throw new ArgumentException("Cannot upload to a closed session");
+
+            if (index >= session.ChunksCount)
+                throw new ArgumentException($"Invalid chunk index {index}, range [0, {session.ChunksCount - 1}]");
+
+            _logger.LogDebug($"In session {session.Id} uploading chunk {index} out of {session.ChunksCount}");
+
+            var tempFileName = string.Format(TempFileNameFormat, sessionId, session.FileName, index);
+            var tempFilePath = Path.Combine(_settings.UploadPath, tempFileName);
+            _logger.LogDebug($"Temp file '{tempFilePath}' in '{Path.GetFullPath(tempFilePath)}'");
+
+            _context.Entry(session).Collection(item => item.Chunks).Load();
+            var fileChunk = session.Chunks.FirstOrDefault(item => item.Index == index);
+
+            if (fileChunk != null)
             {
-
-                var session = _context.UploadSessions.FirstOrDefault(item => item.Id == sessionId);
-
-                if (session == null)
-                    throw new ArgumentException($"Cannot find upload session {sessionId}");
-
-                if (session.EndedOn != null)
-                    throw new ArgumentException("Cannot upload to a closed session");
-
-                if (index >= session.ChunksCount)
-                    throw new ArgumentException($"Invalid chunk index {index}, range [0, {session.ChunksCount - 1}]");
-
-                _logger.LogDebug($"In session {session.Id} uploading chunk {index} out of {session.ChunksCount}");
-
-                var tempFileName = string.Format(TempFileNameFormat, sessionId, session.FileName, index);
-                var tempFilePath = Path.Combine(_settings.UploadPath, tempFileName);
-                _logger.LogDebug($"Temp file '{tempFilePath}' in '{Path.GetFullPath(tempFilePath)}'");
-
-                _context.Entry(session).Collection(item => item.Chunks).Load();
-                var fileChunk = session.Chunks.FirstOrDefault(item => item.Index == index);
-
-                if (fileChunk != null)
-                {
-                    _logger.LogDebug($"Chunk {index} already existing, replacing it");
-                    fileChunk.Date = DateTime.Now;
-                    fileChunk.Size = chunkStream.Length;
-                }
-                else
-                {
-                    _logger.LogDebug($"Chunk {index} does not exist, creating it");
-                    fileChunk = new FileChunk
-                    {
-                        Date = DateTime.Now,
-                        Index = index,
-                        Session = session,
-                        Size = chunkStream.Length
-                    };
-                    _context.FileChunks.Add(fileChunk);
-                }
-                _context.SaveChanges();
-
-                if (File.Exists(tempFilePath))
-                {
-                    _logger.LogDebug("Temp file exists, removing it");
-                    File.Delete(tempFilePath);
-                }
-                else
-                    _logger.LogDebug("Temp file does not exist");
-
-                // Write temp file
-                using var tmpFile = File.OpenWrite(tempFilePath);
-                chunkStream.CopyTo(tmpFile);
+                _logger.LogDebug($"Chunk {index} already existing, replacing it");
+                fileChunk.Date = DateTime.Now;
+                fileChunk.Size = chunkStream.Length;
             }
-            finally
+            else
             {
-                mutex.ReleaseMutex();
+                _logger.LogDebug($"Chunk {index} does not exist, creating it");
+                fileChunk = new FileChunk
+                {
+                    Date = DateTime.Now,
+                    Index = index,
+                    Session = session,
+                    Size = chunkStream.Length
+                };
+                await _context.FileChunks.AddAsync(fileChunk);
             }
+            await _context.SaveChangesAsync();
+
+            if (File.Exists(tempFilePath))
+            {
+                _logger.LogDebug("Temp file exists, removing it");
+                File.Delete(tempFilePath);
+            }
+            else
+                _logger.LogDebug("Temp file does not exist");
+
+            // Write temp file
+            await using var tmpFile = File.OpenWrite(tempFilePath);
+            await chunkStream.CopyToAsync(tmpFile);
+            //}
+            //finally
+            //{
+            //    mutex.ReleaseMutex();
+            //}
         }
 
         public string CloseSession(int sessionId, bool performCleanup = true)
@@ -267,7 +267,7 @@ namespace Registry.Web.Services.Adapters
                 _logger.LogDebug($"Removing temp file '{Path.GetFullPath(tempFilePath)}'");
 
                 File.Delete(tempFilePath);
-                
+
             }
 
         }
