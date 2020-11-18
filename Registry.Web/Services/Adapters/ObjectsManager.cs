@@ -15,6 +15,7 @@ using Registry.Web.Exceptions;
 using Registry.Web.Models;
 using Registry.Web.Models.DTO;
 using Registry.Web.Services.Ports;
+using Registry.Web.Utilities;
 
 namespace Registry.Web.Services.Adapters
 {
@@ -277,7 +278,7 @@ namespace Registry.Web.Services.Adapters
         {
             await _utils.GetDatasetAndCheck(orgSlug, dsSlug);
 
-            _chunkedUploadManager.Upload(sessionId, stream, index);
+            await _chunkedUploadManager.Upload(sessionId, stream, index);
         }
 
         public async Task AddToSession(string orgSlug, string dsSlug, int sessionId, int index, byte[] data)
