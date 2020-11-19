@@ -36,7 +36,30 @@ namespace Registry.Web.Controllers
             _objectsManager = datasetsManager;
             _logger = logger;
         }
-        
+
+        [HttpGet("download", Name = nameof(ObjectsController) + "." + nameof(Download))]
+        public async Task<IActionResult> Download([FromRoute] string orgSlug, [FromRoute] string dsSlug,
+            [FromQuery(Name = "p")] string pathsRaw)
+        {
+            try
+            {
+
+                var paths = pathsRaw?.Split(",", StringSplitOptions.RemoveEmptyEntries);
+
+                _logger.LogDebug($"Objects controller Download('{orgSlug}', '{dsSlug}', '{pathsRaw}')");
+
+                return null;
+                //var res = await _objectsManager.Download(orgSlug, dsSlug, paths);
+                //return File(res.Data, res.ContentType, res.Name);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, $"Exception in Objects controller Download('{orgSlug}', '{dsSlug}', '{pathsRaw}')");
+
+                return ExceptionResult(ex);
+            }
+        }
+
         [HttpGet("obj", Name = nameof(ObjectsController) + "." + nameof(Get))]
         public async Task<IActionResult> Get([FromRoute] string orgSlug, [FromRoute] string dsSlug, [FromForm] string path)
         {

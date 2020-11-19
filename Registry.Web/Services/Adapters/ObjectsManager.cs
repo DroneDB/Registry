@@ -307,5 +307,10 @@ namespace Registry.Web.Services.Adapters
 
             return newObj;
         }
+
+        public async Task Download(string orgSlug, string dsSlug, string[] paths)
+        {
+            throw new NotImplementedException();
+        }
     }
 }
