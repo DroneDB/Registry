@@ -134,23 +134,7 @@ namespace Registry.Web.Services.Adapters
             // Write temp file
             await using var tmpFile = File.OpenWrite(tempFilePath);
 
-            await using MemoryStream memory = new MemoryStream();
-
-            int count;
-            do
-            {
-                var data = new byte[1024];
-                count = await chunkStream.ReadAsync(data, 0, 1024);
-                var str = Encoding.UTF8.GetString(data);
-                Debug.WriteLine(str);
-            } while (chunkStream.CanRead || count == 1024);
-            
             await chunkStream.CopyToAsync(tmpFile);
-            //}
-            //finally
-            //{
-            //    mutex.ReleaseMutex();
-            //}
         }
 
         public string CloseSession(int sessionId, bool performCleanup = true)

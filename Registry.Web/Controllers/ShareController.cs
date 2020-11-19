@@ -110,7 +110,6 @@ namespace Registry.Web.Controllers
         [HttpPost("upload/{token}/session/{sessionId}/chunk/{index}")]
         public async Task<IActionResult> UploadToSession(string token, int sessionId, int index, IFormFile file)
         {
-
             try
             {
 
