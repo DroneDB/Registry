@@ -108,8 +108,7 @@ namespace Registry.Web.Controllers
         private static readonly FormOptions DefaultFormOptions = new FormOptions();
 
         [HttpPost("upload/{token}/session/{sessionId}/chunk/{index}")]
-        [DisableFormValueModelBinding]
-        public async Task<IActionResult> UploadToSession(string token, int sessionId, int index)
+        public async Task<IActionResult> UploadToSession(string token, int sessionId, int index, IFormFile file)
         {
 
             try
@@ -117,51 +116,12 @@ namespace Registry.Web.Controllers
 
                 _logger.LogDebug($"Share controller UploadToSession('{token}', {sessionId}, {index}");// '{file?.FileName}')");
 
-                if (!MultipartRequestHelper.IsMultipartContentType(Request.ContentType))
-                    throw new InvalidOperationException("Expected multipart request");
+                if (file == null)
+                    throw new ArgumentException("No file uploaded");
 
+                await using var stream = file.OpenReadStream();
 
-                var boundary = MultipartRequestHelper.GetBoundary(MediaTypeHeaderValue.Parse(Request.ContentType), DefaultFormOptions.MultipartBoundaryLengthLimit);
-                var reader = new MultipartReader(boundary, HttpContext.Request.Body);
-
-                var section = await reader.ReadNextSectionAsync();
-
-                while (section != null)
-                {
-                    var hasContentDispositionHeader = ContentDispositionHeaderValue.TryParse(section.ContentDisposition, out var contentDisposition);
-
-                    if (hasContentDispositionHeader)
-                    {
-                        if (MultipartRequestHelper.HasFileContentDisposition(contentDisposition))
-                        {
-                            var fileName = contentDisposition.FileName.Value;
-
-                            if (string.IsNullOrWhiteSpace(fileName))
-                                throw new ArgumentException("Missing file name");
-
-                            _logger.LogDebug($"Uploaded file name '{fileName}'");
-
-                            section.Body.Reset();
-
-                            await _shareManager.UploadToSession(token, sessionId, index, section.Body);
-
-                        }
-                        else
-                            throw new ArgumentException("Expected file section");
-
-                    }
-
-                    // Drain any remaining section body that hasn't been consumed and
-                    // read the headers for the next section.
-                    section = await reader.ReadNextSectionAsync();
-                }
-
-                //if (file == null)
-                //    throw new ArgumentException("No file uploaded");
-
-                //await using var stream = file.OpenReadStream();
-
-                //await _shareManager.UploadToSession(token, sessionId, index, stream);
+                await _shareManager.UploadToSession(token, sessionId, index, stream);
 
                 return Ok();
             }

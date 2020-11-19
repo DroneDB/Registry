@@ -1,12 +1,15 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO;
 using System.Linq;
+using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using Registry.Common;
 using Registry.Web.Data;
 using Registry.Web.Data.Models;
 using Registry.Web.Models;
@@ -130,6 +133,18 @@ namespace Registry.Web.Services.Adapters
 
             // Write temp file
             await using var tmpFile = File.OpenWrite(tempFilePath);
+
+            await using MemoryStream memory = new MemoryStream();
+
+            int count;
+            do
+            {
+                var data = new byte[1024];
+                count = await chunkStream.ReadAsync(data, 0, 1024);
+                var str = Encoding.UTF8.GetString(data);
+                Debug.WriteLine(str);
+            } while (chunkStream.CanRead || count == 1024);
+            
             await chunkStream.CopyToAsync(tmpFile);
             //}
             //finally
