@@ -1,5 +1,6 @@
 ﻿using System;
 using Newtonsoft.Json;
+using Registry.Web.Utilities;
 
 namespace Registry.Web.Models.DTO
 {

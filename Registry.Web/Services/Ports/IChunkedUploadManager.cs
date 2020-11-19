@@ -9,7 +9,7 @@ namespace Registry.Web.Services.Ports
     public interface IChunkedUploadManager
     {
         public int InitSession(string fileName, int chunks, long size);
-        public void Upload(int sessionId, Stream chunkStream, int index);
+        public Task Upload(int sessionId, Stream chunkStream, int index);
         public string CloseSession(int sessionId, bool performCleanup = true);
 
         public void RemoveTimedoutSessions();
