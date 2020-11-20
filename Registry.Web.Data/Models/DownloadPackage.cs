@@ -7,6 +7,9 @@ namespace Registry.Web.Data.Models
 {
     public class DownloadPackage
     {
+        [Key]
+        public Guid Id { get; set; }
+
         [Required]
         public DateTime CreationDate { get; set; }
         
