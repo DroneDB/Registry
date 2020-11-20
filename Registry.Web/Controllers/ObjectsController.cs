@@ -48,9 +48,10 @@ namespace Registry.Web.Controllers
 
                 _logger.LogDebug($"Objects controller Download('{orgSlug}', '{dsSlug}', '{pathsRaw}')");
 
-                return null;
-                //var res = await _objectsManager.Download(orgSlug, dsSlug, paths);
-                //return File(res.Data, res.ContentType, res.Name);
+                var res = await _objectsManager.Download(orgSlug, dsSlug, paths);
+
+                return File(res.ContentStream, res.ContentType, res.Name);
+
             }
             catch (Exception ex)
             {
@@ -110,11 +111,11 @@ namespace Registry.Web.Controllers
 
                 var newObj = await _objectsManager.AddNew(orgSlug, dsSlug, path, stream);
                 return CreatedAtRoute(nameof(ObjectsController) + "." + nameof(GetInfo), new
-                    {
-                        orgSlug = orgSlug,
-                        dsSlug = dsSlug,
-                        path = newObj.Path
-                    },
+                {
+                    orgSlug = orgSlug,
+                    dsSlug = dsSlug,
+                    path = newObj.Path
+                },
                     newObj);
             }
             catch (Exception ex)
@@ -130,9 +131,9 @@ namespace Registry.Web.Controllers
         {
             try
             {
-               
+
                 _logger.LogDebug($"Objects controller PostNewSession('{orgSlug}', '{dsSlug}', {chunks}, {size})");
-                
+
                 var sessionId = await _objectsManager.AddNewSession(orgSlug, dsSlug, chunks, size);
 
                 return Ok(new UploadNewSessionResultDto
@@ -159,7 +160,7 @@ namespace Registry.Web.Controllers
 
                 if (file == null)
                     throw new ArgumentException("No file uploaded");
-                
+
                 await using var stream = file.OpenReadStream();
 
                 await _objectsManager.AddToSession(orgSlug, dsSlug, sessionId, index, stream);
@@ -183,13 +184,13 @@ namespace Registry.Web.Controllers
                 _logger.LogDebug($"Objects controller CloseSession('{orgSlug}', '{dsSlug}', {sessionId}, '{path}')");
 
                 var newObj = await _objectsManager.CloseSession(orgSlug, dsSlug, sessionId, path);
-                
+
                 return CreatedAtRoute(nameof(ObjectsController) + "." + nameof(GetInfo), new
-                    {
-                        orgSlug = orgSlug,
-                        dsSlug = dsSlug,
-                        path = newObj.Path
-                    },
+                {
+                    orgSlug = orgSlug,
+                    dsSlug = dsSlug,
+                    path = newObj.Path
+                },
                     newObj);
 
             }
@@ -221,6 +222,6 @@ namespace Registry.Web.Controllers
 
         }
 
-        
+
     }
 }
