@@ -11,6 +11,8 @@ using Registry.Adapters.ObjectSystem;
 using System.IO.Compression;
 using System.Reactive.Linq;
 using Microsoft.VisualBasic.CompilerServices;
+using MimeMapping;
+using Newtonsoft.Json;
 using Registry.Common;
 using Registry.Ports.ObjectSystem.Model;
 
@@ -1024,10 +1026,31 @@ namespace Registry.Adapters.Test.ObjectSystem
         public void Cleanup()
         {
             Debug.WriteLine("Removing orphaned test folders");
-            Directory.Delete(Path.Combine(Path.GetTempPath(), BaseTestFolder), true);
+            var testFolder = Path.Combine(Path.GetTempPath(), BaseTestFolder);
+
+            if (Directory.Exists(testFolder))
+                Directory.Delete(testFolder, true);
         }
 
+        [Explicit]
+        [Test]
+        public void PrintObjectInfo()
+        {
+            var objectPath = @"C:\Users\Art Director\Downloads\Test1\Storage\public-default\Sub\20170320_150447.jpg";
+            var fileInfo = new FileInfo(objectPath);
 
+            var objectInfo = new PhysicalObjectSystem.ObjectInfoDto
+            {
+                ContentType = MimeUtility.GetMimeMapping(objectPath),
+                ETag = PhysicalObjectSystem.CalculateETag(objectPath, fileInfo),
+                LastModified = File.GetLastWriteTime(objectPath),
+                Size = fileInfo.Length,
+                Name = objectPath,
+                MetaData = new Dictionary<string, string>()
+            };
+
+            Debug.WriteLine(JsonConvert.SerializeObject(objectInfo, Formatting.Indented));
+        }
 
     }
 }
