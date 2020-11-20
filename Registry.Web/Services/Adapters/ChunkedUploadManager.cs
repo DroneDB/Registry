@@ -100,7 +100,7 @@ namespace Registry.Web.Services.Adapters
             var tempFilePath = Path.Combine(_settings.UploadPath, tempFileName);
             _logger.LogDebug($"Temp file '{tempFilePath}' in '{Path.GetFullPath(tempFilePath)}'");
 
-            _context.Entry(session).Collection(item => item.Chunks).Load();
+            await _context.Entry(session).Collection(item => item.Chunks).LoadAsync();
             var fileChunk = session.Chunks.FirstOrDefault(item => item.Index == index);
 
             if (fileChunk != null)
@@ -134,17 +134,6 @@ namespace Registry.Web.Services.Adapters
             // Write temp file
             await using var tmpFile = File.OpenWrite(tempFilePath);
 
-            await using MemoryStream memory = new MemoryStream();
-
-            int count;
-            do
-            {
-                var data = new byte[1024];
-                count = await chunkStream.ReadAsync(data, 0, 1024);
-                var str = Encoding.UTF8.GetString(data);
-                Debug.WriteLine(str);
-            } while (chunkStream.CanRead || count == 1024);
-            
             await chunkStream.CopyToAsync(tmpFile);
             //}
             //finally
