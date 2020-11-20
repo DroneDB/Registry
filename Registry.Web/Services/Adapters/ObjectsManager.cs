@@ -1,12 +1,14 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.IO;
+using System.IO.Compression;
 using System.Linq;
 using System.Reactive.Linq;
 using System.Runtime.CompilerServices;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using MimeMapping;
 using Registry.Common;
 using Registry.Ports.DroneDB;
 using Registry.Ports.ObjectSystem;
@@ -308,9 +310,111 @@ namespace Registry.Web.Services.Adapters
             return newObj;
         }
 
-        public async Task Download(string orgSlug, string dsSlug, string[] paths)
+        public async Task<FileDescriptorDto> Download(string orgSlug, string dsSlug, string[] paths)
         {
-            throw new NotImplementedException();
+            await _utils.GetDatasetAndCheck(orgSlug, dsSlug);
+
+            _logger.LogInformation($"In '{orgSlug}/{dsSlug}'");
+
+            if (paths.Any(path => path.Contains("*") || path.Contains("?")))
+                throw new ArgumentException("Wildcards in paths are not supported");
+
+            var ddb = _ddbFactory.GetDdb(orgSlug, dsSlug);
+
+            var filePaths = new List<string>();
+
+            foreach (var path in paths)
+            {
+                var entries = ddb.Search(path)?.ToArray();
+
+                if (entries == null || !entries.Any())
+                    throw new ArgumentException($"Cannot find any file path matching '{path}'");
+
+                filePaths.AddRange(entries.Select(item => item.Path));
+            }
+
+            _logger.LogInformation($"Found {filePaths.Count} paths");
+
+            FileDescriptorDto descriptor;
+
+            // If there is just one file we return it
+            if (filePaths.Count == 1)
+            {
+                var filePath = filePaths.First();
+
+                _logger.LogInformation($"Only one path found: '{filePath}'");
+
+                descriptor = new FileDescriptorDto
+                {
+                    ContentStream = new MemoryStream(),
+                    Name = Path.GetFileName(filePath),
+                    ContentType = MimeUtility.GetMimeMapping(filePath)
+                };
+
+                await WriteObjectContentStream(orgSlug, dsSlug, filePath, descriptor.ContentStream);
+
+                descriptor.ContentStream.Reset();
+
+            }
+            // Otherwise we zip everything together and return the package
+            else
+            {
+                descriptor = new FileDescriptorDto
+                {
+                    Name = $"{orgSlug}-{dsSlug}-{CommonUtils.RandomString(8)}.zip",
+                    ContentStream = new MemoryStream(),
+                    ContentType = "application/zip"
+                };
+
+                using (var archive = new ZipArchive(descriptor.ContentStream, ZipArchiveMode.Create, true))
+                {
+
+                    foreach (var path in filePaths)
+                    {
+                        _logger.LogInformation($"Zipping: '{path}'");
+
+                        var entry = archive.CreateEntry(path, CompressionLevel.Fastest);
+                        await using var entryStream = entry.Open();
+                        await WriteObjectContentStream(orgSlug, dsSlug, path, entryStream);
+                    }
+
+                }
+                descriptor.ContentStream.Reset();
+            }
+
+            return descriptor;
+
+        }
+
+        private async Task WriteObjectContentStream(string orgSlug, string dsSlug, string path, Stream stream)
+        {
+            var bucketName = string.Format(BucketNameFormat, orgSlug, dsSlug);
+
+            _logger.LogInformation($"Using bucket '{bucketName}'");
+
+            var bucketExists = await _objectSystem.BucketExistsAsync(bucketName);
+
+            if (!bucketExists)
+            {
+                _logger.LogInformation("Bucket does not exist, creating it");
+
+                var region = _settings.StorageProvider.Settings.SafeGetValue("region");
+                if (region == null)
+                    _logger.LogWarning("No region specified in storage provider config");
+
+                await _objectSystem.MakeBucketAsync(bucketName, region);
+
+                _logger.LogInformation("Bucket created");
+            }
+
+            var objInfo = await _objectSystem.GetObjectInfoAsync(bucketName, path);
+
+            if (objInfo == null)
+                throw new NotFoundException($"Cannot find '{path}' in storage provider");
+
+            _logger.LogInformation($"Getting object '{path}' in bucket '{bucketName}'");
+
+            await _objectSystem.GetObjectAsync(bucketName, path, s => s.CopyTo(stream));
         }
     }
 }
