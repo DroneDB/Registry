@@ -61,6 +61,27 @@ namespace Registry.Web.Controllers
             }
         }
 
+        [HttpGet("package/{id}", Name = nameof(ObjectsController) + "." + nameof(DownloadPackage))]
+        public async Task<IActionResult> DownloadPackage([FromRoute] string orgSlug, [FromRoute] string dsSlug, string id)
+        {
+            try
+            {
+                _logger.LogDebug($"Objects controller DownloadPackage('{orgSlug}', '{dsSlug}', '{id}')");
+
+                var res = await _objectsManager.Download(orgSlug, dsSlug, id);
+
+                return File(res.ContentStream, res.ContentType, res.Name);
+
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, $"Exception in Objects controller DownloadPackage('{orgSlug}', '{dsSlug}', '{id}')");
+
+                return ExceptionResult(ex);
+            }
+
+        }
+
         [HttpPost("download", Name = nameof(ObjectsController) + "." + nameof(Download))]
         public async Task<IActionResult> GetPackageUrl([FromRoute] string orgSlug, [FromRoute] string dsSlug, string[] paths, DateTime? expiration)
         {
@@ -72,9 +93,16 @@ namespace Registry.Web.Controllers
 
                 var res = await _objectsManager.GetDownloadPackage(orgSlug, dsSlug, paths, expiration);
 
+                var downloadUrl = Url.Link(nameof(ObjectsController) + "." + nameof(DownloadPackage), new
+                {
+                    orgSlug,
+                    dsSlug,
+                    id = res
+                });
+
                 return Ok(new DownloadPackageDto
                 {
-                    DownloadUrl = res, // TODO: Generate url
+                    DownloadUrl = downloadUrl, 
                     Expiration = expiration
                 });
 
