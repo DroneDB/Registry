@@ -6,6 +6,7 @@ using System.Linq;
 using System.Reactive.Linq;
 using System.Runtime.CompilerServices;
 using System.Threading.Tasks;
+using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using MimeMapping;
@@ -13,6 +14,7 @@ using Registry.Common;
 using Registry.Ports.DroneDB;
 using Registry.Ports.ObjectSystem;
 using Registry.Web.Data;
+using Registry.Web.Data.Models;
 using Registry.Web.Exceptions;
 using Registry.Web.Models;
 using Registry.Web.Models.DTO;
@@ -28,6 +30,7 @@ namespace Registry.Web.Services.Adapters
         private readonly IChunkedUploadManager _chunkedUploadManager;
         private readonly IDdbFactory _ddbFactory;
         private readonly IUtils _utils;
+        private readonly IAuthManager _authManager;
         private readonly RegistryContext _context;
         private readonly AppSettings _settings;
 
@@ -43,7 +46,7 @@ namespace Registry.Web.Services.Adapters
             IChunkedUploadManager chunkedUploadManager,
             IOptions<AppSettings> settings,
             IDdbFactory ddbFactory,
-            IUtils utils)
+            IUtils utils, IAuthManager authManager)
         {
             _logger = logger;
             _context = context;
@@ -51,6 +54,7 @@ namespace Registry.Web.Services.Adapters
             _chunkedUploadManager = chunkedUploadManager;
             _ddbFactory = ddbFactory;
             _utils = utils;
+            _authManager = authManager;
             _settings = settings.Value;
         }
 
@@ -310,6 +314,69 @@ namespace Registry.Web.Services.Adapters
             return newObj;
         }
 
+        public async Task<string> GetDownloadPackage(string orgSlug, string dsSlug, string[] paths, DateTime? expiration = null)
+        {
+            var ds = await _utils.GetDatasetAndCheck(orgSlug, dsSlug);
+
+            _logger.LogInformation($"In '{orgSlug}/{dsSlug}'");
+
+            if (paths.Any(path => path.Contains("*") || path.Contains("?") || string.IsNullOrWhiteSpace(path)))
+                throw new ArgumentException("Wildcards or empty paths are not supported");
+
+            var currentUser = await _authManager.GetCurrentUser();
+
+            var downloadPackage = new DownloadPackage
+            {
+                CreationDate = DateTime.Now,
+                Dataset = ds,
+                ExpirationDate = expiration,
+                Queries = paths,
+                UserName = currentUser.UserName
+            };
+
+            await _context.DownloadPackages.AddAsync(downloadPackage);
+            await _context.SaveChangesAsync();
+
+            return downloadPackage.Id.ToString();
+        }
+
+        public async Task<FileDescriptorDto> Download(string orgSlug, string dsSlug, string packageId)
+        {
+            await _utils.GetDatasetAndCheck(orgSlug, dsSlug);
+
+            _logger.LogInformation($"In '{orgSlug}/{dsSlug}'");
+
+            if (!Guid.TryParse(packageId, out var packageGuid))
+                throw new ArgumentException("Invalid package Id: expected guid");
+            
+            var package = _context.DownloadPackages.FirstOrDefault(item => item.Id == packageGuid);
+
+            if (package == null)
+                throw new ArgumentException($"Cannot find package with id '{packageId}'");
+
+            // If it has and expiration date
+            if (package.ExpirationDate != null)
+            {
+                // If expired
+                if (DateTime.Now > package.ExpirationDate)
+                {
+                    _context.DownloadPackages.Remove(package);
+                    await _context.SaveChangesAsync();
+
+                    throw new ArgumentException("This package is expired");
+                }
+            }
+            // It's a one-time download
+            else
+            {
+                _context.DownloadPackages.Remove(package);
+                await _context.SaveChangesAsync();
+            }
+
+            return await GetFileDescriptor(orgSlug, dsSlug, package.Queries);
+
+        }
+
         public async Task<FileDescriptorDto> Download(string orgSlug, string dsSlug, string[] paths)
         {
             await _utils.GetDatasetAndCheck(orgSlug, dsSlug);
@@ -319,6 +386,11 @@ namespace Registry.Web.Services.Adapters
             if (paths.Any(path => path.Contains("*") || path.Contains("?")))
                 throw new ArgumentException("Wildcards in paths are not supported");
 
+            return await GetFileDescriptor(orgSlug, dsSlug, paths);
+        }
+
+        private async Task<FileDescriptorDto> GetFileDescriptor(string orgSlug, string dsSlug, string[] paths)
+        {
             var ddb = _ddbFactory.GetDdb(orgSlug, dsSlug);
 
             var filePaths = new List<string>();
@@ -354,7 +426,6 @@ namespace Registry.Web.Services.Adapters
                 await WriteObjectContentStream(orgSlug, dsSlug, filePath, descriptor.ContentStream);
 
                 descriptor.ContentStream.Reset();
-
             }
             // Otherwise we zip everything together and return the package
             else
@@ -368,7 +439,6 @@ namespace Registry.Web.Services.Adapters
 
                 using (var archive = new ZipArchive(descriptor.ContentStream, ZipArchiveMode.Create, true))
                 {
-
                     foreach (var path in filePaths)
                     {
                         _logger.LogInformation($"Zipping: '{path}'");
@@ -377,13 +447,12 @@ namespace Registry.Web.Services.Adapters
                         await using var entryStream = entry.Open();
                         await WriteObjectContentStream(orgSlug, dsSlug, path, entryStream);
                     }
-
                 }
+
                 descriptor.ContentStream.Reset();
             }
 
             return descriptor;
-
         }
 
         private async Task WriteObjectContentStream(string orgSlug, string dsSlug, string path, Stream stream)

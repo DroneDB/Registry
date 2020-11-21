@@ -61,6 +61,32 @@ namespace Registry.Web.Controllers
             }
         }
 
+        [HttpPost("download", Name = nameof(ObjectsController) + "." + nameof(Download))]
+        public async Task<IActionResult> GetPackageUrl([FromRoute] string orgSlug, [FromRoute] string dsSlug, string[] paths, DateTime? expiration)
+        {
+            var pathsJoined = paths != null ? string.Join(',', paths) : null;
+
+            try
+            {
+                _logger.LogDebug($"Objects controller Download('{orgSlug}', '{dsSlug}', '{pathsJoined}', '{expiration}')");
+
+                var res = await _objectsManager.GetDownloadPackage(orgSlug, dsSlug, paths, expiration);
+
+                return Ok(new DownloadPackageDto
+                {
+                    DownloadUrl = res, // TODO: Generate url
+                    Expiration = expiration
+                });
+
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, $"Exception in Objects controller Download('{orgSlug}', '{dsSlug}', '{pathsJoined}')");
+
+                return ExceptionResult(ex);
+            }
+        }
+
         [HttpGet("obj", Name = nameof(ObjectsController) + "." + nameof(Get))]
         public async Task<IActionResult> Get([FromRoute] string orgSlug, [FromRoute] string dsSlug, [FromForm] string path)
         {
@@ -125,6 +151,8 @@ namespace Registry.Web.Controllers
                 return ExceptionResult(ex);
             }
         }
+
+        #region Sessions
 
         [HttpPost("obj/session")]
         public async Task<IActionResult> PostNewSession([FromRoute] string orgSlug, [FromRoute] string dsSlug, [FromForm] int chunks, [FromForm] long size)
@@ -201,6 +229,8 @@ namespace Registry.Web.Controllers
                 return ExceptionResult(ex);
             }
         }
+
+        #endregion
 
         [HttpDelete("obj")]
         public async Task<IActionResult> Delete([FromRoute] string orgSlug, [FromRoute] string dsSlug, [FromForm] string path)
