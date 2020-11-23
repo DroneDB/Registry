@@ -21,8 +21,7 @@ namespace Registry.Web.Data.Models
         [Required]
         public Dataset Dataset { get; set; }
 
-        [Required]
-        public string[] Queries { get; set; }
+        public string[] Paths { get; set; }
 
         [Required]
         public string UserName { get; set; }

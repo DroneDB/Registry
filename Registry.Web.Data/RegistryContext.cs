@@ -24,7 +24,7 @@ namespace Registry.Web.Data
                 .OnDelete(DeleteBehavior.Cascade);
 
             modelBuilder.Entity<DownloadPackage>()
-                .Property(e => e.Queries)
+                .Property(e => e.Paths)
                 .HasConversion(
                     v => string.Join(';', v),
                     v => v.Split(';', StringSplitOptions.RemoveEmptyEntries));
