@@ -39,7 +39,7 @@ namespace Registry.Web.Controllers
 
         [HttpGet("download", Name = nameof(ObjectsController) + "." + nameof(Download))]
         public async Task<IActionResult> Download([FromRoute] string orgSlug, [FromRoute] string dsSlug,
-            [FromQuery(Name = "p")] string pathsRaw)
+            [FromQuery(Name = "path")] string pathsRaw)
         {
             try
             {
@@ -85,7 +85,7 @@ namespace Registry.Web.Controllers
 
         [HttpPost("download", Name = nameof(ObjectsController) + "." + nameof(Download))]
         public async Task<IActionResult> GetPackageUrl([FromRoute] string orgSlug, [FromRoute] string dsSlug,
-            [FromForm] string[] paths, [FromForm] DateTime? expiration, [FromForm] bool isPublic)
+            [FromForm(Name = "path")] string[] paths, [FromForm] DateTime? expiration, [FromForm] bool isPublic)
         {
             var pathsJoined = paths != null ? string.Join(',', paths) : null;
 
