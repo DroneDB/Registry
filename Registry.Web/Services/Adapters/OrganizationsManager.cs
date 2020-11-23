@@ -64,7 +64,7 @@ namespace Registry.Web.Services.Adapters
 
         public async Task<OrganizationDto> Get(string orgSlug)
         {
-            var org = await _utils.GetOrganizationAndCheck(orgSlug);
+            var org = await _utils.GetOrganization(orgSlug);
 
             return org.ToDto();
         }
@@ -122,7 +122,7 @@ namespace Registry.Web.Services.Adapters
         public async Task Edit(string orgSlug, OrganizationDto organization)
         {
 
-            var org = await _utils.GetOrganizationAndCheck(orgSlug);
+            var org = await _utils.GetOrganization(orgSlug);
 
             // TODO: To change when implementing anonymous users
             var currentUser = await _authManager.GetCurrentUser();
@@ -167,7 +167,7 @@ namespace Registry.Web.Services.Adapters
         public async Task Delete(string orgSlug)
         {
 
-            var org = await _utils.GetOrganizationAndCheck(orgSlug);
+            var org = await _utils.GetOrganization(orgSlug);
 
             if (org == null)
                 throw new NotFoundException("Cannot find organization with this orgSlug");

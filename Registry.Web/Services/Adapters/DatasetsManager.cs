@@ -40,7 +40,7 @@ namespace Registry.Web.Services.Adapters
 
         public async Task<IEnumerable<DatasetDto>> List(string orgSlug)
         {
-            var org = await _utils.GetOrganizationAndCheck(orgSlug);
+            var org = await _utils.GetOrganization(orgSlug);
 
             var query = from ds in org.Datasets
 
@@ -64,7 +64,7 @@ namespace Registry.Web.Services.Adapters
         public async Task<DatasetDto> Get(string orgSlug, string dsSlug)
         {
 
-            var dataset = await _utils.GetDatasetAndCheck(orgSlug, dsSlug);
+            var dataset = await _utils.GetDataset(orgSlug, dsSlug);
 
             return dataset.ToDto();
         }
@@ -72,7 +72,7 @@ namespace Registry.Web.Services.Adapters
         public async Task<DatasetDto> AddNew(string orgSlug, DatasetDto dataset)
         {
 
-            var org = await _utils.GetOrganizationAndCheck(orgSlug);
+            var org = await _utils.GetOrganization(orgSlug);
 
             var ds = dataset.ToEntity();
 
@@ -92,7 +92,7 @@ namespace Registry.Web.Services.Adapters
 
         public async Task Edit(string orgSlug, string dsSlug, DatasetDto dataset)
         {
-            var org = await _utils.GetOrganizationAndCheck(orgSlug);
+            var org = await _utils.GetOrganization(orgSlug);
 
             var entity = org.Datasets.FirstOrDefault(item => item.Slug == dsSlug);
 
@@ -115,7 +115,7 @@ namespace Registry.Web.Services.Adapters
 
         public async Task Delete(string orgSlug, string dsSlug)
         {
-            var org = await _utils.GetOrganizationAndCheck(orgSlug);
+            var org = await _utils.GetOrganization(orgSlug);
             
             var entity = org.Datasets.FirstOrDefault(item => item.Slug == dsSlug);
 

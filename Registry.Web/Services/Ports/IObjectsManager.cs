@@ -24,7 +24,7 @@ namespace Registry.Web.Services.Ports
         Task AddToSession(string orgSlug, string dsSlug, int sessionId, int index, byte[] data);
         Task<UploadedObjectDto> CloseSession(string orgSlug, string dsSlug, int sessionId, string path);
         Task<FileDescriptorDto> Download(string orgSlug, string dsSlug, string[] paths);
-        Task<string> GetDownloadPackage(string orgSlug, string dsSlug, string[] paths, DateTime? expiration = null);
+        Task<string> GetDownloadPackage(string orgSlug, string dsSlug, string[] paths, DateTime? expiration = null, bool isPublic = false);
         Task<FileDescriptorDto> Download(string orgSlug, string dsSlug, string packageId);
     }
 }

@@ -61,7 +61,7 @@ namespace Registry.Web.Services.Adapters
         public async Task<IEnumerable<ObjectDto>> List(string orgSlug, string dsSlug, string path)
         {
 
-            await _utils.GetDatasetAndCheck(orgSlug, dsSlug);
+            await _utils.GetDataset(orgSlug, dsSlug);
 
             _logger.LogInformation($"In '{orgSlug}/{dsSlug}'");
 
@@ -79,7 +79,7 @@ namespace Registry.Web.Services.Adapters
         public async Task<ObjectRes> Get(string orgSlug, string dsSlug, string path)
         {
 
-            await _utils.GetDatasetAndCheck(orgSlug, dsSlug);
+            await _utils.GetDataset(orgSlug, dsSlug);
 
             _logger.LogInformation($"In '{orgSlug}/{dsSlug}'");
 
@@ -143,7 +143,7 @@ namespace Registry.Web.Services.Adapters
 
         public async Task<UploadedObjectDto> AddNew(string orgSlug, string dsSlug, string path, Stream stream)
         {
-            var dataset = await _utils.GetDatasetAndCheck(orgSlug, dsSlug);
+            var dataset = await _utils.GetDataset(orgSlug, dsSlug);
 
             _logger.LogInformation($"In '{orgSlug}/{dsSlug}'");
 
@@ -194,7 +194,7 @@ namespace Registry.Web.Services.Adapters
 
         public async Task Delete(string orgSlug, string dsSlug, string path)
         {
-            var dataset = await _utils.GetDatasetAndCheck(orgSlug, dsSlug);
+            var dataset = await _utils.GetDataset(orgSlug, dsSlug);
 
             _logger.LogInformation($"In '{orgSlug}/{dsSlug}'");
 
@@ -228,7 +228,7 @@ namespace Registry.Web.Services.Adapters
 
         public async Task DeleteAll(string orgSlug, string dsSlug)
         {
-            var dataset = await _utils.GetDatasetAndCheck(orgSlug, dsSlug);
+            var dataset = await _utils.GetDataset(orgSlug, dsSlug);
 
             _logger.LogInformation($"In '{orgSlug}/{dsSlug}'");
 
@@ -269,7 +269,7 @@ namespace Registry.Web.Services.Adapters
 
         public async Task<int> AddNewSession(string orgSlug, string dsSlug, int chunks, long size)
         {
-            await _utils.GetDatasetAndCheck(orgSlug, dsSlug);
+            await _utils.GetDataset(orgSlug, dsSlug);
 
             var fileName = $"{orgSlug.ToSlug()}-{dsSlug.ToSlug()}-{CommonUtils.RandomString(16)}";
 
@@ -282,7 +282,7 @@ namespace Registry.Web.Services.Adapters
 
         public async Task AddToSession(string orgSlug, string dsSlug, int sessionId, int index, Stream stream)
         {
-            await _utils.GetDatasetAndCheck(orgSlug, dsSlug);
+            await _utils.GetDataset(orgSlug, dsSlug);
 
             await _chunkedUploadManager.Upload(sessionId, stream, index);
         }
@@ -296,7 +296,7 @@ namespace Registry.Web.Services.Adapters
 
         public async Task<UploadedObjectDto> CloseSession(string orgSlug, string dsSlug, int sessionId, string path)
         {
-            await _utils.GetDatasetAndCheck(orgSlug, dsSlug);
+            await _utils.GetDataset(orgSlug, dsSlug);
 
             var tempFilePath = _chunkedUploadManager.CloseSession(sessionId, false);
 
@@ -314,17 +314,13 @@ namespace Registry.Web.Services.Adapters
             return newObj;
         }
 
-        public async Task<string> GetDownloadPackage(string orgSlug, string dsSlug, string[] paths, DateTime? expiration = null)
+        public async Task<string> GetDownloadPackage(string orgSlug, string dsSlug, string[] paths, DateTime? expiration = null, bool isPublic = false)
         {
-            var ds = await _utils.GetDatasetAndCheck(orgSlug, dsSlug);
+            var ds = await _utils.GetDataset(orgSlug, dsSlug);
 
             _logger.LogInformation($"In '{orgSlug}/{dsSlug}'");
 
-            if (paths == null || !paths.Any())
-                throw new ArgumentException("No paths provided");
-
-            if (paths.Any(path => path.Contains("*") || path.Contains("?") || string.IsNullOrWhiteSpace(path)))
-                throw new ArgumentException("Wildcards or empty paths are not supported");
+            EnsurePathsValidity(orgSlug, dsSlug, paths);
 
             var currentUser = await _authManager.GetCurrentUser();
 
@@ -334,7 +330,8 @@ namespace Registry.Web.Services.Adapters
                 Dataset = ds,
                 ExpirationDate = expiration,
                 Queries = paths,
-                UserName = currentUser.UserName
+                UserName = currentUser.UserName,
+                IsPublic = isPublic
             };
 
             await _context.DownloadPackages.AddAsync(downloadPackage);
@@ -343,9 +340,29 @@ namespace Registry.Web.Services.Adapters
             return downloadPackage.Id.ToString();
         }
 
+        private void EnsurePathsValidity(string orgSlug, string dsSlug, string[] paths)
+        {
+
+            if (paths == null || !paths.Any())
+                throw new ArgumentException("No paths provided");
+
+            if (paths.Any(path => path.Contains("*") || path.Contains("?") || string.IsNullOrWhiteSpace(path)))
+                throw new ArgumentException("Wildcards or empty paths are not supported");
+
+            var ddb = _ddbFactory.GetDdb(orgSlug, dsSlug);
+
+            foreach (var path in paths)
+            {
+                var res = ddb.Search(path)?.ToArray();
+
+                if (res == null || !res.Any())
+                    throw new ArgumentException($"Invalid path: '{path}'");
+            }
+        }
+
         public async Task<FileDescriptorDto> Download(string orgSlug, string dsSlug, string packageId)
         {
-            await _utils.GetDatasetAndCheck(orgSlug, dsSlug);
+            await _utils.GetDataset(orgSlug, dsSlug, checkOwnership:false);
 
             _logger.LogInformation($"In '{orgSlug}/{dsSlug}'");
 
@@ -353,12 +370,18 @@ namespace Registry.Web.Services.Adapters
                 throw new ArgumentException("No package id provided");
 
             if (!Guid.TryParse(packageId, out var packageGuid))
-                throw new ArgumentException("Invalid package Id: expected guid");
+                throw new ArgumentException("Invalid package id: expected guid");
             
             var package = _context.DownloadPackages.FirstOrDefault(item => item.Id == packageGuid);
 
             if (package == null)
                 throw new ArgumentException($"Cannot find package with id '{packageId}'");
+
+            var user = await _authManager.GetCurrentUser();
+
+            // If we are not logged-in and this is not a public package
+            if (user == null && !package.IsPublic)
+                throw new ArgumentException("Invalid package id");
 
             // If it has and expiration date
             if (package.ExpirationDate != null)
@@ -385,15 +408,11 @@ namespace Registry.Web.Services.Adapters
 
         public async Task<FileDescriptorDto> Download(string orgSlug, string dsSlug, string[] paths)
         {
-            await _utils.GetDatasetAndCheck(orgSlug, dsSlug);
+            await _utils.GetDataset(orgSlug, dsSlug);
 
             _logger.LogInformation($"In '{orgSlug}/{dsSlug}'");
 
-            if (paths == null || !paths.Any())
-                throw new ArgumentException("No paths provided");
-
-            if (paths.Any(path => path.Contains("*") || path.Contains("?")))
-                throw new ArgumentException("Wildcards in paths are not supported");
+            EnsurePathsValidity(orgSlug, dsSlug, paths);
 
             return await GetFileDescriptor(orgSlug, dsSlug, paths);
         }

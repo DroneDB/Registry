@@ -27,5 +27,8 @@ namespace Registry.Web.Data.Models
         [Required]
         public string UserName { get; set; }
 
+        [Required]
+        public bool IsPublic { get; set; }
+
     }
 }
