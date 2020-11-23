@@ -320,6 +320,9 @@ namespace Registry.Web.Services.Adapters
 
             _logger.LogInformation($"In '{orgSlug}/{dsSlug}'");
 
+            if (paths == null || !paths.Any())
+                throw new ArgumentException("No paths provided");
+
             if (paths.Any(path => path.Contains("*") || path.Contains("?") || string.IsNullOrWhiteSpace(path)))
                 throw new ArgumentException("Wildcards or empty paths are not supported");
 
@@ -345,6 +348,9 @@ namespace Registry.Web.Services.Adapters
             await _utils.GetDatasetAndCheck(orgSlug, dsSlug);
 
             _logger.LogInformation($"In '{orgSlug}/{dsSlug}'");
+
+            if (packageId == null)
+                throw new ArgumentException("No package id provided");
 
             if (!Guid.TryParse(packageId, out var packageGuid))
                 throw new ArgumentException("Invalid package Id: expected guid");
@@ -382,6 +388,9 @@ namespace Registry.Web.Services.Adapters
             await _utils.GetDatasetAndCheck(orgSlug, dsSlug);
 
             _logger.LogInformation($"In '{orgSlug}/{dsSlug}'");
+
+            if (paths == null || !paths.Any())
+                throw new ArgumentException("No paths provided");
 
             if (paths.Any(path => path.Contains("*") || path.Contains("?")))
                 throw new ArgumentException("Wildcards in paths are not supported");
