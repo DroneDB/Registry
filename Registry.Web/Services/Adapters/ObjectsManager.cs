@@ -329,7 +329,7 @@ namespace Registry.Web.Services.Adapters
                 CreationDate = DateTime.Now,
                 Dataset = ds,
                 ExpirationDate = expiration,
-                Queries = paths,
+                Paths = paths,
                 UserName = currentUser.UserName,
                 IsPublic = isPublic
             };
@@ -344,10 +344,14 @@ namespace Registry.Web.Services.Adapters
         {
 
             if (paths == null || !paths.Any())
-                throw new ArgumentException("No paths provided");
+                // Everything
+                return;
 
             if (paths.Any(path => path.Contains("*") || path.Contains("?") || string.IsNullOrWhiteSpace(path)))
                 throw new ArgumentException("Wildcards or empty paths are not supported");
+
+            if (paths.Length != paths.Distinct().Count())
+                throw new ArgumentException("Duplicate paths");
 
             var ddb = _ddbFactory.GetDdb(orgSlug, dsSlug);
 
@@ -362,7 +366,7 @@ namespace Registry.Web.Services.Adapters
 
         public async Task<FileDescriptorDto> Download(string orgSlug, string dsSlug, string packageId)
         {
-            await _utils.GetDataset(orgSlug, dsSlug, checkOwnership:false);
+            await _utils.GetDataset(orgSlug, dsSlug, checkOwnership: false);
 
             _logger.LogInformation($"In '{orgSlug}/{dsSlug}'");
 
@@ -371,7 +375,7 @@ namespace Registry.Web.Services.Adapters
 
             if (!Guid.TryParse(packageId, out var packageGuid))
                 throw new ArgumentException("Invalid package id: expected guid");
-            
+
             var package = _context.DownloadPackages.FirstOrDefault(item => item.Id == packageGuid);
 
             if (package == null)
@@ -402,7 +406,7 @@ namespace Registry.Web.Services.Adapters
                 await _context.SaveChangesAsync();
             }
 
-            return await GetFileDescriptor(orgSlug, dsSlug, package.Queries);
+            return await GetFileDescriptor(orgSlug, dsSlug, package.Paths);
 
         }
 
@@ -423,14 +427,26 @@ namespace Registry.Web.Services.Adapters
 
             var filePaths = new List<string>();
 
-            foreach (var path in paths)
+            if (paths != null)
             {
-                var entries = ddb.Search(path)?.ToArray();
 
-                if (entries == null || !entries.Any())
-                    throw new ArgumentException($"Cannot find any file path matching '{path}'");
+                foreach (var path in paths)
+                {
+                    var entries = ddb.Search(path)?.ToArray();
 
-                filePaths.AddRange(entries.Select(item => item.Path));
+                    if (entries == null || !entries.Any())
+                        throw new ArgumentException($"Cannot find any file path matching '{path}'");
+
+                    filePaths.AddRange(entries.Select(item => item.Path));
+                }
+
+            }
+            else
+            {
+                // Select everything
+                filePaths = ddb.Search(null)
+                    .Select(entry => entry.Path)
+                    .ToList();
             }
 
             _logger.LogInformation($"Found {filePaths.Count} paths");
@@ -464,6 +480,9 @@ namespace Registry.Web.Services.Adapters
                     ContentStream = new MemoryStream(),
                     ContentType = "application/zip"
                 };
+
+                // Hopefully all the folders are correctly ordered
+                filePaths.Sort();
 
                 using (var archive = new ZipArchive(descriptor.ContentStream, ZipArchiveMode.Create, true))
                 {
