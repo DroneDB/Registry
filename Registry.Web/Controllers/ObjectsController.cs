@@ -85,7 +85,7 @@ namespace Registry.Web.Controllers
 
         [HttpPost("download", Name = nameof(ObjectsController) + "." + nameof(Download))]
         public async Task<IActionResult> GetPackageUrl([FromRoute] string orgSlug, [FromRoute] string dsSlug,
-            [FromForm] string[] paths, [FromForm] DateTime? expiration)
+            [FromForm] string[] paths, [FromForm] DateTime? expiration, [FromForm] bool isPublic)
         {
             var pathsJoined = paths != null ? string.Join(',', paths) : null;
 
@@ -94,7 +94,7 @@ namespace Registry.Web.Controllers
                 _logger.LogDebug(
                     $"Objects controller Download('{orgSlug}', '{dsSlug}', '{pathsJoined}', '{expiration}')");
 
-                var res = await _objectsManager.GetDownloadPackage(orgSlug, dsSlug, paths, expiration);
+                var res = await _objectsManager.GetDownloadPackage(orgSlug, dsSlug, paths, expiration, isPublic);
 
                 var downloadUrl = Url.Link(nameof(ObjectsController) + "." + nameof(DownloadPackage), new
                 {
