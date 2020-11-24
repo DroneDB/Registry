@@ -32,6 +32,8 @@ namespace Registry.Web.Services.Adapters
             _settings = settings.Value;
             _logger = logger;
 
+            // Ensure uploadpath exists
+            Directory.CreateDirectory(_settings.UploadPath);
         }
 
         public int InitSession(string fileName, int chunks, long size)

@@ -16,6 +16,7 @@ using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using Registry.Adapters.DroneDB;
 using Registry.Ports.DroneDB;
+using Registry.Web.Models;
 
 namespace Registry.Web
 {
@@ -88,8 +89,8 @@ namespace Registry.Web
             var defaultConfig = JsonConvert.DeserializeObject<JObject>(File.ReadAllText(DefaultConfigFilePath));
             var config = JsonConvert.DeserializeObject<JObject>(File.ReadAllText(ConfigFilePath));
 
-            var defaultAppSettings = defaultConfig["AppSettings"];
-            var appSettings = config["AppSettings"];
+            var defaultAppSettings = defaultConfig["AppSettings"]?.ToObject<AppSettings>();
+            var appSettings = config["AppSettings"]?.ToObject<AppSettings>();
 
             if (appSettings == null)
             {
@@ -97,23 +98,26 @@ namespace Registry.Web
                 return false;
             }
 
-            var secret = appSettings["Secret"];
+            if (string.IsNullOrWhiteSpace(appSettings.UploadPath))
+            {
+                Console.WriteLine("UploadPath should not be null or empty");
+                return false;
+            }
+
+            var secret = appSettings.Secret;
 
             // If secret does not exist
-            if (secret == null || string.IsNullOrWhiteSpace(secret.Value<string>()))
+            if (secret == null || string.IsNullOrWhiteSpace(secret))
             {
                 Console.WriteLine(" !> Secret not found in config");
 
                 var str = CommonUtils.RandomString(64);
 
-                appSettings["Secret"] = str;
+                appSettings.Secret = str;
 
                 Console.WriteLine($" -> Generated secret: '{str}'");
 
             }
-
-            // TODO: Check if ddb command exists
-
 
             var connectionStrings = config["ConnectionStrings"];
 
@@ -128,7 +132,7 @@ namespace Registry.Web
             if (!CheckConnection(connectionStrings, defaultConnectionStrings, "IdentityConnection")) return false;
             if (!CheckConnection(connectionStrings, defaultConnectionStrings, "RegistryConnection")) return false;
 
-            var defaultAdmin = appSettings["DefaultAdmin"];
+            var defaultAdmin = appSettings.DefaultAdmin;
 
             if (defaultAdmin == null)
             {
@@ -140,9 +144,11 @@ namespace Registry.Web
                     return false;
                 }
 
-                appSettings["DefaultAdmin"] = defaultAppSettings["DefaultAdmin"];
+                appSettings.DefaultAdmin = defaultAppSettings.DefaultAdmin;
 
             }
+
+            config["AppSettings"] = JObject.FromObject(appSettings);
 
             // Update config
             File.WriteAllText(ConfigFilePath, JsonConvert.SerializeObject(config, Formatting.Indented));
