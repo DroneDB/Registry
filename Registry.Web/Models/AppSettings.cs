@@ -2,6 +2,8 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
+using Newtonsoft.Json;
+using Newtonsoft.Json.Converters;
 using Registry.Common;
 
 namespace Registry.Web.Models
@@ -26,11 +28,13 @@ namespace Registry.Web.Models
         /// <summary>
         /// Provider for authentication database
         /// </summary>
+        [JsonConverter(typeof(StringEnumConverter))] 
         public DbProvider AuthProvider { get; set; }
 
         /// <summary>
         /// Provider for registry database
         /// </summary>
+        [JsonConverter(typeof(StringEnumConverter))] 
         public DbProvider RegistryProvider { get; set; }
 
         /// <summary>
@@ -87,6 +91,8 @@ namespace Registry.Web.Models
 
     public class StorageProvider
     {
+
+        [JsonConverter(typeof(StringEnumConverter))] 
         public StorageType Type { get; set; }
         public DictionaryEx<string, string> Settings { get; set; }
     }
