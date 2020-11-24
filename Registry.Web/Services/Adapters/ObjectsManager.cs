@@ -10,6 +10,7 @@ using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using MimeMapping;
+using Minio.Exceptions;
 using Registry.Common;
 using Registry.Ports.DroneDB;
 using Registry.Ports.ObjectSystem;
@@ -83,6 +84,9 @@ namespace Registry.Web.Services.Adapters
 
             _logger.LogInformation($"In '{orgSlug}/{dsSlug}'");
 
+            if (string.IsNullOrWhiteSpace(path))
+                throw new ArgumentException("Path should not be null");
+
             var ddb = _ddbFactory.GetDdb(orgSlug, dsSlug);
 
             var res = ddb.Search(path).FirstOrDefault();
@@ -110,16 +114,16 @@ namespace Registry.Web.Services.Adapters
 
             }
 
-            var objInfo = await _objectSystem.GetObjectInfoAsync(bucketName, path);
+            var objInfo = await _objectSystem.GetObjectInfoAsync(bucketName, res.Path);
 
             if (objInfo == null)
-                throw new NotFoundException($"Cannot find '{path}' in storage provider");
+                throw new NotFoundException($"Cannot find '{res.Path}' in storage provider");
 
             await using var memory = new MemoryStream();
 
-            _logger.LogInformation($"Getting object '{path}' in bucket '{bucketName}'");
+            _logger.LogInformation($"Getting object '{res.Path}' in bucket '{bucketName}'");
 
-            await _objectSystem.GetObjectAsync(bucketName, path, stream => stream.CopyTo(memory));
+            await _objectSystem.GetObjectAsync(bucketName, res.Path, stream => stream.CopyTo(memory));
 
             return new ObjectRes
             {
@@ -385,7 +389,7 @@ namespace Registry.Web.Services.Adapters
 
             // If we are not logged-in and this is not a public package
             if (user == null && !package.IsPublic)
-                throw new ArgumentException("Invalid package id");
+                throw new UnauthorizedException("Download not allowed");
 
             // If it has and expiration date
             if (package.ExpirationDate != null)
