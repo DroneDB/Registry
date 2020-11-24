@@ -141,7 +141,7 @@ namespace Registry.Web
              */
 
             services.AddTransient<TokenManagerMiddleware>();
-            services.AddTransient<JwtInHeaderMiddleware>();
+            services.AddTransient<JwtInCookieMiddleware>();
             services.AddTransient<ITokenManager, TokenManager>();
             services.AddSingleton<IHttpContextAccessor, HttpContextAccessor>();
 
@@ -261,7 +261,7 @@ namespace Registry.Web
 
             app.UseRouting();
 
-            app.UseMiddleware<JwtInHeaderMiddleware>();
+            app.UseMiddleware<JwtInCookieMiddleware>();
 
             app.UseAuthentication();
             app.UseAuthorization();

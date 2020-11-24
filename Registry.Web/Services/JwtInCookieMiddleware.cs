@@ -5,11 +5,11 @@ using Registry.Web.Models;
 
 namespace Registry.Web.Services
 {
-    public class JwtInHeaderMiddleware : IMiddleware
+    public class JwtInCookieMiddleware : IMiddleware
     {
         private readonly AppSettings _settings;
 
-        public JwtInHeaderMiddleware(IOptions<AppSettings> settings)
+        public JwtInCookieMiddleware(IOptions<AppSettings> settings)
         {
             _settings = settings.Value;
         }
