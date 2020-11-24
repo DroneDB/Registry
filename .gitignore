@@ -350,3 +350,4 @@ appsettings.json
 /Registry.Web/temp
 /Registry.Web/ddbstore/
 /Registry.Web/ddb-log*
+/Registry.Web/uploads

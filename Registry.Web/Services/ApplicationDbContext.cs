@@ -2,7 +2,7 @@
 using Microsoft.EntityFrameworkCore;
 using Registry.Web.Models;
 
-namespace Registry.Web.Services.Adapters
+namespace Registry.Web.Services
 {
     public sealed class ApplicationDbContext : IdentityDbContext<User>
     {

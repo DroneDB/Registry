@@ -6,6 +6,7 @@ using System.Text;
 using System.Threading.Tasks;
 using Microsoft.AspNet.OData.Builder;
 using Microsoft.AspNet.OData.Extensions;
+using Microsoft.AspNetCore.Authentication.Cookies;
 using Registry.Web.Models;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Builder;
@@ -91,6 +92,10 @@ namespace Registry.Web
                         ValidateAudience = false
                     };
                 });
+                //.AddCookie(CookieAuthenticationDefaults.AuthenticationScheme, options =>
+                //{
+                //    options.Cookie.Name = appSettings.AuthCookieName;
+                //});
 
             services.Configure<IdentityOptions>(options =>
             {
@@ -136,6 +141,7 @@ namespace Registry.Web
              */
 
             services.AddTransient<TokenManagerMiddleware>();
+            services.AddTransient<JwtInCookieMiddleware>();
             services.AddTransient<ITokenManager, TokenManager>();
             services.AddSingleton<IHttpContextAccessor, HttpContextAccessor>();
 
@@ -255,11 +261,13 @@ namespace Registry.Web
 
             app.UseRouting();
 
+            app.UseMiddleware<JwtInCookieMiddleware>();
+
             app.UseAuthentication();
             app.UseAuthorization();
 
             app.UseMiddleware<TokenManagerMiddleware>();
-
+            
             app.UseDefaultFiles();
             app.UseStaticFiles();
 

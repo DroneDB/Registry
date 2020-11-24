@@ -3,7 +3,7 @@ using System.Threading.Tasks;
 using Microsoft.AspNetCore.Http;
 using Registry.Web.Services.Ports;
 
-namespace Registry.Web.Services.Adapters
+namespace Registry.Web.Services
 {
     public class TokenManagerMiddleware : IMiddleware
     {

@@ -34,9 +34,10 @@ namespace Registry.Web.Services.Adapters
             var authorizationHeader = _httpContextAccessor
                 .HttpContext.Request.Headers["authorization"];
 
-            return authorizationHeader == StringValues.Empty
-                ? string.Empty
-                : authorizationHeader.Single().Split(" ").Last();
+            return 
+                authorizationHeader == StringValues.Empty ? 
+                    _httpContextAccessor.HttpContext.Request.Cookies[_appSettings.AuthCookieName] : 
+                    authorizationHeader.Single().Split(" ").Last();
         }
 
     }
