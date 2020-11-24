@@ -100,7 +100,7 @@ namespace Registry.Web.Services.Adapters
             var tempFilePath = Path.Combine(_settings.UploadPath, tempFileName);
             _logger.LogDebug($"Temp file '{tempFilePath}' in '{Path.GetFullPath(tempFilePath)}'");
 
-            _context.Entry(session).Collection(item => item.Chunks).Load();
+            await _context.Entry(session).Collection(item => item.Chunks).LoadAsync();
             var fileChunk = session.Chunks.FirstOrDefault(item => item.Index == index);
 
             if (fileChunk != null)

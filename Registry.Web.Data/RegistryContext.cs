@@ -23,6 +23,12 @@ namespace Registry.Web.Data
                 .IsRequired(true)
                 .OnDelete(DeleteBehavior.Cascade);
 
+            modelBuilder.Entity<DownloadPackage>()
+                .Property(e => e.Paths)
+                .HasConversion(
+                    v => string.Join(';', v),
+                    v => v.Split(';', StringSplitOptions.RemoveEmptyEntries));
+
         }
 
         protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
@@ -42,6 +48,8 @@ namespace Registry.Web.Data
 
         public DbSet<UploadSession> UploadSessions { get; set; }
         public DbSet<FileChunk> FileChunks { get; set; }
+
+        public DbSet<DownloadPackage> DownloadPackages { get; set; }
 
     }
 }

@@ -31,7 +31,7 @@ namespace Registry.Web.Services.Adapters
         }
 
         
-        public async Task<Organization> GetOrganizationAndCheck(string orgSlug, bool safe = false)
+        public async Task<Organization> GetOrganization(string orgSlug, bool safe = false, bool checkOwnership = true)
         {
             if (string.IsNullOrWhiteSpace(orgSlug))
                 throw new BadRequestException("Missing organization id");
@@ -39,16 +39,14 @@ namespace Registry.Web.Services.Adapters
             if (!orgSlug.IsValidSlug())
                 throw new BadRequestException("Invalid organization id");
             
-            var org = _context.Organizations.Include(item => item.Datasets).FirstOrDefault(item => item.Slug == orgSlug);
+            var org = _context.Organizations.Include(item => item.Datasets)
+                .FirstOrDefault(item => item.Slug == orgSlug);
 
-            if (org == null)
-            {
-                if (safe) return null;
+            if (org == null) 
+                return safe ? (Organization) null : 
+                    throw new NotFoundException("Organization not found");
 
-                throw new NotFoundException("Organization not found");
-            }
-
-            if (!await _authManager.IsUserAdmin())
+            if (checkOwnership && !await _authManager.IsUserAdmin())
             {
                 var currentUser = await _authManager.GetCurrentUser();
 
@@ -57,12 +55,14 @@ namespace Registry.Web.Services.Adapters
 
                 if (org.OwnerId != currentUser.Id && org.OwnerId != null && !org.IsPublic)
                     throw new UnauthorizedException("This organization does not belong to the current user");
+
             }
 
             return org;
+
         }
 
-        public async Task<Dataset> GetDatasetAndCheck(string orgSlug, string dsSlug, bool retNullIfNotFound = false)
+        public async Task<Dataset> GetDataset(string orgSlug, string dsSlug, bool retNullIfNotFound = false, bool checkOwnership = true)
         {
             if (string.IsNullOrWhiteSpace(dsSlug))
                 throw new BadRequestException("Missing dataset id");
@@ -70,7 +70,7 @@ namespace Registry.Web.Services.Adapters
             if (!dsSlug.IsValidSlug())
                 throw new BadRequestException("Invalid dataset id");
 
-            var org = await GetOrganizationAndCheck(orgSlug);
+            var org = await GetOrganization(orgSlug, checkOwnership: checkOwnership);
 
             var dataset = org.Datasets.FirstOrDefault(item => item.Slug == dsSlug);
 

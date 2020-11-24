@@ -8,8 +8,9 @@ namespace Registry.Web.Services.Ports
     public interface IUtils
     {
 
-        Task<Organization> GetOrganizationAndCheck(string orgSlug, bool safe = false);
-        Task<Dataset> GetDatasetAndCheck(string orgSlug, string dsSlug, bool safe = false);
+        Task<Organization> GetOrganization(string orgSlug, bool safe = false, bool checkOwnership = true);
+        Task<Dataset> GetDataset(string orgSlug, string dsSlug, bool safe = false, bool checkOwnership = true);
+
         string GetFreeOrganizationSlug(string orgName);
     }
 }

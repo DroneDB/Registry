@@ -557,7 +557,7 @@ namespace Registry.Adapters.ObjectSystem
 
         }
 
-        private string CalculateETag(string filePath, FileInfo info)
+        public static string CalculateETag(string filePath, FileInfo info)
         {
             // 5GB
             var chunkSize = 5L * 1024 * 1024 * 1024;
@@ -619,14 +619,14 @@ namespace Registry.Adapters.ObjectSystem
         }
 
 
-        private class BucketInfoDto
+        public class BucketInfoDto
         {
             public string Name { get; set; }
             public string Owner { get; set; }
             public ObjectInfoDto[] Objects { get; set; }
         }
 
-        private class ObjectInfoDto
+        public class ObjectInfoDto
         {
             public string Name { get; set; }
             public long Size { get; set; }

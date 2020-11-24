@@ -33,5 +33,7 @@ namespace Registry.Web.Data.Models
 
         public virtual ICollection<Batch> Batches { get; set; }
 
+        public virtual ICollection<DownloadPackage> DownloadPackages { get; set; }
+
     }
 }
