@@ -87,6 +87,11 @@ namespace Registry.Web.Models
         /// </summary>
         public TimeSpan ChunkedUploadSessionTimeout { get; set; }
 
+        /// <summary>
+        /// Name of the auth cookie that contains the jwt token
+        /// </summary>
+        public string AuthCookieName { get; set; }
+
     }
 
     public class StorageProvider

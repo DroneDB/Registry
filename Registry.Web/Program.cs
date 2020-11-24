@@ -100,8 +100,20 @@ namespace Registry.Web
 
             if (string.IsNullOrWhiteSpace(appSettings.UploadPath))
             {
-                Console.WriteLine("UploadPath should not be null or empty");
+                Console.WriteLine(" !> UploadPath should not be null or empty");
                 return false;
+            }
+
+            if (string.IsNullOrWhiteSpace(appSettings.AuthCookieName))
+            {
+                if (string.IsNullOrWhiteSpace(defaultAppSettings?.AuthCookieName))
+                {
+                    Console.WriteLine(" !> AuthCookieName cannot be null or empty");
+                    return false;
+                }
+
+                appSettings.AuthCookieName = defaultAppSettings.AuthCookieName;
+                Console.WriteLine($" -> Set auth cookie name to '{appSettings.AuthCookieName}'");
             }
 
             var secret = appSettings.Secret;
