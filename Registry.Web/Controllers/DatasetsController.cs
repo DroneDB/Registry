@@ -34,7 +34,7 @@ namespace Registry.Web.Controllers
             _logger = logger;
         }
 
-        
+
         [HttpGet("{dsSlug:regex([[\\w-]]+)}/batches")]
         public async Task<IActionResult> Batches([FromRoute] string orgSlug, string dsSlug)
         {
@@ -101,6 +101,25 @@ namespace Registry.Web.Controllers
             catch (Exception ex)
             {
                 _logger.LogError(ex, $"Exception in Dataset controller Post('{orgSlug}', '{dataset?.Slug}')");
+                return ExceptionResult(ex);
+            }
+        }
+
+
+        [HttpPost("{dsSlug:regex([[\\w-]]+)}/rename")]
+        public async Task<IActionResult> Rename([FromRoute] string orgSlug, string dsSlug, [FromForm(Name = "slug")] string newSlug)
+        {
+            try
+            {
+                _logger.LogDebug($"Dataset controller Rename('{orgSlug}', '{dsSlug}', '{newSlug}')");
+
+                await _datasetsManager.Rename(orgSlug, dsSlug, newSlug);
+
+                return Ok(await _datasetsManager.Get(orgSlug, newSlug));
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, $"Exception in Dataset controller Rename('{orgSlug}', '{dsSlug}', '{newSlug}')')");
                 return ExceptionResult(ex);
             }
         }
