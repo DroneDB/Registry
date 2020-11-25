@@ -113,6 +113,7 @@ namespace Registry.Web.Services.Adapters
 
         }
 
+
         public async Task Delete(string orgSlug, string dsSlug)
         {
             var org = await _utils.GetOrganization(orgSlug);
@@ -127,6 +128,25 @@ namespace Registry.Web.Services.Adapters
             await _objectsManager.DeleteAll(orgSlug, dsSlug);
 
             await _context.SaveChangesAsync();
+        }
+
+        public async Task Rename(string orgSlug, string dsSlug, string newSlug)
+        {
+
+            if (string.IsNullOrWhiteSpace(newSlug))
+                throw new ArgumentException("New slug is empty");
+            
+            if (!newSlug.IsValidSlug())
+                throw new ArgumentException($"Invalid slug '{newSlug}'");
+
+            var ds = await _utils.GetDataset(orgSlug, dsSlug);
+
+            ds.Slug = newSlug;
+
+            await _context.SaveChangesAsync();
+
+            await _objectsManager.MoveDataset(orgSlug, dsSlug, newSlug);
+
         }
     }
 }

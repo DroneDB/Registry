@@ -99,7 +99,7 @@ namespace Registry.Web.Utilities
         }
 
         // Only lowercase letters, numbers, - and _. Max length 255
-        private static readonly Regex _safeNameRegex = new Regex(@"^[a-z\d\-_]{1,255}$", RegexOptions.Compiled | RegexOptions.Singleline);
+        private static readonly Regex SafeNameRegex = new Regex(@"^[a-z\d\-_]{1,255}$", RegexOptions.Compiled | RegexOptions.Singleline);
         
         /// <summary>
         /// Checks if a string is a valid slug
@@ -108,7 +108,7 @@ namespace Registry.Web.Utilities
         /// <returns></returns>
         public static bool IsValidSlug(this string name)
         {
-            return _safeNameRegex.IsMatch(name);
+            return SafeNameRegex.IsMatch(name);
         }
 
         
