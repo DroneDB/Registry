@@ -278,17 +278,22 @@ namespace Registry.Adapters.ObjectSystem
             {
 
                 var path = prefix != null ? Path.Combine(bucketPath, prefix) : bucketPath;
-
                 var files = Directory.EnumerateFiles(path, "*", searchOption);
+                var fullPath = Path.GetFullPath(path);
 
                 foreach (var file in files)
                 {
 
                     var info = new FileInfo(file);
 
+                    var key = info.FullName.Replace(fullPath, string.Empty);
+
+                    if (key.StartsWith("/") || key.StartsWith("\\"))
+                        key = key.Substring(1, key.Length - 1);
+
                     var obj = new ItemInfo
                     {
-                        Key = Path.GetFileName(file),
+                        Key = key,
                         Size = (ulong)info.Length,
                         LastModified = info.LastWriteTime,
                         IsDir = false
@@ -302,9 +307,14 @@ namespace Registry.Adapters.ObjectSystem
                 foreach (var folder in folders)
                 {
 
+                    var key = Path.GetFullPath(folder).Replace(fullPath, string.Empty);
+
+                    if (key.StartsWith("/") || key.StartsWith("\\"))
+                        key = key.Substring(1, key.Length - 1);
+
                     var obj = new ItemInfo
                     {
-                        Key = Path.GetFileName(folder),
+                        Key = key,
                         Size = 0,
                         LastModified = Directory.GetLastWriteTime(folder),
                         IsDir = true
@@ -440,6 +450,7 @@ namespace Registry.Adapters.ObjectSystem
         {
             CheckPath(objectName);
             var objectPath = GetObjectPath(bucketName, objectName);
+
             EnsureFileExists(objectPath);
             return objectPath;
         }
@@ -598,6 +609,12 @@ namespace Registry.Adapters.ObjectSystem
         {
             if (!File.Exists(path))
                 throw new ArgumentException($"File '{Path.GetFileName(path)}' does not exist");
+        }
+
+        private void EnsureFolderExists(string path)
+        {
+            if (!Directory.Exists(path))
+                throw new ArgumentException($"Folder '{Path.GetFileName(path)}' does not exist");
         }
 
         private void EnsureBucketExists(string bucketName)
