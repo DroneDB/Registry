@@ -136,8 +136,17 @@ namespace Registry.Web.Services.Adapters
             if (string.IsNullOrWhiteSpace(newSlug))
                 throw new ArgumentException("New slug is empty");
             
+            if (dsSlug == MagicStrings.DefaultDatasetSlug || newSlug == MagicStrings.DefaultDatasetSlug)
+                throw new ArgumentException("Cannot move default dataset");
+
             if (!newSlug.IsValidSlug())
                 throw new ArgumentException($"Invalid slug '{newSlug}'");
+
+            if (await _utils.GetDataset(orgSlug, newSlug, true) != null)
+                throw new ArgumentException($"Dataset '{newSlug}' already exists");
+
+            // TODO: Add exception catching, when interrupted put DS in dirty state
+            await _objectsManager.MoveDataset(orgSlug, dsSlug, newSlug);
 
             var ds = await _utils.GetDataset(orgSlug, dsSlug);
 
@@ -145,7 +154,6 @@ namespace Registry.Web.Services.Adapters
 
             await _context.SaveChangesAsync();
 
-            await _objectsManager.MoveDataset(orgSlug, dsSlug, newSlug);
 
         }
     }
