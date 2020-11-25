@@ -209,7 +209,7 @@ namespace Registry.Web.Test
             var path = Path.Combine(TestDataFolder, fileName);
             
             if (!File.Exists(path))
-                CommonUtils.SmartDownloadFile("https://github.com/pierotofy/drone_dataset_brighton_beach/raw/master/" + fileName, path);
+                CommonUtils.SmartDownloadFile("https://github.com/DroneDB/test_data/raw/master/test-datasets/drone_dataset_brighton_beach/" + fileName, path);
             
             ddb.Add(fileName, File.ReadAllBytes(path));
 
