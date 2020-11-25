@@ -271,6 +271,7 @@ namespace Registry.Web.Services.Adapters
 
         }
 
+        #region Sessions
         public async Task<int> AddNewSession(string orgSlug, string dsSlug, int chunks, long size)
         {
             await _utils.GetDataset(orgSlug, dsSlug);
@@ -297,6 +298,7 @@ namespace Registry.Web.Services.Adapters
             memory.Reset();
             await AddToSession(orgSlug, dsSlug, sessionId, index, memory);
         }
+        #endregion
 
         public async Task<UploadedObjectDto> CloseSession(string orgSlug, string dsSlug, int sessionId, string path)
         {
@@ -318,6 +320,58 @@ namespace Registry.Web.Services.Adapters
             return newObj;
         }
 
+        public async Task MoveDataset(string orgSlug, string dsSlug, string newDsSlug)
+        {
+            var dataset = await _utils.GetDataset(orgSlug, dsSlug);
+
+            _logger.LogInformation($"In '{orgSlug}/{dsSlug}'");
+
+            var oldBucket = string.Format(BucketNameFormat, orgSlug, dsSlug);
+
+            _logger.LogInformation($"Using bucket '{oldBucket}'");
+
+            var bucketExists = await _objectSystem.BucketExistsAsync(oldBucket);
+
+            if (!bucketExists)
+            {
+                _logger.LogWarning($"Asked to remove non-existing bucket '{oldBucket}'");
+                return;
+            }
+
+            _logger.LogInformation($"Renaming bucket");
+
+            var newBucket = string.Format(BucketNameFormat, orgSlug, newDsSlug);
+
+            var region = _settings.StorageProvider.Settings.SafeGetValue("region");
+            if (region == null)
+                _logger.LogWarning("No region specified in storage provider config");
+
+            await _objectSystem.MakeBucketAsync(newBucket, region);
+
+            var objects = _objectSystem.ListObjectsAsync(oldBucket, recursive: true).ToEnumerable().ToArray();
+
+            foreach (var obj in objects)
+            {
+                if (obj.IsDir)
+                {
+                    _logger.LogDebug($"Skipping folder '{obj.Key}'");
+                    continue;
+                }
+
+                _logger.LogDebug($"Moving '{obj.Key}'");
+                // TODO: Metadata?
+                await _objectSystem.CopyObjectAsync(oldBucket, obj.Key, newBucket);
+            }
+
+            _logger.LogInformation("Deleting old bucket");
+
+            await _objectSystem.RemoveBucketAsync(oldBucket);
+            
+            _logger.LogInformation("Old bucket deleted");
+            
+        }
+
+        #region Downloads
         public async Task<string> GetDownloadPackage(string orgSlug, string dsSlug, string[] paths, DateTime? expiration = null, bool isPublic = false)
         {
             var ds = await _utils.GetDataset(orgSlug, dsSlug);
@@ -413,6 +467,7 @@ namespace Registry.Web.Services.Adapters
             return await GetFileDescriptor(orgSlug, dsSlug, package.Paths);
 
         }
+
 
         public async Task<FileDescriptorDto> Download(string orgSlug, string dsSlug, string[] paths)
         {
@@ -536,5 +591,7 @@ namespace Registry.Web.Services.Adapters
 
             await _objectSystem.GetObjectAsync(bucketName, path, s => s.CopyTo(stream));
         }
+
+        #endregion
     }
 }

@@ -139,6 +139,28 @@ namespace Registry.Web.Test
         }
 
         [Test]
+        public async Task MoveDataset_ExistingDataset_Ok()
+        {
+
+            using var test = new TestFS(Test1ArchiveUrl, BaseTestFolder);
+            await using var context = GetTest1Context();
+
+            _settings.DdbStoragePath = Path.Combine(test.TestFolder, DdbFolder);
+            _appSettingsMock.Setup(o => o.Value).Returns(_settings);
+            _authManagerMock.Setup(o => o.IsUserAdmin()).Returns(Task.FromResult(true));
+
+            var objectSystem = new PhysicalObjectSystem(Path.Combine(test.TestFolder, StorageFolder));
+
+            var objectManager = new ObjectsManager(_objectManagerLogger, context,
+                objectSystem, _chunkedUploadManagerMock.Object, _appSettingsMock.Object,
+                new DdbFactory(_appSettingsMock.Object, _ddbFactoryLogger), new WebUtils(_authManagerMock.Object, context), _authManagerMock.Object);
+
+            await objectManager.MoveDataset(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug,
+                "newdataset");
+            
+        }
+
+        [Test]
         public async Task Get_ExistingFile_FileRes()
         {
             var expectedHash = new byte[] { 152, 110, 79, 250, 177, 15, 101, 187, 24, 23, 34, 217, 117, 168, 119, 124 };

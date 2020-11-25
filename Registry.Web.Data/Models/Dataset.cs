@@ -7,6 +7,7 @@ namespace Registry.Web.Data.Models
 {
     public class Dataset
     {
+        // TODO: We should add an index to this field!
         public string Slug { get; set; }
         
         [Key]
