@@ -92,6 +92,11 @@ namespace Registry.Web.Models
         /// </summary>
         public string AuthCookieName { get; set; }
 
+        /// <summary>
+        /// Overrides current host name
+        /// </summary>
+        public string HostNameOverride { get; set; }
+
     }
 
     public class StorageProvider
