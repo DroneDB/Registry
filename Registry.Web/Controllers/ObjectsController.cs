@@ -185,6 +185,27 @@ namespace Registry.Web.Controllers
             }
         }
 
+
+        [HttpDelete(RoutesHelper.ObjectsRadix)]
+        public async Task<IActionResult> Delete([FromRoute] string orgSlug, [FromRoute] string dsSlug, [FromForm] string path)
+        {
+
+            try
+            {
+                _logger.LogDebug($"Objects controller Delete('{orgSlug}', '{dsSlug}', '{path}')");
+
+                await _objectsManager.Delete(orgSlug, dsSlug, path);
+                return NoContent();
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, $"Exception in Objects controller Delete('{orgSlug}', '{dsSlug}', '{path}')");
+
+                return ExceptionResult(ex);
+            }
+
+        }
+
         #region Sessions
 
         [HttpPost(RoutesHelper.ObjectsRadix + "/session")]
@@ -264,26 +285,6 @@ namespace Registry.Web.Controllers
         }
 
         #endregion
-
-        [HttpDelete(RoutesHelper.ObjectsRadix)]
-        public async Task<IActionResult> Delete([FromRoute] string orgSlug, [FromRoute] string dsSlug, [FromForm] string path)
-        {
-
-            try
-            {
-                _logger.LogDebug($"Objects controller Delete('{orgSlug}', '{dsSlug}', '{path}')");
-
-                await _objectsManager.Delete(orgSlug, dsSlug, path);
-                return NoContent();
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, $"Exception in Objects controller Delete('{orgSlug}', '{dsSlug}', '{path}')");
-
-                return ExceptionResult(ex);
-            }
-
-        }
 
 
     }
