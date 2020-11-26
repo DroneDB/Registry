@@ -1,13 +1,21 @@
 ﻿using System;
 using System.Linq;
+using System.Net;
 using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
+using Microsoft.AspNet.OData.Extensions;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Routing;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
+using Registry.Common;
+using Registry.Web.Controllers;
 using Registry.Web.Data;
 using Registry.Web.Data.Models;
 using Registry.Web.Exceptions;
+using Registry.Web.Models;
 using Registry.Web.Models.DTO;
 using Registry.Web.Services.Ports;
 using Registry.Web.Utilities;
@@ -23,14 +31,24 @@ namespace Registry.Web.Services.Adapters
     {
         private readonly IAuthManager _authManager;
         private readonly RegistryContext _context;
+        private readonly AppSettings _settings;
+        private readonly IHttpContextAccessor _accessor;
+        private readonly LinkGenerator _generator;
 
-        public WebUtils(IAuthManager authManager, RegistryContext context)
+        public WebUtils(IAuthManager authManager,
+            RegistryContext context,
+            IOptions<AppSettings> settings,
+            IHttpContextAccessor accessor,
+            LinkGenerator generator)
         {
             _authManager = authManager;
             _context = context;
+            _accessor = accessor;
+            _generator = generator;
+            _settings = settings.Value;
         }
 
-        
+
         public async Task<Organization> GetOrganization(string orgSlug, bool safe = false, bool checkOwnership = true)
         {
             if (string.IsNullOrWhiteSpace(orgSlug))
@@ -38,12 +56,12 @@ namespace Registry.Web.Services.Adapters
 
             if (!orgSlug.IsValidSlug())
                 throw new BadRequestException("Invalid organization id");
-            
+
             var org = _context.Organizations.Include(item => item.Datasets)
                 .FirstOrDefault(item => item.Slug == orgSlug);
 
-            if (org == null) 
-                return safe ? (Organization) null : 
+            if (org == null)
+                return safe ? (Organization)null :
                     throw new NotFoundException("Organization not found");
 
             if (checkOwnership && !await _authManager.IsUserAdmin())
@@ -92,7 +110,7 @@ namespace Registry.Web.Services.Adapters
 
             var res = slug;
 
-            for (var n = 1;; n++)
+            for (var n = 1; ; n++)
             {
                 var org = _context.Organizations.FirstOrDefault(item => item.Slug == res);
 
@@ -101,6 +119,37 @@ namespace Registry.Web.Services.Adapters
                 res = slug + "-" + n;
 
             }
+
+        }
+        public EntryDto GetDatasetEntry(Dataset dataset)
+        {
+            return new EntryDto
+            {
+                AddedOn = dataset.LastEdit,
+                Depth = 0,
+                Size = dataset.Size,
+                Path = GenerateDatasetUrl(dataset),
+                Type = EntryType.DroneDb
+            };
+        }
+
+        private string GenerateDatasetUrl(Dataset dataset)
+        {
+
+            var context = _accessor.HttpContext;
+            var host = context.Request.Host;
+
+            var hostName = !string.IsNullOrWhiteSpace(_settings.HostNameOverride) ? 
+                _settings.HostNameOverride : host.ToString();
+            
+            var scheme = context.Request.IsHttps ? "ddb" : "ddb+unsafe";
+
+            var datasetUrl = _generator.GetUriByRouteValues(_accessor.HttpContext,
+                nameof(DatasetsController) + ".Get",
+                new { orgSlug = dataset.Organization.Slug, dsSlug = dataset.Slug },
+                scheme, new HostString(hostName));
+
+            return datasetUrl;
 
         }
     }

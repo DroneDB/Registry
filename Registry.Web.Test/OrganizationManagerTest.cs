@@ -3,6 +3,8 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using FluentAssertions;
+using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Routing;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -25,14 +27,18 @@ namespace Registry.Web.Test
         private Mock<IOptions<AppSettings>> _appSettingsMock;
         private Mock<IDatasetsManager> _datasetManagerMock;
         private Logger<OrganizationsManager> _organizationsManagerLogger;
-
-
+        private Mock<IHttpContextAccessor> _httpContextAccessorMock;
+        private Mock<LinkGenerator> _linkGeneratorMock;
+        
         [SetUp]
         public void Setup()
         {
             _appSettingsMock = new Mock<IOptions<AppSettings>>();
             _authManagerMock = new Mock<IAuthManager>();
             _datasetManagerMock = new Mock<IDatasetsManager>();
+            _httpContextAccessorMock = new Mock<IHttpContextAccessor>();
+            _linkGeneratorMock = new Mock<LinkGenerator>();
+
             _organizationsManagerLogger = new Logger<OrganizationsManager>(LoggerFactory.Create(builder => builder.AddConsole()));
 
         }
@@ -45,8 +51,11 @@ namespace Registry.Web.Test
             _appSettingsMock.Setup(o => o.Value).Returns(_settings);
             _authManagerMock.Setup(o => o.IsUserAdmin()).Returns(Task.FromResult(true));
 
+            var webUtils = new WebUtils(_authManagerMock.Object, context, _appSettingsMock.Object,
+                _httpContextAccessorMock.Object, _linkGeneratorMock.Object);
+
             var organizationsManager =
-                new OrganizationsManager(_authManagerMock.Object, context, new WebUtils(_authManagerMock.Object, context), _datasetManagerMock.Object, _organizationsManagerLogger);
+                new OrganizationsManager(_authManagerMock.Object, context, webUtils, _datasetManagerMock.Object, _organizationsManagerLogger);
 
             var list = (await organizationsManager.List()).ToArray();
 

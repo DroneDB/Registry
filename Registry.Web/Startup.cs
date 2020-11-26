@@ -168,6 +168,8 @@ namespace Registry.Web
                 options.MultipartBodyLengthLimit = appSettings.MaxRequestBodySize;
             });
 
+            services.AddHttpContextAccessor();
+
             // TODO: Enable when needed. Should check return object structure
             // services.AddOData();
 

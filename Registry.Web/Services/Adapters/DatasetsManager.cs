@@ -69,6 +69,14 @@ namespace Registry.Web.Services.Adapters
             return dataset.ToDto();
         }
 
+        public async Task<EntryDto> GetEntry(string orgSlug, string dsSlug)
+        {
+
+            var dataset = await _utils.GetDataset(orgSlug, dsSlug);
+
+            return _utils.GetDatasetEntry(dataset);
+        }
+
         public async Task<DatasetDto> AddNew(string orgSlug, DatasetDto dataset)
         {
 

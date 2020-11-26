@@ -78,11 +78,27 @@ namespace Registry.Web.Controllers
             {
                 _logger.LogDebug($"Dataset controller Get('{orgSlug}', '{dsSlug}')");
 
-                return Ok(await _datasetsManager.Get(orgSlug, dsSlug));
+                return Ok(await _datasetsManager.GetEntry(orgSlug, dsSlug));
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, $"Exception in Dataset controller Get('{orgSlug}', '{dsSlug}')");
+                return ExceptionResult(ex);
+            }
+        }
+
+        [HttpGet(RoutesHelper.DatasetSlug + "/ex", Name = nameof(DatasetsController) + "." + nameof(GetEx))]
+        public async Task<IActionResult> GetEx([FromRoute] string orgSlug, string dsSlug)
+        {
+            try
+            {
+                _logger.LogDebug($"Dataset controller GetEx('{orgSlug}', '{dsSlug}')");
+
+                return Ok(await _datasetsManager.Get(orgSlug, dsSlug));
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, $"Exception in Dataset controller GetEx('{orgSlug}', '{dsSlug}')");
                 return ExceptionResult(ex);
             }
         }
