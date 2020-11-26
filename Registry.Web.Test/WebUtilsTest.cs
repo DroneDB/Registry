@@ -176,11 +176,11 @@ namespace Registry.Web.Test
         [Test]
         public void ToSlug_ComplexString_Exception()
         {
-            const string str = ":;:ç°§ç§é*{1↓-&%$/&%$)=(/\n\ta";
+            const string str = ":;:ç°§ç§é*{1.↓-&%$/&%$)=(/\n\ta";
 
             var slug = str.ToSlug();
 
-            slug.Should().Be("0---c--c-e--1---------------a");
+            slug.Should().Be("0---c--c-e--1.---------------a");
         }
 
 
