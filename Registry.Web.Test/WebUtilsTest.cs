@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
@@ -15,6 +15,7 @@ using Registry.Web.Data.Models;
 using Registry.Web.Models;
 using Registry.Web.Services.Adapters;
 using Registry.Web.Services.Ports;
+using Registry.Web.Utilities;
 
 namespace Registry.Web.Test
 {
@@ -56,7 +57,7 @@ namespace Registry.Web.Test
 
             var utils = new WebUtils(_authManagerMock.Object, context);
 
-            const string organizationName = "Uav4Geo";
+            const string organizationName = "uav4geo";
             const string expectedOrganizationSlug = "uav4geo";
 
             var slug = utils.GetFreeOrganizationSlug(organizationName);
@@ -75,7 +76,7 @@ namespace Registry.Web.Test
 
             var utils = new WebUtils(_authManagerMock.Object, context);
 
-            const string organizationName = "Public";
+            const string organizationName = "public";
             const string expectedOrganizationSlug = "public-1";
 
             var slug = utils.GetFreeOrganizationSlug(organizationName);
@@ -91,7 +92,7 @@ namespace Registry.Web.Test
             _appSettingsMock.Setup(o => o.Value).Returns(_settings);
             _authManagerMock.Setup(o => o.IsUserAdmin()).Returns(Task.FromResult(true));
 
-            const string organizationName = "Public";
+            const string organizationName = "public";
             const string expectedOrganizationSlug = "public-2";
 
             context.Add(new Organization
@@ -120,7 +121,7 @@ namespace Registry.Web.Test
             _appSettingsMock.Setup(o => o.Value).Returns(_settings);
             _authManagerMock.Setup(o => o.IsUserAdmin()).Returns(Task.FromResult(true));
 
-            const string organizationName = "Public";
+            const string organizationName = "public";
             const string expectedOrganizationSlug = "public-3";
 
             context.Add(new Organization
@@ -152,6 +153,34 @@ namespace Registry.Web.Test
 
             slug.Should().Be(expectedOrganizationSlug);
 
+        }
+
+        [Test]
+        public void ToSlug_EmptyString_Exception()
+        {
+            var str = string.Empty;
+
+            str.Invoking(s => s.ToSlug()).Should().Throw<ArgumentException>();
+        }
+
+        [Test]
+        public void ToSlug_SimpleString_Exception()
+        {
+            const string str = "òàùè";
+
+            var slug = str.ToSlug();
+
+            slug.Should().Be("oaue");
+        }
+
+        [Test]
+        public void ToSlug_ComplexString_Exception()
+        {
+            const string str = ":;:ç°§ç§é*{1↓-&%$/&%$)=(/\n\ta";
+
+            var slug = str.ToSlug();
+
+            slug.Should().Be("0---c--c-e--1---------------a");
         }
 
 
