@@ -19,13 +19,14 @@ using Registry.Web.Exceptions;
 using Registry.Web.Models;
 using Registry.Web.Models.DTO;
 using Registry.Web.Services.Ports;
+using Registry.Web.Utilities;
 
 namespace Registry.Web.Controllers
 {
 
     [Authorize]
     [ApiController]
-    [Route("orgs/{orgSlug:regex([[\\w-]]+)}/ds/{dsSlug:regex([[\\w-]]+)}")]
+    [Route(RoutesHelper.OrganizationsRadix + "/" + RoutesHelper.OrganizationSlug + "/" + RoutesHelper.DatasetRadix + "/" + RoutesHelper.DatasetSlug)]
     public class ObjectsController : ControllerBaseEx
     {
         private readonly IObjectsManager _objectsManager;
@@ -119,7 +120,7 @@ namespace Registry.Web.Controllers
             }
         }
 
-        [HttpGet("obj", Name = nameof(ObjectsController) + "." + nameof(Get))]
+        [HttpGet(RoutesHelper.ObjectsRadix, Name = nameof(ObjectsController) + "." + nameof(Get))]
         public async Task<IActionResult> Get([FromRoute] string orgSlug, [FromRoute] string dsSlug, [FromForm] string path)
         {
             try
@@ -155,7 +156,7 @@ namespace Registry.Web.Controllers
             }
         }
 
-        [HttpPost("obj")]
+        [HttpPost(RoutesHelper.ObjectsRadix)]
         public async Task<IActionResult> Post([FromRoute] string orgSlug, [FromRoute] string dsSlug, [FromForm] string path, IFormFile file)
         {
             try
@@ -186,7 +187,7 @@ namespace Registry.Web.Controllers
 
         #region Sessions
 
-        [HttpPost("obj/session")]
+        [HttpPost(RoutesHelper.ObjectsRadix + "/session")]
         public async Task<IActionResult> PostNewSession([FromRoute] string orgSlug, [FromRoute] string dsSlug, [FromForm] int chunks, [FromForm] long size)
         {
             try
@@ -210,7 +211,7 @@ namespace Registry.Web.Controllers
             }
         }
 
-        [HttpPost("obj/session/{sessionId}/chunk/{index}")]
+        [HttpPost(RoutesHelper.ObjectsRadix + "/session/{sessionId}/chunk/{index}")]
         public async Task<IActionResult> UploadToSession([FromRoute] string orgSlug, [FromRoute] string dsSlug, int sessionId, int index, IFormFile file)
         {
             try
@@ -235,7 +236,7 @@ namespace Registry.Web.Controllers
             }
         }
 
-        [HttpPost("obj/session/{sessionId}/close")]
+        [HttpPost(RoutesHelper.ObjectsRadix + "/session/{sessionId}/close")]
         public async Task<IActionResult> CloseSession([FromRoute] string orgSlug, [FromRoute] string dsSlug, int sessionId, [FromForm] string path)
         {
             try
@@ -264,7 +265,7 @@ namespace Registry.Web.Controllers
 
         #endregion
 
-        [HttpDelete("obj")]
+        [HttpDelete(RoutesHelper.ObjectsRadix)]
         public async Task<IActionResult> Delete([FromRoute] string orgSlug, [FromRoute] string dsSlug, [FromForm] string path)
         {
 
