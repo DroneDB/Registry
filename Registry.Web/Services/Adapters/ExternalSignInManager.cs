@@ -21,14 +21,14 @@ namespace Registry.Web.Services.Adapters
     {
         private readonly AppSettings _settings;
 
-        public ExternalSignInManager(UserManager<User> userManager, 
-            IHttpContextAccessor contextAccessor, 
-            IUserClaimsPrincipalFactory<User> claimsFactory, 
-            IOptions<IdentityOptions> optionsAccessor, 
-            ILogger<SignInManager<User>> logger, 
-            IAuthenticationSchemeProvider schemes, 
+        public ExternalSignInManager(UserManager<User> userManager,
+            IHttpContextAccessor contextAccessor,
+            IUserClaimsPrincipalFactory<User> claimsFactory,
+            IOptions<IdentityOptions> optionsAccessor,
+            ILogger<SignInManager<User>> logger,
+            IAuthenticationSchemeProvider schemes,
             IUserConfirmation<User> confirmation,
-            IOptions<AppSettings> settings) : 
+            IOptions<AppSettings> settings) :
             base(userManager, contextAccessor, claimsFactory, optionsAccessor, logger, schemes, confirmation)
         {
             this._settings = settings.Value;
@@ -39,9 +39,10 @@ namespace Registry.Web.Services.Adapters
         {
 
             var client = new HttpClient();
+
             try
             {
-                var content = new FormUrlEncodedContent(new []
+                var content = new FormUrlEncodedContent(new[]
                 {
                     new KeyValuePair<string, string>("username", user.UserName),
                     new KeyValuePair<string, string>("password", password)
@@ -52,12 +53,17 @@ namespace Registry.Web.Services.Adapters
                 if (!res.IsSuccessStatusCode)
                     return SignInResult.Failed;
 
-                string result = res.Content.ReadAsStringAsync().Result;
+                var result = res.Content.ReadAsStringAsync().Result;
 
-                //var obj = JsonConvert.DeserializeObject<AuthResponseDto>(result);
+                var obj = JsonConvert.DeserializeObject<Dictionary<string, string>>(result);
+
+                if (obj != null)
+                {
+                    user.Metadata = obj;
+                }
 
                 Logger.LogInformation(result);
-                
+
                 return SignInResult.Success;
             }
             catch (WebException ex)
@@ -67,10 +73,5 @@ namespace Registry.Web.Services.Adapters
             }
         }
 
-        //class AuthResponseDto
-        //{
-        //    public string Message { get; set; }
-        //    public Dictionary<string, string> Metadata { get; set; }
-        //}
     }
 }

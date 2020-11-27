@@ -64,8 +64,8 @@ namespace Registry.Web.Services.Adapters
 
                 if (!res.Succeeded) return null;
 
-                await _CreateUserInternal(userName, null, password);
-                user = await _userManager.FindByNameAsync(userName);
+                user = await _CreateUserInternal(user, password);
+                
             }
             else
             {
@@ -80,7 +80,7 @@ namespace Registry.Web.Services.Adapters
             return new AuthenticateResponse(user, tokenDescriptor.Token, tokenDescriptor.ExpiresOn);
         }
 
-        public async Task CreateUser(string userName, string email, string password)
+        public async Task<User> CreateUser(string userName, string email, string password)
         {
 
             if (!await _authManager.IsUserAdmin())
@@ -91,10 +91,29 @@ namespace Registry.Web.Services.Adapters
             if (user != null)
                 throw new InvalidOperationException("User already exists");
 
-            await _CreateUserInternal(userName, email, password);
+            return await _CreateUserInternal(userName, email, password);
         }
 
-        private async Task _CreateUserInternal(string userName, string email, string password)
+        private async Task<User> _CreateUserInternal(User user, string password)
+        {
+            var res = await _userManager.CreateAsync(user, password);
+
+            if (!res.Succeeded)
+            {
+                var errors = string.Join(";", res.Errors.Select(item => $"{item.Code} - {item.Description}"));
+                _logger.LogWarning("Error in creating user");
+                _logger.LogWarning(errors);
+
+                throw new InvalidOperationException("Error in creating user");
+            }
+
+            // Create a default organization for the user
+            await CreateUserDefaultOrganization(user);
+
+            return user;
+        }
+
+        private async Task<User> _CreateUserInternal(string userName, string email, string password)
         {
             var user = new User
             {
@@ -115,6 +134,8 @@ namespace Registry.Web.Services.Adapters
 
             // Create a default organization for the user
             await CreateUserDefaultOrganization(user);
+
+            return user;
         }
 
         private async Task CreateUserDefaultOrganization(User user)
