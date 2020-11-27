@@ -78,7 +78,7 @@ namespace Registry.Web.Services.Adapters
                               UserName = batch.UserName,
                               Status = batch.Status,
                               Entries = from entry in batch.Entries
-                                        select new EntryDto
+                                        select new BatchEntryDto
                                         {
                                             Hash = entry.Hash,
                                             Type = entry.Type,

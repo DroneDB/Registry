@@ -39,8 +39,6 @@ namespace Registry.Web.Services.Adapters
 
         private const string BucketNameFormat = "{0}-{1}";
 
-        // TODO: Add sqlite db sync to backing server
-
         public ObjectsManager(ILogger<ObjectsManager> logger,
             RegistryContext context,
             IObjectSystem objectSystem,

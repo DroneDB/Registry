@@ -24,19 +24,17 @@ namespace Registry.Web.Controllers
 {
     [Authorize]
     [ApiController]
-    [Route("share")]
+    [Route(RoutesHelper.ShareRadix)]
     public class ShareController : ControllerBaseEx
     {
         private readonly IShareManager _shareManager;
 
         private readonly ILogger<ShareController> _logger;
-        private readonly IOptions<AppSettings> _settings;
 
-        public ShareController(IShareManager shareManager, ILogger<ShareController> logger, IOptions<AppSettings> settings)
+        public ShareController(IShareManager shareManager, ILogger<ShareController> logger)
         {
             _shareManager = shareManager;
             _logger = logger;
-            _settings = settings;
         }
 
         [HttpPost("init")]

@@ -12,5 +12,6 @@ namespace Registry.Web.Services.Ports
         Task<Dataset> GetDataset(string orgSlug, string dsSlug, bool safe = false, bool checkOwnership = true);
 
         string GetFreeOrganizationSlug(string orgName);
+        EntryDto GetDatasetEntry(Dataset dataset);
     }
 }

@@ -10,23 +10,11 @@ using Registry.Common;
 
 namespace Registry.Web.Models.DTO
 {
-    public class ObjectDto
+    public class ObjectDto : EntryDto
     {
         
         [JsonProperty("id")]
         public int Id { get; set; }
-        [JsonProperty("path")]
-        public string Path { get; set; }
-        [JsonProperty("mdate")]
-        public DateTime ModifiedTime { get; set; }
-        [JsonProperty("hash")]
-        public string Hash { get; set; }
-        [JsonProperty("depth")]
-        public int Depth { get; set; }
-        [JsonProperty("size")]
-        public int Size { get; set; }
-        [JsonProperty("type")]
-        public EntryType Type { get; set; }
         [JsonProperty("meta")]
         public Dictionary<string, string> Meta { get; set; }
         [JsonProperty("point_geom")]

@@ -15,12 +15,13 @@ using Registry.Web.Models;
 using Registry.Web.Models.DTO;
 using Registry.Web.Services;
 using Registry.Web.Services.Ports;
+using Registry.Web.Utilities;
 
 namespace Registry.Web.Controllers
 {
     [Authorize]
     [ApiController]
-    [Route("orgs")]
+    [Route(RoutesHelper.OrganizationsRadix)]
     public class OrganizationsController : ControllerBaseEx
     {
         private readonly IOrganizationsManager _organizationsManager;
@@ -49,7 +50,7 @@ namespace Registry.Web.Controllers
             }
         }
 
-        [HttpGet("{orgSlug:regex([[\\w-]]+)}", Name = nameof(OrganizationsController) + "." + nameof(Get))]
+        [HttpGet(RoutesHelper.OrganizationSlug, Name = nameof(OrganizationsController) + "." + nameof(Get))]
         public async Task<IActionResult> Get(string orgSlug)
         {
             try
@@ -88,7 +89,7 @@ namespace Registry.Web.Controllers
 
         }
 
-        [HttpPut("{orgSlug:regex([[\\w-]]+)}")]
+        [HttpPut(RoutesHelper.OrganizationSlug)]
         public async Task<IActionResult> Put(string orgSlug, [FromForm] OrganizationDto organization)
         {
 
@@ -108,7 +109,7 @@ namespace Registry.Web.Controllers
 
         }
 
-        [HttpDelete("{orgSlug:regex([[\\w-]]+)}")]
+        [HttpDelete(RoutesHelper.OrganizationSlug)]
         public async Task<IActionResult> Delete(string orgSlug)
         {
 

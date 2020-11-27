@@ -18,12 +18,13 @@ using Microsoft.IdentityModel.Tokens;
 using Registry.Web.Models.DTO;
 using Registry.Web.Services.Adapters;
 using Registry.Web.Services.Ports;
+using Registry.Web.Utilities;
 
 namespace Registry.Web.Controllers
 {
     [Authorize]
     [ApiController]
-    [Route("users")]
+    [Route(RoutesHelper.UsersRadix)]
     public class UsersController : ControllerBaseEx
     {
         private readonly IUsersManager _usersManager;
