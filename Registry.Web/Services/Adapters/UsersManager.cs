@@ -15,6 +15,7 @@ using Registry.Web.Exceptions;
 using Registry.Web.Models;
 using Registry.Web.Models.DTO;
 using Registry.Web.Services.Ports;
+using SignInResult = Microsoft.AspNetCore.Identity.SignInResult;
 
 namespace Registry.Web.Services.Adapters
 {
@@ -55,19 +56,31 @@ namespace Registry.Web.Services.Adapters
         {
             var user = await _userManager.FindByNameAsync(userName);
 
-            if (user == null) return null;
+            SignInResult res;
+            if (user == null)
+            {
+                user = new User { UserName = userName };
+                res = await _signInManager.CheckPasswordSignInAsync(user, password, false);
 
-            var res = await _signInManager.CheckPasswordSignInAsync(user, password, false);
+                if (!res.Succeeded) return null;
 
-            if (!res.Succeeded) return null;
+                user = await _CreateUserInternal(user, password);
+                
+            }
+            else
+            {
+                res = await _signInManager.CheckPasswordSignInAsync(user, password, false);
 
+                if (!res.Succeeded) return null;
+            }
+            
             // authentication successful so generate jwt token
             var tokenDescriptor = await GenerateJwtToken(user);
 
             return new AuthenticateResponse(user, tokenDescriptor.Token, tokenDescriptor.ExpiresOn);
         }
 
-        public async Task CreateUser(string userName, string email, string password)
+        public async Task<User> CreateUser(string userName, string email, string password)
         {
 
             if (!await _authManager.IsUserAdmin())
@@ -78,7 +91,31 @@ namespace Registry.Web.Services.Adapters
             if (user != null)
                 throw new InvalidOperationException("User already exists");
 
-            user = new User
+            return await _CreateUserInternal(userName, email, password);
+        }
+
+        private async Task<User> _CreateUserInternal(User user, string password)
+        {
+            var res = await _userManager.CreateAsync(user, password);
+
+            if (!res.Succeeded)
+            {
+                var errors = string.Join(";", res.Errors.Select(item => $"{item.Code} - {item.Description}"));
+                _logger.LogWarning("Error in creating user");
+                _logger.LogWarning(errors);
+
+                throw new InvalidOperationException("Error in creating user");
+            }
+
+            // Create a default organization for the user
+            await CreateUserDefaultOrganization(user);
+
+            return user;
+        }
+
+        private async Task<User> _CreateUserInternal(string userName, string email, string password)
+        {
+            var user = new User
             {
                 UserName = userName,
                 Email = email
@@ -97,6 +134,8 @@ namespace Registry.Web.Services.Adapters
 
             // Create a default organization for the user
             await CreateUserDefaultOrganization(user);
+
+            return user;
         }
 
         private async Task CreateUserDefaultOrganization(User user)
@@ -110,7 +149,7 @@ namespace Registry.Web.Services.Adapters
                 CreationDate = DateTime.Now,
                 Owner = user.Id,
                 Slug = orgSlug
-            });
+            }, true);
         }
 
         public async Task ChangePassword(string userName, string currentPassword, string newPassword)
@@ -149,7 +188,7 @@ namespace Registry.Web.Services.Adapters
 
         public async Task DeleteUser(string userName)
         {
-            
+
             if (!await _authManager.IsUserAdmin())
                 throw new UnauthorizedException("Only admins can delete users");
 
@@ -177,21 +216,21 @@ namespace Registry.Web.Services.Adapters
 
                 throw new InvalidOperationException("Cannot delete user: " + errors);
             }
-            
+
         }
 
         public async Task<IEnumerable<UserDto>> GetAll()
         {
-            if (!await _authManager.IsUserAdmin()) 
+            if (!await _authManager.IsUserAdmin())
                 throw new UnauthorizedException("User is not admin");
 
             var query = from user in _userManager.Users
-                select new UserDto
-                {
-                    Email = user.Email,
-                    UserName = user.UserName,
-                    Id = user.Id
-                };
+                        select new UserDto
+                        {
+                            Email = user.Email,
+                            UserName = user.UserName,
+                            Id = user.Id
+                        };
 
 
             return query.ToArray();
@@ -219,7 +258,7 @@ namespace Registry.Web.Services.Adapters
 
             return new JwtDescriptor
             {
-                Token = tokenHandler.WriteToken(token), 
+                Token = tokenHandler.WriteToken(token),
                 ExpiresOn = expiresOn
             };
         }

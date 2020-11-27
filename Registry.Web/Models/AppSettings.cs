@@ -97,6 +97,10 @@ namespace Registry.Web.Models
         /// </summary>
         public string HostNameOverride { get; set; }
 
+        /// <summary>
+        /// External authentication provider url
+        /// </summary>
+        public string ExternalAuthUrl { get; set; }
     }
 
     public class StorageProvider

@@ -67,10 +67,20 @@ namespace Registry.Web
 
             ConfigureDbProvider<ApplicationDbContext>(services, appSettings.AuthProvider, IdentityConnectionName);
 
-            services.AddIdentityCore<User>()
-                .AddRoles<IdentityRole>()
-                .AddEntityFrameworkStores<ApplicationDbContext>()
-                .AddSignInManager();
+            if (!string.IsNullOrWhiteSpace(appSettings.ExternalAuthUrl))
+            {
+                services.AddIdentityCore<User>()
+                    .AddRoles<IdentityRole>()
+                    .AddEntityFrameworkStores<ApplicationDbContext>()
+                    .AddSignInManager<ExternalSignInManager>();
+            }
+            else
+            {
+                services.AddIdentityCore<User>()
+                    .AddRoles<IdentityRole>()
+                    .AddEntityFrameworkStores<ApplicationDbContext>()
+                    .AddSignInManager();
+            }
 
             ConfigureDbProvider<RegistryContext>(services, appSettings.RegistryProvider, RegistryConnectionName);
 
@@ -79,6 +89,7 @@ namespace Registry.Web
                 {
                     auth.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
                     auth.DefaultChallengeScheme = JwtBearerDefaults.AuthenticationScheme;
+                    
                 })
                 .AddJwtBearer(jwt =>
                 {
@@ -92,10 +103,6 @@ namespace Registry.Web
                         ValidateAudience = false
                     };
                 });
-                //.AddCookie(CookieAuthenticationDefaults.AuthenticationScheme, options =>
-                //{
-                //    options.Cookie.Name = appSettings.AuthCookieName;
-                //});
 
             services.Configure<IdentityOptions>(options =>
             {
