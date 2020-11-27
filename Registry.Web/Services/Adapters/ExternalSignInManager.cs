@@ -4,6 +4,7 @@ using System.IO;
 using System.Linq;
 using System.Net;
 using System.Net.Http;
+using System.Text;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Http;
@@ -34,13 +35,18 @@ namespace Registry.Web.Services.Adapters
         }
 
         // This is basically a stub
-        public override async Task<SignInResult?> CheckPasswordSignInAsync(User user, string password, bool lockoutOnFailure)
+        public override async Task<SignInResult> CheckPasswordSignInAsync(User user, string password, bool lockoutOnFailure)
         {
 
             var client = new HttpClient();
             try
             {
-                var content = new StringContent($"username={user.UserName}&password={password}");
+                var content = new FormUrlEncodedContent(new []
+                {
+                    new KeyValuePair<string, string>("username", user.UserName),
+                    new KeyValuePair<string, string>("password", password)
+                });
+
                 var res = await client.PostAsync(_settings.ExternalAuthUrl, content);
 
                 if (!res.IsSuccessStatusCode)

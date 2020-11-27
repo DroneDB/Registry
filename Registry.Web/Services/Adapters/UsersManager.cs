@@ -15,6 +15,7 @@ using Registry.Web.Exceptions;
 using Registry.Web.Models;
 using Registry.Web.Models.DTO;
 using Registry.Web.Services.Ports;
+using SignInResult = Microsoft.AspNetCore.Identity.SignInResult;
 
 namespace Registry.Web.Services.Adapters
 {
@@ -55,12 +56,24 @@ namespace Registry.Web.Services.Adapters
         {
             var user = await _userManager.FindByNameAsync(userName);
 
-            if (user == null) return null;
+            SignInResult res;
+            if (user == null)
+            {
+                user = new User { UserName = userName };
+                res = await _signInManager.CheckPasswordSignInAsync(user, password, false);
 
-            var res = await _signInManager.CheckPasswordSignInAsync(user, password, false);
+                if (!res.Succeeded) return null;
 
-            if (!res.Succeeded) return null;
+                await _CreateUserInternal(userName, null, password);
+                user = await _userManager.FindByNameAsync(userName);
+            }
+            else
+            {
+                res = await _signInManager.CheckPasswordSignInAsync(user, password, false);
 
+                if (!res.Succeeded) return null;
+            }
+            
             // authentication successful so generate jwt token
             var tokenDescriptor = await GenerateJwtToken(user);
 
@@ -78,7 +91,12 @@ namespace Registry.Web.Services.Adapters
             if (user != null)
                 throw new InvalidOperationException("User already exists");
 
-            user = new User
+            await _CreateUserInternal(userName, email, password);
+        }
+
+        private async Task _CreateUserInternal(string userName, string email, string password)
+        {
+            var user = new User
             {
                 UserName = userName,
                 Email = email
@@ -110,7 +128,7 @@ namespace Registry.Web.Services.Adapters
                 CreationDate = DateTime.Now,
                 Owner = user.Id,
                 Slug = orgSlug
-            });
+            }, true);
         }
 
         public async Task ChangePassword(string userName, string currentPassword, string newPassword)
@@ -149,7 +167,7 @@ namespace Registry.Web.Services.Adapters
 
         public async Task DeleteUser(string userName)
         {
-            
+
             if (!await _authManager.IsUserAdmin())
                 throw new UnauthorizedException("Only admins can delete users");
 
@@ -177,21 +195,21 @@ namespace Registry.Web.Services.Adapters
 
                 throw new InvalidOperationException("Cannot delete user: " + errors);
             }
-            
+
         }
 
         public async Task<IEnumerable<UserDto>> GetAll()
         {
-            if (!await _authManager.IsUserAdmin()) 
+            if (!await _authManager.IsUserAdmin())
                 throw new UnauthorizedException("User is not admin");
 
             var query = from user in _userManager.Users
-                select new UserDto
-                {
-                    Email = user.Email,
-                    UserName = user.UserName,
-                    Id = user.Id
-                };
+                        select new UserDto
+                        {
+                            Email = user.Email,
+                            UserName = user.UserName,
+                            Id = user.Id
+                        };
 
 
             return query.ToArray();
@@ -219,7 +237,7 @@ namespace Registry.Web.Services.Adapters
 
             return new JwtDescriptor
             {
-                Token = tokenHandler.WriteToken(token), 
+                Token = tokenHandler.WriteToken(token),
                 ExpiresOn = expiresOn
             };
         }
