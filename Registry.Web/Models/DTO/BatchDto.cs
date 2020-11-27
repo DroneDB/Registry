@@ -23,7 +23,7 @@ namespace Registry.Web.Models.DTO
         public string Path { get; set; }
         public string Hash { get; set; }
         public EntryType Type { get; set; }
-        public int Size { get; set; }
+        public long Size { get; set; }
         public DateTime AddedOn { get; set; }
     }
 }
