@@ -11,7 +11,7 @@ namespace Registry.Web.Models.DTO
     public class EntryDto
     {
         public string Path { get; set; }
-        //public string Hash { get; set; }
+        public string Hash { get; set; }
         public EntryType Type { get; set; }
         public long Size { get; set; }
 
@@ -19,6 +19,6 @@ namespace Registry.Web.Models.DTO
 
         [JsonProperty("mtime")]
         [JsonConverter(typeof(UnixDateTimeConverter))] 
-        public DateTime AddedOn { get; set; }
+        public DateTime ModifiedTime { get; set; }
     }
 }

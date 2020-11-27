@@ -38,6 +38,8 @@ namespace Registry.Web.Controllers
             _logger = logger;
         }
 
+        #region Downloads
+
         [HttpGet("download", Name = nameof(ObjectsController) + "." + nameof(Download))]
         public async Task<IActionResult> Download([FromRoute] string orgSlug, [FromRoute] string dsSlug,
             [FromQuery(Name = "path")] string pathsRaw)
@@ -119,6 +121,7 @@ namespace Registry.Web.Controllers
                 return ExceptionResult(ex);
             }
         }
+        #endregion
 
         [HttpGet(RoutesHelper.ObjectsRadix, Name = nameof(ObjectsController) + "." + nameof(Get))]
         public async Task<IActionResult> Get([FromRoute] string orgSlug, [FromRoute] string dsSlug, [FromForm] string path)

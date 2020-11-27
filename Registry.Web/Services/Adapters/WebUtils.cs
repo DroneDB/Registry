@@ -125,7 +125,7 @@ namespace Registry.Web.Services.Adapters
         {
             return new EntryDto
             {
-                AddedOn = dataset.LastEdit,
+                ModifiedTime = dataset.LastEdit,
                 Depth = 0,
                 Size = dataset.Size,
                 Path = GenerateDatasetUrl(dataset),
