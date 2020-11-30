@@ -6,6 +6,7 @@ using System.Text;
 using System.Threading.Tasks;
 using Microsoft.AspNet.OData.Builder;
 using Microsoft.AspNet.OData.Extensions;
+using Microsoft.AspNetCore.Authentication.Cookies;
 using Registry.Web.Models;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Builder;
@@ -66,10 +67,20 @@ namespace Registry.Web
 
             ConfigureDbProvider<ApplicationDbContext>(services, appSettings.AuthProvider, IdentityConnectionName);
 
-            services.AddIdentityCore<User>()
-                .AddRoles<IdentityRole>()
-                .AddEntityFrameworkStores<ApplicationDbContext>()
-                .AddSignInManager();
+            if (!string.IsNullOrWhiteSpace(appSettings.ExternalAuthUrl))
+            {
+                services.AddIdentityCore<User>()
+                    .AddRoles<IdentityRole>()
+                    .AddEntityFrameworkStores<ApplicationDbContext>()
+                    .AddSignInManager<ExternalSignInManager>();
+            }
+            else
+            {
+                services.AddIdentityCore<User>()
+                    .AddRoles<IdentityRole>()
+                    .AddEntityFrameworkStores<ApplicationDbContext>()
+                    .AddSignInManager();
+            }
 
             ConfigureDbProvider<RegistryContext>(services, appSettings.RegistryProvider, RegistryConnectionName);
 
@@ -78,6 +89,7 @@ namespace Registry.Web
                 {
                     auth.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
                     auth.DefaultChallengeScheme = JwtBearerDefaults.AuthenticationScheme;
+                    
                 })
                 .AddJwtBearer(jwt =>
                 {
@@ -136,6 +148,7 @@ namespace Registry.Web
              */
 
             services.AddTransient<TokenManagerMiddleware>();
+            services.AddTransient<JwtInCookieMiddleware>();
             services.AddTransient<ITokenManager, TokenManager>();
             services.AddSingleton<IHttpContextAccessor, HttpContextAccessor>();
 
@@ -161,6 +174,8 @@ namespace Registry.Web
                 // We could put this in config "Kestrel->Limits" section
                 options.MultipartBodyLengthLimit = appSettings.MaxRequestBodySize;
             });
+
+            services.AddHttpContextAccessor();
 
             // TODO: Enable when needed. Should check return object structure
             // services.AddOData();
@@ -255,11 +270,13 @@ namespace Registry.Web
 
             app.UseRouting();
 
+            app.UseMiddleware<JwtInCookieMiddleware>();
+
             app.UseAuthentication();
             app.UseAuthorization();
 
             app.UseMiddleware<TokenManagerMiddleware>();
-
+            
             app.UseDefaultFiles();
             app.UseStaticFiles();
 
@@ -273,13 +290,13 @@ namespace Registry.Web
             SetupDatabase(app);
 
         }
-        private IEdmModel GetEdmModel()
-        {
-            var odataBuilder = new ODataConventionModelBuilder();
-            odataBuilder.EntitySet<OrganizationDto>("Organizations");
+        //private IEdmModel GetEdmModel()
+        //{
+        //    var odataBuilder = new ODataConventionModelBuilder();
+        //    odataBuilder.EntitySet<OrganizationDto>("Organizations");
 
-            return odataBuilder.GetEdmModel();
-        }
+        //    return odataBuilder.GetEdmModel();
+        //}
 
         // NOTE: Maybe put all this as stated in https://stackoverflow.com/a/55707949
         private void SetupDatabase(IApplicationBuilder app)

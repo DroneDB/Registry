@@ -5,6 +5,8 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using FluentAssertions;
+using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Routing;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -45,6 +47,9 @@ namespace Registry.Web.Test
         private Mock<IOrganizationsManager> _organizationsManagerMock;
         private Mock<IDatasetsManager> _datasetsManagerMock;
         private Mock<IChunkedUploadManager> _chunkedUploadManagerMock;
+        private Mock<IHttpContextAccessor> _httpContextAccessorMock;
+        private Mock<LinkGenerator> _linkGeneratorMock;
+
         private INameGenerator _nameGenerator;
         private IBatchTokenGenerator _batchTokenGenerator;
 
@@ -76,6 +81,9 @@ namespace Registry.Web.Test
             _organizationsManagerMock = new Mock<IOrganizationsManager>();
             _datasetsManagerMock = new Mock<IDatasetsManager>();
             _chunkedUploadManagerMock = new Mock<IChunkedUploadManager>();
+            _httpContextAccessorMock = new Mock<IHttpContextAccessor>();
+            _linkGeneratorMock = new Mock<LinkGenerator>();
+
 
             _passwordHasher = new PasswordHasher();
 
@@ -142,9 +150,10 @@ namespace Registry.Web.Test
             sys.SyncBucket($"{MagicStrings.PublicOrganizationSlug}-{MagicStrings.DefaultDatasetSlug}");
 
             var ddbFactory = new DdbFactory(_appSettingsMock.Object, _ddbFactoryLogger);
-            var webUtils = new WebUtils(_authManagerMock.Object, context);
+            var webUtils = new WebUtils(_authManagerMock.Object, context, _appSettingsMock.Object,
+                _httpContextAccessorMock.Object, _linkGeneratorMock.Object);
 
-            var objectManager = new ObjectsManager(_objectManagerLogger, context, sys, _chunkedUploadManagerMock.Object, _appSettingsMock.Object, ddbFactory, webUtils);
+            var objectManager = new ObjectsManager(_objectManagerLogger, context, sys, _chunkedUploadManagerMock.Object, _appSettingsMock.Object, ddbFactory, webUtils, _authManagerMock.Object);
 
             var datasetManager = new DatasetsManager(context, webUtils, _datasetsManagerLogger, objectManager, _passwordHasher);
             var organizationsManager = new OrganizationsManager(_authManagerMock.Object, context, webUtils, datasetManager, _organizationsManagerLogger);
@@ -218,9 +227,10 @@ namespace Registry.Web.Test
             sys.SyncBucket($"{MagicStrings.PublicOrganizationSlug}-{MagicStrings.DefaultDatasetSlug}");
 
             var ddbFactory = new DdbFactory(_appSettingsMock.Object, _ddbFactoryLogger);
-            var webUtils = new WebUtils(_authManagerMock.Object, context);
+            var webUtils = new WebUtils(_authManagerMock.Object, context, _appSettingsMock.Object,
+                _httpContextAccessorMock.Object, _linkGeneratorMock.Object);
 
-            var objectManager = new ObjectsManager(_objectManagerLogger, context, sys, _chunkedUploadManagerMock.Object, _appSettingsMock.Object, ddbFactory, webUtils);
+            var objectManager = new ObjectsManager(_objectManagerLogger, context, sys, _chunkedUploadManagerMock.Object, _appSettingsMock.Object, ddbFactory, webUtils, _authManagerMock.Object);
 
             var datasetManager = new DatasetsManager(context, webUtils, _datasetsManagerLogger, objectManager, _passwordHasher);
             var organizationsManager = new OrganizationsManager(_authManagerMock.Object, context, webUtils, datasetManager, _organizationsManagerLogger);
@@ -332,9 +342,10 @@ namespace Registry.Web.Test
             sys.SyncBucket($"{MagicStrings.PublicOrganizationSlug}-{MagicStrings.DefaultDatasetSlug}");
 
             var ddbFactory = new DdbFactory(_appSettingsMock.Object, _ddbFactoryLogger);
-            var webUtils = new WebUtils(_authManagerMock.Object, context);
+            var webUtils = new WebUtils(_authManagerMock.Object, context, _appSettingsMock.Object,
+                _httpContextAccessorMock.Object, _linkGeneratorMock.Object);
 
-            var objectManager = new ObjectsManager(_objectManagerLogger, context, sys, _chunkedUploadManagerMock.Object, _appSettingsMock.Object, ddbFactory, webUtils);
+            var objectManager = new ObjectsManager(_objectManagerLogger, context, sys, _chunkedUploadManagerMock.Object, _appSettingsMock.Object, ddbFactory, webUtils, _authManagerMock.Object);
 
             var datasetManager = new DatasetsManager(context, webUtils, _datasetsManagerLogger, objectManager, _passwordHasher);
             var organizationsManager = new OrganizationsManager(_authManagerMock.Object, context, webUtils, datasetManager, _organizationsManagerLogger);
@@ -493,6 +504,7 @@ namespace Registry.Web.Test
     ""RandomDatasetNameLength"": 16 
 }
   ");
+
 
 
         public ShareManagerTest(IPasswordHasher passwordHasher)

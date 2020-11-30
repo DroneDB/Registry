@@ -14,13 +14,14 @@ using Registry.Web.Data.Models;
 using Registry.Web.Models;
 using Registry.Web.Models.DTO;
 using Registry.Web.Services.Ports;
+using Registry.Web.Utilities;
 
 namespace Registry.Web.Controllers
 {
 
     [Authorize]
     [ApiController]
-    [Route("orgs/{orgSlug:regex([[\\w-]]+)}/ds")]
+    [Route(RoutesHelper.OrganizationsRadix + "/" + RoutesHelper.OrganizationSlug + "/" + RoutesHelper.DatasetRadix)]
     public class DatasetsController : ControllerBaseEx
     {
         private readonly IDatasetsManager _datasetsManager;
@@ -34,8 +35,8 @@ namespace Registry.Web.Controllers
             _logger = logger;
         }
 
-        
-        [HttpGet("{dsSlug:regex([[\\w-]]+)}/batches")]
+
+        [HttpGet(RoutesHelper.DatasetSlug + "/batches")]
         public async Task<IActionResult> Batches([FromRoute] string orgSlug, string dsSlug)
         {
             try
@@ -70,18 +71,34 @@ namespace Registry.Web.Controllers
             }
         }
 
-        [HttpGet("{dsSlug:regex([[\\w-]]+)}", Name = nameof(DatasetsController) + "." + nameof(Get))]
+        [HttpGet(RoutesHelper.DatasetSlug, Name = nameof(DatasetsController) + "." + nameof(Get))]
         public async Task<IActionResult> Get([FromRoute] string orgSlug, string dsSlug)
         {
             try
             {
                 _logger.LogDebug($"Dataset controller Get('{orgSlug}', '{dsSlug}')");
 
-                return Ok(await _datasetsManager.Get(orgSlug, dsSlug));
+                return Ok(await _datasetsManager.GetEntry(orgSlug, dsSlug));
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, $"Exception in Dataset controller Get('{orgSlug}', '{dsSlug}')");
+                return ExceptionResult(ex);
+            }
+        }
+
+        [HttpGet(RoutesHelper.DatasetSlug + "/ex", Name = nameof(DatasetsController) + "." + nameof(GetEx))]
+        public async Task<IActionResult> GetEx([FromRoute] string orgSlug, string dsSlug)
+        {
+            try
+            {
+                _logger.LogDebug($"Dataset controller GetEx('{orgSlug}', '{dsSlug}')");
+
+                return Ok(await _datasetsManager.Get(orgSlug, dsSlug));
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, $"Exception in Dataset controller GetEx('{orgSlug}', '{dsSlug}')");
                 return ExceptionResult(ex);
             }
         }
@@ -105,8 +122,26 @@ namespace Registry.Web.Controllers
             }
         }
 
-        // POST: ddb/
-        [HttpPut("{dsSlug:regex([[\\w-]]+)}")]
+
+        [HttpPost(RoutesHelper.DatasetSlug + "/rename")]
+        public async Task<IActionResult> Rename([FromRoute] string orgSlug, string dsSlug, [FromForm(Name = "slug")] string newSlug)
+        {
+            try
+            {
+                _logger.LogDebug($"Dataset controller Rename('{orgSlug}', '{dsSlug}', '{newSlug}')");
+
+                await _datasetsManager.Rename(orgSlug, dsSlug, newSlug);
+
+                return Ok(await _datasetsManager.Get(orgSlug, newSlug));
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, $"Exception in Dataset controller Rename('{orgSlug}', '{dsSlug}', '{newSlug}')')");
+                return ExceptionResult(ex);
+            }
+        }
+
+        [HttpPut(RoutesHelper.DatasetSlug)]
         public async Task<IActionResult> Put([FromRoute] string orgSlug, string dsSlug, [FromForm] DatasetDto dataset)
         {
 
@@ -125,8 +160,7 @@ namespace Registry.Web.Controllers
 
         }
 
-        // DELETE: ddb/dsSlug
-        [HttpDelete("{dsSlug:regex([[\\w-]]+)}")]
+        [HttpDelete(RoutesHelper.DatasetSlug)]
         public async Task<IActionResult> Delete([FromRoute] string orgSlug, string dsSlug)
         {
 

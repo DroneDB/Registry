@@ -8,6 +8,7 @@ using Registry.Web.Data;
 using Registry.Web.Exceptions;
 using Registry.Web.Models.DTO;
 using Registry.Web.Services.Ports;
+using Registry.Web.Utilities;
 
 namespace Registry.Web.Services.Adapters
 {
@@ -63,52 +64,59 @@ namespace Registry.Web.Services.Adapters
 
         public async Task<OrganizationDto> Get(string orgSlug)
         {
-            var org = await _utils.GetOrganizationAndCheck(orgSlug);
+            var org = await _utils.GetOrganization(orgSlug);
 
             return org.ToDto();
         }
 
-        public async Task<OrganizationDto> AddNew(OrganizationDto organization)
+        public async Task<OrganizationDto> AddNew(OrganizationDto organization, bool skipAuthCheck = false)
         {
             // TODO: To change when implementing anonymous users
-            var currentUser = await _authManager.GetCurrentUser();
 
-            if (currentUser == null)
-                throw new UnauthorizedException("Invalid user");
-
-            if (!organization.Slug.IsValidSlug())
-                throw new BadRequestException("Invalid organization orgSlug");
-
-            var existingOrg = _context.Organizations.FirstOrDefault(item => item.Slug == organization.Slug);
-
-            if (existingOrg != null)
-                throw new ConflictException("The organization already exists");
-
-            if (!await _authManager.IsUserAdmin())
+            if (skipAuthCheck)
             {
-
-                // If the owner is specified it should be the current user
-                if (organization.Owner != null && organization.Owner != currentUser.Id)
-                    throw new UnauthorizedException("Cannot create a new organization that belongs to a different user");
-
-                // The current user is the owner
-                organization.Owner = currentUser.Id;
-
+                if (!organization.Slug.IsValidSlug())
+                    throw new BadRequestException("Invalid organization orgSlug");
             }
             else
             {
-                // If no owner specified, the owner is the current user
-                if (organization.Owner == null)
+                var currentUser = await _authManager.GetCurrentUser();
+
+                if (currentUser == null)
+                    throw new UnauthorizedException("Invalid user");
+
+                if (!organization.Slug.IsValidSlug())
+                    throw new BadRequestException("Invalid organization orgSlug");
+
+                var existingOrg = _context.Organizations.FirstOrDefault(item => item.Slug == organization.Slug);
+
+                if (existingOrg != null)
+                    throw new ConflictException("The organization already exists");
+
+                if (!await _authManager.IsUserAdmin())
+                {
+                    // If the owner is specified it should be the current user
+                    if (organization.Owner != null && organization.Owner != currentUser.Id)
+                        throw new UnauthorizedException(
+                            "Cannot create a new organization that belongs to a different user");
+
+                    // The current user is the owner
                     organization.Owner = currentUser.Id;
+                }
                 else
                 {
-                    // Otherwise check if user exists
-                    if (!await _authManager.UserExists(organization.Owner))
-                        throw new BadRequestException($"Cannot find user with name '{organization.Owner}'");
-
+                    // If no owner specified, the owner is the current user
+                    if (organization.Owner == null)
+                        organization.Owner = currentUser.Id;
+                    else
+                    {
+                        // Otherwise check if user exists
+                        if (!await _authManager.UserExists(organization.Owner))
+                            throw new BadRequestException($"Cannot find user with name '{organization.Owner}'");
+                    }
                 }
             }
-
+            
             var org = organization.ToEntity();
             org.CreationDate = DateTime.Now;
 
@@ -121,7 +129,7 @@ namespace Registry.Web.Services.Adapters
         public async Task Edit(string orgSlug, OrganizationDto organization)
         {
 
-            var org = await _utils.GetOrganizationAndCheck(orgSlug);
+            var org = await _utils.GetOrganization(orgSlug);
 
             // TODO: To change when implementing anonymous users
             var currentUser = await _authManager.GetCurrentUser();
@@ -166,7 +174,7 @@ namespace Registry.Web.Services.Adapters
         public async Task Delete(string orgSlug)
         {
 
-            var org = await _utils.GetOrganizationAndCheck(orgSlug);
+            var org = await _utils.GetOrganization(orgSlug);
 
             if (org == null)
                 throw new NotFoundException("Cannot find organization with this orgSlug");

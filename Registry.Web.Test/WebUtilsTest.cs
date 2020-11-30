@@ -1,9 +1,11 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using FluentAssertions;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Identity;
+using Microsoft.AspNetCore.Routing;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -15,6 +17,7 @@ using Registry.Web.Data.Models;
 using Registry.Web.Models;
 using Registry.Web.Services.Adapters;
 using Registry.Web.Services.Ports;
+using Registry.Web.Utilities;
 
 namespace Registry.Web.Test
 {
@@ -31,6 +34,8 @@ namespace Registry.Web.Test
         private Mock<RoleManager<User>> _roleManagerMock;
         private Mock<IOrganizationsManager> _organizationsManager;
         private Mock<IDatasetsManager> _datasetsManagerMock;
+        private Mock<IHttpContextAccessor> _httpContextAccessorMock;
+        private Mock<LinkGenerator> _linkGeneratorMock;
 
         [SetUp]
         public void Setup()
@@ -44,6 +49,9 @@ namespace Registry.Web.Test
             _roleManagerMock = new Mock<RoleManager<User>>();
             _organizationsManager = new Mock<IOrganizationsManager>();
             _datasetsManagerMock = new Mock<IDatasetsManager>();
+            _httpContextAccessorMock = new Mock<IHttpContextAccessor>();
+            _linkGeneratorMock = new Mock<LinkGenerator>();
+
         }
 
 
@@ -54,12 +62,13 @@ namespace Registry.Web.Test
             _appSettingsMock.Setup(o => o.Value).Returns(_settings);
             _authManagerMock.Setup(o => o.IsUserAdmin()).Returns(Task.FromResult(true));
 
-            var utils = new WebUtils(_authManagerMock.Object, context);
+            var webUtils = new WebUtils(_authManagerMock.Object, context, _appSettingsMock.Object,
+                _httpContextAccessorMock.Object, _linkGeneratorMock.Object);
 
-            const string organizationName = "Uav4Geo";
+            const string organizationName = "uav4geo";
             const string expectedOrganizationSlug = "uav4geo";
 
-            var slug = utils.GetFreeOrganizationSlug(organizationName);
+            var slug = webUtils.GetFreeOrganizationSlug(organizationName);
 
             slug.Should().Be(expectedOrganizationSlug);
 
@@ -73,12 +82,13 @@ namespace Registry.Web.Test
             _appSettingsMock.Setup(o => o.Value).Returns(_settings);
             _authManagerMock.Setup(o => o.IsUserAdmin()).Returns(Task.FromResult(true));
 
-            var utils = new WebUtils(_authManagerMock.Object, context);
+            var webUtils = new WebUtils(_authManagerMock.Object, context, _appSettingsMock.Object,
+                _httpContextAccessorMock.Object, _linkGeneratorMock.Object);
 
-            const string organizationName = "Public";
+            const string organizationName = "public";
             const string expectedOrganizationSlug = "public-1";
 
-            var slug = utils.GetFreeOrganizationSlug(organizationName);
+            var slug = webUtils.GetFreeOrganizationSlug(organizationName);
 
             slug.Should().Be(expectedOrganizationSlug);
 
@@ -91,7 +101,7 @@ namespace Registry.Web.Test
             _appSettingsMock.Setup(o => o.Value).Returns(_settings);
             _authManagerMock.Setup(o => o.IsUserAdmin()).Returns(Task.FromResult(true));
 
-            const string organizationName = "Public";
+            const string organizationName = "public";
             const string expectedOrganizationSlug = "public-2";
 
             context.Add(new Organization
@@ -105,9 +115,10 @@ namespace Registry.Web.Test
             });
             await context.SaveChangesAsync();
 
-            var utils = new WebUtils(_authManagerMock.Object, context);
+            var webUtils = new WebUtils(_authManagerMock.Object, context, _appSettingsMock.Object,
+                _httpContextAccessorMock.Object, _linkGeneratorMock.Object);
 
-            var slug = utils.GetFreeOrganizationSlug(organizationName);
+            var slug = webUtils.GetFreeOrganizationSlug(organizationName);
 
             slug.Should().Be(expectedOrganizationSlug);
 
@@ -120,7 +131,7 @@ namespace Registry.Web.Test
             _appSettingsMock.Setup(o => o.Value).Returns(_settings);
             _authManagerMock.Setup(o => o.IsUserAdmin()).Returns(Task.FromResult(true));
 
-            const string organizationName = "Public";
+            const string organizationName = "public";
             const string expectedOrganizationSlug = "public-3";
 
             context.Add(new Organization
@@ -145,13 +156,42 @@ namespace Registry.Web.Test
 
             await context.SaveChangesAsync();
 
-            var utils = new WebUtils(_authManagerMock.Object, context);
+            var webUtils = new WebUtils(_authManagerMock.Object, context, _appSettingsMock.Object,
+                _httpContextAccessorMock.Object, _linkGeneratorMock.Object);
 
 
-            var slug = utils.GetFreeOrganizationSlug(organizationName);
+            var slug = webUtils.GetFreeOrganizationSlug(organizationName);
 
             slug.Should().Be(expectedOrganizationSlug);
 
+        }
+
+        [Test]
+        public void ToSlug_EmptyString_Exception()
+        {
+            var str = string.Empty;
+
+            str.Invoking(s => s.ToSlug()).Should().Throw<ArgumentException>();
+        }
+
+        [Test]
+        public void ToSlug_SimpleString_Exception()
+        {
+            const string str = "òàùè";
+
+            var slug = str.ToSlug();
+
+            slug.Should().Be("oaue");
+        }
+
+        [Test]
+        public void ToSlug_ComplexString_Exception()
+        {
+            const string str = ":;:ç°§ç§é*{1.↓-&%$/&%$)=(/\n\ta";
+
+            var slug = str.ToSlug();
+
+            slug.Should().Be("0---c--c-e--1.---------------a");
         }
 
 
@@ -185,6 +225,7 @@ namespace Registry.Web.Test
     }
 }
   ");
+
 
         #endregion
 

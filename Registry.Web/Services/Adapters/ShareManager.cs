@@ -14,6 +14,7 @@ using Registry.Web.Exceptions;
 using Registry.Web.Models;
 using Registry.Web.Models.DTO;
 using Registry.Web.Services.Ports;
+using Registry.Web.Utilities;
 
 namespace Registry.Web.Services.Adapters
 {
@@ -60,8 +61,8 @@ namespace Registry.Web.Services.Adapters
 
         public async Task<IEnumerable<BatchDto>> ListBatches(string orgSlug, string dsSlug)
         {
-            await _utils.GetOrganizationAndCheck(orgSlug);
-            var dataset = await _utils.GetDatasetAndCheck(orgSlug, dsSlug);
+            await _utils.GetOrganization(orgSlug);
+            var dataset = await _utils.GetDataset(orgSlug, dsSlug);
 
             _logger.LogInformation($"Listing batches of '{orgSlug}/{dsSlug}'");
 
@@ -77,7 +78,7 @@ namespace Registry.Web.Services.Adapters
                               UserName = batch.UserName,
                               Status = batch.Status,
                               Entries = from entry in batch.Entries
-                                        select new EntryDto
+                                        select new BatchEntryDto
                                         {
                                             Hash = entry.Hash,
                                             Type = entry.Type,
@@ -170,7 +171,7 @@ namespace Registry.Web.Services.Adapters
             if (!res.IsReady)
                 throw new ArgumentException($"Batch '{token}' is not ready");
 
-            _chunkedUploadManager.Upload(sessionId, stream, index);
+            await _chunkedUploadManager.Upload(sessionId, stream, index);
 
         }
 
@@ -272,7 +273,7 @@ namespace Registry.Web.Services.Adapters
                     Description = parameters.DatasetDescription
                 });
 
-                dataset = await _utils.GetDatasetAndCheck(orgSlug, dsSlug);
+                dataset = await _utils.GetDataset(orgSlug, dsSlug);
 
                 _logger.LogInformation($"Created new dataset '{dsSlug}', creating batch");
 
@@ -294,7 +295,7 @@ namespace Registry.Web.Services.Adapters
                 // Let's fill the names if not provided
                 parameters.DatasetName ??= tag.DatasetSlug;
 
-                var org = await _utils.GetOrganizationAndCheck(tag.OrganizationSlug, true);
+                var org = await _utils.GetOrganization(tag.OrganizationSlug, true);
 
                 // Org must exist
                 if (org == null)
@@ -305,7 +306,7 @@ namespace Registry.Web.Services.Adapters
                 _logger.LogInformation("Organization found");
 
                 // Create dataset if not exists
-                dataset = await _utils.GetDatasetAndCheck(tag.OrganizationSlug, tag.DatasetSlug, true);
+                dataset = await _utils.GetDataset(tag.OrganizationSlug, tag.DatasetSlug, true);
 
                 if (dataset == null)
                 {
@@ -317,7 +318,7 @@ namespace Registry.Web.Services.Adapters
                         Name = parameters.DatasetName,
                         Description = parameters.DatasetDescription
                     });
-                    dataset = await _utils.GetDatasetAndCheck(tag.OrganizationSlug, tag.DatasetSlug);
+                    dataset = await _utils.GetDataset(tag.OrganizationSlug, tag.DatasetSlug);
 
                     _logger.LogInformation("Dataset created");
                 }

@@ -7,6 +7,7 @@ namespace Registry.Web.Data.Models
 {
     public class Dataset
     {
+        // TODO: We should add an index to this field!
         public string Slug { get; set; }
         
         [Key]
@@ -32,6 +33,8 @@ namespace Registry.Web.Data.Models
         public Organization Organization { get; set; }
 
         public virtual ICollection<Batch> Batches { get; set; }
+
+        public virtual ICollection<DownloadPackage> DownloadPackages { get; set; }
 
     }
 }

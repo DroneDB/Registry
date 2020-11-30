@@ -136,6 +136,8 @@ namespace Registry.Adapters.DroneDB
                 
                 stream.Reset();
 
+                EnsureFolderExists(filePath);
+
                 using (var writer = File.OpenWrite(filePath))
                 {
                     stream.CopyTo(writer);
@@ -153,6 +155,12 @@ namespace Registry.Adapters.DroneDB
                 if (filePath != null && File.Exists(filePath))
                     File.Delete(filePath);
             }
+        }
+
+        private static void EnsureFolderExists(string filePath)
+        {
+            var folder = Path.GetDirectoryName(filePath);
+            Directory.CreateDirectory(folder);
         }
     }
 }

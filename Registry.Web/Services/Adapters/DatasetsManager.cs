@@ -10,6 +10,7 @@ using Registry.Web.Data;
 using Registry.Web.Exceptions;
 using Registry.Web.Models.DTO;
 using Registry.Web.Services.Ports;
+using Registry.Web.Utilities;
 
 namespace Registry.Web.Services.Adapters
 {
@@ -39,7 +40,7 @@ namespace Registry.Web.Services.Adapters
 
         public async Task<IEnumerable<DatasetDto>> List(string orgSlug)
         {
-            var org = await _utils.GetOrganizationAndCheck(orgSlug);
+            var org = await _utils.GetOrganization(orgSlug);
 
             var query = from ds in org.Datasets
 
@@ -63,15 +64,23 @@ namespace Registry.Web.Services.Adapters
         public async Task<DatasetDto> Get(string orgSlug, string dsSlug)
         {
 
-            var dataset = await _utils.GetDatasetAndCheck(orgSlug, dsSlug);
+            var dataset = await _utils.GetDataset(orgSlug, dsSlug);
 
             return dataset.ToDto();
+        }
+
+        public async Task<EntryDto> GetEntry(string orgSlug, string dsSlug)
+        {
+
+            var dataset = await _utils.GetDataset(orgSlug, dsSlug);
+
+            return _utils.GetDatasetEntry(dataset);
         }
 
         public async Task<DatasetDto> AddNew(string orgSlug, DatasetDto dataset)
         {
 
-            var org = await _utils.GetOrganizationAndCheck(orgSlug);
+            var org = await _utils.GetOrganization(orgSlug);
 
             var ds = dataset.ToEntity();
 
@@ -91,7 +100,7 @@ namespace Registry.Web.Services.Adapters
 
         public async Task Edit(string orgSlug, string dsSlug, DatasetDto dataset)
         {
-            var org = await _utils.GetOrganizationAndCheck(orgSlug);
+            var org = await _utils.GetOrganization(orgSlug);
 
             var entity = org.Datasets.FirstOrDefault(item => item.Slug == dsSlug);
 
@@ -112,9 +121,10 @@ namespace Registry.Web.Services.Adapters
 
         }
 
+
         public async Task Delete(string orgSlug, string dsSlug)
         {
-            var org = await _utils.GetOrganizationAndCheck(orgSlug);
+            var org = await _utils.GetOrganization(orgSlug);
             
             var entity = org.Datasets.FirstOrDefault(item => item.Slug == dsSlug);
 
@@ -126,6 +136,33 @@ namespace Registry.Web.Services.Adapters
             await _objectsManager.DeleteAll(orgSlug, dsSlug);
 
             await _context.SaveChangesAsync();
+        }
+
+        public async Task Rename(string orgSlug, string dsSlug, string newSlug)
+        {
+
+            if (string.IsNullOrWhiteSpace(newSlug))
+                throw new ArgumentException("New slug is empty");
+            
+            if (dsSlug == MagicStrings.DefaultDatasetSlug || newSlug == MagicStrings.DefaultDatasetSlug)
+                throw new ArgumentException("Cannot move default dataset");
+
+            if (!newSlug.IsValidSlug())
+                throw new ArgumentException($"Invalid slug '{newSlug}'");
+
+            if (await _utils.GetDataset(orgSlug, newSlug, true) != null)
+                throw new ArgumentException($"Dataset '{newSlug}' already exists");
+
+            // TODO: Add exception catching, when interrupted put DS in dirty state
+            await _objectsManager.MoveDataset(orgSlug, dsSlug, newSlug);
+
+            var ds = await _utils.GetDataset(orgSlug, dsSlug);
+
+            ds.Slug = newSlug;
+
+            await _context.SaveChangesAsync();
+
+
         }
     }
 }

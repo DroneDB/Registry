@@ -54,7 +54,7 @@ namespace Registry.Web.Test
         }
 
         [Test]
-        public void EndToEnd_Simple_Ok()
+        public async Task EndToEnd_Simple_Ok()
         {
             using var testArea = new TestArea();
             _settings.UploadPath = testArea.TestFolder;
@@ -63,24 +63,24 @@ namespace Registry.Web.Test
 
             var manager = new ChunkedUploadManager(GetTest1Context(), _appSettingsMock.Object, _chunkedUploadManagerLogger);
 
-            const string chunk1str = "Lorem ipsum dolor sit amet, consectetur adipiscing elit. ";
-            const string chunk2str = "Sed vehicula dignissim nunc, quis elementum neque bibendum ac. ";
-            const string chunk3str = "Ut tempus porta eleifend.";
+            const string expectedChunk1Str = "Lorem ipsum dolor sit amet, consectetur adipiscing elit. ";
+            const string expectedChunk2Str = "Sed vehicula dignissim nunc, quis elementum neque bibendum ac. ";
+            const string expectedChunk3Str = "Ut tempus porta eleifend.";
 
             var sessionId = manager.InitSession("test.txt", 3, 145);
-            manager.Upload(sessionId, GetStringStream(chunk1str), 0);
-            manager.Upload(sessionId, GetStringStream(chunk2str), 1);
-            manager.Upload(sessionId, GetStringStream(chunk3str), 2);
+            await manager.Upload(sessionId, GetStringStream(expectedChunk1Str), 0);
+            await manager.Upload(sessionId, GetStringStream(expectedChunk2Str), 1);
+            await manager.Upload(sessionId, GetStringStream(expectedChunk3Str), 2);
 
             var targetFile = manager.CloseSession(sessionId);
 
-            var content = File.ReadAllText(targetFile);
-            content.Should().Be(chunk1str + chunk2str + chunk3str);
+            var content = await File.ReadAllTextAsync(targetFile);
+            content.Should().Be(expectedChunk1Str + expectedChunk2Str + expectedChunk3Str);
 
         }
 
         [Test]
-        public void EndToEnd_Unordered_Ok()
+        public async Task EndToEnd_Unordered_Ok()
         {
             using var testArea = new TestArea();
             _settings.UploadPath = testArea.TestFolder;
@@ -89,24 +89,24 @@ namespace Registry.Web.Test
 
             var manager = new ChunkedUploadManager(GetTest1Context(), _appSettingsMock.Object, _chunkedUploadManagerLogger);
 
-            const string chunk1str = "Lorem ipsum dolor sit amet, consectetur adipiscing elit. ";
-            const string chunk2str = "Sed vehicula dignissim nunc, quis elementum neque bibendum ac. ";
-            const string chunk3str = "Ut tempus porta eleifend.";
+            const string expectedChunk1Str = "Lorem ipsum dolor sit amet, consectetur adipiscing elit. ";
+            const string expectedChunk2Str = "Sed vehicula dignissim nunc, quis elementum neque bibendum ac. ";
+            const string expectedChunk3Str = "Ut tempus porta eleifend.";
 
             var sessionId = manager.InitSession("test.txt", 3, 145);
-            manager.Upload(sessionId, GetStringStream(chunk2str), 1);
-            manager.Upload(sessionId, GetStringStream(chunk3str), 2);
-            manager.Upload(sessionId, GetStringStream(chunk1str), 0);
+            await manager.Upload(sessionId, GetStringStream(expectedChunk2Str), 1);
+            await manager.Upload(sessionId, GetStringStream(expectedChunk3Str), 2);
+            await manager.Upload(sessionId, GetStringStream(expectedChunk1Str), 0);
 
             var targetFile = manager.CloseSession(sessionId);
 
-            var content = File.ReadAllText(targetFile);
-            content.Should().Be(chunk1str + chunk2str + chunk3str);
+            var content = await File.ReadAllTextAsync(targetFile);
+            content.Should().Be(expectedChunk1Str + expectedChunk2Str + expectedChunk3Str);
 
         }
 
         [Test]
-        public void EndToEnd_MissingChunk_Exception()
+        public async Task EndToEnd_MissingChunk_Exception()
         {
             using var testArea = new TestArea();
             _settings.UploadPath = testArea.TestFolder;
@@ -115,13 +115,13 @@ namespace Registry.Web.Test
 
             var manager = new ChunkedUploadManager(GetTest1Context(), _appSettingsMock.Object, _chunkedUploadManagerLogger);
 
-            const string chunk1str = "Lorem ipsum dolor sit amet, consectetur adipiscing elit. ";
-            const string chunk2str = "Sed vehicula dignissim nunc, quis elementum neque bibendum ac. ";
-            const string chunk3str = "Ut tempus porta eleifend.";
+            //const string chunk1str = "Lorem ipsum dolor sit amet, consectetur adipiscing elit. ";
+            const string expectedChunk2Str = "Sed vehicula dignissim nunc, quis elementum neque bibendum ac. ";
+            const string expectedChunk3Str = "Ut tempus porta eleifend.";
 
             var sessionId = manager.InitSession("test.txt", 3, 145);
-            manager.Upload(sessionId, GetStringStream(chunk2str), 1);
-            manager.Upload(sessionId, GetStringStream(chunk3str), 2);
+            await manager.Upload(sessionId, GetStringStream(expectedChunk2Str), 1);
+            await manager.Upload(sessionId, GetStringStream(expectedChunk3Str), 2);
             //manager.Upload(sessionId, GetStringStream(chunk1str), 0);
 
             manager.Invoking(x => x.CloseSession(sessionId)).Should().Throw<InvalidOperationException>();
@@ -130,7 +130,7 @@ namespace Registry.Web.Test
 
 
         [Test]
-        public void Upload_BadChunkIndex_Exception()
+        public async Task Upload_BadChunkIndex_Exception()
         {
             using var testArea = new TestArea();
             _settings.UploadPath = testArea.TestFolder;
@@ -139,19 +139,19 @@ namespace Registry.Web.Test
 
             var manager = new ChunkedUploadManager(GetTest1Context(), _appSettingsMock.Object, _chunkedUploadManagerLogger);
 
-            const string chunk1str = "Lorem ipsum dolor sit amet, consectetur adipiscing elit. ";
-            const string chunk2str = "Sed vehicula dignissim nunc, quis elementum neque bibendum ac. ";
-            const string chunk3str = "Ut tempus porta eleifend.";
+            const string expectedChunk1Str = "Lorem ipsum dolor sit amet, consectetur adipiscing elit. ";
+            const string expectedChunk2Str = "Sed vehicula dignissim nunc, quis elementum neque bibendum ac. ";
+            const string expectedChunk3Str = "Ut tempus porta eleifend.";
 
             var sessionId = manager.InitSession("test.txt", 3, 145);
-            manager.Upload(sessionId, GetStringStream(chunk2str), 1);
-            manager.Upload(sessionId, GetStringStream(chunk3str), 2);
-            manager.Invoking(x => x.Upload(sessionId, GetStringStream(chunk1str), 3)).Should().Throw<ArgumentException>();
+            await manager.Upload(sessionId, GetStringStream(expectedChunk2Str), 1);
+            await manager.Upload(sessionId, GetStringStream(expectedChunk3Str), 2);
+            manager.Invoking(async x => await x.Upload(sessionId, GetStringStream(expectedChunk1Str), 3)).Should().Throw<ArgumentException>();
 
         }
 
         [Test]
-        public void EndToEnd_Parallel_Ok()
+        public async Task EndToEnd_Parallel_Ok()
         {
             using var testArea = new TestArea();
             _settings.UploadPath = testArea.TestFolder;
@@ -160,28 +160,28 @@ namespace Registry.Web.Test
 
             var manager = new ChunkedUploadManager(GetTest1Context(), _appSettingsMock.Object, _chunkedUploadManagerLogger);
 
-            const string chunk1str = "Lorem ipsum dolor sit amet, consectetur adipiscing elit. ";
-            const string chunk2str = "Sed vehicula dignissim nunc, quis elementum neque bibendum ac. ";
-            const string chunk3str = "Ut tempus porta eleifend.";
+            const string expectedChunk1Str = "Lorem ipsum dolor sit amet, consectetur adipiscing elit. ";
+            const string expectedChunk2Str = "Sed vehicula dignissim nunc, quis elementum neque bibendum ac. ";
+            const string expectedChunk3Str = "Ut tempus porta eleifend.";
 
             var sessionId = manager.InitSession("test.txt", 3, 145);
 
-            var t1 = Task.Run(() => manager.Upload(sessionId, GetStringStream(chunk1str), 0));
-            var t2 = Task.Run(() => manager.Upload(sessionId, GetStringStream(chunk2str), 1));
-            var t3 = Task.Run(() => manager.Upload(sessionId, GetStringStream(chunk3str), 2));
+            var t1 = manager.Upload(sessionId, GetStringStream(expectedChunk1Str), 0);
+            var t2 = manager.Upload(sessionId, GetStringStream(expectedChunk2Str), 1);
+            var t3 = manager.Upload(sessionId, GetStringStream(expectedChunk3Str), 2);
 
             Task.WaitAll(t1, t2, t3);
 
             var targetFile = manager.CloseSession(sessionId);
 
-            var content = File.ReadAllText(targetFile);
-            content.Should().Be(chunk1str + chunk2str + chunk3str);
+            var content = await File.ReadAllTextAsync(targetFile);
+            content.Should().Be(expectedChunk1Str + expectedChunk2Str + expectedChunk3Str);
 
         }
 
 
         [Test]
-        public void EndToEnd_Parallel_MultipleSessions_Ok()
+        public async Task EndToEnd_Parallel_MultipleSessions_Ok()
         {
             using var testArea = new TestArea();
             _settings.UploadPath = testArea.TestFolder;
@@ -190,24 +190,24 @@ namespace Registry.Web.Test
 
             var manager = new ChunkedUploadManager(GetTest1Context(), _appSettingsMock.Object, _chunkedUploadManagerLogger);
 
-            const string chunk1str = "Lorem ipsum dolor sit amet, consectetur adipiscing elit. ";
-            const string chunk2str = "Sed vehicula dignissim nunc, quis elementum neque bibendum ac. ";
-            const string chunk3str = "Ut tempus porta eleifend.";
+            const string expectedChunk1Str = "Lorem ipsum dolor sit amet, consectetur adipiscing elit. ";
+            const string expectedChunk2Str = "Sed vehicula dignissim nunc, quis elementum neque bibendum ac. ";
+            const string expectedChunk3Str = "Ut tempus porta eleifend.";
 
             for (var n = 0; n < 10; n++)
             {
                 var sessionId = manager.InitSession($"test-{n}.txt", 3, 145);
 
-                var t1 = Task.Run(() => manager.Upload(sessionId, GetStringStream(chunk1str), 0));
-                var t2 = Task.Run(() => manager.Upload(sessionId, GetStringStream(chunk2str), 1));
-                var t3 = Task.Run(() => manager.Upload(sessionId, GetStringStream(chunk3str), 2));
+                var t1 = manager.Upload(sessionId, GetStringStream(expectedChunk1Str), 0);
+                var t2 = manager.Upload(sessionId, GetStringStream(expectedChunk2Str), 1);
+                var t3 = manager.Upload(sessionId, GetStringStream(expectedChunk3Str), 2);
 
                 Task.WaitAll(t1, t2, t3);
 
                 var targetFile = manager.CloseSession(sessionId);
 
-                var content = File.ReadAllText(targetFile);
-                content.Should().Be(chunk1str + chunk2str + chunk3str);
+                var content = await File.ReadAllTextAsync(targetFile);
+                content.Should().Be(expectedChunk1Str + expectedChunk2Str + expectedChunk3Str);
 
             }
 

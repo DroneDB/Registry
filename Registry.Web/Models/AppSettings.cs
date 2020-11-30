@@ -2,6 +2,8 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
+using Newtonsoft.Json;
+using Newtonsoft.Json.Converters;
 using Registry.Common;
 
 namespace Registry.Web.Models
@@ -26,11 +28,13 @@ namespace Registry.Web.Models
         /// <summary>
         /// Provider for authentication database
         /// </summary>
+        [JsonConverter(typeof(StringEnumConverter))] 
         public DbProvider AuthProvider { get; set; }
 
         /// <summary>
         /// Provider for registry database
         /// </summary>
+        [JsonConverter(typeof(StringEnumConverter))] 
         public DbProvider RegistryProvider { get; set; }
 
         /// <summary>
@@ -83,10 +87,26 @@ namespace Registry.Web.Models
         /// </summary>
         public TimeSpan ChunkedUploadSessionTimeout { get; set; }
 
+        /// <summary>
+        /// Name of the auth cookie that contains the jwt token
+        /// </summary>
+        public string AuthCookieName { get; set; }
+
+        /// <summary>
+        /// Overrides current host name
+        /// </summary>
+        public string HostNameOverride { get; set; }
+
+        /// <summary>
+        /// External authentication provider url
+        /// </summary>
+        public string ExternalAuthUrl { get; set; }
     }
 
     public class StorageProvider
     {
+
+        [JsonConverter(typeof(StringEnumConverter))] 
         public StorageType Type { get; set; }
         public DictionaryEx<string, string> Settings { get; set; }
     }

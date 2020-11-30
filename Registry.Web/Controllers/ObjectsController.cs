@@ -19,13 +19,14 @@ using Registry.Web.Exceptions;
 using Registry.Web.Models;
 using Registry.Web.Models.DTO;
 using Registry.Web.Services.Ports;
+using Registry.Web.Utilities;
 
 namespace Registry.Web.Controllers
 {
 
     [Authorize]
     [ApiController]
-    [Route("orgs/{orgSlug:regex([[\\w-]]+)}/ds/{dsSlug:regex([[\\w-]]+)}")]
+    [Route(RoutesHelper.OrganizationsRadix + "/" + RoutesHelper.OrganizationSlug + "/" + RoutesHelper.DatasetRadix + "/" + RoutesHelper.DatasetSlug)]
     public class ObjectsController : ControllerBaseEx
     {
         private readonly IObjectsManager _objectsManager;
@@ -36,8 +37,93 @@ namespace Registry.Web.Controllers
             _objectsManager = datasetsManager;
             _logger = logger;
         }
-        
-        [HttpGet("obj", Name = nameof(ObjectsController) + "." + nameof(Get))]
+
+        #region Downloads
+
+        [HttpGet("download", Name = nameof(ObjectsController) + "." + nameof(Download))]
+        public async Task<IActionResult> Download([FromRoute] string orgSlug, [FromRoute] string dsSlug,
+            [FromQuery(Name = "path")] string pathsRaw)
+        {
+            try
+            {
+
+                var paths = pathsRaw?.Split(",", StringSplitOptions.RemoveEmptyEntries);
+
+                _logger.LogDebug($"Objects controller Download('{orgSlug}', '{dsSlug}', '{pathsRaw}')");
+
+                var res = await _objectsManager.Download(orgSlug, dsSlug, paths);
+
+                return File(res.ContentStream, res.ContentType, res.Name);
+
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, $"Exception in Objects controller Download('{orgSlug}', '{dsSlug}', '{pathsRaw}')");
+
+                return ExceptionResult(ex);
+            }
+        }
+
+        [AllowAnonymous]
+        [HttpGet("package/{id}", Name = nameof(ObjectsController) + "." + nameof(DownloadPackage))]
+        public async Task<IActionResult> DownloadPackage([FromRoute] string orgSlug, [FromRoute] string dsSlug, string id)
+        {
+            try
+            {
+                _logger.LogDebug($"Objects controller DownloadPackage('{orgSlug}', '{dsSlug}', '{id}')");
+
+                var res = await _objectsManager.Download(orgSlug, dsSlug, id);
+
+                return File(res.ContentStream, res.ContentType, res.Name);
+
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, $"Exception in Objects controller DownloadPackage('{orgSlug}', '{dsSlug}', '{id}')");
+
+                return ExceptionResult(ex);
+            }
+
+        }
+
+        [HttpPost("download", Name = nameof(ObjectsController) + "." + nameof(Download))]
+        public async Task<IActionResult> GetPackageUrl([FromRoute] string orgSlug, [FromRoute] string dsSlug,
+            [FromForm(Name = "path")] string[] paths, [FromForm] DateTime? expiration, [FromForm] bool isPublic)
+        {
+            var pathsJoined = paths != null ? string.Join(',', paths) : null;
+
+            try
+            {
+                _logger.LogDebug(
+                    $"Objects controller Download('{orgSlug}', '{dsSlug}', '{pathsJoined}', '{expiration}')");
+
+                var res = await _objectsManager.GetDownloadPackage(orgSlug, dsSlug, paths, expiration, isPublic);
+
+                var downloadUrl = Url.Link(nameof(ObjectsController) + "." + nameof(DownloadPackage), new
+                {
+                    orgSlug,
+                    dsSlug,
+                    id = res
+                });
+
+                return Ok(new DownloadPackageDto
+                {
+                    DownloadUrl = downloadUrl,
+                    Expiration = expiration
+                });
+
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex,
+                    $"Exception in Objects controller Download('{orgSlug}', '{dsSlug}', '{pathsJoined}')");
+
+                return ExceptionResult(ex);
+            }
+        }
+        #endregion
+
+        [HttpGet(RoutesHelper.ObjectsRadix, Name = nameof(ObjectsController) + "." + nameof(Get))]
         public async Task<IActionResult> Get([FromRoute] string orgSlug, [FromRoute] string dsSlug, [FromForm] string path)
         {
             try
@@ -55,7 +141,7 @@ namespace Registry.Web.Controllers
             }
         }
 
-        [HttpGet("info", Name = nameof(ObjectsController) + "." + nameof(GetInfo))]
+        [HttpPost("list", Name = nameof(ObjectsController) + "." + nameof(GetInfo))]
         public async Task<IActionResult> GetInfo([FromRoute] string orgSlug, [FromRoute] string dsSlug, [FromForm] string path)
         {
             try
@@ -73,7 +159,7 @@ namespace Registry.Web.Controllers
             }
         }
 
-        [HttpPost("obj")]
+        [HttpPost(RoutesHelper.ObjectsRadix)]
         public async Task<IActionResult> Post([FromRoute] string orgSlug, [FromRoute] string dsSlug, [FromForm] string path, IFormFile file)
         {
             try
@@ -87,11 +173,11 @@ namespace Registry.Web.Controllers
 
                 var newObj = await _objectsManager.AddNew(orgSlug, dsSlug, path, stream);
                 return CreatedAtRoute(nameof(ObjectsController) + "." + nameof(GetInfo), new
-                    {
-                        orgSlug = orgSlug,
-                        dsSlug = dsSlug,
-                        path = newObj.Path
-                    },
+                {
+                    orgSlug = orgSlug,
+                    dsSlug = dsSlug,
+                    path = newObj.Path
+                },
                     newObj);
             }
             catch (Exception ex)
@@ -102,83 +188,8 @@ namespace Registry.Web.Controllers
             }
         }
 
-        [HttpPost("obj/session")]
-        public async Task<IActionResult> PostNewSession([FromRoute] string orgSlug, [FromRoute] string dsSlug, [FromForm] int chunks, [FromForm] long size)
-        {
-            try
-            {
-               
-                _logger.LogDebug($"Objects controller PostNewSession('{orgSlug}', '{dsSlug}', {chunks}, {size})");
-                
-                var sessionId = await _objectsManager.AddNewSession(orgSlug, dsSlug, chunks, size);
 
-                return Ok(new UploadNewSessionResultDto
-                {
-                    SessionId = sessionId
-                });
-
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, $"Exception in Objects controller PostNewSession('{orgSlug}', '{dsSlug}', {chunks}, {size})");
-
-                return ExceptionResult(ex);
-            }
-        }
-
-        [HttpPost("obj/session/{sessionId}/chunk/{index}")]
-        public async Task<IActionResult> UploadToSession([FromRoute] string orgSlug, [FromRoute] string dsSlug, int sessionId, int index, IFormFile file)
-        {
-            try
-            {
-
-                _logger.LogDebug($"Objects controller UploadToSession('{orgSlug}', '{dsSlug}', {sessionId}, {index}, '{file?.FileName}')");
-
-                if (file == null)
-                    throw new ArgumentException("No file uploaded");
-                
-                await using var stream = file.OpenReadStream();
-
-                await _objectsManager.AddToSession(orgSlug, dsSlug, sessionId, index, stream);
-
-                return Ok();
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, $"Exception in Objects controller UploadToSession('{orgSlug}', '{dsSlug}', {sessionId}, {index}, '{file?.FileName}')");
-
-                return ExceptionResult(ex);
-            }
-        }
-
-        [HttpPost("obj/session/{sessionId}/close")]
-        public async Task<IActionResult> CloseSession([FromRoute] string orgSlug, [FromRoute] string dsSlug, int sessionId, [FromForm] string path)
-        {
-            try
-            {
-
-                _logger.LogDebug($"Objects controller CloseSession('{orgSlug}', '{dsSlug}', {sessionId}, '{path}')");
-
-                var newObj = await _objectsManager.CloseSession(orgSlug, dsSlug, sessionId, path);
-                
-                return CreatedAtRoute(nameof(ObjectsController) + "." + nameof(GetInfo), new
-                    {
-                        orgSlug = orgSlug,
-                        dsSlug = dsSlug,
-                        path = newObj.Path
-                    },
-                    newObj);
-
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, $"Exception in Objects controller CloseSession('{orgSlug}', '{dsSlug}', {sessionId}, '{path}')");
-
-                return ExceptionResult(ex);
-            }
-        }
-
-        [HttpDelete("obj")]
+        [HttpDelete(RoutesHelper.ObjectsRadix)]
         public async Task<IActionResult> Delete([FromRoute] string orgSlug, [FromRoute] string dsSlug, [FromForm] string path)
         {
 
@@ -198,6 +209,86 @@ namespace Registry.Web.Controllers
 
         }
 
-        
+        #region Sessions
+
+        [HttpPost(RoutesHelper.ObjectsRadix + "/session")]
+        public async Task<IActionResult> PostNewSession([FromRoute] string orgSlug, [FromRoute] string dsSlug, [FromForm] int chunks, [FromForm] long size)
+        {
+            try
+            {
+
+                _logger.LogDebug($"Objects controller PostNewSession('{orgSlug}', '{dsSlug}', {chunks}, {size})");
+
+                var sessionId = await _objectsManager.AddNewSession(orgSlug, dsSlug, chunks, size);
+
+                return Ok(new UploadNewSessionResultDto
+                {
+                    SessionId = sessionId
+                });
+
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, $"Exception in Objects controller PostNewSession('{orgSlug}', '{dsSlug}', {chunks}, {size})");
+
+                return ExceptionResult(ex);
+            }
+        }
+
+        [HttpPost(RoutesHelper.ObjectsRadix + "/session/{sessionId}/chunk/{index}")]
+        public async Task<IActionResult> UploadToSession([FromRoute] string orgSlug, [FromRoute] string dsSlug, int sessionId, int index, IFormFile file)
+        {
+            try
+            {
+
+                _logger.LogDebug($"Objects controller UploadToSession('{orgSlug}', '{dsSlug}', {sessionId}, {index}, '{file?.FileName}')");
+
+                if (file == null)
+                    throw new ArgumentException("No file uploaded");
+
+                await using var stream = file.OpenReadStream();
+
+                await _objectsManager.AddToSession(orgSlug, dsSlug, sessionId, index, stream);
+
+                return Ok();
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, $"Exception in Objects controller UploadToSession('{orgSlug}', '{dsSlug}', {sessionId}, {index}, '{file?.FileName}')");
+
+                return ExceptionResult(ex);
+            }
+        }
+
+        [HttpPost(RoutesHelper.ObjectsRadix + "/session/{sessionId}/close")]
+        public async Task<IActionResult> CloseSession([FromRoute] string orgSlug, [FromRoute] string dsSlug, int sessionId, [FromForm] string path)
+        {
+            try
+            {
+
+                _logger.LogDebug($"Objects controller CloseSession('{orgSlug}', '{dsSlug}', {sessionId}, '{path}')");
+
+                var newObj = await _objectsManager.CloseSession(orgSlug, dsSlug, sessionId, path);
+
+                return CreatedAtRoute(nameof(ObjectsController) + "." + nameof(GetInfo), new
+                {
+                    orgSlug = orgSlug,
+                    dsSlug = dsSlug,
+                    path = newObj.Path
+                },
+                    newObj);
+
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, $"Exception in Objects controller CloseSession('{orgSlug}', '{dsSlug}', {sessionId}, '{path}')");
+
+                return ExceptionResult(ex);
+            }
+        }
+
+        #endregion
+
+
     }
 }

@@ -1,19 +1,13 @@
 ﻿using System;
-using System.Collections.Generic;
-using System.IO;
 using System.Linq;
 using System.Text;
 using System.Text.RegularExpressions;
-using System.Threading.Tasks;
-using Microsoft.EntityFrameworkCore;
 using Registry.Ports.DroneDB;
 using Registry.Ports.DroneDB.Models;
 using Registry.Web.Data.Models;
-using Registry.Web.Models;
 using Registry.Web.Models.DTO;
-using Registry.Web.Services.Ports;
 
-namespace Registry.Web
+namespace Registry.Web.Utilities
 {
     public static class Extenders
     {
@@ -101,12 +95,15 @@ namespace Registry.Web
 
             ds.ObjectsCount = objs.Length;
             ds.Size = objs.Sum(item => item.Size);
-            
+
         }
 
+        // A tag name must be valid ASCII and may contain lowercase and uppercase letters, digits, underscores, periods and dashes.
+        // A tag name may not start with a period or a dash and may contain a maximum of 128 characters.
+
         // Only lowercase letters, numbers, - and _. Max length 255
-        private static readonly Regex _safeNameRegex = new Regex(@"^[a-z\d\-_]{1,255}$", RegexOptions.Compiled | RegexOptions.Singleline);
-        
+        private static readonly Regex SafeNameRegex = new Regex(@"^\w[\w\.-]{0,127}$", RegexOptions.Compiled | RegexOptions.Singleline);
+
         /// <summary>
         /// Checks if a string is a valid slug
         /// </summary>
@@ -114,10 +111,10 @@ namespace Registry.Web
         /// <returns></returns>
         public static bool IsValidSlug(this string name)
         {
-            return _safeNameRegex.IsMatch(name);
+            return SafeNameRegex.IsMatch(name);
         }
 
-        
+
         /// <summary>
         /// Converts a string to a slug
         /// </summary>
@@ -125,6 +122,9 @@ namespace Registry.Web
         /// <returns></returns>
         public static string ToSlug(this string name)
         {
+
+            if (string.IsNullOrWhiteSpace(name))
+                throw new ArgumentException("Cannot make slug from empty string");
 
             Encoding enc;
 
@@ -142,9 +142,10 @@ namespace Registry.Web
             var tempBytes = enc.GetBytes(name);
             var tmp = Encoding.UTF8.GetString(tempBytes);
 
-            var res = new string(tmp.Select(c => char.IsSeparator(c) ? '-' : c).ToArray());
+            var res = new string(tmp.Select(c => char.IsLetterOrDigit(c) || c == '.' ? c : '-').ToArray());
 
-            return res.ToLowerInvariant();
+            // If it starts with a period or a dash pad it with a 0
+            return res[0] == '.' || res[0] == '-' ? "0" + res : res;
         }
 
         /// <summary>
@@ -155,7 +156,7 @@ namespace Registry.Web
         public static TagDto ToTag(this string tag)
         {
 
-            if (string.IsNullOrWhiteSpace(tag)) 
+            if (string.IsNullOrWhiteSpace(tag))
                 throw new FormatException("Tag is null or empty");
 
             var sections = tag.Split('/');
@@ -177,6 +178,6 @@ namespace Registry.Web
 
         }
 
-        
     }
+
 }

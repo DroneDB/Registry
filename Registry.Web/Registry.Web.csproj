@@ -9,12 +9,15 @@
     <Compile Remove="ddb\**" />
     <Compile Remove="logs\**" />
     <Compile Remove="temp\**" />
+    <Compile Remove="uploads\**" />
     <Content Remove="ddb\**" />
     <Content Remove="logs\**" />
     <Content Remove="temp\**" />
+    <Content Remove="uploads\**" />
     <EmbeddedResource Remove="ddb\**" />
     <EmbeddedResource Remove="logs\**" />
     <EmbeddedResource Remove="temp\**" />
+    <EmbeddedResource Remove="uploads\**" />
     <None Remove="ddb\**" />
     <None Remove="logs\**" />
     <None Remove="temp\**" />
@@ -22,6 +25,7 @@
 
   <ItemGroup>
     <None Remove="ddb-log*" />
+    <None Remove="uploads\**" />
   </ItemGroup>
 
   <ItemGroup>

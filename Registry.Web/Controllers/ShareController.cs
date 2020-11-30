@@ -9,14 +9,22 @@ using System;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
+using System.Net;
+using System.Text;
 using System.Threading.Tasks;
+using Microsoft.AspNetCore.Http.Features;
+using Microsoft.AspNetCore.WebUtilities;
+using Microsoft.Extensions.Options;
+using Microsoft.Net.Http.Headers;
 using Registry.Common;
+using Registry.Web.Attributes;
+using Registry.Web.Utilities;
 
 namespace Registry.Web.Controllers
 {
     [Authorize]
     [ApiController]
-    [Route("share")]
+    [Route(RoutesHelper.ShareRadix)]
     public class ShareController : ControllerBaseEx
     {
         private readonly IShareManager _shareManager;
@@ -95,13 +103,15 @@ namespace Registry.Web.Controllers
             }
         }
 
+        private static readonly FormOptions DefaultFormOptions = new FormOptions();
+
         [HttpPost("upload/{token}/session/{sessionId}/chunk/{index}")]
         public async Task<IActionResult> UploadToSession(string token, int sessionId, int index, IFormFile file)
         {
             try
             {
 
-                _logger.LogDebug($"Share controller UploadToSession('{token}', {sessionId}, {index}, '{file?.FileName}')");
+                _logger.LogDebug($"Share controller UploadToSession('{token}', {sessionId}, {index}");// '{file?.FileName}')");
 
                 if (file == null)
                     throw new ArgumentException("No file uploaded");
@@ -114,11 +124,12 @@ namespace Registry.Web.Controllers
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, $"Exception in Share controller UploadToSession('{token}', {sessionId}, {index}, '{file?.FileName}')");
+                _logger.LogError(ex, $"Exception in Share controller UploadToSession('{token}', {sessionId}, {index})");
 
                 return ExceptionResult(ex);
             }
         }
+
 
         [HttpPost("upload/{token}/session/{sessionId}/close")]
         public async Task<IActionResult> CloseSession(string token, int sessionId, [FromForm] string path)
@@ -131,7 +142,7 @@ namespace Registry.Web.Controllers
                 var ret = await _shareManager.CloseUploadSession(token, sessionId, path);
 
                 return Ok(ret);
-                
+
             }
             catch (Exception ex)
             {

@@ -15,15 +15,15 @@ namespace Registry.Web.Models.DTO
         public DateTime? End { get; set; }
 
         public BatchStatus Status { get; set; }
-        public IEnumerable<EntryDto> Entries { get; set; }
+        public IEnumerable<BatchEntryDto> Entries { get; set; }
     }
 
-    public class EntryDto
+    public class BatchEntryDto
     {
         public string Path { get; set; }
         public string Hash { get; set; }
         public EntryType Type { get; set; }
-        public int Size { get; set; }
+        public long Size { get; set; }
         public DateTime AddedOn { get; set; }
     }
 }

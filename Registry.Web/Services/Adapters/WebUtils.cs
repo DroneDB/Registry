@@ -1,15 +1,24 @@
 ﻿using System;
 using System.Linq;
+using System.Net;
 using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
+using Microsoft.AspNet.OData.Extensions;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Routing;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
+using Registry.Common;
+using Registry.Web.Controllers;
 using Registry.Web.Data;
 using Registry.Web.Data.Models;
 using Registry.Web.Exceptions;
+using Registry.Web.Models;
 using Registry.Web.Models.DTO;
 using Registry.Web.Services.Ports;
+using Registry.Web.Utilities;
 
 namespace Registry.Web.Services.Adapters
 {
@@ -22,32 +31,40 @@ namespace Registry.Web.Services.Adapters
     {
         private readonly IAuthManager _authManager;
         private readonly RegistryContext _context;
+        private readonly AppSettings _settings;
+        private readonly IHttpContextAccessor _accessor;
+        private readonly LinkGenerator _generator;
 
-        public WebUtils(IAuthManager authManager, RegistryContext context)
+        public WebUtils(IAuthManager authManager,
+            RegistryContext context,
+            IOptions<AppSettings> settings,
+            IHttpContextAccessor accessor,
+            LinkGenerator generator)
         {
             _authManager = authManager;
             _context = context;
+            _accessor = accessor;
+            _generator = generator;
+            _settings = settings.Value;
         }
 
-        
-        public async Task<Organization> GetOrganizationAndCheck(string orgSlug, bool safe = false)
+
+        public async Task<Organization> GetOrganization(string orgSlug, bool safe = false, bool checkOwnership = true)
         {
             if (string.IsNullOrWhiteSpace(orgSlug))
                 throw new BadRequestException("Missing organization id");
 
             if (!orgSlug.IsValidSlug())
                 throw new BadRequestException("Invalid organization id");
-            
-            var org = _context.Organizations.Include(item => item.Datasets).FirstOrDefault(item => item.Slug == orgSlug);
+
+            var org = _context.Organizations.Include(item => item.Datasets)
+                .FirstOrDefault(item => item.Slug == orgSlug);
 
             if (org == null)
-            {
-                if (safe) return null;
+                return safe ? (Organization)null :
+                    throw new NotFoundException("Organization not found");
 
-                throw new NotFoundException("Organization not found");
-            }
-
-            if (!await _authManager.IsUserAdmin())
+            if (checkOwnership && !await _authManager.IsUserAdmin())
             {
                 var currentUser = await _authManager.GetCurrentUser();
 
@@ -56,12 +73,14 @@ namespace Registry.Web.Services.Adapters
 
                 if (org.OwnerId != currentUser.Id && org.OwnerId != null && !org.IsPublic)
                     throw new UnauthorizedException("This organization does not belong to the current user");
+
             }
 
             return org;
+
         }
 
-        public async Task<Dataset> GetDatasetAndCheck(string orgSlug, string dsSlug, bool retNullIfNotFound = false)
+        public async Task<Dataset> GetDataset(string orgSlug, string dsSlug, bool retNullIfNotFound = false, bool checkOwnership = true)
         {
             if (string.IsNullOrWhiteSpace(dsSlug))
                 throw new BadRequestException("Missing dataset id");
@@ -69,7 +88,7 @@ namespace Registry.Web.Services.Adapters
             if (!dsSlug.IsValidSlug())
                 throw new BadRequestException("Invalid dataset id");
 
-            var org = await GetOrganizationAndCheck(orgSlug);
+            var org = await GetOrganization(orgSlug, checkOwnership: checkOwnership);
 
             var dataset = org.Datasets.FirstOrDefault(item => item.Slug == dsSlug);
 
@@ -91,7 +110,7 @@ namespace Registry.Web.Services.Adapters
 
             var res = slug;
 
-            for (var n = 1;; n++)
+            for (var n = 1; ; n++)
             {
                 var org = _context.Organizations.FirstOrDefault(item => item.Slug == res);
 
@@ -100,6 +119,37 @@ namespace Registry.Web.Services.Adapters
                 res = slug + "-" + n;
 
             }
+
+        }
+        public EntryDto GetDatasetEntry(Dataset dataset)
+        {
+            return new EntryDto
+            {
+                ModifiedTime = dataset.LastEdit,
+                Depth = 0,
+                Size = dataset.Size,
+                Path = GenerateDatasetUrl(dataset),
+                Type = EntryType.DroneDb
+            };
+        }
+
+        private string GenerateDatasetUrl(Dataset dataset)
+        {
+
+            var context = _accessor.HttpContext;
+            var host = context.Request.Host;
+
+            var hostName = !string.IsNullOrWhiteSpace(_settings.HostNameOverride) ? 
+                _settings.HostNameOverride : host.ToString();
+            
+            var scheme = context.Request.IsHttps ? "ddb" : "ddb+unsafe";
+
+            var datasetUrl = _generator.GetUriByRouteValues(_accessor.HttpContext,
+                nameof(DatasetsController) + ".Get",
+                new { orgSlug = dataset.Organization.Slug, dsSlug = dataset.Slug },
+                scheme, new HostString(hostName));
+
+            return datasetUrl;
 
         }
     }

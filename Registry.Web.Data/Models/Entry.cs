@@ -17,7 +17,7 @@ namespace Registry.Web.Data.Models
         [Required]
         public EntryType Type { get; set; }
         [Required]
-        public int Size { get; set; }
+        public long Size { get; set; }
         [Required]
         public DateTime AddedOn { get; set; }
 

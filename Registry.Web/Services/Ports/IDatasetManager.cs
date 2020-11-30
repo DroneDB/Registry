@@ -8,8 +8,11 @@ namespace Registry.Web.Services.Ports
     {
         public Task<IEnumerable<DatasetDto>> List(string orgSlug);
         public Task<DatasetDto> Get(string orgSlug, string dsSlug);
+        public Task<EntryDto> GetEntry(string orgSlug, string dsSlug);
         public Task<DatasetDto> AddNew(string orgSlug, DatasetDto dataset);
         public Task Edit(string orgSlug, string dsSlug, DatasetDto dataset);
         public Task Delete(string orgSlug, string dsSlug);
+
+        public Task Rename(string orgSlug, string dsSlug, string newSlug);
     }
 }

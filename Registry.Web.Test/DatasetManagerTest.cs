@@ -3,6 +3,8 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using FluentAssertions;
+using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Routing;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -27,6 +29,8 @@ namespace Registry.Web.Test
         private Logger<DatasetsManager> _datasetsManagerLogger;
         private Mock<IDdbFactory> _ddbFactoryMock;
         private Mock<IObjectsManager> _objectsManagerMock;
+        private Mock<IHttpContextAccessor> _httpContextAccessorMock;
+        private Mock<LinkGenerator> _linkGeneratorMock;
         private IPasswordHasher _passwordHasher;
 
         [SetUp]
@@ -37,6 +41,8 @@ namespace Registry.Web.Test
             _datasetManagerMock = new Mock<IDatasetsManager>();
             _ddbFactoryMock = new Mock<IDdbFactory>();
             _objectsManagerMock = new Mock<IObjectsManager>();
+            _httpContextAccessorMock = new Mock<IHttpContextAccessor>();
+            _linkGeneratorMock = new Mock<LinkGenerator>();
             _datasetsManagerLogger = new Logger<DatasetsManager>(LoggerFactory.Create(builder => builder.AddConsole()));
             _passwordHasher = new PasswordHasher();
         }
@@ -49,7 +55,7 @@ namespace Registry.Web.Test
             _appSettingsMock.Setup(o => o.Value).Returns(_settings);
             _authManagerMock.Setup(o => o.IsUserAdmin()).Returns(Task.FromResult(true));
             
-            var utils = new WebUtils(_authManagerMock.Object, context);
+            var utils = new WebUtils(_authManagerMock.Object, context, _appSettingsMock.Object, _httpContextAccessorMock.Object, _linkGeneratorMock.Object);
 
             var datasetsManager = new DatasetsManager(context, utils, _datasetsManagerLogger, _objectsManagerMock.Object, _passwordHasher);
 
