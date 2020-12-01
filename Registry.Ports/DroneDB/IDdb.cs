@@ -16,5 +16,7 @@ namespace Registry.Ports.DroneDB
         void Add(string path, byte[] data);
         void Add(string path, Stream data);
         void Remove(string path);
+        Dictionary<string, object> ChangeAttributes(Dictionary<string, object> attributes);
+        void GenerateThumbnail(string imagePath, int size, string outputPath);
     }
 }
