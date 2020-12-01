@@ -18,6 +18,7 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.CodeAnalysis.Options;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Caching.Distributed;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.FileProviders;
@@ -89,7 +90,7 @@ namespace Registry.Web
                 {
                     auth.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
                     auth.DefaultChallengeScheme = JwtBearerDefaults.AuthenticationScheme;
-                    
+
                 })
                 .AddJwtBearer(jwt =>
                 {
@@ -132,7 +133,7 @@ namespace Registry.Web
                     new BadRequestObjectResult(new ErrorResponse(actionContext.ModelState));
             });
 
-            services.AddMemoryCache();
+            RegisterCacheProvider(services, appSettings);
 
             /*
              * NOTE about services lifetime:
@@ -182,6 +183,39 @@ namespace Registry.Web
 
         }
 
+        private void RegisterCacheProvider(IServiceCollection services, AppSettings appSettings)
+        {
+
+            if (appSettings.CachingProvider == null)
+            {
+                // No caching
+                services.AddSingleton<IDistributedCache, DummyDistributedCache>();
+                return;
+            }
+
+            switch (appSettings.CachingProvider.Type)
+            {
+                case CachingType.InMemory:
+
+                    services.AddDistributedMemoryCache();
+
+                    break;
+                case CachingType.Redis:
+
+                    services.AddStackExchangeRedisCache(options =>
+                    {
+                        options.Configuration = appSettings.CachingProvider.Settings["InstanceAddress"];
+                        options.InstanceName = appSettings.CachingProvider.Settings["InstanceName"];
+                    });
+
+                    break;
+                default:
+                    throw new InvalidOperationException(
+                        $"Unsupported caching provider: '{(int)appSettings.CachingProvider.Type}'");
+            }
+
+        }
+
         private static void RegisterStorageProvider(IServiceCollection services, AppSettings appSettings)
         {
             switch (appSettings.StorageProvider.Type)
@@ -189,8 +223,7 @@ namespace Registry.Web
                 case StorageType.Physical:
                     var basePath = appSettings.StorageProvider.Settings["path"];
 
-                    if (!Directory.Exists(basePath))
-                        Directory.CreateDirectory(basePath);
+                    Directory.CreateDirectory(basePath);
 
                     services.AddScoped<IObjectSystem>(provider => new PhysicalObjectSystem(basePath));
                     break;
@@ -217,7 +250,7 @@ namespace Registry.Web
                     break;
                 default:
                     throw new InvalidOperationException(
-                        $"Unsupported storage provider: '{(int) appSettings.StorageProvider.Type}'");
+                        $"Unsupported storage provider: '{(int)appSettings.StorageProvider.Type}'");
             }
         }
 
@@ -256,7 +289,7 @@ namespace Registry.Web
 
         public void Configure(IApplicationBuilder app, IWebHostEnvironment env)
         {
-            
+
             if (env.IsDevelopment())
             {
                 app.UseDeveloperExceptionPage();
@@ -276,7 +309,7 @@ namespace Registry.Web
             app.UseAuthorization();
 
             app.UseMiddleware<TokenManagerMiddleware>();
-            
+
             app.UseDefaultFiles();
             app.UseStaticFiles();
 
@@ -308,7 +341,7 @@ namespace Registry.Web
 
             if (applicationDbContext.Database.IsSqlite())
                 CommonUtils.EnsureFolderCreated(Configuration.GetConnectionString(IdentityConnectionName));
-            
+
             applicationDbContext.Database.EnsureCreated();
 
             CreateDefaultAdmin(serviceScope.ServiceProvider).Wait();
@@ -317,7 +350,7 @@ namespace Registry.Web
 
             if (registryDbContext.Database.IsSqlite())
                 CommonUtils.EnsureFolderCreated(Configuration.GetConnectionString(RegistryConnectionName));
-            
+
             registryDbContext.Database.EnsureCreated();
 
             CreateInitialData(registryDbContext);

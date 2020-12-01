@@ -38,11 +38,6 @@ namespace Registry.Web.Models
         public DbProvider RegistryProvider { get; set; }
 
         /// <summary>
-        /// Storage provider settings
-        /// </summary>
-        public StorageProvider StorageProvider { get; set; }
-
-        /// <summary>
         /// Default admin details
         /// </summary>
         public AdminInfo DefaultAdmin { get; set; }
@@ -101,13 +96,24 @@ namespace Registry.Web.Models
         /// External authentication provider url
         /// </summary>
         public string ExternalAuthUrl { get; set; }
+
+        /// <summary>
+        /// Storage provider settings
+        /// </summary>
+        public DynamicProvider<StorageType> StorageProvider { get; set; }
+
+        /// <summary>
+        /// Caching provider settings
+        /// </summary>
+        public DynamicProvider<CachingType> CachingProvider { get; set; }
+
     }
 
-    public class StorageProvider
+    public class DynamicProvider<T> where T:Enum
     {
 
         [JsonConverter(typeof(StringEnumConverter))] 
-        public StorageType Type { get; set; }
+        public T Type { get; set; }
         public DictionaryEx<string, string> Settings { get; set; }
     }
 
@@ -122,6 +128,11 @@ namespace Registry.Web.Models
     {
         Physical,
         S3
+    }
+    public enum CachingType
+    {
+        InMemory,
+        Redis
     }
 
     public enum DbProvider
