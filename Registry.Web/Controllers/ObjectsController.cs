@@ -38,6 +38,25 @@ namespace Registry.Web.Controllers
             _logger = logger;
         }
 
+
+        [HttpGet("thumb", Name = nameof(ObjectsController) + "." + nameof(GenerateThumbnail))]
+        public async Task<IActionResult> GenerateThumbnail([FromRoute] string orgSlug, [FromRoute] string dsSlug, [FromForm] string path, [FromForm] int? size)
+        {
+            try
+            {
+                _logger.LogDebug($"Objects controller GenerateThumbnail('{orgSlug}', '{dsSlug}', '{path}', '{size}')");
+
+                var res = await _objectsManager.GenerateThumbnail(orgSlug, dsSlug, path, size);
+
+                return File(res.ContentStream, res.ContentType, res.Name);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, $"Exception in Objects controller GenerateThumbnail('{orgSlug}', '{dsSlug}', '{path}', '{size}')");
+                return ExceptionResult(ex);
+            }
+        }
+
         #region Downloads
 
         [HttpGet("download", Name = nameof(ObjectsController) + "." + nameof(Download))]

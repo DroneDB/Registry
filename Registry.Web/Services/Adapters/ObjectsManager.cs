@@ -37,6 +37,9 @@ namespace Registry.Web.Services.Adapters
 
         private const string LocationKey = "location";
 
+        // TODO: Could be moved to config
+        private const int DefaultThumbnailSize = 512;
+
         private const string BucketNameFormat = "{0}-{1}";
 
         public ObjectsManager(ILogger<ObjectsManager> logger,
@@ -85,6 +88,11 @@ namespace Registry.Web.Services.Adapters
             if (string.IsNullOrWhiteSpace(path))
                 throw new ArgumentException("Path should not be null");
 
+            return await InternalGet(orgSlug, dsSlug, path);
+        }
+
+        private async Task<ObjectRes> InternalGet(string orgSlug, string dsSlug, string path)
+        {
             var ddb = _ddbFactory.GetDdb(orgSlug, dsSlug);
 
             var res = ddb.Search(path).FirstOrDefault();
@@ -109,7 +117,6 @@ namespace Registry.Web.Services.Adapters
                 await _objectSystem.MakeBucketAsync(bucketName, region);
 
                 _logger.LogInformation("Bucket created");
-
             }
 
             var objInfo = await _objectSystem.GetObjectInfoAsync(bucketName, res.Path);
@@ -133,7 +140,6 @@ namespace Registry.Web.Services.Adapters
                 Hash = res.Hash,
                 Size = res.Size
             };
-
         }
 
         public async Task<UploadedObjectDto> AddNew(string orgSlug, string dsSlug, string path, byte[] data)
@@ -364,9 +370,50 @@ namespace Registry.Web.Services.Adapters
             _logger.LogInformation("Deleting old bucket");
 
             await _objectSystem.RemoveBucketAsync(oldBucket);
-            
+
             _logger.LogInformation("Old bucket deleted");
-            
+
+        }
+
+        public async Task<FileDescriptorDto> GenerateThumbnail(string orgSlug, string dsSlug, string path, int? size, bool recreate = false)
+        {
+            var ds = await _utils.GetDataset(orgSlug, dsSlug);
+
+            _logger.LogInformation($"In '{orgSlug}/{dsSlug}'");
+
+            EnsurePathsValidity(orgSlug, dsSlug, new[] { path });
+
+            var fileName = Path.GetFileName(path);
+            if (fileName == null)
+                throw new ArgumentException("Path is not valid");
+
+            var destFilePath = Path.Combine(Path.GetTempPath(), "out-" + Path.ChangeExtension(fileName, ".jpg"));
+            var sourceFilePath = Path.Combine(Path.GetTempPath(), fileName);
+
+            try
+            {
+                var obj = await InternalGet(orgSlug, dsSlug, path);
+                await File.WriteAllBytesAsync(sourceFilePath, obj.Data);
+
+                                var ddb = _ddbFactory.GetDdb(orgSlug, dsSlug);
+                ddb.GenerateThumbnail(sourceFilePath, size ?? DefaultThumbnailSize, destFilePath);
+
+                var memory = new MemoryStream(await File.ReadAllBytesAsync(destFilePath));
+                memory.Reset();
+
+                return new FileDescriptorDto
+                {
+                    ContentStream = memory,
+                    ContentType = "image/jpeg",
+                    Name = Path.ChangeExtension(fileName, ".jpg")
+                };
+            }
+            finally
+            {
+                if (File.Exists(destFilePath)) File.Delete(destFilePath);
+                if (File.Exists(sourceFilePath)) File.Delete(sourceFilePath);
+            }
+
         }
 
         #region Downloads
