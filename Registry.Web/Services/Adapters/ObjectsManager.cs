@@ -7,6 +7,7 @@ using System.Reactive.Linq;
 using System.Runtime.CompilerServices;
 using System.Threading.Tasks;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
+using Microsoft.Extensions.Caching.Distributed;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using MimeMapping;
@@ -32,6 +33,7 @@ namespace Registry.Web.Services.Adapters
         private readonly IDdbFactory _ddbFactory;
         private readonly IUtils _utils;
         private readonly IAuthManager _authManager;
+        private readonly IDistributedCache _distributedCache;
         private readonly RegistryContext _context;
         private readonly AppSettings _settings;
 
@@ -48,7 +50,7 @@ namespace Registry.Web.Services.Adapters
             IChunkedUploadManager chunkedUploadManager,
             IOptions<AppSettings> settings,
             IDdbFactory ddbFactory,
-            IUtils utils, IAuthManager authManager)
+            IUtils utils, IAuthManager authManager, IDistributedCache distributedCache)
         {
             _logger = logger;
             _context = context;
@@ -57,6 +59,7 @@ namespace Registry.Web.Services.Adapters
             _ddbFactory = ddbFactory;
             _utils = utils;
             _authManager = authManager;
+            _distributedCache = distributedCache;
             _settings = settings.Value;
         }
 
@@ -395,7 +398,11 @@ namespace Registry.Web.Services.Adapters
                 var obj = await InternalGet(orgSlug, dsSlug, path);
                 await File.WriteAllBytesAsync(sourceFilePath, obj.Data);
 
-                                var ddb = _ddbFactory.GetDdb(orgSlug, dsSlug);
+                // Request a cache-aware ddb implementation
+                var ddb = _ddbFactory
+                    .GetDdb(orgSlug, dsSlug)
+                    .UseCache(_distributedCache);
+                
                 ddb.GenerateThumbnail(sourceFilePath, size ?? DefaultThumbnailSize, destFilePath);
 
                 var memory = new MemoryStream(await File.ReadAllBytesAsync(destFilePath));
