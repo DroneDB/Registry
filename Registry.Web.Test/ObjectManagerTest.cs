@@ -44,11 +44,10 @@ namespace Registry.Web.Test
         private Mock<IOptions<AppSettings>> _appSettingsMock;
         private Mock<IDdbFactory> _ddbFactoryMock;
         private Mock<IAuthManager> _authManagerMock;
-        private Mock<IUtils> _utilsMock;
         private Mock<IHttpContextAccessor> _httpContextAccessorMock;
         private Mock<LinkGenerator> _linkGeneratorMock;
 
-        private const string DataFolder = "Data";
+        //private const string DataFolder = "Data";
         private const string TestStorageFolder = @"Data/Storage";
         private const string DdbTestDataFolder = @"Data/DdbTest";
         private const string StorageFolder = "Storage";
@@ -66,7 +65,6 @@ namespace Registry.Web.Test
             _appSettingsMock = new Mock<IOptions<AppSettings>>();
             _ddbFactoryMock = new Mock<IDdbFactory>();
             _authManagerMock = new Mock<IAuthManager>();
-            _utilsMock = new Mock<IUtils>();
             _chunkedUploadManagerMock = new Mock<IChunkedUploadManager>();
             _httpContextAccessorMock = new Mock<IHttpContextAccessor>();
             _linkGeneratorMock = new Mock<LinkGenerator>();
