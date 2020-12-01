@@ -14,5 +14,6 @@ namespace Registry.Web.Services.Ports
         public Task Delete(string orgSlug, string dsSlug);
 
         public Task Rename(string orgSlug, string dsSlug, string newSlug);
+        Task<Dictionary<string, object>> ChangeAttributes(string orgSlug, string dsSlug, Dictionary<string, object> attributes);
     }
 }
