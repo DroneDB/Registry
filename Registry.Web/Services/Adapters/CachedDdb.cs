@@ -1,4 +1,5 @@
-﻿using System.Collections.Generic;
+﻿using System;
+using System.Collections.Generic;
 using System.IO;
 using Microsoft.Extensions.Caching.Distributed;
 using Registry.Common;
@@ -11,6 +12,9 @@ namespace Registry.Web.Services.Adapters
     {
         private readonly IDdb _ddb;
         private readonly IDistributedCache _cache;
+
+        // TODO: Good candidate for new config key
+        private readonly TimeSpan CacheExpireTime = new TimeSpan(0,5,0);
 
         public CachedDdb(IDdb ddb, IDistributedCache cache)
         {
@@ -54,7 +58,13 @@ namespace Registry.Web.Services.Adapters
             }
 
             _ddb.GenerateThumbnail(imagePath, size, outputPath);
-            _cache.Set(key, File.ReadAllBytes(outputPath));
+
+            var options = new DistributedCacheEntryOptions
+            {
+                SlidingExpiration = CacheExpireTime
+            };
+
+            _cache.Set(key, File.ReadAllBytes(outputPath), options);
         }
     }
 }
