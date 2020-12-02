@@ -30,7 +30,7 @@ namespace Registry.Web.Services.Adapters
             IUtils utils,
             ILogger<DatasetsManager> logger,
             IObjectsManager objectsManager,
-            IPasswordHasher passwordHasher, 
+            IPasswordHasher passwordHasher,
             IDdbFactory ddbFactory)
         {
             _context = context;
@@ -47,19 +47,19 @@ namespace Registry.Web.Services.Adapters
 
             var query = from ds in org.Datasets
 
-                select new DatasetDto
-                {
-                    Id = ds.Id,
-                    Slug = ds.Slug,
-                    CreationDate = ds.CreationDate,
-                    Description = ds.Description,
-                    LastEdit = ds.LastEdit,
-                    Name = ds.Name,
-                    License = ds.License,
-                    Meta = ds.Meta,
-                    ObjectsCount = ds.ObjectsCount,
-                    Size = ds.Size
-                };
+                        select new DatasetDto
+                        {
+                            Id = ds.Id,
+                            Slug = ds.Slug,
+                            CreationDate = ds.CreationDate,
+                            Description = ds.Description,
+                            LastEdit = ds.LastEdit,
+                            Name = ds.Name,
+                            License = ds.License,
+                            Meta = ds.Meta,
+                            ObjectsCount = ds.ObjectsCount,
+                            Size = ds.Size
+                        };
 
             return query;
         }
@@ -72,12 +72,12 @@ namespace Registry.Web.Services.Adapters
             return dataset.ToDto();
         }
 
-        public async Task<EntryDto> GetEntry(string orgSlug, string dsSlug)
+        public async Task<EntryDto[]> GetEntry(string orgSlug, string dsSlug)
         {
 
             var dataset = await _utils.GetDataset(orgSlug, dsSlug);
 
-            return _utils.GetDatasetEntry(dataset);
+            return new[] { _utils.GetDatasetEntry(dataset) };
         }
 
         public async Task<DatasetDto> AddNew(string orgSlug, DatasetDto dataset)
@@ -90,13 +90,13 @@ namespace Registry.Web.Services.Adapters
             ds.LastEdit = DateTime.Now;
             ds.CreationDate = ds.LastEdit;
 
-            if (!string.IsNullOrEmpty(dataset.Password)) 
+            if (!string.IsNullOrEmpty(dataset.Password))
                 ds.PasswordHash = _passwordHasher.Hash(dataset.Password);
 
             org.Datasets.Add(ds);
 
             await _context.SaveChangesAsync();
-            
+
             return ds.ToDto();
 
         }
@@ -128,7 +128,7 @@ namespace Registry.Web.Services.Adapters
         public async Task Delete(string orgSlug, string dsSlug)
         {
             var org = await _utils.GetOrganization(orgSlug);
-            
+
             var entity = org.Datasets.FirstOrDefault(item => item.Slug == dsSlug);
 
             if (entity == null)
@@ -146,7 +146,7 @@ namespace Registry.Web.Services.Adapters
 
             if (string.IsNullOrWhiteSpace(newSlug))
                 throw new ArgumentException("New slug is empty");
-            
+
             if (dsSlug == MagicStrings.DefaultDatasetSlug || newSlug == MagicStrings.DefaultDatasetSlug)
                 throw new ArgumentException("Cannot move default dataset");
 
