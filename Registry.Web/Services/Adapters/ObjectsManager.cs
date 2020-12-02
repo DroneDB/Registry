@@ -19,6 +19,7 @@ using Registry.Web.Data;
 using Registry.Web.Data.Models;
 using Registry.Web.Exceptions;
 using Registry.Web.Models;
+using Registry.Web.Models.Configuration;
 using Registry.Web.Models.DTO;
 using Registry.Web.Services.Ports;
 using Registry.Web.Utilities;
@@ -113,11 +114,7 @@ namespace Registry.Web.Services.Adapters
             {
                 _logger.LogInformation("Bucket does not exist, creating it");
 
-                var region = _settings.StorageProvider.Settings.SafeGetValue("region");
-                if (region == null)
-                    _logger.LogWarning("No region specified in storage provider config");
-
-                await _objectSystem.MakeBucketAsync(bucketName, region);
+                await _objectSystem.MakeBucketAsync(bucketName, SafeGetRegion());
 
                 _logger.LogInformation("Bucket created");
             }
@@ -145,6 +142,23 @@ namespace Registry.Web.Services.Adapters
             };
         }
 
+        private string SafeGetRegion()
+        {
+            if (_settings.StorageProvider.Type != StorageType.S3) return null;
+
+            var settings = _settings.StorageProvider.Settings.ToObject<S3ProviderSettings>();
+            if (settings == null)
+            {
+                _logger.LogWarning("No S3 settings loaded, shouldn't this be a problem?");
+                return null;
+            }
+
+            if (settings.Region == null)
+                _logger.LogWarning("No region specified in storage provider config");
+
+            return settings.Region;
+        }
+
         public async Task<UploadedObjectDto> AddNew(string orgSlug, string dsSlug, string path, byte[] data)
         {
             await using var stream = new MemoryStream(data);
@@ -168,7 +182,7 @@ namespace Registry.Web.Services.Adapters
 
                 _logger.LogInformation($"Bucket '{bucketName}' does not exist, creating it");
 
-                await _objectSystem.MakeBucketAsync(bucketName, _settings.StorageProvider.Settings.SafeGetValue(LocationKey));
+                await _objectSystem.MakeBucketAsync(bucketName, SafeGetLocation());
 
                 _logger.LogInformation("Bucket created");
             }
@@ -201,6 +215,23 @@ namespace Registry.Web.Services.Adapters
             };
 
             return obj;
+        }
+
+        private string SafeGetLocation()
+        {
+            if (_settings.StorageProvider.Type != StorageType.S3) return null;
+
+            var settings = _settings.StorageProvider.Settings.ToObject<S3ProviderSettings>();
+            if (settings == null)
+            {
+                _logger.LogWarning("No S3 settings loaded, shouldn't this be a problem?");
+                return null;
+            }
+
+            if (settings.Location == null)
+                _logger.LogWarning("No location specified in storage provider config");
+
+            return settings.Location;
         }
 
         public async Task Delete(string orgSlug, string dsSlug, string path)
@@ -349,11 +380,7 @@ namespace Registry.Web.Services.Adapters
 
             var newBucket = string.Format(BucketNameFormat, orgSlug, newDsSlug);
 
-            var region = _settings.StorageProvider.Settings.SafeGetValue("region");
-            if (region == null)
-                _logger.LogWarning("No region specified in storage provider config");
-
-            await _objectSystem.MakeBucketAsync(newBucket, region);
+            await _objectSystem.MakeBucketAsync(newBucket, SafeGetRegion());
 
             var objects = _objectSystem.ListObjectsAsync(oldBucket, recursive: true).ToEnumerable().ToArray();
 
@@ -401,7 +428,7 @@ namespace Registry.Web.Services.Adapters
                 // Request a cache-aware ddb implementation
                 var ddb = _ddbFactory
                     .GetDdb(orgSlug, dsSlug)
-                    .UseCache(_distributedCache);
+                    .UseCache(_distributedCache, _settings.CacheProvider.Settings.ToObject<CacheProviderSettings>());
                 
                 ddb.GenerateThumbnail(sourceFilePath, size ?? DefaultThumbnailSize, destFilePath);
 
@@ -625,11 +652,7 @@ namespace Registry.Web.Services.Adapters
             {
                 _logger.LogInformation("Bucket does not exist, creating it");
 
-                var region = _settings.StorageProvider.Settings.SafeGetValue("region");
-                if (region == null)
-                    _logger.LogWarning("No region specified in storage provider config");
-
-                await _objectSystem.MakeBucketAsync(bucketName, region);
+                await _objectSystem.MakeBucketAsync(bucketName, SafeGetRegion());
 
                 _logger.LogInformation("Bucket created");
             }

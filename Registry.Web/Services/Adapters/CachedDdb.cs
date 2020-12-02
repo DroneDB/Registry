@@ -12,14 +12,16 @@ namespace Registry.Web.Services.Adapters
     {
         private readonly IDdb _ddb;
         private readonly IDistributedCache _cache;
+        private readonly TimeSpan? _expiration;
 
         // TODO: Good candidate for new config key
         private readonly TimeSpan CacheExpireTime = new TimeSpan(0,5,0);
 
-        public CachedDdb(IDdb ddb, IDistributedCache cache)
+        public CachedDdb(IDdb ddb, IDistributedCache cache, TimeSpan? expiration)
         {
             _ddb = ddb;
             _cache = cache;
+            _expiration = expiration;
         }
         public IEnumerable<DdbEntry> Search(string path)
         {
@@ -61,7 +63,7 @@ namespace Registry.Web.Services.Adapters
 
             var options = new DistributedCacheEntryOptions
             {
-                SlidingExpiration = CacheExpireTime
+                SlidingExpiration = _expiration ?? CacheExpireTime
             };
 
             _cache.Set(key, File.ReadAllBytes(outputPath), options);

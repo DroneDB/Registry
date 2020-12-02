@@ -1,12 +1,9 @@
 ﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Threading.Tasks;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Converters;
 using Registry.Common;
 
-namespace Registry.Web.Models
+namespace Registry.Web.Models.Configuration
 {
     public class AppSettings
     {
@@ -100,45 +97,12 @@ namespace Registry.Web.Models
         /// <summary>
         /// Storage provider settings
         /// </summary>
-        public DynamicProvider<StorageType> StorageProvider { get; set; }
+        public StorageProvider StorageProvider { get; set; }
 
         /// <summary>
-        /// Caching provider settings
+        /// Cache provider settings
         /// </summary>
-        public DynamicProvider<CachingType> CachingProvider { get; set; }
+        public CacheProvider CacheProvider { get; set; }
 
-    }
-
-    public class DynamicProvider<T> where T:Enum
-    {
-
-        [JsonConverter(typeof(StringEnumConverter))] 
-        public T Type { get; set; }
-        public DictionaryEx<string, string> Settings { get; set; }
-    }
-
-    public class AdminInfo
-    {
-        public string Email { get; set; }
-        public string UserName { get; set; }
-        public string Password { get; set; }
-    }
-
-    public enum StorageType
-    {
-        Physical,
-        S3
-    }
-    public enum CachingType
-    {
-        InMemory,
-        Redis
-    }
-
-    public enum DbProvider
-    {
-        Sqlite,
-        Mysql,
-        Mssql
     }
 }

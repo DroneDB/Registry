@@ -19,6 +19,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.CodeAnalysis.Options;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Caching.Distributed;
+using Microsoft.Extensions.Caching.StackExchangeRedis;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.FileProviders;
@@ -34,10 +35,12 @@ using Registry.Ports.DroneDB;
 using Registry.Ports.ObjectSystem;
 using Registry.Web.Data;
 using Registry.Web.Data.Models;
+using Registry.Web.Models.Configuration;
 using Registry.Web.Models.DTO;
 using Registry.Web.Services;
 using Registry.Web.Services.Adapters;
 using Registry.Web.Services.Ports;
+using Registry.Web.Utilities;
 
 namespace Registry.Web
 {
@@ -186,32 +189,39 @@ namespace Registry.Web
         private void RegisterCacheProvider(IServiceCollection services, AppSettings appSettings)
         {
 
-            if (appSettings.CachingProvider == null)
+            if (appSettings.CacheProvider == null)
             {
                 // No caching
                 services.AddSingleton<IDistributedCache, DummyDistributedCache>();
                 return;
             }
 
-            switch (appSettings.CachingProvider.Type)
+            switch (appSettings.CacheProvider.Type)
             {
-                case CachingType.InMemory:
+                case CacheType.InMemory:
 
                     services.AddDistributedMemoryCache();
 
                     break;
-                case CachingType.Redis:
+
+                case CacheType.Redis:
+
+                    var settings = appSettings.CacheProvider.Settings.ToObject<RedisProviderSettings>();
+
+                    if (settings == null)
+                        throw new ArgumentException("Invalid redis cache provider settings");
 
                     services.AddStackExchangeRedisCache(options =>
                     {
-                        options.Configuration = appSettings.CachingProvider.Settings["InstanceAddress"];
-                        options.InstanceName = appSettings.CachingProvider.Settings["InstanceName"];
+                        options.Configuration = settings.InstanceAddress;
+                        options.InstanceName = settings.InstanceName;
                     });
 
                     break;
+
                 default:
                     throw new InvalidOperationException(
-                        $"Unsupported caching provider: '{(int)appSettings.CachingProvider.Type}'");
+                        $"Unsupported caching provider: '{(int)appSettings.CacheProvider.Type}'");
             }
 
         }
@@ -221,33 +231,38 @@ namespace Registry.Web
             switch (appSettings.StorageProvider.Type)
             {
                 case StorageType.Physical:
-                    var basePath = appSettings.StorageProvider.Settings["path"];
+
+                    var pySettings = appSettings.StorageProvider.Settings.ToObject<PhysicalProviderSettings>();
+                    if (pySettings == null)
+                        throw new ArgumentException("Invalid physical storage provider settings");
+
+                    var basePath = pySettings.Path;
 
                     Directory.CreateDirectory(basePath);
 
                     services.AddScoped<IObjectSystem>(provider => new PhysicalObjectSystem(basePath));
+
                     break;
+
                 case StorageType.S3:
 
-                    // TODO: Need test and maybe validation. Better to create a S3ObjectSystemConfig with this fields
-                    var endpoint = appSettings.StorageProvider.Settings.SafeGetValue("endpoint");
-                    var accessKey = appSettings.StorageProvider.Settings.SafeGetValue("accessKey");
-                    var secretKey = appSettings.StorageProvider.Settings.SafeGetValue("secretKey");
-                    var region = appSettings.StorageProvider.Settings.SafeGetValue("region");
-                    var sessionToken = appSettings.StorageProvider.Settings.SafeGetValue("sessionToken");
-                    var useSsl = appSettings.StorageProvider.Settings.SafeGetValue("useSsl");
+                    var s3Settings = appSettings.StorageProvider.Settings.ToObject<S3ProviderSettings>();
 
-                    if (!bool.TryParse(useSsl, out var tmp))
-                    {
-                        tmp = false;
-                    }
+                    if (s3Settings == null)
+                        throw new ArgumentException("Invalid S3 storage provider settings");
 
-                    var appName = appSettings.StorageProvider.Settings.SafeGetValue("appName");
-                    var appVersion = appSettings.StorageProvider.Settings.SafeGetValue("appVersion");
+                    services.AddScoped<IObjectSystem, S3ObjectSystem>(provider => new S3ObjectSystem(
+                        s3Settings.Endpoint, 
+                        s3Settings.AccessKey, 
+                        s3Settings.SecretKey,
+                        s3Settings.Region,
+                        s3Settings.SessionToken,
+                        s3Settings.UseSsl ?? false,
+                        s3Settings.AppName,
+                        s3Settings.AppVersion));
 
-                    services.AddScoped<IObjectSystem, S3ObjectSystem>(provider => new S3ObjectSystem(endpoint, accessKey,
-                        secretKey, region, sessionToken, tmp, appName, appVersion));
                     break;
+
                 default:
                     throw new InvalidOperationException(
                         $"Unsupported storage provider: '{(int)appSettings.StorageProvider.Type}'");
@@ -339,6 +354,9 @@ namespace Registry.Web
                 .CreateScope();
             using var applicationDbContext = serviceScope.ServiceProvider.GetService<ApplicationDbContext>();
 
+            if (applicationDbContext == null)
+                throw new InvalidOperationException("Cannot get application db context from service provider");
+
             if (applicationDbContext.Database.IsSqlite())
                 CommonUtils.EnsureFolderCreated(Configuration.GetConnectionString(IdentityConnectionName));
 
@@ -347,6 +365,9 @@ namespace Registry.Web
             CreateDefaultAdmin(serviceScope.ServiceProvider).Wait();
 
             using var registryDbContext = serviceScope.ServiceProvider.GetService<RegistryContext>();
+
+            if (registryDbContext == null)
+                throw new InvalidOperationException("Cannot get registry db context from service provider");
 
             if (registryDbContext.Database.IsSqlite())
                 CommonUtils.EnsureFolderCreated(Configuration.GetConnectionString(RegistryConnectionName));
@@ -396,6 +417,15 @@ namespace Registry.Web
             var roleManager = provider.GetService<RoleManager<IdentityRole>>();
             var appSettings = provider.GetService<IOptions<AppSettings>>();
 
+            if (usersManager == null)
+                throw new InvalidOperationException("Cannot get users manager from service provider");
+
+            if (roleManager == null)
+                throw new InvalidOperationException("Cannot get role manager from service provider");
+
+            if (appSettings == null)
+                throw new InvalidOperationException("Cannot get app settings from service provider");
+
             // If no users in database, let's create the default admin
             if (!usersManager.Users.Any())
             {
@@ -413,7 +443,7 @@ namespace Registry.Web
                 var usrRes = await usersManager.CreateAsync(user, defaultAdmin.Password);
                 if (usrRes.Succeeded)
                 {
-                    var res = await usersManager.AddToRoleAsync(user, ApplicationDbContext.AdminRoleName);
+                    await usersManager.AddToRoleAsync(user, ApplicationDbContext.AdminRoleName);
                 }
             }
         }

@@ -1,7 +1,10 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Text;
+using System.Text.Json;
 using System.Text.RegularExpressions;
+using Newtonsoft.Json;
 using Registry.Ports.DroneDB;
 using Registry.Ports.DroneDB.Models;
 using Registry.Web.Data.Models;
@@ -176,6 +179,17 @@ namespace Registry.Web.Utilities
 
             return new TagDto(org, ds);
 
+        }
+
+        public static T ToObject<T>(this JsonElement obj)
+        {
+            return JsonConvert.DeserializeObject<T>(obj.GetRawText());
+        }
+
+        public static T ToObject<T>(this Dictionary<string, object> obj)
+        {
+            // Just don't ask please
+            return JsonConvert.DeserializeObject<T>(JsonConvert.SerializeObject(obj));
         }
 
     }

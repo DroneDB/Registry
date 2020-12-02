@@ -2,6 +2,7 @@
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Options;
 using Registry.Web.Models;
+using Registry.Web.Models.Configuration;
 
 namespace Registry.Web.Services
 {

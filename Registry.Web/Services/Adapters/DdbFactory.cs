@@ -8,6 +8,7 @@ using Microsoft.Extensions.Options;
 using Registry.Adapters.DroneDB;
 using Registry.Ports.DroneDB;
 using Registry.Web.Models;
+using Registry.Web.Models.Configuration;
 using Registry.Web.Services.Ports;
 
 namespace Registry.Web.Services.Adapters

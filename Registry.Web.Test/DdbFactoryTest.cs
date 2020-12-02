@@ -17,6 +17,7 @@ using NUnit.Framework;
 using Registry.Adapters.DroneDB;
 using Registry.Common;
 using Registry.Web.Models;
+using Registry.Web.Models.Configuration;
 using Registry.Web.Services.Adapters;
 
 namespace Registry.Web.Test
