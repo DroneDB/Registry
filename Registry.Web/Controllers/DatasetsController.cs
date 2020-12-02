@@ -9,6 +9,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using Newtonsoft.Json;
 using Registry.Web.Data;
 using Registry.Web.Data.Models;
 using Registry.Web.Models;
@@ -103,7 +104,6 @@ namespace Registry.Web.Controllers
             }
         }
 
-
         [HttpPost]
         public async Task<IActionResult> Post([FromRoute] string orgSlug, [FromForm] DatasetDto dataset)
         {
@@ -122,7 +122,6 @@ namespace Registry.Web.Controllers
             }
         }
 
-
         [HttpPost(RoutesHelper.DatasetSlug + "/rename")]
         public async Task<IActionResult> Rename([FromRoute] string orgSlug, string dsSlug, [FromForm(Name = "slug")] string newSlug)
         {
@@ -136,7 +135,25 @@ namespace Registry.Web.Controllers
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, $"Exception in Dataset controller Rename('{orgSlug}', '{dsSlug}', '{newSlug}')')");
+                _logger.LogError(ex, $"Exception in Dataset controller Rename('{orgSlug}', '{dsSlug}', '{newSlug}')");
+                return ExceptionResult(ex);
+            }
+        }
+
+        [HttpPost(RoutesHelper.DatasetSlug + "/chattr")]
+        public async Task<IActionResult> ChangeAttributes([FromRoute] string orgSlug, string dsSlug, [FromForm(Name = "attrs")] Dictionary<string, object> attributes)
+        {
+            try
+            {
+                _logger.LogDebug($"Dataset controller ChangeAttributes('{orgSlug}', '{dsSlug}', '{(attributes != null ? JsonConvert.SerializeObject(attributes) : null)}')");
+
+                var res = await _datasetsManager.ChangeAttributes(orgSlug, dsSlug, attributes);
+
+                return Ok(res);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, $"Exception in Dataset controller ChangeAttributes('{orgSlug}', '{dsSlug}', '{(attributes != null ? JsonConvert.SerializeObject(attributes) : null)}')')");
                 return ExceptionResult(ex);
             }
         }

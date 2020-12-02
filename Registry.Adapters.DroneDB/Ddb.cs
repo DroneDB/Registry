@@ -125,6 +125,34 @@ namespace Registry.Adapters.DroneDB
             }
         }
 
+        public Dictionary<string, object> ChangeAttributes(Dictionary<string, object> attributes)
+        {
+            try
+            {
+                
+                return DDB.Bindings.DroneDB.ChangeAttributes(_baseDdbPath, attributes);
+
+            }
+            catch (DDBException ex)
+            {
+                throw new InvalidOperationException($"Cannot change attributes of ddb '{_baseDdbPath}'", ex);
+            }
+        }
+
+        public void GenerateThumbnail(string imagePath, int size, string outputPath)
+        {
+            try
+            {
+
+                DDB.Bindings.DroneDB.GenerateThumbnail(imagePath, size, outputPath);
+
+            }
+            catch (DDBException ex)
+            {
+                throw new InvalidOperationException($"Cannot generate thumbnail of '{imagePath}' to '{outputPath}' with size '{size}'", ex);
+            }
+        }
+
         public void Add(string path, Stream stream)
         {
             string filePath = null;

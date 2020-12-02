@@ -14,6 +14,7 @@ using NUnit.Framework;
 using Registry.Web.Data;
 using Registry.Web.Data.Models;
 using Registry.Web.Models;
+using Registry.Web.Models.Configuration;
 using Registry.Web.Services.Adapters;
 using Registry.Web.Services.Ports;
 
@@ -57,7 +58,7 @@ namespace Registry.Web.Test
             
             var utils = new WebUtils(_authManagerMock.Object, context, _appSettingsMock.Object, _httpContextAccessorMock.Object, _linkGeneratorMock.Object);
 
-            var datasetsManager = new DatasetsManager(context, utils, _datasetsManagerLogger, _objectsManagerMock.Object, _passwordHasher);
+            var datasetsManager = new DatasetsManager(context, utils, _datasetsManagerLogger, _objectsManagerMock.Object, _passwordHasher, _ddbFactoryMock.Object);
 
             var list = (await datasetsManager.List(MagicStrings.PublicOrganizationSlug)).ToArray();
 
