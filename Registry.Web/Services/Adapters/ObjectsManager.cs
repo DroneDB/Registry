@@ -563,36 +563,48 @@ namespace Registry.Web.Services.Adapters
         {
             var ddb = _ddbFactory.GetDdb(orgSlug, dsSlug);
 
-            var filePaths = new List<string>();
+            string[] filePaths = null;
 
             if (paths != null)
             {
+                var temp = new List<string>();
 
                 foreach (var path in paths)
                 {
-                    var entries = ddb.Search(path)?.ToArray();
+                    // We are in recursive mode because the paths could contain other folders that we need to expand
+                    var items = ddb.Search(path, true)?
+                        .Where(entry => entry.Type != EntryType.Directory)
+                        .Select(entry => entry.Path).ToArray();
 
-                    if (entries == null || !entries.Any())
+                    if (items == null || !items.Any())
                         throw new ArgumentException($"Cannot find any file path matching '{path}'");
 
-                    filePaths.AddRange(entries.Select(item => item.Path));
+                    temp.AddRange(items);
                 }
+
+                // Get rid of possible duplicates and sort
+                filePaths = temp.Distinct().OrderBy(item => item).ToArray();
 
             }
             else
             {
-                // Select everything
-                filePaths = ddb.Search(null)
+                // Select everything and sort
+                filePaths = ddb.Search(null, true)?
+                    .Where(entry => entry.Type != EntryType.Directory)
                     .Select(entry => entry.Path)
-                    .ToList();
+                    .OrderBy(path => path)
+                    .ToArray();
+
+                if (filePaths == null)
+                    throw new InvalidOperationException("Ddb is empty, what should I get?");
             }
 
-            _logger.LogInformation($"Found {filePaths.Count} paths");
+            _logger.LogInformation($"Found {filePaths.Length} paths");
 
             FileDescriptorDto descriptor;
 
             // If there is just one file we return it
-            if (filePaths.Count == 1)
+            if (filePaths.Length == 1)
             {
                 var filePath = filePaths.First();
 
@@ -618,9 +630,6 @@ namespace Registry.Web.Services.Adapters
                     ContentStream = new MemoryStream(),
                     ContentType = "application/zip"
                 };
-
-                // Hopefully all the folders are correctly ordered
-                filePaths.Sort();
 
                 using (var archive = new ZipArchive(descriptor.ContentStream, ZipArchiveMode.Create, true))
                 {
