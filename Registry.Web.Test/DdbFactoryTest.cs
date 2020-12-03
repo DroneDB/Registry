@@ -50,7 +50,7 @@ namespace Registry.Web.Test
 
             var factory = new DdbManager(_appSettingsMock.Object, _ddbFactoryLogger);
 
-            var ddb = factory.GetDdb(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug);
+            var ddb = factory.Get(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug);
 
             ddb.Should().NotBeNull();
         }
@@ -60,7 +60,7 @@ namespace Registry.Web.Test
         {
             var factory = new DdbManager(_appSettingsMock.Object, _ddbFactoryLogger);
 
-            factory.Invoking(x => x.GetDdb("vlwefwef", MagicStrings.DefaultDatasetSlug))
+            factory.Invoking(x => x.Get("vlwefwef", MagicStrings.DefaultDatasetSlug))
                 .Should().NotThrow<IOException>();
 
         }
@@ -76,7 +76,7 @@ namespace Registry.Web.Test
 
             var factory = new DdbManager(_appSettingsMock.Object, _ddbFactoryLogger);
 
-            var ddb = factory.GetDdb(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug);
+            var ddb = factory.Get(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug);
 
             var res = ddb.Search("asasdadas.jpg");
 
@@ -108,7 +108,7 @@ namespace Registry.Web.Test
 
             var factory = new DdbManager(_appSettingsMock.Object, _ddbFactoryLogger);
 
-            var ddb = factory.GetDdb(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug);
+            var ddb = factory.Get(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug);
             
             var list = ddb.Search(fileName).ToArray();
 
@@ -161,7 +161,7 @@ namespace Registry.Web.Test
 
             var factory = new DdbManager(_appSettingsMock.Object, _ddbFactoryLogger);
 
-            var ddb = factory.GetDdb(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug);
+            var ddb = factory.Get(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug);
 
             var list = ddb.Search(fileName).ToArray();
 
@@ -201,7 +201,7 @@ namespace Registry.Web.Test
 
             var factory = new DdbManager(_appSettingsMock.Object, _ddbFactoryLogger);
 
-            var ddb = factory.GetDdb(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug);
+            var ddb = factory.Get(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug);
 
             const string fileName = "DJI_0028.JPG";
 

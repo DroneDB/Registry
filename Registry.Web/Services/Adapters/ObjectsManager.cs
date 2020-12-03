@@ -71,7 +71,7 @@ namespace Registry.Web.Services.Adapters
 
             _logger.LogInformation($"In '{orgSlug}/{dsSlug}'");
 
-            var ddb = _ddbManager.GetDdb(orgSlug, dsSlug);
+            var ddb = _ddbManager.Get(orgSlug, dsSlug);
 
             _logger.LogInformation($"Searching in '{path}'");
 
@@ -97,7 +97,7 @@ namespace Registry.Web.Services.Adapters
 
         private async Task<ObjectRes> InternalGet(string orgSlug, string dsSlug, string path)
         {
-            var ddb = _ddbManager.GetDdb(orgSlug, dsSlug);
+            var ddb = _ddbManager.Get(orgSlug, dsSlug);
 
             var res = ddb.Search(path).FirstOrDefault();
 
@@ -198,7 +198,7 @@ namespace Registry.Web.Services.Adapters
             _logger.LogInformation("File uploaded, adding to DDB");
 
             // Add to DDB
-            var ddb = _ddbManager.GetDdb(orgSlug, dsSlug);
+            var ddb = _ddbManager.Get(orgSlug, dsSlug);
             ddb.Add(path, stream);
 
             _logger.LogInformation("Added to DDB");
@@ -256,7 +256,7 @@ namespace Registry.Web.Services.Adapters
             _logger.LogInformation($"File deleted, removing from DDB");
 
             // Remove from DDB
-            var ddb = _ddbManager.GetDdb(orgSlug, dsSlug);
+            var ddb = _ddbManager.Get(orgSlug, dsSlug);
 
             ddb.Remove(path);
             dataset.UpdateStatistics(ddb);
@@ -293,7 +293,7 @@ namespace Registry.Web.Services.Adapters
             _logger.LogInformation($"Bucket deleted, removing all files from DDB ");
 
             // Remove all from DDB
-            var ddb = _ddbManager.GetDdb(orgSlug, dsSlug);
+            var ddb = _ddbManager.Get(orgSlug, dsSlug);
 
             var res = ddb.Search(null);
             foreach (var item in res)
@@ -427,7 +427,7 @@ namespace Registry.Web.Services.Adapters
 
                 // Request a cache-aware ddb implementation
                 var ddb = _ddbManager
-                    .GetDdb(orgSlug, dsSlug)
+                    .Get(orgSlug, dsSlug)
                     .UseCache(_distributedCache, _settings.CacheProvider?.Settings.ToObject<CacheProviderSettings>());
                 
                 ddb.GenerateThumbnail(sourceFilePath, size ?? DefaultThumbnailSize, destFilePath);
@@ -490,7 +490,7 @@ namespace Registry.Web.Services.Adapters
             if (paths.Length != paths.Distinct().Count())
                 throw new ArgumentException("Duplicate paths");
 
-            var ddb = _ddbManager.GetDdb(orgSlug, dsSlug);
+            var ddb = _ddbManager.Get(orgSlug, dsSlug);
 
             foreach (var path in paths)
             {
@@ -561,7 +561,7 @@ namespace Registry.Web.Services.Adapters
 
         private async Task<FileDescriptorDto> GetFileDescriptor(string orgSlug, string dsSlug, string[] paths)
         {
-            var ddb = _ddbManager.GetDdb(orgSlug, dsSlug);
+            var ddb = _ddbManager.Get(orgSlug, dsSlug);
 
             string[] filePaths = null;
 

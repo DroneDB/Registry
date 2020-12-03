@@ -172,7 +172,7 @@ namespace Registry.Web.Services.Adapters
         {
             await _utils.GetDataset(orgSlug, dsSlug);
 
-            var ddb = _ddbManager.GetDdb(orgSlug, dsSlug);
+            var ddb = _ddbManager.Get(orgSlug, dsSlug);
 
             return ddb.ChangeAttributes(attributes);
 
