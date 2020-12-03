@@ -135,6 +135,7 @@ namespace Registry.Web.Services.Adapters
                 throw new NotFoundException("Dataset not found");
 
             await _objectsManager.DeleteAll(orgSlug, dsSlug);
+            _ddbManager.Delete(orgSlug, dsSlug);
 
             _context.Datasets.Remove(entity);
 
@@ -159,12 +160,13 @@ namespace Registry.Web.Services.Adapters
             // TODO: Add exception catching, when interrupted put DS in dirty state
             await _objectsManager.MoveDataset(orgSlug, dsSlug, newSlug);
 
+            _ddbManager.Move(orgSlug, dsSlug, newSlug);
+
             var ds = await _utils.GetDataset(orgSlug, dsSlug);
 
             ds.Slug = newSlug;
 
             await _context.SaveChangesAsync();
-
 
         }
 
