@@ -134,9 +134,9 @@ namespace Registry.Web.Services.Adapters
             if (entity == null)
                 throw new NotFoundException("Dataset not found");
 
-            _context.Datasets.Remove(entity);
-
             await _objectsManager.DeleteAll(orgSlug, dsSlug);
+
+            _context.Datasets.Remove(entity);
 
             await _context.SaveChangesAsync();
         }

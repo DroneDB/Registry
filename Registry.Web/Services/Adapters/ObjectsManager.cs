@@ -272,7 +272,7 @@ namespace Registry.Web.Services.Adapters
         {
             var dataset = await _utils.GetDataset(orgSlug, dsSlug);
 
-            _logger.LogInformation($"In '{orgSlug}/{dsSlug}'");
+            _logger.LogInformation($"In DeleteAll('{orgSlug}/{dsSlug}')");
 
             var bucketName = string.Format(BucketNameFormat, orgSlug, dsSlug);
 
