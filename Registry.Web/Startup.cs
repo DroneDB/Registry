@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Text;
@@ -41,6 +42,7 @@ using Registry.Web.Services;
 using Registry.Web.Services.Adapters;
 using Registry.Web.Services.Ports;
 using Registry.Web.Utilities;
+using RestSharp.Extensions;
 
 namespace Registry.Web
 {
@@ -172,6 +174,8 @@ namespace Registry.Web
 
             RegisterStorageProvider(services, appSettings);
 
+            services.AddResponseCompression();
+
             services.Configure<FormOptions>(options =>
             {
                 // See https://docs.microsoft.com/it-it/aspnet/core/fundamentals/servers/kestrel?view=aspnetcore-3.1#maximum-client-connections
@@ -252,8 +256,8 @@ namespace Registry.Web
                         throw new ArgumentException("Invalid S3 storage provider settings");
 
                     services.AddScoped<IObjectSystem, S3ObjectSystem>(provider => new S3ObjectSystem(
-                        s3Settings.Endpoint, 
-                        s3Settings.AccessKey, 
+                        s3Settings.Endpoint,
+                        s3Settings.AccessKey,
                         s3Settings.SecretKey,
                         s3Settings.Region,
                         s3Settings.SessionToken,
@@ -309,6 +313,16 @@ namespace Registry.Web
             {
                 app.UseDeveloperExceptionPage();
             }
+            else
+            {
+                app.UseExceptionHandler("/Error");
+                app.UseHsts();
+            }
+
+            app.UseDefaultFiles();
+            app.UseStaticFiles();
+
+            app.UseRouting();
 
             // We are permissive now
             app.UseCors(cors => cors
@@ -316,17 +330,14 @@ namespace Registry.Web
                 .AllowAnyMethod()
                 .AllowAnyHeader());
 
-            app.UseRouting();
-
             app.UseMiddleware<JwtInCookieMiddleware>();
 
             app.UseAuthentication();
             app.UseAuthorization();
 
-            app.UseMiddleware<TokenManagerMiddleware>();
+            app.UseResponseCompression();
 
-            app.UseDefaultFiles();
-            app.UseStaticFiles();
+            app.UseMiddleware<TokenManagerMiddleware>();
 
             app.UseEndpoints(endpoints =>
             {
@@ -362,8 +373,6 @@ namespace Registry.Web
 
             applicationDbContext.Database.EnsureCreated();
 
-            CreateDefaultAdmin(serviceScope.ServiceProvider).Wait();
-
             using var registryDbContext = serviceScope.ServiceProvider.GetService<RegistryContext>();
 
             if (registryDbContext == null)
@@ -375,6 +384,7 @@ namespace Registry.Web
             registryDbContext.Database.EnsureCreated();
 
             CreateInitialData(registryDbContext);
+            CreateDefaultAdmin(registryDbContext, serviceScope.ServiceProvider).Wait();
 
         }
 
@@ -387,9 +397,9 @@ namespace Registry.Web
                 var entity = new Organization
                 {
                     Slug = MagicStrings.PublicOrganizationSlug,
-                    Name = "Public",
+                    Name = MagicStrings.PublicOrganizationSlug.ToPascalCase(false, CultureInfo.InvariantCulture),
                     CreationDate = DateTime.Now,
-                    Description = "Public organization",
+                    Description = "Organization",
                     IsPublic = true,
                     // NOTE: Maybe this is a good idea to flag this org as "system"
                     OwnerId = null
@@ -397,7 +407,7 @@ namespace Registry.Web
                 var ds = new Dataset
                 {
                     Slug = MagicStrings.DefaultDatasetSlug,
-                    Name = "Default",
+                    Name = MagicStrings.DefaultDatasetSlug.ToPascalCase(false, CultureInfo.InvariantCulture),
                     Description = "Default dataset",
                     IsPublic = true,
                     CreationDate = DateTime.Now,
@@ -410,7 +420,7 @@ namespace Registry.Web
             }
         }
 
-        private async Task CreateDefaultAdmin(IServiceProvider provider)
+        private async Task CreateDefaultAdmin(RegistryContext context, IServiceProvider provider)
         {
 
             var usersManager = provider.GetService<UserManager<User>>();
@@ -445,6 +455,21 @@ namespace Registry.Web
                 {
                     await usersManager.AddToRoleAsync(user, ApplicationDbContext.AdminRoleName);
                 }
+
+                var entity = new Organization
+                {
+                    Slug = defaultAdmin.UserName.ToSlug(),
+                    Name = defaultAdmin.UserName + " organization",
+                    CreationDate = DateTime.Now,
+                    Description = null,
+                    IsPublic = true,
+                    // NOTE: Maybe this is a good idea to flag this org as "system"
+                    OwnerId = user.Id
+                };
+
+                await context.Organizations.AddAsync(entity);
+                await context.SaveChangesAsync();
+
             }
         }
 
