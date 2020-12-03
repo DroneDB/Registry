@@ -28,7 +28,7 @@ namespace Registry.Web.Test
         private Mock<IOptions<AppSettings>> _appSettingsMock;
         private Mock<IDatasetsManager> _datasetManagerMock;
         private Logger<DatasetsManager> _datasetsManagerLogger;
-        private Mock<IDdbFactory> _ddbFactoryMock;
+        private Mock<IDdbManager> _ddbFactoryMock;
         private Mock<IObjectsManager> _objectsManagerMock;
         private Mock<IHttpContextAccessor> _httpContextAccessorMock;
         private Mock<LinkGenerator> _linkGeneratorMock;
@@ -40,7 +40,7 @@ namespace Registry.Web.Test
             _appSettingsMock = new Mock<IOptions<AppSettings>>();
             _authManagerMock = new Mock<IAuthManager>();
             _datasetManagerMock = new Mock<IDatasetsManager>();
-            _ddbFactoryMock = new Mock<IDdbFactory>();
+            _ddbFactoryMock = new Mock<IDdbManager>();
             _objectsManagerMock = new Mock<IObjectsManager>();
             _httpContextAccessorMock = new Mock<IHttpContextAccessor>();
             _linkGeneratorMock = new Mock<LinkGenerator>();

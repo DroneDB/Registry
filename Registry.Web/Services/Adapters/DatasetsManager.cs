@@ -21,7 +21,7 @@ namespace Registry.Web.Services.Adapters
         private readonly ILogger<DatasetsManager> _logger;
         private readonly IObjectsManager _objectsManager;
         private readonly IPasswordHasher _passwordHasher;
-        private readonly IDdbFactory _ddbFactory;
+        private readonly IDdbManager _ddbManager;
 
         // TODO: Add extensive testing
 
@@ -31,14 +31,14 @@ namespace Registry.Web.Services.Adapters
             ILogger<DatasetsManager> logger,
             IObjectsManager objectsManager,
             IPasswordHasher passwordHasher,
-            IDdbFactory ddbFactory)
+            IDdbManager ddbManager)
         {
             _context = context;
             _utils = utils;
             _logger = logger;
             _objectsManager = objectsManager;
             _passwordHasher = passwordHasher;
-            _ddbFactory = ddbFactory;
+            _ddbManager = ddbManager;
         }
 
         public async Task<IEnumerable<DatasetDto>> List(string orgSlug)
@@ -172,7 +172,7 @@ namespace Registry.Web.Services.Adapters
         {
             await _utils.GetDataset(orgSlug, dsSlug);
 
-            var ddb = _ddbFactory.GetDdb(orgSlug, dsSlug);
+            var ddb = _ddbManager.GetDdb(orgSlug, dsSlug);
 
             return ddb.ChangeAttributes(attributes);
 

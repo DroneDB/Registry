@@ -13,12 +13,12 @@ using Registry.Web.Services.Ports;
 
 namespace Registry.Web.Services.Adapters
 {
-    public class DdbFactory : IDdbFactory
+    public class DdbManager : IDdbManager
     {
-        private readonly ILogger<DdbFactory> _logger;
+        private readonly ILogger<DdbManager> _logger;
         private readonly AppSettings _settings;
 
-        public DdbFactory(IOptions<AppSettings> settings, ILogger<DdbFactory> logger)
+        public DdbManager(IOptions<AppSettings> settings, ILogger<DdbManager> logger)
         {
             _logger = logger;
             _settings = settings.Value;
@@ -34,8 +34,6 @@ namespace Registry.Web.Services.Adapters
 
             var ddb = new Ddb(baseDdbPath);
             
-            
-
             return ddb;
         }
 

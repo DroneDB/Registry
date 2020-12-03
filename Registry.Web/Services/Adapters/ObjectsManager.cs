@@ -31,7 +31,7 @@ namespace Registry.Web.Services.Adapters
         private readonly ILogger<ObjectsManager> _logger;
         private readonly IObjectSystem _objectSystem;
         private readonly IChunkedUploadManager _chunkedUploadManager;
-        private readonly IDdbFactory _ddbFactory;
+        private readonly IDdbManager _ddbManager;
         private readonly IUtils _utils;
         private readonly IAuthManager _authManager;
         private readonly IDistributedCache _distributedCache;
@@ -50,14 +50,14 @@ namespace Registry.Web.Services.Adapters
             IObjectSystem objectSystem,
             IChunkedUploadManager chunkedUploadManager,
             IOptions<AppSettings> settings,
-            IDdbFactory ddbFactory,
+            IDdbManager ddbManager,
             IUtils utils, IAuthManager authManager, IDistributedCache distributedCache)
         {
             _logger = logger;
             _context = context;
             _objectSystem = objectSystem;
             _chunkedUploadManager = chunkedUploadManager;
-            _ddbFactory = ddbFactory;
+            _ddbManager = ddbManager;
             _utils = utils;
             _authManager = authManager;
             _distributedCache = distributedCache;
@@ -71,7 +71,7 @@ namespace Registry.Web.Services.Adapters
 
             _logger.LogInformation($"In '{orgSlug}/{dsSlug}'");
 
-            var ddb = _ddbFactory.GetDdb(orgSlug, dsSlug);
+            var ddb = _ddbManager.GetDdb(orgSlug, dsSlug);
 
             _logger.LogInformation($"Searching in '{path}'");
 
@@ -97,7 +97,7 @@ namespace Registry.Web.Services.Adapters
 
         private async Task<ObjectRes> InternalGet(string orgSlug, string dsSlug, string path)
         {
-            var ddb = _ddbFactory.GetDdb(orgSlug, dsSlug);
+            var ddb = _ddbManager.GetDdb(orgSlug, dsSlug);
 
             var res = ddb.Search(path).FirstOrDefault();
 
@@ -198,7 +198,7 @@ namespace Registry.Web.Services.Adapters
             _logger.LogInformation("File uploaded, adding to DDB");
 
             // Add to DDB
-            var ddb = _ddbFactory.GetDdb(orgSlug, dsSlug);
+            var ddb = _ddbManager.GetDdb(orgSlug, dsSlug);
             ddb.Add(path, stream);
 
             _logger.LogInformation("Added to DDB");
@@ -256,7 +256,7 @@ namespace Registry.Web.Services.Adapters
             _logger.LogInformation($"File deleted, removing from DDB");
 
             // Remove from DDB
-            var ddb = _ddbFactory.GetDdb(orgSlug, dsSlug);
+            var ddb = _ddbManager.GetDdb(orgSlug, dsSlug);
 
             ddb.Remove(path);
             dataset.UpdateStatistics(ddb);
@@ -293,7 +293,7 @@ namespace Registry.Web.Services.Adapters
             _logger.LogInformation($"Bucket deleted, removing all files from DDB ");
 
             // Remove all from DDB
-            var ddb = _ddbFactory.GetDdb(orgSlug, dsSlug);
+            var ddb = _ddbManager.GetDdb(orgSlug, dsSlug);
 
             var res = ddb.Search(null);
             foreach (var item in res)
@@ -426,7 +426,7 @@ namespace Registry.Web.Services.Adapters
                 await File.WriteAllBytesAsync(sourceFilePath, obj.Data);
 
                 // Request a cache-aware ddb implementation
-                var ddb = _ddbFactory
+                var ddb = _ddbManager
                     .GetDdb(orgSlug, dsSlug)
                     .UseCache(_distributedCache, _settings.CacheProvider?.Settings.ToObject<CacheProviderSettings>());
                 
@@ -490,7 +490,7 @@ namespace Registry.Web.Services.Adapters
             if (paths.Length != paths.Distinct().Count())
                 throw new ArgumentException("Duplicate paths");
 
-            var ddb = _ddbFactory.GetDdb(orgSlug, dsSlug);
+            var ddb = _ddbManager.GetDdb(orgSlug, dsSlug);
 
             foreach (var path in paths)
             {
@@ -561,7 +561,7 @@ namespace Registry.Web.Services.Adapters
 
         private async Task<FileDescriptorDto> GetFileDescriptor(string orgSlug, string dsSlug, string[] paths)
         {
-            var ddb = _ddbFactory.GetDdb(orgSlug, dsSlug);
+            var ddb = _ddbManager.GetDdb(orgSlug, dsSlug);
 
             string[] filePaths = null;
 

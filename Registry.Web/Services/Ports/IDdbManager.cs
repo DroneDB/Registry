@@ -9,7 +9,7 @@ namespace Registry.Web.Services.Ports
     /// <summary>
     /// Creates new instances of IDdb
     /// </summary>
-    public interface IDdbFactory
+    public interface IDdbManager
     {
         IDdb GetDdb(string orgSlug, string dsSlug);
     }

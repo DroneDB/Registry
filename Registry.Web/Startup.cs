@@ -167,7 +167,7 @@ namespace Registry.Web
             services.AddScoped<IDatasetsManager, DatasetsManager>();
             services.AddScoped<IObjectsManager, ObjectsManager>();
             services.AddScoped<IShareManager, ShareManager>();
-            services.AddScoped<IDdbFactory, DdbFactory>();
+            services.AddScoped<IDdbManager, DdbManager>();
             services.AddSingleton<IPasswordHasher, PasswordHasher>();
             services.AddSingleton<IBatchTokenGenerator, BatchTokenGenerator>();
             services.AddSingleton<INameGenerator, NameGenerator>();
