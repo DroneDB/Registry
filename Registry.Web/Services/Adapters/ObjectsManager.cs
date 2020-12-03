@@ -428,7 +428,7 @@ namespace Registry.Web.Services.Adapters
                 // Request a cache-aware ddb implementation
                 var ddb = _ddbFactory
                     .GetDdb(orgSlug, dsSlug)
-                    .UseCache(_distributedCache, _settings.CacheProvider.Settings.ToObject<CacheProviderSettings>());
+                    .UseCache(_distributedCache, _settings.CacheProvider?.Settings.ToObject<CacheProviderSettings>());
                 
                 ddb.GenerateThumbnail(sourceFilePath, size ?? DefaultThumbnailSize, destFilePath);
 
