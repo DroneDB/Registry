@@ -171,6 +171,7 @@ namespace Registry.Web
             services.AddSingleton<IPasswordHasher, PasswordHasher>();
             services.AddSingleton<IBatchTokenGenerator, BatchTokenGenerator>();
             services.AddSingleton<INameGenerator, NameGenerator>();
+            services.AddSingleton<ICacheManager, CacheManager>();
 
             RegisterStorageProvider(services, appSettings);
 
@@ -368,7 +369,7 @@ namespace Registry.Web
             if (applicationDbContext == null)
                 throw new InvalidOperationException("Cannot get application db context from service provider");
 
-            if (applicationDbContext.Database.IsSqlite())
+            if (applicationDbContext.Database.IsSqlite()) 
                 CommonUtils.EnsureFolderCreated(Configuration.GetConnectionString(IdentityConnectionName));
 
             applicationDbContext.Database.EnsureCreated();

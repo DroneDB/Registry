@@ -48,8 +48,8 @@ namespace Registry.Web.Test
         private Mock<IAuthManager> _authManagerMock;
         private Mock<IHttpContextAccessor> _httpContextAccessorMock;
         private Mock<LinkGenerator> _linkGeneratorMock;
+        private Mock<ICacheManager> _cacheManagerMock;
 
-        private IDistributedCache _distributedCache;
         //private const string DataFolder = "Data";
         private const string TestStorageFolder = @"Data/Storage";
         private const string DdbTestDataFolder = @"Data/DdbTest";
@@ -71,7 +71,7 @@ namespace Registry.Web.Test
             _chunkedUploadManagerMock = new Mock<IChunkedUploadManager>();
             _httpContextAccessorMock = new Mock<IHttpContextAccessor>();
             _linkGeneratorMock = new Mock<LinkGenerator>();
-            _distributedCache = new DummyDistributedCache();
+            _cacheManagerMock = new Mock<ICacheManager>();
 
             if (!Directory.Exists(TestStorageFolder))
                 Directory.CreateDirectory(TestStorageFolder);
@@ -97,7 +97,7 @@ namespace Registry.Web.Test
                 _httpContextAccessorMock.Object, _linkGeneratorMock.Object);
 
             var objectManager = new ObjectsManager(_objectManagerLogger, context, _objectSystemMock.Object, _chunkedUploadManagerMock.Object, _appSettingsMock.Object,
-                _ddbFactoryMock.Object, webUtils, _authManagerMock.Object, _distributedCache);
+                _ddbFactoryMock.Object, webUtils, _authManagerMock.Object, _cacheManagerMock.Object);
 
             objectManager.Invoking(item => item.List(null, MagicStrings.DefaultDatasetSlug, "test")).Should().Throw<BadRequestException>();
             objectManager.Invoking(item => item.List(MagicStrings.PublicOrganizationSlug, null, "test")).Should().Throw<BadRequestException>();
@@ -119,7 +119,7 @@ namespace Registry.Web.Test
                 _httpContextAccessorMock.Object, _linkGeneratorMock.Object);
 
             var objectManager = new ObjectsManager(_objectManagerLogger, context, _objectSystemMock.Object, _chunkedUploadManagerMock.Object, _appSettingsMock.Object,
-                new DdbManager(_appSettingsMock.Object, _ddbFactoryLogger), webUtils, _authManagerMock.Object, _distributedCache);
+                new DdbManager(_appSettingsMock.Object, _ddbFactoryLogger), webUtils, _authManagerMock.Object, _cacheManagerMock.Object);
 
             var res = await objectManager.List(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug, null, true);
 
@@ -148,7 +148,7 @@ namespace Registry.Web.Test
 
             var objectManager = new ObjectsManager(_objectManagerLogger, context,
                 new PhysicalObjectSystem(Path.Combine(test.TestFolder, StorageFolder)), _chunkedUploadManagerMock.Object, _appSettingsMock.Object,
-                new DdbManager(_appSettingsMock.Object, _ddbFactoryLogger), webUtils, _authManagerMock.Object, _distributedCache);
+                new DdbManager(_appSettingsMock.Object, _ddbFactoryLogger), webUtils, _authManagerMock.Object, _cacheManagerMock.Object);
 
             objectManager.Invoking(async x => await x.Get(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug, "weriufbgeiughegr"))
                 .Should().Throw<NotFoundException>();
@@ -173,7 +173,7 @@ namespace Registry.Web.Test
 
             var objectManager = new ObjectsManager(_objectManagerLogger, context,
                 objectSystem, _chunkedUploadManagerMock.Object, _appSettingsMock.Object,
-                new DdbManager(_appSettingsMock.Object, _ddbFactoryLogger), webUtils, _authManagerMock.Object, _distributedCache);
+                new DdbManager(_appSettingsMock.Object, _ddbFactoryLogger), webUtils, _authManagerMock.Object, _cacheManagerMock.Object);
 
             await objectManager.MoveDataset(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug,
                 "newdataset");
@@ -203,7 +203,7 @@ namespace Registry.Web.Test
                 _httpContextAccessorMock.Object, _linkGeneratorMock.Object);
 
             var objectManager = new ObjectsManager(_objectManagerLogger, context, sys, _chunkedUploadManagerMock.Object, _appSettingsMock.Object,
-                new DdbManager(_appSettingsMock.Object, _ddbFactoryLogger), webUtils, _authManagerMock.Object, _distributedCache);
+                new DdbManager(_appSettingsMock.Object, _ddbFactoryLogger), webUtils, _authManagerMock.Object, _cacheManagerMock.Object);
 
             var obj = await objectManager.Get(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug,
                 "DJI_0019.JPG");
@@ -235,7 +235,7 @@ namespace Registry.Web.Test
                 _httpContextAccessorMock.Object, _linkGeneratorMock.Object);
 
             var objectManager = new ObjectsManager(_objectManagerLogger, context, sys, _chunkedUploadManagerMock.Object, _appSettingsMock.Object,
-                new DdbManager(_appSettingsMock.Object, _ddbFactoryLogger), webUtils, _authManagerMock.Object, _distributedCache);
+                new DdbManager(_appSettingsMock.Object, _ddbFactoryLogger), webUtils, _authManagerMock.Object, _cacheManagerMock.Object);
 
             var res = await objectManager.Download(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug,
                 new[] { expectedName });
@@ -270,7 +270,7 @@ namespace Registry.Web.Test
                 _httpContextAccessorMock.Object, _linkGeneratorMock.Object);
 
             var objectManager = new ObjectsManager(_objectManagerLogger, context, sys, _chunkedUploadManagerMock.Object, _appSettingsMock.Object,
-                new DdbManager(_appSettingsMock.Object, _ddbFactoryLogger), webUtils, _authManagerMock.Object, _distributedCache);
+                new DdbManager(_appSettingsMock.Object, _ddbFactoryLogger), webUtils, _authManagerMock.Object, _cacheManagerMock.Object);
 
             var res = await objectManager.Download(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug,
                 fileNames);
@@ -316,7 +316,7 @@ namespace Registry.Web.Test
                 _httpContextAccessorMock.Object, _linkGeneratorMock.Object);
 
             var objectManager = new ObjectsManager(_objectManagerLogger, context, sys, _chunkedUploadManagerMock.Object, _appSettingsMock.Object,
-                new DdbManager(_appSettingsMock.Object, _ddbFactoryLogger), webUtils, _authManagerMock.Object, _distributedCache);
+                new DdbManager(_appSettingsMock.Object, _ddbFactoryLogger), webUtils, _authManagerMock.Object, _cacheManagerMock.Object);
 
             var res = await objectManager.Download(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug,
                 fileNames);
@@ -362,7 +362,7 @@ namespace Registry.Web.Test
                 _httpContextAccessorMock.Object, _linkGeneratorMock.Object);
 
             var objectManager = new ObjectsManager(_objectManagerLogger, context, sys, _chunkedUploadManagerMock.Object, _appSettingsMock.Object,
-                new DdbManager(_appSettingsMock.Object, _ddbFactoryLogger), webUtils, _authManagerMock.Object, _distributedCache);
+                new DdbManager(_appSettingsMock.Object, _ddbFactoryLogger), webUtils, _authManagerMock.Object, _cacheManagerMock.Object);
 
             var res = await objectManager.List(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug,
                 fileName);

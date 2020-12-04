@@ -34,7 +34,7 @@ namespace Registry.Web.Services.Adapters
         private readonly IDdbManager _ddbManager;
         private readonly IUtils _utils;
         private readonly IAuthManager _authManager;
-        private readonly IDistributedCache _distributedCache;
+        private readonly ICacheManager _cacheManager;
         private readonly RegistryContext _context;
         private readonly AppSettings _settings;
 
@@ -51,7 +51,7 @@ namespace Registry.Web.Services.Adapters
             IChunkedUploadManager chunkedUploadManager,
             IOptions<AppSettings> settings,
             IDdbManager ddbManager,
-            IUtils utils, IAuthManager authManager, IDistributedCache distributedCache)
+            IUtils utils, IAuthManager authManager, ICacheManager cacheManager)
         {
             _logger = logger;
             _context = context;
@@ -60,7 +60,7 @@ namespace Registry.Web.Services.Adapters
             _ddbManager = ddbManager;
             _utils = utils;
             _authManager = authManager;
-            _distributedCache = distributedCache;
+            _cacheManager = cacheManager;
             _settings = settings.Value;
         }
 
@@ -422,16 +422,15 @@ namespace Registry.Web.Services.Adapters
 
             try
             {
-                var obj = await InternalGet(orgSlug, dsSlug, path);
-                await File.WriteAllBytesAsync(sourceFilePath, obj.Data);
 
-                // Request a cache-aware ddb implementation
-                var ddb = _ddbManager
-                    .Get(orgSlug, dsSlug)
-                    .UseCache(_distributedCache, _settings.CacheProvider?.Settings.ToObject<CacheProviderSettings>());
-                
-                ddb.GenerateThumbnail(sourceFilePath, size ?? DefaultThumbnailSize, destFilePath);
+                var ddb = _ddbManager.Get(orgSlug, dsSlug);
 
+                _cacheManager.GenerateThumbnail(ddb, sourceFilePath, size ?? DefaultThumbnailSize, destFilePath, async () =>
+                {
+                    var obj = await InternalGet(orgSlug, dsSlug, path);
+                    await File.WriteAllBytesAsync(sourceFilePath, obj.Data);
+                });
+                    
                 var memory = new MemoryStream(await File.ReadAllBytesAsync(destFilePath));
                 memory.Reset();
 
