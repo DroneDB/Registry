@@ -8,6 +8,7 @@ using Registry.Ports.DroneDB.Models;
 
 namespace Registry.Web.Services.Adapters
 {
+    // Proxy class for caching DDB calls
     public class CachedDdb : IDdb
     {
         private readonly IDdb _ddb;
@@ -67,6 +68,11 @@ namespace Registry.Web.Services.Adapters
             };
 
             _cache.Set(key, File.ReadAllBytes(outputPath), options);
+        }
+
+        public void Init()
+        {
+            _ddb.Init();
         }
     }
 }

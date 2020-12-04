@@ -28,22 +28,26 @@ namespace Registry.Adapters.DroneDB
         public Ddb(string ddbPath)
         {
 
+            if (string.IsNullOrWhiteSpace(ddbPath))
+                throw new ArgumentException("Path should not be null or empty");
+
+            if (!Directory.Exists(ddbPath))
+                throw new ArgumentException($"Path '{ddbPath}' does not exist");
+            
             DdbPath = ddbPath;
 
-            Directory.CreateDirectory(ddbPath);
+        }
 
-            // TODO: It would be nice if we could use the bindings to check this
-            if (!Directory.Exists(Path.Combine(ddbPath, ".ddb")))
+        public void Init()
+        {
+            try
             {
-                try
-                {
-                    var res = DDB.Bindings.DroneDB.Init(ddbPath);
-                    Debug.WriteLine(res);
-                }
-                catch (DDBException ex)
-                {
-                    throw new InvalidOperationException($"Cannot initialize ddb in folder '{ddbPath}'", ex);
-                }
+                var res = DDB.Bindings.DroneDB.Init(DdbPath);
+                Debug.WriteLine(res);
+            }
+            catch (DDBException ex)
+            {
+                throw new InvalidOperationException($"Cannot initialize ddb in folder '{DdbPath}'", ex);
             }
         }
 

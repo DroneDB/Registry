@@ -24,25 +24,24 @@ namespace Registry.Web.Services.Adapters
             _settings = settings.Value;
         }
 
-        // NOTE: This logic is separated from the manager classes because it is used in multiple places and it could be subject to change
-
         public IDdb Get(string orgSlug, string dsSlug)
         {
+            var baseDdbPath = GetDdbPath(orgSlug, dsSlug);
 
-            if (string.IsNullOrWhiteSpace(orgSlug))
-                throw new ArgumentException("Organization slug cannot be null or empty");
-
-            if (string.IsNullOrWhiteSpace(dsSlug))
-                throw new ArgumentException("Dataset slug cannot be null or empty");
-
-            var baseDdbPath = Path.Combine(_settings.DdbStoragePath, orgSlug, dsSlug);
-
-            if (!Directory.Exists(baseDdbPath))
-                throw new ArgumentException($"Folder '{baseDdbPath}' does not exist");
-
-            _logger.LogInformation($"Opening ddb in '{baseDdbPath}'");
+            Directory.CreateDirectory(baseDdbPath);
 
             var ddb = new Ddb(baseDdbPath);
+
+            // TODO: It would be nice if we could use the bindings to check this
+            if (!Directory.Exists(Path.Combine(baseDdbPath, ".ddb")))
+            {
+
+                ddb.Init();
+                _logger.LogInformation($"Initialized new ddb in '{baseDdbPath}'");
+
+            }
+            else
+                _logger.LogInformation($"Opened ddb in '{baseDdbPath}'");
             
             return ddb;
         }
