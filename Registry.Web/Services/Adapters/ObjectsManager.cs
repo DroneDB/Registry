@@ -64,7 +64,7 @@ namespace Registry.Web.Services.Adapters
             _settings = settings.Value;
         }
 
-        public async Task<IEnumerable<ObjectDto>> List(string orgSlug, string dsSlug, string path)
+        public async Task<IEnumerable<ObjectDto>> List(string orgSlug, string dsSlug, string path = null, bool recursive = false)
         {
 
             await _utils.GetDataset(orgSlug, dsSlug);
@@ -75,7 +75,7 @@ namespace Registry.Web.Services.Adapters
 
             _logger.LogInformation($"Searching in '{path}'");
 
-            var files = ddb.Search(path).Select(file => file.ToDto()).ToArray();
+            var files = ddb.Search(path, recursive).Select(file => file.ToDto()).ToArray();
 
             _logger.LogInformation($"Found {files.Length} objects");
 
