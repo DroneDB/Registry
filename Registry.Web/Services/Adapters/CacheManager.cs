@@ -34,17 +34,19 @@ namespace Registry.Web.Services.Adapters
             
         }
 
-        public void GenerateThumbnail(IDdb ddb, string sourcePath, int size, string destPath, Func<Task> getData)
+        public async Task GenerateThumbnail(IDdb ddb, string sourcePath, string sourceHash, int size, string destPath, Func<Task> getData)
         {
 
-            var key = $"Thumb-{CommonUtils.ComputeFileHash(sourcePath)}";
-            var res = _cache.Get(key);
+            var key = $"Thumb-{sourceHash}";
+            var res = await _cache.GetAsync(key);
 
             if (res != null)
             {
-                File.WriteAllBytes(destPath, res);
+                await File.WriteAllBytesAsync(destPath, res);
                 return;
             }
+
+            await getData();
 
             ddb.GenerateThumbnail(sourcePath, size, destPath);
 
@@ -53,7 +55,7 @@ namespace Registry.Web.Services.Adapters
                 SlidingExpiration = _expiration
             };
 
-            _cache.Set(key, File.ReadAllBytes(destPath), options);
+            await _cache.SetAsync(key, await File.ReadAllBytesAsync(destPath), options);
 
         }
     }

@@ -8,6 +8,6 @@ namespace Registry.Web.Services.Ports
 {
     public interface ICacheManager
     {
-        public void GenerateThumbnail(IDdb ddb, string sourcePath, int size, string destPath, Func<Task> getData);
+        public Task GenerateThumbnail(IDdb ddb, string sourcePath, string sourceHash, int size, string destPath, Func<Task> getData);
     }
 }

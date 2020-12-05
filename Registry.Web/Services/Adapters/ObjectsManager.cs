@@ -407,7 +407,7 @@ namespace Registry.Web.Services.Adapters
 
         public async Task<FileDescriptorDto> GenerateThumbnail(string orgSlug, string dsSlug, string path, int? size, bool recreate = false)
         {
-            var ds = await _utils.GetDataset(orgSlug, dsSlug);
+            await _utils.GetDataset(orgSlug, dsSlug);
 
             _logger.LogInformation($"In '{orgSlug}/{dsSlug}'");
 
@@ -425,7 +425,11 @@ namespace Registry.Web.Services.Adapters
 
                 var ddb = _ddbManager.Get(orgSlug, dsSlug);
 
-                _cacheManager.GenerateThumbnail(ddb, sourceFilePath, size ?? DefaultThumbnailSize, destFilePath, async () =>
+                var entry = ddb.Search(path).FirstOrDefault();
+                if (entry == null)
+                    throw new ArgumentException($"Cannot find entry '{path}' in ddb");
+
+                await _cacheManager.GenerateThumbnail(ddb, sourceFilePath, entry.Hash, size ?? DefaultThumbnailSize, destFilePath, async () =>
                 {
                     var obj = await InternalGet(orgSlug, dsSlug, path);
                     await File.WriteAllBytesAsync(sourceFilePath, obj.Data);
