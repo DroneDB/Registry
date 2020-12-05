@@ -290,7 +290,7 @@ namespace Registry.Web
 
                     services.AddDbContext<T>(options =>
                         options.UseMySql(
-                            Configuration.GetConnectionString(connectionStringName)));
+                            Configuration.GetConnectionString(connectionStringName), builder => builder.EnableRetryOnFailure()));
 
                     break;
 
