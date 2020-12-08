@@ -10,6 +10,5 @@
         public bool? UseSsl { get; set; }
         public string AppName { get; set; }
         public string AppVersion { get; set; }
-        public string Location { get; set; }
     }
 }

@@ -228,10 +228,10 @@ namespace Registry.Web.Services.Adapters
                 return null;
             }
 
-            if (settings.Location == null)
-                _logger.LogWarning("No location specified in storage provider config");
+            if (settings.Region == null)
+                _logger.LogWarning("No region specified in storage provider config");
 
-            return settings.Location;
+            return settings.Region;
         }
 
         public async Task Delete(string orgSlug, string dsSlug, string path)
