@@ -12,11 +12,12 @@ namespace Registry.Ports.DroneDB
     public interface IDdb
     {
         // public DdbObject GetObjectInfo(int id);
-        IEnumerable<DdbEntry> Search(string path);
+        IEnumerable<DdbEntry> Search(string path, bool recursive = false);
         void Add(string path, byte[] data);
         void Add(string path, Stream data);
         void Remove(string path);
         Dictionary<string, object> ChangeAttributes(Dictionary<string, object> attributes);
         void GenerateThumbnail(string imagePath, int size, string outputPath);
+        void Init();
     }
 }

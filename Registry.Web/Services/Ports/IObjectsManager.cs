@@ -11,7 +11,7 @@ namespace Registry.Web.Services.Ports
 {
     public interface IObjectsManager
     {
-        Task<IEnumerable<ObjectDto>> List(string orgSlug, string dsSlug, string path);
+        Task<IEnumerable<ObjectDto>> List(string orgSlug, string dsSlug, string path = null, bool recursive = false);
         Task<ObjectRes> Get(string orgSlug, string dsSlug, string path);
         Task<UploadedObjectDto> AddNew(string orgSlug, string dsSlug, string path, byte[] data);
         Task<UploadedObjectDto> AddNew(string orgSlug, string dsSlug, string path, Stream stream);

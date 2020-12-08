@@ -34,6 +34,7 @@ namespace Registry.Web.Services.Adapters
         private readonly RegistryContext _context;
         private readonly AppSettings _settings;
         private readonly IHttpContextAccessor _accessor;
+        // NOTE: This could be removed, we don't do it yet because reasons
         private readonly LinkGenerator _generator;
 
         public WebUtils(IAuthManager authManager,
@@ -145,10 +146,7 @@ namespace Registry.Web.Services.Adapters
             
             var scheme = context.Request.IsHttps ? "ddb" : "ddb+unsafe";
 
-            var datasetUrl = _generator.GetUriByRouteValues(_accessor.HttpContext,
-                nameof(DatasetsController) + ".Get",
-                new { orgSlug = dataset.Organization.Slug, dsSlug = dataset.Slug },
-                scheme, new HostString(hostName));
+            var datasetUrl = string.Format($"{scheme}://{host}/{dataset.Organization.Slug}/{dataset.Slug}");
 
             return datasetUrl;
 

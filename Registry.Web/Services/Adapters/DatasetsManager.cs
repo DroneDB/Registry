@@ -21,7 +21,7 @@ namespace Registry.Web.Services.Adapters
         private readonly ILogger<DatasetsManager> _logger;
         private readonly IObjectsManager _objectsManager;
         private readonly IPasswordHasher _passwordHasher;
-        private readonly IDdbFactory _ddbFactory;
+        private readonly IDdbManager _ddbManager;
 
         // TODO: Add extensive testing
 
@@ -30,15 +30,15 @@ namespace Registry.Web.Services.Adapters
             IUtils utils,
             ILogger<DatasetsManager> logger,
             IObjectsManager objectsManager,
-            IPasswordHasher passwordHasher, 
-            IDdbFactory ddbFactory)
+            IPasswordHasher passwordHasher,
+            IDdbManager ddbManager)
         {
             _context = context;
             _utils = utils;
             _logger = logger;
             _objectsManager = objectsManager;
             _passwordHasher = passwordHasher;
-            _ddbFactory = ddbFactory;
+            _ddbManager = ddbManager;
         }
 
         public async Task<IEnumerable<DatasetDto>> List(string orgSlug)
@@ -47,19 +47,19 @@ namespace Registry.Web.Services.Adapters
 
             var query = from ds in org.Datasets
 
-                select new DatasetDto
-                {
-                    Id = ds.Id,
-                    Slug = ds.Slug,
-                    CreationDate = ds.CreationDate,
-                    Description = ds.Description,
-                    LastEdit = ds.LastEdit,
-                    Name = ds.Name,
-                    License = ds.License,
-                    Meta = ds.Meta,
-                    ObjectsCount = ds.ObjectsCount,
-                    Size = ds.Size
-                };
+                        select new DatasetDto
+                        {
+                            Id = ds.Id,
+                            Slug = ds.Slug,
+                            CreationDate = ds.CreationDate,
+                            Description = ds.Description,
+                            LastEdit = ds.LastEdit,
+                            Name = ds.Name,
+                            License = ds.License,
+                            Meta = ds.Meta,
+                            ObjectsCount = ds.ObjectsCount,
+                            Size = ds.Size
+                        };
 
             return query;
         }
@@ -72,12 +72,12 @@ namespace Registry.Web.Services.Adapters
             return dataset.ToDto();
         }
 
-        public async Task<EntryDto> GetEntry(string orgSlug, string dsSlug)
+        public async Task<EntryDto[]> GetEntry(string orgSlug, string dsSlug)
         {
 
             var dataset = await _utils.GetDataset(orgSlug, dsSlug);
 
-            return _utils.GetDatasetEntry(dataset);
+            return new[] { _utils.GetDatasetEntry(dataset) };
         }
 
         public async Task<DatasetDto> AddNew(string orgSlug, DatasetDto dataset)
@@ -90,13 +90,13 @@ namespace Registry.Web.Services.Adapters
             ds.LastEdit = DateTime.Now;
             ds.CreationDate = ds.LastEdit;
 
-            if (!string.IsNullOrEmpty(dataset.Password)) 
+            if (!string.IsNullOrEmpty(dataset.Password))
                 ds.PasswordHash = _passwordHasher.Hash(dataset.Password);
 
             org.Datasets.Add(ds);
 
             await _context.SaveChangesAsync();
-            
+
             return ds.ToDto();
 
         }
@@ -128,15 +128,16 @@ namespace Registry.Web.Services.Adapters
         public async Task Delete(string orgSlug, string dsSlug)
         {
             var org = await _utils.GetOrganization(orgSlug);
-            
+
             var entity = org.Datasets.FirstOrDefault(item => item.Slug == dsSlug);
 
             if (entity == null)
                 throw new NotFoundException("Dataset not found");
 
-            _context.Datasets.Remove(entity);
-
             await _objectsManager.DeleteAll(orgSlug, dsSlug);
+            _ddbManager.Delete(orgSlug, dsSlug);
+
+            _context.Datasets.Remove(entity);
 
             await _context.SaveChangesAsync();
         }
@@ -146,7 +147,7 @@ namespace Registry.Web.Services.Adapters
 
             if (string.IsNullOrWhiteSpace(newSlug))
                 throw new ArgumentException("New slug is empty");
-            
+
             if (dsSlug == MagicStrings.DefaultDatasetSlug || newSlug == MagicStrings.DefaultDatasetSlug)
                 throw new ArgumentException("Cannot move default dataset");
 
@@ -159,12 +160,13 @@ namespace Registry.Web.Services.Adapters
             // TODO: Add exception catching, when interrupted put DS in dirty state
             await _objectsManager.MoveDataset(orgSlug, dsSlug, newSlug);
 
+            _ddbManager.Move(orgSlug, dsSlug, newSlug);
+
             var ds = await _utils.GetDataset(orgSlug, dsSlug);
 
             ds.Slug = newSlug;
 
             await _context.SaveChangesAsync();
-
 
         }
 
@@ -172,7 +174,7 @@ namespace Registry.Web.Services.Adapters
         {
             await _utils.GetDataset(orgSlug, dsSlug);
 
-            var ddb = _ddbFactory.GetDdb(orgSlug, dsSlug);
+            var ddb = _ddbManager.Get(orgSlug, dsSlug);
 
             return ddb.ChangeAttributes(attributes);
 

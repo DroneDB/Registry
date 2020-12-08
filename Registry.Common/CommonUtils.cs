@@ -70,17 +70,13 @@ namespace Registry.Common
 
         public static TValue SafeGetValue<TKey, TValue>(this IDictionary<TKey, TValue> dictionary, TKey key)
         {
-            TValue value;
-
-            return !dictionary.TryGetValue(key, out value) ? default(TValue) : value;
+            return !dictionary.TryGetValue(key, out var value) ? default : value;
         }
 
         public static TValueOut? SafeGetValue<TKey, TValue, TValueOut>(this IDictionary<TKey, TValue> dictionary,
             TKey key, Func<TValue, TValueOut> selector) where TValueOut : struct
         {
-            TValue value;
-
-            return !dictionary.TryGetValue(key, out value) ? null : (TValueOut?)selector(value);
+            return !dictionary.TryGetValue(key, out var value) ? null : (TValueOut?)selector(value);
         }
 
         /// <summary>

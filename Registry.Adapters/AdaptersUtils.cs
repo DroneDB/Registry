@@ -14,6 +14,9 @@ namespace Registry.Adapters
     {
         public static ServerSideEncryption ToSSE(this IServerEncryption encryption)
         {
+
+            if (encryption == null) return null;
+
             if (encryption is EncryptionC ssec)
             {
                 return new SSEC(ssec.Key);
