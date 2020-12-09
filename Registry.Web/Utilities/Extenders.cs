@@ -1,7 +1,9 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Text.RegularExpressions;
+using Microsoft.AspNetCore.Identity;
 using Registry.Ports.DroneDB;
 using Registry.Ports.DroneDB.Models;
 using Registry.Web.Data.Models;
@@ -176,6 +178,12 @@ namespace Registry.Web.Utilities
 
             return new TagDto(org, ds);
 
+        }
+
+        public static string ToErrorString(this IEnumerable<IdentityError> results)
+        {
+            if (results == null || !results.Any()) return "No error details";
+            return string.Join(", ", results.Select(item => $"[{item.Code}: '{item.Description}']"));
         }
 
     }

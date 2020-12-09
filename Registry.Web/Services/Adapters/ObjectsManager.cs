@@ -60,11 +60,11 @@ namespace Registry.Web.Services.Adapters
         public async Task<IEnumerable<ObjectDto>> List(string orgSlug, string dsSlug, string path)
         {
 
-            await _utils.GetDataset(orgSlug, dsSlug);
+            var ds = await _utils.GetDataset(orgSlug, dsSlug);
 
             _logger.LogInformation($"In '{orgSlug}/{dsSlug}'");
 
-            var ddb = _ddbFactory.GetDdb(orgSlug, dsSlug);
+            var ddb = _ddbFactory.GetDdb(orgSlug, ds.InternalRef);
 
             _logger.LogInformation($"Searching in '{path}'");
 
@@ -78,21 +78,21 @@ namespace Registry.Web.Services.Adapters
         public async Task<ObjectRes> Get(string orgSlug, string dsSlug, string path)
         {
 
-            await _utils.GetDataset(orgSlug, dsSlug);
+            var ds = await _utils.GetDataset(orgSlug, dsSlug);
 
             _logger.LogInformation($"In '{orgSlug}/{dsSlug}'");
 
             if (string.IsNullOrWhiteSpace(path))
                 throw new ArgumentException("Path should not be null");
 
-            var ddb = _ddbFactory.GetDdb(orgSlug, dsSlug);
+            var ddb = _ddbFactory.GetDdb(orgSlug, ds.InternalRef);
 
             var res = ddb.Search(path).FirstOrDefault();
 
             if (res == null)
                 throw new NotFoundException($"Cannot find '{path}'");
 
-            var bucketName = string.Format(BucketNameFormat, orgSlug, dsSlug);
+            var bucketName = string.Format(BucketNameFormat, orgSlug, ds.InternalRef.ToString());
 
             _logger.LogInformation($"Using bucket '{bucketName}'");
 
@@ -145,11 +145,11 @@ namespace Registry.Web.Services.Adapters
 
         public async Task<UploadedObjectDto> AddNew(string orgSlug, string dsSlug, string path, Stream stream)
         {
-            var dataset = await _utils.GetDataset(orgSlug, dsSlug);
+            var ds = await _utils.GetDataset(orgSlug, dsSlug);
 
             _logger.LogInformation($"In '{orgSlug}/{dsSlug}'");
 
-            var bucketName = string.Format(BucketNameFormat, orgSlug, dsSlug);
+            var bucketName = string.Format(BucketNameFormat, orgSlug, ds.InternalRef.ToString());
 
             _logger.LogInformation($"Using bucket '{bucketName}'");
 
@@ -175,13 +175,13 @@ namespace Registry.Web.Services.Adapters
             _logger.LogInformation("File uploaded, adding to DDB");
 
             // Add to DDB
-            var ddb = _ddbFactory.GetDdb(orgSlug, dsSlug);
+            var ddb = _ddbFactory.GetDdb(orgSlug, ds.InternalRef);
             ddb.Add(path, stream);
 
             _logger.LogInformation("Added to DDB");
 
             // Refresh objects count and total size
-            dataset.UpdateStatistics(ddb);
+            ds.UpdateStatistics(ddb);
             await _context.SaveChangesAsync();
 
             var obj = new UploadedObjectDto
@@ -196,11 +196,11 @@ namespace Registry.Web.Services.Adapters
 
         public async Task Delete(string orgSlug, string dsSlug, string path)
         {
-            var dataset = await _utils.GetDataset(orgSlug, dsSlug);
+            var ds = await _utils.GetDataset(orgSlug, dsSlug);
 
             _logger.LogInformation($"In '{orgSlug}/{dsSlug}'");
 
-            var bucketName = string.Format(BucketNameFormat, orgSlug, dsSlug);
+            var bucketName = string.Format(BucketNameFormat, orgSlug, ds.InternalRef.ToString());
 
             _logger.LogInformation($"Using bucket '{bucketName}'");
 
@@ -216,10 +216,10 @@ namespace Registry.Web.Services.Adapters
             _logger.LogInformation($"File deleted, removing from DDB");
 
             // Remove from DDB
-            var ddb = _ddbFactory.GetDdb(orgSlug, dsSlug);
+            var ddb = _ddbFactory.GetDdb(orgSlug, ds.InternalRef);
 
             ddb.Remove(path);
-            dataset.UpdateStatistics(ddb);
+            ds.UpdateStatistics(ddb);
 
             // Refresh objects count and total size
             await _context.SaveChangesAsync();
@@ -230,11 +230,11 @@ namespace Registry.Web.Services.Adapters
 
         public async Task DeleteAll(string orgSlug, string dsSlug)
         {
-            var dataset = await _utils.GetDataset(orgSlug, dsSlug);
+            var ds = await _utils.GetDataset(orgSlug, dsSlug);
 
             _logger.LogInformation($"In '{orgSlug}/{dsSlug}'");
 
-            var bucketName = string.Format(BucketNameFormat, orgSlug, dsSlug);
+            var bucketName = string.Format(BucketNameFormat, orgSlug, ds.InternalRef.ToString());
 
             _logger.LogInformation($"Using bucket '{bucketName}'");
 
@@ -253,14 +253,14 @@ namespace Registry.Web.Services.Adapters
             _logger.LogInformation($"Bucket deleted, removing all files from DDB ");
 
             // Remove all from DDB
-            var ddb = _ddbFactory.GetDdb(orgSlug, dsSlug);
+            var ddb = _ddbFactory.GetDdb(orgSlug, ds.InternalRef);
 
             var res = ddb.Search(null);
             foreach (var item in res)
                 ddb.Remove(item.Path);
 
             // Refresh objects count and total size
-            dataset.UpdateStatistics(ddb);
+            ds.UpdateStatistics(ddb);
             await _context.SaveChangesAsync();
 
             _logger.LogInformation("Removed all from DDB");
@@ -318,57 +318,6 @@ namespace Registry.Web.Services.Adapters
             return newObj;
         }
 
-        public async Task MoveDataset(string orgSlug, string dsSlug, string newDsSlug)
-        {
-            var dataset = await _utils.GetDataset(orgSlug, dsSlug);
-
-            _logger.LogInformation($"In '{orgSlug}/{dsSlug}'");
-
-            var oldBucket = string.Format(BucketNameFormat, orgSlug, dsSlug);
-
-            _logger.LogInformation($"Using bucket '{oldBucket}'");
-
-            var bucketExists = await _objectSystem.BucketExistsAsync(oldBucket);
-
-            if (!bucketExists)
-            {
-                _logger.LogWarning($"Asked to remove non-existing bucket '{oldBucket}'");
-                return;
-            }
-
-            _logger.LogInformation($"Renaming bucket");
-
-            var newBucket = string.Format(BucketNameFormat, orgSlug, newDsSlug);
-
-            var region = _settings.StorageProvider.Settings.SafeGetValue("region");
-            if (region == null)
-                _logger.LogWarning("No region specified in storage provider config");
-
-            await _objectSystem.MakeBucketAsync(newBucket, region);
-
-            var objects = _objectSystem.ListObjectsAsync(oldBucket, recursive: true).ToEnumerable().ToArray();
-
-            foreach (var obj in objects)
-            {
-                if (obj.IsDir)
-                {
-                    _logger.LogDebug($"Skipping folder '{obj.Key}'");
-                    continue;
-                }
-
-                _logger.LogDebug($"Moving '{obj.Key}'");
-                // TODO: Metadata?
-                await _objectSystem.CopyObjectAsync(oldBucket, obj.Key, newBucket);
-            }
-
-            _logger.LogInformation("Deleting old bucket");
-
-            await _objectSystem.RemoveBucketAsync(oldBucket);
-            
-            _logger.LogInformation("Old bucket deleted");
-            
-        }
-
         #region Downloads
         public async Task<string> GetDownloadPackage(string orgSlug, string dsSlug, string[] paths, DateTime? expiration = null, bool isPublic = false)
         {
@@ -376,7 +325,7 @@ namespace Registry.Web.Services.Adapters
 
             _logger.LogInformation($"In '{orgSlug}/{dsSlug}'");
 
-            EnsurePathsValidity(orgSlug, dsSlug, paths);
+            EnsurePathsValidity(orgSlug, ds.InternalRef, paths);
 
             var currentUser = await _authManager.GetCurrentUser();
 
@@ -396,7 +345,7 @@ namespace Registry.Web.Services.Adapters
             return downloadPackage.Id.ToString();
         }
 
-        private void EnsurePathsValidity(string orgSlug, string dsSlug, string[] paths)
+        private void EnsurePathsValidity(string orgSlug, Guid internalRef, string[] paths)
         {
 
             if (paths == null || !paths.Any())
@@ -409,7 +358,7 @@ namespace Registry.Web.Services.Adapters
             if (paths.Length != paths.Distinct().Count())
                 throw new ArgumentException("Duplicate paths");
 
-            var ddb = _ddbFactory.GetDdb(orgSlug, dsSlug);
+            var ddb = _ddbFactory.GetDdb(orgSlug, internalRef);
 
             foreach (var path in paths)
             {
@@ -422,7 +371,7 @@ namespace Registry.Web.Services.Adapters
 
         public async Task<FileDescriptorDto> Download(string orgSlug, string dsSlug, string packageId)
         {
-            await _utils.GetDataset(orgSlug, dsSlug, checkOwnership: false);
+            var ds = await _utils.GetDataset(orgSlug, dsSlug, checkOwnership: false);
 
             _logger.LogInformation($"In '{orgSlug}/{dsSlug}'");
 
@@ -462,25 +411,25 @@ namespace Registry.Web.Services.Adapters
                 await _context.SaveChangesAsync();
             }
 
-            return await GetFileDescriptor(orgSlug, dsSlug, package.Paths);
+            return await GetFileDescriptor(orgSlug, dsSlug, ds.InternalRef, package.Paths);
 
         }
 
 
         public async Task<FileDescriptorDto> Download(string orgSlug, string dsSlug, string[] paths)
         {
-            await _utils.GetDataset(orgSlug, dsSlug);
+            var ds = await _utils.GetDataset(orgSlug, dsSlug);
 
             _logger.LogInformation($"In '{orgSlug}/{dsSlug}'");
 
-            EnsurePathsValidity(orgSlug, dsSlug, paths);
+            EnsurePathsValidity(orgSlug, ds.InternalRef, paths);
 
-            return await GetFileDescriptor(orgSlug, dsSlug, paths);
+            return await GetFileDescriptor(orgSlug, dsSlug, ds.InternalRef, paths);
         }
 
-        private async Task<FileDescriptorDto> GetFileDescriptor(string orgSlug, string dsSlug, string[] paths)
+        private async Task<FileDescriptorDto> GetFileDescriptor(string orgSlug, string dsSlug, Guid internalRef, string[] paths)
         {
-            var ddb = _ddbFactory.GetDdb(orgSlug, dsSlug);
+            var ddb = _ddbFactory.GetDdb(orgSlug, internalRef);
 
             var filePaths = new List<string>();
 
@@ -524,7 +473,7 @@ namespace Registry.Web.Services.Adapters
                     ContentType = MimeUtility.GetMimeMapping(filePath)
                 };
 
-                await WriteObjectContentStream(orgSlug, dsSlug, filePath, descriptor.ContentStream);
+                await WriteObjectContentStream(orgSlug, internalRef, filePath, descriptor.ContentStream);
 
                 descriptor.ContentStream.Reset();
             }
@@ -549,7 +498,7 @@ namespace Registry.Web.Services.Adapters
 
                         var entry = archive.CreateEntry(path, CompressionLevel.Fastest);
                         await using var entryStream = entry.Open();
-                        await WriteObjectContentStream(orgSlug, dsSlug, path, entryStream);
+                        await WriteObjectContentStream(orgSlug, internalRef, path, entryStream);
                     }
                 }
 
@@ -559,9 +508,9 @@ namespace Registry.Web.Services.Adapters
             return descriptor;
         }
 
-        private async Task WriteObjectContentStream(string orgSlug, string dsSlug, string path, Stream stream)
+        private async Task WriteObjectContentStream(string orgSlug, Guid internalRef, string path, Stream stream)
         {
-            var bucketName = string.Format(BucketNameFormat, orgSlug, dsSlug);
+            var bucketName = string.Format(BucketNameFormat, orgSlug, internalRef.ToString());
 
             _logger.LogInformation($"Using bucket '{bucketName}'");
 

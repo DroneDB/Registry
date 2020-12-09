@@ -10,7 +10,8 @@ namespace Registry.Web.Data.Models
         [MaxLength(128)]
         [Required]
         public string Slug { get; set; }
-        
+        public Guid InternalRef { get; set; }
+
         [Key]
         public int Id { get; set; }
 

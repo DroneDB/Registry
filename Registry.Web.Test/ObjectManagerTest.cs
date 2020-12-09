@@ -56,8 +56,10 @@ namespace Registry.Web.Test
 
         private const string BaseTestFolder = "ObjectManagerTest";
 
-        private const string Test1ArchiveUrl = "https://github.com/DroneDB/test_data/raw/master/registry/Test1.zip";
-        private const string Test2ArchiveUrl = "https://github.com/DroneDB/test_data/raw/master/registry/Test2.zip";
+        private const string Test1ArchiveUrl = "https://github.com/DroneDB/test_data/raw/master/registry/Test4.zip";
+        private const string Test2ArchiveUrl = "https://github.com/DroneDB/test_data/raw/master/registry/Test3.zip";
+
+        private readonly Guid _defaultDatasetGuid = Guid.Parse("0a223495-84a0-4c15-b425-c7ef88110e75");
 
         [SetUp]
         public void Setup()
@@ -154,31 +156,6 @@ namespace Registry.Web.Test
         }
 
         [Test]
-        public async Task MoveDataset_ExistingDataset_Ok()
-        {
-
-            using var test = new TestFS(Test1ArchiveUrl, BaseTestFolder);
-            await using var context = GetTest1Context();
-
-            _settings.DdbStoragePath = Path.Combine(test.TestFolder, DdbFolder);
-            _appSettingsMock.Setup(o => o.Value).Returns(_settings);
-            _authManagerMock.Setup(o => o.IsUserAdmin()).Returns(Task.FromResult(true));
-
-            var objectSystem = new PhysicalObjectSystem(Path.Combine(test.TestFolder, StorageFolder));
-
-            var webUtils = new WebUtils(_authManagerMock.Object, context, _appSettingsMock.Object,
-                _httpContextAccessorMock.Object, _linkGeneratorMock.Object);
-
-            var objectManager = new ObjectsManager(_objectManagerLogger, context,
-                objectSystem, _chunkedUploadManagerMock.Object, _appSettingsMock.Object,
-                new DdbFactory(_appSettingsMock.Object, _ddbFactoryLogger), webUtils, _authManagerMock.Object);
-
-            await objectManager.MoveDataset(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug,
-                "newdataset");
-            
-        }
-
-        [Test]
         public async Task Get_ExistingFile_FileRes()
         {
             var expectedHash = new byte[] { 152, 110, 79, 250, 177, 15, 101, 187, 24, 23, 34, 217, 117, 168, 119, 124 };
@@ -195,7 +172,7 @@ namespace Registry.Web.Test
             _authManagerMock.Setup(o => o.IsUserAdmin()).Returns(Task.FromResult(true));
 
             var sys = new PhysicalObjectSystem(Path.Combine(test.TestFolder, StorageFolder));
-            sys.SyncBucket($"{MagicStrings.PublicOrganizationSlug}-{MagicStrings.DefaultDatasetSlug}");
+            sys.SyncBucket($"{MagicStrings.PublicOrganizationSlug}-{_defaultDatasetGuid}");
 
             var webUtils = new WebUtils(_authManagerMock.Object, context, _appSettingsMock.Object,
                 _httpContextAccessorMock.Object, _linkGeneratorMock.Object);
@@ -227,7 +204,7 @@ namespace Registry.Web.Test
             _authManagerMock.Setup(o => o.IsUserAdmin()).Returns(Task.FromResult(true));
 
             var sys = new PhysicalObjectSystem(Path.Combine(test.TestFolder, StorageFolder));
-            sys.SyncBucket($"{MagicStrings.PublicOrganizationSlug}-{MagicStrings.DefaultDatasetSlug}");
+            sys.SyncBucket($"{MagicStrings.PublicOrganizationSlug}-{_defaultDatasetGuid}");
 
             var webUtils = new WebUtils(_authManagerMock.Object, context, _appSettingsMock.Object,
                 _httpContextAccessorMock.Object, _linkGeneratorMock.Object);
@@ -262,7 +239,7 @@ namespace Registry.Web.Test
             _authManagerMock.Setup(o => o.IsUserAdmin()).Returns(Task.FromResult(true));
 
             var sys = new PhysicalObjectSystem(Path.Combine(test.TestFolder, StorageFolder));
-            sys.SyncBucket($"{MagicStrings.PublicOrganizationSlug}-{MagicStrings.DefaultDatasetSlug}");
+            sys.SyncBucket($"{MagicStrings.PublicOrganizationSlug}-{_defaultDatasetGuid}");
 
             var webUtils = new WebUtils(_authManagerMock.Object, context, _appSettingsMock.Object,
                 _httpContextAccessorMock.Object, _linkGeneratorMock.Object);
@@ -308,7 +285,7 @@ namespace Registry.Web.Test
             _authManagerMock.Setup(o => o.IsUserAdmin()).Returns(Task.FromResult(true));
 
             var sys = new PhysicalObjectSystem(Path.Combine(test.TestFolder, StorageFolder));
-            sys.SyncBucket($"{MagicStrings.PublicOrganizationSlug}-{MagicStrings.DefaultDatasetSlug}");
+            sys.SyncBucket($"{MagicStrings.PublicOrganizationSlug}-{_defaultDatasetGuid}");
 
             var webUtils = new WebUtils(_authManagerMock.Object, context, _appSettingsMock.Object,
                 _httpContextAccessorMock.Object, _linkGeneratorMock.Object);
@@ -354,7 +331,7 @@ namespace Registry.Web.Test
             using var test = new TestFS(Test1ArchiveUrl, BaseTestFolder);
 
             var sys = new PhysicalObjectSystem(Path.Combine(test.TestFolder, StorageFolder));
-            sys.SyncBucket($"{MagicStrings.PublicOrganizationSlug}-{MagicStrings.DefaultDatasetSlug}");
+            sys.SyncBucket($"{MagicStrings.PublicOrganizationSlug}-{_defaultDatasetGuid}");
 
             var webUtils = new WebUtils(_authManagerMock.Object, context, _appSettingsMock.Object,
                 _httpContextAccessorMock.Object, _linkGeneratorMock.Object);
@@ -449,7 +426,8 @@ namespace Registry.Web.Test
                     Description = "Default dataset",
                     IsPublic = true,
                     CreationDate = DateTime.Now,
-                    LastEdit = DateTime.Now
+                    LastEdit = DateTime.Now,
+                    InternalRef = Guid.Parse("0a223495-84a0-4c15-b425-c7ef88110e75")
                 };
                 entity.Datasets = new List<Dataset> { ds };
 

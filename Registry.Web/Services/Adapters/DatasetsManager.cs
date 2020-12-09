@@ -153,9 +153,6 @@ namespace Registry.Web.Services.Adapters
             if (await _utils.GetDataset(orgSlug, newSlug, true) != null)
                 throw new ArgumentException($"Dataset '{newSlug}' already exists");
 
-            // TODO: Add exception catching, when interrupted put DS in dirty state
-            await _objectsManager.MoveDataset(orgSlug, dsSlug, newSlug);
-
             var ds = await _utils.GetDataset(orgSlug, dsSlug);
 
             ds.Slug = newSlug;

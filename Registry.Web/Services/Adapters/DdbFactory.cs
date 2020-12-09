@@ -23,19 +23,13 @@ namespace Registry.Web.Services.Adapters
             _settings = settings.Value;
         }
 
-        // NOTE: This logic is separated from the manager classes because it is used in multiple places and it could be subject to change
-
-        public IDdb GetDdb(string orgSlug, string dsSlug)
+        public IDdb GetDdb(string orgSlug, Guid internalRef)
         {
-            var baseDdbPath = Path.Combine(_settings.DdbStoragePath, orgSlug, dsSlug);
+            var baseDdbPath = Path.Combine(_settings.DdbStoragePath, orgSlug, internalRef.ToString());
             
             _logger.LogInformation($"Opening ddb in '{baseDdbPath}'");
-
-            var ddb = new Ddb(baseDdbPath);
-            
-            
-
-            return ddb;
+          
+            return new Ddb(baseDdbPath);
         }
 
 

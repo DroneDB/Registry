@@ -26,6 +26,5 @@ namespace Registry.Web.Services.Ports
         Task<FileDescriptorDto> Download(string orgSlug, string dsSlug, string[] paths);
         Task<string> GetDownloadPackage(string orgSlug, string dsSlug, string[] paths, DateTime? expiration = null, bool isPublic = false);
         Task<FileDescriptorDto> Download(string orgSlug, string dsSlug, string packageId);
-        Task MoveDataset(string orgSlug, string dsSlug, string newDsSlug);
     }
 }

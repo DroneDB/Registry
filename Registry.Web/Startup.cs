@@ -37,6 +37,7 @@ using Registry.Web.Models.DTO;
 using Registry.Web.Services;
 using Registry.Web.Services.Adapters;
 using Registry.Web.Services.Ports;
+using Registry.Web.Utilities;
 
 namespace Registry.Web
 {
@@ -89,7 +90,7 @@ namespace Registry.Web
                 {
                     auth.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
                     auth.DefaultChallengeScheme = JwtBearerDefaults.AuthenticationScheme;
-                    
+
                 })
                 .AddJwtBearer(jwt =>
                 {
@@ -217,7 +218,7 @@ namespace Registry.Web
                     break;
                 default:
                     throw new InvalidOperationException(
-                        $"Unsupported storage provider: '{(int) appSettings.StorageProvider.Type}'");
+                        $"Unsupported storage provider: '{(int)appSettings.StorageProvider.Type}'");
             }
         }
 
@@ -256,7 +257,7 @@ namespace Registry.Web
 
         public void Configure(IApplicationBuilder app, IWebHostEnvironment env)
         {
-            
+
             if (env.IsDevelopment())
             {
                 app.UseDeveloperExceptionPage();
@@ -276,7 +277,7 @@ namespace Registry.Web
             app.UseAuthorization();
 
             app.UseMiddleware<TokenManagerMiddleware>();
-            
+
             app.UseDefaultFiles();
             app.UseStaticFiles();
 
@@ -308,7 +309,7 @@ namespace Registry.Web
 
             if (applicationDbContext.Database.IsSqlite())
                 CommonUtils.EnsureFolderCreated(Configuration.GetConnectionString(IdentityConnectionName));
-            
+
             applicationDbContext.Database.EnsureCreated();
 
             CreateDefaultAdmin(serviceScope.ServiceProvider).Wait();
@@ -317,7 +318,7 @@ namespace Registry.Web
 
             if (registryDbContext.Database.IsSqlite())
                 CommonUtils.EnsureFolderCreated(Configuration.GetConnectionString(RegistryConnectionName));
-            
+
             registryDbContext.Database.EnsureCreated();
 
             CreateInitialData(registryDbContext);
@@ -347,7 +348,8 @@ namespace Registry.Web
                     Description = "Default dataset",
                     IsPublic = true,
                     CreationDate = DateTime.Now,
-                    LastEdit = DateTime.Now
+                    LastEdit = DateTime.Now,
+                    InternalRef = Guid.NewGuid()
                 };
                 entity.Datasets = new List<Dataset> { ds };
 
@@ -368,7 +370,10 @@ namespace Registry.Web
             {
                 // first we create Admin role  
                 var role = new IdentityRole { Name = ApplicationDbContext.AdminRoleName };
-                await roleManager.CreateAsync(role);
+                var r = await roleManager.CreateAsync(role);
+
+                if (!r.Succeeded)
+                    throw new InvalidOperationException("Cannot create admin role: " + r?.Errors.ToErrorString());
 
                 var defaultAdmin = appSettings.Value.DefaultAdmin;
                 var user = new User
@@ -378,10 +383,12 @@ namespace Registry.Web
                 };
 
                 var usrRes = await usersManager.CreateAsync(user, defaultAdmin.Password);
-                if (usrRes.Succeeded)
-                {
-                    var res = await usersManager.AddToRoleAsync(user, ApplicationDbContext.AdminRoleName);
-                }
+                if (!usrRes.Succeeded)
+                    throw new InvalidOperationException("Cannot create default admin: " + usrRes.Errors?.ToErrorString());
+                
+                var res = await usersManager.AddToRoleAsync(user, ApplicationDbContext.AdminRoleName);
+                if (!res.Succeeded)
+                    throw new InvalidOperationException("Cannot add admin to admin role: " + res.Errors?.ToErrorString());
             }
         }
 
