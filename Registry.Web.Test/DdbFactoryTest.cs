@@ -17,6 +17,7 @@ using NUnit.Framework;
 using Registry.Adapters.DroneDB;
 using Registry.Common;
 using Registry.Web.Models;
+using Registry.Web.Models.Configuration;
 using Registry.Web.Services.Adapters;
 
 namespace Registry.Web.Test
@@ -25,7 +26,7 @@ namespace Registry.Web.Test
     public class DdbFactoryTest
     {
         private Mock<IOptions<AppSettings>> _appSettingsMock;
-        private Logger<DdbFactory> _ddbFactoryLogger;
+        private Logger<DdbManager> _ddbFactoryLogger;
 
         private const string TestDataFolder = @"Data/Ddb";
         private const string DdbTestDataFolder = @"Data/DdbTest";
@@ -36,7 +37,7 @@ namespace Registry.Web.Test
         public void Setup()
         {
             _appSettingsMock = new Mock<IOptions<AppSettings>>();
-            _ddbFactoryLogger = new Logger<DdbFactory>(LoggerFactory.Create(builder => builder.AddConsole()));
+            _ddbFactoryLogger = new Logger<DdbManager>(LoggerFactory.Create(builder => builder.AddConsole()));
 
             _settings.DdbStoragePath = TestDataFolder;
             _appSettingsMock.Setup(o => o.Value).Returns(_settings);
@@ -47,9 +48,9 @@ namespace Registry.Web.Test
         public void Ctor_ExistingDatabase_Ok()
         {
 
-            var factory = new DdbFactory(_appSettingsMock.Object, _ddbFactoryLogger);
+            var factory = new DdbManager(_appSettingsMock.Object, _ddbFactoryLogger);
 
-            var ddb = factory.GetDdb(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug);
+            var ddb = factory.Get(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug);
 
             ddb.Should().NotBeNull();
         }
@@ -57,9 +58,9 @@ namespace Registry.Web.Test
         [Test]
         public void Ctor_MissingDatabase_NoException()
         {
-            var factory = new DdbFactory(_appSettingsMock.Object, _ddbFactoryLogger);
+            var factory = new DdbManager(_appSettingsMock.Object, _ddbFactoryLogger);
 
-            factory.Invoking(x => x.GetDdb("vlwefwef", MagicStrings.DefaultDatasetSlug))
+            factory.Invoking(x => x.Get("vlwefwef", MagicStrings.DefaultDatasetSlug))
                 .Should().NotThrow<IOException>();
 
         }
@@ -73,9 +74,9 @@ namespace Registry.Web.Test
             _settings.DdbStoragePath = fs.TestFolder;
             _appSettingsMock.Setup(o => o.Value).Returns(_settings);
 
-            var factory = new DdbFactory(_appSettingsMock.Object, _ddbFactoryLogger);
+            var factory = new DdbManager(_appSettingsMock.Object, _ddbFactoryLogger);
 
-            var ddb = factory.GetDdb(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug);
+            var ddb = factory.Get(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug);
 
             var res = ddb.Search("asasdadas.jpg");
 
@@ -105,9 +106,9 @@ namespace Registry.Web.Test
             const double expectedLongitude = 10.60667;
             const double expectedAltitude = 141;
 
-            var factory = new DdbFactory(_appSettingsMock.Object, _ddbFactoryLogger);
+            var factory = new DdbManager(_appSettingsMock.Object, _ddbFactoryLogger);
 
-            var ddb = factory.GetDdb(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug);
+            var ddb = factory.Get(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug);
             
             var list = ddb.Search(fileName).ToArray();
 
@@ -158,9 +159,9 @@ namespace Registry.Web.Test
                 new Position( 46.843311240786406, -91.99418833907131,158.51),
             };
 
-            var factory = new DdbFactory(_appSettingsMock.Object, _ddbFactoryLogger);
+            var factory = new DdbManager(_appSettingsMock.Object, _ddbFactoryLogger);
 
-            var ddb = factory.GetDdb(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug);
+            var ddb = factory.Get(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug);
 
             var list = ddb.Search(fileName).ToArray();
 
@@ -198,9 +199,9 @@ namespace Registry.Web.Test
             _settings.DdbStoragePath = fs.TestFolder;
             _appSettingsMock.Setup(o => o.Value).Returns(_settings);
 
-            var factory = new DdbFactory(_appSettingsMock.Object, _ddbFactoryLogger);
+            var factory = new DdbManager(_appSettingsMock.Object, _ddbFactoryLogger);
 
-            var ddb = factory.GetDdb(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug);
+            var ddb = factory.Get(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug);
 
             const string fileName = "DJI_0028.JPG";
 

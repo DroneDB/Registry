@@ -1,12 +1,9 @@
 ﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Threading.Tasks;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Converters;
 using Registry.Common;
 
-namespace Registry.Web.Models
+namespace Registry.Web.Models.Configuration
 {
     public class AppSettings
     {
@@ -36,11 +33,6 @@ namespace Registry.Web.Models
         /// </summary>
         [JsonConverter(typeof(StringEnumConverter))] 
         public DbProvider RegistryProvider { get; set; }
-
-        /// <summary>
-        /// Storage provider settings
-        /// </summary>
-        public StorageProvider StorageProvider { get; set; }
 
         /// <summary>
         /// Default admin details
@@ -101,33 +93,16 @@ namespace Registry.Web.Models
         /// External authentication provider url
         /// </summary>
         public string ExternalAuthUrl { get; set; }
-    }
 
-    public class StorageProvider
-    {
+        /// <summary>
+        /// Storage provider settings
+        /// </summary>
+        public StorageProvider StorageProvider { get; set; }
 
-        [JsonConverter(typeof(StringEnumConverter))] 
-        public StorageType Type { get; set; }
-        public DictionaryEx<string, string> Settings { get; set; }
-    }
+        /// <summary>
+        /// Cache provider settings
+        /// </summary>
+        public CacheProvider CacheProvider { get; set; }
 
-    public class AdminInfo
-    {
-        public string Email { get; set; }
-        public string UserName { get; set; }
-        public string Password { get; set; }
-    }
-
-    public enum StorageType
-    {
-        Physical,
-        S3
-    }
-
-    public enum DbProvider
-    {
-        Sqlite,
-        Mysql,
-        Mssql
     }
 }
