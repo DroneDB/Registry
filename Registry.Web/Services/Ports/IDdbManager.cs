@@ -11,6 +11,7 @@ namespace Registry.Web.Services.Ports
     /// </summary>
     public interface IDdbManager
     {
-        IDdb GetDdb(string orgSlug, Guid internalRef);
+        IDdb Get(string orgSlug, Guid internalRef);
+        void Delete(string orgSlug, Guid internalRef);
     }
 }

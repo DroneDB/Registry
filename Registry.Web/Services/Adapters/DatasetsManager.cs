@@ -129,15 +129,15 @@ namespace Registry.Web.Services.Adapters
         {
             var org = await _utils.GetOrganization(orgSlug);
 
-            var entity = org.Datasets.FirstOrDefault(item => item.Slug == dsSlug);
+            var ds = org.Datasets.FirstOrDefault(item => item.Slug == dsSlug);
 
-            if (entity == null)
+            if (ds == null)
                 throw new NotFoundException("Dataset not found");
 
             await _objectsManager.DeleteAll(orgSlug, dsSlug);
-            _ddbManager.Delete(orgSlug, dsSlug);
+            _ddbManager.Delete(orgSlug, ds.InternalRef);
 
-            _context.Datasets.Remove(entity);
+            _context.Datasets.Remove(ds);
 
             await _context.SaveChangesAsync();
         }
@@ -167,9 +167,9 @@ namespace Registry.Web.Services.Adapters
 
         public async Task<Dictionary<string, object>> ChangeAttributes(string orgSlug, string dsSlug, Dictionary<string, object> attributes)
         {
-            await _utils.GetDataset(orgSlug, dsSlug);
+            var ds = await _utils.GetDataset(orgSlug, dsSlug);
 
-            var ddb = _ddbManager.Get(orgSlug, dsSlug);
+            var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
 
             return ddb.ChangeAttributes(attributes);
 

@@ -62,7 +62,7 @@ namespace Registry.Web.Test
         {
             var factory = new DdbManager(_appSettingsMock.Object, _ddbFactoryLogger);
 
-            factory.Invoking(x => x.Get("vlwefwef", MagicStrings.DefaultDatasetSlug))
+            factory.Invoking(x => x.Get("vlwefwef", _datasetGuid))
                 .Should().NotThrow<IOException>();
 
         }

@@ -71,7 +71,7 @@ namespace Registry.Web.Services.Adapters
 
             _logger.LogInformation($"In '{orgSlug}/{dsSlug}'");
             
-            var ddb = _ddbFactory.Get(orgSlug, ds.InternalRef);
+            var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
 
             _logger.LogInformation($"Searching in '{path}'");
 
@@ -92,19 +92,19 @@ namespace Registry.Web.Services.Adapters
             if (string.IsNullOrWhiteSpace(path))
                 throw new ArgumentException("Path should not be null");
 
-            return await InternalGet(orgSlug, dsSlug, path);
+            return await InternalGet(orgSlug, ds.InternalRef, path);
         }
 
-        private async Task<ObjectRes> InternalGet(string orgSlug, string dsSlug, string path)
+        private async Task<ObjectRes> InternalGet(string orgSlug, Guid internalRef, string path)
         {
-            var ddb = _ddbManager.Get(orgSlug, dsSlug);
+            var ddb = _ddbManager.Get(orgSlug, internalRef);
 
             var res = ddb.Search(path).FirstOrDefault();
 
             if (res == null)
                 throw new NotFoundException($"Cannot find '{path}'");
 
-            var bucketName = string.Format(BucketNameFormat, orgSlug, ds.InternalRef.ToString());
+            var bucketName = string.Format(BucketNameFormat, orgSlug, internalRef.ToString());
 
             _logger.LogInformation($"Using bucket '{bucketName}'");
 
@@ -198,7 +198,7 @@ namespace Registry.Web.Services.Adapters
             _logger.LogInformation("File uploaded, adding to DDB");
 
             // Add to DDB
-            var ddb = _ddbFactory.Get(orgSlug, ds.InternalRef);
+            var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
             ddb.Add(path, stream);
 
             _logger.LogInformation("Added to DDB");
@@ -256,7 +256,7 @@ namespace Registry.Web.Services.Adapters
             _logger.LogInformation($"File deleted, removing from DDB");
 
             // Remove from DDB
-            var ddb = _ddbFactory.Get(orgSlug, ds.InternalRef);
+            var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
 
             ddb.Remove(path);
             ds.UpdateStatistics(ddb);
@@ -293,7 +293,7 @@ namespace Registry.Web.Services.Adapters
             _logger.LogInformation($"Bucket deleted, removing all files from DDB ");
 
             // Remove all from DDB
-            var ddb = _ddbFactory.Get(orgSlug, ds.InternalRef);
+            var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
 
             var res = ddb.Search(null);
             foreach (var item in res)
@@ -336,7 +336,6 @@ namespace Registry.Web.Services.Adapters
             memory.Reset();
             await AddToSession(orgSlug, dsSlug, sessionId, index, memory);
         }
-        #endregion
 
         public async Task<UploadedObjectDto> CloseSession(string orgSlug, string dsSlug, int sessionId, string path)
         {
@@ -357,6 +356,56 @@ namespace Registry.Web.Services.Adapters
 
             return newObj;
         }
+        #endregion
+
+        public async Task<FileDescriptorDto> GenerateThumbnail(string orgSlug, string dsSlug, string path, int? size, bool recreate = false)
+        {
+            var ds = await _utils.GetDataset(orgSlug, dsSlug);
+
+            _logger.LogInformation($"In '{orgSlug}/{dsSlug}'");
+
+            EnsurePathsValidity(orgSlug, ds.InternalRef, new[] { path });
+
+            var fileName = Path.GetFileName(path);
+            if (fileName == null)
+                throw new ArgumentException("Path is not valid");
+
+            var destFilePath = Path.Combine(Path.GetTempPath(), "out-" + Path.ChangeExtension(fileName, ".jpg"));
+            var sourceFilePath = Path.Combine(Path.GetTempPath(), fileName);
+
+            try
+            {
+
+                var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
+
+                var entry = ddb.Search(path).FirstOrDefault();
+                if (entry == null)
+                    throw new ArgumentException($"Cannot find entry '{path}' in ddb");
+
+                await _cacheManager.GenerateThumbnail(ddb, sourceFilePath, entry.Hash, size ?? DefaultThumbnailSize, destFilePath, async () =>
+                {
+                    var obj = await InternalGet(orgSlug, ds.InternalRef, path);
+                    await File.WriteAllBytesAsync(sourceFilePath, obj.Data);
+                });
+
+                var memory = new MemoryStream(await File.ReadAllBytesAsync(destFilePath));
+                memory.Reset();
+
+                return new FileDescriptorDto
+                {
+                    ContentStream = memory,
+                    ContentType = "image/jpeg",
+                    Name = Path.ChangeExtension(fileName, ".jpg")
+                };
+            }
+            finally
+            {
+                if (File.Exists(destFilePath)) File.Delete(destFilePath);
+                if (File.Exists(sourceFilePath)) File.Delete(sourceFilePath);
+            }
+
+        }
+
 
         #region Downloads
         public async Task<string> GetDownloadPackage(string orgSlug, string dsSlug, string[] paths, DateTime? expiration = null, bool isPublic = false)
@@ -398,7 +447,7 @@ namespace Registry.Web.Services.Adapters
             if (paths.Length != paths.Distinct().Count())
                 throw new ArgumentException("Duplicate paths");
 
-            var ddb = _ddbFactory.Get(orgSlug, ds.InternalRef);
+            var ddb = _ddbManager.Get(orgSlug, internalRef);
 
             foreach (var path in paths)
             {
@@ -469,7 +518,7 @@ namespace Registry.Web.Services.Adapters
 
         private async Task<FileDescriptorDto> GetFileDescriptor(string orgSlug, string dsSlug, Guid internalRef, string[] paths)
         {
-            var ddb = _ddbFactory.Get(orgSlug, internalRef);
+            var ddb = _ddbManager.Get(orgSlug, internalRef);
 
             string[] filePaths = null;
 
