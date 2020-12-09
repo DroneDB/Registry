@@ -27,8 +27,9 @@ namespace Registry.Adapters.ObjectSystem
 
             if (useSsl)
                 _client.WithSSL();
-
-            _client.SetAppInfo(appName, appVersion);
+            
+            if (!string.IsNullOrWhiteSpace(appName) && !string.IsNullOrWhiteSpace(appVersion))
+                _client.SetAppInfo(appName, appVersion);
 
         }
 

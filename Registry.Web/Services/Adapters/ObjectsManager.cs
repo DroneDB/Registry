@@ -7,6 +7,7 @@ using System.Reactive.Linq;
 using System.Runtime.CompilerServices;
 using System.Threading.Tasks;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
+using Microsoft.Extensions.Caching.Distributed;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using MimeMapping;
@@ -18,6 +19,7 @@ using Registry.Web.Data;
 using Registry.Web.Data.Models;
 using Registry.Web.Exceptions;
 using Registry.Web.Models;
+using Registry.Web.Models.Configuration;
 using Registry.Web.Models.DTO;
 using Registry.Web.Services.Ports;
 using Registry.Web.Utilities;
@@ -29,13 +31,17 @@ namespace Registry.Web.Services.Adapters
         private readonly ILogger<ObjectsManager> _logger;
         private readonly IObjectSystem _objectSystem;
         private readonly IChunkedUploadManager _chunkedUploadManager;
-        private readonly IDdbFactory _ddbFactory;
+        private readonly IDdbManager _ddbManager;
         private readonly IUtils _utils;
         private readonly IAuthManager _authManager;
+        private readonly ICacheManager _cacheManager;
         private readonly RegistryContext _context;
         private readonly AppSettings _settings;
 
         private const string LocationKey = "location";
+
+        // TODO: Could be moved to config
+        private const int DefaultThumbnailSize = 512;
 
         private const string BucketNameFormat = "{0}-{1}";
 
@@ -44,31 +50,32 @@ namespace Registry.Web.Services.Adapters
             IObjectSystem objectSystem,
             IChunkedUploadManager chunkedUploadManager,
             IOptions<AppSettings> settings,
-            IDdbFactory ddbFactory,
-            IUtils utils, IAuthManager authManager)
+            IDdbManager ddbManager,
+            IUtils utils, IAuthManager authManager, ICacheManager cacheManager)
         {
             _logger = logger;
             _context = context;
             _objectSystem = objectSystem;
             _chunkedUploadManager = chunkedUploadManager;
-            _ddbFactory = ddbFactory;
+            _ddbManager = ddbManager;
             _utils = utils;
             _authManager = authManager;
+            _cacheManager = cacheManager;
             _settings = settings.Value;
         }
 
-        public async Task<IEnumerable<ObjectDto>> List(string orgSlug, string dsSlug, string path)
+        public async Task<IEnumerable<ObjectDto>> List(string orgSlug, string dsSlug, string path = null, bool recursive = false)
         {
 
             var ds = await _utils.GetDataset(orgSlug, dsSlug);
 
             _logger.LogInformation($"In '{orgSlug}/{dsSlug}'");
-
-            var ddb = _ddbFactory.GetDdb(orgSlug, ds.InternalRef);
+            
+            var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
 
             _logger.LogInformation($"Searching in '{path}'");
 
-            var files = ddb.Search(path).Select(file => file.ToDto()).ToArray();
+            var files = ddb.Search(path, recursive).Select(file => file.ToDto()).ToArray();
 
             _logger.LogInformation($"Found {files.Length} objects");
 
@@ -85,14 +92,19 @@ namespace Registry.Web.Services.Adapters
             if (string.IsNullOrWhiteSpace(path))
                 throw new ArgumentException("Path should not be null");
 
-            var ddb = _ddbFactory.GetDdb(orgSlug, ds.InternalRef);
+            return await InternalGet(orgSlug, ds.InternalRef, path);
+        }
+
+        private async Task<ObjectRes> InternalGet(string orgSlug, Guid internalRef, string path)
+        {
+            var ddb = _ddbManager.Get(orgSlug, internalRef);
 
             var res = ddb.Search(path).FirstOrDefault();
 
             if (res == null)
                 throw new NotFoundException($"Cannot find '{path}'");
 
-            var bucketName = string.Format(BucketNameFormat, orgSlug, ds.InternalRef.ToString());
+            var bucketName = string.Format(BucketNameFormat, orgSlug, internalRef.ToString());
 
             _logger.LogInformation($"Using bucket '{bucketName}'");
 
@@ -102,14 +114,9 @@ namespace Registry.Web.Services.Adapters
             {
                 _logger.LogInformation("Bucket does not exist, creating it");
 
-                var region = _settings.StorageProvider.Settings.SafeGetValue("region");
-                if (region == null)
-                    _logger.LogWarning("No region specified in storage provider config");
-
-                await _objectSystem.MakeBucketAsync(bucketName, region);
+                await _objectSystem.MakeBucketAsync(bucketName, SafeGetRegion());
 
                 _logger.LogInformation("Bucket created");
-
             }
 
             var objInfo = await _objectSystem.GetObjectInfoAsync(bucketName, res.Path);
@@ -133,7 +140,23 @@ namespace Registry.Web.Services.Adapters
                 Hash = res.Hash,
                 Size = res.Size
             };
+        }
 
+        private string SafeGetRegion()
+        {
+            if (_settings.StorageProvider.Type != StorageType.S3) return null;
+
+            var settings = _settings.StorageProvider.Settings.ToObject<S3ProviderSettings>();
+            if (settings == null)
+            {
+                _logger.LogWarning("No S3 settings loaded, shouldn't this be a problem?");
+                return null;
+            }
+
+            if (settings.Region == null)
+                _logger.LogWarning("No region specified in storage provider config");
+
+            return settings.Region;
         }
 
         public async Task<UploadedObjectDto> AddNew(string orgSlug, string dsSlug, string path, byte[] data)
@@ -159,7 +182,7 @@ namespace Registry.Web.Services.Adapters
 
                 _logger.LogInformation($"Bucket '{bucketName}' does not exist, creating it");
 
-                await _objectSystem.MakeBucketAsync(bucketName, _settings.StorageProvider.Settings.SafeGetValue(LocationKey));
+                await _objectSystem.MakeBucketAsync(bucketName, SafeGetLocation());
 
                 _logger.LogInformation("Bucket created");
             }
@@ -175,7 +198,7 @@ namespace Registry.Web.Services.Adapters
             _logger.LogInformation("File uploaded, adding to DDB");
 
             // Add to DDB
-            var ddb = _ddbFactory.GetDdb(orgSlug, ds.InternalRef);
+            var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
             ddb.Add(path, stream);
 
             _logger.LogInformation("Added to DDB");
@@ -192,6 +215,23 @@ namespace Registry.Web.Services.Adapters
             };
 
             return obj;
+        }
+
+        private string SafeGetLocation()
+        {
+            if (_settings.StorageProvider.Type != StorageType.S3) return null;
+
+            var settings = _settings.StorageProvider.Settings.ToObject<S3ProviderSettings>();
+            if (settings == null)
+            {
+                _logger.LogWarning("No S3 settings loaded, shouldn't this be a problem?");
+                return null;
+            }
+
+            if (settings.Region == null)
+                _logger.LogWarning("No region specified in storage provider config");
+
+            return settings.Region;
         }
 
         public async Task Delete(string orgSlug, string dsSlug, string path)
@@ -216,7 +256,7 @@ namespace Registry.Web.Services.Adapters
             _logger.LogInformation($"File deleted, removing from DDB");
 
             // Remove from DDB
-            var ddb = _ddbFactory.GetDdb(orgSlug, ds.InternalRef);
+            var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
 
             ddb.Remove(path);
             ds.UpdateStatistics(ddb);
@@ -232,7 +272,7 @@ namespace Registry.Web.Services.Adapters
         {
             var ds = await _utils.GetDataset(orgSlug, dsSlug);
 
-            _logger.LogInformation($"In '{orgSlug}/{dsSlug}'");
+            _logger.LogInformation($"In DeleteAll('{orgSlug}/{dsSlug}')");
 
             var bucketName = string.Format(BucketNameFormat, orgSlug, ds.InternalRef.ToString());
 
@@ -253,7 +293,7 @@ namespace Registry.Web.Services.Adapters
             _logger.LogInformation($"Bucket deleted, removing all files from DDB ");
 
             // Remove all from DDB
-            var ddb = _ddbFactory.GetDdb(orgSlug, ds.InternalRef);
+            var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
 
             var res = ddb.Search(null);
             foreach (var item in res)
@@ -296,7 +336,6 @@ namespace Registry.Web.Services.Adapters
             memory.Reset();
             await AddToSession(orgSlug, dsSlug, sessionId, index, memory);
         }
-        #endregion
 
         public async Task<UploadedObjectDto> CloseSession(string orgSlug, string dsSlug, int sessionId, string path)
         {
@@ -317,6 +356,56 @@ namespace Registry.Web.Services.Adapters
 
             return newObj;
         }
+        #endregion
+
+        public async Task<FileDescriptorDto> GenerateThumbnail(string orgSlug, string dsSlug, string path, int? size, bool recreate = false)
+        {
+            var ds = await _utils.GetDataset(orgSlug, dsSlug);
+
+            _logger.LogInformation($"In '{orgSlug}/{dsSlug}'");
+
+            EnsurePathsValidity(orgSlug, ds.InternalRef, new[] { path });
+
+            var fileName = Path.GetFileName(path);
+            if (fileName == null)
+                throw new ArgumentException("Path is not valid");
+
+            var destFilePath = Path.Combine(Path.GetTempPath(), "out-" + Path.ChangeExtension(fileName, ".jpg"));
+            var sourceFilePath = Path.Combine(Path.GetTempPath(), fileName);
+
+            try
+            {
+
+                var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
+
+                var entry = ddb.Search(path).FirstOrDefault();
+                if (entry == null)
+                    throw new ArgumentException($"Cannot find entry '{path}' in ddb");
+
+                await _cacheManager.GenerateThumbnail(ddb, sourceFilePath, entry.Hash, size ?? DefaultThumbnailSize, destFilePath, async () =>
+                {
+                    var obj = await InternalGet(orgSlug, ds.InternalRef, path);
+                    await File.WriteAllBytesAsync(sourceFilePath, obj.Data);
+                });
+
+                var memory = new MemoryStream(await File.ReadAllBytesAsync(destFilePath));
+                memory.Reset();
+
+                return new FileDescriptorDto
+                {
+                    ContentStream = memory,
+                    ContentType = "image/jpeg",
+                    Name = Path.ChangeExtension(fileName, ".jpg")
+                };
+            }
+            finally
+            {
+                if (File.Exists(destFilePath)) File.Delete(destFilePath);
+                if (File.Exists(sourceFilePath)) File.Delete(sourceFilePath);
+            }
+
+        }
+
 
         #region Downloads
         public async Task<string> GetDownloadPackage(string orgSlug, string dsSlug, string[] paths, DateTime? expiration = null, bool isPublic = false)
@@ -358,7 +447,7 @@ namespace Registry.Web.Services.Adapters
             if (paths.Length != paths.Distinct().Count())
                 throw new ArgumentException("Duplicate paths");
 
-            var ddb = _ddbFactory.GetDdb(orgSlug, internalRef);
+            var ddb = _ddbManager.Get(orgSlug, internalRef);
 
             foreach (var path in paths)
             {
@@ -429,38 +518,50 @@ namespace Registry.Web.Services.Adapters
 
         private async Task<FileDescriptorDto> GetFileDescriptor(string orgSlug, string dsSlug, Guid internalRef, string[] paths)
         {
-            var ddb = _ddbFactory.GetDdb(orgSlug, internalRef);
+            var ddb = _ddbManager.Get(orgSlug, internalRef);
 
-            var filePaths = new List<string>();
+            string[] filePaths = null;
 
             if (paths != null)
             {
+                var temp = new List<string>();
 
                 foreach (var path in paths)
                 {
-                    var entries = ddb.Search(path)?.ToArray();
+                    // We are in recursive mode because the paths could contain other folders that we need to expand
+                    var items = ddb.Search(path, true)?
+                        .Where(entry => entry.Type != EntryType.Directory)
+                        .Select(entry => entry.Path).ToArray();
 
-                    if (entries == null || !entries.Any())
+                    if (items == null || !items.Any())
                         throw new ArgumentException($"Cannot find any file path matching '{path}'");
 
-                    filePaths.AddRange(entries.Select(item => item.Path));
+                    temp.AddRange(items);
                 }
+
+                // Get rid of possible duplicates and sort
+                filePaths = temp.Distinct().OrderBy(item => item).ToArray();
 
             }
             else
             {
-                // Select everything
-                filePaths = ddb.Search(null)
+                // Select everything and sort
+                filePaths = ddb.Search(null, true)?
+                    .Where(entry => entry.Type != EntryType.Directory)
                     .Select(entry => entry.Path)
-                    .ToList();
+                    .OrderBy(path => path)
+                    .ToArray();
+
+                if (filePaths == null)
+                    throw new InvalidOperationException("Ddb is empty, what should I get?");
             }
 
-            _logger.LogInformation($"Found {filePaths.Count} paths");
+            _logger.LogInformation($"Found {filePaths.Length} paths");
 
             FileDescriptorDto descriptor;
 
             // If there is just one file we return it
-            if (filePaths.Count == 1)
+            if (filePaths.Length == 1)
             {
                 var filePath = filePaths.First();
 
@@ -486,9 +587,6 @@ namespace Registry.Web.Services.Adapters
                     ContentStream = new MemoryStream(),
                     ContentType = "application/zip"
                 };
-
-                // Hopefully all the folders are correctly ordered
-                filePaths.Sort();
 
                 using (var archive = new ZipArchive(descriptor.ContentStream, ZipArchiveMode.Create, true))
                 {
@@ -520,11 +618,7 @@ namespace Registry.Web.Services.Adapters
             {
                 _logger.LogInformation("Bucket does not exist, creating it");
 
-                var region = _settings.StorageProvider.Settings.SafeGetValue("region");
-                if (region == null)
-                    _logger.LogWarning("No region specified in storage provider config");
-
-                await _objectSystem.MakeBucketAsync(bucketName, region);
+                await _objectSystem.MakeBucketAsync(bucketName, SafeGetRegion());
 
                 _logger.LogInformation("Bucket created");
             }

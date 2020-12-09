@@ -1,7 +1,9 @@
 ﻿using System.Threading.Tasks;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Options;
+using Registry.Common;
 using Registry.Web.Models;
+using Registry.Web.Models.Configuration;
 
 namespace Registry.Web.Services
 {
@@ -9,6 +11,8 @@ namespace Registry.Web.Services
     {
         private readonly AppSettings _settings;
 
+        private const string AuthorizationHeaderKey = "Authorization";
+        
         public JwtInCookieMiddleware(IOptions<AppSettings> settings)
         {
             _settings = settings.Value;
@@ -19,8 +23,16 @@ namespace Registry.Web.Services
             var cookie = context.Request.Cookies[_settings.AuthCookieName];
 
             if (cookie != null)
-                if (!context.Request.Headers.ContainsKey("Authorization"))
-                    context.Request.Headers.Append("Authorization", "Bearer " + cookie);
+            {
+
+                var authValue = "Bearer " + cookie;
+
+                if (!context.Request.Headers.ContainsKey(AuthorizationHeaderKey))
+                    context.Request.Headers.Append(AuthorizationHeaderKey, authValue);
+                else
+                    context.Request.Headers[AuthorizationHeaderKey] = authValue;
+                
+            }
 
             await next.Invoke(context);
         }

@@ -6,11 +6,8 @@ using Registry.Ports.DroneDB;
 
 namespace Registry.Web.Services.Ports
 {
-    /// <summary>
-    /// Creates new instances of IDdb
-    /// </summary>
-    public interface IDdbFactory
+    public interface ICacheManager
     {
-        IDdb GetDdb(string orgSlug, Guid internalRef);
+        public Task GenerateThumbnail(IDdb ddb, string sourcePath, string sourceHash, int size, string destPath, Func<Task> getData);
     }
 }

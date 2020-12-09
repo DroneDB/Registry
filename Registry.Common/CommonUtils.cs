@@ -27,7 +27,7 @@ namespace Registry.Common
             {
                 rng.GetBytes(uintBuffer);
                 var num = BitConverter.ToUInt32(uintBuffer, 0);
-                res.Append(valid[(int) (num % (uint) valid.Length)]);
+                res.Append(valid[(int)(num % (uint)valid.Length)]);
             }
 
             return res.ToString();
@@ -48,7 +48,7 @@ namespace Registry.Common
             if (string.Equals(first.FullName, second.FullName, StringComparison.OrdinalIgnoreCase))
                 return true;
 
-            var iterations = (int) Math.Ceiling((double) first.Length / BytesToRead);
+            var iterations = (int)Math.Ceiling((double)first.Length / BytesToRead);
 
             using var fs1 = first.OpenRead();
             using var fs2 = second.OpenRead();
@@ -70,17 +70,13 @@ namespace Registry.Common
 
         public static TValue SafeGetValue<TKey, TValue>(this IDictionary<TKey, TValue> dictionary, TKey key)
         {
-            TValue value;
-
-            return !dictionary.TryGetValue(key, out value) ? default(TValue) : value;
+            return !dictionary.TryGetValue(key, out var value) ? default : value;
         }
 
         public static TValueOut? SafeGetValue<TKey, TValue, TValueOut>(this IDictionary<TKey, TValue> dictionary,
             TKey key, Func<TValue, TValueOut> selector) where TValueOut : struct
         {
-            TValue value;
-
-            return !dictionary.TryGetValue(key, out value) ? null : (TValueOut?) selector(value);
+            return !dictionary.TryGetValue(key, out var value) ? null : (TValueOut?)selector(value);
         }
 
         /// <summary>
@@ -139,19 +135,31 @@ namespace Registry.Common
             return ComputeSha256Hash(Encoding.UTF8.GetBytes(str));
         }
 
-        public static string ComputeSha256Hash(byte[] rawData)
+        public static string ComputeFileHash(string filePath)
         {
-            // Create a SHA256   
+            using var fileStream = File.OpenRead(filePath);
             using var sha256Hash = SHA256.Create();
-            // ComputeHash - returns byte array  
-            var bytes = sha256Hash.ComputeHash(rawData);
+            var bytes = sha256Hash.ComputeHash(fileStream);
 
+            return ConvertBytesToString(bytes);
+        }
+
+        private static string ConvertBytesToString(byte[] bytes)
+        {
             // Convert byte array to a string   
             var builder = new StringBuilder();
             foreach (var t in bytes)
                 builder.Append(t.ToString("x2"));
 
             return builder.ToString();
+        }
+
+        public static string ComputeSha256Hash(byte[] rawData)
+        {
+            using var sha256Hash = SHA256.Create();
+            var bytes = sha256Hash.ComputeHash(rawData);
+
+            return ConvertBytesToString(bytes);
         }
 
         private const string SmartFileCacheFolder = "SmartFileCache";

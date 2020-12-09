@@ -17,6 +17,7 @@ using Newtonsoft.Json.Linq;
 using Registry.Adapters.DroneDB;
 using Registry.Ports.DroneDB;
 using Registry.Web.Models;
+using Registry.Web.Models.Configuration;
 
 namespace Registry.Web
 {
