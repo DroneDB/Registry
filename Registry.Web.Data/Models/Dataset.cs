@@ -7,7 +7,8 @@ namespace Registry.Web.Data.Models
 {
     public class Dataset
     {
-        // TODO: We should add an index to this field!
+        [MaxLength(128)]
+        [Required]
         public string Slug { get; set; }
         
         [Key]
@@ -19,7 +20,7 @@ namespace Registry.Web.Data.Models
         [Required]
         public DateTime CreationDate { get; set; }
         public string License { get; set; }
-        public int Size { get; set; }
+        public long Size { get; set; }
         public int ObjectsCount { get; set; }
         public DateTime LastEdit { get; set; }
         public string Meta { get; set; }

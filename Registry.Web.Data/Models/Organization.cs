@@ -9,6 +9,7 @@ namespace Registry.Web.Data.Models
     public class Organization
     {
         [Key]
+        [MaxLength(128)]
         public string Slug { get; set; }
         [Required]
         public string Name { get; set; }
