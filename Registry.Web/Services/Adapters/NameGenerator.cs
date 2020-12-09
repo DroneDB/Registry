@@ -6,6 +6,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Registry.Common;
 using Registry.Web.Models;
+using Registry.Web.Models.Configuration;
 using Registry.Web.Services.Ports;
 
 namespace Registry.Web.Services.Adapters

@@ -14,6 +14,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Newtonsoft.Json;
 using Registry.Web.Models;
+using Registry.Web.Models.Configuration;
 
 namespace Registry.Web.Services.Adapters
 {

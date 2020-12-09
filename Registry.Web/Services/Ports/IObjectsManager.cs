@@ -11,7 +11,7 @@ namespace Registry.Web.Services.Ports
 {
     public interface IObjectsManager
     {
-        Task<IEnumerable<ObjectDto>> List(string orgSlug, string dsSlug, string path);
+        Task<IEnumerable<ObjectDto>> List(string orgSlug, string dsSlug, string path = null, bool recursive = false);
         Task<ObjectRes> Get(string orgSlug, string dsSlug, string path);
         Task<UploadedObjectDto> AddNew(string orgSlug, string dsSlug, string path, byte[] data);
         Task<UploadedObjectDto> AddNew(string orgSlug, string dsSlug, string path, Stream stream);
@@ -26,5 +26,7 @@ namespace Registry.Web.Services.Ports
         Task<FileDescriptorDto> Download(string orgSlug, string dsSlug, string[] paths);
         Task<string> GetDownloadPackage(string orgSlug, string dsSlug, string[] paths, DateTime? expiration = null, bool isPublic = false);
         Task<FileDescriptorDto> Download(string orgSlug, string dsSlug, string packageId);
+        Task<FileDescriptorDto> GenerateThumbnail(string orgSlug, string dsSlug, string path, int? size, bool recreate = false);
+
     }
 }

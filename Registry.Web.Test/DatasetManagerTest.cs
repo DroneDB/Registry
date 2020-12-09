@@ -14,6 +14,7 @@ using NUnit.Framework;
 using Registry.Web.Data;
 using Registry.Web.Data.Models;
 using Registry.Web.Models;
+using Registry.Web.Models.Configuration;
 using Registry.Web.Services.Adapters;
 using Registry.Web.Services.Ports;
 
@@ -27,7 +28,7 @@ namespace Registry.Web.Test
         private Mock<IOptions<AppSettings>> _appSettingsMock;
         private Mock<IDatasetsManager> _datasetManagerMock;
         private Logger<DatasetsManager> _datasetsManagerLogger;
-        private Mock<IDdbFactory> _ddbFactoryMock;
+        private Mock<IDdbManager> _ddbFactoryMock;
         private Mock<IObjectsManager> _objectsManagerMock;
         private Mock<IHttpContextAccessor> _httpContextAccessorMock;
         private Mock<LinkGenerator> _linkGeneratorMock;
@@ -39,7 +40,7 @@ namespace Registry.Web.Test
             _appSettingsMock = new Mock<IOptions<AppSettings>>();
             _authManagerMock = new Mock<IAuthManager>();
             _datasetManagerMock = new Mock<IDatasetsManager>();
-            _ddbFactoryMock = new Mock<IDdbFactory>();
+            _ddbFactoryMock = new Mock<IDdbManager>();
             _objectsManagerMock = new Mock<IObjectsManager>();
             _httpContextAccessorMock = new Mock<IHttpContextAccessor>();
             _linkGeneratorMock = new Mock<LinkGenerator>();
@@ -57,7 +58,7 @@ namespace Registry.Web.Test
             
             var utils = new WebUtils(_authManagerMock.Object, context, _appSettingsMock.Object, _httpContextAccessorMock.Object, _linkGeneratorMock.Object);
 
-            var datasetsManager = new DatasetsManager(context, utils, _datasetsManagerLogger, _objectsManagerMock.Object, _passwordHasher);
+            var datasetsManager = new DatasetsManager(context, utils, _datasetsManagerLogger, _objectsManagerMock.Object, _passwordHasher, _ddbFactoryMock.Object);
 
             var list = (await datasetsManager.List(MagicStrings.PublicOrganizationSlug)).ToArray();
 
