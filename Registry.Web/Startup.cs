@@ -5,17 +5,20 @@ using System.IO;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
+using HealthChecks.UI.Client;
 using Microsoft.AspNet.OData.Builder;
 using Microsoft.AspNet.OData.Extensions;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Registry.Web.Models;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Http.Features;
 using Microsoft.AspNetCore.HttpsPolicy;
 using Microsoft.AspNetCore.Identity;
+using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.CodeAnalysis.Options;
 using Microsoft.EntityFrameworkCore;
@@ -36,6 +39,7 @@ using Registry.Ports.DroneDB;
 using Registry.Ports.ObjectSystem;
 using Registry.Web.Data;
 using Registry.Web.Data.Models;
+using Registry.Web.HealthChecks;
 using Registry.Web.Models.Configuration;
 using Registry.Web.Models.DTO;
 using Registry.Web.Services;
@@ -140,6 +144,14 @@ namespace Registry.Web
 
             RegisterCacheProvider(services, appSettings);
 
+            services.AddHealthChecks()
+                .AddCheck<CacheHealthCheck>("Cache health check", null, new[] { "service" })
+                .AddCheck<DdbHealthCheck>("DroneDB health check", null, new[] { "service" })
+                .AddCheck<UserManagerHealthCheck>("User manager health check", null, new[] { "database" })
+                .AddDbContextCheck<RegistryContext>("Registry database health check", null, new[] { "database" })
+                .AddDbContextCheck<ApplicationDbContext>("Registry identity database health check", null, new[] { "database" })
+                .AddCheck<ObjectSystemHealthCheck>("Object system health check", null, new[] { "storage" });
+            
             /*
              * NOTE about services lifetime:
              *
@@ -293,8 +305,8 @@ namespace Registry.Web
 
                     services.AddDbContext<T>(options =>
                         options.UseMySql(
-                            connectionString, 
-                            ServerVersion.AutoDetect(connectionString), 
+                            connectionString,
+                            ServerVersion.AutoDetect(connectionString),
                             builder => builder.EnableRetryOnFailure()));
 
                     break;
@@ -348,6 +360,17 @@ namespace Registry.Web
             app.UseEndpoints(endpoints =>
             {
                 endpoints.MapControllers();
+
+                endpoints.MapHealthChecks("/quickhealth", new HealthCheckOptions
+                {
+                    Predicate = _ => false
+                }).RequireAuthorization();
+
+                endpoints.MapHealthChecks("/health", new HealthCheckOptions
+                {
+                    ResponseWriter = UIResponseWriter.WriteHealthCheckUIResponse
+                }).RequireAuthorization();
+
                 // TODO: Enable when needed
                 // endpoints.MapODataRoute("odata", "odata", GetEdmModel());
             });
@@ -374,7 +397,7 @@ namespace Registry.Web
             if (applicationDbContext == null)
                 throw new InvalidOperationException("Cannot get application db context from service provider");
 
-            if (applicationDbContext.Database.IsSqlite()) 
+            if (applicationDbContext.Database.IsSqlite())
                 CommonUtils.EnsureFolderCreated(Configuration.GetConnectionString(IdentityConnectionName));
 
             applicationDbContext.Database.EnsureCreated();
@@ -463,7 +486,7 @@ namespace Registry.Web
                 var usrRes = await usersManager.CreateAsync(user, defaultAdmin.Password);
                 if (!usrRes.Succeeded)
                     throw new InvalidOperationException("Cannot create default admin: " + usrRes.Errors?.ToErrorString());
-                
+
                 var res = await usersManager.AddToRoleAsync(user, ApplicationDbContext.AdminRoleName);
                 if (!res.Succeeded)
                     throw new InvalidOperationException("Cannot add admin to admin role: " + res.Errors?.ToErrorString());
