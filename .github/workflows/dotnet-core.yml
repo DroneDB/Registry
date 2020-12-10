@@ -23,7 +23,7 @@ jobs:
     - name: Setup .NET Core
       uses: actions/setup-dotnet@v1
       with:
-        dotnet-version: '5.x'
+        dotnet-version: '5.0'
     - name: setup utils
       run: sudo apt-get update && sudo apt-get install -y spatialite-bin libsqlite3-mod-spatialite
     - name: Build C++ lib
