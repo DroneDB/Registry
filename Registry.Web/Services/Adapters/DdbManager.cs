@@ -58,7 +58,9 @@ namespace Registry.Web.Services.Adapters
 
             _logger.LogInformation($"Removing ddb '{baseDdbPath}'");
 
-            Directory.Delete(baseDdbPath, true);
+            var parentPath = Path.GetDirectoryName(baseDdbPath) ?? Path.Combine(baseDdbPath, "..");
+
+            Directory.Delete(parentPath, true);
 
         }
 
