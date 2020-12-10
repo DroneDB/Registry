@@ -276,13 +276,16 @@ namespace Registry.Web
 
         private void ConfigureDbProvider<T>(IServiceCollection services, DbProvider provider, string connectionStringName) where T : DbContext
         {
+
+            var connectionString = Configuration.GetConnectionString(connectionStringName);
+
             switch (provider)
             {
                 case DbProvider.Sqlite:
 
                     services.AddDbContext<T>(options =>
                         options.UseSqlite(
-                            Configuration.GetConnectionString(connectionStringName)));
+                            connectionString));
 
                     break;
 
@@ -290,7 +293,9 @@ namespace Registry.Web
 
                     services.AddDbContext<T>(options =>
                         options.UseMySql(
-                            Configuration.GetConnectionString(connectionStringName), builder => builder.EnableRetryOnFailure()));
+                            connectionString, 
+                            ServerVersion.AutoDetect(connectionString), 
+                            builder => builder.EnableRetryOnFailure()));
 
                     break;
 
@@ -298,7 +303,7 @@ namespace Registry.Web
 
                     services.AddDbContext<T>(options =>
                         options.UseSqlServer(
-                            Configuration.GetConnectionString(connectionStringName)));
+                            connectionString));
 
                     break;
 
