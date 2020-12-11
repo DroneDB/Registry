@@ -93,6 +93,9 @@ namespace Registry.Web.Services.Adapters
             if (!string.IsNullOrEmpty(dataset.Password))
                 ds.PasswordHash = _passwordHasher.Hash(dataset.Password);
 
+            if (ds.InternalRef == Guid.Empty)
+                ds.InternalRef = Guid.NewGuid();
+            
             org.Datasets.Add(ds);
 
             await _context.SaveChangesAsync();
@@ -135,7 +138,6 @@ namespace Registry.Web.Services.Adapters
                 throw new NotFoundException("Dataset not found");
 
             await _objectsManager.DeleteAll(orgSlug, dsSlug);
-            _ddbManager.Delete(orgSlug, ds.InternalRef);
 
             _context.Datasets.Remove(ds);
 
