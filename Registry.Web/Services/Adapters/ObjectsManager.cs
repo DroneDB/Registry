@@ -38,8 +38,6 @@ namespace Registry.Web.Services.Adapters
         private readonly RegistryContext _context;
         private readonly AppSettings _settings;
 
-        private const string LocationKey = "location";
-
         // TODO: Could be moved to config
         private const int DefaultThumbnailSize = 512;
 
@@ -70,7 +68,7 @@ namespace Registry.Web.Services.Adapters
             var ds = await _utils.GetDataset(orgSlug, dsSlug);
 
             _logger.LogInformation($"In '{orgSlug}/{dsSlug}'");
-            
+
             var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
 
             _logger.LogInformation($"Searching in '{path}'");
@@ -283,29 +281,18 @@ namespace Registry.Web.Services.Adapters
             if (!bucketExists)
             {
                 _logger.LogWarning($"Asked to remove non-existing bucket '{bucketName}'");
-                return;
+            }
+            else
+            {
+                _logger.LogInformation("Deleting bucket");
+                await _objectSystem.RemoveBucketAsync(bucketName);
+                _logger.LogInformation("Bucket deleted");
+
             }
 
-            _logger.LogInformation($"Deleting bucket");
+            _logger.LogInformation("Removing DDB");
 
-            await _objectSystem.RemoveBucketAsync(bucketName);
-
-            _logger.LogInformation($"Bucket deleted, removing all files from DDB ");
-
-            // Remove all from DDB
-            var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
-
-            var res = ddb.Search(null);
-            foreach (var item in res)
-                ddb.Remove(item.Path);
-
-            // Refresh objects count and total size
-            ds.UpdateStatistics(ddb);
-            await _context.SaveChangesAsync();
-
-            _logger.LogInformation("Removed all from DDB");
-
-            // TODO: Maybe it's more clever to remove the entire sqlite database instead of performing a per-file delete. Just my 2 cents
+            _ddbManager.Delete(orgSlug, ds.InternalRef);
 
         }
 
