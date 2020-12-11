@@ -15,6 +15,7 @@ namespace Registry.Web.Utilities
         public const string ShareRadix = "share";
         public const string UsersRadix = "users";
         public const string ObjectsRadix = "obj";
+        public const string SystemRadix = "sys";
 
     }
 }

@@ -4,6 +4,7 @@ using System.Linq;
 using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
+using Microsoft.AspNetCore.Identity;
 using Newtonsoft.Json;
 using Registry.Ports.DroneDB;
 using Registry.Ports.DroneDB.Models;
@@ -190,6 +191,12 @@ namespace Registry.Web.Utilities
         {
             // Just don't ask please
             return JsonConvert.DeserializeObject<T>(JsonConvert.SerializeObject(obj));
+        }
+
+        public static string ToErrorString(this IEnumerable<IdentityError> results)
+        {
+            if (results == null || !results.Any()) return "No error details";
+            return string.Join(", ", results.Select(item => $"[{item.Code}: '{item.Description}']"));
         }
 
     }

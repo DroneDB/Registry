@@ -31,8 +31,10 @@ namespace Registry.Web.Test
         private const string TestDataFolder = @"Data/Ddb";
         private const string DdbTestDataFolder = @"Data/DdbTest";
 
-        private const string DbTest1ArchiveUrl = "https://github.com/DroneDB/test_data/raw/master/registry/DdbFactoryTest/testdb1.zip";
-        
+        private const string DbTest1ArchiveUrl = "https://github.com/DroneDB/test_data/raw/master/registry/DdbFactoryTest/testdb2.zip";
+
+        private readonly Guid _datasetGuid = Guid.Parse("0a223495-84a0-4c15-b425-c7ef88110e75");
+
         [SetUp]
         public void Setup()
         {
@@ -50,7 +52,7 @@ namespace Registry.Web.Test
 
             var factory = new DdbManager(_appSettingsMock.Object, _ddbFactoryLogger);
 
-            var ddb = factory.Get(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug);
+            var ddb = factory.Get(MagicStrings.PublicOrganizationSlug, _datasetGuid);
 
             ddb.Should().NotBeNull();
         }
@@ -60,7 +62,7 @@ namespace Registry.Web.Test
         {
             var factory = new DdbManager(_appSettingsMock.Object, _ddbFactoryLogger);
 
-            factory.Invoking(x => x.Get("vlwefwef", MagicStrings.DefaultDatasetSlug))
+            factory.Invoking(x => x.Get("vlwefwef", _datasetGuid))
                 .Should().NotThrow<IOException>();
 
         }
@@ -76,7 +78,7 @@ namespace Registry.Web.Test
 
             var factory = new DdbManager(_appSettingsMock.Object, _ddbFactoryLogger);
 
-            var ddb = factory.Get(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug);
+            var ddb = factory.Get(MagicStrings.PublicOrganizationSlug, _datasetGuid);
 
             var res = ddb.Search("asasdadas.jpg");
 
@@ -108,7 +110,7 @@ namespace Registry.Web.Test
 
             var factory = new DdbManager(_appSettingsMock.Object, _ddbFactoryLogger);
 
-            var ddb = factory.Get(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug);
+            var ddb = factory.Get(MagicStrings.PublicOrganizationSlug, _datasetGuid);
             
             var list = ddb.Search(fileName).ToArray();
 
@@ -161,7 +163,7 @@ namespace Registry.Web.Test
 
             var factory = new DdbManager(_appSettingsMock.Object, _ddbFactoryLogger);
 
-            var ddb = factory.Get(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug);
+            var ddb = factory.Get(MagicStrings.PublicOrganizationSlug, _datasetGuid);
 
             var list = ddb.Search(fileName).ToArray();
 
@@ -201,7 +203,7 @@ namespace Registry.Web.Test
 
             var factory = new DdbManager(_appSettingsMock.Object, _ddbFactoryLogger);
 
-            var ddb = factory.Get(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug);
+            var ddb = factory.Get(MagicStrings.PublicOrganizationSlug, _datasetGuid);
 
             const string fileName = "DJI_0028.JPG";
 

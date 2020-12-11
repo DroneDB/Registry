@@ -10,6 +10,7 @@ using MimeMapping;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using Registry.Common;
+using Registry.Common.Model;
 using Registry.Ports.ObjectSystem;
 using Registry.Ports.ObjectSystem.Model;
 
@@ -336,7 +337,7 @@ namespace Registry.Adapters.ObjectSystem
 
         #region Buckets
 
-        public async Task MakeBucketAsync(string bucketName, string location, CancellationToken cancellationToken = default)
+        public async Task MakeBucketAsync(string bucketName, string location = null, CancellationToken cancellationToken = default)
         {
             EnsureBucketDoesNotExist(bucketName);
 
@@ -440,6 +441,10 @@ namespace Registry.Adapters.ObjectSystem
 
         }
 
+        public StorageInfo GetStorageInfo()
+        {
+            return CommonUtils.GetStorageInfo(_baseFolder);
+        }
 
         #endregion
 

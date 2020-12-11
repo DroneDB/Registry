@@ -160,8 +160,8 @@ namespace Registry.Web.Controllers
             }
         }
 
-        [HttpPost("list", Name = nameof(ObjectsController) + "." + nameof(GetInfo))]
-        public async Task<IActionResult> GetInfo([FromRoute] string orgSlug, [FromRoute] string dsSlug, [FromForm] string path)
+        [HttpGet("list", Name = nameof(ObjectsController) + "." + nameof(GetInfo))]
+        public async Task<IActionResult> GetInfo([FromRoute] string orgSlug, [FromRoute] string dsSlug, [FromQuery] string path)
         {
             try
             {
@@ -173,6 +173,24 @@ namespace Registry.Web.Controllers
             catch (Exception ex)
             {
                 _logger.LogError(ex, $"Exception in Objects controller GetInfo('{orgSlug}', '{dsSlug}', '{path}')");
+
+                return ExceptionResult(ex);
+            }
+        }
+
+        [HttpPost("list", Name = nameof(ObjectsController) + "." + nameof(GetInfoEx))]
+        public async Task<IActionResult> GetInfoEx([FromRoute] string orgSlug, [FromRoute] string dsSlug, [FromForm] string path)
+        {
+            try
+            {
+                _logger.LogDebug($"Objects controller GetInfoEx('{orgSlug}', '{dsSlug}', '{path}')");
+
+                var res = await _objectsManager.List(orgSlug, dsSlug, path);
+                return Ok(res);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, $"Exception in Objects controller GetInfoEx('{orgSlug}', '{dsSlug}', '{path}')");
 
                 return ExceptionResult(ex);
             }

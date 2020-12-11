@@ -10,6 +10,7 @@ using System.Threading.Tasks;
 using Minio;
 using Minio.DataModel;
 using Registry.Common;
+using Registry.Common.Model;
 using Registry.Ports.ObjectSystem;
 using Registry.Ports.ObjectSystem.Model;
 
@@ -27,7 +28,7 @@ namespace Registry.Adapters.ObjectSystem
 
             if (useSsl)
                 _client.WithSSL();
-            
+
             if (!string.IsNullOrWhiteSpace(appName) && !string.IsNullOrWhiteSpace(appVersion))
                 _client.SetAppInfo(appName, appVersion);
 
@@ -114,9 +115,9 @@ namespace Registry.Adapters.ObjectSystem
             await _client.GetObjectAsync(bucketName, objectName, filePath, sse?.ToSSE(), cancellationToken);
         }
 
-        public async Task MakeBucketAsync(string bucketName, string location, CancellationToken cancellationToken = default)
+        public async Task MakeBucketAsync(string bucketName, string location = null, CancellationToken cancellationToken = default)
         {
-            await _client.MakeBucketAsync(bucketName, location, cancellationToken);
+            await _client.MakeBucketAsync(bucketName, location ?? "us-east-1", cancellationToken);
         }
 
         public async Task<ListBucketsResult> ListBucketsAsync(CancellationToken cancellationToken = default)
@@ -167,5 +168,10 @@ namespace Registry.Adapters.ObjectSystem
             await _client.SetPolicyAsync(bucketName, policyJson, cancellationToken);
         }
 
+        public StorageInfo GetStorageInfo()
+        {
+            // By definition S3 does not have the concept of "available space"
+            return null;
+        }
     }
 }

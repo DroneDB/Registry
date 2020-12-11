@@ -5,17 +5,20 @@ using System.IO;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
+using HealthChecks.UI.Client;
 using Microsoft.AspNet.OData.Builder;
 using Microsoft.AspNet.OData.Extensions;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Registry.Web.Models;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Http.Features;
 using Microsoft.AspNetCore.HttpsPolicy;
 using Microsoft.AspNetCore.Identity;
+using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.CodeAnalysis.Options;
 using Microsoft.EntityFrameworkCore;
@@ -29,6 +32,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OData.Edm;
+using Microsoft.OpenApi.Models;
 using Registry.Adapters.DroneDB;
 using Registry.Adapters.ObjectSystem;
 using Registry.Common;
@@ -36,6 +40,7 @@ using Registry.Ports.DroneDB;
 using Registry.Ports.ObjectSystem;
 using Registry.Web.Data;
 using Registry.Web.Data.Models;
+using Registry.Web.HealthChecks;
 using Registry.Web.Models.Configuration;
 using Registry.Web.Models.DTO;
 using Registry.Web.Services;
@@ -62,6 +67,27 @@ namespace Registry.Web
         {
             services.AddCors();
             services.AddControllers();
+
+            services.AddSwaggerGen(c =>
+            {
+                c.SwaggerDoc("v1", new OpenApiInfo
+                {
+                    Version = "v1",
+                    Title = "Registry API",
+                    Description = "API to manage DroneDB Registry",
+                    Contact = new OpenApiContact
+                    {
+                        Name = "Luca Di Leo",
+                        Email = "ldileo@digipa.it",
+                        Url = new Uri("https://digipa.it/"),
+                    },
+                    License = new OpenApiLicense
+                    {
+                        Name = "Use under Business Source License",
+                        Url = new Uri("https://github.com/DroneDB/Registry/blob/master/LICENSE.md"),
+                    }
+                });
+            });
 
             services.AddMvcCore().AddNewtonsoftJson();
 
@@ -140,6 +166,19 @@ namespace Registry.Web
 
             RegisterCacheProvider(services, appSettings);
 
+            services.AddHealthChecks()
+                .AddCheck<CacheHealthCheck>("Cache health check", null, new[] {"service"})
+                .AddCheck<DdbHealthCheck>("DroneDB health check", null, new[] {"service"})
+                .AddCheck<UserManagerHealthCheck>("User manager health check", null, new[] {"database"})
+                .AddDbContextCheck<RegistryContext>("Registry database health check", null, new[] {"database"})
+                .AddDbContextCheck<ApplicationDbContext>("Registry identity database health check", null,
+                    new[] {"database"})
+                .AddCheck<ObjectSystemHealthCheck>("Object system health check", null, new[] {"storage"})
+                .AddDiskSpaceHealthCheck(appSettings.UploadPath, "Upload path space health check", null,
+                    new[] {"storage"})
+                .AddDiskSpaceHealthCheck(appSettings.DdbStoragePath, "Ddb storage path space health check", null,
+                    new[] { "storage" });
+            
             /*
              * NOTE about services lifetime:
              *
@@ -168,6 +207,8 @@ namespace Registry.Web
             services.AddScoped<IObjectsManager, ObjectsManager>();
             services.AddScoped<IShareManager, ShareManager>();
             services.AddScoped<IDdbManager, DdbManager>();
+            services.AddScoped<ISystemManager, SystemManager>();
+
             services.AddSingleton<IPasswordHasher, PasswordHasher>();
             services.AddSingleton<IBatchTokenGenerator, BatchTokenGenerator>();
             services.AddSingleton<INameGenerator, NameGenerator>();
@@ -276,13 +317,16 @@ namespace Registry.Web
 
         private void ConfigureDbProvider<T>(IServiceCollection services, DbProvider provider, string connectionStringName) where T : DbContext
         {
+
+            var connectionString = Configuration.GetConnectionString(connectionStringName);
+
             switch (provider)
             {
                 case DbProvider.Sqlite:
 
                     services.AddDbContext<T>(options =>
                         options.UseSqlite(
-                            Configuration.GetConnectionString(connectionStringName)));
+                            connectionString));
 
                     break;
 
@@ -290,7 +334,9 @@ namespace Registry.Web
 
                     services.AddDbContext<T>(options =>
                         options.UseMySql(
-                            Configuration.GetConnectionString(connectionStringName), builder => builder.EnableRetryOnFailure()));
+                            connectionString,
+                            ServerVersion.AutoDetect(connectionString),
+                            builder => builder.EnableRetryOnFailure()));
 
                     break;
 
@@ -298,7 +344,7 @@ namespace Registry.Web
 
                     services.AddDbContext<T>(options =>
                         options.UseSqlServer(
-                            Configuration.GetConnectionString(connectionStringName)));
+                            connectionString));
 
                     break;
 
@@ -323,6 +369,13 @@ namespace Registry.Web
             app.UseDefaultFiles();
             app.UseStaticFiles();
 
+            app.UseSwagger();
+
+            app.UseSwaggerUI(c =>
+            {
+                c.SwaggerEndpoint("/swagger/v1/swagger.json", "Registry API");
+            });
+
             app.UseRouting();
 
             // We are permissive now
@@ -343,6 +396,17 @@ namespace Registry.Web
             app.UseEndpoints(endpoints =>
             {
                 endpoints.MapControllers();
+
+                endpoints.MapHealthChecks("/quickhealth", new HealthCheckOptions
+                {
+                    Predicate = _ => false
+                }).RequireAuthorization();
+
+                endpoints.MapHealthChecks("/health", new HealthCheckOptions
+                {
+                    ResponseWriter = UIResponseWriter.WriteHealthCheckUIResponse
+                }).RequireAuthorization();
+
                 // TODO: Enable when needed
                 // endpoints.MapODataRoute("odata", "odata", GetEdmModel());
             });
@@ -369,7 +433,7 @@ namespace Registry.Web
             if (applicationDbContext == null)
                 throw new InvalidOperationException("Cannot get application db context from service provider");
 
-            if (applicationDbContext.Database.IsSqlite()) 
+            if (applicationDbContext.Database.IsSqlite())
                 CommonUtils.EnsureFolderCreated(Configuration.GetConnectionString(IdentityConnectionName));
 
             applicationDbContext.Database.EnsureCreated();
@@ -412,7 +476,8 @@ namespace Registry.Web
                     Description = "Default dataset",
                     IsPublic = true,
                     CreationDate = DateTime.Now,
-                    LastEdit = DateTime.Now
+                    LastEdit = DateTime.Now,
+                    InternalRef = Guid.NewGuid()
                 };
                 entity.Datasets = new List<Dataset> { ds };
 
@@ -442,7 +507,10 @@ namespace Registry.Web
             {
                 // first we create Admin role  
                 var role = new IdentityRole { Name = ApplicationDbContext.AdminRoleName };
-                await roleManager.CreateAsync(role);
+                var r = await roleManager.CreateAsync(role);
+
+                if (!r.Succeeded)
+                    throw new InvalidOperationException("Cannot create admin role: " + r?.Errors.ToErrorString());
 
                 var defaultAdmin = appSettings.Value.DefaultAdmin;
                 var user = new User
@@ -452,10 +520,12 @@ namespace Registry.Web
                 };
 
                 var usrRes = await usersManager.CreateAsync(user, defaultAdmin.Password);
-                if (usrRes.Succeeded)
-                {
-                    await usersManager.AddToRoleAsync(user, ApplicationDbContext.AdminRoleName);
-                }
+                if (!usrRes.Succeeded)
+                    throw new InvalidOperationException("Cannot create default admin: " + usrRes.Errors?.ToErrorString());
+
+                var res = await usersManager.AddToRoleAsync(user, ApplicationDbContext.AdminRoleName);
+                if (!res.Succeeded)
+                    throw new InvalidOperationException("Cannot add admin to admin role: " + res.Errors?.ToErrorString());
 
                 var entity = new Organization
                 {
@@ -470,7 +540,6 @@ namespace Registry.Web
 
                 await context.Organizations.AddAsync(entity);
                 await context.SaveChangesAsync();
-
             }
         }
 

@@ -93,6 +93,9 @@ namespace Registry.Web.Services.Adapters
             if (!string.IsNullOrEmpty(dataset.Password))
                 ds.PasswordHash = _passwordHasher.Hash(dataset.Password);
 
+            if (ds.InternalRef == Guid.Empty)
+                ds.InternalRef = Guid.NewGuid();
+            
             org.Datasets.Add(ds);
 
             await _context.SaveChangesAsync();
@@ -129,15 +132,14 @@ namespace Registry.Web.Services.Adapters
         {
             var org = await _utils.GetOrganization(orgSlug);
 
-            var entity = org.Datasets.FirstOrDefault(item => item.Slug == dsSlug);
+            var ds = org.Datasets.FirstOrDefault(item => item.Slug == dsSlug);
 
-            if (entity == null)
+            if (ds == null)
                 throw new NotFoundException("Dataset not found");
 
             await _objectsManager.DeleteAll(orgSlug, dsSlug);
-            _ddbManager.Delete(orgSlug, dsSlug);
 
-            _context.Datasets.Remove(entity);
+            _context.Datasets.Remove(ds);
 
             await _context.SaveChangesAsync();
         }
@@ -157,11 +159,6 @@ namespace Registry.Web.Services.Adapters
             if (await _utils.GetDataset(orgSlug, newSlug, true) != null)
                 throw new ArgumentException($"Dataset '{newSlug}' already exists");
 
-            // TODO: Add exception catching, when interrupted put DS in dirty state
-            await _objectsManager.MoveDataset(orgSlug, dsSlug, newSlug);
-
-            _ddbManager.Move(orgSlug, dsSlug, newSlug);
-
             var ds = await _utils.GetDataset(orgSlug, dsSlug);
 
             ds.Slug = newSlug;
@@ -172,9 +169,9 @@ namespace Registry.Web.Services.Adapters
 
         public async Task<Dictionary<string, object>> ChangeAttributes(string orgSlug, string dsSlug, Dictionary<string, object> attributes)
         {
-            await _utils.GetDataset(orgSlug, dsSlug);
+            var ds = await _utils.GetDataset(orgSlug, dsSlug);
 
-            var ddb = _ddbManager.Get(orgSlug, dsSlug);
+            var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
 
             return ddb.ChangeAttributes(attributes);
 

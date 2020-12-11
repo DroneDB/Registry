@@ -10,6 +10,7 @@ using System.Text.RegularExpressions;
 using ICSharpCode.SharpZipLib.GZip;
 using ICSharpCode.SharpZipLib.Tar;
 using ICSharpCode.SharpZipLib.Zip;
+using Registry.Common.Model;
 using ZipFile = System.IO.Compression.ZipFile;
 
 namespace Registry.Common
@@ -208,6 +209,19 @@ namespace Registry.Common
 
             return data;
 
+        }
+
+        public static StorageInfo GetStorageInfo(string path)
+        {
+            var f = new FileInfo(path);
+            var drive = Path.GetPathRoot(f.FullName);
+
+            // This could be improved but It's enough for now
+            var info = DriveInfo.GetDrives()
+                .FirstOrDefault(drv =>
+                    string.Equals(drv.Name, drive, StringComparison.OrdinalIgnoreCase));
+
+            return info == null ? null : new StorageInfo(info.TotalSize, info.AvailableFreeSpace);
         }
 
     }

@@ -51,6 +51,8 @@ namespace Registry.Adapters.DroneDB
             }
         }
 
+        public string Version => DDB.Bindings.DroneDB.GetVersion();
+
         static Ddb()
         {
 #if DEBUG
