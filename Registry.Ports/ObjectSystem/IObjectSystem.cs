@@ -132,7 +132,7 @@ namespace Registry.Ports.ObjectSystem
         /// <param name="location">Region</param>
         /// <param name="cancellationToken">Optional cancellation token to cancel the operation</param>
         /// <returns>Task</returns>
-        Task MakeBucketAsync(string bucketName, string location, CancellationToken cancellationToken = default);
+        Task MakeBucketAsync(string bucketName, string location = null, CancellationToken cancellationToken = default);
 
         /// <summary>
         /// List all objects in a bucket
@@ -183,6 +183,12 @@ namespace Registry.Ports.ObjectSystem
         /// <param name="cancellationToken">Optional cancellation token to cancel the operation</param>
         /// <returns>Returns Task that sets the current bucket policy</returns>
         Task SetPolicyAsync(string bucketName, string policyJson, CancellationToken cancellationToken = default);
+
+        /// <summary>
+        /// Gets the storage info (if available)
+        /// </summary>
+        /// <returns></returns>
+        StorageInfo GetStorageInfo();
 
     }
 }
