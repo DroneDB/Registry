@@ -202,6 +202,8 @@ namespace Registry.Web
             services.AddScoped<IObjectsManager, ObjectsManager>();
             services.AddScoped<IShareManager, ShareManager>();
             services.AddScoped<IDdbManager, DdbManager>();
+            services.AddScoped<ISystemManager, SystemManager>();
+
             services.AddSingleton<IPasswordHasher, PasswordHasher>();
             services.AddSingleton<IBatchTokenGenerator, BatchTokenGenerator>();
             services.AddSingleton<INameGenerator, NameGenerator>();
