@@ -1,10 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-
-namespace Registry.Ports.ObjectSystem.Model
+﻿namespace Registry.Common.Model
 {
     public class StorageInfo
     {

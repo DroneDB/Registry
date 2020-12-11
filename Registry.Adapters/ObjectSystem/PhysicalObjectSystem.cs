@@ -10,6 +10,7 @@ using MimeMapping;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using Registry.Common;
+using Registry.Common.Model;
 using Registry.Ports.ObjectSystem;
 using Registry.Ports.ObjectSystem.Model;
 
@@ -442,15 +443,7 @@ namespace Registry.Adapters.ObjectSystem
 
         public StorageInfo GetStorageInfo()
         {
-            var f = new FileInfo(_baseFolder);
-            var drive = Path.GetPathRoot(f.FullName);
-
-            // This could be improved but It's enough for now
-            var info = DriveInfo.GetDrives()
-                .FirstOrDefault(drv => 
-                    string.Equals(drv.Name, drive, StringComparison.OrdinalIgnoreCase));
-
-            return info == null ? null : new StorageInfo(info.TotalSize, info.AvailableFreeSpace);
+            return CommonUtils.GetStorageInfo(_baseFolder);
         }
 
         #endregion

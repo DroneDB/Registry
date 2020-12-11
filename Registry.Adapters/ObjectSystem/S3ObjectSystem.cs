@@ -10,6 +10,7 @@ using System.Threading.Tasks;
 using Minio;
 using Minio.DataModel;
 using Registry.Common;
+using Registry.Common.Model;
 using Registry.Ports.ObjectSystem;
 using Registry.Ports.ObjectSystem.Model;
 
