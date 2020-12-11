@@ -336,7 +336,7 @@ namespace Registry.Adapters.ObjectSystem
 
         #region Buckets
 
-        public async Task MakeBucketAsync(string bucketName, string location, CancellationToken cancellationToken = default)
+        public async Task MakeBucketAsync(string bucketName, string location = null, CancellationToken cancellationToken = default)
         {
             EnsureBucketDoesNotExist(bucketName);
 
@@ -440,6 +440,18 @@ namespace Registry.Adapters.ObjectSystem
 
         }
 
+        public StorageInfo GetStorageInfo()
+        {
+            var f = new FileInfo(_baseFolder);
+            var drive = Path.GetPathRoot(f.FullName);
+
+            // This could be improved but It's enough for now
+            var info = DriveInfo.GetDrives()
+                .FirstOrDefault(drv => 
+                    string.Equals(drv.Name, drive, StringComparison.OrdinalIgnoreCase));
+
+            return info == null ? null : new StorageInfo(info.TotalSize, info.AvailableFreeSpace);
+        }
 
         #endregion
 
