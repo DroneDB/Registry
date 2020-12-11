@@ -12,8 +12,8 @@ namespace Registry.Web.Services.Ports
         public Task Upload(int sessionId, Stream chunkStream, int index);
         public string CloseSession(int sessionId, bool performCleanup = true);
 
-        public void RemoveTimedoutSessions();
-        public void RemoveClosedSessions();
+        public Task<int[]> RemoveTimedoutSessions();
+        public Task<int[]> RemoveClosedSessions();
 
         public void CleanupSession(int sessionId);
     }
