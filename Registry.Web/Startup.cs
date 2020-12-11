@@ -32,6 +32,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OData.Edm;
+using Microsoft.OpenApi.Models;
 using Registry.Adapters.DroneDB;
 using Registry.Adapters.ObjectSystem;
 using Registry.Common;
@@ -66,6 +67,27 @@ namespace Registry.Web
         {
             services.AddCors();
             services.AddControllers();
+
+            services.AddSwaggerGen(c =>
+            {
+                c.SwaggerDoc("v1", new OpenApiInfo
+                {
+                    Version = "v1",
+                    Title = "Registry API",
+                    Description = "API to manage DroneDB Registry",
+                    Contact = new OpenApiContact
+                    {
+                        Name = "Luca Di Leo",
+                        Email = "ldileo@digipa.it",
+                        Url = new Uri("https://digipa.it/"),
+                    },
+                    License = new OpenApiLicense
+                    {
+                        Name = "Use under Business Source License",
+                        Url = new Uri("https://github.com/DroneDB/Registry/blob/master/LICENSE.md"),
+                    }
+                });
+            });
 
             services.AddMvcCore().AddNewtonsoftJson();
 
@@ -339,6 +361,13 @@ namespace Registry.Web
 
             app.UseDefaultFiles();
             app.UseStaticFiles();
+
+            app.UseSwagger();
+
+            app.UseSwaggerUI(c =>
+            {
+                c.SwaggerEndpoint("/swagger/v1/swagger.json", "Registry API");
+            });
 
             app.UseRouting();
 
