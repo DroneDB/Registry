@@ -167,12 +167,17 @@ namespace Registry.Web
             RegisterCacheProvider(services, appSettings);
 
             services.AddHealthChecks()
-                .AddCheck<CacheHealthCheck>("Cache health check", null, new[] { "service" })
-                .AddCheck<DdbHealthCheck>("DroneDB health check", null, new[] { "service" })
-                .AddCheck<UserManagerHealthCheck>("User manager health check", null, new[] { "database" })
-                .AddDbContextCheck<RegistryContext>("Registry database health check", null, new[] { "database" })
-                .AddDbContextCheck<ApplicationDbContext>("Registry identity database health check", null, new[] { "database" })
-                .AddCheck<ObjectSystemHealthCheck>("Object system health check", null, new[] { "storage" });
+                .AddCheck<CacheHealthCheck>("Cache health check", null, new[] {"service"})
+                .AddCheck<DdbHealthCheck>("DroneDB health check", null, new[] {"service"})
+                .AddCheck<UserManagerHealthCheck>("User manager health check", null, new[] {"database"})
+                .AddDbContextCheck<RegistryContext>("Registry database health check", null, new[] {"database"})
+                .AddDbContextCheck<ApplicationDbContext>("Registry identity database health check", null,
+                    new[] {"database"})
+                .AddCheck<ObjectSystemHealthCheck>("Object system health check", null, new[] {"storage"})
+                .AddDiskSpaceHealthCheck(appSettings.UploadPath, "Upload path space health check", null,
+                    new[] {"storage"})
+                .AddDiskSpaceHealthCheck(appSettings.DdbStoragePath, "Ddb storage path space health check", null,
+                    new[] { "storage" });
             
             /*
              * NOTE about services lifetime:
