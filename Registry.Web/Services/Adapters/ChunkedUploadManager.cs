@@ -228,6 +228,7 @@ namespace Registry.Web.Services.Adapters
             foreach (var session in sessions)
             {
                 _logger.LogDebug($"Removing session {session.Id} of '{session.FileName}' started on {session.StartedOn}");
+                CleanupSession(session.Id);
                 _context.UploadSessions.Remove(session);
             }
 
@@ -244,6 +245,7 @@ namespace Registry.Web.Services.Adapters
             foreach (var session in sessions)
             {
                 _logger.LogDebug($"Removing session {session.Id} of '{session.FileName}' started on {session.StartedOn}");
+                CleanupSession(session.Id);
                 _context.UploadSessions.Remove(session);
             }
 
