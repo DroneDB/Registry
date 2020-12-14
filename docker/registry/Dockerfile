@@ -6,21 +6,44 @@ ENV TZ=Europe/Rome
 RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone
 
 # Install DroneDB dependencies
-RUN apt update && apt install -y --fix-missing \
+#RUN apt update && apt install -y --fix-missing \
     #--no-install-recommends \
-    build-essential \
-    ca-certificates \
-    cmake \
+#    build-essential \
+#    ca-certificates \
+#    cmake \
     # git \
-    sqlite3 \
-    spatialite-bin \
-    exiv2 \
-    libexiv2-dev \
-    libgeos-dev \
-    libgdal-dev
+#    sqlite3 \
+#    spatialite-bin \
+    #exiv2 \
+    #libexiv2-dev \
+#    libgeos-dev \
+#    libgdal-dev
     #apt-transport-https 
     #\
     #wget
+
+RUN apt update && apt install -y --fix-missing --no-install-recommends \
+    software-properties-common \
+    build-essential sudo gpg-agent
+
+RUN add-apt-repository ppa:ubuntugis/ubuntugis-unstable
+
+RUN curl -sL https://deb.nodesource.com/setup_14.x | sudo -E bash - 
+RUN apt install -y nodejs && \
+    npm install -g cmake-js
+
+RUN apt update && apt install -y --fix-missing --no-install-recommends \
+    ca-certificates \
+    cmake \
+    git \
+    sqlite3 \
+    spatialite-bin \
+    libgeos-dev \
+    libgdal-dev \
+    g++-10 \
+    gcc-10
+
+RUN update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-10 1000 --slave /usr/bin/g++ g++ /usr/bin/g++-10
 
 # Install .NET Core (not needed anymore)
 #RUN wget https://packages.microsoft.com/config/ubuntu/20.04/packages-microsoft-prod.deb -O packages-microsoft-prod.deb
@@ -32,7 +55,7 @@ RUN git clone --recurse-submodules https://github.com/uav4geo/DroneDB.git && \
     cd DroneDB && \
     mkdir build && \
     cd build && \
-    cmake .. && make
+    cmake .. && make -j $(cat /proc/cpuinfo | grep processor | wc -l)
 
 # Clone Registry
 RUN git clone --recurse-submodules https://github.com/DroneDB/Registry.git
