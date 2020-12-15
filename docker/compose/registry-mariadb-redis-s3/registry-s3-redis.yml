@@ -1,0 +1,27 @@
+version: '3.3'
+
+services:
+   db:
+     image: mariadb:latest
+     volumes:
+       - db_data:/var/lib/mysql
+     restart: always
+     environment:
+       MYSQL_ROOT_PASSWORD: somewordpress
+       MYSQL_DATABASE: wordpress
+       MYSQL_USER: wordpress
+       MYSQL_PASSWORD: wordpress
+
+   registry:
+     depends_on:
+       - db
+     build: ../../registry/.
+     volumes:
+       - ddbstore:/Registry/Registry.Web/ddbstore
+     ports:
+       - "5000:80"
+       - "5001:443"
+     restart: always
+volumes:
+    db_data: {}
+    ddbstore: {}
