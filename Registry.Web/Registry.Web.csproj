@@ -3,6 +3,7 @@
   <PropertyGroup>
     <TargetFramework>net5.0</TargetFramework>
     <AssemblyName>Registry.Web</AssemblyName>
+    <UserSecretsId>4e006835-31cb-47c5-9dfe-7b73e210db92</UserSecretsId>
   </PropertyGroup>
 
   <ItemGroup>
