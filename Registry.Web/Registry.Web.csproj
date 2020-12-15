@@ -11,14 +11,18 @@
     <Compile Remove="logs\**" />
     <Compile Remove="temp\**" />
     <Compile Remove="uploads\**" />
+    <Compile Remove="wwwroot\**" />
     <Content Remove="ddb\**" />
     <Content Remove="logs\**" />
     <Content Remove="temp\**" />
     <Content Remove="uploads\**" />
+    <!--
+    <Content Remove="wwwroot\**" />-->
     <EmbeddedResource Remove="ddb\**" />
     <EmbeddedResource Remove="logs\**" />
     <EmbeddedResource Remove="temp\**" />
     <EmbeddedResource Remove="uploads\**" />
+    <EmbeddedResource Remove="wwwroot\**" />
     <None Remove="ddb\**" />
     <None Remove="logs\**" />
     <None Remove="temp\**" />
@@ -27,10 +31,7 @@
   <ItemGroup>
     <None Remove="ddb-log*" />
     <None Remove="uploads\**" />
-  </ItemGroup>
-
-  <ItemGroup>
-    <None Include="wwwroot\index.html" />
+    
   </ItemGroup>
 
   <ItemGroup>
@@ -79,5 +80,10 @@
 
   <ProjectExtensions><VisualStudio><UserProperties appsettings_1json__JsonSchema="" /></VisualStudio></ProjectExtensions>
 
+  <!-- We could add this BUT it slows down the builds
+  <Target Name="PostBuild" AfterTargets="PostBuildEvent">
+    <Exec Command="cd wwwroot&#xD;&#xA;call npm install&#xD;&#xA;call webpack" />
+  </Target>
+-->
 
 </Project>
