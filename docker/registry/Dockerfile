@@ -62,6 +62,10 @@ COPY --from=builder /Hub/build /Registry/Registry.Web/bin/Release/net5.0/linux-x
 EXPOSE 5000/tcp
 EXPOSE 5001/tcp
 
-# Run registry
 WORKDIR /Registry/Registry.Web/bin/Release/net5.0/linux-x64
+
+# Copy config
+COPY appsettings.json .
+
+# Run registry
 ENTRYPOINT dotnet Registry.Web.dll --urls="http://0.0.0.0:5000;https://0.0.0.0:5001"
