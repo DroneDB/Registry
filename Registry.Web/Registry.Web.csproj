@@ -13,20 +13,21 @@
     <Compile Remove="temp\**" />
     <Compile Remove="uploads\**" />
     <Compile Remove="wwwroot\**" />
-    <Content Remove="ClientApp\**" />
+
+    <!--<Content Remove="ClientApp\**" />-->
     <Content Remove="ddb\**" />
     <Content Remove="logs\**" />
     <Content Remove="temp\**" />
     <Content Remove="uploads\**" />
+
     <EmbeddedResource Remove="ClientApp\**" />
-    <!--
-    <Content Remove="wwwroot\**" />-->
     <EmbeddedResource Remove="ddb\**" />
     <EmbeddedResource Remove="logs\**" />
     <EmbeddedResource Remove="temp\**" />
     <EmbeddedResource Remove="uploads\**" />
     <EmbeddedResource Remove="wwwroot\**" />
-    <None Remove="ClientApp\**" />
+
+    <!--<None Remove="ClientApp\**" />-->
     <None Remove="ddb\**" />
     <None Remove="logs\**" />
     <None Remove="temp\**" />
@@ -35,7 +36,6 @@
   <ItemGroup>
     <None Remove="ddb-log*" />
     <None Remove="uploads\**" />
-    
   </ItemGroup>
 
   <ItemGroup>
@@ -82,6 +82,8 @@
 
   <ItemGroup>
     <Folder Include="App_Data\" />
+    <Folder Include="wwwroot\" />
+    <Folder Include="ClientApp\" />
   </ItemGroup>
 
   <ProjectExtensions><VisualStudio><UserProperties appsettings_1json__JsonSchema="" /></VisualStudio></ProjectExtensions>
