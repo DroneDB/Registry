@@ -91,6 +91,11 @@ namespace Registry.Web
 
             services.AddMvcCore().AddNewtonsoftJson();
 
+            services.AddSpaStaticFiles(config =>
+            {
+                config.RootPath = "ClientApp/build";
+            });
+
             // Let's use a strongly typed class for settings
             var appSettingsSection = Configuration.GetSection("AppSettings");
             services.Configure<AppSettings>(appSettingsSection);
@@ -232,6 +237,123 @@ namespace Registry.Web
 
         }
 
+        public void Configure(IApplicationBuilder app, IWebHostEnvironment env)
+        {
+
+            if (env.IsDevelopment())
+            {
+                app.UseDeveloperExceptionPage();
+            }
+            else
+            {
+                app.UseHsts();
+            }
+
+            app.UseDefaultFiles();
+
+            app.UseStaticFiles();
+            if (!env.IsDevelopment())
+            {
+                app.UseSpaStaticFiles();
+            }
+
+            app.UseSwagger();
+
+            app.UseSwaggerUI(c =>
+            {
+                c.SwaggerEndpoint("/swagger/v1/swagger.json", "Registry API");
+            });
+
+            app.UseRouting();
+
+            // We are permissive now
+            app.UseCors(cors => cors
+                .AllowAnyOrigin()
+                .AllowAnyMethod()
+                .AllowAnyHeader());
+
+            app.UseMiddleware<JwtInCookieMiddleware>();
+
+            app.UseAuthentication();
+            app.UseAuthorization();
+
+            app.UseResponseCompression();
+
+            app.UseMiddleware<TokenManagerMiddleware>();
+
+            app.UseEndpoints(endpoints =>
+            {
+                endpoints.MapControllers();
+
+                endpoints.MapHealthChecks("/quickhealth", new HealthCheckOptions
+                {
+                    Predicate = _ => false
+                }).RequireAuthorization();
+
+                endpoints.MapHealthChecks("/health", new HealthCheckOptions
+                {
+                    ResponseWriter = UIResponseWriter.WriteHealthCheckUIResponse
+                }).RequireAuthorization();
+
+                // TODO: Enable when needed
+                // endpoints.MapODataRoute("odata", "odata", GetEdmModel());
+            });
+
+            app.UseSpa(spa =>
+            {
+                // To learn more about options for serving an Angular SPA from ASP.NET Core,
+                // see https://go.microsoft.com/fwlink/?linkid=864501
+
+                spa.Options.SourcePath = "ClientApp";
+
+                if (env.IsDevelopment())
+                {
+
+                }
+            });
+
+            SetupDatabase(app);
+
+        }
+        //private IEdmModel GetEdmModel()
+        //{
+        //    var odataBuilder = new ODataConventionModelBuilder();
+        //    odataBuilder.EntitySet<OrganizationDto>("Organizations");
+
+        //    return odataBuilder.GetEdmModel();
+        //}
+
+        // NOTE: Maybe put all this as stated in https://stackoverflow.com/a/55707949
+        private void SetupDatabase(IApplicationBuilder app)
+        {
+            using var serviceScope = app.ApplicationServices
+                .GetRequiredService<IServiceScopeFactory>()
+                .CreateScope();
+            using var applicationDbContext = serviceScope.ServiceProvider.GetService<ApplicationDbContext>();
+
+            if (applicationDbContext == null)
+                throw new InvalidOperationException("Cannot get application db context from service provider");
+
+            if (applicationDbContext.Database.IsSqlite())
+                CommonUtils.EnsureFolderCreated(Configuration.GetConnectionString(IdentityConnectionName));
+
+            applicationDbContext.Database.EnsureCreated();
+
+            using var registryDbContext = serviceScope.ServiceProvider.GetService<RegistryContext>();
+
+            if (registryDbContext == null)
+                throw new InvalidOperationException("Cannot get registry db context from service provider");
+
+            if (registryDbContext.Database.IsSqlite())
+                CommonUtils.EnsureFolderCreated(Configuration.GetConnectionString(RegistryConnectionName));
+
+            registryDbContext.Database.EnsureCreated();
+
+            CreateInitialData(registryDbContext);
+            CreateDefaultAdmin(registryDbContext, serviceScope.ServiceProvider).Wait();
+
+        }
+
         private void RegisterCacheProvider(IServiceCollection services, AppSettings appSettings)
         {
 
@@ -351,106 +473,6 @@ namespace Registry.Web
                 default:
                     throw new ArgumentOutOfRangeException($"Unrecognised provider: '{provider}'");
             }
-        }
-
-        public void Configure(IApplicationBuilder app, IWebHostEnvironment env)
-        {
-
-            if (env.IsDevelopment())
-            {
-                app.UseDeveloperExceptionPage();
-            }
-            else
-            {
-                app.UseExceptionHandler("/Error");
-                app.UseHsts();
-            }
-
-            app.UseDefaultFiles();
-            app.UseStaticFiles();
-
-            app.UseSwagger();
-
-            app.UseSwaggerUI(c =>
-            {
-                c.SwaggerEndpoint("/swagger/v1/swagger.json", "Registry API");
-            });
-
-            app.UseRouting();
-
-            // We are permissive now
-            app.UseCors(cors => cors
-                .AllowAnyOrigin()
-                .AllowAnyMethod()
-                .AllowAnyHeader());
-
-            app.UseMiddleware<JwtInCookieMiddleware>();
-
-            app.UseAuthentication();
-            app.UseAuthorization();
-
-            app.UseResponseCompression();
-
-            app.UseMiddleware<TokenManagerMiddleware>();
-
-            app.UseEndpoints(endpoints =>
-            {
-                endpoints.MapControllers();
-
-                endpoints.MapHealthChecks("/quickhealth", new HealthCheckOptions
-                {
-                    Predicate = _ => false
-                }).RequireAuthorization();
-
-                endpoints.MapHealthChecks("/health", new HealthCheckOptions
-                {
-                    ResponseWriter = UIResponseWriter.WriteHealthCheckUIResponse
-                }).RequireAuthorization();
-
-                // TODO: Enable when needed
-                // endpoints.MapODataRoute("odata", "odata", GetEdmModel());
-            });
-
-            SetupDatabase(app);
-
-        }
-        //private IEdmModel GetEdmModel()
-        //{
-        //    var odataBuilder = new ODataConventionModelBuilder();
-        //    odataBuilder.EntitySet<OrganizationDto>("Organizations");
-
-        //    return odataBuilder.GetEdmModel();
-        //}
-
-        // NOTE: Maybe put all this as stated in https://stackoverflow.com/a/55707949
-        private void SetupDatabase(IApplicationBuilder app)
-        {
-            using var serviceScope = app.ApplicationServices
-                .GetRequiredService<IServiceScopeFactory>()
-                .CreateScope();
-            using var applicationDbContext = serviceScope.ServiceProvider.GetService<ApplicationDbContext>();
-
-            if (applicationDbContext == null)
-                throw new InvalidOperationException("Cannot get application db context from service provider");
-
-            if (applicationDbContext.Database.IsSqlite())
-                CommonUtils.EnsureFolderCreated(Configuration.GetConnectionString(IdentityConnectionName));
-
-            applicationDbContext.Database.EnsureCreated();
-
-            using var registryDbContext = serviceScope.ServiceProvider.GetService<RegistryContext>();
-
-            if (registryDbContext == null)
-                throw new InvalidOperationException("Cannot get registry db context from service provider");
-
-            if (registryDbContext.Database.IsSqlite())
-                CommonUtils.EnsureFolderCreated(Configuration.GetConnectionString(RegistryConnectionName));
-
-            registryDbContext.Database.EnsureCreated();
-
-            CreateInitialData(registryDbContext);
-            CreateDefaultAdmin(registryDbContext, serviceScope.ServiceProvider).Wait();
-
         }
 
         private void CreateInitialData(RegistryContext context)
