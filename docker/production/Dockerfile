@@ -31,9 +31,7 @@ RUN cd /Hub && npm install && webpack
 FROM mcr.microsoft.com/dotnet/sdk:5.0-focal as runner
 
 # Clone Registry
-#RUN cd / && git clone --recurse-submodules https://github.com/DroneDB/Registry.git
-# Testing only before PR merge
-RUN cd / && git clone --single-branch --branch add-docker-compose-deploy https://github.com/HeDo88TH/Registry.git
+RUN cd / && git clone --recurse-submodules https://github.com/DroneDB/Registry.git
 
 # Copy publish profile
 RUN mkdir /Registry/Registry.Web/Properties/PublishProfiles
