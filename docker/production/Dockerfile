@@ -1,4 +1,4 @@
-FROM mcr.microsoft.com/dotnet/sdk:5.0-focal as builder
+FROM ubuntu:focal as builder
 
 LABEL Author="Luca Di Leo <ldileo@digipa.it>"
 
@@ -56,8 +56,8 @@ RUN dpkg -i *.deb
 ENV LD_LIBRARY_PATH="/usr/local/lib:${LD_LIBRARY_PATH}"
 
 # Copy compiled client app in the appropriate folder
-RUN mkdir -p /Registry/Registry.Web/bin/Release/net5.0/linux-x64/wwwroot/build
-COPY --from=builder /Hub/build /Registry/Registry.Web/bin/Release/net5.0/linux-x64/wwwroot/build
+RUN mkdir -p /Registry/Registry.Web/bin/Release/net5.0/linux-x64/ClientApp/build
+COPY --from=builder /Hub/build /Registry/Registry.Web/bin/Release/net5.0/linux-x64/ClientApp/build
 
 EXPOSE 5000/tcp
 EXPOSE 5001/tcp
