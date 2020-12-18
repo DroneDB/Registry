@@ -1,1 +1,4 @@
 data
+initialize.sql
+appsettings.json
+run.sh
