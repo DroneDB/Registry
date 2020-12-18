@@ -68,7 +68,7 @@ services:
             - db
             - redis
             - minio
-        build: .
+        build: ../../.
         volumes:
             - ./data/ddbstore:/Registry/Registry.Web/ddbstore
             - ./data/tmpuploads:/Registry/Registry.Web/uploads
