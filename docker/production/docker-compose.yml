@@ -8,9 +8,9 @@ services:
             - ./initialize.sql:/docker-entrypoint-initdb.d/initialize.sql
         expose:
             - "3306"
-#        restart: always
+        restart: always
         environment:
-            MYSQL_ROOT_PASSWORD: rootpassword
+            - MYSQL_ROOT_PASSWORD
         healthcheck:
             test: ["CMD", "mysqladmin" ,"ping", "-h", "localhost"]
             timeout: 20s
@@ -24,15 +24,13 @@ services:
             - 8080:80
         environment:
             - PMA_HOST=db:3306
-            - PMA_USER=registry
-            - PMA_PASSWORD=YLepR7DgjfzFw25C
 
     minio:
         image: minio/minio:latest
-#        restart: always
+        restart: always
         environment:
-            - MINIO_ACCESS_KEY=minio
-            - MINIO_SECRET_KEY=miniopass
+            - MINIO_ACCESS_KEY
+            - MINIO_SECRET_KEY
         volumes:
             - ./data/minio:/data
         ports:
@@ -57,7 +55,7 @@ services:
         image: erikdubbelboer/phpredisadmin
         environment:
             - ADMIN_USER=admin
-            - ADMIN_PASS=admin
+            - ADMIN_PASS
             - REDIS_1_HOST=redis
             - REDIS_1_PORT=6379
         ports:
@@ -76,3 +74,4 @@ services:
             - 5000:5000
             - 5001:5001
         restart: unless-stopped
+

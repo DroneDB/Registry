@@ -1,5 +1,4 @@
-
-CREATE USER 'registry'@'%' IDENTIFIED BY 'YLepR7DgjfzFw25C';
+CREATE USER 'registry'@'%' IDENTIFIED BY '$MYSQL_PASSWORD';
 GRANT USAGE ON *.* TO 'registry'@'%';
 FLUSH PRIVILEGES;
 
