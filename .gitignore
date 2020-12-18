@@ -346,6 +346,7 @@ Fix/Registry.Web/[Aa]pp_[Dd]ata/
 /Registry.Web/App_Data/*
 
 # Configuration
+appsettings.json
 /Registry.Web/temp
 /Registry.Web/ddbstore/
 /Registry.Web/ddb-log*
