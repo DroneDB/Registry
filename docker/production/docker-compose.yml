@@ -70,8 +70,8 @@ services:
         volumes:
             - ./data/ddbstore:/Registry/Registry.Web/ddbstore
             - ./data/tmpuploads:/Registry/Registry.Web/uploads
+            - ./appsettings.json:/Registry/Registry.Web/bin/Release/net5.0/linux-x64/appsettings.json
         ports:
             - 5000:5000
             - 5001:5001
         restart: unless-stopped
-

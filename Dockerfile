@@ -25,19 +25,14 @@ RUN apt update && apt install -y --fix-missing sudo gpg-agent curl lsb-release
 RUN curl -sL https://deb.nodesource.com/setup_14.x | sudo -E bash -
 RUN apt update && apt install -y --fix-missing nodejs
 
-# Compile client app
-#RUN git clone --recurse-submodules https://github.com/DroneDB/Hub.git
-RUN npm install -g webpack@4 webpack-cli
-#RUN cd /Hub && npm install && webpack
-
-# Clone Registry
-#RUN cd / && git clone --recurse-submodules https://github.com/DroneDB/Registry.git
+# Copy registry
 COPY . /Registry
 
+# Compile client app
+RUN npm install -g webpack@4 webpack-cli
 RUN cd /Registry/Registry.Web/ClientApp && npm install && webpack
 
 # Copy publish profile
-#RUN mkdir /Registry/Registry.Web/Properties/PublishProfiles
 COPY docker/production/FolderProfile.xml /Registry/Registry.Web/Properties/PublishProfiles/FolderProfile.pubxml
 
 # Publish Registry
@@ -57,16 +52,13 @@ RUN dpkg -i *.deb
 ENV LD_LIBRARY_PATH="/usr/local/lib:${LD_LIBRARY_PATH}"
 
 # Copy compiled client app in the appropriate folder
-#RUN mkdir -p /Registry/Registry.Web/bin/Release/net5.0/linux-x64/ClientApp/build
-#COPY --from=builder /Hub/build /Registry/Registry.Web/bin/Release/net5.0/linux-x64/ClientApp/build
+RUN mkdir -p /Registry/Registry.Web/bin/Release/net5.0/linux-x64/ClientApp/build
+RUN cp -r /Registry/Registry.Web/ClientApp/build /Registry/Registry.Web/bin/Release/net5.0/linux-x64/ClientApp
 
 EXPOSE 5000/tcp
 EXPOSE 5001/tcp
 
 WORKDIR /Registry/Registry.Web/bin/Release/net5.0/linux-x64
-
-# Copy config
-COPY docker/production/appsettings.json .
 
 # Run registry
 ENTRYPOINT dotnet Registry.Web.dll --urls="http://0.0.0.0:5000;https://0.0.0.0:5001"
