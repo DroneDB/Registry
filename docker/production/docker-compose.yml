@@ -8,18 +8,19 @@ services:
             - ./initialize.sql:/docker-entrypoint-initdb.d/initialize.sql
         expose:
             - "3306"
-        restart: always
+        restart: unless-stopped
         environment:
             - MYSQL_ROOT_PASSWORD
         healthcheck:
             test: ["CMD", "mysqladmin" ,"ping", "-h", "localhost"]
             timeout: 20s
             retries: 10
+
     phpmyadmin:
         depends_on:
             - db
         image: phpmyadmin
-        restart: always
+        restart: unless-stopped
         ports:
             - 8080:80
         environment:
@@ -27,7 +28,6 @@ services:
 
     minio:
         image: minio/minio:latest
-        restart: always
         environment:
             - MINIO_ACCESS_KEY
             - MINIO_SECRET_KEY
@@ -41,6 +41,7 @@ services:
             interval: 30s
             timeout: 20s
             retries: 3
+        restart: unless-stopped
 
     redis:
         image: redis:latest
@@ -48,6 +49,7 @@ services:
             - ./data/redis:/data
         expose:
             - "6379"
+        restart: unless-stopped
 
     redisadmin:
         depends_on:
@@ -60,6 +62,7 @@ services:
             - REDIS_1_PORT=6379
         ports:
             - 8081:80 
+        restart: unless-stopped
 
     registry:
         depends_on:
