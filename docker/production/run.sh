@@ -8,8 +8,14 @@ export ADMIN_PASS="redisadminpass"
 export REGISTRY_ADMIN_MAIL="test@test.it"
 export REGISTRY_ADMIN_PASSWORD="password"
 export REGISTRY_SECRET="e7er2yjacmbqjxsmf6h3rtrh7t6wjhef7bkv6kauv3wng3jb3t5hx7jtjry5z2ydd6utbufgq6jar2v3cvexhcescgzacfwvg5kqfa3gx3ppzchdtwcakx5hr3s6485z"
+export REGISTRY_EXTERNAL_AUTH_URL=""
+
+rm appsettings.json
+rm initialize.sql
 
 envsubst < appsettings-template.json > appsettings.json
 envsubst < initialize-template.sql > initialize.sql
+
+mkdir -p data
 
 docker-compose up --build -d
