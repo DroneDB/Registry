@@ -34,19 +34,15 @@ namespace Registry.Web.Services.Adapters
         private readonly RegistryContext _context;
         private readonly AppSettings _settings;
         private readonly IHttpContextAccessor _accessor;
-        // NOTE: This could be removed, we don't do it yet because reasons
-        private readonly LinkGenerator _generator;
 
         public WebUtils(IAuthManager authManager,
             RegistryContext context,
             IOptions<AppSettings> settings,
-            IHttpContextAccessor accessor,
-            LinkGenerator generator)
+            IHttpContextAccessor accessor)
         {
             _authManager = authManager;
             _context = context;
             _accessor = accessor;
-            _generator = generator;
             _settings = settings.Value;
         }
 
