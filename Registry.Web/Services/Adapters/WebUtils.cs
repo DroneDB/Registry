@@ -131,7 +131,8 @@ namespace Registry.Web.Services.Adapters
                 Depth = 0,
                 Size = dataset.Size,
                 Path = GenerateDatasetUrl(dataset),
-                Type = EntryType.DroneDb
+                Type = EntryType.DroneDb,
+                Meta = dataset.Meta
             };
         }
 
