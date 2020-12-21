@@ -135,16 +135,32 @@ namespace Registry.Web.Services.Adapters
             };
         }
 
-        private string GenerateDatasetUrl(Dataset dataset)
+        public string GenerateDatasetUrl(Dataset dataset)
         {
 
-            var context = _accessor.HttpContext;
-            var host = context.Request.Host;
+            var isHttps = false;
+            string host;
 
-            var hostName = !string.IsNullOrWhiteSpace(_settings.HostNameOverride) ? 
-                _settings.HostNameOverride : host.ToString();
-            
-            var scheme = context.Request.IsHttps ? "ddb" : "ddb+unsafe";
+            if (!string.IsNullOrWhiteSpace(_settings.ExternalUrlOverride))
+            {
+
+                var uri = new Uri(_settings.ExternalUrlOverride);
+
+                isHttps = uri.Scheme.ToLowerInvariant() == "https";
+                host = uri.Host;
+
+                // Mmmm
+                if (uri.Port != 443 && uri.Port != 80)
+                    host += ":" + uri.Port;
+
+            }
+            else
+            {
+                var context = _accessor.HttpContext;
+                host = context?.Request.Host.ToString() ?? "localhost";
+            }
+
+            var scheme = isHttps ? "ddb" : "ddb+unsafe";
 
             var datasetUrl = string.Format($"{scheme}://{host}/{dataset.Organization.Slug}/{dataset.Slug}");
 
