@@ -1,3 +1,4 @@
 data
 initialize.sql
 appsettings.json
+.env
