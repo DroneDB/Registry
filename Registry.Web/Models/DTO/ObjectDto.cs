@@ -15,8 +15,6 @@ namespace Registry.Web.Models.DTO
         
         [JsonProperty("id")]
         public int Id { get; set; }
-        [JsonProperty("meta")]
-        public Dictionary<string, string> Meta { get; set; }
         [JsonProperty("point_geom")]
         public GeoJSONObject PointGeometry { get; set; }
         [JsonProperty("polygon_geom")]

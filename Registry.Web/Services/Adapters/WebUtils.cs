@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Net;
 using System.Text;
@@ -10,6 +11,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
+using Newtonsoft.Json;
 using Registry.Common;
 using Registry.Web.Controllers;
 using Registry.Web.Data;
@@ -128,7 +130,8 @@ namespace Registry.Web.Services.Adapters
                 Size = dataset.Size,
                 Path = GenerateDatasetUrl(dataset),
                 Type = EntryType.DroneDb,
-                Meta = dataset.Meta
+                Meta = string.IsNullOrWhiteSpace(dataset.Meta) ? new Dictionary<string, string>() : 
+                    JsonConvert.DeserializeObject<Dictionary<string, string>>(dataset.Meta)
             };
         }
 
