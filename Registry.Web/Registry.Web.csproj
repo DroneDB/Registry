@@ -24,6 +24,7 @@
     <None Remove="logs\**" />
     <None Remove="temp\**" />
     <None Remove="uploads\**" />
+    <None Remove="ddb-log*.csv" />
   </ItemGroup>
 
   <ItemGroup>
