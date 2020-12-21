@@ -4,38 +4,38 @@
     <TargetFramework>net5.0</TargetFramework>
     <AssemblyName>Registry.Web</AssemblyName>
     <UserSecretsId>4e006835-31cb-47c5-9dfe-7b73e210db92</UserSecretsId>
+    <SpaRoot>ClientApp\</SpaRoot>
+    <DefaultItemExcludes>$(DefaultItemExcludes);$(SpaRoot)node_modules\**</DefaultItemExcludes>
   </PropertyGroup>
 
   <ItemGroup>
-    <Compile Remove="ClientApp\**" />
-    <Compile Remove="ddb\**" />
     <Compile Remove="logs\**" />
     <Compile Remove="temp\**" />
     <Compile Remove="uploads\**" />
-    <Compile Remove="wwwroot\**" />
 
-    <!--<Content Remove="ClientApp\**" />-->
-    <Content Remove="ddb\**" />
     <Content Remove="logs\**" />
     <Content Remove="temp\**" />
     <Content Remove="uploads\**" />
 
-    <EmbeddedResource Remove="ClientApp\**" />
-    <EmbeddedResource Remove="ddb\**" />
     <EmbeddedResource Remove="logs\**" />
     <EmbeddedResource Remove="temp\**" />
     <EmbeddedResource Remove="uploads\**" />
-    <EmbeddedResource Remove="wwwroot\**" />
 
-    <!--<None Remove="ClientApp\**" />-->
-    <None Remove="ddb\**" />
     <None Remove="logs\**" />
     <None Remove="temp\**" />
+    <None Remove="uploads\**" />
   </ItemGroup>
 
   <ItemGroup>
-    <None Remove="ddb-log*" />
-    <None Remove="uploads\**" />
+  
+    <Folder Include="wwwroot\" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Don't publish the SPA source files, but do show them in the project files list -->
+    <Content Remove="$(SpaRoot)**" />
+    <None Remove="$(SpaRoot)**" />
+    <None Include="$(SpaRoot)**" Exclude="$(SpaRoot)node_modules\**" />
   </ItemGroup>
 
   <ItemGroup>
@@ -78,12 +78,6 @@
     <ProjectReference Include="..\Registry.Common\Registry.Common.csproj" />
     <ProjectReference Include="..\Registry.Ports\Registry.Ports.csproj" />
     <ProjectReference Include="..\Registry.Web.Data\Registry.Web.Data.csproj" />
-  </ItemGroup>
-
-  <ItemGroup>
-    <Folder Include="App_Data\" />
-    <Folder Include="wwwroot\" />
-    <Folder Include="ClientApp\" />
   </ItemGroup>
 
   <ProjectExtensions><VisualStudio><UserProperties appsettings_1json__JsonSchema="" /></VisualStudio></ProjectExtensions>
