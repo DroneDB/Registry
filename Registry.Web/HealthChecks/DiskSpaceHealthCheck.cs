@@ -21,7 +21,7 @@ namespace Registry.Web.HealthChecks
             _freeSpacePercWarningThreshold = freeSpacePercWarningThreshold;
         }
 
-        public async Task<HealthCheckResult> CheckHealthAsync(HealthCheckContext context, CancellationToken cancellationToken = new CancellationToken())
+        public Task<HealthCheckResult> CheckHealthAsync(HealthCheckContext context, CancellationToken cancellationToken = new CancellationToken())
         {
 
             var info = CommonUtils.GetStorageInfo(_path);
@@ -34,9 +34,9 @@ namespace Registry.Web.HealthChecks
             };
             
             if (info != null && info.FreeSpacePerc <= _freeSpacePercWarningThreshold)
-                return HealthCheckResult.Degraded("Low on available disk space", null, data);
+                return Task.FromResult(HealthCheckResult.Degraded("Low on available disk space", null, data));
 
-            return HealthCheckResult.Healthy("Free disk space is fine", data);
+            return Task.FromResult(HealthCheckResult.Healthy("Free disk space is fine", data));
 
         }
     }

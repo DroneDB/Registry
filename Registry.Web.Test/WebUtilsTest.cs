@@ -28,30 +28,30 @@ namespace Registry.Web.Test
 
         private Mock<IAuthManager> _authManagerMock;
         private Mock<IOptions<AppSettings>> _appSettingsMock;
-        private Logger<UsersManager> _usersManagerLogger;
-        private Logger<OrganizationsManager> _organizationsManagerLogger;
-        private Mock<SignInManager<User>> _signInManagerMock;
-        private Mock<UserManager<User>> _userManagerMock;
-        private Mock<RoleManager<User>> _roleManagerMock;
-        private Mock<IOrganizationsManager> _organizationsManager;
-        private Mock<IDatasetsManager> _datasetsManagerMock;
+        //private Logger<UsersManager> _usersManagerLogger;
+        //private Logger<OrganizationsManager> _organizationsManagerLogger;
+        //private Mock<SignInManager<User>> _signInManagerMock;
+        //private Mock<UserManager<User>> _userManagerMock;
+        //private Mock<RoleManager<User>> _roleManagerMock;
+        //private Mock<IOrganizationsManager> _organizationsManager;
+        //private Mock<IDatasetsManager> _datasetsManagerMock;
         private Mock<IHttpContextAccessor> _httpContextAccessorMock;
-        private Mock<LinkGenerator> _linkGeneratorMock;
+        //private Mock<LinkGenerator> _linkGeneratorMock;
 
         [SetUp]
         public void Setup()
         {
             _appSettingsMock = new Mock<IOptions<AppSettings>>();
             _authManagerMock = new Mock<IAuthManager>();
-            _signInManagerMock = new Mock<SignInManager<User>>();
-            _usersManagerLogger = new Logger<UsersManager>(LoggerFactory.Create(builder => builder.AddConsole()));
-            _organizationsManagerLogger = new Logger<OrganizationsManager>(LoggerFactory.Create(builder => builder.AddConsole()));
-            _userManagerMock = new Mock<UserManager<User>>();
-            _roleManagerMock = new Mock<RoleManager<User>>();
-            _organizationsManager = new Mock<IOrganizationsManager>();
-            _datasetsManagerMock = new Mock<IDatasetsManager>();
+            //_signInManagerMock = new Mock<SignInManager<User>>();
+            //_usersManagerLogger = new Logger<UsersManager>(LoggerFactory.Create(builder => builder.AddConsole()));
+            //_organizationsManagerLogger = new Logger<OrganizationsManager>(LoggerFactory.Create(builder => builder.AddConsole()));
+            //_userManagerMock = new Mock<UserManager<User>>();
+            //_roleManagerMock = new Mock<RoleManager<User>>();
+            //_organizationsManager = new Mock<IOrganizationsManager>();
+            //_datasetsManagerMock = new Mock<IDatasetsManager>();
             _httpContextAccessorMock = new Mock<IHttpContextAccessor>();
-            _linkGeneratorMock = new Mock<LinkGenerator>();
+            //_linkGeneratorMock = new Mock<LinkGenerator>();
 
         }
 

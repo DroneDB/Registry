@@ -19,7 +19,7 @@ namespace Registry.Web.HealthChecks
             _ddbManager = ddbManager;
         }
 
-        public async Task<HealthCheckResult> CheckHealthAsync(HealthCheckContext context, CancellationToken cancellationToken = new CancellationToken())
+        public Task<HealthCheckResult> CheckHealthAsync(HealthCheckContext context, CancellationToken cancellationToken = new CancellationToken())
         {
 
             var tempOrg = "test-" + Guid.NewGuid();
@@ -38,21 +38,21 @@ namespace Registry.Web.HealthChecks
             {
                 var version = ddb.Version;
                 if (string.IsNullOrWhiteSpace(version))
-                    return HealthCheckResult.Unhealthy("Cannot get ddb version", null, data);
+                    return Task.FromResult(HealthCheckResult.Unhealthy("Cannot get ddb version", null, data));
 
                 data.Add("DdbVersion", version);
 
                 var entries = ddb.Search(null, true);
 
                 if (entries == null || entries.Any())
-                    return HealthCheckResult.Unhealthy("Something wrong with ddb behaviour", null, data);
+                    return Task.FromResult(HealthCheckResult.Unhealthy("Something wrong with ddb behaviour", null, data));
                 
-                return HealthCheckResult.Healthy("Ddb is working properly", data);
+                return Task.FromResult(HealthCheckResult.Healthy("Ddb is working properly", data));
 
             }
             catch (Exception ex)
             {
-                return HealthCheckResult.Unhealthy("Exception while testing ddb: " + ex.Message, ex, data);
+                return Task.FromResult(HealthCheckResult.Unhealthy("Exception while testing ddb: " + ex.Message, ex, data));
             }
             finally
             {
