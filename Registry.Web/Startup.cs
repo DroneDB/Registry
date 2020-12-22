@@ -20,6 +20,7 @@ using Microsoft.AspNetCore.HttpsPolicy;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.StaticFiles.Infrastructure;
 using Microsoft.CodeAnalysis.Options;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Caching.Distributed;
@@ -250,8 +251,8 @@ namespace Registry.Web
             }
 
             app.UseDefaultFiles();
-
             app.UseStaticFiles();
+
             if (!env.IsDevelopment())
             {
                 app.UseSpaStaticFiles();
@@ -313,6 +314,22 @@ namespace Registry.Web
             });
 
             SetupDatabase(app);
+
+            Initialize(app).Wait();
+            
+        }
+
+        private async Task Initialize(IApplicationBuilder app)
+        {
+            using var serviceScope = app.ApplicationServices
+                .GetRequiredService<IServiceScopeFactory>()
+                .CreateScope();
+            var systemManager = serviceScope.ServiceProvider.GetService<ISystemManager>();
+
+            if (systemManager == null)
+                throw new InvalidOperationException("No ISystemManager interface registered, check startup config");
+
+            await systemManager.SyncDdbMeta();
 
         }
         //private IEdmModel GetEdmModel()

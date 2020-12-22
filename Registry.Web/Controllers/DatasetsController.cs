@@ -163,6 +163,25 @@ namespace Registry.Web.Controllers
             }
         }
 
+        [HttpPost(RoutesHelper.DatasetSlug + "/syncattrs")]
+        public async Task<IActionResult> SyncAttributes([FromRoute] string orgSlug, string dsSlug)
+        {
+            try
+            {
+
+                _logger.LogDebug($"Dataset controller SyncAttributes('{orgSlug}', '{dsSlug}')");
+
+                await _datasetsManager.SyncDdbMeta(orgSlug, dsSlug);
+
+                return Ok();
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, $"Exception in Dataset controller SyncAttributes('{orgSlug}', '{dsSlug}')')");
+                return ExceptionResult(ex);
+            }
+        }
+
         [HttpPut(RoutesHelper.DatasetSlug)]
         public async Task<IActionResult> Put([FromRoute] string orgSlug, string dsSlug, [FromForm] DatasetDto dataset)
         {
