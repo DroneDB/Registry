@@ -88,6 +88,7 @@ namespace Registry.Web
                         Url = new Uri("https://github.com/DroneDB/Registry/blob/master/LICENSE.md"),
                     }
                 });
+                c.DocumentFilter<BasePathDocumentFilter>();
             });
 
             services.AddMvcCore().AddNewtonsoftJson();
