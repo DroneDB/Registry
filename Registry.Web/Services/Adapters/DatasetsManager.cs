@@ -1,12 +1,16 @@
 ﻿using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
+using Microsoft.AspNet.OData.Query;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
+using Newtonsoft.Json;
 using Registry.Common;
 using Registry.Ports.ObjectSystem;
 using Registry.Web.Data;
+using Registry.Web.Data.Models;
 using Registry.Web.Exceptions;
 using Registry.Web.Models.DTO;
 using Registry.Web.Services.Ports;
@@ -45,7 +49,7 @@ namespace Registry.Web.Services.Adapters
         {
             var org = await _utils.GetOrganization(orgSlug);
 
-            var query = from ds in org.Datasets
+            var query = from ds in org.Datasets.ToArray()
 
                         select new DatasetDto
                         {
@@ -56,12 +60,25 @@ namespace Registry.Web.Services.Adapters
                             LastEdit = ds.LastEdit,
                             Name = ds.Name,
                             License = ds.License,
-                            Meta = ds.Meta,
+                            Meta = string.IsNullOrWhiteSpace(ds.Meta) ? null : JsonConvert.DeserializeObject<Dictionary<string, string>>(ds.Meta),
                             ObjectsCount = ds.ObjectsCount,
                             Size = ds.Size
                         };
 
             return query;
+        }
+
+        public async Task SyncDdbMeta(string orgSlug, string dsSlug)
+        {
+
+            var ds = await _utils.GetDataset(orgSlug, dsSlug);
+
+            var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
+
+            var attrs = ddb.ChangeAttributes(null);
+
+            ds.Meta = JsonConvert.SerializeObject(attrs);
+            
         }
 
         public async Task<DatasetDto> Get(string orgSlug, string dsSlug)
@@ -95,7 +112,7 @@ namespace Registry.Web.Services.Adapters
 
             if (ds.InternalRef == Guid.Empty)
                 ds.InternalRef = Guid.NewGuid();
-            
+
             org.Datasets.Add(ds);
 
             await _context.SaveChangesAsync();
@@ -117,7 +134,6 @@ namespace Registry.Web.Services.Adapters
             entity.IsPublic = dataset.IsPublic;
             entity.LastEdit = DateTime.Now;
             entity.License = dataset.License;
-            entity.Meta = dataset.Meta;
             entity.Name = dataset.Name;
 
             if (!string.IsNullOrEmpty(dataset.Password))
@@ -173,7 +189,12 @@ namespace Registry.Web.Services.Adapters
 
             var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
 
-            return ddb.ChangeAttributes(attributes);
+            var attrs = ddb.ChangeAttributes(attributes);
+
+            ds.Meta = JsonConvert.SerializeObject(attrs);
+            await _context.SaveChangesAsync();
+
+            return attrs;
 
         }
     }
