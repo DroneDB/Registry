@@ -45,7 +45,7 @@ namespace Registry.Web.HealthChecks
             if (!res)
                 return HealthCheckResult.Unhealthy("Cannot find the newly created bucket", null, data);
 
-            await _objectSystem.RemoveBucketAsync(testBucketName, cancellationToken);
+            await _objectSystem.RemoveBucketAsync(testBucketName, false, cancellationToken);
 
             res = await _objectSystem.BucketExistsAsync(testBucketName, cancellationToken);
             if (res)

@@ -140,8 +140,16 @@ namespace Registry.Adapters.ObjectSystem
             return await _client.BucketExistsAsync(bucketName, cancellationToken);
         }
 
-        public async Task RemoveBucketAsync(string bucketName, CancellationToken cancellationToken = default)
+        public async Task RemoveBucketAsync(string bucketName, bool force = true, CancellationToken cancellationToken = default)
         {
+
+            if (force)
+            {
+                var objects = _client.ListObjectsAsync(bucketName, null, true, cancellationToken).ToEnumerable();
+
+                await _client.RemoveObjectAsync(bucketName, objects.Select(obj => obj.Key), cancellationToken);
+            }
+
             await _client.RemoveBucketAsync(bucketName, cancellationToken);
         }
 

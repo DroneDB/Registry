@@ -76,6 +76,10 @@
     <ProjectReference Include="..\Registry.Web.Data\Registry.Web.Data.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <Folder Include="App_Data\" />
+  </ItemGroup>
+
   <ProjectExtensions><VisualStudio><UserProperties appsettings_1json__JsonSchema="" /></VisualStudio></ProjectExtensions>
 
   <!-- We could add this BUT it slows down the builds

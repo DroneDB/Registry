@@ -382,7 +382,7 @@ namespace Registry.Adapters.ObjectSystem
             return Directory.Exists(Path.Combine(_baseFolder, bucket));
         }
 
-        public async Task RemoveBucketAsync(string bucketName, CancellationToken cancellationToken = default)
+        public async Task RemoveBucketAsync(string bucketName, bool force = true, CancellationToken cancellationToken = default)
         {
             EnsureBucketExists(bucketName);
 
@@ -390,7 +390,7 @@ namespace Registry.Adapters.ObjectSystem
             {
                 var fullPath = GetBucketPath(bucketName);
 
-                Directory.Delete(fullPath, true);
+                Directory.Delete(fullPath, force);
 
                 var bucketPolicyPath = GetBucketPolicyPath(bucketName);
 
@@ -413,9 +413,8 @@ namespace Registry.Adapters.ObjectSystem
             var bucketPolicyPath = GetBucketPolicyPath(bucketName);
 
             if (File.Exists(bucketPolicyPath))
-            {
                 return await File.ReadAllTextAsync(bucketPolicyPath, Encoding.UTF8, cancellationToken);
-            }
+            
 
             return null;
 

@@ -284,6 +284,7 @@ namespace Registry.Web.Services.Adapters
             }
             else
             {
+
                 _logger.LogInformation("Deleting bucket");
                 await _objectSystem.RemoveBucketAsync(bucketName);
                 _logger.LogInformation("Bucket deleted");
