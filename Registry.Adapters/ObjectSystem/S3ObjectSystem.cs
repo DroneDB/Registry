@@ -145,9 +145,10 @@ namespace Registry.Adapters.ObjectSystem
 
             if (force)
             {
-                var objects = _client.ListObjectsAsync(bucketName, null, true, cancellationToken).ToEnumerable();
+                var objects = _client.ListObjectsAsync(bucketName, null, true, cancellationToken).ToEnumerable().Select(obj => obj.Key).ToArray();
 
-                await _client.RemoveObjectAsync(bucketName, objects.Select(obj => obj.Key), cancellationToken);
+                foreach (var obj in objects)
+                    await _client.RemoveObjectAsync(bucketName, obj, cancellationToken);
             }
 
             await _client.RemoveBucketAsync(bucketName, cancellationToken);
