@@ -88,14 +88,38 @@ namespace Registry.Web.Services.Adapters
             if (!dsSlug.IsValidSlug())
                 throw new BadRequestException("Invalid dataset id");
 
-            var org = await GetOrganization(orgSlug, checkOwnership: checkOwnership);
+            if (string.IsNullOrWhiteSpace(orgSlug))
+                throw new BadRequestException("Missing organization id");
 
+            if (!orgSlug.IsValidSlug())
+                throw new BadRequestException("Invalid organization id");
+
+            var org = _context.Organizations
+                .Include(item => item.Datasets)
+                .FirstOrDefault(item => item.Slug == orgSlug);
+
+            if (org == null)
+                throw new NotFoundException("Organization not found");
+            
             var dataset = org.Datasets.FirstOrDefault(item => item.Slug == dsSlug);
 
             if (dataset == null)
             {
                 if (retNullIfNotFound) return null;
+
                 throw new NotFoundException("Cannot find dataset");
+            }
+
+            if (!dataset.IsPublic && checkOwnership && !await _authManager.IsUserAdmin())
+            {
+                var currentUser = await _authManager.GetCurrentUser();
+
+                if (currentUser == null)
+                    throw new UnauthorizedException("Invalid user");
+
+                if (org.OwnerId != currentUser.Id && org.OwnerId != null && !org.IsPublic)
+                    throw new UnauthorizedException("This organization does not belong to the current user");
+
             }
 
             return dataset;
@@ -130,8 +154,7 @@ namespace Registry.Web.Services.Adapters
                 Size = dataset.Size,
                 Path = GenerateDatasetUrl(dataset),
                 Type = EntryType.DroneDb,
-                Meta = string.IsNullOrWhiteSpace(dataset.Meta) ? new Dictionary<string, string>() : 
-                    JsonConvert.DeserializeObject<Dictionary<string, string>>(dataset.Meta)
+                Meta = dataset.Meta
             };
         }
 
@@ -158,6 +181,7 @@ namespace Registry.Web.Services.Adapters
             {
                 var context = _accessor.HttpContext;
                 host = context?.Request.Host.ToString() ?? "localhost";
+                isHttps = context?.Request.IsHttps ?? false;
             }
 
             var scheme = isHttps ? "ddb" : "ddb+unsafe";
