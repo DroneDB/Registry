@@ -324,7 +324,7 @@ namespace Registry.Web
             if (systemManager == null)
                 throw new InvalidOperationException("No ISystemManager interface registered, check startup config");
 
-            await systemManager.SyncDdbMeta();
+            await systemManager.SyncDdbMeta(null, true);
 
         }
         //private IEdmModel GetEdmModel()

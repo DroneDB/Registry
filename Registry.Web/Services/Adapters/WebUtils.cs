@@ -64,7 +64,7 @@ namespace Registry.Web.Services.Adapters
                 return safe ? (Organization)null :
                     throw new NotFoundException("Organization not found");
 
-            if (checkOwnership && !await _authManager.IsUserAdmin())
+            if (!org.IsPublic && checkOwnership && !await _authManager.IsUserAdmin())
             {
                 var currentUser = await _authManager.GetCurrentUser();
 

@@ -47,8 +47,11 @@ namespace Registry.Web.Services.Adapters
 
         }
 
-        public async Task SyncDdbMeta(string[] orgs = null)
+        public async Task SyncDdbMeta(string[] orgs = null, bool skipAuthCheck = false)
         {
+
+            if (!skipAuthCheck && !await _authManager.IsUserAdmin())
+                throw new UnauthorizedException("Only admins can perform system related tasks");
 
             Tuple<string, Dataset>[] query;
 

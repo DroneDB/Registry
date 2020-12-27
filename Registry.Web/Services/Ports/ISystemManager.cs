@@ -9,6 +9,6 @@ namespace Registry.Web.Services.Ports
     public interface ISystemManager
     {
         public Task<CleanupResult> CleanupSessions();
-        Task SyncDdbMeta(string[] orgs = null);
+        Task SyncDdbMeta(string[] orgs = null, bool skipAuthCheck = false);
     }
 }
