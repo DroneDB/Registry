@@ -52,10 +52,9 @@ namespace Registry.Web.Utilities
                 LastEdit = dataset.LastEdit,
                 Name = string.IsNullOrEmpty(dataset.Name) ? dataset.Slug : dataset.Name,
                 License = dataset.License,
-                //Meta = JsonConvert.SerializeObject(dataset.Meta),
+                Meta = dataset.Meta,
                 ObjectsCount = dataset.ObjectsCount,
-                Size = dataset.Size,
-                IsPublic = dataset.IsPublic
+                Size = dataset.Size
             };
         }
 
@@ -70,7 +69,7 @@ namespace Registry.Web.Utilities
                 LastEdit = dataset.LastEdit,
                 Name = dataset.Name,
                 License = dataset.License,
-                Meta = string.IsNullOrWhiteSpace(dataset.Meta) ? null : JsonConvert.DeserializeObject<Dictionary<string, string>>(dataset.Meta),
+                Meta = dataset.Meta,
                 ObjectsCount = dataset.ObjectsCount,
                 Size = dataset.Size
             };

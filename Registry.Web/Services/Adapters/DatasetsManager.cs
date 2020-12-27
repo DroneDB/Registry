@@ -60,7 +60,7 @@ namespace Registry.Web.Services.Adapters
                             LastEdit = ds.LastEdit,
                             Name = ds.Name,
                             License = ds.License,
-                            Meta = string.IsNullOrWhiteSpace(ds.Meta) ? null : JsonConvert.DeserializeObject<Dictionary<string, string>>(ds.Meta),
+                            Meta = ds.Meta,
                             ObjectsCount = ds.ObjectsCount,
                             Size = ds.Size
                         };
@@ -77,7 +77,7 @@ namespace Registry.Web.Services.Adapters
 
             var attrs = ddb.ChangeAttributes(null);
 
-            ds.Meta = JsonConvert.SerializeObject(attrs);
+            ds.Meta = attrs;
             
         }
 
@@ -191,7 +191,7 @@ namespace Registry.Web.Services.Adapters
 
             var attrs = ddb.ChangeAttributes(attributes);
 
-            ds.Meta = JsonConvert.SerializeObject(attrs);
+            ds.Meta = attrs;
             await _context.SaveChangesAsync();
 
             return attrs;

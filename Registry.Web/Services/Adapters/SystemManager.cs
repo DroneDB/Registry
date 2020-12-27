@@ -74,7 +74,7 @@ namespace Registry.Web.Services.Adapters
                 {
                     var attrs = ddb.ChangeAttributes(new Dictionary<string, object>());
 
-                    ds.Meta = JsonConvert.SerializeObject(attrs);
+                    ds.Meta = attrs;
 
                 }
                 catch (Exception ex)

@@ -17,7 +17,7 @@ namespace Registry.Ports.DroneDB.Models
         public int Depth { get; set; }
         public int Size { get; set; }
         public EntryType Type { get; set; }
-        public Dictionary<string, string> Meta { get; set; }
+        public Dictionary<string, object> Meta { get; set; }
         public Point PointGeometry { get; set; }
         public Polygon PolygonGeometry { get; set; }
     }

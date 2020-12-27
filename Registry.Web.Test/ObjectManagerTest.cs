@@ -57,8 +57,8 @@ namespace Registry.Web.Test
 
         private const string BaseTestFolder = "ObjectManagerTest";
 
-        private const string Test1ArchiveUrl = "https://github.com/DroneDB/test_data/raw/master/registry/Test4.zip";
-        private const string Test2ArchiveUrl = "https://github.com/DroneDB/test_data/raw/master/registry/Test3.zip";
+        private const string Test4ArchiveUrl = "https://github.com/DroneDB/test_data/raw/master/registry/Test4.zip";
+        private const string Test5ArchiveUrl = "https://github.com/DroneDB/test_data/raw/master/registry/Test5.zip";
 
         private readonly Guid _defaultDatasetGuid = Guid.Parse("0a223495-84a0-4c15-b425-c7ef88110e75");
 
@@ -108,7 +108,7 @@ namespace Registry.Web.Test
         [Test]
         public async Task List_PublicDefault_ListObjects()
         {
-            using var test = new TestFS(Test1ArchiveUrl, BaseTestFolder);
+            using var test = new TestFS(Test4ArchiveUrl, BaseTestFolder);
             await using var context = GetTest1Context();
 
             _settings.DdbStoragePath = Path.Combine(test.TestFolder, DdbFolder);
@@ -136,7 +136,7 @@ namespace Registry.Web.Test
         public async Task Get_MissingFile_NotFound()
         {
 
-            using var test = new TestFS(Test1ArchiveUrl, BaseTestFolder);
+            using var test = new TestFS(Test4ArchiveUrl, BaseTestFolder);
             await using var context = GetTest1Context();
 
             _settings.DdbStoragePath = Path.Combine(test.TestFolder, DdbFolder);
@@ -164,7 +164,7 @@ namespace Registry.Web.Test
             const EntryType expectedObjectType = EntryType.GeoImage;
             const string expectedContentType = "image/jpeg";
 
-            using var test = new TestFS(Test1ArchiveUrl, BaseTestFolder);
+            using var test = new TestFS(Test4ArchiveUrl, BaseTestFolder);
 
             await using var context = GetTest1Context();
             _settings.DdbStoragePath = Path.Combine(test.TestFolder, DdbFolder);
@@ -196,7 +196,7 @@ namespace Registry.Web.Test
             var expectedHash = new byte[] { 152, 110, 79, 250, 177, 15, 101, 187, 24, 23, 34, 217, 117, 168, 119, 124 };
 
             const string expectedName = "DJI_0019.JPG";
-            using var test = new TestFS(Test1ArchiveUrl, BaseTestFolder);
+            using var test = new TestFS(Test4ArchiveUrl, BaseTestFolder);
 
             await using var context = GetTest1Context();
             _settings.DdbStoragePath = Path.Combine(test.TestFolder, DdbFolder);
@@ -231,7 +231,7 @@ namespace Registry.Web.Test
         {
 
             string[] fileNames = { "DJI_0019.JPG", "DJI_0020.JPG", "DJI_0021.JPG", "DJI_0022.JPG" };
-            using var test = new TestFS(Test1ArchiveUrl, BaseTestFolder);
+            using var test = new TestFS(Test4ArchiveUrl, BaseTestFolder);
 
             await using var context = GetTest1Context();
             _settings.DdbStoragePath = Path.Combine(test.TestFolder, DdbFolder);
@@ -261,11 +261,11 @@ namespace Registry.Web.Test
                 Debug.WriteLine(entry.FullName);
                 var obj = await objectManager.Get(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug,
                     entry.FullName);
-                
+
                 // We could use entry.Crc32 but md5 comes so handy
                 await using var stream = entry.Open();
                 var expectedHash = md5.ComputeHash(obj.Data);
-                var hash = md5.ComputeHash(stream);
+                var hash = await md5.ComputeHashAsync(stream);
 
                 hash.Should().BeEquivalentTo(expectedHash);
             }
@@ -276,8 +276,12 @@ namespace Registry.Web.Test
         public async Task Download_ExistingFileInSubfolders_PackageRes()
         {
 
-            string[] fileNames = { "DJI_0019.JPG", "DJI_0020.JPG", "DJI_0021.JPG", "DJI_0022.JPG", "Sub/20170320_150445.jpg", "Sub/20170320_150447.jpg" };
-            using var test = new TestFS(Test2ArchiveUrl, BaseTestFolder);
+            const string organizationSlug = "admin";
+            const string datasetSlug = "7kd0gxti9qoemsrk";
+            Guid adminDatasetGuid = Guid.Parse("6c1f5555-d001-4411-9308-42aa6ccd7fd6");
+            
+            string[] fileNames = { "DJI_0007.JPG", "DJI_0008.JPG", "DJI_0009.JPG", "Sub/DJI_0049.JPG", "Sub/DJI_0048.JPG" };
+            using var test = new TestFS(Test5ArchiveUrl, BaseTestFolder);
 
             await using var context = GetTest1Context();
             _settings.DdbStoragePath = Path.Combine(test.TestFolder, DdbFolder);
@@ -285,7 +289,7 @@ namespace Registry.Web.Test
             _authManagerMock.Setup(o => o.IsUserAdmin()).Returns(Task.FromResult(true));
 
             var sys = new PhysicalObjectSystem(Path.Combine(test.TestFolder, StorageFolder));
-            sys.SyncBucket($"{MagicStrings.PublicOrganizationSlug}-{_defaultDatasetGuid}");
+            sys.SyncBucket($"{organizationSlug}-{adminDatasetGuid}");
 
             var webUtils = new WebUtils(_authManagerMock.Object, context, _appSettingsMock.Object,
                 _httpContextAccessorMock.Object);
@@ -293,7 +297,7 @@ namespace Registry.Web.Test
             var objectManager = new ObjectsManager(_objectManagerLogger, context, sys, _chunkedUploadManagerMock.Object, _appSettingsMock.Object,
                 new DdbManager(_appSettingsMock.Object, _ddbFactoryLogger), webUtils, _authManagerMock.Object, _cacheManagerMock.Object);
 
-            var res = await objectManager.Download(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug,
+            var res = await objectManager.Download(organizationSlug, datasetSlug,
                 fileNames);
 
             res.Name.Should().EndWith(".zip");
@@ -305,13 +309,13 @@ namespace Registry.Web.Test
             foreach (var entry in archive.Entries)
             {
                 Debug.WriteLine(entry.FullName);
-                var obj = await objectManager.Get(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug,
+                var obj = await objectManager.Get(organizationSlug, datasetSlug,
                     entry.FullName);
 
                 // We could use entry.Crc32 but md5 comes so handy
                 await using var stream = entry.Open();
                 var expectedHash = md5.ComputeHash(obj.Data);
-                var hash = md5.ComputeHash(stream);
+                var hash = await md5.ComputeHashAsync(stream);
 
                 hash.Should().BeEquivalentTo(expectedHash);
             }
@@ -328,7 +332,7 @@ namespace Registry.Web.Test
             _appSettingsMock.Setup(o => o.Value).Returns(_settings);
             _authManagerMock.Setup(o => o.IsUserAdmin()).Returns(Task.FromResult(true));
 
-            using var test = new TestFS(Test1ArchiveUrl, BaseTestFolder);
+            using var test = new TestFS(Test4ArchiveUrl, BaseTestFolder);
 
             var sys = new PhysicalObjectSystem(Path.Combine(test.TestFolder, StorageFolder));
             sys.SyncBucket($"{MagicStrings.PublicOrganizationSlug}-{_defaultDatasetGuid}");
@@ -431,6 +435,28 @@ namespace Registry.Web.Test
                 };
                 entity.Datasets = new List<Dataset> { ds };
 
+                context.Organizations.Add(entity);
+
+                entity = new Organization
+                {
+                    Slug = "admin",
+                    Name = "admin",
+                    CreationDate = DateTime.Now,
+                    Description = "Admin",
+                    IsPublic = true,
+                    OwnerId = null
+                };
+                ds = new Dataset
+                {
+                    Slug = "7kd0gxti9qoemsrk",
+                    Name = "7kd0gxti9qoemsrk",
+                    Description = null,
+                    IsPublic = true,
+                    CreationDate = DateTime.Now,
+                    LastEdit = DateTime.Now,
+                    InternalRef = Guid.Parse("6c1f5555-d001-4411-9308-42aa6ccd7fd6")
+                };
+                entity.Datasets = new List<Dataset> { ds };
                 context.Organizations.Add(entity);
 
                 context.SaveChanges();
