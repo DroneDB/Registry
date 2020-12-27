@@ -73,12 +73,7 @@ namespace Registry.Web.Services.Adapters
         {
             // TODO: To change when implementing anonymous users
 
-            if (skipAuthCheck)
-            {
-                if (!organization.Slug.IsValidSlug())
-                    throw new BadRequestException("Invalid organization orgSlug");
-            }
-            else
+            if (!skipAuthCheck)
             {
                 var currentUser = await _authManager.GetCurrentUser();
 
@@ -116,7 +111,12 @@ namespace Registry.Web.Services.Adapters
                     }
                 }
             }
-            
+            else
+            {
+                if (!organization.Slug.IsValidSlug())
+                    throw new BadRequestException("Invalid organization orgSlug");
+            }
+
             var org = organization.ToEntity();
             org.CreationDate = DateTime.Now;
 

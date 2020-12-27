@@ -20,7 +20,6 @@ using Registry.Web.Utilities;
 namespace Registry.Web.Controllers
 {
 
-    [Authorize]
     [ApiController]
     [Route(RoutesHelper.OrganizationsRadix + "/" + RoutesHelper.OrganizationSlug + "/" + RoutesHelper.DatasetRadix)]
     public class DatasetsController : ControllerBaseEx

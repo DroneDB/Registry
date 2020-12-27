@@ -19,7 +19,6 @@ using Registry.Web.Utilities;
 
 namespace Registry.Web.Controllers
 {
-    [Authorize]
     [ApiController]
     [Route(RoutesHelper.OrganizationsRadix)]
     public class OrganizationsController : ControllerBaseEx
@@ -33,6 +32,7 @@ namespace Registry.Web.Controllers
             _logger = logger;
         }
 
+        [Authorize]
         [HttpGet(Name = nameof(OrganizationsController) + "." + nameof(GetAll))]
         public async Task<IActionResult> GetAll()
         {
