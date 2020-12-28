@@ -42,5 +42,25 @@ namespace Registry.Web.Controllers
                 return ExceptionResult(ex);
             }
         }
+
+
+        [HttpPost("syncddb", Name = nameof(SystemController) + "." + nameof(SyncDdbMeta))]
+        public async Task<IActionResult> SyncDdbMeta(string[] orgs)
+        {
+            try
+            {
+                _logger.LogDebug($"System controller SyncDdbMeta({orgs.ToPrintableList()})");
+
+                await _systemManager.SyncDdbMeta(orgs);
+
+                return Ok();
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, $"Exception in System controller SyncDdbMeta({orgs.ToPrintableList()})");
+
+                return ExceptionResult(ex);
+            }
+        }
     }
 }

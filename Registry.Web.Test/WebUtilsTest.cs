@@ -28,30 +28,30 @@ namespace Registry.Web.Test
 
         private Mock<IAuthManager> _authManagerMock;
         private Mock<IOptions<AppSettings>> _appSettingsMock;
-        private Logger<UsersManager> _usersManagerLogger;
-        private Logger<OrganizationsManager> _organizationsManagerLogger;
-        private Mock<SignInManager<User>> _signInManagerMock;
-        private Mock<UserManager<User>> _userManagerMock;
-        private Mock<RoleManager<User>> _roleManagerMock;
-        private Mock<IOrganizationsManager> _organizationsManager;
-        private Mock<IDatasetsManager> _datasetsManagerMock;
+        //private Logger<UsersManager> _usersManagerLogger;
+        //private Logger<OrganizationsManager> _organizationsManagerLogger;
+        //private Mock<SignInManager<User>> _signInManagerMock;
+        //private Mock<UserManager<User>> _userManagerMock;
+        //private Mock<RoleManager<User>> _roleManagerMock;
+        //private Mock<IOrganizationsManager> _organizationsManager;
+        //private Mock<IDatasetsManager> _datasetsManagerMock;
         private Mock<IHttpContextAccessor> _httpContextAccessorMock;
-        private Mock<LinkGenerator> _linkGeneratorMock;
+        //private Mock<LinkGenerator> _linkGeneratorMock;
 
         [SetUp]
         public void Setup()
         {
             _appSettingsMock = new Mock<IOptions<AppSettings>>();
             _authManagerMock = new Mock<IAuthManager>();
-            _signInManagerMock = new Mock<SignInManager<User>>();
-            _usersManagerLogger = new Logger<UsersManager>(LoggerFactory.Create(builder => builder.AddConsole()));
-            _organizationsManagerLogger = new Logger<OrganizationsManager>(LoggerFactory.Create(builder => builder.AddConsole()));
-            _userManagerMock = new Mock<UserManager<User>>();
-            _roleManagerMock = new Mock<RoleManager<User>>();
-            _organizationsManager = new Mock<IOrganizationsManager>();
-            _datasetsManagerMock = new Mock<IDatasetsManager>();
+            //_signInManagerMock = new Mock<SignInManager<User>>();
+            //_usersManagerLogger = new Logger<UsersManager>(LoggerFactory.Create(builder => builder.AddConsole()));
+            //_organizationsManagerLogger = new Logger<OrganizationsManager>(LoggerFactory.Create(builder => builder.AddConsole()));
+            //_userManagerMock = new Mock<UserManager<User>>();
+            //_roleManagerMock = new Mock<RoleManager<User>>();
+            //_organizationsManager = new Mock<IOrganizationsManager>();
+            //_datasetsManagerMock = new Mock<IDatasetsManager>();
             _httpContextAccessorMock = new Mock<IHttpContextAccessor>();
-            _linkGeneratorMock = new Mock<LinkGenerator>();
+            //_linkGeneratorMock = new Mock<LinkGenerator>();
 
         }
 
@@ -64,7 +64,7 @@ namespace Registry.Web.Test
             _authManagerMock.Setup(o => o.IsUserAdmin()).Returns(Task.FromResult(true));
 
             var webUtils = new WebUtils(_authManagerMock.Object, context, _appSettingsMock.Object,
-                _httpContextAccessorMock.Object, _linkGeneratorMock.Object);
+                _httpContextAccessorMock.Object);
 
             const string organizationName = "uav4geo";
             const string expectedOrganizationSlug = "uav4geo";
@@ -84,7 +84,7 @@ namespace Registry.Web.Test
             _authManagerMock.Setup(o => o.IsUserAdmin()).Returns(Task.FromResult(true));
 
             var webUtils = new WebUtils(_authManagerMock.Object, context, _appSettingsMock.Object,
-                _httpContextAccessorMock.Object, _linkGeneratorMock.Object);
+                _httpContextAccessorMock.Object);
 
             const string organizationName = "public";
             const string expectedOrganizationSlug = "public-1";
@@ -117,7 +117,7 @@ namespace Registry.Web.Test
             await context.SaveChangesAsync();
 
             var webUtils = new WebUtils(_authManagerMock.Object, context, _appSettingsMock.Object,
-                _httpContextAccessorMock.Object, _linkGeneratorMock.Object);
+                _httpContextAccessorMock.Object);
 
             var slug = webUtils.GetFreeOrganizationSlug(organizationName);
 
@@ -158,7 +158,7 @@ namespace Registry.Web.Test
             await context.SaveChangesAsync();
 
             var webUtils = new WebUtils(_authManagerMock.Object, context, _appSettingsMock.Object,
-                _httpContextAccessorMock.Object, _linkGeneratorMock.Object);
+                _httpContextAccessorMock.Object);
 
 
             var slug = webUtils.GetFreeOrganizationSlug(organizationName);

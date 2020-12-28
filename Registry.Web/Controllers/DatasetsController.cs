@@ -20,7 +20,6 @@ using Registry.Web.Utilities;
 namespace Registry.Web.Controllers
 {
 
-    [Authorize]
     [ApiController]
     [Route(RoutesHelper.OrganizationsRadix + "/" + RoutesHelper.OrganizationSlug + "/" + RoutesHelper.DatasetRadix)]
     public class DatasetsController : ControllerBaseEx
@@ -159,6 +158,25 @@ namespace Registry.Web.Controllers
             catch (Exception ex)
             {
                 _logger.LogError(ex, $"Exception in Dataset controller ChangeAttributes('{orgSlug}', '{dsSlug}', '{rawAttributes}')')");
+                return ExceptionResult(ex);
+            }
+        }
+
+        [HttpPost(RoutesHelper.DatasetSlug + "/syncattrs")]
+        public async Task<IActionResult> SyncAttributes([FromRoute] string orgSlug, string dsSlug)
+        {
+            try
+            {
+
+                _logger.LogDebug($"Dataset controller SyncAttributes('{orgSlug}', '{dsSlug}')");
+
+                await _datasetsManager.SyncDdbMeta(orgSlug, dsSlug);
+
+                return Ok();
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, $"Exception in Dataset controller SyncAttributes('{orgSlug}', '{dsSlug}')')");
                 return ExceptionResult(ex);
             }
         }

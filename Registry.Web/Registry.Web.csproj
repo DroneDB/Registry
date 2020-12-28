@@ -3,33 +3,35 @@
   <PropertyGroup>
     <TargetFramework>net5.0</TargetFramework>
     <AssemblyName>Registry.Web</AssemblyName>
+    <UserSecretsId>4e006835-31cb-47c5-9dfe-7b73e210db92</UserSecretsId>
+    <SpaRoot>ClientApp\</SpaRoot>
+    <DefaultItemExcludes>$(DefaultItemExcludes);$(SpaRoot)node_modules\**</DefaultItemExcludes>
   </PropertyGroup>
 
   <ItemGroup>
-    <Compile Remove="ddb\**" />
     <Compile Remove="logs\**" />
     <Compile Remove="temp\**" />
     <Compile Remove="uploads\**" />
-    <Content Remove="ddb\**" />
+
     <Content Remove="logs\**" />
     <Content Remove="temp\**" />
     <Content Remove="uploads\**" />
-    <EmbeddedResource Remove="ddb\**" />
+
     <EmbeddedResource Remove="logs\**" />
     <EmbeddedResource Remove="temp\**" />
     <EmbeddedResource Remove="uploads\**" />
-    <None Remove="ddb\**" />
+
     <None Remove="logs\**" />
     <None Remove="temp\**" />
-  </ItemGroup>
-
-  <ItemGroup>
-    <None Remove="ddb-log*" />
     <None Remove="uploads\**" />
+    <None Remove="ddb-log*.csv" />
   </ItemGroup>
 
   <ItemGroup>
-    <None Include="wwwroot\index.html" />
+    <!-- Don't publish the SPA source files, but do show them in the project files list -->
+    <Content Remove="$(SpaRoot)**" />
+    <None Remove="$(SpaRoot)**" />
+    <None Include="$(SpaRoot)**" Exclude="$(SpaRoot)node_modules\**" />
   </ItemGroup>
 
   <ItemGroup>
@@ -42,6 +44,8 @@
     <PackageReference Include="Microsoft.AspNetCore.Mvc.NewtonsoftJson" Version="5.0.1" />
     <PackageReference Include="Microsoft.AspNetCore.OData" Version="7.5.2" />
     <PackageReference Include="Microsoft.AspNetCore.ResponseCompression" Version="2.2.0" />
+    <PackageReference Include="Microsoft.AspNetCore.SpaServices" Version="3.1.10" />
+    <PackageReference Include="Microsoft.AspNetCore.SpaServices.Extensions" Version="5.0.1" />
     <PackageReference Include="Microsoft.EntityFrameworkCore" Version="5.0.1" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="5.0.1" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" Version="5.0.1" />
@@ -78,5 +82,10 @@
 
   <ProjectExtensions><VisualStudio><UserProperties appsettings_1json__JsonSchema="" /></VisualStudio></ProjectExtensions>
 
+  <!-- We could add this BUT it slows down the builds
+  <Target Name="PostBuild" AfterTargets="PostBuildEvent">
+    <Exec Command="cd wwwroot&#xD;&#xA;call npm install&#xD;&#xA;call webpack" />
+  </Target>
+-->
 
 </Project>

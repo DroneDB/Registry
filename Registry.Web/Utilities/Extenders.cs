@@ -54,8 +54,7 @@ namespace Registry.Web.Utilities
                 License = dataset.License,
                 Meta = dataset.Meta,
                 ObjectsCount = dataset.ObjectsCount,
-                Size = dataset.Size,
-                IsPublic = dataset.IsPublic
+                Size = dataset.Size
             };
         }
 
@@ -197,6 +196,11 @@ namespace Registry.Web.Utilities
         {
             if (results == null || !results.Any()) return "No error details";
             return string.Join(", ", results.Select(item => $"[{item.Code}: '{item.Description}']"));
+        }
+
+        public static string ToPrintableList(this IEnumerable<string> arr)
+        {
+            return arr == null ? "[]" : $"[{string.Join(", ", arr)}]";
         }
 
     }

@@ -1,0 +1,81 @@
+version: "3.3"
+
+services:
+    db:
+        image: mariadb:latest
+        volumes:
+            - ./data/mysql:/var/lib/mysql
+            - ./initialize.sql:/docker-entrypoint-initdb.d/initialize.sql
+        expose:
+            - "3306"
+        restart: unless-stopped
+        environment:
+            - MYSQL_ROOT_PASSWORD
+        healthcheck:
+            test: ["CMD", "mysqladmin" ,"ping", "-h", "localhost"]
+            timeout: 20s
+            retries: 10
+
+    phpmyadmin:
+        depends_on:
+            - db
+        image: phpmyadmin
+        restart: unless-stopped
+        ports:
+            - 8080:80
+        environment:
+            - PMA_HOST=db:3306
+
+    minio:
+        image: minio/minio:latest
+        environment:
+            - MINIO_ACCESS_KEY
+            - MINIO_SECRET_KEY
+        volumes:
+            - ./data/minio:/data
+        ports:
+            - 9000:9000
+        command: server /data
+        healthcheck:
+            test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+            interval: 30s
+            timeout: 20s
+            retries: 3
+        restart: unless-stopped
+
+    redis:
+        image: redis:latest
+        volumes:
+            - ./data/redis:/data
+        expose:
+            - "6379"
+        restart: unless-stopped
+
+    redisadmin:
+        depends_on:
+            - redis
+        image: erikdubbelboer/phpredisadmin
+        environment:
+            - ADMIN_USER=admin
+            - ADMIN_PASS
+            - REDIS_1_HOST=redis
+            - REDIS_1_PORT=6379
+        ports:
+            - 8081:80 
+        restart: unless-stopped
+
+    registry:
+        depends_on:
+            - db
+            - redis
+            - minio
+        build: ../../.
+        volumes:
+            - ./data/ddbstore:/Registry/Registry.Web/bin/Release/net5.0/linux-x64/ddbstore
+            - ./data/tmpuploads:/Registry/Registry.Web/bin/Release/net5.0/linux-x64/uploads
+            - ./appsettings.json:/Registry/Registry.Web/bin/Release/net5.0/linux-x64/appsettings.json
+            - ./data/logs:/Registry/Registry.Web/bin/Release/net5.0/linux-x64/logs
+        ports:
+            - 5000:5000
+            - 5001:5001
+        restart: unless-stopped

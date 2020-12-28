@@ -29,7 +29,6 @@ namespace Registry.Web.Test
         private Mock<IDatasetsManager> _datasetManagerMock;
         private Logger<OrganizationsManager> _organizationsManagerLogger;
         private Mock<IHttpContextAccessor> _httpContextAccessorMock;
-        private Mock<LinkGenerator> _linkGeneratorMock;
         
         [SetUp]
         public void Setup()
@@ -38,7 +37,6 @@ namespace Registry.Web.Test
             _authManagerMock = new Mock<IAuthManager>();
             _datasetManagerMock = new Mock<IDatasetsManager>();
             _httpContextAccessorMock = new Mock<IHttpContextAccessor>();
-            _linkGeneratorMock = new Mock<LinkGenerator>();
 
             _organizationsManagerLogger = new Logger<OrganizationsManager>(LoggerFactory.Create(builder => builder.AddConsole()));
 
@@ -53,7 +51,7 @@ namespace Registry.Web.Test
             _authManagerMock.Setup(o => o.IsUserAdmin()).Returns(Task.FromResult(true));
 
             var webUtils = new WebUtils(_authManagerMock.Object, context, _appSettingsMock.Object,
-                _httpContextAccessorMock.Object, _linkGeneratorMock.Object);
+                _httpContextAccessorMock.Object);
 
             var organizationsManager =
                 new OrganizationsManager(_authManagerMock.Object, context, webUtils, _datasetManagerMock.Object, _organizationsManagerLogger);

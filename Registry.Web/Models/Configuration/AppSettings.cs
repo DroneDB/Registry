@@ -85,9 +85,9 @@ namespace Registry.Web.Models.Configuration
         public string AuthCookieName { get; set; }
 
         /// <summary>
-        /// Overrides current host name
+        /// Overrides the external url
         /// </summary>
-        public string HostNameOverride { get; set; }
+        public string ExternalUrlOverride { get; set; }
 
         /// <summary>
         /// External authentication provider url

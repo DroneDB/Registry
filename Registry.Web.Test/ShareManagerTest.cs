@@ -50,7 +50,6 @@ namespace Registry.Web.Test
         private Mock<IDatasetsManager> _datasetsManagerMock;
         private Mock<IChunkedUploadManager> _chunkedUploadManagerMock;
         private Mock<IHttpContextAccessor> _httpContextAccessorMock;
-        private Mock<LinkGenerator> _linkGeneratorMock;
         private Mock<ICacheManager> _cacheManagerMock;
 
         private INameGenerator _nameGenerator;
@@ -85,7 +84,6 @@ namespace Registry.Web.Test
             _datasetsManagerMock = new Mock<IDatasetsManager>();
             _chunkedUploadManagerMock = new Mock<IChunkedUploadManager>();
             _httpContextAccessorMock = new Mock<IHttpContextAccessor>();
-            _linkGeneratorMock = new Mock<LinkGenerator>();
 
             _cacheManagerMock = new Mock<ICacheManager>();
             _passwordHasher = new PasswordHasher();
@@ -154,7 +152,7 @@ namespace Registry.Web.Test
 
             var ddbFactory = new DdbManager(_appSettingsMock.Object, _ddbFactoryLogger);
             var webUtils = new WebUtils(_authManagerMock.Object, context, _appSettingsMock.Object,
-                _httpContextAccessorMock.Object, _linkGeneratorMock.Object);
+                _httpContextAccessorMock.Object);
 
             var objectManager = new ObjectsManager(_objectManagerLogger, context, sys, _chunkedUploadManagerMock.Object, 
                 _appSettingsMock.Object, ddbFactory, webUtils, _authManagerMock.Object, _cacheManagerMock.Object);
@@ -232,7 +230,7 @@ namespace Registry.Web.Test
 
             var ddbFactory = new DdbManager(_appSettingsMock.Object, _ddbFactoryLogger);
             var webUtils = new WebUtils(_authManagerMock.Object, context, _appSettingsMock.Object,
-                _httpContextAccessorMock.Object, _linkGeneratorMock.Object);
+                _httpContextAccessorMock.Object);
 
             var objectManager = new ObjectsManager(_objectManagerLogger, context, sys, _chunkedUploadManagerMock.Object, 
                 _appSettingsMock.Object, ddbFactory, webUtils, _authManagerMock.Object, _cacheManagerMock.Object);
@@ -348,7 +346,7 @@ namespace Registry.Web.Test
 
             var ddbFactory = new DdbManager(_appSettingsMock.Object, _ddbFactoryLogger);
             var webUtils = new WebUtils(_authManagerMock.Object, context, _appSettingsMock.Object,
-                _httpContextAccessorMock.Object, _linkGeneratorMock.Object);
+                _httpContextAccessorMock.Object);
 
             var objectManager = new ObjectsManager(_objectManagerLogger, context, sys, _chunkedUploadManagerMock.Object, 
                 _appSettingsMock.Object, ddbFactory, webUtils, _authManagerMock.Object, _cacheManagerMock.Object);

@@ -24,7 +24,6 @@ using Registry.Web.Utilities;
 namespace Registry.Web.Controllers
 {
 
-    [Authorize]
     [ApiController]
     [Route(RoutesHelper.OrganizationsRadix + "/" + RoutesHelper.OrganizationSlug + "/" + RoutesHelper.DatasetRadix + "/" + RoutesHelper.DatasetSlug)]
     public class ObjectsController : ControllerBaseEx

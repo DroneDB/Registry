@@ -102,7 +102,7 @@ namespace Registry.Web.Services.Adapters
             if (res == null)
                 throw new NotFoundException($"Cannot find '{path}'");
 
-            var bucketName = string.Format(BucketNameFormat, orgSlug, internalRef.ToString());
+            var bucketName = GetBucketName(orgSlug, internalRef);
 
             _logger.LogInformation($"Using bucket '{bucketName}'");
 
@@ -170,7 +170,7 @@ namespace Registry.Web.Services.Adapters
 
             _logger.LogInformation($"In '{orgSlug}/{dsSlug}'");
 
-            var bucketName = string.Format(BucketNameFormat, orgSlug, ds.InternalRef.ToString());
+            var bucketName = GetBucketName(orgSlug, ds.InternalRef);
 
             _logger.LogInformation($"Using bucket '{bucketName}'");
 
@@ -238,7 +238,7 @@ namespace Registry.Web.Services.Adapters
 
             _logger.LogInformation($"In '{orgSlug}/{dsSlug}'");
 
-            var bucketName = string.Format(BucketNameFormat, orgSlug, ds.InternalRef.ToString());
+            var bucketName = GetBucketName(orgSlug, ds.InternalRef);
 
             _logger.LogInformation($"Using bucket '{bucketName}'");
 
@@ -272,7 +272,7 @@ namespace Registry.Web.Services.Adapters
 
             _logger.LogInformation($"In DeleteAll('{orgSlug}/{dsSlug}')");
 
-            var bucketName = string.Format(BucketNameFormat, orgSlug, ds.InternalRef.ToString());
+            var bucketName = GetBucketName(orgSlug, ds.InternalRef);
 
             _logger.LogInformation($"Using bucket '{bucketName}'");
 
@@ -284,6 +284,7 @@ namespace Registry.Web.Services.Adapters
             }
             else
             {
+
                 _logger.LogInformation("Deleting bucket");
                 await _objectSystem.RemoveBucketAsync(bucketName);
                 _logger.LogInformation("Bucket deleted");
@@ -595,7 +596,7 @@ namespace Registry.Web.Services.Adapters
 
         private async Task WriteObjectContentStream(string orgSlug, Guid internalRef, string path, Stream stream)
         {
-            var bucketName = string.Format(BucketNameFormat, orgSlug, internalRef.ToString());
+            var bucketName = GetBucketName(orgSlug, internalRef);
 
             _logger.LogInformation($"Using bucket '{bucketName}'");
 
@@ -621,5 +622,10 @@ namespace Registry.Web.Services.Adapters
         }
 
         #endregion
+
+        private string GetBucketName(string orgSlug, Guid internalRef)
+        {
+            return string.Format(BucketNameFormat, orgSlug, internalRef.ToString()).ToLowerInvariant();
+        }
     }
 }
