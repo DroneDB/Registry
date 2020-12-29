@@ -113,10 +113,13 @@ namespace Registry.Web.Services.Adapters
             if (ds.InternalRef == Guid.Empty)
                 ds.InternalRef = Guid.NewGuid();
 
+            var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
+            ds.Meta = ddb.ChangeAttributes(ds.Meta);
+            
             org.Datasets.Add(ds);
 
             await _context.SaveChangesAsync();
-
+            
             return ds.ToDto();
 
         }
