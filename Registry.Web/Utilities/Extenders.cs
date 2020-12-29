@@ -43,7 +43,7 @@ namespace Registry.Web.Utilities
 
         public static Dataset ToEntity(this DatasetDto dataset)
         {
-            return new Dataset
+            var entity = new Dataset
             {
                 Id = dataset.Id,
                 Slug = dataset.Slug,
@@ -56,6 +56,8 @@ namespace Registry.Web.Utilities
                 ObjectsCount = dataset.ObjectsCount,
                 Size = dataset.Size
             };
+            entity.IsPublic = dataset.IsPublic;
+            return entity;
         }
 
         public static DatasetDto ToDto(this Dataset dataset)
@@ -71,7 +73,8 @@ namespace Registry.Web.Utilities
                 License = dataset.License,
                 Meta = dataset.Meta,
                 ObjectsCount = dataset.ObjectsCount,
-                Size = dataset.Size
+                Size = dataset.Size,
+                IsPublic = dataset.IsPublic
             };
         }
 

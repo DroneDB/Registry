@@ -28,9 +28,6 @@ namespace Registry.Web.Data.Models
         public int ObjectsCount { get; set; }
         public DateTime LastEdit { get; set; }
 
-        [Column("Meta")]
-        public string MetaRaw { get; set; }
-        
         public string PasswordHash { get; set; }
 
         [Required]
@@ -42,16 +39,16 @@ namespace Registry.Web.Data.Models
 
         #region Meta
 
-        [NotMapped]
-        public Dictionary<string, object> Meta
+        [Column("Meta")]
+        public string MetaRaw
         {
-            get => string.IsNullOrWhiteSpace(MetaRaw)
-                    ? new Dictionary<string, object>()
-                    : JsonConvert.DeserializeObject<Dictionary<string, object>>(MetaRaw);
-
-            set => MetaRaw = value == null ? null : JsonConvert.SerializeObject(value);
+            get => JsonConvert.SerializeObject(Meta);
+            set => Meta = JsonConvert.DeserializeObject<Dictionary<string, object>>(value);
         }
-        
+
+        [NotMapped]
+        public Dictionary<string, object> Meta { get; set; }
+
         private const string PublicMetaField = "public";
 
         [NotMapped]
@@ -63,20 +60,28 @@ namespace Registry.Web.Data.Models
 
         private void SafeSetMetaField<T>(string field, T val)
         {
-            if (!Meta.ContainsKey(field))
-                Meta.Add(field, val);
-            else
+            if (Meta == null)
+            {
+                Meta = new Dictionary<string, object>
+                {
+                    { field, val }
+                };
+                return;
+            }
+
+            if (Meta.ContainsKey(field))
                 Meta[field] = val;
-            
+            else
+                Meta.Add(field, val);
         }
 
         private T SafeGetMetaField<T>(string field)
         {
-            var res = Meta.SafeGetValue(field);
+            var res = Meta?.SafeGetValue(field);
             if (!(res is T)) return default;
             return (T)res;
         }
-#endregion
+        #endregion
 
 
 

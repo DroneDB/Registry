@@ -14,8 +14,10 @@ using Microsoft.Extensions.Options;
 using Moq;
 using Newtonsoft.Json;
 using NUnit.Framework;
+using Registry.Adapters.DroneDB;
 using Registry.Adapters.ObjectSystem;
 using Registry.Common;
+using Registry.Ports.DroneDB;
 using Registry.Ports.ObjectSystem;
 using Registry.Web.Data;
 using Registry.Web.Data.Models;
@@ -146,6 +148,8 @@ namespace Registry.Web.Test
             _authManagerMock.Setup(o => o.GetCurrentUser()).Returns(Task.FromResult(user));
             _authManagerMock.Setup(o => o.UserExists(user.Id)).Returns(Task.FromResult(true));
             _authManagerMock.Setup(o => o.SafeGetCurrentUserName()).Returns(Task.FromResult(userName));
+            _ddbFactoryMock.Setup(x => x.Get(It.IsAny<string>(), It.IsAny<Guid>()))
+                .Returns(() => new Mock<IDdb>().Object);
 
             var sys = new PhysicalObjectSystem(Path.Combine(test.TestFolder, StorageFolder));
             sys.SyncBucket($"{MagicStrings.PublicOrganizationSlug}-{MagicStrings.DefaultDatasetSlug}");
@@ -224,6 +228,8 @@ namespace Registry.Web.Test
                 Email = "admin@example.com"
             }));
             _authManagerMock.Setup(o => o.SafeGetCurrentUserName()).Returns(Task.FromResult(userName));
+            _ddbFactoryMock.Setup(x => x.Get(It.IsAny<string>(), It.IsAny<Guid>()))
+                .Returns(() => new Mock<IDdb>().Object);
 
             var sys = new PhysicalObjectSystem(Path.Combine(test.TestFolder, StorageFolder));
             sys.SyncBucket($"{MagicStrings.PublicOrganizationSlug}-{MagicStrings.DefaultDatasetSlug}");
@@ -340,6 +346,8 @@ namespace Registry.Web.Test
                 Email = "admin@example.com"
             }));
             _authManagerMock.Setup(o => o.SafeGetCurrentUserName()).Returns(Task.FromResult(userName));
+            _ddbFactoryMock.Setup(x => x.Get(It.IsAny<string>(), It.IsAny<Guid>()))
+                .Returns(() => new Mock<IDdb>().Object);
 
             var sys = new PhysicalObjectSystem(Path.Combine(test.TestFolder, StorageFolder));
             sys.SyncBucket($"{MagicStrings.PublicOrganizationSlug}-{MagicStrings.DefaultDatasetSlug}");
