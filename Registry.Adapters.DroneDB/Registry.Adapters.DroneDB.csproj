@@ -17,4 +17,8 @@
     <ProjectReference Include="..\Registry.Ports\Registry.Ports.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <Folder Include="Models\" />
+  </ItemGroup>
+
 </Project>
