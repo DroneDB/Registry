@@ -6,3 +6,6 @@
 
 **/node_modules
 **/bin
+docker
+**/bin
+**/obj
