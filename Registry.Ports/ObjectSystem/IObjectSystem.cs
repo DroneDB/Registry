@@ -4,6 +4,7 @@ using System.IO;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
+using Registry.Common.Model;
 using Registry.Ports.ObjectSystem.Model;
 
 namespace Registry.Ports.ObjectSystem
@@ -132,7 +133,7 @@ namespace Registry.Ports.ObjectSystem
         /// <param name="location">Region</param>
         /// <param name="cancellationToken">Optional cancellation token to cancel the operation</param>
         /// <returns>Task</returns>
-        Task MakeBucketAsync(string bucketName, string location, CancellationToken cancellationToken = default);
+        Task MakeBucketAsync(string bucketName, string location = null, CancellationToken cancellationToken = default);
 
         /// <summary>
         /// List all objects in a bucket
@@ -153,9 +154,10 @@ namespace Registry.Ports.ObjectSystem
         /// Remove a bucket
         /// </summary>
         /// <param name="bucketName">Name of bucket to remove</param>
+        /// <param name="force">If bucket is full deletes all the objects first</param>
         /// <param name="cancellationToken">Optional cancellation token to cancel the operation</param>
         /// <returns>Task</returns>
-        Task RemoveBucketAsync(string bucketName, CancellationToken cancellationToken = default);
+        Task RemoveBucketAsync(string bucketName, bool force = true, CancellationToken cancellationToken = default);
 
         /// <summary>
         /// List all objects non-recursively in a bucket with a given prefix, optionally emulating a directory
@@ -183,6 +185,12 @@ namespace Registry.Ports.ObjectSystem
         /// <param name="cancellationToken">Optional cancellation token to cancel the operation</param>
         /// <returns>Returns Task that sets the current bucket policy</returns>
         Task SetPolicyAsync(string bucketName, string policyJson, CancellationToken cancellationToken = default);
+
+        /// <summary>
+        /// Gets the storage info (if available)
+        /// </summary>
+        /// <returns></returns>
+        StorageInfo GetStorageInfo();
 
     }
 }

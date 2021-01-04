@@ -4,6 +4,7 @@ using System.Linq;
 using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
+using Microsoft.AspNetCore.Identity;
 using Newtonsoft.Json;
 using Registry.Ports.DroneDB;
 using Registry.Ports.DroneDB.Models;
@@ -42,7 +43,7 @@ namespace Registry.Web.Utilities
 
         public static Dataset ToEntity(this DatasetDto dataset)
         {
-            return new Dataset
+            var entity = new Dataset
             {
                 Id = dataset.Id,
                 Slug = dataset.Slug,
@@ -53,9 +54,10 @@ namespace Registry.Web.Utilities
                 License = dataset.License,
                 Meta = dataset.Meta,
                 ObjectsCount = dataset.ObjectsCount,
-                Size = dataset.Size,
-                IsPublic = dataset.IsPublic
+                Size = dataset.Size
             };
+            entity.IsPublic = dataset.IsPublic;
+            return entity;
         }
 
         public static DatasetDto ToDto(this Dataset dataset)
@@ -71,7 +73,8 @@ namespace Registry.Web.Utilities
                 License = dataset.License,
                 Meta = dataset.Meta,
                 ObjectsCount = dataset.ObjectsCount,
-                Size = dataset.Size
+                Size = dataset.Size,
+                IsPublic = dataset.IsPublic
             };
         }
 
@@ -190,6 +193,17 @@ namespace Registry.Web.Utilities
         {
             // Just don't ask please
             return JsonConvert.DeserializeObject<T>(JsonConvert.SerializeObject(obj));
+        }
+
+        public static string ToErrorString(this IEnumerable<IdentityError> results)
+        {
+            if (results == null || !results.Any()) return "No error details";
+            return string.Join(", ", results.Select(item => $"[{item.Code}: '{item.Description}']"));
+        }
+
+        public static string ToPrintableList(this IEnumerable<string> arr)
+        {
+            return arr == null ? "[]" : $"[{string.Join(", ", arr)}]";
         }
 
     }

@@ -1,0 +1,3 @@
+[submodule "Registry.Web/ClientApp"]
+	path = Registry.Web/ClientApp
+	url = https://github.com/DroneDB/Hub.git

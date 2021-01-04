@@ -21,7 +21,7 @@ namespace Registry.Web.Services.Adapters
 
         public async Task<User> GetCurrentUser()
         {
-            var userId = _httpContextAccessor.HttpContext.User.Claims.FirstOrDefault(c => c.Type == ClaimTypes.Name)?.Value;
+            var userId = _httpContextAccessor.HttpContext?.User.Claims.FirstOrDefault(c => c.Type == ClaimTypes.Name)?.Value;
 
             if (userId == null) return null;
 

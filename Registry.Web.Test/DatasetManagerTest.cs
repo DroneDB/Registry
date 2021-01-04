@@ -31,7 +31,6 @@ namespace Registry.Web.Test
         private Mock<IDdbManager> _ddbFactoryMock;
         private Mock<IObjectsManager> _objectsManagerMock;
         private Mock<IHttpContextAccessor> _httpContextAccessorMock;
-        private Mock<LinkGenerator> _linkGeneratorMock;
         private IPasswordHasher _passwordHasher;
 
         [SetUp]
@@ -43,7 +42,6 @@ namespace Registry.Web.Test
             _ddbFactoryMock = new Mock<IDdbManager>();
             _objectsManagerMock = new Mock<IObjectsManager>();
             _httpContextAccessorMock = new Mock<IHttpContextAccessor>();
-            _linkGeneratorMock = new Mock<LinkGenerator>();
             _datasetsManagerLogger = new Logger<DatasetsManager>(LoggerFactory.Create(builder => builder.AddConsole()));
             _passwordHasher = new PasswordHasher();
         }
@@ -56,7 +54,7 @@ namespace Registry.Web.Test
             _appSettingsMock.Setup(o => o.Value).Returns(_settings);
             _authManagerMock.Setup(o => o.IsUserAdmin()).Returns(Task.FromResult(true));
             
-            var utils = new WebUtils(_authManagerMock.Object, context, _appSettingsMock.Object, _httpContextAccessorMock.Object, _linkGeneratorMock.Object);
+            var utils = new WebUtils(_authManagerMock.Object, context, _appSettingsMock.Object, _httpContextAccessorMock.Object);
 
             var datasetsManager = new DatasetsManager(context, utils, _datasetsManagerLogger, _objectsManagerMock.Object, _passwordHasher, _ddbFactoryMock.Object);
 
@@ -141,8 +139,10 @@ namespace Registry.Web.Test
                     Description = "Default dataset",
                     IsPublic = true,
                     CreationDate = DateTime.Now,
-                    LastEdit = DateTime.Now
+                    LastEdit = DateTime.Now,
+                    InternalRef = Guid.Parse("0a223495-84a0-4c15-b425-c7ef88110e75")
                 };
+
                 entity.Datasets = new List<Dataset> { ds };
 
                 context.Organizations.Add(entity);

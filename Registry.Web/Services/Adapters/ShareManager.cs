@@ -271,7 +271,8 @@ namespace Registry.Web.Services.Adapters
                 {
                     Slug = dsSlug,
                     Name = parameters.DatasetName,
-                    Description = parameters.DatasetDescription
+                    Description = parameters.DatasetDescription,
+                    IsPublic = true
                 });
 
                 dataset = await _utils.GetDataset(orgSlug, dsSlug);
@@ -317,7 +318,8 @@ namespace Registry.Web.Services.Adapters
                     {
                         Slug = tag.DatasetSlug,
                         Name = parameters.DatasetName,
-                        Description = parameters.DatasetDescription
+                        Description = parameters.DatasetDescription,
+                        IsPublic = true
                     });
                     dataset = await _utils.GetDataset(tag.OrganizationSlug, tag.DatasetSlug);
 

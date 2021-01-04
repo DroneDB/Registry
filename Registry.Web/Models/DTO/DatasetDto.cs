@@ -17,10 +17,10 @@ namespace Registry.Web.Models.DTO
         public string Description { get; set; }
         public DateTime CreationDate { get; set; }
         public string License { get; set; }
-        public int Size { get; set; }
+        public long Size { get; set; }
         public int ObjectsCount { get; set; }
         public DateTime LastEdit { get; set; }
-        public string Meta { get; set; }
+        public Dictionary<string, object> Meta { get; set; }
         public bool IsPublic { get; set; }
 
         public string Password { get; set; }

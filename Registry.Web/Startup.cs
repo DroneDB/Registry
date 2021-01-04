@@ -5,18 +5,22 @@ using System.IO;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
+using HealthChecks.UI.Client;
 using Microsoft.AspNet.OData.Builder;
 using Microsoft.AspNet.OData.Extensions;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Registry.Web.Models;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Http.Features;
 using Microsoft.AspNetCore.HttpsPolicy;
 using Microsoft.AspNetCore.Identity;
+using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.StaticFiles.Infrastructure;
 using Microsoft.CodeAnalysis.Options;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Caching.Distributed;
@@ -29,6 +33,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OData.Edm;
+using Microsoft.OpenApi.Models;
 using Registry.Adapters.DroneDB;
 using Registry.Adapters.ObjectSystem;
 using Registry.Common;
@@ -36,6 +41,7 @@ using Registry.Ports.DroneDB;
 using Registry.Ports.ObjectSystem;
 using Registry.Web.Data;
 using Registry.Web.Data.Models;
+using Registry.Web.HealthChecks;
 using Registry.Web.Models.Configuration;
 using Registry.Web.Models.DTO;
 using Registry.Web.Services;
@@ -63,7 +69,34 @@ namespace Registry.Web
             services.AddCors();
             services.AddControllers();
 
+            services.AddSwaggerGen(c =>
+            {
+                c.SwaggerDoc("v1", new OpenApiInfo
+                {
+                    Version = "v1",
+                    Title = "Registry API",
+                    Description = "API to manage DroneDB Registry",
+                    Contact = new OpenApiContact
+                    {
+                        Name = "Luca Di Leo",
+                        Email = "ldileo@digipa.it",
+                        Url = new Uri("https://digipa.it/"),
+                    },
+                    License = new OpenApiLicense
+                    {
+                        Name = "Use under Business Source License",
+                        Url = new Uri("https://github.com/DroneDB/Registry/blob/master/LICENSE.md"),
+                    }
+                });
+                c.DocumentFilter<BasePathDocumentFilter>();
+            });
+
             services.AddMvcCore().AddNewtonsoftJson();
+
+            services.AddSpaStaticFiles(config =>
+            {
+                config.RootPath = "ClientApp/build";
+            });
 
             // Let's use a strongly typed class for settings
             var appSettingsSection = Configuration.GetSection("AppSettings");
@@ -95,7 +128,6 @@ namespace Registry.Web
                 {
                     auth.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
                     auth.DefaultChallengeScheme = JwtBearerDefaults.AuthenticationScheme;
-
                 })
                 .AddJwtBearer(jwt =>
                 {
@@ -140,6 +172,19 @@ namespace Registry.Web
 
             RegisterCacheProvider(services, appSettings);
 
+            services.AddHealthChecks()
+                .AddCheck<CacheHealthCheck>("Cache health check", null, new[] { "service" })
+                .AddCheck<DdbHealthCheck>("DroneDB health check", null, new[] { "service" })
+                .AddCheck<UserManagerHealthCheck>("User manager health check", null, new[] { "database" })
+                .AddDbContextCheck<RegistryContext>("Registry database health check", null, new[] { "database" })
+                .AddDbContextCheck<ApplicationDbContext>("Registry identity database health check", null,
+                    new[] { "database" })
+                .AddCheck<ObjectSystemHealthCheck>("Object system health check", null, new[] { "storage" })
+                .AddDiskSpaceHealthCheck(appSettings.UploadPath, "Upload path space health check", null,
+                    new[] { "storage" })
+                .AddDiskSpaceHealthCheck(appSettings.DdbStoragePath, "Ddb storage path space health check", null,
+                    new[] { "storage" });
+
             /*
              * NOTE about services lifetime:
              *
@@ -168,6 +213,8 @@ namespace Registry.Web
             services.AddScoped<IObjectsManager, ObjectsManager>();
             services.AddScoped<IShareManager, ShareManager>();
             services.AddScoped<IDdbManager, DdbManager>();
+            services.AddScoped<ISystemManager, SystemManager>();
+
             services.AddSingleton<IPasswordHasher, PasswordHasher>();
             services.AddSingleton<IBatchTokenGenerator, BatchTokenGenerator>();
             services.AddSingleton<INameGenerator, NameGenerator>();
@@ -188,6 +235,134 @@ namespace Registry.Web
 
             // TODO: Enable when needed. Should check return object structure
             // services.AddOData();
+
+        }
+
+        public void Configure(IApplicationBuilder app, IWebHostEnvironment env)
+        {
+
+            if (env.IsDevelopment())
+            {
+                app.UseDeveloperExceptionPage();
+            }
+            else
+            {
+                app.UseHsts();
+            }
+
+            app.UseDefaultFiles();
+            app.UseSpaStaticFiles();
+
+            app.UseSwagger();
+
+            app.UseSwaggerUI(c =>
+            {
+                c.SwaggerEndpoint("/swagger/v1/swagger.json", "Registry API");
+            });
+
+            app.UseRouting();
+
+            // We are permissive now
+            app.UseCors(cors => cors
+                .AllowAnyOrigin()
+                .AllowAnyMethod()
+                .AllowAnyHeader());
+
+            app.UseMiddleware<JwtInCookieMiddleware>();
+
+            app.UseAuthentication();
+            app.UseAuthorization();
+
+            app.UseResponseCompression();
+
+            app.UseMiddleware<TokenManagerMiddleware>();
+
+            app.UseEndpoints(endpoints =>
+            {
+                endpoints.MapControllers();
+
+                endpoints.MapHealthChecks("/quickhealth", new HealthCheckOptions
+                {
+                    Predicate = _ => false
+                }).RequireAuthorization();
+
+                endpoints.MapHealthChecks("/health", new HealthCheckOptions
+                {
+                    ResponseWriter = UIResponseWriter.WriteHealthCheckUIResponse
+                }).RequireAuthorization();
+
+                // TODO: Enable when needed
+                // endpoints.MapODataRoute("odata", "odata", GetEdmModel());
+            });
+
+            app.UseSpa(spa =>
+            {
+                // To learn more about options for serving an Angular SPA from ASP.NET Core,
+                // see https://go.microsoft.com/fwlink/?linkid=864501
+
+                spa.Options.SourcePath = "ClientApp";
+
+                if (env.IsDevelopment())
+                {
+
+                }
+            });
+
+            SetupDatabase(app);
+
+            Initialize(app).Wait();
+
+        }
+
+        private async Task Initialize(IApplicationBuilder app)
+        {
+            using var serviceScope = app.ApplicationServices
+                .GetRequiredService<IServiceScopeFactory>()
+                .CreateScope();
+            var systemManager = serviceScope.ServiceProvider.GetService<ISystemManager>();
+
+            if (systemManager == null)
+                throw new InvalidOperationException("No ISystemManager interface registered, check startup config");
+
+            await systemManager.SyncDdbMeta(null, true);
+
+        }
+        //private IEdmModel GetEdmModel()
+        //{
+        //    var odataBuilder = new ODataConventionModelBuilder();
+        //    odataBuilder.EntitySet<OrganizationDto>("Organizations");
+
+        //    return odataBuilder.GetEdmModel();
+        //}
+
+        // NOTE: Maybe put all this as stated in https://stackoverflow.com/a/55707949
+        private void SetupDatabase(IApplicationBuilder app)
+        {
+            using var serviceScope = app.ApplicationServices
+                .GetRequiredService<IServiceScopeFactory>()
+                .CreateScope();
+            using var applicationDbContext = serviceScope.ServiceProvider.GetService<ApplicationDbContext>();
+
+            if (applicationDbContext == null)
+                throw new InvalidOperationException("Cannot get application db context from service provider");
+
+            if (applicationDbContext.Database.IsSqlite())
+                CommonUtils.EnsureFolderCreated(Configuration.GetConnectionString(IdentityConnectionName));
+
+            applicationDbContext.Database.EnsureCreated();
+
+            using var registryDbContext = serviceScope.ServiceProvider.GetService<RegistryContext>();
+
+            if (registryDbContext == null)
+                throw new InvalidOperationException("Cannot get registry db context from service provider");
+
+            if (registryDbContext.Database.IsSqlite())
+                CommonUtils.EnsureFolderCreated(Configuration.GetConnectionString(RegistryConnectionName));
+
+            registryDbContext.Database.EnsureCreated();
+
+            CreateInitialData(registryDbContext);
+            CreateDefaultAdmin(registryDbContext, serviceScope.ServiceProvider).Wait();
 
         }
 
@@ -276,13 +451,16 @@ namespace Registry.Web
 
         private void ConfigureDbProvider<T>(IServiceCollection services, DbProvider provider, string connectionStringName) where T : DbContext
         {
+
+            var connectionString = Configuration.GetConnectionString(connectionStringName);
+
             switch (provider)
             {
                 case DbProvider.Sqlite:
 
                     services.AddDbContext<T>(options =>
                         options.UseSqlite(
-                            Configuration.GetConnectionString(connectionStringName)));
+                            connectionString));
 
                     break;
 
@@ -290,7 +468,9 @@ namespace Registry.Web
 
                     services.AddDbContext<T>(options =>
                         options.UseMySql(
-                            Configuration.GetConnectionString(connectionStringName), builder => builder.EnableRetryOnFailure()));
+                            connectionString,
+                            ServerVersion.AutoDetect(connectionString),
+                            builder => builder.EnableRetryOnFailure()));
 
                     break;
 
@@ -298,95 +478,13 @@ namespace Registry.Web
 
                     services.AddDbContext<T>(options =>
                         options.UseSqlServer(
-                            Configuration.GetConnectionString(connectionStringName)));
+                            connectionString));
 
                     break;
 
                 default:
                     throw new ArgumentOutOfRangeException($"Unrecognised provider: '{provider}'");
             }
-        }
-
-        public void Configure(IApplicationBuilder app, IWebHostEnvironment env)
-        {
-
-            if (env.IsDevelopment())
-            {
-                app.UseDeveloperExceptionPage();
-            }
-            else
-            {
-                app.UseExceptionHandler("/Error");
-                app.UseHsts();
-            }
-
-            app.UseDefaultFiles();
-            app.UseStaticFiles();
-
-            app.UseRouting();
-
-            // We are permissive now
-            app.UseCors(cors => cors
-                .AllowAnyOrigin()
-                .AllowAnyMethod()
-                .AllowAnyHeader());
-
-            app.UseMiddleware<JwtInCookieMiddleware>();
-
-            app.UseAuthentication();
-            app.UseAuthorization();
-
-            app.UseResponseCompression();
-
-            app.UseMiddleware<TokenManagerMiddleware>();
-
-            app.UseEndpoints(endpoints =>
-            {
-                endpoints.MapControllers();
-                // TODO: Enable when needed
-                // endpoints.MapODataRoute("odata", "odata", GetEdmModel());
-            });
-
-            SetupDatabase(app);
-
-        }
-        //private IEdmModel GetEdmModel()
-        //{
-        //    var odataBuilder = new ODataConventionModelBuilder();
-        //    odataBuilder.EntitySet<OrganizationDto>("Organizations");
-
-        //    return odataBuilder.GetEdmModel();
-        //}
-
-        // NOTE: Maybe put all this as stated in https://stackoverflow.com/a/55707949
-        private void SetupDatabase(IApplicationBuilder app)
-        {
-            using var serviceScope = app.ApplicationServices
-                .GetRequiredService<IServiceScopeFactory>()
-                .CreateScope();
-            using var applicationDbContext = serviceScope.ServiceProvider.GetService<ApplicationDbContext>();
-
-            if (applicationDbContext == null)
-                throw new InvalidOperationException("Cannot get application db context from service provider");
-
-            if (applicationDbContext.Database.IsSqlite()) 
-                CommonUtils.EnsureFolderCreated(Configuration.GetConnectionString(IdentityConnectionName));
-
-            applicationDbContext.Database.EnsureCreated();
-
-            using var registryDbContext = serviceScope.ServiceProvider.GetService<RegistryContext>();
-
-            if (registryDbContext == null)
-                throw new InvalidOperationException("Cannot get registry db context from service provider");
-
-            if (registryDbContext.Database.IsSqlite())
-                CommonUtils.EnsureFolderCreated(Configuration.GetConnectionString(RegistryConnectionName));
-
-            registryDbContext.Database.EnsureCreated();
-
-            CreateInitialData(registryDbContext);
-            CreateDefaultAdmin(registryDbContext, serviceScope.ServiceProvider).Wait();
-
         }
 
         private void CreateInitialData(RegistryContext context)
@@ -412,7 +510,8 @@ namespace Registry.Web
                     Description = "Default dataset",
                     IsPublic = true,
                     CreationDate = DateTime.Now,
-                    LastEdit = DateTime.Now
+                    LastEdit = DateTime.Now,
+                    InternalRef = Guid.NewGuid()
                 };
                 entity.Datasets = new List<Dataset> { ds };
 
@@ -442,7 +541,10 @@ namespace Registry.Web
             {
                 // first we create Admin role  
                 var role = new IdentityRole { Name = ApplicationDbContext.AdminRoleName };
-                await roleManager.CreateAsync(role);
+                var r = await roleManager.CreateAsync(role);
+
+                if (!r.Succeeded)
+                    throw new InvalidOperationException("Cannot create admin role: " + r?.Errors.ToErrorString());
 
                 var defaultAdmin = appSettings.Value.DefaultAdmin;
                 var user = new User
@@ -452,10 +554,12 @@ namespace Registry.Web
                 };
 
                 var usrRes = await usersManager.CreateAsync(user, defaultAdmin.Password);
-                if (usrRes.Succeeded)
-                {
-                    await usersManager.AddToRoleAsync(user, ApplicationDbContext.AdminRoleName);
-                }
+                if (!usrRes.Succeeded)
+                    throw new InvalidOperationException("Cannot create default admin: " + usrRes.Errors?.ToErrorString());
+
+                var res = await usersManager.AddToRoleAsync(user, ApplicationDbContext.AdminRoleName);
+                if (!res.Succeeded)
+                    throw new InvalidOperationException("Cannot add admin to admin role: " + res.Errors?.ToErrorString());
 
                 var entity = new Organization
                 {
@@ -470,7 +574,6 @@ namespace Registry.Web
 
                 await context.Organizations.AddAsync(entity);
                 await context.SaveChangesAsync();
-
             }
         }
 

@@ -14,9 +14,9 @@ namespace Registry.Web.Services.Adapters
             return null;
         }
 
-        public async Task<byte[]> GetAsync(string key, CancellationToken token = new CancellationToken())
+        public Task<byte[]> GetAsync(string key, CancellationToken token = new CancellationToken())
         {
-            return null;
+            return Task.FromResult((byte[])null);
         }
 
         public void Set(string key, byte[] value, DistributedCacheEntryOptions options)
@@ -24,10 +24,10 @@ namespace Registry.Web.Services.Adapters
             
         }
 
-        public async Task SetAsync(string key, byte[] value, DistributedCacheEntryOptions options,
+        public Task SetAsync(string key, byte[] value, DistributedCacheEntryOptions options,
             CancellationToken token = new CancellationToken())
         {
-            
+            return new Task(() => {});
         }
 
         public void Refresh(string key)
@@ -35,9 +35,9 @@ namespace Registry.Web.Services.Adapters
             
         }
 
-        public async Task RefreshAsync(string key, CancellationToken token = new CancellationToken())
+        public Task RefreshAsync(string key, CancellationToken token = new CancellationToken())
         {
-            
+            return new Task(() => { });
         }
 
         public void Remove(string key)
@@ -45,9 +45,9 @@ namespace Registry.Web.Services.Adapters
             
         }
 
-        public async Task RemoveAsync(string key, CancellationToken token = new CancellationToken())
+        public Task RemoveAsync(string key, CancellationToken token = new CancellationToken())
         {
-            
+            return new Task(() => { });
         }
     }
 }

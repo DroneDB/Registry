@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Net;
 using System.Text;
@@ -10,6 +11,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
+using Newtonsoft.Json;
 using Registry.Common;
 using Registry.Web.Controllers;
 using Registry.Web.Data;
@@ -34,19 +36,15 @@ namespace Registry.Web.Services.Adapters
         private readonly RegistryContext _context;
         private readonly AppSettings _settings;
         private readonly IHttpContextAccessor _accessor;
-        // NOTE: This could be removed, we don't do it yet because reasons
-        private readonly LinkGenerator _generator;
 
         public WebUtils(IAuthManager authManager,
             RegistryContext context,
             IOptions<AppSettings> settings,
-            IHttpContextAccessor accessor,
-            LinkGenerator generator)
+            IHttpContextAccessor accessor)
         {
             _authManager = authManager;
             _context = context;
             _accessor = accessor;
-            _generator = generator;
             _settings = settings.Value;
         }
 
@@ -66,7 +64,7 @@ namespace Registry.Web.Services.Adapters
                 return safe ? (Organization)null :
                     throw new NotFoundException("Organization not found");
 
-            if (checkOwnership && !await _authManager.IsUserAdmin())
+            if (!org.IsPublic && checkOwnership && !await _authManager.IsUserAdmin())
             {
                 var currentUser = await _authManager.GetCurrentUser();
 
@@ -90,14 +88,38 @@ namespace Registry.Web.Services.Adapters
             if (!dsSlug.IsValidSlug())
                 throw new BadRequestException("Invalid dataset id");
 
-            var org = await GetOrganization(orgSlug, checkOwnership: checkOwnership);
+            if (string.IsNullOrWhiteSpace(orgSlug))
+                throw new BadRequestException("Missing organization id");
 
+            if (!orgSlug.IsValidSlug())
+                throw new BadRequestException("Invalid organization id");
+
+            var org = _context.Organizations
+                .Include(item => item.Datasets)
+                .FirstOrDefault(item => item.Slug == orgSlug);
+
+            if (org == null)
+                throw new NotFoundException("Organization not found");
+            
             var dataset = org.Datasets.FirstOrDefault(item => item.Slug == dsSlug);
 
             if (dataset == null)
             {
                 if (retNullIfNotFound) return null;
+
                 throw new NotFoundException("Cannot find dataset");
+            }
+
+            if (!dataset.IsPublic && checkOwnership && !await _authManager.IsUserAdmin())
+            {
+                var currentUser = await _authManager.GetCurrentUser();
+
+                if (currentUser == null)
+                    throw new UnauthorizedException("Invalid user");
+
+                if (org.OwnerId != currentUser.Id && org.OwnerId != null && !org.IsPublic)
+                    throw new UnauthorizedException("This organization does not belong to the current user");
+
             }
 
             return dataset;
@@ -131,20 +153,38 @@ namespace Registry.Web.Services.Adapters
                 Depth = 0,
                 Size = dataset.Size,
                 Path = GenerateDatasetUrl(dataset),
-                Type = EntryType.DroneDb
+                Type = EntryType.DroneDb,
+                Meta = dataset.Meta
             };
         }
 
-        private string GenerateDatasetUrl(Dataset dataset)
+        public string GenerateDatasetUrl(Dataset dataset)
         {
 
-            var context = _accessor.HttpContext;
-            var host = context.Request.Host;
+            var isHttps = false;
+            string host;
 
-            var hostName = !string.IsNullOrWhiteSpace(_settings.HostNameOverride) ? 
-                _settings.HostNameOverride : host.ToString();
-            
-            var scheme = context.Request.IsHttps ? "ddb" : "ddb+unsafe";
+            if (!string.IsNullOrWhiteSpace(_settings.ExternalUrlOverride))
+            {
+
+                var uri = new Uri(_settings.ExternalUrlOverride);
+
+                isHttps = uri.Scheme.ToLowerInvariant() == "https";
+                host = uri.Host;
+
+                // Mmmm
+                if (uri.Port != 443 && uri.Port != 80)
+                    host += ":" + uri.Port;
+
+            }
+            else
+            {
+                var context = _accessor.HttpContext;
+                host = context?.Request.Host.ToString() ?? "localhost";
+                isHttps = context?.Request.IsHttps ?? false;
+            }
+
+            var scheme = isHttps ? "ddb" : "ddb+unsafe";
 
             var datasetUrl = string.Format($"{scheme}://{host}/{dataset.Organization.Slug}/{dataset.Slug}");
 

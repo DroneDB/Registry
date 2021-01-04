@@ -1,20 +1,21 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFramework>netcoreapp3.1</TargetFramework>
+    <TargetFramework>net5.0</TargetFramework>
 
     <IsPackable>false</IsPackable>
   </PropertyGroup>
 
   <ItemGroup>
     <PackageReference Include="FluentAssertions" Version="5.10.3" />
-    <PackageReference Include="Microsoft.EntityFrameworkCore" Version="3.1.9" />
-    <PackageReference Include="Microsoft.EntityFrameworkCore.InMemory" Version="3.1.9" />
-    <PackageReference Include="Moq" Version="4.14.7" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore" Version="5.0.1" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.InMemory" Version="5.0.1" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Relational" Version="5.0.1" />
+    <PackageReference Include="Moq" Version="4.15.2" />
     <PackageReference Include="NetTopologySuite.Core" Version="1.15.3" />
     <PackageReference Include="nunit" Version="3.12.0" />
     <PackageReference Include="NUnit3TestAdapter" Version="3.17.0" />
-    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="16.7.1" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="16.8.3" />
   </ItemGroup>
 
   <ItemGroup>
@@ -27,7 +28,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <None Include="Data\Ddb\public\default\.ddb\dbase.sqlite">
+    <None Include="Data\Ddb\public\0a223495-84a0-4c15-b425-c7ef88110e75\.ddb\dbase.sqlite">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </None>
   </ItemGroup>

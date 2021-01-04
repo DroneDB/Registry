@@ -14,8 +14,10 @@ using Microsoft.Extensions.Options;
 using Moq;
 using Newtonsoft.Json;
 using NUnit.Framework;
+using Registry.Adapters.DroneDB;
 using Registry.Adapters.ObjectSystem;
 using Registry.Common;
+using Registry.Ports.DroneDB;
 using Registry.Ports.ObjectSystem;
 using Registry.Web.Data;
 using Registry.Web.Data.Models;
@@ -50,7 +52,6 @@ namespace Registry.Web.Test
         private Mock<IDatasetsManager> _datasetsManagerMock;
         private Mock<IChunkedUploadManager> _chunkedUploadManagerMock;
         private Mock<IHttpContextAccessor> _httpContextAccessorMock;
-        private Mock<LinkGenerator> _linkGeneratorMock;
         private Mock<ICacheManager> _cacheManagerMock;
 
         private INameGenerator _nameGenerator;
@@ -85,7 +86,6 @@ namespace Registry.Web.Test
             _datasetsManagerMock = new Mock<IDatasetsManager>();
             _chunkedUploadManagerMock = new Mock<IChunkedUploadManager>();
             _httpContextAccessorMock = new Mock<IHttpContextAccessor>();
-            _linkGeneratorMock = new Mock<LinkGenerator>();
 
             _cacheManagerMock = new Mock<ICacheManager>();
             _passwordHasher = new PasswordHasher();
@@ -148,13 +148,15 @@ namespace Registry.Web.Test
             _authManagerMock.Setup(o => o.GetCurrentUser()).Returns(Task.FromResult(user));
             _authManagerMock.Setup(o => o.UserExists(user.Id)).Returns(Task.FromResult(true));
             _authManagerMock.Setup(o => o.SafeGetCurrentUserName()).Returns(Task.FromResult(userName));
+            _ddbFactoryMock.Setup(x => x.Get(It.IsAny<string>(), It.IsAny<Guid>()))
+                .Returns(() => new Mock<IDdb>().Object);
 
             var sys = new PhysicalObjectSystem(Path.Combine(test.TestFolder, StorageFolder));
             sys.SyncBucket($"{MagicStrings.PublicOrganizationSlug}-{MagicStrings.DefaultDatasetSlug}");
 
             var ddbFactory = new DdbManager(_appSettingsMock.Object, _ddbFactoryLogger);
             var webUtils = new WebUtils(_authManagerMock.Object, context, _appSettingsMock.Object,
-                _httpContextAccessorMock.Object, _linkGeneratorMock.Object);
+                _httpContextAccessorMock.Object);
 
             var objectManager = new ObjectsManager(_objectManagerLogger, context, sys, _chunkedUploadManagerMock.Object, 
                 _appSettingsMock.Object, ddbFactory, webUtils, _authManagerMock.Object, _cacheManagerMock.Object);
@@ -226,13 +228,15 @@ namespace Registry.Web.Test
                 Email = "admin@example.com"
             }));
             _authManagerMock.Setup(o => o.SafeGetCurrentUserName()).Returns(Task.FromResult(userName));
+            _ddbFactoryMock.Setup(x => x.Get(It.IsAny<string>(), It.IsAny<Guid>()))
+                .Returns(() => new Mock<IDdb>().Object);
 
             var sys = new PhysicalObjectSystem(Path.Combine(test.TestFolder, StorageFolder));
             sys.SyncBucket($"{MagicStrings.PublicOrganizationSlug}-{MagicStrings.DefaultDatasetSlug}");
 
             var ddbFactory = new DdbManager(_appSettingsMock.Object, _ddbFactoryLogger);
             var webUtils = new WebUtils(_authManagerMock.Object, context, _appSettingsMock.Object,
-                _httpContextAccessorMock.Object, _linkGeneratorMock.Object);
+                _httpContextAccessorMock.Object);
 
             var objectManager = new ObjectsManager(_objectManagerLogger, context, sys, _chunkedUploadManagerMock.Object, 
                 _appSettingsMock.Object, ddbFactory, webUtils, _authManagerMock.Object, _cacheManagerMock.Object);
@@ -342,13 +346,15 @@ namespace Registry.Web.Test
                 Email = "admin@example.com"
             }));
             _authManagerMock.Setup(o => o.SafeGetCurrentUserName()).Returns(Task.FromResult(userName));
+            _ddbFactoryMock.Setup(x => x.Get(It.IsAny<string>(), It.IsAny<Guid>()))
+                .Returns(() => new Mock<IDdb>().Object);
 
             var sys = new PhysicalObjectSystem(Path.Combine(test.TestFolder, StorageFolder));
             sys.SyncBucket($"{MagicStrings.PublicOrganizationSlug}-{MagicStrings.DefaultDatasetSlug}");
 
             var ddbFactory = new DdbManager(_appSettingsMock.Object, _ddbFactoryLogger);
             var webUtils = new WebUtils(_authManagerMock.Object, context, _appSettingsMock.Object,
-                _httpContextAccessorMock.Object, _linkGeneratorMock.Object);
+                _httpContextAccessorMock.Object);
 
             var objectManager = new ObjectsManager(_objectManagerLogger, context, sys, _chunkedUploadManagerMock.Object, 
                 _appSettingsMock.Object, ddbFactory, webUtils, _authManagerMock.Object, _cacheManagerMock.Object);
@@ -548,8 +554,10 @@ namespace Registry.Web.Test
                     Description = "Default dataset",
                     IsPublic = true,
                     CreationDate = DateTime.Now,
-                    LastEdit = DateTime.Now
+                    LastEdit = DateTime.Now,
+                    InternalRef = Guid.Parse("0a223495-84a0-4c15-b425-c7ef88110e75")
                 };
+
                 entity.Datasets = new List<Dataset> { ds };
 
                 context.Organizations.Add(entity);

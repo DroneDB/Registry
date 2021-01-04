@@ -13,5 +13,6 @@ namespace Registry.Web.Services.Ports
 
         string GetFreeOrganizationSlug(string orgName);
         EntryDto GetDatasetEntry(Dataset dataset);
+        string GenerateDatasetUrl(Dataset dataset);
     }
 }

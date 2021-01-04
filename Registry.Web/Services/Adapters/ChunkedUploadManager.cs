@@ -209,7 +209,7 @@ namespace Registry.Web.Services.Adapters
 
         }
 
-        public void RemoveTimedoutSessions()
+        public async Task<int[]> RemoveTimedoutSessions()
         {
             var now = DateTime.Now;
 
@@ -218,36 +218,52 @@ namespace Registry.Web.Services.Adapters
             // 2) Sessions with chunks where their newest chunk is expired
             var sessions = _context.UploadSessions
                 .Include(session => session.Chunks)
+                // TODO: The performance of this query is baaaaaaaaad, it's on my to do list
+                .ToArray()
                 .Where(session =>
                     (session.Chunks.Count == 0 && session.StartedOn + _settings.ChunkedUploadSessionTimeout > now) ||
-                    (session.Chunks.Count > 0 && session.Chunks.OrderByDescending(chunk => chunk.Date).First().Date + _settings.ChunkedUploadSessionTimeout > now))
+                    (session.Chunks.Count > 0 && 
+                        session.Chunks.OrderByDescending(chunk => chunk.Date).First().Date + _settings.ChunkedUploadSessionTimeout > now))
                 .ToArray();
 
             _logger.LogDebug($"Found {sessions.Length} timed out sessions");
 
+            return await SafeRemoveSessions(sessions);
+        }
+
+        private async Task<int[]> SafeRemoveSessions(IEnumerable<UploadSession> sessions)
+        {
+            var removedSessions = new List<int>();
+
             foreach (var session in sessions)
             {
                 _logger.LogDebug($"Removing session {session.Id} of '{session.FileName}' started on {session.StartedOn}");
-                _context.UploadSessions.Remove(session);
+                try
+                {
+                    // TODO: This code could be fragile, need extensive testing
+                    CleanupSession(session.Id);
+                    _context.UploadSessions.Remove(session);
+                    await _context.SaveChangesAsync();
+                    removedSessions.Add(session.Id);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, $"Cannot remove sessions {session.Id}");
+                }
             }
 
-            _context.SaveChanges();
+            return removedSessions.ToArray();
 
         }
 
-        public void RemoveClosedSessions()
+        public async Task<int[]> RemoveClosedSessions()
         {
             var sessions = _context.UploadSessions.Where(item => item.EndedOn != null).ToArray();
 
             _logger.LogDebug($"Found {sessions.Length} closed sessions");
 
-            foreach (var session in sessions)
-            {
-                _logger.LogDebug($"Removing session {session.Id} of '{session.FileName}' started on {session.StartedOn}");
-                _context.UploadSessions.Remove(session);
-            }
+            return await SafeRemoveSessions(sessions);
 
-            _context.SaveChanges();
         }
 
         public void CleanupSession(int sessionId)

@@ -1,12 +1,16 @@
 ﻿using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
+using Microsoft.AspNet.OData.Query;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
+using Newtonsoft.Json;
 using Registry.Common;
 using Registry.Ports.ObjectSystem;
 using Registry.Web.Data;
+using Registry.Web.Data.Models;
 using Registry.Web.Exceptions;
 using Registry.Web.Models.DTO;
 using Registry.Web.Services.Ports;
@@ -45,7 +49,7 @@ namespace Registry.Web.Services.Adapters
         {
             var org = await _utils.GetOrganization(orgSlug);
 
-            var query = from ds in org.Datasets
+            var query = from ds in org.Datasets.ToArray()
 
                         select new DatasetDto
                         {
@@ -62,6 +66,19 @@ namespace Registry.Web.Services.Adapters
                         };
 
             return query;
+        }
+
+        public async Task SyncDdbMeta(string orgSlug, string dsSlug)
+        {
+
+            var ds = await _utils.GetDataset(orgSlug, dsSlug);
+
+            var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
+
+            var attrs = ddb.ChangeAttributes(null);
+
+            ds.Meta = attrs;
+            
         }
 
         public async Task<DatasetDto> Get(string orgSlug, string dsSlug)
@@ -93,10 +110,16 @@ namespace Registry.Web.Services.Adapters
             if (!string.IsNullOrEmpty(dataset.Password))
                 ds.PasswordHash = _passwordHasher.Hash(dataset.Password);
 
+            if (ds.InternalRef == Guid.Empty)
+                ds.InternalRef = Guid.NewGuid();
+
+            var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
+            ds.Meta = ddb.ChangeAttributes(ds.Meta);
+            
             org.Datasets.Add(ds);
 
             await _context.SaveChangesAsync();
-
+            
             return ds.ToDto();
 
         }
@@ -114,7 +137,6 @@ namespace Registry.Web.Services.Adapters
             entity.IsPublic = dataset.IsPublic;
             entity.LastEdit = DateTime.Now;
             entity.License = dataset.License;
-            entity.Meta = dataset.Meta;
             entity.Name = dataset.Name;
 
             if (!string.IsNullOrEmpty(dataset.Password))
@@ -129,15 +151,14 @@ namespace Registry.Web.Services.Adapters
         {
             var org = await _utils.GetOrganization(orgSlug);
 
-            var entity = org.Datasets.FirstOrDefault(item => item.Slug == dsSlug);
+            var ds = org.Datasets.FirstOrDefault(item => item.Slug == dsSlug);
 
-            if (entity == null)
+            if (ds == null)
                 throw new NotFoundException("Dataset not found");
 
             await _objectsManager.DeleteAll(orgSlug, dsSlug);
-            _ddbManager.Delete(orgSlug, dsSlug);
 
-            _context.Datasets.Remove(entity);
+            _context.Datasets.Remove(ds);
 
             await _context.SaveChangesAsync();
         }
@@ -157,11 +178,6 @@ namespace Registry.Web.Services.Adapters
             if (await _utils.GetDataset(orgSlug, newSlug, true) != null)
                 throw new ArgumentException($"Dataset '{newSlug}' already exists");
 
-            // TODO: Add exception catching, when interrupted put DS in dirty state
-            await _objectsManager.MoveDataset(orgSlug, dsSlug, newSlug);
-
-            _ddbManager.Move(orgSlug, dsSlug, newSlug);
-
             var ds = await _utils.GetDataset(orgSlug, dsSlug);
 
             ds.Slug = newSlug;
@@ -172,11 +188,16 @@ namespace Registry.Web.Services.Adapters
 
         public async Task<Dictionary<string, object>> ChangeAttributes(string orgSlug, string dsSlug, Dictionary<string, object> attributes)
         {
-            await _utils.GetDataset(orgSlug, dsSlug);
+            var ds = await _utils.GetDataset(orgSlug, dsSlug);
 
-            var ddb = _ddbManager.Get(orgSlug, dsSlug);
+            var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
 
-            return ddb.ChangeAttributes(attributes);
+            var attrs = ddb.ChangeAttributes(attributes);
+
+            ds.Meta = attrs;
+            await _context.SaveChangesAsync();
+
+            return attrs;
 
         }
     }

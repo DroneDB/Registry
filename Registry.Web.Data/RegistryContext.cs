@@ -23,6 +23,7 @@ namespace Registry.Web.Data
                 .IsRequired(true)
                 .OnDelete(DeleteBehavior.Cascade);
 
+            // TODO: Need to set value comparer
             modelBuilder.Entity<DownloadPackage>()
                 .Property(e => e.Paths)
                 .HasConversion(

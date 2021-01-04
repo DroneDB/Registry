@@ -31,8 +31,10 @@ namespace Registry.Web.Test
         private const string TestDataFolder = @"Data/Ddb";
         private const string DdbTestDataFolder = @"Data/DdbTest";
 
-        private const string DbTest1ArchiveUrl = "https://github.com/DroneDB/test_data/raw/master/registry/DdbFactoryTest/testdb1.zip";
-        
+        private const string DbTest1ArchiveUrl = "https://github.com/DroneDB/test_data/raw/master/registry/DdbFactoryTest/testdb2.zip";
+
+        private readonly Guid _datasetGuid = Guid.Parse("0a223495-84a0-4c15-b425-c7ef88110e75");
+
         [SetUp]
         public void Setup()
         {
@@ -50,7 +52,7 @@ namespace Registry.Web.Test
 
             var factory = new DdbManager(_appSettingsMock.Object, _ddbFactoryLogger);
 
-            var ddb = factory.Get(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug);
+            var ddb = factory.Get(MagicStrings.PublicOrganizationSlug, _datasetGuid);
 
             ddb.Should().NotBeNull();
         }
@@ -60,7 +62,7 @@ namespace Registry.Web.Test
         {
             var factory = new DdbManager(_appSettingsMock.Object, _ddbFactoryLogger);
 
-            factory.Invoking(x => x.Get("vlwefwef", MagicStrings.DefaultDatasetSlug))
+            factory.Invoking(x => x.Get("vlwefwef", _datasetGuid))
                 .Should().NotThrow<IOException>();
 
         }
@@ -76,7 +78,7 @@ namespace Registry.Web.Test
 
             var factory = new DdbManager(_appSettingsMock.Object, _ddbFactoryLogger);
 
-            var ddb = factory.Get(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug);
+            var ddb = factory.Get(MagicStrings.PublicOrganizationSlug, _datasetGuid);
 
             var res = ddb.Search("asasdadas.jpg");
 
@@ -84,7 +86,7 @@ namespace Registry.Web.Test
 
         }
 
-        
+
         [Test]
         public void Search_ExistingEntry_Entry1()
         {
@@ -100,7 +102,7 @@ namespace Registry.Web.Test
             const int expectedType = 3;
             const string expectedHash = "f27ddc96daf9aeff3c026de8292681296c3e9d952b647235878c50f2b7b39e94";
             var expectedModifiedTime = new DateTime(2020, 06, 10, 14, 44, 36);
-            var expectedMeta = JsonConvert.DeserializeObject<Dictionary<string,string>>(
+            var expectedMeta = JsonConvert.DeserializeObject<Dictionary<string, object>>(
                 "{\"captureTime\":1591800276004.8,\"focalLength\":4.16,\"focalLength35\":26.0,\"height\":3024,\"make\":\"samsung\",\"model\":\"SM-G950F\",\"orientation\":1,\"sensor\":\"samsung sm-g950f\",\"sensorHeight\":4.32,\"sensorWidth\":5.76,\"width\":4032}");
             const double expectedLatitude = 45.50027;
             const double expectedLongitude = 10.60667;
@@ -108,8 +110,8 @@ namespace Registry.Web.Test
 
             var factory = new DdbManager(_appSettingsMock.Object, _ddbFactoryLogger);
 
-            var ddb = factory.Get(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug);
-            
+            var ddb = factory.Get(MagicStrings.PublicOrganizationSlug, _datasetGuid);
+
             var list = ddb.Search(fileName).ToArray();
 
             list.Should().HaveCount(1);
@@ -145,7 +147,7 @@ namespace Registry.Web.Test
             const int expectedType = 3;
             const string expectedHash = "e6e57187a33951a27f51e3a86cc66c6ce43d555f0d51ba3c715fc7b707ce1477";
             var expectedModifiedTime = new DateTime(2017, 04, 2, 20, 01, 27);
-            var expectedMeta = JsonConvert.DeserializeObject<Dictionary<string, string>>(
+            var expectedMeta = JsonConvert.DeserializeObject<Dictionary<string, object>>(
                 "{\"cameraPitch\":-90.0,\"cameraRoll\":0.0,\"cameraYaw\":45.29999923706055,\"captureTime\":1466699547000.0,\"focalLength\":3.4222222222222225,\"focalLength35\":20.0,\"height\":2250,\"make\":\"DJI\",\"model\":\"FC300S\",\"orientation\":1,\"sensor\":\"dji fc300s\",\"sensorHeight\":3.4650000000000003,\"sensorWidth\":6.16,\"width\":4000}");
             const double expectedLatitude = 46.842952;
             const double expectedLongitude = -91.994052;
@@ -161,7 +163,7 @@ namespace Registry.Web.Test
 
             var factory = new DdbManager(_appSettingsMock.Object, _ddbFactoryLogger);
 
-            var ddb = factory.Get(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug);
+            var ddb = factory.Get(MagicStrings.PublicOrganizationSlug, _datasetGuid);
 
             var list = ddb.Search(fileName).ToArray();
 
@@ -182,7 +184,7 @@ namespace Registry.Web.Test
             res.PointGeometry.Coordinates.Altitude.Should().BeApproximately(expectedAltitude, 0.1);
 
             var polygon = res.PolygonGeometry;
-            
+
             var coords = polygon.Coordinates[0].Coordinates;
 
             coords.Should().BeEquivalentTo(expectedCoordinates);
@@ -201,17 +203,17 @@ namespace Registry.Web.Test
 
             var factory = new DdbManager(_appSettingsMock.Object, _ddbFactoryLogger);
 
-            var ddb = factory.Get(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug);
+            var ddb = factory.Get(MagicStrings.PublicOrganizationSlug, _datasetGuid);
 
             const string fileName = "DJI_0028.JPG";
 
             ddb.Remove(fileName);
 
             var path = Path.Combine(TestDataFolder, fileName);
-            
+
             if (!File.Exists(path))
                 CommonUtils.SmartDownloadFile("https://github.com/DroneDB/test_data/raw/master/test-datasets/drone_dataset_brighton_beach/" + fileName, path);
-            
+
             ddb.Add(fileName, File.ReadAllBytes(path));
 
             ddb.Search(fileName).Should().HaveCount(1);
