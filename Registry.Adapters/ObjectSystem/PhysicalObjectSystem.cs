@@ -574,12 +574,14 @@ namespace Registry.Adapters.ObjectSystem
 
         public static string CalculateETag(string filePath, FileInfo info)
         {
-            // 5GB
-            var chunkSize = 5L * 1024 * 1024 * 1024;
+            // 2GB
+            var chunkSize = 2L * 1024 * 1024 * 1024;
 
             var parts = info.Length == 0 ? 1 : (int)Math.Ceiling((double)info.Length / chunkSize);
 
-            return AdaptersUtils.CalculateMultipartEtag(File.ReadAllBytes(filePath), parts);
+            using var stream = File.OpenRead(filePath);
+
+            return AdaptersUtils.CalculateMultipartEtag(stream, parts);
 
         }
 

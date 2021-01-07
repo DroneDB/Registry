@@ -11,6 +11,6 @@ namespace Registry.Web.Models
 
         public EntryType Type { get; set; }
         public string Hash { get; set; }
-        public int Size { get; set; }
+        public long Size { get; set; }
     }
 }

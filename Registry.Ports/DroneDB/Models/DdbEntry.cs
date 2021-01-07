@@ -15,7 +15,7 @@ namespace Registry.Ports.DroneDB.Models
         public DateTime ModifiedTime { get; set; }
         public string Hash { get; set; }
         public int Depth { get; set; }
-        public int Size { get; set; }
+        public long Size { get; set; }
         public EntryType Type { get; set; }
         public Dictionary<string, object> Meta { get; set; }
         public Point PointGeometry { get; set; }

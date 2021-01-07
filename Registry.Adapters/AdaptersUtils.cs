@@ -51,6 +51,36 @@ namespace Registry.Adapters
             return hash;
         }
 
+        public static string CalculateMultipartEtag(Stream stream, int chunkCount)
+        {
+            var multipartSplitCount = 0;
+            var chunkSize = 1024 * 1024 * chunkCount;
+            var splitCount = stream.Length / chunkSize;
+            var concatHash = new List<byte>();
+
+            using var md5 = MD5.Create();
+
+            var buffer = new byte[chunkSize];
+
+            for (var i = 0; i <= splitCount; i++)
+            {
+                var cnt = stream.Read(buffer, 0, chunkSize);
+                if (cnt == 0) break;
+
+                var chunk = cnt != chunkSize ? buffer.Take(cnt).ToArray() : buffer;
+                var hash = chunk.GetHash(md5);
+                concatHash.AddRange(hash);
+                multipartSplitCount++;
+            }
+
+            string multipartHash = BitConverter.ToString(concatHash.ToArray())
+                .Replace("-", string.Empty)
+                .ToLowerInvariant();
+
+            return multipartHash + "-" + multipartSplitCount;
+
+        }
+
         public static string CalculateMultipartEtag(byte[] array, int chunkCount)
         {
             var multipartSplitCount = 0;

@@ -5,7 +5,6 @@ using System.Threading.Tasks;
 using GeoJSON.Net;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
-using Registry.Adapters.DroneDB.Models;
 using Registry.Common;
 
 namespace Registry.Web.Models.DTO
