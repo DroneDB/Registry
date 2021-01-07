@@ -3,11 +3,10 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
 using System.Linq;
+using System.Reflection;
 using System.Text;
 using System.Threading.Tasks;
 using HealthChecks.UI.Client;
-using Microsoft.AspNet.OData.Builder;
-using Microsoft.AspNet.OData.Extensions;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Registry.Web.Models;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
@@ -32,7 +31,6 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
-using Microsoft.OData.Edm;
 using Microsoft.OpenApi.Models;
 using Registry.Adapters.DroneDB;
 using Registry.Adapters.ObjectSystem;
@@ -291,6 +289,11 @@ namespace Registry.Web
                     ResponseWriter = UIResponseWriter.WriteHealthCheckUIResponse
                 }).RequireAuthorization();
 
+                endpoints.MapGet("/version", async context =>
+                {
+                    await context.Response.WriteAsync(Assembly.GetExecutingAssembly().GetName().Version?.ToString() ?? "undefined");
+                });
+
                 // TODO: Enable when needed
                 // endpoints.MapODataRoute("odata", "odata", GetEdmModel());
             });
@@ -347,19 +350,43 @@ namespace Registry.Web
                 throw new InvalidOperationException("Cannot get application db context from service provider");
 
             if (applicationDbContext.Database.IsSqlite())
+            {
                 CommonUtils.EnsureFolderCreated(Configuration.GetConnectionString(IdentityConnectionName));
 
-            applicationDbContext.Database.EnsureCreated();
+                // No migrations
+                applicationDbContext.Database.EnsureCreated();
+            }
 
+            if (applicationDbContext.Database.IsSqlServer())
+                // No migrations
+                applicationDbContext.Database.EnsureCreated();
+
+
+            if (applicationDbContext.Database.IsMySql() && applicationDbContext.Database.GetPendingMigrations().Any())
+                // Use migrations
+                applicationDbContext.Database.Migrate();
+            
             using var registryDbContext = serviceScope.ServiceProvider.GetService<RegistryContext>();
 
             if (registryDbContext == null)
                 throw new InvalidOperationException("Cannot get registry db context from service provider");
 
             if (registryDbContext.Database.IsSqlite())
+            {
                 CommonUtils.EnsureFolderCreated(Configuration.GetConnectionString(RegistryConnectionName));
+                // No migrations
+                registryDbContext.Database.EnsureCreated();
+            }
 
-            registryDbContext.Database.EnsureCreated();
+            if (registryDbContext.Database.IsSqlServer())
+                // No migrations
+                registryDbContext.Database.EnsureCreated();
+
+
+            if (registryDbContext.Database.IsMySql() && registryDbContext.Database.GetPendingMigrations().Any())
+                // Use migrations
+                registryDbContext.Database.Migrate();
+
 
             CreateInitialData(registryDbContext);
             CreateDefaultAdmin(registryDbContext, serviceScope.ServiceProvider).Wait();
@@ -454,37 +481,16 @@ namespace Registry.Web
 
             var connectionString = Configuration.GetConnectionString(connectionStringName);
 
-            switch (provider)
-            {
-                case DbProvider.Sqlite:
+            services.AddDbContext<T>(options =>
+                _ = provider switch
+                {
+                    DbProvider.Sqlite => options.UseSqlite(connectionString),
+                    DbProvider.Mysql => options.UseMySql(connectionString, ServerVersion.AutoDetect(connectionString),
+                        builder => builder.EnableRetryOnFailure()),
+                    DbProvider.Mssql => options.UseSqlServer(connectionString),
+                    _ => throw new ArgumentOutOfRangeException(nameof(provider), $"Unrecognised provider: '{provider}'")
+                });
 
-                    services.AddDbContext<T>(options =>
-                        options.UseSqlite(
-                            connectionString));
-
-                    break;
-
-                case DbProvider.Mysql:
-
-                    services.AddDbContext<T>(options =>
-                        options.UseMySql(
-                            connectionString,
-                            ServerVersion.AutoDetect(connectionString),
-                            builder => builder.EnableRetryOnFailure()));
-
-                    break;
-
-                case DbProvider.Mssql:
-
-                    services.AddDbContext<T>(options =>
-                        options.UseSqlServer(
-                            connectionString));
-
-                    break;
-
-                default:
-                    throw new ArgumentOutOfRangeException($"Unrecognised provider: '{provider}'");
-            }
         }
 
         private void CreateInitialData(RegistryContext context)
