@@ -454,37 +454,16 @@ namespace Registry.Web
 
             var connectionString = Configuration.GetConnectionString(connectionStringName);
 
-            switch (provider)
-            {
-                case DbProvider.Sqlite:
+            services.AddDbContext<T>(options =>
+                _ = provider switch
+                {
+                    DbProvider.Sqlite => options.UseSqlite(connectionString),
+                    DbProvider.Mysql => options.UseMySql(connectionString, ServerVersion.AutoDetect(connectionString),
+                        builder => builder.EnableRetryOnFailure()),
+                    DbProvider.Mssql => options.UseSqlServer(connectionString),
+                    _ => throw new ArgumentOutOfRangeException(nameof(provider), $"Unrecognised provider: '{provider}'")
+                });
 
-                    services.AddDbContext<T>(options =>
-                        options.UseSqlite(
-                            connectionString));
-
-                    break;
-
-                case DbProvider.Mysql:
-
-                    services.AddDbContext<T>(options =>
-                        options.UseMySql(
-                            connectionString,
-                            ServerVersion.AutoDetect(connectionString),
-                            builder => builder.EnableRetryOnFailure()));
-
-                    break;
-
-                case DbProvider.Mssql:
-
-                    services.AddDbContext<T>(options =>
-                        options.UseSqlServer(
-                            connectionString));
-
-                    break;
-
-                default:
-                    throw new ArgumentOutOfRangeException($"Unrecognised provider: '{provider}'");
-            }
         }
 
         private void CreateInitialData(RegistryContext context)
