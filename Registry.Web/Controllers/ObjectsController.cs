@@ -81,6 +81,27 @@ namespace Registry.Web.Controllers
             }
         }
 
+        [HttpGet("download/{*path}", Name = nameof(ObjectsController) + "." + nameof(DownloadExact))]
+        public async Task<IActionResult> DownloadExact([FromRoute] string orgSlug, [FromRoute] string dsSlug, string path)
+        {
+            try
+            {
+
+                _logger.LogDebug($"Objects controller DownloadExact('{orgSlug}', '{dsSlug}', '{path}')");
+
+                var res = await _objectsManager.Download(orgSlug, dsSlug, new[] { path });
+
+                return File(res.ContentStream, res.ContentType);
+
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, $"Exception in Objects controller Download('{orgSlug}', '{dsSlug}', '{path}')");
+
+                return ExceptionResult(ex);
+            }
+        }
+
         [AllowAnonymous]
         [HttpGet("package/{id}", Name = nameof(ObjectsController) + "." + nameof(DownloadPackage))]
         public async Task<IActionResult> DownloadPackage([FromRoute] string orgSlug, [FromRoute] string dsSlug, string id)
@@ -89,7 +110,7 @@ namespace Registry.Web.Controllers
             {
                 _logger.LogDebug($"Objects controller DownloadPackage('{orgSlug}', '{dsSlug}', '{id}')");
 
-                var res = await _objectsManager.Download(orgSlug, dsSlug, id);
+                var res = await _objectsManager.DownloadPackage(orgSlug, dsSlug, id);
 
                 return File(res.ContentStream, res.ContentType, res.Name);
 
