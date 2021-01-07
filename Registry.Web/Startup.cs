@@ -347,19 +347,43 @@ namespace Registry.Web
                 throw new InvalidOperationException("Cannot get application db context from service provider");
 
             if (applicationDbContext.Database.IsSqlite())
+            {
                 CommonUtils.EnsureFolderCreated(Configuration.GetConnectionString(IdentityConnectionName));
 
-            applicationDbContext.Database.EnsureCreated();
+                // No migrations
+                applicationDbContext.Database.EnsureCreated();
+            }
 
+            if (applicationDbContext.Database.IsSqlServer())
+                // No migrations
+                applicationDbContext.Database.EnsureCreated();
+
+
+            if (applicationDbContext.Database.IsMySql() && applicationDbContext.Database.GetPendingMigrations().Any())
+                // Use migrations
+                applicationDbContext.Database.Migrate();
+            
             using var registryDbContext = serviceScope.ServiceProvider.GetService<RegistryContext>();
 
             if (registryDbContext == null)
                 throw new InvalidOperationException("Cannot get registry db context from service provider");
 
             if (registryDbContext.Database.IsSqlite())
+            {
                 CommonUtils.EnsureFolderCreated(Configuration.GetConnectionString(RegistryConnectionName));
+                // No migrations
+                registryDbContext.Database.EnsureCreated();
+            }
 
-            registryDbContext.Database.EnsureCreated();
+            if (registryDbContext.Database.IsSqlServer())
+                // No migrations
+                registryDbContext.Database.EnsureCreated();
+
+
+            if (registryDbContext.Database.IsMySql() && registryDbContext.Database.GetPendingMigrations().Any())
+                // Use migrations
+                registryDbContext.Database.Migrate();
+
 
             CreateInitialData(registryDbContext);
             CreateDefaultAdmin(registryDbContext, serviceScope.ServiceProvider).Wait();
