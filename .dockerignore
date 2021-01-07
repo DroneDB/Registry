@@ -9,7 +9,7 @@
 **/bin
 **/obj
 
-docker
+docker/production/data
 Registry.Adapters.Test/Data
 Registry.Web.Test/Data
 Registry.Web/uploads
