@@ -289,6 +289,11 @@ namespace Registry.Web
                     ResponseWriter = UIResponseWriter.WriteHealthCheckUIResponse
                 }).RequireAuthorization();
 
+                endpoints.MapGet("/version", async context =>
+                {
+                    await context.Response.WriteAsync(Assembly.GetExecutingAssembly().GetName().Version?.ToString() ?? "undefined");
+                });
+
                 // TODO: Enable when needed
                 // endpoints.MapODataRoute("odata", "odata", GetEdmModel());
             });
