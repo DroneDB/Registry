@@ -96,7 +96,7 @@ namespace Registry.Web.Controllers
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, $"Exception in Objects controller Download('{orgSlug}', '{dsSlug}', '{path}')");
+                _logger.LogError(ex, $"Exception in Objects controller DownloadExact('{orgSlug}', '{dsSlug}', '{path}')");
 
                 return ExceptionResult(ex);
             }
