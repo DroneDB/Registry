@@ -446,7 +446,7 @@ namespace Registry.Web.Services.Adapters
             }
         }
 
-        public async Task<FileDescriptorDto> Download(string orgSlug, string dsSlug, string packageId)
+        public async Task<FileDescriptorDto> DownloadPackage(string orgSlug, string dsSlug, string packageId)
         {
             var ds = await _utils.GetDataset(orgSlug, dsSlug, checkOwnership: false);
 

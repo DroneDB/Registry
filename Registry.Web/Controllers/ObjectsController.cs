@@ -59,23 +59,56 @@ namespace Registry.Web.Controllers
 
         [HttpGet("download", Name = nameof(ObjectsController) + "." + nameof(Download))]
         public async Task<IActionResult> Download([FromRoute] string orgSlug, [FromRoute] string dsSlug,
-            [FromQuery(Name = "path")] string pathsRaw)
+            [FromQuery(Name = "path")] string pathsRaw, [FromQuery(Name = "inline")] int? isInlineRaw)
         {
             try
             {
 
                 var paths = pathsRaw?.Split(",", StringSplitOptions.RemoveEmptyEntries);
+                bool isInline = isInlineRaw == 1;
 
-                _logger.LogDebug($"Objects controller Download('{orgSlug}', '{dsSlug}', '{pathsRaw}')");
+                _logger.LogDebug($"Objects controller Download('{orgSlug}', '{dsSlug}', '{pathsRaw}', '{isInlineRaw}')");
 
                 var res = await _objectsManager.Download(orgSlug, dsSlug, paths);
 
-                return File(res.ContentStream, res.ContentType, res.Name);
+                if (!isInline)
+                    return File(res.ContentStream, res.ContentType, res.Name);
+
+                Response.Headers.Add("Content-Disposition", "inline");
+                return File(res.ContentStream, res.ContentType);
 
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, $"Exception in Objects controller Download('{orgSlug}', '{dsSlug}', '{pathsRaw}')");
+
+                return ExceptionResult(ex);
+            }
+        }
+
+        [HttpGet("download/{*path}", Name = nameof(ObjectsController) + "." + nameof(DownloadExact))]
+        public async Task<IActionResult> DownloadExact([FromRoute] string orgSlug, [FromRoute] string dsSlug, string path,
+            [FromQuery(Name = "inline")] int? isInlineRaw)
+        {
+            try
+            {
+
+                bool isInline = isInlineRaw == 1;
+
+                _logger.LogDebug($"Objects controller DownloadExact('{orgSlug}', '{dsSlug}', '{path}', '{isInlineRaw}')");
+
+                var res = await _objectsManager.Download(orgSlug, dsSlug, new[] { path });
+
+                if (!isInline)
+                    return File(res.ContentStream, res.ContentType, res.Name);
+
+                Response.Headers.Add("Content-Disposition", "inline");
+                return File(res.ContentStream, res.ContentType);
+
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, $"Exception in Objects controller DownloadExact('{orgSlug}', '{dsSlug}', '{path}')");
 
                 return ExceptionResult(ex);
             }
@@ -89,7 +122,7 @@ namespace Registry.Web.Controllers
             {
                 _logger.LogDebug($"Objects controller DownloadPackage('{orgSlug}', '{dsSlug}', '{id}')");
 
-                var res = await _objectsManager.Download(orgSlug, dsSlug, id);
+                var res = await _objectsManager.DownloadPackage(orgSlug, dsSlug, id);
 
                 return File(res.ContentStream, res.ContentType, res.Name);
 
