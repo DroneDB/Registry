@@ -70,6 +70,12 @@ namespace Registry.Web.Controllers
 
                 var res = await _objectsManager.Download(orgSlug, dsSlug, paths);
 
+                if (paths?.Length == 1)
+                {
+                    Response.Headers.Add("Content-Disposition", "inline");
+                    return File(res.ContentStream, res.ContentType);
+                }
+
                 return File(res.ContentStream, res.ContentType, res.Name);
 
             }
@@ -90,6 +96,8 @@ namespace Registry.Web.Controllers
                 _logger.LogDebug($"Objects controller DownloadExact('{orgSlug}', '{dsSlug}', '{path}')");
 
                 var res = await _objectsManager.Download(orgSlug, dsSlug, new[] { path });
+
+                Response.Headers.Add("Content-Disposition", "inline");
 
                 return File(res.ContentStream, res.ContentType);
 
