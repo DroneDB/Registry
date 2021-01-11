@@ -14,6 +14,7 @@ namespace Registry.Common
         GeoRaster = 4,
         PointCloud = 5,
         Image = 6,
-        DroneDb = 7
+        DroneDb = 7,
+        Markdown = 8
     }
 }
