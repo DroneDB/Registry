@@ -26,6 +26,6 @@ namespace Registry.Web.Services.Ports
         Task<string> GetDownloadPackage(string orgSlug, string dsSlug, string[] paths, DateTime? expiration = null, bool isPublic = false);
         Task<FileDescriptorDto> DownloadPackage(string orgSlug, string dsSlug, string packageId);
         Task<FileDescriptorDto> GenerateThumbnail(string orgSlug, string dsSlug, string path, int? size, bool recreate = false);
-
+        Task<FileDescriptorDto> GenerateTile(string orgSlug, string dsSlug, string path, int tz, int tx, int ty, bool retina);
     }
 }
