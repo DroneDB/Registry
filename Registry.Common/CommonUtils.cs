@@ -224,6 +224,19 @@ namespace Registry.Common
             return info == null ? null : new StorageInfo(info.TotalSize, info.AvailableFreeSpace);
         }
 
+        public static bool SafeDelete(string path)
+        {
+            try
+            {
+
+                File.Delete(path);
+                return true;
+            }
+            catch (IOException ex)
+            {
+                return false;
+            }
+        }
     }
 
 

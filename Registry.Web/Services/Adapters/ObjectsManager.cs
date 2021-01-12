@@ -383,8 +383,11 @@ namespace Registry.Web.Services.Adapters
             }
             finally
             {
-                if (File.Exists(destFilePath)) File.Delete(destFilePath);
-                if (File.Exists(sourceFilePath)) File.Delete(sourceFilePath);
+                if (File.Exists(destFilePath) && !CommonUtils.SafeDelete(destFilePath))
+                    _logger.LogWarning($"Cannot delete dest file '{destFilePath}'");
+
+                if (File.Exists(sourceFilePath) && !CommonUtils.SafeDelete(sourceFilePath))
+                    _logger.LogWarning($"Cannot delete source file '{sourceFilePath}'");
             }
 
         }
@@ -406,7 +409,7 @@ namespace Registry.Web.Services.Adapters
 
             try
             {
-                
+
                 var obj = await InternalGet(orgSlug, ds.InternalRef, path);
                 await File.WriteAllBytesAsync(sourceFilePath, obj.Data);
 
@@ -424,9 +427,11 @@ namespace Registry.Web.Services.Adapters
             }
             finally
             {
-                if (File.Exists(destFilePath)) File.Delete(destFilePath);
-                // DDB handles this
-                //if (File.Exists(sourceFilePath)) File.Delete(sourceFilePath);
+                if (File.Exists(destFilePath) && !CommonUtils.SafeDelete(destFilePath))
+                    _logger.LogWarning($"Cannot delete dest file '{destFilePath}'");
+
+                if (File.Exists(sourceFilePath) && !CommonUtils.SafeDelete(sourceFilePath))
+                    _logger.LogWarning($"Cannot delete source file '{sourceFilePath}'");
             }
 
         }
