@@ -44,7 +44,22 @@ namespace Registry.Adapters.ObjectSystem
             }
             catch (Exception ex)
             {
-                await _remoteStorage.GetObjectAsync(bucketName, objectName, callback, sse, cancellationToken);
+
+                if (!await _localStorage.BucketExistsAsync(bucketName, cancellationToken))
+                    await _localStorage.MakeBucketAsync(bucketName, null, cancellationToken);
+
+                await _remoteStorage.GetObjectAsync(bucketName, objectName, async stream =>
+                {
+                    stream.Reset();
+
+                    await _localStorage.PutObjectAsync(bucketName, objectName, stream, stream.Length, null, null, sse,
+                        cancellationToken);
+
+                    stream.Reset();
+
+                    await _remoteStorage.GetObjectAsync(bucketName, objectName, callback, sse, cancellationToken);
+
+                }, sse, cancellationToken);
             }
 
         }
@@ -75,6 +90,10 @@ namespace Registry.Adapters.ObjectSystem
             }
             catch (Exception ex)
             {
+                if (!await _localStorage.BucketExistsAsync(bucketName, cancellationToken))
+                    await _localStorage.MakeBucketAsync(bucketName, null, cancellationToken);
+
+                await _remoteStorage.PutObjectAsync(bucketName, objectName, filePath, null, null, sse, cancellationToken);
                 await _remoteStorage.GetObjectAsync(bucketName, objectName, filePath, sse, cancellationToken);
             }
         }
@@ -125,6 +144,10 @@ namespace Registry.Adapters.ObjectSystem
         public async Task PutObjectAsync(string bucketName, string objectName, Stream data, long size, string contentType = null,
             Dictionary<string, string> metaData = null, IServerEncryption sse = null, CancellationToken cancellationToken = default)
         {
+
+            if (!await _localStorage.BucketExistsAsync(bucketName, cancellationToken))
+                await _localStorage.MakeBucketAsync(bucketName, null, cancellationToken);
+
             await Task.WhenAll(
                 _remoteStorage.PutObjectAsync(bucketName, objectName, data, size, contentType, metaData, sse, cancellationToken),
                 _localStorage.PutObjectAsync(bucketName, objectName, data, size, contentType, metaData, sse, cancellationToken)
@@ -134,6 +157,10 @@ namespace Registry.Adapters.ObjectSystem
         public async Task PutObjectAsync(string bucketName, string objectName, string filePath, string contentType = null,
             Dictionary<string, string> metaData = null, IServerEncryption sse = null, CancellationToken cancellationToken = default)
         {
+
+            if (!await _localStorage.BucketExistsAsync(bucketName, cancellationToken))
+                await _localStorage.MakeBucketAsync(bucketName, null, cancellationToken);
+
             await Task.WhenAll(
                 _remoteStorage.PutObjectAsync(bucketName, objectName, filePath, contentType, metaData, sse, cancellationToken),
                 _localStorage.PutObjectAsync(bucketName, objectName, filePath, contentType, metaData, sse, cancellationToken)
