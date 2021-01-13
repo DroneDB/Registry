@@ -9,6 +9,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Minio;
 using Minio.DataModel;
+using Registry.Adapters.ObjectSystem.Model;
 using Registry.Common;
 using Registry.Common.Model;
 using Registry.Ports.ObjectSystem;
@@ -21,16 +22,16 @@ namespace Registry.Adapters.ObjectSystem
 
         private readonly MinioClient _client;
 
-        public S3ObjectSystem(string endpoint, string accessKey = "", string secretKey = "", string region = "",
-            string sessionToken = "", bool useSsl = false, string appName = "", string appVersion = "")
+        public S3ObjectSystem(S3ObjectSystemSettings settings)
         {
-            _client = new MinioClient(endpoint, accessKey, secretKey, region, sessionToken);
+            _client = new MinioClient(settings.Endpoint, settings.AccessKey ?? string.Empty, settings.SecretKey ?? string.Empty, 
+                settings.Region ?? string.Empty, settings.SessionToken ?? string.Empty);
 
-            if (useSsl)
+            if (settings.UseSsl)
                 _client.WithSSL();
 
-            if (!string.IsNullOrWhiteSpace(appName) && !string.IsNullOrWhiteSpace(appVersion))
-                _client.SetAppInfo(appName, appVersion);
+            if (!string.IsNullOrWhiteSpace(settings.AppName) && !string.IsNullOrWhiteSpace(settings.AppVersion))
+                _client.SetAppInfo(settings.AppName, settings.AppVersion);
 
         }
 

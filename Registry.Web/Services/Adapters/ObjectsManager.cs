@@ -145,7 +145,7 @@ namespace Registry.Web.Services.Adapters
         {
             if (_settings.StorageProvider.Type != StorageType.S3) return null;
 
-            var settings = _settings.StorageProvider.Settings.ToObject<S3ProviderSettings>();
+            var settings = _settings.StorageProvider.Settings.ToObject<S3StorageProviderSettings>();
             if (settings == null)
             {
                 _logger.LogWarning("No S3 settings loaded, shouldn't this be a problem?");
@@ -220,7 +220,7 @@ namespace Registry.Web.Services.Adapters
         {
             if (_settings.StorageProvider.Type != StorageType.S3) return null;
 
-            var settings = _settings.StorageProvider.Settings.ToObject<S3ProviderSettings>();
+            var settings = _settings.StorageProvider.Settings.ToObject<S3StorageProviderSettings>();
             if (settings == null)
             {
                 _logger.LogWarning("No S3 settings loaded, shouldn't this be a problem?");

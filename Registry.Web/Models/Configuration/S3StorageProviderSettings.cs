@@ -1,6 +1,6 @@
 ﻿namespace Registry.Web.Models.Configuration
 {
-    public class S3ProviderSettings : StorageProviderSettings
+    public class S3StorageProviderSettings : StorageProviderSettings
     {
         public string Endpoint { get; set; }
         public string AccessKey { get; set; }
