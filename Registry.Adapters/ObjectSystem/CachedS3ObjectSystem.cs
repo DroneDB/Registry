@@ -5,6 +5,7 @@ using System.Linq;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
+using Newtonsoft.Json;
 using Registry.Adapters.ObjectSystem.Model;
 using Registry.Common;
 using Registry.Common.Model;
@@ -15,12 +16,25 @@ namespace Registry.Adapters.ObjectSystem
 {
     public class CachedS3ObjectSystem : IObjectSystem
     {
-        private readonly PhysicalObjectSystem _localStorage;
         private readonly S3ObjectSystem _remoteStorage;
 
         public string CachePath { get; }
         public TimeSpan CacheExpiration { get; }
         public long MaxSize { get; }
+
+        private const string CacheFileEntryFormat = "{0}-{1}";
+        private const string CacheFileInfoFormat = "{0}-{1}.json";
+
+        private string GetCacheFileName(string bucketName, string objectName)
+        {
+            return Path.Combine(CachePath,
+                string.Format(CacheFileEntryFormat, bucketName, objectName.Replace('/', '-')));
+        }
+        private string GetCacheFileInfoName(string bucketName, string objectName)
+        {
+            return Path.Combine(CachePath,
+                string.Format(CacheFileInfoFormat, bucketName, objectName.Replace('/', '-')));
+        }
 
         public CachedS3ObjectSystem(
             S3ObjectSystemSettings settings, string cachePath, TimeSpan cacheExpiration, long maxSize = 0)
@@ -31,52 +45,39 @@ namespace Registry.Adapters.ObjectSystem
             MaxSize = maxSize;
 
             _remoteStorage = new S3ObjectSystem(settings);
-            _localStorage = new PhysicalObjectSystem(CachePath, false);
         }
 
         public async Task GetObjectAsync(string bucketName, string objectName, Action<Stream> callback, IServerEncryption sse = null,
             CancellationToken cancellationToken = default)
         {
-
-            try
+            var cachedFileName = GetCacheFileName(bucketName, objectName);
+            if (File.Exists(cachedFileName))
             {
-                await _localStorage.GetObjectAsync(bucketName, objectName, callback, sse, cancellationToken);
-            }
-            catch (Exception ex)
-            {
+                var memory = new MemoryStream();
+                await using (var s = File.OpenRead(cachedFileName)) 
+                    await s.CopyToAsync(memory, cancellationToken);
 
-                if (!await _localStorage.BucketExistsAsync(bucketName, cancellationToken))
-                    await _localStorage.MakeBucketAsync(bucketName, null, cancellationToken);
+                memory.Reset();
 
-                await _remoteStorage.GetObjectAsync(bucketName, objectName, async stream =>
-                {
-                    stream.Reset();
-
-                    await _localStorage.PutObjectAsync(bucketName, objectName, stream, stream.Length, null, null, sse,
-                        cancellationToken);
-
-                    stream.Reset();
-
-                    await _remoteStorage.GetObjectAsync(bucketName, objectName, callback, sse, cancellationToken);
-
-                }, sse, cancellationToken);
+                callback(memory);
+                return;
             }
 
+            await _remoteStorage.GetObjectAsync(bucketName, objectName, stream =>
+            {
+                using (var s = File.OpenWrite(cachedFileName)) stream.CopyTo(s);
+
+                stream.Reset();
+
+                callback(stream);
+
+            }, sse, cancellationToken);
         }
 
         public async Task GetObjectAsync(string bucketName, string objectName, long offset, long length, Action<Stream> cb,
             IServerEncryption sse = null, CancellationToken cancellationToken = default)
         {
-            
-            try
-            {
-                await _localStorage.GetObjectAsync(bucketName, objectName, offset, length, cb, sse, cancellationToken);
-            }
-            catch (Exception ex)
-            {
-                await _remoteStorage.GetObjectAsync(bucketName, objectName, offset, length, cb, sse, cancellationToken);
-            }
-
+            await _remoteStorage.GetObjectAsync(bucketName, objectName, offset, length, cb, sse, cancellationToken);
         }
 
 
@@ -84,41 +85,36 @@ namespace Registry.Adapters.ObjectSystem
             CancellationToken cancellationToken = default)
         {
 
-            try
+            var cachedFileName = GetCacheFileName(bucketName, objectName);
+            if (File.Exists(cachedFileName))
             {
-                await _localStorage.GetObjectAsync(bucketName, objectName, filePath, sse, cancellationToken);
+                File.Copy(cachedFileName, filePath, true);
+                return;
             }
-            catch (Exception ex)
-            {
-                if (!await _localStorage.BucketExistsAsync(bucketName, cancellationToken))
-                    await _localStorage.MakeBucketAsync(bucketName, null, cancellationToken);
 
-                await _remoteStorage.PutObjectAsync(bucketName, objectName, filePath, null, null, sse, cancellationToken);
-                await _remoteStorage.GetObjectAsync(bucketName, objectName, filePath, sse, cancellationToken);
-            }
+            await _remoteStorage.GetObjectAsync(bucketName, objectName, filePath, sse, cancellationToken);
+
+            File.Copy(filePath, cachedFileName, true);
         }
 
 
-        public async Task RemoveObjectAsync(string bucketName, string objectName, CancellationToken cancellationToken = default)
-        {
-            await Task.WhenAll(
-                _remoteStorage.RemoveObjectAsync(bucketName, objectName, cancellationToken),
-                _localStorage.RemoveObjectAsync(bucketName, objectName, cancellationToken));
-        }
 
         public async Task<ObjectInfo> GetObjectInfoAsync(string bucketName, string objectName, IServerEncryption sse = null,
             CancellationToken cancellationToken = default)
         {
 
-            try
+            var cachedFileInfoName = GetCacheFileInfoName(bucketName, objectName);
+            if (File.Exists(cachedFileInfoName))
             {
-                return await _localStorage.GetObjectInfoAsync(bucketName, objectName, sse, cancellationToken);
-            }
-            catch (Exception ex)
-            {
-                return await _remoteStorage.GetObjectInfoAsync(bucketName, objectName, sse, cancellationToken);
+                return JsonConvert.DeserializeObject<ObjectInfo>(
+                    await File.ReadAllTextAsync(cachedFileInfoName, cancellationToken));
             }
 
+            var objectInfo = await _remoteStorage.GetObjectInfoAsync(bucketName, objectName, sse, cancellationToken);
+
+            await File.WriteAllTextAsync(cachedFileInfoName, JsonConvert.SerializeObject(objectInfo), cancellationToken);
+
+            return objectInfo;
         }
 
         public IObservable<ObjectUpload> ListIncompleteUploads(string bucketName, string prefix = "", bool recursive = false,
@@ -145,37 +141,31 @@ namespace Registry.Adapters.ObjectSystem
             Dictionary<string, string> metaData = null, IServerEncryption sse = null, CancellationToken cancellationToken = default)
         {
 
-            if (!await _localStorage.BucketExistsAsync(bucketName, cancellationToken))
-                await _localStorage.MakeBucketAsync(bucketName, null, cancellationToken);
+            await _remoteStorage.PutObjectAsync(bucketName, objectName, data, size, contentType, metaData, sse, cancellationToken);
 
-            await Task.WhenAll(
-                _remoteStorage.PutObjectAsync(bucketName, objectName, data, size, contentType, metaData, sse, cancellationToken),
-                _localStorage.PutObjectAsync(bucketName, objectName, data, size, contentType, metaData, sse, cancellationToken)
-            );
+            var cachedFileName = GetCacheFileName(bucketName, objectName);
+            data.Reset();
+
+            await using var writer = File.OpenWrite(cachedFileName);
+            await data.CopyToAsync(writer, cancellationToken);
+
         }
 
         public async Task PutObjectAsync(string bucketName, string objectName, string filePath, string contentType = null,
             Dictionary<string, string> metaData = null, IServerEncryption sse = null, CancellationToken cancellationToken = default)
-        {
+        {            
+            
+            await _remoteStorage.PutObjectAsync(bucketName, objectName, filePath, contentType, metaData, sse, cancellationToken);
 
-            if (!await _localStorage.BucketExistsAsync(bucketName, cancellationToken))
-                await _localStorage.MakeBucketAsync(bucketName, null, cancellationToken);
-
-            await Task.WhenAll(
-                _remoteStorage.PutObjectAsync(bucketName, objectName, filePath, contentType, metaData, sse, cancellationToken),
-                _localStorage.PutObjectAsync(bucketName, objectName, filePath, contentType, metaData, sse, cancellationToken)
-            );
-
+            var cachedFileName = GetCacheFileName(bucketName, objectName);
+            File.Copy(filePath, cachedFileName, true);
         }
 
         #endregion
 
         public async Task MakeBucketAsync(string bucketName, string location = null, CancellationToken cancellationToken = default)
         {
-            await Task.WhenAll(
-                _remoteStorage.MakeBucketAsync(bucketName, location, cancellationToken),
-                _localStorage.MakeBucketAsync(bucketName, location, cancellationToken)
-            );
+            await _remoteStorage.MakeBucketAsync(bucketName, location, cancellationToken);
         }
 
         public async Task<ListBucketsResult> ListBucketsAsync(CancellationToken cancellationToken = default)
@@ -187,14 +177,21 @@ namespace Registry.Adapters.ObjectSystem
         {
             return await _remoteStorage.BucketExistsAsync(bucketName, cancellationToken);
         }
+        
+        public async Task RemoveObjectAsync(string bucketName, string objectName, CancellationToken cancellationToken = default)
+        {
+            var cachedFileName = GetCacheFileName(bucketName, objectName);
+            if (File.Exists(cachedFileName)) File.Delete(cachedFileName);
+
+            await _remoteStorage.RemoveObjectAsync(bucketName, objectName, cancellationToken);
+        }
 
         public async Task RemoveBucketAsync(string bucketName, bool force = true, CancellationToken cancellationToken = default)
         {
-            if (await _localStorage.BucketExistsAsync(bucketName, cancellationToken))
-                await _localStorage.RemoveBucketAsync(bucketName, force, cancellationToken);
-
             await _remoteStorage.RemoveBucketAsync(bucketName, force, cancellationToken);
 
+            var cachedFiles = Directory.EnumerateFiles(CachePath, bucketName + "-*");
+            foreach(var file in cachedFiles) File.Delete(file);
         }
 
         public IObservable<ItemInfo> ListObjectsAsync(string bucketName, string prefix = null, bool recursive = false,

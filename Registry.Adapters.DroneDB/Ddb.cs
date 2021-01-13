@@ -199,8 +199,9 @@ namespace Registry.Adapters.DroneDB
             }
             finally
             {
-                if (filePath != null && File.Exists(filePath))
-                    File.Delete(filePath);
+                if (filePath != null && File.Exists(filePath)) 
+                    if (!CommonUtils.SafeDelete(filePath))
+                        Debug.WriteLine($"Cannot delete file '{filePath}'");
             }
         }
 
