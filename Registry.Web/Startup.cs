@@ -459,18 +459,19 @@ namespace Registry.Web
                     if (s3Settings == null)
                         throw new ArgumentException("Invalid S3 storage provider settings");
 
-                    services.AddScoped<IObjectSystem, S3ObjectSystem>(provider => new S3ObjectSystem(
-                        new S3ObjectSystemSettings
-                        {
-                            Endpoint = s3Settings.Endpoint,
-                            AccessKey = s3Settings.AccessKey,
-                            SecretKey = s3Settings.SecretKey,
-                            Region = s3Settings.Region,
-                            SessionToken = s3Settings.SessionToken,
-                            UseSsl = s3Settings.UseSsl ?? false,
-                            AppName = s3Settings.AppName,
-                            AppVersion = s3Settings.AppVersion
-                        }));
+                    services.AddSingleton(new S3ObjectSystemSettings
+                    {
+                        Endpoint = s3Settings.Endpoint,
+                        AccessKey = s3Settings.AccessKey,
+                        SecretKey = s3Settings.SecretKey,
+                        Region = s3Settings.Region,
+                        SessionToken = s3Settings.SessionToken,
+                        UseSsl = s3Settings.UseSsl ?? false,
+                        AppName = s3Settings.AppName,
+                        AppVersion = s3Settings.AppVersion
+                    });
+
+                    services.AddScoped<IObjectSystem, S3ObjectSystem>();
 
                     break;
 
@@ -481,7 +482,7 @@ namespace Registry.Web
                     if (cachedS3Settings == null)
                         throw new ArgumentException("Invalid S3 storage provider settings");
 
-                    services.AddScoped<IObjectSystem, CachedS3ObjectSystem>(provider => new CachedS3ObjectSystem(new S3ObjectSystemSettings
+                    services.AddSingleton(new CachedS3ObjectSystemSettings
                     {
                         Endpoint = cachedS3Settings.Endpoint,
                         AccessKey = cachedS3Settings.AccessKey,
@@ -490,8 +491,13 @@ namespace Registry.Web
                         SessionToken = cachedS3Settings.SessionToken,
                         UseSsl = cachedS3Settings.UseSsl ?? false,
                         AppName = cachedS3Settings.AppName,
-                        AppVersion = cachedS3Settings.AppVersion
-                    }, cachedS3Settings.CachePath, cachedS3Settings.CacheExpiration, cachedS3Settings.MaxSize));
+                        AppVersion = cachedS3Settings.AppVersion,
+                        CacheExpiration = cachedS3Settings.CacheExpiration,
+                        CachePath = cachedS3Settings.CachePath,
+                        MaxSize = cachedS3Settings.MaxSize
+                    });
+
+                    services.AddScoped<IObjectSystem, CachedS3ObjectSystem>();
 
 
                     break;

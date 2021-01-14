@@ -2,47 +2,50 @@
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Linq.Expressions;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
+using Microsoft.Extensions.Logging;
 using Newtonsoft.Json;
 using Registry.Adapters.ObjectSystem.Model;
 using Registry.Common;
 using Registry.Common.Model;
 using Registry.Ports.ObjectSystem;
 using Registry.Ports.ObjectSystem.Model;
+using Exception = System.Exception;
 
 namespace Registry.Adapters.ObjectSystem
 {
     public class CachedS3ObjectSystem : IObjectSystem
     {
+        private readonly ILogger<CachedS3ObjectSystem> _logger;
         private readonly S3ObjectSystem _remoteStorage;
 
         public string CachePath { get; }
         public TimeSpan CacheExpiration { get; }
-        public long MaxSize { get; }
+        public long? MaxSize { get; }
 
         private const string CacheFileEntryFormat = "{0}-{1}";
         private const string CacheFileInfoFormat = "{0}-{1}.json";
 
         private string GetCacheFileName(string bucketName, string objectName)
         {
-            return Path.Combine(CachePath,
-                string.Format(CacheFileEntryFormat, bucketName, objectName.Replace('/', '-')));
+            return Path.Combine(CachePath, bucketName, objectName.Replace('/', '-'));
         }
         private string GetCacheFileInfoName(string bucketName, string objectName)
         {
-            return Path.Combine(CachePath,
-                string.Format(CacheFileInfoFormat, bucketName, objectName.Replace('/', '-')));
+            return Path.Combine(CachePath, bucketName, objectName.Replace('/', '-') + ".json");
         }
 
         public CachedS3ObjectSystem(
-            S3ObjectSystemSettings settings, string cachePath, TimeSpan cacheExpiration, long maxSize = 0)
+            CachedS3ObjectSystemSettings settings, ILogger<CachedS3ObjectSystem> logger)
 
         {
-            CachePath = cachePath;
-            CacheExpiration = cacheExpiration;
-            MaxSize = maxSize;
+            _logger = logger;
+            CachePath = settings.CachePath;
+            CacheExpiration = settings.CacheExpiration;
+            MaxSize = settings.MaxSize;
 
             _remoteStorage = new S3ObjectSystem(settings);
         }
@@ -50,33 +53,62 @@ namespace Registry.Adapters.ObjectSystem
         public async Task GetObjectAsync(string bucketName, string objectName, Action<Stream> callback, IServerEncryption sse = null,
             CancellationToken cancellationToken = default)
         {
+
             var cachedFileName = GetCacheFileName(bucketName, objectName);
-            if (File.Exists(cachedFileName))
+
+            try
             {
-                var memory = new MemoryStream();
-                await using (var s = File.OpenRead(cachedFileName)) 
-                    await s.CopyToAsync(memory, cancellationToken);
+                if (File.Exists(cachedFileName))
+                {
+                    var memory = new MemoryStream();
+                    await using (var s = File.OpenRead(cachedFileName))
+                        await s.CopyToAsync(memory, cancellationToken);
 
-                memory.Reset();
+                    memory.Reset();
 
-                callback(memory);
-                return;
+                    callback(memory);
+                    return;
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, $"Cannot read from cache the file '{cachedFileName}' in '{bucketName}' bucket and '{objectName}' object");
             }
 
             await _remoteStorage.GetObjectAsync(bucketName, objectName, stream =>
             {
-                using (var s = File.OpenWrite(cachedFileName)) stream.CopyTo(s);
+                using var memory = new MemoryStream();
+                stream.CopyTo(memory);
 
-                stream.Reset();
+                try
+                {
+                    EnsureBucketPathExists(bucketName);
+                    memory.Reset();
+                    using var s = File.OpenWrite(cachedFileName);
+                    memory.CopyTo(s);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, $"Cannot write to cache the file '{cachedFileName}' in '{bucketName}' bucket and '{objectName}' object");
+                }
 
-                callback(stream);
+                memory.Reset();
 
+                callback(memory);
             }, sse, cancellationToken);
+        }
+
+        private void EnsureBucketPathExists(string bucketName)
+        {
+            var bucketPath = GetBucketFolder(bucketName);
+            Directory.CreateDirectory(bucketPath);
+
         }
 
         public async Task GetObjectAsync(string bucketName, string objectName, long offset, long length, Action<Stream> cb,
             IServerEncryption sse = null, CancellationToken cancellationToken = default)
         {
+            // NOTE: Not supported partial file recovery
             await _remoteStorage.GetObjectAsync(bucketName, objectName, offset, length, cb, sse, cancellationToken);
         }
 
@@ -86,17 +118,35 @@ namespace Registry.Adapters.ObjectSystem
         {
 
             var cachedFileName = GetCacheFileName(bucketName, objectName);
-            if (File.Exists(cachedFileName))
+
+            try
             {
-                File.Copy(cachedFileName, filePath, true);
-                return;
+                if (File.Exists(cachedFileName))
+                {
+                    File.Copy(cachedFileName, filePath, true);
+                    return;
+                }
+
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, $"Cannot read from cache the file '{cachedFileName}' in '{bucketName}' bucket and '{objectName}' object");
             }
 
             await _remoteStorage.GetObjectAsync(bucketName, objectName, filePath, sse, cancellationToken);
 
-            File.Copy(filePath, cachedFileName, true);
-        }
+            try
+            {
+                EnsureBucketPathExists(bucketName);
 
+                File.Copy(filePath, cachedFileName, true);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, $"Cannot copy to cache from '{filePath}' to '{cachedFileName}' in '{bucketName}' bucket and '{objectName}' object");
+            }
+
+        }
 
 
         public async Task<ObjectInfo> GetObjectInfoAsync(string bucketName, string objectName, IServerEncryption sse = null,
@@ -104,15 +154,34 @@ namespace Registry.Adapters.ObjectSystem
         {
 
             var cachedFileInfoName = GetCacheFileInfoName(bucketName, objectName);
-            if (File.Exists(cachedFileInfoName))
+
+            try
             {
-                return JsonConvert.DeserializeObject<ObjectInfo>(
-                    await File.ReadAllTextAsync(cachedFileInfoName, cancellationToken));
+                if (File.Exists(cachedFileInfoName))
+                {
+                    return JsonConvert.DeserializeObject<ObjectInfo>(
+                        await File.ReadAllTextAsync(cachedFileInfoName, cancellationToken));
+                }
+
             }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, $"Cannot read from cache the file info '{cachedFileInfoName}' in '{bucketName}' bucket and '{objectName}' object");
+            }
+
 
             var objectInfo = await _remoteStorage.GetObjectInfoAsync(bucketName, objectName, sse, cancellationToken);
 
-            await File.WriteAllTextAsync(cachedFileInfoName, JsonConvert.SerializeObject(objectInfo), cancellationToken);
+            try
+            {
+                EnsureBucketPathExists(bucketName);
+
+                await File.WriteAllTextAsync(cachedFileInfoName, JsonConvert.SerializeObject(objectInfo, Formatting.Indented), cancellationToken);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, $"Cannot write file info to cache '{cachedFileInfoName}' in '{bucketName}' bucket and '{objectName}' object");
+            }
 
             return objectInfo;
         }
@@ -144,21 +213,41 @@ namespace Registry.Adapters.ObjectSystem
             await _remoteStorage.PutObjectAsync(bucketName, objectName, data, size, contentType, metaData, sse, cancellationToken);
 
             var cachedFileName = GetCacheFileName(bucketName, objectName);
-            data.Reset();
 
-            await using var writer = File.OpenWrite(cachedFileName);
-            await data.CopyToAsync(writer, cancellationToken);
+            try
+            {
+                data.Reset();
+
+                EnsureBucketPathExists(bucketName);
+
+                await using var writer = File.OpenWrite(cachedFileName);
+                await data.CopyToAsync(writer, cancellationToken);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, $"Cannot write to cache the file '{cachedFileName}' in '{bucketName}' bucket and '{objectName}' object");
+            }
 
         }
 
         public async Task PutObjectAsync(string bucketName, string objectName, string filePath, string contentType = null,
             Dictionary<string, string> metaData = null, IServerEncryption sse = null, CancellationToken cancellationToken = default)
-        {            
-            
+        {
+
             await _remoteStorage.PutObjectAsync(bucketName, objectName, filePath, contentType, metaData, sse, cancellationToken);
 
             var cachedFileName = GetCacheFileName(bucketName, objectName);
-            File.Copy(filePath, cachedFileName, true);
+            try
+            {
+                EnsureBucketPathExists(bucketName);
+
+                File.Copy(filePath, cachedFileName, true);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, $"Cannot copy to cache from '{filePath}' to '{cachedFileName}' in '{bucketName}' bucket and '{objectName}' object");
+            }
+
         }
 
         #endregion
@@ -177,21 +266,54 @@ namespace Registry.Adapters.ObjectSystem
         {
             return await _remoteStorage.BucketExistsAsync(bucketName, cancellationToken);
         }
-        
+
         public async Task RemoveObjectAsync(string bucketName, string objectName, CancellationToken cancellationToken = default)
         {
-            var cachedFileName = GetCacheFileName(bucketName, objectName);
-            if (File.Exists(cachedFileName)) File.Delete(cachedFileName);
 
-            await _remoteStorage.RemoveObjectAsync(bucketName, objectName, cancellationToken);
+            await Task.WhenAll(new Task(() =>
+                {
+                    var cachedFileName = GetCacheFileName(bucketName, objectName);
+
+                    try
+                    {
+                        if (File.Exists(cachedFileName)) File.Delete(cachedFileName);
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogError(ex,
+                            $"Cannot delete cached file '{cachedFileName}' in '{bucketName}' bucket and '{objectName}' object");
+                    }
+
+                }),
+                _remoteStorage.RemoveObjectAsync(bucketName, objectName, cancellationToken)
+            );
+
         }
 
         public async Task RemoveBucketAsync(string bucketName, bool force = true, CancellationToken cancellationToken = default)
         {
-            await _remoteStorage.RemoveBucketAsync(bucketName, force, cancellationToken);
 
-            var cachedFiles = Directory.EnumerateFiles(CachePath, bucketName + "-*");
-            foreach(var file in cachedFiles) File.Delete(file);
+            await Task.WhenAll(new Task(() =>
+                {
+                    var bucketFolder = GetBucketFolder(bucketName);
+                    try
+                    {
+                        if (Directory.Exists(bucketFolder)) Directory.Delete(bucketFolder, true);
+
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogError(ex,
+                            $"Cannot delete cached files in folder '{bucketFolder}' of '{bucketName}' bucket and");
+                    }
+                }),
+                _remoteStorage.RemoveBucketAsync(bucketName, force, cancellationToken));
+
+        }
+
+        private string GetBucketFolder(string bucketName)
+        {
+            return Path.GetFullPath(Path.Combine(CachePath, bucketName));
         }
 
         public IObservable<ItemInfo> ListObjectsAsync(string bucketName, string prefix = null, bool recursive = false,
