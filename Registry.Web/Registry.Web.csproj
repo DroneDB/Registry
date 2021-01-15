@@ -12,17 +12,21 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <Compile Remove="ddbstore\**" />
     <Compile Remove="logs\**" />
     <Compile Remove="temp\**" />
     <Compile Remove="uploads\**" />
+    <Content Remove="ddbstore\**" />
 
     <Content Remove="logs\**" />
     <Content Remove="temp\**" />
     <Content Remove="uploads\**" />
+    <EmbeddedResource Remove="ddbstore\**" />
 
     <EmbeddedResource Remove="logs\**" />
     <EmbeddedResource Remove="temp\**" />
     <EmbeddedResource Remove="uploads\**" />
+    <None Remove="ddbstore\**" />
 
     <None Remove="logs\**" />
     <None Remove="temp\**" />
