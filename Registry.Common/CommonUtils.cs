@@ -244,6 +244,18 @@ namespace Registry.Common
                 return false;
             }
         }
+
+        public static void RemoveEmptyFolders(string folder)
+        {
+            foreach (var directory in Directory.GetDirectories(folder))
+            {
+                RemoveEmptyFolders(directory);
+                if (Directory.GetFileSystemEntries(directory).Length == 0)
+                {
+                    Directory.Delete(directory, false);
+                }
+            }
+        }
     }
 
 
