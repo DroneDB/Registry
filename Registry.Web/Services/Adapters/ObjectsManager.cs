@@ -191,8 +191,14 @@ namespace Registry.Web.Services.Adapters
 
             _logger.LogInformation($"Uploading '{path}' (size {stream.Length}) to bucket '{bucketName}'");
 
-            // TODO: No metadata / encryption ?
-            await _objectSystem.PutObjectAsync(bucketName, path, stream, stream.Length, contentType);
+            var memory = new MemoryStream();
+            await stream.CopyToAsync(memory);
+            memory.Reset();
+            stream.Reset();
+
+            // Leveraging async work
+            //await _objectSystem.PutObjectAsync(bucketName, path, stream, stream.Length, contentType);
+            var asyncTask = _objectSystem.PutObjectAsync(bucketName, path, memory, memory.Length, contentType);
 
             _logger.LogInformation("File uploaded, adding to DDB");
 
