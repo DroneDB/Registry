@@ -270,45 +270,39 @@ namespace Registry.Adapters.ObjectSystem
         public async Task RemoveObjectAsync(string bucketName, string objectName, CancellationToken cancellationToken = default)
         {
 
-            await Task.WhenAll(new Task(() =>
-                {
-                    var cachedFileName = GetCacheFileName(bucketName, objectName);
+            var cachedFileName = GetCacheFileName(bucketName, objectName);
 
-                    try
-                    {
-                        if (File.Exists(cachedFileName)) File.Delete(cachedFileName);
-                    }
-                    catch (Exception ex)
-                    {
-                        _logger.LogError(ex,
-                            $"Cannot delete cached file '{cachedFileName}' in '{bucketName}' bucket and '{objectName}' object");
-                    }
+            try
+            {
+                if (File.Exists(cachedFileName)) File.Delete(cachedFileName);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex,
+                    $"Cannot delete cached file '{cachedFileName}' in '{bucketName}' bucket and '{objectName}' object");
+            }
 
-                }),
-                _remoteStorage.RemoveObjectAsync(bucketName, objectName, cancellationToken)
-            );
-
+            await _remoteStorage.RemoveObjectAsync(bucketName, objectName, cancellationToken);
+            
         }
 
         public async Task RemoveBucketAsync(string bucketName, bool force = true, CancellationToken cancellationToken = default)
         {
 
-            await Task.WhenAll(new Task(() =>
-                {
-                    var bucketFolder = GetBucketFolder(bucketName);
-                    try
-                    {
-                        if (Directory.Exists(bucketFolder)) Directory.Delete(bucketFolder, true);
+            var bucketFolder = GetBucketFolder(bucketName);
+            try
+            {
+                if (Directory.Exists(bucketFolder)) Directory.Delete(bucketFolder, true);
 
-                    }
-                    catch (Exception ex)
-                    {
-                        _logger.LogError(ex,
-                            $"Cannot delete cached files in folder '{bucketFolder}' of '{bucketName}' bucket and");
-                    }
-                }),
-                _remoteStorage.RemoveBucketAsync(bucketName, force, cancellationToken));
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex,
+                    $"Cannot delete cached files in folder '{bucketFolder}' of '{bucketName}' bucket and");
+            }
 
+            await _remoteStorage.RemoveBucketAsync(bucketName, force, cancellationToken);
+            
         }
 
         private string GetBucketFolder(string bucketName)
