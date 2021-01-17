@@ -16,22 +16,27 @@
     <Compile Remove="logs\**" />
     <Compile Remove="temp\**" />
     <Compile Remove="uploads\**" />
+    <Compile Remove="s3cache\**" />
+    
     <Content Remove="ddbstore\**" />
-
     <Content Remove="logs\**" />
     <Content Remove="temp\**" />
     <Content Remove="uploads\**" />
-    <EmbeddedResource Remove="ddbstore\**" />
+    <Content Remove="s3cache\**" />
 
+    <EmbeddedResource Remove="ddbstore\**" />
     <EmbeddedResource Remove="logs\**" />
     <EmbeddedResource Remove="temp\**" />
     <EmbeddedResource Remove="uploads\**" />
-    <None Remove="ddbstore\**" />
+    <EmbeddedResource Remove="s3cache\**" />
 
+    <None Remove="ddbstore\**" />
+    <None Remove="s3cache\**" />
     <None Remove="logs\**" />
     <None Remove="temp\**" />
     <None Remove="uploads\**" />
     <None Remove="ddb-log*.csv" />
+
   </ItemGroup>
 
   <ItemGroup>
