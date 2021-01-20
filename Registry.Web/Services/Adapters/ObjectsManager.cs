@@ -196,9 +196,7 @@ namespace Registry.Web.Services.Adapters
             memory.Reset();
             stream.Reset();
 
-            // Leveraging async work
-            //await _objectSystem.PutObjectAsync(bucketName, path, stream, stream.Length, contentType);
-            var asyncTask = _objectSystem.PutObjectAsync(bucketName, path, memory, memory.Length, contentType);
+            await _objectSystem.PutObjectAsync(bucketName, path, memory, memory.Length, contentType);
 
             _logger.LogInformation("File uploaded, adding to DDB");
 

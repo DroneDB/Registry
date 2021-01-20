@@ -22,6 +22,8 @@ namespace Registry.Adapters.ObjectSystem
         private readonly ILogger<CachedS3ObjectSystem> _logger;
         private readonly S3ObjectSystem _remoteStorage;
 
+        private const int MaxUploadAttempts = 5;
+
         public string CachePath { get; }
         public TimeSpan? CacheExpiration { get; }
         public long? MaxSize { get; }
@@ -30,7 +32,7 @@ namespace Registry.Adapters.ObjectSystem
 
         private Dictionary<string, FileInfo> _fileInfos;
 
-        private static object _sync = new();
+        private static readonly object _sync = new();
 
         //private readonly Mutex evt;
 
@@ -65,8 +67,8 @@ namespace Registry.Adapters.ObjectSystem
         private void UpdateCurrentCacheSize()
         {
             Cleanup();
-            _fileInfos = Directory.EnumerateFiles(CachePath, "*", SearchOption.AllDirectories).Select(file => new FileInfo(file))
-                .ToDictionary(info => info.FullName, info => info);
+            _fileInfos = SafeGetAllFiles(CachePath).Select(file => new FileInfo(file))
+                         .ToDictionary(info => info.FullName, info => info);
             _currentCacheSize = _fileInfos.Sum(file => file.Value.Length);
         }
 
@@ -124,22 +126,30 @@ namespace Registry.Adapters.ObjectSystem
                     if (info.Exists)
                     {
 
-                        try
+                        var signalFileExists = File.Exists(GetSignalFileName(info.FullName));
+
+                        if (!signalFileExists)
                         {
-                            _logger.LogInformation($"Deleting '{pair.Key}'");
+                            try
+                            {
+                                _logger.LogInformation($"Deleting '{pair.Key}'");
 
-                            var fileSize = info.Length;
-                            info.Delete();
+                                var fileSize = info.Length;
+                                info.Delete();
 
-                            _fileInfos.Remove(pair.Key);
+                                _fileInfos.Remove(pair.Key);
 
-                            size += fileSize;
-                            cnt++;
-
+                                size += fileSize;
+                                cnt++;
+                            }
+                            catch (Exception ex)
+                            {
+                                _logger.LogError(ex, $"Cannot delete file '{pair.Value}'");
+                            }
                         }
-                        catch (Exception ex)
+                        else
                         {
-                            _logger.LogError(ex, $"Cannot delete file '{pair.Value}'");
+                            _logger.LogInformation($"Skipping '{pair.Key}' because is being uploaded");
                         }
                     }
 
@@ -167,11 +177,12 @@ namespace Registry.Adapters.ObjectSystem
                 return;
             }
 
-            lock(_sync) { 
+            lock (_sync)
+            {
 
                 _logger.LogInformation($"Cleaning up folder '{folder}'");
 
-                var expiredFiles = (from file in Directory.EnumerateFiles(folder, "*", SearchOption.AllDirectories)
+                var expiredFiles = (from file in SafeGetAllFiles(folder)
                                     let info = new FileInfo(file)
                                     where info.LastAccessTime + CacheExpiration < DateTime.Now
                                     select new { Path = file, Size = info.Length }).ToArray();
@@ -187,7 +198,9 @@ namespace Registry.Adapters.ObjectSystem
 
                 foreach (var file in expiredFiles)
                 {
-                    if (File.Exists(file.Path))
+                    if (!File.Exists(file.Path)) continue;
+
+                    if (!File.Exists(GetSignalFileName(file.Path)))
                     {
                         try
                         {
@@ -206,6 +219,10 @@ namespace Registry.Adapters.ObjectSystem
                             _logger.LogError(ex, $"Cannot delete expired file '{file}'");
                         }
                     }
+                    else
+                    {
+                        _logger.LogInformation($"Skipping '{file.Path}' because it's being uploaded");
+                    }
                 }
 
                 // Safe for first execution
@@ -216,7 +233,16 @@ namespace Registry.Adapters.ObjectSystem
             }
         }
 
+        private bool IsSignalFile(string file)
+        {
+            return file != null && file.EndsWith(SignalFileSuffix);
+        }
 
+        private string[] SafeGetAllFiles(string path)
+        {
+            return Directory.EnumerateFiles(path, "*", SearchOption.AllDirectories).Where(p => !IsSignalFile(p)).ToArray();
+
+        }
 
         private void TrackCachedFile(string file)
         {
@@ -257,10 +283,23 @@ namespace Registry.Adapters.ObjectSystem
                 _currentCacheSize = _fileInfos.Sum(f => f.Value.Length);
             };
         }
+
         private string GetBucketFolder(string bucketName)
         {
             return Path.GetFullPath(Path.Combine(CachePath, bucketName));
         }
+
+        private const string SignalFileSuffix = "-pending";
+        private string GetSignalFileName(string path)
+        {
+            return path + SignalFileSuffix;
+        }
+
+        private string GetSignalFileName(string bucketName, string objectName)
+        {
+            return GetCacheFileName(bucketName, objectName) + SignalFileSuffix;
+        }
+
 
         #endregion
 
@@ -415,7 +454,6 @@ namespace Registry.Adapters.ObjectSystem
             Dictionary<string, string> metaData = null, IServerEncryption sse = null, CancellationToken cancellationToken = default)
         {
 
-            await _remoteStorage.PutObjectAsync(bucketName, objectName, data, size, contentType, metaData, sse, cancellationToken);
 
             var cachedFileName = GetCacheFileName(bucketName, objectName);
 
@@ -428,6 +466,7 @@ namespace Registry.Adapters.ObjectSystem
                 await using (var writer = File.OpenWrite(cachedFileName))
                     await data.CopyToAsync(writer, cancellationToken);
 
+                CreateSignalFile(cachedFileName);
                 TrackCachedFile(cachedFileName);
                 TrimExcessCache();
             }
@@ -436,21 +475,118 @@ namespace Registry.Adapters.ObjectSystem
                 _logger.LogError(ex, $"Cannot write to cache the file '{cachedFileName}' in '{bucketName}' bucket and '{objectName}' object");
             }
 
+            var task = SafePutObjectAsync(bucketName, objectName, data, size, contentType, metaData, sse, cancellationToken);
+
+        }
+
+        private void CreateSignalFile(string file)
+        {
+            File.WriteAllText(GetSignalFileName(file), DateTime.Now.ToString("O"));
+        }
+
+        private bool IsFileSignaled(string file)
+        {
+            return File.Exists(GetSignalFileName(file));
+        }
+
+        private async Task SafePutObjectAsync(string bucketName, string objectName, Stream data, long size,
+            string contentType, Dictionary<string, string> metaData, IServerEncryption sse,
+            CancellationToken cancellationToken)
+        {
+
+            var signalFileName = GetSignalFileName(bucketName, objectName);
+            var cachedFileName = GetCacheFileName(bucketName, objectName);
+
+            if (!IsFileSignaled(cachedFileName))
+                CreateSignalFile(cachedFileName);
+
+            int cnt = 1;
+            do
+            {
+                try
+                {
+                    _logger.LogInformation($"Uploading file '{objectName}' to '{bucketName}' bucket");
+                    await _remoteStorage.PutObjectAsync(bucketName, objectName, data, size, contentType, metaData, sse,
+                        cancellationToken);
+                    break;
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, $"Cannot file '{objectName}' to '{bucketName}' bucket to S3 ({cnt}° attempt)");
+                    cnt++;
+                }
+
+            } while (cnt < MaxUploadAttempts);
+
+            if (cnt == MaxUploadAttempts)
+            {
+                _logger.LogError(
+                    "No attempt to upload file to S3 was successful, leaving the file in unsyncronized state");
+
+                return;
+            }
+
+            _logger.LogInformation($"Removing signal file '{signalFileName}'");
+            File.Delete(signalFileName);
+        }
+
+        private async Task SafePutObjectAsync(string bucketName, string objectName, string filePath,
+            string contentType, Dictionary<string, string> metaData, IServerEncryption sse,
+            CancellationToken cancellationToken)
+        {
+
+            var signalFileName = GetSignalFileName(bucketName, objectName);
+            var cachedFileName = GetCacheFileName(bucketName, objectName);
+
+            if (!IsFileSignaled(cachedFileName))
+                CreateSignalFile(cachedFileName);
+
+            int cnt = 1;
+            do
+            {
+                try
+                {
+                    _logger.LogInformation($"Uploading file '{objectName}' to '{bucketName}' bucket");
+                    await _remoteStorage.PutObjectAsync(bucketName, objectName, filePath, contentType, metaData, sse,
+                        cancellationToken);
+                    break;
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, $"Cannot file '{objectName}' to '{bucketName}' bucket to S3 ({cnt}° attempt)");
+                    cnt++;
+                }
+
+            } while (cnt < MaxUploadAttempts);
+
+            if (cnt == MaxUploadAttempts)
+            {
+                _logger.LogError(
+                    "No attempt to upload file to S3 was successful, leaving the file in unsyncronized state");
+
+                return;
+            }
+
+            _logger.LogInformation($"Removing signal file '{signalFileName}'");
+            File.Delete(signalFileName);
         }
 
         public async Task PutObjectAsync(string bucketName, string objectName, string filePath, string contentType = null,
             Dictionary<string, string> metaData = null, IServerEncryption sse = null, CancellationToken cancellationToken = default)
         {
-
-            await _remoteStorage.PutObjectAsync(bucketName, objectName, filePath, contentType, metaData, sse, cancellationToken);
-
+            
             var cachedFileName = GetCacheFileName(bucketName, objectName);
+
+            if (!IsFileSignaled(cachedFileName))
+                CreateSignalFile(cachedFileName);
+
             try
             {
                 EnsureBucketPathExists(bucketName);
 
                 File.Copy(filePath, cachedFileName, true);
 
+                CreateSignalFile(cachedFileName);
                 TrackCachedFile(cachedFileName);
                 TrimExcessCache();
 
@@ -459,6 +595,8 @@ namespace Registry.Adapters.ObjectSystem
             {
                 _logger.LogError(ex, $"Cannot copy to cache from '{filePath}' to '{cachedFileName}' in '{bucketName}' bucket and '{objectName}' object");
             }
+
+            var task = SafePutObjectAsync(bucketName, objectName, filePath, contentType, metaData, sse, cancellationToken);
 
         }
 
@@ -500,7 +638,7 @@ namespace Registry.Adapters.ObjectSystem
             {
                 if (Directory.Exists(bucketFolder))
                 {
-                    var files = Directory.EnumerateFiles(bucketFolder, "*", SearchOption.AllDirectories);
+                    var files = SafeGetAllFiles(bucketFolder);
                     foreach (var file in files)
                         DetachCachedFile(file);
 
@@ -582,6 +720,6 @@ namespace Registry.Adapters.ObjectSystem
         }
 
         #endregion
-        
+
     }
 }
