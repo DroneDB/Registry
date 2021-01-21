@@ -5,6 +5,8 @@ using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Newtonsoft.Json;
+using Registry.Adapters.ObjectSystem;
+using Registry.Ports.ObjectSystem;
 using Registry.Web.Data;
 using Registry.Web.Data.Models;
 using Registry.Web.Exceptions;
@@ -20,14 +22,16 @@ namespace Registry.Web.Services.Adapters
         private readonly RegistryContext _context;
         private readonly IDdbManager _ddbManager;
         private readonly ILogger<SystemManager> _logger;
+        private readonly IObjectSystem _objectSystem;
 
-        public SystemManager(IChunkedUploadManager chunkedUploadManager, IAuthManager authManager, RegistryContext context, IDdbManager ddbManager, ILogger<SystemManager> logger)
+        public SystemManager(IChunkedUploadManager chunkedUploadManager, IAuthManager authManager, RegistryContext context, IDdbManager ddbManager, ILogger<SystemManager> logger, IObjectSystem objectSystem)
         {
             _chunkedUploadManager = chunkedUploadManager;
             _authManager = authManager;
             _context = context;
             _ddbManager = ddbManager;
             _logger = logger;
+            _objectSystem = objectSystem;
         }
 
         public async Task<CleanupResult> CleanupSessions()
@@ -89,5 +93,11 @@ namespace Registry.Web.Services.Adapters
             await _context.SaveChangesAsync();
         }
 
+        public CachedS3ObjectSystem.SyncFilesRes SyncFiles()
+        {
+            var cachedS3 = _objectSystem as CachedS3ObjectSystem;
+
+            return cachedS3?.SyncFiles();
+        }
     }
 }
