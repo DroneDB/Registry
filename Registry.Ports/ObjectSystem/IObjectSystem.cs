@@ -192,5 +192,10 @@ namespace Registry.Ports.ObjectSystem
         /// <returns></returns>
         StorageInfo GetStorageInfo();
 
+        /// <summary>
+        /// Cleans up any intermediate or temp file
+        /// </summary>
+        void Cleanup();
+
     }
 }

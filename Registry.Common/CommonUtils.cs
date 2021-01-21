@@ -239,7 +239,7 @@ namespace Registry.Common
                 File.Delete(path);
                 return true;
             }
-            catch (IOException ex)
+            catch
             {
                 return false;
             }
@@ -247,14 +247,18 @@ namespace Registry.Common
 
         public static void RemoveEmptyFolders(string folder)
         {
+            if (!Directory.Exists(folder)) return;
+
             foreach (var directory in Directory.GetDirectories(folder))
             {
                 RemoveEmptyFolders(directory);
+                if (!Directory.Exists(directory)) continue;
                 if (Directory.GetFileSystemEntries(directory).Length == 0)
                 {
                     Directory.Delete(directory, false);
                 }
             }
+
         }
     }
 

@@ -183,5 +183,10 @@ namespace Registry.Adapters.ObjectSystem
             // By definition S3 does not have the concept of "available space"
             return null;
         }
+
+        public void Cleanup()
+        {
+            //
+        }
     }
 }

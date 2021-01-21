@@ -1,10 +1,14 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Collections.ObjectModel;
 using System.IO;
 using System.Linq;
 using System.Security.Cryptography;
 using System.Text;
+using MimeMapping;
 using Minio.DataModel;
+using Registry.Adapters.ObjectSystem;
+using Registry.Adapters.ObjectSystem.Model;
 using Registry.Ports.ObjectSystem.Model;
 using SSEC = Minio.DataModel.SSEC;
 
@@ -27,7 +31,7 @@ namespace Registry.Adapters
                 return new SSEKMS(ssekms.Key, ssekms.Context);
             }
 
-            if (encryption is EncryptionS3 sses3)
+            if (encryption is EncryptionS3)
             {
                 return new SSES3();
             }
@@ -122,6 +126,46 @@ namespace Registry.Adapters
         }
 
 
+        public static string CalculateETag(FileInfo info)
+        {
+            // 2GB
+            var chunkSize = 2L * 1024 * 1024 * 1024;
+
+            var parts = info.Length == 0 ? 1 : (int)Math.Ceiling((double)info.Length / chunkSize);
+
+            using var stream = info.OpenRead();
+
+            return CalculateMultipartEtag(stream, parts);
+
+        }
+
+        public static string CalculateETag(string filePath)
+        {
+            return CalculateETag(new FileInfo(filePath));
+        }
+
+
         #endregion
+
+        public static ObjectInfoDto GenerateObjectInfo(string filePath, string objectName = null)
+        {
+
+            var fileInfo = new FileInfo(filePath);
+
+            var objectInfo = new ObjectInfoDto
+            {
+                MetaData = new Dictionary<string, string>(),
+                ContentType = MimeUtility.GetMimeMapping(filePath),
+                ETag = CalculateETag(fileInfo),
+                LastModified = File.GetLastWriteTime(filePath),
+                Name = objectName ?? fileInfo.Name,
+                Size = fileInfo.Length
+            };
+
+            return objectInfo;
+
+        }
+
+
     }
 }

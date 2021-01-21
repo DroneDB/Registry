@@ -36,6 +36,7 @@ namespace Registry.Adapters.ObjectSystem
         private static readonly object _sync = new();
 
         private const string SignalFileSuffix = "-pending";
+        private const string BrokenFileSuffix = "-broken";
 
         private string GetCacheFileName(string bucketName, string objectName)
         {
@@ -43,7 +44,17 @@ namespace Registry.Adapters.ObjectSystem
         }
         private string GetCacheFileInfoName(string bucketName, string objectName)
         {
-            return Path.GetFullPath(Path.Combine(CachePath, bucketName, objectName.Replace('/', '-') + ".json"));
+            return GetCacheFileName(bucketName, objectName) + ".json";
+        }
+
+        private ObjectInfoDto GetFileObjectInfo(string path)
+        {
+            return !File.Exists(path) ? null : JsonConvert.DeserializeObject<ObjectInfoDto>(File.ReadAllText(path, Encoding.UTF8));
+        }
+
+        private static string GetCacheFileInfoName(string cacheFile)
+        {
+            return cacheFile + ".json";
         }
 
         public CachedS3ObjectSystem(
@@ -108,8 +119,9 @@ namespace Registry.Adapters.ObjectSystem
                     {
 
                         var signalFileExists = File.Exists(GetSignalFileName(info.FullName));
+                        var brokenFileExists = File.Exists(GetBrokenFileName(info.FullName));
 
-                        if (!signalFileExists)
+                        if (!signalFileExists && !brokenFileExists)
                         {
                             try
                             {
@@ -242,9 +254,13 @@ namespace Registry.Adapters.ObjectSystem
         private void UpdateCurrentCacheSize()
         {
             Cleanup();
-            _fileInfos = SafeGetAllFiles(CachePath).Select(file => new FileInfo(file))
-                .ToDictionary(info => info.FullName, info => info);
-            _currentCacheSize = _fileInfos.Sum(file => file.Value.Length);
+
+            lock (_sync)
+            {
+                _fileInfos = SafeGetAllFiles(CachePath).Select(file => new FileInfo(file))
+                    .ToDictionary(info => info.FullName, info => info);
+                _currentCacheSize = _fileInfos.Sum(file => file.Value.Length);
+            }
         }
 
         public void Cleanup()
@@ -271,13 +287,12 @@ namespace Registry.Adapters.ObjectSystem
 
         private void DetachCachedFile(string file)
         {
-            if (_fileInfos.Remove(file))
-            {
+            if (!_fileInfos.Remove(file)) return;
+
 #if DEBUG
-                _logger.LogInformation($"Detached file '{file}' from cache");
+            _logger.LogInformation($"Detached file '{file}' from cache");
 #endif
-                _currentCacheSize = _fileInfos.Sum(f => f.Value.Length);
-            };
+            _currentCacheSize = _fileInfos.Sum(f => f.Value.Length);
         }
 
         private string GetBucketFolder(string bucketName)
@@ -285,7 +300,7 @@ namespace Registry.Adapters.ObjectSystem
             return Path.GetFullPath(Path.Combine(CachePath, bucketName));
         }
 
-        private string GetSignalFileName(string path)
+        private static string GetSignalFileName(string path)
         {
             return path + SignalFileSuffix;
         }
@@ -295,18 +310,128 @@ namespace Registry.Adapters.ObjectSystem
             return GetCacheFileName(bucketName, objectName) + SignalFileSuffix;
         }
 
-
-        private bool IsSignalFile(string file)
+        private static bool IsSignalFile(string file)
         {
             return file != null && file.EndsWith(SignalFileSuffix);
         }
 
-        private string[] SafeGetAllFiles(string path)
+        private static string GetBrokenFileName(string path)
         {
-            return Directory.EnumerateFiles(path, "*", SearchOption.AllDirectories).Where(p => !IsSignalFile(p)).ToArray();
+            return path + BrokenFileSuffix;
+        }
+
+        private string GetBrokenFileName(string bucketName, string objectName)
+        {
+            return GetCacheFileName(bucketName, objectName) + BrokenFileSuffix;
+        }
+
+        private static bool IsBrokenFile(string file)
+        {
+            return file != null && file.EndsWith(BrokenFileSuffix);
+        }
+
+        private static string[] SafeGetAllFiles(string path)
+        {
+            return Directory.EnumerateFiles(path, "*", SearchOption.AllDirectories).Where(p => !IsSignalFile(p) && !IsBrokenFile(p)).ToArray();
 
         }
 
+        private static async Task CreateInfoFile(string cachedFileName, string bucketName, string objectName, Dictionary<string, string> metaData, CancellationToken cancellationToken)
+        {
+            var info = AdaptersUtils.GenerateObjectInfo(cachedFileName, objectName);
+            info.MetaData = metaData;
+
+            await File.WriteAllTextAsync(GetCacheFileInfoName(cachedFileName),
+                JsonConvert.SerializeObject(info, Formatting.Indented), cancellationToken);
+        }
+
+        private static async Task CreateSignalFile(string file)
+        {
+            await File.WriteAllTextAsync(GetSignalFileName(file), DateTime.Now.ToString("O"));
+        }
+
+        private static bool IsFileSignaled(string file)
+        {
+            return File.Exists(GetSignalFileName(file));
+        }
+
+        public class SyncFilesRes
+        {
+            public string[] SyncedFiles { get; set; }
+            public SyncFileError[] ErrorFiles { get; set; }
+        }
+
+        public class SyncFileError
+        {
+            public string Path { get; set; }
+            public string ErrorMessage { get; set; }
+        }
+
+        public SyncFilesRes SyncFiles()
+        {
+
+            var syncedFiles = new List<string>();
+            var errorFiles = new List<SyncFileError>();
+
+            _logger.LogInformation("Looking for unsyncronized files");
+
+            lock (_sync)
+            {
+                var files = Directory.EnumerateFiles(CachePath, "*" + BrokenFileSuffix, SearchOption.AllDirectories).ToArray();
+
+                if (!files.Any())
+                {
+                    _logger.LogInformation("No broken files are preset");
+                    return new SyncFilesRes();
+                }
+
+                foreach (var f in files)
+                {
+                    var file = f.Substring(0, f.Length - BrokenFileSuffix.Length);
+
+                    try
+                    {
+                        var bucketName = Path.GetFileName(Path.GetDirectoryName(file));
+
+                        var info = GetFileObjectInfo(file + ".json");
+                        if (info == null)
+                        {
+                            _logger.LogWarning($"Cannot get file info of '{file}'");
+                            break;
+                        }
+
+                        _logger.LogInformation($"Syncing '{file}' to '{bucketName}'");
+
+                        // This is like a nuclear bomb
+                        _remoteStorage.PutObjectAsync(bucketName, info.Name, file, info.ContentType,
+                                info.MetaData?.ToDictionary(key => key.Key, val => val.Value))
+                            .Wait();
+
+                        _logger.LogInformation("File is synced, deleting broken flag file and signal file");
+
+                        CommonUtils.SafeDelete(GetBrokenFileName(file));
+                        CommonUtils.SafeDelete(GetSignalFileName(file));
+
+                        _logger.LogInformation("Deleted broken flag file");
+
+                        syncedFiles.Add(file);
+
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogError(ex, $"Cannot sync '{file}'");
+                        errorFiles.Add(new SyncFileError {ErrorMessage = ex.Message, Path = file});
+                    }
+
+                }
+
+                return new SyncFilesRes
+                {
+                    ErrorFiles = errorFiles.ToArray(),
+                    SyncedFiles = syncedFiles.ToArray()
+                };
+            }
+        }
 
         #endregion
 
@@ -365,7 +490,11 @@ namespace Registry.Adapters.ObjectSystem
                 memory.Reset();
 
                 callback(memory);
+
             }, sse, cancellationToken);
+
+            // Added to populate file info cache
+            await GetObjectInfoAsync(bucketName, objectName, sse, cancellationToken);
 
         }
 
@@ -408,6 +537,10 @@ namespace Registry.Adapters.ObjectSystem
             {
                 _logger.LogError(ex, $"Cannot copy to cache from '{filePath}' to '{cachedFileName}' in '{bucketName}' bucket and '{objectName}' object");
             }
+
+            // Added to populate file info cache
+            await GetObjectInfoAsync(bucketName, objectName, sse, cancellationToken);
+
 
         }
 
@@ -461,7 +594,6 @@ namespace Registry.Adapters.ObjectSystem
             Dictionary<string, string> metaData = null, IServerEncryption sse = null, CancellationToken cancellationToken = default)
         {
 
-
             var cachedFileName = GetCacheFileName(bucketName, objectName);
 
             try
@@ -473,28 +605,56 @@ namespace Registry.Adapters.ObjectSystem
                 await using (var writer = File.OpenWrite(cachedFileName))
                     await data.CopyToAsync(writer, cancellationToken);
 
-                CreateSignalFile(cachedFileName);
+                await CreateInfoFile(cachedFileName, bucketName, objectName, metaData, cancellationToken);
+                await CreateSignalFile(cachedFileName);
+
                 TrackCachedFile(cachedFileName);
                 TrimExcessCache();
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, $"Cannot write to cache the file '{cachedFileName}' in '{bucketName}' bucket and '{objectName}' object");
+                throw;
             }
 
-            var task = SafePutObjectAsync(bucketName, objectName, data, size, contentType, metaData, sse, cancellationToken);
+#pragma warning disable 4014
+            SafePutObjectAsync(bucketName, objectName, data, size, contentType, metaData, sse, cancellationToken);
+#pragma warning restore 4014
 
         }
 
-        private void CreateSignalFile(string file)
+        public async Task PutObjectAsync(string bucketName, string objectName, string filePath, string contentType = null,
+            Dictionary<string, string> metaData = null, IServerEncryption sse = null, CancellationToken cancellationToken = default)
         {
-            File.WriteAllText(GetSignalFileName(file), DateTime.Now.ToString("O"));
+
+            var cachedFileName = GetCacheFileName(bucketName, objectName);
+
+            if (!IsFileSignaled(cachedFileName))
+                await CreateSignalFile(cachedFileName);
+
+            try
+            {
+                EnsureBucketPathExists(bucketName);
+
+                File.Copy(filePath, cachedFileName, true);
+
+                await CreateSignalFile(cachedFileName);
+                TrackCachedFile(cachedFileName);
+                TrimExcessCache();
+
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, $"Cannot copy to cache from '{filePath}' to '{cachedFileName}' in '{bucketName}' bucket and '{objectName}' object");
+            }
+
+#pragma warning disable 4014
+            SafePutObjectAsync(bucketName, objectName, filePath, contentType, metaData, sse, cancellationToken);
+#pragma warning restore 4014
+
         }
 
-        private bool IsFileSignaled(string file)
-        {
-            return File.Exists(GetSignalFileName(file));
-        }
+        // The following two methods should be unified ASAP
 
         private async Task SafePutObjectAsync(string bucketName, string objectName, Stream data, long size,
             string contentType, Dictionary<string, string> metaData, IServerEncryption sse,
@@ -505,7 +665,7 @@ namespace Registry.Adapters.ObjectSystem
             var cachedFileName = GetCacheFileName(bucketName, objectName);
 
             if (!IsFileSignaled(cachedFileName))
-                CreateSignalFile(cachedFileName);
+                await CreateSignalFile(cachedFileName);
 
             int cnt = 1;
             do
@@ -513,6 +673,7 @@ namespace Registry.Adapters.ObjectSystem
                 try
                 {
                     _logger.LogInformation($"Uploading file '{objectName}' to '{bucketName}' bucket");
+                    throw new Exception("Dummy");
                     await _remoteStorage.PutObjectAsync(bucketName, objectName, data, size, contentType, metaData, sse,
                         cancellationToken);
                     break;
@@ -530,6 +691,12 @@ namespace Registry.Adapters.ObjectSystem
                 _logger.LogError(
                     "No attempt to upload file to S3 was successful, leaving the file in unsyncronized state");
 
+                // Signal that this file is not synced
+                await File.WriteAllTextAsync(GetBrokenFileName(bucketName, objectName), DateTime.Now.ToString("O"), cancellationToken);
+
+                // Write down call info
+                await CreateInfoFile(cachedFileName, bucketName, objectName, metaData, cancellationToken);
+
                 return;
             }
 
@@ -546,7 +713,7 @@ namespace Registry.Adapters.ObjectSystem
             var cachedFileName = GetCacheFileName(bucketName, objectName);
 
             if (!IsFileSignaled(cachedFileName))
-                CreateSignalFile(cachedFileName);
+                await CreateSignalFile(cachedFileName);
 
             int cnt = 1;
             do
@@ -571,40 +738,17 @@ namespace Registry.Adapters.ObjectSystem
                 _logger.LogError(
                     "No attempt to upload file to S3 was successful, leaving the file in unsyncronized state");
 
+                // Signal that this file is not synced
+                await File.WriteAllTextAsync(GetBrokenFileName(bucketName, objectName), DateTime.Now.ToString("O"), cancellationToken);
+
+                // Write down call info
+                await CreateInfoFile(cachedFileName, bucketName, objectName, metaData, cancellationToken);
+
                 return;
             }
 
             _logger.LogInformation($"Removing signal file '{signalFileName}'");
             File.Delete(signalFileName);
-        }
-
-        public async Task PutObjectAsync(string bucketName, string objectName, string filePath, string contentType = null,
-            Dictionary<string, string> metaData = null, IServerEncryption sse = null, CancellationToken cancellationToken = default)
-        {
-            
-            var cachedFileName = GetCacheFileName(bucketName, objectName);
-
-            if (!IsFileSignaled(cachedFileName))
-                CreateSignalFile(cachedFileName);
-
-            try
-            {
-                EnsureBucketPathExists(bucketName);
-
-                File.Copy(filePath, cachedFileName, true);
-
-                CreateSignalFile(cachedFileName);
-                TrackCachedFile(cachedFileName);
-                TrimExcessCache();
-
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, $"Cannot copy to cache from '{filePath}' to '{cachedFileName}' in '{bucketName}' bucket and '{objectName}' object");
-            }
-
-            var task = SafePutObjectAsync(bucketName, objectName, filePath, contentType, metaData, sse, cancellationToken);
-
         }
 
         #endregion
@@ -664,7 +808,7 @@ namespace Registry.Adapters.ObjectSystem
 
         }
 
-#endregion
+        #endregion
 
         #region Proxied
 
@@ -730,6 +874,8 @@ namespace Registry.Adapters.ObjectSystem
         }
 
         #endregion
+
+
 
     }
 }
