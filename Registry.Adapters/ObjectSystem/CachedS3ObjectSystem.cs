@@ -35,6 +35,8 @@ namespace Registry.Adapters.ObjectSystem
         // NOTE: This is thread safe as long that there is only one worker process
         private static readonly object _sync = new();
 
+        private const string SignalFileSuffix = "-pending";
+
         private string GetCacheFileName(string bucketName, string objectName)
         {
             return Path.GetFullPath(Path.Combine(CachePath, bucketName, objectName.Replace('/', '-')));
@@ -63,27 +65,6 @@ namespace Registry.Adapters.ObjectSystem
 
         #region Utils
 
-        private void UpdateCurrentCacheSize()
-        {
-            Cleanup();
-            _fileInfos = SafeGetAllFiles(CachePath).Select(file => new FileInfo(file))
-                         .ToDictionary(info => info.FullName, info => info);
-            _currentCacheSize = _fileInfos.Sum(file => file.Value.Length);
-        }
-
-        public void Cleanup()
-        {
-            CleanupFolder(CachePath);
-
-            CommonUtils.RemoveEmptyFolders(CachePath);
-        }
-
-        public void CleanupBucket(string bucketName)
-        {
-            var bucketFolder = GetBucketFolder(bucketName);
-            if (Directory.Exists(bucketFolder))
-                CleanupFolder(bucketFolder);
-        }
 
         private void TrimExcessCache()
         {
@@ -235,16 +216,6 @@ namespace Registry.Adapters.ObjectSystem
             }
         }
 
-        private bool IsSignalFile(string file)
-        {
-            return file != null && file.EndsWith(SignalFileSuffix);
-        }
-
-        private string[] SafeGetAllFiles(string path)
-        {
-            return Directory.EnumerateFiles(path, "*", SearchOption.AllDirectories).Where(p => !IsSignalFile(p)).ToArray();
-
-        }
 
         private void TrackCachedFile(string file)
         {
@@ -267,6 +238,29 @@ namespace Registry.Adapters.ObjectSystem
             _currentCacheSize = _fileInfos.Sum(f => f.Value.Length);
 
         }
+
+        private void UpdateCurrentCacheSize()
+        {
+            Cleanup();
+            _fileInfos = SafeGetAllFiles(CachePath).Select(file => new FileInfo(file))
+                .ToDictionary(info => info.FullName, info => info);
+            _currentCacheSize = _fileInfos.Sum(file => file.Value.Length);
+        }
+
+        public void Cleanup()
+        {
+            CleanupFolder(CachePath);
+
+            CommonUtils.RemoveEmptyFolders(CachePath);
+        }
+
+        public void CleanupBucket(string bucketName)
+        {
+            var bucketFolder = GetBucketFolder(bucketName);
+            if (Directory.Exists(bucketFolder))
+                CleanupFolder(bucketFolder);
+        }
+
 
         private void EnsureBucketPathExists(string bucketName)
         {
@@ -291,7 +285,6 @@ namespace Registry.Adapters.ObjectSystem
             return Path.GetFullPath(Path.Combine(CachePath, bucketName));
         }
 
-        private const string SignalFileSuffix = "-pending";
         private string GetSignalFileName(string path)
         {
             return path + SignalFileSuffix;
@@ -300,6 +293,18 @@ namespace Registry.Adapters.ObjectSystem
         private string GetSignalFileName(string bucketName, string objectName)
         {
             return GetCacheFileName(bucketName, objectName) + SignalFileSuffix;
+        }
+
+
+        private bool IsSignalFile(string file)
+        {
+            return file != null && file.EndsWith(SignalFileSuffix);
+        }
+
+        private string[] SafeGetAllFiles(string path)
+        {
+            return Directory.EnumerateFiles(path, "*", SearchOption.AllDirectories).Where(p => !IsSignalFile(p)).ToArray();
+
         }
 
 
@@ -604,6 +609,7 @@ namespace Registry.Adapters.ObjectSystem
 
         #endregion
 
+        #region Delete
 
         public async Task RemoveObjectAsync(string bucketName, string objectName, CancellationToken cancellationToken = default)
         {
@@ -657,6 +663,8 @@ namespace Registry.Adapters.ObjectSystem
             await _remoteStorage.RemoveBucketAsync(bucketName, force, cancellationToken);
 
         }
+
+#endregion
 
         #region Proxied
 
