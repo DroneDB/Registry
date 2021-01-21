@@ -32,9 +32,8 @@ namespace Registry.Adapters.ObjectSystem
 
         private Dictionary<string, FileInfo> _fileInfos;
 
+        // NOTE: This is thread safe as long that there is only one worker process
         private static readonly object _sync = new();
-
-        //private readonly Mutex evt;
 
         private string GetCacheFileName(string bucketName, string objectName)
         {
@@ -88,7 +87,8 @@ namespace Registry.Adapters.ObjectSystem
 
         private void TrimExcessCache()
         {
-            if (MaxSize == null)
+            // Check if we need to enforce cache size (MaxSize == 0 is a failsafe)
+            if (MaxSize == null || MaxSize == 0)
             {
 #if DEBUG
                 _logger.LogInformation("No limitations in cache size");
@@ -169,10 +169,12 @@ namespace Registry.Adapters.ObjectSystem
         private void CleanupFolder(string folder)
         {
 
-            if (CacheExpiration == null)
+            // Check if we need to enforce cache expiration (default compare is a failsafe)
+
+            if (CacheExpiration == null || CacheExpiration.Value == default)
             {
 #if DEBUG
-                _logger.LogInformation($"Cannot clean up folder '{folder}' because no cache expiration set");
+                _logger.LogInformation($"No need to clean up folder '{folder}' because no cache expiration set");
 #endif
                 return;
             }
