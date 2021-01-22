@@ -161,7 +161,8 @@ namespace Registry.Web.Test
             var objectManager = new ObjectsManager(_objectManagerLogger, context, sys, _chunkedUploadManagerMock.Object, 
                 _appSettingsMock.Object, ddbFactory, webUtils, _authManagerMock.Object, _cacheManagerMock.Object);
 
-            var datasetManager = new DatasetsManager(context, webUtils, _datasetsManagerLogger, objectManager, _passwordHasher, _ddbFactoryMock.Object);
+            var datasetManager = new DatasetsManager(context, webUtils, _datasetsManagerLogger, objectManager,
+                _passwordHasher, _ddbFactoryMock.Object, _authManagerMock.Object);
             var organizationsManager = new OrganizationsManager(_authManagerMock.Object, context, webUtils, datasetManager, _organizationsManagerLogger);
 
             var shareManager = new ShareManager(_appSettingsMock.Object, _shareManagerLogger, objectManager, datasetManager, organizationsManager, 
@@ -241,7 +242,8 @@ namespace Registry.Web.Test
             var objectManager = new ObjectsManager(_objectManagerLogger, context, sys, _chunkedUploadManagerMock.Object, 
                 _appSettingsMock.Object, ddbFactory, webUtils, _authManagerMock.Object, _cacheManagerMock.Object);
 
-            var datasetManager = new DatasetsManager(context, webUtils, _datasetsManagerLogger, objectManager, _passwordHasher, _ddbFactoryMock.Object);
+            var datasetManager = new DatasetsManager(context, webUtils, _datasetsManagerLogger, objectManager,
+                _passwordHasher, _ddbFactoryMock.Object, _authManagerMock.Object);
             var organizationsManager = new OrganizationsManager(_authManagerMock.Object, context, webUtils, datasetManager, _organizationsManagerLogger);
 
             var shareManager = new ShareManager(_appSettingsMock.Object, _shareManagerLogger, objectManager, datasetManager, organizationsManager, 
@@ -359,7 +361,8 @@ namespace Registry.Web.Test
             var objectManager = new ObjectsManager(_objectManagerLogger, context, sys, _chunkedUploadManagerMock.Object, 
                 _appSettingsMock.Object, ddbFactory, webUtils, _authManagerMock.Object, _cacheManagerMock.Object);
 
-            var datasetManager = new DatasetsManager(context, webUtils, _datasetsManagerLogger, objectManager, _passwordHasher, _ddbFactoryMock.Object);
+            var datasetManager = new DatasetsManager(context, webUtils, _datasetsManagerLogger, objectManager,
+                _passwordHasher, _ddbFactoryMock.Object, _authManagerMock.Object);
             var organizationsManager = new OrganizationsManager(_authManagerMock.Object, context, webUtils, datasetManager, _organizationsManagerLogger);
 
             var shareManager = new ShareManager(_appSettingsMock.Object, _shareManagerLogger, objectManager, datasetManager, organizationsManager, 
