@@ -56,7 +56,8 @@ namespace Registry.Web.Test
             
             var utils = new WebUtils(_authManagerMock.Object, context, _appSettingsMock.Object, _httpContextAccessorMock.Object);
 
-            var datasetsManager = new DatasetsManager(context, utils, _datasetsManagerLogger, _objectsManagerMock.Object, _passwordHasher, _ddbFactoryMock.Object);
+            var datasetsManager = new DatasetsManager(context, utils, _datasetsManagerLogger,
+                _objectsManagerMock.Object, _passwordHasher, _ddbFactoryMock.Object, _authManagerMock.Object);
 
             var list = (await datasetsManager.List(MagicStrings.PublicOrganizationSlug)).ToArray();
 

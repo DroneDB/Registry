@@ -6,28 +6,37 @@
     <UserSecretsId>4e006835-31cb-47c5-9dfe-7b73e210db92</UserSecretsId>
     <SpaRoot>ClientApp\</SpaRoot>
     <DefaultItemExcludes>$(DefaultItemExcludes);$(SpaRoot)node_modules\**</DefaultItemExcludes>
-    <AssemblyVersion>1.0.1.0</AssemblyVersion>
-    <FileVersion>1.0.1.0</FileVersion>
-    <Version>1.0.1</Version>
+    <AssemblyVersion>1.0.2.0</AssemblyVersion>
+    <FileVersion>1.0.2.0</FileVersion>
+    <Version>1.0.2</Version>
   </PropertyGroup>
 
   <ItemGroup>
+    <Compile Remove="ddbstore\**" />
     <Compile Remove="logs\**" />
     <Compile Remove="temp\**" />
     <Compile Remove="uploads\**" />
-
+    <Compile Remove="s3cache\**" />
+    
+    <Content Remove="ddbstore\**" />
     <Content Remove="logs\**" />
     <Content Remove="temp\**" />
     <Content Remove="uploads\**" />
+    <Content Remove="s3cache\**" />
 
+    <EmbeddedResource Remove="ddbstore\**" />
     <EmbeddedResource Remove="logs\**" />
     <EmbeddedResource Remove="temp\**" />
     <EmbeddedResource Remove="uploads\**" />
+    <EmbeddedResource Remove="s3cache\**" />
 
+    <None Remove="ddbstore\**" />
+    <None Remove="s3cache\**" />
     <None Remove="logs\**" />
     <None Remove="temp\**" />
     <None Remove="uploads\**" />
     <None Remove="ddb-log*.csv" />
+
   </ItemGroup>
 
   <ItemGroup>

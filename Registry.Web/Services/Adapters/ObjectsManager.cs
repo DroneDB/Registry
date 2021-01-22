@@ -14,6 +14,7 @@ using MimeMapping;
 using Minio.Exceptions;
 using Registry.Common;
 using Registry.Ports.DroneDB;
+using Registry.Ports.DroneDB.Models;
 using Registry.Ports.ObjectSystem;
 using Registry.Web.Data;
 using Registry.Web.Data.Models;
@@ -144,7 +145,7 @@ namespace Registry.Web.Services.Adapters
         {
             if (_settings.StorageProvider.Type != StorageType.S3) return null;
 
-            var settings = _settings.StorageProvider.Settings.ToObject<S3ProviderSettings>();
+            var settings = _settings.StorageProvider.Settings.ToObject<S3StorageProviderSettings>();
             if (settings == null)
             {
                 _logger.LogWarning("No S3 settings loaded, shouldn't this be a problem?");
@@ -190,8 +191,12 @@ namespace Registry.Web.Services.Adapters
 
             _logger.LogInformation($"Uploading '{path}' (size {stream.Length}) to bucket '{bucketName}'");
 
-            // TODO: No metadata / encryption ?
-            await _objectSystem.PutObjectAsync(bucketName, path, stream, stream.Length, contentType);
+            var memory = new MemoryStream();
+            await stream.CopyToAsync(memory);
+            memory.Reset();
+            stream.Reset();
+
+            await _objectSystem.PutObjectAsync(bucketName, path, memory, memory.Length, contentType);
 
             _logger.LogInformation("File uploaded, adding to DDB");
 
@@ -219,7 +224,7 @@ namespace Registry.Web.Services.Adapters
         {
             if (_settings.StorageProvider.Type != StorageType.S3) return null;
 
-            var settings = _settings.StorageProvider.Settings.ToObject<S3ProviderSettings>();
+            var settings = _settings.StorageProvider.Settings.ToObject<S3StorageProviderSettings>();
             if (settings == null)
             {
                 _logger.LogWarning("No S3 settings loaded, shouldn't this be a problem?");
@@ -352,23 +357,17 @@ namespace Registry.Web.Services.Adapters
 
             _logger.LogInformation($"In '{orgSlug}/{dsSlug}'");
 
-            EnsurePathsValidity(orgSlug, ds.InternalRef, new[] { path });
+            var entry = EnsurePathValidity(orgSlug, ds.InternalRef, path, out IDdb ddb);
 
             var fileName = Path.GetFileName(path);
             if (fileName == null)
                 throw new ArgumentException("Path is not valid");
 
             var destFilePath = Path.Combine(Path.GetTempPath(), "out-" + Path.ChangeExtension(fileName, ".jpg"));
-            var sourceFilePath = Path.Combine(Path.GetTempPath(), fileName);
+            var sourceFilePath = Path.GetTempFileName();
 
             try
             {
-
-                var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
-
-                var entry = ddb.Search(path).FirstOrDefault();
-                if (entry == null)
-                    throw new ArgumentException($"Cannot find entry '{path}' in ddb");
 
                 await _cacheManager.GenerateThumbnail(ddb, sourceFilePath, entry.Hash, size ?? DefaultThumbnailSize, destFilePath, async () =>
                 {
@@ -388,12 +387,58 @@ namespace Registry.Web.Services.Adapters
             }
             finally
             {
-                if (File.Exists(destFilePath)) File.Delete(destFilePath);
-                if (File.Exists(sourceFilePath)) File.Delete(sourceFilePath);
+                if (File.Exists(destFilePath) && !CommonUtils.SafeDelete(destFilePath))
+                    _logger.LogWarning($"Cannot delete dest file '{destFilePath}'");
+
+                if (File.Exists(sourceFilePath) && !CommonUtils.SafeDelete(sourceFilePath))
+                    _logger.LogWarning($"Cannot delete source file '{sourceFilePath}'");
             }
 
         }
 
+        public async Task<FileDescriptorDto> GenerateTile(string orgSlug, string dsSlug, string path, int tz, int tx, int ty, bool retina)
+        {
+            var ds = await _utils.GetDataset(orgSlug, dsSlug);
+
+            _logger.LogInformation($"In '{orgSlug}/{dsSlug}'");
+
+            EnsurePathValidity(orgSlug, ds.InternalRef, path, out IDdb ddb);
+
+            var fileName = Path.GetFileName(path);
+            if (fileName == null)
+                throw new ArgumentException("Path is not valid");
+
+            var destFilePath = string.Empty;
+            var sourceFilePath = Path.Combine(Path.GetTempPath(), "out-" + fileName);
+
+            try
+            {
+
+                var obj = await InternalGet(orgSlug, ds.InternalRef, path);
+                await File.WriteAllBytesAsync(sourceFilePath, obj.Data);
+
+                destFilePath = ddb.GenerateTile(sourceFilePath, tz, tx, ty, retina, true);
+
+                var memory = new MemoryStream(await File.ReadAllBytesAsync(destFilePath));
+                memory.Reset();
+
+                return new FileDescriptorDto
+                {
+                    ContentStream = memory,
+                    ContentType = "image/png",
+                    Name = fileName
+                };
+            }
+            finally
+            {
+                if (File.Exists(destFilePath) && !CommonUtils.SafeDelete(destFilePath))
+                    _logger.LogWarning($"Cannot delete dest file '{destFilePath}'");
+
+                if (File.Exists(sourceFilePath) && !CommonUtils.SafeDelete(sourceFilePath))
+                    _logger.LogWarning($"Cannot delete source file '{sourceFilePath}'");
+            }
+
+        }
 
         #region Downloads
         public async Task<string> GetDownloadPackage(string orgSlug, string dsSlug, string[] paths, DateTime? expiration = null, bool isPublic = false)
@@ -422,12 +467,41 @@ namespace Registry.Web.Services.Adapters
             return downloadPackage.Id.ToString();
         }
 
-        private void EnsurePathsValidity(string orgSlug, Guid internalRef, string[] paths)
+        #region Utils
+
+        private DdbEntry EnsurePathValidity(string orgSlug, Guid internalRef, string path)
         {
+            return EnsurePathValidity(orgSlug, internalRef, path, out IDdb ddb);
+        }
+
+        private DdbEntry EnsurePathValidity(string orgSlug, Guid internalRef, string path, out IDdb ddb)
+        {
+
+            if (path.Contains("*") || path.Contains("?") || string.IsNullOrWhiteSpace(path))
+                throw new ArgumentException("Wildcards or empty paths are not supported");
+
+            ddb = _ddbManager.Get(orgSlug, internalRef);
+
+            var res = ddb.Search(path)?.ToArray();
+
+            if (res == null || !res.Any())
+                throw new ArgumentException($"Invalid path: '{path}'");
+
+            return res.First();
+        }
+
+        private DdbEntry[] EnsurePathsValidity(string orgSlug, Guid internalRef, string[] paths)
+        {
+            return EnsurePathsValidity(orgSlug, internalRef, paths, out IDdb ddb);
+        }
+
+        private DdbEntry[] EnsurePathsValidity(string orgSlug, Guid internalRef, string[] paths, out IDdb ddb)
+        {
+            ddb = null;
 
             if (paths == null || !paths.Any())
                 // Everything
-                return;
+                return null;
 
             if (paths.Any(path => path.Contains("*") || path.Contains("?") || string.IsNullOrWhiteSpace(path)))
                 throw new ArgumentException("Wildcards or empty paths are not supported");
@@ -435,7 +509,9 @@ namespace Registry.Web.Services.Adapters
             if (paths.Length != paths.Distinct().Count())
                 throw new ArgumentException("Duplicate paths");
 
-            var ddb = _ddbManager.Get(orgSlug, internalRef);
+            ddb = _ddbManager.Get(orgSlug, internalRef);
+
+            var entries = new List<DdbEntry>();
 
             foreach (var path in paths)
             {
@@ -443,8 +519,14 @@ namespace Registry.Web.Services.Adapters
 
                 if (res == null || !res.Any())
                     throw new ArgumentException($"Invalid path: '{path}'");
+
+                entries.AddRange(res);
             }
+
+            return entries.ToArray();
         }
+
+        #endregion
 
         public async Task<FileDescriptorDto> DownloadPackage(string orgSlug, string dsSlug, string packageId)
         {
@@ -508,7 +590,7 @@ namespace Registry.Web.Services.Adapters
         {
             var ddb = _ddbManager.Get(orgSlug, internalRef);
 
-            string[] filePaths = null;
+            string[] filePaths;
 
             if (paths != null)
             {

@@ -211,6 +211,13 @@ namespace Registry.Common
 
         }
 
+        // Credit: https://stackoverflow.com/questions/12166404/how-do-i-get-folder-size-in-c
+        public static long GetDirectorySize(string folderPath)
+        {
+            DirectoryInfo di = new DirectoryInfo(folderPath);
+            return di.EnumerateFiles("*", SearchOption.AllDirectories).Sum(fi => fi.Length);
+        }
+
         public static StorageInfo GetStorageInfo(string path)
         {
             var f = new FileInfo(path);
@@ -224,6 +231,35 @@ namespace Registry.Common
             return info == null ? null : new StorageInfo(info.TotalSize, info.AvailableFreeSpace);
         }
 
+        public static bool SafeDelete(string path)
+        {
+            try
+            {
+
+                File.Delete(path);
+                return true;
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
+        public static void RemoveEmptyFolders(string folder)
+        {
+            if (!Directory.Exists(folder)) return;
+
+            foreach (var directory in Directory.GetDirectories(folder))
+            {
+                RemoveEmptyFolders(directory);
+                if (!Directory.Exists(directory)) continue;
+                if (Directory.GetFileSystemEntries(directory).Length == 0)
+                {
+                    Directory.Delete(directory, false);
+                }
+            }
+
+        }
     }
 
 

@@ -62,5 +62,23 @@ namespace Registry.Web.Controllers
                 return ExceptionResult(ex);
             }
         }
+
+        [HttpPost("syncfiles", Name = nameof(SystemController) + "." + nameof(SyncFiles))]
+        public IActionResult SyncFiles()
+        {
+            try
+            {
+                _logger.LogDebug($"System controller SyncFiles()");
+
+                return Ok(_systemManager.SyncFiles());
+
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, $"Exception in System controller SyncFiles()");
+
+                return ExceptionResult(ex);
+            }
+        }
     }
 }

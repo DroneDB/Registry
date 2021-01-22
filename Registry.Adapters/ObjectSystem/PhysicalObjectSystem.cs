@@ -9,6 +9,7 @@ using System.Threading.Tasks;
 using MimeMapping;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
+using Registry.Adapters.ObjectSystem.Model;
 using Registry.Common;
 using Registry.Common.Model;
 using Registry.Ports.ObjectSystem;
@@ -54,13 +55,13 @@ namespace Registry.Adapters.ObjectSystem
         {
             EnsureBucketExists(bucketName);
 
-            var bucketPath = GetBucketPath(bucketName); 
+            var bucketPath = GetBucketPath(bucketName);
 
             foreach (var file in Directory.EnumerateFiles(bucketPath, "*.*", SearchOption.AllDirectories))
             {
 
                 var objectName = file.Replace(bucketPath, string.Empty);
-                if (objectName.StartsWith('/') || objectName.StartsWith('\\')) objectName = objectName.Substring(1);
+                if (objectName.StartsWith('/') || objectName.StartsWith('\\')) objectName = objectName[1..];
 
                 UpdateObjectInfo(bucketName, objectName);
             }
@@ -145,7 +146,7 @@ namespace Registry.Adapters.ObjectSystem
             EnsureBucketExists(bucketName);
 
             // We never have incomplete uploads :)
-            return new ObjectUpload[0].ToObservable();
+            return Array.Empty<ObjectUpload>().ToObservable();
         }
 
 #pragma warning disable 1998
@@ -191,7 +192,7 @@ namespace Registry.Adapters.ObjectSystem
                 LastModified = info.LastModified,
                 ETag = info.ETag,
                 ContentType = info.ContentType,
-                MetaData = info.MetaData ?? metadata ?? new Dictionary<string, string>()
+                MetaData = info.MetaData?.ToDictionary(pair => pair.Key, pair => pair.Value) ?? metadata ?? new Dictionary<string, string>()
             };
 
             AddOrReplaceObjectInfoInternal(destBucketName, newInfo);
@@ -225,7 +226,7 @@ namespace Registry.Adapters.ObjectSystem
                     ContentType = contentType ?? objectInfo.ContentType,
                     ETag = objectInfo.ETag,
                     LastModified = objectInfo.LastModified,
-                    MetaData = metaData ?? objectInfo.MetaData ?? new Dictionary<string, string>(),
+                    MetaData = metaData ?? objectInfo.MetaData?.ToDictionary(pair => pair.Key, pair => pair.Value) ?? new Dictionary<string, string>(),
                     Name = objectName,
                     Size = objectInfo.Size
                 };
@@ -290,7 +291,7 @@ namespace Registry.Adapters.ObjectSystem
                     var key = info.FullName.Replace(fullPath, string.Empty);
 
                     if (key.StartsWith("/") || key.StartsWith("\\"))
-                        key = key.Substring(1, key.Length - 1);
+                        key = key[1..];
 
                     var obj = new ItemInfo
                     {
@@ -311,7 +312,7 @@ namespace Registry.Adapters.ObjectSystem
                     var key = Path.GetFullPath(folder).Replace(fullPath, string.Empty);
 
                     if (key.StartsWith("/") || key.StartsWith("\\"))
-                        key = key.Substring(1, key.Length - 1);
+                        key = key[1..];
 
                     var obj = new ItemInfo
                     {
@@ -414,12 +415,12 @@ namespace Registry.Adapters.ObjectSystem
 
             if (File.Exists(bucketPolicyPath))
                 return await File.ReadAllTextAsync(bucketPolicyPath, Encoding.UTF8, cancellationToken);
-            
+
 
             return null;
 
         }
-        
+
         public async Task SetPolicyAsync(string bucketName, string policyJson, CancellationToken cancellationToken = default)
         {
 
@@ -445,6 +446,11 @@ namespace Registry.Adapters.ObjectSystem
             return CommonUtils.GetStorageInfo(_baseFolder);
         }
 
+        public void Cleanup()
+        {
+            //
+        }
+
         #endregion
 
         #region Utils
@@ -459,12 +465,12 @@ namespace Registry.Adapters.ObjectSystem
             return objectPath;
         }
 
-        private BucketInfoDto GenerateBucketInfo(string bucketName)
+        private static BucketInfoDto GenerateBucketInfo(string bucketName)
         {
             return new BucketInfoDto
             {
                 Name = bucketName,
-                Objects = new ObjectInfoDto[0],
+                Objects = Array.Empty<ObjectInfoDto>(),
                 Owner = null
             };
         }
@@ -488,7 +494,7 @@ namespace Registry.Adapters.ObjectSystem
         private BucketInfoDto UpdateBucketInfo(string bucketName)
         {
             var bucketInfo = GenerateBucketInfo(bucketName);
-            
+
             SaveBucketInfo(bucketInfo);
 
             return bucketInfo;
@@ -556,41 +562,11 @@ namespace Registry.Adapters.ObjectSystem
         {
             var objectPath = GetObjectPath(bucketName, objectName);
 
-            var fileInfo = new FileInfo(objectPath);
-
-            var objectInfo = new ObjectInfoDto
-            {
-                ContentType = MimeUtility.GetMimeMapping(objectPath),
-                ETag = CalculateETag(objectPath, fileInfo),
-                LastModified = File.GetLastWriteTime(objectPath),
-                Size = fileInfo.Length,
-                Name = objectName,
-                MetaData = new Dictionary<string, string>()
-            };
-
-            return objectInfo;
+            return AdaptersUtils.GenerateObjectInfo(objectPath, objectName);
 
         }
 
-        public static string CalculateETag(string filePath, FileInfo info)
-        {
-            // 2GB
-            var chunkSize = 2L * 1024 * 1024 * 1024;
-
-            var parts = info.Length == 0 ? 1 : (int)Math.Ceiling((double)info.Length / chunkSize);
-
-            using var stream = File.OpenRead(filePath);
-
-            return AdaptersUtils.CalculateMultipartEtag(stream, parts);
-
-        }
-
-        private string CalculateETag(string filePath)
-        {
-            return CalculateETag(filePath, new FileInfo(filePath));
-        }
-
-        private void CheckPath(string path)
+        private static void CheckPath(string path)
         {
             if (path.Contains(".."))
                 throw new ArgumentException("Parent path separator is not supported");
@@ -611,13 +587,13 @@ namespace Registry.Adapters.ObjectSystem
             return Path.Combine(_baseFolder, bucketName);
         }
 
-        private void EnsureFileExists(string path)
+        private static void EnsureFileExists(string path)
         {
             if (!File.Exists(path))
                 throw new ArgumentException($"File '{Path.GetFileName(path)}' does not exist");
         }
 
-        private void EnsureFolderExists(string path)
+        private static void EnsureFolderExists(string path)
         {
             if (!Directory.Exists(path))
                 throw new ArgumentException($"Folder '{Path.GetFileName(path)}' does not exist");
@@ -642,24 +618,9 @@ namespace Registry.Adapters.ObjectSystem
         }
 
 
-        public class BucketInfoDto
-        {
-            public string Name { get; set; }
-            public string Owner { get; set; }
-            public ObjectInfoDto[] Objects { get; set; }
-        }
-
-        public class ObjectInfoDto
-        {
-            public string Name { get; set; }
-            public long Size { get; set; }
-            public DateTime LastModified { get; set; }
-            public string ETag { get; set; }
-            public string ContentType { get; set; }
-            public IReadOnlyDictionary<string, string> MetaData { get; set; }
-        }
-
         #endregion
+
+
 
     }
 }

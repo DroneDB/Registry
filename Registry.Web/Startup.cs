@@ -34,6 +34,7 @@ using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
 using Registry.Adapters.DroneDB;
 using Registry.Adapters.ObjectSystem;
+using Registry.Adapters.ObjectSystem.Model;
 using Registry.Common;
 using Registry.Ports.DroneDB;
 using Registry.Ports.ObjectSystem;
@@ -171,12 +172,12 @@ namespace Registry.Web
             RegisterCacheProvider(services, appSettings);
 
             services.AddHealthChecks()
-                .AddCheck<CacheHealthCheck>("Cache health check", null, new[] { "service" })
-                .AddCheck<DdbHealthCheck>("DroneDB health check", null, new[] { "service" })
-                .AddCheck<UserManagerHealthCheck>("User manager health check", null, new[] { "database" })
-                .AddDbContextCheck<RegistryContext>("Registry database health check", null, new[] { "database" })
+                .AddCheck<CacheHealthCheck>("Cache health check", null, new[] {"service"})
+                .AddCheck<DdbHealthCheck>("DroneDB health check", null, new[] {"service"})
+                .AddCheck<UserManagerHealthCheck>("User manager health check", null, new[] {"database"})
+                .AddDbContextCheck<RegistryContext>("Registry database health check", null, new[] {"database"})
                 .AddDbContextCheck<ApplicationDbContext>("Registry identity database health check", null,
-                    new[] { "database" })
+                    new[] {"database"})
                 .AddCheck<ObjectSystemHealthCheck>("Object system health check", null, new[] { "storage" })
                 .AddDiskSpaceHealthCheck(appSettings.UploadPath, "Upload path space health check", null,
                     new[] { "storage" })
@@ -365,7 +366,7 @@ namespace Registry.Web
             if (applicationDbContext.Database.IsMySql() && applicationDbContext.Database.GetPendingMigrations().Any())
                 // Use migrations
                 applicationDbContext.Database.Migrate();
-            
+
             using var registryDbContext = serviceScope.ServiceProvider.GetService<RegistryContext>();
 
             if (registryDbContext == null)
@@ -453,20 +454,51 @@ namespace Registry.Web
 
                 case StorageType.S3:
 
-                    var s3Settings = appSettings.StorageProvider.Settings.ToObject<S3ProviderSettings>();
+                    var s3Settings = appSettings.StorageProvider.Settings.ToObject<S3StorageProviderSettings>();
 
                     if (s3Settings == null)
                         throw new ArgumentException("Invalid S3 storage provider settings");
 
-                    services.AddScoped<IObjectSystem, S3ObjectSystem>(provider => new S3ObjectSystem(
-                        s3Settings.Endpoint,
-                        s3Settings.AccessKey,
-                        s3Settings.SecretKey,
-                        s3Settings.Region,
-                        s3Settings.SessionToken,
-                        s3Settings.UseSsl ?? false,
-                        s3Settings.AppName,
-                        s3Settings.AppVersion));
+                    services.AddSingleton(new S3ObjectSystemSettings
+                    {
+                        Endpoint = s3Settings.Endpoint,
+                        AccessKey = s3Settings.AccessKey,
+                        SecretKey = s3Settings.SecretKey,
+                        Region = s3Settings.Region,
+                        SessionToken = s3Settings.SessionToken,
+                        UseSsl = s3Settings.UseSsl ?? false,
+                        AppName = s3Settings.AppName,
+                        AppVersion = s3Settings.AppVersion
+                    });
+
+                    services.AddScoped<IObjectSystem, S3ObjectSystem>();
+
+                    break;
+
+                case StorageType.CachedS3:
+
+                    var cachedS3Settings = appSettings.StorageProvider.Settings.ToObject<CachedS3StorageStorageProviderSettings>();
+
+                    if (cachedS3Settings == null)
+                        throw new ArgumentException("Invalid S3 storage provider settings");
+
+                    services.AddSingleton(new CachedS3ObjectSystemSettings
+                    {
+                        Endpoint = cachedS3Settings.Endpoint,
+                        AccessKey = cachedS3Settings.AccessKey,
+                        SecretKey = cachedS3Settings.SecretKey,
+                        Region = cachedS3Settings.Region,
+                        SessionToken = cachedS3Settings.SessionToken,
+                        UseSsl = cachedS3Settings.UseSsl ?? false,
+                        AppName = cachedS3Settings.AppName,
+                        AppVersion = cachedS3Settings.AppVersion,
+                        CacheExpiration = cachedS3Settings.CacheExpiration,
+                        CachePath = cachedS3Settings.CachePath,
+                        MaxSize = cachedS3Settings.MaxSize
+                    });
+
+                    services.AddScoped<IObjectSystem, CachedS3ObjectSystem>();
+
 
                     break;
 

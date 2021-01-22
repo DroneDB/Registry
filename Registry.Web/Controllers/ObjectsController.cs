@@ -55,6 +55,32 @@ namespace Registry.Web.Controllers
             }
         }
 
+        [HttpGet("tiles/{tz}/{tx}/{tyRaw}.png", Name = nameof(ObjectsController) + "." + nameof(GenerateTile))]
+        public async Task<IActionResult> GenerateTile([FromRoute] string orgSlug, [FromRoute] string dsSlug,
+            [FromRoute] int tz, [FromRoute] int tx, [FromRoute] string tyRaw, [FromQuery] string path)
+        {
+
+            try
+            {
+                _logger.LogDebug($"Objects controller GenerateTile('{orgSlug}', '{dsSlug}', '{path}', '{tz}', '{tx}', '{tyRaw}')");
+
+                var retina = tyRaw.EndsWith("@2x");
+
+                if (!int.TryParse(retina ? tyRaw.Replace("@2x", string.Empty) : tyRaw, out var ty))
+                    throw new ArgumentException("Invalid input parameters (retina indicator should be '@2x')");
+                
+                var res = await _objectsManager.GenerateTile(orgSlug, dsSlug, path, tz, tx, ty, retina);
+
+                return File(res.ContentStream, res.ContentType, res.Name);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, $"Exception in Objects controller GenerateTile('{orgSlug}', '{dsSlug}', '{path}', '{tz}', '{tx}', '{tyRaw}')");
+                return ExceptionResult(ex);
+            }
+
+        }
+
         #region Downloads
 
         [HttpGet("download", Name = nameof(ObjectsController) + "." + nameof(Download))]

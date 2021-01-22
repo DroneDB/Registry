@@ -1,8 +1,11 @@
-﻿using System.Linq;
+﻿using System.Data;
+using System.Linq;
 using System.Security.Claims;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Identity;
+using Registry.Web.Data.Models;
+using Registry.Web.Exceptions;
 using Registry.Web.Models;
 using Registry.Web.Services.Ports;
 
@@ -44,6 +47,13 @@ namespace Registry.Web.Services.Adapters
             var user = await _usersManager.FindByIdAsync(userId);
             
             return user != null;
+        }
+
+        public async Task<bool> IsOwnerOrAdmin(Dataset ds)
+        {
+            var user = await GetCurrentUser();
+
+            return user != null && (await IsUserAdmin() || ds.Organization.OwnerId == user.Id);
         }
 
         public async Task<bool> IsUserAdmin()

@@ -38,6 +38,19 @@ namespace Registry.Adapters.DroneDB
 
         }
 
+        public string GenerateTile(string imagePath, int tz, int tx, int ty, bool retina, bool tms)
+        {
+
+            try
+            {
+                return DDB.Bindings.DroneDB.GenerateTile(imagePath, tz, tx, ty, retina ? 512 : 256, true);
+            }
+            catch (DDBException ex)
+            {
+                throw new InvalidOperationException($"Cannot generate tile of '{imagePath}'", ex);
+            }
+        }
+
         public void Init()
         {
             try
@@ -186,8 +199,9 @@ namespace Registry.Adapters.DroneDB
             }
             finally
             {
-                if (filePath != null && File.Exists(filePath))
-                    File.Delete(filePath);
+                if (filePath != null && File.Exists(filePath)) 
+                    if (!CommonUtils.SafeDelete(filePath))
+                        Debug.WriteLine($"Cannot delete file '{filePath}'");
             }
         }
 
