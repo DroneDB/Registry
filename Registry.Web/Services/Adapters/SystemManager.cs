@@ -39,7 +39,7 @@ namespace Registry.Web.Services.Adapters
 
             if (!await _authManager.IsUserAdmin())
                 throw new UnauthorizedException("Only admins can perform system related tasks");
-            
+
             var removedSessions = new List<int>();
             removedSessions.AddRange(await _chunkedUploadManager.RemoveTimedoutSessions());
             removedSessions.AddRange(await _chunkedUploadManager.RemoveClosedSessions());
@@ -62,16 +62,16 @@ namespace Registry.Web.Services.Adapters
             if (orgs == null)
             {
                 query = (from ds in _context.Datasets.Include(item => item.Organization)
-                    let org = ds.Organization
-                    select new Tuple<string, Dataset>(org.Slug, ds)).ToArray();
+                         let org = ds.Organization
+                         select new Tuple<string, Dataset>(org.Slug, ds)).ToArray();
             }
             else
             {
 
                 query = (from ds in _context.Datasets.Include(item => item.Organization)
-                    let org = ds.Organization
-                    where orgs.Contains(org.Slug)
-                    select new Tuple<string, Dataset>(org.Slug, ds)).ToArray();
+                         let org = ds.Organization
+                         where orgs.Contains(org.Slug)
+                         select new Tuple<string, Dataset>(org.Slug, ds)).ToArray();
             }
 
             foreach (var (orgSlug, ds) in query)
@@ -93,11 +93,25 @@ namespace Registry.Web.Services.Adapters
             await _context.SaveChangesAsync();
         }
 
-        public CachedS3ObjectSystem.SyncFilesRes SyncFiles()
+        public SyncFilesResDto SyncFiles()
         {
             var cachedS3 = _objectSystem as CachedS3ObjectSystem;
 
-            return cachedS3?.SyncFiles();
+            if (cachedS3 == null)
+                throw new NotSupportedException(
+                    "Current object system does not support SyncFiles method, only CachedS3ObjectSystem can");
+
+            var res = cachedS3.SyncFiles();
+
+            return new SyncFilesResDto
+            {
+                ErrorFiles = res?.ErrorFiles?.Select(err => new SyncFileErrorDto
+                {
+                    ErrorMessage = err.ErrorMessage,
+                    Path = err.Path
+                }).ToArray(),
+                SyncedFiles = res?.SyncedFiles
+            };
         }
     }
 }

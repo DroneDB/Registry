@@ -355,17 +355,6 @@ namespace Registry.Adapters.ObjectSystem
             return File.Exists(GetSignalFileName(file));
         }
 
-        public class SyncFilesRes
-        {
-            public string[] SyncedFiles { get; set; }
-            public SyncFileError[] ErrorFiles { get; set; }
-        }
-
-        public class SyncFileError
-        {
-            public string Path { get; set; }
-            public string ErrorMessage { get; set; }
-        }
 
         public SyncFilesRes SyncFiles()
         {
@@ -618,7 +607,9 @@ namespace Registry.Adapters.ObjectSystem
             }
 
 #pragma warning disable 4014
-            SafePutObjectAsync(bucketName, objectName, data, size, contentType, metaData, sse, cancellationToken);
+            SafePutObjectAsync(bucketName, objectName, metaData, 
+                () => _remoteStorage.PutObjectAsync(bucketName, objectName, data, size, contentType, metaData, sse,
+                cancellationToken), cancellationToken);
 #pragma warning restore 4014
 
         }
@@ -649,15 +640,13 @@ namespace Registry.Adapters.ObjectSystem
             }
 
 #pragma warning disable 4014
-            SafePutObjectAsync(bucketName, objectName, filePath, contentType, metaData, sse, cancellationToken);
+            SafePutObjectAsync(bucketName, objectName, metaData, 
+                () => _remoteStorage.PutObjectAsync(bucketName, objectName, filePath, contentType, metaData, sse, cancellationToken), cancellationToken);
 #pragma warning restore 4014
 
         }
 
-        // The following two methods should be unified ASAP
-
-        private async Task SafePutObjectAsync(string bucketName, string objectName, Stream data, long size,
-            string contentType, Dictionary<string, string> metaData, IServerEncryption sse,
+        private async Task SafePutObjectAsync(string bucketName, string objectName, Dictionary<string, string> metaData, Func<Task> call,
             CancellationToken cancellationToken)
         {
 
@@ -673,9 +662,9 @@ namespace Registry.Adapters.ObjectSystem
                 try
                 {
                     _logger.LogInformation($"Uploading file '{objectName}' to '{bucketName}' bucket");
-                    throw new Exception("Dummy");
-                    await _remoteStorage.PutObjectAsync(bucketName, objectName, data, size, contentType, metaData, sse,
-                        cancellationToken);
+
+                    await call();
+                    
                     break;
                 }
                 catch (Exception ex)
@@ -704,52 +693,7 @@ namespace Registry.Adapters.ObjectSystem
             File.Delete(signalFileName);
         }
 
-        private async Task SafePutObjectAsync(string bucketName, string objectName, string filePath,
-            string contentType, Dictionary<string, string> metaData, IServerEncryption sse,
-            CancellationToken cancellationToken)
-        {
-
-            var signalFileName = GetSignalFileName(bucketName, objectName);
-            var cachedFileName = GetCacheFileName(bucketName, objectName);
-
-            if (!IsFileSignaled(cachedFileName))
-                await CreateSignalFile(cachedFileName);
-
-            int cnt = 1;
-            do
-            {
-                try
-                {
-                    _logger.LogInformation($"Uploading file '{objectName}' to '{bucketName}' bucket");
-                    await _remoteStorage.PutObjectAsync(bucketName, objectName, filePath, contentType, metaData, sse,
-                        cancellationToken);
-                    break;
-                }
-                catch (Exception ex)
-                {
-                    _logger.LogError(ex, $"Cannot file '{objectName}' to '{bucketName}' bucket to S3 ({cnt}° attempt)");
-                    cnt++;
-                }
-
-            } while (cnt < MaxUploadAttempts);
-
-            if (cnt == MaxUploadAttempts)
-            {
-                _logger.LogError(
-                    "No attempt to upload file to S3 was successful, leaving the file in unsyncronized state");
-
-                // Signal that this file is not synced
-                await File.WriteAllTextAsync(GetBrokenFileName(bucketName, objectName), DateTime.Now.ToString("O"), cancellationToken);
-
-                // Write down call info
-                await CreateInfoFile(cachedFileName, bucketName, objectName, metaData, cancellationToken);
-
-                return;
-            }
-
-            _logger.LogInformation($"Removing signal file '{signalFileName}'");
-            File.Delete(signalFileName);
-        }
+        
 
         #endregion
 
