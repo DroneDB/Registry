@@ -26,7 +26,7 @@ namespace Registry.Web.Controllers
             _logger = logger;
         }
 
-        [HttpGet("cleanupsessions", Name = nameof(SystemController) + "." + nameof(CleanupSessions))]
+        [HttpPost("cleanupsessions", Name = nameof(SystemController) + "." + nameof(CleanupSessions))]
         public async Task<IActionResult> CleanupSessions()
         {
             try
