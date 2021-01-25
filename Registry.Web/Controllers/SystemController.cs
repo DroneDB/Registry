@@ -43,6 +43,23 @@ namespace Registry.Web.Controllers
             }
         }
 
+        [HttpPost("cleanupbatches", Name = nameof(SystemController) + "." + nameof(CleanupBatches))]
+        public async Task<IActionResult> CleanupBatches()
+        {
+            try
+            {
+                _logger.LogDebug($"System controller CleanupBatches()");
+
+                return Ok(await _systemManager.CleanupBatches());
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, $"Exception in System controller CleanupBatches()");
+
+                return ExceptionResult(ex);
+            }
+        }
+
 
         [HttpPost("syncddb", Name = nameof(SystemController) + "." + nameof(SyncDdbMeta))]
         public async Task<IActionResult> SyncDdbMeta(string[] orgs)
