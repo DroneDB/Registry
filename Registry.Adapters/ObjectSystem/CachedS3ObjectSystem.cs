@@ -40,7 +40,13 @@ namespace Registry.Adapters.ObjectSystem
 
         private string GetCacheFileName(string bucketName, string objectName)
         {
-            return Path.GetFullPath(Path.Combine(CachePath, bucketName, objectName.Replace('/', '-')));
+            var path = Path.GetFullPath(Path.Combine(CachePath, bucketName, objectName));
+
+            // Create folder tree if not existing
+            var folder = Path.GetDirectoryName(path);
+            if (folder != null) Directory.CreateDirectory(folder);
+
+            return path;
         }
         private string GetCacheFileInfoName(string bucketName, string objectName)
         {
@@ -195,7 +201,15 @@ namespace Registry.Adapters.ObjectSystem
                 {
                     if (!File.Exists(file.Path)) continue;
 
-                    if (!File.Exists(GetSignalFileName(file.Path)))
+                    // If we have a .json file that is an info file of a file not synced yet or that is being uploaded we skip it
+                    if (file.Path.EndsWith(".json") && (File.Exists(file.Path.Replace(".json", BrokenFileSuffix)) ||
+                                                        File.Exists(file.Path.Replace(".json", SignalFileSuffix))))
+                    {
+                        _logger.LogInformation($"Skipping '{file.Path}' because is info file of not synced yet file");
+                        continue;
+                    }
+
+                    if (!File.Exists(GetSignalFileName(file.Path)) && !File.Exists(GetBrokenFileName(file.Path)))
                     {
                         try
                         {
@@ -216,7 +230,7 @@ namespace Registry.Adapters.ObjectSystem
                     }
                     else
                     {
-                        _logger.LogInformation($"Skipping '{file.Path}' because it's being uploaded");
+                        _logger.LogInformation($"Skipping '{file.Path}' because it's being uploaded or is not synced yet");
                     }
                 }
 
@@ -380,12 +394,25 @@ namespace Registry.Adapters.ObjectSystem
 
                     try
                     {
-                        var bucketName = Path.GetFileName(Path.GetDirectoryName(file));
+                        var bucketName = Path.GetRelativePath(CachePath, Path.GetDirectoryName(file) ?? string.Empty)
+                            .Split(Path.DirectorySeparatorChar).FirstOrDefault(); 
+
+                        if (bucketName == null)
+                        {
+                            var msg = $"Cannot retrieve bucket name from file '{file}'";
+                            _logger.LogWarning(msg);
+                            errorFiles.Add(new SyncFileError { ErrorMessage = msg, Path = file });
+
+                            break;
+                        }
 
                         var info = GetFileObjectInfo(file + ".json");
                         if (info == null)
                         {
-                            _logger.LogWarning($"Cannot get file info of '{file}'");
+                            var msg = $"Cannot get file info of '{file}'";
+                            _logger.LogWarning(msg);
+                            errorFiles.Add(new SyncFileError { ErrorMessage = msg, Path = file });
+
                             break;
                         }
 
@@ -409,7 +436,7 @@ namespace Registry.Adapters.ObjectSystem
                     catch (Exception ex)
                     {
                         _logger.LogError(ex, $"Cannot sync '{file}'");
-                        errorFiles.Add(new SyncFileError {ErrorMessage = ex.Message, Path = file});
+                        errorFiles.Add(new SyncFileError { ErrorMessage = ex.Message, Path = file });
                     }
 
                 }
@@ -607,7 +634,7 @@ namespace Registry.Adapters.ObjectSystem
             }
 
 #pragma warning disable 4014
-            SafePutObjectAsync(bucketName, objectName, metaData, 
+            SafePutObjectAsync(bucketName, objectName, metaData,
                 () => _remoteStorage.PutObjectAsync(bucketName, objectName, data, size, contentType, metaData, sse,
                 cancellationToken), cancellationToken);
 #pragma warning restore 4014
@@ -640,7 +667,7 @@ namespace Registry.Adapters.ObjectSystem
             }
 
 #pragma warning disable 4014
-            SafePutObjectAsync(bucketName, objectName, metaData, 
+            SafePutObjectAsync(bucketName, objectName, metaData,
                 () => _remoteStorage.PutObjectAsync(bucketName, objectName, filePath, contentType, metaData, sse, cancellationToken), cancellationToken);
 #pragma warning restore 4014
 
@@ -664,7 +691,7 @@ namespace Registry.Adapters.ObjectSystem
                     _logger.LogInformation($"Uploading file '{objectName}' to '{bucketName}' bucket");
 
                     await call();
-                    
+
                     break;
                 }
                 catch (Exception ex)
@@ -682,6 +709,10 @@ namespace Registry.Adapters.ObjectSystem
 
                 // Signal that this file is not synced
                 await File.WriteAllTextAsync(GetBrokenFileName(bucketName, objectName), DateTime.Now.ToString("O"), cancellationToken);
+                
+                // Remove pending file
+                var signalFile = GetSignalFileName(bucketName, objectName);
+                if (File.Exists(signalFile)) File.Delete(signalFile);
 
                 // Write down call info
                 await CreateInfoFile(cachedFileName, bucketName, objectName, metaData, cancellationToken);
@@ -693,7 +724,7 @@ namespace Registry.Adapters.ObjectSystem
             File.Delete(signalFileName);
         }
 
-        
+
 
         #endregion
 
