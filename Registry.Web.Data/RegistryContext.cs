@@ -20,8 +20,14 @@ namespace Registry.Web.Data
             modelBuilder.Entity<FileChunk>()
                 .HasOne(chunk => chunk.Session)
                 .WithMany(session => session.Chunks)
-                .IsRequired(true)
+                .IsRequired()
                 .OnDelete(DeleteBehavior.Cascade);
+
+            modelBuilder
+                .Entity<Entry>()
+                .HasOne(e => e.Batch)
+                .WithMany(e => e.Entries)
+                .OnDelete(DeleteBehavior.ClientCascade);
 
             // TODO: Need to set value comparer
             modelBuilder.Entity<DownloadPackage>()
