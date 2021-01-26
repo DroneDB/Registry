@@ -17,12 +17,41 @@ namespace Registry.Web.Data
             modelBuilder.Entity<Dataset>()
                 .HasIndex(ds => ds.Slug);
 
-            modelBuilder.Entity<FileChunk>()
-                .HasOne(chunk => chunk.Session)
-                .WithMany(session => session.Chunks)
-                .IsRequired(true)
+            modelBuilder
+                .Entity<Dataset>()
+                .HasOne(ds => ds.Organization)
+                .WithMany(org => org.Datasets)
+                .IsRequired()
                 .OnDelete(DeleteBehavior.Cascade);
 
+            modelBuilder
+                .Entity<FileChunk>()
+                .HasOne(chunk => chunk.Session)
+                .WithMany(session => session.Chunks)
+                .IsRequired()
+                .OnDelete(DeleteBehavior.Cascade);
+
+            modelBuilder
+                .Entity<Batch>()
+                .HasOne(e => e.Dataset)
+                .WithMany(e => e.Batches)
+                .IsRequired()
+                .OnDelete(DeleteBehavior.Cascade);
+
+            modelBuilder
+                .Entity<Entry>()
+                .HasOne(e => e.Batch)
+                .WithMany(e => e.Entries)
+                .IsRequired()
+                .OnDelete(DeleteBehavior.Cascade);
+
+            modelBuilder
+                .Entity<DownloadPackage>()
+                .HasOne(e => e.Dataset)
+                .WithMany(e => e.DownloadPackages)
+                .IsRequired()
+                .OnDelete(DeleteBehavior.Cascade);
+            
             // TODO: Need to set value comparer
             modelBuilder.Entity<DownloadPackage>()
                 .Property(e => e.Paths)

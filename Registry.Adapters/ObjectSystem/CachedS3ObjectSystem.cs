@@ -33,7 +33,7 @@ namespace Registry.Adapters.ObjectSystem
         private Dictionary<string, FileInfo> _fileInfos;
 
         // NOTE: This is thread safe as long that there is only one worker process
-        private static readonly object _sync = new();
+        private static readonly object _sync = new object();
 
         private const string SignalFileSuffix = "-pending";
         private const string BrokenFileSuffix = "-broken";

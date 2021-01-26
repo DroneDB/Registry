@@ -12,7 +12,7 @@ namespace Registry.Web.Services.Ports
         public Task<CleanupResult> CleanupSessions();
         public Task SyncDdbMeta(string[] orgs = null, bool skipAuthCheck = false);
 
-        // This is a hard reference and a violation of our architecture. Keeping it simple by now.
         public SyncFilesResDto SyncFiles();
+        public Task<CleanupBatchesResultDto> CleanupBatches();
     }
 }

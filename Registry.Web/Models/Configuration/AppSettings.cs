@@ -65,6 +65,11 @@ namespace Registry.Web.Models.Configuration
         public int BatchTokenLength { get; set; }
 
         /// <summary>
+        /// Timeout of batch uploads
+        /// </summary>
+        public TimeSpan UploadBatchTimeout { get; set; }
+
+        /// <summary>
         /// Length of the random generated dataset name
         /// </summary>
         public int RandomDatasetNameLength { get; set; }

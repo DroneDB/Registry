@@ -26,7 +26,7 @@ namespace Registry.Web.Controllers
             _logger = logger;
         }
 
-        [HttpGet("cleanupsessions", Name = nameof(SystemController) + "." + nameof(CleanupSessions))]
+        [HttpPost("cleanupsessions", Name = nameof(SystemController) + "." + nameof(CleanupSessions))]
         public async Task<IActionResult> CleanupSessions()
         {
             try
@@ -38,6 +38,23 @@ namespace Registry.Web.Controllers
             catch (Exception ex)
             {
                 _logger.LogError(ex, $"Exception in System controller CleanupSessions()");
+
+                return ExceptionResult(ex);
+            }
+        }
+
+        [HttpPost("cleanupbatches", Name = nameof(SystemController) + "." + nameof(CleanupBatches))]
+        public async Task<IActionResult> CleanupBatches()
+        {
+            try
+            {
+                _logger.LogDebug($"System controller CleanupBatches()");
+
+                return Ok(await _systemManager.CleanupBatches());
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, $"Exception in System controller CleanupBatches()");
 
                 return ExceptionResult(ex);
             }
