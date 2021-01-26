@@ -2,15 +2,17 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Registry.Web.Data;
 
 namespace Registry.Web.Data.Migrations
 {
     [DbContext(typeof(RegistryContext))]
-    partial class RegistryContextModelSnapshot : ModelSnapshot
+    [Migration("20210126152755_EntryAndBatchDeleteCascade")]
+    partial class EntryAndBatchDeleteCascade
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -250,7 +252,7 @@ namespace Registry.Web.Data.Migrations
                     b.HasOne("Registry.Web.Data.Models.Dataset", "Dataset")
                         .WithMany("Batches")
                         .HasForeignKey("DatasetId")
-                        .OnDelete(DeleteBehavior.Cascade)
+                        .OnDelete(DeleteBehavior.ClientCascade)
                         .IsRequired();
 
                     b.Navigation("Dataset");
@@ -272,7 +274,7 @@ namespace Registry.Web.Data.Migrations
                     b.HasOne("Registry.Web.Data.Models.Dataset", "Dataset")
                         .WithMany("DownloadPackages")
                         .HasForeignKey("DatasetId")
-                        .OnDelete(DeleteBehavior.Cascade)
+                        .OnDelete(DeleteBehavior.ClientCascade)
                         .IsRequired();
 
                     b.Navigation("Dataset");
@@ -283,7 +285,7 @@ namespace Registry.Web.Data.Migrations
                     b.HasOne("Registry.Web.Data.Models.Batch", "Batch")
                         .WithMany("Entries")
                         .HasForeignKey("BatchToken")
-                        .OnDelete(DeleteBehavior.Cascade)
+                        .OnDelete(DeleteBehavior.ClientCascade)
                         .IsRequired();
 
                     b.Navigation("Batch");
