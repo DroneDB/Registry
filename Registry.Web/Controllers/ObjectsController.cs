@@ -4,7 +4,6 @@ using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
-using Microsoft.AspNet.OData;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Identity;
@@ -56,27 +55,86 @@ namespace Registry.Web.Controllers
             }
         }
 
+        [HttpGet("tiles/{tz}/{tx}/{tyRaw}.png", Name = nameof(ObjectsController) + "." + nameof(GenerateTile))]
+        public async Task<IActionResult> GenerateTile([FromRoute] string orgSlug, [FromRoute] string dsSlug,
+            [FromRoute] int tz, [FromRoute] int tx, [FromRoute] string tyRaw, [FromQuery] string path)
+        {
+
+            try
+            {
+                _logger.LogDebug($"Objects controller GenerateTile('{orgSlug}', '{dsSlug}', '{path}', '{tz}', '{tx}', '{tyRaw}')");
+
+                var retina = tyRaw.EndsWith("@2x");
+
+                if (!int.TryParse(retina ? tyRaw.Replace("@2x", string.Empty) : tyRaw, out var ty))
+                    throw new ArgumentException("Invalid input parameters (retina indicator should be '@2x')");
+                
+                var res = await _objectsManager.GenerateTile(orgSlug, dsSlug, path, tz, tx, ty, retina);
+
+                return File(res.ContentStream, res.ContentType, res.Name);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, $"Exception in Objects controller GenerateTile('{orgSlug}', '{dsSlug}', '{path}', '{tz}', '{tx}', '{tyRaw}')");
+                return ExceptionResult(ex);
+            }
+
+        }
+
         #region Downloads
 
         [HttpGet("download", Name = nameof(ObjectsController) + "." + nameof(Download))]
         public async Task<IActionResult> Download([FromRoute] string orgSlug, [FromRoute] string dsSlug,
-            [FromQuery(Name = "path")] string pathsRaw)
+            [FromQuery(Name = "path")] string pathsRaw, [FromQuery(Name = "inline")] int? isInlineRaw)
         {
             try
             {
 
                 var paths = pathsRaw?.Split(",", StringSplitOptions.RemoveEmptyEntries);
+                bool isInline = isInlineRaw == 1;
 
-                _logger.LogDebug($"Objects controller Download('{orgSlug}', '{dsSlug}', '{pathsRaw}')");
+                _logger.LogDebug($"Objects controller Download('{orgSlug}', '{dsSlug}', '{pathsRaw}', '{isInlineRaw}')");
 
                 var res = await _objectsManager.Download(orgSlug, dsSlug, paths);
 
-                return File(res.ContentStream, res.ContentType, res.Name);
+                if (!isInline)
+                    return File(res.ContentStream, res.ContentType, res.Name);
+
+                Response.Headers.Add("Content-Disposition", "inline");
+                return File(res.ContentStream, res.ContentType);
 
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, $"Exception in Objects controller Download('{orgSlug}', '{dsSlug}', '{pathsRaw}')");
+
+                return ExceptionResult(ex);
+            }
+        }
+
+        [HttpGet("download/{*path}", Name = nameof(ObjectsController) + "." + nameof(DownloadExact))]
+        public async Task<IActionResult> DownloadExact([FromRoute] string orgSlug, [FromRoute] string dsSlug, string path,
+            [FromQuery(Name = "inline")] int? isInlineRaw)
+        {
+            try
+            {
+
+                bool isInline = isInlineRaw == 1;
+
+                _logger.LogDebug($"Objects controller DownloadExact('{orgSlug}', '{dsSlug}', '{path}', '{isInlineRaw}')");
+
+                var res = await _objectsManager.Download(orgSlug, dsSlug, new[] { path });
+
+                if (!isInline)
+                    return File(res.ContentStream, res.ContentType, res.Name);
+
+                Response.Headers.Add("Content-Disposition", "inline");
+                return File(res.ContentStream, res.ContentType);
+
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, $"Exception in Objects controller DownloadExact('{orgSlug}', '{dsSlug}', '{path}')");
 
                 return ExceptionResult(ex);
             }
@@ -90,7 +148,7 @@ namespace Registry.Web.Controllers
             {
                 _logger.LogDebug($"Objects controller DownloadPackage('{orgSlug}', '{dsSlug}', '{id}')");
 
-                var res = await _objectsManager.Download(orgSlug, dsSlug, id);
+                var res = await _objectsManager.DownloadPackage(orgSlug, dsSlug, id);
 
                 return File(res.ContentStream, res.ContentType, res.Name);
 

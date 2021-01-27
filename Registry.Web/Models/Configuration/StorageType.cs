@@ -3,6 +3,7 @@
     public enum StorageType
     {
         Physical,
-        S3
+        S3,
+        CachedS3
     }
 }

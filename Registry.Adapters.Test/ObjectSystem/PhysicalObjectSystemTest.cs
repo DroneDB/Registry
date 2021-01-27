@@ -13,6 +13,7 @@ using System.Reactive.Linq;
 using Microsoft.VisualBasic.CompilerServices;
 using MimeMapping;
 using Newtonsoft.Json;
+using Registry.Adapters.ObjectSystem.Model;
 using Registry.Common;
 using Registry.Ports.ObjectSystem.Model;
 
@@ -1039,10 +1040,10 @@ namespace Registry.Adapters.Test.ObjectSystem
             var objectPath = @"C:\Users\Art Director\Downloads\Test1\Storage\public-default\Sub\20170320_150447.jpg";
             var fileInfo = new FileInfo(objectPath);
 
-            var objectInfo = new PhysicalObjectSystem.ObjectInfoDto
+            var objectInfo = new ObjectInfoDto
             {
                 ContentType = MimeUtility.GetMimeMapping(objectPath),
-                ETag = PhysicalObjectSystem.CalculateETag(objectPath, fileInfo),
+                ETag = AdaptersUtils.CalculateETag(fileInfo),
                 LastModified = File.GetLastWriteTime(objectPath),
                 Size = fileInfo.Length,
                 Name = objectPath,

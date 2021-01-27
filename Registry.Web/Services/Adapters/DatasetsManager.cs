@@ -3,7 +3,6 @@ using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
-using Microsoft.AspNet.OData.Query;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Newtonsoft.Json;
@@ -26,6 +25,7 @@ namespace Registry.Web.Services.Adapters
         private readonly IObjectsManager _objectsManager;
         private readonly IPasswordHasher _passwordHasher;
         private readonly IDdbManager _ddbManager;
+        private readonly IAuthManager _authManager;
 
         // TODO: Add extensive testing
 
@@ -34,8 +34,8 @@ namespace Registry.Web.Services.Adapters
             IUtils utils,
             ILogger<DatasetsManager> logger,
             IObjectsManager objectsManager,
-            IPasswordHasher passwordHasher,
-            IDdbManager ddbManager)
+            IPasswordHasher passwordHasher, 
+            IDdbManager ddbManager, IAuthManager authManager)
         {
             _context = context;
             _utils = utils;
@@ -43,10 +43,12 @@ namespace Registry.Web.Services.Adapters
             _objectsManager = objectsManager;
             _passwordHasher = passwordHasher;
             _ddbManager = ddbManager;
+            _authManager = authManager;
         }
 
         public async Task<IEnumerable<DatasetDto>> List(string orgSlug)
         {
+
             var org = await _utils.GetOrganization(orgSlug);
 
             var query = from ds in org.Datasets.ToArray()
@@ -72,6 +74,10 @@ namespace Registry.Web.Services.Adapters
         {
 
             var ds = await _utils.GetDataset(orgSlug, dsSlug);
+
+            if (!await _authManager.IsOwnerOrAdmin(ds))
+                throw new UnauthorizedException("The current user is not allowed to sync db meta");
+
 
             var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
 
@@ -126,21 +132,20 @@ namespace Registry.Web.Services.Adapters
 
         public async Task Edit(string orgSlug, string dsSlug, DatasetDto dataset)
         {
-            var org = await _utils.GetOrganization(orgSlug);
 
-            var entity = org.Datasets.FirstOrDefault(item => item.Slug == dsSlug);
+            var ds = await _utils.GetDataset(orgSlug, dsSlug);
 
-            if (entity == null)
-                throw new NotFoundException("Dataset not found");
+            if (!await _authManager.IsOwnerOrAdmin(ds))
+                throw new UnauthorizedException("The current user is not allowed to edit dataset");
 
-            entity.Description = dataset.Description;
-            entity.IsPublic = dataset.IsPublic;
-            entity.LastEdit = DateTime.Now;
-            entity.License = dataset.License;
-            entity.Name = dataset.Name;
+            ds.Description = dataset.Description;
+            ds.IsPublic = dataset.IsPublic;
+            ds.LastEdit = DateTime.Now;
+            ds.License = dataset.License;
+            ds.Name = dataset.Name;
 
             if (!string.IsNullOrEmpty(dataset.Password))
-                entity.PasswordHash = _passwordHasher.Hash(dataset.Password);
+                ds.PasswordHash = _passwordHasher.Hash(dataset.Password);
 
             await _context.SaveChangesAsync();
 
@@ -155,6 +160,9 @@ namespace Registry.Web.Services.Adapters
 
             if (ds == null)
                 throw new NotFoundException("Dataset not found");
+
+            if (!await _authManager.IsOwnerOrAdmin(ds))
+                throw new UnauthorizedException("The current user is not allowed to delete dataset");
 
             await _objectsManager.DeleteAll(orgSlug, dsSlug);
 
@@ -180,6 +188,9 @@ namespace Registry.Web.Services.Adapters
 
             var ds = await _utils.GetDataset(orgSlug, dsSlug);
 
+            if (!await _authManager.IsOwnerOrAdmin(ds))
+                throw new UnauthorizedException("The current user is not allowed to rename dataset");
+
             ds.Slug = newSlug;
 
             await _context.SaveChangesAsync();
@@ -190,6 +201,9 @@ namespace Registry.Web.Services.Adapters
         {
             var ds = await _utils.GetDataset(orgSlug, dsSlug);
 
+            if (!await _authManager.IsOwnerOrAdmin(ds))
+                throw new UnauthorizedException("The current user is not allowed to change attributes");
+            
             var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
 
             var attrs = ddb.ChangeAttributes(attributes);

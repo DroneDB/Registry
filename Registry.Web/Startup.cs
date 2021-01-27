@@ -3,11 +3,10 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
 using System.Linq;
+using System.Reflection;
 using System.Text;
 using System.Threading.Tasks;
 using HealthChecks.UI.Client;
-using Microsoft.AspNet.OData.Builder;
-using Microsoft.AspNet.OData.Extensions;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Registry.Web.Models;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
@@ -32,10 +31,10 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
-using Microsoft.OData.Edm;
 using Microsoft.OpenApi.Models;
 using Registry.Adapters.DroneDB;
 using Registry.Adapters.ObjectSystem;
+using Registry.Adapters.ObjectSystem.Model;
 using Registry.Common;
 using Registry.Ports.DroneDB;
 using Registry.Ports.ObjectSystem;
@@ -173,12 +172,12 @@ namespace Registry.Web
             RegisterCacheProvider(services, appSettings);
 
             services.AddHealthChecks()
-                .AddCheck<CacheHealthCheck>("Cache health check", null, new[] { "service" })
-                .AddCheck<DdbHealthCheck>("DroneDB health check", null, new[] { "service" })
-                .AddCheck<UserManagerHealthCheck>("User manager health check", null, new[] { "database" })
-                .AddDbContextCheck<RegistryContext>("Registry database health check", null, new[] { "database" })
+                .AddCheck<CacheHealthCheck>("Cache health check", null, new[] {"service"})
+                .AddCheck<DdbHealthCheck>("DroneDB health check", null, new[] {"service"})
+                .AddCheck<UserManagerHealthCheck>("User manager health check", null, new[] {"database"})
+                .AddDbContextCheck<RegistryContext>("Registry database health check", null, new[] {"database"})
                 .AddDbContextCheck<ApplicationDbContext>("Registry identity database health check", null,
-                    new[] { "database" })
+                    new[] {"database"})
                 .AddCheck<ObjectSystemHealthCheck>("Object system health check", null, new[] { "storage" })
                 .AddDiskSpaceHealthCheck(appSettings.UploadPath, "Upload path space health check", null,
                     new[] { "storage" })
@@ -291,6 +290,11 @@ namespace Registry.Web
                     ResponseWriter = UIResponseWriter.WriteHealthCheckUIResponse
                 }).RequireAuthorization();
 
+                endpoints.MapGet("/version", async context =>
+                {
+                    await context.Response.WriteAsync(Assembly.GetExecutingAssembly().GetName().Version?.ToString() ?? "undefined");
+                });
+
                 // TODO: Enable when needed
                 // endpoints.MapODataRoute("odata", "odata", GetEdmModel());
             });
@@ -347,9 +351,21 @@ namespace Registry.Web
                 throw new InvalidOperationException("Cannot get application db context from service provider");
 
             if (applicationDbContext.Database.IsSqlite())
+            {
                 CommonUtils.EnsureFolderCreated(Configuration.GetConnectionString(IdentityConnectionName));
 
-            applicationDbContext.Database.EnsureCreated();
+                // No migrations
+                applicationDbContext.Database.EnsureCreated();
+            }
+
+            if (applicationDbContext.Database.IsSqlServer())
+                // No migrations
+                applicationDbContext.Database.EnsureCreated();
+
+
+            if (applicationDbContext.Database.IsMySql() && applicationDbContext.Database.GetPendingMigrations().Any())
+                // Use migrations
+                applicationDbContext.Database.Migrate();
 
             using var registryDbContext = serviceScope.ServiceProvider.GetService<RegistryContext>();
 
@@ -357,9 +373,21 @@ namespace Registry.Web
                 throw new InvalidOperationException("Cannot get registry db context from service provider");
 
             if (registryDbContext.Database.IsSqlite())
+            {
                 CommonUtils.EnsureFolderCreated(Configuration.GetConnectionString(RegistryConnectionName));
+                // No migrations
+                registryDbContext.Database.EnsureCreated();
+            }
 
-            registryDbContext.Database.EnsureCreated();
+            if (registryDbContext.Database.IsSqlServer())
+                // No migrations
+                registryDbContext.Database.EnsureCreated();
+
+
+            if (registryDbContext.Database.IsMySql() && registryDbContext.Database.GetPendingMigrations().Any())
+                // Use migrations
+                registryDbContext.Database.Migrate();
+
 
             CreateInitialData(registryDbContext);
             CreateDefaultAdmin(registryDbContext, serviceScope.ServiceProvider).Wait();
@@ -426,20 +454,51 @@ namespace Registry.Web
 
                 case StorageType.S3:
 
-                    var s3Settings = appSettings.StorageProvider.Settings.ToObject<S3ProviderSettings>();
+                    var s3Settings = appSettings.StorageProvider.Settings.ToObject<S3StorageProviderSettings>();
 
                     if (s3Settings == null)
                         throw new ArgumentException("Invalid S3 storage provider settings");
 
-                    services.AddScoped<IObjectSystem, S3ObjectSystem>(provider => new S3ObjectSystem(
-                        s3Settings.Endpoint,
-                        s3Settings.AccessKey,
-                        s3Settings.SecretKey,
-                        s3Settings.Region,
-                        s3Settings.SessionToken,
-                        s3Settings.UseSsl ?? false,
-                        s3Settings.AppName,
-                        s3Settings.AppVersion));
+                    services.AddSingleton(new S3ObjectSystemSettings
+                    {
+                        Endpoint = s3Settings.Endpoint,
+                        AccessKey = s3Settings.AccessKey,
+                        SecretKey = s3Settings.SecretKey,
+                        Region = s3Settings.Region,
+                        SessionToken = s3Settings.SessionToken,
+                        UseSsl = s3Settings.UseSsl ?? false,
+                        AppName = s3Settings.AppName,
+                        AppVersion = s3Settings.AppVersion
+                    });
+
+                    services.AddScoped<IObjectSystem, S3ObjectSystem>();
+
+                    break;
+
+                case StorageType.CachedS3:
+
+                    var cachedS3Settings = appSettings.StorageProvider.Settings.ToObject<CachedS3StorageStorageProviderSettings>();
+
+                    if (cachedS3Settings == null)
+                        throw new ArgumentException("Invalid S3 storage provider settings");
+
+                    services.AddSingleton(new CachedS3ObjectSystemSettings
+                    {
+                        Endpoint = cachedS3Settings.Endpoint,
+                        AccessKey = cachedS3Settings.AccessKey,
+                        SecretKey = cachedS3Settings.SecretKey,
+                        Region = cachedS3Settings.Region,
+                        SessionToken = cachedS3Settings.SessionToken,
+                        UseSsl = cachedS3Settings.UseSsl ?? false,
+                        AppName = cachedS3Settings.AppName,
+                        AppVersion = cachedS3Settings.AppVersion,
+                        CacheExpiration = cachedS3Settings.CacheExpiration,
+                        CachePath = cachedS3Settings.CachePath,
+                        MaxSize = cachedS3Settings.MaxSize
+                    });
+
+                    services.AddScoped<IObjectSystem, CachedS3ObjectSystem>();
+
 
                     break;
 
@@ -454,37 +513,16 @@ namespace Registry.Web
 
             var connectionString = Configuration.GetConnectionString(connectionStringName);
 
-            switch (provider)
-            {
-                case DbProvider.Sqlite:
+            services.AddDbContext<T>(options =>
+                _ = provider switch
+                {
+                    DbProvider.Sqlite => options.UseSqlite(connectionString),
+                    DbProvider.Mysql => options.UseMySql(connectionString, ServerVersion.AutoDetect(connectionString),
+                        builder => builder.EnableRetryOnFailure()),
+                    DbProvider.Mssql => options.UseSqlServer(connectionString),
+                    _ => throw new ArgumentOutOfRangeException(nameof(provider), $"Unrecognised provider: '{provider}'")
+                });
 
-                    services.AddDbContext<T>(options =>
-                        options.UseSqlite(
-                            connectionString));
-
-                    break;
-
-                case DbProvider.Mysql:
-
-                    services.AddDbContext<T>(options =>
-                        options.UseMySql(
-                            connectionString,
-                            ServerVersion.AutoDetect(connectionString),
-                            builder => builder.EnableRetryOnFailure()));
-
-                    break;
-
-                case DbProvider.Mssql:
-
-                    services.AddDbContext<T>(options =>
-                        options.UseSqlServer(
-                            connectionString));
-
-                    break;
-
-                default:
-                    throw new ArgumentOutOfRangeException($"Unrecognised provider: '{provider}'");
-            }
         }
 
         private void CreateInitialData(RegistryContext context)
