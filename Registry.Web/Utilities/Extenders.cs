@@ -97,11 +97,10 @@ namespace Registry.Web.Utilities
 
         public static void UpdateStatistics(this Dataset ds, IDdb ddb)
         {
-            var objs = ddb.Search(null).ToArray();
+            var objs = ddb.Search("*", true).ToArray();
 
             ds.ObjectsCount = objs.Length;
             ds.Size = objs.Sum(item => item.Size);
-
         }
 
         // A tag name must be valid ASCII and may contain lowercase and uppercase letters, digits, underscores, periods and dashes.
