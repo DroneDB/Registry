@@ -51,7 +51,6 @@ namespace Registry.Web.Utilities
                 Description = dataset.Description,
                 LastEdit = dataset.LastEdit,
                 Name = string.IsNullOrEmpty(dataset.Name) ? dataset.Slug : dataset.Name,
-                License = dataset.License,
                 Meta = dataset.Meta,
                 ObjectsCount = dataset.ObjectsCount,
                 Size = dataset.Size
@@ -70,7 +69,6 @@ namespace Registry.Web.Utilities
                 Description = dataset.Description,
                 LastEdit = dataset.LastEdit,
                 Name = dataset.Name,
-                License = dataset.License,
                 Meta = dataset.Meta,
                 ObjectsCount = dataset.ObjectsCount,
                 Size = dataset.Size,
