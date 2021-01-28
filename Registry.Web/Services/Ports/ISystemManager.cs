@@ -14,5 +14,6 @@ namespace Registry.Web.Services.Ports
 
         public SyncFilesResDto SyncFiles();
         public Task<CleanupBatchesResultDto> CleanupBatches();
+        Task<CleanupDatasetResultDto> CleanupEmptyDatasets();
     }
 }
