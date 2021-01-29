@@ -26,6 +26,23 @@ namespace Registry.Web.Controllers
             _logger = logger;
         }
 
+        [HttpGet("version", Name = nameof(SystemController) + "." + nameof(GetVersion))]
+        public IActionResult GetVersion()
+        {
+            try
+            {
+                _logger.LogDebug($"System controller GetVersion()");
+
+                return Ok(_systemManager.GetVersion());
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, $"Exception in System controller GetVersion()");
+
+                return ExceptionResult(ex);
+            }
+        }
+
         [HttpPost("cleanupsessions", Name = nameof(SystemController) + "." + nameof(CleanupSessions))]
         public async Task<IActionResult> CleanupSessions()
         {

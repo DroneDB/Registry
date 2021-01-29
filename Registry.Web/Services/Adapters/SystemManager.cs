@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Reflection;
 using System.Threading.Tasks;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.EntityFrameworkCore;
@@ -115,6 +116,11 @@ namespace Registry.Web.Services.Adapters
                 RemovedDatasets = deleted.ToArray()
             };
 
+        }
+
+        public string GetVersion()
+        {
+            return Assembly.GetExecutingAssembly().GetName().Version?.ToString();
         }
 
         public async Task<CleanupBatchesResultDto> CleanupBatches()
