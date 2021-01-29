@@ -12,7 +12,7 @@ namespace Registry.Web.Services
     public sealed class ApplicationDbContext : IdentityDbContext<User>
     {
 
-        public const string AdminRoleName = "Admin";
+        public const string AdminRoleName = "admin";
         public ApplicationDbContext(DbContextOptions<ApplicationDbContext> options)
             : base(options)
         {
@@ -28,7 +28,7 @@ namespace Registry.Web.Services
                 .Property(b => b.Metadata)
                 .HasConversion(
                     v => JsonConvert.SerializeObject(v),
-                    v => JsonConvert.DeserializeObject<Dictionary<string, string>>(v));
+                    v => JsonConvert.DeserializeObject<Dictionary<string, object>>(v));
             
         }
         

@@ -20,6 +20,6 @@ namespace Registry.Web.Models
          *  so you will need to explicitly call the Update method on the DbSet<> to set the entity
          *  to modified in the change tracker.
          */
-        public Dictionary<string, string> Metadata { get; set; } = new Dictionary<string, string>();
+        public Dictionary<string, object> Metadata { get; set; } = new Dictionary<string, object>();
     }
 }

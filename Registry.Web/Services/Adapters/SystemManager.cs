@@ -72,7 +72,7 @@ namespace Registry.Web.Services.Adapters
 
             foreach (var ds in datasets)
             {
-                _logger.LogInformation($"Analyzing dataset {ds.Slug}/{ds.Organization.Slug}");
+                _logger.LogInformation($"Analyzing dataset {ds.Organization.Slug}/{ds.Slug}");
 
                 try
                 {
