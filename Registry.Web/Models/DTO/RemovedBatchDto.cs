@@ -11,6 +11,20 @@ namespace Registry.Web.Models.DTO
         public RemoveBatchErrorDto[] RemoveBatchErrors { get; set; }
     }
 
+    public class CleanupDatasetResultDto
+    {
+        public string[] RemovedDatasets { get; set; }
+
+        public CleanupDatasetErrorDto[] RemoveDatasetErrors { get; set; }
+
+    }
+
+    public class CleanupDatasetErrorDto
+    {
+        public string Dataset { get; set; }
+        public string Organization { get; set; }
+        public string Message { get; set; }
+    }
 
     public class RemoveBatchErrorDto
     {

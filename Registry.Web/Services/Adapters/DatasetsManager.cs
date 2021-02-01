@@ -61,7 +61,6 @@ namespace Registry.Web.Services.Adapters
                             Description = ds.Description,
                             LastEdit = ds.LastEdit,
                             Name = ds.Name,
-                            License = ds.License,
                             Meta = ds.Meta,
                             ObjectsCount = ds.ObjectsCount,
                             Size = ds.Size
@@ -141,7 +140,6 @@ namespace Registry.Web.Services.Adapters
             ds.Description = dataset.Description;
             ds.IsPublic = dataset.IsPublic;
             ds.LastEdit = DateTime.Now;
-            ds.License = dataset.License;
             ds.Name = dataset.Name;
 
             if (!string.IsNullOrEmpty(dataset.Password))

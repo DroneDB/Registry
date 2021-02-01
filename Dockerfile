@@ -30,7 +30,7 @@ COPY . /Registry
 
 # Compile client app
 RUN npm install -g webpack@4 webpack-cli
-RUN cd /Registry/Registry.Web/ClientApp && npm install && webpack
+RUN cd /Registry/Registry.Web/ClientApp && npm install && webpack --mode=production
 
 # Copy publish profile
 COPY docker/production/FolderProfile.xml /Registry/Registry.Web/Properties/PublishProfiles/FolderProfile.pubxml

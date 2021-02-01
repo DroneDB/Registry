@@ -8,9 +8,12 @@ using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
+using Newtonsoft.Json.Linq;
+using Registry.Common;
 using Registry.Web.Exceptions;
 using Registry.Web.Models;
 using Registry.Web.Models.Configuration;
@@ -31,12 +34,14 @@ namespace Registry.Web.Services.Adapters
         private readonly SignInManager<User> _signInManager;
         private readonly UserManager<User> _userManager;
         private readonly AppSettings _appSettings;
+        private readonly ApplicationDbContext _applicationDbContext;
 
         public UsersManager(
             IOptions<AppSettings> appSettings,
             SignInManager<User> signInManager,
             UserManager<User> userManager,
             RoleManager<IdentityRole> roleManager,
+            ApplicationDbContext applicationDbContext,
             IAuthManager authManager,
             IOrganizationsManager organizationsManager,
             IUtils utils,
@@ -47,6 +52,7 @@ namespace Registry.Web.Services.Adapters
             _organizationsManager = organizationsManager;
             _utils = utils;
             _logger = logger;
+            _applicationDbContext = applicationDbContext;
             _signInManager = signInManager;
             _userManager = userManager;
             _appSettings = appSettings.Value;
@@ -66,19 +72,58 @@ namespace Registry.Web.Services.Adapters
                 if (!res.Succeeded) return null;
 
                 user = await _CreateUserInternal(user, password);
-                
+
             }
             else
             {
                 res = await _signInManager.CheckPasswordSignInAsync(user, password, false);
 
                 if (!res.Succeeded) return null;
+
             }
-            
+
+            await SyncRoles(user);
+
             // authentication successful so generate jwt token
             var tokenDescriptor = await GenerateJwtToken(user);
 
             return new AuthenticateResponse(user, tokenDescriptor.Token, tokenDescriptor.ExpiresOn);
+        }
+
+        private async Task SyncRoles(User user)
+        {
+            var tmp = user.Metadata?.SafeGetValue("roles");
+            var roles = tmp as string[] ?? (tmp as JArray)?.ToObject<string[]>();
+            if (roles == null)
+                return;
+
+            // Remove all pre-existing roles
+            var userRoles = await _userManager.GetRolesAsync(user);
+            foreach (var role in userRoles)
+                await _userManager.RemoveFromRoleAsync(user, role);
+
+            var edited = false;
+
+            // Sync roles
+            foreach (var role in roles)
+            {
+                // Create missing roles
+                if (!await _roleManager.RoleExistsAsync(role))
+                    await _roleManager.CreateAsync(new IdentityRole { Name = role });
+
+                // Skip if already in this role
+                if (await _userManager.IsInRoleAsync(user, role)) continue;
+
+                await _userManager.AddToRoleAsync(user, role);
+                edited = true;
+
+            }
+
+            if (edited)
+            {
+                _applicationDbContext.Entry(user).State = EntityState.Modified;
+                await _applicationDbContext.SaveChangesAsync();
+            }
         }
 
         public async Task<User> CreateUser(string userName, string email, string password)
