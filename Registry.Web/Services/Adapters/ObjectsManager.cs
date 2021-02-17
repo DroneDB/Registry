@@ -631,7 +631,7 @@ namespace Registry.Web.Services.Adapters
             FileDescriptorDto descriptor;
 
             // If there is just one file we return it
-            if (filePaths.Length == 1)
+            if (filePaths.Length == 1 && paths?.Length == 1 && filePaths[0] == paths[0])
             {
                 var filePath = filePaths.First();
 

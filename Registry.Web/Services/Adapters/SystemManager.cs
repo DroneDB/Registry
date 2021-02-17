@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Reflection;
 using System.Threading.Tasks;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.EntityFrameworkCore;
@@ -56,6 +57,72 @@ namespace Registry.Web.Services.Adapters
             };
 
         }
+
+        public async Task<CleanupDatasetResultDto> CleanupEmptyDatasets()
+        {
+            if (!await _authManager.IsUserAdmin())
+                throw new UnauthorizedException("Only admins can perform system related tasks");
+
+            var datasets = _context.Datasets.Include(ds => ds.Organization).Where(ds => ds.ObjectsCount == 0).ToArray();
+
+            _logger.LogInformation($"Found {datasets.Length} with objects count zero");
+
+            var deleted = new List<string>();
+            var notDeleted = new List<CleanupDatasetErrorDto>();
+
+            foreach (var ds in datasets)
+            {
+                _logger.LogInformation($"Analyzing dataset {ds.Organization.Slug}/{ds.Slug}");
+
+                try
+                {
+                    // Check if objects count is ok
+                    var ddb = _ddbManager.Get(ds.Organization.Slug, ds.InternalRef);
+
+                    var entries = ddb.Search("*", true)?.ToArray();
+
+                    if (entries != null && entries.Any())
+                    {
+                        _logger.LogInformation($"Objects count was wrong, found {entries.Length} objects, updating stats and going on");
+                        ds.ObjectsCount = entries.Length;
+                        ds.Size = entries.Sum(entry => entry.Size);
+
+                        await _context.SaveChangesAsync();
+                    }
+                    else
+                    {
+                        _context.Remove(ds);
+                        await _context.SaveChangesAsync();
+
+                        deleted.Add(ds.Slug);
+                        _logger.LogInformation("Deleted");
+                    }
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, $"Cannot remove dataset '{ds.Slug}'");
+                    notDeleted.Add(new CleanupDatasetErrorDto
+                    {
+                        Dataset = ds.Slug,
+                        Organization = ds.Organization.Slug,
+                        Message = ex.Message
+                    });
+                }
+            }
+
+            return new CleanupDatasetResultDto
+            {
+                RemoveDatasetErrors = notDeleted.ToArray(),
+                RemovedDatasets = deleted.ToArray()
+            };
+
+        }
+
+        public string GetVersion()
+        {
+            return Assembly.GetExecutingAssembly().GetName().Version?.ToString();
+        }
+
         public async Task<CleanupBatchesResultDto> CleanupBatches()
         {
             if (!await _authManager.IsUserAdmin())

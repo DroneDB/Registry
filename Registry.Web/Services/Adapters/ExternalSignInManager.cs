@@ -56,7 +56,7 @@ namespace Registry.Web.Services.Adapters
 
                 var result = res.Content.ReadAsStringAsync().Result;
 
-                var obj = JsonConvert.DeserializeObject<Dictionary<string, string>>(result);
+                var obj = JsonConvert.DeserializeObject<Dictionary<string, object>>(result);
 
                 if (obj != null)
                 {
