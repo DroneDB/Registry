@@ -15,6 +15,8 @@ namespace Registry.Common
         PointCloud = 5,
         Image = 6,
         DroneDb = 7,
-        Markdown = 8
+        Markdown = 8,
+        Video = 9,
+        Geovideo = 10
     }
 }
