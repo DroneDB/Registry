@@ -1,11 +1,9 @@
 ﻿using System.Threading.Tasks;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Options;
-using Registry.Common;
-using Registry.Web.Models;
 using Registry.Web.Models.Configuration;
 
-namespace Registry.Web.Services
+namespace Registry.Web.Middlewares
 {
     public class JwtInCookieMiddleware : IMiddleware
     {

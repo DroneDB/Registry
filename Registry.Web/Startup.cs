@@ -41,6 +41,7 @@ using Registry.Ports.ObjectSystem;
 using Registry.Web.Data;
 using Registry.Web.Data.Models;
 using Registry.Web.HealthChecks;
+using Registry.Web.Middlewares;
 using Registry.Web.Models.Configuration;
 using Registry.Web.Models.DTO;
 using Registry.Web.Services;
