@@ -68,7 +68,7 @@ namespace Registry.Web.Controllers
 
                 if (!int.TryParse(retina ? tyRaw.Replace("@2x", string.Empty) : tyRaw, out var ty))
                     throw new ArgumentException("Invalid input parameters (retina indicator should be '@2x')");
-                
+
                 var res = await _objectsManager.GenerateTile(orgSlug, dsSlug, path, tz, tx, ty, retina);
 
                 return File(res.ContentStream, res.ContentType, res.Name);
@@ -91,17 +91,21 @@ namespace Registry.Web.Controllers
             {
 
                 var paths = pathsRaw?.Split(",", StringSplitOptions.RemoveEmptyEntries);
-                bool isInline = isInlineRaw == 1;
+                var isInline = isInlineRaw == 1;
 
                 _logger.LogDebug($"Objects controller Download('{orgSlug}', '{dsSlug}', '{pathsRaw}', '{isInlineRaw}')");
 
                 var res = await _objectsManager.Download(orgSlug, dsSlug, paths);
 
-                if (!isInline)
-                    return File(res.ContentStream, res.ContentType, res.Name);
+                var fsr = new FileStreamResult(res.ContentStream, res.ContentType)
+                {
+                    FileDownloadName = res.Name
+                };
+
+                if (!isInline) return fsr;
 
                 Response.Headers.Add("Content-Disposition", "inline");
-                return File(res.ContentStream, res.ContentType);
+                return fsr;
 
             }
             catch (Exception ex)

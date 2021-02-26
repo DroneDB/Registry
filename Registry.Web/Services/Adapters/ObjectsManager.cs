@@ -644,6 +644,7 @@ namespace Registry.Web.Services.Adapters
                     ContentType = MimeUtility.GetMimeMapping(filePath)
                 };
 
+                //WriteObjectContentStream(orgSlug, internalRef, filePath, descriptor.ContentStream);
                 await WriteObjectContentStream(orgSlug, internalRef, filePath, descriptor.ContentStream);
 
                 descriptor.ContentStream.Reset();
@@ -666,6 +667,8 @@ namespace Registry.Web.Services.Adapters
 
                         var entry = archive.CreateEntry(path, CompressionLevel.Fastest);
                         await using var entryStream = entry.Open();
+
+                        //WriteObjectContentStream(orgSlug, internalRef, path, entryStream);
                         await WriteObjectContentStream(orgSlug, internalRef, path, entryStream);
                     }
                 }
@@ -685,13 +688,14 @@ namespace Registry.Web.Services.Adapters
             var bucketExists = await _objectSystem.BucketExistsAsync(bucketName);
 
             if (!bucketExists)
-            {
-                _logger.LogInformation("Bucket does not exist, creating it");
+                throw new NotFoundException($"Cannot find bucket '{bucketName}'");
 
-                await _objectSystem.MakeBucketAsync(bucketName, SafeGetRegion());
-
-                _logger.LogInformation("Bucket created");
-            }
+            //if (!bucketExists)
+            //{
+            //    _logger.LogInformation("Bucket does not exist, creating it");
+            //    await _objectSystem.MakeBucketAsync(bucketName, SafeGetRegion());
+            //    _logger.LogInformation("Bucket created");
+            //}
 
             var objInfo = await _objectSystem.GetObjectInfoAsync(bucketName, path);
 
