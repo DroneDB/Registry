@@ -4,6 +4,7 @@ using System.IO.Compression;
 using System.Linq;
 using System.Runtime.Serialization;
 using System.Threading.Tasks;
+using Microsoft.AspNetCore.Identity.UI.V4.Pages.Internal.Account;
 using Microsoft.Extensions.Logging;
 using MimeMapping;
 using Registry.Common;
@@ -14,12 +15,18 @@ using Registry.Web.Services.Ports;
 
 namespace Registry.Web.Models.DTO
 {
+
+    public enum FileDescriptorType
+    {
+        Single, Multiple, Dataset
+    }
+
     public class FileDescriptor
     {
         private readonly string _orgSlug;
         private readonly Guid _internalRef;
         private readonly string[] _paths;
-        private readonly bool _isSingle;
+        private readonly FileDescriptorType _descriptorType;
         private readonly IObjectSystem _objectSystem;
         private readonly IObjectsManager _objectManager;
         private readonly ILogger<ObjectsManager> _logger;
@@ -29,12 +36,12 @@ namespace Registry.Web.Models.DTO
         public string ContentType { get; }
 
         public FileDescriptor(string name, string contentType, string orgSlug, Guid internalRef, string[] paths,
-            bool isSingle, IObjectSystem objectSystem, IObjectsManager objectManager, ILogger<ObjectsManager> logger)
+            FileDescriptorType descriptorType, IObjectSystem objectSystem, IObjectsManager objectManager, ILogger<ObjectsManager> logger)
         {
             _orgSlug = orgSlug;
             _internalRef = internalRef;
             _paths = paths;
-            _isSingle = isSingle;
+            _descriptorType = descriptorType;
             _objectSystem = objectSystem;
             _objectManager = objectManager;
             _logger = logger;
@@ -45,7 +52,7 @@ namespace Registry.Web.Models.DTO
         public async Task CopyToAsync(Stream stream)
         {
             // If there is just one file we return it
-            if (_isSingle)
+            if (_descriptorType == FileDescriptorType.Single)
             {
                 var filePath = _paths.First();
 
@@ -66,6 +73,11 @@ namespace Registry.Web.Models.DTO
                     await using var entryStream = entry.Open();
 
                     await WriteObjectContentStream(_orgSlug, _internalRef, path, entryStream);
+                }
+
+                if (_descriptorType == FileDescriptorType.Dataset)
+                {
+                    // TODO: Include DDB
                 }
             }
 

@@ -603,6 +603,8 @@ namespace Registry.Web.Services.Adapters
 
             string[] filePaths;
 
+            bool includeDdb = false;
+
             if (paths != null)
             {
                 var temp = new List<string>();
@@ -635,6 +637,9 @@ namespace Registry.Web.Services.Adapters
 
                 if (filePaths == null)
                     throw new InvalidOperationException("Ddb is empty, what should I get?");
+
+                // We include the ddb folder only when asked for the entire dataset
+                includeDdb = true;
             }
 
             _logger.LogInformation($"Found {filePaths.Length} paths");
@@ -649,15 +654,17 @@ namespace Registry.Web.Services.Adapters
                 _logger.LogInformation($"Only one path found: '{filePath}'");
 
                 descriptor = new FileDescriptor(Path.GetFileName(filePath), MimeUtility.GetMimeMapping(filePath),
-                    orgSlug, internalRef, filePaths, true, _objectSystem, this, _logger);
+                    orgSlug, internalRef, filePaths, FileDescriptorType.Single, _objectSystem, this, _logger);
 
             }
             // Otherwise we zip everything together and return the package
             else
             {
                 descriptor = new FileDescriptor($"{orgSlug}-{dsSlug}-{CommonUtils.RandomString(8)}.zip",
-                    "application/zip", orgSlug, internalRef, filePaths, false, _objectSystem, this, _logger);
-    
+                    "application/zip", orgSlug, internalRef, filePaths,
+                    includeDdb ? FileDescriptorType.Dataset : FileDescriptorType.Multiple, _objectSystem, this,
+                    _logger);
+
             }
 
             return descriptor;
