@@ -8,6 +8,8 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Mvc.Abstractions;
+using Microsoft.AspNetCore.Routing;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -83,6 +85,7 @@ namespace Registry.Web.Controllers
 
         #region Downloads
 
+
         [HttpGet("download", Name = nameof(ObjectsController) + "." + nameof(Download))]
         public async Task<IActionResult> Download([FromRoute] string orgSlug, [FromRoute] string dsSlug,
             [FromQuery(Name = "path")] string pathsRaw, [FromQuery(Name = "inline")] int? isInlineRaw)
@@ -94,18 +97,18 @@ namespace Registry.Web.Controllers
                 var isInline = isInlineRaw == 1;
 
                 _logger.LogDebug($"Objects controller Download('{orgSlug}', '{dsSlug}', '{pathsRaw}', '{isInlineRaw}')");
+                
+                var res = await _objectsManager.DownloadStream(orgSlug, dsSlug, paths);
 
-                var res = await _objectsManager.Download(orgSlug, dsSlug, paths);
+                Response.StatusCode = 200;
+                Response.ContentType = res.ContentType;
 
-                var fsr = new FileStreamResult(res.ContentStream, res.ContentType)
-                {
-                    FileDownloadName = res.Name
-                };
+                Response.Headers.Add("Content-Disposition",
+                    isInline ? "inline" : $"attachment; filename=\"{res.Name}\"");
 
-                if (!isInline) return fsr;
+                await res.CopyToAsync(Response.Body);
 
-                Response.Headers.Add("Content-Disposition", "inline");
-                return fsr;
+                return new EmptyResult();
 
             }
             catch (Exception ex)
