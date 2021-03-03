@@ -12,6 +12,7 @@ using Registry.Ports.ObjectSystem;
 using Registry.Web.Exceptions;
 using Registry.Web.Services.Adapters;
 using Registry.Web.Services.Ports;
+using Registry.Web.Utilities;
 
 namespace Registry.Web.Models.DTO
 {
@@ -30,13 +31,14 @@ namespace Registry.Web.Models.DTO
         private readonly IObjectSystem _objectSystem;
         private readonly IObjectsManager _objectManager;
         private readonly ILogger<ObjectsManager> _logger;
+        private readonly IDdbManager _ddbManager;
 
         public string Name { get; }
         
         public string ContentType { get; }
 
         public FileDescriptor(string name, string contentType, string orgSlug, Guid internalRef, string[] paths,
-            FileDescriptorType descriptorType, IObjectSystem objectSystem, IObjectsManager objectManager, ILogger<ObjectsManager> logger)
+            FileDescriptorType descriptorType, IObjectSystem objectSystem, IObjectsManager objectManager, ILogger<ObjectsManager> logger, IDdbManager ddbManager)
         {
             _orgSlug = orgSlug;
             _internalRef = internalRef;
@@ -45,6 +47,7 @@ namespace Registry.Web.Models.DTO
             _objectSystem = objectSystem;
             _objectManager = objectManager;
             _logger = logger;
+            _ddbManager = ddbManager;
             Name = name;
             ContentType = contentType;
         }
@@ -75,9 +78,13 @@ namespace Registry.Web.Models.DTO
                     await WriteObjectContentStream(_orgSlug, _internalRef, path, entryStream);
                 }
 
+                // Include ddb folder
                 if (_descriptorType == FileDescriptorType.Dataset)
                 {
-                    // TODO: Include DDB
+                    var ddb = _ddbManager.Get(_orgSlug, _internalRef);
+
+                    archive.CreateEntryFromAny(Path.Combine(ddb.FolderPath, _ddbManager.DdbFolderName));
+                    
                 }
             }
 

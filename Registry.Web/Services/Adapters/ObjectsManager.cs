@@ -583,7 +583,7 @@ namespace Registry.Web.Services.Adapters
 
             EnsurePathsValidity(orgSlug, ds.InternalRef, paths);
 
-            return await GetFileDescriptor(orgSlug, dsSlug, ds.InternalRef, paths);
+            return GetFileDescriptor(orgSlug, dsSlug, ds.InternalRef, paths);
         }
 
         public async Task<FileDescriptorDto> Download(string orgSlug, string dsSlug, string[] paths)
@@ -597,7 +597,7 @@ namespace Registry.Web.Services.Adapters
             return await GetOfflineFileDescriptor(orgSlug, dsSlug, ds.InternalRef, paths);
         }
 
-        private async Task<FileDescriptor> GetFileDescriptor(string orgSlug, string dsSlug, Guid internalRef, string[] paths)
+        private FileDescriptor GetFileDescriptor(string orgSlug, string dsSlug, Guid internalRef, string[] paths)
         {
             var ddb = _ddbManager.Get(orgSlug, internalRef);
 
@@ -654,7 +654,7 @@ namespace Registry.Web.Services.Adapters
                 _logger.LogInformation($"Only one path found: '{filePath}'");
 
                 descriptor = new FileDescriptor(Path.GetFileName(filePath), MimeUtility.GetMimeMapping(filePath),
-                    orgSlug, internalRef, filePaths, FileDescriptorType.Single, _objectSystem, this, _logger);
+                    orgSlug, internalRef, filePaths, FileDescriptorType.Single, _objectSystem, this, _logger, _ddbManager);
 
             }
             // Otherwise we zip everything together and return the package
@@ -663,7 +663,7 @@ namespace Registry.Web.Services.Adapters
                 descriptor = new FileDescriptor($"{orgSlug}-{dsSlug}-{CommonUtils.RandomString(8)}.zip",
                     "application/zip", orgSlug, internalRef, filePaths,
                     includeDdb ? FileDescriptorType.Dataset : FileDescriptorType.Multiple, _objectSystem, this,
-                    _logger);
+                    _logger, _ddbManager);
 
             }
 
