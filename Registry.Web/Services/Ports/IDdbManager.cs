@@ -13,5 +13,7 @@ namespace Registry.Web.Services.Ports
     {
         IDdb Get(string orgSlug, Guid internalRef);
         void Delete(string orgSlug, Guid internalRef);
+
+        public string DdbFolderName { get; }
     }
 }

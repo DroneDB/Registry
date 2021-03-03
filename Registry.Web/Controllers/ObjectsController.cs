@@ -8,6 +8,8 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Mvc.Abstractions;
+using Microsoft.AspNetCore.Routing;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -68,7 +70,7 @@ namespace Registry.Web.Controllers
 
                 if (!int.TryParse(retina ? tyRaw.Replace("@2x", string.Empty) : tyRaw, out var ty))
                     throw new ArgumentException("Invalid input parameters (retina indicator should be '@2x')");
-                
+
                 var res = await _objectsManager.GenerateTile(orgSlug, dsSlug, path, tz, tx, ty, retina);
 
                 return File(res.ContentStream, res.ContentType, res.Name);
@@ -83,6 +85,7 @@ namespace Registry.Web.Controllers
 
         #region Downloads
 
+
         [HttpGet("download", Name = nameof(ObjectsController) + "." + nameof(Download))]
         public async Task<IActionResult> Download([FromRoute] string orgSlug, [FromRoute] string dsSlug,
             [FromQuery(Name = "path")] string pathsRaw, [FromQuery(Name = "inline")] int? isInlineRaw)
@@ -91,17 +94,21 @@ namespace Registry.Web.Controllers
             {
 
                 var paths = pathsRaw?.Split(",", StringSplitOptions.RemoveEmptyEntries);
-                bool isInline = isInlineRaw == 1;
+                var isInline = isInlineRaw == 1;
 
                 _logger.LogDebug($"Objects controller Download('{orgSlug}', '{dsSlug}', '{pathsRaw}', '{isInlineRaw}')");
+                
+                var res = await _objectsManager.DownloadStream(orgSlug, dsSlug, paths);
 
-                var res = await _objectsManager.Download(orgSlug, dsSlug, paths);
+                Response.StatusCode = 200;
+                Response.ContentType = res.ContentType;
 
-                if (!isInline)
-                    return File(res.ContentStream, res.ContentType, res.Name);
+                Response.Headers.Add("Content-Disposition",
+                    isInline ? "inline" : $"attachment; filename=\"{res.Name}\"");
 
-                Response.Headers.Add("Content-Disposition", "inline");
-                return File(res.ContentStream, res.ContentType);
+                await res.CopyToAsync(Response.Body);
+
+                return new EmptyResult();
 
             }
             catch (Exception ex)

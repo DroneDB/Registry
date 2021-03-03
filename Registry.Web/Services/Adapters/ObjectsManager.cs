@@ -570,10 +570,21 @@ namespace Registry.Web.Services.Adapters
                 await _context.SaveChangesAsync();
             }
 
-            return await GetFileDescriptor(orgSlug, dsSlug, ds.InternalRef, package.Paths);
+            return await GetOfflineFileDescriptor(orgSlug, dsSlug, ds.InternalRef, package.Paths);
 
         }
 
+
+        public async Task<FileDescriptor> DownloadStream(string orgSlug, string dsSlug, string[] paths)
+        {
+            var ds = await _utils.GetDataset(orgSlug, dsSlug);
+
+            _logger.LogInformation($"In '{orgSlug}/{dsSlug}'");
+
+            EnsurePathsValidity(orgSlug, ds.InternalRef, paths);
+
+            return GetFileDescriptor(orgSlug, dsSlug, ds.InternalRef, paths);
+        }
 
         public async Task<FileDescriptorDto> Download(string orgSlug, string dsSlug, string[] paths)
         {
@@ -583,10 +594,83 @@ namespace Registry.Web.Services.Adapters
 
             EnsurePathsValidity(orgSlug, ds.InternalRef, paths);
 
-            return await GetFileDescriptor(orgSlug, dsSlug, ds.InternalRef, paths);
+            return await GetOfflineFileDescriptor(orgSlug, dsSlug, ds.InternalRef, paths);
         }
 
-        private async Task<FileDescriptorDto> GetFileDescriptor(string orgSlug, string dsSlug, Guid internalRef, string[] paths)
+        private FileDescriptor GetFileDescriptor(string orgSlug, string dsSlug, Guid internalRef, string[] paths)
+        {
+            var ddb = _ddbManager.Get(orgSlug, internalRef);
+
+            string[] filePaths;
+
+            bool includeDdb = false;
+
+            if (paths != null)
+            {
+                var temp = new List<string>();
+
+                foreach (var path in paths)
+                {
+                    // We are in recursive mode because the paths could contain other folders that we need to expand
+                    var items = ddb.Search(path, true)?
+                        .Where(entry => entry.Type != EntryType.Directory)
+                        .Select(entry => entry.Path).ToArray();
+
+                    if (items == null || !items.Any())
+                        throw new ArgumentException($"Cannot find any file path matching '{path}'");
+
+                    temp.AddRange(items);
+                }
+
+                // Get rid of possible duplicates and sort
+                filePaths = temp.Distinct().OrderBy(item => item).ToArray();
+
+            }
+            else
+            {
+                // Select everything and sort
+                filePaths = ddb.Search(null, true)?
+                    .Where(entry => entry.Type != EntryType.Directory)
+                    .Select(entry => entry.Path)
+                    .OrderBy(path => path)
+                    .ToArray();
+
+                if (filePaths == null)
+                    throw new InvalidOperationException("Ddb is empty, what should I get?");
+
+                // We include the ddb folder only when asked for the entire dataset
+                includeDdb = true;
+            }
+
+            _logger.LogInformation($"Found {filePaths.Length} paths");
+
+            FileDescriptor descriptor;
+
+            // If there is just one file we return it
+            if (filePaths.Length == 1 && paths?.Length == 1 && filePaths[0] == paths[0])
+            {
+                var filePath = filePaths.First();
+
+                _logger.LogInformation($"Only one path found: '{filePath}'");
+
+                descriptor = new FileDescriptor(Path.GetFileName(filePath), MimeUtility.GetMimeMapping(filePath),
+                    orgSlug, internalRef, filePaths, FileDescriptorType.Single, _objectSystem, this, _logger, _ddbManager);
+
+            }
+            // Otherwise we zip everything together and return the package
+            else
+            {
+                descriptor = new FileDescriptor($"{orgSlug}-{dsSlug}-{CommonUtils.RandomString(8)}.zip",
+                    "application/zip", orgSlug, internalRef, filePaths,
+                    includeDdb ? FileDescriptorType.Dataset : FileDescriptorType.Multiple, _objectSystem, this,
+                    _logger, _ddbManager);
+
+            }
+
+            return descriptor;
+        }
+
+        private async Task<FileDescriptorDto> GetOfflineFileDescriptor(string orgSlug, string dsSlug, Guid internalRef, string[] paths)
         {
             var ddb = _ddbManager.Get(orgSlug, internalRef);
 
@@ -666,6 +750,7 @@ namespace Registry.Web.Services.Adapters
 
                         var entry = archive.CreateEntry(path, CompressionLevel.Fastest);
                         await using var entryStream = entry.Open();
+
                         await WriteObjectContentStream(orgSlug, internalRef, path, entryStream);
                     }
                 }
@@ -685,13 +770,7 @@ namespace Registry.Web.Services.Adapters
             var bucketExists = await _objectSystem.BucketExistsAsync(bucketName);
 
             if (!bucketExists)
-            {
-                _logger.LogInformation("Bucket does not exist, creating it");
-
-                await _objectSystem.MakeBucketAsync(bucketName, SafeGetRegion());
-
-                _logger.LogInformation("Bucket created");
-            }
+                throw new NotFoundException($"Cannot find bucket '{bucketName}'");
 
             var objInfo = await _objectSystem.GetObjectInfoAsync(bucketName, path);
 
@@ -701,11 +780,12 @@ namespace Registry.Web.Services.Adapters
             _logger.LogInformation($"Getting object '{path}' in bucket '{bucketName}'");
 
             await _objectSystem.GetObjectAsync(bucketName, path, s => s.CopyTo(stream));
+
         }
 
         #endregion
 
-        private string GetBucketName(string orgSlug, Guid internalRef)
+        public string GetBucketName(string orgSlug, Guid internalRef)
         {
             return string.Format(BucketNameFormat, orgSlug, internalRef.ToString()).ToLowerInvariant();
         }
