@@ -18,6 +18,8 @@ namespace Registry.Web.Services.Adapters
         private readonly ILogger<DdbManager> _logger;
         private readonly AppSettings _settings;
 
+        public string DdbFolderName { get; } = ".ddb";
+
         public DdbManager(IOptions<AppSettings> settings, ILogger<DdbManager> logger)
         {
             _logger = logger;
@@ -33,7 +35,7 @@ namespace Registry.Web.Services.Adapters
             var ddb = new Ddb(baseDdbPath);
 
             // TODO: It would be nice if we could use the bindings to check this
-            if (!Directory.Exists(Path.Combine(baseDdbPath, ".ddb")))
+            if (!Directory.Exists(Path.Combine(baseDdbPath, DdbFolderName)))
             {
 
                 ddb.Init();
