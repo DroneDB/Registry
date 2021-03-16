@@ -39,6 +39,24 @@ namespace Registry.Web.Controllers
         }
 
 
+        [HttpGet("ddb", Name = nameof(ObjectsController) + "." + nameof(GetDdb))]
+        public async Task<IActionResult> GetDdb([FromRoute] string orgSlug, [FromRoute] string dsSlug)
+        {
+            try
+            {
+                _logger.LogDebug($"Objects controller GetDdb('{orgSlug}', '{dsSlug}')");
+
+                var res = await _objectsManager.GetDdb(orgSlug, dsSlug);
+
+                return File(res.ContentStream, res.ContentType, res.Name);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, $"Exception in Objects controller GetDdb('{orgSlug}', '{dsSlug}')");
+                return ExceptionResult(ex);
+            }
+        }
+
         [HttpGet("thumb", Name = nameof(ObjectsController) + "." + nameof(GenerateThumbnail))]
         public async Task<IActionResult> GenerateThumbnail([FromRoute] string orgSlug, [FromRoute] string dsSlug, [FromQuery] string path, [FromQuery] int? size)
         {

@@ -784,5 +784,39 @@ namespace Registry.Web.Services.Managers
         {
             return string.Format(BucketNameFormat, orgSlug, internalRef.ToString()).ToLowerInvariant();
         }
+
+        public async Task<FileDescriptorDto> GetDdb(string orgSlug, string dsSlug)
+        {
+            var ds = await _utils.GetDataset(orgSlug, dsSlug);
+
+            _logger.LogInformation($"In '{orgSlug}/{dsSlug}'");
+
+            var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
+
+            var tempFile = Path.Combine(Path.GetTempPath(), Path.GetRandomFileName());
+
+            try
+            {
+                // We could do this fully in memory BUT it's not a strict requirement by now: ddb folders are not huge (yet)
+                ZipFile.CreateFromDirectory(ddb.FolderPath, tempFile, CompressionLevel.Optimal, false);
+
+                await using var s = File.OpenRead(tempFile);
+                var memory = new MemoryStream();
+                await s.CopyToAsync(memory);
+                memory.Reset();
+                
+                return new FileDescriptorDto
+                {
+                    ContentStream = memory,
+                    ContentType = "application/zip",
+                    Name = $"{orgSlug}-{dsSlug}-ddb.zip"
+                };
+
+            }
+            finally
+            {
+                if (File.Exists(tempFile)) File.Delete(tempFile);
+            }
+        }
     }
 }
