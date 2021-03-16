@@ -11,6 +11,7 @@ using Registry.Common;
 using Registry.Ports.ObjectSystem;
 using Registry.Web.Exceptions;
 using Registry.Web.Services.Adapters;
+using Registry.Web.Services.Managers;
 using Registry.Web.Services.Ports;
 using Registry.Web.Utilities;
 

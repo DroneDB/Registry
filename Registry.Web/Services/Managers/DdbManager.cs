@@ -1,17 +1,13 @@
 ﻿using System;
-using System.Collections.Generic;
 using System.IO;
-using System.Linq;
-using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Registry.Adapters.DroneDB;
 using Registry.Ports.DroneDB;
-using Registry.Web.Models;
 using Registry.Web.Models.Configuration;
 using Registry.Web.Services.Ports;
 
-namespace Registry.Web.Services.Adapters
+namespace Registry.Web.Services.Managers
 {
     public class DdbManager : IDdbManager
     {

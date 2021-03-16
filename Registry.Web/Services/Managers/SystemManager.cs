@@ -3,11 +3,9 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
 using System.Threading.Tasks;
-using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
-using Newtonsoft.Json;
 using Registry.Adapters.ObjectSystem;
 using Registry.Ports.ObjectSystem;
 using Registry.Web.Data;
@@ -17,7 +15,7 @@ using Registry.Web.Models.Configuration;
 using Registry.Web.Models.DTO;
 using Registry.Web.Services.Ports;
 
-namespace Registry.Web.Services.Adapters
+namespace Registry.Web.Services.Managers
 {
     public class SystemManager : ISystemManager
     {

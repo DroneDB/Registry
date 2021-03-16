@@ -3,15 +3,10 @@ using System.Collections.Generic;
 using System.IO;
 using System.IO.Compression;
 using System.Linq;
-using System.Reactive.Linq;
-using System.Runtime.CompilerServices;
 using System.Threading.Tasks;
-using Microsoft.CodeAnalysis.CSharp.Syntax;
-using Microsoft.Extensions.Caching.Distributed;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using MimeMapping;
-using Minio.Exceptions;
 using Registry.Common;
 using Registry.Ports.DroneDB;
 using Registry.Ports.DroneDB.Models;
@@ -25,7 +20,7 @@ using Registry.Web.Models.DTO;
 using Registry.Web.Services.Ports;
 using Registry.Web.Utilities;
 
-namespace Registry.Web.Services.Adapters
+namespace Registry.Web.Services.Managers
 {
     public class ObjectsManager : IObjectsManager
     {

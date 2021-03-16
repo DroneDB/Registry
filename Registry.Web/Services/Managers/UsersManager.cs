@@ -5,9 +5,7 @@ using System.Linq;
 using System.Security.Claims;
 using System.Text;
 using System.Threading.Tasks;
-using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
-using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -21,7 +19,7 @@ using Registry.Web.Models.DTO;
 using Registry.Web.Services.Ports;
 using SignInResult = Microsoft.AspNetCore.Identity.SignInResult;
 
-namespace Registry.Web.Services.Adapters
+namespace Registry.Web.Services.Managers
 {
     public class UsersManager : IUsersManager
     {
