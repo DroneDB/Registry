@@ -54,7 +54,7 @@ namespace Registry.Web.Controllers
 
         }
 
-        [HttpPost("obj")]
+        [HttpPost("upload")]
         public async Task<IActionResult> Upload([FromRoute] string orgSlug, [FromRoute] string dsSlug, IFormFile file)
         {
             try
