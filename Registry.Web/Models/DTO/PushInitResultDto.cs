@@ -9,10 +9,7 @@ namespace Registry.Web.Models.DTO
 
     public class PushInitResultDto
     {
-        public string Token { get; set; }
-
         public string[] NeededFiles { get; set; }
-
     }
 
 
