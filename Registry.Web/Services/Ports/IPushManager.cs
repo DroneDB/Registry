@@ -10,7 +10,7 @@ namespace Registry.Web.Services.Ports
     public interface IPushManager
     {
         Task<PushInitResultDto> Init(string orgSlug, string dsSlug, Stream stream);
-        Task Upload(string orgSlug, string dsSlug, Stream stream);
+        Task Upload(string orgSlug, string dsSlug, string filePath, Stream stream);
         Task<object> Commit(string orgSlug, string dsSlug);
     }
 

@@ -55,7 +55,7 @@ namespace Registry.Web.Controllers
         }
 
         [HttpPost("upload")]
-        public async Task<IActionResult> Upload([FromRoute] string orgSlug, [FromRoute] string dsSlug, IFormFile file)
+        public async Task<IActionResult> Upload([FromRoute] string orgSlug, [FromRoute] string dsSlug, string path, IFormFile file)
         {
             try
             {
@@ -65,7 +65,7 @@ namespace Registry.Web.Controllers
                     throw new ArgumentException("No file uploaded");
 
                 await using var stream = file.OpenReadStream();
-                await _pushManager.Upload(orgSlug, dsSlug, stream);
+                await _pushManager.Upload(orgSlug, dsSlug, path, stream);
 
                 return Ok();
             }
