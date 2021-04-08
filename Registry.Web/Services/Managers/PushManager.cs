@@ -6,6 +6,7 @@ using System.Threading.Tasks;
 using DDB.Bindings;
 using DDB.Bindings.Model;
 using Newtonsoft.Json;
+using Registry.Adapters.DroneDB;
 using Registry.Web.Models.DTO;
 using Registry.Web.Services.Ports;
 
@@ -94,7 +95,23 @@ namespace Registry.Web.Services.Managers
 
             await _utils.GetDataset(orgSlug, dsSlug);
 
-            // Check push folder integrity (ddb, delta and files)
+            var baseTempFolder = Path.Combine(Path.GetTempPath(), PushFolderName, orgSlug, dsSlug);
+            var deltaFilePath = Path.Combine(baseTempFolder, DeltaFileName);
+            var addTempFolder = Path.Combine(baseTempFolder, AddsTempFolder);
+
+            // Check push folder integrity (delta and files)
+
+            if (!File.Exists(deltaFilePath))
+                throw new InvalidOperationException("Delta not found");
+
+            var delta = JsonConvert.DeserializeObject<Delta>(deltaFilePath);
+
+            foreach (var add in delta.Adds)
+                if (!File.Exists(Path.Combine(addTempFolder, add.Path)))
+                    throw new InvalidOperationException($"Cannot commit: missing '{add.Path}'");
+            
+
+
             // Applies delta 
             // Replaces ddb folder
             // Updates last sync
