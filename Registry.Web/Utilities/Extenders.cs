@@ -17,7 +17,7 @@ namespace Registry.Web.Utilities
     {
         public static Organization ToEntity(this OrganizationDto organization)
         {
-            return new Organization
+            return new()
             {
                 Slug = organization.Slug,
                 Name = string.IsNullOrEmpty(organization.Name) ? organization.Slug : organization.Name,
@@ -30,7 +30,7 @@ namespace Registry.Web.Utilities
 
         public static OrganizationDto ToDto(this Organization organization)
         {
-            return new OrganizationDto
+            return new()
             {
                 Slug = organization.Slug,
                 Name = organization.Name,
@@ -61,7 +61,7 @@ namespace Registry.Web.Utilities
 
         public static DatasetDto ToDto(this Dataset dataset)
         {
-            return new DatasetDto
+            return new()
             {
                 Id = dataset.Id,
                 Slug = dataset.Slug,
@@ -78,7 +78,7 @@ namespace Registry.Web.Utilities
 
         public static ObjectDto ToDto(this DdbEntry obj)
         {
-            return new ObjectDto
+            return new()
             {
                 Depth = obj.Depth,
                 Hash = obj.Hash,

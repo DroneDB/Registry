@@ -48,6 +48,7 @@ namespace Registry.Web.Data.Models
         [NotMapped]
         public Dictionary<string, object> Meta { get; set; }
 
+        private const string LastUpdateField = "mtime";
         private const string PublicMetaField = "public";
 
         [NotMapped]
@@ -55,6 +56,33 @@ namespace Registry.Web.Data.Models
         {
             get => SafeGetMetaField<bool>(PublicMetaField);
             set => SafeSetMetaField(PublicMetaField, value);
+        }
+
+        [NotMapped]
+        public DateTime? LastUpdate
+        {
+            get
+            {
+                var val = SafeGetMetaField<long?>(LastUpdateField);
+
+                if (val == null) return null;
+
+                var dateTimeOffset = DateTimeOffset.FromUnixTimeSeconds(val.Value);
+
+                return dateTimeOffset.LocalDateTime;
+
+            }
+            set
+            {
+                if (value == null) { 
+                    SafeSetMetaField<long?>(LastUpdateField, null);
+                    return;
+                }
+
+                var dt = new DateTimeOffset(value.Value);
+                
+                SafeSetMetaField(LastUpdateField, dt.ToUnixTimeSeconds());
+            }
         }
 
         private void SafeSetMetaField<T>(string field, T val)
