@@ -14,6 +14,7 @@ using Registry.Common;
 using Registry.Common.Model;
 using Registry.Ports.ObjectSystem;
 using Registry.Ports.ObjectSystem.Model;
+using CopyConditions = Registry.Ports.ObjectSystem.Model.CopyConditions;
 
 namespace Registry.Adapters.ObjectSystem
 {
@@ -90,17 +91,12 @@ namespace Registry.Adapters.ObjectSystem
         }
 
         public async Task CopyObjectAsync(string bucketName, string objectName, string destBucketName, string destObjectName = null,
-            IReadOnlyDictionary<string, string> copyConditions = null, Dictionary<string, string> metadata = null, IServerEncryption sseSrc = null,
+            CopyConditions copyConditions = null, Dictionary<string, string> metadata = null, IServerEncryption sseSrc = null,
             IServerEncryption sseDest = null, CancellationToken cancellationToken = default)
         {
 
-            // TODO: Implement
-            if (copyConditions != null)
-                throw new NotImplementedException("Copy conditions are not supported");
-
-            await _client.CopyObjectAsync(bucketName, objectName, destBucketName, destObjectName, null, metadata,
+            await _client.CopyObjectAsync(bucketName, objectName, destBucketName, destObjectName, copyConditions?.ToS3CopyConditions(), metadata,
                 sseSrc.ToSSE(), sseDest.ToSSE(), cancellationToken);
-
         }
 
         public async Task PutObjectAsync(string bucketName, string objectName, string filePath, string contentType = null,

@@ -160,7 +160,7 @@ namespace Registry.Adapters.ObjectSystem
         }
 
         public async Task CopyObjectAsync(string bucketName, string objectName, string destBucketName, string destObjectName = null,
-            IReadOnlyDictionary<string, string> copyConditions = null, Dictionary<string, string> metadata = null, IServerEncryption sseSrc = null,
+            CopyConditions copyConditions = null, Dictionary<string, string> metadata = null, IServerEncryption sseSrc = null,
             IServerEncryption sseDest = null, CancellationToken cancellationToken = default)
         {
             EnsureBucketExists(bucketName);

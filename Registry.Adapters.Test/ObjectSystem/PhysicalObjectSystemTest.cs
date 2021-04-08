@@ -898,7 +898,7 @@ namespace Registry.Adapters.Test.ObjectSystem
 
             FluentActions.Invoking(async () =>
             {
-                await fs.CopyObjectAsync(bucketName, objectName, destBucketName, null, new Dictionary<string, string>());
+                await fs.CopyObjectAsync(bucketName, objectName, destBucketName, null, new CopyConditions());
             }).Should().Throw<NotImplementedException>();
 
         }

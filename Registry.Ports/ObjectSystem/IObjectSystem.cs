@@ -100,7 +100,7 @@ namespace Registry.Ports.ObjectSystem
         /// <param name="sseDest">Optional Server-side encryption option for destination. Defaults to null.</param>
         /// <param name="cancellationToken">Optional cancellation token to cancel the operation</param>
         /// <returns></returns>
-        Task CopyObjectAsync(string bucketName, string objectName, string destBucketName, string destObjectName = null, IReadOnlyDictionary<string, string> copyConditions = null, Dictionary<string, string> metadata = null, IServerEncryption sseSrc = null, IServerEncryption sseDest = null, CancellationToken cancellationToken = default);
+        Task CopyObjectAsync(string bucketName, string objectName, string destBucketName, string destObjectName = null, CopyConditions copyConditions = null, Dictionary<string, string> metadata = null, IServerEncryption sseSrc = null, IServerEncryption sseDest = null, CancellationToken cancellationToken = default);
 
         /// <summary>
         /// Creates an object from file

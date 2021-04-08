@@ -7,12 +7,14 @@ using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
+using Minio.DataModel;
 using Newtonsoft.Json;
 using Registry.Adapters.ObjectSystem.Model;
 using Registry.Common;
 using Registry.Common.Model;
 using Registry.Ports.ObjectSystem;
 using Registry.Ports.ObjectSystem.Model;
+using CopyConditions = Registry.Ports.ObjectSystem.Model.CopyConditions;
 using Exception = System.Exception;
 
 namespace Registry.Adapters.ObjectSystem
@@ -807,7 +809,7 @@ namespace Registry.Adapters.ObjectSystem
         }
 
         public async Task CopyObjectAsync(string bucketName, string objectName, string destBucketName, string destObjectName = null,
-            IReadOnlyDictionary<string, string> copyConditions = null, Dictionary<string, string> metadata = null, IServerEncryption sseSrc = null,
+            CopyConditions copyConditions = null, Dictionary<string, string> metadata = null, IServerEncryption sseSrc = null,
             IServerEncryption sseDest = null, CancellationToken cancellationToken = default)
         {
             await _remoteStorage.CopyObjectAsync(bucketName, objectName, destBucketName, destObjectName, copyConditions, metadata, sseSrc, sseDest, cancellationToken);
