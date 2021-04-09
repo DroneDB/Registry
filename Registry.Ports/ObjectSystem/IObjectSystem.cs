@@ -70,6 +70,17 @@ namespace Registry.Ports.ObjectSystem
         Task<ObjectInfo> GetObjectInfoAsync(string bucketName, string objectName, IServerEncryption sse = null, CancellationToken cancellationToken = default);
 
         /// <summary>
+        /// Tests the object's existence.
+        /// </summary>
+        /// <param name="bucketName">Bucket to test object in</param>
+        /// <param name="objectName">Name of the object to stat</param>
+        /// <param name="sse">Optional Server-side encryption option. Defaults to null.</param>
+        /// <param name="cancellationToken">Optional cancellation token to cancel the operation</param>
+        /// <returns>Facts about the object</returns>
+        Task<bool> ObjectExistsAsync(string bucketName, string objectName, IServerEncryption sse = null,
+            CancellationToken cancellationToken = default);
+
+        /// <summary>
         /// Lists all incomplete uploads in a given bucket and prefix recursively
         /// </summary>
         /// <param name="bucketName">Bucket to list all incomplete uploads from</param>

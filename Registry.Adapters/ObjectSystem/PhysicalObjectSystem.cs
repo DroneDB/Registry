@@ -140,6 +140,17 @@ namespace Registry.Adapters.ObjectSystem
 
         }
 
+        public async Task<bool> ObjectExistsAsync(string bucketName, string objectName, IServerEncryption sse = null,
+            CancellationToken cancellationToken = default)
+        {
+            EnsureBucketExists(bucketName);
+
+            CheckPath(objectName);
+            var objectPath = GetObjectPath(bucketName, objectName);
+
+            return File.Exists(objectPath);
+        }
+
         public IObservable<ObjectUpload> ListIncompleteUploads(string bucketName, string prefix = "", bool recursive = false,
             CancellationToken cancellationToken = default)
         {

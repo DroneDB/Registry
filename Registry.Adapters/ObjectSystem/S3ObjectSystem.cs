@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Reactive.Linq;
@@ -9,6 +10,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Minio;
 using Minio.DataModel;
+using Minio.Exceptions;
 using Registry.Adapters.ObjectSystem.Model;
 using Registry.Common;
 using Registry.Common.Model;
@@ -68,6 +70,24 @@ namespace Registry.Adapters.ObjectSystem
             var res = await _client.StatObjectAsync(bucketName, objectName, sse?.ToSSE(), cancellationToken);
 
             return new ObjectInfo(res.ObjectName, res.Size, res.LastModified, res.ETag, res.ContentType, res.MetaData);
+        }
+
+        public async Task<bool> ObjectExistsAsync(string bucketName, string objectName, IServerEncryption sse = null,
+            CancellationToken cancellationToken = default)
+        {
+            try
+            {
+                await _client.StatObjectAsync(bucketName, objectName, sse?.ToSSE(), cancellationToken);
+
+                return true;
+            }
+            catch (MinioException e)
+            {
+                Debug.WriteLine($"Object '{objectName}' in bucket '{bucketName}' does not exist: {e}");
+            }
+
+            return false;
+
         }
 
         public IObservable<ObjectUpload> ListIncompleteUploads(string bucketName, string prefix = "", bool recursive = false,

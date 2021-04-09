@@ -8,6 +8,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using Minio.DataModel;
+using Minio.Exceptions;
 using Newtonsoft.Json;
 using Registry.Adapters.ObjectSystem.Model;
 using Registry.Common;
@@ -602,6 +603,22 @@ namespace Registry.Adapters.ObjectSystem
             }
 
             return objectInfo;
+        }
+
+        public async Task<bool> ObjectExistsAsync(string bucketName, string objectName, IServerEncryption sse = null,
+            CancellationToken cancellationToken = default)
+        {
+            try
+            {
+                await _remoteStorage.GetObjectInfoAsync(bucketName, objectName, sse, cancellationToken);
+                return true;
+            }
+            catch (MinioException e)
+            {
+                _logger.LogInformation($"Object '{objectName}' in bucket '{bucketName}' does not exist: {e}");
+            }
+
+            return false;
         }
 
         #endregion
