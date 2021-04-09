@@ -258,7 +258,7 @@ namespace Registry.Web.Test
                     Description = "Default dataset",
                     IsPublic = true,
                     CreationDate = DateTime.Now,
-                    LastEdit = DateTime.Now,
+                    LastUpdate = DateTime.Now,
                     InternalRef = Guid.Parse("0a223495-84a0-4c15-b425-c7ef88110e75")
                 };
 

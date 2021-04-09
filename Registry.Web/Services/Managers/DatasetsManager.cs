@@ -28,7 +28,7 @@ namespace Registry.Web.Services.Managers
             IUtils utils,
             ILogger<DatasetsManager> logger,
             IObjectsManager objectsManager,
-            IPasswordHasher passwordHasher, 
+            IPasswordHasher passwordHasher,
             IDdbManager ddbManager, IAuthManager authManager)
         {
             _context = context;
@@ -53,7 +53,7 @@ namespace Registry.Web.Services.Managers
                             Slug = ds.Slug,
                             CreationDate = ds.CreationDate,
                             Description = ds.Description,
-                            LastEdit = ds.LastEdit,
+                            LastEdit = ds.LastUpdate,
                             Name = ds.Name,
                             Meta = ds.Meta,
                             ObjectsCount = ds.ObjectsCount,
@@ -77,7 +77,7 @@ namespace Registry.Web.Services.Managers
             var attrs = ddb.ChangeAttributes(null);
 
             ds.Meta = attrs;
-            
+
         }
 
         public async Task<DatasetDto> Get(string orgSlug, string dsSlug)
@@ -103,8 +103,9 @@ namespace Registry.Web.Services.Managers
 
             var ds = dataset.ToEntity();
 
-            ds.LastEdit = DateTime.Now;
-            ds.CreationDate = ds.LastEdit;
+            var now = DateTime.Now;
+            ds.LastUpdate = now;
+            ds.CreationDate = now;
 
             if (!string.IsNullOrEmpty(dataset.Password))
                 ds.PasswordHash = _passwordHasher.Hash(dataset.Password);
@@ -114,11 +115,11 @@ namespace Registry.Web.Services.Managers
 
             var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
             ds.Meta = ddb.ChangeAttributes(ds.Meta);
-            
+
             org.Datasets.Add(ds);
 
             await _context.SaveChangesAsync();
-            
+
             return ds.ToDto();
 
         }
@@ -133,7 +134,7 @@ namespace Registry.Web.Services.Managers
 
             ds.Description = dataset.Description;
             ds.IsPublic = dataset.IsPublic;
-            ds.LastEdit = DateTime.Now;
+            ds.LastUpdate = DateTime.Now;
             ds.Name = dataset.Name;
 
             if (!string.IsNullOrEmpty(dataset.Password))
@@ -195,7 +196,7 @@ namespace Registry.Web.Services.Managers
 
             if (!await _authManager.IsOwnerOrAdmin(ds))
                 throw new UnauthorizedException("The current user is not allowed to change attributes");
-            
+
             var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
 
             var attrs = ddb.ChangeAttributes(attributes);

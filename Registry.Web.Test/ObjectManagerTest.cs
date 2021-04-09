@@ -431,7 +431,7 @@ namespace Registry.Web.Test
                     Description = "Default dataset",
                     IsPublic = true,
                     CreationDate = DateTime.Now,
-                    LastEdit = DateTime.Now,
+                    LastUpdate = DateTime.Now,
                     InternalRef = Guid.Parse("0a223495-84a0-4c15-b425-c7ef88110e75")
                 };
                 entity.Datasets = new List<Dataset> { ds };
@@ -454,7 +454,7 @@ namespace Registry.Web.Test
                     Description = null,
                     IsPublic = true,
                     CreationDate = DateTime.Now,
-                    LastEdit = DateTime.Now,
+                    LastUpdate = DateTime.Now,
                     InternalRef = Guid.Parse("6c1f5555-d001-4411-9308-42aa6ccd7fd6")
                 };
                 entity.Datasets = new List<Dataset> { ds };

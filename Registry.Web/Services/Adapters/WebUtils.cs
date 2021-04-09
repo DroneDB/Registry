@@ -146,9 +146,9 @@ namespace Registry.Web.Services.Adapters
         }
         public EntryDto GetDatasetEntry(Dataset dataset)
         {
-            return new EntryDto
+            return new()
             {
-                ModifiedTime = dataset.LastEdit,
+                ModifiedTime = dataset.LastUpdate,
                 Depth = 0,
                 Size = dataset.Size,
                 Path = GenerateDatasetUrl(dataset),
@@ -160,7 +160,7 @@ namespace Registry.Web.Services.Adapters
         public string GenerateDatasetUrl(Dataset dataset)
         {
 
-            var isHttps = false;
+            bool isHttps;
             string host;
 
             if (!string.IsNullOrWhiteSpace(_settings.ExternalUrlOverride))

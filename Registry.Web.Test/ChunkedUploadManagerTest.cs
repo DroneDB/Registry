@@ -291,7 +291,7 @@ namespace Registry.Web.Test
                     Description = "Default dataset",
                     IsPublic = true,
                     CreationDate = DateTime.Now,
-                    LastEdit = DateTime.Now
+                    LastUpdate = DateTime.Now
                 };
                 entity.Datasets = new List<Dataset> { ds };
 

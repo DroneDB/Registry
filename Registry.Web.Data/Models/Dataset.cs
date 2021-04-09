@@ -25,7 +25,6 @@ namespace Registry.Web.Data.Models
         public DateTime CreationDate { get; set; }
         public long Size { get; set; }
         public int ObjectsCount { get; set; }
-        public DateTime LastEdit { get; set; }
 
         public string PasswordHash { get; set; }
 

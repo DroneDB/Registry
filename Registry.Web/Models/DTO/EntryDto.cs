@@ -21,6 +21,6 @@ namespace Registry.Web.Models.DTO
 
         [JsonProperty("mtime")]
         [JsonConverter(typeof(UnixDateTimeConverter))] 
-        public DateTime ModifiedTime { get; set; }
+        public DateTime? ModifiedTime { get; set; }
     }
 }

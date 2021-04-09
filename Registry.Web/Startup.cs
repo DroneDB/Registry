@@ -558,7 +558,7 @@ namespace Registry.Web
                     Description = "Default dataset",
                     IsPublic = true,
                     CreationDate = DateTime.Now,
-                    LastEdit = DateTime.Now,
+                    LastUpdate = DateTime.Now,
                     InternalRef = Guid.NewGuid()
                 };
                 entity.Datasets = new List<Dataset> { ds };
