@@ -84,9 +84,9 @@ namespace Registry.Web.Controllers
             {
                 _logger.LogDebug($"Push controller Commit('{orgSlug}', '{dsSlug}')");
 
-                var res = await _pushManager.Commit(orgSlug, dsSlug);
+                await _pushManager.Commit(orgSlug, dsSlug);
 
-                return Ok(res);
+                return Ok();
             }
             catch (Exception ex)
             {

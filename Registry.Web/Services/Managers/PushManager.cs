@@ -90,7 +90,7 @@ namespace Registry.Web.Services.Managers
             
         }
 
-        public async Task<object> Commit(string orgSlug, string dsSlug)
+        public async Task Commit(string orgSlug, string dsSlug)
         {
 
             await _utils.GetDataset(orgSlug, dsSlug);
