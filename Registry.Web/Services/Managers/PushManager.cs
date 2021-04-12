@@ -11,6 +11,8 @@ using Registry.Adapters.DroneDB;
 using Registry.Ports.ObjectSystem;
 using Registry.Web.Models.DTO;
 using Registry.Web.Services.Ports;
+using Registry.Web.Utilities;
+using EntryType = Registry.Common.EntryType;
 
 namespace Registry.Web.Services.Managers
 {
@@ -51,12 +53,11 @@ namespace Registry.Web.Services.Managers
 
             // 1) Unzip stream contents in temp ddb folder
             using var archive = new ZipArchive(stream, ZipArchiveMode.Read);
-            archive.ExtractToDirectory(ddbTempFolder);
+            archive.ExtractToDirectory(ddbTempFolder, true);
 
             // 2) Perform delta with our ddb
             var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
-            // TODO Check: This could be a scope violation: using an external library interface and model class
-            var delta = DroneDB.Delta(ddb.FolderPath, ddbTempFolder);
+            var delta = DroneDB.Delta(ddbTempFolder, ddb.FolderPath).ToDto();
 
             // 3) Save delta json in temp folder
             await File.WriteAllTextAsync(Path.Combine(baseTempFolder, DeltaFileName),
@@ -66,7 +67,7 @@ namespace Registry.Web.Services.Managers
             return new PushInitResultDto
             {
                 NeededFiles = delta.Adds
-                    .Where(item => item.Type != EntryType.Directory)
+                    .Where(item => item.Type != Common.EntryType.Directory)
                     .Select(item => item.Path)
                     .ToArray()
             };
@@ -76,7 +77,7 @@ namespace Registry.Web.Services.Managers
         {
             await _utils.GetDataset(orgSlug, dsSlug);
 
-            if (path.Contains("."))
+            if (path.Contains(".."))
                 throw new InvalidOperationException("Path cannot contain dot notation");
 
             var baseTempFolder = Path.Combine(Path.GetTempPath(), PushFolderName, orgSlug, dsSlug);
@@ -95,7 +96,7 @@ namespace Registry.Web.Services.Managers
             if (parentPath != null) Directory.CreateDirectory(parentPath);
 
             // Save file in temp folder
-            await using var file = File.OpenWrite(addTempFolder);
+            await using var file = File.OpenWrite(filePath);
             await stream.CopyToAsync(file);
 
         }
@@ -115,9 +116,9 @@ namespace Registry.Web.Services.Managers
             if (!File.Exists(deltaFilePath))
                 throw new InvalidOperationException("Delta not found");
 
-            var delta = JsonConvert.DeserializeObject<Delta>(deltaFilePath);
+            var delta = JsonConvert.DeserializeObject<DeltaDto>(await File.ReadAllTextAsync(deltaFilePath));
 
-            foreach (var add in delta.Adds)
+            foreach (var add in delta.Adds.Where(item => item.Type != EntryType.Directory))
                 if (!File.Exists(Path.Combine(addTempFolder, add.Path)))
                     throw new InvalidOperationException($"Cannot commit: missing '{add.Path}'");
 
@@ -128,15 +129,40 @@ namespace Registry.Web.Services.Managers
             // Replaces ddb folder
             var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
             Directory.Delete(ddb.FolderPath, true);
-            Directory.CreateDirectory(ddb.FolderPath);
+            //Directory.CreateDirectory(ddb.FolderPath);
             Directory.Move(ddbTempFolder, ddb.FolderPath);
 
             // Updates last sync
             ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
 
+            // TODO: Add timestamp parameter to Commit method
+            //DroneDB.SetLastSync(ddb.FolderPath, settings)
+
+            // Clean intermediate files
+            await Clean(orgSlug, dsSlug);
+
         }
 
-        private async Task ApplyDelta(string bucketName, Delta delta, string addTempFolder)
+        public async Task Clean(string orgSlug, string dsSlug)
+        {
+            await _utils.GetDataset(orgSlug, dsSlug);
+
+            var baseTempFolder = Path.Combine(Path.GetTempPath(), PushFolderName, orgSlug, dsSlug);
+
+            _logger.LogInformation("Cleaning '" + baseTempFolder + "'");
+
+            if (Directory.Exists(baseTempFolder))
+            {
+                Directory.Delete(baseTempFolder, true);
+                _logger.LogInformation("Done");
+            }
+            else
+            {
+                _logger.LogInformation("Nothing to clean");
+            }
+        }
+
+        private async Task ApplyDelta(string bucketName, DeltaDto delta, string addTempFolder)
         {
 
             const string tempFolderName = ".tmp";
@@ -158,7 +184,7 @@ namespace Registry.Web.Services.Managers
 
                 await _objectSystem.CopyObjectAsync(bucketName, source, bucketName, dest);
 
-                delta.Copies[index] = new CopyAction(Path.Combine(tempFolderName, copy.Source), copy.Destination);
+                delta.Copies[index] = new CopyActionDto { Source = Path.Combine(tempFolderName, copy.Source), Destination = copy.Destination };
             }
 
 
@@ -170,7 +196,7 @@ namespace Registry.Web.Services.Managers
 
                 var dest = rem.Path;
 
-                if (rem.Type != EntryType.Directory)
+                if (rem.Type != Common.EntryType.Directory)
                 {
 
                     _logger.LogInformation("Deleting file");
@@ -211,7 +237,7 @@ namespace Registry.Web.Services.Managers
 
                 _logger.LogInformation(add.ToString());
 
-                if (add.Type == EntryType.Directory)
+                if (add.Type == Common.EntryType.Directory)
                 {
                     _logger.LogInformation("Cant do much on directories");
                     continue;
@@ -244,7 +270,7 @@ namespace Registry.Web.Services.Managers
                 else
                 {
                     _logger.LogInformation("Dest file does not exist, performing copy");
-                    await _objectSystem.CopyObjectAsync(bucketName, dest, bucketName, dest);
+                    await _objectSystem.CopyObjectAsync(bucketName, source, bucketName, dest);
 
                     //File.Copy(source, dest);
                 }
