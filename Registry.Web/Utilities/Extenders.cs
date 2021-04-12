@@ -4,6 +4,7 @@ using System.Linq;
 using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
+using DDB.Bindings.Model;
 using Microsoft.AspNetCore.Identity;
 using Newtonsoft.Json;
 using Registry.Ports.DroneDB;
@@ -15,6 +16,19 @@ namespace Registry.Web.Utilities
 {
     public static class Extenders
     {
+
+        public static DeltaDto ToDto(this Delta delta)
+        {
+            if (delta == null) return null;
+
+            return new DeltaDto
+            {
+                Adds = delta.Adds?.Select(add => new AddActionDto { Path = add.Path, Type = (Common.EntryType)(int)add.Type }).ToArray(),
+                Copies = delta.Copies?.Select(cpy => new CopyActionDto { Destination = cpy.Destination, Source = cpy.Source }).ToArray(),
+                Removes = delta.Removes?.Select(rem => new RemoveActionDto { Path = rem.Path, Type = (Common.EntryType)(int)rem.Type }).ToArray()
+            };
+        }
+
         public static Organization ToEntity(this OrganizationDto organization)
         {
             return new()
@@ -202,7 +216,7 @@ namespace Registry.Web.Utilities
         {
             return arr == null ? "[]" : $"[{string.Join(", ", arr)}]";
         }
-        
+
 
     }
 
