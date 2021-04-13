@@ -69,7 +69,7 @@ namespace Registry.Web.Test
         private const string Test2ArchiveDatasetInternalGuid = "496af2f3-8c6c-41c2-95b9-dd2846e66d95";
 
         private const string TestArchiveUrl = "https://github.com/DroneDB/test_data/raw/master/registry/push/test.zip";
-        
+
         public PushManagerTest()
         {
             //
@@ -126,6 +126,7 @@ namespace Registry.Web.Test
                 Email = "admin@example.com"
             }));
             _authManagerMock.Setup(o => o.SafeGetCurrentUserName()).Returns(Task.FromResult(userName));
+            _authManagerMock.Setup(o => o.IsOwnerOrAdmin(It.IsAny<Dataset>())).Returns(Task.FromResult(true));
 
             var sys = new PhysicalObjectSystem(Path.Combine(test.TestFolder, StorageFolder));
             sys.SyncBucket($"{userName}-{Test2ArchiveDatasetInternalGuid}");
@@ -137,31 +138,46 @@ namespace Registry.Web.Test
             var objectManager = new ObjectsManager(_objectManagerLogger, context, sys, _chunkedUploadManagerMock.Object,
                 _appSettingsMock.Object, ddbManager, webUtils, _authManagerMock.Object, _cacheManagerMock.Object);
 
-            var pushManager = new PushManager(webUtils, ddbManager, sys, objectManager, _pushManagerLogger);
+            var pushManager = new PushManager(webUtils, ddbManager, sys, objectManager, _pushManagerLogger,
+                _datasetsManagerMock.Object, _authManagerMock.Object);
 
             try
             {
 
-                await using var stream = File.OpenRead(Path.Combine(test.TestFolder, "ClientDdb.zip"));
-                var result = await pushManager.Init(userName, dsSlug, stream);
-
-                TestContext.WriteLine(JsonConvert.SerializeObject(result));
-
-                foreach (var file in result.NeededFiles)
+                await using (var stream = File.OpenRead(Path.Combine(test.TestFolder, "ClientDdb.zip")))
                 {
-                    var filePath = Path.Combine(test.TestFolder, "NewFiles", file);
-                    if (!File.Exists(filePath))
+                    var result = await pushManager.Init(userName, dsSlug, stream);
+
+                    TestContext.WriteLine(JsonConvert.SerializeObject(result));
+
+                    foreach (var file in result.NeededFiles)
                     {
-                        Assert.Fail($"File '{file}' not present in test archive");
-                        return;
+                        var filePath = Path.Combine(test.TestFolder, "NewFiles", file);
+                        if (!File.Exists(filePath))
+                        {
+                            Assert.Fail($"File '{file}' not present in test archive");
+                            return;
+                        }
+
+                        await using var up = File.OpenRead(filePath);
+                        await pushManager.Upload(userName, dsSlug, file, up);
                     }
 
-                    await using var up = File.OpenRead(filePath);
-                    await pushManager.Upload(userName, dsSlug, file, up);
                 }
 
-
                 await pushManager.Commit(userName, dsSlug);
+
+                // Verify that all the files are in the correct places
+                await using (var stream = File.OpenRead(Path.Combine(test.TestFolder, "ClientDdb.zip")))
+                {
+                    var result = await pushManager.Init(userName, dsSlug, stream);
+
+                    TestContext.WriteLine(JsonConvert.SerializeObject(result));
+
+                    result.NeededFiles.Should().BeEmpty();
+
+                    await pushManager.Clean(userName, dsSlug);
+                }
 
             }
             finally

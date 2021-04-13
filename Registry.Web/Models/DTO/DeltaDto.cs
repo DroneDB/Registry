@@ -23,13 +23,17 @@ namespace Registry.Web.Models.DTO
 
         public EntryType Type { get; set; }
 
+        public override string ToString() =>
+            $"ADD -> [{(Type == EntryType.Directory ? 'D' : 'F')}] {Path}";
+
+
     }
 
     public class CopyActionDto
     {
         public string Source { get; set; }
         public string Destination { get; set; }
-
+        public override string ToString() => $"CPY -> {Source} TO {Destination}";
     }
 
     public class RemoveActionDto
@@ -37,6 +41,9 @@ namespace Registry.Web.Models.DTO
         public string Path { get; set; }
 
         public EntryType Type { get; set; }
+
+        public override string ToString() => $"DEL -> [{(Type == EntryType.Directory ? 'D' : 'F')}] {Path}";
+
 
     }
 }
