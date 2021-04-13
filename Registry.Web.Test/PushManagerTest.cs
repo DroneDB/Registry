@@ -7,6 +7,7 @@ using System.Threading.Tasks;
 using FluentAssertions;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
+using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Caching.Distributed;
 using Microsoft.Extensions.Logging;
@@ -16,6 +17,7 @@ using Newtonsoft.Json;
 using NUnit.Framework;
 using Registry.Adapters.DroneDB;
 using Registry.Adapters.ObjectSystem;
+using Registry.Adapters.ObjectSystem.Model;
 using Registry.Common;
 using Registry.Ports.DroneDB;
 using Registry.Ports.ObjectSystem;
@@ -138,6 +140,116 @@ namespace Registry.Web.Test
             var objectManager = new ObjectsManager(_objectManagerLogger, context, sys, _chunkedUploadManagerMock.Object,
                 _appSettingsMock.Object, ddbManager, webUtils, _authManagerMock.Object, _cacheManagerMock.Object);
 
+            var pushManager = new PushManager(webUtils, ddbManager, sys, objectManager, _pushManagerLogger,
+                _datasetsManagerMock.Object, _authManagerMock.Object);
+
+            try
+            {
+
+                await using (var stream = File.OpenRead(Path.Combine(test.TestFolder, "ClientDdb.zip")))
+                {
+                    var result = await pushManager.Init(userName, dsSlug, stream);
+
+                    TestContext.WriteLine(JsonConvert.SerializeObject(result));
+
+                    foreach (var file in result.NeededFiles)
+                    {
+                        var filePath = Path.Combine(test.TestFolder, "NewFiles", file);
+                        if (!File.Exists(filePath))
+                        {
+                            Assert.Fail($"File '{file}' not present in test archive");
+                            return;
+                        }
+
+                        await using var up = File.OpenRead(filePath);
+                        await pushManager.Upload(userName, dsSlug, file, up);
+                    }
+
+                }
+
+                await pushManager.Commit(userName, dsSlug);
+
+                // Verify that all the files are in the correct places
+                await using (var stream = File.OpenRead(Path.Combine(test.TestFolder, "ClientDdb.zip")))
+                {
+                    var result = await pushManager.Init(userName, dsSlug, stream);
+
+                    TestContext.WriteLine(JsonConvert.SerializeObject(result));
+
+                    result.NeededFiles.Should().BeEmpty();
+
+                    await pushManager.Clean(userName, dsSlug);
+                }
+
+            }
+            finally
+            {
+                await pushManager.Clean(userName, dsSlug);
+            }
+            //await pushManager.Init()
+
+        }
+
+        [Test]
+        [Explicit]
+        public async Task Init_HappyPath2_Ok()
+        {
+
+            /* INITIALIZATION & SETUP */
+            const string userName = "admin";
+            const string dsSlug = "test";
+
+            using var test = new TestFS(TestArchiveUrl, BaseTestFolder, true);
+
+            await using var context = GetTest1Context();
+
+            _authManagerMock.Setup(o => o.IsUserAdmin()).Returns(Task.FromResult(true));
+            _authManagerMock.Setup(o => o.GetCurrentUser()).Returns(Task.FromResult(new User
+            {
+                UserName = userName,
+                Email = "admin@example.com"
+            }));
+            _authManagerMock.Setup(o => o.SafeGetCurrentUserName()).Returns(Task.FromResult(userName));
+            _authManagerMock.Setup(o => o.IsOwnerOrAdmin(It.IsAny<Dataset>())).Returns(Task.FromResult(true));
+
+            var sys = new S3ObjectSystem(new S3ObjectSystemSettings
+            {
+                AccessKey = "minioadmin",
+                SecretKey = "minioadmin",
+                AppName = "Registry",
+                AppVersion = "1.0",
+                Endpoint = "localhost:9000",
+                Region = "us-east-1",
+                UseSsl = false
+            });
+
+            var bucketName = userName + "-496af2f3-8c6c-41c2-95b9-dd2846e66d95";
+
+            if (await sys.BucketExistsAsync(bucketName))
+                await sys.RemoveBucketAsync(bucketName);
+
+            await sys.MakeBucketAsync(bucketName);
+
+            var basePath = Path.Combine(test.TestFolder,
+                "Storage/admin-496af2f3-8c6c-41c2-95b9-dd2846e66d95");
+
+            foreach (var entry in Directory.EnumerateFiles(basePath, "*",SearchOption.AllDirectories))
+            {
+                var relPath = Path.GetRelativePath(basePath, entry).Replace('\\', '/');
+                TestContext.WriteLine(relPath);
+                await sys.PutObjectAsync(bucketName, relPath, entry);
+            }
+
+            //var sys = new PhysicalObjectSystem(Path.Combine(test.TestFolder, StorageFolder));
+            //sys.SyncBucket($"{userName}-{Test2ArchiveDatasetInternalGuid}");
+
+            var ddbManager = new DdbManager(_appSettingsMock.Object, _ddbFactoryLogger);
+            var webUtils = new WebUtils(_authManagerMock.Object, context, _appSettingsMock.Object,
+                _httpContextAccessorMock.Object);
+
+            var objectManager = new ObjectsManager(_objectManagerLogger, context, sys, _chunkedUploadManagerMock.Object,
+                _appSettingsMock.Object, ddbManager, webUtils, _authManagerMock.Object, _cacheManagerMock.Object);
+            
             var pushManager = new PushManager(webUtils, ddbManager, sys, objectManager, _pushManagerLogger,
                 _datasetsManagerMock.Object, _authManagerMock.Object);
 
