@@ -67,7 +67,6 @@ namespace Registry.Web.Test
 
 
         private const string Test2ArchiveDatasetInternalGuid = "496af2f3-8c6c-41c2-95b9-dd2846e66d95";
-        private const string Test1ArchiveUrl = "https://github.com/DroneDB/test_data/raw/master/registry/Test1.zip";
 
         private const string TestArchiveUrl = "https://github.com/DroneDB/test_data/raw/master/registry/push/test.zip";
         
