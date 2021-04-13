@@ -31,8 +31,8 @@ jobs:
           mkdir -p build
           cd build
           cmake -DBUILD_TESTING=OFF ..
-          make -j ddb
-          sudo make -j install
+          make -j$(nproc) ddb
+          sudo make -j$(nproc) install
           sudo ldconfig          
     - name: Install dependencies
       run: |
