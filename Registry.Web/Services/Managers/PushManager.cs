@@ -9,6 +9,7 @@ using Microsoft.Extensions.Logging;
 using Newtonsoft.Json;
 using Registry.Adapters.DroneDB;
 using Registry.Ports.ObjectSystem;
+using Registry.Web.Exceptions;
 using Registry.Web.Models.DTO;
 using Registry.Web.Services.Ports;
 using Registry.Web.Utilities;
@@ -26,17 +27,21 @@ namespace Registry.Web.Services.Managers
         private readonly IUtils _utils;
         private readonly IDdbManager _ddbManager;
         private readonly IObjectsManager _objectsManager;
+        private readonly IDatasetsManager _datasetsManager;
+        private readonly IAuthManager _authManager;
         private readonly IObjectSystem _objectSystem;
         private readonly ILogger<PushManager> _logger;
 
         public PushManager(IUtils utils, IDdbManager ddbManager, IObjectSystem objectSystem,
-            IObjectsManager objectsManager, ILogger<PushManager> logger)
+            IObjectsManager objectsManager, ILogger<PushManager> logger, IDatasetsManager datasetsManager, IAuthManager authManager)
         {
             _utils = utils;
             _ddbManager = ddbManager;
             _objectSystem = objectSystem;
             _objectsManager = objectsManager;
             _logger = logger;
+            _datasetsManager = datasetsManager;
+            _authManager = authManager;
         }
 
         public async Task<PushInitResultDto> Init(string orgSlug, string dsSlug, Stream stream)
@@ -44,6 +49,9 @@ namespace Registry.Web.Services.Managers
 
             var ds = await _utils.GetDataset(orgSlug, dsSlug);
 
+            if (!await _authManager.IsOwnerOrAdmin(ds))
+                throw new UnauthorizedException("The current user is not allowed to push to this dataset");
+            
             // 0) Setup temp folders
             var baseTempFolder = Path.Combine(Path.GetTempPath(), PushFolderName, orgSlug, dsSlug);
             Directory.CreateDirectory(baseTempFolder);
@@ -75,8 +83,11 @@ namespace Registry.Web.Services.Managers
 
         public async Task Upload(string orgSlug, string dsSlug, string path, Stream stream)
         {
-            await _utils.GetDataset(orgSlug, dsSlug);
+            var ds = await _utils.GetDataset(orgSlug, dsSlug);
 
+            if (!await _authManager.IsOwnerOrAdmin(ds))
+                throw new UnauthorizedException("The current user is not allowed to upload to this dataset");
+            
             if (path.Contains(".."))
                 throw new InvalidOperationException("Path cannot contain dot notation");
 
@@ -106,6 +117,9 @@ namespace Registry.Web.Services.Managers
 
             var ds = await _utils.GetDataset(orgSlug, dsSlug);
 
+            if (!await _authManager.IsOwnerOrAdmin(ds))
+                throw new UnauthorizedException("The current user is not allowed to commit to this dataset");
+
             var baseTempFolder = Path.Combine(Path.GetTempPath(), PushFolderName, orgSlug, dsSlug);
             var deltaFilePath = Path.Combine(baseTempFolder, DeltaFileName);
             var addTempFolder = Path.Combine(baseTempFolder, AddsTempFolder);
@@ -132,11 +146,11 @@ namespace Registry.Web.Services.Managers
             //Directory.CreateDirectory(ddb.FolderPath);
             Directory.Move(ddbTempFolder, ddb.FolderPath);
 
-            // Updates last sync
-            ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
+            //// It should be ok already
+            //ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
+            ////DroneDB.SetLastSync(ddb.FolderPath, settings)
 
-            // TODO: Add timestamp parameter to Commit method
-            //DroneDB.SetLastSync(ddb.FolderPath, settings)
+            await _datasetsManager.SyncDdbMeta(orgSlug, dsSlug);
 
             // Clean intermediate files
             await Clean(orgSlug, dsSlug);
