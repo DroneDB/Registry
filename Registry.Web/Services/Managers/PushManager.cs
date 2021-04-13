@@ -55,7 +55,7 @@ namespace Registry.Web.Services.Managers
 
             if (!await _authManager.IsOwnerOrAdmin(ds))
                 throw new UnauthorizedException("The current user is not allowed to push to this dataset");
-            
+
             // 0) Setup temp folders
             var baseTempFolder = Path.Combine(Path.GetTempPath(), PushFolderName, orgSlug, dsSlug);
             Directory.CreateDirectory(baseTempFolder);
@@ -65,7 +65,7 @@ namespace Registry.Web.Services.Managers
 
             // 1) Unzip stream contents in temp ddb folder
             using var archive = new ZipArchive(stream, ZipArchiveMode.Read);
-            archive.ExtractToDirectory(ddbTempFolder, true);
+            archive.ExtractToDirectory(Path.Combine(ddbTempFolder, ".ddb"), true);
 
             // 2) Perform delta with our ddb
             var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
@@ -91,7 +91,7 @@ namespace Registry.Web.Services.Managers
 
             if (!await _authManager.IsOwnerOrAdmin(ds))
                 throw new UnauthorizedException("The current user is not allowed to upload to this dataset");
-            
+
             if (path.Contains(".."))
                 throw new InvalidOperationException("Path cannot contain dot notation");
 
