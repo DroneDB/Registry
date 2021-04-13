@@ -2,12 +2,16 @@
 using System.IO;
 using System.IO.Compression;
 using System.Linq;
+using System.Reactive.Linq;
 using System.Threading.Tasks;
 using DDB.Bindings;
 using DDB.Bindings.Model;
+using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.Extensions.Logging;
+using Microsoft.VisualStudio.Web.CodeGeneration;
 using Newtonsoft.Json;
 using Registry.Adapters.DroneDB;
+using Registry.Common;
 using Registry.Ports.ObjectSystem;
 using Registry.Web.Exceptions;
 using Registry.Web.Models.DTO;
@@ -126,7 +130,6 @@ namespace Registry.Web.Services.Managers
             var ddbTempFolder = Path.Combine(baseTempFolder, DdbTempFolder);
 
             // Check push folder integrity (delta and files)
-
             if (!File.Exists(deltaFilePath))
                 throw new InvalidOperationException("Delta not found");
 
@@ -143,7 +146,6 @@ namespace Registry.Web.Services.Managers
             // Replaces ddb folder
             var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
             Directory.Delete(ddb.FolderPath, true);
-            //Directory.CreateDirectory(ddb.FolderPath);
             Directory.Move(ddbTempFolder, ddb.FolderPath);
 
             //// It should be ok already
@@ -189,16 +191,16 @@ namespace Registry.Web.Services.Managers
                 _logger.LogInformation(copy.ToString());
 
                 var source = copy.Source;
-                var dest = Path.Combine(tempFolderName, copy.Source);
+                var dest = CommonUtils.SafeCombine(tempFolderName, copy.Source);
 
                 EnsureParentFolderExists(dest);
 
                 _logger.LogInformation(
-                    $"Changed copy path from {copy.Source} to {Path.Combine(tempFolderName, copy.Source)}");
+                    $"Changed copy path from {copy.Source} to {dest}");
 
                 await _objectSystem.CopyObjectAsync(bucketName, source, bucketName, dest);
 
-                delta.Copies[index] = new CopyActionDto { Source = Path.Combine(tempFolderName, copy.Source), Destination = copy.Destination };
+                delta.Copies[index] = new CopyActionDto { Source = dest, Destination = copy.Destination };
             }
 
 
@@ -210,7 +212,7 @@ namespace Registry.Web.Services.Managers
 
                 var dest = rem.Path;
 
-                if (rem.Type != Common.EntryType.Directory)
+                if (rem.Type != EntryType.Directory)
                 {
 
                     _logger.LogInformation("Deleting file");
@@ -251,13 +253,13 @@ namespace Registry.Web.Services.Managers
 
                 _logger.LogInformation(add.ToString());
 
-                if (add.Type == Common.EntryType.Directory)
+                if (add.Type == EntryType.Directory)
                 {
                     _logger.LogInformation("Cant do much on directories");
                     continue;
                 }
 
-                var source = Path.Combine(addTempFolder, add.Path);
+                var source = CommonUtils.SafeCombine(addTempFolder, add.Path);
 
                 _logger.LogInformation("Uploading file");
 
@@ -308,6 +310,15 @@ namespace Registry.Web.Services.Managers
                     //File.Move(dest + ".replace", dest, true);
                 }
             }
+
+            _logger.LogInformation("Clearing temp folder");
+
+            _objectSystem.ListObjectsAsync(bucketName, tempFolderName, true).Subscribe(
+                async obj =>
+                {
+                    await _objectSystem.RemoveObjectAsync(bucketName, tempFolderName + "/" + obj.Key);
+                });
+
 
         }
 
