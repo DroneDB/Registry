@@ -144,6 +144,11 @@ namespace Registry.Adapters.DroneDB
             }
         }
 
+        public Dictionary<string, object> GetAttributes()
+        {
+            return ChangeAttributes(new Dictionary<string, object>());
+        }
+
         public Dictionary<string, object> ChangeAttributes(Dictionary<string, object> attributes)
         {
             try

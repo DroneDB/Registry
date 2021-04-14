@@ -26,5 +26,6 @@ namespace Registry.Ports.DroneDB
 
         // This could lead to problems if we plan to move ddbpath to S3 but it's good for now
         string FolderPath { get; }
+        Dictionary<string, object> GetAttributes();
     }
 }
