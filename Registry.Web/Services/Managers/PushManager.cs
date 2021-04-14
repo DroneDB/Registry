@@ -65,7 +65,7 @@ namespace Registry.Web.Services.Managers
 
             // 1) Unzip stream contents in temp ddb folder
             using var archive = new ZipArchive(stream, ZipArchiveMode.Read);
-            archive.ExtractToDirectory(Path.Combine(ddbTempFolder, ".ddb"), true);
+            archive.ExtractToDirectory(ddbTempFolder, true);
 
             // 2) Perform delta with our ddb
             var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
@@ -313,13 +313,13 @@ namespace Registry.Web.Services.Managers
 
             _logger.LogInformation("Clearing temp folder");
 
-            _objectSystem.ListObjectsAsync(bucketName, tempFolderName, true).Subscribe(
-                async obj =>
-                {
-                    await _objectSystem.RemoveObjectAsync(bucketName, tempFolderName + "/" + obj.Key);
-                });
+            var objects = _objectSystem.ListObjectsAsync(bucketName, tempFolderName, true).ToEnumerable().ToArray();
 
-
+            foreach (var obj in objects)
+            {
+                await _objectSystem.RemoveObjectAsync(bucketName, tempFolderName + "/" + obj.Key);
+            }
+            
         }
 
         private void EnsureParentFolderExists(string folder)

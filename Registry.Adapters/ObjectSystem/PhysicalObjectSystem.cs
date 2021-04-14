@@ -99,12 +99,12 @@ namespace Registry.Adapters.ObjectSystem
         }
 
 
-        public async Task RemoveObjectAsync(string bucketName, string objectName, CancellationToken cancellationToken = default)
+        public Task RemoveObjectAsync(string bucketName, string objectName, CancellationToken cancellationToken = default)
         {
             EnsureBucketExists(bucketName);
             var objectPath = EnsureObjectExists(bucketName, objectName);
 
-            await Task.Run(() =>
+            return Task.Run(() =>
             {
                 File.Delete(objectPath);
 
