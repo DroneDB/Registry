@@ -74,7 +74,7 @@ namespace Registry.Web.Services.Managers
 
             var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
 
-            var attrs = ddb.ChangeAttributes(null);
+            var attrs = ddb.GetAttributes();
 
             ds.Meta = attrs;
 
