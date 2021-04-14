@@ -65,7 +65,7 @@ namespace Registry.Web.Services.Managers
 
             // 1) Unzip stream contents in temp ddb folder
             using var archive = new ZipArchive(stream, ZipArchiveMode.Read);
-            archive.ExtractToDirectory(ddbTempFolder, true);
+            archive.ExtractToDirectory(Path.Combine(ddbTempFolder, _ddbManager.DdbFolderName), true);
 
             // 2) Perform delta with our ddb
             var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
@@ -87,8 +87,15 @@ namespace Registry.Web.Services.Managers
 
         public async Task Upload(string orgSlug, string dsSlug, string path, Stream stream)
         {
-            var ds = await _utils.GetDataset(orgSlug, dsSlug);
 
+            if (string.IsNullOrWhiteSpace(path))
+                throw new ArgumentException("Path cannot be empty");
+
+            if (stream == null || !stream.CanRead)
+                throw new ArgumentException("Stream is null or is not readable");
+
+            var ds = await _utils.GetDataset(orgSlug, dsSlug);
+            
             if (!await _authManager.IsOwnerOrAdmin(ds))
                 throw new UnauthorizedException("The current user is not allowed to upload to this dataset");
 
@@ -319,7 +326,7 @@ namespace Registry.Web.Services.Managers
             {
                 await _objectSystem.RemoveObjectAsync(bucketName, tempFolderName + "/" + obj.Key);
             }
-            
+
         }
 
         private void EnsureParentFolderExists(string folder)
