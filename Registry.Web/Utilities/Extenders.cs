@@ -63,17 +63,14 @@ namespace Registry.Web.Utilities
                 Slug = dataset.Slug,
                 CreationDate = dataset.CreationDate,
                 Description = dataset.Description,
-                LastUpdate = dataset.LastEdit,
                 Name = string.IsNullOrEmpty(dataset.Name) ? dataset.Slug : dataset.Name,
-                Meta = dataset.Meta,
                 ObjectsCount = dataset.ObjectsCount,
                 Size = dataset.Size
             };
-            entity.IsPublic = dataset.IsPublic;
             return entity;
         }
 
-        public static DatasetDto ToDto(this Dataset dataset)
+        public static DatasetDto ToDto(this Dataset dataset, DdbAttributes attributes)
         {
             return new()
             {
@@ -81,12 +78,12 @@ namespace Registry.Web.Utilities
                 Slug = dataset.Slug,
                 CreationDate = dataset.CreationDate,
                 Description = dataset.Description,
-                LastEdit = dataset.LastUpdate,
+                LastEdit = attributes.LastUpdate,
                 Name = dataset.Name,
-                Meta = dataset.Meta,
+                Meta = attributes.Meta,
                 ObjectsCount = dataset.ObjectsCount,
                 Size = dataset.Size,
-                IsPublic = dataset.IsPublic
+                IsPublic = attributes.IsPublic
             };
         }
 

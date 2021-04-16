@@ -20,6 +20,7 @@ using Registry.Adapters.ObjectSystem;
 using Registry.Adapters.ObjectSystem.Model;
 using Registry.Common;
 using Registry.Ports.DroneDB;
+using Registry.Ports.DroneDB.Models;
 using Registry.Ports.ObjectSystem;
 using Registry.Web.Data;
 using Registry.Web.Data.Models;
@@ -107,6 +108,16 @@ namespace Registry.Web.Test
             _batchTokenGenerator = new BatchTokenGenerator(_appSettingsMock.Object, _batchTokenGeneratorLogger);
             _nameGenerator = new NameGenerator(_appSettingsMock.Object, _nameGeneratorLogger);
 
+            var ddbMock1 = new Mock<IDdb>();
+            ddbMock1.Setup(x => x.GetAttributesRaw()).Returns(new Dictionary<string, object>
+            {
+                {"public", true }
+            });
+            var ddbMock2 = new Mock<IDdb>();
+            ddbMock2.Setup(x => x.GetAttributes()).Returns(new DdbAttributes(ddbMock1.Object));
+
+            _ddbFactoryMock.Setup(x => x.Get(It.IsAny<string>(), It.IsAny<Guid>())).Returns(ddbMock2.Object);
+            
         }
 
         [Test]
@@ -135,7 +146,7 @@ namespace Registry.Web.Test
 
             var ddbManager = new DdbManager(_appSettingsMock.Object, _ddbFactoryLogger);
             var webUtils = new WebUtils(_authManagerMock.Object, context, _appSettingsMock.Object,
-                _httpContextAccessorMock.Object);
+                _httpContextAccessorMock.Object, _ddbFactoryMock.Object);
 
             var objectManager = new ObjectsManager(_objectManagerLogger, context, sys, _chunkedUploadManagerMock.Object,
                 _appSettingsMock.Object, ddbManager, webUtils, _authManagerMock.Object, _cacheManagerMock.Object);
@@ -245,7 +256,7 @@ namespace Registry.Web.Test
 
             var ddbManager = new DdbManager(_appSettingsMock.Object, _ddbFactoryLogger);
             var webUtils = new WebUtils(_authManagerMock.Object, context, _appSettingsMock.Object,
-                _httpContextAccessorMock.Object);
+                _httpContextAccessorMock.Object, _ddbFactoryMock.Object);
 
             var objectManager = new ObjectsManager(_objectManagerLogger, context, sys, _chunkedUploadManagerMock.Object,
                 _appSettingsMock.Object, ddbManager, webUtils, _authManagerMock.Object, _cacheManagerMock.Object);
@@ -363,9 +374,9 @@ namespace Registry.Web.Test
                     Slug = MagicStrings.DefaultDatasetSlug,
                     Name = "Default",
                     Description = "Default dataset",
-                    IsPublic = true,
+                    //IsPublic = true,
                     CreationDate = DateTime.Now,
-                    LastUpdate = DateTime.Now,
+                    //LastUpdate = DateTime.Now,
                     InternalRef = Guid.Parse("0a223495-84a0-4c15-b425-c7ef88110e75")
                 };
 
@@ -388,9 +399,9 @@ namespace Registry.Web.Test
                     Slug = "test",
                     Name = "Test",
                     Description = "Test dataset",
-                    IsPublic = false,
+                    //IsPublic = false,
                     CreationDate = DateTime.Now,
-                    LastUpdate = DateTime.Now,
+                    //LastUpdate = DateTime.Now,
                     InternalRef = Guid.Parse(Test2ArchiveDatasetInternalGuid)
                 };
 

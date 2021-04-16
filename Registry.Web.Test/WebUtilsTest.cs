@@ -28,31 +28,16 @@ namespace Registry.Web.Test
 
         private Mock<IAuthManager> _authManagerMock;
         private Mock<IOptions<AppSettings>> _appSettingsMock;
-        //private Logger<UsersManager> _usersManagerLogger;
-        //private Logger<OrganizationsManager> _organizationsManagerLogger;
-        //private Mock<SignInManager<User>> _signInManagerMock;
-        //private Mock<UserManager<User>> _userManagerMock;
-        //private Mock<RoleManager<User>> _roleManagerMock;
-        //private Mock<IOrganizationsManager> _organizationsManager;
-        //private Mock<IDatasetsManager> _datasetsManagerMock;
         private Mock<IHttpContextAccessor> _httpContextAccessorMock;
-        //private Mock<LinkGenerator> _linkGeneratorMock;
+        private Mock<IDdbManager> _ddbManagerMock;
 
         [SetUp]
         public void Setup()
         {
             _appSettingsMock = new Mock<IOptions<AppSettings>>();
             _authManagerMock = new Mock<IAuthManager>();
-            //_signInManagerMock = new Mock<SignInManager<User>>();
-            //_usersManagerLogger = new Logger<UsersManager>(LoggerFactory.Create(builder => builder.AddConsole()));
-            //_organizationsManagerLogger = new Logger<OrganizationsManager>(LoggerFactory.Create(builder => builder.AddConsole()));
-            //_userManagerMock = new Mock<UserManager<User>>();
-            //_roleManagerMock = new Mock<RoleManager<User>>();
-            //_organizationsManager = new Mock<IOrganizationsManager>();
-            //_datasetsManagerMock = new Mock<IDatasetsManager>();
             _httpContextAccessorMock = new Mock<IHttpContextAccessor>();
-            //_linkGeneratorMock = new Mock<LinkGenerator>();
-
+            _ddbManagerMock = new Mock<IDdbManager>();
         }
 
 
@@ -64,7 +49,7 @@ namespace Registry.Web.Test
             _authManagerMock.Setup(o => o.IsUserAdmin()).Returns(Task.FromResult(true));
 
             var webUtils = new WebUtils(_authManagerMock.Object, context, _appSettingsMock.Object,
-                _httpContextAccessorMock.Object);
+                _httpContextAccessorMock.Object, _ddbManagerMock.Object);
 
             const string organizationName = "uav4geo";
             const string expectedOrganizationSlug = "uav4geo";
@@ -84,7 +69,7 @@ namespace Registry.Web.Test
             _authManagerMock.Setup(o => o.IsUserAdmin()).Returns(Task.FromResult(true));
 
             var webUtils = new WebUtils(_authManagerMock.Object, context, _appSettingsMock.Object,
-                _httpContextAccessorMock.Object);
+                _httpContextAccessorMock.Object, _ddbManagerMock.Object);
 
             const string organizationName = "public";
             const string expectedOrganizationSlug = "public-1";
@@ -117,7 +102,7 @@ namespace Registry.Web.Test
             await context.SaveChangesAsync();
 
             var webUtils = new WebUtils(_authManagerMock.Object, context, _appSettingsMock.Object,
-                _httpContextAccessorMock.Object);
+                _httpContextAccessorMock.Object, _ddbManagerMock.Object);
 
             var slug = webUtils.GetFreeOrganizationSlug(organizationName);
 
@@ -158,7 +143,7 @@ namespace Registry.Web.Test
             await context.SaveChangesAsync();
 
             var webUtils = new WebUtils(_authManagerMock.Object, context, _appSettingsMock.Object,
-                _httpContextAccessorMock.Object);
+                _httpContextAccessorMock.Object, _ddbManagerMock.Object);
 
 
             var slug = webUtils.GetFreeOrganizationSlug(organizationName);
@@ -256,9 +241,9 @@ namespace Registry.Web.Test
                     Slug = MagicStrings.DefaultDatasetSlug,
                     Name = "Default",
                     Description = "Default dataset",
-                    IsPublic = true,
+                    //IsPublic = true,
                     CreationDate = DateTime.Now,
-                    LastUpdate = DateTime.Now,
+                    //LastUpdate = DateTime.Now,
                     InternalRef = Guid.Parse("0a223495-84a0-4c15-b425-c7ef88110e75")
                 };
 

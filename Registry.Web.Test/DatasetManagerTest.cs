@@ -11,6 +11,9 @@ using Microsoft.Extensions.Options;
 using Moq;
 using Newtonsoft.Json;
 using NUnit.Framework;
+using Registry.Adapters.DroneDB;
+using Registry.Ports.DroneDB;
+using Registry.Ports.DroneDB.Models;
 using Registry.Web.Data;
 using Registry.Web.Data.Models;
 using Registry.Web.Models;
@@ -55,7 +58,17 @@ namespace Registry.Web.Test
             _appSettingsMock.Setup(o => o.Value).Returns(_settings);
             _authManagerMock.Setup(o => o.IsUserAdmin()).Returns(Task.FromResult(true));
             
-            var utils = new WebUtils(_authManagerMock.Object, context, _appSettingsMock.Object, _httpContextAccessorMock.Object);
+            var utils = new WebUtils(_authManagerMock.Object, context, _appSettingsMock.Object, _httpContextAccessorMock.Object, _ddbFactoryMock.Object);
+
+            var ddbMock1 = new Mock<IDdb>();
+            ddbMock1.Setup(x => x.GetAttributesRaw()).Returns(new Dictionary<string, object>
+            {
+                {"public", true }
+            });
+            var ddbMock2 = new Mock<IDdb>();
+            ddbMock2.Setup(x => x.GetAttributes()).Returns(new DdbAttributes(ddbMock1.Object));
+
+            _ddbFactoryMock.Setup(x => x.Get(It.IsAny<string>(), It.IsAny<Guid>())).Returns(ddbMock2.Object);
 
             var datasetsManager = new DatasetsManager(context, utils, _datasetsManagerLogger,
                 _objectsManagerMock.Object, _passwordHasher, _ddbFactoryMock.Object, _authManagerMock.Object);
@@ -139,9 +152,9 @@ namespace Registry.Web.Test
                     Slug = MagicStrings.DefaultDatasetSlug,
                     Name = "Default",
                     Description = "Default dataset",
-                    IsPublic = true,
+                    //IsPublic = true,
                     CreationDate = DateTime.Now,
-                    LastUpdate = DateTime.Now,
+                    //LastUpdate = DateTime.Now,
                     InternalRef = Guid.Parse("0a223495-84a0-4c15-b425-c7ef88110e75")
                 };
 

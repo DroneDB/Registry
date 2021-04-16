@@ -159,7 +159,7 @@ namespace Registry.Web.Services.Managers
             //ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
             ////DroneDB.SetLastSync(ddb.FolderPath, settings)
 
-            await _datasetsManager.SyncDdbMeta(orgSlug, dsSlug);
+            //await _datasetsManager.SyncDdbMeta(orgSlug, dsSlug);
 
             // Clean intermediate files
             await Clean(orgSlug, dsSlug);

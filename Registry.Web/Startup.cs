@@ -330,25 +330,9 @@ namespace Registry.Web
             });
 
             SetupDatabase(app);
-
-            Initialize(app).Wait();
-
+            
         }
-
-        private async Task Initialize(IApplicationBuilder app)
-        {
-            using var serviceScope = app.ApplicationServices
-                .GetRequiredService<IServiceScopeFactory>()
-                .CreateScope();
-            var systemManager = serviceScope.ServiceProvider.GetService<ISystemManager>();
-
-            if (systemManager == null)
-                throw new InvalidOperationException("No ISystemManager interface registered, check startup config");
-
-            await systemManager.SyncDdbMeta(null, true);
-
-        }
-
+        
         // NOTE: Maybe put all this as stated in https://stackoverflow.com/a/55707949
         private void SetupDatabase(IApplicationBuilder app)
         {
@@ -556,9 +540,9 @@ namespace Registry.Web
                     Slug = MagicStrings.DefaultDatasetSlug,
                     Name = MagicStrings.DefaultDatasetSlug.ToPascalCase(false, CultureInfo.InvariantCulture),
                     Description = "Default dataset",
-                    IsPublic = true,
+                    //IsPublic = true,
                     CreationDate = DateTime.Now,
-                    LastUpdate = DateTime.Now,
+                    //LastUpdate = DateTime.Now,
                     InternalRef = Guid.NewGuid()
                 };
                 entity.Datasets = new List<Dataset> { ds };

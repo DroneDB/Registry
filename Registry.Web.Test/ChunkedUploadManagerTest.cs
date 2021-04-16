@@ -289,9 +289,9 @@ namespace Registry.Web.Test
                     Slug = MagicStrings.DefaultDatasetSlug,
                     Name = "Default",
                     Description = "Default dataset",
-                    IsPublic = true,
+                    //IsPublic = true,
                     CreationDate = DateTime.Now,
-                    LastUpdate = DateTime.Now
+                    //LastUpdate = DateTime.Now
                 };
                 entity.Datasets = new List<Dataset> { ds };
 

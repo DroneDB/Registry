@@ -205,48 +205,6 @@ namespace Registry.Web.Services.Managers
 
         }
 
-        public async Task SyncDdbMeta(string[] orgs = null, bool skipAuthCheck = false)
-        {
-
-            if (!skipAuthCheck && !await _authManager.IsUserAdmin())
-                throw new UnauthorizedException("Only admins can perform system related tasks");
-
-            Tuple<string, Dataset>[] query;
-
-            if (orgs == null)
-            {
-                query = (from ds in _context.Datasets.Include(item => item.Organization)
-                         let org = ds.Organization
-                         select new Tuple<string, Dataset>(org.Slug, ds)).ToArray();
-            }
-            else
-            {
-
-                query = (from ds in _context.Datasets.Include(item => item.Organization)
-                         let org = ds.Organization
-                         where orgs.Contains(org.Slug)
-                         select new Tuple<string, Dataset>(org.Slug, ds)).ToArray();
-            }
-
-            foreach (var (orgSlug, ds) in query)
-            {
-                var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
-                try
-                {
-                    var attrs = ddb.ChangeAttributes(new Dictionary<string, object>());
-
-                    ds.Meta = attrs;
-
-                }
-                catch (Exception ex)
-                {
-                    _logger.LogError(ex, $"Cannot get attributes from ddb");
-                }
-            }
-
-            await _context.SaveChangesAsync();
-        }
-
         public SyncFilesResDto SyncFiles()
         {
             var cachedS3 = _objectSystem as CachedS3ObjectSystem;

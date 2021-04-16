@@ -144,12 +144,17 @@ namespace Registry.Adapters.DroneDB
             }
         }
 
-        public Dictionary<string, object> GetAttributes()
+        public Dictionary<string, object> GetAttributesRaw()
         {
-            return ChangeAttributes(new Dictionary<string, object>());
+            return ChangeAttributesRaw(new Dictionary<string, object>());
         }
 
-        public Dictionary<string, object> ChangeAttributes(Dictionary<string, object> attributes)
+        public DdbAttributes GetAttributes()
+        {
+            return new(this);
+        }
+
+        public Dictionary<string, object> ChangeAttributesRaw(Dictionary<string, object> attributes)
         {
             try
             {

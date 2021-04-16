@@ -12,6 +12,8 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 using Newtonsoft.Json;
 using Registry.Common;
+using Registry.Ports.DroneDB;
+using Registry.Ports.DroneDB.Models;
 using Registry.Web.Controllers;
 using Registry.Web.Data;
 using Registry.Web.Data.Models;
@@ -35,15 +37,17 @@ namespace Registry.Web.Services.Adapters
         private readonly RegistryContext _context;
         private readonly AppSettings _settings;
         private readonly IHttpContextAccessor _accessor;
+        private readonly IDdbManager _ddbManager;
 
         public WebUtils(IAuthManager authManager,
             RegistryContext context,
             IOptions<AppSettings> settings,
-            IHttpContextAccessor accessor)
+            IHttpContextAccessor accessor, IDdbManager ddbManager)
         {
             _authManager = authManager;
             _context = context;
             _accessor = accessor;
+            _ddbManager = ddbManager;
             _settings = settings.Value;
         }
 
@@ -109,7 +113,10 @@ namespace Registry.Web.Services.Adapters
                 throw new NotFoundException("Cannot find dataset");
             }
 
-            if (!dataset.IsPublic && checkOwnership && !await _authManager.IsUserAdmin())
+            var ddb = _ddbManager.Get(orgSlug, dataset.InternalRef);
+            var attributes = ddb.GetAttributes();
+
+            if (!attributes.IsPublic && checkOwnership && !await _authManager.IsUserAdmin())
             {
                 var currentUser = await _authManager.GetCurrentUser();
 
@@ -144,16 +151,16 @@ namespace Registry.Web.Services.Adapters
             }
 
         }
-        public EntryDto GetDatasetEntry(Dataset dataset)
+        public EntryDto GetDatasetEntry(Dataset dataset, DdbAttributes attributes)
         {
             return new()
             {
-                ModifiedTime = dataset.LastUpdate,
+                ModifiedTime = attributes.LastUpdate,
                 Depth = 0,
                 Size = dataset.Size,
                 Path = GenerateDatasetUrl(dataset),
                 Type = EntryType.DroneDb,
-                Meta = dataset.Meta
+                Meta = attributes.Meta
             };
         }
 
