@@ -4,6 +4,7 @@ using System.IO;
 using System.IO.Compression;
 using System.Linq;
 using System.Threading.Tasks;
+using DDB.Bindings;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using MimeMapping;
@@ -404,7 +405,7 @@ namespace Registry.Web.Services.Managers
                 throw new ArgumentException("Path is not valid");
 
             var destFilePath = string.Empty;
-            var sourceFilePath = Path.Combine(Path.GetTempPath(), "out-" + fileName);
+            var sourceFilePath = Path.Combine(Path.GetTempPath(), CommonUtils.RandomString(8) + fileName);
 
             try
             {
