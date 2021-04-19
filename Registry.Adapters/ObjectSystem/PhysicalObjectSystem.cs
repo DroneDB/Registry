@@ -294,6 +294,14 @@ namespace Registry.Adapters.ObjectSystem
             {
 
                 var path = prefix != null ? Path.Combine(bucketPath, prefix) : bucketPath;
+
+                if (!Directory.Exists(path))
+                {
+                    obs.OnCompleted();
+                    // Cold observable
+                    return () => { };
+                }
+
                 var files = Directory.EnumerateFiles(path, "*", searchOption);
                 var fullPath = Path.GetFullPath(path);
 
