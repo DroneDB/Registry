@@ -101,7 +101,9 @@ namespace Registry.Web.Services.Managers
 
             var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
 
-            ddb.ChangeAttributesRaw(dataset.Meta);
+            if (dataset.Meta != null) 
+                ddb.ChangeAttributesRaw(dataset.Meta);
+
             var attributes = ddb.GetAttributes();
             attributes.IsPublic = dataset.IsPublic;
 
