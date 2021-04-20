@@ -153,15 +153,7 @@ namespace Registry.Web.Services.Managers
             // Replaces ddb folder
             var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
             Directory.Delete(ddb.FolderPath, true);
-
             FolderUtils.Move(ddbTempFolder, ddb.FolderPath);
-            //Directory.Move(ddbTempFolder, ddb.FolderPath);
-
-            //// It should be ok already
-            //ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
-            ////DroneDB.SetLastSync(ddb.FolderPath, settings)
-
-            //await _datasetsManager.SyncDdbMeta(orgSlug, dsSlug);
 
             // Clean intermediate files
             await Clean(orgSlug, dsSlug);
