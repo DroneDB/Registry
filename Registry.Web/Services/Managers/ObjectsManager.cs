@@ -3,15 +3,11 @@ using System.Collections.Generic;
 using System.IO;
 using System.IO.Compression;
 using System.Linq;
-using System.Reactive.Linq;
-using System.Runtime.CompilerServices;
 using System.Threading.Tasks;
-using Microsoft.CodeAnalysis.CSharp.Syntax;
-using Microsoft.Extensions.Caching.Distributed;
+using DDB.Bindings;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using MimeMapping;
-using Minio.Exceptions;
 using Registry.Common;
 using Registry.Ports.DroneDB;
 using Registry.Ports.DroneDB.Models;
@@ -25,7 +21,7 @@ using Registry.Web.Models.DTO;
 using Registry.Web.Services.Ports;
 using Registry.Web.Utilities;
 
-namespace Registry.Web.Services.Adapters
+namespace Registry.Web.Services.Managers
 {
     public class ObjectsManager : IObjectsManager
     {
@@ -409,7 +405,7 @@ namespace Registry.Web.Services.Adapters
                 throw new ArgumentException("Path is not valid");
 
             var destFilePath = string.Empty;
-            var sourceFilePath = Path.Combine(Path.GetTempPath(), "out-" + fileName);
+            var sourceFilePath = Path.Combine(Path.GetTempPath(), CommonUtils.RandomString(8) + fileName);
 
             try
             {
@@ -788,6 +784,40 @@ namespace Registry.Web.Services.Adapters
         public string GetBucketName(string orgSlug, Guid internalRef)
         {
             return string.Format(BucketNameFormat, orgSlug, internalRef.ToString()).ToLowerInvariant();
+        }
+
+        public async Task<FileDescriptorDto> GetDdb(string orgSlug, string dsSlug)
+        {
+            var ds = await _utils.GetDataset(orgSlug, dsSlug);
+
+            _logger.LogInformation($"In '{orgSlug}/{dsSlug}'");
+
+            var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
+
+            var tempFile = Path.Combine(Path.GetTempPath(), Path.GetRandomFileName());
+
+            try
+            {
+                // We could do this fully in memory BUT it's not a strict requirement by now: ddb folders are not huge (yet)
+                ZipFile.CreateFromDirectory(ddb.FolderPath, tempFile, CompressionLevel.Optimal, false);
+
+                await using var s = File.OpenRead(tempFile);
+                var memory = new MemoryStream();
+                await s.CopyToAsync(memory);
+                memory.Reset();
+                
+                return new FileDescriptorDto
+                {
+                    ContentStream = memory,
+                    ContentType = "application/zip",
+                    Name = $"{orgSlug}-{dsSlug}-ddb.zip"
+                };
+
+            }
+            finally
+            {
+                if (File.Exists(tempFile)) File.Delete(tempFile);
+            }
         }
     }
 }

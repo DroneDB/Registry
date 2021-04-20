@@ -7,6 +7,7 @@ using System.Text;
 using FluentAssertions;
 using NUnit.Framework;
 using Registry.Common;
+using Registry.Ports.ObjectSystem.Model;
 
 namespace Registry.Adapters.Test
 {
@@ -33,6 +34,18 @@ namespace Registry.Adapters.Test
             var res = AdaptersUtils.CalculateMultipartEtag(stream, 2);
 
             res.Should().Be(etag);
+        }
+
+        [Test]
+        public void ToS3CopyConditions_Simple_Ok()
+        {
+            var cc = new CopyConditions();
+            cc.SetModified(DateTime.Now);
+            cc.SetByteRange(0, 100);
+
+            var newcc = cc.ToS3CopyConditions();
+
+            cc.GetConditions().Should().BeEquivalentTo(newcc.GetConditions());
         }
 
 

@@ -16,6 +16,7 @@ using Registry.Web.Data.Models;
 using Registry.Web.Models;
 using Registry.Web.Models.Configuration;
 using Registry.Web.Services.Adapters;
+using Registry.Web.Services.Managers;
 using Registry.Web.Services.Ports;
 
 namespace Registry.Web.Test
@@ -29,6 +30,7 @@ namespace Registry.Web.Test
         private Mock<IDatasetsManager> _datasetManagerMock;
         private Logger<OrganizationsManager> _organizationsManagerLogger;
         private Mock<IHttpContextAccessor> _httpContextAccessorMock;
+        private Mock<IDdbManager> _ddbManagerMock;
         
         [SetUp]
         public void Setup()
@@ -37,6 +39,7 @@ namespace Registry.Web.Test
             _authManagerMock = new Mock<IAuthManager>();
             _datasetManagerMock = new Mock<IDatasetsManager>();
             _httpContextAccessorMock = new Mock<IHttpContextAccessor>();
+            _ddbManagerMock = new Mock<IDdbManager>();
 
             _organizationsManagerLogger = new Logger<OrganizationsManager>(LoggerFactory.Create(builder => builder.AddConsole()));
 
@@ -51,7 +54,7 @@ namespace Registry.Web.Test
             _authManagerMock.Setup(o => o.IsUserAdmin()).Returns(Task.FromResult(true));
 
             var webUtils = new WebUtils(_authManagerMock.Object, context, _appSettingsMock.Object,
-                _httpContextAccessorMock.Object);
+                _httpContextAccessorMock.Object, _ddbManagerMock.Object);
 
             var organizationsManager =
                 new OrganizationsManager(_authManagerMock.Object, context, webUtils, _datasetManagerMock.Object, _organizationsManagerLogger);
@@ -134,9 +137,9 @@ namespace Registry.Web.Test
                     Slug = MagicStrings.DefaultDatasetSlug,
                     Name = "Default",
                     Description = "Default dataset",
-                    IsPublic = true,
+                    //IsPublic = true,
                     CreationDate = DateTime.Now,
-                    LastEdit = DateTime.Now,
+                    //LastUpdate = DateTime.Now,
                     InternalRef = Guid.Parse("0a223495-84a0-4c15-b425-c7ef88110e75")
                 };
                 entity.Datasets = new List<Dataset> { ds };

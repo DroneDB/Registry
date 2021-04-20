@@ -19,7 +19,7 @@ namespace Registry.Web.Models.DTO
         public string License { get; set; }
         public long Size { get; set; }
         public int ObjectsCount { get; set; }
-        public DateTime LastEdit { get; set; }
+        public DateTime? LastEdit { get; set; }
         public Dictionary<string, object> Meta { get; set; }
         public bool IsPublic { get; set; }
 

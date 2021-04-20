@@ -99,12 +99,12 @@ namespace Registry.Adapters.ObjectSystem
         }
 
 
-        public async Task RemoveObjectAsync(string bucketName, string objectName, CancellationToken cancellationToken = default)
+        public Task RemoveObjectAsync(string bucketName, string objectName, CancellationToken cancellationToken = default)
         {
             EnsureBucketExists(bucketName);
             var objectPath = EnsureObjectExists(bucketName, objectName);
 
-            await Task.Run(() =>
+            return Task.Run(() =>
             {
                 File.Delete(objectPath);
 
@@ -140,6 +140,20 @@ namespace Registry.Adapters.ObjectSystem
 
         }
 
+        public Task<bool> ObjectExistsAsync(string bucketName, string objectName, IServerEncryption sse = null,
+            CancellationToken cancellationToken = default)
+        {
+            return Task.Run(() =>
+            {
+                EnsureBucketExists(bucketName);
+
+                CheckPath(objectName);
+                var objectPath = GetObjectPath(bucketName, objectName);
+
+                return File.Exists(objectPath);
+            }, cancellationToken);
+        }
+
         public IObservable<ObjectUpload> ListIncompleteUploads(string bucketName, string prefix = "", bool recursive = false,
             CancellationToken cancellationToken = default)
         {
@@ -160,7 +174,7 @@ namespace Registry.Adapters.ObjectSystem
         }
 
         public async Task CopyObjectAsync(string bucketName, string objectName, string destBucketName, string destObjectName = null,
-            IReadOnlyDictionary<string, string> copyConditions = null, Dictionary<string, string> metadata = null, IServerEncryption sseSrc = null,
+            CopyConditions copyConditions = null, Dictionary<string, string> metadata = null, IServerEncryption sseSrc = null,
             IServerEncryption sseDest = null, CancellationToken cancellationToken = default)
         {
             EnsureBucketExists(bucketName);
@@ -280,6 +294,14 @@ namespace Registry.Adapters.ObjectSystem
             {
 
                 var path = prefix != null ? Path.Combine(bucketPath, prefix) : bucketPath;
+
+                if (!Directory.Exists(path))
+                {
+                    obs.OnCompleted();
+                    // Cold observable
+                    return () => { };
+                }
+
                 var files = Directory.EnumerateFiles(path, "*", searchOption);
                 var fullPath = Path.GetFullPath(path);
 
