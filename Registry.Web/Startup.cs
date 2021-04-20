@@ -393,8 +393,8 @@ namespace Registry.Web
 
             if (appSettings.CacheProvider == null)
             {
-                // No caching
-                services.AddSingleton<IDistributedCache, DummyDistributedCache>();
+                // Use memory caching
+                services.AddDistributedMemoryCache();
                 return;
             }
 
