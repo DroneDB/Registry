@@ -153,7 +153,9 @@ namespace Registry.Web.Services.Managers
             // Replaces ddb folder
             var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
             Directory.Delete(ddb.FolderPath, true);
-            Directory.Move(ddbTempFolder, ddb.FolderPath);
+
+            FolderUtils.Move(ddbTempFolder, ddb.FolderPath);
+            //Directory.Move(ddbTempFolder, ddb.FolderPath);
 
             //// It should be ok already
             //ddb = _ddbManager.Get(orgSlug, ds.InternalRef);

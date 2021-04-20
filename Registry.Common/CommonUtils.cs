@@ -260,7 +260,7 @@ namespace Registry.Common
             }
 
         }
-
+        
         /// <summary>
         /// Combines an array of strings into a path using the forward slash as folder separator
         /// </summary>
