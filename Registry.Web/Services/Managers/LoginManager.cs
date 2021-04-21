@@ -1,4 +1,6 @@
-﻿using System.Collections.Generic;
+﻿using System;
+using System.Collections.Generic;
+using System.Linq;
 using System.Net;
 using System.Net.Http;
 using System.Threading.Tasks;
@@ -10,27 +12,28 @@ using Microsoft.Extensions.Options;
 using Newtonsoft.Json;
 using Registry.Web.Models;
 using Registry.Web.Models.Configuration;
+using Registry.Web.Models.DTO;
+using Registry.Web.Services.Ports;
+using Serilog.Core;
 
 namespace Registry.Web.Services.Managers
 {
-    public class ExternalSignInManager : SignInManager<User>
+    public class LocalLoginManager : ILoginManager
     {
+        private readonly UserManager<User> _userManager;
+        private readonly ILogger<ILoginManager> _logger;
         private readonly AppSettings _settings;
 
-        public ExternalSignInManager(UserManager<User> userManager,
-            IHttpContextAccessor contextAccessor,
-            IUserClaimsPrincipalFactory<User> claimsFactory,
-            IOptions<IdentityOptions> optionsAccessor,
-            ILogger<SignInManager<User>> logger,
-            IAuthenticationSchemeProvider schemes,
-            IUserConfirmation<User> confirmation,
-            IOptions<AppSettings> settings) :
-            base(userManager, contextAccessor, claimsFactory, optionsAccessor, logger, schemes, confirmation)
+        public LocalLoginManager(UserManager<User> userManager,
+            ILogger<ILoginManager> logger,
+            IOptions<AppSettings> settings)
         {
+            _userManager = userManager;
+            _logger = logger;
             _settings = settings.Value;
         }
 
-        public async Task<SignInResult> CheckTokenSignInAsync(string token)
+        public async Task<LoginResult> CheckTokenSignInAsync(string token)
         {
 
             var client = new HttpClient();
@@ -56,20 +59,20 @@ namespace Registry.Web.Services.Managers
                 //    user.Metadata = obj;
                 //}
 
-                Logger.LogInformation(result);
+                _logger.LogInformation(result);
 
                 return SignInResult.Success;
             }
             catch (WebException ex)
             {
-                Logger.LogError(ex, "Exception in calling CanSignInAsync");
+                _logger.LogError(ex, "Exception in calling CanSignInAsync");
                 return SignInResult.NotAllowed;
             }
         }
 
 
         // This is basically a stub
-        public override async Task<SignInResult> CheckPasswordSignInAsync(User user, string password, bool lockoutOnFailure)
+        public async Task<SignInResult> CheckPasswordSignInAsync(User user, string password, bool lockoutOnFailure)
         {
 
             var client = new HttpClient();
@@ -96,16 +99,15 @@ namespace Registry.Web.Services.Managers
                     user.Metadata = obj;
                 }
 
-                Logger.LogInformation(result);
+                _logger.LogInformation(result);
 
                 return SignInResult.Success;
             }
             catch (WebException ex)
             {
-                Logger.LogError(ex, "Exception in calling CanSignInAsync");
+                _logger.LogError(ex, "Exception in calling CanSignInAsync");
                 return SignInResult.NotAllowed;
             }
         }
-
     }
 }

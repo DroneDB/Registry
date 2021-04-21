@@ -88,6 +88,17 @@ namespace Registry.Web.Services.Managers
             return new AuthenticateResponse(user, tokenDescriptor.Token, tokenDescriptor.ExpiresOn);
         }
 
+        public Task<AuthenticateResponse> Authenticate(string token)
+        {
+            // Internal auth does not support token auth
+            if (_appSettings.ExternalAuthUrl == null)
+                return null;
+
+            //var res = await _signInManager.CheckTokenAsync(user, password, false);
+
+
+        }
+
         private async Task SyncRoles(User user)
         {
             var tmp = user.Metadata?.SafeGetValue("roles");
