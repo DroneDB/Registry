@@ -29,14 +29,14 @@ namespace Registry.Web.Services.Managers
         private readonly IOrganizationsManager _organizationsManager;
         private readonly IUtils _utils;
         private readonly ILogger<UsersManager> _logger;
-        private readonly SignInManager<User> _signInManager;
+        private readonly ILoginManager _loginManager;
         private readonly UserManager<User> _userManager;
         private readonly AppSettings _appSettings;
         private readonly ApplicationDbContext _applicationDbContext;
 
         public UsersManager(
             IOptions<AppSettings> appSettings,
-            SignInManager<User> signInManager,
+            ILoginManager loginManager,
             UserManager<User> userManager,
             RoleManager<IdentityRole> roleManager,
             ApplicationDbContext applicationDbContext,
@@ -51,7 +51,7 @@ namespace Registry.Web.Services.Managers
             _utils = utils;
             _logger = logger;
             _applicationDbContext = applicationDbContext;
-            _signInManager = signInManager;
+            _loginManager = loginManager;
             _userManager = userManager;
             _appSettings = appSettings.Value;
 
@@ -59,26 +59,15 @@ namespace Registry.Web.Services.Managers
 
         public async Task<AuthenticateResponse> Authenticate(string userName, string password)
         {
-            var user = await _userManager.FindByNameAsync(userName);
 
-            SignInResult res;
-            if (user == null)
-            {
-                user = new User { UserName = userName };
-                res = await _signInManager.CheckPasswordSignInAsync(user, password, false);
+            var res = await _loginManager.CheckAccess(userName, password);
 
-                if (!res.Succeeded) return null;
+            if (!res.Success)
+                return null;
 
-                user = await _CreateUserInternal(user, password);
-
-            }
-            else
-            {
-                res = await _signInManager.CheckPasswordSignInAsync(user, password, false);
-
-                if (!res.Succeeded) return null;
-
-            }
+            // Create user if not exists because login manager has greenlighed us
+            var user = await _userManager.FindByNameAsync(userName) ?? 
+                       await _CreateUserInternal(new User { UserName = userName }, password);
 
             await SyncRoles(user);
 
@@ -88,14 +77,27 @@ namespace Registry.Web.Services.Managers
             return new AuthenticateResponse(user, tokenDescriptor.Token, tokenDescriptor.ExpiresOn);
         }
 
-        public Task<AuthenticateResponse> Authenticate(string token)
+        public async Task<AuthenticateResponse> Authenticate(string token)
         {
             // Internal auth does not support token auth
             if (_appSettings.ExternalAuthUrl == null)
                 return null;
 
-            //var res = await _signInManager.CheckTokenAsync(user, password, false);
+            var res = await _loginManager.CheckAccess(token);
 
+            if (!res.Success)
+                return null;
+
+            // Create user if not exists because login manager has greenlighed us
+            var user = await _userManager.FindByNameAsync(res.UserName) ??
+                       await _CreateUserInternal(new User { UserName = res.UserName }, CommonUtils.RandomString(16));
+
+            await SyncRoles(user);
+
+            // authentication successful so generate jwt token
+            var tokenDescriptor = await GenerateJwtToken(user);
+
+            return new AuthenticateResponse(user, tokenDescriptor.Token, tokenDescriptor.ExpiresOn);
 
         }
 
