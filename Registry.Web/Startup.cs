@@ -112,8 +112,9 @@ namespace Registry.Web
             {
                 services.AddIdentityCore<User>()
                     .AddRoles<IdentityRole>()
-                    .AddEntityFrameworkStores<ApplicationDbContext>()
-                    .AddSignInManager<ExternalSignInManager>();
+                    .AddEntityFrameworkStores<ApplicationDbContext>();
+
+                services.AddScoped<ILoginManager, RemoteLoginManager>();
             }
             else
             {
@@ -121,6 +122,9 @@ namespace Registry.Web
                     .AddRoles<IdentityRole>()
                     .AddEntityFrameworkStores<ApplicationDbContext>()
                     .AddSignInManager();
+
+                services.AddScoped<ILoginManager, LocalLoginManager>();
+
             }
 
             ConfigureDbProvider<RegistryContext>(services, appSettings.RegistryProvider, RegistryConnectionName);

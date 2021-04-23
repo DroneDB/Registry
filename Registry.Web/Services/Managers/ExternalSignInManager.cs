@@ -27,8 +27,46 @@ namespace Registry.Web.Services.Managers
             IOptions<AppSettings> settings) :
             base(userManager, contextAccessor, claimsFactory, optionsAccessor, logger, schemes, confirmation)
         {
-            this._settings = settings.Value;
+            _settings = settings.Value;
         }
+
+        public async Task<SignInResult> CheckTokenSignInAsync(string token)
+        {
+
+            var client = new HttpClient();
+
+            try
+            {
+                var content = new FormUrlEncodedContent(new[]
+                {
+                    new KeyValuePair<string, string>("token", token),
+                });
+
+                var res = await client.PostAsync(_settings.ExternalAuthUrl, content);
+
+                if (!res.IsSuccessStatusCode)
+                    return SignInResult.Failed;
+
+                var result = await res.Content.ReadAsStringAsync();
+
+                var obj = JsonConvert.DeserializeObject<Dictionary<string, object>>(result);
+
+                //if (obj != null)
+                //{
+                //    user.Metadata = obj;
+                //}
+
+                Logger.LogInformation(result);
+
+                return SignInResult.Success;
+            }
+            catch (WebException ex)
+            {
+                Logger.LogError(ex, "Exception in calling CanSignInAsync");
+                return SignInResult.NotAllowed;
+            }
+        }
+
 
         // This is basically a stub
         public override async Task<SignInResult> CheckPasswordSignInAsync(User user, string password, bool lockoutOnFailure)
@@ -49,14 +87,14 @@ namespace Registry.Web.Services.Managers
                 if (!res.IsSuccessStatusCode)
                     return SignInResult.Failed;
 
-                var result = res.Content.ReadAsStringAsync().Result;
+                var result = await res.Content.ReadAsStringAsync();
 
                 var obj = JsonConvert.DeserializeObject<Dictionary<string, object>>(result);
 
-                if (obj != null)
-                {
-                    user.Metadata = obj;
-                }
+                //if (obj != null)
+                //{
+                //    user.Metadata = obj;
+                //}
 
                 Logger.LogInformation(result);
 

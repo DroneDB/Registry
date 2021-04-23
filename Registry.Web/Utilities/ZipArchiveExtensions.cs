@@ -4,6 +4,7 @@ using System.IO;
 using System.IO.Compression;
 using System.Linq;
 using System.Threading.Tasks;
+using Registry.Common;
 
 namespace Registry.Web.Utilities
 {
@@ -15,17 +16,17 @@ namespace Registry.Web.Utilities
             var fileName = Path.GetFileName(sourceName);
             if (File.GetAttributes(sourceName).HasFlag(FileAttributes.Directory))
             {
-                archive.CreateEntryFromDirectory(sourceName, Path.Combine(entryName, fileName));
+                archive.CreateEntryFromDirectory(sourceName, CommonUtils.SafeCombine(entryName, fileName));
             }
             else
             {
-                archive.CreateEntryFromFile(sourceName, Path.Combine(entryName, fileName), CompressionLevel.Fastest);
+                archive.CreateEntryFromFile(sourceName, CommonUtils.SafeCombine(entryName, fileName), CompressionLevel.Fastest);
             }
         }
 
         public static void CreateEntryFromDirectory(this ZipArchive archive, string sourceDirName, string entryName = "")
         {
-            string[] files = Directory.GetFiles(sourceDirName).Concat(Directory.GetDirectories(sourceDirName)).ToArray();
+            var files = Directory.GetFiles(sourceDirName).Concat(Directory.GetDirectories(sourceDirName)).ToArray();
             //archive.CreateEntry(Path.Combine(entryName, Path.GetFileName(sourceDirName)));
             foreach (var file in files)
             {
