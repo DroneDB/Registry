@@ -47,6 +47,7 @@ using Registry.Web.Models.Configuration;
 using Registry.Web.Models.DTO;
 using Registry.Web.Services;
 using Registry.Web.Services.Adapters;
+using Registry.Web.Services.Managers;
 using Registry.Web.Services.Ports;
 using Registry.Web.Utilities;
 using RestSharp.Extensions;
@@ -213,6 +214,7 @@ namespace Registry.Web
             services.AddScoped<IDatasetsManager, DatasetsManager>();
             services.AddScoped<IObjectsManager, ObjectsManager>();
             services.AddScoped<IShareManager, ShareManager>();
+            services.AddScoped<IPushManager, PushManager>();
             services.AddScoped<IDdbManager, DdbManager>();
             services.AddScoped<ISystemManager, SystemManager>();
 
@@ -328,25 +330,9 @@ namespace Registry.Web
             });
 
             SetupDatabase(app);
-
-            Initialize(app).Wait();
-
+            
         }
-
-        private async Task Initialize(IApplicationBuilder app)
-        {
-            using var serviceScope = app.ApplicationServices
-                .GetRequiredService<IServiceScopeFactory>()
-                .CreateScope();
-            var systemManager = serviceScope.ServiceProvider.GetService<ISystemManager>();
-
-            if (systemManager == null)
-                throw new InvalidOperationException("No ISystemManager interface registered, check startup config");
-
-            await systemManager.SyncDdbMeta(null, true);
-
-        }
-
+        
         // NOTE: Maybe put all this as stated in https://stackoverflow.com/a/55707949
         private void SetupDatabase(IApplicationBuilder app)
         {
@@ -407,8 +393,8 @@ namespace Registry.Web
 
             if (appSettings.CacheProvider == null)
             {
-                // No caching
-                services.AddSingleton<IDistributedCache, DummyDistributedCache>();
+                // Use memory caching
+                services.AddDistributedMemoryCache();
                 return;
             }
 
@@ -554,9 +540,9 @@ namespace Registry.Web
                     Slug = MagicStrings.DefaultDatasetSlug,
                     Name = MagicStrings.DefaultDatasetSlug.ToPascalCase(false, CultureInfo.InvariantCulture),
                     Description = "Default dataset",
-                    IsPublic = true,
+                    //IsPublic = true,
                     CreationDate = DateTime.Now,
-                    LastEdit = DateTime.Now,
+                    //LastUpdate = DateTime.Now,
                     InternalRef = Guid.NewGuid()
                 };
                 entity.Datasets = new List<Dataset> { ds };

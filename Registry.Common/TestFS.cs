@@ -52,7 +52,7 @@ namespace Registry.Common
                 Debug.WriteLine($"Archive path is an url");
 
                 var client = new WebClient();
-                var tempPath = Path.Combine(Path.GetTempPath(), uri.Segments.Last());
+                var tempPath = Path.Combine(Path.GetTempPath(), baseTestFolder, uri.Segments.Last());
 
                 if (File.Exists(tempPath))
                 {

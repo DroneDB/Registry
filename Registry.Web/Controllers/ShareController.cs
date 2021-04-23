@@ -103,15 +103,13 @@ namespace Registry.Web.Controllers
             }
         }
 
-        private static readonly FormOptions DefaultFormOptions = new FormOptions();
-
         [HttpPost("upload/{token}/session/{sessionId}/chunk/{index}")]
         public async Task<IActionResult> UploadToSession(string token, int sessionId, int index, IFormFile file)
         {
             try
             {
 
-                _logger.LogDebug($"Share controller UploadToSession('{token}', {sessionId}, {index}");// '{file?.FileName}')");
+                _logger.LogDebug($"Share controller UploadToSession('{token}', {sessionId}, {index}");
 
                 if (file == null)
                     throw new ArgumentException("No file uploaded");

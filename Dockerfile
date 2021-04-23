@@ -7,7 +7,7 @@ ENV TZ=Europe/Rome
 RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone
 RUN apt update && apt install -y --fix-missing --no-install-recommends build-essential software-properties-common
 RUN add-apt-repository -y ppa:ubuntugis/ubuntugis-unstable
-RUN apt install -y --fix-missing --no-install-recommends ca-certificates cmake git checkinstall sqlite3 spatialite-bin libgeos-dev libgdal-dev g++-10 gcc-10
+RUN apt install -y --fix-missing --no-install-recommends ca-certificates cmake git checkinstall sqlite3 spatialite-bin libgeos-dev libgdal-dev g++-10 gcc-10 pdal libpdal-dev
 RUN update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-10 1000 --slave /usr/bin/g++ g++ /usr/bin/g++-10
 
 # Build DroneDB
@@ -43,7 +43,7 @@ ENV TZ=Europe/Rome
 RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone
 RUN apt update && apt install -y --fix-missing --no-install-recommends software-properties-common
 RUN add-apt-repository -y ppa:ubuntugis/ubuntugis-unstable
-RUN apt install -y --fix-missing --no-install-recommends ca-certificates sqlite3 spatialite-bin libgeos-dev libgdal-dev
+RUN apt install -y --fix-missing --no-install-recommends ca-certificates sqlite3 spatialite-bin libgeos-dev libgdal-dev pdal libpdal-dev
 
 # Install DroneDB from deb package and set library path
 COPY --from=builder /DroneDB/build/*.deb /

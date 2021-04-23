@@ -260,6 +260,16 @@ namespace Registry.Common
             }
 
         }
+        
+        /// <summary>
+        /// Combines an array of strings into a path using the forward slash as folder separator
+        /// </summary>
+        /// <param name="paths">An array of parts of the path.</param>
+        /// <returns></returns>
+        public static string SafeCombine(params string[] paths)
+        {
+            return Path.Combine(paths).Replace('\\', '/');
+        }
     }
 
 

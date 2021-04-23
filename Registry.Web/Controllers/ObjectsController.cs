@@ -39,6 +39,24 @@ namespace Registry.Web.Controllers
         }
 
 
+        [HttpGet("ddb", Name = nameof(ObjectsController) + "." + nameof(GetDdb))]
+        public async Task<IActionResult> GetDdb([FromRoute] string orgSlug, [FromRoute] string dsSlug)
+        {
+            try
+            {
+                _logger.LogDebug($"Objects controller GetDdb('{orgSlug}', '{dsSlug}')");
+
+                var res = await _objectsManager.GetDdb(orgSlug, dsSlug);
+
+                return File(res.ContentStream, res.ContentType, res.Name);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, $"Exception in Objects controller GetDdb('{orgSlug}', '{dsSlug}')");
+                return ExceptionResult(ex);
+            }
+        }
+
         [HttpGet("thumb", Name = nameof(ObjectsController) + "." + nameof(GenerateThumbnail))]
         public async Task<IActionResult> GenerateThumbnail([FromRoute] string orgSlug, [FromRoute] string dsSlug, [FromQuery] string path, [FromQuery] int? size)
         {
@@ -169,7 +187,40 @@ namespace Registry.Web.Controllers
 
         }
 
-        [HttpPost("download", Name = nameof(ObjectsController) + "." + nameof(Download))]
+        [HttpPost("download", Name = nameof(ObjectsController) + "." + nameof(DownloadPost))]
+        public async Task<IActionResult> DownloadPost([FromRoute] string orgSlug, [FromRoute] string dsSlug,
+            [FromForm(Name = "path")] string pathsRaw, [FromForm(Name = "inline")] int? isInlineRaw)
+        {
+            try
+            {
+
+                var paths = pathsRaw?.Split(",", StringSplitOptions.RemoveEmptyEntries);
+                var isInline = isInlineRaw == 1;
+
+                _logger.LogDebug($"Objects controller DownloadPost('{orgSlug}', '{dsSlug}', '{pathsRaw}', '{isInlineRaw}')");
+
+                var res = await _objectsManager.DownloadStream(orgSlug, dsSlug, paths);
+
+                Response.StatusCode = 200;
+                Response.ContentType = res.ContentType;
+
+                Response.Headers.Add("Content-Disposition",
+                    isInline ? "inline" : $"attachment; filename=\"{res.Name}\"");
+
+                await res.CopyToAsync(Response.Body);
+
+                return new EmptyResult();
+
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, $"Exception in Objects controller DownloadPost('{orgSlug}', '{dsSlug}', '{pathsRaw}')");
+
+                return ExceptionResult(ex);
+            }
+        }
+
+        [HttpPost("getpackage", Name = nameof(ObjectsController) + "." + nameof(GetPackageUrl))]
         public async Task<IActionResult> GetPackageUrl([FromRoute] string orgSlug, [FromRoute] string dsSlug,
             [FromForm(Name = "path")] string[] paths, [FromForm] DateTime? expiration, [FromForm] bool isPublic)
         {

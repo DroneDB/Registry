@@ -70,6 +70,17 @@ namespace Registry.Ports.ObjectSystem
         Task<ObjectInfo> GetObjectInfoAsync(string bucketName, string objectName, IServerEncryption sse = null, CancellationToken cancellationToken = default);
 
         /// <summary>
+        /// Tests the object's existence.
+        /// </summary>
+        /// <param name="bucketName">Bucket to test object in</param>
+        /// <param name="objectName">Name of the object to stat</param>
+        /// <param name="sse">Optional Server-side encryption option. Defaults to null.</param>
+        /// <param name="cancellationToken">Optional cancellation token to cancel the operation</param>
+        /// <returns>Facts about the object</returns>
+        Task<bool> ObjectExistsAsync(string bucketName, string objectName, IServerEncryption sse = null,
+            CancellationToken cancellationToken = default);
+
+        /// <summary>
         /// Lists all incomplete uploads in a given bucket and prefix recursively
         /// </summary>
         /// <param name="bucketName">Bucket to list all incomplete uploads from</param>
@@ -100,7 +111,7 @@ namespace Registry.Ports.ObjectSystem
         /// <param name="sseDest">Optional Server-side encryption option for destination. Defaults to null.</param>
         /// <param name="cancellationToken">Optional cancellation token to cancel the operation</param>
         /// <returns></returns>
-        Task CopyObjectAsync(string bucketName, string objectName, string destBucketName, string destObjectName = null, IReadOnlyDictionary<string, string> copyConditions = null, Dictionary<string, string> metadata = null, IServerEncryption sseSrc = null, IServerEncryption sseDest = null, CancellationToken cancellationToken = default);
+        Task CopyObjectAsync(string bucketName, string objectName, string destBucketName, string destObjectName = null, CopyConditions copyConditions = null, Dictionary<string, string> metadata = null, IServerEncryption sseSrc = null, IServerEncryption sseDest = null, CancellationToken cancellationToken = default);
 
         /// <summary>
         /// Creates an object from file

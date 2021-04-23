@@ -1,5 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using System.IO;
 using System.Text;
 using Registry.Ports.DroneDB.Models;
@@ -16,7 +15,7 @@ namespace Registry.Ports.DroneDB
         void Add(string path, byte[] data);
         void Add(string path, Stream data);
         void Remove(string path);
-        Dictionary<string, object> ChangeAttributes(Dictionary<string, object> attributes);
+        Dictionary<string, object> ChangeAttributesRaw(Dictionary<string, object> attributes);
         void GenerateThumbnail(string imagePath, int size, string outputPath);
 
         string GenerateTile(string imagePath, int tz, int tx, int ty, bool retina, bool tms);
@@ -26,5 +25,10 @@ namespace Registry.Ports.DroneDB
 
         // This could lead to problems if we plan to move ddbpath to S3 but it's good for now
         string FolderPath { get; }
+        Dictionary<string, object> GetAttributesRaw();
+
+        DdbAttributes GetAttributes();
+
+        
     }
 }
