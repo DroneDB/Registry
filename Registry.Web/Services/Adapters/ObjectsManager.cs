@@ -191,11 +191,6 @@ namespace Registry.Web.Services.Adapters
 
             _logger.LogInformation($"Uploading '{path}' (size {stream.Length}) to bucket '{bucketName}'");
 
-            // var memory = new MemoryStream();
-            // await stream.CopyToAsync(memory);
-            // memory.Reset();
-            // stream.Reset();
-
             await _objectSystem.PutObjectAsync(bucketName, path, stream, stream.Length, contentType);
 
             _logger.LogInformation("File uploaded, adding to DDB");
