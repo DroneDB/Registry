@@ -91,10 +91,10 @@ namespace Registry.Web.Services.Managers
 
                 var obj = JsonConvert.DeserializeObject<Dictionary<string, object>>(result);
 
-                if (obj != null)
-                {
-                    user.Metadata = obj;
-                }
+                //if (obj != null)
+                //{
+                //    user.Metadata = obj;
+                //}
 
                 Logger.LogInformation(result);
 

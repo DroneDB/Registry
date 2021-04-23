@@ -9,6 +9,7 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Newtonsoft.Json;
+using Registry.Common;
 using Registry.Web.Models.Configuration;
 using Registry.Web.Models.DTO;
 using Registry.Web.Services.Ports;
@@ -52,17 +53,12 @@ namespace Registry.Web.Services.Managers
 
                 var obj = JsonConvert.DeserializeObject<Dictionary<string, object>>(result);
 
-                //if (obj != null)
-                //{
-                //    user.Metadata = obj;
-                //}
-
                 _logger.LogInformation(result);
 
                 return new LoginResult
                 {
                     Success = true,
-                    //UserName = userName,
+                    UserName = obj?.SafeGetValue("username") as string,
                     Metadata = obj
                 };
             }
@@ -72,7 +68,6 @@ namespace Registry.Web.Services.Managers
                 return new LoginResult
                 {
                     Success = false,
-                    //UserName = userName
                 };
             }
         }
@@ -104,18 +99,13 @@ namespace Registry.Web.Services.Managers
                 var result = await res.Content.ReadAsStringAsync();
 
                 var obj = JsonConvert.DeserializeObject<Dictionary<string, object>>(result);
-
-                //if (obj != null)
-                //{
-                //    user.Metadata = obj;
-                //}
-
+               
                 _logger.LogInformation(result);
 
                 return new LoginResult
                 {
                     Success = true,
-                    UserName = userName,
+                    UserName = obj?.SafeGetValue("username") as string ?? userName,
                     Metadata = obj
                 };
             }
