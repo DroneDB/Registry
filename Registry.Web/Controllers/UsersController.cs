@@ -45,7 +45,9 @@ namespace Registry.Web.Controllers
             {
                 _logger.LogDebug($"Users controller Authenticate('{model.Username}')");
 
-                var res = await _usersManager.Authenticate(model.Username, model.Password);
+                var res = string.IsNullOrWhiteSpace(model.Token) ? 
+                    await _usersManager.Authenticate(model.Username, model.Password) :
+                    await _usersManager.Authenticate(model.Token);
 
                 if (res == null)
                     return Unauthorized(new ErrorResponse("Unauthorized"));
@@ -60,7 +62,7 @@ namespace Registry.Web.Controllers
             }
 
         }
-
+        
         [HttpPost("authenticate/refresh")]
         public async Task<IActionResult> Refresh()
         {
