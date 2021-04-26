@@ -16,6 +16,5 @@ namespace Registry.Web.Services.Ports
 
         public Task Rename(string orgSlug, string dsSlug, string newSlug);
         Task<Dictionary<string, object>> ChangeAttributes(string orgSlug, string dsSlug, Dictionary<string, object> attributes);
-        Task SyncDdbMeta(string orgSlug, string dsSlug);
     }
 }

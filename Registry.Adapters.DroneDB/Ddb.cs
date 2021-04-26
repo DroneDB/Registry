@@ -23,7 +23,6 @@ namespace Registry.Adapters.DroneDB
 
     public class Ddb : IDdb
     {
-        public readonly string DdbPath;
 
         public Ddb(string ddbPath)
         {
@@ -33,8 +32,8 @@ namespace Registry.Adapters.DroneDB
 
             if (!Directory.Exists(ddbPath))
                 throw new ArgumentException($"Path '{ddbPath}' does not exist");
-            
-            DdbPath = ddbPath;
+
+            FolderPath = ddbPath;
 
         }
 
@@ -55,16 +54,17 @@ namespace Registry.Adapters.DroneDB
         {
             try
             {
-                var res = DDB.Bindings.DroneDB.Init(DdbPath);
+                var res = DDB.Bindings.DroneDB.Init(FolderPath);
                 Debug.WriteLine(res);
             }
             catch (DDBException ex)
             {
-                throw new InvalidOperationException($"Cannot initialize ddb in folder '{DdbPath}'", ex);
+                throw new InvalidOperationException($"Cannot initialize ddb in folder '{FolderPath}'", ex);
             }
         }
 
         public string Version => DDB.Bindings.DroneDB.GetVersion();
+        public string FolderPath { get; }
 
         static Ddb()
         {
@@ -83,12 +83,12 @@ namespace Registry.Adapters.DroneDB
 
                 // If the path is not absolute let's rebase it on ddbPath
                 if (path != null && !Path.IsPathRooted(path))
-                    path = Path.Combine(DdbPath, path);
+                    path = Path.Combine(FolderPath, path);
 
                 // If path is null we use the base ddb path
-                path ??= DdbPath;
+                path ??= FolderPath;
                 
-                var entries = DDB.Bindings.DroneDB.List(DdbPath, path, recursive);
+                var entries = DDB.Bindings.DroneDB.List(FolderPath, path, recursive);
                 
                 if (entries == null)
                 {
@@ -116,7 +116,7 @@ namespace Registry.Adapters.DroneDB
             }
             catch (DDBException ex)
             {
-                throw new InvalidOperationException($"Cannot list '{path}' to ddb '{DdbPath}'", ex);
+                throw new InvalidOperationException($"Cannot list '{path}' to ddb '{FolderPath}'", ex);
             }
 
 
@@ -134,27 +134,37 @@ namespace Registry.Adapters.DroneDB
             {
 
                 // If the path is not absolute let's rebase it on ddbPath
-                if (!Path.IsPathRooted(path)) path = Path.Combine(DdbPath, path);
+                if (!Path.IsPathRooted(path)) path = Path.Combine(FolderPath, path);
 
-                DDB.Bindings.DroneDB.Remove(DdbPath, path);
+                DDB.Bindings.DroneDB.Remove(FolderPath, path);
             }
             catch (DDBException ex)
             {
-                throw new InvalidOperationException($"Cannot remove '{path}' from ddb '{DdbPath}'", ex);
+                throw new InvalidOperationException($"Cannot remove '{path}' from ddb '{FolderPath}'", ex);
             }
         }
 
-        public Dictionary<string, object> ChangeAttributes(Dictionary<string, object> attributes)
+        public Dictionary<string, object> GetAttributesRaw()
+        {
+            return ChangeAttributesRaw(new Dictionary<string, object>());
+        }
+
+        public DdbAttributes GetAttributes()
+        {
+            return new(this);
+        }
+
+        public Dictionary<string, object> ChangeAttributesRaw(Dictionary<string, object> attributes)
         {
             try
             {
 
-                return DDB.Bindings.DroneDB.ChangeAttributes(DdbPath, attributes);
+                return DDB.Bindings.DroneDB.ChangeAttributes(FolderPath, attributes);
 
             }
             catch (DDBException ex)
             {
-                throw new InvalidOperationException($"Cannot change attributes of ddb '{DdbPath}'", ex);
+                throw new InvalidOperationException($"Cannot change attributes of ddb '{FolderPath}'", ex);
             }
         }
 
@@ -179,7 +189,7 @@ namespace Registry.Adapters.DroneDB
             try
             {
 
-                filePath = Path.Combine(DdbPath, path);
+                filePath = Path.Combine(FolderPath, path);
 
                 stream.Reset();
 
@@ -190,12 +200,12 @@ namespace Registry.Adapters.DroneDB
                     stream.CopyTo(writer);
                 }
 
-                DDB.Bindings.DroneDB.Add(DdbPath, filePath);
+                DDB.Bindings.DroneDB.Add(FolderPath, filePath);
 
             }
             catch (DDBException ex)
             {
-                throw new InvalidOperationException($"Cannot add '{path}' to ddb '{DdbPath}'", ex);
+                throw new InvalidOperationException($"Cannot add '{path}' to ddb '{FolderPath}'", ex);
             }
             finally
             {
@@ -213,7 +223,7 @@ namespace Registry.Adapters.DroneDB
 
         public override string ToString()
         {
-            return DdbPath;
+            return FolderPath;
         }
     }
 }

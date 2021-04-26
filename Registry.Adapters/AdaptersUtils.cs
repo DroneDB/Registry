@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.IO;
 using System.Linq;
+using System.Reflection;
 using System.Security.Cryptography;
 using System.Text;
 using MimeMapping;
@@ -10,6 +11,7 @@ using Minio.DataModel;
 using Registry.Adapters.ObjectSystem;
 using Registry.Adapters.ObjectSystem.Model;
 using Registry.Ports.ObjectSystem.Model;
+using CopyConditions = Minio.DataModel.CopyConditions;
 using SSEC = Minio.DataModel.SSEC;
 
 namespace Registry.Adapters
@@ -166,6 +168,32 @@ namespace Registry.Adapters
 
         }
 
+        public static CopyConditions ToS3CopyConditions(
+            this Ports.ObjectSystem.Model.CopyConditions copyConditions)
+        {
+            if (copyConditions == null) throw new ArgumentNullException(nameof(copyConditions));
 
+            var cc = new CopyConditions();
+
+            var copyConditionsField = typeof(CopyConditions).GetField("copyConditions", BindingFlags.NonPublic | BindingFlags.Instance);
+
+            if (copyConditionsField == null)
+                throw new InvalidOperationException("Expected copyConditions field not found");
+
+            if (!(copyConditionsField.GetValue(cc) is Dictionary<string, string> obj))
+                throw new InvalidOperationException("Expected copyConditions field value not found");
+
+            foreach (var (key, value) in copyConditions.GetConditions())
+                obj.Add(key, value);
+            
+            cc.SetByteRange(copyConditions.ByteRangeStart, copyConditions.ByteRangeEnd);
+
+            return cc;
+        }
+
+        private static T GetField<T>(CopyConditions copyConditions, string byterangestart)
+        {
+            throw new NotImplementedException();
+        }
     }
 }

@@ -19,6 +19,7 @@ using Microsoft.AspNetCore.HttpsPolicy;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Server.Kestrel.Core;
 using Microsoft.AspNetCore.StaticFiles.Infrastructure;
 using Microsoft.CodeAnalysis.Options;
 using Microsoft.EntityFrameworkCore;
@@ -41,10 +42,12 @@ using Registry.Ports.ObjectSystem;
 using Registry.Web.Data;
 using Registry.Web.Data.Models;
 using Registry.Web.HealthChecks;
+using Registry.Web.Middlewares;
 using Registry.Web.Models.Configuration;
 using Registry.Web.Models.DTO;
 using Registry.Web.Services;
 using Registry.Web.Services.Adapters;
+using Registry.Web.Services.Managers;
 using Registry.Web.Services.Ports;
 using Registry.Web.Utilities;
 using RestSharp.Extensions;
@@ -109,8 +112,9 @@ namespace Registry.Web
             {
                 services.AddIdentityCore<User>()
                     .AddRoles<IdentityRole>()
-                    .AddEntityFrameworkStores<ApplicationDbContext>()
-                    .AddSignInManager<ExternalSignInManager>();
+                    .AddEntityFrameworkStores<ApplicationDbContext>();
+
+                services.AddScoped<ILoginManager, RemoteLoginManager>();
             }
             else
             {
@@ -118,6 +122,9 @@ namespace Registry.Web
                     .AddRoles<IdentityRole>()
                     .AddEntityFrameworkStores<ApplicationDbContext>()
                     .AddSignInManager();
+
+                services.AddScoped<ILoginManager, LocalLoginManager>();
+
             }
 
             ConfigureDbProvider<RegistryContext>(services, appSettings.RegistryProvider, RegistryConnectionName);
@@ -172,12 +179,12 @@ namespace Registry.Web
             RegisterCacheProvider(services, appSettings);
 
             services.AddHealthChecks()
-                .AddCheck<CacheHealthCheck>("Cache health check", null, new[] {"service"})
-                .AddCheck<DdbHealthCheck>("DroneDB health check", null, new[] {"service"})
-                .AddCheck<UserManagerHealthCheck>("User manager health check", null, new[] {"database"})
-                .AddDbContextCheck<RegistryContext>("Registry database health check", null, new[] {"database"})
+                .AddCheck<CacheHealthCheck>("Cache health check", null, new[] { "service" })
+                .AddCheck<DdbHealthCheck>("DroneDB health check", null, new[] { "service" })
+                .AddCheck<UserManagerHealthCheck>("User manager health check", null, new[] { "database" })
+                .AddDbContextCheck<RegistryContext>("Registry database health check", null, new[] { "database" })
                 .AddDbContextCheck<ApplicationDbContext>("Registry identity database health check", null,
-                    new[] {"database"})
+                    new[] { "database" })
                 .AddCheck<ObjectSystemHealthCheck>("Object system health check", null, new[] { "storage" })
                 .AddDiskSpaceHealthCheck(appSettings.UploadPath, "Upload path space health check", null,
                     new[] { "storage" })
@@ -211,6 +218,7 @@ namespace Registry.Web
             services.AddScoped<IDatasetsManager, DatasetsManager>();
             services.AddScoped<IObjectsManager, ObjectsManager>();
             services.AddScoped<IShareManager, ShareManager>();
+            services.AddScoped<IPushManager, PushManager>();
             services.AddScoped<IDdbManager, DdbManager>();
             services.AddScoped<ISystemManager, SystemManager>();
 
@@ -231,6 +239,18 @@ namespace Registry.Web
             });
 
             services.AddHttpContextAccessor();
+
+            // If using Kestrel:
+            services.Configure<KestrelServerOptions>(options =>
+            {
+                options.AllowSynchronousIO = true;
+            });
+
+            // If using IIS:
+            services.Configure<IISServerOptions>(options =>
+            {
+                options.AllowSynchronousIO = true;
+            });
 
             // TODO: Enable when needed. Should check return object structure
             // services.AddOData();
@@ -295,6 +315,7 @@ namespace Registry.Web
                     await context.Response.WriteAsync(Assembly.GetExecutingAssembly().GetName().Version?.ToString() ?? "undefined");
                 });
 
+
                 // TODO: Enable when needed
                 // endpoints.MapODataRoute("odata", "odata", GetEdmModel());
             });
@@ -313,32 +334,9 @@ namespace Registry.Web
             });
 
             SetupDatabase(app);
-
-            Initialize(app).Wait();
-
+            
         }
-
-        private async Task Initialize(IApplicationBuilder app)
-        {
-            using var serviceScope = app.ApplicationServices
-                .GetRequiredService<IServiceScopeFactory>()
-                .CreateScope();
-            var systemManager = serviceScope.ServiceProvider.GetService<ISystemManager>();
-
-            if (systemManager == null)
-                throw new InvalidOperationException("No ISystemManager interface registered, check startup config");
-
-            await systemManager.SyncDdbMeta(null, true);
-
-        }
-        //private IEdmModel GetEdmModel()
-        //{
-        //    var odataBuilder = new ODataConventionModelBuilder();
-        //    odataBuilder.EntitySet<OrganizationDto>("Organizations");
-
-        //    return odataBuilder.GetEdmModel();
-        //}
-
+        
         // NOTE: Maybe put all this as stated in https://stackoverflow.com/a/55707949
         private void SetupDatabase(IApplicationBuilder app)
         {
@@ -399,8 +397,8 @@ namespace Registry.Web
 
             if (appSettings.CacheProvider == null)
             {
-                // No caching
-                services.AddSingleton<IDistributedCache, DummyDistributedCache>();
+                // Use memory caching
+                services.AddDistributedMemoryCache();
                 return;
             }
 
@@ -546,9 +544,9 @@ namespace Registry.Web
                     Slug = MagicStrings.DefaultDatasetSlug,
                     Name = MagicStrings.DefaultDatasetSlug.ToPascalCase(false, CultureInfo.InvariantCulture),
                     Description = "Default dataset",
-                    IsPublic = true,
+                    //IsPublic = true,
                     CreationDate = DateTime.Now,
-                    LastEdit = DateTime.Now,
+                    //LastUpdate = DateTime.Now,
                     InternalRef = Guid.NewGuid()
                 };
                 entity.Datasets = new List<Dataset> { ds };

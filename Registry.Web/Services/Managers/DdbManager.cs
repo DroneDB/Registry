@@ -1,22 +1,20 @@
 ﻿using System;
-using System.Collections.Generic;
 using System.IO;
-using System.Linq;
-using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Registry.Adapters.DroneDB;
 using Registry.Ports.DroneDB;
-using Registry.Web.Models;
 using Registry.Web.Models.Configuration;
 using Registry.Web.Services.Ports;
 
-namespace Registry.Web.Services.Adapters
+namespace Registry.Web.Services.Managers
 {
     public class DdbManager : IDdbManager
     {
         private readonly ILogger<DdbManager> _logger;
         private readonly AppSettings _settings;
+
+        public string DdbFolderName { get; } = ".ddb";
 
         public DdbManager(IOptions<AppSettings> settings, ILogger<DdbManager> logger)
         {
@@ -33,7 +31,7 @@ namespace Registry.Web.Services.Adapters
             var ddb = new Ddb(baseDdbPath);
 
             // TODO: It would be nice if we could use the bindings to check this
-            if (!Directory.Exists(Path.Combine(baseDdbPath, ".ddb")))
+            if (!Directory.Exists(Path.Combine(baseDdbPath, DdbFolderName)))
             {
 
                 ddb.Init();

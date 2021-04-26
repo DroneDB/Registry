@@ -25,7 +25,6 @@ namespace Registry.Web.Data.Models
         public DateTime CreationDate { get; set; }
         public long Size { get; set; }
         public int ObjectsCount { get; set; }
-        public DateTime LastEdit { get; set; }
 
         public string PasswordHash { get; set; }
 
@@ -35,54 +34,6 @@ namespace Registry.Web.Data.Models
         public virtual ICollection<Batch> Batches { get; set; }
 
         public virtual ICollection<DownloadPackage> DownloadPackages { get; set; }
-
-        #region Meta
-
-        [Column("Meta")]
-        public string MetaRaw
-        {
-            get => JsonConvert.SerializeObject(Meta);
-            set => Meta = JsonConvert.DeserializeObject<Dictionary<string, object>>(value);
-        }
-
-        [NotMapped]
-        public Dictionary<string, object> Meta { get; set; }
-
-        private const string PublicMetaField = "public";
-
-        [NotMapped]
-        public bool IsPublic
-        {
-            get => SafeGetMetaField<bool>(PublicMetaField);
-            set => SafeSetMetaField(PublicMetaField, value);
-        }
-
-        private void SafeSetMetaField<T>(string field, T val)
-        {
-            if (Meta == null)
-            {
-                Meta = new Dictionary<string, object>
-                {
-                    { field, val }
-                };
-                return;
-            }
-
-            if (Meta.ContainsKey(field))
-                Meta[field] = val;
-            else
-                Meta.Add(field, val);
-        }
-
-        private T SafeGetMetaField<T>(string field)
-        {
-            var res = Meta?.SafeGetValue(field);
-            if (!(res is T)) return default;
-            return (T)res;
-        }
-        #endregion
-
-
 
     }
 }

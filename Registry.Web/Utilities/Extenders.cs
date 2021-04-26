@@ -4,6 +4,7 @@ using System.Linq;
 using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
+using DDB.Bindings.Model;
 using Microsoft.AspNetCore.Identity;
 using Newtonsoft.Json;
 using Registry.Ports.DroneDB;
@@ -15,9 +16,22 @@ namespace Registry.Web.Utilities
 {
     public static class Extenders
     {
+
+        public static DeltaDto ToDto(this Delta delta)
+        {
+            if (delta == null) return null;
+
+            return new DeltaDto
+            {
+                Adds = delta.Adds?.Select(add => new AddActionDto { Path = add.Path, Type = (Common.EntryType)(int)add.Type }).ToArray(),
+                Copies = delta.Copies?.Select(cpy => new CopyActionDto { Destination = cpy.Destination, Source = cpy.Source }).ToArray(),
+                Removes = delta.Removes?.Select(rem => new RemoveActionDto { Path = rem.Path, Type = (Common.EntryType)(int)rem.Type }).ToArray()
+            };
+        }
+
         public static Organization ToEntity(this OrganizationDto organization)
         {
-            return new Organization
+            return new()
             {
                 Slug = organization.Slug,
                 Name = string.IsNullOrEmpty(organization.Name) ? organization.Slug : organization.Name,
@@ -30,7 +44,7 @@ namespace Registry.Web.Utilities
 
         public static OrganizationDto ToDto(this Organization organization)
         {
-            return new OrganizationDto
+            return new()
             {
                 Slug = organization.Slug,
                 Name = organization.Name,
@@ -49,36 +63,33 @@ namespace Registry.Web.Utilities
                 Slug = dataset.Slug,
                 CreationDate = dataset.CreationDate,
                 Description = dataset.Description,
-                LastEdit = dataset.LastEdit,
                 Name = string.IsNullOrEmpty(dataset.Name) ? dataset.Slug : dataset.Name,
-                Meta = dataset.Meta,
                 ObjectsCount = dataset.ObjectsCount,
                 Size = dataset.Size
             };
-            entity.IsPublic = dataset.IsPublic;
             return entity;
         }
 
-        public static DatasetDto ToDto(this Dataset dataset)
+        public static DatasetDto ToDto(this Dataset dataset, DdbAttributes attributes)
         {
-            return new DatasetDto
+            return new()
             {
                 Id = dataset.Id,
                 Slug = dataset.Slug,
                 CreationDate = dataset.CreationDate,
                 Description = dataset.Description,
-                LastEdit = dataset.LastEdit,
+                LastEdit = attributes.LastUpdate,
                 Name = dataset.Name,
-                Meta = dataset.Meta,
+                Meta = attributes.Meta,
                 ObjectsCount = dataset.ObjectsCount,
                 Size = dataset.Size,
-                IsPublic = dataset.IsPublic
+                IsPublic = attributes.IsPublic
             };
         }
 
         public static ObjectDto ToDto(this DdbEntry obj)
         {
-            return new ObjectDto
+            return new()
             {
                 Depth = obj.Depth,
                 Hash = obj.Hash,
@@ -105,7 +116,7 @@ namespace Registry.Web.Utilities
         // A tag name may not start with a period or a dash and may contain a maximum of 128 characters.
 
         // Only lowercase letters, numbers, - and _. Max length 255
-        private static readonly Regex SafeNameRegex = new Regex(@"^\w[\w\.-]{0,127}$", RegexOptions.Compiled | RegexOptions.Singleline);
+        private static readonly Regex SafeNameRegex = new(@"^\w[\w\.-]{0,127}$", RegexOptions.Compiled | RegexOptions.Singleline);
 
         /// <summary>
         /// Checks if a string is a valid slug
@@ -202,6 +213,7 @@ namespace Registry.Web.Utilities
         {
             return arr == null ? "[]" : $"[{string.Join(", ", arr)}]";
         }
+
 
     }
 

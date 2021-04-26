@@ -10,7 +10,6 @@ namespace Registry.Web.Services.Ports
     public interface ISystemManager
     {
         public Task<CleanupResult> CleanupSessions();
-        public Task SyncDdbMeta(string[] orgs = null, bool skipAuthCheck = false);
 
         public SyncFilesResDto SyncFiles();
         public Task<CleanupBatchesResultDto> CleanupBatches();

@@ -8,6 +8,8 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Mvc.Abstractions;
+using Microsoft.AspNetCore.Routing;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -36,6 +38,24 @@ namespace Registry.Web.Controllers
             _logger = logger;
         }
 
+
+        [HttpGet("ddb", Name = nameof(ObjectsController) + "." + nameof(GetDdb))]
+        public async Task<IActionResult> GetDdb([FromRoute] string orgSlug, [FromRoute] string dsSlug)
+        {
+            try
+            {
+                _logger.LogDebug($"Objects controller GetDdb('{orgSlug}', '{dsSlug}')");
+
+                var res = await _objectsManager.GetDdb(orgSlug, dsSlug);
+
+                return File(res.ContentStream, res.ContentType, res.Name);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, $"Exception in Objects controller GetDdb('{orgSlug}', '{dsSlug}')");
+                return ExceptionResult(ex);
+            }
+        }
 
         [HttpGet("thumb", Name = nameof(ObjectsController) + "." + nameof(GenerateThumbnail))]
         public async Task<IActionResult> GenerateThumbnail([FromRoute] string orgSlug, [FromRoute] string dsSlug, [FromQuery] string path, [FromQuery] int? size)
@@ -68,7 +88,7 @@ namespace Registry.Web.Controllers
 
                 if (!int.TryParse(retina ? tyRaw.Replace("@2x", string.Empty) : tyRaw, out var ty))
                     throw new ArgumentException("Invalid input parameters (retina indicator should be '@2x')");
-                
+
                 var res = await _objectsManager.GenerateTile(orgSlug, dsSlug, path, tz, tx, ty, retina);
 
                 return File(res.ContentStream, res.ContentType, res.Name);
@@ -83,6 +103,7 @@ namespace Registry.Web.Controllers
 
         #region Downloads
 
+
         [HttpGet("download", Name = nameof(ObjectsController) + "." + nameof(Download))]
         public async Task<IActionResult> Download([FromRoute] string orgSlug, [FromRoute] string dsSlug,
             [FromQuery(Name = "path")] string pathsRaw, [FromQuery(Name = "inline")] int? isInlineRaw)
@@ -91,17 +112,21 @@ namespace Registry.Web.Controllers
             {
 
                 var paths = pathsRaw?.Split(",", StringSplitOptions.RemoveEmptyEntries);
-                bool isInline = isInlineRaw == 1;
+                var isInline = isInlineRaw == 1;
 
                 _logger.LogDebug($"Objects controller Download('{orgSlug}', '{dsSlug}', '{pathsRaw}', '{isInlineRaw}')");
+                
+                var res = await _objectsManager.DownloadStream(orgSlug, dsSlug, paths);
 
-                var res = await _objectsManager.Download(orgSlug, dsSlug, paths);
+                Response.StatusCode = 200;
+                Response.ContentType = res.ContentType;
 
-                if (!isInline)
-                    return File(res.ContentStream, res.ContentType, res.Name);
+                Response.Headers.Add("Content-Disposition",
+                    isInline ? "inline" : $"attachment; filename=\"{res.Name}\"");
 
-                Response.Headers.Add("Content-Disposition", "inline");
-                return File(res.ContentStream, res.ContentType);
+                await res.CopyToAsync(Response.Body);
+
+                return new EmptyResult();
 
             }
             catch (Exception ex)
@@ -162,7 +187,40 @@ namespace Registry.Web.Controllers
 
         }
 
-        [HttpPost("download", Name = nameof(ObjectsController) + "." + nameof(Download))]
+        [HttpPost("download", Name = nameof(ObjectsController) + "." + nameof(DownloadPost))]
+        public async Task<IActionResult> DownloadPost([FromRoute] string orgSlug, [FromRoute] string dsSlug,
+            [FromForm(Name = "path")] string pathsRaw, [FromForm(Name = "inline")] int? isInlineRaw)
+        {
+            try
+            {
+
+                var paths = pathsRaw?.Split(",", StringSplitOptions.RemoveEmptyEntries);
+                var isInline = isInlineRaw == 1;
+
+                _logger.LogDebug($"Objects controller DownloadPost('{orgSlug}', '{dsSlug}', '{pathsRaw}', '{isInlineRaw}')");
+
+                var res = await _objectsManager.DownloadStream(orgSlug, dsSlug, paths);
+
+                Response.StatusCode = 200;
+                Response.ContentType = res.ContentType;
+
+                Response.Headers.Add("Content-Disposition",
+                    isInline ? "inline" : $"attachment; filename=\"{res.Name}\"");
+
+                await res.CopyToAsync(Response.Body);
+
+                return new EmptyResult();
+
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, $"Exception in Objects controller DownloadPost('{orgSlug}', '{dsSlug}', '{pathsRaw}')");
+
+                return ExceptionResult(ex);
+            }
+        }
+
+        [HttpPost("getpackage", Name = nameof(ObjectsController) + "." + nameof(GetPackageUrl))]
         public async Task<IActionResult> GetPackageUrl([FromRoute] string orgSlug, [FromRoute] string dsSlug,
             [FromForm(Name = "path")] string[] paths, [FromForm] DateTime? expiration, [FromForm] bool isPublic)
         {

@@ -10,7 +10,7 @@ namespace Registry.Web.Models
     
     public class AuthenticateResponse
     {
-        public string Id { get; }
+        public string Username { get; }
         public string Token { get; }
 
         [JsonConverter(typeof(UnixDateTimeConverter))]
@@ -18,7 +18,7 @@ namespace Registry.Web.Models
         
         public AuthenticateResponse(User user, string token, DateTime expires)
         {
-            Id = user.Id;
+            Username = user.UserName;
             Token = token;
             Expires = expires;
         }

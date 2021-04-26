@@ -16,6 +16,7 @@ using Registry.Web.Data.Models;
 using Registry.Web.Models;
 using Registry.Web.Models.Configuration;
 using Registry.Web.Services.Adapters;
+using Registry.Web.Services.Managers;
 using Registry.Web.Services.Ports;
 
 namespace Registry.Web.Test
@@ -288,9 +289,9 @@ namespace Registry.Web.Test
                     Slug = MagicStrings.DefaultDatasetSlug,
                     Name = "Default",
                     Description = "Default dataset",
-                    IsPublic = true,
+                    //IsPublic = true,
                     CreationDate = DateTime.Now,
-                    LastEdit = DateTime.Now
+                    //LastUpdate = DateTime.Now
                 };
                 entity.Datasets = new List<Dataset> { ds };
 

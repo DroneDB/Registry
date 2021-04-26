@@ -23,9 +23,12 @@ namespace Registry.Web.Services.Ports
         Task AddToSession(string orgSlug, string dsSlug, int sessionId, int index, byte[] data);
         Task<UploadedObjectDto> CloseSession(string orgSlug, string dsSlug, int sessionId, string path);
         Task<FileDescriptorDto> Download(string orgSlug, string dsSlug, string[] paths);
+        Task<FileDescriptor> DownloadStream(string orgSlug, string dsSlug, string[] paths);
         Task<string> GetDownloadPackage(string orgSlug, string dsSlug, string[] paths, DateTime? expiration = null, bool isPublic = false);
         Task<FileDescriptorDto> DownloadPackage(string orgSlug, string dsSlug, string packageId);
         Task<FileDescriptorDto> GenerateThumbnail(string orgSlug, string dsSlug, string path, int? size, bool recreate = false);
         Task<FileDescriptorDto> GenerateTile(string orgSlug, string dsSlug, string path, int tz, int tx, int ty, bool retina);
+        string GetBucketName(string orgSlug, Guid internalRef);
+        Task<FileDescriptorDto> GetDdb(string orgSlug, string dsSlug);
     }
 }

@@ -1,7 +1,6 @@
 ﻿using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using System.Threading.Tasks;
 
 namespace Registry.Web.Models.DTO
 {
@@ -11,4 +10,5 @@ namespace Registry.Web.Models.DTO
         public Stream ContentStream { get; set; }
         public string ContentType { get; set; }
     }
+
 }

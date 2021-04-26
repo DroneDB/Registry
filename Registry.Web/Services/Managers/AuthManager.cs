@@ -1,15 +1,13 @@
-﻿using System.Data;
-using System.Linq;
+﻿using System.Linq;
 using System.Security.Claims;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Identity;
 using Registry.Web.Data.Models;
-using Registry.Web.Exceptions;
 using Registry.Web.Models;
 using Registry.Web.Services.Ports;
 
-namespace Registry.Web.Services.Adapters
+namespace Registry.Web.Services.Managers
 {
     public class AuthManager : IAuthManager
     {

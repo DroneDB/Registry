@@ -9,7 +9,7 @@ namespace Registry.Web.Services
 {
     public static class DistributedCacheExtensions
     {
-        private static readonly TimeSpan DefaultExpireTime = new TimeSpan(60);
+        private static readonly TimeSpan DefaultExpireTime = new(60);
 
         public static async Task SetRecordAsync<T>(this IDistributedCache cache, string recordId, T data,
             TimeSpan? absoluteExpireTime = null, TimeSpan? unusedExpireTime = null)

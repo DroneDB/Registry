@@ -19,6 +19,7 @@ using Registry.Common;
 using Registry.Web.Models;
 using Registry.Web.Models.Configuration;
 using Registry.Web.Services.Adapters;
+using Registry.Web.Services.Managers;
 
 namespace Registry.Web.Test
 {
