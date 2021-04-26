@@ -58,6 +58,7 @@ namespace Registry.Web.Controllers
         }
 
         [HttpPost("upload/{token}")]
+        [DisableRequestSizeLimit]
         public async Task<IActionResult> Upload(string token, [FromForm] string path, IFormFile file)
         {
             try
@@ -104,6 +105,7 @@ namespace Registry.Web.Controllers
         }
 
         [HttpPost("upload/{token}/session/{sessionId}/chunk/{index}")]
+        [DisableRequestSizeLimit]
         public async Task<IActionResult> UploadToSession(string token, int sessionId, int index, IFormFile file)
         {
             try

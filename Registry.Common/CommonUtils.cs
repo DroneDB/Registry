@@ -270,6 +270,13 @@ namespace Registry.Common
         {
             return Path.Combine(paths).Replace('\\', '/');
         }
+        
+        public static (string, Stream) GetTempStream(int bufferSize = 104857600)
+        {
+            var file = Path.Combine(Path.GetTempPath(), "temp-files", RandomString(16));
+
+            return (file, new BufferedStream(File.Open(file, FileMode.CreateNew, FileAccess.ReadWrite), bufferSize));
+        }
     }
 
 
