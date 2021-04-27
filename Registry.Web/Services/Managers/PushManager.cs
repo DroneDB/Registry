@@ -51,10 +51,26 @@ namespace Registry.Web.Services.Managers
         public async Task<PushInitResultDto> Init(string orgSlug, string dsSlug, Stream stream)
         {
 
-            var ds = await _utils.GetDataset(orgSlug, dsSlug);
+            var ds = await _utils.GetDataset(orgSlug, dsSlug, true);
 
-            if (!await _authManager.IsOwnerOrAdmin(ds))
-                throw new UnauthorizedException("The current user is not allowed to push to this dataset");
+            if (ds == null)
+            {
+                _logger.LogInformation("Dataset does not exist, creating it");
+                await _datasetsManager.AddNew(orgSlug, new DatasetDto
+                {
+                    Name = dsSlug,
+                    Slug = dsSlug
+                });
+
+                _logger.LogInformation($"New dataset {orgSlug}/{dsSlug} created");
+                ds = await _utils.GetDataset(orgSlug, dsSlug);
+            }
+            else
+            {
+                if (!await _authManager.IsOwnerOrAdmin(ds))
+                    throw new UnauthorizedException("The current user is not allowed to push to this dataset");
+            }
+
 
             // 0) Setup temp folders
             var baseTempFolder = Path.Combine(Path.GetTempPath(), PushFolderName, orgSlug, dsSlug);
