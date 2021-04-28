@@ -156,10 +156,11 @@ namespace Registry.Web.Utilities
             var tempBytes = enc.GetBytes(name);
             var tmp = Encoding.UTF8.GetString(tempBytes);
 
-            var res = new string(tmp.Select(c => char.IsLetterOrDigit(c) || c == '.' ? c : '-').ToArray());
+            var str = new string(tmp.Select(c => char.IsLetterOrDigit(c) || c == '.' ? c : '-').ToArray())
+                .ToLowerInvariant();
 
             // If it starts with a period or a dash pad it with a 0
-            return res[0] == '.' || res[0] == '-' ? "0" + res : res;
+            return str[0] == '.' || str[0] == '-' ? "0" + str : str;
         }
 
         /// <summary>
