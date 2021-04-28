@@ -189,22 +189,25 @@ namespace Registry.Web.Services.Managers
 
             var tempFileName = Path.GetTempFileName();
 
-            try {
-
-                using (var tempFileStream = File.OpenWrite(tempFileName)) {
+            try
+            {
+                await using (var tempFileStream = File.OpenWrite(tempFileName))
+                {
                     await stream.CopyToAsync(tempFileStream);
                 }
 
-                using (var tempFileStream = File.OpenRead(tempFileName)) {
+                await using (var tempFileStream = File.OpenRead(tempFileName))
+                {
                     await _objectSystem.PutObjectAsync(bucketName, path, tempFileStream, tempFileStream.Length, contentType);
                 }
 
-               _logger.LogInformation("File uploaded, adding to DDB");
+                _logger.LogInformation("File uploaded, adding to DDB");
 
                 // Add to DDB
                 var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
 
-                using (var tempFileStream = File.OpenRead(tempFileName)) {
+                await using (var tempFileStream = File.OpenRead(tempFileName))
+                {
                     ddb.Add(path, tempFileStream);
                 }
 
@@ -223,8 +226,9 @@ namespace Registry.Web.Services.Managers
 
                 return obj;
 
-            } finally {
-
+            }
+            finally
+            {
                 if (File.Exists(tempFileName)) File.Delete(tempFileName);
             }
         }
@@ -818,7 +822,7 @@ namespace Registry.Web.Services.Managers
                 var memory = new MemoryStream();
                 await s.CopyToAsync(memory);
                 memory.Reset();
-                
+
                 return new FileDescriptorDto
                 {
                     ContentStream = memory,
