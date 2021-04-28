@@ -187,28 +187,46 @@ namespace Registry.Web.Services.Managers
 
             _logger.LogInformation($"Uploading '{path}' (size {stream.Length}) to bucket '{bucketName}'");
 
-            await _objectSystem.PutObjectAsync(bucketName, path, stream, stream.Length, contentType);
+            var tempFileName = Path.GetTempFileName();
 
-            _logger.LogInformation("File uploaded, adding to DDB");
+            try {
 
-            // Add to DDB
-            var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
-            ddb.Add(path, stream);
+                using (var tempFileStream = File.OpenWrite(tempFileName)) {
+                    await stream.CopyToAsync(tempFileStream);
+                }
 
-            _logger.LogInformation("Added to DDB");
+                using (var tempFileStream = File.OpenRead(tempFileName)) {
+                    await _objectSystem.PutObjectAsync(bucketName, path, tempFileStream, tempFileStream.Length, contentType);
+                }
 
-            // Refresh objects count and total size
-            ds.UpdateStatistics(ddb);
-            await _context.SaveChangesAsync();
+               _logger.LogInformation("File uploaded, adding to DDB");
 
-            var obj = new UploadedObjectDto
-            {
-                Path = path,
-                ContentType = contentType,
-                Size = stream.Length
-            };
+                // Add to DDB
+                var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
 
-            return obj;
+                using (var tempFileStream = File.OpenRead(tempFileName)) {
+                    ddb.Add(path, tempFileStream);
+                }
+
+                _logger.LogInformation("Added to DDB");
+
+                // Refresh objects count and total size
+                ds.UpdateStatistics(ddb);
+                await _context.SaveChangesAsync();
+
+                var obj = new UploadedObjectDto
+                {
+                    Path = path,
+                    ContentType = contentType,
+                    Size = stream.Length
+                };
+
+                return obj;
+
+            } finally {
+
+                if (File.Exists(tempFileName)) File.Delete(tempFileName);
+            }
         }
 
         private string SafeGetLocation()
