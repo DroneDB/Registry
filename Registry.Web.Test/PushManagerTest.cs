@@ -188,16 +188,13 @@ namespace Registry.Web.Test
                     TestContext.WriteLine(JsonConvert.SerializeObject(result));
 
                     result.NeededFiles.Should().BeEmpty();
-
-                    await pushManager.Clean(userName, dsSlug);
+                    
                 }
-
             }
             finally
             {
                 await pushManager.Clean(userName, dsSlug);
             }
-            //await pushManager.Init()
 
         }
 
@@ -299,7 +296,6 @@ namespace Registry.Web.Test
 
                     result.NeededFiles.Should().BeEmpty();
 
-                    await pushManager.Clean(userName, dsSlug);
                 }
 
             }
@@ -307,7 +303,6 @@ namespace Registry.Web.Test
             {
                 await pushManager.Clean(userName, dsSlug);
             }
-            //await pushManager.Init()
 
         }
 
