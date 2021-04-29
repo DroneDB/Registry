@@ -172,15 +172,7 @@ namespace Registry.Web.Services.Managers
             _logger.LogInformation($"Using bucket '{bucketName}'");
 
             // If the bucket does not exist, let's create it
-            if (!await _objectSystem.BucketExistsAsync(bucketName))
-            {
-
-                _logger.LogInformation($"Bucket '{bucketName}' does not exist, creating it");
-
-                await _objectSystem.MakeBucketAsync(bucketName, SafeGetLocation());
-
-                _logger.LogInformation("Bucket created");
-            }
+            await EnsureBucketExists(bucketName);
 
             // TODO: I highly doubt the robustness of this 
             var contentType = MimeTypes.GetMimeType(path);
@@ -812,6 +804,23 @@ namespace Registry.Web.Services.Managers
             finally
             {
                 if (File.Exists(tempFile)) File.Delete(tempFile);
+            }
+        }
+
+        public async Task EnsureBucketExists(string bucketName)
+        {
+            if (!await _objectSystem.BucketExistsAsync(bucketName))
+            {
+
+                _logger.LogInformation($"Bucket '{bucketName}' does not exist, creating it");
+
+                await _objectSystem.MakeBucketAsync(bucketName, SafeGetLocation());
+
+                _logger.LogInformation("Bucket created");
+            }
+            else
+            {
+                _logger.LogInformation($"Bucket '{bucketName}' already exists");
             }
         }
     }
