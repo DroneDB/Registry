@@ -157,7 +157,7 @@ namespace Registry.Web.Services.Managers
 
         private bool IsValidUserName(string userName)
         {
-            return Regex.IsMatch(userName, "^[a-z0-9]$", RegexOptions.Singleline);
+            return Regex.IsMatch(userName, "^[a-z0-9]{1,127}$", RegexOptions.Singleline);
         }
 
         private async Task<User> CreateUserInternal(User user, string password)
