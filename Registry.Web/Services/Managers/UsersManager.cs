@@ -4,6 +4,7 @@ using System.IdentityModel.Tokens.Jwt;
 using System.Linq;
 using System.Security.Claims;
 using System.Text;
+using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
@@ -67,7 +68,7 @@ namespace Registry.Web.Services.Managers
 
             // Create user if not exists because login manager has greenlighed us
             var user = await _userManager.FindByNameAsync(userName) ?? 
-                       await _CreateUserInternal(new User { UserName = userName }, password);
+                       await CreateUserInternal(new User { UserName = userName }, password);
 
             await SyncRoles(user);
 
@@ -90,7 +91,7 @@ namespace Registry.Web.Services.Managers
 
             // Create user if not exists because login manager has greenlighed us
             var user = await _userManager.FindByNameAsync(res.UserName) ??
-                       await _CreateUserInternal(new User { UserName = res.UserName }, CommonUtils.RandomString(16));
+                       await CreateUserInternal(new User { UserName = res.UserName }, CommonUtils.RandomString(16));
 
             await SyncRoles(user);
 
@@ -143,15 +144,23 @@ namespace Registry.Web.Services.Managers
             if (!await _authManager.IsUserAdmin())
                 throw new UnauthorizedException("Only admins can create new users");
 
+            if (!IsValidUserName(userName))
+                throw new ArgumentException("The provided username is not valid");
+
             var user = await _userManager.FindByNameAsync(userName);
 
             if (user != null)
                 throw new InvalidOperationException("User already exists");
 
-            return await _CreateUserInternal(userName, email, password);
+            return await CreateUserInternal(userName, email, password);
         }
 
-        private async Task<User> _CreateUserInternal(User user, string password)
+        private bool IsValidUserName(string userName)
+        {
+            return Regex.IsMatch(userName, "^[a-z0-9]{1,127}$", RegexOptions.Singleline);
+        }
+
+        private async Task<User> CreateUserInternal(User user, string password)
         {
             var res = await _userManager.CreateAsync(user, password);
 
@@ -170,7 +179,7 @@ namespace Registry.Web.Services.Managers
             return user;
         }
 
-        private async Task<User> _CreateUserInternal(string userName, string email, string password)
+        private async Task<User> CreateUserInternal(string userName, string email, string password)
         {
             var user = new User
             {
