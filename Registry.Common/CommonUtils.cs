@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Globalization;
 using System.IO;
 using System.Linq;
@@ -7,6 +8,7 @@ using System.Net;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.RegularExpressions;
+using System.Threading;
 using ICSharpCode.SharpZipLib.GZip;
 using ICSharpCode.SharpZipLib.Tar;
 using ICSharpCode.SharpZipLib.Zip;
@@ -269,6 +271,56 @@ namespace Registry.Common
         public static string SafeCombine(params string[] paths)
         {
             return Path.Combine(paths).Replace('\\', '/');
+        }
+        
+        public static (string, Stream) GetTempStream(int bufferSize = 104857600)
+        {
+            var file = Path.Combine(Path.GetTempPath(), "temp-files", RandomString(16));
+
+            return (file, new BufferedStream(File.Open(file, FileMode.CreateNew, FileAccess.ReadWrite), bufferSize));
+        }
+
+        public static bool SafeTreeDelete(string baseTempFolder, int rounds = 3, int delay = 500)
+        {
+            var entries = new List<string>(
+                Directory.EnumerateFileSystemEntries(baseTempFolder, "*", SearchOption.AllDirectories));
+
+            for (var n = 0; n < rounds; n++)
+            {
+                foreach (var entry in entries.ToArray())
+                {
+                    try
+                    {
+
+                        if (Directory.Exists(entry))
+                        {
+                            Directory.Delete(entry, true);
+                            entries.Remove(entry);
+                            continue;
+                        }
+
+                        if (File.Exists(entry))
+                        {
+                            File.Delete(entry);
+                            entries.Remove(entry);
+                            continue;
+                        }
+
+                        entries.Remove(entry);
+
+                    }
+                    catch (Exception ex)
+                    {
+                        Debug.WriteLine("Exception: " + ex.Message);
+                    }
+                }
+
+                if (!entries.Any()) return true;
+
+                Thread.Sleep(delay);
+            }
+
+            return !entries.Any();
         }
     }
 

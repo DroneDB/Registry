@@ -116,7 +116,7 @@ namespace Registry.Web.Utilities
         // A tag name may not start with a period or a dash and may contain a maximum of 128 characters.
 
         // Only lowercase letters, numbers, - and _. Max length 255
-        private static readonly Regex SafeNameRegex = new(@"^\w[\w\.-]{0,127}$", RegexOptions.Compiled | RegexOptions.Singleline);
+        private static readonly Regex SafeNameRegex = new(@"^[a-z0-9_][a-z0-9_-]{0,127}$", RegexOptions.Compiled | RegexOptions.Singleline);
 
         /// <summary>
         /// Checks if a string is a valid slug
@@ -156,10 +156,11 @@ namespace Registry.Web.Utilities
             var tempBytes = enc.GetBytes(name);
             var tmp = Encoding.UTF8.GetString(tempBytes);
 
-            var res = new string(tmp.Select(c => char.IsLetterOrDigit(c) || c == '.' ? c : '-').ToArray());
+            var str = new string(tmp.Select(c => char.IsLetterOrDigit(c) || c == '.' ? c : '-').ToArray())
+                .ToLowerInvariant();
 
             // If it starts with a period or a dash pad it with a 0
-            return res[0] == '.' || res[0] == '-' ? "0" + res : res;
+            return str[0] == '.' || str[0] == '-' ? "0" + str : str;
         }
 
         /// <summary>

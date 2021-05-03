@@ -172,43 +172,57 @@ namespace Registry.Web.Services.Managers
             _logger.LogInformation($"Using bucket '{bucketName}'");
 
             // If the bucket does not exist, let's create it
-            if (!await _objectSystem.BucketExistsAsync(bucketName))
-            {
-
-                _logger.LogInformation($"Bucket '{bucketName}' does not exist, creating it");
-
-                await _objectSystem.MakeBucketAsync(bucketName, SafeGetLocation());
-
-                _logger.LogInformation("Bucket created");
-            }
+            await EnsureBucketExists(bucketName);
 
             // TODO: I highly doubt the robustness of this 
             var contentType = MimeTypes.GetMimeType(path);
 
             _logger.LogInformation($"Uploading '{path}' (size {stream.Length}) to bucket '{bucketName}'");
 
-            await _objectSystem.PutObjectAsync(bucketName, path, stream, stream.Length, contentType);
+            var tempFileName = Path.GetTempFileName();
 
-            _logger.LogInformation("File uploaded, adding to DDB");
-
-            // Add to DDB
-            var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
-            ddb.Add(path, stream);
-
-            _logger.LogInformation("Added to DDB");
-
-            // Refresh objects count and total size
-            ds.UpdateStatistics(ddb);
-            await _context.SaveChangesAsync();
-
-            var obj = new UploadedObjectDto
+            try
             {
-                Path = path,
-                ContentType = contentType,
-                Size = stream.Length
-            };
+                await using (var tempFileStream = File.OpenWrite(tempFileName))
+                {
+                    await stream.CopyToAsync(tempFileStream);
+                }
 
-            return obj;
+                await using (var tempFileStream = File.OpenRead(tempFileName))
+                {
+                    await _objectSystem.PutObjectAsync(bucketName, path, tempFileStream, tempFileStream.Length, contentType);
+                }
+
+                _logger.LogInformation("File uploaded, adding to DDB");
+
+                // Add to DDB
+                var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
+
+                await using (var tempFileStream = File.OpenRead(tempFileName))
+                {
+                    ddb.Add(path, tempFileStream);
+                }
+
+                _logger.LogInformation("Added to DDB");
+
+                // Refresh objects count and total size
+                ds.UpdateStatistics(ddb);
+                await _context.SaveChangesAsync();
+
+                var obj = new UploadedObjectDto
+                {
+                    Path = path,
+                    ContentType = contentType,
+                    Size = stream.Length
+                };
+
+                return obj;
+
+            }
+            finally
+            {
+                if (File.Exists(tempFileName)) File.Delete(tempFileName);
+            }
         }
 
         private string SafeGetLocation()
@@ -800,7 +814,7 @@ namespace Registry.Web.Services.Managers
                 var memory = new MemoryStream();
                 await s.CopyToAsync(memory);
                 memory.Reset();
-                
+
                 return new FileDescriptorDto
                 {
                     ContentStream = memory,
@@ -812,6 +826,23 @@ namespace Registry.Web.Services.Managers
             finally
             {
                 if (File.Exists(tempFile)) File.Delete(tempFile);
+            }
+        }
+
+        public async Task EnsureBucketExists(string bucketName)
+        {
+            if (!await _objectSystem.BucketExistsAsync(bucketName))
+            {
+
+                _logger.LogInformation($"Bucket '{bucketName}' does not exist, creating it");
+
+                await _objectSystem.MakeBucketAsync(bucketName, SafeGetLocation());
+
+                _logger.LogInformation("Bucket created");
+            }
+            else
+            {
+                _logger.LogInformation($"Bucket '{bucketName}' already exists");
             }
         }
     }

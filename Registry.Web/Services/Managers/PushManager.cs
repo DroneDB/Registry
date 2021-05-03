@@ -51,10 +51,26 @@ namespace Registry.Web.Services.Managers
         public async Task<PushInitResultDto> Init(string orgSlug, string dsSlug, Stream stream)
         {
 
-            var ds = await _utils.GetDataset(orgSlug, dsSlug);
+            var ds = await _utils.GetDataset(orgSlug, dsSlug, true);
 
-            if (!await _authManager.IsOwnerOrAdmin(ds))
-                throw new UnauthorizedException("The current user is not allowed to push to this dataset");
+            if (ds == null)
+            {
+                _logger.LogInformation("Dataset does not exist, creating it");
+                await _datasetsManager.AddNew(orgSlug, new DatasetDto
+                {
+                    Name = dsSlug,
+                    Slug = dsSlug
+                });
+
+                _logger.LogInformation($"New dataset {orgSlug}/{dsSlug} created");
+                ds = await _utils.GetDataset(orgSlug, dsSlug);
+            }
+            else
+            {
+                if (!await _authManager.IsOwnerOrAdmin(ds))
+                    throw new UnauthorizedException("The current user is not allowed to push to this dataset");
+            }
+
 
             // 0) Setup temp folders
             var baseTempFolder = Path.Combine(Path.GetTempPath(), PushFolderName, orgSlug, dsSlug);
@@ -95,7 +111,7 @@ namespace Registry.Web.Services.Managers
                 throw new ArgumentException("Stream is null or is not readable");
 
             var ds = await _utils.GetDataset(orgSlug, dsSlug);
-            
+
             if (!await _authManager.IsOwnerOrAdmin(ds))
                 throw new UnauthorizedException("The current user is not allowed to upload to this dataset");
 
@@ -148,6 +164,8 @@ namespace Registry.Web.Services.Managers
 
             // Applies delta 
             var bucketName = _objectsManager.GetBucketName(orgSlug, ds.InternalRef);
+
+            await _objectsManager.EnsureBucketExists(bucketName);
             await ApplyDelta(bucketName, delta, addTempFolder);
 
             // Replaces ddb folder
@@ -170,8 +188,17 @@ namespace Registry.Web.Services.Managers
 
             if (Directory.Exists(baseTempFolder))
             {
-                Directory.Delete(baseTempFolder, true);
-                _logger.LogInformation("Done");
+                try
+                {
+                    Directory.Delete(baseTempFolder, true);
+                    _logger.LogInformation("Done");
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "Cannot cleanup, trying with safe delete");
+
+                    CommonUtils.SafeTreeDelete(baseTempFolder);
+                }
             }
             else
             {
@@ -229,20 +256,6 @@ namespace Registry.Web.Services.Managers
                         _logger.LogInformation("File does not exist in dest, nothing to do");
                     }
                 }
-                //else
-                //{
-                //    if (Directory.Exists(dest))
-                //    {
-                //        Console.WriteLine("Directory exists in dest, deleting it");
-
-                //        Directory.Delete(dest, true);
-                //    }
-                //    else
-                //    {
-                //        Console.WriteLine("Directory does not exist in dest, nothing to do");
-
-                //    }
-                //}
 
             }
 
@@ -265,7 +278,6 @@ namespace Registry.Web.Services.Managers
                 _logger.LogInformation("Uploading file");
 
                 await _objectSystem.PutObjectAsync(bucketName, add.Path, source);
-                //File.Copy(source, dest, true);
 
             }
 
@@ -282,14 +294,12 @@ namespace Registry.Web.Services.Managers
                 {
                     _logger.LogInformation("Dest file exists, writing shadow");
                     await _objectSystem.CopyObjectAsync(bucketName, dest, bucketName, dest + ".replace");
-                    //File.Copy(source, dest + ".replace");
                 }
                 else
                 {
                     _logger.LogInformation("Dest file does not exist, performing copy");
                     await _objectSystem.CopyObjectAsync(bucketName, source, bucketName, dest);
 
-                    //File.Copy(source, dest);
                 }
             }
 
@@ -308,7 +318,6 @@ namespace Registry.Web.Services.Managers
                     await _objectSystem.CopyObjectAsync(bucketName, dest + ".replace", bucketName, dest);
                     await _objectSystem.RemoveObjectAsync(bucketName, dest + ".replace");
 
-                    //File.Move(dest + ".replace", dest, true);
                 }
             }
 

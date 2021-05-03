@@ -54,6 +54,7 @@ namespace Registry.Web.Controllers
 
         }
 
+        [DisableRequestSizeLimit]
         [HttpPost("upload")]
         public async Task<IActionResult> Upload([FromRoute] string orgSlug, [FromRoute] string dsSlug, [FromForm] string path, IFormFile file)
         {
