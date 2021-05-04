@@ -96,7 +96,7 @@ namespace Registry.Web.Services.Managers
         {
             var bucketName = GetBucketName(orgSlug, internalRef);
 
-            maxWaitTime ??= new TimeSpan(0, 0, 0, 10);
+            maxWaitTime ??= new TimeSpan(0, 0, 1, 0);
 
             if (!File.Exists(destFile))
             {
