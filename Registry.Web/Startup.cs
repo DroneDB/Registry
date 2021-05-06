@@ -212,7 +212,6 @@ namespace Registry.Web
             services.AddScoped<IUtils, WebUtils>();
             services.AddScoped<IAuthManager, AuthManager>();
 
-            services.AddScoped<IChunkedUploadManager, ChunkedUploadManager>();
             services.AddScoped<IUsersManager, UsersManager>();
             services.AddScoped<IOrganizationsManager, OrganizationsManager>();
             services.AddScoped<IDatasetsManager, DatasetsManager>();
