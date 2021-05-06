@@ -55,11 +55,6 @@ namespace Registry.Web.Models.Configuration
         public long MaxRequestBodySize { get; set; }
 
         /// <summary>
-        /// Max upload chunk size
-        /// </summary>
-        public long MaxUploadChunkSize { get; set; }
-
-        /// <summary>
         /// Lenght of batch tokens
         /// </summary>
         public int BatchTokenLength { get; set; }

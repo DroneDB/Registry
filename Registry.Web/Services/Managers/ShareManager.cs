@@ -299,8 +299,7 @@ namespace Registry.Web.Services.Managers
 
             return new ShareInitResultDto
             {
-                Token = batch.Token, 
-                MaxUploadChunkSize = _settings.Value.MaxUploadChunkSize,
+                Token = batch.Token
 
                 // NOTE: Maybe useful in the future
                 // Tag = tag
