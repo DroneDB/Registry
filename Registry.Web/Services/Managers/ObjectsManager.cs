@@ -340,55 +340,6 @@ namespace Registry.Web.Services.Managers
 
         }
 
-        #region Sessions
-        public async Task<int> AddNewSession(string orgSlug, string dsSlug, int chunks, long size)
-        {
-            await _utils.GetDataset(orgSlug, dsSlug);
-
-            var fileName = $"{orgSlug.ToSlug()}-{dsSlug.ToSlug()}-{CommonUtils.RandomString(16)}";
-
-            _logger.LogDebug($"Generated '{fileName}' as temp file name");
-
-            var sessionId = _chunkedUploadManager.InitSession(fileName, chunks, size);
-
-            return sessionId;
-        }
-
-        public async Task AddToSession(string orgSlug, string dsSlug, int sessionId, int index, Stream stream)
-        {
-            await _utils.GetDataset(orgSlug, dsSlug);
-
-            await _chunkedUploadManager.Upload(sessionId, stream, index);
-        }
-
-        public async Task AddToSession(string orgSlug, string dsSlug, int sessionId, int index, byte[] data)
-        {
-            await using var memory = new MemoryStream(data);
-            memory.Reset();
-            await AddToSession(orgSlug, dsSlug, sessionId, index, memory);
-        }
-
-        public async Task<UploadedObjectDto> CloseSession(string orgSlug, string dsSlug, int sessionId, string path)
-        {
-            await _utils.GetDataset(orgSlug, dsSlug);
-
-            var tempFilePath = _chunkedUploadManager.CloseSession(sessionId, false);
-
-            UploadedObjectDto newObj;
-
-            await using (var fileStream = File.OpenRead(tempFilePath))
-            {
-                newObj = await AddNew(orgSlug, dsSlug, path, fileStream);
-            }
-
-            _chunkedUploadManager.CleanupSession(sessionId);
-
-            File.Delete(tempFilePath);
-
-            return newObj;
-        }
-        #endregion
-
         public async Task<FileDescriptorDto> GenerateThumbnail(string orgSlug, string dsSlug, string path, int? size, bool recreate = false)
         {
             var ds = await _utils.GetDataset(orgSlug, dsSlug);
