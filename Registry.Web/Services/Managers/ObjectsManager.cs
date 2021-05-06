@@ -30,7 +30,6 @@ namespace Registry.Web.Services.Managers
     {
         private readonly ILogger<ObjectsManager> _logger;
         private readonly IObjectSystem _objectSystem;
-        private readonly IChunkedUploadManager _chunkedUploadManager;
         private readonly IDdbManager _ddbManager;
         private readonly IUtils _utils;
         private readonly IAuthManager _authManager;
@@ -45,7 +44,6 @@ namespace Registry.Web.Services.Managers
         public ObjectsManager(ILogger<ObjectsManager> logger,
             RegistryContext context,
             IObjectSystem objectSystem,
-            IChunkedUploadManager chunkedUploadManager,
             IOptions<AppSettings> settings,
             IDdbManager ddbManager,
             IUtils utils, IAuthManager authManager, ICacheManager cacheManager)
@@ -53,7 +51,6 @@ namespace Registry.Web.Services.Managers
             _logger = logger;
             _context = context;
             _objectSystem = objectSystem;
-            _chunkedUploadManager = chunkedUploadManager;
             _ddbManager = ddbManager;
             _utils = utils;
             _authManager = authManager;

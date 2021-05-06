@@ -52,7 +52,6 @@ namespace Registry.Web.Test
         private Mock<IObjectsManager> _objectsManagerMock;
         private Mock<IOrganizationsManager> _organizationsManagerMock;
         private Mock<IDatasetsManager> _datasetsManagerMock;
-        private Mock<IChunkedUploadManager> _chunkedUploadManagerMock;
         private Mock<IHttpContextAccessor> _httpContextAccessorMock;
         private Mock<ICacheManager> _cacheManagerMock;
 
@@ -86,7 +85,6 @@ namespace Registry.Web.Test
             _objectsManagerMock = new Mock<IObjectsManager>();
             _organizationsManagerMock = new Mock<IOrganizationsManager>();
             _datasetsManagerMock = new Mock<IDatasetsManager>();
-            _chunkedUploadManagerMock = new Mock<IChunkedUploadManager>();
             _httpContextAccessorMock = new Mock<IHttpContextAccessor>();
 
             _cacheManagerMock = new Mock<ICacheManager>();
@@ -121,7 +119,7 @@ namespace Registry.Web.Test
 
 
             var manager = new ShareManager(_appSettingsMock.Object, _shareManagerLogger, _objectsManagerMock.Object, _datasetsManagerMock.Object,
-                _organizationsManagerMock.Object, _chunkedUploadManagerMock.Object, _utilsMock.Object, _authManagerMock.Object, _batchTokenGenerator, _nameGenerator, GetTest1Context());
+                _organizationsManagerMock.Object, _utilsMock.Object, _authManagerMock.Object, _batchTokenGenerator, _nameGenerator, GetTest1Context());
 
             manager.Invoking(x => x.Initialize(null)).Should().Throw<BadRequestException>();
             // Now empty tag is supported
@@ -168,7 +166,7 @@ namespace Registry.Web.Test
             var webUtils = new WebUtils(_authManagerMock.Object, context, _appSettingsMock.Object,
                 _httpContextAccessorMock.Object, _ddbFactoryMock.Object);
 
-            var objectManager = new ObjectsManager(_objectManagerLogger, context, sys, _chunkedUploadManagerMock.Object, 
+            var objectManager = new ObjectsManager(_objectManagerLogger, context, sys,  
                 _appSettingsMock.Object, ddbFactory, webUtils, _authManagerMock.Object, _cacheManagerMock.Object);
 
             var datasetManager = new DatasetsManager(context, webUtils, _datasetsManagerLogger, objectManager,
@@ -176,7 +174,7 @@ namespace Registry.Web.Test
             var organizationsManager = new OrganizationsManager(_authManagerMock.Object, context, webUtils, datasetManager, _organizationsManagerLogger);
 
             var shareManager = new ShareManager(_appSettingsMock.Object, _shareManagerLogger, objectManager, datasetManager, organizationsManager, 
-                _chunkedUploadManagerMock.Object, webUtils, _authManagerMock.Object, _batchTokenGenerator, _nameGenerator, context);
+                webUtils, _authManagerMock.Object, _batchTokenGenerator, _nameGenerator, context);
 
             /* TEST */
 
@@ -261,7 +259,7 @@ namespace Registry.Web.Test
             var webUtils = new WebUtils(_authManagerMock.Object, context, _appSettingsMock.Object,
                 _httpContextAccessorMock.Object, _ddbFactoryMock.Object);
 
-            var objectManager = new ObjectsManager(_objectManagerLogger, context, sys, _chunkedUploadManagerMock.Object, 
+            var objectManager = new ObjectsManager(_objectManagerLogger, context, sys, 
                 _appSettingsMock.Object, ddbFactory, webUtils, _authManagerMock.Object, _cacheManagerMock.Object);
 
             var datasetManager = new DatasetsManager(context, webUtils, _datasetsManagerLogger, objectManager,
@@ -269,7 +267,7 @@ namespace Registry.Web.Test
             var organizationsManager = new OrganizationsManager(_authManagerMock.Object, context, webUtils, datasetManager, _organizationsManagerLogger);
 
             var shareManager = new ShareManager(_appSettingsMock.Object, _shareManagerLogger, objectManager, datasetManager, organizationsManager, 
-                _chunkedUploadManagerMock.Object, webUtils, _authManagerMock.Object, _batchTokenGenerator, _nameGenerator, context);
+                webUtils, _authManagerMock.Object, _batchTokenGenerator, _nameGenerator, context);
 
             /* TEST */
 
@@ -389,7 +387,7 @@ namespace Registry.Web.Test
             var webUtils = new WebUtils(_authManagerMock.Object, context, _appSettingsMock.Object,
                 _httpContextAccessorMock.Object, _ddbFactoryMock.Object);
 
-            var objectManager = new ObjectsManager(_objectManagerLogger, context, sys, _chunkedUploadManagerMock.Object, 
+            var objectManager = new ObjectsManager(_objectManagerLogger, context, sys, 
                 _appSettingsMock.Object, ddbFactory, webUtils, _authManagerMock.Object, _cacheManagerMock.Object);
 
             var datasetManager = new DatasetsManager(context, webUtils, _datasetsManagerLogger, objectManager,
@@ -397,7 +395,7 @@ namespace Registry.Web.Test
             var organizationsManager = new OrganizationsManager(_authManagerMock.Object, context, webUtils, datasetManager, _organizationsManagerLogger);
 
             var shareManager = new ShareManager(_appSettingsMock.Object, _shareManagerLogger, objectManager, datasetManager, organizationsManager, 
-                _chunkedUploadManagerMock.Object, webUtils, _authManagerMock.Object, _batchTokenGenerator, _nameGenerator, context);
+                webUtils, _authManagerMock.Object, _batchTokenGenerator, _nameGenerator, context);
 
             /* TEST */
 
