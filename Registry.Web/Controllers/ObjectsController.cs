@@ -312,6 +312,8 @@ namespace Registry.Web.Controllers
         }
 
         [HttpPost(RoutesHelper.ObjectsRadix)]
+        [RequestFormLimits(ValueLengthLimit = int.MaxValue, MultipartBodyLengthLimit = long.MaxValue)]
+        [DisableRequestSizeLimit]
         public async Task<IActionResult> Post([FromRoute] string orgSlug, [FromRoute] string dsSlug, [FromForm] string path, IFormFile file)
         {
             try

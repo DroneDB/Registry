@@ -59,6 +59,7 @@ namespace Registry.Web.Controllers
 
         [HttpPost("upload/{token}")]
         [DisableRequestSizeLimit]
+        [RequestFormLimits(ValueLengthLimit = int.MaxValue, MultipartBodyLengthLimit = long.MaxValue)]
         public async Task<IActionResult> Upload(string token, [FromForm] string path, IFormFile file)
         {
             try
