@@ -230,12 +230,15 @@ namespace Registry.Web
 
             services.AddResponseCompression();
 
-            services.Configure<FormOptions>(options =>
+            if (appSettings.MaxRequestBodySize.HasValue)
             {
-                // See https://docs.microsoft.com/it-it/aspnet/core/fundamentals/servers/kestrel?view=aspnetcore-3.1#maximum-client-connections
-                // We could put this in config "Kestrel->Limits" section
-                options.MultipartBodyLengthLimit = appSettings.MaxRequestBodySize;
-            });
+                services.Configure<FormOptions>(options =>
+                {
+                    // See https://docs.microsoft.com/it-it/aspnet/core/fundamentals/servers/kestrel?view=aspnetcore-3.1#maximum-client-connections
+                    // We could put this in config "Kestrel->Limits" section
+                    options.MultipartBodyLengthLimit = appSettings.MaxRequestBodySize.Value;
+                });
+            }
 
             services.AddHttpContextAccessor();
 
@@ -333,9 +336,9 @@ namespace Registry.Web
             });
 
             SetupDatabase(app);
-            
+
         }
-        
+
         // NOTE: Maybe put all this as stated in https://stackoverflow.com/a/55707949
         private void SetupDatabase(IApplicationBuilder app)
         {
