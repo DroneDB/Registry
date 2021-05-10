@@ -45,7 +45,6 @@ namespace Registry.Web.Test
         private Logger<DdbManager> _ddbFactoryLogger;
         private Logger<ObjectsManager> _objectManagerLogger;
         private Mock<IObjectSystem> _objectSystemMock;
-        private Mock<IChunkedUploadManager> _chunkedUploadManagerMock;
         private Mock<IOptions<AppSettings>> _appSettingsMock;
         private Mock<IDdbManager> _ddbFactoryMock;
         private Mock<IAuthManager> _authManagerMock;
@@ -72,7 +71,6 @@ namespace Registry.Web.Test
             _appSettingsMock = new Mock<IOptions<AppSettings>>();
             _ddbFactoryMock = new Mock<IDdbManager>();
             _authManagerMock = new Mock<IAuthManager>();
-            _chunkedUploadManagerMock = new Mock<IChunkedUploadManager>();
             _httpContextAccessorMock = new Mock<IHttpContextAccessor>();
             _cacheManagerMock = new Mock<ICacheManager>();
 
@@ -110,7 +108,7 @@ namespace Registry.Web.Test
             var webUtils = new WebUtils(_authManagerMock.Object, context, _appSettingsMock.Object,
                 _httpContextAccessorMock.Object, _ddbFactoryMock.Object);
 
-            var objectManager = new ObjectsManager(_objectManagerLogger, context, _objectSystemMock.Object, _chunkedUploadManagerMock.Object, _appSettingsMock.Object,
+            var objectManager = new ObjectsManager(_objectManagerLogger, context, _objectSystemMock.Object, _appSettingsMock.Object,
                 _ddbFactoryMock.Object, webUtils, _authManagerMock.Object, _cacheManagerMock.Object);
 
             objectManager.Invoking(item => item.List(null, MagicStrings.DefaultDatasetSlug, "test")).Should().Throw<BadRequestException>();
@@ -132,7 +130,7 @@ namespace Registry.Web.Test
             var webUtils = new WebUtils(_authManagerMock.Object, context, _appSettingsMock.Object,
                 _httpContextAccessorMock.Object, _ddbFactoryMock.Object);
 
-            var objectManager = new ObjectsManager(_objectManagerLogger, context, _objectSystemMock.Object, _chunkedUploadManagerMock.Object, _appSettingsMock.Object,
+            var objectManager = new ObjectsManager(_objectManagerLogger, context, _objectSystemMock.Object, _appSettingsMock.Object,
                 new DdbManager(_appSettingsMock.Object, _ddbFactoryLogger), webUtils, _authManagerMock.Object, _cacheManagerMock.Object);
 
             var res = await objectManager.List(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug, null, true);
@@ -161,7 +159,7 @@ namespace Registry.Web.Test
                 _httpContextAccessorMock.Object, _ddbFactoryMock.Object);
 
             var objectManager = new ObjectsManager(_objectManagerLogger, context,
-                new PhysicalObjectSystem(Path.Combine(test.TestFolder, StorageFolder)), _chunkedUploadManagerMock.Object, _appSettingsMock.Object,
+                new PhysicalObjectSystem(Path.Combine(test.TestFolder, StorageFolder)), _appSettingsMock.Object,
                 new DdbManager(_appSettingsMock.Object, _ddbFactoryLogger), webUtils, _authManagerMock.Object, _cacheManagerMock.Object);
 
             objectManager.Invoking(async x => await x.Get(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug, "weriufbgeiughegr"))
@@ -191,7 +189,7 @@ namespace Registry.Web.Test
             var webUtils = new WebUtils(_authManagerMock.Object, context, _appSettingsMock.Object,
                 _httpContextAccessorMock.Object, _ddbFactoryMock.Object);
 
-            var objectManager = new ObjectsManager(_objectManagerLogger, context, sys, _chunkedUploadManagerMock.Object, _appSettingsMock.Object,
+            var objectManager = new ObjectsManager(_objectManagerLogger, context, sys, _appSettingsMock.Object,
                 new DdbManager(_appSettingsMock.Object, _ddbFactoryLogger), webUtils, _authManagerMock.Object, _cacheManagerMock.Object);
 
             var obj = await objectManager.Get(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug,
@@ -223,7 +221,7 @@ namespace Registry.Web.Test
             var webUtils = new WebUtils(_authManagerMock.Object, context, _appSettingsMock.Object,
                 _httpContextAccessorMock.Object, _ddbFactoryMock.Object);
 
-            var objectManager = new ObjectsManager(_objectManagerLogger, context, sys, _chunkedUploadManagerMock.Object, _appSettingsMock.Object,
+            var objectManager = new ObjectsManager(_objectManagerLogger, context, sys, _appSettingsMock.Object,
                 new DdbManager(_appSettingsMock.Object, _ddbFactoryLogger), webUtils, _authManagerMock.Object, _cacheManagerMock.Object);
 
             var res = await objectManager.Download(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug,
@@ -258,7 +256,7 @@ namespace Registry.Web.Test
             var webUtils = new WebUtils(_authManagerMock.Object, context, _appSettingsMock.Object,
                 _httpContextAccessorMock.Object, _ddbFactoryMock.Object);
 
-            var objectManager = new ObjectsManager(_objectManagerLogger, context, sys, _chunkedUploadManagerMock.Object, _appSettingsMock.Object,
+            var objectManager = new ObjectsManager(_objectManagerLogger, context, sys, _appSettingsMock.Object,
                 new DdbManager(_appSettingsMock.Object, _ddbFactoryLogger), webUtils, _authManagerMock.Object, _cacheManagerMock.Object);
 
             var res = await objectManager.Download(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug,
@@ -308,7 +306,7 @@ namespace Registry.Web.Test
             var webUtils = new WebUtils(_authManagerMock.Object, context, _appSettingsMock.Object,
                 _httpContextAccessorMock.Object, _ddbFactoryMock.Object);
 
-            var objectManager = new ObjectsManager(_objectManagerLogger, context, sys, _chunkedUploadManagerMock.Object, _appSettingsMock.Object,
+            var objectManager = new ObjectsManager(_objectManagerLogger, context, sys, _appSettingsMock.Object,
                 new DdbManager(_appSettingsMock.Object, _ddbFactoryLogger), webUtils, _authManagerMock.Object, _cacheManagerMock.Object);
 
             var res = await objectManager.Download(organizationSlug, datasetSlug,
@@ -354,7 +352,7 @@ namespace Registry.Web.Test
             var webUtils = new WebUtils(_authManagerMock.Object, context, _appSettingsMock.Object,
                 _httpContextAccessorMock.Object, _ddbFactoryMock.Object);
 
-            var objectManager = new ObjectsManager(_objectManagerLogger, context, sys, _chunkedUploadManagerMock.Object, _appSettingsMock.Object,
+            var objectManager = new ObjectsManager(_objectManagerLogger, context, sys, _appSettingsMock.Object,
                 new DdbManager(_appSettingsMock.Object, _ddbFactoryLogger), webUtils, _authManagerMock.Object, _cacheManagerMock.Object);
 
             var res = await objectManager.List(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug,

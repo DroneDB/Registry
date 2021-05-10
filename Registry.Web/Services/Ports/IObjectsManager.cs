@@ -18,10 +18,6 @@ namespace Registry.Web.Services.Ports
 
         Task DeleteAll(string orgSlug, string dsSlug);
 
-        Task<int> AddNewSession(string orgSlug, string dsSlug, int chunks, long size);
-        Task AddToSession(string orgSlug, string dsSlug, int sessionId, int index, Stream stream);
-        Task AddToSession(string orgSlug, string dsSlug, int sessionId, int index, byte[] data);
-        Task<UploadedObjectDto> CloseSession(string orgSlug, string dsSlug, int sessionId, string path);
         Task<FileDescriptorDto> Download(string orgSlug, string dsSlug, string[] paths);
         Task<FileDescriptor> DownloadStream(string orgSlug, string dsSlug, string[] paths);
         Task<string> GetDownloadPackage(string orgSlug, string dsSlug, string[] paths, DateTime? expiration = null, bool isPublic = false);

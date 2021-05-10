@@ -19,7 +19,6 @@ namespace Registry.Web.Services.Managers
 {
     public class SystemManager : ISystemManager
     {
-        private readonly IChunkedUploadManager _chunkedUploadManager;
         private readonly IAuthManager _authManager;
         private readonly RegistryContext _context;
         private readonly IDdbManager _ddbManager;
@@ -28,11 +27,10 @@ namespace Registry.Web.Services.Managers
         private readonly IObjectsManager _objectManager;
         private readonly AppSettings _settings;
 
-        public SystemManager(IChunkedUploadManager chunkedUploadManager, IAuthManager authManager,
+        public SystemManager(IAuthManager authManager,
             RegistryContext context, IDdbManager ddbManager, ILogger<SystemManager> logger, IObjectSystem objectSystem,
             IObjectsManager objectManager, IOptions<AppSettings> settings)
         {
-            _chunkedUploadManager = chunkedUploadManager;
             _authManager = authManager;
             _context = context;
             _ddbManager = ddbManager;
@@ -40,20 +38,6 @@ namespace Registry.Web.Services.Managers
             _objectSystem = objectSystem;
             _objectManager = objectManager;
             _settings = settings.Value;
-        }
-
-        public async Task<CleanupResult> CleanupSessions()
-        {
-
-            if (!await _authManager.IsUserAdmin())
-                throw new UnauthorizedException("Only admins can perform system related tasks");
-
-            return new CleanupResult
-            {
-                RemovedSessions = (await _chunkedUploadManager.RemoveTimedoutSessions()).Union(
-                    await _chunkedUploadManager.RemoveClosedSessions()).ToArray()
-            };
-
         }
 
         public async Task<CleanupDatasetResultDto> CleanupEmptyDatasets()
