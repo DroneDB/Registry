@@ -157,7 +157,7 @@ namespace Registry.Web.Services.Adapters
             {
                 ModifiedTime = attributes.LastUpdate,
                 Depth = 0,
-                Size = dataset.Size,
+                //Size = dataset.Size,
                 Path = GenerateDatasetUrl(dataset),
                 Type = EntryType.DroneDb,
                 Meta = attributes.Meta

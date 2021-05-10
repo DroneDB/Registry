@@ -63,9 +63,7 @@ namespace Registry.Web.Utilities
                 Slug = dataset.Slug,
                 CreationDate = dataset.CreationDate,
                 Description = dataset.Description,
-                Name = string.IsNullOrEmpty(dataset.Name) ? dataset.Slug : dataset.Name,
-                ObjectsCount = dataset.ObjectsCount,
-                Size = dataset.Size
+                Name = string.IsNullOrEmpty(dataset.Name) ? dataset.Slug : dataset.Name
             };
             return entity;
         }
@@ -81,8 +79,8 @@ namespace Registry.Web.Utilities
                 LastEdit = attributes.LastUpdate,
                 Name = dataset.Name,
                 Meta = attributes.Meta,
-                ObjectsCount = dataset.ObjectsCount,
-                Size = dataset.Size,
+                ObjectsCount = attributes.ObjectsCount,
+                //Size = dataset.Size,
                 IsPublic = attributes.IsPublic
             };
         }
@@ -102,14 +100,6 @@ namespace Registry.Web.Utilities
                 Size = obj.Size,
                 Type = obj.Type
             };
-        }
-
-        public static void UpdateStatistics(this Dataset ds, IDdb ddb)
-        {
-            var objs = ddb.Search("*", true).ToArray();
-
-            ds.ObjectsCount = objs.Length;
-            ds.Size = objs.Sum(item => item.Size);
         }
 
         // A tag name must be valid ASCII and may contain lowercase and uppercase letters, digits, underscores, periods and dashes.

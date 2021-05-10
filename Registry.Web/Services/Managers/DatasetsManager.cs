@@ -58,8 +58,8 @@ namespace Registry.Web.Services.Managers
                             IsPublic = attributes.IsPublic,
                             Name = ds.Name,
                             Meta = attributes.Meta,
-                            ObjectsCount = ds.ObjectsCount,
-                            Size = ds.Size
+                            ObjectsCount = attributes.ObjectsCount,
+                            //Size = ds.Size
                         };
 
             return query;

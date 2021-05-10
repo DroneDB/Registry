@@ -16,8 +16,6 @@ namespace Registry.Web.Models.DTO
         public string Name { get; set; }
         public string Description { get; set; }
         public DateTime CreationDate { get; set; }
-        public string License { get; set; }
-        public long Size { get; set; }
         public int ObjectsCount { get; set; }
         public DateTime? LastEdit { get; set; }
         public Dictionary<string, object> Meta { get; set; }
