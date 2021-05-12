@@ -1,56 +1,47 @@
 ﻿using System;
 using System.Collections.Generic;
-using Newtonsoft.Json;
-using Registry.Common;
 
 namespace Registry.Ports.DroneDB.Models
 {
-    public class DdbAttributes
+    public class DdbAttributes : DdbMeta
     {
         private readonly IDdb _ddb;
 
-        public DdbAttributes(IDdb ddb)
+        public DdbAttributes(IDdb ddb) : base(ddb.GetAttributesRaw()) 
         {
             _ddb = ddb;
         }
 
         #region Meta
 
-        private string MetaRaw
-        {
-            get => JsonConvert.SerializeObject(_meta);
-            set => _meta = JsonConvert.DeserializeObject<Dictionary<string, object>>(value);
-        }
-
-        private Dictionary<string, object> _meta;
-
-        private const string LastUpdateField = "mtime";
-        private const string PublicMetaField = "public";
-        private const string ObjectsCountField = "entries";
-
-        public bool IsPublic
-        {
-            get => SafeGetMetaField<bool>(PublicMetaField);
-            set => SafeSetMetaField(PublicMetaField, value);
-        }
-
-        public int ObjectsCount
-        {
-            get => SafeGetMetaField<int>(ObjectsCountField);
-            set => SafeSetMetaField(ObjectsCountField, value);
-        }
-
-        public DateTime? LastUpdate
+        public new bool IsPublic
         {
             get
             {
-                var val = SafeGetMetaField<long?>(LastUpdateField);
+                UpdateMeta();
 
-                if (val == null) return null;
+                return base.IsPublic;
+            }
+            set => SafeSetMetaField(PublicMetaField, value);
+        }
 
-                var dateTimeOffset = DateTimeOffset.FromUnixTimeSeconds(val.Value);
+        public new int ObjectsCount
+        {
+            get
+            {
+                UpdateMeta();
 
-                return dateTimeOffset.LocalDateTime;
+                return base.ObjectsCount;
+            }
+        }
+
+        public new DateTime? LastUpdate
+        {
+            get
+            {
+                UpdateMeta();
+
+                return base.LastUpdate;
 
             }
             set
@@ -67,7 +58,6 @@ namespace Registry.Ports.DroneDB.Models
             }
         }
 
-        public Dictionary<string, object> Meta => new(_meta);
 
         private void UpdateMeta()
         {
@@ -97,18 +87,20 @@ namespace Registry.Ports.DroneDB.Models
 
         private void SaveMeta()
         {
-            _meta = _ddb.ChangeAttributesRaw(_meta);
+
+            var tmp = new Dictionary<string, object>();
+
+            // We can only set LastUpdate and IsPublic
+            if (_meta.ContainsKey(LastUpdateField))
+                tmp.Add(LastUpdateField, _meta[LastUpdateField]);
+
+            if (_meta.ContainsKey(PublicMetaField))
+                tmp.Add(PublicMetaField, _meta[PublicMetaField]);
+
+            _meta = _ddb.ChangeAttributesRaw(tmp);
         }
 
-        private T SafeGetMetaField<T>(string field)
-        {
-            UpdateMeta();
 
-            var res = _meta?.SafeGetValue(field);
-            if (!(res is T)) return default;
-
-            return (T)res;
-        }
         #endregion
     }
 }

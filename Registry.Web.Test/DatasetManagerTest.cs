@@ -60,13 +60,24 @@ namespace Registry.Web.Test
             
             var utils = new WebUtils(_authManagerMock.Object, context, _appSettingsMock.Object, _httpContextAccessorMock.Object, _ddbFactoryMock.Object);
 
-            var ddbMock1 = new Mock<IDdb>();
-            ddbMock1.Setup(x => x.GetAttributesRaw()).Returns(new Dictionary<string, object>
-            {
-                {"public", true }
-            });
+            //var ddbMock1 = new Mock<IDdb>();
+            //ddbMock1.Setup(x => x.GetAttributesRaw()).Returns(new Dictionary<string, object>
+            //{
+            //    {"public", true }
+            //});
+            //var ddbMock2 = new Mock<IDdb>();
+            //ddbMock2.Setup(x => x.GetAttributes()).Returns(new DdbAttributes(ddbMock1.Object));
+
             var ddbMock2 = new Mock<IDdb>();
-            ddbMock2.Setup(x => x.GetAttributes()).Returns(new DdbAttributes(ddbMock1.Object));
+            ddbMock2.Setup(x => x.GetInfo()).Returns(new DdbEntry
+            {
+                Meta = new Dictionary<string, object>
+                {
+                    {"public", true }
+                },
+                Size = 1000,
+                ModifiedTime = DateTime.Now
+            });
 
             _ddbFactoryMock.Setup(x => x.Get(It.IsAny<string>(), It.IsAny<Guid>())).Returns(ddbMock2.Object);
 
@@ -87,7 +98,7 @@ namespace Registry.Web.Test
             pub.Slug.Should().Be(expectedSlug);
 
             // TODO: Check test data: this should be true
-            //pub.IsPublic.Should().BeTrue();
+            pub.IsPublic.Should().BeTrue();
             pub.Name.Should().Be(expectedName);
 
         }

@@ -21,6 +21,7 @@ namespace Registry.Web.Models.DTO
         public Dictionary<string, object> Meta { get; set; }
         public bool IsPublic { get; set; }
 
+        public long Size { get; set; }
         public string Password { get; set; }
 
     }
