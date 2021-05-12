@@ -60,16 +60,8 @@ namespace Registry.Web.Test
             
             var utils = new WebUtils(_authManagerMock.Object, context, _appSettingsMock.Object, _httpContextAccessorMock.Object, _ddbFactoryMock.Object);
 
-            //var ddbMock1 = new Mock<IDdb>();
-            //ddbMock1.Setup(x => x.GetAttributesRaw()).Returns(new Dictionary<string, object>
-            //{
-            //    {"public", true }
-            //});
-            //var ddbMock2 = new Mock<IDdb>();
-            //ddbMock2.Setup(x => x.GetAttributes()).Returns(new DdbAttributes(ddbMock1.Object));
-
-            var ddbMock2 = new Mock<IDdb>();
-            ddbMock2.Setup(x => x.GetInfo()).Returns(new DdbEntry
+            var ddbMock = new Mock<IDdb>();
+            ddbMock.Setup(x => x.GetInfo()).Returns(new DdbEntry
             {
                 Meta = new Dictionary<string, object>
                 {
@@ -78,8 +70,8 @@ namespace Registry.Web.Test
                 Size = 1000,
                 ModifiedTime = DateTime.Now
             });
-
-            _ddbFactoryMock.Setup(x => x.Get(It.IsAny<string>(), It.IsAny<Guid>())).Returns(ddbMock2.Object);
+            
+            _ddbFactoryMock.Setup(x => x.Get(It.IsAny<string>(), It.IsAny<Guid>())).Returns(ddbMock.Object);
 
             var datasetsManager = new DatasetsManager(context, utils, _datasetsManagerLogger,
                 _objectsManagerMock.Object, _passwordHasher, _ddbFactoryMock.Object, _authManagerMock.Object);

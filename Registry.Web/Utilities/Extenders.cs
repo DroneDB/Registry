@@ -68,19 +68,21 @@ namespace Registry.Web.Utilities
             return entity;
         }
 
-        public static DatasetDto ToDto(this Dataset dataset, DdbAttributes attributes)
+        public static DatasetDto ToDto(this Dataset dataset, DdbEntry entry)
         {
+            var attributes = new DdbMeta(entry.Meta);
+
             return new()
             {
                 Id = dataset.Id,
                 Slug = dataset.Slug,
                 CreationDate = dataset.CreationDate,
                 Description = dataset.Description,
-                LastEdit = attributes.LastUpdate,
+                LastEdit = entry.ModifiedTime,
                 Name = dataset.Name,
-                Meta = attributes.Meta,
+                Meta = entry.Meta,
                 ObjectsCount = attributes.ObjectsCount,
-                //Size = dataset.Size,
+                Size = entry.Size,
                 IsPublic = attributes.IsPublic
             };
         }

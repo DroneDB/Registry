@@ -72,9 +72,9 @@ namespace Registry.Web.Services.Managers
         {
 
             var dataset = await _utils.GetDataset(orgSlug, dsSlug);
-            var ddbManager = _ddbManager.Get(orgSlug, dataset.InternalRef);
+            var ddb = _ddbManager.Get(orgSlug, dataset.InternalRef);
 
-            return dataset.ToDto(ddbManager.GetAttributes());
+            return dataset.ToDto(ddb.GetInfo());
         }
 
         public async Task<EntryDto[]> GetEntry(string orgSlug, string dsSlug)
@@ -122,16 +122,17 @@ namespace Registry.Web.Services.Managers
                 ddb.ChangeAttributesRaw(dataset.Meta);
 
             var attributes = ddb.GetAttributes();
-            attributes.IsPublic = dataset.IsPublic;
 
+            attributes.IsPublic = dataset.IsPublic;
             attributes.LastUpdate = now;
+
             ds.CreationDate = now;
 
             org.Datasets.Add(ds);
 
             await _context.SaveChangesAsync();
 
-            return ds.ToDto(attributes);
+            return ds.ToDto(ddb.GetInfo());
 
         }
 
