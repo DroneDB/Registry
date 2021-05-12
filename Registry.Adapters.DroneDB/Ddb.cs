@@ -105,7 +105,7 @@ namespace Registry.Adapters.DroneDB
                                 ModifiedTime = entry.ModifiedTime,
                                 Path = entry.Path,
                                 Size = entry.Size,
-                                Type = (Common.EntryType)(int)entry.Type,
+                                Type = (EntryType)(int)entry.Type,
 
                                 PointGeometry = (Point)entry.PointGeometry?.ToObject<Feature>()?.Geometry,
                                 PolygonGeometry = (Polygon)entry.PolygonGeometry?.ToObject<Feature>()?.Geometry
@@ -152,6 +152,30 @@ namespace Registry.Adapters.DroneDB
         public DdbAttributes GetAttributes()
         {
             return new(this);
+        }
+
+        public DdbEntry GetInfo()
+        {
+            var info = DDB.Bindings.DroneDB.Info(FolderPath);
+
+            var entry = info.FirstOrDefault();
+
+            if (entry == null)
+                throw new InvalidOperationException("Cannot get ddb info of dataset");
+
+            return new DdbEntry
+            {
+                Depth = entry.Depth,
+                Hash = entry.Hash,
+                Meta = entry.Meta,
+                ModifiedTime = entry.ModifiedTime,
+                Path = entry.Path,
+                Size = entry.Size,
+                Type = (EntryType)(int)entry.Type,
+
+                PointGeometry = (Point)entry.PointGeometry?.ToObject<Feature>()?.Geometry,
+                PolygonGeometry = (Polygon)entry.PolygonGeometry?.ToObject<Feature>()?.Geometry
+            };
         }
 
         public Dictionary<string, object> ChangeAttributesRaw(Dictionary<string, object> attributes)

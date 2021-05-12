@@ -151,18 +151,6 @@ namespace Registry.Web.Services.Adapters
             }
 
         }
-        public EntryDto GetDatasetEntry(Dataset dataset, DdbAttributes attributes)
-        {
-            return new()
-            {
-                ModifiedTime = attributes.LastUpdate,
-                Depth = 0,
-                Size = dataset.Size,
-                Path = GenerateDatasetUrl(dataset),
-                Type = EntryType.DroneDb,
-                Meta = attributes.Meta
-            };
-        }
 
         public string GenerateDatasetUrl(Dataset dataset)
         {

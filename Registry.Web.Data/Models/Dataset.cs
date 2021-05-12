@@ -23,8 +23,6 @@ namespace Registry.Web.Data.Models
         public string Description { get; set; }
         [Required]
         public DateTime CreationDate { get; set; }
-        public long Size { get; set; }
-        public int ObjectsCount { get; set; }
 
         public string PasswordHash { get; set; }
 

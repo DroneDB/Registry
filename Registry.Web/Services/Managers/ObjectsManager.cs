@@ -235,10 +235,6 @@ namespace Registry.Web.Services.Managers
 
                 _logger.LogInformation("Added to DDB");
 
-                // Refresh objects count and total size
-                ds.UpdateStatistics(ddb);
-                await _context.SaveChangesAsync();
-
                 var obj = new UploadedObjectDto
                 {
                     Path = path,
@@ -297,10 +293,6 @@ namespace Registry.Web.Services.Managers
             var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
 
             ddb.Remove(path);
-            ds.UpdateStatistics(ddb);
-
-            // Refresh objects count and total size
-            await _context.SaveChangesAsync();
 
             _logger.LogInformation("Removed from DDB");
 

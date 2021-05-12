@@ -45,7 +45,7 @@ namespace Registry.Web.Services.Managers
             if (!await _authManager.IsUserAdmin())
                 throw new UnauthorizedException("Only admins can perform system related tasks");
 
-            var datasets = _context.Datasets.Include(ds => ds.Organization).Where(ds => ds.ObjectsCount == 0).ToArray();
+            var datasets = _context.Datasets.Include(ds => ds.Organization).ToArray();
 
             _logger.LogInformation($"Found {datasets.Length} with objects count zero");
 
@@ -63,15 +63,7 @@ namespace Registry.Web.Services.Managers
 
                     var entries = ddb.Search("*", true)?.ToArray();
 
-                    if (entries != null && entries.Any())
-                    {
-                        _logger.LogInformation($"Objects count was wrong, found {entries.Length} objects, updating stats and going on");
-                        ds.ObjectsCount = entries.Length;
-                        ds.Size = entries.Sum(entry => entry.Size);
-
-                        await _context.SaveChangesAsync();
-                    }
-                    else
+                    if (entries == null || !entries.Any())
                     {
                         _context.Remove(ds);
                         await _context.SaveChangesAsync();
