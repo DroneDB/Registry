@@ -190,8 +190,8 @@ namespace Registry.Web.Services.Managers
             stream.Reset();
             return await AddNew(orgSlug, dsSlug, path, stream);
         }
-
-        public async Task<UploadedObjectDto> AddNew(string orgSlug, string dsSlug, string path, Stream stream)
+        
+        public async Task<UploadedObjectDto> AddNew(string orgSlug, string dsSlug, string path, Stream stream = null)
         {
             var ds = await _utils.GetDataset(orgSlug, dsSlug);
 
@@ -204,51 +204,79 @@ namespace Registry.Web.Services.Managers
             // If the bucket does not exist, let's create it
             await EnsureBucketExists(bucketName);
 
-            // TODO: I highly doubt the robustness of this 
-            var contentType = MimeTypes.GetMimeType(path);
+            UploadedObjectDto obj;
 
-            _logger.LogInformation($"Uploading '{path}' (size {stream.Length}) to bucket '{bucketName}'");
-
-            var tempFileName = Path.GetTempFileName();
-
-            try
+            // If it's a folder
+            if (stream == null)
             {
-                await using (var tempFileStream = File.OpenWrite(tempFileName))
-                {
-                    await stream.CopyToAsync(tempFileStream);
-                }
-
-                await using (var tempFileStream = File.OpenRead(tempFileName))
-                {
-                    await _objectSystem.PutObjectAsync(bucketName, path, tempFileStream, tempFileStream.Length, contentType);
-                }
-
-                _logger.LogInformation("File uploaded, adding to DDB");
+                _logger.LogInformation("Adding folder to DDB");
 
                 // Add to DDB
                 var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
 
-                await using (var tempFileStream = File.OpenRead(tempFileName))
-                {
-                    ddb.Add(path, tempFileStream);
-                }
+                ddb.Add(path);
 
                 _logger.LogInformation("Added to DDB");
 
-                var obj = new UploadedObjectDto
+                obj = new UploadedObjectDto
                 {
                     Path = path,
-                    ContentType = contentType,
-                    Size = stream.Length
+                    ContentType = null,
+                    Size = 0
                 };
 
-                return obj;
-
             }
-            finally
+            else
             {
-                if (File.Exists(tempFileName)) File.Delete(tempFileName);
+
+                // TODO: I highly doubt the robustness of this 
+                var contentType = MimeTypes.GetMimeType(path);
+
+                _logger.LogInformation($"Uploading '{path}' (size {stream.Length}) to bucket '{bucketName}'");
+
+                var tempFileName = Path.GetTempFileName();
+
+                try
+                {
+                    await using (var tempFileStream = File.OpenWrite(tempFileName))
+                    {
+                        await stream.CopyToAsync(tempFileStream);
+                    }
+
+                    await using (var tempFileStream = File.OpenRead(tempFileName))
+                    {
+                        await _objectSystem.PutObjectAsync(bucketName, path, tempFileStream, tempFileStream.Length, contentType);
+                    }
+
+                    _logger.LogInformation("File uploaded, adding to DDB");
+
+                    // Add to DDB
+                    var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
+
+                    await using (var tempFileStream = File.OpenRead(tempFileName))
+                    {
+                        ddb.Add(path, tempFileStream);
+                    }
+
+                    _logger.LogInformation("Added to DDB");
+
+                    obj = new UploadedObjectDto
+                    {
+                        Path = path,
+                        ContentType = contentType,
+                        Size = stream.Length
+                    };
+
+
+                }
+                finally
+                {
+                    if (File.Exists(tempFileName)) File.Delete(tempFileName);
+                }
             }
+
+            return obj;
+
         }
 
         private string SafeGetLocation()
@@ -772,7 +800,7 @@ namespace Registry.Web.Services.Managers
             try
             {
                 // We could do this fully in memory BUT it's not a strict requirement by now: ddb folders are not huge (yet)
-                ZipFile.CreateFromDirectory(ddb.FolderPath, tempFile, CompressionLevel.Optimal, false);
+                ZipFile.CreateFromDirectory(ddb.DatabaseFolder, tempFile, CompressionLevel.Optimal, false);
 
                 await using var s = File.OpenRead(tempFile);
                 var memory = new MemoryStream();

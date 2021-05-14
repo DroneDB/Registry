@@ -247,6 +247,20 @@ namespace Registry.Common
             }
         }
 
+        public static bool SafeDeleteFolder(string path)
+        {
+            try
+            {
+
+                Directory.Delete(path, true);
+                return true;
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
         public static void RemoveEmptyFolders(string folder)
         {
             if (!Directory.Exists(folder)) return;
