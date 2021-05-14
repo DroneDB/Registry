@@ -13,7 +13,7 @@ namespace Registry.Ports.DroneDB
         // public DdbObject GetObjectInfo(int id);
         IEnumerable<DdbEntry> Search(string path, bool recursive = false);
         void Add(string path, byte[] data);
-        void Add(string path, Stream data);
+        void Add(string path, Stream data = null);
         void Remove(string path);
         Dictionary<string, object> ChangeAttributesRaw(Dictionary<string, object> attributes);
         void GenerateThumbnail(string imagePath, int size, string outputPath);
@@ -24,7 +24,7 @@ namespace Registry.Ports.DroneDB
         string Version { get; }
 
         // This could lead to problems if we plan to move ddbpath to S3 but it's good for now
-        string FolderPath { get; }
+        string DatabaseFolder { get; }
         Dictionary<string, object> GetAttributesRaw();
 
         DdbAttributes GetAttributes();

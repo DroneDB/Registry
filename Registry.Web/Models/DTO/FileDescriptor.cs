@@ -84,7 +84,7 @@ namespace Registry.Web.Models.DTO
                 {
                     var ddb = _ddbManager.Get(_orgSlug, _internalRef);
 
-                    archive.CreateEntryFromAny(Path.Combine(ddb.FolderPath, _ddbManager.DdbFolderName));
+                    archive.CreateEntryFromAny(Path.Combine(ddb.DatabaseFolder, _ddbManager.DdbFolderName));
                     
                 }
             }

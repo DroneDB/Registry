@@ -85,7 +85,7 @@ namespace Registry.Web.Services.Managers
 
             // 2) Perform delta with our ddb
             var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
-            var delta = DroneDB.Delta(ddbTempFolder, ddb.FolderPath).ToDto();
+            var delta = DroneDB.Delta(ddbTempFolder, ddb.DatabaseFolder).ToDto();
 
             // 3) Save delta json in temp folder
             await File.WriteAllTextAsync(Path.Combine(baseTempFolder, DeltaFileName),
@@ -170,8 +170,8 @@ namespace Registry.Web.Services.Managers
 
             // Replaces ddb folder
             var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
-            Directory.Delete(ddb.FolderPath, true);
-            FolderUtils.Move(ddbTempFolder, ddb.FolderPath);
+            Directory.Delete(ddb.DatabaseFolder, true);
+            FolderUtils.Move(ddbTempFolder, ddb.DatabaseFolder);
 
             // Clean intermediate files
             await Clean(orgSlug, dsSlug);
