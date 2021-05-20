@@ -190,7 +190,7 @@ namespace Registry.Web.Services.Managers
             stream.Reset();
             return await AddNew(orgSlug, dsSlug, path, stream);
         }
-        
+
         public async Task<UploadedObjectDto> AddNew(string orgSlug, string dsSlug, string path, Stream stream = null)
         {
             var ds = await _utils.GetDataset(orgSlug, dsSlug);
@@ -277,6 +277,52 @@ namespace Registry.Web.Services.Managers
 
             return obj;
 
+        }
+
+        public async Task Move(string orgSlug, string dsSlug, string source, string dest)
+        {
+            var ds = await _utils.GetDataset(orgSlug, dsSlug);
+
+            _logger.LogInformation($"In '{orgSlug}/{dsSlug}'");
+
+            var bucketName = GetBucketName(orgSlug, ds.InternalRef);
+
+            _logger.LogInformation($"Using bucket '{bucketName}'");
+
+            // If the bucket does not exist, let's create it
+            await EnsureBucketExists(bucketName);
+
+            var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
+
+            // Checking if source exists
+            var src = ddb.Search(source).FirstOrDefault();
+            if (src == null)
+                throw new ArgumentException($"Cannot find source entry '{source}'");
+
+            if (src.Type == EntryType.Directory)
+            {
+                // TODO: Folder recursive copy
+                throw new NotImplementedException("Folder copy/rename not implemented yet");
+            }
+            else
+            {
+
+                _logger.LogInformation($"Copying object '{source}' to '{dest}'");
+                await _objectSystem.CopyObjectAsync(bucketName, source, bucketName, dest);
+
+                _logger.LogInformation("Removing source object");
+                await _objectSystem.RemoveObjectAsync(bucketName, source);
+
+                _logger.LogInformation("Performing ddb move");
+                ddb.Move(source, dest);
+
+                var dst = ddb.Search(dest).FirstOrDefault();
+                if (dst == null)
+                    throw new InvalidOperationException($"Cannot find destination entry '{dest}' after move, something wrong with ddb");
+
+                _logger.LogInformation("Move OK");
+
+            }
         }
 
         private string SafeGetLocation()
