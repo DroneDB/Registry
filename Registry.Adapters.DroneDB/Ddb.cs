@@ -144,6 +144,18 @@ namespace Registry.Adapters.DroneDB
             }
         }
 
+        public void Move(string source, string dest)
+        {
+            try
+            {
+                DDB.Bindings.DroneDB.MoveEntry(DatabaseFolder, source, dest);
+            }
+            catch (DDBException ex)
+            {
+                throw new InvalidOperationException($"Cannot move '{source}' to {dest} from ddb '{DatabaseFolder}'", ex);
+            }
+        }
+
         public Dictionary<string, object> GetAttributesRaw()
         {
             return ChangeAttributesRaw(new Dictionary<string, object>());
