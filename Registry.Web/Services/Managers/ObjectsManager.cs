@@ -42,6 +42,8 @@ namespace Registry.Web.Services.Managers
         private const int DefaultThumbnailSize = 512;
 
         private const string BucketNameFormat = "{0}-{1}";
+        private const string TempFolderName = "Registry-ObjectsManager";
+
         public ObjectsManager(ILogger<ObjectsManager> logger,
             RegistryContext context,
             IObjectSystem objectSystem,
@@ -233,47 +235,51 @@ namespace Registry.Web.Services.Managers
                 // TODO: I highly doubt the robustness of this 
                 var contentType = MimeTypes.GetMimeType(path);
 
-                _logger.LogInformation($"Uploading '{path}' (size {stream.Length}) to bucket '{bucketName}'");
-
                 var tempFileName = Path.GetTempFileName();
 
-                try
+                // Write down the file
+                await using (var tempFileStream = File.OpenWrite(tempFileName))
                 {
-                    await using (var tempFileStream = File.OpenWrite(tempFileName))
-                    {
-                        await stream.CopyToAsync(tempFileStream);
-                    }
-
-                    await using (var tempFileStream = File.OpenRead(tempFileName))
-                    {
-                        await _objectSystem.PutObjectAsync(bucketName, path, tempFileStream, tempFileStream.Length, contentType);
-                    }
-
-                    _logger.LogInformation("File uploaded, adding to DDB");
-
-                    // Add to DDB
-                    var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
-
-                    await using (var tempFileStream = File.OpenRead(tempFileName))
-                    {
-                        ddb.Add(path, tempFileStream);
-                    }
-
-                    _logger.LogInformation("Added to DDB");
-
-                    obj = new UploadedObjectDto
-                    {
-                        Path = path,
-                        ContentType = contentType,
-                        Size = stream.Length
-                    };
-
-
+                    await stream.CopyToAsync(tempFileStream);
                 }
-                finally
+
+                _logger.LogInformation("File uploaded, adding to DDB");
+
+                // Add to DDB
+                var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
+
+                await using (var tempFileStream = File.OpenRead(tempFileName))
                 {
-                    if (File.Exists(tempFileName)) File.Delete(tempFileName);
+                    ddb.Add(path, tempFileStream);
                 }
+
+                _logger.LogInformation("Added to DDB");
+
+                // We perform the actual upload asynchronously
+#pragma warning disable 4014
+                Task.Run(async () =>
+#pragma warning restore 4014
+                {
+
+                    _logger.LogInformation($"Uploading '{path}' (size {stream.Length}) to bucket '{bucketName}'");
+
+                    await using (var tmpStream = File.OpenRead(tempFileName))
+                        await _objectSystem.PutObjectAsync(bucketName, path, tmpStream, tmpStream.Length, contentType);
+
+                    _logger.LogInformation($"Deleting temp file '{tempFileName}'");
+
+                    if (File.Exists(tempFileName))
+                        CommonUtils.SafeDelete(tempFileName);
+
+                });
+
+                obj = new UploadedObjectDto
+                {
+                    Path = path,
+                    ContentType = contentType,
+                    Size = stream.Length
+                };
+                
             }
 
             return obj;
@@ -359,7 +365,7 @@ namespace Registry.Web.Services.Managers
 
             if (!ddb.Search(path).Any())
                 throw new BadRequestException($"Path '{path}' not found in dataset");
-            
+
             var bucketName = GetBucketName(orgSlug, ds.InternalRef);
 
             _logger.LogInformation($"Using bucket '{bucketName}'");
@@ -894,6 +900,6 @@ namespace Registry.Web.Services.Managers
             }
         }
 
-    
+
     }
 }
