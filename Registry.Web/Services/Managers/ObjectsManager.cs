@@ -342,15 +342,6 @@ namespace Registry.Web.Services.Managers
             return settings.Region;
         }
 
-        public async Task Move(string orgSlug, string dsSlug, string fromPath, string toPath)
-        {
-            var ds = await _utils.GetDataset(orgSlug, dsSlug);
-
-            _logger.LogInformation($"In '{orgSlug}/{dsSlug}'");
-
-            var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
-        }
-
         public async Task Delete(string orgSlug, string dsSlug, string path)
         {
             var ds = await _utils.GetDataset(orgSlug, dsSlug);
