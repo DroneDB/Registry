@@ -102,7 +102,7 @@ namespace Registry.Web.Test
         public void List_NullParameters_BadRequestException()
         {
             using var context = GetTest1Context();
-            _appSettingsMock.Setup(o => o.Value).Returns(_settings);
+            _appSettingsMock.Setup(o => o.Value).Returns(JsonConvert.DeserializeObject<AppSettings>(_settingsJson));
             _authManagerMock.Setup(o => o.IsUserAdmin()).Returns(Task.FromResult(true));
 
             var webUtils = new WebUtils(_authManagerMock.Object, context, _appSettingsMock.Object,
@@ -123,8 +123,10 @@ namespace Registry.Web.Test
             using var test = new TestFS(Test4ArchiveUrl, BaseTestFolder);
             await using var context = GetTest1Context();
 
-            _settings.DdbStoragePath = Path.Combine(test.TestFolder, DdbFolder);
-            _appSettingsMock.Setup(o => o.Value).Returns(_settings);
+            var settings = JsonConvert.DeserializeObject<AppSettings>(_settingsJson);
+
+            settings.DdbStoragePath = Path.Combine(test.TestFolder, DdbFolder);
+            _appSettingsMock.Setup(o => o.Value).Returns(settings);
             _authManagerMock.Setup(o => o.IsUserAdmin()).Returns(Task.FromResult(true));
 
             var webUtils = new WebUtils(_authManagerMock.Object, context, _appSettingsMock.Object,
@@ -151,8 +153,10 @@ namespace Registry.Web.Test
             using var test = new TestFS(Test4ArchiveUrl, BaseTestFolder);
             await using var context = GetTest1Context();
 
-            _settings.DdbStoragePath = Path.Combine(test.TestFolder, DdbFolder);
-            _appSettingsMock.Setup(o => o.Value).Returns(_settings);
+            var settings = JsonConvert.DeserializeObject<AppSettings>(_settingsJson);
+
+            settings.DdbStoragePath = Path.Combine(test.TestFolder, DdbFolder);
+            _appSettingsMock.Setup(o => o.Value).Returns(settings);
             _authManagerMock.Setup(o => o.IsUserAdmin()).Returns(Task.FromResult(true));
 
             var webUtils = new WebUtils(_authManagerMock.Object, context, _appSettingsMock.Object,
@@ -179,8 +183,10 @@ namespace Registry.Web.Test
             using var test = new TestFS(Test4ArchiveUrl, BaseTestFolder);
 
             await using var context = GetTest1Context();
-            _settings.DdbStoragePath = Path.Combine(test.TestFolder, DdbFolder);
-            _appSettingsMock.Setup(o => o.Value).Returns(_settings);
+            var settings = JsonConvert.DeserializeObject<AppSettings>(_settingsJson);
+
+            settings.DdbStoragePath = Path.Combine(test.TestFolder, DdbFolder);
+            _appSettingsMock.Setup(o => o.Value).Returns(settings);
             _authManagerMock.Setup(o => o.IsUserAdmin()).Returns(Task.FromResult(true));
 
             var sys = new PhysicalObjectSystem(Path.Combine(test.TestFolder, StorageFolder));
@@ -211,8 +217,10 @@ namespace Registry.Web.Test
             using var test = new TestFS(Test4ArchiveUrl, BaseTestFolder);
 
             await using var context = GetTest1Context();
-            _settings.DdbStoragePath = Path.Combine(test.TestFolder, DdbFolder);
-            _appSettingsMock.Setup(o => o.Value).Returns(_settings);
+            var settings = JsonConvert.DeserializeObject<AppSettings>(_settingsJson);
+
+            settings.DdbStoragePath = Path.Combine(test.TestFolder, DdbFolder);
+            _appSettingsMock.Setup(o => o.Value).Returns(settings);
             _authManagerMock.Setup(o => o.IsUserAdmin()).Returns(Task.FromResult(true));
 
             var sys = new PhysicalObjectSystem(Path.Combine(test.TestFolder, StorageFolder));
@@ -246,8 +254,10 @@ namespace Registry.Web.Test
             using var test = new TestFS(Test4ArchiveUrl, BaseTestFolder);
 
             await using var context = GetTest1Context();
-            _settings.DdbStoragePath = Path.Combine(test.TestFolder, DdbFolder);
-            _appSettingsMock.Setup(o => o.Value).Returns(_settings);
+            var settings = JsonConvert.DeserializeObject<AppSettings>(_settingsJson);
+
+            settings.DdbStoragePath = Path.Combine(test.TestFolder, DdbFolder);
+            _appSettingsMock.Setup(o => o.Value).Returns(settings);
             _authManagerMock.Setup(o => o.IsUserAdmin()).Returns(Task.FromResult(true));
 
             var sys = new PhysicalObjectSystem(Path.Combine(test.TestFolder, StorageFolder));
@@ -296,8 +306,10 @@ namespace Registry.Web.Test
             using var test = new TestFS(Test5ArchiveUrl, BaseTestFolder);
 
             await using var context = GetTest1Context();
-            _settings.DdbStoragePath = Path.Combine(test.TestFolder, DdbFolder);
-            _appSettingsMock.Setup(o => o.Value).Returns(_settings);
+            var settings = JsonConvert.DeserializeObject<AppSettings>(_settingsJson);
+
+            settings.DdbStoragePath = Path.Combine(test.TestFolder, DdbFolder);
+            _appSettingsMock.Setup(o => o.Value).Returns(settings);
             _authManagerMock.Setup(o => o.IsUserAdmin()).Returns(Task.FromResult(true));
 
             var sys = new PhysicalObjectSystem(Path.Combine(test.TestFolder, StorageFolder));
@@ -341,11 +353,14 @@ namespace Registry.Web.Test
             const string fileName = "DJI_0028.JPG";
 
             await using var context = GetTest1Context();
-            _appSettingsMock.Setup(o => o.Value).Returns(_settings);
-            _authManagerMock.Setup(o => o.IsUserAdmin()).Returns(Task.FromResult(true));
-
             using var test = new TestFS(Test4ArchiveUrl, BaseTestFolder);
 
+            var settings = JsonConvert.DeserializeObject<AppSettings>(_settingsJson);
+
+            settings.DdbStoragePath = Path.Combine(test.TestFolder, DdbFolder);
+            _appSettingsMock.Setup(o => o.Value).Returns(settings);
+            _authManagerMock.Setup(o => o.IsUserAdmin()).Returns(Task.FromResult(true));
+            
             var sys = new PhysicalObjectSystem(Path.Combine(test.TestFolder, StorageFolder));
             sys.SyncBucket($"{MagicStrings.PublicOrganizationSlug}-{_defaultDatasetGuid}");
 
@@ -397,11 +412,15 @@ namespace Registry.Web.Test
             const string fileName2 = "DJI_0020.JPG";
 
             await using var context = GetTest1Context();
-            _appSettingsMock.Setup(o => o.Value).Returns(_settings);
-            _authManagerMock.Setup(o => o.IsUserAdmin()).Returns(Task.FromResult(true));
-
             using var test = new TestFS(Test4ArchiveUrl, BaseTestFolder);
 
+            var settings = JsonConvert.DeserializeObject<AppSettings>(_settingsJson);
+
+            settings.DdbStoragePath = Path.Combine(test.TestFolder, DdbFolder);
+
+            _appSettingsMock.Setup(o => o.Value).Returns(settings);
+            _authManagerMock.Setup(o => o.IsUserAdmin()).Returns(Task.FromResult(true));
+            
             var sys = new PhysicalObjectSystem(Path.Combine(test.TestFolder, StorageFolder));
             sys.SyncBucket($"{MagicStrings.PublicOrganizationSlug}-{_defaultDatasetGuid}");
 
@@ -456,7 +475,7 @@ namespace Registry.Web.Test
 
         #region Test Data
 
-        private readonly AppSettings _settings = JsonConvert.DeserializeObject<AppSettings>(@"{
+        private readonly string _settingsJson = @"{
     ""Secret"": ""a2780070a24cfcaf5a4a43f931200ba0d19d8b86b3a7bd5123d9ad75b125f480fcce1f9b7f41a53abe2ba8456bd142d38c455302e0081e5139bc3fc9bf614497"",
     ""TokenExpirationInDays"": 7,
     ""RevokedTokens"": [
@@ -483,7 +502,7 @@ namespace Registry.Web.Test
       ""Build"": 3
     }
 }
-  ");
+  ";
 
         #endregion
 
