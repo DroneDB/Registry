@@ -193,12 +193,7 @@ namespace Registry.Adapters
 
             return cc;
         }
-
-        private static T GetField<T>(CopyConditions copyConditions, string byterangestart)
-        {
-            throw new NotImplementedException();
-        }
-
+        
         public static async Task MoveDirectory(this IObjectSystem system, string bucketName, string source, string dest)
         {
             var sourceObjects = await system.ListObjectsAsync(bucketName, source, true).ToArray();
