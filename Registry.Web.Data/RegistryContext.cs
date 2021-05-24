@@ -25,13 +25,6 @@ namespace Registry.Web.Data
                 .OnDelete(DeleteBehavior.Cascade);
 
             modelBuilder
-                .Entity<FileChunk>()
-                .HasOne(chunk => chunk.Session)
-                .WithMany(session => session.Chunks)
-                .IsRequired()
-                .OnDelete(DeleteBehavior.Cascade);
-
-            modelBuilder
                 .Entity<Batch>()
                 .HasOne(e => e.Dataset)
                 .WithMany(e => e.Batches)
@@ -74,10 +67,6 @@ namespace Registry.Web.Data
         public DbSet<Dataset> Datasets { get; set; }
 
         public DbSet<Batch> Batches { get; set; }
-        public DbSet<Entry> Entries { get; set; }
-
-        public DbSet<UploadSession> UploadSessions { get; set; }
-        public DbSet<FileChunk> FileChunks { get; set; }
 
         public DbSet<DownloadPackage> DownloadPackages { get; set; }
 

@@ -52,7 +52,6 @@ namespace Registry.Web.Test
         private Mock<IObjectsManager> _objectsManagerMock;
         private Mock<IOrganizationsManager> _organizationsManagerMock;
         private Mock<IDatasetsManager> _datasetsManagerMock;
-        private Mock<IChunkedUploadManager> _chunkedUploadManagerMock;
         private Mock<IHttpContextAccessor> _httpContextAccessorMock;
         private Mock<ICacheManager> _cacheManagerMock;
 
@@ -86,7 +85,6 @@ namespace Registry.Web.Test
             _objectsManagerMock = new Mock<IObjectsManager>();
             _organizationsManagerMock = new Mock<IOrganizationsManager>();
             _datasetsManagerMock = new Mock<IDatasetsManager>();
-            _chunkedUploadManagerMock = new Mock<IChunkedUploadManager>();
             _httpContextAccessorMock = new Mock<IHttpContextAccessor>();
 
             _cacheManagerMock = new Mock<ICacheManager>();
@@ -121,7 +119,7 @@ namespace Registry.Web.Test
 
 
             var manager = new ShareManager(_appSettingsMock.Object, _shareManagerLogger, _objectsManagerMock.Object, _datasetsManagerMock.Object,
-                _organizationsManagerMock.Object, _chunkedUploadManagerMock.Object, _utilsMock.Object, _authManagerMock.Object, _batchTokenGenerator, _nameGenerator, GetTest1Context());
+                _organizationsManagerMock.Object, _utilsMock.Object, _authManagerMock.Object, _batchTokenGenerator, _nameGenerator, GetTest1Context());
 
             manager.Invoking(x => x.Initialize(null)).Should().Throw<BadRequestException>();
             // Now empty tag is supported
@@ -151,16 +149,22 @@ namespace Registry.Web.Test
             _authManagerMock.Setup(o => o.UserExists(user.Id)).Returns(Task.FromResult(true));
             _authManagerMock.Setup(o => o.SafeGetCurrentUserName()).Returns(Task.FromResult(userName));
 
-            var ddbMock1 = new Mock<IDdb>();
-            ddbMock1.Setup(x => x.GetAttributesRaw()).Returns(new Dictionary<string, object>
+            var attributes = new Dictionary<string, object>
             {
-                {"public", true }
+                {"public", true}
+            };
+
+            var ddbMock = new Mock<IDdb>();
+            ddbMock.Setup(x => x.GetInfo()).Returns(new DdbEntry
+            {
+                Meta = attributes
             });
             var ddbMock2 = new Mock<IDdb>();
-            ddbMock2.Setup(x => x.GetAttributes()).Returns(new DdbAttributes(ddbMock1.Object));
+            ddbMock2.Setup(x => x.GetAttributesRaw()).Returns(attributes);
+            ddbMock.Setup(x => x.GetAttributes()).Returns(new DdbAttributes(ddbMock2.Object));
 
-            _ddbFactoryMock.Setup(x => x.Get(It.IsAny<string>(), It.IsAny<Guid>())).Returns(ddbMock2.Object);
-            
+            _ddbFactoryMock.Setup(x => x.Get(It.IsAny<string>(), It.IsAny<Guid>())).Returns(ddbMock.Object);
+
             var sys = new PhysicalObjectSystem(Path.Combine(test.TestFolder, StorageFolder));
             sys.SyncBucket($"{MagicStrings.PublicOrganizationSlug}-{MagicStrings.DefaultDatasetSlug}");
 
@@ -168,15 +172,15 @@ namespace Registry.Web.Test
             var webUtils = new WebUtils(_authManagerMock.Object, context, _appSettingsMock.Object,
                 _httpContextAccessorMock.Object, _ddbFactoryMock.Object);
 
-            var objectManager = new ObjectsManager(_objectManagerLogger, context, sys, _chunkedUploadManagerMock.Object, 
+            var objectManager = new ObjectsManager(_objectManagerLogger, context, sys,
                 _appSettingsMock.Object, ddbFactory, webUtils, _authManagerMock.Object, _cacheManagerMock.Object);
 
             var datasetManager = new DatasetsManager(context, webUtils, _datasetsManagerLogger, objectManager,
                 _passwordHasher, _ddbFactoryMock.Object, _authManagerMock.Object);
             var organizationsManager = new OrganizationsManager(_authManagerMock.Object, context, webUtils, datasetManager, _organizationsManagerLogger);
 
-            var shareManager = new ShareManager(_appSettingsMock.Object, _shareManagerLogger, objectManager, datasetManager, organizationsManager, 
-                _chunkedUploadManagerMock.Object, webUtils, _authManagerMock.Object, _batchTokenGenerator, _nameGenerator, context);
+            var shareManager = new ShareManager(_appSettingsMock.Object, _shareManagerLogger, objectManager, datasetManager, organizationsManager,
+                webUtils, _authManagerMock.Object, _batchTokenGenerator, _nameGenerator, context);
 
             /* TEST */
 
@@ -239,21 +243,23 @@ namespace Registry.Web.Test
                 Email = "admin@example.com"
             }));
             _authManagerMock.Setup(o => o.SafeGetCurrentUserName()).Returns(Task.FromResult(userName));
-            
-            //_ddbFactoryMock.Setup(x => x.Get(It.IsAny<string>(), It.IsAny<Guid>()))
-            //    .Returns(() => new Mock<IDdb>().Object);
 
-            var ddbMock1 = new Mock<IDdb>();
-            ddbMock1.Setup(x => x.GetAttributesRaw()).Returns(new Dictionary<string, object>
+            var attributes = new Dictionary<string, object>
             {
-                {"public", true }
+                {"public", true}
+            };
+
+            var ddbMock = new Mock<IDdb>();
+            ddbMock.Setup(x => x.GetInfo()).Returns(new DdbEntry
+            {
+                Meta = attributes
             });
             var ddbMock2 = new Mock<IDdb>();
-            ddbMock2.Setup(x => x.GetAttributes()).Returns(new DdbAttributes(ddbMock1.Object));
+            ddbMock2.Setup(x => x.GetAttributesRaw()).Returns(attributes);
+            ddbMock.Setup(x => x.GetAttributes()).Returns(new DdbAttributes(ddbMock2.Object));
 
-            _ddbFactoryMock.Setup(x => x.Get(It.IsAny<string>(), It.IsAny<Guid>())).Returns(ddbMock2.Object);
-
-
+            _ddbFactoryMock.Setup(x => x.Get(It.IsAny<string>(), It.IsAny<Guid>())).Returns(ddbMock.Object);
+            
             var sys = new PhysicalObjectSystem(Path.Combine(test.TestFolder, StorageFolder));
             sys.SyncBucket($"{MagicStrings.PublicOrganizationSlug}-{MagicStrings.DefaultDatasetSlug}");
 
@@ -261,15 +267,15 @@ namespace Registry.Web.Test
             var webUtils = new WebUtils(_authManagerMock.Object, context, _appSettingsMock.Object,
                 _httpContextAccessorMock.Object, _ddbFactoryMock.Object);
 
-            var objectManager = new ObjectsManager(_objectManagerLogger, context, sys, _chunkedUploadManagerMock.Object, 
+            var objectManager = new ObjectsManager(_objectManagerLogger, context, sys,
                 _appSettingsMock.Object, ddbFactory, webUtils, _authManagerMock.Object, _cacheManagerMock.Object);
 
             var datasetManager = new DatasetsManager(context, webUtils, _datasetsManagerLogger, objectManager,
                 _passwordHasher, _ddbFactoryMock.Object, _authManagerMock.Object);
             var organizationsManager = new OrganizationsManager(_authManagerMock.Object, context, webUtils, datasetManager, _organizationsManagerLogger);
 
-            var shareManager = new ShareManager(_appSettingsMock.Object, _shareManagerLogger, objectManager, datasetManager, organizationsManager, 
-                _chunkedUploadManagerMock.Object, webUtils, _authManagerMock.Object, _batchTokenGenerator, _nameGenerator, context);
+            var shareManager = new ShareManager(_appSettingsMock.Object, _shareManagerLogger, objectManager, datasetManager, organizationsManager,
+                webUtils, _authManagerMock.Object, _batchTokenGenerator, _nameGenerator, context);
 
             /* TEST */
 
@@ -371,16 +377,21 @@ namespace Registry.Web.Test
             }));
             _authManagerMock.Setup(o => o.SafeGetCurrentUserName()).Returns(Task.FromResult(userName));
 
-            var ddbMock1 = new Mock<IDdb>();
-            ddbMock1.Setup(x => x.GetAttributesRaw()).Returns(new Dictionary<string, object>
+            var attributes = new Dictionary<string, object>
             {
-                {"public", true }
+                {"public", true}
+            };
+
+            var ddbMock = new Mock<IDdb>();
+            ddbMock.Setup(x => x.GetInfo()).Returns(new DdbEntry
+            {
+                Meta = attributes
             });
             var ddbMock2 = new Mock<IDdb>();
-            ddbMock2.Setup(x => x.GetAttributes()).Returns(new DdbAttributes(ddbMock1.Object));
+            ddbMock2.Setup(x => x.GetAttributesRaw()).Returns(attributes);
+            ddbMock.Setup(x => x.GetAttributes()).Returns(new DdbAttributes(ddbMock2.Object));
 
-            _ddbFactoryMock.Setup(x => x.Get(It.IsAny<string>(), It.IsAny<Guid>())).Returns(ddbMock2.Object);
-
+            _ddbFactoryMock.Setup(x => x.Get(It.IsAny<string>(), It.IsAny<Guid>())).Returns(ddbMock.Object);
 
             var sys = new PhysicalObjectSystem(Path.Combine(test.TestFolder, StorageFolder));
             sys.SyncBucket($"{MagicStrings.PublicOrganizationSlug}-{MagicStrings.DefaultDatasetSlug}");
@@ -389,15 +400,15 @@ namespace Registry.Web.Test
             var webUtils = new WebUtils(_authManagerMock.Object, context, _appSettingsMock.Object,
                 _httpContextAccessorMock.Object, _ddbFactoryMock.Object);
 
-            var objectManager = new ObjectsManager(_objectManagerLogger, context, sys, _chunkedUploadManagerMock.Object, 
+            var objectManager = new ObjectsManager(_objectManagerLogger, context, sys,
                 _appSettingsMock.Object, ddbFactory, webUtils, _authManagerMock.Object, _cacheManagerMock.Object);
 
             var datasetManager = new DatasetsManager(context, webUtils, _datasetsManagerLogger, objectManager,
                 _passwordHasher, _ddbFactoryMock.Object, _authManagerMock.Object);
             var organizationsManager = new OrganizationsManager(_authManagerMock.Object, context, webUtils, datasetManager, _organizationsManagerLogger);
 
-            var shareManager = new ShareManager(_appSettingsMock.Object, _shareManagerLogger, objectManager, datasetManager, organizationsManager, 
-                _chunkedUploadManagerMock.Object, webUtils, _authManagerMock.Object, _batchTokenGenerator, _nameGenerator, context);
+            var shareManager = new ShareManager(_appSettingsMock.Object, _shareManagerLogger, objectManager, datasetManager, organizationsManager,
+                webUtils, _authManagerMock.Object, _batchTokenGenerator, _nameGenerator, context);
 
             /* TEST */
 

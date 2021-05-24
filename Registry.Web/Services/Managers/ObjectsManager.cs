@@ -1,8 +1,11 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Diagnostics;
+using System.Globalization;
 using System.IO;
 using System.IO.Compression;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using DDB.Bindings;
 using Microsoft.Extensions.Logging;
@@ -27,7 +30,6 @@ namespace Registry.Web.Services.Managers
     {
         private readonly ILogger<ObjectsManager> _logger;
         private readonly IObjectSystem _objectSystem;
-        private readonly IChunkedUploadManager _chunkedUploadManager;
         private readonly IDdbManager _ddbManager;
         private readonly IUtils _utils;
         private readonly IAuthManager _authManager;
@@ -39,11 +41,9 @@ namespace Registry.Web.Services.Managers
         private const int DefaultThumbnailSize = 512;
 
         private const string BucketNameFormat = "{0}-{1}";
-
         public ObjectsManager(ILogger<ObjectsManager> logger,
             RegistryContext context,
             IObjectSystem objectSystem,
-            IChunkedUploadManager chunkedUploadManager,
             IOptions<AppSettings> settings,
             IDdbManager ddbManager,
             IUtils utils, IAuthManager authManager, ICacheManager cacheManager)
@@ -51,7 +51,6 @@ namespace Registry.Web.Services.Managers
             _logger = logger;
             _context = context;
             _objectSystem = objectSystem;
-            _chunkedUploadManager = chunkedUploadManager;
             _ddbManager = ddbManager;
             _utils = utils;
             _authManager = authManager;
@@ -88,6 +87,37 @@ namespace Registry.Web.Services.Managers
                 throw new ArgumentException("Path should not be null");
 
             return await InternalGet(orgSlug, ds.InternalRef, path);
+        }
+
+        private async Task SafeGetFile(string orgSlug, Guid internalRef, string path, string destFile, TimeSpan? maxWaitTime = null)
+        {
+            var bucketName = GetBucketName(orgSlug, internalRef);
+
+            maxWaitTime ??= new TimeSpan(0, 0, 1, 0);
+
+            if (!File.Exists(destFile))
+            {
+                // ReSharper disable once MethodHasAsyncOverload
+                File.WriteAllText(destFile + ".lock", Environment.TickCount.ToString());
+
+                await using var file = File.OpenWrite(destFile);
+                await _objectSystem.GetObjectAsync(bucketName, path, stream => stream.CopyTo(file));
+
+                File.Delete(destFile + ".lock");
+            }
+            else
+            {
+                var time = DateTime.Now;
+                while (File.Exists(destFile + ".lock"))
+                {
+                    Thread.Sleep(50);
+
+                    if (DateTime.Now > time + maxWaitTime.Value)
+                        throw new InvalidOperationException("Wait time expired, cannot get file");
+                }
+
+            }
+
         }
 
         private async Task<ObjectRes> InternalGet(string orgSlug, Guid internalRef, string path)
@@ -205,10 +235,6 @@ namespace Registry.Web.Services.Managers
 
                 _logger.LogInformation("Added to DDB");
 
-                // Refresh objects count and total size
-                ds.UpdateStatistics(ddb);
-                await _context.SaveChangesAsync();
-
                 var obj = new UploadedObjectDto
                 {
                     Path = path,
@@ -267,10 +293,6 @@ namespace Registry.Web.Services.Managers
             var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
 
             ddb.Remove(path);
-            ds.UpdateStatistics(ddb);
-
-            // Refresh objects count and total size
-            await _context.SaveChangesAsync();
 
             _logger.LogInformation("Removed from DDB");
 
@@ -306,55 +328,6 @@ namespace Registry.Web.Services.Managers
             _ddbManager.Delete(orgSlug, ds.InternalRef);
 
         }
-
-        #region Sessions
-        public async Task<int> AddNewSession(string orgSlug, string dsSlug, int chunks, long size)
-        {
-            await _utils.GetDataset(orgSlug, dsSlug);
-
-            var fileName = $"{orgSlug.ToSlug()}-{dsSlug.ToSlug()}-{CommonUtils.RandomString(16)}";
-
-            _logger.LogDebug($"Generated '{fileName}' as temp file name");
-
-            var sessionId = _chunkedUploadManager.InitSession(fileName, chunks, size);
-
-            return sessionId;
-        }
-
-        public async Task AddToSession(string orgSlug, string dsSlug, int sessionId, int index, Stream stream)
-        {
-            await _utils.GetDataset(orgSlug, dsSlug);
-
-            await _chunkedUploadManager.Upload(sessionId, stream, index);
-        }
-
-        public async Task AddToSession(string orgSlug, string dsSlug, int sessionId, int index, byte[] data)
-        {
-            await using var memory = new MemoryStream(data);
-            memory.Reset();
-            await AddToSession(orgSlug, dsSlug, sessionId, index, memory);
-        }
-
-        public async Task<UploadedObjectDto> CloseSession(string orgSlug, string dsSlug, int sessionId, string path)
-        {
-            await _utils.GetDataset(orgSlug, dsSlug);
-
-            var tempFilePath = _chunkedUploadManager.CloseSession(sessionId, false);
-
-            UploadedObjectDto newObj;
-
-            await using (var fileStream = File.OpenRead(tempFilePath))
-            {
-                newObj = await AddNew(orgSlug, dsSlug, path, fileStream);
-            }
-
-            _chunkedUploadManager.CleanupSession(sessionId);
-
-            File.Delete(tempFilePath);
-
-            return newObj;
-        }
-        #endregion
 
         public async Task<FileDescriptorDto> GenerateThumbnail(string orgSlug, string dsSlug, string path, int? size, bool recreate = false)
         {
@@ -407,41 +380,32 @@ namespace Registry.Web.Services.Managers
 
             _logger.LogInformation($"In '{orgSlug}/{dsSlug}'");
 
-            EnsurePathValidity(orgSlug, ds.InternalRef, path, out IDdb ddb);
+            EnsurePathValidity(orgSlug, ds.InternalRef, path, out var ddb);
 
             var fileName = Path.GetFileName(path);
             if (fileName == null)
                 throw new ArgumentException("Path is not valid");
 
-            var destFilePath = string.Empty;
-            var sourceFilePath = Path.Combine(Path.GetTempPath(), CommonUtils.RandomString(8) + fileName);
+            var sourceFilePath = Path.Combine(Path.GetTempPath(), nameof(GenerateTile), orgSlug, dsSlug, path);
 
-            try
+            var dirName = Path.GetDirectoryName(sourceFilePath);
+            if (dirName != null)
+                Directory.CreateDirectory(dirName);
+
+            await SafeGetFile(orgSlug, ds.InternalRef, path, sourceFilePath);
+
+            _logger.LogInformation($"Generating tile from '{sourceFilePath}'");
+            var destFilePath = ddb.GenerateTile(sourceFilePath, tz, tx, ty, retina, true);
+
+            var memory = new MemoryStream(await File.ReadAllBytesAsync(destFilePath));
+            memory.Reset();
+
+            return new FileDescriptorDto
             {
-
-                var obj = await InternalGet(orgSlug, ds.InternalRef, path);
-                await File.WriteAllBytesAsync(sourceFilePath, obj.Data);
-
-                destFilePath = ddb.GenerateTile(sourceFilePath, tz, tx, ty, retina, true);
-
-                var memory = new MemoryStream(await File.ReadAllBytesAsync(destFilePath));
-                memory.Reset();
-
-                return new FileDescriptorDto
-                {
-                    ContentStream = memory,
-                    ContentType = "image/png",
-                    Name = fileName
-                };
-            }
-            finally
-            {
-                if (File.Exists(destFilePath) && !CommonUtils.SafeDelete(destFilePath))
-                    _logger.LogWarning($"Cannot delete dest file '{destFilePath}'");
-
-                if (File.Exists(sourceFilePath) && !CommonUtils.SafeDelete(sourceFilePath))
-                    _logger.LogWarning($"Cannot delete source file '{sourceFilePath}'");
-            }
+                ContentStream = memory,
+                ContentType = "image/png",
+                Name = fileName
+            };
 
         }
 

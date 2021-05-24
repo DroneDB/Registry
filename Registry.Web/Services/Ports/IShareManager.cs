@@ -18,11 +18,5 @@ namespace Registry.Web.Services.Ports
         public Task<bool> IsPathAllowed(string token, string path);
         public Task<IsBatchReadyResult> IsBatchReady(string token);
 
-        public Task<int> StartUploadSession(string token, int chunks, long size);
-        public Task UploadToSession(string token, int sessionId, int index, Stream stream);
-        public Task UploadToSession(string token, int sessionId, int index, byte[] data);
-
-        public Task<UploadResultDto> CloseUploadSession(string token, int sessionId, string path);
-
     }
 }

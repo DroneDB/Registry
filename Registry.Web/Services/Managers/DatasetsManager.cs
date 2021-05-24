@@ -3,6 +3,8 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
+using Registry.Common;
+using Registry.Ports.DroneDB.Models;
 using Registry.Web.Data;
 using Registry.Web.Exceptions;
 using Registry.Web.Models.DTO;
@@ -47,7 +49,8 @@ namespace Registry.Web.Services.Managers
 
             var query = from ds in org.Datasets.ToArray()
                         let ddb = _ddbManager.Get(orgSlug, ds.InternalRef)
-                        let attributes = ddb.GetAttributes()
+                        let info = ddb.GetInfo()
+                        let attributes = new DdbMeta(info.Meta)
                         select new DatasetDto
                         {
                             Id = ds.Id,
@@ -58,8 +61,8 @@ namespace Registry.Web.Services.Managers
                             IsPublic = attributes.IsPublic,
                             Name = ds.Name,
                             Meta = attributes.Meta,
-                            ObjectsCount = ds.ObjectsCount,
-                            Size = ds.Size
+                            ObjectsCount = attributes.ObjectsCount,
+                            Size = info.Size
                         };
 
             return query;
@@ -69,9 +72,9 @@ namespace Registry.Web.Services.Managers
         {
 
             var dataset = await _utils.GetDataset(orgSlug, dsSlug);
-            var ddbManager = _ddbManager.Get(orgSlug, dataset.InternalRef);
+            var ddb = _ddbManager.Get(orgSlug, dataset.InternalRef);
 
-            return dataset.ToDto(ddbManager.GetAttributes());
+            return dataset.ToDto(ddb.GetInfo());
         }
 
         public async Task<EntryDto[]> GetEntry(string orgSlug, string dsSlug)
@@ -81,7 +84,21 @@ namespace Registry.Web.Services.Managers
 
             var ddb = _ddbManager.Get(orgSlug, dataset.InternalRef);
 
-            return new[] { _utils.GetDatasetEntry(dataset, ddb.GetAttributes()) };
+            var info = ddb.GetInfo();
+            var attrs = new DdbMeta(info.Meta);
+            
+            var entry = new EntryDto
+            {
+                ModifiedTime = attrs.LastUpdate,
+                Depth = 0,
+                Size = info.Size,
+                Path = _utils.GenerateDatasetUrl(dataset),
+                Type = EntryType.DroneDb,
+                Meta = info.Meta
+            };
+
+
+            return new[] { entry };
         }
 
         public async Task<DatasetDto> AddNew(string orgSlug, DatasetDto dataset)
@@ -105,16 +122,17 @@ namespace Registry.Web.Services.Managers
                 ddb.ChangeAttributesRaw(dataset.Meta);
 
             var attributes = ddb.GetAttributes();
-            attributes.IsPublic = dataset.IsPublic;
 
+            attributes.IsPublic = dataset.IsPublic;
             attributes.LastUpdate = now;
+
             ds.CreationDate = now;
 
             org.Datasets.Add(ds);
 
             await _context.SaveChangesAsync();
 
-            return ds.ToDto(attributes);
+            return ds.ToDto(ddb.GetInfo());
 
         }
 

@@ -43,23 +43,6 @@ namespace Registry.Web.Controllers
             }
         }
 
-        [HttpPost("cleanupsessions", Name = nameof(SystemController) + "." + nameof(CleanupSessions))]
-        public async Task<IActionResult> CleanupSessions()
-        {
-            try
-            {
-                _logger.LogDebug($"System controller CleanupSessions()");
-
-                return Ok(await _systemManager.CleanupSessions());
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, $"Exception in System controller CleanupSessions()");
-
-                return ExceptionResult(ex);
-            }
-        }
-
         [HttpPost("cleanupbatches", Name = nameof(SystemController) + "." + nameof(CleanupBatches))]
         public async Task<IActionResult> CleanupBatches()
         {
