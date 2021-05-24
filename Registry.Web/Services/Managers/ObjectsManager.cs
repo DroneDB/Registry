@@ -353,6 +353,11 @@ namespace Registry.Web.Services.Managers
 
             _logger.LogInformation($"In '{orgSlug}/{dsSlug}'");
 
+            var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
+
+            if (!ddb.Search(path).Any())
+                throw new BadRequestException($"Path '{path}' not found in dataset");
+            
             var bucketName = GetBucketName(orgSlug, ds.InternalRef);
 
             _logger.LogInformation($"Using bucket '{bucketName}'");
@@ -369,8 +374,6 @@ namespace Registry.Web.Services.Managers
             _logger.LogInformation($"File deleted, removing from DDB");
 
             // Remove from DDB
-            var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
-
             ddb.Remove(path);
 
             _logger.LogInformation("Removed from DDB");
@@ -888,5 +891,7 @@ namespace Registry.Web.Services.Managers
                 _logger.LogInformation($"Bucket '{bucketName}' already exists");
             }
         }
+
+    
     }
 }

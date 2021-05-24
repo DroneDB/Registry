@@ -291,7 +291,7 @@ namespace Registry.Web.Test
             const string organizationSlug = "admin";
             const string datasetSlug = "7kd0gxti9qoemsrk";
             Guid adminDatasetGuid = Guid.Parse("6c1f5555-d001-4411-9308-42aa6ccd7fd6");
-            
+
             string[] fileNames = { "DJI_0007.JPG", "DJI_0008.JPG", "DJI_0009.JPG", "Sub/DJI_0049.JPG", "Sub/DJI_0048.JPG" };
             using var test = new TestFS(Test5ArchiveUrl, BaseTestFolder);
 
@@ -377,9 +377,79 @@ namespace Registry.Web.Test
 
             res.Should().HaveCount(1);
 
-            // TODO: Should check why geometry is null
+        }
+
+        [Test]
+        public async Task EndToEnd_HappyPath()
+        {
+
+            /*
+             * 1) List files
+             * 3) Add folder 'Test'
+             * 4) Add file 'DJI_0021.JPG' inside folder 'Test'
+             * 5) Move file 'DJI_0020.JPG' inside folder 'Test'
+             * 6) Move folder 'Test' to 'Test1'
+             * 7) Delete file 'Test/DJI_0021.JPG'
+             * 8) Delete folder 'Test1'
+             */
+
+            const string fileName = "DJI_0028.JPG";
+            const string fileName2 = "DJI_0020.JPG";
+
+            await using var context = GetTest1Context();
+            _appSettingsMock.Setup(o => o.Value).Returns(_settings);
+            _authManagerMock.Setup(o => o.IsUserAdmin()).Returns(Task.FromResult(true));
+
+            using var test = new TestFS(Test4ArchiveUrl, BaseTestFolder);
+
+            var sys = new PhysicalObjectSystem(Path.Combine(test.TestFolder, StorageFolder));
+            sys.SyncBucket($"{MagicStrings.PublicOrganizationSlug}-{_defaultDatasetGuid}");
+
+            var webUtils = new WebUtils(_authManagerMock.Object, context, _appSettingsMock.Object,
+                _httpContextAccessorMock.Object, _ddbFactoryMock.Object);
+
+            var objectManager = new ObjectsManager(_objectManagerLogger, context, sys, _appSettingsMock.Object,
+                new DdbManager(_appSettingsMock.Object, _ddbFactoryLogger), webUtils, _authManagerMock.Object, _cacheManagerMock.Object);
+
+            (await objectManager.List(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug)).Should().HaveCount(19);
+            
+            var newres = await objectManager.AddNew(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug, "Test");
+            newres.Size.Should().Be(0);
+            newres.ContentType.Should().BeNull();
+            newres.Path.Should().Be("Test");
+
+            var newFileUrl = "https://github.com/DroneDB/test_data/raw/master/test-datasets/drone_dataset_brighton_beach/" + fileName;
+
+            await objectManager.AddNew(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug,
+                "Test/" + fileName, CommonUtils.SmartDownloadData(newFileUrl));
+
+            (await objectManager.List(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug, "Test/" + fileName)).Should().HaveCount(1); ;
+
+            await objectManager.Move(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug, fileName2,
+                "Test/" + fileName2);
+
+            (await objectManager.List(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug, "Test/" + fileName2)).Should().HaveCount(1); ;
+            
+            await objectManager.Move(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug, "Test", "Test2" + fileName2);
+
+            (await objectManager.List(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug, "Test2")).Should().HaveCount(2); ;
+
+            //await objectManager.Delete(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug, fileName);
+
+            //res = await objectManager.List(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug,
+            //    fileName);
+
+            //res.Should().HaveCount(0);
+
+
+
+            //res = await objectManager.List(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug,
+            //    fileName);
+
+            //res.Should().HaveCount(1);
 
         }
+
 
         #region Test Data
 

@@ -230,7 +230,7 @@ namespace Registry.Adapters.DroneDB
 
                     folderPath = Path.Combine(DatabaseFolder, path);
 
-                    EnsureFolderExists(folderPath);
+                    Directory.CreateDirectory(folderPath);
 
                     DDB.Bindings.DroneDB.Add(DatabaseFolder, folderPath);
 
