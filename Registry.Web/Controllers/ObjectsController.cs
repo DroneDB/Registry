@@ -369,5 +369,25 @@ namespace Registry.Web.Controllers
 
         }
 
+        [HttpPut(RoutesHelper.ObjectsRadix)]
+        public async Task<IActionResult> Move([FromRoute] string orgSlug, [FromRoute] string dsSlug, [FromForm] string source, [FromForm] string dest)
+        {
+
+            try
+            {
+                _logger.LogDebug($"Objects controller Move('{orgSlug}', '{dsSlug}', '{source}', '{dest}')");
+
+                await _objectsManager.Move(orgSlug, dsSlug, source, dest);
+                return NoContent();
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, $"Exception in Objects controller Move('{orgSlug}', '{dsSlug}', '{source}', '{dest}')");
+
+                return ExceptionResult(ex);
+            }
+
+        }
+
     }
 }

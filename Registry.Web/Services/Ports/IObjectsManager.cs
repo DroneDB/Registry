@@ -14,10 +14,9 @@ namespace Registry.Web.Services.Ports
         Task<ObjectRes> Get(string orgSlug, string dsSlug, string path);
         Task<UploadedObjectDto> AddNew(string orgSlug, string dsSlug, string path, byte[] data);
         Task<UploadedObjectDto> AddNew(string orgSlug, string dsSlug, string path, Stream stream = null);
+        Task Move(string orgSlug, string dsSlug, string source, string dest);
         Task Delete(string orgSlug, string dsSlug, string path);
-
         Task DeleteAll(string orgSlug, string dsSlug);
-
         Task<FileDescriptorDto> Download(string orgSlug, string dsSlug, string[] paths);
         Task<FileDescriptor> DownloadStream(string orgSlug, string dsSlug, string[] paths);
         Task<string> GetDownloadPackage(string orgSlug, string dsSlug, string[] paths, DateTime? expiration = null, bool isPublic = false);
