@@ -412,27 +412,30 @@ namespace Registry.Web.Test
                 new DdbManager(_appSettingsMock.Object, _ddbFactoryLogger), webUtils, _authManagerMock.Object, _cacheManagerMock.Object);
 
             (await objectManager.List(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug)).Should().HaveCount(19);
-            
+
             var newres = await objectManager.AddNew(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug, "Test");
             newres.Size.Should().Be(0);
             newres.ContentType.Should().BeNull();
             newres.Path.Should().Be("Test");
 
-            var newFileUrl = "https://github.com/DroneDB/test_data/raw/master/test-datasets/drone_dataset_brighton_beach/" + fileName;
+            const string newFileUrl = "https://github.com/DroneDB/test_data/raw/master/test-datasets/drone_dataset_brighton_beach/" + fileName;
 
             await objectManager.AddNew(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug,
                 "Test/" + fileName, CommonUtils.SmartDownloadData(newFileUrl));
 
-            (await objectManager.List(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug, "Test/" + fileName)).Should().HaveCount(1); ;
+            (await objectManager.List(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug, "Test/" + fileName))
+                .Should().HaveCount(1);
 
             await objectManager.Move(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug, fileName2,
                 "Test/" + fileName2);
 
-            (await objectManager.List(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug, "Test/" + fileName2)).Should().HaveCount(1); ;
-            
-            await objectManager.Move(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug, "Test", "Test2" + fileName2);
+            (await objectManager.List(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug, "Test/" + fileName2))
+                .Should().HaveCount(1);
 
-            (await objectManager.List(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug, "Test2")).Should().HaveCount(2); ;
+            await objectManager.Move(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug, "Test", "Test2");
+
+            (await objectManager.List(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug, "Test2"))
+                .Should().HaveCount(2);
 
             //await objectManager.Delete(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug, fileName);
 

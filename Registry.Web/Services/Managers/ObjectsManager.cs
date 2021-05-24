@@ -318,16 +318,18 @@ namespace Registry.Web.Services.Managers
                 _logger.LogInformation("Removing source object");
                 await _objectSystem.RemoveObjectAsync(bucketName, source);
 
-                _logger.LogInformation("Performing ddb move");
-                ddb.Move(source, dest);
-
-                var dst = ddb.Search(dest).FirstOrDefault();
-                if (dst == null)
-                    throw new InvalidOperationException($"Cannot find destination entry '{dest}' after move, something wrong with ddb");
-
-                _logger.LogInformation("Move OK");
-
             }
+
+            _logger.LogInformation("Performing ddb move");
+            ddb.Move(source, dest);
+
+            var dst = ddb.Search(dest).FirstOrDefault();
+            if (dst == null)
+                throw new InvalidOperationException($"Cannot find destination '{dest}' after move, something wrong with ddb");
+
+            _logger.LogInformation("Move OK");
+
+
         }
 
         private string SafeGetLocation()
