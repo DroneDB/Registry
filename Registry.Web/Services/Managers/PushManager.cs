@@ -327,7 +327,7 @@ namespace Registry.Web.Services.Managers
 
             foreach (var obj in objects)
             {
-                await _objectSystem.RemoveObjectAsync(bucketName, tempFolderName + "/" + obj.Key);
+                await _objectSystem.RemoveObjectAsync(bucketName, obj.Key);
             }
 
         }
