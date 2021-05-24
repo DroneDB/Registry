@@ -3,13 +3,16 @@ using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.IO;
 using System.Linq;
+using System.Reactive.Linq;
 using System.Reflection;
 using System.Security.Cryptography;
 using System.Text;
+using System.Threading.Tasks;
 using MimeMapping;
 using Minio.DataModel;
 using Registry.Adapters.ObjectSystem;
 using Registry.Adapters.ObjectSystem.Model;
+using Registry.Ports.ObjectSystem;
 using Registry.Ports.ObjectSystem.Model;
 using CopyConditions = Minio.DataModel.CopyConditions;
 using SSEC = Minio.DataModel.SSEC;
@@ -194,6 +197,31 @@ namespace Registry.Adapters
         private static T GetField<T>(CopyConditions copyConditions, string byterangestart)
         {
             throw new NotImplementedException();
+        }
+
+        public static async Task MoveDirectory(this IObjectSystem system, string bucketName, string source, string dest)
+        {
+            var sourceObjects = await system.ListObjectsAsync(bucketName, source, true).ToArray();
+
+            foreach (var obj in sourceObjects)
+            {
+
+                if (obj.IsDir)
+                {
+
+                }
+                else
+                {
+                    var newPath = dest + obj.Key[source.Length..];
+
+                    await system.CopyObjectAsync(bucketName, obj.Key, bucketName, newPath);
+                    await system.RemoveObjectAsync(bucketName, obj.Key);
+                }
+
+            }
+
+
+            return;
         }
     }
 }

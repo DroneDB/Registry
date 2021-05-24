@@ -11,6 +11,7 @@ using DDB.Bindings;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using MimeMapping;
+using Registry.Adapters;
 using Registry.Common;
 using Registry.Ports.DroneDB;
 using Registry.Ports.DroneDB.Models;
@@ -295,14 +296,18 @@ namespace Registry.Web.Services.Managers
             var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
 
             // Checking if source exists
-            var src = ddb.Search(source).FirstOrDefault();
-            if (src == null)
+            var src = ddb.Search(source).ToArray();
+            if (!src.Any())
                 throw new ArgumentException($"Cannot find source entry '{source}'");
 
-            if (src.Type == EntryType.Directory)
+            // If it's a folder
+            if (src.Length > 1)
             {
-                // TODO: Folder recursive copy
-                throw new NotImplementedException("Folder copy/rename not implemented yet");
+                _logger.LogInformation($"Moving folder '{source}' to '{dest}'");
+
+                await _objectSystem.MoveDirectory(bucketName, source, dest);
+                _logger.LogInformation("Move OK");
+
             }
             else
             {
