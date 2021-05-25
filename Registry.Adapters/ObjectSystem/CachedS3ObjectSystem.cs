@@ -652,11 +652,9 @@ namespace Registry.Adapters.ObjectSystem
                 throw;
             }
 
-#pragma warning disable 4014
-            SafePutObjectAsync(bucketName, objectName, metaData,
-                () => _remoteStorage.PutObjectAsync(bucketName, objectName, data, size, contentType, metaData, sse,
-                cancellationToken), cancellationToken);
-#pragma warning restore 4014
+            await SafePutObjectAsync(bucketName, objectName, metaData,
+                async () => await _remoteStorage.PutObjectAsync(bucketName, objectName, data, size, contentType, metaData, sse,
+                    cancellationToken), cancellationToken);
 
         }
 
@@ -685,10 +683,8 @@ namespace Registry.Adapters.ObjectSystem
                 _logger.LogError(ex, $"Cannot copy to cache from '{filePath}' to '{cachedFileName}' in '{bucketName}' bucket and '{objectName}' object");
             }
 
-#pragma warning disable 4014
-            SafePutObjectAsync(bucketName, objectName, metaData,
-                () => _remoteStorage.PutObjectAsync(bucketName, objectName, filePath, contentType, metaData, sse, cancellationToken), cancellationToken);
-#pragma warning restore 4014
+            await SafePutObjectAsync(bucketName, objectName, metaData,
+                async () => await _remoteStorage.PutObjectAsync(bucketName, objectName, filePath, contentType, metaData, sse, cancellationToken), cancellationToken);
 
         }
 

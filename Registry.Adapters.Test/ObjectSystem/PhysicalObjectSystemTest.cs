@@ -332,9 +332,9 @@ namespace Registry.Adapters.Test.ObjectSystem
             objects.Select(item => item.IsDir).OrderBy(item => item).Should().BeEquivalentTo(expectedObjectIsDir);
 
             // Check objects in subfolder "rep"
-            objects = fs.ListObjectsAsync(bucketName, "rep").ToEnumerable().ToArray();
+            objects = fs.ListObjectsAsync(bucketName, "rep", true).ToEnumerable().ToArray();
 
-            expectedObjectKeys = new[] { "parse.js", "phone.png" };
+            expectedObjectKeys = new[] { "rep/parse.js", "rep/phone.png" };
             expectedObjectSizes = new ulong[] { 57, 3490 };
             expectedObjectIsDir = new[] { false, false };
 

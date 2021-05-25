@@ -33,7 +33,7 @@ namespace Registry.Adapters.DroneDB
             if (!Directory.Exists(ddbPath))
                 throw new ArgumentException($"Path '{ddbPath}' does not exist");
 
-            FolderPath = ddbPath;
+            DatabaseFolder = ddbPath;
 
         }
 
@@ -54,17 +54,17 @@ namespace Registry.Adapters.DroneDB
         {
             try
             {
-                var res = DDB.Bindings.DroneDB.Init(FolderPath);
+                var res = DDB.Bindings.DroneDB.Init(DatabaseFolder);
                 Debug.WriteLine(res);
             }
             catch (DDBException ex)
             {
-                throw new InvalidOperationException($"Cannot initialize ddb in folder '{FolderPath}'", ex);
+                throw new InvalidOperationException($"Cannot initialize ddb in folder '{DatabaseFolder}'", ex);
             }
         }
 
         public string Version => DDB.Bindings.DroneDB.GetVersion();
-        public string FolderPath { get; }
+        public string DatabaseFolder { get; }
 
         static Ddb()
         {
@@ -83,13 +83,13 @@ namespace Registry.Adapters.DroneDB
 
                 // If the path is not absolute let's rebase it on ddbPath
                 if (path != null && !Path.IsPathRooted(path))
-                    path = Path.Combine(FolderPath, path);
+                    path = Path.Combine(DatabaseFolder, path);
 
                 // If path is null we use the base ddb path
-                path ??= FolderPath;
-                
-                var entries = DDB.Bindings.DroneDB.List(FolderPath, path, recursive);
-                
+                path ??= DatabaseFolder;
+
+                var entries = DDB.Bindings.DroneDB.List(DatabaseFolder, path, recursive);
+
                 if (entries == null)
                 {
                     Debug.WriteLine("Strange null return value");
@@ -116,7 +116,7 @@ namespace Registry.Adapters.DroneDB
             }
             catch (DDBException ex)
             {
-                throw new InvalidOperationException($"Cannot list '{path}' to ddb '{FolderPath}'", ex);
+                throw new InvalidOperationException($"Cannot list '{path}' to ddb '{DatabaseFolder}'", ex);
             }
 
 
@@ -134,13 +134,25 @@ namespace Registry.Adapters.DroneDB
             {
 
                 // If the path is not absolute let's rebase it on ddbPath
-                if (!Path.IsPathRooted(path)) path = Path.Combine(FolderPath, path);
+                if (!Path.IsPathRooted(path)) path = Path.Combine(DatabaseFolder, path);
 
-                DDB.Bindings.DroneDB.Remove(FolderPath, path);
+                DDB.Bindings.DroneDB.Remove(DatabaseFolder, path);
             }
             catch (DDBException ex)
             {
-                throw new InvalidOperationException($"Cannot remove '{path}' from ddb '{FolderPath}'", ex);
+                throw new InvalidOperationException($"Cannot remove '{path}' from ddb '{DatabaseFolder}'", ex);
+            }
+        }
+
+        public void Move(string source, string dest)
+        {
+            try
+            {
+                DDB.Bindings.DroneDB.MoveEntry(DatabaseFolder, source, dest);
+            }
+            catch (DDBException ex)
+            {
+                throw new InvalidOperationException($"Cannot move '{source}' to {dest} from ddb '{DatabaseFolder}'", ex);
             }
         }
 
@@ -156,7 +168,7 @@ namespace Registry.Adapters.DroneDB
 
         public DdbEntry GetInfo()
         {
-            var info = DDB.Bindings.DroneDB.Info(FolderPath);
+            var info = DDB.Bindings.DroneDB.Info(DatabaseFolder);
 
             var entry = info.FirstOrDefault();
 
@@ -183,12 +195,12 @@ namespace Registry.Adapters.DroneDB
             try
             {
 
-                return DDB.Bindings.DroneDB.ChangeAttributes(FolderPath, attributes);
+                return DDB.Bindings.DroneDB.ChangeAttributes(DatabaseFolder, attributes);
 
             }
             catch (DDBException ex)
             {
-                throw new InvalidOperationException($"Cannot change attributes of ddb '{FolderPath}'", ex);
+                throw new InvalidOperationException($"Cannot change attributes of ddb '{DatabaseFolder}'", ex);
             }
         }
 
@@ -206,36 +218,66 @@ namespace Registry.Adapters.DroneDB
             }
         }
 
-        public void Add(string path, Stream stream)
+        public void Add(string path, Stream stream = null)
         {
-            string filePath = null;
 
-            try
+            if (stream == null)
             {
+                string folderPath = null;
 
-                filePath = Path.Combine(FolderPath, path);
-
-                stream.Reset();
-
-                EnsureFolderExists(filePath);
-
-                using (var writer = File.OpenWrite(filePath))
+                try
                 {
-                    stream.CopyTo(writer);
+
+                    folderPath = Path.Combine(DatabaseFolder, path);
+
+                    Directory.CreateDirectory(folderPath);
+
+                    DDB.Bindings.DroneDB.Add(DatabaseFolder, folderPath);
+
                 }
-
-                DDB.Bindings.DroneDB.Add(FolderPath, filePath);
-
+                catch (DDBException ex)
+                {
+                    throw new InvalidOperationException($"Cannot add folder '{path}' to ddb '{DatabaseFolder}'", ex);
+                }
+                finally
+                {
+                    if (folderPath != null && Directory.Exists(folderPath))
+                        if (!CommonUtils.SafeDeleteFolder(folderPath))
+                            Debug.WriteLine($"Cannot delete folder '{folderPath}'");
+                }
             }
-            catch (DDBException ex)
+            else
             {
-                throw new InvalidOperationException($"Cannot add '{path}' to ddb '{FolderPath}'", ex);
-            }
-            finally
-            {
-                if (filePath != null && File.Exists(filePath)) 
-                    if (!CommonUtils.SafeDelete(filePath))
-                        Debug.WriteLine($"Cannot delete file '{filePath}'");
+
+                string filePath = null;
+
+                try
+                {
+
+                    filePath = Path.Combine(DatabaseFolder, path);
+
+                    stream.Reset();
+
+                    EnsureFolderExists(filePath);
+
+                    using (var writer = File.OpenWrite(filePath))
+                    {
+                        stream.CopyTo(writer);
+                    }
+
+                    DDB.Bindings.DroneDB.Add(DatabaseFolder, filePath);
+
+                }
+                catch (DDBException ex)
+                {
+                    throw new InvalidOperationException($"Cannot add '{path}' to ddb '{DatabaseFolder}'", ex);
+                }
+                finally
+                {
+                    if (filePath != null && File.Exists(filePath))
+                        if (!CommonUtils.SafeDelete(filePath))
+                            Debug.WriteLine($"Cannot delete file '{filePath}'");
+                }
             }
         }
 
@@ -247,7 +289,7 @@ namespace Registry.Adapters.DroneDB
 
         public override string ToString()
         {
-            return FolderPath;
+            return DatabaseFolder;
         }
     }
 }

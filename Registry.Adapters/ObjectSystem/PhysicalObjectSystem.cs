@@ -317,7 +317,7 @@ namespace Registry.Adapters.ObjectSystem
 
                     var obj = new ItemInfo
                     {
-                        Key = key,
+                        Key = CommonUtils.SafeCombine(prefix, key),
                         Size = (ulong)info.Length,
                         LastModified = info.LastWriteTime,
                         IsDir = false
@@ -338,7 +338,7 @@ namespace Registry.Adapters.ObjectSystem
 
                     var obj = new ItemInfo
                     {
-                        Key = key,
+                        Key = CommonUtils.SafeCombine(prefix, key),
                         Size = 0,
                         LastModified = Directory.GetLastWriteTime(folder),
                         IsDir = true

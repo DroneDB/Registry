@@ -3,13 +3,17 @@ using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.IO;
 using System.Linq;
+using System.Reactive.Linq;
 using System.Reflection;
 using System.Security.Cryptography;
 using System.Text;
+using System.Threading.Tasks;
 using MimeMapping;
 using Minio.DataModel;
 using Registry.Adapters.ObjectSystem;
 using Registry.Adapters.ObjectSystem.Model;
+using Registry.Common;
+using Registry.Ports.ObjectSystem;
 using Registry.Ports.ObjectSystem.Model;
 using CopyConditions = Minio.DataModel.CopyConditions;
 using SSEC = Minio.DataModel.SSEC;
@@ -185,15 +189,35 @@ namespace Registry.Adapters
 
             foreach (var (key, value) in copyConditions.GetConditions())
                 obj.Add(key, value);
-            
+
             cc.SetByteRange(copyConditions.ByteRangeStart, copyConditions.ByteRangeEnd);
 
             return cc;
         }
 
-        private static T GetField<T>(CopyConditions copyConditions, string byterangestart)
+        public static async Task MoveDirectory(this IObjectSystem system, string bucketName, string source, string dest)
         {
-            throw new NotImplementedException();
+            var sourceObjects = await system.ListObjectsAsync(bucketName, source, true).ToArray();
+
+            foreach (var obj in sourceObjects)
+            {
+
+                if (obj.IsDir)
+                {
+                    throw new NotSupportedException("Not supported folder copy");
+                }
+                else
+                {
+                    var newPath = CommonUtils.SafeCombine(dest, obj.Key[(source.Length + 1)..]);
+
+                    await system.CopyObjectAsync(bucketName, obj.Key, bucketName, newPath);
+                    await system.RemoveObjectAsync(bucketName, obj.Key);
+                }
+
+            }
+
+
+            return;
         }
     }
 }

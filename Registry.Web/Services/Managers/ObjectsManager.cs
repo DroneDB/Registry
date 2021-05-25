@@ -11,6 +11,7 @@ using DDB.Bindings;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using MimeMapping;
+using Registry.Adapters;
 using Registry.Common;
 using Registry.Ports.DroneDB;
 using Registry.Ports.DroneDB.Models;
@@ -41,6 +42,8 @@ namespace Registry.Web.Services.Managers
         private const int DefaultThumbnailSize = 512;
 
         private const string BucketNameFormat = "{0}-{1}";
+        private const string TempFolderName = "Registry-ObjectsManager";
+
         public ObjectsManager(ILogger<ObjectsManager> logger,
             RegistryContext context,
             IObjectSystem objectSystem,
@@ -191,7 +194,7 @@ namespace Registry.Web.Services.Managers
             return await AddNew(orgSlug, dsSlug, path, stream);
         }
 
-        public async Task<UploadedObjectDto> AddNew(string orgSlug, string dsSlug, string path, Stream stream)
+        public async Task<UploadedObjectDto> AddNew(string orgSlug, string dsSlug, string path, Stream stream = null)
         {
             var ds = await _utils.GetDataset(orgSlug, dsSlug);
 
@@ -204,23 +207,40 @@ namespace Registry.Web.Services.Managers
             // If the bucket does not exist, let's create it
             await EnsureBucketExists(bucketName);
 
-            // TODO: I highly doubt the robustness of this 
-            var contentType = MimeTypes.GetMimeType(path);
+            UploadedObjectDto obj;
 
-            _logger.LogInformation($"Uploading '{path}' (size {stream.Length}) to bucket '{bucketName}'");
-
-            var tempFileName = Path.GetTempFileName();
-
-            try
+            // If it's a folder
+            if (stream == null)
             {
+                _logger.LogInformation("Adding folder to DDB");
+
+                // Add to DDB
+                var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
+
+                ddb.Add(path);
+
+                _logger.LogInformation("Added to DDB");
+
+                obj = new UploadedObjectDto
+                {
+                    Path = path,
+                    ContentType = null,
+                    Size = 0
+                };
+
+            }
+            else
+            {
+
+                // TODO: I highly doubt the robustness of this 
+                var contentType = MimeTypes.GetMimeType(path);
+
+                var tempFileName = Path.GetTempFileName();
+
+                // Write down the file
                 await using (var tempFileStream = File.OpenWrite(tempFileName))
                 {
                     await stream.CopyToAsync(tempFileStream);
-                }
-
-                await using (var tempFileStream = File.OpenRead(tempFileName))
-                {
-                    await _objectSystem.PutObjectAsync(bucketName, path, tempFileStream, tempFileStream.Length, contentType);
                 }
 
                 _logger.LogInformation("File uploaded, adding to DDB");
@@ -235,20 +255,87 @@ namespace Registry.Web.Services.Managers
 
                 _logger.LogInformation("Added to DDB");
 
-                var obj = new UploadedObjectDto
+                // We perform the actual upload asynchronously
+#pragma warning disable 4014
+                Task.Run(async () =>
+#pragma warning restore 4014
+                {
+
+                    _logger.LogInformation($"Uploading '{path}' (size {stream.Length}) to bucket '{bucketName}'");
+
+                    await using (var tmpStream = File.OpenRead(tempFileName))
+                        await _objectSystem.PutObjectAsync(bucketName, path, tmpStream, tmpStream.Length, contentType);
+
+                    _logger.LogInformation($"Deleting temp file '{tempFileName}'");
+
+                    if (File.Exists(tempFileName))
+                        CommonUtils.SafeDelete(tempFileName);
+
+                });
+
+                obj = new UploadedObjectDto
                 {
                     Path = path,
                     ContentType = contentType,
                     Size = stream.Length
                 };
-
-                return obj;
-
+                
             }
-            finally
+
+            return obj;
+
+        }
+
+        public async Task Move(string orgSlug, string dsSlug, string source, string dest)
+        {
+            var ds = await _utils.GetDataset(orgSlug, dsSlug);
+
+            _logger.LogInformation($"In '{orgSlug}/{dsSlug}'");
+
+            var bucketName = GetBucketName(orgSlug, ds.InternalRef);
+
+            _logger.LogInformation($"Using bucket '{bucketName}'");
+
+            // If the bucket does not exist, let's create it
+            await EnsureBucketExists(bucketName);
+
+            var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
+
+            // Checking if source exists
+            var src = ddb.Search(source).ToArray();
+            if (!src.Any())
+                throw new ArgumentException($"Cannot find source entry '{source}'");
+
+            // If it's a folder
+            if (src.Length > 1)
             {
-                if (File.Exists(tempFileName)) File.Delete(tempFileName);
+                _logger.LogInformation($"Moving folder '{source}' to '{dest}'");
+
+                await _objectSystem.MoveDirectory(bucketName, source, dest);
+                _logger.LogInformation("Move OK");
+
             }
+            else
+            {
+
+                _logger.LogInformation($"Copying object '{source}' to '{dest}'");
+                await _objectSystem.CopyObjectAsync(bucketName, source, bucketName, dest);
+
+                _logger.LogInformation("Removing source object");
+                await _objectSystem.RemoveObjectAsync(bucketName, source);
+
+            }
+
+            _logger.LogInformation("Performing ddb move");
+            ddb.Move(source, dest);
+
+            var dst = ddb.Search(dest).FirstOrDefault();
+            if (dst == null)
+                throw new InvalidOperationException($"Cannot find destination '{dest}' after move, something wrong with ddb");
+
+            _logger.LogInformation("Move OK");
+
+
         }
 
         private string SafeGetLocation()
@@ -274,6 +361,11 @@ namespace Registry.Web.Services.Managers
 
             _logger.LogInformation($"In '{orgSlug}/{dsSlug}'");
 
+            var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
+
+            if (!ddb.Search(path).Any())
+                throw new BadRequestException($"Path '{path}' not found in dataset");
+
             var bucketName = GetBucketName(orgSlug, ds.InternalRef);
 
             _logger.LogInformation($"Using bucket '{bucketName}'");
@@ -290,8 +382,6 @@ namespace Registry.Web.Services.Managers
             _logger.LogInformation($"File deleted, removing from DDB");
 
             // Remove from DDB
-            var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
-
             ddb.Remove(path);
 
             _logger.LogInformation("Removed from DDB");
@@ -772,7 +862,7 @@ namespace Registry.Web.Services.Managers
             try
             {
                 // We could do this fully in memory BUT it's not a strict requirement by now: ddb folders are not huge (yet)
-                ZipFile.CreateFromDirectory(ddb.FolderPath, tempFile, CompressionLevel.Optimal, false);
+                ZipFile.CreateFromDirectory(ddb.DatabaseFolder, tempFile, CompressionLevel.Optimal, false);
 
                 await using var s = File.OpenRead(tempFile);
                 var memory = new MemoryStream();
@@ -809,5 +899,7 @@ namespace Registry.Web.Services.Managers
                 _logger.LogInformation($"Bucket '{bucketName}' already exists");
             }
         }
+
+
     }
 }

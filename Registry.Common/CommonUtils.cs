@@ -247,6 +247,20 @@ namespace Registry.Common
             }
         }
 
+        public static bool SafeDeleteFolder(string path)
+        {
+            try
+            {
+
+                Directory.Delete(path, true);
+                return true;
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
         public static void RemoveEmptyFolders(string folder)
         {
             if (!Directory.Exists(folder)) return;
@@ -270,7 +284,7 @@ namespace Registry.Common
         /// <returns></returns>
         public static string SafeCombine(params string[] paths)
         {
-            return Path.Combine(paths).Replace('\\', '/');
+            return Path.Combine(paths.Where(item => item != null).ToArray()).Replace('\\', '/');
         }
         
         public static (string, Stream) GetTempStream(int bufferSize = 104857600)

@@ -115,7 +115,7 @@ namespace Registry.Web.Controllers
                 var isInline = isInlineRaw == 1;
 
                 _logger.LogDebug($"Objects controller Download('{orgSlug}', '{dsSlug}', '{pathsRaw}', '{isInlineRaw}')");
-                
+
                 var res = await _objectsManager.DownloadStream(orgSlug, dsSlug, paths);
 
                 Response.StatusCode = 200;
@@ -314,25 +314,31 @@ namespace Registry.Web.Controllers
         [HttpPost(RoutesHelper.ObjectsRadix)]
         [RequestFormLimits(ValueLengthLimit = int.MaxValue, MultipartBodyLengthLimit = long.MaxValue)]
         [DisableRequestSizeLimit]
-        public async Task<IActionResult> Post([FromRoute] string orgSlug, [FromRoute] string dsSlug, [FromForm] string path, IFormFile file)
+        public async Task<IActionResult> Post([FromRoute] string orgSlug, [FromRoute] string dsSlug, [FromForm] string path, IFormFile file = null)
         {
             try
             {
                 _logger.LogDebug($"Objects controller Post('{orgSlug}', '{dsSlug}', '{path}', '{file?.FileName}')");
 
+                UploadedObjectDto newObj;
+
                 if (file == null)
-                    throw new ArgumentException("No file uploaded");
+                {
+                    newObj = await _objectsManager.AddNew(orgSlug, dsSlug, path);
+                }
+                else
+                {
+                    await using var stream = file.OpenReadStream();
+                    newObj = await _objectsManager.AddNew(orgSlug, dsSlug, path, stream);
+                }
 
-                await using var stream = file.OpenReadStream();
-
-                var newObj = await _objectsManager.AddNew(orgSlug, dsSlug, path, stream);
                 return CreatedAtRoute(nameof(ObjectsController) + "." + nameof(GetInfo), new
                 {
-                    orgSlug = orgSlug,
-                    dsSlug = dsSlug,
+                    orgSlug,
+                    dsSlug,
                     path = newObj.Path
-                },
-                    newObj);
+                }, newObj);
+
             }
             catch (Exception ex)
             {
@@ -357,6 +363,26 @@ namespace Registry.Web.Controllers
             catch (Exception ex)
             {
                 _logger.LogError(ex, $"Exception in Objects controller Delete('{orgSlug}', '{dsSlug}', '{path}')");
+
+                return ExceptionResult(ex);
+            }
+
+        }
+
+        [HttpPut(RoutesHelper.ObjectsRadix)]
+        public async Task<IActionResult> Move([FromRoute] string orgSlug, [FromRoute] string dsSlug, [FromForm] string source, [FromForm] string dest)
+        {
+
+            try
+            {
+                _logger.LogDebug($"Objects controller Move('{orgSlug}', '{dsSlug}', '{source}', '{dest}')");
+
+                await _objectsManager.Move(orgSlug, dsSlug, source, dest);
+                return NoContent();
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, $"Exception in Objects controller Move('{orgSlug}', '{dsSlug}', '{source}', '{dest}')");
 
                 return ExceptionResult(ex);
             }
