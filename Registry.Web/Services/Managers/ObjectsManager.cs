@@ -231,7 +231,11 @@ namespace Registry.Web.Services.Managers
             }
             else
             {
-
+                // Check for existence
+                var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
+                if(ddb.Search(path).Any())
+                    throw new ArgumentException($"File '{path}' already exists");
+                
                 // TODO: I highly doubt the robustness of this 
                 var contentType = MimeTypes.GetMimeType(path);
 
@@ -246,8 +250,6 @@ namespace Registry.Web.Services.Managers
                 _logger.LogInformation("File uploaded, adding to DDB");
 
                 // Add to DDB
-                var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
-
                 await using (var tempFileStream = File.OpenRead(tempFileName))
                 {
                     ddb.Add(path, tempFileStream);
