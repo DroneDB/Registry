@@ -233,9 +233,9 @@ namespace Registry.Web.Services.Managers
             {
                 // Check for existence
                 var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
-                if(ddb.Search(path).Any())
+                if (ddb.Search(path).Any())
                     throw new ArgumentException($"File '{path}' already exists");
-                
+
                 // TODO: I highly doubt the robustness of this 
                 var contentType = MimeTypes.GetMimeType(path);
 
@@ -281,7 +281,7 @@ namespace Registry.Web.Services.Managers
                     ContentType = contentType,
                     Size = stream.Length
                 };
-                
+
             }
 
             return obj;
@@ -365,7 +365,8 @@ namespace Registry.Web.Services.Managers
 
             var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
 
-            if (!ddb.Search(path).Any())
+            var objs = ddb.Search(path, true).ToArray();
+            if (!objs.Any())
                 throw new BadRequestException($"Path '{path}' not found in dataset");
 
             var bucketName = GetBucketName(orgSlug, ds.InternalRef);
@@ -373,20 +374,20 @@ namespace Registry.Web.Services.Managers
             _logger.LogInformation($"Using bucket '{bucketName}'");
 
             var bucketExists = await _objectSystem.BucketExistsAsync(bucketName);
-
             if (!bucketExists)
                 throw new BadRequestException($"Cannot find bucket '{bucketName}'");
 
-            _logger.LogInformation($"Deleting '{path}'");
-
-            await _objectSystem.RemoveObjectAsync(bucketName, path);
-
-            _logger.LogInformation($"File deleted, removing from DDB");
-
-            // Remove from DDB
+            _logger.LogInformation("Removing from DDB");
             ddb.Remove(path);
 
-            _logger.LogInformation("Removed from DDB");
+            foreach (var obj in objs.Where(item => item.Type != EntryType.Directory))
+            {
+                _logger.LogInformation($"Deleting '{obj.Path}'");
+                await _objectSystem.RemoveObjectAsync(bucketName, obj.Path);
+            }
+            
+            _logger.LogInformation("Deletion complete");
+
 
         }
 
@@ -408,11 +409,9 @@ namespace Registry.Web.Services.Managers
             }
             else
             {
-
                 _logger.LogInformation("Deleting bucket");
                 await _objectSystem.RemoveBucketAsync(bucketName);
                 _logger.LogInformation("Bucket deleted");
-
             }
 
             _logger.LogInformation("Removing DDB");
