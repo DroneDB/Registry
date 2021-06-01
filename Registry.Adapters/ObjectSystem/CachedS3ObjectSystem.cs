@@ -637,6 +637,8 @@ namespace Registry.Adapters.ObjectSystem
 
                 EnsureBucketPathExists(bucketName);
 
+                if (File.Exists(cachedFileName)) File.Delete(cachedFileName);
+
                 await using (var writer = File.OpenWrite(cachedFileName))
                     await data.CopyToAsync(writer, cancellationToken);
 
