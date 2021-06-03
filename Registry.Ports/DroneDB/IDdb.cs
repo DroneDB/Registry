@@ -37,5 +37,7 @@ namespace Registry.Ports.DroneDB
         DdbAttributes GetAttributes();
 
         DdbEntry GetInfo();
+
+        DdbEntry GetInfo(string path);
     }
 }

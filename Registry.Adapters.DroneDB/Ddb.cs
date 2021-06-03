@@ -168,6 +168,14 @@ namespace Registry.Adapters.DroneDB
 
         public DdbEntry GetInfo()
         {
+            return GetInfo(DatabaseFolder);
+        }
+
+        public DdbEntry GetInfo(string path)
+        {
+            if (string.IsNullOrWhiteSpace(path))
+                throw new ArgumentException("Path cannot be null or empty");
+
             var info = DDB.Bindings.DroneDB.Info(DatabaseFolder);
 
             var entry = info.FirstOrDefault();

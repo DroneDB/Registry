@@ -187,14 +187,14 @@ namespace Registry.Web.Services.Managers
             return settings.Region;
         }
 
-        public async Task<UploadedObjectDto> AddNew(string orgSlug, string dsSlug, string path, byte[] data)
+        public async Task<ObjectDto> AddNew(string orgSlug, string dsSlug, string path, byte[] data)
         {
             await using var stream = new MemoryStream(data);
             stream.Reset();
             return await AddNew(orgSlug, dsSlug, path, stream);
         }
 
-        public async Task<UploadedObjectDto> AddNew(string orgSlug, string dsSlug, string path, Stream stream = null)
+        public async Task<ObjectDto> AddNew(string orgSlug, string dsSlug, string path, Stream stream = null)
         {
             var ds = await _utils.GetDataset(orgSlug, dsSlug);
 
@@ -207,82 +207,67 @@ namespace Registry.Web.Services.Managers
             // If the bucket does not exist, let's create it
             await EnsureBucketExists(bucketName);
 
-            UploadedObjectDto obj;
-
+            var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
+            
             // If it's a folder
             if (stream == null)
             {
                 _logger.LogInformation("Adding folder to DDB");
 
                 // Add to DDB
-                var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
-
                 ddb.Add(path);
 
                 _logger.LogInformation("Added to DDB");
 
-                obj = new UploadedObjectDto
+                return new ObjectDto
                 {
                     Path = path,
-                    ContentType = null,
+                    Type = EntryType.Directory,
                     Size = 0
                 };
-
             }
-            else
-            {
-                var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
 
-                // TODO: I highly doubt the robustness of this 
-                var contentType = MimeTypes.GetMimeType(path);
+            // TODO: I highly doubt the robustness of this 
+            var contentType = MimeTypes.GetMimeType(path);
 
-                var tempFileName = Path.GetTempFileName();
+            var tempFileName = Path.GetTempFileName();
 
-                // Write down the file
-                await using (var tempFileStream = File.OpenWrite(tempFileName))
-                {
-                    await stream.CopyToAsync(tempFileStream);
-                }
+            // Write down the file
+            await using (var tempFileStream = File.OpenWrite(tempFileName))
+                await stream.CopyToAsync(tempFileStream);
+            
+            _logger.LogInformation("File uploaded, adding to DDB");
 
-                _logger.LogInformation("File uploaded, adding to DDB");
+            // Add to DDB
+            await using (var tempFileStream = File.OpenRead(tempFileName))
+                ddb.Add(path, tempFileStream);
+            
+            _logger.LogInformation("Added to DDB");
 
-                // Add to DDB
-                await using (var tempFileStream = File.OpenRead(tempFileName))
-                {
-                    ddb.Add(path, tempFileStream);
-                }
-
-                _logger.LogInformation("Added to DDB");
-
-                // We perform the actual upload asynchronously
+            // We perform the actual upload asynchronously
 #pragma warning disable 4014
-                Task.Run(async () =>
+            Task.Run(async () =>
 #pragma warning restore 4014
-                {
+            {
 
-                    _logger.LogInformation($"Uploading '{path}' (size {stream.Length}) to bucket '{bucketName}'");
+                _logger.LogInformation($"Uploading '{path}' (size {stream.Length}) to bucket '{bucketName}'");
 
-                    await using (var tmpStream = File.OpenRead(tempFileName))
-                        await _objectSystem.PutObjectAsync(bucketName, path, tmpStream, tmpStream.Length, contentType);
+                await using (var tmpStream = File.OpenRead(tempFileName))
+                    await _objectSystem.PutObjectAsync(bucketName, path, tmpStream, tmpStream.Length, contentType);
 
-                    _logger.LogInformation($"Deleting temp file '{tempFileName}'");
+                _logger.LogInformation($"Deleting temp file '{tempFileName}'");
 
-                    if (File.Exists(tempFileName))
-                        CommonUtils.SafeDelete(tempFileName);
+                if (File.Exists(tempFileName))
+                    CommonUtils.SafeDelete(tempFileName);
 
-                });
+            });
 
-                obj = new UploadedObjectDto
-                {
-                    Path = path,
-                    ContentType = contentType,
-                    Size = stream.Length
-                };
+            var obj = ddb.Search(path).Select(file => file.ToDto()).FirstOrDefault();
 
-            }
+            if (obj == null)
+                throw new InvalidOperationException("Cannot find just added file!");
 
             return obj;
-
         }
 
         public async Task Move(string orgSlug, string dsSlug, string source, string dest)
@@ -382,7 +367,7 @@ namespace Registry.Web.Services.Managers
                 _logger.LogInformation($"Deleting '{obj.Path}'");
                 await _objectSystem.RemoveObjectAsync(bucketName, obj.Path);
             }
-            
+
             _logger.LogInformation("Deletion complete");
 
 

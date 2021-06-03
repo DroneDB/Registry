@@ -320,7 +320,7 @@ namespace Registry.Web.Controllers
             {
                 _logger.LogDebug($"Objects controller Post('{orgSlug}', '{dsSlug}', '{path}', '{file?.FileName}')");
 
-                UploadedObjectDto newObj;
+                ObjectDto newObj;
 
                 if (file == null)
                 {
