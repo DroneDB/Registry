@@ -127,25 +127,22 @@ namespace Registry.Web.Services.Managers
         {
             var ddb = _ddbManager.Get(orgSlug, internalRef);
 
-            var res = ddb.Search(path).FirstOrDefault();
-
-            if (res == null)
+            if (!ddb.Exists(path))
                 throw new NotFoundException($"Cannot find '{path}'");
 
             var bucketName = GetBucketName(orgSlug, internalRef);
 
             _logger.LogInformation($"Using bucket '{bucketName}'");
 
-            var bucketExists = await _objectSystem.BucketExistsAsync(bucketName);
+            await EnsureBucketExists(bucketName);
 
-            if (!bucketExists)
-            {
-                _logger.LogInformation("Bucket does not exist, creating it");
+            var entries = ddb.Search(path).Where(item => item.Type != EntryType.Directory).ToArray();
 
-                await _objectSystem.MakeBucketAsync(bucketName, SafeGetRegion());
+            // This is a folder
+            if (entries.Length != 1)
+                throw new InvalidOperationException("Cannot get a folder, we are supposed to deal with a file!");
 
-                _logger.LogInformation("Bucket created");
-            }
+            var res = entries.First();
 
             var objInfo = await _objectSystem.GetObjectInfoAsync(bucketName, res.Path);
 
@@ -168,23 +165,6 @@ namespace Registry.Web.Services.Managers
                 Hash = res.Hash,
                 Size = res.Size
             };
-        }
-
-        private string SafeGetRegion()
-        {
-            if (_settings.StorageProvider.Type != StorageType.S3) return null;
-
-            var settings = _settings.StorageProvider.Settings.ToObject<S3StorageProviderSettings>();
-            if (settings == null)
-            {
-                _logger.LogWarning("No S3 settings loaded, shouldn't this be a problem?");
-                return null;
-            }
-
-            if (settings.Region == null)
-                _logger.LogWarning("No region specified in storage provider config");
-
-            return settings.Region;
         }
 
         public async Task<ObjectDto> AddNew(string orgSlug, string dsSlug, string path, byte[] data)
@@ -272,6 +252,7 @@ namespace Registry.Web.Services.Managers
 
         public async Task Move(string orgSlug, string dsSlug, string source, string dest)
         {
+            
             var ds = await _utils.GetDataset(orgSlug, dsSlug);
 
             _logger.LogInformation($"In '{orgSlug}/{dsSlug}'");
@@ -286,35 +267,52 @@ namespace Registry.Web.Services.Managers
             var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
 
             // Checking if source exists
-            var src = ddb.Search(source).ToArray();
-            if (!src.Any())
+            if (!ddb.Exists(source))
                 throw new ArgumentException($"Cannot find source entry '{source}'");
 
-            // If it's a folder
-            if (src.Length > 1)
+            // Short circuit!
+            if (source == dest)
             {
-                _logger.LogInformation($"Moving folder '{source}' to '{dest}'");
-
-                await _objectSystem.MoveDirectory(bucketName, source, dest);
-                _logger.LogInformation("Move OK");
-
+                _logger.LogInformation("Source and dest are the same, nothing to do!");
+                return;
             }
-            else
+
+            var src = ddb.Search(source).Where(item => item.Type != EntryType.Directory).ToArray();
+
+            switch (src.Length)
             {
+                // If it's an empty folder
+                case 0:
 
-                _logger.LogInformation($"Copying object '{source}' to '{dest}'");
-                await _objectSystem.CopyObjectAsync(bucketName, source, bucketName, dest);
+                    _logger.LogInformation("Moving empty folder, nothing to do in object system");
 
-                _logger.LogInformation("Removing source object");
-                await _objectSystem.RemoveObjectAsync(bucketName, source);
+                    break;
+                
+                case 1:
 
+                    _logger.LogInformation($"Copying object '{source}' to '{dest}'");
+                    await _objectSystem.CopyObjectAsync(bucketName, source, bucketName, dest);
+
+                    _logger.LogInformation("Removing source object");
+                    await _objectSystem.RemoveObjectAsync(bucketName, source);
+
+                    break;
+
+                // If it's a folder
+                default:
+
+                    _logger.LogInformation($"Moving folder '{source}' to '{dest}'");
+
+                    await _objectSystem.MoveDirectory(bucketName, source, dest);
+                    _logger.LogInformation("Move OK");
+
+                    break;
             }
 
             _logger.LogInformation("Performing ddb move");
             ddb.Move(source, dest);
 
-            var dst = ddb.Search(dest).FirstOrDefault();
-            if (dst == null)
+            if (!ddb.Exists(dest))
                 throw new InvalidOperationException($"Cannot find destination '{dest}' after move, something wrong with ddb");
 
             _logger.LogInformation("Move OK");
@@ -346,9 +344,8 @@ namespace Registry.Web.Services.Managers
             _logger.LogInformation($"In '{orgSlug}/{dsSlug}'");
 
             var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
-
-            var objs = ddb.Search(path, true).ToArray();
-            if (!objs.Any())
+            
+            if (!ddb.Exists(path))
                 throw new BadRequestException($"Path '{path}' not found in dataset");
 
             var bucketName = GetBucketName(orgSlug, ds.InternalRef);
@@ -362,6 +359,8 @@ namespace Registry.Web.Services.Managers
             _logger.LogInformation("Removing from DDB");
             ddb.Remove(path);
 
+            var objs = ddb.Search(path, true).ToArray();
+            
             foreach (var obj in objs.Where(item => item.Type != EntryType.Directory))
             {
                 _logger.LogInformation($"Deleting '{obj.Path}'");

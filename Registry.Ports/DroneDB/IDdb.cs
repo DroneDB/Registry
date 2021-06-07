@@ -39,5 +39,6 @@ namespace Registry.Ports.DroneDB
         DdbEntry GetInfo();
 
         DdbEntry GetInfo(string path);
+        bool Exists(string path);
     }
 }
