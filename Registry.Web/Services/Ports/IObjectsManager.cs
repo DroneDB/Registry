@@ -18,7 +18,7 @@ namespace Registry.Web.Services.Ports
         Task Delete(string orgSlug, string dsSlug, string path);
         Task DeleteAll(string orgSlug, string dsSlug);
         Task<FileDescriptorDto> Download(string orgSlug, string dsSlug, string[] paths);
-        Task<FileDescriptor> DownloadStream(string orgSlug, string dsSlug, string[] paths);
+        Task<FileStreamDescriptor> DownloadStream(string orgSlug, string dsSlug, string[] paths);
         Task<string> GetDownloadPackage(string orgSlug, string dsSlug, string[] paths, DateTime? expiration = null, bool isPublic = false);
         Task<FileDescriptorDto> DownloadPackage(string orgSlug, string dsSlug, string packageId);
         Task<FileDescriptorDto> GenerateThumbnail(string orgSlug, string dsSlug, string path, int? size, bool recreate = false);

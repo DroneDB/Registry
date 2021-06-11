@@ -23,11 +23,12 @@ namespace Registry.Web.Models.DTO
         Single, Multiple, Dataset
     }
 
-    public class FileDescriptor
+    public class FileStreamDescriptor
     {
         private readonly string _orgSlug;
         private readonly Guid _internalRef;
         private readonly string[] _paths;
+        private readonly string[] _folders;
         private readonly FileDescriptorType _descriptorType;
         private readonly IObjectSystem _objectSystem;
         private readonly IObjectsManager _objectManager;
@@ -35,15 +36,16 @@ namespace Registry.Web.Models.DTO
         private readonly IDdbManager _ddbManager;
 
         public string Name { get; }
-        
+
         public string ContentType { get; }
 
-        public FileDescriptor(string name, string contentType, string orgSlug, Guid internalRef, string[] paths,
+        public FileStreamDescriptor(string name, string contentType, string orgSlug, Guid internalRef, string[] paths, string[] folders,
             FileDescriptorType descriptorType, IObjectSystem objectSystem, IObjectsManager objectManager, ILogger<ObjectsManager> logger, IDdbManager ddbManager)
         {
             _orgSlug = orgSlug;
             _internalRef = internalRef;
             _paths = paths;
+            _folders = folders;
             _descriptorType = descriptorType;
             _objectSystem = objectSystem;
             _objectManager = objectManager;
@@ -61,7 +63,7 @@ namespace Registry.Web.Models.DTO
                 var filePath = _paths.First();
 
                 _logger.LogInformation($"Only one path found: '{filePath}'");
-                
+
                 await WriteObjectContentStream(_orgSlug, _internalRef, filePath, stream);
 
             }
@@ -79,14 +81,21 @@ namespace Registry.Web.Models.DTO
                     await WriteObjectContentStream(_orgSlug, _internalRef, path, entryStream);
                 }
 
+                // We treat folders separately because if they are empty they would not be included in the archive
+                if (_folders != null)
+                {
+                    foreach (var folder in _folders)
+                        archive.CreateEntry(folder + "/");
+                }
+
                 // Include ddb folder
                 if (_descriptorType == FileDescriptorType.Dataset)
                 {
                     var ddb = _ddbManager.Get(_orgSlug, _internalRef);
 
                     archive.CreateEntryFromAny(Path.Combine(ddb.DatabaseFolder, _ddbManager.DdbFolderName));
-                    
                 }
+
             }
 
         }
