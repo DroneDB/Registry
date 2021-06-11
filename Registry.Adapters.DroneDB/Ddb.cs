@@ -75,20 +75,26 @@ namespace Registry.Adapters.DroneDB
 #endif
         }
 
-        public bool Exists(string path)
+        public DdbEntry GetEntry(string path)
         {
             var objs = Search(path, true).ToArray();
-            if (objs.Any())
-                return true;
-
+            
+            if (objs.Any(p => p.Path == path))
+                return objs.First();
+            
             var parent = Path.GetDirectoryName(path);
 
             if (string.IsNullOrEmpty(parent)) parent = "*";
 
             objs = Search(parent, true).ToArray();
 
-            return objs.Any(item => item.Path == path);
+            return objs.FirstOrDefault(item => item.Path == path);
 
+        }
+
+        public bool EntryExists(string path)
+        {
+            return GetEntry(path) != null;
         }
 
 
