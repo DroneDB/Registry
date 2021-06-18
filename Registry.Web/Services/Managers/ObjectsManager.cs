@@ -189,6 +189,9 @@ namespace Registry.Web.Services.Managers
             // If it's a folder
             if (stream == null)
             {
+                if (ddb.EntryExists(path))
+                    throw new InvalidOperationException("Cannot create a folder on another entry");
+
                 _logger.LogInformation("Adding folder to DDB");
 
                 // Add to DDB
