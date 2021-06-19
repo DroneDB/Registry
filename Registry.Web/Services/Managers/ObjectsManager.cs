@@ -177,6 +177,9 @@ namespace Registry.Web.Services.Managers
 
             _logger.LogInformation($"In '{orgSlug}/{dsSlug}'");
 
+            if (!await _authManager.IsOwnerOrAdmin(ds))
+                throw new UnauthorizedException("The current user is not allowed to edit dataset");
+
             var bucketName = GetBucketName(orgSlug, ds.InternalRef);
 
             _logger.LogInformation($"Using bucket '{bucketName}'");
@@ -256,6 +259,9 @@ namespace Registry.Web.Services.Managers
             var ds = await _utils.GetDataset(orgSlug, dsSlug);
 
             _logger.LogInformation($"In '{orgSlug}/{dsSlug}'");
+
+            if (!await _authManager.IsOwnerOrAdmin(ds))
+                throw new UnauthorizedException("The current user is not allowed to edit dataset");
 
             var bucketName = GetBucketName(orgSlug, ds.InternalRef);
 
@@ -356,6 +362,9 @@ namespace Registry.Web.Services.Managers
 
             _logger.LogInformation($"In '{orgSlug}/{dsSlug}'");
 
+            if (!await _authManager.IsOwnerOrAdmin(ds))
+                throw new UnauthorizedException("The current user is not allowed to edit dataset");
+            
             var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
             
             if (!ddb.EntryExists(path))
@@ -390,6 +399,9 @@ namespace Registry.Web.Services.Managers
             var ds = await _utils.GetDataset(orgSlug, dsSlug);
 
             _logger.LogInformation($"In DeleteAll('{orgSlug}/{dsSlug}')");
+
+            if (!await _authManager.IsOwnerOrAdmin(ds))
+                throw new UnauthorizedException("The current user is not allowed to edit dataset");
 
             var bucketName = GetBucketName(orgSlug, ds.InternalRef);
 
