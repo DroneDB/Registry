@@ -75,6 +75,29 @@ namespace Registry.Adapters.DroneDB
 #endif
         }
 
+        public DdbEntry GetEntry(string path)
+        {
+            var objs = Search(path, true).ToArray();
+            
+            if (objs.Any(p => p.Path == path))
+                return objs.First();
+            
+            var parent = Path.GetDirectoryName(path);
+
+            if (string.IsNullOrEmpty(parent)) parent = "*";
+
+            objs = Search(parent, true).ToArray();
+
+            return objs.FirstOrDefault(item => item.Path == path);
+
+        }
+
+        public bool EntryExists(string path)
+        {
+            return GetEntry(path) != null;
+        }
+
+
         public IEnumerable<DdbEntry> Search(string path, bool recursive = false)
         {
 
@@ -168,6 +191,14 @@ namespace Registry.Adapters.DroneDB
 
         public DdbEntry GetInfo()
         {
+            return GetInfo(DatabaseFolder);
+        }
+
+        public DdbEntry GetInfo(string path)
+        {
+            if (string.IsNullOrWhiteSpace(path))
+                throw new ArgumentException("Path cannot be null or empty");
+
             var info = DDB.Bindings.DroneDB.Info(DatabaseFolder);
 
             var entry = info.FirstOrDefault();

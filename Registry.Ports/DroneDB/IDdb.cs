@@ -37,5 +37,21 @@ namespace Registry.Ports.DroneDB
         DdbAttributes GetAttributes();
 
         DdbEntry GetInfo();
+
+        /// <summary>
+        /// Calls DDB info command on specified path
+        /// </summary>
+        /// <param name="path"></param>
+        /// <returns></returns>
+        DdbEntry GetInfo(string path);
+
+        /// <summary>
+        /// Gets the specified path inside the DDB database
+        /// </summary>
+        /// <param name="path"></param>
+        /// <returns></returns>
+        DdbEntry GetEntry(string path);
+
+        bool EntryExists(string path);
     }
 }

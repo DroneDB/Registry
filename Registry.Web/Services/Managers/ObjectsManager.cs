@@ -127,25 +127,19 @@ namespace Registry.Web.Services.Managers
         {
             var ddb = _ddbManager.Get(orgSlug, internalRef);
 
-            var res = ddb.Search(path).FirstOrDefault();
-
-            if (res == null)
+            if (!ddb.EntryExists(path))
                 throw new NotFoundException($"Cannot find '{path}'");
 
             var bucketName = GetBucketName(orgSlug, internalRef);
 
             _logger.LogInformation($"Using bucket '{bucketName}'");
 
-            var bucketExists = await _objectSystem.BucketExistsAsync(bucketName);
+            await EnsureBucketExists(bucketName);
 
-            if (!bucketExists)
-            {
-                _logger.LogInformation("Bucket does not exist, creating it");
+            var res = ddb.GetEntry(path);
 
-                await _objectSystem.MakeBucketAsync(bucketName, SafeGetRegion());
-
-                _logger.LogInformation("Bucket created");
-            }
+            if (res.Type == EntryType.Directory)
+                throw new InvalidOperationException("Cannot get a folder, we are supposed to deal with a file!");
 
             var objInfo = await _objectSystem.GetObjectInfoAsync(bucketName, res.Path);
 
@@ -170,35 +164,21 @@ namespace Registry.Web.Services.Managers
             };
         }
 
-        private string SafeGetRegion()
-        {
-            if (_settings.StorageProvider.Type != StorageType.S3) return null;
-
-            var settings = _settings.StorageProvider.Settings.ToObject<S3StorageProviderSettings>();
-            if (settings == null)
-            {
-                _logger.LogWarning("No S3 settings loaded, shouldn't this be a problem?");
-                return null;
-            }
-
-            if (settings.Region == null)
-                _logger.LogWarning("No region specified in storage provider config");
-
-            return settings.Region;
-        }
-
-        public async Task<UploadedObjectDto> AddNew(string orgSlug, string dsSlug, string path, byte[] data)
+        public async Task<ObjectDto> AddNew(string orgSlug, string dsSlug, string path, byte[] data)
         {
             await using var stream = new MemoryStream(data);
             stream.Reset();
             return await AddNew(orgSlug, dsSlug, path, stream);
         }
 
-        public async Task<UploadedObjectDto> AddNew(string orgSlug, string dsSlug, string path, Stream stream = null)
+        public async Task<ObjectDto> AddNew(string orgSlug, string dsSlug, string path, Stream stream = null)
         {
             var ds = await _utils.GetDataset(orgSlug, dsSlug);
 
             _logger.LogInformation($"In '{orgSlug}/{dsSlug}'");
+
+            if (!await _authManager.IsOwnerOrAdmin(ds))
+                throw new UnauthorizedException("The current user is not allowed to edit dataset");
 
             var bucketName = GetBucketName(orgSlug, ds.InternalRef);
 
@@ -207,90 +187,81 @@ namespace Registry.Web.Services.Managers
             // If the bucket does not exist, let's create it
             await EnsureBucketExists(bucketName);
 
-            UploadedObjectDto obj;
-
+            var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
+            
             // If it's a folder
             if (stream == null)
             {
+                if (ddb.EntryExists(path))
+                    throw new InvalidOperationException("Cannot create a folder on another entry");
+
                 _logger.LogInformation("Adding folder to DDB");
 
                 // Add to DDB
-                var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
-
                 ddb.Add(path);
 
                 _logger.LogInformation("Added to DDB");
 
-                obj = new UploadedObjectDto
+                return new ObjectDto
                 {
                     Path = path,
-                    ContentType = null,
+                    Type = EntryType.Directory,
                     Size = 0
                 };
-
             }
-            else
+
+            // TODO: I highly doubt the robustness of this 
+            var contentType = MimeTypes.GetMimeType(path);
+
+            var tempFileName = Path.GetTempFileName();
+
+            // Write down the file
+            await using (var tempFileStream = File.OpenWrite(tempFileName))
+                await stream.CopyToAsync(tempFileStream);
+            
+            _logger.LogInformation("File uploaded, adding to DDB");
+
+            // Add to DDB
+            await using (var tempFileStream = File.OpenRead(tempFileName))
+                ddb.Add(path, tempFileStream);
+            
+            _logger.LogInformation("Added to DDB");
+
+            // We perform the actual upload asynchronously
+#pragma warning disable 4014
+            Task.Run(async () =>
+#pragma warning restore 4014
             {
 
-                // TODO: I highly doubt the robustness of this 
-                var contentType = MimeTypes.GetMimeType(path);
+                _logger.LogInformation($"Uploading '{path}' (size {stream.Length}) to bucket '{bucketName}'");
 
-                var tempFileName = Path.GetTempFileName();
+                await using (var tmpStream = File.OpenRead(tempFileName))
+                    await _objectSystem.PutObjectAsync(bucketName, path, tmpStream, tmpStream.Length, contentType);
 
-                // Write down the file
-                await using (var tempFileStream = File.OpenWrite(tempFileName))
-                {
-                    await stream.CopyToAsync(tempFileStream);
-                }
+                _logger.LogInformation($"Deleting temp file '{tempFileName}'");
 
-                _logger.LogInformation("File uploaded, adding to DDB");
+                if (File.Exists(tempFileName))
+                    CommonUtils.SafeDelete(tempFileName);
 
-                // Add to DDB
-                var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
+            });
 
-                await using (var tempFileStream = File.OpenRead(tempFileName))
-                {
-                    ddb.Add(path, tempFileStream);
-                }
+            var obj = ddb.Search(path).Select(file => file.ToDto()).FirstOrDefault();
 
-                _logger.LogInformation("Added to DDB");
-
-                // We perform the actual upload asynchronously
-#pragma warning disable 4014
-                Task.Run(async () =>
-#pragma warning restore 4014
-                {
-
-                    _logger.LogInformation($"Uploading '{path}' (size {stream.Length}) to bucket '{bucketName}'");
-
-                    await using (var tmpStream = File.OpenRead(tempFileName))
-                        await _objectSystem.PutObjectAsync(bucketName, path, tmpStream, tmpStream.Length, contentType);
-
-                    _logger.LogInformation($"Deleting temp file '{tempFileName}'");
-
-                    if (File.Exists(tempFileName))
-                        CommonUtils.SafeDelete(tempFileName);
-
-                });
-
-                obj = new UploadedObjectDto
-                {
-                    Path = path,
-                    ContentType = contentType,
-                    Size = stream.Length
-                };
-                
-            }
+            if (obj == null)
+                throw new InvalidOperationException("Cannot find just added file!");
 
             return obj;
-
         }
 
         public async Task Move(string orgSlug, string dsSlug, string source, string dest)
         {
+            
             var ds = await _utils.GetDataset(orgSlug, dsSlug);
 
             _logger.LogInformation($"In '{orgSlug}/{dsSlug}'");
+
+            if (!await _authManager.IsOwnerOrAdmin(ds))
+                throw new UnauthorizedException("The current user is not allowed to edit dataset");
 
             var bucketName = GetBucketName(orgSlug, ds.InternalRef);
 
@@ -301,36 +272,66 @@ namespace Registry.Web.Services.Managers
 
             var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
 
+            var sourceEntry = ddb.GetEntry(source);
+
             // Checking if source exists
-            var src = ddb.Search(source).ToArray();
-            if (!src.Any())
-                throw new ArgumentException($"Cannot find source entry '{source}'");
+            if (sourceEntry == null)
+                throw new InvalidOperationException("Cannot find source entry: '" + source + "'");
 
-            // If it's a folder
-            if (src.Length > 1)
+            // Short circuit!
+            if (source == dest)
             {
-                _logger.LogInformation($"Moving folder '{source}' to '{dest}'");
-
-                await _objectSystem.MoveDirectory(bucketName, source, dest);
-                _logger.LogInformation("Move OK");
-
+                _logger.LogInformation("Source and dest are the same, nothing to do!");
+                return;
             }
-            else
+
+            var destEntry = ddb.GetEntry(dest);
+
+            if (destEntry != null)
             {
+                if (sourceEntry.Type == EntryType.Directory && destEntry.Type != EntryType.Directory)
+                    throw new ArgumentException("Cannot move a folder on a file");
 
-                _logger.LogInformation($"Copying object '{source}' to '{dest}'");
-                await _objectSystem.CopyObjectAsync(bucketName, source, bucketName, dest);
+                if (sourceEntry.Type != EntryType.Directory && destEntry.Type == EntryType.Directory)
+                    throw new ArgumentException("Cannot move a file on a folder");
+            }
 
-                _logger.LogInformation("Removing source object");
-                await _objectSystem.RemoveObjectAsync(bucketName, source);
+            var src = ddb.Search(source).Where(item => item.Type != EntryType.Directory).ToArray();
 
+            switch (src.Length)
+            {
+                // If it's an empty folder
+                case 0:
+
+                    _logger.LogInformation("Moving empty folder, nothing to do in object system");
+
+                    break;
+                
+                case 1:
+
+                    _logger.LogInformation($"Copying object '{source}' to '{dest}'");
+                    await _objectSystem.CopyObjectAsync(bucketName, source, bucketName, dest);
+
+                    _logger.LogInformation("Removing source object");
+                    await _objectSystem.RemoveObjectAsync(bucketName, source);
+
+                    break;
+
+                // If it's a folder
+                default:
+
+                    _logger.LogInformation($"Moving folder '{source}' to '{dest}'");
+
+                    await _objectSystem.MoveDirectory(bucketName, source, dest);
+                    _logger.LogInformation("Move OK");
+
+                    break;
             }
 
             _logger.LogInformation("Performing ddb move");
             ddb.Move(source, dest);
 
-            var dst = ddb.Search(dest).FirstOrDefault();
-            if (dst == null)
+            if (!ddb.EntryExists(dest))
                 throw new InvalidOperationException($"Cannot find destination '{dest}' after move, something wrong with ddb");
 
             _logger.LogInformation("Move OK");
@@ -361,9 +362,12 @@ namespace Registry.Web.Services.Managers
 
             _logger.LogInformation($"In '{orgSlug}/{dsSlug}'");
 
+            if (!await _authManager.IsOwnerOrAdmin(ds))
+                throw new UnauthorizedException("The current user is not allowed to edit dataset");
+            
             var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
-
-            if (!ddb.Search(path).Any())
+            
+            if (!ddb.EntryExists(path))
                 throw new BadRequestException($"Path '{path}' not found in dataset");
 
             var bucketName = GetBucketName(orgSlug, ds.InternalRef);
@@ -371,20 +375,22 @@ namespace Registry.Web.Services.Managers
             _logger.LogInformation($"Using bucket '{bucketName}'");
 
             var bucketExists = await _objectSystem.BucketExistsAsync(bucketName);
-
             if (!bucketExists)
                 throw new BadRequestException($"Cannot find bucket '{bucketName}'");
 
-            _logger.LogInformation($"Deleting '{path}'");
-
-            await _objectSystem.RemoveObjectAsync(bucketName, path);
-
-            _logger.LogInformation($"File deleted, removing from DDB");
-
-            // Remove from DDB
+            _logger.LogInformation("Removing from DDB");
             ddb.Remove(path);
 
-            _logger.LogInformation("Removed from DDB");
+            var objs = ddb.Search(path, true).ToArray();
+            
+            foreach (var obj in objs.Where(item => item.Type != EntryType.Directory))
+            {
+                _logger.LogInformation($"Deleting '{obj.Path}'");
+                await _objectSystem.RemoveObjectAsync(bucketName, obj.Path);
+            }
+
+            _logger.LogInformation("Deletion complete");
+
 
         }
 
@@ -393,6 +399,9 @@ namespace Registry.Web.Services.Managers
             var ds = await _utils.GetDataset(orgSlug, dsSlug);
 
             _logger.LogInformation($"In DeleteAll('{orgSlug}/{dsSlug}')");
+
+            if (!await _authManager.IsOwnerOrAdmin(ds))
+                throw new UnauthorizedException("The current user is not allowed to edit dataset");
 
             var bucketName = GetBucketName(orgSlug, ds.InternalRef);
 
@@ -406,11 +415,9 @@ namespace Registry.Web.Services.Managers
             }
             else
             {
-
                 _logger.LogInformation("Deleting bucket");
                 await _objectSystem.RemoveBucketAsync(bucketName);
                 _logger.LogInformation("Bucket deleted");
-
             }
 
             _logger.LogInformation("Removing DDB");
@@ -549,18 +556,18 @@ namespace Registry.Web.Services.Managers
             return res.First();
         }
 
-        private DdbEntry[] EnsurePathsValidity(string orgSlug, Guid internalRef, string[] paths)
+        private void EnsurePathsValidity(string orgSlug, Guid internalRef, string[] paths)
         {
-            return EnsurePathsValidity(orgSlug, internalRef, paths, out IDdb ddb);
+            EnsurePathsValidity(orgSlug, internalRef, paths, out IDdb ddb);
         }
 
-        private DdbEntry[] EnsurePathsValidity(string orgSlug, Guid internalRef, string[] paths, out IDdb ddb)
+        private void EnsurePathsValidity(string orgSlug, Guid internalRef, string[] paths, out IDdb ddb)
         {
             ddb = null;
 
             if (paths == null || !paths.Any())
                 // Everything
-                return null;
+                return;
 
             if (paths.Any(path => path.Contains("*") || path.Contains("?") || string.IsNullOrWhiteSpace(path)))
                 throw new ArgumentException("Wildcards or empty paths are not supported");
@@ -569,20 +576,11 @@ namespace Registry.Web.Services.Managers
                 throw new ArgumentException("Duplicate paths");
 
             ddb = _ddbManager.Get(orgSlug, internalRef);
-
-            var entries = new List<DdbEntry>();
-
+            
             foreach (var path in paths)
-            {
-                var res = ddb.Search(path)?.ToArray();
-
-                if (res == null || !res.Any())
+                if (!ddb.EntryExists(path))
                     throw new ArgumentException($"Invalid path: '{path}'");
-
-                entries.AddRange(res);
-            }
-
-            return entries.ToArray();
+            
         }
 
         #endregion
@@ -634,7 +632,7 @@ namespace Registry.Web.Services.Managers
         }
 
 
-        public async Task<FileDescriptor> DownloadStream(string orgSlug, string dsSlug, string[] paths)
+        public async Task<FileStreamDescriptor> DownloadStream(string orgSlug, string dsSlug, string[] paths)
         {
             var ds = await _utils.GetDataset(orgSlug, dsSlug);
 
@@ -642,7 +640,7 @@ namespace Registry.Web.Services.Managers
 
             EnsurePathsValidity(orgSlug, ds.InternalRef, paths);
 
-            return GetFileDescriptor(orgSlug, dsSlug, ds.InternalRef, paths);
+            return GetFileStreamDescriptor(orgSlug, dsSlug, ds.InternalRef, paths);
         }
 
         public async Task<FileDescriptorDto> Download(string orgSlug, string dsSlug, string[] paths)
@@ -656,127 +654,50 @@ namespace Registry.Web.Services.Managers
             return await GetOfflineFileDescriptor(orgSlug, dsSlug, ds.InternalRef, paths);
         }
 
-        private FileDescriptor GetFileDescriptor(string orgSlug, string dsSlug, Guid internalRef, string[] paths)
+        private FileStreamDescriptor GetFileStreamDescriptor(string orgSlug, string dsSlug, Guid internalRef, string[] paths)
         {
             var ddb = _ddbManager.Get(orgSlug, internalRef);
 
-            string[] filePaths;
+            var (files, folders, includeDdb) = GetFilePaths(paths, ddb);
 
-            bool includeDdb = false;
-
-            if (paths != null)
-            {
-                var temp = new List<string>();
-
-                foreach (var path in paths)
-                {
-                    // We are in recursive mode because the paths could contain other folders that we need to expand
-                    var items = ddb.Search(path, true)?
-                        .Where(entry => entry.Type != EntryType.Directory)
-                        .Select(entry => entry.Path).ToArray();
-
-                    if (items == null || !items.Any())
-                        throw new ArgumentException($"Cannot find any file path matching '{path}'");
-
-                    temp.AddRange(items);
-                }
-
-                // Get rid of possible duplicates and sort
-                filePaths = temp.Distinct().OrderBy(item => item).ToArray();
-
-            }
-            else
-            {
-                // Select everything and sort
-                filePaths = ddb.Search(null, true)?
-                    .Where(entry => entry.Type != EntryType.Directory)
-                    .Select(entry => entry.Path)
-                    .OrderBy(path => path)
-                    .ToArray();
-
-                if (filePaths == null)
-                    throw new InvalidOperationException("Ddb is empty, what should I get?");
-
-                // We include the ddb folder only when asked for the entire dataset
-                includeDdb = true;
-            }
-
-            _logger.LogInformation($"Found {filePaths.Length} paths");
-
-            FileDescriptor descriptor;
+            FileStreamDescriptor streamDescriptor;
 
             // If there is just one file we return it
-            if (filePaths.Length == 1 && paths?.Length == 1 && filePaths[0] == paths[0])
+            if (files.Length == 1 && paths?.Length == 1 && files[0] == paths[0])
             {
-                var filePath = filePaths.First();
+                var filePath = files.First();
 
                 _logger.LogInformation($"Only one path found: '{filePath}'");
 
-                descriptor = new FileDescriptor(Path.GetFileName(filePath), MimeUtility.GetMimeMapping(filePath),
-                    orgSlug, internalRef, filePaths, FileDescriptorType.Single, _objectSystem, this, _logger, _ddbManager);
+                streamDescriptor = new FileStreamDescriptor(Path.GetFileName(filePath), MimeUtility.GetMimeMapping(filePath),
+                    orgSlug, internalRef, files, null, FileDescriptorType.Single, _objectSystem, this, _logger, _ddbManager);
 
             }
             // Otherwise we zip everything together and return the package
             else
             {
-                descriptor = new FileDescriptor($"{orgSlug}-{dsSlug}-{CommonUtils.RandomString(8)}.zip",
-                    "application/zip", orgSlug, internalRef, filePaths,
+                streamDescriptor = new FileStreamDescriptor($"{orgSlug}-{dsSlug}-{CommonUtils.RandomString(8)}.zip",
+                    "application/zip", orgSlug, internalRef, files, folders,
                     includeDdb ? FileDescriptorType.Dataset : FileDescriptorType.Multiple, _objectSystem, this,
                     _logger, _ddbManager);
 
             }
 
-            return descriptor;
+            return streamDescriptor;
         }
 
         private async Task<FileDescriptorDto> GetOfflineFileDescriptor(string orgSlug, string dsSlug, Guid internalRef, string[] paths)
         {
             var ddb = _ddbManager.Get(orgSlug, internalRef);
 
-            string[] filePaths;
-
-            if (paths != null)
-            {
-                var temp = new List<string>();
-
-                foreach (var path in paths)
-                {
-                    // We are in recursive mode because the paths could contain other folders that we need to expand
-                    var items = ddb.Search(path, true)?
-                        .Where(entry => entry.Type != EntryType.Directory)
-                        .Select(entry => entry.Path).ToArray();
-
-                    if (items == null || !items.Any())
-                        throw new ArgumentException($"Cannot find any file path matching '{path}'");
-
-                    temp.AddRange(items);
-                }
-
-                // Get rid of possible duplicates and sort
-                filePaths = temp.Distinct().OrderBy(item => item).ToArray();
-
-            }
-            else
-            {
-                // Select everything and sort
-                filePaths = ddb.Search(null, true)?
-                    .Where(entry => entry.Type != EntryType.Directory)
-                    .Select(entry => entry.Path)
-                    .OrderBy(path => path)
-                    .ToArray();
-
-                if (filePaths == null)
-                    throw new InvalidOperationException("Ddb is empty, what should I get?");
-            }
-
-            _logger.LogInformation($"Found {filePaths.Length} paths");
+            var (files, folders, includeDdb) = GetFilePaths(paths, ddb);
 
             FileDescriptorDto descriptor;
 
             // If there is just one file we return it
-            if (filePaths.Length == 1 && paths?.Length == 1 && filePaths[0] == paths[0])
+            if (files.Length == 1 && paths?.Length == 1 && files[0] == paths[0])
             {
-                var filePath = filePaths.First();
+                var filePath = files.First();
 
                 _logger.LogInformation($"Only one path found: '{filePath}'");
 
@@ -803,7 +724,7 @@ namespace Registry.Web.Services.Managers
 
                 using (var archive = new ZipArchive(descriptor.ContentStream, ZipArchiveMode.Create, true))
                 {
-                    foreach (var path in filePaths)
+                    foreach (var path in files)
                     {
                         _logger.LogInformation($"Zipping: '{path}'");
 
@@ -811,6 +732,19 @@ namespace Registry.Web.Services.Managers
                         await using var entryStream = entry.Open();
 
                         await WriteObjectContentStream(orgSlug, internalRef, path, entryStream);
+                    }
+
+                    // We treat folders separately because if they are empty they would not be included in the archive
+                    if (folders != null)
+                    {
+                        foreach (var folder in folders)
+                            archive.CreateEntry(folder + "/");
+                    }
+
+                    // Include ddb folder
+                    if (includeDdb)
+                    {
+                        archive.CreateEntryFromAny(Path.Combine(ddb.DatabaseFolder, _ddbManager.DdbFolderName));
                     }
                 }
 
@@ -840,6 +774,72 @@ namespace Registry.Web.Services.Managers
 
             await _objectSystem.GetObjectAsync(bucketName, path, s => s.CopyTo(stream));
 
+        }
+
+        private (string[] files, string[] folders, bool includeDdb) GetFilePaths(string[] paths, IDdb ddb)
+        {
+            string[] files;
+            string[] folders;
+
+            var includeDdb = false;
+
+            if (paths != null)
+            {
+                var tempFiles = new List<string>();
+                var tempFolders = new List<string>();
+
+                foreach (var path in paths)
+                {
+                    var entry = ddb.GetEntry(path);
+
+                    if (entry.Type == EntryType.Directory)
+                    {
+                        // We are in recursive mode because the paths could contain other folders that we need to expand
+                        var items = ddb.Search(path, true)?.ToArray();
+
+                        if (items == null)
+                            throw new InvalidOperationException("Ddb is empty, what should I get?");
+
+                        tempFolders.Add(path);
+                        tempFiles.AddRange(items.Where(item => item.Type != EntryType.Directory).Select(item => item.Path));
+                        tempFolders.AddRange(items.Where(item => item.Type == EntryType.Directory).Select(item => item.Path));
+                    }
+                    else
+                    {
+                        tempFiles.Add(path);
+                    }
+                }
+
+                // Get rid of possible duplicates and sort
+                files = tempFiles.Distinct().OrderBy(item => item).ToArray();
+                folders = tempFolders.Distinct().OrderBy(item => item).ToArray();
+            }
+            else
+            {
+                var entries = ddb.Search(null, true)?.ToArray();
+
+                if (entries == null || !entries.Any())
+                    throw new InvalidOperationException("Ddb is empty, what should I get?");
+
+                // Select everything and sort
+                files = entries
+                    .Where(entry => entry.Type != EntryType.Directory)
+                    .Select(entry => entry.Path)
+                    .OrderBy(path => path)
+                    .ToArray();
+
+                folders = entries
+                    .Where(entry => entry.Type == EntryType.Directory)
+                    .Select(entry => entry.Path)
+                    .OrderBy(path => path)
+                    .ToArray();
+
+                // We include the ddb folder only when asked for the entire dataset
+                includeDdb = true;
+            }
+
+            _logger.LogInformation($"Found {files.Length} paths");
+            return (files, folders, includeDdb);
         }
 
         #endregion

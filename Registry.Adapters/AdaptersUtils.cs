@@ -203,21 +203,16 @@ namespace Registry.Adapters
             {
 
                 if (obj.IsDir)
-                {
                     throw new NotSupportedException("Not supported folder copy");
-                }
-                else
-                {
-                    var newPath = CommonUtils.SafeCombine(dest, obj.Key[(source.Length + 1)..]);
+                
 
-                    await system.CopyObjectAsync(bucketName, obj.Key, bucketName, newPath);
-                    await system.RemoveObjectAsync(bucketName, obj.Key);
-                }
+                var newPath = CommonUtils.SafeCombine(dest, obj.Key[(source.Length + 1)..]);
+
+                await system.CopyObjectAsync(bucketName, obj.Key, bucketName, newPath);
+                await system.RemoveObjectAsync(bucketName, obj.Key);
 
             }
 
-
-            return;
         }
     }
 }
