@@ -75,7 +75,7 @@ namespace Registry.Web.Models.DTO
                 {
                     _logger.LogInformation($"Zipping: '{path}'");
 
-                    var entry = archive.CreateEntry(path, CompressionLevel.Fastest);
+                    var entry = archive.CreateEntry(path, CompressionLevel.NoCompression);
                     await using var entryStream = entry.Open();
 
                     await WriteObjectContentStream(_orgSlug, _internalRef, path, entryStream);

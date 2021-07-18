@@ -728,7 +728,7 @@ namespace Registry.Web.Services.Managers
                     {
                         _logger.LogInformation($"Zipping: '{path}'");
 
-                        var entry = archive.CreateEntry(path, CompressionLevel.Fastest);
+                        var entry = archive.CreateEntry(path, CompressionLevel.NoCompression);
                         await using var entryStream = entry.Open();
 
                         await WriteObjectContentStream(orgSlug, internalRef, path, entryStream);
@@ -862,7 +862,7 @@ namespace Registry.Web.Services.Managers
             try
             {
                 // We could do this fully in memory BUT it's not a strict requirement by now: ddb folders are not huge (yet)
-                ZipFile.CreateFromDirectory(ddb.DatabaseFolder, tempFile, CompressionLevel.Optimal, false);
+                ZipFile.CreateFromDirectory(ddb.DatabaseFolder, tempFile, CompressionLevel.NoCompression, false);
 
                 await using var s = File.OpenRead(tempFile);
                 var memory = new MemoryStream();
