@@ -20,7 +20,7 @@ namespace Registry.Web.Utilities
             }
             else
             {
-                archive.CreateEntryFromFile(sourceName, CommonUtils.SafeCombine(entryName, fileName), CompressionLevel.Fastest);
+                archive.CreateEntryFromFile(sourceName, CommonUtils.SafeCombine(entryName, fileName), CompressionLevel.NoCompression);
             }
         }
 
