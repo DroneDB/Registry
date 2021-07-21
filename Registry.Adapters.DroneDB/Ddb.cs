@@ -179,6 +179,31 @@ namespace Registry.Adapters.DroneDB
             }
         }
 
+        public void Build(string path, string dest = null, bool force = false)
+        {
+            try
+            {
+                DDB.Bindings.DroneDB.Build(DatabaseFolder, path, dest, force);
+            }
+            catch (DDBException ex)
+            {
+                throw new InvalidOperationException($"Cannot build '{path}' from ddb '{DatabaseFolder}'", ex);
+            }
+        }
+
+        public void BuildAll(string dest = null, bool force = false)
+        {
+            try
+            {
+                DDB.Bindings.DroneDB.Build(DatabaseFolder, null, dest, force);
+            }
+            catch (DDBException ex)
+            {
+                throw new InvalidOperationException($"Cannot build all from ddb '{DatabaseFolder}'", ex);
+            }
+        }
+
+
         public Dictionary<string, object> GetAttributesRaw()
         {
             return ChangeAttributesRaw(new Dictionary<string, object>());
