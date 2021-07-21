@@ -197,8 +197,12 @@ namespace Registry.Web
                 .AddDiskSpaceHealthCheck(appSettings.UploadPath, "Upload path space health check", null,
                     new[] { "storage" })
                 .AddDiskSpaceHealthCheck(appSettings.DdbStoragePath, "Ddb storage path space health check", null,
-                    new[] { "storage" });
-            
+                    new[] { "storage" })
+                .AddHangfire(options =>
+                {
+                    options.MinimumAvailableServers = 1;
+                }, "Hangfire health check", null, new[] { "database" });
+
             /*
              * NOTE about services lifetime:
              *
@@ -423,7 +427,7 @@ namespace Registry.Web
                         .UseRecommendedSerializerSettings()
                         .UseConsole()
                         .UseInMemoryStorage());
-                    
+
                     break;
 
                 case HangfireProvider.Mysql:
