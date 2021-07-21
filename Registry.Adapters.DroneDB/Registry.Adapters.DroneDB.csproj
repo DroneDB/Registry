@@ -6,6 +6,12 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <Compile Remove="Models\**" />
+    <EmbeddedResource Remove="Models\**" />
+    <None Remove="Models\**" />
+  </ItemGroup>
+
+  <ItemGroup>
     <PackageReference Include="DDB.Bindings" Version="1.0.15" />
     <PackageReference Include="GeoJSON.Net" Version="1.2.19" />
     <PackageReference Include="Microsoft.Extensions.Logging" Version="5.0.0" />
@@ -16,10 +22,6 @@
     <ProjectReference Include="..\Registry.Adapters\Registry.Adapters.csproj" />
     <ProjectReference Include="..\Registry.Common\Registry.Common.csproj" />
     <ProjectReference Include="..\Registry.Ports\Registry.Ports.csproj" />
-  </ItemGroup>
-
-  <ItemGroup>
-    <Folder Include="Models\" />
   </ItemGroup>
 
 </Project>
