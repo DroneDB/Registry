@@ -272,7 +272,9 @@ namespace Registry.Web
             }
 
             app.UseDefaultFiles();
-            app.UseSpaStaticFiles();
+            app.UseSpaStaticFiles(new StaticFileOptions{
+                ServeUnknownFileTypes = true
+            });
 
             app.UseSwagger();
 
