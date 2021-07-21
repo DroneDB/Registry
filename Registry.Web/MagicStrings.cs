@@ -11,7 +11,6 @@ namespace Registry.Web
     {
         public const string PublicOrganizationSlug = "public";
         public const string DefaultDatasetSlug = "default";
-        public const string SqlLiteProviderName = "Microsoft.EntityFrameworkCore.Sqlite";
         public const string AnonymousUserName = "anonymous";
     }
 }

@@ -1,13 +1,10 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Threading.Tasks;
+﻿using System.Collections.Generic;
 using Microsoft.Extensions.Options;
 using Microsoft.OpenApi.Models;
 using Registry.Web.Models.Configuration;
 using Swashbuckle.AspNetCore.SwaggerGen;
 
-namespace Registry.Web.Services
+namespace Registry.Web.Filters
 {
     public class BasePathDocumentFilter : IDocumentFilter
     {

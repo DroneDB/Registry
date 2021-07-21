@@ -35,6 +35,12 @@ namespace Registry.Web.Models.Configuration
         public DbProvider RegistryProvider { get; set; }
 
         /// <summary>
+        /// Provider for hangfire
+        /// </summary>
+        [JsonConverter(typeof(StringEnumConverter))]
+        public HangfireProvider HangfireProvider { get; set; }
+        
+        /// <summary>
         /// Default admin details
         /// </summary>
         public AdminInfo DefaultAdmin { get; set; }

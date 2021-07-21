@@ -6,6 +6,11 @@ using System.Linq;
 using System.Reflection;
 using System.Text;
 using System.Threading.Tasks;
+using System.Transactions;
+using Hangfire;
+using Hangfire.Console;
+using Hangfire.InMemory;
+using Hangfire.MySql;
 using HealthChecks.UI.Client;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Registry.Web.Models;
@@ -41,6 +46,7 @@ using Registry.Ports.DroneDB;
 using Registry.Ports.ObjectSystem;
 using Registry.Web.Data;
 using Registry.Web.Data.Models;
+using Registry.Web.Filters;
 using Registry.Web.HealthChecks;
 using Registry.Web.Middlewares;
 using Registry.Web.Models.Configuration;
@@ -58,6 +64,7 @@ namespace Registry.Web
     {
         private const string IdentityConnectionName = "IdentityConnection";
         private const string RegistryConnectionName = "RegistryConnection";
+        private const string HangfireConnectionName = "HangfireConnection";
 
         public Startup(IConfiguration configuration)
         {
@@ -177,6 +184,7 @@ namespace Registry.Web
             });
 
             RegisterCacheProvider(services, appSettings);
+            RegisterHangfireProvider(services, appSettings);
 
             services.AddHealthChecks()
                 .AddCheck<CacheHealthCheck>("Cache health check", null, new[] { "service" })
@@ -190,7 +198,7 @@ namespace Registry.Web
                     new[] { "storage" })
                 .AddDiskSpaceHealthCheck(appSettings.DdbStoragePath, "Ddb storage path space health check", null,
                     new[] { "storage" });
-
+            
             /*
              * NOTE about services lifetime:
              *
@@ -272,7 +280,8 @@ namespace Registry.Web
             }
 
             app.UseDefaultFiles();
-            app.UseSpaStaticFiles(new StaticFileOptions{
+            app.UseSpaStaticFiles(new StaticFileOptions
+            {
                 ServeUnknownFileTypes = true
             });
 
@@ -300,6 +309,11 @@ namespace Registry.Web
 
             app.UseMiddleware<TokenManagerMiddleware>();
 
+            app.UseHangfireDashboard("/hangfire", new DashboardOptions
+            {
+                AsyncAuthorization = new[] { new HangfireAuthorizationFilter() }
+            });
+
             app.UseEndpoints(endpoints =>
             {
                 endpoints.MapControllers();
@@ -319,6 +333,7 @@ namespace Registry.Web
                     await context.Response.WriteAsync(Assembly.GetExecutingAssembly().GetName().Version?.ToString() ?? "undefined");
                 });
 
+                endpoints.MapHangfireDashboard().RequireAuthorization();
 
                 // TODO: Enable when needed
                 // endpoints.MapODataRoute("odata", "odata", GetEdmModel());
@@ -393,6 +408,53 @@ namespace Registry.Web
 
             CreateInitialData(registryDbContext);
             CreateDefaultAdmin(registryDbContext, serviceScope.ServiceProvider).Wait();
+
+        }
+
+        private void RegisterHangfireProvider(IServiceCollection services, AppSettings appSettings)
+        {
+            switch (appSettings.HangfireProvider)
+            {
+                case HangfireProvider.InMemory:
+
+                    services.AddHangfire(configuration => configuration
+                        .SetDataCompatibilityLevel(CompatibilityLevel.Version_170)
+                        .UseSimpleAssemblyNameTypeSerializer()
+                        .UseRecommendedSerializerSettings()
+                        .UseConsole()
+                        .UseInMemoryStorage());
+                    
+                    break;
+
+                case HangfireProvider.Mysql:
+
+                    services.AddHangfire(configuration => configuration
+                        .SetDataCompatibilityLevel(CompatibilityLevel.Version_170)
+                        .UseSimpleAssemblyNameTypeSerializer()
+                        .UseRecommendedSerializerSettings()
+                        .UseConsole()
+                        .UseStorage(new MySqlStorage(Configuration.GetConnectionString(HangfireConnectionName),
+                            new MySqlStorageOptions
+                            {
+                                TransactionIsolationLevel = IsolationLevel.ReadCommitted,
+                                QueuePollInterval = TimeSpan.FromSeconds(15),
+                                JobExpirationCheckInterval = TimeSpan.FromHours(1),
+                                CountersAggregateInterval = TimeSpan.FromMinutes(5),
+                                PrepareSchemaIfNecessary = true,
+                                DashboardJobListLimit = 50000,
+                                TransactionTimeout = TimeSpan.FromMinutes(10),
+                                TablesPrefix = "hangfire"
+                            })));
+
+                    break;
+
+                default:
+                    throw new InvalidOperationException(
+                        $"Unsupported hangfire provider: '{appSettings.HangfireProvider}'");
+            }
+
+            // Add the processing server as IHostedService
+            services.AddHangfireServer();
 
         }
 
