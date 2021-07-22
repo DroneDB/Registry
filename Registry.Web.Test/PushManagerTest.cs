@@ -31,6 +31,7 @@ using Registry.Web.Models.DTO;
 using Registry.Web.Services.Adapters;
 using Registry.Web.Services.Managers;
 using Registry.Web.Services.Ports;
+using Registry.Web.Test.Adapters;
 
 namespace Registry.Web.Test
 {
@@ -56,6 +57,7 @@ namespace Registry.Web.Test
         private Mock<IDatasetsManager> _datasetsManagerMock;
         private Mock<IHttpContextAccessor> _httpContextAccessorMock;
         private Mock<ICacheManager> _cacheManagerMock;
+        private IBackgroundJobsProcessor _backgroundJobsProcessor;
 
         private INameGenerator _nameGenerator;
         private IBatchTokenGenerator _batchTokenGenerator;
@@ -105,6 +107,7 @@ namespace Registry.Web.Test
             _appSettingsMock.Setup(o => o.Value).Returns(_settings);
             _batchTokenGenerator = new BatchTokenGenerator(_appSettingsMock.Object, _batchTokenGeneratorLogger);
             _nameGenerator = new NameGenerator(_appSettingsMock.Object, _nameGeneratorLogger);
+            _backgroundJobsProcessor = new SimpleBackgroundJobsProcessor();
 
             var ddbMock1 = new Mock<IDdb>();
             ddbMock1.Setup(x => x.GetAttributesRaw()).Returns(new Dictionary<string, object>
@@ -147,7 +150,7 @@ namespace Registry.Web.Test
                 _httpContextAccessorMock.Object, _ddbFactoryMock.Object);
 
             var objectManager = new ObjectsManager(_objectManagerLogger, context, sys, 
-                _appSettingsMock.Object, ddbManager, webUtils, _authManagerMock.Object, _cacheManagerMock.Object);
+                _appSettingsMock.Object, ddbManager, webUtils, _authManagerMock.Object, _cacheManagerMock.Object, _backgroundJobsProcessor);
 
             var pushManager = new PushManager(webUtils, ddbManager, sys, objectManager, _pushManagerLogger,
                 _datasetsManagerMock.Object, _authManagerMock.Object);
@@ -254,7 +257,7 @@ namespace Registry.Web.Test
                 _httpContextAccessorMock.Object, _ddbFactoryMock.Object);
 
             var objectManager = new ObjectsManager(_objectManagerLogger, context, sys, 
-                _appSettingsMock.Object, ddbManager, webUtils, _authManagerMock.Object, _cacheManagerMock.Object);
+                _appSettingsMock.Object, ddbManager, webUtils, _authManagerMock.Object, _cacheManagerMock.Object, _backgroundJobsProcessor);
             
             var pushManager = new PushManager(webUtils, ddbManager, sys, objectManager, _pushManagerLogger,
                 _datasetsManagerMock.Object, _authManagerMock.Object);
