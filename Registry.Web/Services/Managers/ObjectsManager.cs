@@ -47,7 +47,6 @@ namespace Registry.Web.Services.Managers
         private const int DefaultThumbnailSize = 512;
 
         private const string BucketNameFormat = "{0}-{1}";
-        private const string TempFolderName = "Registry-ObjectsManager";
 
         public ObjectsManager(ILogger<ObjectsManager> logger,
             RegistryContext context,
@@ -180,48 +179,6 @@ namespace Registry.Web.Services.Managers
             return await AddNew(orgSlug, dsSlug, path, stream);
         }
 
-        public static void BuildWrapper(string ddbPath, string path, string tempFile, PerformContext context)
-        {
-            Action<string> writeLine = context != null ? context.WriteLine : Console.WriteLine;
-
-            writeLine($"In BuildWrapper('{ddbPath}', '{path}', '{tempFile}')");
-            var ddb = new Ddb(ddbPath);
-
-            var folderPath = Path.Combine(ddbPath, path);
-            Directory.CreateDirectory(Path.GetDirectoryName(folderPath)!);
-
-            writeLine($"Created folder structure");
-
-            File.Copy(tempFile, folderPath);
-
-            writeLine("Temp file copied");
-
-            writeLine("Running build");
-            ddb.Build(path);
-
-            writeLine("Done build");
-
-            File.Delete(folderPath);
-
-            writeLine("Deleted copy of temp file");
-            writeLine("Done");
-        }
-
-        public static void SafeDelete(string path, PerformContext context)
-        {
-            Action<string> writeLine = context != null ? context.WriteLine : Console.WriteLine;
-
-            writeLine($"In SafeDelete('{path}')");
-
-            if (File.Exists(path))
-            {
-                var res = CommonUtils.SafeDelete(path);
-                writeLine(res ? "File deleted successfully" : "Cannot delete file");
-            }
-            else
-                writeLine("File does not exist");
-        }
-
         public async Task<ObjectDto> AddNew(string orgSlug, string dsSlug, string path, Stream stream = null)
         {
             var ds = await _utils.GetDataset(orgSlug, dsSlug);
@@ -300,7 +257,7 @@ namespace Registry.Web.Services.Managers
             {
                 _logger.LogInformation("This is a point cloud, we need to build it!");
 
-                var jobId = _backgroundJob.Enqueue(() => BuildWrapper(ddb.DatabaseFolder, path, tempFileName, null));
+                var jobId = _backgroundJob.Enqueue(() => HangfireUtils.BuildWrapper(ddb.DatabaseFolder, path, tempFileName, null));
 
                 _logger.LogInformation("Background job id is " + jobId);
 
@@ -310,7 +267,7 @@ namespace Registry.Web.Services.Managers
                 {
                     _logger.LogInformation($"Scheduling deletion of temp file '{tempFileName}' after job {jobId} completes");
 
-                    _backgroundJob.ContinueJobWith(jobId, () => SafeDelete(tempFileName, null));
+                    _backgroundJob.ContinueJobWith(jobId, () => HangfireUtils.SafeDelete(tempFileName, null));
                 });
             }
             
@@ -399,6 +356,8 @@ namespace Registry.Web.Services.Managers
             if (!ddb.EntryExists(dest))
                 throw new InvalidOperationException($"Cannot find destination '{dest}' after move, something wrong with ddb");
 
+
+            
             _logger.LogInformation("Move OK");
 
 
