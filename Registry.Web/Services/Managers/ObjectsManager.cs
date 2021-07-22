@@ -39,7 +39,7 @@ namespace Registry.Web.Services.Managers
         private readonly IUtils _utils;
         private readonly IAuthManager _authManager;
         private readonly ICacheManager _cacheManager;
-        private readonly IBackgroundJobClient _backgroundJob;
+        private readonly IBackgroundJobsProcessor _backgroundJob;
         private readonly RegistryContext _context;
         private readonly AppSettings _settings;
 
@@ -56,7 +56,7 @@ namespace Registry.Web.Services.Managers
             IUtils utils, 
             IAuthManager authManager, 
             ICacheManager cacheManager,
-            IBackgroundJobClient backgroundJob)
+            IBackgroundJobsProcessor backgroundJob)
         {
             _logger = logger;
             _context = context;

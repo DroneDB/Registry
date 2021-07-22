@@ -20,6 +20,7 @@ namespace Registry.Web.Utilities
 
             writeLine($"In BuildWrapper('{ddbPath}', '{path}', '{tempFile}')");
 
+            // TODO: This could be a violation of our abstraction. We should serialize the IDdb object and pass it to this method
             var ddb = new Ddb(ddbPath);
 
             var folderPath = Path.Combine(ddbPath, path);
@@ -27,7 +28,7 @@ namespace Registry.Web.Utilities
 
             writeLine($"Created folder structure");
 
-            File.Copy(tempFile, folderPath);
+            File.Copy(tempFile, folderPath, true);
 
             writeLine("Temp file copied");
 
@@ -36,7 +37,7 @@ namespace Registry.Web.Utilities
 
             writeLine("Done build");
 
-            File.Delete(folderPath);
+            SafeDelete(folderPath, context);
 
             writeLine("Deleted copy of temp file");
             writeLine("Done");
