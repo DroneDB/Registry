@@ -5,6 +5,7 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using FluentAssertions;
+using Hangfire;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.EntityFrameworkCore;
@@ -54,6 +55,7 @@ namespace Registry.Web.Test
         private Mock<IDatasetsManager> _datasetsManagerMock;
         private Mock<IHttpContextAccessor> _httpContextAccessorMock;
         private Mock<ICacheManager> _cacheManagerMock;
+        private Mock<IBackgroundJobClient> _backgroundJobsMock;
 
         private INameGenerator _nameGenerator;
         private IBatchTokenGenerator _batchTokenGenerator;
@@ -86,6 +88,7 @@ namespace Registry.Web.Test
             _organizationsManagerMock = new Mock<IOrganizationsManager>();
             _datasetsManagerMock = new Mock<IDatasetsManager>();
             _httpContextAccessorMock = new Mock<IHttpContextAccessor>();
+            _backgroundJobsMock = new Mock<IBackgroundJobClient>();
 
             _cacheManagerMock = new Mock<ICacheManager>();
             _passwordHasher = new PasswordHasher();

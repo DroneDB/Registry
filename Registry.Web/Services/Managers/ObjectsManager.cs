@@ -8,10 +8,14 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using DDB.Bindings;
+using Hangfire;
+using Hangfire.Console;
+using Hangfire.Server;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using MimeMapping;
 using Registry.Adapters;
+using Registry.Adapters.DroneDB;
 using Registry.Common;
 using Registry.Ports.DroneDB;
 using Registry.Ports.DroneDB.Models;
@@ -35,6 +39,7 @@ namespace Registry.Web.Services.Managers
         private readonly IUtils _utils;
         private readonly IAuthManager _authManager;
         private readonly ICacheManager _cacheManager;
+        private readonly IBackgroundJobClient _backgroundJob;
         private readonly RegistryContext _context;
         private readonly AppSettings _settings;
 
@@ -49,7 +54,10 @@ namespace Registry.Web.Services.Managers
             IObjectSystem objectSystem,
             IOptions<AppSettings> settings,
             IDdbManager ddbManager,
-            IUtils utils, IAuthManager authManager, ICacheManager cacheManager)
+            IUtils utils, 
+            IAuthManager authManager, 
+            ICacheManager cacheManager,
+            IBackgroundJobClient backgroundJob)
         {
             _logger = logger;
             _context = context;
@@ -58,6 +66,7 @@ namespace Registry.Web.Services.Managers
             _utils = utils;
             _authManager = authManager;
             _cacheManager = cacheManager;
+            _backgroundJob = backgroundJob;
             _settings = settings.Value;
         }
 
@@ -171,6 +180,48 @@ namespace Registry.Web.Services.Managers
             return await AddNew(orgSlug, dsSlug, path, stream);
         }
 
+        public static void BuildWrapper(string ddbPath, string path, string tempFile, PerformContext context)
+        {
+            Action<string> writeLine = context != null ? context.WriteLine : Console.WriteLine;
+
+            writeLine($"In BuildWrapper('{ddbPath}', '{path}', '{tempFile}')");
+            var ddb = new Ddb(ddbPath);
+
+            var folderPath = Path.Combine(ddbPath, path);
+            Directory.CreateDirectory(Path.GetDirectoryName(folderPath)!);
+
+            writeLine($"Created folder structure");
+
+            File.Copy(tempFile, folderPath);
+
+            writeLine("Temp file copied");
+
+            writeLine("Running build");
+            ddb.Build(path);
+
+            writeLine("Done build");
+
+            File.Delete(folderPath);
+
+            writeLine("Deleted copy of temp file");
+            writeLine("Done");
+        }
+
+        public static void SafeDelete(string path, PerformContext context)
+        {
+            Action<string> writeLine = context != null ? context.WriteLine : Console.WriteLine;
+
+            writeLine($"In SafeDelete('{path}')");
+
+            if (File.Exists(path))
+            {
+                var res = CommonUtils.SafeDelete(path);
+                writeLine(res ? "File deleted successfully" : "Cannot delete file");
+            }
+            else
+                writeLine("File does not exist");
+        }
+
         public async Task<ObjectDto> AddNew(string orgSlug, string dsSlug, string path, Stream stream = null)
         {
             var ds = await _utils.GetDataset(orgSlug, dsSlug);
@@ -227,28 +278,42 @@ namespace Registry.Web.Services.Managers
             
             _logger.LogInformation("Added to DDB");
 
+            var obj = ddb.Search(path).Select(file => file.ToDto()).FirstOrDefault();
+
+            if (obj == null)
+                throw new InvalidOperationException("Cannot find just added file!");
+
             // We perform the actual upload asynchronously
 #pragma warning disable 4014
-            Task.Run(async () =>
+            var uploadTask = Task.Run(async () =>
 #pragma warning restore 4014
             {
 
                 _logger.LogInformation($"Uploading '{path}' (size {stream.Length}) to bucket '{bucketName}'");
 
-                await using (var tmpStream = File.OpenRead(tempFileName))
-                    await _objectSystem.PutObjectAsync(bucketName, path, tmpStream, tmpStream.Length, contentType);
-
-                _logger.LogInformation($"Deleting temp file '{tempFileName}'");
-
-                if (File.Exists(tempFileName))
-                    CommonUtils.SafeDelete(tempFileName);
+                await using var tmpStream = File.OpenRead(tempFileName);
+                await _objectSystem.PutObjectAsync(bucketName, path, tmpStream, tmpStream.Length, contentType);
 
             });
 
-            var obj = ddb.Search(path).Select(file => file.ToDto()).FirstOrDefault();
+            if (obj.Type == EntryType.PointCloud)
+            {
+                _logger.LogInformation("This is a point cloud, we need to build it!");
 
-            if (obj == null)
-                throw new InvalidOperationException("Cannot find just added file!");
+                var jobId = _backgroundJob.Enqueue(() => BuildWrapper(ddb.DatabaseFolder, path, tempFileName, null));
+
+                _logger.LogInformation("Background job id is " + jobId);
+
+#pragma warning disable 4014
+                uploadTask.ContinueWith(task =>
+#pragma warning restore 4014
+                {
+                    _logger.LogInformation($"Scheduling deletion of temp file '{tempFileName}' after job {jobId} completes");
+
+                    _backgroundJob.ContinueJobWith(jobId, () => SafeDelete(tempFileName, null));
+                });
+            }
+            
 
             return obj;
         }
