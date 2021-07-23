@@ -37,9 +37,12 @@ namespace Registry.Web.Services.Ports
     public enum JobStatus
     {
         Unknown,
+        Scheduled,
+        Processing,
         Succeeded,
         Enqueued,
         Deleted,
-        Failed
+        Failed,
+        Awaiting
     }
 }
