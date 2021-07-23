@@ -27,6 +27,7 @@ namespace Registry.Web.Services
             {
                 logger.LogInformation($"Bucket '{bucketName}' already exists");
             }
+
         }
 
         public static string SafeGetLocation<T>(this AppSettings settings, ILogger<T> logger)
