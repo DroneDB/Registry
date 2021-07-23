@@ -153,7 +153,7 @@ namespace Registry.Web.Test
                 _appSettingsMock.Object, ddbManager, webUtils, _authManagerMock.Object, _cacheManagerMock.Object, _backgroundJobsProcessor);
 
             var pushManager = new PushManager(webUtils, ddbManager, sys, objectManager, _pushManagerLogger,
-                _datasetsManagerMock.Object, _authManagerMock.Object);
+                _datasetsManagerMock.Object, _authManagerMock.Object, _appSettingsMock.Object);
 
             try
             {
@@ -260,7 +260,7 @@ namespace Registry.Web.Test
                 _appSettingsMock.Object, ddbManager, webUtils, _authManagerMock.Object, _cacheManagerMock.Object, _backgroundJobsProcessor);
             
             var pushManager = new PushManager(webUtils, ddbManager, sys, objectManager, _pushManagerLogger,
-                _datasetsManagerMock.Object, _authManagerMock.Object);
+                _datasetsManagerMock.Object, _authManagerMock.Object, _appSettingsMock.Object);
 
             try
             {

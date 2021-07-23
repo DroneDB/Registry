@@ -45,8 +45,8 @@ namespace Registry.Web.Services.Managers
 
         // TODO: Could be moved to config
         private const int DefaultThumbnailSize = 512;
-
-        private const string BucketNameFormat = "{0}-{1}";
+        
+        private readonly string _location;
 
         public ObjectsManager(ILogger<ObjectsManager> logger,
             RegistryContext context,
@@ -67,6 +67,8 @@ namespace Registry.Web.Services.Managers
             _cacheManager = cacheManager;
             _backgroundJob = backgroundJob;
             _settings = settings.Value;
+
+            _location = _settings.SafeGetLocation(_logger);
         }
 
         public async Task<IEnumerable<ObjectDto>> List(string orgSlug, string dsSlug, string path = null, bool recursive = false)
@@ -102,7 +104,7 @@ namespace Registry.Web.Services.Managers
 
         private async Task SafeGetFile(string orgSlug, Guid internalRef, string path, string destFile, TimeSpan? maxWaitTime = null)
         {
-            var bucketName = GetBucketName(orgSlug, internalRef);
+            var bucketName = _utils.GetBucketName(orgSlug, internalRef);
 
             maxWaitTime ??= new TimeSpan(0, 0, 1, 0);
 
@@ -138,11 +140,11 @@ namespace Registry.Web.Services.Managers
             if (!ddb.EntryExists(path))
                 throw new NotFoundException($"Cannot find '{path}'");
 
-            var bucketName = GetBucketName(orgSlug, internalRef);
+            var bucketName = _utils.GetBucketName(orgSlug, internalRef);
 
             _logger.LogInformation($"Using bucket '{bucketName}'");
 
-            await EnsureBucketExists(bucketName);
+            await _objectSystem.EnsureBucketExists(bucketName, _location, _logger);
 
             var res = ddb.GetEntry(path);
 
@@ -188,12 +190,12 @@ namespace Registry.Web.Services.Managers
             if (!await _authManager.IsOwnerOrAdmin(ds))
                 throw new UnauthorizedException("The current user is not allowed to edit dataset");
 
-            var bucketName = GetBucketName(orgSlug, ds.InternalRef);
+            var bucketName = _utils.GetBucketName(orgSlug, ds.InternalRef);
 
             _logger.LogInformation($"Using bucket '{bucketName}'");
 
             // If the bucket does not exist, let's create it
-            await EnsureBucketExists(bucketName);
+            await _objectSystem.EnsureBucketExists(bucketName, _location, _logger);
 
             var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
             
@@ -285,12 +287,12 @@ namespace Registry.Web.Services.Managers
             if (!await _authManager.IsOwnerOrAdmin(ds))
                 throw new UnauthorizedException("The current user is not allowed to edit dataset");
 
-            var bucketName = GetBucketName(orgSlug, ds.InternalRef);
+            var bucketName = _utils.GetBucketName(orgSlug, ds.InternalRef);
 
             _logger.LogInformation($"Using bucket '{bucketName}'");
 
             // If the bucket does not exist, let's create it
-            await EnsureBucketExists(bucketName);
+            await _objectSystem.EnsureBucketExists(bucketName, _location, _logger);
 
             var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
 
@@ -363,23 +365,6 @@ namespace Registry.Web.Services.Managers
 
         }
 
-        private string SafeGetLocation()
-        {
-            if (_settings.StorageProvider.Type != StorageType.S3) return null;
-
-            var settings = _settings.StorageProvider.Settings.ToObject<S3StorageProviderSettings>();
-            if (settings == null)
-            {
-                _logger.LogWarning("No S3 settings loaded, shouldn't this be a problem?");
-                return null;
-            }
-
-            if (settings.Region == null)
-                _logger.LogWarning("No region specified in storage provider config");
-
-            return settings.Region;
-        }
-
         public async Task Delete(string orgSlug, string dsSlug, string path)
         {
             var ds = await _utils.GetDataset(orgSlug, dsSlug);
@@ -394,7 +379,7 @@ namespace Registry.Web.Services.Managers
             if (!ddb.EntryExists(path))
                 throw new BadRequestException($"Path '{path}' not found in dataset");
 
-            var bucketName = GetBucketName(orgSlug, ds.InternalRef);
+            var bucketName = _utils.GetBucketName(orgSlug, ds.InternalRef);
 
             _logger.LogInformation($"Using bucket '{bucketName}'");
 
@@ -427,7 +412,7 @@ namespace Registry.Web.Services.Managers
             if (!await _authManager.IsOwnerOrAdmin(ds))
                 throw new UnauthorizedException("The current user is not allowed to edit dataset");
 
-            var bucketName = GetBucketName(orgSlug, ds.InternalRef);
+            var bucketName = _utils.GetBucketName(orgSlug, ds.InternalRef);
 
             _logger.LogInformation($"Using bucket '{bucketName}'");
 
@@ -694,7 +679,7 @@ namespace Registry.Web.Services.Managers
                 _logger.LogInformation($"Only one path found: '{filePath}'");
 
                 streamDescriptor = new FileStreamDescriptor(Path.GetFileName(filePath), MimeUtility.GetMimeMapping(filePath),
-                    orgSlug, internalRef, files, null, FileDescriptorType.Single, _objectSystem, this, _logger, _ddbManager);
+                    orgSlug, internalRef, files, null, FileDescriptorType.Single, _objectSystem, this, _logger, _ddbManager, _utils);
 
             }
             // Otherwise we zip everything together and return the package
@@ -703,7 +688,7 @@ namespace Registry.Web.Services.Managers
                 streamDescriptor = new FileStreamDescriptor($"{orgSlug}-{dsSlug}-{CommonUtils.RandomString(8)}.zip",
                     "application/zip", orgSlug, internalRef, files, folders,
                     includeDdb ? FileDescriptorType.Dataset : FileDescriptorType.Multiple, _objectSystem, this,
-                    _logger, _ddbManager);
+                    _logger, _ddbManager, _utils);
 
             }
 
@@ -780,7 +765,7 @@ namespace Registry.Web.Services.Managers
 
         private async Task WriteObjectContentStream(string orgSlug, Guid internalRef, string path, Stream stream)
         {
-            var bucketName = GetBucketName(orgSlug, internalRef);
+            var bucketName = _utils.GetBucketName(orgSlug, internalRef);
 
             _logger.LogInformation($"Using bucket '{bucketName}'");
 
@@ -868,10 +853,6 @@ namespace Registry.Web.Services.Managers
 
         #endregion
 
-        public string GetBucketName(string orgSlug, Guid internalRef)
-        {
-            return string.Format(BucketNameFormat, orgSlug, internalRef.ToString()).ToLowerInvariant();
-        }
 
         public async Task<FileDescriptorDto> GetDdb(string orgSlug, string dsSlug)
         {
@@ -907,22 +888,6 @@ namespace Registry.Web.Services.Managers
             }
         }
 
-        public async Task EnsureBucketExists(string bucketName)
-        {
-            if (!await _objectSystem.BucketExistsAsync(bucketName))
-            {
-
-                _logger.LogInformation($"Bucket '{bucketName}' does not exist, creating it");
-
-                await _objectSystem.MakeBucketAsync(bucketName, SafeGetLocation());
-
-                _logger.LogInformation("Bucket created");
-            }
-            else
-            {
-                _logger.LogInformation($"Bucket '{bucketName}' already exists");
-            }
-        }
 
 
     }

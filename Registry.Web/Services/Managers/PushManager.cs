@@ -8,12 +8,14 @@ using DDB.Bindings;
 using DDB.Bindings.Model;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 using Microsoft.VisualStudio.Web.CodeGeneration;
 using Newtonsoft.Json;
 using Registry.Adapters.DroneDB;
 using Registry.Common;
 using Registry.Ports.ObjectSystem;
 using Registry.Web.Exceptions;
+using Registry.Web.Models.Configuration;
 using Registry.Web.Models.DTO;
 using Registry.Web.Services.Ports;
 using Registry.Web.Utilities;
@@ -35,9 +37,10 @@ namespace Registry.Web.Services.Managers
         private readonly IAuthManager _authManager;
         private readonly IObjectSystem _objectSystem;
         private readonly ILogger<PushManager> _logger;
+        private readonly AppSettings _settings;
 
         public PushManager(IUtils utils, IDdbManager ddbManager, IObjectSystem objectSystem,
-            IObjectsManager objectsManager, ILogger<PushManager> logger, IDatasetsManager datasetsManager, IAuthManager authManager)
+            IObjectsManager objectsManager, ILogger<PushManager> logger, IDatasetsManager datasetsManager, IAuthManager authManager, IOptions<AppSettings> settings)
         {
             _utils = utils;
             _ddbManager = ddbManager;
@@ -46,6 +49,7 @@ namespace Registry.Web.Services.Managers
             _logger = logger;
             _datasetsManager = datasetsManager;
             _authManager = authManager;
+            _settings = settings.Value;
         }
 
         public async Task<PushInitResultDto> Init(string orgSlug, string dsSlug, Stream stream)
@@ -163,9 +167,9 @@ namespace Registry.Web.Services.Managers
                     throw new InvalidOperationException($"Cannot commit: missing '{add.Path}'");
 
             // Applies delta 
-            var bucketName = _objectsManager.GetBucketName(orgSlug, ds.InternalRef);
+            var bucketName = _utils.GetBucketName(orgSlug, ds.InternalRef);
 
-            await _objectsManager.EnsureBucketExists(bucketName);
+            await _objectSystem.EnsureBucketExists(bucketName, _settings.SafeGetLocation(_logger), _logger);
             await ApplyDelta(bucketName, delta, addTempFolder);
 
             // Replaces ddb folder
