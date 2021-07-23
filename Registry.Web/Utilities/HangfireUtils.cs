@@ -14,7 +14,7 @@ namespace Registry.Web.Utilities
     public static class HangfireUtils
     {
 
-        public static void BuildWrapper(string ddbPath, string path, string tempFile, PerformContext context)
+        public static void BuildWrapper(string ddbPath, string path, string tempFile, bool force, PerformContext context)
         {
             Action<string> writeLine = context != null ? context.WriteLine : Console.WriteLine;
 
@@ -33,7 +33,7 @@ namespace Registry.Web.Utilities
             writeLine("Temp file copied");
 
             writeLine("Running build");
-            ddb.Build(path);
+            ddb.Build(path, null, force);
 
             writeLine("Done build");
 

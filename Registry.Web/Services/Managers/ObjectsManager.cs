@@ -259,7 +259,7 @@ namespace Registry.Web.Services.Managers
             {
                 _logger.LogInformation("This is a point cloud, we need to build it!");
 
-                var jobId = _backgroundJob.Enqueue(() => HangfireUtils.BuildWrapper(ddb.DatabaseFolder, path, tempFileName, null));
+                var jobId = _backgroundJob.Enqueue(() => HangfireUtils.BuildWrapper(ddb.DatabaseFolder, path, tempFileName, true, null));
 
                 _logger.LogInformation("Background job id is " + jobId);
 
@@ -888,7 +888,50 @@ namespace Registry.Web.Services.Managers
             }
         }
 
+        public async Task Build(string orgSlug, string dsSlug, string path, bool force = false)
+        {
+            var ds = await _utils.GetDataset(orgSlug, dsSlug);
 
+            _logger.LogInformation($"In '{orgSlug}/{dsSlug}'");
 
+            if (!await _authManager.IsOwnerOrAdmin(ds))
+                throw new UnauthorizedException("The current user is not allowed to build dataset");
+
+            var bucketName = _utils.GetBucketName(orgSlug, ds.InternalRef);
+
+            _logger.LogInformation($"Using bucket '{bucketName}'");
+
+            // If the bucket does not exist, let's create it
+            await _objectSystem.EnsureBucketExists(bucketName, _location, _logger);
+
+            var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
+
+            var entry = ddb.GetEntry(path);
+
+            // Checking if path exists
+            if (entry == null)
+                throw new InvalidOperationException($"Cannot find source entry: '{path}'");
+
+            // TODO: We should centralize this logic
+            if (entry.Type != EntryType.PointCloud)
+            {
+                return;
+            }
+
+            var obj = await InternalGet(orgSlug, ds.InternalRef, path);
+
+            var tempFileName = Path.GetTempFileName();
+            try
+            {
+                await File.WriteAllBytesAsync(tempFileName, obj.Data);
+
+                HangfireUtils.BuildWrapper(ddb.DatabaseFolder, path, tempFileName, force, null);
+            }
+            finally
+            {
+                CommonUtils.SafeDelete(tempFileName);
+            }
+
+        }
     }
 }
