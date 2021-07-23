@@ -407,5 +407,25 @@ namespace Registry.Web.Controllers
             }
         }
 
+        [HttpGet("build/{hash}/{*path}", Name = nameof(ObjectsController) + "." + nameof(BuildFile))]
+        public async Task<IActionResult> BuildFile([FromRoute] string orgSlug, [FromRoute] string dsSlug, [FromRoute] string hash, [FromRoute] string path)
+        {
+            try
+            {
+                _logger.LogDebug($"Objects controller Build('{orgSlug}', '{dsSlug}', '{path}')");
+
+                var res = await _objectsManager.GetBuildFile(orgSlug, dsSlug, hash, path);
+
+                return File(res.ContentStream, res.ContentType, res.Name);
+
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, $"Exception in Objects controller Build('{orgSlug}', '{dsSlug}', '{path}')");
+
+                return ExceptionResult(ex);
+            }
+        }
+
     }
 }
