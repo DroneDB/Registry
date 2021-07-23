@@ -49,9 +49,9 @@ namespace Registry.Web.Services.Adapters
         }
 
         public string ContinueJobWith(string parentId, Expression<Action> methodCall,
-            BackgroundJobContinuationOptions options = BackgroundJobContinuationOptions.OnlyOnSucceededState) => _client.ContinueJobWith(parentId, methodCall, null, (Hangfire.JobContinuationOptions)options);
+            BackgroundJobContinuationOptions options = BackgroundJobContinuationOptions.OnlyOnSucceededState) => _client.ContinueJobWith(parentId, methodCall, (JobContinuationOptions)options);
 
         public string ContinueJobWith<T>(string parentId, Expression<Action<T>> methodCall,
-            BackgroundJobContinuationOptions options = BackgroundJobContinuationOptions.OnlyOnSucceededState) => _client.ContinueJobWith(parentId, methodCall, null, (Hangfire.JobContinuationOptions)options);
+            BackgroundJobContinuationOptions options = BackgroundJobContinuationOptions.OnlyOnSucceededState) => _client.ContinueJobWith(parentId, methodCall, (JobContinuationOptions)options);
     }
 }
