@@ -34,6 +34,7 @@ namespace Registry.Adapters.DroneDB
                 throw new ArgumentException($"Path '{ddbPath}' does not exist");
 
             DatabaseFolder = ddbPath;
+            BuildFolder = Path.Combine(ddbPath, ".ddb", "build");
 
         }
 
@@ -65,6 +66,7 @@ namespace Registry.Adapters.DroneDB
 
         public string Version => DDB.Bindings.DroneDB.GetVersion();
         public string DatabaseFolder { get; }
+        public string BuildFolder { get; }
 
         static Ddb()
         {
