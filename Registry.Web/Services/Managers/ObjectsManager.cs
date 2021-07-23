@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.ComponentModel;
 using System.Diagnostics;
 using System.Globalization;
 using System.IO;
@@ -76,7 +77,7 @@ namespace Registry.Web.Services.Managers
 
             var ds = await _utils.GetDataset(orgSlug, dsSlug);
 
-            _logger.LogInformation($"In '{orgSlug}/{dsSlug}'");
+            _logger.LogInformation($"In List('{orgSlug}/{dsSlug}')");
 
             var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
 
@@ -94,7 +95,7 @@ namespace Registry.Web.Services.Managers
 
             var ds = await _utils.GetDataset(orgSlug, dsSlug);
 
-            _logger.LogInformation($"In '{orgSlug}/{dsSlug}'");
+            _logger.LogInformation($"In Get('{orgSlug}/{dsSlug}')");
 
             if (string.IsNullOrWhiteSpace(path))
                 throw new ArgumentException("Path should not be null");
@@ -185,7 +186,7 @@ namespace Registry.Web.Services.Managers
         {
             var ds = await _utils.GetDataset(orgSlug, dsSlug);
 
-            _logger.LogInformation($"In '{orgSlug}/{dsSlug}'");
+            _logger.LogInformation($"In AddNew('{orgSlug}/{dsSlug}')");
 
             if (!await _authManager.IsOwnerOrAdmin(ds))
                 throw new UnauthorizedException("The current user is not allowed to edit dataset");
@@ -282,7 +283,7 @@ namespace Registry.Web.Services.Managers
             
             var ds = await _utils.GetDataset(orgSlug, dsSlug);
 
-            _logger.LogInformation($"In '{orgSlug}/{dsSlug}'");
+            _logger.LogInformation($"In Move('{orgSlug}/{dsSlug}')");
 
             if (!await _authManager.IsOwnerOrAdmin(ds))
                 throw new UnauthorizedException("The current user is not allowed to edit dataset");
@@ -369,7 +370,7 @@ namespace Registry.Web.Services.Managers
         {
             var ds = await _utils.GetDataset(orgSlug, dsSlug);
 
-            _logger.LogInformation($"In '{orgSlug}/{dsSlug}'");
+            _logger.LogInformation($"In Delete('{orgSlug}/{dsSlug}')");
 
             if (!await _authManager.IsOwnerOrAdmin(ds))
                 throw new UnauthorizedException("The current user is not allowed to edit dataset");
@@ -439,7 +440,7 @@ namespace Registry.Web.Services.Managers
         {
             var ds = await _utils.GetDataset(orgSlug, dsSlug);
 
-            _logger.LogInformation($"In '{orgSlug}/{dsSlug}'");
+            _logger.LogInformation($"In GenerateThumbnail('{orgSlug}/{dsSlug}')");
 
             var entry = EnsurePathValidity(orgSlug, ds.InternalRef, path, out IDdb ddb);
 
@@ -484,7 +485,7 @@ namespace Registry.Web.Services.Managers
         {
             var ds = await _utils.GetDataset(orgSlug, dsSlug);
 
-            _logger.LogInformation($"In '{orgSlug}/{dsSlug}'");
+            _logger.LogInformation($"In GenerateTile('{orgSlug}/{dsSlug}')");
 
             EnsurePathValidity(orgSlug, ds.InternalRef, path, out var ddb);
 
@@ -520,7 +521,7 @@ namespace Registry.Web.Services.Managers
         {
             var ds = await _utils.GetDataset(orgSlug, dsSlug);
 
-            _logger.LogInformation($"In '{orgSlug}/{dsSlug}'");
+            _logger.LogInformation($"In GetDownloadPackage('{orgSlug}/{dsSlug}')");
 
             EnsurePathsValidity(orgSlug, ds.InternalRef, paths);
 
@@ -552,8 +553,7 @@ namespace Registry.Web.Services.Managers
         private DdbEntry EnsurePathValidity(string orgSlug, Guid internalRef, string path, out IDdb ddb)
         {
 
-            if (path.Contains("*") || path.Contains("?") || string.IsNullOrWhiteSpace(path))
-                throw new ArgumentException("Wildcards or empty paths are not supported");
+            EnsureNoWildcardOrEmptyPaths(path);
 
             ddb = _ddbManager.Get(orgSlug, internalRef);
 
@@ -563,6 +563,12 @@ namespace Registry.Web.Services.Managers
                 throw new ArgumentException($"Invalid path: '{path}'");
 
             return res.First();
+        }
+
+        private void EnsureNoWildcardOrEmptyPaths(string path)
+        {
+            if (path.Contains("*") || path.Contains("?") || string.IsNullOrWhiteSpace(path))
+                throw new ArgumentException("Wildcards or empty paths are not supported");
         }
 
         private void EnsurePathsValidity(string orgSlug, Guid internalRef, string[] paths)
@@ -598,7 +604,7 @@ namespace Registry.Web.Services.Managers
         {
             var ds = await _utils.GetDataset(orgSlug, dsSlug, checkOwnership: false);
 
-            _logger.LogInformation($"In '{orgSlug}/{dsSlug}'");
+            _logger.LogInformation($"In DownloadPackage('{orgSlug}/{dsSlug}')");
 
             if (packageId == null)
                 throw new ArgumentException("No package id provided");
@@ -645,7 +651,7 @@ namespace Registry.Web.Services.Managers
         {
             var ds = await _utils.GetDataset(orgSlug, dsSlug);
 
-            _logger.LogInformation($"In '{orgSlug}/{dsSlug}'");
+            _logger.LogInformation($"In DownloadStream('{orgSlug}/{dsSlug}')");
 
             EnsurePathsValidity(orgSlug, ds.InternalRef, paths);
 
@@ -656,7 +662,7 @@ namespace Registry.Web.Services.Managers
         {
             var ds = await _utils.GetDataset(orgSlug, dsSlug);
 
-            _logger.LogInformation($"In '{orgSlug}/{dsSlug}'");
+            _logger.LogInformation($"In Download('{orgSlug}/{dsSlug}')");
 
             EnsurePathsValidity(orgSlug, ds.InternalRef, paths);
 
@@ -858,7 +864,7 @@ namespace Registry.Web.Services.Managers
         {
             var ds = await _utils.GetDataset(orgSlug, dsSlug);
 
-            _logger.LogInformation($"In '{orgSlug}/{dsSlug}'");
+            _logger.LogInformation($"In GetDdb('{orgSlug}/{dsSlug}')");
 
             var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
 
@@ -892,7 +898,7 @@ namespace Registry.Web.Services.Managers
         {
             var ds = await _utils.GetDataset(orgSlug, dsSlug);
 
-            _logger.LogInformation($"In '{orgSlug}/{dsSlug}'");
+            _logger.LogInformation($"In Build('{orgSlug}/{dsSlug}')");
 
             if (!await _authManager.IsOwnerOrAdmin(ds))
                 throw new UnauthorizedException("The current user is not allowed to build dataset");
@@ -931,6 +937,37 @@ namespace Registry.Web.Services.Managers
             {
                 CommonUtils.SafeDelete(tempFileName);
             }
+
+        }
+
+        public async Task<FileDescriptorDto> GetBuildFile(string orgSlug, string dsSlug, string hash, string path)
+        {
+            var ds = await _utils.GetDataset(orgSlug, dsSlug);
+
+            _logger.LogInformation($"In GetBuildFile('{orgSlug}/{dsSlug}')");
+
+            if (!await _authManager.IsOwnerOrAdmin(ds))
+                throw new UnauthorizedException("The current user is not allowed to build dataset");
+            
+            EnsureNoWildcardOrEmptyPaths(path);
+
+            Debug.Assert(path != null, nameof(path) + " != null");
+            if (Path.IsPathRooted(path) || path.Contains(".."))
+                throw new ArgumentException("Rooted or relative paths are not supported");
+
+            var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
+
+            var filePath = Path.Combine(ddb.BuildFolder, hash, path);
+
+            if (!File.Exists(filePath))
+                throw new ArgumentException($"File '{path}' does not exist");
+
+            return new FileDescriptorDto
+            {
+                ContentStream = File.OpenRead(filePath),
+                ContentType = MimeUtility.GetMimeMapping(filePath),
+                Name = Path.GetFileName(filePath)
+            };
 
         }
     }
