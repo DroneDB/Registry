@@ -162,6 +162,9 @@ namespace Registry.Web.Services.Managers
 
             var delta = JsonConvert.DeserializeObject<DeltaDto>(await File.ReadAllTextAsync(deltaFilePath));
 
+            if (delta == null)
+                throw new ArgumentException("Provided delta is not deserializable");
+            
             foreach (var add in delta.Adds.Where(item => item.Type != EntryType.Directory))
                 if (!File.Exists(Path.Combine(addTempFolder, add.Path)))
                     throw new InvalidOperationException($"Cannot commit: missing '{add.Path}'");
