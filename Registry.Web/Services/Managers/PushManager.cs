@@ -164,7 +164,7 @@ namespace Registry.Web.Services.Managers
 
             if (delta == null)
                 throw new ArgumentException("Provided delta is not deserializable");
-            
+
             foreach (var add in delta.Adds.Where(item => item.Type != EntryType.Directory))
                 if (!File.Exists(Path.Combine(addTempFolder, add.Path)))
                     throw new InvalidOperationException($"Cannot commit: missing '{add.Path}'");
@@ -177,7 +177,6 @@ namespace Registry.Web.Services.Managers
 
             // Replaces ddb folder
             var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
-            Directory.Delete(ddb.DatabaseFolder, true);
             FolderUtils.Move(ddbTempFolder, ddb.DatabaseFolder);
 
             // Clean intermediate files

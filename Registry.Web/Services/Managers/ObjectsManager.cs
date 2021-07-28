@@ -46,7 +46,7 @@ namespace Registry.Web.Services.Managers
 
         // TODO: Could be moved to config
         private const int DefaultThumbnailSize = 512;
-        
+
         private readonly string _location;
 
         public ObjectsManager(ILogger<ObjectsManager> logger,
@@ -54,8 +54,8 @@ namespace Registry.Web.Services.Managers
             IObjectSystem objectSystem,
             IOptions<AppSettings> settings,
             IDdbManager ddbManager,
-            IUtils utils, 
-            IAuthManager authManager, 
+            IUtils utils,
+            IAuthManager authManager,
             ICacheManager cacheManager,
             IBackgroundJobsProcessor backgroundJob)
         {
@@ -199,7 +199,7 @@ namespace Registry.Web.Services.Managers
             await _objectSystem.EnsureBucketExists(bucketName, _location, _logger);
 
             var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
-            
+
             // If it's a folder
             if (stream == null)
             {
@@ -229,13 +229,13 @@ namespace Registry.Web.Services.Managers
             // Write down the file
             await using (var tempFileStream = File.OpenWrite(tempFileName))
                 await stream.CopyToAsync(tempFileStream);
-            
+
             _logger.LogInformation("File uploaded, adding to DDB");
 
             // Add to DDB
             await using (var tempFileStream = File.OpenRead(tempFileName))
                 ddb.Add(path, tempFileStream);
-            
+
             _logger.LogInformation("Added to DDB");
 
             var obj = ddb.Search(path).Select(file => file.ToDto()).FirstOrDefault();
@@ -243,7 +243,7 @@ namespace Registry.Web.Services.Managers
             if (obj == null)
                 throw new InvalidOperationException("Cannot find just added file!");
 
-            // We perform the actual upload asynchronously
+            // We perform the actual upload asynchronously, we will move it to hangfire soon or later
 #pragma warning disable 4014
             var uploadTask = Task.Run(async () =>
 #pragma warning restore 4014
@@ -273,14 +273,14 @@ namespace Registry.Web.Services.Managers
                     _backgroundJob.ContinueJobWith(jobId, () => HangfireUtils.SafeDelete(tempFileName, null));
                 });
             }
-            
+
 
             return obj;
         }
 
         public async Task Move(string orgSlug, string dsSlug, string source, string dest)
         {
-            
+
             var ds = await _utils.GetDataset(orgSlug, dsSlug);
 
             _logger.LogInformation($"In Move('{orgSlug}/{dsSlug}')");
@@ -331,7 +331,7 @@ namespace Registry.Web.Services.Managers
                     _logger.LogInformation("Moving empty folder, nothing to do in object system");
 
                     break;
-                
+
                 case 1:
 
                     _logger.LogInformation($"Copying object '{source}' to '{dest}'");
@@ -360,7 +360,7 @@ namespace Registry.Web.Services.Managers
                 throw new InvalidOperationException($"Cannot find destination '{dest}' after move, something wrong with ddb");
 
 
-            
+
             _logger.LogInformation("Move OK");
 
 
@@ -374,9 +374,9 @@ namespace Registry.Web.Services.Managers
 
             if (!await _authManager.IsOwnerOrAdmin(ds))
                 throw new UnauthorizedException("The current user is not allowed to edit dataset");
-            
+
             var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
-            
+
             if (!ddb.EntryExists(path))
                 throw new BadRequestException($"Path '{path}' not found in dataset");
 
@@ -392,7 +392,7 @@ namespace Registry.Web.Services.Managers
             ddb.Remove(path);
 
             var objs = ddb.Search(path, true).ToArray();
-            
+
             foreach (var obj in objs.Where(item => item.Type != EntryType.Directory))
             {
                 _logger.LogInformation($"Deleting '{obj.Path}'");
@@ -591,11 +591,11 @@ namespace Registry.Web.Services.Managers
                 throw new ArgumentException("Duplicate paths");
 
             ddb = _ddbManager.Get(orgSlug, internalRef);
-            
+
             foreach (var path in paths)
                 if (!ddb.EntryExists(path))
                     throw new ArgumentException($"Invalid path: '{path}'");
-            
+
         }
 
         #endregion
@@ -759,7 +759,7 @@ namespace Registry.Web.Services.Managers
                     // Include ddb folder
                     if (includeDdb)
                     {
-                        archive.CreateEntryFromAny(Path.Combine(ddb.DatabaseFolder, _ddbManager.DdbFolderName));
+                        archive.CreateEntryFromAny(Path.Combine(ddb.DatabaseFolder, _ddbManager.DdbFolderName), string.Empty, new[] { ddb.BuildFolder });
                     }
                 }
 
@@ -948,7 +948,7 @@ namespace Registry.Web.Services.Managers
 
             if (!await _authManager.IsOwnerOrAdmin(ds))
                 throw new UnauthorizedException("The current user is not allowed to build dataset");
-            
+
             EnsureNoWildcardOrEmptyPaths(path);
 
             Debug.Assert(path != null, nameof(path) + " != null");
