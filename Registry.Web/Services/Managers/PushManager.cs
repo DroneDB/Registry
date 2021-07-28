@@ -38,9 +38,12 @@ namespace Registry.Web.Services.Managers
         private readonly IObjectSystem _objectSystem;
         private readonly ILogger<PushManager> _logger;
         private readonly AppSettings _settings;
+        private readonly IBackgroundJobsProcessor _backgroundJob;
+
 
         public PushManager(IUtils utils, IDdbManager ddbManager, IObjectSystem objectSystem,
-            IObjectsManager objectsManager, ILogger<PushManager> logger, IDatasetsManager datasetsManager, IAuthManager authManager, IOptions<AppSettings> settings)
+            IObjectsManager objectsManager, ILogger<PushManager> logger, IDatasetsManager datasetsManager, IAuthManager authManager, 
+            IBackgroundJobsProcessor backgroundJob, IOptions<AppSettings> settings)
         {
             _utils = utils;
             _ddbManager = ddbManager;
@@ -49,6 +52,7 @@ namespace Registry.Web.Services.Managers
             _logger = logger;
             _datasetsManager = datasetsManager;
             _authManager = authManager;
+            _backgroundJob = backgroundJob;
             _settings = settings.Value;
         }
 
@@ -169,14 +173,26 @@ namespace Registry.Web.Services.Managers
                 if (!File.Exists(Path.Combine(addTempFolder, add.Path)))
                     throw new InvalidOperationException($"Cannot commit: missing '{add.Path}'");
 
-            // Applies delta 
             var bucketName = _utils.GetBucketName(orgSlug, ds.InternalRef);
-
             await _objectSystem.EnsureBucketExists(bucketName, _settings.SafeGetLocation(_logger), _logger);
+            
+            // Applies delta 
             await ApplyDelta(bucketName, delta, addTempFolder);
 
-            // Replaces ddb folder
             var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
+
+            foreach (var item in delta.Adds)
+            {
+                if (item.Type == EntryType.PointCloud)
+                {
+                    var tempFileName = Path.Combine(addTempFolder, item.Path);
+                    HangfireUtils.BuildWrapper(ddb.DatabaseFolder, item.Path, tempFileName, true, null);
+                    //var jobId = _backgroundJob.Enqueue(() => HangfireUtils.BuildWrapper(ddb.DatabaseFolder, item.Path, tempFileName, true, null));
+
+                }
+            }
+
+            // Replaces ddb folder
             FolderUtils.Move(ddbTempFolder, ddb.DatabaseFolder);
 
             // Clean intermediate files
