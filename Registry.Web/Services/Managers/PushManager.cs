@@ -42,7 +42,7 @@ namespace Registry.Web.Services.Managers
 
 
         public PushManager(IUtils utils, IDdbManager ddbManager, IObjectSystem objectSystem,
-            IObjectsManager objectsManager, ILogger<PushManager> logger, IDatasetsManager datasetsManager, IAuthManager authManager, 
+            IObjectsManager objectsManager, ILogger<PushManager> logger, IDatasetsManager datasetsManager, IAuthManager authManager,
             IBackgroundJobsProcessor backgroundJob, IOptions<AppSettings> settings)
         {
             _utils = utils;
@@ -175,28 +175,41 @@ namespace Registry.Web.Services.Managers
 
             var bucketName = _utils.GetBucketName(orgSlug, ds.InternalRef);
             await _objectSystem.EnsureBucketExists(bucketName, _settings.SafeGetLocation(_logger), _logger);
-            
+
             // Applies delta 
             await ApplyDelta(bucketName, delta, addTempFolder);
 
             var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
 
-            foreach (var item in delta.Adds)
-            {
-                if (item.Type == EntryType.PointCloud)
-                {
-                    var tempFileName = Path.Combine(addTempFolder, item.Path);
-                    HangfireUtils.BuildWrapper(ddb.DatabaseFolder, item.Path, tempFileName, true, null);
-                    //var jobId = _backgroundJob.Enqueue(() => HangfireUtils.BuildWrapper(ddb.DatabaseFolder, item.Path, tempFileName, true, null));
-
-                }
-            }
-
             // Replaces ddb folder
             FolderUtils.Move(ddbTempFolder, ddb.DatabaseFolder);
 
-            // Clean intermediate files
-            await Clean(orgSlug, dsSlug);
+            // Delete delta file
+            File.Delete(deltaFilePath);
+
+            foreach (var item in delta.Adds)
+            {
+                var tempFileName = Path.Combine(addTempFolder, item.Path);
+
+                if (item.Type == EntryType.PointCloud)
+                {
+
+                    var jobId = _backgroundJob.Enqueue(() =>
+                        HangfireUtils.BuildWrapper(ddb.DatabaseFolder, item.Path, tempFileName, true, null));
+
+                    _backgroundJob.ContinueJobWith(jobId, () =>
+                        HangfireUtils.SafeDelete(tempFileName, null));
+
+                }
+                else
+                {
+                    if (!CommonUtils.SafeDelete(tempFileName))
+                    {
+                        _logger.LogWarning($"Cannot delete '{tempFileName}'");
+                    }
+                }
+            }
+
 
         }
 
