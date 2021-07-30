@@ -21,6 +21,8 @@ namespace Registry.Ports.DroneDB
         /// </summary>
         string DatabaseFolder { get; }
 
+        string BuildFolder { get; }
+
         IEnumerable<DdbEntry> Search(string path, bool recursive = false);
         void Add(string path, byte[] data);
         void Add(string path, Stream data = null);
@@ -53,5 +55,7 @@ namespace Registry.Ports.DroneDB
         DdbEntry GetEntry(string path);
 
         bool EntryExists(string path);
+        void Build(string path, string dest = null, bool force = false);
+        void BuildAll(string dest = null, bool force = false);
     }
 }

@@ -11,12 +11,15 @@ namespace Registry.Web.Utilities
     public static class ZipArchiveExtension
     {
 
-        public static void CreateEntryFromAny(this ZipArchive archive, string sourceName, string entryName = "")
+        public static void CreateEntryFromAny(this ZipArchive archive, string sourceName, string entryName = "", string[] excludes = null)
         {
             var fileName = Path.GetFileName(sourceName);
+
+            if (excludes != null && excludes.Contains(fileName)) return;
+
             if (File.GetAttributes(sourceName).HasFlag(FileAttributes.Directory))
             {
-                archive.CreateEntryFromDirectory(sourceName, CommonUtils.SafeCombine(entryName, fileName));
+                archive.CreateEntryFromDirectory(sourceName, CommonUtils.SafeCombine(entryName, fileName), excludes);
             }
             else
             {
@@ -24,13 +27,14 @@ namespace Registry.Web.Utilities
             }
         }
 
-        public static void CreateEntryFromDirectory(this ZipArchive archive, string sourceDirName, string entryName = "")
+        public static void CreateEntryFromDirectory(this ZipArchive archive, string sourceDirName, string entryName = "", string[] excludes = null)
         {
             var files = Directory.GetFiles(sourceDirName).Concat(Directory.GetDirectories(sourceDirName)).ToArray();
-            //archive.CreateEntry(Path.Combine(entryName, Path.GetFileName(sourceDirName)));
+            
             foreach (var file in files)
             {
-                archive.CreateEntryFromAny(file, entryName);
+                if (excludes != null && excludes.Contains(file)) return;
+                archive.CreateEntryFromAny(file, entryName, excludes);
             }
         }
     }

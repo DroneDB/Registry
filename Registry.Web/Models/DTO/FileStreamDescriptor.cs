@@ -34,13 +34,14 @@ namespace Registry.Web.Models.DTO
         private readonly IObjectsManager _objectManager;
         private readonly ILogger<ObjectsManager> _logger;
         private readonly IDdbManager _ddbManager;
+        private readonly IUtils _utils;
 
         public string Name { get; }
 
         public string ContentType { get; }
 
         public FileStreamDescriptor(string name, string contentType, string orgSlug, Guid internalRef, string[] paths, string[] folders,
-            FileDescriptorType descriptorType, IObjectSystem objectSystem, IObjectsManager objectManager, ILogger<ObjectsManager> logger, IDdbManager ddbManager)
+            FileDescriptorType descriptorType, IObjectSystem objectSystem, IObjectsManager objectManager, ILogger<ObjectsManager> logger, IDdbManager ddbManager, IUtils utils)
         {
             _orgSlug = orgSlug;
             _internalRef = internalRef;
@@ -51,6 +52,7 @@ namespace Registry.Web.Models.DTO
             _objectManager = objectManager;
             _logger = logger;
             _ddbManager = ddbManager;
+            _utils = utils;
             Name = name;
             ContentType = contentType;
         }
@@ -93,7 +95,7 @@ namespace Registry.Web.Models.DTO
                 {
                     var ddb = _ddbManager.Get(_orgSlug, _internalRef);
 
-                    archive.CreateEntryFromAny(Path.Combine(ddb.DatabaseFolder, _ddbManager.DdbFolderName));
+                    archive.CreateEntryFromAny(Path.Combine(ddb.DatabaseFolder, _ddbManager.DdbFolderName), string.Empty, new[] { ddb.BuildFolder });
                 }
 
             }
@@ -102,7 +104,7 @@ namespace Registry.Web.Models.DTO
 
         private async Task WriteObjectContentStream(string orgSlug, Guid internalRef, string path, Stream stream)
         {
-            var bucketName = _objectManager.GetBucketName(orgSlug, internalRef);
+            var bucketName = _utils.GetBucketName(orgSlug, internalRef);
 
             _logger.LogInformation($"Using bucket '{bucketName}'");
 

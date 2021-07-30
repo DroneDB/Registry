@@ -134,7 +134,24 @@ namespace Registry.Adapters.ObjectSystem
 
         public async Task MakeBucketAsync(string bucketName, string location = null, CancellationToken cancellationToken = default)
         {
-            await _client.MakeBucketAsync(bucketName, location ?? "us-east-1", cancellationToken);
+            try
+            {
+
+                await _client.MakeBucketAsync(bucketName, location ?? "us-east-1", cancellationToken);
+
+            }
+            catch (MinioException ex)
+            {
+                // This ugly mess is a fast and dirty way to skip che error message thrown when we are trying to create an already existing bucket
+                // The issue is due to the async nature of S3. Many times we do "If !BucketExists Then MakeBucket"
+                // BUT it's not safe in a highly multithreaded context where the same code is executed in parallel.
+                // It happens that two threads are executing the same If !BucketExists and then two MakeBucket -> Exception
+                if (!ex.XmlError.Contains("<Code>BucketAlreadyOwnedByYou</Code>",
+                    StringComparison.OrdinalIgnoreCase)) throw;
+
+                Debug.WriteLine("Eating BucketAlreadyOwnedByYou exception");
+
+            }
         }
 
         public async Task<ListBucketsResult> ListBucketsAsync(CancellationToken cancellationToken = default)

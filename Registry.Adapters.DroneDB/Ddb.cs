@@ -34,6 +34,7 @@ namespace Registry.Adapters.DroneDB
                 throw new ArgumentException($"Path '{ddbPath}' does not exist");
 
             DatabaseFolder = ddbPath;
+            BuildFolder = Path.Combine(ddbPath, ".ddb", "build");
 
         }
 
@@ -65,6 +66,7 @@ namespace Registry.Adapters.DroneDB
 
         public string Version => DDB.Bindings.DroneDB.GetVersion();
         public string DatabaseFolder { get; }
+        public string BuildFolder { get; }
 
         static Ddb()
         {
@@ -178,6 +180,31 @@ namespace Registry.Adapters.DroneDB
                 throw new InvalidOperationException($"Cannot move '{source}' to {dest} from ddb '{DatabaseFolder}'", ex);
             }
         }
+
+        public void Build(string path, string dest = null, bool force = false)
+        {
+            try
+            {
+                DDB.Bindings.DroneDB.Build(DatabaseFolder, path, dest, force);
+            }
+            catch (DDBException ex)
+            {
+                throw new InvalidOperationException($"Cannot build '{path}' from ddb '{DatabaseFolder}'", ex);
+            }
+        }
+
+        public void BuildAll(string dest = null, bool force = false)
+        {
+            try
+            {
+                DDB.Bindings.DroneDB.Build(DatabaseFolder, null, dest, force);
+            }
+            catch (DDBException ex)
+            {
+                throw new InvalidOperationException($"Cannot build all from ddb '{DatabaseFolder}'", ex);
+            }
+        }
+
 
         public Dictionary<string, object> GetAttributesRaw()
         {

@@ -31,6 +31,7 @@ using Registry.Web.Models.DTO;
 using Registry.Web.Services.Adapters;
 using Registry.Web.Services.Managers;
 using Registry.Web.Services.Ports;
+using Registry.Web.Test.Adapters;
 
 namespace Registry.Web.Test
 {
@@ -56,6 +57,7 @@ namespace Registry.Web.Test
         private Mock<IDatasetsManager> _datasetsManagerMock;
         private Mock<IHttpContextAccessor> _httpContextAccessorMock;
         private Mock<ICacheManager> _cacheManagerMock;
+        private IBackgroundJobsProcessor _backgroundJobsProcessor;
 
         private INameGenerator _nameGenerator;
         private IBatchTokenGenerator _batchTokenGenerator;
@@ -105,6 +107,7 @@ namespace Registry.Web.Test
             _appSettingsMock.Setup(o => o.Value).Returns(_settings);
             _batchTokenGenerator = new BatchTokenGenerator(_appSettingsMock.Object, _batchTokenGeneratorLogger);
             _nameGenerator = new NameGenerator(_appSettingsMock.Object, _nameGeneratorLogger);
+            _backgroundJobsProcessor = new SimpleBackgroundJobsProcessor();
 
             var ddbMock1 = new Mock<IDdb>();
             ddbMock1.Setup(x => x.GetAttributesRaw()).Returns(new Dictionary<string, object>
@@ -115,7 +118,7 @@ namespace Registry.Web.Test
             ddbMock2.Setup(x => x.GetAttributes()).Returns(new DdbAttributes(ddbMock1.Object));
 
             _ddbFactoryMock.Setup(x => x.Get(It.IsAny<string>(), It.IsAny<Guid>())).Returns(ddbMock2.Object);
-            
+
         }
 
         [Test]
@@ -146,11 +149,11 @@ namespace Registry.Web.Test
             var webUtils = new WebUtils(_authManagerMock.Object, context, _appSettingsMock.Object,
                 _httpContextAccessorMock.Object, _ddbFactoryMock.Object);
 
-            var objectManager = new ObjectsManager(_objectManagerLogger, context, sys, 
-                _appSettingsMock.Object, ddbManager, webUtils, _authManagerMock.Object, _cacheManagerMock.Object);
+            var objectManager = new ObjectsManager(_objectManagerLogger, context, sys,
+                _appSettingsMock.Object, ddbManager, webUtils, _authManagerMock.Object, _cacheManagerMock.Object, _backgroundJobsProcessor);
 
             var pushManager = new PushManager(webUtils, ddbManager, sys, objectManager, _pushManagerLogger,
-                _datasetsManagerMock.Object, _authManagerMock.Object);
+                _datasetsManagerMock.Object, _authManagerMock.Object, _backgroundJobsProcessor, _appSettingsMock.Object);
 
             try
             {
@@ -186,7 +189,7 @@ namespace Registry.Web.Test
                     TestContext.WriteLine(JsonConvert.SerializeObject(result));
 
                     result.NeededFiles.Should().BeEmpty();
-                    
+
                 }
             }
             finally
@@ -204,7 +207,7 @@ namespace Registry.Web.Test
             /* INITIALIZATION & SETUP */
             const string userName = "admin";
             const string dsSlug = "test";
-            
+
             using var test = new TestFS(TestArchiveUrl, BaseTestFolder, true);
 
             await using var context = GetTest1Context();
@@ -239,7 +242,7 @@ namespace Registry.Web.Test
             var basePath = Path.Combine(test.TestFolder,
                 "Storage/admin-496af2f3-8c6c-41c2-95b9-dd2846e66d95");
 
-            foreach (var entry in Directory.EnumerateFiles(basePath, "*",SearchOption.AllDirectories))
+            foreach (var entry in Directory.EnumerateFiles(basePath, "*", SearchOption.AllDirectories))
             {
                 var relPath = Path.GetRelativePath(basePath, entry).Replace('\\', '/');
                 TestContext.WriteLine(relPath);
@@ -253,11 +256,11 @@ namespace Registry.Web.Test
             var webUtils = new WebUtils(_authManagerMock.Object, context, _appSettingsMock.Object,
                 _httpContextAccessorMock.Object, _ddbFactoryMock.Object);
 
-            var objectManager = new ObjectsManager(_objectManagerLogger, context, sys, 
-                _appSettingsMock.Object, ddbManager, webUtils, _authManagerMock.Object, _cacheManagerMock.Object);
-            
+            var objectManager = new ObjectsManager(_objectManagerLogger, context, sys,
+                _appSettingsMock.Object, ddbManager, webUtils, _authManagerMock.Object, _cacheManagerMock.Object, _backgroundJobsProcessor);
+
             var pushManager = new PushManager(webUtils, ddbManager, sys, objectManager, _pushManagerLogger,
-                _datasetsManagerMock.Object, _authManagerMock.Object);
+                _datasetsManagerMock.Object, _authManagerMock.Object, _backgroundJobsProcessor, _appSettingsMock.Object);
 
             try
             {

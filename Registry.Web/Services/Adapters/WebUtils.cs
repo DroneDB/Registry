@@ -185,5 +185,12 @@ namespace Registry.Web.Services.Adapters
             return datasetUrl;
 
         }
+
+        private const string BucketNameFormat = "{0}-{1}";
+
+        public string GetBucketName(string orgSlug, Guid internalRef)
+        {
+            return string.Format(BucketNameFormat, orgSlug, internalRef.ToString()).ToLowerInvariant();
+        }
     }
 }

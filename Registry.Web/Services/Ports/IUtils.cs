@@ -1,4 +1,5 @@
-﻿using System.Threading.Tasks;
+﻿using System;
+using System.Threading.Tasks;
 using Registry.Ports.DroneDB;
 using Registry.Ports.DroneDB.Models;
 using Registry.Web.Data.Models;
@@ -14,5 +15,6 @@ namespace Registry.Web.Services.Ports
 
         string GetFreeOrganizationSlug(string orgName);
         string GenerateDatasetUrl(Dataset dataset);
+        string GetBucketName(string orgSlug, Guid internalRef);
     }
 }

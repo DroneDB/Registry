@@ -5,6 +5,7 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using FluentAssertions;
+using Hangfire;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.EntityFrameworkCore;
@@ -29,6 +30,7 @@ using Registry.Web.Models.DTO;
 using Registry.Web.Services.Adapters;
 using Registry.Web.Services.Managers;
 using Registry.Web.Services.Ports;
+using Registry.Web.Test.Adapters;
 
 namespace Registry.Web.Test
 {
@@ -54,6 +56,7 @@ namespace Registry.Web.Test
         private Mock<IDatasetsManager> _datasetsManagerMock;
         private Mock<IHttpContextAccessor> _httpContextAccessorMock;
         private Mock<ICacheManager> _cacheManagerMock;
+        private IBackgroundJobsProcessor _backgroundJobsProcessor;
 
         private INameGenerator _nameGenerator;
         private IBatchTokenGenerator _batchTokenGenerator;
@@ -86,6 +89,7 @@ namespace Registry.Web.Test
             _organizationsManagerMock = new Mock<IOrganizationsManager>();
             _datasetsManagerMock = new Mock<IDatasetsManager>();
             _httpContextAccessorMock = new Mock<IHttpContextAccessor>();
+            _backgroundJobsProcessor = new SimpleBackgroundJobsProcessor();
 
             _cacheManagerMock = new Mock<ICacheManager>();
             _passwordHasher = new PasswordHasher();
@@ -173,7 +177,7 @@ namespace Registry.Web.Test
                 _httpContextAccessorMock.Object, _ddbFactoryMock.Object);
 
             var objectManager = new ObjectsManager(_objectManagerLogger, context, sys,
-                _appSettingsMock.Object, ddbFactory, webUtils, _authManagerMock.Object, _cacheManagerMock.Object);
+                _appSettingsMock.Object, ddbFactory, webUtils, _authManagerMock.Object, _cacheManagerMock.Object, _backgroundJobsProcessor);
 
             var datasetManager = new DatasetsManager(context, webUtils, _datasetsManagerLogger, objectManager,
                 _passwordHasher, _ddbFactoryMock.Object, _authManagerMock.Object);
@@ -270,7 +274,7 @@ namespace Registry.Web.Test
                 _httpContextAccessorMock.Object, _ddbFactoryMock.Object);
 
             var objectManager = new ObjectsManager(_objectManagerLogger, context, sys,
-                _appSettingsMock.Object, ddbFactory, webUtils, _authManagerMock.Object, _cacheManagerMock.Object);
+                _appSettingsMock.Object, ddbFactory, webUtils, _authManagerMock.Object, _cacheManagerMock.Object, _backgroundJobsProcessor);
 
             var datasetManager = new DatasetsManager(context, webUtils, _datasetsManagerLogger, objectManager,
                 _passwordHasher, _ddbFactoryMock.Object, _authManagerMock.Object);
@@ -404,7 +408,7 @@ namespace Registry.Web.Test
                 _httpContextAccessorMock.Object, _ddbFactoryMock.Object);
 
             var objectManager = new ObjectsManager(_objectManagerLogger, context, sys,
-                _appSettingsMock.Object, ddbFactory, webUtils, _authManagerMock.Object, _cacheManagerMock.Object);
+                _appSettingsMock.Object, ddbFactory, webUtils, _authManagerMock.Object, _cacheManagerMock.Object, _backgroundJobsProcessor);
 
             var datasetManager = new DatasetsManager(context, webUtils, _datasetsManagerLogger, objectManager,
                 _passwordHasher, _ddbFactoryMock.Object, _authManagerMock.Object);

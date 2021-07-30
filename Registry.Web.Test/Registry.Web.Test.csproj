@@ -9,15 +9,25 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <Compile Remove="Data\Chunks\**" />
+    <Compile Remove="Data\Storage\**" />
+    <EmbeddedResource Remove="Data\Chunks\**" />
+    <EmbeddedResource Remove="Data\Storage\**" />
+    <None Remove="Data\Chunks\**" />
+    <None Remove="Data\Storage\**" />
+  </ItemGroup>
+
+  <ItemGroup>
     <PackageReference Include="FluentAssertions" Version="5.10.3" />
-    <PackageReference Include="Microsoft.EntityFrameworkCore" Version="5.0.1" />
-    <PackageReference Include="Microsoft.EntityFrameworkCore.InMemory" Version="5.0.1" />
-    <PackageReference Include="Microsoft.EntityFrameworkCore.Relational" Version="5.0.1" />
-    <PackageReference Include="Moq" Version="4.15.2" />
+    <PackageReference Include="Hangfire.Core" Version="1.7.24" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore" Version="5.0.8" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.InMemory" Version="5.0.8" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Relational" Version="5.0.8" />
+    <PackageReference Include="Moq" Version="4.16.1" />
     <PackageReference Include="NetTopologySuite.Core" Version="1.15.3" />
-    <PackageReference Include="nunit" Version="3.13.0" />
-    <PackageReference Include="NUnit3TestAdapter" Version="3.17.0" />
-    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="16.8.3" />
+    <PackageReference Include="nunit" Version="3.13.2" />
+    <PackageReference Include="NUnit3TestAdapter" Version="4.0.0" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="16.10.0" />
   </ItemGroup>
 
   <ItemGroup>
@@ -33,11 +43,6 @@
     <None Include="Data\Ddb\public\0a223495-84a0-4c15-b425-c7ef88110e75\.ddb\dbase.sqlite">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </None>
-  </ItemGroup>
-
-  <ItemGroup>
-    <Folder Include="Data\Chunks\" />
-    <Folder Include="Data\Storage\" />
   </ItemGroup>
 
 </Project>

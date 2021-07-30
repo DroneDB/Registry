@@ -389,5 +389,43 @@ namespace Registry.Web.Controllers
 
         }
 
+        [HttpPost("build", Name = nameof(ObjectsController) + "." + nameof(Build))]
+        public async Task<IActionResult> Build([FromRoute] string orgSlug, [FromRoute] string dsSlug, [FromForm] string path, [FromForm] bool force = false)
+        {
+            try
+            {
+                _logger.LogDebug($"Objects controller Build('{orgSlug}', '{dsSlug}', '{path}')");
+
+                await _objectsManager.Build(orgSlug, dsSlug, path, force);
+                return Ok();
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, $"Exception in Objects controller Build('{orgSlug}', '{dsSlug}', '{path}')");
+
+                return ExceptionResult(ex);
+            }
+        }
+
+        [HttpGet("build/{hash}/{*path}", Name = nameof(ObjectsController) + "." + nameof(BuildFile))]
+        public async Task<IActionResult> BuildFile([FromRoute] string orgSlug, [FromRoute] string dsSlug, [FromRoute] string hash, [FromRoute] string path)
+        {
+            try
+            {
+                _logger.LogDebug($"Objects controller Build('{orgSlug}', '{dsSlug}', '{path}')");
+
+                var res = await _objectsManager.GetBuildFile(orgSlug, dsSlug, hash, path);
+
+                return File(res.ContentStream, res.ContentType, res.Name);
+
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, $"Exception in Objects controller Build('{orgSlug}', '{dsSlug}', '{path}')");
+
+                return ExceptionResult(ex);
+            }
+        }
+
     }
 }
