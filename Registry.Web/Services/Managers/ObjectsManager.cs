@@ -947,8 +947,9 @@ namespace Registry.Web.Services.Managers
 
             _logger.LogInformation($"In GetBuildFile('{orgSlug}/{dsSlug}')");
 
-            if (!await _authManager.IsOwnerOrAdmin(ds))
-                throw new UnauthorizedException("The current user is not allowed to build dataset");
+            // TODO: Should we enforce the ownership policy? This way anonymous users will not be able to browse point clouds
+            // if (!await _authManager.IsOwnerOrAdmin(ds))
+            //     throw new UnauthorizedException("The current user is not allowed to build dataset");
 
             EnsureNoWildcardOrEmptyPaths(path);
 
