@@ -962,7 +962,7 @@ namespace Registry.Web.Services.Managers
             var filePath = Path.Combine(ddb.BuildFolder, hash, path);
 
             if (!File.Exists(filePath))
-                throw new ArgumentException($"File '{path}' does not exist");
+                throw new NotFoundException($"File '{path}' does not exist");
 
             return new FileDescriptorDto
             {
