@@ -256,7 +256,7 @@ namespace Registry.Web.Services.Managers
 
             });
 
-            if (obj.Type == EntryType.PointCloud)
+            if (ddb.IsBuildable(obj.Path))
             {
                 _logger.LogInformation("This is a point cloud, we need to build it!");
 
@@ -918,12 +918,13 @@ namespace Registry.Web.Services.Managers
             if (entry == null)
                 throw new InvalidOperationException($"Cannot find source entry: '{path}'");
 
-            // TODO: We should centralize this logic
-            if (entry.Type != EntryType.PointCloud)
+            // Nothing to do here
+            if (!ddb.IsBuildable(entry.Path))
             {
+                _logger.LogInformation($"'{entry.Path}' is not buildable, nothing to do here");
                 return;
             }
-
+            
             var obj = await InternalGet(orgSlug, ds.InternalRef, path);
 
             var tempFileName = Path.GetTempFileName();
