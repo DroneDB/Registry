@@ -57,5 +57,7 @@ namespace Registry.Ports.DroneDB
         bool EntryExists(string path);
         void Build(string path, string dest = null, bool force = false);
         void BuildAll(string dest = null, bool force = false);
+
+        bool IsBuildable(string path);
     }
 }

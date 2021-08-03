@@ -20,13 +20,10 @@ using Polygon = GeoJSON.Net.Geometry.Polygon;
 
 namespace Registry.Adapters.DroneDB
 {
-
     public class Ddb : IDdb
     {
-
         public Ddb(string ddbPath)
         {
-
             if (string.IsNullOrWhiteSpace(ddbPath))
                 throw new ArgumentException("Path should not be null or empty");
 
@@ -35,12 +32,10 @@ namespace Registry.Adapters.DroneDB
 
             DatabaseFolder = ddbPath;
             BuildFolder = Path.Combine(ddbPath, ".ddb", "build");
-
         }
 
         public string GenerateTile(string imagePath, int tz, int tx, int ty, bool retina, bool tms)
         {
-
             try
             {
                 return DDB.Bindings.DroneDB.GenerateTile(imagePath, tz, tx, ty, retina ? 512 : 256, true);
@@ -80,10 +75,10 @@ namespace Registry.Adapters.DroneDB
         public DdbEntry GetEntry(string path)
         {
             var objs = Search(path, true).ToArray();
-            
+
             if (objs.Any(p => p.Path == path))
                 return objs.First();
-            
+
             var parent = Path.GetDirectoryName(path);
 
             if (string.IsNullOrEmpty(parent)) parent = "*";
@@ -91,7 +86,6 @@ namespace Registry.Adapters.DroneDB
             objs = Search(parent, true).ToArray();
 
             return objs.FirstOrDefault(item => item.Path == path);
-
         }
 
         public bool EntryExists(string path)
@@ -102,10 +96,8 @@ namespace Registry.Adapters.DroneDB
 
         public IEnumerable<DdbEntry> Search(string path, bool recursive = false)
         {
-
             try
             {
-
                 // If the path is not absolute let's rebase it on ddbPath
                 if (path != null && !Path.IsPathRooted(path))
                     path = Path.Combine(DatabaseFolder, path);
@@ -118,23 +110,23 @@ namespace Registry.Adapters.DroneDB
                 if (entries == null)
                 {
                     Debug.WriteLine("Strange null return value");
-                    return new DdbEntry[0];
+                    return Array.Empty<DdbEntry>();
                 }
 
                 var query = from entry in entries
-                            select new DdbEntry
-                            {
-                                Depth = entry.Depth,
-                                Hash = entry.Hash,
-                                Meta = entry.Meta,
-                                ModifiedTime = entry.ModifiedTime,
-                                Path = entry.Path,
-                                Size = entry.Size,
-                                Type = (EntryType)(int)entry.Type,
+                    select new DdbEntry
+                    {
+                        Depth = entry.Depth,
+                        Hash = entry.Hash,
+                        Meta = entry.Meta,
+                        ModifiedTime = entry.ModifiedTime,
+                        Path = entry.Path,
+                        Size = entry.Size,
+                        Type = (EntryType)(int)entry.Type,
 
-                                PointGeometry = (Point)entry.PointGeometry?.ToObject<Feature>()?.Geometry,
-                                PolygonGeometry = (Polygon)entry.PolygonGeometry?.ToObject<Feature>()?.Geometry
-                            };
+                        PointGeometry = (Point)entry.PointGeometry?.ToObject<Feature>()?.Geometry,
+                        PolygonGeometry = (Polygon)entry.PolygonGeometry?.ToObject<Feature>()?.Geometry
+                    };
 
 
                 return query.ToArray();
@@ -143,8 +135,6 @@ namespace Registry.Adapters.DroneDB
             {
                 throw new InvalidOperationException($"Cannot list '{path}' to ddb '{DatabaseFolder}'", ex);
             }
-
-
         }
 
         public void Add(string path, byte[] data)
@@ -157,7 +147,6 @@ namespace Registry.Adapters.DroneDB
         {
             try
             {
-
                 // If the path is not absolute let's rebase it on ddbPath
                 if (!Path.IsPathRooted(path)) path = Path.Combine(DatabaseFolder, path);
 
@@ -177,7 +166,8 @@ namespace Registry.Adapters.DroneDB
             }
             catch (DDBException ex)
             {
-                throw new InvalidOperationException($"Cannot move '{source}' to {dest} from ddb '{DatabaseFolder}'", ex);
+                throw new InvalidOperationException($"Cannot move '{source}' to {dest} from ddb '{DatabaseFolder}'",
+                    ex);
             }
         }
 
@@ -205,6 +195,17 @@ namespace Registry.Adapters.DroneDB
             }
         }
 
+        public bool IsBuildable(string path)
+        {
+            try
+            {
+                return DDB.Bindings.DroneDB.IsBuildable(DatabaseFolder, path);
+            }
+            catch (DDBException ex)
+            {
+                throw new InvalidOperationException($"Cannot call IsBuildable from ddb '{DatabaseFolder}'", ex);
+            }
+        }
 
         public Dictionary<string, object> GetAttributesRaw()
         {
@@ -252,9 +253,7 @@ namespace Registry.Adapters.DroneDB
         {
             try
             {
-
                 return DDB.Bindings.DroneDB.ChangeAttributes(DatabaseFolder, attributes);
-
             }
             catch (DDBException ex)
             {
@@ -266,32 +265,28 @@ namespace Registry.Adapters.DroneDB
         {
             try
             {
-
                 DDB.Bindings.DroneDB.GenerateThumbnail(imagePath, size, outputPath);
-
             }
             catch (DDBException ex)
             {
-                throw new InvalidOperationException($"Cannot generate thumbnail of '{imagePath}' to '{outputPath}' with size '{size}'", ex);
+                throw new InvalidOperationException(
+                    $"Cannot generate thumbnail of '{imagePath}' to '{outputPath}' with size '{size}'", ex);
             }
         }
 
         public void Add(string path, Stream stream = null)
         {
-
             if (stream == null)
             {
                 string folderPath = null;
 
                 try
                 {
-
                     folderPath = Path.Combine(DatabaseFolder, path);
 
                     Directory.CreateDirectory(folderPath);
 
                     DDB.Bindings.DroneDB.Add(DatabaseFolder, folderPath);
-
                 }
                 catch (DDBException ex)
                 {
@@ -306,12 +301,10 @@ namespace Registry.Adapters.DroneDB
             }
             else
             {
-
                 string filePath = null;
 
                 try
                 {
-
                     filePath = Path.Combine(DatabaseFolder, path);
 
                     stream.Reset();
@@ -324,7 +317,6 @@ namespace Registry.Adapters.DroneDB
                     }
 
                     DDB.Bindings.DroneDB.Add(DatabaseFolder, filePath);
-
                 }
                 catch (DDBException ex)
                 {
@@ -342,7 +334,7 @@ namespace Registry.Adapters.DroneDB
         private static void EnsureFolderExists(string filePath)
         {
             var folder = Path.GetDirectoryName(filePath);
-            Directory.CreateDirectory(folder);
+            if (folder != null) Directory.CreateDirectory(folder);
         }
 
         public override string ToString()
