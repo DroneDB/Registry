@@ -17,13 +17,15 @@ namespace Registry.Web.Utilities
 
             if (excludes != null && excludes.Contains(fileName)) return;
 
+            var path = CommonUtils.SafeCombine(entryName, fileName);
+            
             if (File.GetAttributes(sourceName).HasFlag(FileAttributes.Directory))
             {
-                archive.CreateEntryFromDirectory(sourceName, CommonUtils.SafeCombine(entryName, fileName), excludes);
+                archive.CreateEntryFromDirectory(sourceName, path, excludes);
             }
             else
             {
-                archive.CreateEntryFromFile(sourceName, CommonUtils.SafeCombine(entryName, fileName), CompressionLevel.NoCompression);
+                archive.CreateEntryFromFile(sourceName, path, CommonUtils.GetCompressionLevel(path));
             }
         }
 
