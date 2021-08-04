@@ -954,9 +954,35 @@ namespace Registry.Web.Services.Managers
 
         public async Task<FileDescriptorDto> GetBuildFile(string orgSlug, string dsSlug, string hash, string path)
         {
-            var ds = await _utils.GetDataset(orgSlug, dsSlug);
+            _logger.LogInformation($"In GetBuildFile('{orgSlug}/{dsSlug}', '{hash}', '{path}')");
 
-            _logger.LogInformation($"In GetBuildFile('{orgSlug}/{dsSlug}')");
+            var filePath = await GetBuildFilePath(orgSlug, dsSlug, hash, path);
+
+            if (!File.Exists(filePath))
+                throw new NotFoundException($"File '{path}' does not exist");
+
+            return new FileDescriptorDto
+            {
+                ContentStream = File.OpenRead(filePath),
+                ContentType = MimeUtility.GetMimeMapping(filePath),
+                Name = Path.GetFileName(filePath)
+            };
+
+        }
+
+        public async Task<bool> CheckBuildFile(string orgSlug, string dsSlug, string hash, string path)
+        {
+
+            _logger.LogInformation($"In CheckBuildFile('{orgSlug}/{dsSlug}', '{hash}', '{path}')");
+
+            var filePath = await GetBuildFilePath(orgSlug, dsSlug, hash, path);
+
+            return File.Exists(filePath);
+        }
+        
+        private async Task<string> GetBuildFilePath(string orgSlug, string dsSlug, string hash, string path)
+        {
+            var ds = await _utils.GetDataset(orgSlug, dsSlug);
 
             // TODO: Should we enforce the ownership policy? This way anonymous users will not be able to browse point clouds
             // if (!await _authManager.IsOwnerOrAdmin(ds))
@@ -970,18 +996,7 @@ namespace Registry.Web.Services.Managers
 
             var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
 
-            var filePath = Path.Combine(ddb.BuildFolder, hash, path);
-
-            if (!File.Exists(filePath))
-                throw new NotFoundException($"File '{path}' does not exist");
-
-            return new FileDescriptorDto
-            {
-                ContentStream = File.OpenRead(filePath),
-                ContentType = MimeUtility.GetMimeMapping(filePath),
-                Name = Path.GetFileName(filePath)
-            };
-
+            return Path.Combine(ddb.BuildFolder, hash, path);;
         }
     }
 }
