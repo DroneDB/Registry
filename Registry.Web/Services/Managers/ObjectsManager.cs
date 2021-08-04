@@ -501,19 +501,30 @@ namespace Registry.Web.Services.Managers
 
             await SafeGetFile(orgSlug, ds.InternalRef, path, sourceFilePath);
 
-            _logger.LogInformation($"Generating tile from '{sourceFilePath}'");
-            var destFilePath = ddb.GenerateTile(sourceFilePath, tz, tx, ty, retina, true);
-
-            var memory = new MemoryStream(await File.ReadAllBytesAsync(destFilePath));
-            memory.Reset();
-
-            return new FileDescriptorDto
+            try
             {
-                ContentStream = memory,
-                ContentType = "image/png",
-                Name = fileName
-            };
 
+                _logger.LogInformation($"Generating tile from '{sourceFilePath}'");
+                var destFilePath = ddb.GenerateTile(sourceFilePath, tz, tx, ty, retina, true);
+
+                var memory = new MemoryStream(await File.ReadAllBytesAsync(destFilePath));
+                memory.Reset();
+
+                return new FileDescriptorDto
+                {
+                    ContentStream = memory,
+                    ContentType = "image/png",
+                    Name = fileName
+                };
+            }
+            catch (InvalidOperationException ex)
+            {
+                // NOTE: This is the definition of self-inflicted wound
+                if (ex.InnerException != null && ex.InnerException.Message.Contains("Out of bounds", StringComparison.OrdinalIgnoreCase))
+                    throw new NotFoundException("Tile out of bounds");
+
+                throw;
+            }
         }
 
         #region Downloads
