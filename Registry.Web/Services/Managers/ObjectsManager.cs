@@ -256,7 +256,7 @@ namespace Registry.Web.Services.Managers
 
             });
 
-            if (obj.Type == EntryType.PointCloud)
+            if (ddb.IsBuildable(obj.Path))
             {
                 _logger.LogInformation("This is a point cloud, we need to build it!");
 
@@ -918,12 +918,13 @@ namespace Registry.Web.Services.Managers
             if (entry == null)
                 throw new InvalidOperationException($"Cannot find source entry: '{path}'");
 
-            // TODO: We should centralize this logic
-            if (entry.Type != EntryType.PointCloud)
+            // Nothing to do here
+            if (!ddb.IsBuildable(entry.Path))
             {
+                _logger.LogInformation($"'{entry.Path}' is not buildable, nothing to do here");
                 return;
             }
-
+            
             var obj = await InternalGet(orgSlug, ds.InternalRef, path);
 
             var tempFileName = Path.GetTempFileName();
@@ -946,8 +947,9 @@ namespace Registry.Web.Services.Managers
 
             _logger.LogInformation($"In GetBuildFile('{orgSlug}/{dsSlug}')");
 
-            if (!await _authManager.IsOwnerOrAdmin(ds))
-                throw new UnauthorizedException("The current user is not allowed to build dataset");
+            // TODO: Should we enforce the ownership policy? This way anonymous users will not be able to browse point clouds
+            // if (!await _authManager.IsOwnerOrAdmin(ds))
+            //     throw new UnauthorizedException("The current user is not allowed to build dataset");
 
             EnsureNoWildcardOrEmptyPaths(path);
 
@@ -960,7 +962,7 @@ namespace Registry.Web.Services.Managers
             var filePath = Path.Combine(ddb.BuildFolder, hash, path);
 
             if (!File.Exists(filePath))
-                throw new ArgumentException($"File '{path}' does not exist");
+                throw new NotFoundException($"File '{path}' does not exist");
 
             return new FileDescriptorDto
             {

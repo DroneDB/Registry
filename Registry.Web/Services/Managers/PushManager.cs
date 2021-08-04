@@ -42,7 +42,8 @@ namespace Registry.Web.Services.Managers
 
 
         public PushManager(IUtils utils, IDdbManager ddbManager, IObjectSystem objectSystem,
-            IObjectsManager objectsManager, ILogger<PushManager> logger, IDatasetsManager datasetsManager, IAuthManager authManager,
+            IObjectsManager objectsManager, ILogger<PushManager> logger, IDatasetsManager datasetsManager,
+            IAuthManager authManager,
             IBackgroundJobsProcessor backgroundJob, IOptions<AppSettings> settings)
         {
             _utils = utils;
@@ -58,7 +59,6 @@ namespace Registry.Web.Services.Managers
 
         public async Task<PushInitResultDto> Init(string orgSlug, string dsSlug, Stream stream)
         {
-
             var ds = await _utils.GetDataset(orgSlug, dsSlug, true);
 
             if (ds == null)
@@ -111,11 +111,10 @@ namespace Registry.Web.Services.Managers
 
         public async Task Upload(string orgSlug, string dsSlug, string path, Stream stream)
         {
-
             if (string.IsNullOrWhiteSpace(path))
                 throw new ArgumentException("Path cannot be empty");
 
-            if (stream == null || !stream.CanRead)
+            if (stream is not { CanRead: true })
                 throw new ArgumentException("Stream is null or is not readable");
 
             var ds = await _utils.GetDataset(orgSlug, dsSlug);
@@ -144,12 +143,10 @@ namespace Registry.Web.Services.Managers
             // Save file in temp folder
             await using var file = File.OpenWrite(filePath);
             await stream.CopyToAsync(file);
-
         }
 
         public async Task Commit(string orgSlug, string dsSlug)
         {
-
             var ds = await _utils.GetDataset(orgSlug, dsSlug);
 
             if (!await _authManager.IsOwnerOrAdmin(ds))
@@ -191,15 +188,13 @@ namespace Registry.Web.Services.Managers
             {
                 var tempFileName = Path.Combine(addTempFolder, item.Path);
 
-                if (item.Type == EntryType.PointCloud)
+                if (ddb.IsBuildable(item.Path))
                 {
-
                     var jobId = _backgroundJob.Enqueue(() =>
                         HangfireUtils.BuildWrapper(ddb.DatabaseFolder, item.Path, tempFileName, true, null));
 
                     _backgroundJob.ContinueJobWith(jobId, () =>
                         HangfireUtils.SafeDelete(tempFileName, null));
-
                 }
                 else
                 {
@@ -209,8 +204,6 @@ namespace Registry.Web.Services.Managers
                     }
                 }
             }
-
-
         }
 
         public async Task Clean(string orgSlug, string dsSlug)
@@ -219,7 +212,7 @@ namespace Registry.Web.Services.Managers
 
             var baseTempFolder = Path.Combine(Path.GetTempPath(), PushFolderName, orgSlug, dsSlug);
 
-            _logger.LogInformation("Cleaning '" + baseTempFolder + "'");
+            _logger.LogInformation($"Cleaning '{baseTempFolder}'");
 
             if (Directory.Exists(baseTempFolder))
             {
@@ -243,7 +236,6 @@ namespace Registry.Web.Services.Managers
 
         private async Task ApplyDelta(string bucketName, DeltaDto delta, string addTempFolder)
         {
-
             const string tempFolderName = ".tmp";
 
             _logger.LogInformation("Moving copies to temp folder ");
@@ -277,7 +269,6 @@ namespace Registry.Web.Services.Managers
 
                 if (rem.Type != EntryType.Directory)
                 {
-
                     _logger.LogInformation("Deleting file");
 
                     if (await _objectSystem.ObjectExistsAsync(bucketName, dest))
@@ -291,7 +282,6 @@ namespace Registry.Web.Services.Managers
                         _logger.LogInformation("File does not exist in dest, nothing to do");
                     }
                 }
-
             }
 
 
@@ -299,7 +289,6 @@ namespace Registry.Web.Services.Managers
 
             foreach (var add in delta.Adds)
             {
-
                 _logger.LogInformation(add.ToString());
 
                 if (add.Type == EntryType.Directory)
@@ -313,7 +302,6 @@ namespace Registry.Web.Services.Managers
                 _logger.LogInformation("Uploading file");
 
                 await _objectSystem.PutObjectAsync(bucketName, add.Path, source);
-
             }
 
             _logger.LogInformation("Working on direct copies");
@@ -334,7 +322,6 @@ namespace Registry.Web.Services.Managers
                 {
                     _logger.LogInformation("Dest file does not exist, performing copy");
                     await _objectSystem.CopyObjectAsync(bucketName, source, bucketName, dest);
-
                 }
             }
 
@@ -352,7 +339,6 @@ namespace Registry.Web.Services.Managers
                     // Basically a move
                     await _objectSystem.CopyObjectAsync(bucketName, dest + ".replace", bucketName, dest);
                     await _objectSystem.RemoveObjectAsync(bucketName, dest + ".replace");
-
                 }
             }
 
@@ -364,15 +350,12 @@ namespace Registry.Web.Services.Managers
             {
                 await _objectSystem.RemoveObjectAsync(bucketName, obj.Key);
             }
-
         }
 
-        private void EnsureParentFolderExists(string folder)
+        private static void EnsureParentFolderExists(string folder)
         {
             var tempFolder = Path.GetDirectoryName(folder);
             if (tempFolder != null) Directory.CreateDirectory(tempFolder);
         }
     }
-
-
 }
