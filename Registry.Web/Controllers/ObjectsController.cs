@@ -151,10 +151,14 @@ namespace Registry.Web.Controllers
                 var res = await _objectsManager.Download(orgSlug, dsSlug, new[] { path });
 
                 if (!isInline)
-                    return File(res.ContentStream, res.ContentType, res.Name);
+                {
+                    var stream = File(res.ContentStream, res.ContentType, res.Name);
+                    stream.EnableRangeProcessing = true;
+                    return stream;
+                }
 
                 Response.Headers.Add("Content-Disposition", "inline");
-                return File(res.ContentStream, res.ContentType);
+                return File(res.ContentStream, res.ContentType, true);
 
             }
             catch (Exception ex)
