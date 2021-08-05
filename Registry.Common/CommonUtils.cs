@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Globalization;
 using System.IO;
+using System.IO.Compression;
 using System.Linq;
 using System.Net;
 using System.Security.Cryptography;
@@ -335,6 +336,49 @@ namespace Registry.Common
             }
 
             return !entries.Any();
+        }
+
+        private static readonly HashSet<string> _compressibleMimeTypes =  new()
+        { "text/html",
+            "text/css",
+            "text/plain",
+            "text/xml",
+            "text/csv",
+            "text/x-component",
+            "text/javascript",
+            "application/pdf",
+            "application/rtf",
+            "application/x-sh",
+            "application/x-tar",
+            "application/x-javascript",
+            "application/javascript",
+            "application/json",
+            "application/manifest+json",
+            "application/vnd.api+json",
+            "application/xml",
+            "application/xhtml+xml",
+            "application/rss+xml",
+            "application/atom+xml",
+            "application/vnd.ms-fontobject",
+            "application/x-font-ttf",
+            "application/x-font-opentype",
+            "application/x-font-truetype",
+            "image/svg+xml",
+            "image/x-icon",
+            "image/vnd.microsoft.icon",
+            "font/ttf",
+            "font/eot",
+            "font/otf",
+            "font/opentype"};
+
+        public static CompressionLevel GetCompressionLevel(string path)
+        {
+            if (!MimeTypes.TryGetMimeType(path, out var mimeType))
+                return CompressionLevel.NoCompression;
+            
+            return _compressibleMimeTypes.Contains(mimeType)
+                ? CompressionLevel.Optimal
+                : CompressionLevel.NoCompression;
         }
     }
 

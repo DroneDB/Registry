@@ -26,5 +26,6 @@ namespace Registry.Web.Services.Ports
         Task<FileDescriptorDto> GetDdb(string orgSlug, string dsSlug);
         Task Build(string orgSlug, string dsSlug, string path, bool force = false);
         Task<FileDescriptorDto> GetBuildFile(string orgSlug, string dsSlug, string hash, string path);
+        Task<bool> CheckBuildFile(string orgSlug, string dsSlug, string hash, string path);
     }
 }

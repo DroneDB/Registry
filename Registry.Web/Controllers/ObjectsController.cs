@@ -151,10 +151,14 @@ namespace Registry.Web.Controllers
                 var res = await _objectsManager.Download(orgSlug, dsSlug, new[] { path });
 
                 if (!isInline)
-                    return File(res.ContentStream, res.ContentType, res.Name);
+                {
+                    var stream = File(res.ContentStream, res.ContentType, res.Name);
+                    stream.EnableRangeProcessing = true;
+                    return stream;
+                }
 
                 Response.Headers.Add("Content-Disposition", "inline");
-                return File(res.ContentStream, res.ContentType);
+                return File(res.ContentStream, res.ContentType, true);
 
             }
             catch (Exception ex)
@@ -412,7 +416,7 @@ namespace Registry.Web.Controllers
         {
             try
             {
-                _logger.LogDebug($"Objects controller Build('{orgSlug}', '{dsSlug}', '{path}')");
+                _logger.LogDebug($"Objects controller BuildFile('{orgSlug}', '{dsSlug}', '{path}')");
 
                 var res = await _objectsManager.GetBuildFile(orgSlug, dsSlug, hash, path);
 
@@ -421,7 +425,27 @@ namespace Registry.Web.Controllers
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, $"Exception in Objects controller Build('{orgSlug}', '{dsSlug}', '{path}')");
+                _logger.LogError(ex, $"Exception in Objects controller BuildFile('{orgSlug}', '{dsSlug}', '{path}')");
+
+                return ExceptionResult(ex);
+            }
+        }
+        
+        [HttpHead("build/{hash}/{*path}", Name = nameof(ObjectsController) + "." + nameof(BuildFile))]
+        public async Task<IActionResult> CheckBuildFile([FromRoute] string orgSlug, [FromRoute] string dsSlug, [FromRoute] string hash, [FromRoute] string path)
+        {
+            try
+            {
+                _logger.LogDebug($"Objects controller CheckBuildFile('{orgSlug}', '{dsSlug}', '{path}')");
+
+                var res = await _objectsManager.CheckBuildFile(orgSlug, dsSlug, hash, path);
+
+                return res ? Ok() : NotFound();
+
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, $"Exception in Objects controller CheckBuildFile('{orgSlug}', '{dsSlug}', '{path}')");
 
                 return ExceptionResult(ex);
             }
