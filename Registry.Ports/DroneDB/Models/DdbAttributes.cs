@@ -3,7 +3,7 @@ using System.Collections.Generic;
 
 namespace Registry.Ports.DroneDB.Models
 {
-    public class DdbAttributes : DdbMeta
+    public class DdbAttributes : DdbProperties
     {
         private readonly IDdb _ddb;
 
@@ -18,18 +18,18 @@ namespace Registry.Ports.DroneDB.Models
         {
             get
             {
-                UpdateMeta();
+                UpdateProperties();
 
                 return base.IsPublic;
             }
-            set => SafeSetMetaField(PublicMetaField, value);
+            set => SafeSetPropertyField(PublicPropertyField, value);
         }
 
         public new int ObjectsCount
         {
             get
             {
-                UpdateMeta();
+                UpdateProperties();
 
                 return base.ObjectsCount;
             }
@@ -39,7 +39,7 @@ namespace Registry.Ports.DroneDB.Models
         {
             get
             {
-                UpdateMeta();
+                UpdateProperties();
 
                 return base.LastUpdate;
 
@@ -48,56 +48,56 @@ namespace Registry.Ports.DroneDB.Models
             {
                 if (value == null)
                 {
-                    SafeSetMetaField<long?>(LastUpdateField, null);
+                    SafeSetPropertyField<long?>(LastUpdateField, null);
                     return;
                 }
 
                 var dt = new DateTimeOffset(value.Value);
 
-                SafeSetMetaField(LastUpdateField, dt.ToUnixTimeSeconds());
+                SafeSetPropertyField(LastUpdateField, dt.ToUnixTimeSeconds());
             }
         }
 
 
-        private void UpdateMeta()
+        private void UpdateProperties()
         {
-            _meta = _ddb.GetAttributesRaw();
+            _properties = _ddb.GetAttributesRaw();
         }
 
-        private void SafeSetMetaField<T>(string field, T val)
+        private void SafeSetPropertyField<T>(string field, T val)
         {
 
-            if (_meta == null)
+            if (_properties == null)
             {
-                _meta = new Dictionary<string, object>
+                _properties = new Dictionary<string, object>
                 {
                     { field, val }
                 };
                 return;
             }
 
-            if (_meta.ContainsKey(field))
-                _meta[field] = val;
+            if (_properties.ContainsKey(field))
+                _properties[field] = val;
             else
-                _meta.Add(field, val);
+                _properties.Add(field, val);
 
-            SaveMeta();
+            SaveProperties();
 
         }
 
-        private void SaveMeta()
+        private void SaveProperties()
         {
 
             var tmp = new Dictionary<string, object>();
 
             // We can only set LastUpdate and IsPublic
-            if (_meta.ContainsKey(LastUpdateField))
-                tmp.Add(LastUpdateField, _meta[LastUpdateField]);
+            if (_properties.ContainsKey(LastUpdateField))
+                tmp.Add(LastUpdateField, _properties[LastUpdateField]);
 
-            if (_meta.ContainsKey(PublicMetaField))
-                tmp.Add(PublicMetaField, _meta[PublicMetaField]);
+            if (_properties.ContainsKey(PublicPropertyField))
+                tmp.Add(PublicPropertyField, _properties[PublicPropertyField]);
 
-            _meta = _ddb.ChangeAttributesRaw(tmp);
+            _properties = _ddb.ChangeAttributesRaw(tmp);
         }
 
 

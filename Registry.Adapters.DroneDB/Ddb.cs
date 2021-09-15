@@ -14,7 +14,6 @@ using Newtonsoft.Json.Linq;
 using Registry.Common;
 using Registry.Ports.DroneDB;
 using Registry.Ports.DroneDB.Models;
-using LineString = GeoJSON.Net.Geometry.LineString;
 using Point = GeoJSON.Net.Geometry.Point;
 using Polygon = GeoJSON.Net.Geometry.Polygon;
 
@@ -118,7 +117,7 @@ namespace Registry.Adapters.DroneDB
                     {
                         Depth = entry.Depth,
                         Hash = entry.Hash,
-                        Meta = entry.Meta,
+                        Properties = entry.Properties,
                         ModifiedTime = entry.ModifiedTime,
                         Path = entry.Path,
                         Size = entry.Size,
@@ -238,7 +237,7 @@ namespace Registry.Adapters.DroneDB
             {
                 Depth = entry.Depth,
                 Hash = entry.Hash,
-                Meta = entry.Meta,
+                Properties = entry.Properties,
                 ModifiedTime = entry.ModifiedTime,
                 Path = entry.Path,
                 Size = entry.Size,

@@ -70,7 +70,7 @@ namespace Registry.Web.Utilities
 
         public static DatasetDto ToDto(this Dataset dataset, DdbEntry entry)
         {
-            var attributes = new DdbMeta(entry.Meta);
+            var attributes = new DdbProperties(entry.Properties);
 
             return new()
             {
@@ -80,7 +80,7 @@ namespace Registry.Web.Utilities
                 Description = dataset.Description,
                 LastEdit = entry.ModifiedTime,
                 Name = dataset.Name,
-                Meta = entry.Meta,
+                Properties = entry.Properties,
                 ObjectsCount = attributes.ObjectsCount,
                 Size = entry.Size,
                 IsPublic = attributes.IsPublic
@@ -94,7 +94,7 @@ namespace Registry.Web.Utilities
                 Depth = obj.Depth,
                 Hash = obj.Hash,
                 Id = obj.Id,
-                Meta = obj.Meta,
+                Properties = obj.Properties,
                 ModifiedTime = obj.ModifiedTime,
                 Path = obj.Path,
                 PointGeometry = obj.PointGeometry,
