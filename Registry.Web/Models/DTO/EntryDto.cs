@@ -16,8 +16,8 @@ namespace Registry.Web.Models.DTO
         public long Size { get; set; }
         public int Depth { get; set; }
 
-        [JsonProperty("meta")]
-        public Dictionary<string, object> Meta { get; set; }
+        [JsonProperty("properties")]
+        public Dictionary<string, object> Properties { get; set; }
 
         [JsonProperty("mtime")]
         [JsonConverter(typeof(UnixDateTimeConverter))] 

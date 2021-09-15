@@ -126,7 +126,7 @@ namespace Registry.Web.Test
             res.Depth.Should().Be(expectedDepth);
             res.Size.Should().Be(expectedSize);
             res.Type.Should().Be(expectedType);
-            res.Meta.Should().BeEquivalentTo(expectedMeta);
+            res.Properties.Should().BeEquivalentTo(expectedMeta);
             res.PointGeometry.Coordinates.Latitude.Should().BeApproximately(expectedLatitude, 0.00001);
             res.PointGeometry.Coordinates.Longitude.Should().BeApproximately(expectedLongitude, 0.00001);
             res.PointGeometry.Coordinates.Altitude.Should().BeApproximately(expectedAltitude, 0.1);
@@ -179,7 +179,7 @@ namespace Registry.Web.Test
             res.Depth.Should().Be(expectedDepth);
             res.Size.Should().Be(expectedSize);
             res.Type.Should().Be(expectedType);
-            res.Meta.Should().BeEquivalentTo(expectedMeta);
+            res.Properties.Should().BeEquivalentTo(expectedMeta);
             res.PointGeometry.Coordinates.Latitude.Should().BeApproximately(expectedLatitude, 0.00001);
             res.PointGeometry.Coordinates.Longitude.Should().BeApproximately(expectedLongitude, 0.00001);
             res.PointGeometry.Coordinates.Altitude.Should().BeApproximately(expectedAltitude, 0.1);

@@ -161,7 +161,7 @@ namespace Registry.Web.Test
             var ddbMock = new Mock<IDdb>();
             ddbMock.Setup(x => x.GetInfo()).Returns(new DdbEntry
             {
-                Meta = attributes
+                Properties = attributes
             });
             var ddbMock2 = new Mock<IDdb>();
             ddbMock2.Setup(x => x.GetAttributesRaw()).Returns(attributes);
@@ -258,7 +258,7 @@ namespace Registry.Web.Test
             var ddbMock = new Mock<IDdb>();
             ddbMock.Setup(x => x.GetInfo()).Returns(new DdbEntry
             {
-                Meta = attributes
+                Properties = attributes
             });
             var ddbMock2 = new Mock<IDdb>();
             ddbMock2.Setup(x => x.GetAttributesRaw()).Returns(attributes);
@@ -392,7 +392,7 @@ namespace Registry.Web.Test
             var ddbMock = new Mock<IDdb>();
             ddbMock.Setup(x => x.GetInfo()).Returns(new DdbEntry
             {
-                Meta = attributes
+                Properties = attributes
             });
             var ddbMock2 = new Mock<IDdb>();
             ddbMock2.Setup(x => x.GetAttributesRaw()).Returns(attributes);

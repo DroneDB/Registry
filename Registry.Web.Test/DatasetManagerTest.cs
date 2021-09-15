@@ -63,7 +63,7 @@ namespace Registry.Web.Test
             var ddbMock = new Mock<IDdb>();
             ddbMock.Setup(x => x.GetInfo()).Returns(new DdbEntry
             {
-                Meta = new Dictionary<string, object>
+                Properties = new Dictionary<string, object>
                 {
                     {"public", true }
                 },

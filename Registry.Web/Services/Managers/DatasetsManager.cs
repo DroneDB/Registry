@@ -50,7 +50,7 @@ namespace Registry.Web.Services.Managers
             var query = from ds in org.Datasets.ToArray()
                         let ddb = _ddbManager.Get(orgSlug, ds.InternalRef)
                         let info = ddb.GetInfo()
-                        let attributes = new DdbMeta(info.Meta)
+                        let attributes = new DdbProperties(info.Properties)
                         select new DatasetDto
                         {
                             Id = ds.Id,
@@ -60,7 +60,7 @@ namespace Registry.Web.Services.Managers
                             LastEdit = attributes.LastUpdate,
                             IsPublic = attributes.IsPublic,
                             Name = ds.Name,
-                            Meta = attributes.Meta,
+                            Properties = attributes.Properties,
                             ObjectsCount = attributes.ObjectsCount,
                             Size = info.Size
                         };
@@ -85,7 +85,7 @@ namespace Registry.Web.Services.Managers
             var ddb = _ddbManager.Get(orgSlug, dataset.InternalRef);
 
             var info = ddb.GetInfo();
-            var attrs = new DdbMeta(info.Meta);
+            var attrs = new DdbProperties(info.Properties);
             
             var entry = new EntryDto
             {
@@ -94,7 +94,7 @@ namespace Registry.Web.Services.Managers
                 Size = info.Size,
                 Path = _utils.GenerateDatasetUrl(dataset),
                 Type = EntryType.DroneDb,
-                Meta = info.Meta
+                Properties = info.Properties
             };
 
 
@@ -118,8 +118,8 @@ namespace Registry.Web.Services.Managers
 
             var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
 
-            if (dataset.Meta != null) 
-                ddb.ChangeAttributesRaw(dataset.Meta);
+            if (dataset.Properties != null) 
+                ddb.ChangeAttributesRaw(dataset.Properties);
 
             var attributes = ddb.GetAttributes();
 

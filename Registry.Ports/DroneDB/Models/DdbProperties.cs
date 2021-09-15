@@ -8,20 +8,20 @@ using Registry.Common;
 
 namespace Registry.Ports.DroneDB.Models
 {
-    public class DdbMeta
+    public class DdbProperties
     {
-        protected Dictionary<string, object> _meta;
+        protected Dictionary<string, object> _properties;
 
-        public DdbMeta(Dictionary<string, object> meta)
+        public DdbProperties(Dictionary<string, object> properties)
         {
-            _meta = meta;
+            _properties = properties;
         }
 
         public const string LastUpdateField = "mtime";
-        public const string PublicMetaField = "public";
+        public const string PublicPropertyField = "public";
         public const string ObjectsCountField = "entries";
         
-        public bool IsPublic => SafeGetMetaField<bool>(PublicMetaField);
+        public bool IsPublic => SafeGetMetaField<bool>(PublicPropertyField);
 
         public int ObjectsCount => SafeGetMetaField<int>(ObjectsCountField);
 
@@ -41,7 +41,7 @@ namespace Registry.Ports.DroneDB.Models
 
         protected T SafeGetMetaField<T>(string field)
         {
-            var res = _meta?.SafeGetValue(field);
+            var res = _properties?.SafeGetValue(field);
             if (!(res is T)) return default;
 
             return (T)res;
@@ -49,11 +49,11 @@ namespace Registry.Ports.DroneDB.Models
 
         protected string MetaRaw
         {
-            get => JsonConvert.SerializeObject(_meta);
-            set => _meta = JsonConvert.DeserializeObject<Dictionary<string, object>>(value);
+            get => JsonConvert.SerializeObject(_properties);
+            set => _properties = JsonConvert.DeserializeObject<Dictionary<string, object>>(value);
         }
 
-        public Dictionary<string, object> Meta => new(_meta);
+        public Dictionary<string, object> Properties => new(_properties);
 
 
     }
