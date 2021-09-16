@@ -233,6 +233,7 @@ namespace Registry.Web
             services.AddScoped<IDdbManager, DdbManager>();
             services.AddScoped<ISystemManager, SystemManager>();
             services.AddScoped<IBackgroundJobsProcessor, BackgroundJobsProcessor>();
+            services.AddScoped<IMetaManager, MetaManager>();
 
             services.AddSingleton<IPasswordHasher, PasswordHasher>();
             services.AddSingleton<IBatchTokenGenerator, BatchTokenGenerator>();
