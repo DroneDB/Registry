@@ -554,63 +554,6 @@ namespace Registry.Web.Services.Managers
             return downloadPackage.Id.ToString();
         }
 
-        #region Utils
-
-        private DdbEntry EnsurePathValidity(string orgSlug, Guid internalRef, string path)
-        {
-            return EnsurePathValidity(orgSlug, internalRef, path, out IDdb ddb);
-        }
-
-        private DdbEntry EnsurePathValidity(string orgSlug, Guid internalRef, string path, out IDdb ddb)
-        {
-
-            EnsureNoWildcardOrEmptyPaths(path);
-
-            ddb = _ddbManager.Get(orgSlug, internalRef);
-
-            var res = ddb.Search(path)?.ToArray();
-
-            if (res == null || !res.Any())
-                throw new ArgumentException($"Invalid path: '{path}'");
-
-            return res.First();
-        }
-
-        private void EnsureNoWildcardOrEmptyPaths(string path)
-        {
-            if (path.Contains("*") || path.Contains("?") || string.IsNullOrWhiteSpace(path))
-                throw new ArgumentException("Wildcards or empty paths are not supported");
-        }
-
-        private void EnsurePathsValidity(string orgSlug, Guid internalRef, string[] paths)
-        {
-            EnsurePathsValidity(orgSlug, internalRef, paths, out IDdb ddb);
-        }
-
-        private void EnsurePathsValidity(string orgSlug, Guid internalRef, string[] paths, out IDdb ddb)
-        {
-            ddb = null;
-
-            if (paths == null || !paths.Any())
-                // Everything
-                return;
-
-            if (paths.Any(path => path.Contains("*") || path.Contains("?") || string.IsNullOrWhiteSpace(path)))
-                throw new ArgumentException("Wildcards or empty paths are not supported");
-
-            if (paths.Length != paths.Distinct().Count())
-                throw new ArgumentException("Duplicate paths");
-
-            ddb = _ddbManager.Get(orgSlug, internalRef);
-
-            foreach (var path in paths)
-                if (!ddb.EntryExists(path))
-                    throw new ArgumentException($"Invalid path: '{path}'");
-
-        }
-
-        #endregion
-
         public async Task<FileDescriptorDto> DownloadPackage(string orgSlug, string dsSlug, string packageId)
         {
             var ds = await _utils.GetDataset(orgSlug, dsSlug, checkOwnership: false);
@@ -870,6 +813,63 @@ namespace Registry.Web.Services.Managers
 
         #endregion
 
+        #region Utils
+
+        private DdbEntry EnsurePathValidity(string orgSlug, Guid internalRef, string path)
+        {
+            return EnsurePathValidity(orgSlug, internalRef, path, out IDdb ddb);
+        }
+
+        private DdbEntry EnsurePathValidity(string orgSlug, Guid internalRef, string path, out IDdb ddb)
+        {
+
+            EnsureNoWildcardOrEmptyPaths(path);
+
+            ddb = _ddbManager.Get(orgSlug, internalRef);
+
+            var res = ddb.Search(path)?.ToArray();
+
+            if (res == null || !res.Any())
+                throw new ArgumentException($"Invalid path: '{path}'");
+
+            return res.First();
+        }
+
+        private void EnsureNoWildcardOrEmptyPaths(string path)
+        {
+            if (path.Contains("*") || path.Contains("?") || string.IsNullOrWhiteSpace(path))
+                throw new ArgumentException("Wildcards or empty paths are not supported");
+        }
+
+        private void EnsurePathsValidity(string orgSlug, Guid internalRef, string[] paths)
+        {
+            EnsurePathsValidity(orgSlug, internalRef, paths, out IDdb ddb);
+        }
+
+        private void EnsurePathsValidity(string orgSlug, Guid internalRef, string[] paths, out IDdb ddb)
+        {
+            ddb = null;
+
+            if (paths == null || !paths.Any())
+                // Everything
+                return;
+
+            if (paths.Any(path => path.Contains("*") || path.Contains("?") || string.IsNullOrWhiteSpace(path)))
+                throw new ArgumentException("Wildcards or empty paths are not supported");
+
+            if (paths.Length != paths.Distinct().Count())
+                throw new ArgumentException("Duplicate paths");
+
+            ddb = _ddbManager.Get(orgSlug, internalRef);
+
+            foreach (var path in paths)
+                if (!ddb.EntryExists(path))
+                    throw new ArgumentException($"Invalid path: '{path}'");
+
+        }
+
+        #endregion
+
 
         public async Task<FileDescriptorDto> GetDdb(string orgSlug, string dsSlug)
         {
@@ -951,6 +951,8 @@ namespace Registry.Web.Services.Managers
             }
 
         }
+        
+        #region Build
 
         public async Task<FileDescriptorDto> GetBuildFile(string orgSlug, string dsSlug, string hash, string path)
         {
@@ -998,5 +1000,7 @@ namespace Registry.Web.Services.Managers
 
             return Path.Combine(ddb.BuildFolder, hash, path);;
         }
+        
+        #endregion
     }
 }
