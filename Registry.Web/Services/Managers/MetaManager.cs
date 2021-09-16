@@ -3,6 +3,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using Registry.Ports.ObjectSystem;
 using Registry.Web.Data;
@@ -27,7 +28,7 @@ namespace Registry.Web.Services.Managers
             _utils = utils;
         }
 
-        public async Task<MetaDto> Add(string orgSlug, string dsSlug, string key, JObject data, string path = null)
+        public async Task<MetaDto> Add(string orgSlug, string dsSlug, string key, string data, string path = null)
         {
             var dataset = await _utils.GetDataset(orgSlug, dsSlug);
 
@@ -54,7 +55,7 @@ namespace Registry.Web.Services.Managers
             };
         }
 
-        public async Task<MetaDto> Set(string orgSlug, string dsSlug, string key, JObject data, string path = null)
+        public async Task<MetaDto> Set(string orgSlug, string dsSlug, string key, string data, string path = null)
         {
             var dataset = await _utils.GetDataset(orgSlug, dsSlug);
 
@@ -95,7 +96,7 @@ namespace Registry.Web.Services.Managers
             return ddb.Meta.Remove(id);
         }
 
-        public async Task<MetaDto[]> Get(string orgSlug, string dsSlug, string key, string path = null)
+        public async Task<JToken> Get(string orgSlug, string dsSlug, string key, string path = null)
         {
             var dataset = await _utils.GetDataset(orgSlug, dsSlug);
 
@@ -111,12 +112,7 @@ namespace Registry.Web.Services.Managers
 
             var res = ddb.Meta.Get(key, path);
 
-            return res.Select(item => new MetaDto
-            {
-                Data = item.Data,
-                Id = item.Id,
-                ModifiedTime = item.ModifiedTime
-            }).ToArray();
+            return JsonConvert.DeserializeObject<JToken>(res);
 
         }
 

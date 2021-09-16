@@ -32,7 +32,7 @@ namespace Registry.Web.Controllers
         // This is the correct approach
         [HttpPost("add/{key}", Name = nameof(MetaController) + "." + nameof(Add))]
         public async Task<IActionResult> Add([FromRoute] string orgSlug, [FromRoute] string dsSlug,
-            [FromRoute] string key, [FromBody] JObject data, [FromQuery] string path = null)
+            [FromRoute] string key, [FromBody] string data, [FromQuery] string path = null)
         {
             try
             {
@@ -63,9 +63,7 @@ namespace Registry.Web.Controllers
 
                 _logger.LogDebug($"Meta Controller AddAlt('{orgSlug}', '{dsSlug}', '{key}', '{path}')");
 
-                var obj = JsonConvert.DeserializeObject<JObject>(data);
-
-                var res = await _metaManager.Add(orgSlug, dsSlug, key, obj, pathFromForm);
+                var res = await _metaManager.Add(orgSlug, dsSlug, key, data, pathFromForm);
 
                 return Ok(res);
             }
@@ -78,7 +76,7 @@ namespace Registry.Web.Controllers
 
         [HttpPost("set/{key}", Name = nameof(MetaController) + "." + nameof(Set))]
         public async Task<IActionResult> Set([FromRoute] string orgSlug, [FromRoute] string dsSlug,
-            [FromRoute] string key, [FromBody] JObject data, [FromQuery] string path = null)
+            [FromRoute] string key, [FromBody] string data, [FromQuery] string path = null)
         {
             try
             {
@@ -108,9 +106,7 @@ namespace Registry.Web.Controllers
 
                 _logger.LogDebug($"Meta Controller Set('{orgSlug}', '{dsSlug}', '{key}', '{path}')");
 
-                var obj = JsonConvert.DeserializeObject<JObject>(data);
-
-                var res = await _metaManager.Set(orgSlug, dsSlug, key, obj, pathFromForm);
+                var res = await _metaManager.Set(orgSlug, dsSlug, key, data, pathFromForm);
 
                 return Ok(res);
             }

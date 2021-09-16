@@ -7,7 +7,7 @@ namespace Registry.Ports.DroneDB.Models
     {
         public string Id { get; set; }
 
-        public JObject Data { get; set; }
+        public JToken Data { get; set; }
 
         public DateTime ModifiedTime { get; set; }
     }

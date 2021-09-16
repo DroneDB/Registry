@@ -137,8 +137,8 @@ namespace Registry.Web.Test
 
             var metaManager = new MetaManager(_metaManagerLogger, ddbManager, webUtils);
 
-            var a = await metaManager.Add(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug, "annotations",
-                JObject.FromObject(new { test = 123 }));
+            var a = await metaManager.Add(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug, 
+                "annotations", "{\"test\":123}");
 
             a.Data["test"].ToObject<int>().Should().Be(123);
 
@@ -149,7 +149,7 @@ namespace Registry.Web.Test
             res.First().Key.Should().Be("annotations");
 
             var a2 = await metaManager.Add(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug, "annotations",
-                JObject.FromObject(new { test = 4124, pippo = "ciao" }));
+                "{\"test\":4124,\"pippo\":\"ciao\"}");
 
             a2.Data["test"].ToObject<int>().Should().Be(4124);
             a2.Data["pippo"].ToObject<string>().Should().Be("ciao");

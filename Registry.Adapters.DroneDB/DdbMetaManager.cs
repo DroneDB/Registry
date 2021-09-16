@@ -15,11 +15,10 @@ namespace Registry.Adapters.DroneDB
             _ddb = ddb;
         }
 
-        public DdbMeta Add(string key, object data, string path = null)
+        public DdbMeta Add(string key, string data, string path = null)
         {
-            var j = JsonConvert.SerializeObject(data);
 
-            var m = DDB.Bindings.DroneDB.MetaAdd(_ddb.DatabaseFolder, key, j, path);
+            var m = DDB.Bindings.DroneDB.MetaAdd(_ddb.DatabaseFolder, key, data, path);
 
             return new DdbMeta
             {
@@ -29,11 +28,9 @@ namespace Registry.Adapters.DroneDB
             };
         }
 
-        public DdbMeta Set(string key, object data, string path = null)
+        public DdbMeta Set(string key, string data, string path = null)
         {
-            var j = JsonConvert.SerializeObject(data);
-
-            var m = DDB.Bindings.DroneDB.MetaSet(_ddb.DatabaseFolder, key, j, path);
+            var m = DDB.Bindings.DroneDB.MetaSet(_ddb.DatabaseFolder, key, data, path);
 
             return new DdbMeta
             {
@@ -48,17 +45,12 @@ namespace Registry.Adapters.DroneDB
             return DDB.Bindings.DroneDB.MetaRemove(_ddb.DatabaseFolder, id);
         }
 
-        public DdbMeta[] Get(string key, string path = null)
+        public string Get(string key, string path = null)
         {
 
             var m = DDB.Bindings.DroneDB.MetaGet(_ddb.DatabaseFolder, key, path);
 
-            return m.Select(item => new DdbMeta
-            {
-                Data = JObject.FromObject(item.Data),
-                Id = item.Id,
-                ModifiedTime = item.ModifiedTime
-            }).ToArray();
+            return m;
         }
 
         public int Unset(string key, string path = null)
