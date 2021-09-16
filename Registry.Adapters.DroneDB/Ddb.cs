@@ -21,6 +21,7 @@ namespace Registry.Adapters.DroneDB
 {
     public class Ddb : IDdb
     {
+        
         public Ddb(string ddbPath)
         {
             if (string.IsNullOrWhiteSpace(ddbPath))
@@ -31,6 +32,7 @@ namespace Registry.Adapters.DroneDB
 
             DatabaseFolder = ddbPath;
             BuildFolder = Path.Combine(ddbPath, ".ddb", "build");
+            DdbMeta = new DdbMetaManager(this);
         }
 
         public string GenerateTile(string imagePath, int tz, int tx, int ty, bool retina, bool tms)
@@ -205,6 +207,8 @@ namespace Registry.Adapters.DroneDB
                 throw new InvalidOperationException($"Cannot call IsBuildable from ddb '{DatabaseFolder}'", ex);
             }
         }
+
+        public IDdbMetaManager DdbMeta { get; }
 
         public Dictionary<string, object> GetAttributesRaw()
         {

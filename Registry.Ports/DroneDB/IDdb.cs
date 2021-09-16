@@ -59,5 +59,7 @@ namespace Registry.Ports.DroneDB
         void BuildAll(string dest = null, bool force = false);
 
         bool IsBuildable(string path);
+        
+        IDdbMetaManager DdbMeta { get;  }
     }
 }
