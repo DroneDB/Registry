@@ -60,6 +60,6 @@ namespace Registry.Ports.DroneDB
 
         bool IsBuildable(string path);
         
-        IDdbMetaManager DdbMeta { get;  }
+        IDdbMetaManager Meta { get;  }
     }
 }

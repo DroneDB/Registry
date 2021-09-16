@@ -48,18 +48,17 @@ namespace Registry.Adapters.DroneDB
             return DDB.Bindings.DroneDB.MetaRemove(_ddb.DatabaseFolder, id);
         }
 
-        public DdbMeta Get(string key, string path = null)
+        public DdbMeta[] Get(string key, string path = null)
         {
 
             var m = DDB.Bindings.DroneDB.MetaGet(_ddb.DatabaseFolder, key, path);
 
-            return new DdbMeta
+            return m.Select(item => new DdbMeta
             {
-                Data = JObject.FromObject(m.Data),
-                Id = m.Id,
-                ModifiedTime = m.ModifiedTime
-            };
-
+                Data = JObject.FromObject(item.Data),
+                Id = item.Id,
+                ModifiedTime = item.ModifiedTime
+            }).ToArray();
         }
 
         public int Unset(string key, string path = null)

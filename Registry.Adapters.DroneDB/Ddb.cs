@@ -32,7 +32,7 @@ namespace Registry.Adapters.DroneDB
 
             DatabaseFolder = ddbPath;
             BuildFolder = Path.Combine(ddbPath, ".ddb", "build");
-            DdbMeta = new DdbMetaManager(this);
+            Meta = new DdbMetaManager(this);
         }
 
         public string GenerateTile(string imagePath, int tz, int tx, int ty, bool retina, bool tms)
@@ -63,6 +63,8 @@ namespace Registry.Adapters.DroneDB
         public string Version => DDB.Bindings.DroneDB.GetVersion();
         public string DatabaseFolder { get; }
         public string BuildFolder { get; }
+        
+        public IDdbMetaManager Meta { get; }
 
         static Ddb()
         {
@@ -207,8 +209,6 @@ namespace Registry.Adapters.DroneDB
                 throw new InvalidOperationException($"Cannot call IsBuildable from ddb '{DatabaseFolder}'", ex);
             }
         }
-
-        public IDdbMetaManager DdbMeta { get; }
 
         public Dictionary<string, object> GetAttributesRaw()
         {
