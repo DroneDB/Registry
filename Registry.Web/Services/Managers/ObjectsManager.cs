@@ -46,6 +46,7 @@ namespace Registry.Web.Services.Managers
 
         // TODO: Could be moved to config
         private const int DefaultThumbnailSize = 512;
+        private const string BuildFolderName = ".build";
 
         private readonly string _location;
 
@@ -238,10 +239,12 @@ namespace Registry.Web.Services.Managers
 
             _logger.LogInformation("Added to DDB");
 
-            var obj = ddb.Search(path).Select(file => file.ToDto()).FirstOrDefault();
+            var entry = ddb.GetEntry(path);
 
-            if (obj == null)
+            if (entry == null)
                 throw new InvalidOperationException("Cannot find just added file!");
+
+            var obj = entry.ToDto();
 
             // We perform the actual upload asynchronously, we will move it to hangfire soon or later
 #pragma warning disable 4014
@@ -265,12 +268,19 @@ namespace Registry.Web.Services.Managers
                 _logger.LogInformation("Background job id is " + jobId);
 
 #pragma warning disable 4014
-                uploadTask.ContinueWith(task =>
+                uploadTask.ContinueWith(_ =>
 #pragma warning restore 4014
                 {
-                    _logger.LogInformation($"Scheduling deletion of temp file '{tempFileName}' after job {jobId} completes");
+                    _logger.LogInformation(
+                        $"Scheduling deletion of temp file '{tempFileName}' after job {jobId} completes");
 
-                    _backgroundJob.ContinueJobWith(jobId, () => HangfireUtils.SafeDelete(tempFileName, null));
+                    var deleteId = _backgroundJob.ContinueJobWith(jobId, () => HangfireUtils.SafeDelete(tempFileName, null));
+
+                    // Put it on storage
+                    _backgroundJob.ContinueJobWith(deleteId, () => HangfireUtils.SyncBuildFolder(_objectSystem, ddb, entry, bucketName, null));
+
+                    //await SyncBuildFolder(ddb, entry, bucketName);
+
                 });
             }
 
@@ -944,6 +954,10 @@ namespace Registry.Web.Services.Managers
                 await File.WriteAllBytesAsync(tempFileName, obj.Data);
 
                 HangfireUtils.BuildWrapper(ddb.DatabaseFolder, path, tempFileName, force, null);
+
+                // Put it on storage
+                HangfireUtils.SyncBuildFolder(_objectSystem, ddb, entry, bucketName, null);
+                
             }
             finally
             {
@@ -951,23 +965,45 @@ namespace Registry.Web.Services.Managers
             }
 
         }
-        
+
         #region Build
 
         public async Task<FileDescriptorDto> GetBuildFile(string orgSlug, string dsSlug, string hash, string path)
         {
             _logger.LogInformation($"In GetBuildFile('{orgSlug}/{dsSlug}', '{hash}', '{path}')");
 
-            var filePath = await GetBuildFilePath(orgSlug, dsSlug, hash, path);
+            var ds = await _utils.GetDataset(orgSlug, dsSlug);
 
-            if (!File.Exists(filePath))
-                throw new NotFoundException($"File '{path}' does not exist");
+            EnsureNoWildcardOrEmptyPaths(path);
 
+            Debug.Assert(path != null, nameof(path) + " != null");
+            if (Path.IsPathRooted(path) || path.Contains(".."))
+                throw new ArgumentException("Rooted or relative paths are not supported");
+
+            var bucketName = _utils.GetBucketName(orgSlug, ds.InternalRef);
+
+            _logger.LogInformation($"Using bucket '{bucketName}'");
+
+            var destPath = Path.Combine(BuildFolderName, path);
+
+            _logger.LogInformation($"Using actual path '{destPath}'");
+            
+            var objInfo = await _objectSystem.GetObjectInfoAsync(bucketName, destPath);
+
+            if (objInfo == null)
+                throw new NotFoundException($"Cannot find '{destPath}' in storage provider");
+
+            await using var memory = new MemoryStream();
+
+            _logger.LogInformation($"Getting object '{destPath}' in bucket '{bucketName}'");
+
+            await _objectSystem.GetObjectAsync(bucketName, destPath, stream => stream.CopyTo(memory));
+            
             return new FileDescriptorDto
             {
-                ContentStream = File.OpenRead(filePath),
-                ContentType = MimeUtility.GetMimeMapping(filePath),
-                Name = Path.GetFileName(filePath)
+                ContentStream = memory,
+                ContentType = MimeUtility.GetMimeMapping(path),
+                Name = Path.GetFileName(path)
             };
 
         }
@@ -977,18 +1013,7 @@ namespace Registry.Web.Services.Managers
 
             _logger.LogInformation($"In CheckBuildFile('{orgSlug}/{dsSlug}', '{hash}', '{path}')");
 
-            var filePath = await GetBuildFilePath(orgSlug, dsSlug, hash, path);
-
-            return File.Exists(filePath);
-        }
-        
-        private async Task<string> GetBuildFilePath(string orgSlug, string dsSlug, string hash, string path)
-        {
             var ds = await _utils.GetDataset(orgSlug, dsSlug);
-
-            // TODO: Should we enforce the ownership policy? This way anonymous users will not be able to browse point clouds
-            // if (!await _authManager.IsOwnerOrAdmin(ds))
-            //     throw new UnauthorizedException("The current user is not allowed to build dataset");
 
             EnsureNoWildcardOrEmptyPaths(path);
 
@@ -996,11 +1021,19 @@ namespace Registry.Web.Services.Managers
             if (Path.IsPathRooted(path) || path.Contains(".."))
                 throw new ArgumentException("Rooted or relative paths are not supported");
 
-            var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
+            var bucketName = _utils.GetBucketName(orgSlug, ds.InternalRef);
 
-            return Path.Combine(ddb.BuildFolder, hash, path);;
+            _logger.LogInformation($"Using bucket '{bucketName}'");
+
+            var destPath = Path.Combine(BuildFolderName, path);
+
+            _logger.LogInformation($"Using actual path '{destPath}'");
+
+            var objInfo = await _objectSystem.GetObjectInfoAsync(bucketName, destPath);
+
+            return objInfo != null;
         }
-        
+
         #endregion
     }
 }

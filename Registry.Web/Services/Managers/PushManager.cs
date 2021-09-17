@@ -192,9 +192,15 @@ namespace Registry.Web.Services.Managers
                 {
                     var jobId = _backgroundJob.Enqueue(() =>
                         HangfireUtils.BuildWrapper(ddb.DatabaseFolder, item.Path, tempFileName, true, null));
-
-                    _backgroundJob.ContinueJobWith(jobId, () =>
+                    
+                    var deleteId = _backgroundJob.ContinueJobWith(jobId, () =>
                         HangfireUtils.SafeDelete(tempFileName, null));
+
+                    var entry = ddb.GetEntry(item.Path);
+
+                    // Put it on storage
+                    _backgroundJob.ContinueJobWith(deleteId, () => HangfireUtils.SyncBuildFolder(_objectSystem, ddb, entry, bucketName, null));
+
                 }
                 else
                 {

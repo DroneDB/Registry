@@ -8,6 +8,8 @@ using Hangfire.Server;
 using Registry.Adapters.DroneDB;
 using Registry.Common;
 using Registry.Ports.DroneDB;
+using Registry.Ports.DroneDB.Models;
+using Registry.Ports.ObjectSystem;
 
 namespace Registry.Web.Utilities
 {
@@ -57,5 +59,56 @@ namespace Registry.Web.Utilities
             else
                 writeLine("File does not exist");
         }
+
+
+        public static void SyncBuildFolder(IObjectSystem objectSystem, IDdb ddb, DdbEntry obj, string bucketName, PerformContext context)
+        {
+            Action<string> writeLine = context != null ? context.WriteLine : Console.WriteLine;
+
+            // TODO: We are assuming this convention, if ddb changes this policy we are screwed
+            var buildPath = Path.Combine(ddb.BuildFolder, obj.Hash);
+            var destFolder = Path.Combine("." + (Path.GetFileName(ddb.BuildFolder) ?? "build"), obj.Hash);
+
+            writeLine($"SyncBuildFolder -> '{buildPath}' to '{destFolder}'");
+
+            // Put it on storage
+            SyncFolder(objectSystem, buildPath, bucketName, destFolder, context);
+
+        }
+
+        public static void SyncFolder(IObjectSystem objectSystem, string sourcePath, string bucketName, string destPath, PerformContext context)
+        {
+            Action<string> writeLine = context != null ? context.WriteLine : Console.WriteLine;
+
+            writeLine($"Using bucket '{bucketName}'");
+
+            foreach (var file in Directory.EnumerateFiles(sourcePath))
+            {
+                var name = Path.GetFileName(file);
+                var source = Path.Combine(sourcePath, name);
+                var dest = Path.Combine(destPath, name);
+
+                var contentType = MimeTypes.GetMimeType(file);
+
+                writeLine($"'{file}' -> PutObjectAsync('{name}', '{source}', '{dest}', '{contentType}')");
+
+                objectSystem.PutObjectAsync(bucketName, dest, source, contentType).Wait();
+            }
+
+            foreach (var folder in Directory.EnumerateDirectories(sourcePath))
+            {
+                var name = Path.GetFileName(folder);
+
+                var source = Path.Combine(sourcePath, name);
+                var dest = Path.Combine(destPath, name);
+
+                writeLine($"'{folder}' -> SyncFolder('{name}', '{source}', '{dest}')");
+
+                SyncFolder(objectSystem, source, bucketName, dest, context);
+
+            }
+        }
+
+
     }
 }
