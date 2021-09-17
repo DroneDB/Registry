@@ -36,7 +36,7 @@ RUN cd /Registry/Registry.Web/ClientApp && npm install && webpack --mode=product
 COPY docker/production/FolderProfile.xml /Registry/Registry.Web/Properties/PublishProfiles/FolderProfile.pubxml
 
 # Publish Registry
-RUN cd /Registry/Registry.Web && dotnet publish --configuration Release /p:PublishProfile=FolderProfile
+RUN cd /Registry/Registry.Web && dotnet dev-certs https && dotnet publish --configuration Release /p:PublishProfile=FolderProfile
 
 # Install DroneDB libraries (can be slimmed down somehow)
 ENV TZ=Europe/Rome
