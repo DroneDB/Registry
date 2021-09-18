@@ -49,18 +49,21 @@ namespace Registry.Web.Controllers
             }
         }
 
-        // This is a monstrosity
+        // This is a monstrosity, but it works :)
+        // basically key and path can be either query or formdata parameters
         [HttpPost("add", Name = nameof(MetaController) + "." + nameof(AddAlt))]
         public async Task<IActionResult> AddAlt([FromRoute] string orgSlug, [FromRoute] string dsSlug,
-            [FromForm] string key, [FromForm] string data, [FromForm(Name = "path")] string pathFromForm = null,
-            [FromQuery(Name = "path")] string pathFromQuery = null)
+            [FromForm(Name = "key")] string keyFromForm, [FromForm] string data,
+            [FromForm(Name = "path")] string pathFromForm = null,
+            [FromQuery(Name = "path")] string pathFromQuery = null,
+            [FromQuery(Name = "key")] string keyFromQuery = null)
         {
             // C# magics, precedence to form parameter
             var path = pathFromForm ?? pathFromQuery;
+            var key = keyFromForm ?? keyFromQuery;
 
             try
             {
-
                 _logger.LogDebug($"Meta Controller AddAlt('{orgSlug}', '{dsSlug}', '{key}', '{path}')");
 
                 var res = await _metaManager.Add(orgSlug, dsSlug, key, data, pathFromForm);
@@ -95,15 +98,16 @@ namespace Registry.Web.Controllers
 
         [HttpPost("set", Name = nameof(MetaController) + "." + nameof(SetAlt))]
         public async Task<IActionResult> SetAlt([FromRoute] string orgSlug, [FromRoute] string dsSlug,
-            [FromForm] string key, [FromForm] string data, [FromForm(Name = "path")] string pathFromForm = null,
-            [FromQuery(Name = "path")] string pathFromQuery = null)
+            [FromForm(Name = "key")] string keyFromForm, [FromForm] string data, [FromForm(Name = "path")] string pathFromForm = null,
+            [FromQuery(Name = "path")] string pathFromQuery = null,
+            [FromQuery(Name = "key")] string keyFromQuery = null)
         {
             // C# magics, precedence to form parameter
             var path = pathFromForm ?? pathFromQuery;
+            var key = keyFromForm ?? keyFromQuery;
 
             try
             {
-
                 _logger.LogDebug($"Meta Controller Set('{orgSlug}', '{dsSlug}', '{key}', '{path}')");
 
                 var res = await _metaManager.Set(orgSlug, dsSlug, key, data, pathFromForm);
@@ -118,7 +122,8 @@ namespace Registry.Web.Controllers
         }
 
         [HttpDelete("remove/{id}", Name = nameof(MetaController) + "." + nameof(Remove))]
-        public async Task<IActionResult> Remove([FromRoute] string orgSlug, [FromRoute] string dsSlug, [FromRoute] string id)
+        public async Task<IActionResult> Remove([FromRoute] string orgSlug, [FromRoute] string dsSlug,
+            [FromRoute] string id)
         {
             try
             {
@@ -136,7 +141,8 @@ namespace Registry.Web.Controllers
         }
 
         [HttpPost("remove", Name = nameof(MetaController) + "." + nameof(RemoveAlt))]
-        public async Task<IActionResult> RemoveAlt([FromRoute] string orgSlug, [FromRoute] string dsSlug, [FromForm] string id)
+        public async Task<IActionResult> RemoveAlt([FromRoute] string orgSlug, [FromRoute] string dsSlug,
+            [FromForm] string id)
         {
             try
             {
@@ -167,22 +173,24 @@ namespace Registry.Web.Controllers
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, $"Exception in Meta controller Remove('{orgSlug}', '{dsSlug}', '{key}', '{path}')");
+                _logger.LogError(ex,
+                    $"Exception in Meta controller Remove('{orgSlug}', '{dsSlug}', '{key}', '{path}')");
                 return ExceptionResult(ex);
             }
         }
 
         [HttpPost("unset", Name = nameof(MetaController) + "." + nameof(UnsetAlt))]
         public async Task<IActionResult> UnsetAlt([FromRoute] string orgSlug, [FromRoute] string dsSlug,
-            [FromForm] string key, [FromForm(Name = "path")] string pathFromForm = null,
-            [FromQuery(Name = "path")] string pathFromQuery = null)
+            [FromForm(Name = "key")] string keyFromForm, [FromForm(Name = "path")] string pathFromForm = null,
+            [FromQuery(Name = "path")] string pathFromQuery = null,
+            [FromQuery(Name = "key")] string keyFromQuery = null)
         {
             // C# magics, precedence to form parameter
             var path = pathFromForm ?? pathFromQuery;
+            var key = keyFromForm ?? keyFromQuery;
 
             try
             {
-
                 _logger.LogDebug($"Meta Controller UnsetAlt('{orgSlug}', '{dsSlug}', '{key}', '{path}')");
 
                 var res = await _metaManager.Unset(orgSlug, dsSlug, key, pathFromForm);
@@ -191,13 +199,15 @@ namespace Registry.Web.Controllers
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, $"Exception in Meta controller UnsetAlt('{orgSlug}', '{dsSlug}', '{key}', '{path}')");
+                _logger.LogError(ex,
+                    $"Exception in Meta controller UnsetAlt('{orgSlug}', '{dsSlug}', '{key}', '{path}')");
                 return ExceptionResult(ex);
             }
         }
 
         [HttpGet("list", Name = nameof(MetaController) + "." + nameof(List))]
-        public async Task<IActionResult> List([FromRoute] string orgSlug, [FromRoute] string dsSlug, [FromQuery] string path = null)
+        public async Task<IActionResult> List([FromRoute] string orgSlug, [FromRoute] string dsSlug,
+            [FromQuery] string path = null)
         {
             try
             {
@@ -232,31 +242,5 @@ namespace Registry.Web.Controllers
                 return ExceptionResult(ex);
             }
         }
-
-        [HttpGet("get", Name = nameof(MetaController) + "." + nameof(GetAlt))]
-        public async Task<IActionResult> GetAlt([FromRoute] string orgSlug, [FromRoute] string dsSlug,
-            [FromForm] string key, [FromForm(Name = "path")] string pathFromForm = null,
-            [FromQuery(Name = "path")] string pathFromQuery = null)
-        {
-            // C# magics, precedence to form parameter
-            var path = pathFromForm ?? pathFromQuery;
-
-            try
-            {
-
-                _logger.LogDebug($"Meta Controller GetAlt('{orgSlug}', '{dsSlug}', '{key}', '{path}')");
-                
-                var res = await _metaManager.Get(orgSlug, dsSlug, key, pathFromForm);
-
-                return Ok(res);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, $"Exception in Meta controller GetAlt('{orgSlug}', '{dsSlug}', '{key}', '{path}')");
-                return ExceptionResult(ex);
-            }
-        }
-
-
     }
 }
