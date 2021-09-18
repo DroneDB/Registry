@@ -22,7 +22,7 @@ namespace Registry.Adapters.DroneDB
 
             return new DdbMeta
             {
-                Data = JObject.FromObject(m.Data),
+                Data = JToken.FromObject(m.Data),
                 Id = m.Id,
                 ModifiedTime = m.ModifiedTime
             };
@@ -34,7 +34,7 @@ namespace Registry.Adapters.DroneDB
 
             return new DdbMeta
             {
-                Data = JObject.FromObject(m.Data),
+                Data = JToken.FromObject(m.Data),
                 Id = m.Id,
                 ModifiedTime = m.ModifiedTime
             };
