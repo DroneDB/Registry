@@ -131,7 +131,7 @@ namespace Registry.Web.Controllers
 
                 var res = await _metaManager.Remove(orgSlug, dsSlug, id);
 
-                return Ok(res);
+                return Ok(new { Removed = res });
             }
             catch (Exception ex)
             {
@@ -150,7 +150,7 @@ namespace Registry.Web.Controllers
 
                 var res = await _metaManager.Remove(orgSlug, dsSlug, id);
 
-                return Ok(res);
+                return Ok(new { Removed = res });
             }
             catch (Exception ex)
             {
@@ -169,7 +169,7 @@ namespace Registry.Web.Controllers
 
                 var res = await _metaManager.Unset(orgSlug, dsSlug, key, path);
 
-                return Ok(res);
+                return Ok(new { Removed = res });
             }
             catch (Exception ex)
             {
@@ -195,7 +195,7 @@ namespace Registry.Web.Controllers
 
                 var res = await _metaManager.Unset(orgSlug, dsSlug, key, path);
 
-                return Ok(res);
+                return Ok(new { Removed = res });
             }
             catch (Exception ex)
             {
