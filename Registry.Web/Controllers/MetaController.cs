@@ -66,7 +66,7 @@ namespace Registry.Web.Controllers
             {
                 _logger.LogDebug($"Meta Controller AddAlt('{orgSlug}', '{dsSlug}', '{key}', '{path}')");
 
-                var res = await _metaManager.Add(orgSlug, dsSlug, key, data, pathFromForm);
+                var res = await _metaManager.Add(orgSlug, dsSlug, key, data, path);
 
                 return Ok(res);
             }
@@ -110,7 +110,7 @@ namespace Registry.Web.Controllers
             {
                 _logger.LogDebug($"Meta Controller Set('{orgSlug}', '{dsSlug}', '{key}', '{path}')");
 
-                var res = await _metaManager.Set(orgSlug, dsSlug, key, data, pathFromForm);
+                var res = await _metaManager.Set(orgSlug, dsSlug, key, data, path);
 
                 return Ok(res);
             }
@@ -193,7 +193,7 @@ namespace Registry.Web.Controllers
             {
                 _logger.LogDebug($"Meta Controller UnsetAlt('{orgSlug}', '{dsSlug}', '{key}', '{path}')");
 
-                var res = await _metaManager.Unset(orgSlug, dsSlug, key, pathFromForm);
+                var res = await _metaManager.Unset(orgSlug, dsSlug, key, path);
 
                 return Ok(res);
             }
