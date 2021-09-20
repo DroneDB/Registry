@@ -63,7 +63,7 @@ namespace Registry.Web.Services.Adapters
                 .FirstOrDefault(item => item.Slug == orgSlug);
 
             if (org == null)
-                return safe ? (Organization)null : throw new NotFoundException("Organization not found");
+                return safe ? null : throw new NotFoundException("Organization not found");
 
             if (!org.IsPublic && checkOwnership && !await _authManager.IsUserAdmin())
             {
