@@ -162,12 +162,7 @@ namespace Registry.Web.Services.Managers
 
         public async Task Delete(string orgSlug, string dsSlug)
         {
-            var org = await _utils.GetOrganization(orgSlug);
-
-            var ds = org.Datasets.FirstOrDefault(item => item.Slug == dsSlug);
-
-            if (ds == null)
-                throw new NotFoundException("Dataset not found");
+            var ds = await _utils.GetDataset(orgSlug, dsSlug);
 
             if (!await _authManager.IsOwnerOrAdmin(ds))
                 throw new UnauthorizedException("The current user is not allowed to delete dataset");
