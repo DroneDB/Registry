@@ -984,7 +984,7 @@ namespace Registry.Web.Services.Managers
 
             _logger.LogInformation($"Using bucket '{bucketName}'");
 
-            var destPath = Path.Combine(BuildFolderName, path);
+            var destPath = CommonUtils.SafeCombine(BuildFolderName, hash, path);
 
             _logger.LogInformation($"Using actual path '{destPath}'");
             
@@ -993,12 +993,14 @@ namespace Registry.Web.Services.Managers
             if (objInfo == null)
                 throw new NotFoundException($"Cannot find '{destPath}' in storage provider");
 
-            await using var memory = new MemoryStream();
+            var memory = new MemoryStream();
 
             _logger.LogInformation($"Getting object '{destPath}' in bucket '{bucketName}'");
 
             await _objectSystem.GetObjectAsync(bucketName, destPath, stream => stream.CopyTo(memory));
             
+            memory.Reset();
+
             return new FileDescriptorDto
             {
                 ContentStream = memory,
@@ -1025,7 +1027,7 @@ namespace Registry.Web.Services.Managers
 
             _logger.LogInformation($"Using bucket '{bucketName}'");
 
-            var destPath = Path.Combine(BuildFolderName, path);
+            var destPath = CommonUtils.SafeCombine(BuildFolderName, path);
 
             _logger.LogInformation($"Using actual path '{destPath}'");
 

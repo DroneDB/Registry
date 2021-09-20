@@ -28,7 +28,7 @@ namespace Registry.Web.Utilities
             var folderPath = Path.Combine(ddbPath, path);
             Directory.CreateDirectory(Path.GetDirectoryName(folderPath)!);
 
-            writeLine($"Created folder structure");
+            writeLine($"Created folder structure: '{folderPath}'");
 
             File.Copy(tempFile, folderPath, true);
 
@@ -66,8 +66,8 @@ namespace Registry.Web.Utilities
             Action<string> writeLine = context != null ? context.WriteLine : Console.WriteLine;
 
             // TODO: We are assuming this convention, if ddb changes this policy we are screwed
-            var buildPath = Path.Combine(ddb.BuildFolder, obj.Hash);
-            var destFolder = Path.Combine("." + (Path.GetFileName(ddb.BuildFolder) ?? "build"), obj.Hash);
+            var buildPath = Path.GetFullPath(Path.Combine(ddb.BuildFolder, obj.Hash));
+            var destFolder = CommonUtils.SafeCombine("." + (Path.GetFileName(ddb.BuildFolder) ?? "build"), obj.Hash);
 
             writeLine($"SyncBuildFolder -> '{buildPath}' to '{destFolder}'");
 
@@ -85,14 +85,15 @@ namespace Registry.Web.Utilities
             foreach (var file in Directory.EnumerateFiles(sourcePath))
             {
                 var name = Path.GetFileName(file);
-                var source = Path.Combine(sourcePath, name);
-                var dest = Path.Combine(destPath, name);
+                var source = Path.GetFullPath(Path.Combine(sourcePath, name));
+                var dest = CommonUtils.SafeCombine(destPath, name);
 
                 var contentType = MimeTypes.GetMimeType(file);
 
                 writeLine($"'{file}' -> PutObjectAsync('{name}', '{source}', '{dest}', '{contentType}')");
 
-                objectSystem.PutObjectAsync(bucketName, dest, source, contentType).Wait();
+                objectSystem.PutObjectAsync(bucketName, dest, source, contentType).GetAwaiter().GetResult();
+                    
             }
 
             foreach (var folder in Directory.EnumerateDirectories(sourcePath))
@@ -100,7 +101,7 @@ namespace Registry.Web.Utilities
                 var name = Path.GetFileName(folder);
 
                 var source = Path.Combine(sourcePath, name);
-                var dest = Path.Combine(destPath, name);
+                var dest = CommonUtils.SafeCombine(destPath, name);
 
                 writeLine($"'{folder}' -> SyncFolder('{name}', '{source}', '{dest}')");
 
