@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
+using System.Runtime.Serialization;
 using System.Text;
 using DDB.Bindings;
 using GeoJSON.Net;
@@ -11,6 +12,7 @@ using GeoJSON.Net.Feature;
 using GeoJSON.Net.Geometry;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
+using Registry.Adapters.ObjectSystem;
 using Registry.Common;
 using Registry.Ports.DroneDB;
 using Registry.Ports.DroneDB.Models;
@@ -21,7 +23,20 @@ namespace Registry.Adapters.DroneDB
 {
     public class Ddb : IDdb
     {
-        
+
+        [JsonConstructor]
+        private Ddb()
+        {
+            //
+        }
+
+        [OnDeserialized]
+        internal void OnDeserializedMethod(StreamingContext context)
+        {
+            BuildFolder = Path.Combine(DatabaseFolder, ".ddb", "build");
+            Meta = new DdbMetaManager(this);
+        }
+
         public Ddb(string ddbPath)
         {
             if (string.IsNullOrWhiteSpace(ddbPath))
@@ -60,11 +75,16 @@ namespace Registry.Adapters.DroneDB
             }
         }
 
+        [JsonIgnore]
         public string Version => DDB.Bindings.DroneDB.GetVersion();
-        public string DatabaseFolder { get; }
-        public string BuildFolder { get; }
-        
-        public IDdbMetaManager Meta { get; }
+
+        [JsonProperty]
+        public string DatabaseFolder { get; private set; }
+        [JsonProperty]
+        public string BuildFolder { get; private set; }
+
+        [JsonIgnore]
+        public IDdbMetaManager Meta { get; private set; }
 
         static Ddb()
         {

@@ -11,6 +11,7 @@ using System.Threading.Tasks;
 using Minio;
 using Minio.DataModel;
 using Minio.Exceptions;
+using Newtonsoft.Json;
 using Registry.Adapters.ObjectSystem.Model;
 using Registry.Common;
 using Registry.Common.Model;
@@ -22,11 +23,14 @@ namespace Registry.Adapters.ObjectSystem
 {
     public class S3ObjectSystem : IObjectSystem
     {
+        [JsonProperty]
+        private readonly S3ObjectSystemSettings _settings;
 
         private readonly MinioClient _client;
 
         public S3ObjectSystem(S3ObjectSystemSettings settings)
         {
+            _settings = settings;
             _client = new MinioClient(settings.Endpoint, settings.AccessKey ?? string.Empty, settings.SecretKey ?? string.Empty, 
                 settings.Region ?? string.Empty, settings.SessionToken ?? string.Empty);
 

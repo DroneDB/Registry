@@ -1,13 +1,13 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO;
 using System.Linq;
-using System.Linq.Expressions;
+using System.Runtime.Serialization;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
-using Minio.DataModel;
 using Minio.Exceptions;
 using Newtonsoft.Json;
 using Registry.Adapters.ObjectSystem.Model;
@@ -22,14 +22,19 @@ namespace Registry.Adapters.ObjectSystem
 {
     public class CachedS3ObjectSystem : IObjectSystem
     {
+        [JsonProperty("settings")]
+        private readonly CachedS3ObjectSystemSettings _settings;
         private readonly ILogger<CachedS3ObjectSystem> _logger;
-        private readonly S3ObjectSystem _remoteStorage;
+        private S3ObjectSystem _remoteStorage;
 
         private const int MaxUploadAttempts = 5;
 
-        public string CachePath { get; }
-        public TimeSpan? CacheExpiration { get; }
-        public long? MaxSize { get; }
+        [JsonIgnore]
+        public string CachePath { get; private set; }
+        [JsonIgnore]
+        public TimeSpan? CacheExpiration { get; private set; }
+        [JsonIgnore]
+        public long? MaxSize { get; private set; }
 
         private long _currentCacheSize;
 
@@ -66,11 +71,30 @@ namespace Registry.Adapters.ObjectSystem
             return cacheFile + ".json";
         }
 
-        public CachedS3ObjectSystem(
-            CachedS3ObjectSystemSettings settings, ILogger<CachedS3ObjectSystem> logger)
-
+        [JsonConstructor]
+        private CachedS3ObjectSystem()
         {
+            LogInformation = s => Debug.WriteLine(s);
+            LogError = (exception, s) => Debug.WriteLine($"{s} -> {exception}");
+        }
+
+        [OnDeserialized]
+        internal void OnDeserializedMethod(StreamingContext context)
+        {
+            _remoteStorage = new S3ObjectSystem(_settings);
+            CachePath = Path.GetFullPath(_settings.CachePath);
+            CacheExpiration = _settings.CacheExpiration;
+            MaxSize = _settings.MaxSize;
+            UpdateCurrentCacheSize();
+        }
+
+        public CachedS3ObjectSystem(CachedS3ObjectSystemSettings settings, ILogger<CachedS3ObjectSystem> logger)
+        {
+            _settings = settings;
             _logger = logger;
+            LogInformation = s => _logger.LogInformation(s);
+            LogError = (ex, s) => _logger.LogError(ex, s);
+
             CachePath = Path.GetFullPath(settings.CachePath);
             CacheExpiration = settings.CacheExpiration;
             MaxSize = settings.MaxSize;
@@ -85,6 +109,8 @@ namespace Registry.Adapters.ObjectSystem
 
         #region Utils
 
+        private readonly Action<string> LogInformation;
+        private readonly Action<Exception, string> LogError;
 
         private void TrimExcessCache()
         {
@@ -92,7 +118,7 @@ namespace Registry.Adapters.ObjectSystem
             if (MaxSize == null || MaxSize == 0)
             {
 #if DEBUG
-                _logger.LogInformation("No limitations in cache size");
+                LogInformation("No limitations in cache size");
 #endif
 
                 return;
@@ -105,7 +131,7 @@ namespace Registry.Adapters.ObjectSystem
                 {
                     var perc = (double)_currentCacheSize / MaxSize;
 #if DEBUG
-                    _logger.LogInformation($"Total cache usage is {_currentCacheSize / 1024:F2}KB ({perc:P})");
+                    LogInformation($"Total cache usage is {_currentCacheSize / 1024:F2}KB ({perc:P})");
 #endif
                     return;
 
@@ -113,7 +139,7 @@ namespace Registry.Adapters.ObjectSystem
 
                 var spaceToFree = _currentCacheSize - MaxSize;
 
-                _logger.LogInformation($"Freeing at least {spaceToFree / 1024:F2}KB");
+                LogInformation($"Freeing at least {spaceToFree / 1024:F2}KB");
 
                 var files = _fileInfos.OrderBy(item => item.Value.LastAccessTime);
 
@@ -134,7 +160,7 @@ namespace Registry.Adapters.ObjectSystem
                         {
                             try
                             {
-                                _logger.LogInformation($"Deleting '{pair.Key}'");
+                                LogInformation($"Deleting '{pair.Key}'");
 
                                 var fileSize = info.Length;
                                 info.Delete();
@@ -146,18 +172,18 @@ namespace Registry.Adapters.ObjectSystem
                             }
                             catch (Exception ex)
                             {
-                                _logger.LogError(ex, $"Cannot delete file '{pair.Value}'");
+                                LogError(ex, $"Cannot delete file '{pair.Value}'");
                             }
                         }
                         else
                         {
-                            _logger.LogInformation($"Skipping '{pair.Key}' because is being uploaded");
+                            LogInformation($"Skipping '{pair.Key}' because is being uploaded");
                         }
                     }
 
                     if (size > spaceToFree)
                     {
-                        _logger.LogInformation($"Deleted {cnt} files of size {size / 1024:F2}KB");
+                        LogInformation($"Deleted {cnt} files of size {size / 1024:F2}KB");
                         break;
                     }
 
@@ -176,7 +202,7 @@ namespace Registry.Adapters.ObjectSystem
             if (CacheExpiration == null || CacheExpiration.Value == default)
             {
 #if DEBUG
-                _logger.LogInformation($"No need to clean up folder '{folder}' because no cache expiration set");
+                LogInformation($"No need to clean up folder '{folder}' because no cache expiration set");
 #endif
                 return;
             }
@@ -184,7 +210,7 @@ namespace Registry.Adapters.ObjectSystem
             lock (_sync)
             {
 
-                _logger.LogInformation($"Cleaning up folder '{folder}'");
+                LogInformation($"Cleaning up folder '{folder}'");
 
                 var expiredFiles = (from file in SafeGetAllFiles(folder)
                                     let info = new FileInfo(file)
@@ -193,7 +219,7 @@ namespace Registry.Adapters.ObjectSystem
 
                 if (!expiredFiles.Any())
                 {
-                    _logger.LogInformation("No expired files");
+                    LogInformation("No expired files");
                     return;
                 }
 
@@ -208,7 +234,7 @@ namespace Registry.Adapters.ObjectSystem
                     if (file.Path.EndsWith(".json") && (File.Exists(file.Path.Replace(".json", BrokenFileSuffix)) ||
                                                         File.Exists(file.Path.Replace(".json", SignalFileSuffix))))
                     {
-                        _logger.LogInformation($"Skipping '{file.Path}' because is info file of not synced yet file");
+                        LogInformation($"Skipping '{file.Path}' because is info file of not synced yet file");
                         continue;
                     }
 
@@ -217,7 +243,7 @@ namespace Registry.Adapters.ObjectSystem
                         try
                         {
 #if DEBUG
-                            _logger.LogInformation($"Deleting expired file '{file.Path}'");
+                            LogInformation($"Deleting expired file '{file.Path}'");
 #endif
                             File.Delete(file.Path);
                             deletedFiles++;
@@ -228,12 +254,12 @@ namespace Registry.Adapters.ObjectSystem
                         }
                         catch (Exception ex)
                         {
-                            _logger.LogError(ex, $"Cannot delete expired file '{file}'");
+                            LogError(ex, $"Cannot delete expired file '{file}'");
                         }
                     }
                     else
                     {
-                        _logger.LogInformation($"Skipping '{file.Path}' because it's being uploaded or is not synced yet");
+                        LogInformation($"Skipping '{file.Path}' because it's being uploaded or is not synced yet");
                     }
                 }
 
@@ -241,7 +267,7 @@ namespace Registry.Adapters.ObjectSystem
                 if (_fileInfos != null)
                     _currentCacheSize = _fileInfos.Sum(f => f.Value.Length);
 
-                _logger.LogInformation($"Deleted {deletedFiles} files of {totalDeletedFileSize / 1024:F2}KB size");
+                LogInformation($"Deleted {deletedFiles} files of {totalDeletedFileSize / 1024:F2}KB size");
             }
         }
 
@@ -307,7 +333,7 @@ namespace Registry.Adapters.ObjectSystem
             if (!_fileInfos.Remove(file)) return;
 
 #if DEBUG
-            _logger.LogInformation($"Detached file '{file}' from cache");
+            LogInformation($"Detached file '{file}' from cache");
 #endif
             _currentCacheSize = _fileInfos.Sum(f => f.Value.Length);
         }
@@ -379,7 +405,7 @@ namespace Registry.Adapters.ObjectSystem
             var syncedFiles = new List<string>();
             var errorFiles = new List<SyncFileError>();
 
-            _logger.LogInformation("Looking for unsyncronized files");
+            LogInformation("Looking for unsyncronized files");
 
             lock (_sync)
             {
@@ -387,7 +413,7 @@ namespace Registry.Adapters.ObjectSystem
 
                 if (!files.Any())
                 {
-                    _logger.LogInformation("No broken files are preset");
+                    LogInformation("No broken files are preset");
                     return new SyncFilesRes();
                 }
 
@@ -398,7 +424,7 @@ namespace Registry.Adapters.ObjectSystem
                     try
                     {
                         var bucketName = Path.GetRelativePath(CachePath, Path.GetDirectoryName(file) ?? string.Empty)
-                            .Split(Path.DirectorySeparatorChar).FirstOrDefault(); 
+                            .Split(Path.DirectorySeparatorChar).FirstOrDefault();
 
                         if (bucketName == null)
                         {
@@ -419,26 +445,25 @@ namespace Registry.Adapters.ObjectSystem
                             break;
                         }
 
-                        _logger.LogInformation($"Syncing '{file}' to '{bucketName}'");
+                        LogInformation($"Syncing '{file}' to '{bucketName}'");
 
                         // This is like a nuclear bomb
                         _remoteStorage.PutObjectAsync(bucketName, info.Name, file, info.ContentType,
-                                info.MetaData?.ToDictionary(key => key.Key, val => val.Value))
-                            .Wait();
+                                info.MetaData?.ToDictionary(key => key.Key, val => val.Value)).GetAwaiter().GetResult();
 
-                        _logger.LogInformation("File is synced, deleting broken flag file and signal file");
+                        LogInformation("File is synced, deleting broken flag file and signal file");
 
                         CommonUtils.SafeDelete(GetBrokenFileName(file));
                         CommonUtils.SafeDelete(GetSignalFileName(file));
 
-                        _logger.LogInformation("Deleted broken flag file");
+                        LogInformation("Deleted broken flag file");
 
                         syncedFiles.Add(file);
 
                     }
                     catch (Exception ex)
                     {
-                        _logger.LogError(ex, $"Cannot sync '{file}'");
+                        LogError(ex, $"Cannot sync '{file}'");
                         errorFiles.Add(new SyncFileError { ErrorMessage = ex.Message, Path = file });
                     }
 
@@ -483,7 +508,7 @@ namespace Registry.Adapters.ObjectSystem
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, $"Cannot read from cache the file '{cachedFileName}' in '{bucketName}' bucket and '{objectName}' object");
+                LogError(ex, $"Cannot read from cache the file '{cachedFileName}' in '{bucketName}' bucket and '{objectName}' object");
             }
 
             await _remoteStorage.GetObjectAsync(bucketName, objectName, stream =>
@@ -503,7 +528,7 @@ namespace Registry.Adapters.ObjectSystem
                 }
                 catch (Exception ex)
                 {
-                    _logger.LogError(ex, $"Cannot write to cache the file '{cachedFileName}' in '{bucketName}' bucket and '{objectName}' object");
+                    LogError(ex, $"Cannot write to cache the file '{cachedFileName}' in '{bucketName}' bucket and '{objectName}' object");
                 }
 
                 memory.Reset();
@@ -538,7 +563,7 @@ namespace Registry.Adapters.ObjectSystem
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, $"Cannot read from cache the file '{cachedFileName}' in '{bucketName}' bucket and '{objectName}' object");
+                LogError(ex, $"Cannot read from cache the file '{cachedFileName}' in '{bucketName}' bucket and '{objectName}' object");
             }
 
             await _remoteStorage.GetObjectAsync(bucketName, objectName, filePath, sse, cancellationToken);
@@ -554,7 +579,7 @@ namespace Registry.Adapters.ObjectSystem
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, $"Cannot copy to cache from '{filePath}' to '{cachedFileName}' in '{bucketName}' bucket and '{objectName}' object");
+                LogError(ex, $"Cannot copy to cache from '{filePath}' to '{cachedFileName}' in '{bucketName}' bucket and '{objectName}' object");
             }
 
             // Added to populate file info cache
@@ -582,7 +607,7 @@ namespace Registry.Adapters.ObjectSystem
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, $"Cannot read from cache the file info '{cachedFileInfoName}' in '{bucketName}' bucket and '{objectName}' object");
+                LogError(ex, $"Cannot read from cache the file info '{cachedFileInfoName}' in '{bucketName}' bucket and '{objectName}' object");
             }
 
             var objectInfo = await _remoteStorage.GetObjectInfoAsync(bucketName, objectName, sse, cancellationToken);
@@ -599,7 +624,7 @@ namespace Registry.Adapters.ObjectSystem
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, $"Cannot write file info to cache '{cachedFileInfoName}' in '{bucketName}' bucket and '{objectName}' object");
+                LogError(ex, $"Cannot write file info to cache '{cachedFileInfoName}' in '{bucketName}' bucket and '{objectName}' object");
             }
 
             return objectInfo;
@@ -615,7 +640,7 @@ namespace Registry.Adapters.ObjectSystem
             }
             catch (MinioException e)
             {
-                _logger.LogInformation($"Object '{objectName}' in bucket '{bucketName}' does not exist: {e}");
+                LogInformation($"Object '{objectName}' in bucket '{bucketName}' does not exist: {e}");
             }
 
             return false;
@@ -650,7 +675,7 @@ namespace Registry.Adapters.ObjectSystem
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, $"Cannot write to cache the file '{cachedFileName}' in '{bucketName}' bucket and '{objectName}' object");
+                LogError(ex, $"Cannot write to cache the file '{cachedFileName}' in '{bucketName}' bucket and '{objectName}' object");
                 throw;
             }
 
@@ -675,14 +700,16 @@ namespace Registry.Adapters.ObjectSystem
 
                 File.Copy(filePath, cachedFileName, true);
 
+                await CreateInfoFile(cachedFileName, bucketName, objectName, metaData, cancellationToken);
                 await CreateSignalFile(cachedFileName);
+
                 TrackCachedFile(cachedFileName);
                 TrimExcessCache();
 
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, $"Cannot copy to cache from '{filePath}' to '{cachedFileName}' in '{bucketName}' bucket and '{objectName}' object");
+                LogError(ex, $"Cannot copy to cache from '{filePath}' to '{cachedFileName}' in '{bucketName}' bucket and '{objectName}' object");
             }
 
             await SafePutObjectAsync(bucketName, objectName, metaData,
@@ -705,7 +732,7 @@ namespace Registry.Adapters.ObjectSystem
             {
                 try
                 {
-                    _logger.LogInformation($"Uploading file '{objectName}' to '{bucketName}' bucket");
+                    LogInformation($"Uploading file '{objectName}' to '{bucketName}' bucket");
 
                     await call();
 
@@ -713,7 +740,7 @@ namespace Registry.Adapters.ObjectSystem
                 }
                 catch (Exception ex)
                 {
-                    _logger.LogError(ex, $"Cannot file '{objectName}' to '{bucketName}' bucket to S3 ({cnt}° attempt)");
+                    LogError(ex, $"Cannot file '{objectName}' to '{bucketName}' bucket to S3 ({cnt}° attempt)");
                     cnt++;
                 }
 
@@ -721,12 +748,12 @@ namespace Registry.Adapters.ObjectSystem
 
             if (cnt == MaxUploadAttempts)
             {
-                _logger.LogError(
+                LogError(new Exception(),
                     "No attempt to upload file to S3 was successful, leaving the file in unsyncronized state");
 
                 // Signal that this file is not synced
                 await File.WriteAllTextAsync(GetBrokenFileName(bucketName, objectName), DateTime.Now.ToString("O"), cancellationToken);
-                
+
                 // Remove pending file
                 var signalFile = GetSignalFileName(bucketName, objectName);
                 if (File.Exists(signalFile)) File.Delete(signalFile);
@@ -737,7 +764,7 @@ namespace Registry.Adapters.ObjectSystem
                 return;
             }
 
-            _logger.LogInformation($"Removing signal file '{signalFileName}'");
+            LogInformation($"Removing signal file '{signalFileName}'");
             File.Delete(signalFileName);
         }
 
@@ -765,7 +792,7 @@ namespace Registry.Adapters.ObjectSystem
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex,
+                LogError(ex,
                     $"Cannot delete cached file '{cachedFileName}' in '{bucketName}' bucket and '{objectName}' object");
             }
 
@@ -792,7 +819,7 @@ namespace Registry.Adapters.ObjectSystem
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex,
+                LogError(ex,
                     $"Cannot delete cached files in folder '{bucketFolder}' of '{bucketName}' bucket and");
             }
 
