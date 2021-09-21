@@ -788,6 +788,13 @@ namespace Registry.Adapters.ObjectSystem
                     File.Delete(cachedFileName);
                     DetachCachedFile(cachedFileName);
 
+                    // Remove pending file if exists
+                    var signalFile = GetSignalFileName(bucketName, objectName);
+                    if (File.Exists(signalFile)) File.Delete(signalFile);
+
+                    var infoFile = GetCacheFileInfoName(cachedFileName);
+                    if (File.Exists(infoFile)) File.Delete(infoFile);
+
                 }
             }
             catch (Exception ex)
