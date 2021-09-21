@@ -107,7 +107,7 @@ namespace Registry.Web.Test
             var webUtils = new WebUtils(_authManagerMock.Object, context, _appSettingsMock.Object,
                 _httpContextAccessorMock.Object, ddbManager);
 
-            var metaManager = new MetaManager(_metaManagerLogger, ddbManager, webUtils);
+            var metaManager = new MetaManager(_metaManagerLogger, ddbManager, _authManagerMock.Object,  webUtils);
 
             var res = await metaManager.List(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug);
 
@@ -126,6 +126,7 @@ namespace Registry.Web.Test
             settings.DdbStoragePath = Path.Combine(test.TestFolder, DdbFolder);
             _appSettingsMock.Setup(o => o.Value).Returns(settings);
             _authManagerMock.Setup(o => o.IsUserAdmin()).Returns(Task.FromResult(true));
+            _authManagerMock.Setup(o => o.IsOwnerOrAdmin(It.IsAny<Dataset>())).Returns(Task.FromResult(true));
 
             var sys = new PhysicalObjectSystem(Path.Combine(test.TestFolder, StorageFolder));
             sys.SyncBucket($"{MagicStrings.PublicOrganizationSlug}-{_defaultDatasetGuid}");
@@ -135,7 +136,7 @@ namespace Registry.Web.Test
             var webUtils = new WebUtils(_authManagerMock.Object, context, _appSettingsMock.Object,
                 _httpContextAccessorMock.Object, ddbManager);
 
-            var metaManager = new MetaManager(_metaManagerLogger, ddbManager, webUtils);
+            var metaManager = new MetaManager(_metaManagerLogger, ddbManager, _authManagerMock.Object, webUtils);
 
             var a = await metaManager.Add(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug, 
                 "annotations", "{\"test\":123}");

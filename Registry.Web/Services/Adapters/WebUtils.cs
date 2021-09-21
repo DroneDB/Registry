@@ -26,7 +26,6 @@ using Registry.Web.Utilities;
 
 namespace Registry.Web.Services.Adapters
 {
-
     // NOTE: This class is a fundamental piece of the architecture because 
     // it encapsulates all the validation logic of the organizations and datasets
     // The logic is centralized here because it could be subject to change
@@ -64,8 +63,7 @@ namespace Registry.Web.Services.Adapters
                 .FirstOrDefault(item => item.Slug == orgSlug);
 
             if (org == null)
-                return safe ? (Organization)null :
-                    throw new NotFoundException("Organization not found");
+                return safe ? null : throw new NotFoundException("Organization not found");
 
             if (!org.IsPublic && checkOwnership && !await _authManager.IsUserAdmin())
             {
@@ -76,14 +74,13 @@ namespace Registry.Web.Services.Adapters
 
                 if (org.OwnerId != currentUser.Id && org.OwnerId != null && !org.IsPublic)
                     throw new UnauthorizedException("This organization does not belong to the current user");
-
             }
 
             return org;
-
         }
 
-        public async Task<Dataset> GetDataset(string orgSlug, string dsSlug, bool retNullIfNotFound = false, bool checkOwnership = true)
+        public async Task<Dataset> GetDataset(string orgSlug, string dsSlug, bool retNullIfNotFound = false,
+            bool checkOwnership = true)
         {
             if (string.IsNullOrWhiteSpace(dsSlug))
                 throw new BadRequestException("Missing dataset id");
@@ -103,7 +100,7 @@ namespace Registry.Web.Services.Adapters
 
             if (org == null)
                 throw new NotFoundException("Organization not found");
-            
+
             var dataset = org.Datasets.FirstOrDefault(item => item.Slug == dsSlug);
 
             if (dataset == null)
@@ -116,14 +113,14 @@ namespace Registry.Web.Services.Adapters
             var ddb = _ddbManager.Get(orgSlug, dataset.InternalRef);
             var attributes = ddb.GetAttributes();
 
-            if (!attributes.IsPublic && checkOwnership && !await _authManager.IsUserAdmin())
+            if (!attributes.IsPublic && !await _authManager.IsUserAdmin() && checkOwnership)
             {
                 var currentUser = await _authManager.GetCurrentUser();
 
                 if (currentUser == null)
                     throw new UnauthorizedException("Invalid user");
 
-                if (org.OwnerId != currentUser.Id && org.OwnerId != null && !org.IsPublic)
+                if (org.OwnerId != null && org.OwnerId != currentUser.Id)
                     throw new UnauthorizedException("This organization does not belong to the current user");
 
             }
@@ -140,27 +137,23 @@ namespace Registry.Web.Services.Adapters
 
             var res = slug;
 
-            for (var n = 1; ; n++)
+            for (var n = 1;; n++)
             {
                 var org = _context.Organizations.FirstOrDefault(item => item.Slug == res);
 
                 if (org == null) return res;
 
                 res = slug + "-" + n;
-
             }
-
         }
 
         public string GenerateDatasetUrl(Dataset dataset)
         {
-
             bool isHttps;
             string host;
 
             if (!string.IsNullOrWhiteSpace(_settings.ExternalUrlOverride))
             {
-
                 var uri = new Uri(_settings.ExternalUrlOverride);
 
                 isHttps = uri.Scheme.ToLowerInvariant() == "https";
@@ -169,7 +162,6 @@ namespace Registry.Web.Services.Adapters
                 // Mmmm
                 if (uri.Port != 443 && uri.Port != 80)
                     host += ":" + uri.Port;
-
             }
             else
             {
@@ -183,7 +175,6 @@ namespace Registry.Web.Services.Adapters
             var datasetUrl = string.Format($"{scheme}://{host}/{dataset.Organization.Slug}/{dataset.Slug}");
 
             return datasetUrl;
-
         }
 
         private const string BucketNameFormat = "{0}-{1}";

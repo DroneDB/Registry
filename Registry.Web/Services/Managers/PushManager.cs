@@ -61,6 +61,9 @@ namespace Registry.Web.Services.Managers
         {
             var ds = await _utils.GetDataset(orgSlug, dsSlug, true);
 
+            if (!await _authManager.IsOwnerOrAdmin(ds))
+                throw new UnauthorizedException("The current user is not allowed to init push");
+
             if (ds == null)
             {
                 _logger.LogInformation("Dataset does not exist, creating it");
