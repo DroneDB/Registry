@@ -389,9 +389,10 @@ namespace Registry.Web.Services.Managers
                 throw new BadRequestException($"Cannot find bucket '{bucketName}'");
 
             _logger.LogInformation("Removing from DDB");
-            ddb.Remove(path);
-
+            
             var objs = ddb.Search(path, true).ToArray();
+
+            ddb.Remove(path);
 
             foreach (var obj in objs.Where(item => item.Type != EntryType.Directory))
             {
