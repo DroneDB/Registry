@@ -511,7 +511,7 @@ namespace Registry.Adapters.Test.ObjectSystem
             FluentActions.Invoking(async () =>
             {
                 await fs.RemoveObjectAsync(bucketName, missingObject);
-            }).Should().Throw<ArgumentException>();
+            }).Should().NotThrow<ArgumentException>();
 
         }
 

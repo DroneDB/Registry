@@ -102,7 +102,7 @@ namespace Registry.Adapters.ObjectSystem
         public Task RemoveObjectAsync(string bucketName, string objectName, CancellationToken cancellationToken = default)
         {
             EnsureBucketExists(bucketName);
-            var objectPath = EnsureObjectExists(bucketName, objectName);
+            var objectPath = GetObjectPath(bucketName, objectName);
 
             return Task.Run(() =>
             {
