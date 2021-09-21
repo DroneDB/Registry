@@ -7,6 +7,7 @@ using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using Registry.Ports.ObjectSystem;
 using Registry.Web.Data;
+using Registry.Web.Exceptions;
 using Registry.Web.Models.Configuration;
 using Registry.Web.Models.DTO;
 using Registry.Web.Services.Ports;
@@ -17,21 +18,25 @@ namespace Registry.Web.Services.Managers
     {
         private readonly ILogger<MetaManager> _logger;
         private readonly IDdbManager _ddbManager;
+        private readonly IAuthManager _authManager;
         private readonly IUtils _utils;
 
         public MetaManager(ILogger<MetaManager> logger,
-            IDdbManager ddbManager,
-            IUtils utils)
+            IDdbManager ddbManager, IAuthManager authManager,IUtils utils)
         {
             _logger = logger;
             _ddbManager = ddbManager;
             _utils = utils;
+            _authManager = authManager;
         }
 
         public async Task<MetaDto> Add(string orgSlug, string dsSlug, string key, string data, string path = null)
         {
-            var dataset = await _utils.GetDataset(orgSlug, dsSlug);
+            var ds = await _utils.GetDataset(orgSlug, dsSlug);
 
+            if (!await _authManager.IsOwnerOrAdmin(ds))
+                throw new UnauthorizedException("The current user is not allowed to add meta");
+            
             _logger.LogInformation($"In Add('{orgSlug}/{dsSlug}', {key}, {path})");
 
             if (string.IsNullOrWhiteSpace(key))
@@ -40,7 +45,7 @@ namespace Registry.Web.Services.Managers
             if (data == null)
                 throw new ArgumentException("Data should not be null");
 
-            var ddb = _ddbManager.Get(orgSlug, dataset.InternalRef);
+            var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
 
             if (path != null && !ddb.EntryExists(path))
                 throw new ArgumentException($"Path '{path}' does not exist");
@@ -57,7 +62,10 @@ namespace Registry.Web.Services.Managers
 
         public async Task<MetaDto> Set(string orgSlug, string dsSlug, string key, string data, string path = null)
         {
-            var dataset = await _utils.GetDataset(orgSlug, dsSlug);
+            var ds = await _utils.GetDataset(orgSlug, dsSlug);
+
+            if (!await _authManager.IsOwnerOrAdmin(ds))
+                throw new UnauthorizedException("The current user is not allowed to set meta");
 
             _logger.LogInformation($"In Set('{orgSlug}/{dsSlug}', {key}, {path})");
 
@@ -67,7 +75,7 @@ namespace Registry.Web.Services.Managers
             if (data == null)
                 throw new ArgumentException("Data should not be null");
 
-            var ddb = _ddbManager.Get(orgSlug, dataset.InternalRef);
+            var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
 
             if (path != null && !ddb.EntryExists(path))
                 throw new ArgumentException($"Path '{path}' does not exist");
@@ -84,14 +92,17 @@ namespace Registry.Web.Services.Managers
 
         public async Task<int> Remove(string orgSlug, string dsSlug, string id)
         {
-            var dataset = await _utils.GetDataset(orgSlug, dsSlug);
+            var ds = await _utils.GetDataset(orgSlug, dsSlug);
+
+            if (!await _authManager.IsOwnerOrAdmin(ds))
+                throw new UnauthorizedException("The current user is not allowed to remove meta");
 
             _logger.LogInformation($"In Remove('{orgSlug}/{dsSlug}', {id})");
 
             if (string.IsNullOrWhiteSpace(id))
                 throw new ArgumentException("Id should not be null or empty");
 
-            var ddb = _ddbManager.Get(orgSlug, dataset.InternalRef);
+            var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
 
             return ddb.Meta.Remove(id);
         }
@@ -118,14 +129,17 @@ namespace Registry.Web.Services.Managers
 
         public async Task<int> Unset(string orgSlug, string dsSlug, string key, string path = null)
         {
-            var dataset = await _utils.GetDataset(orgSlug, dsSlug);
+            var ds = await _utils.GetDataset(orgSlug, dsSlug);
+
+            if (!await _authManager.IsOwnerOrAdmin(ds))
+                throw new UnauthorizedException("The current user is not allowed to unset meta");
 
             _logger.LogInformation($"In Unset('{orgSlug}/{dsSlug}', {key}, {path})");
 
             if (string.IsNullOrWhiteSpace(key))
                 throw new ArgumentException("Key should not be null or empty");
 
-            var ddb = _ddbManager.Get(orgSlug, dataset.InternalRef);
+            var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
 
             if (path != null && !ddb.EntryExists(path))
                 throw new ArgumentException($"Path '{path}' does not exist");
