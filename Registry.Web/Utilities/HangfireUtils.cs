@@ -57,7 +57,15 @@ namespace Registry.Web.Utilities
                 writeLine(res ? "File deleted successfully" : "Cannot delete file");
             }
             else
-                writeLine("File does not exist");
+            {
+                if (Directory.Exists(path))
+                {
+                    writeLine(!CommonUtils.SafeDeleteFolder(path)
+                        ? "Cannot delete folder"
+                        : "Folder deleted successfully");
+                } else 
+                    writeLine("No file or folder found");
+            }
         }
 
 
@@ -80,7 +88,9 @@ namespace Registry.Web.Utilities
         {
             Action<string> writeLine = context != null ? context.WriteLine : Console.WriteLine;
 
-            writeLine($"Using bucket '{bucketName}'");
+            writeLine($"SyncFolder -> '{sourcePath}' to '{destPath}' on bucket '{bucketName}");
+
+            int cnt = 0;
 
             foreach (var file in Directory.EnumerateFiles(sourcePath))
             {
@@ -90,11 +100,16 @@ namespace Registry.Web.Utilities
 
                 var contentType = MimeTypes.GetMimeType(file);
 
+#if DEBUG
                 writeLine($"'{file}' -> PutObjectAsync('{name}', '{source}', '{dest}', '{contentType}')");
-
+#endif
+                // TODO: We could find a way to parallelize this (I know what you are thinking and the answer is NO, more clever plz)
                 objectSystem.PutObjectAsync(bucketName, dest, source, contentType).GetAwaiter().GetResult();
-                    
+
+                cnt++;
             }
+
+            writeLine($"Synced {cnt} files");
 
             foreach (var folder in Directory.EnumerateDirectories(sourcePath))
             {

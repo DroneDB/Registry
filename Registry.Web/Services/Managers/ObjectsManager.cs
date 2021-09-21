@@ -6,6 +6,7 @@ using System.Globalization;
 using System.IO;
 using System.IO.Compression;
 using System.Linq;
+using System.Reactive.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using DDB.Bindings;
@@ -277,9 +278,10 @@ namespace Registry.Web.Services.Managers
                     var deleteId = _backgroundJob.ContinueJobWith(jobId, () => HangfireUtils.SafeDelete(tempFileName, null));
 
                     // Put it on storage
-                    _backgroundJob.ContinueJobWith(deleteId, () => HangfireUtils.SyncBuildFolder(_objectSystem, ddb, entry, bucketName, null));
+                    var syncId = _backgroundJob.ContinueJobWith(deleteId, () => HangfireUtils.SyncBuildFolder(_objectSystem, ddb, entry, bucketName, null));
 
-                    //await SyncBuildFolder(ddb, entry, bucketName);
+                    var buildFolder = Path.Combine(ddb.BuildFolder, obj.Hash);
+                    _backgroundJob.ContinueJobWith(syncId, () => HangfireUtils.SafeDelete(buildFolder, null));
 
                 });
             }
@@ -408,6 +410,15 @@ namespace Registry.Web.Services.Managers
             {
                 _logger.LogInformation($"Deleting '{obj.Path}'");
                 await _objectSystem.RemoveObjectAsync(bucketName, obj.Path);
+
+                var buildPath = CommonUtils.SafeCombine(BuildFolderName, obj.Hash);
+                var buildFiles = _objectSystem.ListObjectsAsync(bucketName, buildPath, true).ToEnumerable().ToArray();
+
+                foreach (var file in buildFiles.Where(item => !item.IsDir))
+                {
+                    _logger.LogInformation($"Deleting build file '{file.Key}'");
+                    await _objectSystem.RemoveObjectAsync(bucketName, file.Key);
+                }
             }
 
             _logger.LogInformation("Deletion complete");
@@ -958,7 +969,10 @@ namespace Registry.Web.Services.Managers
 
                 // Put it on storage
                 HangfireUtils.SyncBuildFolder(_objectSystem, ddb, entry, bucketName, null);
-                
+
+                // Delete local build folder
+                CommonUtils.SafeDeleteFolder(Path.Combine(ddb.BuildFolder, entry.Hash));
+
             }
             finally
             {

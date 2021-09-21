@@ -199,7 +199,10 @@ namespace Registry.Web.Services.Managers
                     var entry = ddb.GetEntry(item.Path);
 
                     // Put it on storage
-                    _backgroundJob.ContinueJobWith(deleteId, () => HangfireUtils.SyncBuildFolder(_objectSystem, ddb, entry, bucketName, null));
+                    var syncId = _backgroundJob.ContinueJobWith(deleteId, () => HangfireUtils.SyncBuildFolder(_objectSystem, ddb, entry, bucketName, null));
+                    var buildFolder = Path.Combine(ddb.BuildFolder, entry.Hash);
+                    _backgroundJob.ContinueJobWith(syncId,
+                        () => HangfireUtils.SafeDelete(buildFolder, null));
 
                 }
                 else
