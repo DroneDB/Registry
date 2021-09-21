@@ -208,6 +208,9 @@ namespace Registry.Web.Services.Managers
                 if (ddb.EntryExists(path))
                     throw new InvalidOperationException("Cannot create a folder on another entry");
 
+                if (path == BuildFolderName)
+                    throw new InvalidOperationException($"'{BuildFolderName}' is a reserved folder name");
+
                 _logger.LogInformation("Adding folder to DDB");
 
                 // Add to DDB
@@ -322,6 +325,9 @@ namespace Registry.Web.Services.Managers
                 return;
             }
 
+            if (dest == BuildFolderName)
+                throw new InvalidOperationException($"'{BuildFolderName}' is a reserved folder name");
+
             var destEntry = ddb.GetEntry(dest);
 
             if (destEntry != null)
@@ -386,6 +392,9 @@ namespace Registry.Web.Services.Managers
 
             if (!await _authManager.IsOwnerOrAdmin(ds))
                 throw new UnauthorizedException("The current user is not allowed to edit dataset");
+
+            if (path == BuildFolderName)
+                throw new InvalidOperationException($"'{BuildFolderName}' is a reserved folder name");
 
             var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
 
