@@ -266,14 +266,31 @@ namespace Registry.Common
         {
             if (!Directory.Exists(folder)) return;
 
-            foreach (var directory in Directory.GetDirectories(folder))
+            try
             {
-                RemoveEmptyFolders(directory);
-                if (!Directory.Exists(directory)) continue;
-                if (Directory.GetFileSystemEntries(directory).Length == 0)
+                
+                // Recursive call
+                Directory.EnumerateDirectories(folder).ToList().ForEach(RemoveEmptyFolders);
+
+                // If not empty we don't have to delete it
+                if (Directory.EnumerateFileSystemEntries(folder).Any()) return;
+
+                try
                 {
-                    Directory.Delete(directory, false);
+                    Directory.Delete(folder);
                 }
+                catch (UnauthorizedAccessException)
+                {
+                    //
+                }
+                catch (DirectoryNotFoundException)
+                {
+                    //
+                }
+            }
+            catch (UnauthorizedAccessException)
+            {
+                //
             }
 
         }
