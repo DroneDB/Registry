@@ -114,6 +114,26 @@ namespace Registry.Adapters.ObjectSystem
 
         }
 
+        public Task RemoveObjectsAsync(string bucketName, string[] objectsNames, CancellationToken cancellationToken = default)
+        {
+            EnsureBucketExists(bucketName);
+
+            return Task.Run(() =>
+            {
+                foreach (var obj in objectsNames)
+                {
+                    var objectPath = GetObjectPath(bucketName, obj);
+
+                    File.Delete(objectPath);
+
+                    // Remove from bucket json
+                    RemoveObjectInfoInternal(bucketName, obj);
+
+                }
+
+            }, cancellationToken);
+        }
+
 
         public async Task<ObjectInfo> GetObjectInfoAsync(string bucketName, string objectName, IServerEncryption sse = null,
             CancellationToken cancellationToken = default)

@@ -68,6 +68,11 @@ namespace Registry.Adapters.ObjectSystem
             await _client.RemoveObjectAsync(bucketName, objectName, cancellationToken);
         }
 
+        public async Task RemoveObjectsAsync(string bucketName, string[] objectsNames, CancellationToken cancellationToken = default)
+        {
+            var res = (await _client.RemoveObjectAsync(bucketName, objectsNames, cancellationToken)).ToEnumerable().ToArray();
+        }
+
         public async Task<ObjectInfo> GetObjectInfoAsync(string bucketName, string objectName, IServerEncryption sse = null,
             CancellationToken cancellationToken = default)
         {
