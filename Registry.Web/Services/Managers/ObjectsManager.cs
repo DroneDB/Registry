@@ -47,9 +47,13 @@ namespace Registry.Web.Services.Managers
 
         // TODO: Could be moved to config
         private const int DefaultThumbnailSize = 512;
-        private const string BuildFolderName = ".build";
 
         private readonly string _location;
+
+        private bool IsReservedPath(string path)
+        {
+            return path.StartsWith(_ddbManager.DatabaseFolderName);
+        }
 
         public ObjectsManager(ILogger<ObjectsManager> logger,
             RegistryContext context,
@@ -72,6 +76,7 @@ namespace Registry.Web.Services.Managers
             _settings = settings.Value;
 
             _location = _settings.SafeGetLocation(_logger);
+
         }
 
         public async Task<IEnumerable<ObjectDto>> List(string orgSlug, string dsSlug, string path = null, bool recursive = false)
@@ -208,8 +213,8 @@ namespace Registry.Web.Services.Managers
                 if (ddb.EntryExists(path))
                     throw new InvalidOperationException("Cannot create a folder on another entry");
 
-                if (path == BuildFolderName)
-                    throw new InvalidOperationException($"'{BuildFolderName}' is a reserved folder name");
+                if (path == ddb.DatabaseFolderName)
+                    throw new InvalidOperationException($"'{ddb.DatabaseFolderName}' is a reserved folder name");
 
                 _logger.LogInformation("Adding folder to DDB");
 
@@ -250,7 +255,7 @@ namespace Registry.Web.Services.Managers
 
             var obj = entry.ToDto();
 
-            // We perform the actual upload asynchronously, we will move it to hangfire soon or later
+            // NOTE: We perform the actual upload asynchronously, we will move it to hangfire soon or later
 #pragma warning disable 4014
             var uploadTask = Task.Run(async () =>
 #pragma warning restore 4014
@@ -267,7 +272,10 @@ namespace Registry.Web.Services.Managers
             {
                 _logger.LogInformation("This is a point cloud, we need to build it!");
 
-                var jobId = _backgroundJob.Enqueue(() => HangfireUtils.BuildWrapper(ddb.DatabaseFolder, path, tempFileName, true, null));
+                var tempBuildFolder = Path.Combine(Path.GetTempPath(), nameof(HangfireUtils), CommonUtils.RandomString(16));
+                _logger.LogInformation($"Destination temp folder '{tempBuildFolder}'");
+
+                var jobId = _backgroundJob.Enqueue(() => HangfireUtils.BuildWrapper(ddb, path, tempFileName, tempBuildFolder, true, null));
 
                 _logger.LogInformation("Background job id is " + jobId);
 
@@ -280,11 +288,16 @@ namespace Registry.Web.Services.Managers
 
                     var deleteId = _backgroundJob.ContinueJobWith(jobId, () => HangfireUtils.SafeDelete(tempFileName, null));
 
-                    // Put it on storage
-                    var syncId = _backgroundJob.ContinueJobWith(deleteId, () => HangfireUtils.SyncBuildFolder(_objectSystem, ddb, entry, bucketName, null));
+                    var destBucketFolder = CommonUtils.SafeCombine(ddb.DatabaseFolderName, ddb.BuildFolderName);
+                    
+                    // NOTE: If the user deletes the LAZ file while it is being built this process goes on and saves it on storage anyways
+                    //       We could check if the file is still in ddb, otherwise cancel the folder sync. Too early for this?
 
-                    var buildFolder = Path.Combine(ddb.BuildFolder, obj.Hash);
-                    _backgroundJob.ContinueJobWith(syncId, () => HangfireUtils.SafeDelete(buildFolder, null));
+                    // Put it on storage
+                    var syncId = _backgroundJob.ContinueJobWith(deleteId, () =>
+                        HangfireUtils.SyncFolder(_objectSystem, tempBuildFolder, bucketName, destBucketFolder, null));
+
+                    _backgroundJob.ContinueJobWith(syncId, () => HangfireUtils.SafeDelete(tempBuildFolder, null));
 
                 });
             }
@@ -318,15 +331,15 @@ namespace Registry.Web.Services.Managers
             if (sourceEntry == null)
                 throw new InvalidOperationException("Cannot find source entry: '" + source + "'");
 
+            if (IsReservedPath(dest))
+                throw new InvalidOperationException($"'{dest}' is a reserved path");
+
             // Short circuit!
             if (source == dest)
             {
                 _logger.LogInformation("Source and dest are the same, nothing to do!");
                 return;
             }
-
-            if (dest == BuildFolderName)
-                throw new InvalidOperationException($"'{BuildFolderName}' is a reserved folder name");
 
             var destEntry = ddb.GetEntry(dest);
 
@@ -377,8 +390,6 @@ namespace Registry.Web.Services.Managers
             if (!ddb.EntryExists(dest))
                 throw new InvalidOperationException($"Cannot find destination '{dest}' after move, something wrong with ddb");
 
-
-
             _logger.LogInformation("Move OK");
 
 
@@ -393,8 +404,8 @@ namespace Registry.Web.Services.Managers
             if (!await _authManager.IsOwnerOrAdmin(ds))
                 throw new UnauthorizedException("The current user is not allowed to edit dataset");
 
-            if (path == BuildFolderName)
-                throw new InvalidOperationException($"'{BuildFolderName}' is a reserved folder name");
+            if (IsReservedPath(path))
+                throw new InvalidOperationException($"'{path}' is a reserved path");
 
             var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
 
@@ -420,18 +431,27 @@ namespace Registry.Web.Services.Managers
                 _logger.LogInformation($"Deleting '{obj.Path}'");
                 await _objectSystem.RemoveObjectAsync(bucketName, obj.Path);
 
-                var buildPath = CommonUtils.SafeCombine(BuildFolderName, obj.Hash);
-                var buildFiles = _objectSystem.ListObjectsAsync(bucketName, buildPath, true).ToEnumerable().ToArray();
+                await RemoveBuildFiles(bucketName, obj.Hash);
 
-                foreach (var file in buildFiles.Where(item => !item.IsDir))
-                {
-                    _logger.LogInformation($"Deleting build file '{file.Key}'");
-                    await _objectSystem.RemoveObjectAsync(bucketName, file.Key);
-                }
             }
 
             _logger.LogInformation("Deletion complete");
 
+
+        }
+
+        private async Task RemoveBuildFiles(string bucketName, string hash, CancellationToken cancellationToken = default)
+        {
+            // TODO: This path calculation should not be done here (IMHO)
+            var buildPath = CommonUtils.SafeCombine(_ddbManager.DatabaseFolderName, _ddbManager.BuildFolderName, hash);
+
+            var buildFiles = _objectSystem.ListObjectsAsync(bucketName, buildPath, true)
+                .ToEnumerable()
+                .Where(item => !item.IsDir)
+                .Select(item => item.Key)
+                .ToArray();
+
+            await _objectSystem.RemoveObjectsAsync(bucketName, buildFiles, cancellationToken);
 
         }
 
@@ -744,7 +764,7 @@ namespace Registry.Web.Services.Managers
                     // Include ddb folder
                     if (includeDdb)
                     {
-                        archive.CreateEntryFromAny(Path.Combine(ddb.DatabaseFolder, _ddbManager.DdbFolderName), string.Empty, new[] { ddb.BuildFolder });
+                        archive.CreateEntryFromAny(Path.Combine(ddb.DatasetFolderPath, ddb.DatabaseFolderName), string.Empty, new[] { ddb.BuildFolderPath });
                     }
                 }
 
@@ -915,7 +935,7 @@ namespace Registry.Web.Services.Managers
             try
             {
                 // We could do this fully in memory BUT it's not a strict requirement by now: ddb folders are not huge (yet)
-                ZipFile.CreateFromDirectory(ddb.DatabaseFolder, tempFile, CompressionLevel.NoCompression, false);
+                ZipFile.CreateFromDirectory(ddb.DatasetFolderPath, tempFile, CompressionLevel.NoCompression, false);
 
                 await using var s = File.OpenRead(tempFile);
                 var memory = new MemoryStream();
@@ -966,7 +986,7 @@ namespace Registry.Web.Services.Managers
                 _logger.LogInformation($"'{entry.Path}' is not buildable, nothing to do here");
                 return;
             }
-            
+
             var obj = await InternalGet(orgSlug, ds.InternalRef, path);
 
             var tempFileName = Path.GetTempFileName();
@@ -974,13 +994,13 @@ namespace Registry.Web.Services.Managers
             {
                 await File.WriteAllBytesAsync(tempFileName, obj.Data);
 
-                HangfireUtils.BuildWrapper(ddb.DatabaseFolder, path, tempFileName, force, null);
+                HangfireUtils.BuildWrapper(ddb, path, tempFileName, null, false, null);
 
                 // Put it on storage
                 HangfireUtils.SyncBuildFolder(_objectSystem, ddb, entry, bucketName, null);
 
                 // Delete local build folder
-                CommonUtils.SafeDeleteFolder(Path.Combine(ddb.BuildFolder, entry.Hash));
+                CommonUtils.SafeDeleteFolder(Path.Combine(BuildBasePath, entry.Hash));
 
             }
             finally
@@ -1005,13 +1025,11 @@ namespace Registry.Web.Services.Managers
                 throw new ArgumentException("Rooted or relative paths are not supported");
 
             var bucketName = _utils.GetBucketName(orgSlug, ds.InternalRef);
-
             _logger.LogInformation($"Using bucket '{bucketName}'");
 
-            var destPath = CommonUtils.SafeCombine(BuildFolderName, hash, path);
-
+            var destPath = CommonUtils.SafeCombine(BuildBasePath, hash, path);
             _logger.LogInformation($"Using actual path '{destPath}'");
-            
+
             var objInfo = await _objectSystem.GetObjectInfoAsync(bucketName, destPath);
 
             if (objInfo == null)
@@ -1022,7 +1040,7 @@ namespace Registry.Web.Services.Managers
             _logger.LogInformation($"Getting object '{destPath}' in bucket '{bucketName}'");
 
             await _objectSystem.GetObjectAsync(bucketName, destPath, stream => stream.CopyTo(memory));
-            
+
             memory.Reset();
 
             return new FileDescriptorDto
@@ -1033,6 +1051,9 @@ namespace Registry.Web.Services.Managers
             };
 
         }
+
+        // Base build folder path (example: .ddb/build)
+        private string BuildBasePath => CommonUtils.SafeCombine(_ddbManager.DatabaseFolderName, _ddbManager.BuildFolderName);
 
         public async Task<bool> CheckBuildFile(string orgSlug, string dsSlug, string hash, string path)
         {
@@ -1048,11 +1069,9 @@ namespace Registry.Web.Services.Managers
                 throw new ArgumentException("Rooted or relative paths are not supported");
 
             var bucketName = _utils.GetBucketName(orgSlug, ds.InternalRef);
-
             _logger.LogInformation($"Using bucket '{bucketName}'");
 
-            var destPath = CommonUtils.SafeCombine(BuildFolderName, path);
-
+            var destPath = CommonUtils.SafeCombine(BuildBasePath, hash, path);
             _logger.LogInformation($"Using actual path '{destPath}'");
 
             var objInfo = await _objectSystem.GetObjectInfoAsync(bucketName, destPath);
