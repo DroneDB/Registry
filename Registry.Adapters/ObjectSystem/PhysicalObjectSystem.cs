@@ -3,10 +3,10 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Reactive.Linq;
+using System.Runtime.Serialization;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
-using MimeMapping;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using Registry.Adapters.ObjectSystem.Model;
@@ -22,13 +22,17 @@ namespace Registry.Adapters.ObjectSystem
     /// </summary>
     public class PhysicalObjectSystem : IObjectSystem
     {
+        [JsonProperty]
         public bool UseStrictNamingConvention { get; }
+        
+        [JsonProperty("BaseFolder")]
         private readonly string _baseFolder;
 
         private const string ContentTypeKey = "Content-Type";
         public const string InfoFolder = ".info";
         public const string PolicySuffix = "policy";
 
+        [JsonProperty("InfoFolderPath")]
         private readonly string _infoFolderPath;
 
         public PhysicalObjectSystem(string baseFolder, bool useStrictNamingConvention = false)
@@ -46,9 +50,24 @@ namespace Registry.Adapters.ObjectSystem
             _infoFolderPath = Path.Combine(_baseFolder, InfoFolder);
 
             // Let's ensure that the info folder exists
-            if (!Directory.Exists(_infoFolderPath))
-                Directory.CreateDirectory(_infoFolderPath);
+            Directory.CreateDirectory(_infoFolderPath);
 
+        }
+
+        [JsonConstructor]
+        private PhysicalObjectSystem()
+        {
+            //
+        }
+
+        [OnDeserialized]
+        internal void OnDeserializedMethod(StreamingContext context)
+        {
+            if (!Directory.Exists(_baseFolder))
+                throw new ArgumentException($"'{_baseFolder}' does not exists");
+            
+            // Let's ensure that the info folder exists
+            Directory.CreateDirectory(_infoFolderPath);
         }
 
         public void SyncBucket(string bucketName)
