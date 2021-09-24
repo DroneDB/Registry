@@ -18,7 +18,7 @@ namespace Registry.Adapters.DroneDB
         public DdbMeta Add(string key, string data, string path = null)
         {
 
-            var m = DDB.Bindings.DroneDB.MetaAdd(_ddb.DatabaseFolder, key, data, path);
+            var m = DDB.Bindings.DroneDB.MetaAdd(_ddb.DatasetFolderPath, key, data, path);
 
             return new DdbMeta
             {
@@ -30,7 +30,7 @@ namespace Registry.Adapters.DroneDB
 
         public DdbMeta Set(string key, string data, string path = null)
         {
-            var m = DDB.Bindings.DroneDB.MetaSet(_ddb.DatabaseFolder, key, data, path);
+            var m = DDB.Bindings.DroneDB.MetaSet(_ddb.DatasetFolderPath, key, data, path);
 
             return new DdbMeta
             {
@@ -42,26 +42,26 @@ namespace Registry.Adapters.DroneDB
 
         public int Remove(string id)
         {
-            return DDB.Bindings.DroneDB.MetaRemove(_ddb.DatabaseFolder, id);
+            return DDB.Bindings.DroneDB.MetaRemove(_ddb.DatasetFolderPath, id);
         }
 
         public string Get(string key, string path = null)
         {
 
-            var m = DDB.Bindings.DroneDB.MetaGet(_ddb.DatabaseFolder, key, path);
+            var m = DDB.Bindings.DroneDB.MetaGet(_ddb.DatasetFolderPath, key, path);
 
             return m;
         }
 
         public int Unset(string key, string path = null)
         {
-            return DDB.Bindings.DroneDB.MetaUnset(_ddb.DatabaseFolder, key, path);
+            return DDB.Bindings.DroneDB.MetaUnset(_ddb.DatasetFolderPath, key, path);
         }
 
         public DdbMetaListItem[] List(string path = null)
         {
 
-            var list = DDB.Bindings.DroneDB.MetaList(_ddb.DatabaseFolder, path);
+            var list = DDB.Bindings.DroneDB.MetaList(_ddb.DatasetFolderPath, path);
 
             return list.Select(item => new DdbMetaListItem
             {

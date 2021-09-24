@@ -773,12 +773,8 @@ namespace Registry.Adapters.ObjectSystem
         #endregion
 
         #region Delete
-
-        public async Task RemoveObjectAsync(string bucketName, string objectName, CancellationToken cancellationToken = default)
+        private bool RemoveLocalObject(string bucketName, string objectName)
         {
-
-            CleanupBucket(bucketName);
-
             var cachedFileName = GetCacheFileName(bucketName, objectName);
 
             try
@@ -801,6 +797,36 @@ namespace Registry.Adapters.ObjectSystem
             {
                 LogError(ex,
                     $"Cannot delete cached file '{cachedFileName}' in '{bucketName}' bucket and '{objectName}' object");
+                return false;
+            }
+
+            return true;
+
+        }
+        public async Task RemoveObjectsAsync(string bucketName, string[] objectsNames, CancellationToken cancellationToken = default)
+        {
+            CleanupBucket(bucketName);
+
+            foreach (var obj in objectsNames)
+            {
+                if (!RemoveLocalObject(bucketName, obj))
+                {
+                    _logger.LogWarning($"Cannot remove local object '{obj}' in bucket '{bucketName}'");
+                }
+            }
+
+            await _remoteStorage.RemoveObjectsAsync(bucketName, objectsNames, cancellationToken);
+
+        }
+        
+        public async Task RemoveObjectAsync(string bucketName, string objectName, CancellationToken cancellationToken = default)
+        {
+
+            CleanupBucket(bucketName);
+
+            if (!RemoveLocalObject(bucketName, objectName))
+            {
+                _logger.LogWarning($"Cannot remove local object '{objectName}' in bucket '{bucketName}'");
             }
 
             await _remoteStorage.RemoveObjectAsync(bucketName, objectName, cancellationToken);
