@@ -4,13 +4,12 @@ using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Reactive.Linq;
-using System.Reflection;
-using System.Text;
+using System.Runtime.Serialization;
 using System.Threading;
 using System.Threading.Tasks;
 using Minio;
-using Minio.DataModel;
 using Minio.Exceptions;
+using Newtonsoft.Json;
 using Registry.Adapters.ObjectSystem.Model;
 using Registry.Common;
 using Registry.Common.Model;
@@ -22,11 +21,14 @@ namespace Registry.Adapters.ObjectSystem
 {
     public class S3ObjectSystem : IObjectSystem
     {
+        [JsonProperty("settings")]
+        private readonly S3ObjectSystemSettings _settings;
 
-        private readonly MinioClient _client;
+        private MinioClient _client;
 
         public S3ObjectSystem(S3ObjectSystemSettings settings)
         {
+            _settings = settings;
             _client = new MinioClient(settings.Endpoint, settings.AccessKey ?? string.Empty, settings.SecretKey ?? string.Empty, 
                 settings.Region ?? string.Empty, settings.SessionToken ?? string.Empty);
 
@@ -35,6 +37,26 @@ namespace Registry.Adapters.ObjectSystem
 
             if (!string.IsNullOrWhiteSpace(settings.AppName) && !string.IsNullOrWhiteSpace(settings.AppVersion))
                 _client.SetAppInfo(settings.AppName, settings.AppVersion);
+
+        }
+
+        [JsonConstructor]
+        private S3ObjectSystem()
+        {
+            // 
+        }
+
+        [OnDeserialized]
+        internal void OnDeserializedMethod(StreamingContext context)
+        {
+            _client = new MinioClient(_settings.Endpoint, _settings.AccessKey ?? string.Empty, _settings.SecretKey ?? string.Empty,
+                _settings.Region ?? string.Empty, _settings.SessionToken ?? string.Empty);
+
+            if (_settings.UseSsl)
+                _client.WithSSL();
+
+            if (!string.IsNullOrWhiteSpace(_settings.AppName) && !string.IsNullOrWhiteSpace(_settings.AppVersion))
+                _client.SetAppInfo(_settings.AppName, _settings.AppVersion);
 
         }
 
@@ -62,6 +84,11 @@ namespace Registry.Adapters.ObjectSystem
         public async Task RemoveObjectAsync(string bucketName, string objectName, CancellationToken cancellationToken = default)
         {
             await _client.RemoveObjectAsync(bucketName, objectName, cancellationToken);
+        }
+
+        public async Task RemoveObjectsAsync(string bucketName, string[] objectsNames, CancellationToken cancellationToken = default)
+        {
+            var res = (await _client.RemoveObjectAsync(bucketName, objectsNames, cancellationToken)).ToEnumerable().ToArray();
         }
 
         public async Task<ObjectInfo> GetObjectInfoAsync(string bucketName, string objectName, IServerEncryption sse = null,

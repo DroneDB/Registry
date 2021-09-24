@@ -569,7 +569,6 @@ namespace Registry.Web
 
                     services.AddScoped<IObjectSystem, CachedS3ObjectSystem>();
 
-
                     break;
 
                 default:

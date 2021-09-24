@@ -59,6 +59,17 @@ namespace Registry.Ports.ObjectSystem
         /// <returns></returns>
         Task RemoveObjectAsync(string bucketName, string objectName, CancellationToken cancellationToken = default);
 
+
+        /// <summary>
+        /// Removes multiple objects in specific bucket
+        /// </summary>
+        /// <param name="bucketName">Bucket to remove object from</param>
+        /// <param name="objectsNames">Keys of objects to remove</param>
+        /// <param name="cancellationToken">Optional cancellation token to cancel the operation</param>
+        /// <returns></returns>
+        Task RemoveObjectsAsync(string bucketName, string[] objectsNames, CancellationToken cancellationToken = default);
+
+
         /// <summary>
         /// Tests the object's existence and returns metadata about existing objects.
         /// </summary>

@@ -92,11 +92,11 @@ namespace Registry.Web.Services.Managers
 
             // 1) Unzip stream contents in temp ddb folder
             using var archive = new ZipArchive(stream, ZipArchiveMode.Read);
-            archive.ExtractToDirectory(Path.Combine(ddbTempFolder, _ddbManager.DdbFolderName), true);
+            archive.ExtractToDirectory(Path.Combine(ddbTempFolder, _ddbManager.DatabaseFolderName), true);
 
             // 2) Perform delta with our ddb
             var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
-            var delta = DroneDB.Delta(ddbTempFolder, ddb.DatabaseFolder).ToDto();
+            var delta = DroneDB.Delta(ddbTempFolder, ddb.DatasetFolderPath).ToDto();
 
             // 3) Save delta json in temp folder
             await File.WriteAllTextAsync(Path.Combine(baseTempFolder, DeltaFileName),
@@ -182,7 +182,7 @@ namespace Registry.Web.Services.Managers
             var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
 
             // Replaces ddb folder
-            FolderUtils.Move(ddbTempFolder, ddb.DatabaseFolder);
+            FolderUtils.Move(ddbTempFolder, ddb.DatasetFolderPath);
 
             // Delete delta file
             File.Delete(deltaFilePath);
@@ -194,10 +194,19 @@ namespace Registry.Web.Services.Managers
                 if (ddb.IsBuildable(item.Path))
                 {
                     var jobId = _backgroundJob.Enqueue(() =>
-                        HangfireUtils.BuildWrapper(ddb.DatabaseFolder, item.Path, tempFileName, true, null));
-
-                    _backgroundJob.ContinueJobWith(jobId, () =>
+                        HangfireUtils.BuildWrapper(ddb, item.Path, tempFileName, null, true, null));
+                    
+                    var deleteId = _backgroundJob.ContinueJobWith(jobId, () =>
                         HangfireUtils.SafeDelete(tempFileName, null));
+
+                    var entry = ddb.GetEntry(item.Path);
+
+                    // Put it on storage
+                    var syncId = _backgroundJob.ContinueJobWith(deleteId, () => HangfireUtils.SyncBuildFolder(_objectSystem, ddb, entry, bucketName, null));
+                    var buildFolder = Path.Combine(ddb.BuildFolderPath, entry.Hash);
+                    _backgroundJob.ContinueJobWith(syncId,
+                        () => HangfireUtils.SafeDelete(buildFolder, null));
+
                 }
                 else
                 {

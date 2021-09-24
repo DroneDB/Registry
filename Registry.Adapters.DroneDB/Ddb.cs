@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
+using System.Runtime.Serialization;
 using System.Text;
 using DDB.Bindings;
 using GeoJSON.Net;
@@ -11,6 +12,7 @@ using GeoJSON.Net.Feature;
 using GeoJSON.Net.Geometry;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
+using Registry.Adapters.ObjectSystem;
 using Registry.Common;
 using Registry.Ports.DroneDB;
 using Registry.Ports.DroneDB.Models;
@@ -21,7 +23,20 @@ namespace Registry.Adapters.DroneDB
 {
     public class Ddb : IDdb
     {
-        
+
+        [JsonConstructor]
+        private Ddb()
+        {
+            //
+        }
+
+        [OnDeserialized]
+        internal void OnDeserializedMethod(StreamingContext context)
+        {
+            BuildFolderPath = Path.Combine(DatasetFolderPath, DatabaseFolderName, BuildFolderName);
+            Meta = new DdbMetaManager(this);
+        }
+
         public Ddb(string ddbPath)
         {
             if (string.IsNullOrWhiteSpace(ddbPath))
@@ -30,8 +45,8 @@ namespace Registry.Adapters.DroneDB
             if (!Directory.Exists(ddbPath))
                 throw new ArgumentException($"Path '{ddbPath}' does not exist");
 
-            DatabaseFolder = ddbPath;
-            BuildFolder = Path.Combine(ddbPath, ".ddb", "build");
+            DatasetFolderPath = ddbPath;
+            BuildFolderPath = Path.Combine(ddbPath, DatabaseFolderName, BuildFolderName);
             Meta = new DdbMetaManager(this);
         }
 
@@ -51,20 +66,33 @@ namespace Registry.Adapters.DroneDB
         {
             try
             {
-                var res = DDB.Bindings.DroneDB.Init(DatabaseFolder);
+                var res = DDB.Bindings.DroneDB.Init(DatasetFolderPath);
                 Debug.WriteLine(res);
             }
             catch (DDBException ex)
             {
-                throw new InvalidOperationException($"Cannot initialize ddb in folder '{DatabaseFolder}'", ex);
+                throw new InvalidOperationException($"Cannot initialize ddb in folder '{DatasetFolderPath}'", ex);
             }
         }
 
-        public string Version => DDB.Bindings.DroneDB.GetVersion();
-        public string DatabaseFolder { get; }
-        public string BuildFolder { get; }
+        // These consts are like magic strings: if anything changes this goes kaboom!
+        public const string DatabaseFolderName = ".ddb";
+        public const string BuildFolderName = "build";
         
-        public IDdbMetaManager Meta { get; }
+        string IDdb.DatabaseFolderName => DatabaseFolderName;
+        string IDdb.BuildFolderName => BuildFolderName;
+
+        [JsonIgnore]
+        public string Version => DDB.Bindings.DroneDB.GetVersion();
+
+        [JsonProperty]
+        public string DatasetFolderPath { get; private set; }
+        
+        [JsonProperty]
+        public string BuildFolderPath { get; private set; }
+
+        [JsonIgnore]
+        public IDdbMetaManager Meta { get; private set; }
 
         static Ddb()
         {
@@ -103,12 +131,12 @@ namespace Registry.Adapters.DroneDB
             {
                 // If the path is not absolute let's rebase it on ddbPath
                 if (path != null && !Path.IsPathRooted(path))
-                    path = Path.Combine(DatabaseFolder, path);
+                    path = Path.Combine(DatasetFolderPath, path);
 
                 // If path is null we use the base ddb path
-                path ??= DatabaseFolder;
+                path ??= DatasetFolderPath;
 
-                var entries = DDB.Bindings.DroneDB.List(DatabaseFolder, path, recursive);
+                var entries = DDB.Bindings.DroneDB.List(DatasetFolderPath, path, recursive);
 
                 if (entries == null)
                 {
@@ -136,7 +164,7 @@ namespace Registry.Adapters.DroneDB
             }
             catch (DDBException ex)
             {
-                throw new InvalidOperationException($"Cannot list '{path}' to ddb '{DatabaseFolder}'", ex);
+                throw new InvalidOperationException($"Cannot list '{path}' to ddb '{DatasetFolderPath}'", ex);
             }
         }
 
@@ -151,13 +179,13 @@ namespace Registry.Adapters.DroneDB
             try
             {
                 // If the path is not absolute let's rebase it on ddbPath
-                if (!Path.IsPathRooted(path)) path = Path.Combine(DatabaseFolder, path);
+                if (!Path.IsPathRooted(path)) path = Path.Combine(DatasetFolderPath, path);
 
-                DDB.Bindings.DroneDB.Remove(DatabaseFolder, path);
+                DDB.Bindings.DroneDB.Remove(DatasetFolderPath, path);
             }
             catch (DDBException ex)
             {
-                throw new InvalidOperationException($"Cannot remove '{path}' from ddb '{DatabaseFolder}'", ex);
+                throw new InvalidOperationException($"Cannot remove '{path}' from ddb '{DatasetFolderPath}'", ex);
             }
         }
 
@@ -165,11 +193,11 @@ namespace Registry.Adapters.DroneDB
         {
             try
             {
-                DDB.Bindings.DroneDB.MoveEntry(DatabaseFolder, source, dest);
+                DDB.Bindings.DroneDB.MoveEntry(DatasetFolderPath, source, dest);
             }
             catch (DDBException ex)
             {
-                throw new InvalidOperationException($"Cannot move '{source}' to {dest} from ddb '{DatabaseFolder}'",
+                throw new InvalidOperationException($"Cannot move '{source}' to {dest} from ddb '{DatasetFolderPath}'",
                     ex);
             }
         }
@@ -178,11 +206,11 @@ namespace Registry.Adapters.DroneDB
         {
             try
             {
-                DDB.Bindings.DroneDB.Build(DatabaseFolder, path, dest, force);
+                DDB.Bindings.DroneDB.Build(DatasetFolderPath, path, dest, force);
             }
             catch (DDBException ex)
             {
-                throw new InvalidOperationException($"Cannot build '{path}' from ddb '{DatabaseFolder}'", ex);
+                throw new InvalidOperationException($"Cannot build '{path}' from ddb '{DatasetFolderPath}'", ex);
             }
         }
 
@@ -190,11 +218,11 @@ namespace Registry.Adapters.DroneDB
         {
             try
             {
-                DDB.Bindings.DroneDB.Build(DatabaseFolder, null, dest, force);
+                DDB.Bindings.DroneDB.Build(DatasetFolderPath, null, dest, force);
             }
             catch (DDBException ex)
             {
-                throw new InvalidOperationException($"Cannot build all from ddb '{DatabaseFolder}'", ex);
+                throw new InvalidOperationException($"Cannot build all from ddb '{DatasetFolderPath}'", ex);
             }
         }
 
@@ -202,11 +230,11 @@ namespace Registry.Adapters.DroneDB
         {
             try
             {
-                return DDB.Bindings.DroneDB.IsBuildable(DatabaseFolder, path);
+                return DDB.Bindings.DroneDB.IsBuildable(DatasetFolderPath, path);
             }
             catch (DDBException ex)
             {
-                throw new InvalidOperationException($"Cannot call IsBuildable from ddb '{DatabaseFolder}'", ex);
+                throw new InvalidOperationException($"Cannot call IsBuildable from ddb '{DatasetFolderPath}'", ex);
             }
         }
 
@@ -222,7 +250,7 @@ namespace Registry.Adapters.DroneDB
 
         public DdbEntry GetInfo()
         {
-            return GetInfo(DatabaseFolder);
+            return GetInfo(DatasetFolderPath);
         }
 
         public DdbEntry GetInfo(string path)
@@ -230,7 +258,7 @@ namespace Registry.Adapters.DroneDB
             if (string.IsNullOrWhiteSpace(path))
                 throw new ArgumentException("Path cannot be null or empty");
 
-            var info = DDB.Bindings.DroneDB.Info(DatabaseFolder);
+            var info = DDB.Bindings.DroneDB.Info(DatasetFolderPath);
 
             var entry = info.FirstOrDefault();
 
@@ -256,11 +284,11 @@ namespace Registry.Adapters.DroneDB
         {
             try
             {
-                return DDB.Bindings.DroneDB.ChangeAttributes(DatabaseFolder, attributes);
+                return DDB.Bindings.DroneDB.ChangeAttributes(DatasetFolderPath, attributes);
             }
             catch (DDBException ex)
             {
-                throw new InvalidOperationException($"Cannot change attributes of ddb '{DatabaseFolder}'", ex);
+                throw new InvalidOperationException($"Cannot change attributes of ddb '{DatasetFolderPath}'", ex);
             }
         }
 
@@ -285,15 +313,15 @@ namespace Registry.Adapters.DroneDB
 
                 try
                 {
-                    folderPath = Path.Combine(DatabaseFolder, path);
+                    folderPath = Path.Combine(DatasetFolderPath, path);
 
                     Directory.CreateDirectory(folderPath);
 
-                    DDB.Bindings.DroneDB.Add(DatabaseFolder, folderPath);
+                    DDB.Bindings.DroneDB.Add(DatasetFolderPath, folderPath);
                 }
                 catch (DDBException ex)
                 {
-                    throw new InvalidOperationException($"Cannot add folder '{path}' to ddb '{DatabaseFolder}'", ex);
+                    throw new InvalidOperationException($"Cannot add folder '{path}' to ddb '{DatasetFolderPath}'", ex);
                 }
                 finally
                 {
@@ -308,7 +336,7 @@ namespace Registry.Adapters.DroneDB
 
                 try
                 {
-                    filePath = Path.Combine(DatabaseFolder, path);
+                    filePath = Path.Combine(DatasetFolderPath, path);
 
                     stream.Reset();
 
@@ -319,11 +347,11 @@ namespace Registry.Adapters.DroneDB
                         stream.CopyTo(writer);
                     }
 
-                    DDB.Bindings.DroneDB.Add(DatabaseFolder, filePath);
+                    DDB.Bindings.DroneDB.Add(DatasetFolderPath, filePath);
                 }
                 catch (DDBException ex)
                 {
-                    throw new InvalidOperationException($"Cannot add '{path}' to ddb '{DatabaseFolder}'", ex);
+                    throw new InvalidOperationException($"Cannot add '{path}' to ddb '{DatasetFolderPath}'", ex);
                 }
                 finally
                 {
@@ -342,7 +370,7 @@ namespace Registry.Adapters.DroneDB
 
         public override string ToString()
         {
-            return DatabaseFolder;
+            return DatasetFolderPath;
         }
     }
 }

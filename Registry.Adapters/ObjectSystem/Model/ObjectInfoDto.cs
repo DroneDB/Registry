@@ -1,7 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 
-namespace Registry.Adapters.ObjectSystem
+namespace Registry.Adapters.ObjectSystem.Model
 {
     public class ObjectInfoDto
     {

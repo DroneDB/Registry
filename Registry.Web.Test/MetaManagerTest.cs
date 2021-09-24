@@ -39,7 +39,7 @@ namespace Registry.Web.Test
         //private Mock<IDdbManager> _ddbFactoryMock;
         private Mock<IAuthManager> _authManagerMock;
         private Mock<IHttpContextAccessor> _httpContextAccessorMock;
-        private DdbManager _ddbFactory;
+        //private DdbManager _ddbFactory;
 
         //private const string DataFolder = "Data";
         private const string TestStorageFolder = @"Data/Storage";

@@ -10,18 +10,31 @@ namespace Registry.Ports.DroneDB
     /// </summary>
     public interface IDdb
     {
+
+        /// <summary>
+        /// Name of the database folder (example: .ddb)
+        /// </summary>
+        string DatabaseFolderName { get; }
+        
+        /// <summary>
+        /// Name of the build folder (example: build)
+        /// </summary>
+        string BuildFolderName { get; }
+        
         /// <summary>
         /// DroneDB client version
         /// </summary>
         string Version { get; }
 
-        // This could lead to problems if we plan to move ddbpath to S3 but it's good for now
         /// <summary>
-        /// DroneDB database folder
+        /// DroneDB dataset folder path
         /// </summary>
-        string DatabaseFolder { get; }
+        string DatasetFolderPath { get; }
 
-        string BuildFolder { get; }
+        /// <summary>
+        /// The build folder path
+        /// </summary>
+        string BuildFolderPath { get; }
 
         IEnumerable<DdbEntry> Search(string path, bool recursive = false);
         void Add(string path, byte[] data);
