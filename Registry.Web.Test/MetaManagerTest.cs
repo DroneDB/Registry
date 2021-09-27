@@ -15,6 +15,7 @@ using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using NUnit.Framework;
 using Registry.Adapters.ObjectSystem;
+using Registry.Adapters.ObjectSystem.Model;
 using Registry.Common;
 using Registry.Ports.DroneDB;
 using Registry.Ports.DroneDB.Models;
@@ -99,7 +100,12 @@ namespace Registry.Web.Test
             _appSettingsMock.Setup(o => o.Value).Returns(settings);
             _authManagerMock.Setup(o => o.IsUserAdmin()).Returns(Task.FromResult(true));
 
-            var sys = new PhysicalObjectSystem(Path.Combine(test.TestFolder, StorageFolder));
+            var poss = new PhysicalObjectSystemSettings
+            {
+                BasePath = Path.Combine(test.TestFolder, StorageFolder)
+            };
+
+            var sys = new PhysicalObjectSystem(poss);
             sys.SyncBucket($"{MagicStrings.PublicOrganizationSlug}-{_defaultDatasetGuid}");
 
             var ddbManager = new DdbManager(_appSettingsMock.Object, _ddbFactoryLogger);
@@ -128,7 +134,12 @@ namespace Registry.Web.Test
             _authManagerMock.Setup(o => o.IsUserAdmin()).Returns(Task.FromResult(true));
             _authManagerMock.Setup(o => o.IsOwnerOrAdmin(It.IsAny<Dataset>())).Returns(Task.FromResult(true));
 
-            var sys = new PhysicalObjectSystem(Path.Combine(test.TestFolder, StorageFolder));
+            var poss = new PhysicalObjectSystemSettings
+            {
+                BasePath = Path.Combine(test.TestFolder, StorageFolder)
+            };
+
+            var sys = new PhysicalObjectSystem(poss);
             sys.SyncBucket($"{MagicStrings.PublicOrganizationSlug}-{_defaultDatasetGuid}");
 
             var ddbManager = new DdbManager(_appSettingsMock.Object, _ddbFactoryLogger);

@@ -142,7 +142,7 @@ namespace Registry.Web.Test
             _authManagerMock.Setup(o => o.SafeGetCurrentUserName()).Returns(Task.FromResult(userName));
             _authManagerMock.Setup(o => o.IsOwnerOrAdmin(It.IsAny<Dataset>())).Returns(Task.FromResult(true));
 
-            var sys = new PhysicalObjectSystem(Path.Combine(test.TestFolder, StorageFolder));
+            var sys = new PhysicalObjectSystem(new PhysicalObjectSystemSettings { BasePath = Path.Combine(test.TestFolder, StorageFolder) });
             sys.SyncBucket($"{userName}-{Test2ArchiveDatasetInternalGuid}");
 
             var ddbManager = new DdbManager(_appSettingsMock.Object, _ddbFactoryLogger);

@@ -17,6 +17,7 @@ using Newtonsoft.Json;
 using NUnit.Framework;
 using Registry.Adapters.DroneDB;
 using Registry.Adapters.ObjectSystem;
+using Registry.Adapters.ObjectSystem.Model;
 using Registry.Common;
 using Registry.Ports.DroneDB;
 using Registry.Ports.DroneDB.Models;
@@ -169,7 +170,7 @@ namespace Registry.Web.Test
 
             _ddbFactoryMock.Setup(x => x.Get(It.IsAny<string>(), It.IsAny<Guid>())).Returns(ddbMock.Object);
 
-            var sys = new PhysicalObjectSystem(Path.Combine(test.TestFolder, StorageFolder));
+            var sys = new PhysicalObjectSystem(new PhysicalObjectSystemSettings { BasePath = Path.Combine(test.TestFolder, StorageFolder) });
             sys.SyncBucket($"{MagicStrings.PublicOrganizationSlug}-{MagicStrings.DefaultDatasetSlug}");
 
             var ddbFactory = new DdbManager(_appSettingsMock.Object, _ddbFactoryLogger);
@@ -242,7 +243,7 @@ namespace Registry.Web.Test
 
             _authManagerMock.Setup(o => o.IsUserAdmin()).Returns(Task.FromResult(true));
             _authManagerMock.Setup(o => o.IsOwnerOrAdmin(It.IsAny<Dataset>())).Returns(Task.FromResult(true));
-            
+
             _authManagerMock.Setup(o => o.GetCurrentUser()).Returns(Task.FromResult(new User
             {
                 UserName = userName,
@@ -265,8 +266,8 @@ namespace Registry.Web.Test
             ddbMock.Setup(x => x.GetAttributes()).Returns(new DdbAttributes(ddbMock2.Object));
 
             _ddbFactoryMock.Setup(x => x.Get(It.IsAny<string>(), It.IsAny<Guid>())).Returns(ddbMock.Object);
-            
-            var sys = new PhysicalObjectSystem(Path.Combine(test.TestFolder, StorageFolder));
+
+            var sys = new PhysicalObjectSystem(new PhysicalObjectSystemSettings { BasePath = Path.Combine(test.TestFolder, StorageFolder) });
             sys.SyncBucket($"{MagicStrings.PublicOrganizationSlug}-{MagicStrings.DefaultDatasetSlug}");
 
             var ddbFactory = new DdbManager(_appSettingsMock.Object, _ddbFactoryLogger);
@@ -400,7 +401,7 @@ namespace Registry.Web.Test
 
             _ddbFactoryMock.Setup(x => x.Get(It.IsAny<string>(), It.IsAny<Guid>())).Returns(ddbMock.Object);
 
-            var sys = new PhysicalObjectSystem(Path.Combine(test.TestFolder, StorageFolder));
+            var sys = new PhysicalObjectSystem(new PhysicalObjectSystemSettings { BasePath = Path.Combine(test.TestFolder, StorageFolder) });
             sys.SyncBucket($"{MagicStrings.PublicOrganizationSlug}-{MagicStrings.DefaultDatasetSlug}");
 
             var ddbFactory = new DdbManager(_appSettingsMock.Object, _ddbFactoryLogger);

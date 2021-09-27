@@ -23,8 +23,8 @@ namespace Registry.Adapters.ObjectSystem
     public class PhysicalObjectSystem : IObjectSystem
     {
         [JsonProperty]
-        public bool UseStrictNamingConvention { get; }
-        
+        private readonly PhysicalObjectSystemSettings _settings;
+
         [JsonProperty("BaseFolder")]
         private readonly string _baseFolder;
 
@@ -35,14 +35,15 @@ namespace Registry.Adapters.ObjectSystem
         [JsonProperty("InfoFolderPath")]
         private readonly string _infoFolderPath;
 
-        public PhysicalObjectSystem(string baseFolder, bool useStrictNamingConvention = false)
+        public PhysicalObjectSystem(PhysicalObjectSystemSettings settings)
         {
             // We are not there yet
-            if (useStrictNamingConvention)
+            if (settings.UseStrictNamingConvention)
                 throw new NotImplementedException("UseStrictNamingConvention is not implemented yet");
 
-            UseStrictNamingConvention = useStrictNamingConvention;
-            _baseFolder = baseFolder;
+            _settings = settings;
+
+            _baseFolder = settings.BasePath;
 
             if (!Directory.Exists(_baseFolder))
                 throw new ArgumentException($"'{_baseFolder}' does not exists");
@@ -53,7 +54,7 @@ namespace Registry.Adapters.ObjectSystem
             Directory.CreateDirectory(_infoFolderPath);
 
         }
-
+        
         [JsonConstructor]
         private PhysicalObjectSystem()
         {
@@ -65,11 +66,10 @@ namespace Registry.Adapters.ObjectSystem
         {
             if (!Directory.Exists(_baseFolder))
                 throw new ArgumentException($"'{_baseFolder}' does not exists");
-            
+
             // Let's ensure that the info folder exists
             Directory.CreateDirectory(_infoFolderPath);
         }
-
         public void SyncBucket(string bucketName)
         {
             EnsureBucketExists(bucketName);

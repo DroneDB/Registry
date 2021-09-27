@@ -23,6 +23,7 @@ using Moq;
 using Newtonsoft.Json;
 using NUnit.Framework;
 using Registry.Adapters.ObjectSystem;
+using Registry.Adapters.ObjectSystem.Model;
 using Registry.Common;
 using Registry.Ports.DroneDB;
 using Registry.Ports.DroneDB.Models;
@@ -166,7 +167,7 @@ namespace Registry.Web.Test
                 _httpContextAccessorMock.Object, _ddbFactoryMock.Object);
 
             var objectManager = new ObjectsManager(_objectManagerLogger, context,
-                new PhysicalObjectSystem(Path.Combine(test.TestFolder, StorageFolder)), _appSettingsMock.Object,
+                new PhysicalObjectSystem(new PhysicalObjectSystemSettings { BasePath = Path.Combine(test.TestFolder, StorageFolder) }), _appSettingsMock.Object,
                 new DdbManager(_appSettingsMock.Object, _ddbFactoryLogger), webUtils, _authManagerMock.Object, _cacheManagerMock.Object, _backgroundJobsProcessor);
 
             objectManager.Invoking(async x => await x.Get(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug, "weriufbgeiughegr"))
@@ -192,7 +193,7 @@ namespace Registry.Web.Test
             _appSettingsMock.Setup(o => o.Value).Returns(settings);
             _authManagerMock.Setup(o => o.IsUserAdmin()).Returns(Task.FromResult(true));
 
-            var sys = new PhysicalObjectSystem(Path.Combine(test.TestFolder, StorageFolder));
+            var sys = new PhysicalObjectSystem(new PhysicalObjectSystemSettings { BasePath = Path.Combine(test.TestFolder, StorageFolder) });
             sys.SyncBucket($"{MagicStrings.PublicOrganizationSlug}-{_defaultDatasetGuid}");
 
             var webUtils = new WebUtils(_authManagerMock.Object, context, _appSettingsMock.Object,
@@ -226,7 +227,7 @@ namespace Registry.Web.Test
             _appSettingsMock.Setup(o => o.Value).Returns(settings);
             _authManagerMock.Setup(o => o.IsUserAdmin()).Returns(Task.FromResult(true));
 
-            var sys = new PhysicalObjectSystem(Path.Combine(test.TestFolder, StorageFolder));
+            var sys = new PhysicalObjectSystem(new PhysicalObjectSystemSettings { BasePath = Path.Combine(test.TestFolder, StorageFolder) });
             sys.SyncBucket($"{MagicStrings.PublicOrganizationSlug}-{_defaultDatasetGuid}");
 
             var webUtils = new WebUtils(_authManagerMock.Object, context, _appSettingsMock.Object,
@@ -263,7 +264,7 @@ namespace Registry.Web.Test
             _appSettingsMock.Setup(o => o.Value).Returns(settings);
             _authManagerMock.Setup(o => o.IsUserAdmin()).Returns(Task.FromResult(true));
 
-            var sys = new PhysicalObjectSystem(Path.Combine(test.TestFolder, StorageFolder));
+            var sys = new PhysicalObjectSystem(new PhysicalObjectSystemSettings { BasePath = Path.Combine(test.TestFolder, StorageFolder) });
             sys.SyncBucket($"{MagicStrings.PublicOrganizationSlug}-{_defaultDatasetGuid}");
 
             var webUtils = new WebUtils(_authManagerMock.Object, context, _appSettingsMock.Object,
@@ -315,7 +316,7 @@ namespace Registry.Web.Test
             _appSettingsMock.Setup(o => o.Value).Returns(settings);
             _authManagerMock.Setup(o => o.IsUserAdmin()).Returns(Task.FromResult(true));
 
-            var sys = new PhysicalObjectSystem(Path.Combine(test.TestFolder, StorageFolder));
+            var sys = new PhysicalObjectSystem(new PhysicalObjectSystemSettings { BasePath = Path.Combine(test.TestFolder, StorageFolder) });
             sys.SyncBucket($"{organizationSlug}-{adminDatasetGuid}");
 
             var webUtils = new WebUtils(_authManagerMock.Object, context, _appSettingsMock.Object,
@@ -364,8 +365,8 @@ namespace Registry.Web.Test
             _appSettingsMock.Setup(o => o.Value).Returns(settings);
             _authManagerMock.Setup(o => o.IsUserAdmin()).Returns(Task.FromResult(true));
             _authManagerMock.Setup(o => o.IsOwnerOrAdmin(It.IsAny<Dataset>())).Returns(Task.FromResult(true));
-            
-            var sys = new PhysicalObjectSystem(Path.Combine(test.TestFolder, StorageFolder));
+
+            var sys = new PhysicalObjectSystem(new PhysicalObjectSystemSettings { BasePath = Path.Combine(test.TestFolder, StorageFolder) });
             sys.SyncBucket($"{MagicStrings.PublicOrganizationSlug}-{_defaultDatasetGuid}");
 
             var webUtils = new WebUtils(_authManagerMock.Object, context, _appSettingsMock.Object,
@@ -425,8 +426,8 @@ namespace Registry.Web.Test
             _appSettingsMock.Setup(o => o.Value).Returns(settings);
             _authManagerMock.Setup(o => o.IsUserAdmin()).Returns(Task.FromResult(true));
             _authManagerMock.Setup(o => o.IsOwnerOrAdmin(It.IsAny<Dataset>())).Returns(Task.FromResult(true));
-            
-            var sys = new PhysicalObjectSystem(Path.Combine(test.TestFolder, StorageFolder));
+
+            var sys = new PhysicalObjectSystem(new PhysicalObjectSystemSettings { BasePath = Path.Combine(test.TestFolder, StorageFolder) });
             sys.SyncBucket($"{MagicStrings.PublicOrganizationSlug}-{_defaultDatasetGuid}");
 
             var webUtils = new WebUtils(_authManagerMock.Object, context, _appSettingsMock.Object,
