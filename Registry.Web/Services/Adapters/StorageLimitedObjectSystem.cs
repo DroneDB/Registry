@@ -50,7 +50,8 @@ namespace Registry.Web.Services.Adapters
             {
                 var userStorage = GetUserStorage(user);
 
-                if (userStorage + size > maxStorage)
+                // maxStorage is in megabytes while userStorage and size are in bytes
+                if (userStorage + size > maxStorage * 1024 * 1024)
                     throw new MaxUserStorageException(userStorage, maxStorage);
             }
         }

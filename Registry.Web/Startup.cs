@@ -523,7 +523,7 @@ namespace Registry.Web
                         BasePath = ps.Path
                     });
 
-                    t = typeof(PhysicalObjectSystem);
+                    services.AddScoped<IObjectSystem, PhysicalObjectSystem>();
 
                     break;
 
@@ -546,7 +546,7 @@ namespace Registry.Web
                         AppVersion = s3Settings.AppVersion
                     });
 
-                    t = typeof(S3ObjectSystem);
+                    services.AddScoped<IObjectSystem, S3ObjectSystem>();
 
                     break;
 
@@ -572,7 +572,7 @@ namespace Registry.Web
                         MaxSize = cachedS3Settings.MaxSize
                     });
 
-                    t = typeof(CachedS3ObjectSystem);
+                    services.AddScoped<IObjectSystem, CachedS3ObjectSystem>();
 
                     break;
 
@@ -581,22 +581,10 @@ namespace Registry.Web
                         $"Unsupported storage provider: '{(int)appSettings.StorageProvider.Type}'");
             }
 
-            services.AddScoped(t);
-
             if (appSettings.EnableStorageLimiter)
             {
-                services.AddScoped<IObjectSystem>(provider =>
-                    new StorageLimitedObjectSystem(
-                        (IObjectSystem)provider.GetRequiredService(t), 
-                        provider.GetRequiredService<IAuthManager>(), 
-                        provider.GetRequiredService<IDdbManager>(), 
-                        provider.GetRequiredService<RegistryContext>()));
+                services.Decorate<IObjectSystem, StorageLimitedObjectSystem>();
             }
-            else
-            {
-                services.AddScoped(typeof(IObjectSystem), t);
-            }
-
         }
 
         private void ConfigureDbProvider<T>(IServiceCollection services, DbProvider provider, string connectionStringName) where T : DbContext
