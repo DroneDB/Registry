@@ -5,6 +5,7 @@ using System.Diagnostics;
 using System.Globalization;
 using System.IO;
 using System.IO.Compression;
+using System.IO.Enumeration;
 using System.Linq;
 using System.Reactive.Linq;
 using System.Threading;
@@ -91,6 +92,27 @@ namespace Registry.Web.Services.Managers
             _logger.LogInformation($"Searching in '{path}'");
 
             var files = ddb.Search(path, recursive).Select(file => file.ToDto()).ToArray();
+
+            _logger.LogInformation($"Found {files.Length} objects");
+
+            return files;
+        }
+
+        public async Task<IEnumerable<ObjectDto>> Search(string orgSlug, string dsSlug, string query = null, string path = null, bool recursive = true)
+        {
+
+            var ds = await _utils.GetDataset(orgSlug, dsSlug);
+
+            _logger.LogInformation($"In Search('{orgSlug}/{dsSlug}')");
+
+            var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
+
+            _logger.LogInformation($"Searching in '{path}' -> {query} ({(recursive ? 'r' : 'n')}");
+
+            var files = (from entry in ddb.Search(path, recursive)
+                        let name = Path.GetFileName(entry.Path)
+                        where FileSystemName.MatchesSimpleExpression(query, name)
+                        select entry.ToDto()).ToArray();
 
             _logger.LogInformation($"Found {files.Length} objects");
 
