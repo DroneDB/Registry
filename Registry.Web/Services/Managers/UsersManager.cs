@@ -252,6 +252,17 @@ namespace Registry.Web.Services.Managers
 
         }
 
+        public async Task<UserStorageInfo> GetUserStorageInfo()
+        {
+            var user = await _authManager.GetCurrentUser();
+
+            if (user == null)
+                throw new BadRequestException("User does not exist");
+
+            return _utils.GetUserStorage(user);
+
+        }
+
         public async Task DeleteUser(string userName)
         {
 

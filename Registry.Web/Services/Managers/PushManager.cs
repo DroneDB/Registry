@@ -39,8 +39,7 @@ namespace Registry.Web.Services.Managers
         private readonly ILogger<PushManager> _logger;
         private readonly AppSettings _settings;
         private readonly IBackgroundJobsProcessor _backgroundJob;
-
-
+        
         public PushManager(IUtils utils, IDdbManager ddbManager, IObjectSystem objectSystem,
             IObjectsManager objectsManager, ILogger<PushManager> logger, IDatasetsManager datasetsManager,
             IAuthManager authManager,
@@ -82,6 +81,8 @@ namespace Registry.Web.Services.Managers
                     throw new UnauthorizedException("The current user is not allowed to push to this dataset");
             }
 
+            // Check if user has enough space to upload any file
+            await _utils.CheckCurrentUserStorage();
 
             // 0) Setup temp folders
             var baseTempFolder = Path.Combine(Path.GetTempPath(), PushFolderName, orgSlug, dsSlug);
@@ -124,6 +125,9 @@ namespace Registry.Web.Services.Managers
 
             if (!await _authManager.IsOwnerOrAdmin(ds))
                 throw new UnauthorizedException("The current user is not allowed to upload to this dataset");
+
+            // Check if user has enough space to upload this
+            await _utils.CheckCurrentUserStorage();
 
             if (path.Contains(".."))
                 throw new InvalidOperationException("Path cannot contain dot notation");

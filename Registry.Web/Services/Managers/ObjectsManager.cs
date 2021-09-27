@@ -231,6 +231,9 @@ namespace Registry.Web.Services.Managers
                 };
             }
 
+            // Check user storage space
+            await _utils.CheckCurrentUserStorage(stream.Length);
+
             // TODO: I highly doubt the robustness of this 
             var contentType = MimeTypes.GetMimeType(path);
 
@@ -239,7 +242,7 @@ namespace Registry.Web.Services.Managers
             // Write down the file
             await using (var tempFileStream = File.OpenWrite(tempFileName))
                 await stream.CopyToAsync(tempFileStream);
-
+            
             _logger.LogInformation("File uploaded, adding to DDB");
 
             // Add to DDB

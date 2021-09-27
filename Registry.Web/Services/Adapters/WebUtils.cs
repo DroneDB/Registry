@@ -213,6 +213,8 @@ namespace Registry.Web.Services.Adapters
 
         public async Task CheckCurrentUserStorage(long size = 0)
         {
+            if (!_settings.EnableStorageLimiter) return;
+
             var storageInfo = GetUserStorage(await _authManager.GetCurrentUser());
 
             if (storageInfo.Total != null && storageInfo.Used + size > storageInfo.Total)
