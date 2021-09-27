@@ -506,19 +506,24 @@ namespace Registry.Web
 
         private static void RegisterStorageProvider(IServiceCollection services, AppSettings appSettings)
         {
+            Type t;
+
             switch (appSettings.StorageProvider.Type)
             {
                 case StorageType.Physical:
 
-                    var pySettings = appSettings.StorageProvider.Settings.ToObject<PhysicalProviderSettings>();
-                    if (pySettings == null)
+                    var ps = appSettings.StorageProvider.Settings.ToObject<PhysicalProviderSettings>();
+                    if (ps == null)
                         throw new ArgumentException("Invalid physical storage provider settings");
 
-                    var basePath = pySettings.Path;
+                    Directory.CreateDirectory(ps.Path);
 
-                    Directory.CreateDirectory(basePath);
+                    services.AddSingleton(new PhysicalObjectSystemSettings
+                    {
+                        BasePath = ps.Path
+                    });
 
-                    services.AddScoped<IObjectSystem>(provider => new PhysicalObjectSystem(basePath));
+                    t = typeof(PhysicalObjectSystem);
 
                     break;
 
@@ -541,7 +546,7 @@ namespace Registry.Web
                         AppVersion = s3Settings.AppVersion
                     });
 
-                    services.AddScoped<IObjectSystem, S3ObjectSystem>();
+                    t = typeof(S3ObjectSystem);
 
                     break;
 
@@ -567,7 +572,7 @@ namespace Registry.Web
                         MaxSize = cachedS3Settings.MaxSize
                     });
 
-                    services.AddScoped<IObjectSystem, CachedS3ObjectSystem>();
+                    t = typeof(CachedS3ObjectSystem);
 
                     break;
 
@@ -575,6 +580,23 @@ namespace Registry.Web
                     throw new InvalidOperationException(
                         $"Unsupported storage provider: '{(int)appSettings.StorageProvider.Type}'");
             }
+
+            services.AddScoped(t);
+
+            if (appSettings.EnableStorageLimiter)
+            {
+                services.AddScoped<IObjectSystem>(provider =>
+                    new StorageLimitedObjectSystem(
+                        (IObjectSystem)provider.GetRequiredService(t), 
+                        provider.GetRequiredService<IAuthManager>(), 
+                        provider.GetRequiredService<IDdbManager>(), 
+                        provider.GetRequiredService<RegistryContext>()));
+            }
+            else
+            {
+                services.AddScoped(typeof(IObjectSystem), t);
+            }
+
         }
 
         private void ConfigureDbProvider<T>(IServiceCollection services, DbProvider provider, string connectionStringName) where T : DbContext

@@ -110,5 +110,10 @@ namespace Registry.Web.Models.Configuration
         /// </summary>
         public CacheProvider CacheProvider { get; set; }
 
+        /// <summary>
+        /// Enables the user storage limiter
+        /// </summary>
+        public bool EnableStorageLimiter { get; set; }
+
     }
 }
