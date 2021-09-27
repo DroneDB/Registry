@@ -171,5 +171,25 @@ namespace Registry.Web.Controllers
 
         }
 
+        [HttpGet("storage")]
+        public async Task<IActionResult> GetUserQuotaInfo()
+        {
+            try
+            {
+                _logger.LogDebug($"Users controller GetUserQuotaInfo()");
+
+                var res = await _usersManager.GetUserStorageInfo();
+
+                return Ok(res);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, $"Exception in Users controller GetUserQuotaInfo()");
+
+                return ExceptionResult(ex);
+            }
+
+        }
+
     }
 }

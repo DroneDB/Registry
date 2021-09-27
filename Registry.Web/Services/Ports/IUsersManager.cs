@@ -17,5 +17,6 @@ namespace Registry.Web.Services.Ports
         Task DeleteUser(string userName);
         Task ChangePassword(string userName, string currentPassword, string newPassword);
         Task<AuthenticateResponse> Refresh();
+        Task<UserStorageInfo> GetUserStorageInfo();
     }
 }
