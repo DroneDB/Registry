@@ -224,6 +224,9 @@ namespace Registry.Web.Services.Adapters
         {
             if (!_settings.EnableStorageLimiter) return;
 
+            // Admins don't have limits
+            if (await _authManager.IsUserAdmin()) return;
+
             var storageInfo = GetUserStorage(await _authManager.GetCurrentUser());
 
             if (storageInfo.Total != null && storageInfo.Used + size > storageInfo.Total)
