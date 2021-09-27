@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Runtime.Serialization;
+using Registry.Common;
 
 namespace Registry.Web.Services.Adapters
 {
@@ -7,7 +8,7 @@ namespace Registry.Web.Services.Adapters
     internal class MaxUserStorageException : InvalidOperationException
     {
         private long userStorage;
-        private long maxStorage;
+        private long? maxStorage;
 
         public MaxUserStorageException()
         {
@@ -17,7 +18,8 @@ namespace Registry.Web.Services.Adapters
         {
         }
 
-        public MaxUserStorageException(long userStorage, long maxStorage)
+        public MaxUserStorageException(long userStorage, long? maxStorage) : base(
+            $"User run out of space: usage {CommonUtils.GetBytesReadable(userStorage)} out of {(maxStorage == null ? "UNLIMITED" : CommonUtils.GetBytesReadable(maxStorage.Value))}")
         {
             this.userStorage = userStorage;
             this.maxStorage = maxStorage;

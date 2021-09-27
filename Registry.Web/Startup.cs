@@ -506,7 +506,6 @@ namespace Registry.Web
 
         private static void RegisterStorageProvider(IServiceCollection services, AppSettings appSettings)
         {
-            Type t;
 
             switch (appSettings.StorageProvider.Type)
             {
@@ -581,10 +580,6 @@ namespace Registry.Web
                         $"Unsupported storage provider: '{(int)appSettings.StorageProvider.Type}'");
             }
 
-            if (appSettings.EnableStorageLimiter)
-            {
-                services.Decorate<IObjectSystem, StorageLimitedObjectSystem>();
-            }
         }
 
         private void ConfigureDbProvider<T>(IServiceCollection services, DbProvider provider, string connectionStringName) where T : DbContext
