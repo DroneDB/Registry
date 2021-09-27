@@ -94,6 +94,11 @@ namespace Registry.Adapters.DroneDB
         [JsonIgnore]
         public IDdbMetaManager Meta { get; private set; }
 
+        public long GetSize()
+        {
+            return DDB.Bindings.DroneDB.Info(DatasetFolderPath).FirstOrDefault()?.Size ?? 0;
+        }
+
         static Ddb()
         {
 #if DEBUG
