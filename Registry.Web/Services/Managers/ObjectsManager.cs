@@ -493,6 +493,9 @@ namespace Registry.Web.Services.Managers
 
             _logger.LogInformation($"In GenerateThumbnail('{orgSlug}/{dsSlug}')");
 
+            // Fix fox '/img.png' -> 'img.png'
+            if (path.StartsWith('/')) path = path.Substring(1);
+
             var entry = EnsurePathValidity(orgSlug, ds.InternalRef, path, out IDdb ddb);
 
             var fileName = Path.GetFileName(path);
