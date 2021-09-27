@@ -184,11 +184,20 @@ namespace Registry.Web.Services.Adapters
             return string.Format(BucketNameFormat, orgSlug, internalRef.ToString()).ToLowerInvariant();
         }
 
+        // NOTE: This function can be optimized down the line.
+        // It currently enumerates all the datasets and asks DDB for size.
+        // If we notice a slowdown of the upload/share/push process this could be the culprit
+        // A simple cache level could be the solution but it needs to be kept in sync
+        // with all the dataset operations. Really a pain if it is not necessary.
+
         public UserStorageInfo GetUserStorage(User user)
         {
 
+            if (user == null)
+                throw new ArgumentException("User is null", nameof(user));
+
             // This is pure C# magics
-            var maxStorage = user.Metadata.SafeGetValue(MagicStrings.MaxStorageKey) is long obj ? obj : (long?)null;
+            var maxStorage = user.Metadata?.SafeGetValue(MagicStrings.MaxStorageKey) is long obj ? obj : (long?)null;
 
             // Get all the datasets that belong to the user
             var datasets = (from org in _context.Organizations
