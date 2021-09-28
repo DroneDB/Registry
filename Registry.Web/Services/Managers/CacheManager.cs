@@ -34,7 +34,7 @@ namespace Registry.Web.Services.Managers
         public async Task GenerateThumbnail(IDdb ddb, string sourcePath, string sourceHash, int size, string destPath, Func<Task> getData)
         {
 
-            var key = $"Thumb-{sourceHash}";
+            var key = $"Thumb-{sourceHash}-{size.ToString()}";
             var res = await _cache.GetAsync(key);
 
             if (res != null)

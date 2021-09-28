@@ -66,7 +66,7 @@ namespace Registry.Web.Controllers
 
                 var res = await _objectsManager.GenerateThumbnail(orgSlug, dsSlug, path, size);
 
-                return File(res.ContentStream, res.ContentType, res.Name);
+                return File(res.ContentStream, res.ContentType);
             }
             catch (Exception ex)
             {
