@@ -252,6 +252,73 @@ namespace Registry.Web.Services.Managers
 
         }
 
+        public async Task<UserStorageInfo> GetUserStorageInfo(string userName = null)
+        {
+            var user = await _authManager.GetCurrentUser();
+
+            if (user == null)
+                throw new BadRequestException("User does not exist");
+
+            if (string.IsNullOrWhiteSpace(userName))
+                return _utils.GetUserStorage(user);
+
+            if (!await _authManager.IsUserAdmin())
+                throw new UnauthorizedException("Cannot get other user's storage info");
+
+            user = await _userManager.FindByNameAsync(userName);
+            
+            if (user == null)
+                throw new BadRequestException("Cannot find user " + userName);
+
+            return _utils.GetUserStorage(user);
+
+        }
+
+        public async Task<Dictionary<string, object>> GetUserMeta(string userName = null)
+        {
+            var user = await _authManager.GetCurrentUser();
+
+            if (user == null)
+                throw new BadRequestException("User does not exist");
+
+            if (string.IsNullOrWhiteSpace(userName))
+                return user.Metadata;
+
+            if (!await _authManager.IsUserAdmin())
+                throw new UnauthorizedException("Cannot get other user's meta");
+
+            user = await _userManager.FindByNameAsync(userName);
+
+            if (user == null)
+                throw new BadRequestException("Cannot find user " + userName);
+
+            return user.Metadata;
+
+        }
+
+        public async Task SetUserMeta(string userName, Dictionary<string, object> meta)
+        {
+            var user = await _authManager.GetCurrentUser();
+
+            if (user == null)
+                throw new BadRequestException("User does not exist");
+
+            if (string.IsNullOrWhiteSpace(userName))
+                throw new BadRequestException("User name cannot be empty");
+
+            if (!await _authManager.IsUserAdmin())
+                throw new UnauthorizedException("Cannot change user data");
+
+            user = await _userManager.FindByNameAsync(userName);
+
+            if (user == null)
+                throw new BadRequestException("Cannot find user " + userName);
+
+            user.Metadata = meta;
+            await _applicationDbContext.SaveChangesAsync();
+
+        }
+
         public async Task DeleteUser(string userName)
         {
 

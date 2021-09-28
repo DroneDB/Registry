@@ -149,9 +149,12 @@ namespace Registry.Web.Services.Managers
             if (parameters == null)
                 throw new BadRequestException("Invalid parameters");
 
-            var currentUser = await _authManager.GetCurrentUser(); ;
+            var currentUser = await _authManager.GetCurrentUser();
             if (currentUser == null)
                 throw new UnauthorizedException("Invalid user");
+
+            // Check if user has enough space to upload any file
+            await _utils.CheckCurrentUserStorage();
 
             Dataset dataset;
             TagDto tag;
@@ -347,6 +350,9 @@ namespace Registry.Web.Services.Managers
 
             if (stream == null)
                 throw new BadRequestException("Missing data stream");
+
+            // Check if user has enough space to upload this
+            await _utils.CheckCurrentUserStorage(stream.Length);
 
             if (!stream.CanRead)
                 throw new BadRequestException("Cannot read from data stream");

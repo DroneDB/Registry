@@ -37,7 +37,7 @@ namespace Registry.Adapters.Test.ObjectSystem
 
             FluentActions.Invoking(() =>
             {
-                var fs = new PhysicalObjectSystem(missingPath);
+                var fs = new PhysicalObjectSystem(new PhysicalObjectSystemSettings { BasePath = missingPath });
             }).Should().Throw<ArgumentException>();
 
 
@@ -51,7 +51,7 @@ namespace Registry.Adapters.Test.ObjectSystem
             try
             {
 
-                var fs = new PhysicalObjectSystem(test.TestFolder);
+                var fs = new PhysicalObjectSystem(new PhysicalObjectSystemSettings { BasePath = test.TestFolder });
 
             }
             catch (Exception ex)
@@ -71,7 +71,7 @@ namespace Registry.Adapters.Test.ObjectSystem
 
             const string missingBucketName = "wuiohfniwugfnuiweggrweerg";
 
-            var fs = new PhysicalObjectSystem(test.TestFolder);
+            var fs = new PhysicalObjectSystem(new PhysicalObjectSystemSettings { BasePath = test.TestFolder });
 
             var res = await fs.BucketExistsAsync(missingBucketName);
 
@@ -86,7 +86,7 @@ namespace Registry.Adapters.Test.ObjectSystem
 
             const string existingBucketName = "bucket1";
 
-            var fs = new PhysicalObjectSystem(test.TestFolder);
+            var fs = new PhysicalObjectSystem(new PhysicalObjectSystemSettings { BasePath = test.TestFolder });
 
             var res = await fs.BucketExistsAsync(existingBucketName);
 
@@ -101,7 +101,7 @@ namespace Registry.Adapters.Test.ObjectSystem
 
             string[] expectedBuckets = { "bucket1", "bucket2" };
 
-            var fs = new PhysicalObjectSystem(test.TestFolder);
+            var fs = new PhysicalObjectSystem(new PhysicalObjectSystemSettings { BasePath = test.TestFolder });
 
             var res = await fs.ListBucketsAsync();
 
@@ -122,7 +122,7 @@ namespace Registry.Adapters.Test.ObjectSystem
 
             const string missingBucketName = "iuwehfoiluwbfgoiuwreg";
 
-            var fs = new PhysicalObjectSystem(test.TestFolder);
+            var fs = new PhysicalObjectSystem(new PhysicalObjectSystemSettings { BasePath = test.TestFolder });
 
             FluentActions.Invoking(async () =>
             {
@@ -141,7 +141,7 @@ namespace Registry.Adapters.Test.ObjectSystem
 
             const string bucketToRemove = "bucket1";
 
-            var fs = new PhysicalObjectSystem(test.TestFolder);
+            var fs = new PhysicalObjectSystem(new PhysicalObjectSystemSettings { BasePath = test.TestFolder });
 
             await fs.RemoveBucketAsync(bucketToRemove);
 
@@ -163,7 +163,7 @@ namespace Registry.Adapters.Test.ObjectSystem
 
             const string alreadyExistingBucket = "bucket1";
 
-            var fs = new PhysicalObjectSystem(test.TestFolder);
+            var fs = new PhysicalObjectSystem(new PhysicalObjectSystemSettings { BasePath = test.TestFolder });
 
             FluentActions.Invoking(async () =>
             {
@@ -182,7 +182,7 @@ namespace Registry.Adapters.Test.ObjectSystem
 
             const string newBucketName = "bucket3";
 
-            var fs = new PhysicalObjectSystem(test.TestFolder);
+            var fs = new PhysicalObjectSystem(new PhysicalObjectSystemSettings { BasePath = test.TestFolder });
 
             await fs.MakeBucketAsync(newBucketName, null);
 
@@ -199,7 +199,7 @@ namespace Registry.Adapters.Test.ObjectSystem
 
             const string missingBucket = "bucket3";
 
-            var fs = new PhysicalObjectSystem(test.TestFolder);
+            var fs = new PhysicalObjectSystem(new PhysicalObjectSystemSettings { BasePath = test.TestFolder });
 
             FluentActions.Invoking(async () =>
             {
@@ -215,7 +215,7 @@ namespace Registry.Adapters.Test.ObjectSystem
             const string bucketName = "bucket1";
             const string expectedPolicy = "{\r\n    \"test\": \"test\"\r\n}\r\n";
 
-            var fs = new PhysicalObjectSystem(test.TestFolder);
+            var fs = new PhysicalObjectSystem(new PhysicalObjectSystemSettings { BasePath = test.TestFolder });
 
             var policy = await fs.GetPolicyAsync(bucketName);
 
@@ -231,7 +231,7 @@ namespace Registry.Adapters.Test.ObjectSystem
             const string bucketName = "bucket2";
             const string expectedPolicy = null;
 
-            var fs = new PhysicalObjectSystem(test.TestFolder);
+            var fs = new PhysicalObjectSystem(new PhysicalObjectSystemSettings { BasePath = test.TestFolder });
 
             var policy = await fs.GetPolicyAsync(bucketName);
 
@@ -247,7 +247,7 @@ namespace Registry.Adapters.Test.ObjectSystem
             const string missingBucket = "bucket3";
             const string policy = "{\"test\": \"test\" }";
 
-            var fs = new PhysicalObjectSystem(test.TestFolder);
+            var fs = new PhysicalObjectSystem(new PhysicalObjectSystemSettings { BasePath = test.TestFolder });
 
             FluentActions.Invoking(async () =>
             {
@@ -264,7 +264,7 @@ namespace Registry.Adapters.Test.ObjectSystem
             const string bucketName = "bucket1";
             const string policy = "{\"test\", \"test\" }";
 
-            var fs = new PhysicalObjectSystem(test.TestFolder);
+            var fs = new PhysicalObjectSystem(new PhysicalObjectSystemSettings { BasePath = test.TestFolder });
 
             FluentActions.Invoking(async () =>
             {
@@ -281,7 +281,7 @@ namespace Registry.Adapters.Test.ObjectSystem
             const string bucketName = "bucket1";
             const string newPolicy = "{\r\n    \"key\": \"value\"\r\n}\r\n";
 
-            var fs = new PhysicalObjectSystem(test.TestFolder);
+            var fs = new PhysicalObjectSystem(new PhysicalObjectSystemSettings { BasePath = test.TestFolder });
 
             await fs.SetPolicyAsync(bucketName, newPolicy);
 
@@ -303,7 +303,7 @@ namespace Registry.Adapters.Test.ObjectSystem
 
             const string missingBucket = "bucket3";
 
-            var fs = new PhysicalObjectSystem(test.TestFolder);
+            var fs = new PhysicalObjectSystem(new PhysicalObjectSystemSettings { BasePath = test.TestFolder });
 
             FluentActions.Invoking(() =>
             {
@@ -323,7 +323,7 @@ namespace Registry.Adapters.Test.ObjectSystem
             ulong[] expectedObjectSizes = { 3100, 3190, 16401, 3282, 0 };
             bool[] expectedObjectIsDir = { false, false, false, false, true };
 
-            var fs = new PhysicalObjectSystem(test.TestFolder);
+            var fs = new PhysicalObjectSystem(new PhysicalObjectSystemSettings { BasePath = test.TestFolder });
 
             var objects = fs.ListObjectsAsync(bucketName).ToEnumerable().ToArray();
 
@@ -352,7 +352,7 @@ namespace Registry.Adapters.Test.ObjectSystem
             const string missingBucket = "bucket3";
             const string objectName = "flag-ita.jpg";
 
-            var fs = new PhysicalObjectSystem(test.TestFolder);
+            var fs = new PhysicalObjectSystem(new PhysicalObjectSystemSettings { BasePath = test.TestFolder });
 
             FluentActions.Invoking(async () =>
             {
@@ -369,7 +369,7 @@ namespace Registry.Adapters.Test.ObjectSystem
             const string existingBucket = "bucket1";
             const string missingObjectName = "flag-itaaaaaaaa.jpg";
 
-            var fs = new PhysicalObjectSystem(test.TestFolder);
+            var fs = new PhysicalObjectSystem(new PhysicalObjectSystemSettings { BasePath = test.TestFolder });
 
             FluentActions.Invoking(async () =>
             {
@@ -393,7 +393,7 @@ namespace Registry.Adapters.Test.ObjectSystem
             const string expectedMetadataKey = "key";
             const string expectedMetadataValue = "value";
 
-            var fs = new PhysicalObjectSystem(test.TestFolder);
+            var fs = new PhysicalObjectSystem(new PhysicalObjectSystemSettings { BasePath = test.TestFolder });
 
             var info = await fs.GetObjectInfoAsync(bucketName, objectName);
 
@@ -421,7 +421,7 @@ namespace Registry.Adapters.Test.ObjectSystem
             const string expectedEtag = "fc9f0320d52ff371200b7b0767424fc8-1";
             const long expectedSize = 3282;
 
-            var fs = new PhysicalObjectSystem(test.TestFolder);
+            var fs = new PhysicalObjectSystem(new PhysicalObjectSystemSettings { BasePath = test.TestFolder });
 
             var info = await fs.GetObjectInfoAsync(bucketName, objectName);
 
@@ -445,7 +445,7 @@ namespace Registry.Adapters.Test.ObjectSystem
             const string expectedEtag = "5319fbb9c487037d5c605db4a384869b-1";
             const long expectedSize = 3490;
 
-            var fs = new PhysicalObjectSystem(test.TestFolder);
+            var fs = new PhysicalObjectSystem(new PhysicalObjectSystemSettings { BasePath = test.TestFolder });
 
             var info = await fs.GetObjectInfoAsync(bucketName, objectName);
 
@@ -469,7 +469,7 @@ namespace Registry.Adapters.Test.ObjectSystem
             const string expectedEtag = "18412d191bf153548ce03a1d1c65a073-1";
             const long expectedSize = 225302;
 
-            var fs = new PhysicalObjectSystem(test.TestFolder);
+            var fs = new PhysicalObjectSystem(new PhysicalObjectSystemSettings { BasePath = test.TestFolder });
 
             var info = await fs.GetObjectInfoAsync(bucketName, objectName);
 
@@ -489,7 +489,7 @@ namespace Registry.Adapters.Test.ObjectSystem
             const string missingBucket = "bucket3";
             const string objectName = "flag-ita.jpg";
 
-            var fs = new PhysicalObjectSystem(test.TestFolder);
+            var fs = new PhysicalObjectSystem(new PhysicalObjectSystemSettings { BasePath = test.TestFolder });
 
             FluentActions.Invoking(async () =>
             {
@@ -506,7 +506,7 @@ namespace Registry.Adapters.Test.ObjectSystem
             const string bucketName = "bucket1";
             const string missingObject = "flag-itaaaaaa.jpg";
 
-            var fs = new PhysicalObjectSystem(test.TestFolder);
+            var fs = new PhysicalObjectSystem(new PhysicalObjectSystemSettings { BasePath = test.TestFolder });
 
             FluentActions.Invoking(async () =>
             {
@@ -523,7 +523,7 @@ namespace Registry.Adapters.Test.ObjectSystem
             const string bucketName = "bucket1";
             const string objectName = "flag-ita.jpg";
 
-            var fs = new PhysicalObjectSystem(test.TestFolder);
+            var fs = new PhysicalObjectSystem(new PhysicalObjectSystemSettings { BasePath = test.TestFolder });
 
             fs.ListObjectsAsync(bucketName).ToEnumerable().Select(item => item.Key).Should().Contain(objectName);
 
@@ -546,7 +546,7 @@ namespace Registry.Adapters.Test.ObjectSystem
             const string missingBucket = "bucket3";
             const string objectName = "flag-ita.jpg";
 
-            var fs = new PhysicalObjectSystem(test.TestFolder);
+            var fs = new PhysicalObjectSystem(new PhysicalObjectSystemSettings { BasePath = test.TestFolder });
 
             FluentActions.Invoking(async () =>
             {
@@ -563,7 +563,7 @@ namespace Registry.Adapters.Test.ObjectSystem
             const string bucketName = "bucket1";
             const string missingObject = "flag-itaaaaaa.jpg";
 
-            var fs = new PhysicalObjectSystem(test.TestFolder);
+            var fs = new PhysicalObjectSystem(new PhysicalObjectSystemSettings { BasePath = test.TestFolder });
 
             FluentActions.Invoking(async () =>
             {
@@ -580,7 +580,7 @@ namespace Registry.Adapters.Test.ObjectSystem
             const string bucketName = "bucket1";
             const string objectName = "flag-ita.jpg";
 
-            var fs = new PhysicalObjectSystem(test.TestFolder);
+            var fs = new PhysicalObjectSystem(new PhysicalObjectSystemSettings { BasePath = test.TestFolder });
 
             var newFilePath = Path.Combine(Path.GetTempPath(), objectName);
 
@@ -606,7 +606,7 @@ namespace Registry.Adapters.Test.ObjectSystem
             const string missingBucket = "bucket3";
             const string objectName = "flag-ita.jpg";
 
-            var fs = new PhysicalObjectSystem(test.TestFolder);
+            var fs = new PhysicalObjectSystem(new PhysicalObjectSystemSettings { BasePath = test.TestFolder });
 
             FluentActions.Invoking(async () =>
             {
@@ -623,7 +623,7 @@ namespace Registry.Adapters.Test.ObjectSystem
             const string bucketName = "bucket1";
             const string missingObject = "flag-itaaaaaa.jpg";
 
-            var fs = new PhysicalObjectSystem(test.TestFolder);
+            var fs = new PhysicalObjectSystem(new PhysicalObjectSystemSettings { BasePath = test.TestFolder });
 
             FluentActions.Invoking(async () =>
             {
@@ -640,7 +640,7 @@ namespace Registry.Adapters.Test.ObjectSystem
             const string bucketName = "bucket1";
             const string objectName = "flag-ita.jpg";
 
-            var fs = new PhysicalObjectSystem(test.TestFolder);
+            var fs = new PhysicalObjectSystem(new PhysicalObjectSystemSettings { BasePath = test.TestFolder });
 
             var newFilePath = Path.Combine(Path.GetTempPath(), objectName);
 
@@ -672,7 +672,7 @@ namespace Registry.Adapters.Test.ObjectSystem
             const string missingBucket = "bucket3";
             const string objectName = "flag-ita.jpg";
 
-            var fs = new PhysicalObjectSystem(test.TestFolder);
+            var fs = new PhysicalObjectSystem(new PhysicalObjectSystemSettings { BasePath = test.TestFolder });
 
             FluentActions.Invoking(async () =>
             {
@@ -689,7 +689,7 @@ namespace Registry.Adapters.Test.ObjectSystem
             const string bucketName = "bucket1";
             const string missingObject = "flag-itaaaaaa.jpg";
 
-            var fs = new PhysicalObjectSystem(test.TestFolder);
+            var fs = new PhysicalObjectSystem(new PhysicalObjectSystemSettings { BasePath = test.TestFolder });
 
             FluentActions.Invoking(async () =>
             {
@@ -706,7 +706,7 @@ namespace Registry.Adapters.Test.ObjectSystem
             const string bucketName = "bucket1";
             const string objectName = "flag-ita.jpg";
 
-            var fs = new PhysicalObjectSystem(test.TestFolder);
+            var fs = new PhysicalObjectSystem(new PhysicalObjectSystemSettings { BasePath = test.TestFolder });
 
             var newFilePath = Path.Combine(Path.GetTempPath(), objectName);
 
@@ -755,7 +755,7 @@ namespace Registry.Adapters.Test.ObjectSystem
             const string missingBucket = "bucket3";
             const string objectName = "flag-ita.jpg";
 
-            var fs = new PhysicalObjectSystem(test.TestFolder);
+            var fs = new PhysicalObjectSystem(new PhysicalObjectSystemSettings { BasePath = test.TestFolder });
 
             FluentActions.Invoking(async () =>
             {
@@ -772,7 +772,7 @@ namespace Registry.Adapters.Test.ObjectSystem
             const string bucketName = "bucket1";
             const string missingObject = "flag-itaaaaaa.jpg";
 
-            var fs = new PhysicalObjectSystem(test.TestFolder);
+            var fs = new PhysicalObjectSystem(new PhysicalObjectSystemSettings { BasePath = test.TestFolder });
 
             FluentActions.Invoking(async () =>
             {
@@ -789,7 +789,7 @@ namespace Registry.Adapters.Test.ObjectSystem
             const string bucketName = "bucket1";
             const string missingObject = "flag-ita.jpg";
 
-            var fs = new PhysicalObjectSystem(test.TestFolder);
+            var fs = new PhysicalObjectSystem(new PhysicalObjectSystemSettings { BasePath = test.TestFolder });
 
             FluentActions.Invoking(async () =>
             {
@@ -805,7 +805,7 @@ namespace Registry.Adapters.Test.ObjectSystem
 
             const string missingBucket = "bucket3";
 
-            var fs = new PhysicalObjectSystem(test.TestFolder);
+            var fs = new PhysicalObjectSystem(new PhysicalObjectSystemSettings { BasePath = test.TestFolder });
 
             FluentActions.Invoking(async () =>
             {
@@ -821,7 +821,7 @@ namespace Registry.Adapters.Test.ObjectSystem
 
             const string missingBucket = "bucket1";
 
-            var fs = new PhysicalObjectSystem(test.TestFolder);
+            var fs = new PhysicalObjectSystem(new PhysicalObjectSystemSettings { BasePath = test.TestFolder });
 
             fs.ListIncompleteUploads(missingBucket).ToEnumerable().Should().BeEmpty();
 
@@ -837,7 +837,7 @@ namespace Registry.Adapters.Test.ObjectSystem
 
             const string destBucket = "bucket2";
 
-            var fs = new PhysicalObjectSystem(test.TestFolder);
+            var fs = new PhysicalObjectSystem(new PhysicalObjectSystemSettings { BasePath = test.TestFolder });
 
             FluentActions.Invoking(async () =>
             {
@@ -856,7 +856,7 @@ namespace Registry.Adapters.Test.ObjectSystem
 
             const string destBucket = "bucket2";
 
-            var fs = new PhysicalObjectSystem(test.TestFolder);
+            var fs = new PhysicalObjectSystem(new PhysicalObjectSystemSettings { BasePath = test.TestFolder });
 
             FluentActions.Invoking(async () =>
             {
@@ -875,7 +875,7 @@ namespace Registry.Adapters.Test.ObjectSystem
 
             const string missingBucket = "bucket3";
 
-            var fs = new PhysicalObjectSystem(test.TestFolder);
+            var fs = new PhysicalObjectSystem(new PhysicalObjectSystemSettings { BasePath = test.TestFolder });
 
             FluentActions.Invoking(async () =>
             {
@@ -894,7 +894,7 @@ namespace Registry.Adapters.Test.ObjectSystem
 
             const string destBucketName = "bucket2";
 
-            var fs = new PhysicalObjectSystem(test.TestFolder);
+            var fs = new PhysicalObjectSystem(new PhysicalObjectSystemSettings { BasePath = test.TestFolder });
 
             FluentActions.Invoking(async () =>
             {
@@ -913,7 +913,7 @@ namespace Registry.Adapters.Test.ObjectSystem
 
             const string destBucketName = "bucket2";
 
-            var fs = new PhysicalObjectSystem(test.TestFolder);
+            var fs = new PhysicalObjectSystem(new PhysicalObjectSystemSettings { BasePath = test.TestFolder });
 
             var sourceFileInfo = await fs.GetObjectInfoAsync(bucketName, objectName);
 
@@ -937,7 +937,7 @@ namespace Registry.Adapters.Test.ObjectSystem
 
             using var memoryStream = new MemoryStream(Encoding.UTF8.GetBytes(fileContent));
 
-            var fs = new PhysicalObjectSystem(test.TestFolder);
+            var fs = new PhysicalObjectSystem(new PhysicalObjectSystemSettings { BasePath = test.TestFolder });
 
             FluentActions.Invoking(async () =>
             {
@@ -958,11 +958,11 @@ namespace Registry.Adapters.Test.ObjectSystem
             const int expectedObjectSize = 11;
             const string expectedObjectContentType = "text/plain";
             const string expectedETag = "b10a8db164e0754105b7a99be72e3fe5-1";
-            
+
             await using var memoryStream = new MemoryStream(Encoding.UTF8.GetBytes(fileContent));
 
-            var fs = new PhysicalObjectSystem(test.TestFolder);
-            
+            var fs = new PhysicalObjectSystem(new PhysicalObjectSystemSettings { BasePath = test.TestFolder });
+
             await fs.PutObjectAsync(bucketName, objectName, memoryStream, fileContent.Length);
 
             var info = await fs.GetObjectInfoAsync(bucketName, objectName);
@@ -1001,11 +1001,11 @@ namespace Registry.Adapters.Test.ObjectSystem
             const string expectedObjectContentType = "text/css";
             const string expectedETag = "b10a8db164e0754105b7a99be72e3fe5-1";
 
-            var metadata = new Dictionary<string, string> {{"test", "hello"}};
+            var metadata = new Dictionary<string, string> { { "test", "hello" } };
 
             await using var memoryStream = new MemoryStream(Encoding.UTF8.GetBytes(fileContent));
 
-            var fs = new PhysicalObjectSystem(test.TestFolder);
+            var fs = new PhysicalObjectSystem(new PhysicalObjectSystemSettings { BasePath = test.TestFolder });
 
             await fs.PutObjectAsync(bucketName, objectName, memoryStream, fileContent.Length, "text/css", metadata);
 

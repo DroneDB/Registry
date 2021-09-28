@@ -137,7 +137,7 @@ namespace Registry.Web.Services.Adapters
 
             var res = slug;
 
-            for (var n = 1;; n++)
+            for (var n = 1; ; n++)
             {
                 var org = _context.Organizations.FirstOrDefault(item => item.Slug == res);
 
@@ -182,6 +182,58 @@ namespace Registry.Web.Services.Adapters
         public string GetBucketName(string orgSlug, Guid internalRef)
         {
             return string.Format(BucketNameFormat, orgSlug, internalRef.ToString()).ToLowerInvariant();
+        }
+
+        // NOTE: This function can be optimized down the line.
+        // It currently enumerates all the datasets and asks DDB for size.
+        // If we notice a slowdown of the upload/share/push process this could be the culprit
+        // A simple cache level could be the solution but it needs to be kept in sync
+        // with all the dataset operations. Really a pain if it is not necessary.
+
+        public UserStorageInfo GetUserStorage(User user)
+        {
+
+            if (user == null)
+                throw new ArgumentException("User is null", nameof(user));
+
+            // This is pure C# magics
+            var maxStorage = user.Metadata?.SafeGetValue(MagicStrings.MaxStorageKey) is long obj ? obj : (long?)null;
+
+            // Get all the datasets that belong to the user
+            var datasets = (from org in _context.Organizations
+                where org.OwnerId == user.Id
+                from dataset in org.Datasets
+                select new { OrgSlug = org.Slug, dataset.InternalRef}).ToArray();
+
+            // Get the size and sum
+            var size =
+                (from ds in datasets
+                 let ddb = _ddbManager.Get(ds.OrgSlug, ds.InternalRef)
+                 select ddb.GetSize()).Sum();
+
+            return new UserStorageInfo
+            {
+                // Max storage is in MB, we need bytes to stay consistent
+                Total = maxStorage * 1024 * 1024,
+                Used = size
+            };
+
+        }
+
+        public async Task CheckCurrentUserStorage(long size = 0)
+        {
+            if (!_settings.EnableStorageLimiter) return;
+
+            // Admins don't have limits
+            if (await _authManager.IsUserAdmin()) return;
+
+            var storageInfo = GetUserStorage(await _authManager.GetCurrentUser());
+
+            var currentUsage = storageInfo.Used + size;
+
+            if (storageInfo.Total != null && currentUsage > storageInfo.Total)
+                throw new MaxUserStorageException(currentUsage, storageInfo.Total);
+
         }
     }
 }

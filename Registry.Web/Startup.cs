@@ -506,19 +506,23 @@ namespace Registry.Web
 
         private static void RegisterStorageProvider(IServiceCollection services, AppSettings appSettings)
         {
+
             switch (appSettings.StorageProvider.Type)
             {
                 case StorageType.Physical:
 
-                    var pySettings = appSettings.StorageProvider.Settings.ToObject<PhysicalProviderSettings>();
-                    if (pySettings == null)
+                    var ps = appSettings.StorageProvider.Settings.ToObject<PhysicalProviderSettings>();
+                    if (ps == null)
                         throw new ArgumentException("Invalid physical storage provider settings");
 
-                    var basePath = pySettings.Path;
+                    Directory.CreateDirectory(ps.Path);
 
-                    Directory.CreateDirectory(basePath);
+                    services.AddSingleton(new PhysicalObjectSystemSettings
+                    {
+                        BasePath = ps.Path
+                    });
 
-                    services.AddScoped<IObjectSystem>(provider => new PhysicalObjectSystem(basePath));
+                    services.AddScoped<IObjectSystem, PhysicalObjectSystem>();
 
                     break;
 
@@ -575,6 +579,7 @@ namespace Registry.Web
                     throw new InvalidOperationException(
                         $"Unsupported storage provider: '{(int)appSettings.StorageProvider.Type}'");
             }
+
         }
 
         private void ConfigureDbProvider<T>(IServiceCollection services, DbProvider provider, string connectionStringName) where T : DbContext
