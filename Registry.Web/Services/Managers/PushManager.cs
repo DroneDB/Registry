@@ -81,9 +81,6 @@ namespace Registry.Web.Services.Managers
                     throw new UnauthorizedException("The current user is not allowed to push to this dataset");
             }
 
-            // Check if user has enough space to upload any file
-            await _utils.CheckCurrentUserStorage();
-
             // 0) Setup temp folders
             var baseTempFolder = Path.Combine(Path.GetTempPath(), PushFolderName, orgSlug, dsSlug);
             Directory.CreateDirectory(baseTempFolder);
@@ -118,7 +115,7 @@ namespace Registry.Web.Services.Managers
             if (string.IsNullOrWhiteSpace(path))
                 throw new ArgumentException("Path cannot be empty");
 
-            if (stream is not { CanRead: true })
+            if (!stream.CanRead)
                 throw new ArgumentException("Stream is null or is not readable");
 
             var ds = await _utils.GetDataset(orgSlug, dsSlug);
@@ -127,7 +124,7 @@ namespace Registry.Web.Services.Managers
                 throw new UnauthorizedException("The current user is not allowed to upload to this dataset");
 
             // Check if user has enough space to upload this
-            await _utils.CheckCurrentUserStorage();
+            await _utils.CheckCurrentUserStorage(stream.Length);
 
             if (path.Contains(".."))
                 throw new InvalidOperationException("Path cannot contain dot notation");
