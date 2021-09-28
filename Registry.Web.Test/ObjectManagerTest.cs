@@ -151,6 +151,42 @@ namespace Registry.Web.Test
         }
 
         [Test]
+        public async Task Search_PublicDefault_ListObjects()
+        {
+            using var test = new TestFS(Test4ArchiveUrl, BaseTestFolder);
+            await using var context = GetTest1Context();
+
+            var settings = JsonConvert.DeserializeObject<AppSettings>(_settingsJson);
+
+            settings.DdbStoragePath = Path.Combine(test.TestFolder, DdbFolder);
+            _appSettingsMock.Setup(o => o.Value).Returns(settings);
+            _authManagerMock.Setup(o => o.IsUserAdmin()).Returns(Task.FromResult(true));
+
+            var webUtils = new WebUtils(_authManagerMock.Object, context, _appSettingsMock.Object,
+                _httpContextAccessorMock.Object, _ddbFactoryMock.Object);
+
+            var objectManager = new ObjectsManager(_objectManagerLogger, context, _objectSystemMock.Object, _appSettingsMock.Object,
+                new DdbManager(_appSettingsMock.Object, _ddbFactoryLogger), webUtils, _authManagerMock.Object, _cacheManagerMock.Object, _backgroundJobsProcessor);
+
+            var res = await objectManager.Search(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug, "DJI*");
+
+            res.Should().HaveCount(18);
+
+            res = await objectManager.Search(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug, "*1444*");
+            res.Should().HaveCount(7);
+
+            res = await objectManager.Search(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug, "*438*");
+            res.Should().HaveCount(1);
+
+            res = await objectManager.Search(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug, "*438*", "Sub");
+            res.Should().HaveCount(1);
+
+            res = await objectManager.Search(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug, "*438*", "Sub", false);
+            res.Should().HaveCount(1);
+
+        }
+
+        [Test]
         public async Task Get_MissingFile_NotFound()
         {
 

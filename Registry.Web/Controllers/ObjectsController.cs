@@ -315,6 +315,25 @@ namespace Registry.Web.Controllers
             }
         }
 
+
+        [HttpPost("search", Name = nameof(ObjectsController) + "." + nameof(Search))]
+        public async Task<IActionResult> Search([FromRoute] string orgSlug, [FromRoute] string dsSlug, [FromForm] string query, [FromForm] string path, [FromForm] bool recursive = true)
+        {
+            try
+            {
+                _logger.LogDebug($"Objects controller Search('{orgSlug}', '{dsSlug}', '{path}')");
+
+                var res = await _objectsManager.Search(orgSlug, dsSlug, query, path, recursive);
+                return Ok(res);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, $"Exception in Objects controller Search('{orgSlug}', '{dsSlug}', '{path}')");
+
+                return ExceptionResult(ex);
+            }
+        }
+
         [HttpPost(RoutesHelper.ObjectsRadix)]
         [RequestFormLimits(ValueLengthLimit = int.MaxValue, MultipartBodyLengthLimit = long.MaxValue)]
         [DisableRequestSizeLimit]
@@ -430,7 +449,7 @@ namespace Registry.Web.Controllers
                 return ExceptionResult(ex);
             }
         }
-        
+
         [HttpHead("build/{hash}/{*path}", Name = nameof(ObjectsController) + "." + nameof(BuildFile))]
         public async Task<IActionResult> CheckBuildFile([FromRoute] string orgSlug, [FromRoute] string dsSlug, [FromRoute] string hash, [FromRoute] string path)
         {
