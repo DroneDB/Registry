@@ -229,8 +229,10 @@ namespace Registry.Web.Services.Adapters
 
             var storageInfo = GetUserStorage(await _authManager.GetCurrentUser());
 
-            if (storageInfo.Total != null && storageInfo.Used + size > storageInfo.Total)
-                throw new MaxUserStorageException(storageInfo.Used, storageInfo.Total);
+            var currentUsage = storageInfo.Used + size;
+
+            if (storageInfo.Total != null && currentUsage > storageInfo.Total)
+                throw new MaxUserStorageException(currentUsage, storageInfo.Total);
 
         }
     }
