@@ -29,7 +29,7 @@ namespace Registry.Web.Controllers
     {
         private readonly IUsersManager _usersManager;
         private readonly ILogger<UsersController> _logger;
-        
+
         public UsersController(IUsersManager usersManager, ILogger<UsersController> logger)
         {
             _usersManager = usersManager;
@@ -45,7 +45,7 @@ namespace Registry.Web.Controllers
             {
                 _logger.LogDebug($"Users controller Authenticate('{model.Username}')");
 
-                var res = string.IsNullOrWhiteSpace(model.Token) ? 
+                var res = string.IsNullOrWhiteSpace(model.Token) ?
                     await _usersManager.Authenticate(model.Username, model.Password) :
                     await _usersManager.Authenticate(model.Token);
 
@@ -62,7 +62,7 @@ namespace Registry.Web.Controllers
             }
 
         }
-        
+
         [HttpPost("authenticate/refresh")]
         public async Task<IActionResult> Refresh()
         {
@@ -191,6 +191,26 @@ namespace Registry.Web.Controllers
 
         }
 
+        [HttpGet("{userName}/storage")]
+        public async Task<IActionResult> GetUserQuotaInfo([FromRoute]string userName)
+        {
+            try
+            {
+                _logger.LogDebug($"Users controller GetUserQuotaInfo('{userName}')");
+
+                var res = await _usersManager.GetUserStorageInfo(userName);
+
+                return Ok(res);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, $"Exception in Users controller GetUserQuotaInfo('{userName}')");
+
+                return ExceptionResult(ex);
+            }
+
+        }
+
         [HttpGet("meta")]
         public async Task<IActionResult> GetUserMeta()
         {
@@ -212,21 +232,42 @@ namespace Registry.Web.Controllers
 
         }
 
-        [HttpPost("meta")]
-        public async Task<IActionResult> SetUserMeta([FromBody]Dictionary<string, object> meta)
+        [HttpGet("{userName}/meta")]
+        public async Task<IActionResult> GetUserMeta([FromRoute]string userName)
         {
 
             try
             {
-                _logger.LogDebug($"Users controller SetUserMeta()");
+                _logger.LogDebug($"Users controller GetUserMeta('{userName}')");
 
-                await _usersManager.SetUserMeta(meta);
+                var meta = await _usersManager.GetUserMeta(userName);
+
+                return Ok(meta);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, $"Exception in Users controller GetUserMeta('{userName}')");
+
+                return ExceptionResult(ex);
+            }
+
+        }
+
+        [HttpPost("{userName}/meta")]
+        public async Task<IActionResult> SetUserMeta([FromRoute] string userName, [FromBody] Dictionary<string, object> meta)
+        {
+
+            try
+            {
+                _logger.LogDebug($"Users controller SetUserMeta('{userName}')");
+
+                await _usersManager.SetUserMeta(userName, meta);
 
                 return Ok();
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, $"Exception in Users controller SetUserMeta()");
+                _logger.LogError(ex, $"Exception in Users controller SetUserMeta('{userName}')");
 
                 return ExceptionResult(ex);
             }
