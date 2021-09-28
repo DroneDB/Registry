@@ -191,5 +191,47 @@ namespace Registry.Web.Controllers
 
         }
 
+        [HttpGet("meta")]
+        public async Task<IActionResult> GetUserMeta()
+        {
+
+            try
+            {
+                _logger.LogDebug($"Users controller GetUserMeta()");
+
+                var meta = await _usersManager.GetUserMeta();
+
+                return Ok(meta);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, $"Exception in Users controller GetUserMeta()");
+
+                return ExceptionResult(ex);
+            }
+
+        }
+
+        [HttpPost("meta")]
+        public async Task<IActionResult> SetUserMeta([FromBody]Dictionary<string, object> meta)
+        {
+
+            try
+            {
+                _logger.LogDebug($"Users controller SetUserMeta()");
+
+                await _usersManager.SetUserMeta(meta);
+
+                return Ok();
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, $"Exception in Users controller SetUserMeta()");
+
+                return ExceptionResult(ex);
+            }
+
+        }
+
     }
 }

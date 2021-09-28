@@ -18,5 +18,7 @@ namespace Registry.Web.Services.Ports
         Task ChangePassword(string userName, string currentPassword, string newPassword);
         Task<AuthenticateResponse> Refresh();
         Task<UserStorageInfo> GetUserStorageInfo();
+        Task<Dictionary<string, object>> GetUserMeta();
+        Task SetUserMeta(Dictionary<string, object> meta);
     }
 }

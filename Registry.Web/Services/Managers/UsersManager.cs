@@ -263,6 +263,30 @@ namespace Registry.Web.Services.Managers
 
         }
 
+        public async Task<Dictionary<string, object>> GetUserMeta()
+        {
+            var user = await _authManager.GetCurrentUser();
+
+            if (user == null)
+                throw new BadRequestException("User does not exist");
+
+            return user.Metadata;
+        }
+
+        public async Task SetUserMeta(Dictionary<string, object> meta)
+        {
+            var user = await _authManager.GetCurrentUser();
+
+            if (user == null)
+                throw new BadRequestException("User does not exist");
+
+            var userEntity = _applicationDbContext.Users.First(item => item.Id == user.Id);
+
+            userEntity.Metadata = meta;
+            await _applicationDbContext.SaveChangesAsync();
+
+        }
+
         public async Task DeleteUser(string userName)
         {
 
