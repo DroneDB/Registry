@@ -360,7 +360,7 @@ namespace Registry.Web.Services.Managers
                 throw new InvalidOperationException($"'{dest}' is a reserved path");
 
             // Short circuit!
-            if (dest.StartsWith(source))
+            if ((dest + "/").StartsWith(source + "/"))
                 throw new InvalidOperationException("Cannot move a path onto itself or one of its descendants");
             
             var destEntry = ddb.GetEntry(dest);
