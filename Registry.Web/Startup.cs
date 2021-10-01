@@ -194,8 +194,6 @@ namespace Registry.Web
                 .AddDbContextCheck<ApplicationDbContext>("Registry identity database health check", null,
                     new[] { "database" })
                 .AddCheck<ObjectSystemHealthCheck>("Object system health check", null, new[] { "storage" })
-                .AddDiskSpaceHealthCheck(appSettings.UploadPath, "Upload path space health check", null,
-                    new[] { "storage" })
                 .AddDiskSpaceHealthCheck(appSettings.DdbStoragePath, "Ddb storage path space health check", null,
                     new[] { "storage" })
                 .AddHangfire(options =>
@@ -555,6 +553,8 @@ namespace Registry.Web
 
                     if (cachedS3Settings == null)
                         throw new ArgumentException("Invalid S3 storage provider settings");
+
+                    Directory.CreateDirectory(cachedS3Settings.CachePath);
 
                     services.AddSingleton(new CachedS3ObjectSystemSettings
                     {

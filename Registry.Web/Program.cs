@@ -99,12 +99,6 @@ namespace Registry.Web
                 return false;
             }
 
-            if (string.IsNullOrWhiteSpace(appSettings.UploadPath))
-            {
-                Console.WriteLine(" !> UploadPath should not be null or empty");
-                return false;
-            }
-
             if (string.IsNullOrWhiteSpace(appSettings.AuthCookieName))
             {
                 if (string.IsNullOrWhiteSpace(defaultAppSettings?.AuthCookieName))
