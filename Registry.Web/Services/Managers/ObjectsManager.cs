@@ -527,20 +527,17 @@ namespace Registry.Web.Services.Managers
             if (fileName == null)
                 throw new ArgumentException("Path is not valid");
 
-            var destFilePath = Path.Combine(Path.GetTempPath(), "out-" + Path.ChangeExtension(fileName, ".jpg"));
             var sourceFilePath = Path.GetTempFileName();
 
             try
             {
-
-                await _cacheManager.GenerateThumbnail(ddb, sourceFilePath, entry.Hash, size ?? DefaultThumbnailSize, destFilePath, async () =>
+                byte[] thumb = await _cacheManager.GenerateThumbnail(ddb, sourceFilePath, entry.Hash, size ?? DefaultThumbnailSize, async () =>
                 {
                     var obj = await InternalGet(orgSlug, ds.InternalRef, path);
                     await File.WriteAllBytesAsync(sourceFilePath, obj.Data);
                 });
 
-                var memory = new MemoryStream(await File.ReadAllBytesAsync(destFilePath));
-                memory.Reset();
+                var memory = new MemoryStream(thumb);
 
                 return new FileDescriptorDto
                 {
@@ -551,9 +548,6 @@ namespace Registry.Web.Services.Managers
             }
             finally
             {
-                if (File.Exists(destFilePath) && !CommonUtils.SafeDelete(destFilePath))
-                    _logger.LogWarning($"Cannot delete dest file '{destFilePath}'");
-
                 if (File.Exists(sourceFilePath) && !CommonUtils.SafeDelete(sourceFilePath))
                     _logger.LogWarning($"Cannot delete source file '{sourceFilePath}'");
             }

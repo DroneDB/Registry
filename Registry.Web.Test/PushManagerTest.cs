@@ -335,7 +335,7 @@ namespace Registry.Web.Test
     ""SupportedDdbVersion"": {
       ""Major"": 0,
       ""Minor"": 9,
-      ""Build"": 4
+      ""Build"": 13
     },
     ""BatchTokenLength"": 32,
     ""RandomDatasetNameLength"": 16 

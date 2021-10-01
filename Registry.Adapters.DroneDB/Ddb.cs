@@ -297,16 +297,16 @@ namespace Registry.Adapters.DroneDB
             }
         }
 
-        public void GenerateThumbnail(string imagePath, int size, string outputPath)
+        public byte[] GenerateThumbnail(string imagePath, int size)
         {
             try
             {
-                DDB.Bindings.DroneDB.GenerateThumbnail(imagePath, size, outputPath);
+                return DDB.Bindings.DroneDB.GenerateThumbnail(imagePath, size);
             }
             catch (DDBException ex)
             {
                 throw new InvalidOperationException(
-                    $"Cannot generate thumbnail of '{imagePath}' to '{outputPath}' with size '{size}'", ex);
+                    $"Cannot generate thumbnail of '{imagePath}' with size '{size}'", ex);
             }
         }
 

@@ -42,7 +42,7 @@ namespace Registry.Ports.DroneDB
         void Remove(string path);
         void Move(string source, string dest);
         Dictionary<string, object> ChangeAttributesRaw(Dictionary<string, object> attributes);
-        void GenerateThumbnail(string imagePath, int size, string outputPath);
+        byte[] GenerateThumbnail(string imagePath, int size);
         string GenerateTile(string imagePath, int tz, int tx, int ty, bool retina, bool tms);
         
         void Init();
