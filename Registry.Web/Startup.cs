@@ -554,8 +554,6 @@ namespace Registry.Web
                     if (cachedS3Settings == null)
                         throw new ArgumentException("Invalid S3 storage provider settings");
 
-                    Directory.CreateDirectory(cachedS3Settings.CachePath);
-
                     services.AddSingleton(new CachedS3ObjectSystemSettings
                     {
                         Endpoint = cachedS3Settings.Endpoint,

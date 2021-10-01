@@ -262,7 +262,7 @@ namespace Registry.Common
             }
         }
 
-        public static void RemoveEmptyFolders(string folder)
+        public static void RemoveEmptyFolders(string folder, bool removeSelf = false)
         {
             if (!Directory.Exists(folder)) return;
 
@@ -270,10 +270,12 @@ namespace Registry.Common
             {
                 
                 // Recursive call
-                Directory.EnumerateDirectories(folder).ToList().ForEach(RemoveEmptyFolders);
+                Directory.EnumerateDirectories(folder).ToList().ForEach(f => RemoveEmptyFolders(f, true));
 
                 // If not empty we don't have to delete it
                 if (Directory.EnumerateFileSystemEntries(folder).Any()) return;
+
+                if (!removeSelf) return;
 
                 try
                 {
