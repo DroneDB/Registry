@@ -57,6 +57,7 @@ using Registry.Web.Services.Managers;
 using Registry.Web.Services.Ports;
 using Registry.Web.Utilities;
 using RestSharp.Extensions;
+using Microsoft.AspNetCore.Mvc.ApplicationParts;
 
 namespace Registry.Web
 {
@@ -232,6 +233,7 @@ namespace Registry.Web
             services.AddScoped<ISystemManager, SystemManager>();
             services.AddScoped<IBackgroundJobsProcessor, BackgroundJobsProcessor>();
             services.AddScoped<IMetaManager, MetaManager>();
+            services.AddScoped<IS3BridgeManager, S3BridgeManager>();
 
             services.AddSingleton<IPasswordHasher, PasswordHasher>();
             services.AddSingleton<IBatchTokenGenerator, BatchTokenGenerator>();
@@ -239,6 +241,7 @@ namespace Registry.Web
             services.AddSingleton<ICacheManager, CacheManager>();
 
             RegisterStorageProvider(services, appSettings);
+            RegisterS3Bridge(services, appSettings);
 
             services.AddResponseCompression();
 
@@ -269,6 +272,23 @@ namespace Registry.Web
             // TODO: Enable when needed. Should check return object structure
             // services.AddOData();
 
+        }
+
+        private void RegisterS3Bridge(IServiceCollection services, AppSettings appSettings)
+        {
+            // The S3 bridge controller is enabled by default, 
+            // but we only need it if the storage backend is S3 or CachedS3
+            // For all others, we remove it
+            if (appSettings.StorageProvider.Type != StorageType.S3 && appSettings.StorageProvider.Type != StorageType.CachedS3)
+            {
+                var appPartManager = (ApplicationPartManager)services.FirstOrDefault(a => a.ServiceType == typeof(ApplicationPartManager)).ImplementationInstance;
+                var mockingPart = appPartManager.ApplicationParts.FirstOrDefault(a => a.Name == "MyMockLibrary.Namespace");
+
+                if (mockingPart != null)
+                {
+                    appPartManager.ApplicationParts.Remove(mockingPart);
+                }
+            }            
         }
 
         public void Configure(IApplicationBuilder app, IWebHostEnvironment env)

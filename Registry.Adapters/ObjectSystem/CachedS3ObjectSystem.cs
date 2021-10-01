@@ -309,8 +309,7 @@ namespace Registry.Adapters.ObjectSystem
         public void Cleanup()
         {
             CleanupFolder(CachePath);
-
-            Directory.EnumerateDirectories(CachePath).ToList().ForEach(CommonUtils.RemoveEmptyFolders);
+            CommonUtils.RemoveEmptyFolders(CachePath);
         }
 
         public void CleanupBucket(string bucketName)
