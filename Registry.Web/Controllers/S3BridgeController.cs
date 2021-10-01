@@ -1,6 +1,7 @@
 ﻿using System;
 using System.IO;
 using System.Net;
+using System.Net.Http.Headers;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Filters;
@@ -63,6 +64,28 @@ namespace Registry.Web.Controllers
             _logger = logger;
         }
 
+        [HttpHead("{bucket}/{*path}", Name = nameof(S3BridgeController) + "." + nameof(Check))]
+        public async Task<IActionResult> Check([FromRoute] string bucket, string path)
+        {
+            _logger.LogDebug($"S3Bridge controller Check('{bucket}', '{path}')");
+            try
+            {
+                if (await _objectSystem.ObjectExistsAsync(bucket, path))
+                {
+                    Response.Headers.Add("Accept-Ranges", "bytes");
+                    return Ok();
+                }
+                else
+                {
+                    return NotFound();
+                }
+            }catch(Exception ex)
+            {
+                _logger.LogError(ex, $"Exception in S3 bridge controller Check('{bucket}', '{path}')");
+
+                return ExceptionResult(ex);
+            }
+        }
 
         [HttpGet("{bucket}/{*path}", Name = nameof(S3BridgeController) + "." + nameof(Get))]
         public async Task<IActionResult> Get([FromRoute] string bucket, string path)
@@ -73,7 +96,35 @@ namespace Registry.Web.Controllers
 
             if (Request.Headers.ContainsKey("Range"))
             {
-                // TODO
+                try
+                {
+                    var rangeHdr = RangeHeaderValue.Parse(Request.Headers["Range"]);
+                    if (rangeHdr.Unit != "bytes") throw new ArgumentException("Only bytes units are supported in range");
+
+                    foreach (var range in rangeHdr.Ranges)
+                    {
+                        long offset = range.From.Value;
+                        long length = range.To.Value - range.From.Value;
+
+                        // Executed asynchronously, we do not wait for this to complete
+                        // so that we can stream the result.
+                        _ = _objectSystem.GetObjectAsync(bucket, path, offset, length, stream =>
+                        {
+                            fsr.SetResult(File(stream, MimeUtility.GetMimeMapping(path), Path.GetFileName(path)));
+                        }).ContinueWith(t =>
+                        {
+                            _logger.LogError(t.Exception, $"Exception in S3Bridge controller Get('{bucket}', '{path}')");
+                            fsr.SetResult(ExceptionResult(t.Exception));
+                        }, TaskContinuationOptions.OnlyOnFaulted);
+
+                        break;
+                    }
+                }
+                catch(Exception ex)
+                {
+                    _logger.LogError(ex, $"Exception in S3Bridge controller Get('{bucket}', '{path}')");
+                    return ExceptionResult(ex);
+                }
             }
             else
             {

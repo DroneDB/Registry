@@ -69,7 +69,7 @@ namespace Registry.Adapters.ObjectSystem
         public async Task GetObjectAsync(string bucketName, string objectName, long offset, long length, Action<Stream> cb,
             IServerEncryption sse = null, CancellationToken cancellationToken = default)
         {
-            await _client.GetObjectAsync(bucketName, objectName, cb, sse?.ToSSE(), cancellationToken);
+            await _client.GetObjectAsync(bucketName, objectName, offset, length, cb, sse?.ToSSE(), cancellationToken);
         }
 
         public async Task PutObjectAsync(string bucketName, string objectName, Stream data, long size, string contentType = null,
