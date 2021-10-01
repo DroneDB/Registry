@@ -264,37 +264,28 @@ namespace Registry.Common
 
         public static void RemoveEmptyFolders(string folder)
         {
-            if (!Directory.Exists(folder)) return;
-
             try
             {
-                
-                // Recursive call
+                if (!Directory.Exists(folder)) return;
+
                 Directory.EnumerateDirectories(folder).ToList().ForEach(RemoveEmptyFolders);
 
                 // If not empty we don't have to delete it
                 if (Directory.EnumerateFileSystemEntries(folder).Any()) return;
 
-                try
-                {
-                    Directory.Delete(folder);
-                }
-                catch (UnauthorizedAccessException)
-                {
-                    //
-                }
-                catch (DirectoryNotFoundException)
-                {
-                    //
-                }
+                Directory.Delete(folder);
             }
             catch (UnauthorizedAccessException)
             {
                 //
             }
+            catch (DirectoryNotFoundException)
+            {
+                //
+            }
 
         }
-        
+
         /// <summary>
         /// Combines an array of strings into a path using the forward slash as folder separator
         /// </summary>
@@ -304,7 +295,7 @@ namespace Registry.Common
         {
             return Path.Combine(paths.Where(item => item != null).ToArray()).Replace('\\', '/');
         }
-        
+
         public static (string, Stream) GetTempStream(int bufferSize = 104857600)
         {
             var file = Path.Combine(Path.GetTempPath(), "temp-files", RandomString(16));
@@ -355,8 +346,9 @@ namespace Registry.Common
             return !entries.Any();
         }
 
-        private static readonly HashSet<string> _compressibleMimeTypes =  new()
-        { "text/html",
+        private static readonly HashSet<string> _compressibleMimeTypes = new()
+        {
+            "text/html",
             "text/css",
             "text/plain",
             "text/xml",
@@ -386,13 +378,14 @@ namespace Registry.Common
             "font/ttf",
             "font/eot",
             "font/otf",
-            "font/opentype"};
+            "font/opentype"
+        };
 
         public static CompressionLevel GetCompressionLevel(string path)
         {
             if (!MimeTypes.TryGetMimeType(path, out var mimeType))
                 return CompressionLevel.NoCompression;
-            
+
             return _compressibleMimeTypes.Contains(mimeType)
                 ? CompressionLevel.Optimal
                 : CompressionLevel.NoCompression;
