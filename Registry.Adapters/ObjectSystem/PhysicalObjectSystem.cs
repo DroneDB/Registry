@@ -88,33 +88,27 @@ namespace Registry.Adapters.ObjectSystem
 
         #region Objects
 
+        #pragma warning disable 1998
         public async Task GetObjectAsync(string bucketName, string objectName, Action<Stream> callback, IServerEncryption sse = null,
             CancellationToken cancellationToken = default)
         {
             EnsureBucketExists(bucketName);
             var objectPath = EnsureObjectExists(bucketName, objectName);
 
-            await using var stream = File.OpenRead(objectPath);
-
-            callback(stream);
-
+            callback(File.OpenRead(objectPath));
         }
 
+        #pragma warning disable 1998
         public async Task GetObjectAsync(string bucketName, string objectName, long offset, long length, Action<Stream> callback,
             IServerEncryption sse = null, CancellationToken cancellationToken = default)
         {
             EnsureBucketExists(bucketName);
             var objectPath = EnsureObjectExists(bucketName, objectName);
 
-            await using var stream = File.OpenRead(objectPath);
+            var stream = new SubsetStream(File.OpenRead(objectPath), length);
+            stream.Seek(offset, SeekOrigin.Begin);
 
-            var buffer = new byte[length];
-
-            await stream.ReadAsync(buffer, (int)offset, (int)length, cancellationToken);
-
-            await using var memory = new MemoryStream(buffer);
-
-            callback(memory);
+            callback(stream);
         }
 
 

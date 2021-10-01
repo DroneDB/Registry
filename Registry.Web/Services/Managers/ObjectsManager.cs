@@ -1058,26 +1058,27 @@ namespace Registry.Web.Services.Managers
             var destPath = CommonUtils.SafeCombine(BuildBasePath, hash, path);
             _logger.LogInformation($"Using actual path '{destPath}'");
 
-            var objInfo = await _objectSystem.GetObjectInfoAsync(bucketName, destPath);
-
-            if (objInfo == null)
-                throw new NotFoundException($"Cannot find '{destPath}' in storage provider");
-
-            var memory = new MemoryStream();
-
             _logger.LogInformation($"Getting object '{destPath}' in bucket '{bucketName}'");
 
-            await _objectSystem.GetObjectAsync(bucketName, destPath, stream => stream.CopyTo(memory));
+            var fdt = new TaskCompletionSource<FileDescriptorDto>();
 
-            memory.Reset();
-
-            return new FileDescriptorDto
+            // Executed asynchronously, we do not wait for this to complete
+            // so that we can stream the result.
+            _ = _objectSystem.GetObjectAsync(bucketName, destPath, stream =>
             {
-                ContentStream = memory,
-                ContentType = MimeUtility.GetMimeMapping(path),
-                Name = Path.GetFileName(path)
-            };
+                fdt.SetResult(new FileDescriptorDto
+                {
+                    ContentStream = stream,
+                    ContentType = MimeUtility.GetMimeMapping(path),
+                    Name = Path.GetFileName(path)
+                });
+            }).ContinueWith(t =>
+            {
+                _logger.LogError(t.Exception, $"Exception in GetBuildFile('{orgSlug}', '{dsSlug}', '{hash}', '{path}')");
+                fdt.SetException(t.Exception);
+            }, TaskContinuationOptions.OnlyOnFaulted);
 
+            return await fdt.Task;
         }
 
         // Base build folder path (example: .ddb/build)

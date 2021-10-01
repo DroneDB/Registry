@@ -93,7 +93,7 @@ namespace Registry.Web
                     },
                     License = new OpenApiLicense
                     {
-                        Name = "Use under Business Source License",
+                        Name = "Use under AGPLv3 License",
                         Url = new Uri("https://github.com/DroneDB/Registry/blob/master/LICENSE.md"),
                     }
                 });
