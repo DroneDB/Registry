@@ -310,7 +310,7 @@ namespace Registry.Adapters.ObjectSystem
         {
             CleanupFolder(CachePath);
 
-            CommonUtils.RemoveEmptyFolders(CachePath);
+            Directory.EnumerateDirectories(CachePath).ToList().ForEach(CommonUtils.RemoveEmptyFolders);
         }
 
         public void CleanupBucket(string bucketName)
@@ -376,7 +376,6 @@ namespace Registry.Adapters.ObjectSystem
         private static string[] SafeGetAllFiles(string path)
         {
             return Directory.EnumerateFiles(path, "*", SearchOption.AllDirectories).Where(p => !IsSignalFile(p) && !IsBrokenFile(p)).ToArray();
-
         }
 
         private static async Task CreateInfoFile(string cachedFileName, string bucketName, string objectName, Dictionary<string, string> metaData, CancellationToken cancellationToken)
