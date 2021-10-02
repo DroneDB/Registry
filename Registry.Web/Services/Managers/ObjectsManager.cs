@@ -1031,7 +1031,7 @@ namespace Registry.Web.Services.Managers
 
         #region Build
 
-        public async Task<FileDescriptorDto> GetBuildFile(string orgSlug, string dsSlug, string hash, string path)
+        public async Task<StreamableFileDescriptor> GetBuildFile(string orgSlug, string dsSlug, string hash, string path)
         {
             _logger.LogInformation($"In GetBuildFile('{orgSlug}/{dsSlug}', '{hash}', '{path}')");
 
@@ -1047,29 +1047,14 @@ namespace Registry.Web.Services.Managers
             _logger.LogInformation($"Using bucket '{bucketName}'");
 
             var destPath = CommonUtils.SafeCombine(BuildBasePath, hash, path);
-            _logger.LogInformation($"Using actual path '{destPath}'");
 
             _logger.LogInformation($"Getting object '{destPath}' in bucket '{bucketName}'");
+            
+            return new StreamableFileDescriptor(async (stream, cancellationToken) => {
+                await _objectSystem.GetObjectAsync(bucketName, destPath, 
+                        source => source.CopyTo(stream), cancellationToken: cancellationToken);
+                }, Path.GetFileName(path), MimeUtility.GetMimeMapping(path));
 
-            var fdt = new TaskCompletionSource<FileDescriptorDto>();
-
-            // Executed asynchronously, we do not wait for this to complete
-            // so that we can stream the result.
-            _ = _objectSystem.GetObjectAsync(bucketName, destPath, stream =>
-            {
-                fdt.SetResult(new FileDescriptorDto
-                {
-                    ContentStream = stream,
-                    ContentType = MimeUtility.GetMimeMapping(path),
-                    Name = Path.GetFileName(path)
-                });
-            }).ContinueWith(t =>
-            {
-                _logger.LogError(t.Exception, $"Exception in GetBuildFile('{orgSlug}', '{dsSlug}', '{hash}', '{path}')");
-                fdt.SetException(t.Exception);
-            }, TaskContinuationOptions.OnlyOnFaulted);
-
-            return await fdt.Task;
         }
 
         // Base build folder path (example: .ddb/build)

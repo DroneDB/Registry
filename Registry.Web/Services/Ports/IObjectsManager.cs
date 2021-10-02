@@ -29,7 +29,7 @@ namespace Registry.Web.Services.Ports
         Task<FileDescriptorDto> GenerateTile(string orgSlug, string dsSlug, string path, int tz, int tx, int ty, bool retina);
         Task<FileDescriptorDto> GetDdb(string orgSlug, string dsSlug);
         Task Build(string orgSlug, string dsSlug, string path, bool force = false);
-        Task<FileDescriptorDto> GetBuildFile(string orgSlug, string dsSlug, string hash, string path);
+        Task<StreamableFileDescriptor> GetBuildFile(string orgSlug, string dsSlug, string hash, string path);
         Task<bool> CheckBuildFile(string orgSlug, string dsSlug, string hash, string path);
     }
 }
