@@ -439,7 +439,12 @@ namespace Registry.Web.Controllers
 
                 var res = await _objectsManager.GetBuildFile(orgSlug, dsSlug, hash, path);
 
-                return File(res.ContentStream, res.ContentType, res.Name);
+                Response.StatusCode = 200;
+                Response.ContentType = res.ContentType;
+
+                await res.CopyToAsync(Response.Body);
+
+                return new EmptyResult();
 
             }
             catch (Exception ex)

@@ -19,6 +19,7 @@ namespace Registry.Web.Utilities
         public const string SessionRadix = "session";
         public const string PushRadix = "push";
         public const string MetaRadix = "meta";
+        public const string BridgeRadix = "_bridge";
 
     }
 }

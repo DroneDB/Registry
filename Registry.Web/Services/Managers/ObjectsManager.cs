@@ -524,20 +524,17 @@ namespace Registry.Web.Services.Managers
             if (fileName == null)
                 throw new ArgumentException("Path is not valid");
 
-            var destFilePath = Path.Combine(Path.GetTempPath(), "out-" + Path.ChangeExtension(fileName, ".jpg"));
             var sourceFilePath = Path.GetTempFileName();
 
             try
             {
-
-                await _cacheManager.GenerateThumbnail(ddb, sourceFilePath, entry.Hash, size ?? DefaultThumbnailSize, destFilePath, async () =>
+                byte[] thumb = await _cacheManager.GenerateThumbnail(ddb, sourceFilePath, entry.Hash, size ?? DefaultThumbnailSize, async () =>
                 {
                     var obj = await InternalGet(orgSlug, ds.InternalRef, path);
                     await File.WriteAllBytesAsync(sourceFilePath, obj.Data);
                 });
 
-                var memory = new MemoryStream(await File.ReadAllBytesAsync(destFilePath));
-                memory.Reset();
+                var memory = new MemoryStream(thumb);
 
                 return new FileDescriptorDto
                 {
@@ -548,9 +545,6 @@ namespace Registry.Web.Services.Managers
             }
             finally
             {
-                if (File.Exists(destFilePath) && !CommonUtils.SafeDelete(destFilePath))
-                    _logger.LogWarning($"Cannot delete dest file '{destFilePath}'");
-
                 if (File.Exists(sourceFilePath) && !CommonUtils.SafeDelete(sourceFilePath))
                     _logger.LogWarning($"Cannot delete source file '{sourceFilePath}'");
             }
@@ -1037,7 +1031,7 @@ namespace Registry.Web.Services.Managers
 
         #region Build
 
-        public async Task<FileDescriptorDto> GetBuildFile(string orgSlug, string dsSlug, string hash, string path)
+        public async Task<StreamableFileDescriptor> GetBuildFile(string orgSlug, string dsSlug, string hash, string path)
         {
             _logger.LogInformation($"In GetBuildFile('{orgSlug}/{dsSlug}', '{hash}', '{path}')");
 
@@ -1053,27 +1047,13 @@ namespace Registry.Web.Services.Managers
             _logger.LogInformation($"Using bucket '{bucketName}'");
 
             var destPath = CommonUtils.SafeCombine(BuildBasePath, hash, path);
-            _logger.LogInformation($"Using actual path '{destPath}'");
-
-            var objInfo = await _objectSystem.GetObjectInfoAsync(bucketName, destPath);
-
-            if (objInfo == null)
-                throw new NotFoundException($"Cannot find '{destPath}' in storage provider");
-
-            var memory = new MemoryStream();
 
             _logger.LogInformation($"Getting object '{destPath}' in bucket '{bucketName}'");
-
-            await _objectSystem.GetObjectAsync(bucketName, destPath, stream => stream.CopyTo(memory));
-
-            memory.Reset();
-
-            return new FileDescriptorDto
-            {
-                ContentStream = memory,
-                ContentType = MimeUtility.GetMimeMapping(path),
-                Name = Path.GetFileName(path)
-            };
+            
+            return new StreamableFileDescriptor(async (stream, cancellationToken) => {
+                await _objectSystem.GetObjectAsync(bucketName, destPath, 
+                        source => source.CopyTo(stream), cancellationToken: cancellationToken);
+                }, Path.GetFileName(path), MimeUtility.GetMimeMapping(path));
 
         }
 

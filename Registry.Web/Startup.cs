@@ -9,10 +9,8 @@ using System.Threading.Tasks;
 using System.Transactions;
 using Hangfire;
 using Hangfire.Console;
-using Hangfire.InMemory;
 using Hangfire.MySql;
 using HealthChecks.UI.Client;
-using Microsoft.AspNetCore.Authentication.Cookies;
 using Registry.Web.Models;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Builder;
@@ -20,29 +18,19 @@ using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Http.Features;
-using Microsoft.AspNetCore.HttpsPolicy;
 using Microsoft.AspNetCore.Identity;
-using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Server.Kestrel.Core;
-using Microsoft.AspNetCore.StaticFiles.Infrastructure;
-using Microsoft.CodeAnalysis.Options;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Caching.Distributed;
-using Microsoft.Extensions.Caching.StackExchangeRedis;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.FileProviders;
 using Microsoft.Extensions.Hosting;
-using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
-using Registry.Adapters.DroneDB;
 using Registry.Adapters.ObjectSystem;
 using Registry.Adapters.ObjectSystem.Model;
 using Registry.Common;
-using Registry.Ports.DroneDB;
 using Registry.Ports.ObjectSystem;
 using Registry.Web.Data;
 using Registry.Web.Data.Models;
@@ -50,7 +38,6 @@ using Registry.Web.Filters;
 using Registry.Web.HealthChecks;
 using Registry.Web.Middlewares;
 using Registry.Web.Models.Configuration;
-using Registry.Web.Models.DTO;
 using Registry.Web.Services;
 using Registry.Web.Services.Adapters;
 using Registry.Web.Services.Managers;
@@ -93,7 +80,7 @@ namespace Registry.Web
                     },
                     License = new OpenApiLicense
                     {
-                        Name = "Use under Business Source License",
+                        Name = "Use under AGPLv3 License",
                         Url = new Uri("https://github.com/DroneDB/Registry/blob/master/LICENSE.md"),
                     }
                 });
@@ -194,8 +181,6 @@ namespace Registry.Web
                 .AddDbContextCheck<ApplicationDbContext>("Registry identity database health check", null,
                     new[] { "database" })
                 .AddCheck<ObjectSystemHealthCheck>("Object system health check", null, new[] { "storage" })
-                .AddDiskSpaceHealthCheck(appSettings.UploadPath, "Upload path space health check", null,
-                    new[] { "storage" })
                 .AddDiskSpaceHealthCheck(appSettings.DdbStoragePath, "Ddb storage path space health check", null,
                     new[] { "storage" })
                 .AddHangfire(options =>
@@ -234,6 +219,7 @@ namespace Registry.Web
             services.AddScoped<ISystemManager, SystemManager>();
             services.AddScoped<IBackgroundJobsProcessor, BackgroundJobsProcessor>();
             services.AddScoped<IMetaManager, MetaManager>();
+            services.AddScoped<IS3BridgeManager, S3BridgeManager>();
 
             services.AddSingleton<IPasswordHasher, PasswordHasher>();
             services.AddSingleton<IBatchTokenGenerator, BatchTokenGenerator>();

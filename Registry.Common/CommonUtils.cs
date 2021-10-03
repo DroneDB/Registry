@@ -262,18 +262,32 @@ namespace Registry.Common
             }
         }
 
-        public static void RemoveEmptyFolders(string folder)
+        public static void RemoveEmptyFolders(string folder, bool removeSelf = false)
         {
             try
             {
                 if (!Directory.Exists(folder)) return;
-
-                Directory.EnumerateDirectories(folder).ToList().ForEach(RemoveEmptyFolders);
+                
+                // Recursive call
+                Directory.EnumerateDirectories(folder).ToList().ForEach(f => RemoveEmptyFolders(f, true));
 
                 // If not empty we don't have to delete it
                 if (Directory.EnumerateFileSystemEntries(folder).Any()) return;
 
-                Directory.Delete(folder);
+                if (!removeSelf) return;
+
+                try
+                {
+                    Directory.Delete(folder);
+                }
+                catch (UnauthorizedAccessException)
+                {
+                    //
+                }
+                catch (DirectoryNotFoundException)
+                {
+                    //
+                }
             }
             catch (UnauthorizedAccessException)
             {

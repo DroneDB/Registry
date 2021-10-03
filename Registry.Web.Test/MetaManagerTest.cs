@@ -209,7 +209,7 @@ namespace Registry.Web.Test
 ""SupportedDdbVersion"": {
       ""Major"": 0,
       ""Minor"": 9,
-      ""Build"": 3
+      ""Build"": 13
     }
 }
   ";

@@ -31,7 +31,7 @@ namespace Registry.Web.Services.Managers
             
         }
 
-        public async Task GenerateThumbnail(IDdb ddb, string sourcePath, string sourceHash, int size, string destPath, Func<Task> getData)
+        public async Task<byte []> GenerateThumbnail(IDdb ddb, string sourcePath, string sourceHash, int size, Func<Task> getData)
         {
 
             var key = $"Thumb-{sourceHash}-{size}";
@@ -39,20 +39,20 @@ namespace Registry.Web.Services.Managers
 
             if (res != null)
             {
-                await File.WriteAllBytesAsync(destPath, res);
-                return;
+                return res;
             }
 
             await getData();
-
-            ddb.GenerateThumbnail(sourcePath, size, destPath);
 
             var options = new DistributedCacheEntryOptions
             {
                 SlidingExpiration = _expiration
             };
 
-            await _cache.SetAsync(key, await File.ReadAllBytesAsync(destPath), options);
+            byte[] thumb = ddb.GenerateThumbnail(sourcePath, size);
+            await _cache.SetAsync(key, thumb, options);
+
+            return thumb;
 
         }
     }

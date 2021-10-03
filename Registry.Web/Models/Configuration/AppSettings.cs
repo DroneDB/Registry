@@ -76,16 +76,6 @@ namespace Registry.Web.Models.Configuration
         public int RandomDatasetNameLength { get; set; }
 
         /// <summary>
-        /// Temp folder where to store uploaded chunks
-        /// </summary>
-        public string UploadPath { get; set; }
-
-        /// <summary>
-        /// Timeout of the chunked upload sessions
-        /// </summary>
-        public TimeSpan ChunkedUploadSessionTimeout { get; set; }
-
-        /// <summary>
         /// Name of the auth cookie that contains the jwt token
         /// </summary>
         public string AuthCookieName { get; set; }

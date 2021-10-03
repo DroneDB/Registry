@@ -113,11 +113,6 @@ namespace Registry.Web.Models.DTO
             if (!bucketExists)
                 throw new NotFoundException($"Cannot find bucket '{bucketName}'");
 
-            var objInfo = await _objectSystem.GetObjectInfoAsync(bucketName, path);
-
-            if (objInfo == null)
-                throw new NotFoundException($"Cannot find '{path}' in storage provider");
-
             _logger.LogInformation($"Getting object '{path}' in bucket '{bucketName}'");
 
             await _objectSystem.GetObjectAsync(bucketName, path, s => s.CopyTo(stream));

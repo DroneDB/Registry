@@ -309,8 +309,7 @@ namespace Registry.Adapters.ObjectSystem
         public void Cleanup()
         {
             CleanupFolder(CachePath);
-
-            Directory.EnumerateDirectories(CachePath).ToList().ForEach(CommonUtils.RemoveEmptyFolders);
+            CommonUtils.RemoveEmptyFolders(CachePath);
         }
 
         public void CleanupBucket(string bucketName)
@@ -493,16 +492,8 @@ namespace Registry.Adapters.ObjectSystem
                 var info = new FileInfo(cachedFileName);
                 if (info.Exists)
                 {
-
-                    var memory = new MemoryStream();
-                    await using (var s = info.OpenRead())
-                        await s.CopyToAsync(memory, cancellationToken);
-
-                    memory.Reset();
-
-                    callback(memory);
+                    callback(info.OpenRead());
                     return;
-
                 }
             }
             catch (Exception ex)
@@ -512,14 +503,10 @@ namespace Registry.Adapters.ObjectSystem
 
             await _remoteStorage.GetObjectAsync(bucketName, objectName, stream =>
             {
-                using var memory = new MemoryStream();
-                stream.CopyTo(memory);
-
                 try
                 {
                     EnsureBucketPathExists(bucketName);
-                    memory.Reset();
-                    using (var s = File.OpenWrite(cachedFileName)) memory.CopyTo(s);
+                    using (var s = File.OpenWrite(cachedFileName)) stream.CopyTo(s);
 
                     TrackCachedFile(cachedFileName);
                     TrimExcessCache();
@@ -528,11 +515,10 @@ namespace Registry.Adapters.ObjectSystem
                 catch (Exception ex)
                 {
                     LogError(ex, $"Cannot write to cache the file '{cachedFileName}' in '{bucketName}' bucket and '{objectName}' object");
+                    throw;
                 }
 
-                memory.Reset();
-
-                callback(memory);
+                callback(File.OpenRead(cachedFileName));
 
             }, sse, cancellationToken);
 
