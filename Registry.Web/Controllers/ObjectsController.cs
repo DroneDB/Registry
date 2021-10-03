@@ -442,8 +442,6 @@ namespace Registry.Web.Controllers
                 Response.StatusCode = 200;
                 Response.ContentType = res.ContentType;
 
-                Response.Headers.Add("Content-Disposition", "inline");
-
                 await res.CopyToAsync(Response.Body);
 
                 return new EmptyResult();
