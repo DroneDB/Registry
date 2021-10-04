@@ -524,31 +524,18 @@ namespace Registry.Web.Services.Managers
             if (fileName == null)
                 throw new ArgumentException("Path is not valid");
 
-            var sourceFilePath = Path.GetTempFileName();
+            var bucketName = _utils.GetBucketName(orgSlug, ds.InternalRef);
+            var sourcePath = GetThumbSource(bucketName, entry);
 
-            try
+            byte[] thumb = await _cacheManager.GenerateThumbnail(ddb, sourcePath, entry.Hash, size ?? DefaultThumbnailSize);
+            var memory = new MemoryStream(thumb);
+
+            return new FileDescriptorDto
             {
-                byte[] thumb = await _cacheManager.GenerateThumbnail(ddb, sourceFilePath, entry.Hash, size ?? DefaultThumbnailSize, async () =>
-                {
-                    var obj = await InternalGet(orgSlug, ds.InternalRef, path);
-                    await File.WriteAllBytesAsync(sourceFilePath, obj.Data);
-                });
-
-                var memory = new MemoryStream(thumb);
-
-                return new FileDescriptorDto
-                {
-                    ContentStream = memory,
-                    ContentType = "image/jpeg",
-                    Name = Path.ChangeExtension(fileName, ".jpg")
-                };
-            }
-            finally
-            {
-                if (File.Exists(sourceFilePath) && !CommonUtils.SafeDelete(sourceFilePath))
-                    _logger.LogWarning($"Cannot delete source file '{sourceFilePath}'");
-            }
-
+                ContentStream = memory,
+                ContentType = "image/jpeg",
+                Name = Path.ChangeExtension(fileName, ".jpg")
+            };
         }
 
         public async Task<FileDescriptorDto> GenerateTile(string orgSlug, string dsSlug, string path, int tz, int tx, int ty, bool retina)
@@ -1082,6 +1069,20 @@ namespace Registry.Web.Services.Managers
             var objInfo = await _objectSystem.GetObjectInfoAsync(bucketName, destPath);
 
             return objInfo != null;
+        }
+
+        public string GetThumbSource(string bucketName, DdbEntry entry)
+        {
+            if (entry.Type == EntryType.PointCloud)
+            {
+                return _objectSystem.GetInternalPath(bucketName, CommonUtils.SafeCombine(BuildBasePath, entry.Hash, "ept", "ept.json"));
+            }
+            else
+            {
+                return _objectSystem.GetInternalPath(bucketName, entry.Path);
+            }
+            // TODO: support for COGs
+            // TODO: more generic name? This method is the same for tiles
         }
 
         #endregion

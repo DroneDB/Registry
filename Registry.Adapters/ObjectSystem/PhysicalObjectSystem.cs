@@ -672,6 +672,15 @@ namespace Registry.Adapters.ObjectSystem
 
         }
 
+        public bool IsS3Based()
+        {
+            return false;
+        }
+
+        public string GetInternalPath(string bucketName, string objectName)
+        {
+            return GetObjectPath(bucketName, objectName);
+        }
 
         #endregion
 

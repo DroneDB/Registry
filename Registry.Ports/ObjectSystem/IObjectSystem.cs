@@ -218,6 +218,19 @@ namespace Registry.Ports.ObjectSystem
         /// Cleans up any intermediate or temp file
         /// </summary>
         void Cleanup();
+        
+        /// <summary>
+        /// Whether this object system is based on S3
+        /// </summary>
+        /// <returns></returns>
+        bool IsS3Based();
+
+        /// <summary>
+        /// Get an internal path/URL to access the object.
+        /// </summary>
+        /// <param name="bucketName">Bucket to retrieve object from</param>
+        /// <param name="objectName">Name of object to retrieve</param>
+        string GetInternalPath(string bucketName, string objectName);
 
     }
 }

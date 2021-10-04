@@ -71,7 +71,7 @@ namespace Registry.Web.Controllers
             catch (Exception ex)
             {
                 _logger.LogError(ex, $"Exception in Objects controller GenerateThumbnail('{orgSlug}', '{dsSlug}', '{path}', '{size}')");
-                return ExceptionResult(ex);
+                return ExceptionResult(new Exception("Cannot generate thumbnail"));
             }
         }
 

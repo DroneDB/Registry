@@ -9,6 +9,7 @@ using Microsoft.Extensions.Logging;
 using MimeMapping;
 using Registry.Ports.ObjectSystem;
 using Registry.Web.Models;
+using Registry.Web.Models.DTO;
 using Registry.Web.Services.Ports;
 using Registry.Web.Utilities;
 
@@ -54,7 +55,7 @@ namespace Registry.Web.Controllers
 
         public bool IsS3Enabled()
         {
-            return _s3BridgeManager.IsS3Enabled();
+            return _objectSystem.IsS3Based();
         }
 
         public S3BridgeController(IS3BridgeManager s3BridgeManager, IObjectSystem objectSystem, ILogger<S3BridgeController> logger)
@@ -92,12 +93,13 @@ namespace Registry.Web.Controllers
         {
             _logger.LogDebug($"S3Bridge controller Get('{bucket}', '{path}')");
 
-            var fsr = new TaskCompletionSource<IActionResult>();
-
-            if (Request.Headers.ContainsKey("Range"))
+            try
             {
-                try
+                StreamableFileDescriptor res = null;
+
+                if (Request.Headers.ContainsKey("Range"))
                 {
+
                     var rangeHdr = RangeHeaderValue.Parse(Request.Headers["Range"]);
                     if (rangeHdr.Unit != "bytes") throw new ArgumentException("Only bytes units are supported in range");
 
@@ -106,41 +108,30 @@ namespace Registry.Web.Controllers
                         long offset = range.From.Value;
                         long length = range.To.Value - range.From.Value;
 
-                        // Executed asynchronously, we do not wait for this to complete
-                        // so that we can stream the result.
-                        _ = _objectSystem.GetObjectAsync(bucket, path, offset, length, stream =>
-                        {
-                            fsr.SetResult(File(stream, MimeUtility.GetMimeMapping(path), Path.GetFileName(path)));
-                        }).ContinueWith(t =>
-                        {
-                            _logger.LogError(t.Exception, $"Exception in S3Bridge controller Get('{bucket}', '{path}')");
-                            fsr.SetResult(ExceptionResult(t.Exception));
-                        }, TaskContinuationOptions.OnlyOnFaulted);
-
+                        res = new StreamableFileDescriptor(async (stream, cancellationToken) => {
+                            await _objectSystem.GetObjectAsync(bucket, path, offset, length,
+                                    source => source.CopyTo(stream), cancellationToken: cancellationToken);
+                        }, Path.GetFileName(path), MimeUtility.GetMimeMapping(path));
                         break;
                     }
                 }
-                catch(Exception ex)
+                else
                 {
-                    _logger.LogError(ex, $"Exception in S3Bridge controller Get('{bucket}', '{path}')");
-                    return ExceptionResult(ex);
+                    res = new StreamableFileDescriptor(async (stream, cancellationToken) => {
+                        await _objectSystem.GetObjectAsync(bucket, path,
+                                source => source.CopyTo(stream), cancellationToken: cancellationToken);
+                    }, Path.GetFileName(path), MimeUtility.GetMimeMapping(path));
                 }
+
+                Response.StatusCode = 200;
+                Response.ContentType = res.ContentType;
+                await res.CopyToAsync(Response.Body);
+
+                return new EmptyResult();
+            }catch (Exception ex){
+                _logger.LogError(ex, $"Exception in S3Bridge controller Get('{bucket}', '{path}')");
+                return ExceptionResult(ex);
             }
-            else
-            {
-                // Executed asynchronously, we do not wait for this to complete
-                // so that we can stream the result.
-                _ = _objectSystem.GetObjectAsync(bucket, path, stream =>
-                {
-                    fsr.SetResult(File(stream, MimeUtility.GetMimeMapping(path), Path.GetFileName(path)));
-                }).ContinueWith(t =>
-                {
-                    _logger.LogError(t.Exception, $"Exception in S3Bridge controller Get('{bucket}', '{path}')");
-                    fsr.SetResult(ExceptionResult(t.Exception));
-                }, TaskContinuationOptions.OnlyOnFaulted);
-            }
-                
-            return await fsr.Task;
         }
     }
 

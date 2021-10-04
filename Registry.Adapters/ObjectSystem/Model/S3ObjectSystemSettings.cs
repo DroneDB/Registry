@@ -15,5 +15,6 @@ namespace Registry.Adapters.ObjectSystem.Model
         public bool UseSsl { get; set; }
         public string AppName { get; set; }
         public string AppVersion { get; set; }
+        public string BridgeUrl { get; set; }
     }
 }

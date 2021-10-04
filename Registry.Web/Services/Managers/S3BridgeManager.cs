@@ -12,10 +12,5 @@ namespace Registry.Web.Services.Managers
         {
             _settings = settings;
         }
-
-        public bool IsS3Enabled()
-        {
-            return _settings.Value.StorageProvider.Type == StorageType.CachedS3 || _settings.Value.StorageProvider.Type == StorageType.S3;
-        }
     }
 }
