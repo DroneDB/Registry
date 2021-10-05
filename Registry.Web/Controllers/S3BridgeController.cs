@@ -15,41 +15,12 @@ using Registry.Web.Utilities;
 
 namespace Registry.Web.Controllers
 {
-    public class RestrictToS3Attribute : ActionFilterAttribute
-    {
-        public override void OnActionExecuting(ActionExecutingContext context)
-        {
-            var controller = (S3BridgeController)context.Controller;
-            if (!controller.IsS3Enabled())
-            {
-                context.Result = new NotFoundResult();
-                return;
-            }
-            base.OnActionExecuting(context);
-        }
-    }
-
-    public class RestrictToLocalhostAttribute : ActionFilterAttribute
-    {
-        public override void OnActionExecuting(ActionExecutingContext context)
-        {
-            var remoteIp = context.HttpContext.Connection.RemoteIpAddress;
-            if (!IPAddress.IsLoopback(remoteIp))
-            {
-                context.Result = new UnauthorizedResult();
-                return;
-            }
-            base.OnActionExecuting(context);
-        }
-    }
-
     [ApiController]
     [RestrictToS3]
     [RestrictToLocalhost]
     [Route(RoutesHelper.BridgeRadix)]
     public class S3BridgeController : ControllerBaseEx
     {
-        private readonly IS3BridgeManager _s3BridgeManager;
         private readonly ILogger<S3BridgeController> _logger;
         private readonly IObjectSystem _objectSystem;
 
@@ -58,9 +29,8 @@ namespace Registry.Web.Controllers
             return _objectSystem.IsS3Based();
         }
 
-        public S3BridgeController(IS3BridgeManager s3BridgeManager, IObjectSystem objectSystem, ILogger<S3BridgeController> logger)
+        public S3BridgeController(IObjectSystem objectSystem, ILogger<S3BridgeController> logger)
         {
-            _s3BridgeManager = s3BridgeManager;
             _objectSystem = objectSystem;
             _logger = logger;
         }
@@ -71,15 +41,13 @@ namespace Registry.Web.Controllers
             _logger.LogDebug($"S3Bridge controller Check('{bucket}', '{path}')");
             try
             {
-                if (await _objectSystem.ObjectExistsAsync(bucket, path))
-                {
-                    Response.Headers.Add("Accept-Ranges", "bytes");
-                    return Ok();
-                }
-                else
-                {
+                if (!await _objectSystem.ObjectExistsAsync(bucket, path)) 
                     return NotFound();
-                }
+
+                Response.Headers.Add("Accept-Ranges", "bytes");
+
+                return Ok();
+
             }catch(Exception ex)
             {
                 _logger.LogError(ex, $"Exception in S3 bridge controller Check('{bucket}', '{path}')");
@@ -112,6 +80,7 @@ namespace Registry.Web.Controllers
                             await _objectSystem.GetObjectAsync(bucket, path, offset, length,
                                     source => source.CopyTo(stream), cancellationToken: cancellationToken);
                         }, Path.GetFileName(path), MimeUtility.GetMimeMapping(path));
+
                         break;
                     }
                 }
@@ -132,6 +101,34 @@ namespace Registry.Web.Controllers
                 _logger.LogError(ex, $"Exception in S3Bridge controller Get('{bucket}', '{path}')");
                 return ExceptionResult(ex);
             }
+        }
+    }
+
+    public class RestrictToS3Attribute : ActionFilterAttribute
+    {
+        public override void OnActionExecuting(ActionExecutingContext context)
+        {
+            var controller = (S3BridgeController)context.Controller;
+            if (!controller.IsS3Enabled())
+            {
+                context.Result = new NotFoundResult();
+                return;
+            }
+            base.OnActionExecuting(context);
+        }
+    }
+
+    public class RestrictToLocalhostAttribute : ActionFilterAttribute
+    {
+        public override void OnActionExecuting(ActionExecutingContext context)
+        {
+            var remoteIp = context.HttpContext.Connection.RemoteIpAddress;
+            if (!IPAddress.IsLoopback(remoteIp))
+            {
+                context.Result = new UnauthorizedResult();
+                return;
+            }
+            base.OnActionExecuting(context);
         }
     }
 
