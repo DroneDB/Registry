@@ -219,7 +219,6 @@ namespace Registry.Web
             services.AddScoped<ISystemManager, SystemManager>();
             services.AddScoped<IBackgroundJobsProcessor, BackgroundJobsProcessor>();
             services.AddScoped<IMetaManager, MetaManager>();
-            services.AddScoped<IS3BridgeManager, S3BridgeManager>();
 
             services.AddSingleton<IPasswordHasher, PasswordHasher>();
             services.AddSingleton<IBatchTokenGenerator, BatchTokenGenerator>();
@@ -528,7 +527,8 @@ namespace Registry.Web
                         SessionToken = s3Settings.SessionToken,
                         UseSsl = s3Settings.UseSsl ?? false,
                         AppName = s3Settings.AppName,
-                        AppVersion = s3Settings.AppVersion
+                        AppVersion = s3Settings.AppVersion,
+                        BridgeUrl = s3Settings.BridgeUrl
                     });
 
                     services.AddScoped<IObjectSystem, S3ObjectSystem>();
@@ -552,6 +552,7 @@ namespace Registry.Web
                         UseSsl = cachedS3Settings.UseSsl ?? false,
                         AppName = cachedS3Settings.AppName,
                         AppVersion = cachedS3Settings.AppVersion,
+                        BridgeUrl = cachedS3Settings.BridgeUrl,
                         CacheExpiration = cachedS3Settings.CacheExpiration,
                         CachePath = cachedS3Settings.CachePath,
                         MaxSize = cachedS3Settings.MaxSize

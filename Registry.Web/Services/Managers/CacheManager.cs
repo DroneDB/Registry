@@ -31,7 +31,7 @@ namespace Registry.Web.Services.Managers
             
         }
 
-        public async Task<byte []> GenerateThumbnail(IDdb ddb, string sourcePath, string sourceHash, int size, Func<Task> getData)
+        public async Task<byte []> GenerateThumbnail(IDdb ddb, string sourcePath, string sourceHash, int size)
         {
 
             var key = $"Thumb-{sourceHash}-{size}";
@@ -41,8 +41,6 @@ namespace Registry.Web.Services.Managers
             {
                 return res;
             }
-
-            await getData();
 
             var options = new DistributedCacheEntryOptions
             {

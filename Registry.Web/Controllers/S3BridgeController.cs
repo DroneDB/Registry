@@ -9,11 +9,101 @@ using Microsoft.Extensions.Logging;
 using MimeMapping;
 using Registry.Ports.ObjectSystem;
 using Registry.Web.Models;
+using Registry.Web.Models.DTO;
 using Registry.Web.Services.Ports;
 using Registry.Web.Utilities;
 
 namespace Registry.Web.Controllers
 {
+    [ApiController]
+    [RestrictToS3]
+    [RestrictToLocalhost]
+    [Route(RoutesHelper.BridgeRadix)]
+    public class S3BridgeController : ControllerBaseEx
+    {
+        private readonly ILogger<S3BridgeController> _logger;
+        private readonly IObjectSystem _objectSystem;
+
+        public bool IsS3Enabled()
+        {
+            return _objectSystem.IsS3Based();
+        }
+
+        public S3BridgeController(IObjectSystem objectSystem, ILogger<S3BridgeController> logger)
+        {
+            _objectSystem = objectSystem;
+            _logger = logger;
+        }
+
+        [HttpHead("{bucket}/{*path}", Name = nameof(S3BridgeController) + "." + nameof(Check))]
+        public async Task<IActionResult> Check([FromRoute] string bucket, string path)
+        {
+            _logger.LogDebug($"S3Bridge controller Check('{bucket}', '{path}')");
+            try
+            {
+                if (!await _objectSystem.ObjectExistsAsync(bucket, path)) 
+                    return NotFound();
+
+                Response.Headers.Add("Accept-Ranges", "bytes");
+
+                return Ok();
+
+            }catch(Exception ex)
+            {
+                _logger.LogError(ex, $"Exception in S3 bridge controller Check('{bucket}', '{path}')");
+
+                return ExceptionResult(ex);
+            }
+        }
+
+        [HttpGet("{bucket}/{*path}", Name = nameof(S3BridgeController) + "." + nameof(Get))]
+        public async Task<IActionResult> Get([FromRoute] string bucket, string path)
+        {
+            _logger.LogDebug($"S3Bridge controller Get('{bucket}', '{path}')");
+
+            try
+            {
+                StreamableFileDescriptor res = null;
+
+                if (Request.Headers.ContainsKey("Range"))
+                {
+
+                    var rangeHdr = RangeHeaderValue.Parse(Request.Headers["Range"]);
+                    if (rangeHdr.Unit != "bytes") throw new ArgumentException("Only bytes units are supported in range");
+
+                    foreach (var range in rangeHdr.Ranges)
+                    {
+                        long offset = range.From.Value;
+                        long length = range.To.Value - range.From.Value;
+
+                        res = new StreamableFileDescriptor(async (stream, cancellationToken) => {
+                            await _objectSystem.GetObjectAsync(bucket, path, offset, length,
+                                    source => source.CopyTo(stream), cancellationToken: cancellationToken);
+                        }, Path.GetFileName(path), MimeUtility.GetMimeMapping(path));
+
+                        break;
+                    }
+                }
+                else
+                {
+                    res = new StreamableFileDescriptor(async (stream, cancellationToken) => {
+                        await _objectSystem.GetObjectAsync(bucket, path,
+                                source => source.CopyTo(stream), cancellationToken: cancellationToken);
+                    }, Path.GetFileName(path), MimeUtility.GetMimeMapping(path));
+                }
+
+                Response.StatusCode = 200;
+                Response.ContentType = res.ContentType;
+                await res.CopyToAsync(Response.Body);
+
+                return new EmptyResult();
+            }catch (Exception ex){
+                _logger.LogError(ex, $"Exception in S3Bridge controller Get('{bucket}', '{path}')");
+                return ExceptionResult(ex);
+            }
+        }
+    }
+
     public class RestrictToS3Attribute : ActionFilterAttribute
     {
         public override void OnActionExecuting(ActionExecutingContext context)
@@ -39,108 +129,6 @@ namespace Registry.Web.Controllers
                 return;
             }
             base.OnActionExecuting(context);
-        }
-    }
-
-    [ApiController]
-    [RestrictToS3]
-    [RestrictToLocalhost]
-    [Route(RoutesHelper.BridgeRadix)]
-    public class S3BridgeController : ControllerBaseEx
-    {
-        private readonly IS3BridgeManager _s3BridgeManager;
-        private readonly ILogger<S3BridgeController> _logger;
-        private readonly IObjectSystem _objectSystem;
-
-        public bool IsS3Enabled()
-        {
-            return _s3BridgeManager.IsS3Enabled();
-        }
-
-        public S3BridgeController(IS3BridgeManager s3BridgeManager, IObjectSystem objectSystem, ILogger<S3BridgeController> logger)
-        {
-            _s3BridgeManager = s3BridgeManager;
-            _objectSystem = objectSystem;
-            _logger = logger;
-        }
-
-        [HttpHead("{bucket}/{*path}", Name = nameof(S3BridgeController) + "." + nameof(Check))]
-        public async Task<IActionResult> Check([FromRoute] string bucket, string path)
-        {
-            _logger.LogDebug($"S3Bridge controller Check('{bucket}', '{path}')");
-            try
-            {
-                if (await _objectSystem.ObjectExistsAsync(bucket, path))
-                {
-                    Response.Headers.Add("Accept-Ranges", "bytes");
-                    return Ok();
-                }
-                else
-                {
-                    return NotFound();
-                }
-            }catch(Exception ex)
-            {
-                _logger.LogError(ex, $"Exception in S3 bridge controller Check('{bucket}', '{path}')");
-
-                return ExceptionResult(ex);
-            }
-        }
-
-        [HttpGet("{bucket}/{*path}", Name = nameof(S3BridgeController) + "." + nameof(Get))]
-        public async Task<IActionResult> Get([FromRoute] string bucket, string path)
-        {
-            _logger.LogDebug($"S3Bridge controller Get('{bucket}', '{path}')");
-
-            var fsr = new TaskCompletionSource<IActionResult>();
-
-            if (Request.Headers.ContainsKey("Range"))
-            {
-                try
-                {
-                    var rangeHdr = RangeHeaderValue.Parse(Request.Headers["Range"]);
-                    if (rangeHdr.Unit != "bytes") throw new ArgumentException("Only bytes units are supported in range");
-
-                    foreach (var range in rangeHdr.Ranges)
-                    {
-                        long offset = range.From.Value;
-                        long length = range.To.Value - range.From.Value;
-
-                        // Executed asynchronously, we do not wait for this to complete
-                        // so that we can stream the result.
-                        _ = _objectSystem.GetObjectAsync(bucket, path, offset, length, stream =>
-                        {
-                            fsr.SetResult(File(stream, MimeUtility.GetMimeMapping(path), Path.GetFileName(path)));
-                        }).ContinueWith(t =>
-                        {
-                            _logger.LogError(t.Exception, $"Exception in S3Bridge controller Get('{bucket}', '{path}')");
-                            fsr.SetResult(ExceptionResult(t.Exception));
-                        }, TaskContinuationOptions.OnlyOnFaulted);
-
-                        break;
-                    }
-                }
-                catch(Exception ex)
-                {
-                    _logger.LogError(ex, $"Exception in S3Bridge controller Get('{bucket}', '{path}')");
-                    return ExceptionResult(ex);
-                }
-            }
-            else
-            {
-                // Executed asynchronously, we do not wait for this to complete
-                // so that we can stream the result.
-                _ = _objectSystem.GetObjectAsync(bucket, path, stream =>
-                {
-                    fsr.SetResult(File(stream, MimeUtility.GetMimeMapping(path), Path.GetFileName(path)));
-                }).ContinueWith(t =>
-                {
-                    _logger.LogError(t.Exception, $"Exception in S3Bridge controller Get('{bucket}', '{path}')");
-                    fsr.SetResult(ExceptionResult(t.Exception));
-                }, TaskContinuationOptions.OnlyOnFaulted);
-            }
-                
-            return await fsr.Task;
         }
     }
 

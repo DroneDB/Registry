@@ -910,6 +910,16 @@ namespace Registry.Adapters.ObjectSystem
             return _remoteStorage.GetStorageInfo();
         }
 
+        public bool IsS3Based()
+        {
+            return true;
+        }
+
+        public string GetInternalPath(string bucketName, string objectName)
+        {
+            return _settings.BridgeUrl + "/" + bucketName + "/" + Uri.EscapeUriString(objectName);
+        }
+
         #endregion
 
 
