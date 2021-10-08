@@ -257,13 +257,15 @@ namespace Registry.Web
             // TODO: Enable when needed. Should check return object structure
             // services.AddOData();
 
+            if (appSettings.WorkerThreads > 0)
+            {
+                ThreadPool.GetMinThreads(out _, out var ioCompletionThreads);
+                ThreadPool.SetMinThreads(appSettings.WorkerThreads, ioCompletionThreads);
+            }
         }
 
         public void Configure(IApplicationBuilder app, IWebHostEnvironment env)
         {
-            //ThreadPool.GetMinThreads(out _, out var ioCompletionThreads);
-            //ThreadPool.SetMinThreads(10000, ioCompletionThreads);
-
             if (env.IsDevelopment())
             {
                 app.UseDeveloperExceptionPage();
