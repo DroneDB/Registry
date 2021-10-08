@@ -61,7 +61,7 @@ namespace Registry.Web.Services.Managers
                     // Check if objects count is ok
                     var ddb = _ddbManager.Get(ds.Organization.Slug, ds.InternalRef);
 
-                    var entries = ddb.Search("*", true)?.ToArray();
+                    var entries = (await ddb.SearchAsync("*", true))?.ToArray();
 
                     if (entries == null || !entries.Any())
                     {
@@ -140,7 +140,7 @@ namespace Registry.Web.Services.Managers
                         var ddb = _ddbManager.Get(org.Slug, ds.InternalRef);
 
                         // Remove empty ddb
-                        if (!ddb.Search("*", true).Any())
+                        if (!(await ddb.SearchAsync("*", true)).Any())
                             _ddbManager.Delete(org.Slug, ds.InternalRef);
 
                     }

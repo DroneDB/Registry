@@ -111,7 +111,7 @@ namespace Registry.Web.Services.Adapters
             }
 
             var ddb = _ddbManager.Get(orgSlug, dataset.InternalRef);
-            var attributes = ddb.GetAttributes();
+            var attributes = await ddb.GetAttributesAsync();
 
             if (!attributes.IsPublic && !await _authManager.IsUserAdmin() && checkOwnership)
             {

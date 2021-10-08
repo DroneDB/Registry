@@ -192,7 +192,7 @@ namespace Registry.Web.Services.Managers
             {
                 var tempFileName = Path.Combine(addTempFolder, item.Path);
 
-                if (ddb.IsBuildable(item.Path))
+                if (await ddb.IsBuildableAsync(item.Path))
                 {
                     var jobId = _backgroundJob.Enqueue(() =>
                         HangfireUtils.BuildWrapper(ddb, item.Path, tempFileName, null, true, null));
@@ -200,7 +200,7 @@ namespace Registry.Web.Services.Managers
                     var deleteId = _backgroundJob.ContinueJobWith(jobId, () =>
                         HangfireUtils.SafeDelete(tempFileName, null));
 
-                    var entry = ddb.GetEntry(item.Path);
+                    var entry = await ddb.GetEntryAsync(item.Path);
 
                     // Put it on storage
                     var syncId = _backgroundJob.ContinueJobWith(deleteId, () => HangfireUtils.SyncBuildFolder(_objectSystem, ddb, entry, bucketName, null));
