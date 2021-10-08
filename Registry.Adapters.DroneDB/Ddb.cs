@@ -452,7 +452,7 @@ namespace Registry.Adapters.DroneDB
 
         public async Task<DdbEntry> GetInfoAsync(CancellationToken cancellationToken = default)
         {
-            return await Task<DdbEntry>.Factory.StartNew(GetInfo, cancellationToken,
+            return await Task<DdbEntry>.Factory.StartNew(() => GetInfo(), cancellationToken,
                 TaskCreationOptions.LongRunning, TaskScheduler.Default);
         }
 

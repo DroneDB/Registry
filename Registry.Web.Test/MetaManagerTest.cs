@@ -74,17 +74,6 @@ namespace Registry.Web.Test
 
             _ddbFactoryLogger = new Logger<DdbManager>(LoggerFactory.Create(builder => builder.AddConsole()));
             _metaManagerLogger = new Logger<MetaManager>(LoggerFactory.Create(builder => builder.AddConsole()));
-
-            //var ddbMock1 = new Mock<IDdb>();
-            //ddbMock1.Setup(x => x.GetAttributesRaw()).Returns(new Dictionary<string, object>
-            //{
-            //    {"public", true }
-            //});
-            //var ddbMock2 = new Mock<IDdb>();
-            //ddbMock2.Setup(x => x.GetAttributes()).Returns(new DdbAttributes(ddbMock1.Object));
-
-            //_ddbFactoryMock.Setup(x => x.Get(It.IsAny<string>(), It.IsAny<Guid>())).Returns(ddbMock2.Object);
-
         }
 
         [Test]
