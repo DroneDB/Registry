@@ -160,13 +160,13 @@ namespace Registry.Web.Test
             };
 
             var ddbMock = new Mock<IDdb>();
-            ddbMock.Setup(x => x.GetInfo()).Returns(new DdbEntry
+            ddbMock.Setup(x => x.GetInfoAsync(default)).Returns(Task.FromResult(new DdbEntry
             {
                 Properties = attributes
-            });
+            }));
             var ddbMock2 = new Mock<IDdb>();
             ddbMock2.Setup(x => x.GetAttributesRaw()).Returns(attributes);
-            ddbMock.Setup(x => x.GetAttributes()).Returns(new DdbAttributes(ddbMock2.Object));
+            ddbMock.Setup(x => x.GetAttributesAsync(default)).Returns(Task.FromResult(new DdbAttributes(ddbMock2.Object)));
 
             _ddbFactoryMock.Setup(x => x.Get(It.IsAny<string>(), It.IsAny<Guid>())).Returns(ddbMock.Object);
 
@@ -257,13 +257,13 @@ namespace Registry.Web.Test
             };
 
             var ddbMock = new Mock<IDdb>();
-            ddbMock.Setup(x => x.GetInfo()).Returns(new DdbEntry
+            ddbMock.Setup(x => x.GetInfoAsync(default)).Returns(Task.FromResult(new DdbEntry
             {
                 Properties = attributes
-            });
+            }));
             var ddbMock2 = new Mock<IDdb>();
             ddbMock2.Setup(x => x.GetAttributesRaw()).Returns(attributes);
-            ddbMock.Setup(x => x.GetAttributes()).Returns(new DdbAttributes(ddbMock2.Object));
+            ddbMock.Setup(x => x.GetAttributesAsync(default)).Returns(Task.FromResult(new DdbAttributes(ddbMock2.Object)));
 
             _ddbFactoryMock.Setup(x => x.Get(It.IsAny<string>(), It.IsAny<Guid>())).Returns(ddbMock.Object);
 
@@ -391,13 +391,13 @@ namespace Registry.Web.Test
             };
 
             var ddbMock = new Mock<IDdb>();
-            ddbMock.Setup(x => x.GetInfo()).Returns(new DdbEntry
+            ddbMock.Setup(x => x.GetInfoAsync(default)).Returns(Task.FromResult(new DdbEntry
             {
                 Properties = attributes
-            });
+            }));
             var ddbMock2 = new Mock<IDdb>();
             ddbMock2.Setup(x => x.GetAttributesRaw()).Returns(attributes);
-            ddbMock.Setup(x => x.GetAttributes()).Returns(new DdbAttributes(ddbMock2.Object));
+            ddbMock.Setup(x => x.GetAttributesAsync(default)).Returns(Task.FromResult(new DdbAttributes(ddbMock2.Object)));
 
             _ddbFactoryMock.Setup(x => x.Get(It.IsAny<string>(), It.IsAny<Guid>())).Returns(ddbMock.Object);
 

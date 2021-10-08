@@ -47,7 +47,7 @@ namespace Registry.Web.Services.Managers
 
             var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
 
-            if (path != null && !ddb.EntryExists(path))
+            if (path != null && !await ddb.EntryExistsAsync(path))
                 throw new ArgumentException($"Path '{path}' does not exist");
 
             var res = ddb.Meta.Add(key, data, path);
@@ -77,7 +77,7 @@ namespace Registry.Web.Services.Managers
 
             var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
 
-            if (path != null && !ddb.EntryExists(path))
+            if (path != null && !await ddb.EntryExistsAsync(path))
                 throw new ArgumentException($"Path '{path}' does not exist");
 
             var res = ddb.Meta.Set(key, data, path);
@@ -118,7 +118,7 @@ namespace Registry.Web.Services.Managers
 
             var ddb = _ddbManager.Get(orgSlug, dataset.InternalRef);
 
-            if (path != null && !ddb.EntryExists(path))
+            if (path != null && !await ddb.EntryExistsAsync(path))
                 throw new ArgumentException($"Path '{path}' does not exist");
 
             var res = ddb.Meta.Get(key, path);
@@ -141,7 +141,7 @@ namespace Registry.Web.Services.Managers
 
             var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
 
-            if (path != null && !ddb.EntryExists(path))
+            if (path != null && !await ddb.EntryExistsAsync(path))
                 throw new ArgumentException($"Path '{path}' does not exist");
 
             return ddb.Meta.Unset(key, path);
@@ -156,7 +156,7 @@ namespace Registry.Web.Services.Managers
 
             var ddb = _ddbManager.Get(orgSlug, dataset.InternalRef);
 
-            if (path != null && !ddb.EntryExists(path))
+            if (path != null && !await ddb.EntryExistsAsync(path))
                 throw new ArgumentException($"Path '{path}' does not exist");
 
             var res = ddb.Meta.List(path);

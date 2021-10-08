@@ -47,25 +47,30 @@ namespace Registry.Web.Services.Managers
 
             var org = await _utils.GetOrganization(orgSlug);
 
-            var query = from ds in org.Datasets.ToArray()
-                        let ddb = _ddbManager.Get(orgSlug, ds.InternalRef)
-                        let info = ddb.GetInfo()
-                        let attributes = new DdbProperties(info.Properties)
-                        select new DatasetDto
-                        {
-                            Id = ds.Id,
-                            Slug = ds.Slug,
-                            CreationDate = ds.CreationDate,
-                            Description = ds.Description,
-                            LastEdit = attributes.LastUpdate,
-                            IsPublic = attributes.IsPublic,
-                            Name = ds.Name,
-                            Properties = attributes.Properties,
-                            ObjectsCount = attributes.ObjectsCount,
-                            Size = info.Size
-                        };
+            var res = new List<DatasetDto>();
 
-            return query;
+            foreach (var ds in org.Datasets.ToArray())
+            {
+                var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
+                var info = await ddb.GetInfoAsync();
+                var attributes = new DdbProperties(info.Properties);
+
+                res.Add(new DatasetDto
+                {
+                    Id = ds.Id,
+                    Slug = ds.Slug,
+                    CreationDate = ds.CreationDate,
+                    Description = ds.Description,
+                    LastEdit = attributes.LastUpdate,
+                    IsPublic = attributes.IsPublic,
+                    Name = ds.Name,
+                    Properties = attributes.Properties,
+                    ObjectsCount = attributes.ObjectsCount,
+                    Size = info.Size
+                });
+            }
+            
+            return res.ToArray();
         }
 
         public async Task<DatasetDto> Get(string orgSlug, string dsSlug)
@@ -74,7 +79,7 @@ namespace Registry.Web.Services.Managers
             var dataset = await _utils.GetDataset(orgSlug, dsSlug);
             var ddb = _ddbManager.Get(orgSlug, dataset.InternalRef);
 
-            return dataset.ToDto(ddb.GetInfo());
+            return dataset.ToDto(await ddb.GetInfoAsync());
         }
 
         public async Task<EntryDto[]> GetEntry(string orgSlug, string dsSlug)
@@ -84,7 +89,7 @@ namespace Registry.Web.Services.Managers
 
             var ddb = _ddbManager.Get(orgSlug, dataset.InternalRef);
 
-            var info = ddb.GetInfo();
+            var info = await ddb.GetInfoAsync();
             var attrs = new DdbProperties(info.Properties);
             
             var entry = new EntryDto
@@ -119,9 +124,9 @@ namespace Registry.Web.Services.Managers
             var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
 
             if (dataset.Properties != null) 
-                ddb.ChangeAttributesRaw(dataset.Properties);
+                await ddb.ChangeAttributesRawAsync(dataset.Properties);
 
-            var attributes = ddb.GetAttributes();
+            var attributes = await ddb.GetAttributesAsync();
 
             attributes.IsPublic = dataset.IsPublic;
             attributes.LastUpdate = now;
@@ -132,7 +137,7 @@ namespace Registry.Web.Services.Managers
 
             await _context.SaveChangesAsync();
 
-            return ds.ToDto(ddb.GetInfo());
+            return ds.ToDto(await ddb.GetInfoAsync());
 
         }
 
@@ -148,7 +153,7 @@ namespace Registry.Web.Services.Managers
             ds.Name = dataset.Name;
 
             var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
-            var attributes = ddb.GetAttributes();
+            var attributes = await ddb.GetAttributesAsync();
             attributes.IsPublic = dataset.IsPublic;
             attributes.LastUpdate = DateTime.Now;
 
@@ -208,7 +213,7 @@ namespace Registry.Web.Services.Managers
                 throw new UnauthorizedException("The current user is not allowed to change attributes");
 
             var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
-            var attrs = ddb.ChangeAttributesRaw(attributes);
+            var attrs = await ddb.ChangeAttributesRawAsync(attributes);
 
             return attrs;
 

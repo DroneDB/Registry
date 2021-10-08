@@ -5,6 +5,8 @@ using System.IO;
 using System.Linq;
 using System.Runtime.Serialization;
 using System.Text;
+using System.Threading;
+using System.Threading.Tasks;
 using DDB.Bindings;
 using GeoJSON.Net;
 using GeoJSON.Net.CoordinateReferenceSystem;
@@ -78,7 +80,7 @@ namespace Registry.Adapters.DroneDB
         // These consts are like magic strings: if anything changes this goes kaboom!
         public const string DatabaseFolderName = ".ddb";
         public const string BuildFolderName = "build";
-        
+
         string IDdb.DatabaseFolderName => DatabaseFolderName;
         string IDdb.BuildFolderName => BuildFolderName;
 
@@ -87,7 +89,7 @@ namespace Registry.Adapters.DroneDB
 
         [JsonProperty]
         public string DatasetFolderPath { get; private set; }
-        
+
         [JsonProperty]
         public string BuildFolderPath { get; private set; }
 
@@ -150,19 +152,19 @@ namespace Registry.Adapters.DroneDB
                 }
 
                 var query = from entry in entries
-                    select new DdbEntry
-                    {
-                        Depth = entry.Depth,
-                        Hash = entry.Hash,
-                        Properties = entry.Properties,
-                        ModifiedTime = entry.ModifiedTime,
-                        Path = entry.Path,
-                        Size = entry.Size,
-                        Type = (EntryType)(int)entry.Type,
+                            select new DdbEntry
+                            {
+                                Depth = entry.Depth,
+                                Hash = entry.Hash,
+                                Properties = entry.Properties,
+                                ModifiedTime = entry.ModifiedTime,
+                                Path = entry.Path,
+                                Size = entry.Size,
+                                Type = (EntryType)(int)entry.Type,
 
-                        PointGeometry = (Point)entry.PointGeometry?.ToObject<Feature>()?.Geometry,
-                        PolygonGeometry = (Polygon)entry.PolygonGeometry?.ToObject<Feature>()?.Geometry
-                    };
+                                PointGeometry = (Point)entry.PointGeometry?.ToObject<Feature>()?.Geometry,
+                                PolygonGeometry = (Polygon)entry.PolygonGeometry?.ToObject<Feature>()?.Geometry
+                            };
 
 
                 return query.ToArray();
@@ -377,5 +379,125 @@ namespace Registry.Adapters.DroneDB
         {
             return DatasetFolderPath;
         }
+
+        #region Async
+
+
+        public async Task<IEnumerable<DdbEntry>> SearchAsync(string path, bool recursive = false, CancellationToken cancellationToken = default)
+        {
+            return await Task<IEnumerable<DdbEntry>>.Factory.StartNew(() => Search(path, recursive), cancellationToken,
+                TaskCreationOptions.LongRunning, TaskScheduler.Default);
+        }
+
+        public async Task AddAsync(string path, byte[] data, CancellationToken cancellationToken = default)
+        {
+            await Task.Factory.StartNew(() => Add(path, data), cancellationToken,
+                TaskCreationOptions.LongRunning, TaskScheduler.Default);
+        }
+
+        public async Task AddAsync(string path, Stream data = null, CancellationToken cancellationToken = default)
+        {
+            await Task.Factory.StartNew(() => Add(path, data), cancellationToken,
+                TaskCreationOptions.LongRunning, TaskScheduler.Default);
+        }
+
+        public async Task RemoveAsync(string path, CancellationToken cancellationToken = default)
+        {
+            await Task.Factory.StartNew(() => Remove(path), cancellationToken,
+                TaskCreationOptions.LongRunning, TaskScheduler.Default);
+        }
+
+        public async Task MoveAsync(string source, string dest, CancellationToken cancellationToken = default)
+        {
+            await Task.Factory.StartNew(() => Move(source, dest), cancellationToken,
+                TaskCreationOptions.LongRunning, TaskScheduler.Default);
+        }
+
+        public async Task<Dictionary<string, object>> ChangeAttributesRawAsync(Dictionary<string, object> attributes, CancellationToken cancellationToken = default)
+        {
+            return await Task<Dictionary<string, object>>.Factory.StartNew(() => ChangeAttributesRaw(attributes), cancellationToken,
+                TaskCreationOptions.LongRunning, TaskScheduler.Default);
+        }
+
+        public async Task<byte[]> GenerateThumbnailAsync(string imagePath, int size, CancellationToken cancellationToken = default)
+        {
+            return await Task<byte[]>.Factory.StartNew(() => GenerateThumbnail(imagePath, size), cancellationToken,
+                TaskCreationOptions.LongRunning, TaskScheduler.Default);
+        }
+
+        public async Task<string> GenerateTileAsync(string imagePath, int tz, int tx, int ty, bool retina, bool tms,
+            CancellationToken cancellationToken = default)
+        {
+            return await Task<string>.Factory.StartNew(() => GenerateTile(imagePath, tz, tx, ty, retina, tms), cancellationToken,
+                TaskCreationOptions.LongRunning, TaskScheduler.Default);
+        }
+
+        public async Task InitAsync(CancellationToken cancellationToken = default)
+        {
+            await Task.Factory.StartNew(Init, cancellationToken,
+                TaskCreationOptions.LongRunning, TaskScheduler.Default);
+        }
+
+        public async Task<Dictionary<string, object>> GetAttributesRawAsync(CancellationToken cancellationToken = default)
+        {
+            return await Task<Dictionary<string,object>>.Factory.StartNew(GetAttributesRaw, cancellationToken,
+                TaskCreationOptions.LongRunning, TaskScheduler.Default);
+        }
+
+        public async Task<DdbAttributes> GetAttributesAsync(CancellationToken cancellationToken = default)
+        {
+            return await Task<DdbAttributes>.Factory.StartNew(GetAttributes, cancellationToken,
+                TaskCreationOptions.LongRunning, TaskScheduler.Default);
+        }
+
+        public async Task<DdbEntry> GetInfoAsync(CancellationToken cancellationToken = default)
+        {
+            return await Task<DdbEntry>.Factory.StartNew(() => GetInfo(), cancellationToken,
+                TaskCreationOptions.LongRunning, TaskScheduler.Default);
+        }
+
+        public async Task<DdbEntry> GetInfoAsync(string path, CancellationToken cancellationToken = default)
+        {
+            return await Task<DdbEntry>.Factory.StartNew(() => GetInfo(path), cancellationToken,
+                TaskCreationOptions.LongRunning, TaskScheduler.Default);
+        }
+
+        public async Task<DdbEntry> GetEntryAsync(string path, CancellationToken cancellationToken = default)
+        {
+            return await Task<DdbEntry>.Factory.StartNew(() => GetEntry(path), cancellationToken,
+                TaskCreationOptions.LongRunning, TaskScheduler.Default);
+        }
+
+        public async Task<bool> EntryExistsAsync(string path, CancellationToken cancellationToken = default)
+        {
+            return await Task<bool>.Factory.StartNew(() => EntryExists(path), cancellationToken,
+                TaskCreationOptions.LongRunning, TaskScheduler.Default);
+        }
+
+        public async Task BuildAsync(string path, string dest = null, bool force = false, CancellationToken cancellationToken = default)
+        {
+            await Task.Factory.StartNew(() => Build(path, dest, force), cancellationToken,
+                TaskCreationOptions.LongRunning, TaskScheduler.Default);
+        }
+
+        public async Task BuildAllAsync(string dest = null, bool force = false, CancellationToken cancellationToken = default)
+        {
+            await Task.Factory.StartNew(() => BuildAll(dest, force), cancellationToken,
+                TaskCreationOptions.LongRunning, TaskScheduler.Default);
+        }
+
+        public async Task<bool> IsBuildableAsync(string path, CancellationToken cancellationToken = default)
+        {
+            return await Task<bool>.Factory.StartNew(() => IsBuildable(path), cancellationToken,
+                TaskCreationOptions.LongRunning, TaskScheduler.Default);
+        }
+
+        public async Task<long> GetSizeAsync(CancellationToken cancellationToken = default)
+        {
+            return await Task<long>.Factory.StartNew(GetSize, cancellationToken,
+                TaskCreationOptions.LongRunning, TaskScheduler.Default);
+        }
+
+        #endregion
     }
 }

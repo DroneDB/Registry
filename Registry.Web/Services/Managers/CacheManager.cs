@@ -47,7 +47,7 @@ namespace Registry.Web.Services.Managers
                 SlidingExpiration = _expiration
             };
 
-            byte[] thumb = ddb.GenerateThumbnail(sourcePath, size);
+            var thumb = await ddb.GenerateThumbnailAsync(sourcePath, size);
             await _cache.SetAsync(key, thumb, options);
 
             return thumb;

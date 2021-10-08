@@ -91,7 +91,7 @@ namespace Registry.Web.Services.Managers
 
             _logger.LogInformation($"Searching in '{path}'");
 
-            var files = ddb.Search(path, recursive).Select(file => file.ToDto()).ToArray();
+            var files = (await ddb.SearchAsync(path, recursive)).Select(file => file.ToDto()).ToArray();
 
             _logger.LogInformation($"Found {files.Length} objects");
 
@@ -109,7 +109,7 @@ namespace Registry.Web.Services.Managers
 
             _logger.LogInformation($"Searching in '{path}' -> {query} ({(recursive ? 'r' : 'n')}");
 
-            var files = (from entry in ddb.Search(path, recursive)
+            var files = (from entry in await ddb.SearchAsync(path, recursive)
                         let name = Path.GetFileName(entry.Path)
                         where FileSystemName.MatchesSimpleExpression(query, name)
                         select entry.ToDto()).ToArray();
@@ -167,7 +167,7 @@ namespace Registry.Web.Services.Managers
         {
             var ddb = _ddbManager.Get(orgSlug, internalRef);
 
-            if (!ddb.EntryExists(path))
+            if (!await ddb.EntryExistsAsync(path))
                 throw new NotFoundException($"Cannot find '{path}'");
 
             var bucketName = _utils.GetBucketName(orgSlug, internalRef);
@@ -176,7 +176,7 @@ namespace Registry.Web.Services.Managers
 
             await _objectSystem.EnsureBucketExists(bucketName, _location, _logger);
 
-            var res = ddb.GetEntry(path);
+            var res = await ddb.GetEntryAsync(path);
 
             if (res.Type == EntryType.Directory)
                 throw new InvalidOperationException("Cannot get a folder, we are supposed to deal with a file!");
@@ -232,7 +232,7 @@ namespace Registry.Web.Services.Managers
             // If it's a folder
             if (stream == null)
             {
-                if (ddb.EntryExists(path))
+                if (await ddb.EntryExistsAsync(path))
                     throw new InvalidOperationException("Cannot create a folder on another entry");
 
                 if (path == ddb.DatabaseFolderName)
@@ -241,7 +241,7 @@ namespace Registry.Web.Services.Managers
                 _logger.LogInformation("Adding folder to DDB");
 
                 // Add to DDB
-                ddb.Add(path);
+                await ddb.AddAsync(path);
 
                 _logger.LogInformation("Added to DDB");
 
@@ -269,11 +269,11 @@ namespace Registry.Web.Services.Managers
 
             // Add to DDB
             await using (var tempFileStream = File.OpenRead(tempFileName))
-                ddb.Add(path, tempFileStream);
+                await ddb.AddAsync(path, tempFileStream);
 
             _logger.LogInformation("Added to DDB");
 
-            var entry = ddb.GetEntry(path);
+            var entry = await ddb.GetEntryAsync(path);
 
             if (entry == null)
                 throw new InvalidOperationException("Cannot find just added file!");
@@ -293,7 +293,7 @@ namespace Registry.Web.Services.Managers
 
             });
 
-            if (ddb.IsBuildable(obj.Path))
+            if (await ddb.IsBuildableAsync(obj.Path))
             {
                 _logger.LogInformation("This is a point cloud, we need to build it!");
 
@@ -350,7 +350,7 @@ namespace Registry.Web.Services.Managers
 
             var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
 
-            var sourceEntry = ddb.GetEntry(source);
+            var sourceEntry = await ddb.GetEntryAsync(source);
 
             // Checking if source exists
             if (sourceEntry == null)
@@ -363,7 +363,7 @@ namespace Registry.Web.Services.Managers
             if ((dest + "/").StartsWith(source + "/"))
                 throw new InvalidOperationException("Cannot move a path onto itself or one of its descendants");
             
-            var destEntry = ddb.GetEntry(dest);
+            var destEntry = await ddb.GetEntryAsync(dest);
 
             if (destEntry != null)
             {
@@ -374,7 +374,7 @@ namespace Registry.Web.Services.Managers
                     throw new ArgumentException("Cannot move a file on a folder");
             }
 
-            var src = ddb.Search(source).Where(item => item.Type != EntryType.Directory).ToArray();
+            var src = (await ddb.SearchAsync(source)).Where(item => item.Type != EntryType.Directory).ToArray();
 
             switch (src.Length)
             {
@@ -407,9 +407,9 @@ namespace Registry.Web.Services.Managers
             }
 
             _logger.LogInformation("Performing ddb move");
-            ddb.Move(source, dest);
+            await ddb.MoveAsync(source, dest);
 
-            if (!ddb.EntryExists(dest))
+            if (!await ddb.EntryExistsAsync(dest))
                 throw new InvalidOperationException($"Cannot find destination '{dest}' after move, something wrong with ddb");
 
             _logger.LogInformation("Move OK");
@@ -431,7 +431,7 @@ namespace Registry.Web.Services.Managers
 
             var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
 
-            if (!ddb.EntryExists(path))
+            if (!await ddb.EntryExistsAsync(path))
                 throw new BadRequestException($"Path '{path}' not found in dataset");
 
             var bucketName = _utils.GetBucketName(orgSlug, ds.InternalRef);
@@ -444,9 +444,9 @@ namespace Registry.Web.Services.Managers
 
             _logger.LogInformation("Removing from DDB");
 
-            var objs = ddb.Search(path, true).ToArray();
+            var objs = (await ddb.SearchAsync(path, true)).ToArray();
 
-            ddb.Remove(path);
+            await ddb.RemoveAsync(path);
 
             foreach (var obj in objs.Where(item => item.Type != EntryType.Directory))
             {
@@ -527,8 +527,8 @@ namespace Registry.Web.Services.Managers
             var bucketName = _utils.GetBucketName(orgSlug, ds.InternalRef);
             var sourcePath = GetThumbSource(bucketName, entry);
 
-            byte[] thumb = await _cacheManager.GenerateThumbnail(ddb, sourcePath, entry.Hash, size ?? DefaultThumbnailSize);
-            var memory = new MemoryStream(thumb);
+            var thumbData = await _cacheManager.GenerateThumbnail(ddb, sourcePath, entry.Hash, size ?? DefaultThumbnailSize);
+            var memory = new MemoryStream(thumbData);
 
             return new FileDescriptorDto
             {
@@ -562,7 +562,7 @@ namespace Registry.Web.Services.Managers
             {
 
                 _logger.LogInformation($"Generating tile from '{sourceFilePath}'");
-                var destFilePath = ddb.GenerateTile(sourceFilePath, tz, tx, ty, retina, true);
+                var destFilePath = await ddb.GenerateTileAsync(sourceFilePath, tz, tx, ty, retina, true);
 
                 var memory = new MemoryStream(await File.ReadAllBytesAsync(destFilePath));
                 memory.Reset();
@@ -980,14 +980,14 @@ namespace Registry.Web.Services.Managers
 
             var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
 
-            var entry = ddb.GetEntry(path);
+            var entry = await ddb.GetEntryAsync(path);
 
             // Checking if path exists
             if (entry == null)
                 throw new InvalidOperationException($"Cannot find source entry: '{path}'");
 
             // Nothing to do here
-            if (!ddb.IsBuildable(entry.Path))
+            if (!await ddb.IsBuildableAsync(entry.Path))
             {
                 _logger.LogInformation($"'{entry.Path}' is not buildable, nothing to do here");
                 return;
@@ -1073,14 +1073,11 @@ namespace Registry.Web.Services.Managers
 
         public string GetThumbSource(string bucketName, DdbEntry entry)
         {
-            if (entry.Type == EntryType.PointCloud)
-            {
-                return _objectSystem.GetInternalPath(bucketName, CommonUtils.SafeCombine(BuildBasePath, entry.Hash, "ept", "ept.json"));
-            }
-            else
-            {
-                return _objectSystem.GetInternalPath(bucketName, entry.Path);
-            }
+            return _objectSystem.GetInternalPath(bucketName, 
+                entry.Type == EntryType.PointCloud ? 
+                    CommonUtils.SafeCombine(BuildBasePath, entry.Hash, "ept", "ept.json") : 
+                    entry.Path);
+
             // TODO: support for COGs
             // TODO: more generic name? This method is the same for tiles
         }

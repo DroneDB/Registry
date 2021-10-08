@@ -61,16 +61,16 @@ namespace Registry.Web.Test
             var utils = new WebUtils(_authManagerMock.Object, context, _appSettingsMock.Object, _httpContextAccessorMock.Object, _ddbFactoryMock.Object);
 
             var ddbMock = new Mock<IDdb>();
-            ddbMock.Setup(x => x.GetInfo()).Returns(new DdbEntry
-            {
-                Properties = new Dictionary<string, object>
-                {
-                    {"public", true }
-                },
-                Size = 1000,
-                ModifiedTime = DateTime.Now
-            });
-            
+            ddbMock.Setup(x => x.GetInfoAsync(default)).Returns(Task.FromResult(new DdbEntry{
+                    Properties = new Dictionary<string, object>
+                    {
+                        {"public", true }
+                    },
+                    Size = 1000,
+                    ModifiedTime = DateTime.Now
+                }
+            ));
+
             _ddbFactoryMock.Setup(x => x.Get(It.IsAny<string>(), It.IsAny<Guid>())).Returns(ddbMock.Object);
 
             var datasetsManager = new DatasetsManager(context, utils, _datasetsManagerLogger,

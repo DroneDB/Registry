@@ -5,6 +5,7 @@ using System.IO;
 using System.Linq;
 using System.Reflection;
 using System.Text;
+using System.Threading;
 using System.Threading.Tasks;
 using System.Transactions;
 using Hangfire;
@@ -256,11 +257,15 @@ namespace Registry.Web
             // TODO: Enable when needed. Should check return object structure
             // services.AddOData();
 
+            if (appSettings.WorkerThreads > 0)
+            {
+                ThreadPool.GetMinThreads(out _, out var ioCompletionThreads);
+                ThreadPool.SetMinThreads(appSettings.WorkerThreads, ioCompletionThreads);
+            }
         }
 
         public void Configure(IApplicationBuilder app, IWebHostEnvironment env)
         {
-
             if (env.IsDevelopment())
             {
                 app.UseDeveloperExceptionPage();
