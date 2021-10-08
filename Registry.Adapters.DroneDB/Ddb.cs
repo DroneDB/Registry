@@ -52,15 +52,15 @@ namespace Registry.Adapters.DroneDB
             Meta = new DdbMetaManager(this);
         }
 
-        public string GenerateTile(string imagePath, int tz, int tx, int ty, bool retina, bool tms)
+        public byte[] GenerateTile(string inputPath, int tz, int tx, int ty, bool retina, string inputPathHash)
         {
             try
             {
-                return DDB.Bindings.DroneDB.GenerateTile(imagePath, tz, tx, ty, retina ? 512 : 256, true);
+                return DDB.Bindings.DroneDB.GenerateMemoryTile(inputPath, tz, tx, ty, retina ? 512 : 256, true, false, inputPathHash);
             }
             catch (DDBException ex)
             {
-                throw new InvalidOperationException($"Cannot generate tile of '{imagePath}'", ex);
+                throw new InvalidOperationException($"Cannot generate tile of '{inputPath}'", ex);
             }
         }
 
@@ -425,10 +425,10 @@ namespace Registry.Adapters.DroneDB
                 TaskCreationOptions.LongRunning, TaskScheduler.Default);
         }
 
-        public async Task<string> GenerateTileAsync(string imagePath, int tz, int tx, int ty, bool retina, bool tms,
+        public async Task<byte []> GenerateTileAsync(string inputPath, int tz, int tx, int ty, bool retina, string inputPathHash,
             CancellationToken cancellationToken = default)
         {
-            return await Task<string>.Factory.StartNew(() => GenerateTile(imagePath, tz, tx, ty, retina, tms), cancellationToken,
+            return await Task<byte[]>.Factory.StartNew(() => GenerateTile(inputPath, tz, tx, ty, retina, inputPathHash), cancellationToken,
                 TaskCreationOptions.LongRunning, TaskScheduler.Default);
         }
 

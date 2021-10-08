@@ -47,7 +47,7 @@ namespace Registry.Ports.DroneDB
 
         Dictionary<string, object> ChangeAttributesRaw(Dictionary<string, object> attributes);
         byte[] GenerateThumbnail(string imagePath, int size);
-        string GenerateTile(string imagePath, int tz, int tx, int ty, bool retina, bool tms);
+        byte[] GenerateTile(string inputPath, int tz, int tx, int ty, bool retina, string inputPathHash);
 
         void Init();
 
@@ -89,7 +89,7 @@ namespace Registry.Ports.DroneDB
         Task MoveAsync(string source, string dest, CancellationToken cancellationToken = default);
         Task<Dictionary<string, object>> ChangeAttributesRawAsync(Dictionary<string, object> attributes, CancellationToken cancellationToken = default);
         Task<byte[]> GenerateThumbnailAsync(string imagePath, int size, CancellationToken cancellationToken = default);
-        Task<string> GenerateTileAsync(string imagePath, int tz, int tx, int ty, bool retina, bool tms, CancellationToken cancellationToken = default);
+        Task<byte []> GenerateTileAsync(string inputPath, int tz, int tx, int ty, bool retina, string inputPathHash, CancellationToken cancellationToken = default);
         Task InitAsync(CancellationToken cancellationToken = default);
         Task<Dictionary<string, object>> GetAttributesRawAsync(CancellationToken cancellationToken = default);
         Task<DdbAttributes> GetAttributesAsync(CancellationToken cancellationToken = default);
