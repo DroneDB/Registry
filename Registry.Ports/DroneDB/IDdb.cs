@@ -1,6 +1,8 @@
 ﻿using System.Collections.Generic;
 using System.IO;
 using System.Text;
+using System.Threading;
+using System.Threading.Tasks;
 using Registry.Ports.DroneDB.Models;
 
 namespace Registry.Ports.DroneDB
@@ -39,14 +41,16 @@ namespace Registry.Ports.DroneDB
         IEnumerable<DdbEntry> Search(string path, bool recursive = false);
         void Add(string path, byte[] data);
         void Add(string path, Stream data = null);
+
         void Remove(string path);
         void Move(string source, string dest);
+
         Dictionary<string, object> ChangeAttributesRaw(Dictionary<string, object> attributes);
         byte[] GenerateThumbnail(string imagePath, int size);
         string GenerateTile(string imagePath, int tz, int tx, int ty, bool retina, bool tms);
-        
+
         void Init();
-        
+
         Dictionary<string, object> GetAttributesRaw();
 
         DdbAttributes GetAttributes();
@@ -72,8 +76,33 @@ namespace Registry.Ports.DroneDB
         void BuildAll(string dest = null, bool force = false);
 
         bool IsBuildable(string path);
-        
+
         IDdbMetaManager Meta { get;  }
         long GetSize();
+
+        #region Async
+
+        Task<IEnumerable<DdbEntry>> SearchAsync(string path, bool recursive = false, CancellationToken cancellationToken = default);
+        Task AddAsync(string path, byte[] data, CancellationToken cancellationToken = default);
+        Task AddAsync(string path, Stream data = null, CancellationToken cancellationToken = default);
+        Task RemoveAsync(string path, CancellationToken cancellationToken = default);
+        Task MoveAsync(string source, string dest, CancellationToken cancellationToken = default);
+        Task<Dictionary<string, object>> ChangeAttributesRawAsync(Dictionary<string, object> attributes, CancellationToken cancellationToken = default);
+        Task<byte[]> GenerateThumbnailAsync(string imagePath, int size, CancellationToken cancellationToken = default);
+        Task<string> GenerateTileAsync(string imagePath, int tz, int tx, int ty, bool retina, bool tms, CancellationToken cancellationToken = default);
+        Task InitAsync(CancellationToken cancellationToken = default);
+        Task<Dictionary<string, object>> GetAttributesRawAsync(CancellationToken cancellationToken = default);
+        Task<DdbAttributes> GetAttributesAsync(CancellationToken cancellationToken = default);
+        Task<DdbEntry> GetInfoAsync(CancellationToken cancellationToken = default);
+        Task<DdbEntry> GetInfoAsync(string path, CancellationToken cancellationToken = default);
+        Task<DdbEntry> GetEntryAsync(string path, CancellationToken cancellationToken = default);
+        Task<bool> EntryExistsAsync(string path, CancellationToken cancellationToken = default);
+        Task BuildAsync(string path, string dest = null, bool force = false, CancellationToken cancellationToken = default);
+        Task BuildAllAsync(string dest = null, bool force = false, CancellationToken cancellationToken = default);
+        Task<bool> IsBuildableAsync(string path, CancellationToken cancellationToken = default);
+        Task<long> GetSizeAsync(CancellationToken cancellationToken = default);
+
+        #endregion
+
     }
 }
