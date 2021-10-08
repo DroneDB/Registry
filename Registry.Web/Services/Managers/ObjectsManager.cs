@@ -527,8 +527,8 @@ namespace Registry.Web.Services.Managers
             var bucketName = _utils.GetBucketName(orgSlug, ds.InternalRef);
             var sourcePath = GetThumbSource(bucketName, entry);
 
-            byte[] thumb = await _cacheManager.GenerateThumbnail(ddb, sourcePath, entry.Hash, size ?? DefaultThumbnailSize);
-            var memory = new MemoryStream(thumb);
+            var thumbData = await _cacheManager.GenerateThumbnail(ddb, sourcePath, entry.Hash, size ?? DefaultThumbnailSize);
+            var memory = new MemoryStream(thumbData);
 
             return new FileDescriptorDto
             {
@@ -1073,14 +1073,11 @@ namespace Registry.Web.Services.Managers
 
         public string GetThumbSource(string bucketName, DdbEntry entry)
         {
-            if (entry.Type == EntryType.PointCloud)
-            {
-                return _objectSystem.GetInternalPath(bucketName, CommonUtils.SafeCombine(BuildBasePath, entry.Hash, "ept", "ept.json"));
-            }
-            else
-            {
-                return _objectSystem.GetInternalPath(bucketName, entry.Path);
-            }
+            return _objectSystem.GetInternalPath(bucketName, 
+                entry.Type == EntryType.PointCloud ? 
+                    CommonUtils.SafeCombine(BuildBasePath, entry.Hash, "ept", "ept.json") : 
+                    entry.Path);
+
             // TODO: support for COGs
             // TODO: more generic name? This method is the same for tiles
         }

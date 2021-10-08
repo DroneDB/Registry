@@ -5,6 +5,7 @@ using System.IO;
 using System.Linq;
 using System.Reflection;
 using System.Text;
+using System.Threading;
 using System.Threading.Tasks;
 using System.Transactions;
 using Hangfire;
@@ -260,6 +261,8 @@ namespace Registry.Web
 
         public void Configure(IApplicationBuilder app, IWebHostEnvironment env)
         {
+            //ThreadPool.GetMinThreads(out _, out var ioCompletionThreads);
+            //ThreadPool.SetMinThreads(10000, ioCompletionThreads);
 
             if (env.IsDevelopment())
             {
