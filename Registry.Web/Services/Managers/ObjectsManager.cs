@@ -525,7 +525,7 @@ namespace Registry.Web.Services.Managers
                 throw new ArgumentException("Path is not valid");
 
             var bucketName = _utils.GetBucketName(orgSlug, ds.InternalRef);
-            var sourcePath = GetThumbSource(bucketName, entry);
+            var sourcePath = GetBuildSource(bucketName, entry);
 
             var thumbData = await _cacheManager.GenerateThumbnail(ddb, sourcePath, entry.Hash, size ?? DefaultThumbnailSize);
             var memory = new MemoryStream(thumbData);
@@ -544,34 +544,25 @@ namespace Registry.Web.Services.Managers
 
             _logger.LogInformation($"In GenerateTile('{orgSlug}/{dsSlug}')");
 
-            EnsurePathValidity(orgSlug, ds.InternalRef, path, out var ddb);
+            var bucketName = _utils.GetBucketName(orgSlug, ds.InternalRef);
+            var entry = EnsurePathValidity(orgSlug, ds.InternalRef, path, out var ddb);
 
             var fileName = Path.GetFileName(path);
             if (fileName == null)
                 throw new ArgumentException("Path is not valid");
 
-            var sourceFilePath = Path.Combine(Path.GetTempPath(), nameof(GenerateTile), orgSlug, dsSlug, path);
-
-            var dirName = Path.GetDirectoryName(sourceFilePath);
-            if (dirName != null)
-                Directory.CreateDirectory(dirName);
-
-            await SafeGetFile(orgSlug, ds.InternalRef, path, sourceFilePath);
+            var sourcePath = GetBuildSource(bucketName, entry);
 
             try
             {
-
-                _logger.LogInformation($"Generating tile from '{sourceFilePath}'");
-                var destFilePath = await ddb.GenerateTileAsync(sourceFilePath, tz, tx, ty, retina, true);
-
-                var memory = new MemoryStream(await File.ReadAllBytesAsync(destFilePath));
-                memory.Reset();
+                var tileData = await ddb.GenerateTileAsync(sourcePath, tz, tx, ty, retina, entry.Hash);
+                var memory = new MemoryStream(tileData);
 
                 return new FileDescriptorDto
                 {
                     ContentStream = memory,
                     ContentType = "image/png",
-                    Name = fileName
+                    Name = $"{ty}.png"
                 };
             }
             catch (InvalidOperationException ex)
@@ -1071,15 +1062,13 @@ namespace Registry.Web.Services.Managers
             return objInfo != null;
         }
 
-        public string GetThumbSource(string bucketName, DdbEntry entry)
+        public string GetBuildSource(string bucketName, DdbEntry entry)
         {
-            return _objectSystem.GetInternalPath(bucketName, 
-                entry.Type == EntryType.PointCloud ? 
-                    CommonUtils.SafeCombine(BuildBasePath, entry.Hash, "ept", "ept.json") : 
-                    entry.Path);
-
-            // TODO: support for COGs
-            // TODO: more generic name? This method is the same for tiles
+            string path = entry.Path;
+            if (entry.Type == EntryType.PointCloud) path = CommonUtils.SafeCombine(BuildBasePath, entry.Hash, "ept", "ept.json");
+            else if (entry.Type == EntryType.GeoRaster) path = CommonUtils.SafeCombine(BuildBasePath, entry.Hash, "cog", "cog.tif");
+            
+            return _objectSystem.GetInternalPath(bucketName, path);
         }
 
         #endregion
