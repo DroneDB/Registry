@@ -24,6 +24,8 @@ namespace Registry.Web.Controllers
         private readonly ILogger<S3BridgeController> _logger;
         private readonly IObjectSystem _objectSystem;
 
+        [ApiExplorerSettings(IgnoreApi = true)]
+        [NonAction]
         public bool IsS3Enabled()
         {
             return _objectSystem.IsS3Based();
