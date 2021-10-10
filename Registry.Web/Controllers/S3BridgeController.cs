@@ -1,13 +1,15 @@
 ﻿using System;
 using System.IO;
-using System.Net;
+using System.Linq;
 using System.Net.Http.Headers;
+using System.Reactive.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.AspNetCore.Mvc.Filters;
 using Microsoft.Extensions.Logging;
 using MimeMapping;
 using Registry.Ports.ObjectSystem;
+using Registry.Web.Attributes;
 using Registry.Web.Models;
 using Registry.Web.Models.DTO;
 using Registry.Web.Services.Ports;
@@ -18,7 +20,7 @@ namespace Registry.Web.Controllers
     [ApiController]
     [RestrictToS3]
     [RestrictToLocalhost]
-    [Route(RoutesHelper.BridgeRadix)]
+    [Route(RoutesHelper.BridgeRadix + "/{bucket}/{*path}")]
     public class S3BridgeController : ControllerBaseEx
     {
         private readonly ILogger<S3BridgeController> _logger;
@@ -37,20 +39,26 @@ namespace Registry.Web.Controllers
             _logger = logger;
         }
 
-        [HttpHead("{bucket}/{*path}", Name = nameof(S3BridgeController) + "." + nameof(Check))]
-        public async Task<IActionResult> Check([FromRoute] string bucket, string path)
+        [HttpHead(Name = nameof(S3BridgeController) + "." + nameof(Check))]
+        public async Task<IActionResult> Check([FromRoute] string bucket, [FromRoute] string path)
         {
             _logger.LogDebug($"S3Bridge controller Check('{bucket}', '{path}')");
+
             try
             {
-                if (!await _objectSystem.ObjectExistsAsync(bucket, path)) 
+
+                if (string.IsNullOrWhiteSpace(path))
+                    throw new ArgumentException("Path cannot be empty", nameof(Path));
+
+                if (!await _objectSystem.ObjectExistsAsync(bucket, path))
                     return NotFound();
 
                 Response.Headers.Add("Accept-Ranges", "bytes");
 
                 return Ok();
 
-            }catch(Exception ex)
+            }
+            catch (Exception ex)
             {
                 _logger.LogError(ex, $"Exception in S3 bridge controller Check('{bucket}', '{path}')");
 
@@ -58,37 +66,52 @@ namespace Registry.Web.Controllers
             }
         }
 
-        [HttpGet("{bucket}/{*path}", Name = nameof(S3BridgeController) + "." + nameof(Get))]
-        public async Task<IActionResult> Get([FromRoute] string bucket, string path)
+        [HttpGet(Name = nameof(S3BridgeController) + "." + nameof(Get))]
+        [ResponseCache(Duration = 60)]
+        public async Task<IActionResult> Get([FromRoute] string bucket, [FromRoute] string path)
         {
             _logger.LogDebug($"S3Bridge controller Get('{bucket}', '{path}')");
 
             try
             {
-                StreamableFileDescriptor res = null;
+                if (string.IsNullOrWhiteSpace(path))
+                    throw new ArgumentException("Path cannot be empty", nameof(Path));
 
-                if (Request.Headers.ContainsKey("Range"))
+                StreamableFileDescriptor res;
+
+                if (Request.Headers.TryGetValue("Range", out var rangeHeaderRaw))
                 {
 
-                    var rangeHdr = RangeHeaderValue.Parse(Request.Headers["Range"]);
-                    if (rangeHdr.Unit != "bytes") throw new ArgumentException("Only bytes units are supported in range");
+                    var rangeHeader = RangeHeaderValue.Parse(rangeHeaderRaw);
 
-                    foreach (var range in rangeHdr.Ranges)
+                    if (rangeHeader.Unit != "bytes")
+                        throw new ArgumentException("Only bytes units are supported in range");
+
+                    if (rangeHeader.Ranges.Count > 1)
+                        throw new ArgumentException("Multiple ranges are not supported");
+
+                    var range = rangeHeader.Ranges.First();
+
+                    if (!range.From.HasValue)
+                        throw new ArgumentException("Range 'From' field is empty");
+
+                    if (!range.To.HasValue)
+                        throw new ArgumentException("Range 'To' field is empty");
+
+                    var offset = range.From.Value;
+                    var length = range.To.Value - range.From.Value;
+
+                    res = new StreamableFileDescriptor(async (stream, cancellationToken) =>
                     {
-                        long offset = range.From.Value;
-                        long length = range.To.Value - range.From.Value;
+                        await _objectSystem.GetObjectAsync(bucket, path, offset, length,
+                                source => source.CopyTo(stream), cancellationToken: cancellationToken);
+                    }, Path.GetFileName(path), MimeUtility.GetMimeMapping(path));
 
-                        res = new StreamableFileDescriptor(async (stream, cancellationToken) => {
-                            await _objectSystem.GetObjectAsync(bucket, path, offset, length,
-                                    source => source.CopyTo(stream), cancellationToken: cancellationToken);
-                        }, Path.GetFileName(path), MimeUtility.GetMimeMapping(path));
-
-                        break;
-                    }
                 }
                 else
                 {
-                    res = new StreamableFileDescriptor(async (stream, cancellationToken) => {
+                    res = new StreamableFileDescriptor(async (stream, cancellationToken) =>
+                    {
                         await _objectSystem.GetObjectAsync(bucket, path,
                                 source => source.CopyTo(stream), cancellationToken: cancellationToken);
                     }, Path.GetFileName(path), MimeUtility.GetMimeMapping(path));
@@ -99,39 +122,12 @@ namespace Registry.Web.Controllers
                 await res.CopyToAsync(Response.Body);
 
                 return new EmptyResult();
-            }catch (Exception ex){
+            }
+            catch (Exception ex)
+            {
                 _logger.LogError(ex, $"Exception in S3Bridge controller Get('{bucket}', '{path}')");
                 return ExceptionResult(ex);
             }
         }
     }
-
-    public class RestrictToS3Attribute : ActionFilterAttribute
-    {
-        public override void OnActionExecuting(ActionExecutingContext context)
-        {
-            var controller = (S3BridgeController)context.Controller;
-            if (!controller.IsS3Enabled())
-            {
-                context.Result = new NotFoundResult();
-                return;
-            }
-            base.OnActionExecuting(context);
-        }
-    }
-
-    public class RestrictToLocalhostAttribute : ActionFilterAttribute
-    {
-        public override void OnActionExecuting(ActionExecutingContext context)
-        {
-            var remoteIp = context.HttpContext.Connection.RemoteIpAddress;
-            if (!IPAddress.IsLoopback(remoteIp))
-            {
-                context.Result = new UnauthorizedResult();
-                return;
-            }
-            base.OnActionExecuting(context);
-        }
-    }
-
 }

@@ -89,10 +89,17 @@ namespace Registry.Web
                 c.DocumentFilter<BasePathDocumentFilter>();
             });
             services.AddSwaggerGenNewtonsoftSupport();
-            
+
             services.AddMvcCore()
                 .AddApiExplorer()
                 .AddNewtonsoftJson();
+
+            services.AddResponseCaching(options =>
+            {
+                options.MaximumBodySize = 8 * 1024 * 1024; // 8MB
+                options.SizeLimit = 10 * 1024 * 1024;      // 10MB
+                options.UseCaseSensitivePaths = true;
+            });
 
             services.AddSpaStaticFiles(config =>
             {
@@ -306,6 +313,7 @@ namespace Registry.Web
             app.UseAuthorization();
 
             app.UseResponseCompression();
+            app.UseResponseCaching();
 
             app.UseMiddleware<TokenManagerMiddleware>();
 
@@ -534,7 +542,7 @@ namespace Registry.Web
 
                     if (!CommonUtils.Validate(s3Settings, out results))
                         throw new ArgumentException("Invalid S3 storage provider settings: " + results.ToErrorString());
-                    
+
                     services.AddSingleton(new S3ObjectSystemSettings
                     {
                         Endpoint = s3Settings.Endpoint,
