@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.ComponentModel.DataAnnotations;
 using System.Diagnostics;
 using System.Globalization;
 using System.IO;
@@ -267,7 +268,7 @@ namespace Registry.Common
             try
             {
                 if (!Directory.Exists(folder)) return;
-                
+
                 // Recursive call
                 Directory.EnumerateDirectories(folder).ToList().ForEach(f => RemoveEmptyFolders(f, true));
 
@@ -459,7 +460,38 @@ namespace Registry.Common
             // Return formatted number with suffix
             return readable.ToString("0.### ") + suffix;
         }
+
+        public static bool Validate<T>(T obj, out ICollection<ValidationResult> results)
+        {
+            results = new List<ValidationResult>();
+
+            return Validator.TryValidateObject(obj, new ValidationContext(obj), results, true);
+        }
+
+        public static string ToErrorString(this IEnumerable<ValidationResult> results)
+        {
+            var builder = new StringBuilder();
+
+            foreach (var res in results)
+            {
+                builder.Append(res.ErrorMessage);
+
+                if (res.MemberNames.Any())
+                {
+                    builder.Append(" (");
+                    builder.Append(string.Join(", ", res.MemberNames));
+                    builder.Append(')');
+                }
+
+                builder.Append("; ");
+            }
+
+            return builder.ToString();
+
+        }
     }
+
+
 
 
 }

@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.ComponentModel.DataAnnotations;
 using System.Globalization;
 using System.IO;
 using System.Linq;
@@ -497,6 +498,8 @@ namespace Registry.Web
         private static void RegisterStorageProvider(IServiceCollection services, AppSettings appSettings)
         {
 
+            ICollection<ValidationResult> results;
+
             switch (appSettings.StorageProvider.Type)
             {
                 case StorageType.Physical:
@@ -504,6 +507,9 @@ namespace Registry.Web
                     var ps = appSettings.StorageProvider.Settings.ToObject<PhysicalProviderSettings>();
                     if (ps == null)
                         throw new ArgumentException("Invalid physical storage provider settings");
+
+                    if (!CommonUtils.Validate(ps, out results))
+                        throw new ArgumentException("Invalid physical storage provider settings: " + results.ToErrorString());
 
                     Directory.CreateDirectory(ps.Path);
 
@@ -523,6 +529,9 @@ namespace Registry.Web
                     if (s3Settings == null)
                         throw new ArgumentException("Invalid S3 storage provider settings");
 
+                    if (!CommonUtils.Validate(s3Settings, out results))
+                        throw new ArgumentException("Invalid S3 storage provider settings: " + results.ToErrorString());
+                    
                     services.AddSingleton(new S3ObjectSystemSettings
                     {
                         Endpoint = s3Settings.Endpoint,
@@ -546,6 +555,9 @@ namespace Registry.Web
 
                     if (cachedS3Settings == null)
                         throw new ArgumentException("Invalid S3 storage provider settings");
+
+                    if (!CommonUtils.Validate(cachedS3Settings, out results))
+                        throw new ArgumentException("Invalid S3 storage provider settings: " + results.ToErrorString());
 
                     services.AddSingleton(new CachedS3ObjectSystemSettings
                     {
