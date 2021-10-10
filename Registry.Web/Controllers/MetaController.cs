@@ -7,6 +7,7 @@ using Microsoft.Extensions.Logging;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using Registry.Web.Models;
+using Registry.Web.Models.DTO;
 using Registry.Web.Services.Ports;
 using Registry.Web.Utilities;
 
@@ -206,6 +207,7 @@ namespace Registry.Web.Controllers
         }
 
         [HttpGet("list", Name = nameof(MetaController) + "." + nameof(List))]
+        [ProducesResponseType(typeof(IEnumerable<MetaListItemDto>), 200)]
         public async Task<IActionResult> List([FromRoute] string orgSlug, [FromRoute] string dsSlug,
             [FromQuery] string path = null)
         {

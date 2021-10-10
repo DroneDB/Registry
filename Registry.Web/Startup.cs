@@ -88,8 +88,11 @@ namespace Registry.Web
                 });
                 c.DocumentFilter<BasePathDocumentFilter>();
             });
-
-            services.AddMvcCore().AddNewtonsoftJson();
+            services.AddSwaggerGenNewtonsoftSupport();
+            
+            services.AddMvcCore()
+                .AddApiExplorer()
+                .AddNewtonsoftJson();
 
             services.AddSpaStaticFiles(config =>
             {

@@ -33,6 +33,7 @@ namespace Registry.Web.Controllers
 
         [Authorize]
         [HttpGet(Name = nameof(OrganizationsController) + "." + nameof(GetAll))]
+        [ProducesResponseType(typeof(IEnumerable<OrganizationDto>), 200)]
         public async Task<IActionResult> GetAll()
         {
             try
@@ -50,6 +51,7 @@ namespace Registry.Web.Controllers
         }
 
         [HttpGet(RoutesHelper.OrganizationSlug, Name = nameof(OrganizationsController) + "." + nameof(Get))]
+        [ProducesResponseType(typeof(OrganizationDto), 200)]
         public async Task<IActionResult> Get(string orgSlug)
         {
             try

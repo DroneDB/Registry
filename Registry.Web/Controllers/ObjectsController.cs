@@ -225,6 +225,7 @@ namespace Registry.Web.Controllers
         }
 
         [HttpPost("getpackage", Name = nameof(ObjectsController) + "." + nameof(GetPackageUrl))]
+        [ProducesResponseType(typeof(DownloadPackageDto), 200)]
         public async Task<IActionResult> GetPackageUrl([FromRoute] string orgSlug, [FromRoute] string dsSlug,
             [FromForm(Name = "path")] string[] paths, [FromForm] DateTime? expiration, [FromForm] bool isPublic)
         {
@@ -280,6 +281,7 @@ namespace Registry.Web.Controllers
         }
 
         [HttpGet("list", Name = nameof(ObjectsController) + "." + nameof(GetInfo))]
+        [ProducesResponseType(typeof(IEnumerable<ObjectDto>), 200)]
         public async Task<IActionResult> GetInfo([FromRoute] string orgSlug, [FromRoute] string dsSlug, [FromQuery] string path)
         {
             try
@@ -298,6 +300,7 @@ namespace Registry.Web.Controllers
         }
 
         [HttpPost("list", Name = nameof(ObjectsController) + "." + nameof(GetInfoEx))]
+        [ProducesResponseType(typeof(IEnumerable<ObjectDto>), 200)]
         public async Task<IActionResult> GetInfoEx([FromRoute] string orgSlug, [FromRoute] string dsSlug, [FromForm] string path)
         {
             try
@@ -317,6 +320,7 @@ namespace Registry.Web.Controllers
 
 
         [HttpPost("search", Name = nameof(ObjectsController) + "." + nameof(Search))]
+        [ProducesResponseType(typeof(IEnumerable<ObjectDto>), 200)]
         public async Task<IActionResult> Search([FromRoute] string orgSlug, [FromRoute] string dsSlug, [FromForm] string query, [FromForm] string path, [FromForm] bool recursive = true)
         {
             try

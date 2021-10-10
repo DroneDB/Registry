@@ -27,6 +27,7 @@ namespace Registry.Web.Controllers
         }
 
         [HttpGet("version", Name = nameof(SystemController) + "." + nameof(GetVersion))]
+        [ProducesResponseType(typeof(string), 200)]
         public IActionResult GetVersion()
         {
             try

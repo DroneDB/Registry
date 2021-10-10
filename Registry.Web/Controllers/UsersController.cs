@@ -151,12 +151,13 @@ namespace Registry.Web.Controllers
         }
 
         [HttpGet]
+        [ProducesResponseType(typeof(IEnumerable<UserDto>), 200)]
         public async Task<IActionResult> GetAll()
         {
 
             try
             {
-                _logger.LogDebug($"Users controller GetAll()");
+                _logger.LogDebug("Users controller GetAll()");
 
                 var res = await _usersManager.GetAll();
 
@@ -172,6 +173,7 @@ namespace Registry.Web.Controllers
         }
 
         [HttpGet("storage")]
+        [ProducesResponseType(typeof(UserStorageInfo), 200)]
         public async Task<IActionResult> GetUserQuotaInfo()
         {
             try
@@ -192,6 +194,7 @@ namespace Registry.Web.Controllers
         }
 
         [HttpGet("{userName}/storage")]
+        [ProducesResponseType(typeof(UserStorageInfo), 200)]
         public async Task<IActionResult> GetUserQuotaInfo([FromRoute]string userName)
         {
             try
@@ -212,6 +215,7 @@ namespace Registry.Web.Controllers
         }
 
         [HttpGet("meta")]
+        [ProducesResponseType(typeof(Dictionary<string, object>), 200)]
         public async Task<IActionResult> GetUserMeta()
         {
 
@@ -233,6 +237,7 @@ namespace Registry.Web.Controllers
         }
 
         [HttpGet("{userName}/meta")]
+        [ProducesResponseType(typeof(Dictionary<string, object>), 200)]
         public async Task<IActionResult> GetUserMeta([FromRoute]string userName)
         {
 
