@@ -103,9 +103,9 @@ namespace Registry.Web.Test
         }
 
         [Test]
-        public void List_NullParameters_BadRequestException()
+        public async Task List_NullParameters_BadRequestException()
         {
-            using var context = GetTest1Context();
+            await using var context = GetTest1Context();
             _appSettingsMock.Setup(o => o.Value).Returns(JsonConvert.DeserializeObject<AppSettings>(_settingsJson));
             _authManagerMock.Setup(o => o.IsUserAdmin()).Returns(Task.FromResult(true));
 
@@ -115,10 +115,17 @@ namespace Registry.Web.Test
             var objectManager = new ObjectsManager(_objectManagerLogger, context, _objectSystemMock.Object, _appSettingsMock.Object,
                 _ddbFactoryMock.Object, webUtils, _authManagerMock.Object, _cacheManagerMock.Object, _backgroundJobsProcessor);
 
-            objectManager.Invoking(item => item.List(null, MagicStrings.DefaultDatasetSlug, "test")).Should().Throw<BadRequestException>();
-            objectManager.Invoking(item => item.List(MagicStrings.PublicOrganizationSlug, null, "test")).Should().Throw<BadRequestException>();
-            objectManager.Invoking(item => item.List(string.Empty, MagicStrings.DefaultDatasetSlug, "test")).Should().Throw<BadRequestException>();
-            objectManager.Invoking(item => item.List(MagicStrings.PublicOrganizationSlug, string.Empty, "test")).Should().Throw<BadRequestException>();
+            await objectManager.Invoking(item => item.List(null, MagicStrings.DefaultDatasetSlug, "test"))
+                .Should().ThrowAsync<BadRequestException>();
+
+            await objectManager.Invoking(item => item.List(MagicStrings.PublicOrganizationSlug, null, "test"))
+                .Should().ThrowAsync<BadRequestException>();
+
+            await objectManager.Invoking(item => item.List(string.Empty, MagicStrings.DefaultDatasetSlug, "test"))
+                .Should().ThrowAsync<BadRequestException>();
+
+            await objectManager.Invoking(item => item.List(MagicStrings.PublicOrganizationSlug, string.Empty, "test"))
+                .Should().ThrowAsync<BadRequestException>();
         }
 
         [Test]
@@ -206,8 +213,8 @@ namespace Registry.Web.Test
                 new PhysicalObjectSystem(new PhysicalObjectSystemSettings { BasePath = Path.Combine(test.TestFolder, StorageFolder) }), _appSettingsMock.Object,
                 new DdbManager(_appSettingsMock.Object, _ddbFactoryLogger), webUtils, _authManagerMock.Object, _cacheManagerMock.Object, _backgroundJobsProcessor);
 
-            objectManager.Invoking(async x => await x.Get(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug, "weriufbgeiughegr"))
-                .Should().Throw<NotFoundException>();
+            await objectManager.Invoking(async x => await x.Get(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug, "weriufbgeiughegr"))
+                .Should().ThrowAsync<NotFoundException>();
 
         }
 

@@ -116,7 +116,7 @@ namespace Registry.Adapters.Test.ObjectSystem
         }
 
         [Test]
-        public void RemoveBucketAsync_MissingBucket_ArgumentException()
+        public async Task RemoveBucketAsync_MissingBucket_ArgumentException()
         {
             using var test = new TestFS(Path.Combine(TestArchivesPath, "Test1.zip"), BaseTestFolder);
 
@@ -124,10 +124,10 @@ namespace Registry.Adapters.Test.ObjectSystem
 
             var fs = new PhysicalObjectSystem(new PhysicalObjectSystemSettings { BasePath = test.TestFolder });
 
-            FluentActions.Invoking(async () =>
+            await FluentActions.Invoking(async () =>
             {
                 await fs.RemoveBucketAsync(missingBucketName);
-            }).Should().Throw<ArgumentException>();
+            }).Should().ThrowAsync<ArgumentException>();
 
         }
 
@@ -156,7 +156,7 @@ namespace Registry.Adapters.Test.ObjectSystem
         }
 
         [Test]
-        public void MakeBucketAsync_ExistingBucket_ArgumentException()
+        public async Task MakeBucketAsync_ExistingBucket_ArgumentException()
         {
 
             using var test = new TestFS(Path.Combine(TestArchivesPath, "Test1.zip"), BaseTestFolder);
@@ -165,10 +165,10 @@ namespace Registry.Adapters.Test.ObjectSystem
 
             var fs = new PhysicalObjectSystem(new PhysicalObjectSystemSettings { BasePath = test.TestFolder });
 
-            FluentActions.Invoking(async () =>
+            await FluentActions.Invoking(async () =>
             {
                 await fs.MakeBucketAsync(alreadyExistingBucket, null);
-            }).Should().Throw<ArgumentException>();
+            }).Should().ThrowAsync<ArgumentException>();
 
         }
 
@@ -193,7 +193,7 @@ namespace Registry.Adapters.Test.ObjectSystem
         }
 
         [Test]
-        public void GetPolicyAsync_MissingBucket_ArgumentException()
+        public async Task GetPolicyAsync_MissingBucket_ArgumentException()
         {
             using var test = new TestFS(Path.Combine(TestArchivesPath, "Test2.zip"), BaseTestFolder);
 
@@ -201,10 +201,10 @@ namespace Registry.Adapters.Test.ObjectSystem
 
             var fs = new PhysicalObjectSystem(new PhysicalObjectSystemSettings { BasePath = test.TestFolder });
 
-            FluentActions.Invoking(async () =>
+            await FluentActions.Invoking(async () =>
             {
                 await fs.GetPolicyAsync(missingBucket);
-            }).Should().Throw<ArgumentException>();
+            }).Should().ThrowAsync<ArgumentException>();
         }
 
         [Test]
@@ -240,7 +240,7 @@ namespace Registry.Adapters.Test.ObjectSystem
         }
 
         [Test]
-        public void SetPolicyAsync_MissingBucket_ArgumentException()
+        public async Task SetPolicyAsync_MissingBucket_ArgumentException()
         {
             using var test = new TestFS(Path.Combine(TestArchivesPath, "Test2.zip"), BaseTestFolder);
 
@@ -249,15 +249,15 @@ namespace Registry.Adapters.Test.ObjectSystem
 
             var fs = new PhysicalObjectSystem(new PhysicalObjectSystemSettings { BasePath = test.TestFolder });
 
-            FluentActions.Invoking(async () =>
+            await FluentActions.Invoking(async () =>
             {
                 await fs.SetPolicyAsync(missingBucket, policy);
-            }).Should().Throw<ArgumentException>();
+            }).Should().ThrowAsync<ArgumentException>();
 
         }
 
         [Test]
-        public void SetPolicyAsync_InvalidPolicyJson_ArgumentException()
+        public async Task SetPolicyAsync_InvalidPolicyJson_ArgumentException()
         {
             using var test = new TestFS(Path.Combine(TestArchivesPath, "Test2.zip"), BaseTestFolder);
 
@@ -266,10 +266,10 @@ namespace Registry.Adapters.Test.ObjectSystem
 
             var fs = new PhysicalObjectSystem(new PhysicalObjectSystemSettings { BasePath = test.TestFolder });
 
-            FluentActions.Invoking(async () =>
+            await FluentActions.Invoking(async () =>
             {
                 await fs.SetPolicyAsync(bucketName, policy);
-            }).Should().Throw<ArgumentException>();
+            }).Should().ThrowAsync<ArgumentException>();
 
         }
 
@@ -345,7 +345,7 @@ namespace Registry.Adapters.Test.ObjectSystem
         }
 
         [Test]
-        public void GetObjectInfoAsync_MissingBucket_ArgumentException()
+        public async Task GetObjectInfoAsync_MissingBucket_ArgumentException()
         {
             using var test = new TestFS(Path.Combine(TestArchivesPath, "Test4.zip"), BaseTestFolder);
 
@@ -354,15 +354,15 @@ namespace Registry.Adapters.Test.ObjectSystem
 
             var fs = new PhysicalObjectSystem(new PhysicalObjectSystemSettings { BasePath = test.TestFolder });
 
-            FluentActions.Invoking(async () =>
+            await FluentActions.Invoking(async () =>
             {
                 await fs.GetObjectInfoAsync(missingBucket, objectName);
-            }).Should().Throw<ArgumentException>();
+            }).Should().ThrowAsync<ArgumentException>();
 
         }
 
         [Test]
-        public void GetObjectInfoAsync_MissingObject_ArgumentException()
+        public async Task GetObjectInfoAsync_MissingObject_ArgumentException()
         {
             using var test = new TestFS(Path.Combine(TestArchivesPath, "Test4.zip"), BaseTestFolder);
 
@@ -371,10 +371,10 @@ namespace Registry.Adapters.Test.ObjectSystem
 
             var fs = new PhysicalObjectSystem(new PhysicalObjectSystemSettings { BasePath = test.TestFolder });
 
-            FluentActions.Invoking(async () =>
+            await FluentActions.Invoking(async () =>
             {
                 await fs.GetObjectInfoAsync(existingBucket, missingObjectName);
-            }).Should().Throw<ArgumentException>();
+            }).Should().ThrowAsync<ArgumentException>();
 
         }
 
@@ -482,7 +482,7 @@ namespace Registry.Adapters.Test.ObjectSystem
         }
 
         [Test]
-        public void RemoveObjectAsync_MissingBucket_ArgumentException()
+        public async Task RemoveObjectAsync_MissingBucket_ArgumentException()
         {
             using var test = new TestFS(Path.Combine(TestArchivesPath, "Test4.zip"), BaseTestFolder);
 
@@ -491,15 +491,15 @@ namespace Registry.Adapters.Test.ObjectSystem
 
             var fs = new PhysicalObjectSystem(new PhysicalObjectSystemSettings { BasePath = test.TestFolder });
 
-            FluentActions.Invoking(async () =>
+            await FluentActions.Invoking(async () =>
             {
                 await fs.RemoveObjectAsync(missingBucket, objectName);
-            }).Should().Throw<ArgumentException>();
+            }).Should().ThrowAsync<ArgumentException>();
 
         }
 
         [Test]
-        public void RemoveObjectAsync_MissingObject_ArgumentException()
+        public async Task RemoveObjectAsync_MissingObject_ArgumentException()
         {
             using var test = new TestFS(Path.Combine(TestArchivesPath, "Test4.zip"), BaseTestFolder);
 
@@ -508,10 +508,10 @@ namespace Registry.Adapters.Test.ObjectSystem
 
             var fs = new PhysicalObjectSystem(new PhysicalObjectSystemSettings { BasePath = test.TestFolder });
 
-            FluentActions.Invoking(async () =>
+            await FluentActions.Invoking(async () =>
             {
                 await fs.RemoveObjectAsync(bucketName, missingObject);
-            }).Should().NotThrow<ArgumentException>();
+            }).Should().ThrowAsync<ArgumentException>();
 
         }
 
@@ -529,17 +529,17 @@ namespace Registry.Adapters.Test.ObjectSystem
 
             await fs.RemoveObjectAsync(bucketName, objectName);
 
-            FluentActions.Invoking(async () =>
+            await FluentActions.Invoking(async () =>
             {
                 var res = await fs.GetObjectInfoAsync(bucketName, objectName);
-            }).Should().Throw<ArgumentException>();
+            }).Should().ThrowAsync<ArgumentException>();
 
             fs.ListObjectsAsync(bucketName).ToEnumerable().Select(item => item.Key).Should().NotContain(objectName);
 
         }
 
         [Test]
-        public void GetObjectAsync_File_MissingBucket_ArgumentException()
+        public async Task GetObjectAsync_File_MissingBucket_ArgumentException()
         {
             using var test = new TestFS(Path.Combine(TestArchivesPath, "Test4.zip"), BaseTestFolder);
 
@@ -548,15 +548,15 @@ namespace Registry.Adapters.Test.ObjectSystem
 
             var fs = new PhysicalObjectSystem(new PhysicalObjectSystemSettings { BasePath = test.TestFolder });
 
-            FluentActions.Invoking(async () =>
+            await FluentActions.Invoking(async () =>
             {
                 await fs.GetObjectAsync(missingBucket, objectName, Path.Combine(Path.GetTempPath(), objectName));
-            }).Should().Throw<ArgumentException>();
+            }).Should().ThrowAsync<ArgumentException>();
 
         }
 
         [Test]
-        public void GetObjectAsync_File_MissingObject_ArgumentException()
+        public async Task GetObjectAsync_File_MissingObject_ArgumentException()
         {
             using var test = new TestFS(Path.Combine(TestArchivesPath, "Test4.zip"), BaseTestFolder);
 
@@ -565,10 +565,10 @@ namespace Registry.Adapters.Test.ObjectSystem
 
             var fs = new PhysicalObjectSystem(new PhysicalObjectSystemSettings { BasePath = test.TestFolder });
 
-            FluentActions.Invoking(async () =>
+            await FluentActions.Invoking(async () =>
             {
                 await fs.GetObjectAsync(bucketName, missingObject, Path.Combine(Path.GetTempPath(), missingObject));
-            }).Should().Throw<ArgumentException>();
+            }).Should().ThrowAsync<ArgumentException>();
 
         }
 
@@ -599,7 +599,7 @@ namespace Registry.Adapters.Test.ObjectSystem
         }
 
         [Test]
-        public void GetObjectAsync_Stream_MissingBucket_ArgumentException()
+        public async Task GetObjectAsync_Stream_MissingBucket_ArgumentException()
         {
             using var test = new TestFS(Path.Combine(TestArchivesPath, "Test4.zip"), BaseTestFolder);
 
@@ -608,15 +608,15 @@ namespace Registry.Adapters.Test.ObjectSystem
 
             var fs = new PhysicalObjectSystem(new PhysicalObjectSystemSettings { BasePath = test.TestFolder });
 
-            FluentActions.Invoking(async () =>
+            await FluentActions.Invoking(async () =>
             {
                 await fs.GetObjectAsync(missingBucket, objectName, s => { });
-            }).Should().Throw<ArgumentException>();
+            }).Should().ThrowAsync<ArgumentException>();
 
         }
 
         [Test]
-        public void GetObjectAsync_Stream_MissingObject_ArgumentException()
+        public async Task GetObjectAsync_Stream_MissingObject_ArgumentException()
         {
             using var test = new TestFS(Path.Combine(TestArchivesPath, "Test4.zip"), BaseTestFolder);
 
@@ -625,10 +625,10 @@ namespace Registry.Adapters.Test.ObjectSystem
 
             var fs = new PhysicalObjectSystem(new PhysicalObjectSystemSettings { BasePath = test.TestFolder });
 
-            FluentActions.Invoking(async () =>
+            await FluentActions.Invoking(async () =>
             {
                 await fs.GetObjectAsync(bucketName, missingObject, s => { });
-            }).Should().Throw<ArgumentException>();
+            }).Should().ThrowAsync<ArgumentException>();
 
         }
 
@@ -665,7 +665,7 @@ namespace Registry.Adapters.Test.ObjectSystem
         }
 
         [Test]
-        public void GetObjectAsync_StreamChunk_MissingBucket_ArgumentException()
+        public async Task GetObjectAsync_StreamChunk_MissingBucket_ArgumentException()
         {
             using var test = new TestFS(Path.Combine(TestArchivesPath, "Test4.zip"), BaseTestFolder);
 
@@ -674,15 +674,15 @@ namespace Registry.Adapters.Test.ObjectSystem
 
             var fs = new PhysicalObjectSystem(new PhysicalObjectSystemSettings { BasePath = test.TestFolder });
 
-            FluentActions.Invoking(async () =>
+            await FluentActions.Invoking(async () =>
             {
                 await fs.GetObjectAsync(missingBucket, objectName, 0, 4000, s => { });
-            }).Should().Throw<ArgumentException>();
+            }).Should().ThrowAsync<ArgumentException>();
 
         }
 
         [Test]
-        public void GetObjectAsync_StreamChunk_MissingObject_ArgumentException()
+        public async Task GetObjectAsync_StreamChunk_MissingObject_ArgumentException()
         {
             using var test = new TestFS(Path.Combine(TestArchivesPath, "Test4.zip"), BaseTestFolder);
 
@@ -691,10 +691,10 @@ namespace Registry.Adapters.Test.ObjectSystem
 
             var fs = new PhysicalObjectSystem(new PhysicalObjectSystemSettings { BasePath = test.TestFolder });
 
-            FluentActions.Invoking(async () =>
+            await FluentActions.Invoking(async () =>
             {
                 await fs.GetObjectAsync(bucketName, missingObject, 0, 4000, s => { });
-            }).Should().Throw<ArgumentException>();
+            }).Should().ThrowAsync<ArgumentException>();
 
         }
 
@@ -748,7 +748,7 @@ namespace Registry.Adapters.Test.ObjectSystem
         }
 
         [Test]
-        public void RemoveIncompleteUploadAsync_MissingBucket_ArgumentException()
+        public async Task RemoveIncompleteUploadAsync_MissingBucket_ArgumentException()
         {
             using var test = new TestFS(Path.Combine(TestArchivesPath, "Test4.zip"), BaseTestFolder);
 
@@ -757,15 +757,15 @@ namespace Registry.Adapters.Test.ObjectSystem
 
             var fs = new PhysicalObjectSystem(new PhysicalObjectSystemSettings { BasePath = test.TestFolder });
 
-            FluentActions.Invoking(async () =>
+            await FluentActions.Invoking(async () =>
             {
                 await fs.RemoveIncompleteUploadAsync(missingBucket, objectName);
-            }).Should().Throw<ArgumentException>();
+            }).Should().ThrowAsync<ArgumentException>();
 
         }
 
         [Test]
-        public void RemoveIncompleteUploadAsync_MissingObject_ArgumentException()
+        public async Task RemoveIncompleteUploadAsync_MissingObject_ArgumentException()
         {
             using var test = new TestFS(Path.Combine(TestArchivesPath, "Test4.zip"), BaseTestFolder);
 
@@ -774,15 +774,15 @@ namespace Registry.Adapters.Test.ObjectSystem
 
             var fs = new PhysicalObjectSystem(new PhysicalObjectSystemSettings { BasePath = test.TestFolder });
 
-            FluentActions.Invoking(async () =>
+            await FluentActions.Invoking(async () =>
             {
                 await fs.RemoveIncompleteUploadAsync(bucketName, missingObject);
-            }).Should().Throw<ArgumentException>();
+            }).Should().ThrowAsync<ArgumentException>();
 
         }
 
         [Test]
-        public void RemoveIncompleteUploadAsync_ExistingObject_NotSupportedException()
+        public async Task RemoveIncompleteUploadAsync_ExistingObject_NotSupportedException()
         {
             using var test = new TestFS(Path.Combine(TestArchivesPath, "Test4.zip"), BaseTestFolder);
 
@@ -791,15 +791,15 @@ namespace Registry.Adapters.Test.ObjectSystem
 
             var fs = new PhysicalObjectSystem(new PhysicalObjectSystemSettings { BasePath = test.TestFolder });
 
-            FluentActions.Invoking(async () =>
+            await FluentActions.Invoking(async () =>
             {
                 await fs.RemoveIncompleteUploadAsync(bucketName, missingObject);
-            }).Should().Throw<NotSupportedException>();
+            }).Should().ThrowAsync<NotSupportedException>();
 
         }
 
         [Test]
-        public void ListIncompleteUploads_MissingBucket_ArgumentException()
+        public async Task ListIncompleteUploads_MissingBucket_ArgumentException()
         {
             using var test = new TestFS(Path.Combine(TestArchivesPath, "Test4.zip"), BaseTestFolder);
 
@@ -807,10 +807,10 @@ namespace Registry.Adapters.Test.ObjectSystem
 
             var fs = new PhysicalObjectSystem(new PhysicalObjectSystemSettings { BasePath = test.TestFolder });
 
-            FluentActions.Invoking(async () =>
+            await FluentActions.Invoking(async () =>
             {
                 await fs.ListIncompleteUploads(missingBucket);
-            }).Should().Throw<ArgumentException>();
+            }).Should().ThrowAsync<ArgumentException>();
 
         }
 
@@ -828,7 +828,7 @@ namespace Registry.Adapters.Test.ObjectSystem
         }
 
         [Test]
-        public void CopyObjectAsync_MissingSourceBucket_ArgumentException()
+        public async Task CopyObjectAsync_MissingSourceBucket_ArgumentException()
         {
             using var test = new TestFS(Path.Combine(TestArchivesPath, "Test4.zip"), BaseTestFolder);
 
@@ -839,15 +839,15 @@ namespace Registry.Adapters.Test.ObjectSystem
 
             var fs = new PhysicalObjectSystem(new PhysicalObjectSystemSettings { BasePath = test.TestFolder });
 
-            FluentActions.Invoking(async () =>
+            await FluentActions.Invoking(async () =>
             {
                 await fs.CopyObjectAsync(missingBucket, sourceObjectName, destBucket);
-            }).Should().Throw<ArgumentException>();
+            }).Should().ThrowAsync<ArgumentException>();
 
         }
 
         [Test]
-        public void CopyObjectAsync_MissingObject_ArgumentException()
+        public async Task CopyObjectAsync_MissingObject_ArgumentException()
         {
             using var test = new TestFS(Path.Combine(TestArchivesPath, "Test4.zip"), BaseTestFolder);
 
@@ -858,15 +858,15 @@ namespace Registry.Adapters.Test.ObjectSystem
 
             var fs = new PhysicalObjectSystem(new PhysicalObjectSystemSettings { BasePath = test.TestFolder });
 
-            FluentActions.Invoking(async () =>
+            await FluentActions.Invoking(async () =>
             {
                 await fs.CopyObjectAsync(bucketName, missingObject, destBucket);
-            }).Should().Throw<ArgumentException>();
+            }).Should().ThrowAsync<ArgumentException>();
 
         }
 
         [Test]
-        public void CopyObjectAsync_MissingDestBucket_ArgumentException()
+        public async Task CopyObjectAsync_MissingDestBucket_ArgumentException()
         {
             using var test = new TestFS(Path.Combine(TestArchivesPath, "Test4.zip"), BaseTestFolder);
 
@@ -877,15 +877,15 @@ namespace Registry.Adapters.Test.ObjectSystem
 
             var fs = new PhysicalObjectSystem(new PhysicalObjectSystemSettings { BasePath = test.TestFolder });
 
-            FluentActions.Invoking(async () =>
+            await FluentActions.Invoking(async () =>
             {
                 await fs.CopyObjectAsync(bucketName, objectName, missingBucket);
-            }).Should().Throw<ArgumentException>();
+            }).Should().ThrowAsync<ArgumentException>();
 
         }
 
         [Test]
-        public void CopyObjectAsync_CopyConditions_NotImplemented()
+        public async Task CopyObjectAsync_CopyConditions_NotImplemented()
         {
             using var test = new TestFS(Path.Combine(TestArchivesPath, "Test4.zip"), BaseTestFolder);
 
@@ -896,10 +896,10 @@ namespace Registry.Adapters.Test.ObjectSystem
 
             var fs = new PhysicalObjectSystem(new PhysicalObjectSystemSettings { BasePath = test.TestFolder });
 
-            FluentActions.Invoking(async () =>
+            await FluentActions.Invoking(async () =>
             {
                 await fs.CopyObjectAsync(bucketName, objectName, destBucketName, null, new CopyConditions());
-            }).Should().Throw<NotImplementedException>();
+            }).Should().ThrowAsync<NotImplementedException>();
 
         }
 
@@ -926,7 +926,7 @@ namespace Registry.Adapters.Test.ObjectSystem
         }
 
         [Test]
-        public void PutObjectAsync_MissingObject_ArgumentException()
+        public async Task PutObjectAsync_MissingObject_ArgumentException()
         {
             using var test = new TestFS(Path.Combine(TestArchivesPath, "Test4.zip"), BaseTestFolder);
 
@@ -935,14 +935,14 @@ namespace Registry.Adapters.Test.ObjectSystem
 
             const string fileContent = "Hello World";
 
-            using var memoryStream = new MemoryStream(Encoding.UTF8.GetBytes(fileContent));
+            await using var memoryStream = new MemoryStream(Encoding.UTF8.GetBytes(fileContent));
 
             var fs = new PhysicalObjectSystem(new PhysicalObjectSystemSettings { BasePath = test.TestFolder });
 
-            FluentActions.Invoking(async () =>
+            await FluentActions.Invoking(async () =>
             {
                 await fs.PutObjectAsync(missingBucket, objectName, memoryStream, fileContent.Length);
-            }).Should().Throw<ArgumentException>();
+            }).Should().ThrowAsync<ArgumentException>();
         }
 
         [Test]

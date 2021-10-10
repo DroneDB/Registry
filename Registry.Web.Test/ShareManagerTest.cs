@@ -110,7 +110,7 @@ namespace Registry.Web.Test
         }
 
         [Test]
-        public void Initialize_NullParameters_BadRequest()
+        public async Task Initialize_NullParameters_BadRequest()
         {
             const string userName = "admin";
 
@@ -126,10 +126,10 @@ namespace Registry.Web.Test
             var manager = new ShareManager(_appSettingsMock.Object, _shareManagerLogger, _objectsManagerMock.Object, _datasetsManagerMock.Object,
                 _organizationsManagerMock.Object, _utilsMock.Object, _authManagerMock.Object, _batchTokenGenerator, _nameGenerator, GetTest1Context());
 
-            manager.Invoking(x => x.Initialize(null)).Should().Throw<BadRequestException>();
+            await manager.Invoking(x => x.Initialize(null)).Should().ThrowAsync<BadRequestException>();
             // Now empty tag is supported
             //manager.Invoking(x => x.Initialize(new ShareInitDto())).Should().Throw<BadRequestException>();
-            manager.Invoking(x => x.Initialize(new ShareInitDto { Tag = "ciao" })).Should().Throw<BadRequestException>();
+           await manager.Invoking(x => x.Initialize(new ShareInitDto { Tag = "ciao" })).Should().ThrowAsync<BadRequestException>();
 
         }
 
@@ -493,12 +493,12 @@ namespace Registry.Web.Test
             newBatch.Status.Should().Be(BatchStatus.Running);
 
             // Upload to old batch -> Exception
-            shareManager.Invoking(async x => await x.Upload(initRes.Token, fileName, CommonUtils.SmartDownloadData(newFileUrl)))
-                .Should().Throw<BadRequestException>();
+            await shareManager.Invoking(async x => await x.Upload(initRes.Token, fileName, CommonUtils.SmartDownloadData(newFileUrl)))
+                .Should().ThrowAsync<BadRequestException>();
 
             // Commit old batch -> Exception
-            shareManager.Invoking(async x => await shareManager.Commit(initRes.Token))
-                .Should().Throw<BadRequestException>();
+            await shareManager.Invoking(async x => await shareManager.Commit(initRes.Token))
+                .Should().ThrowAsync<BadRequestException>();
 
             // Fix
             context.Set<Entry>().Local.Clear();
