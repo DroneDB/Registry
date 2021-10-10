@@ -115,7 +115,7 @@ namespace Registry.Adapters.ObjectSystem
         public Task RemoveObjectAsync(string bucketName, string objectName, CancellationToken cancellationToken = default)
         {
             EnsureBucketExists(bucketName);
-            var objectPath = GetObjectPath(bucketName, objectName);
+            var objectPath = EnsureObjectExists(bucketName, objectName);
 
             return Task.Run(() =>
             {
@@ -135,7 +135,7 @@ namespace Registry.Adapters.ObjectSystem
             {
                 foreach (var obj in objectsNames)
                 {
-                    var objectPath = GetObjectPath(bucketName, obj);
+                    var objectPath = EnsureObjectExists(bucketName, obj);
 
                     File.Delete(objectPath);
 
