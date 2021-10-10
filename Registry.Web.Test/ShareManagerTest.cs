@@ -45,8 +45,6 @@ namespace Registry.Web.Test
         private Logger<BatchTokenGenerator> _batchTokenGeneratorLogger;
         private Logger<NameGenerator> _nameGeneratorLogger;
 
-        private IPasswordHasher _passwordHasher;
-
         private Mock<IObjectSystem> _objectSystemMock;
         private Mock<IOptions<AppSettings>> _appSettingsMock;
         private Mock<IDdbManager> _ddbFactoryMock;
@@ -93,7 +91,6 @@ namespace Registry.Web.Test
             _backgroundJobsProcessor = new SimpleBackgroundJobsProcessor();
 
             _cacheManagerMock = new Mock<ICacheManager>();
-            _passwordHasher = new PasswordHasher();
 
             _shareManagerLogger = new Logger<ShareManager>(LoggerFactory.Create(builder => builder.AddConsole()));
             _objectManagerLogger = new Logger<ObjectsManager>(LoggerFactory.Create(builder => builder.AddConsole()));
@@ -181,7 +178,7 @@ namespace Registry.Web.Test
                 _appSettingsMock.Object, ddbFactory, webUtils, _authManagerMock.Object, _cacheManagerMock.Object, _backgroundJobsProcessor);
 
             var datasetManager = new DatasetsManager(context, webUtils, _datasetsManagerLogger, objectManager,
-                _passwordHasher, _ddbFactoryMock.Object, _authManagerMock.Object);
+                _ddbFactoryMock.Object, _authManagerMock.Object);
             var organizationsManager = new OrganizationsManager(_authManagerMock.Object, context, webUtils, datasetManager, _organizationsManagerLogger);
 
             var shareManager = new ShareManager(_appSettingsMock.Object, _shareManagerLogger, objectManager, datasetManager, organizationsManager,
@@ -278,7 +275,7 @@ namespace Registry.Web.Test
                 _appSettingsMock.Object, ddbFactory, webUtils, _authManagerMock.Object, _cacheManagerMock.Object, _backgroundJobsProcessor);
 
             var datasetManager = new DatasetsManager(context, webUtils, _datasetsManagerLogger, objectManager,
-                _passwordHasher, _ddbFactoryMock.Object, _authManagerMock.Object);
+                _ddbFactoryMock.Object, _authManagerMock.Object);
             var organizationsManager = new OrganizationsManager(_authManagerMock.Object, context, webUtils, datasetManager, _organizationsManagerLogger);
 
             var shareManager = new ShareManager(_appSettingsMock.Object, _shareManagerLogger, objectManager, datasetManager, organizationsManager,
@@ -293,7 +290,6 @@ namespace Registry.Web.Test
             const string datasetTestName = "First";
             const string organizationTestSlug = "test";
             const string datasetTestSlug = "first";
-            const string testPassword = "ciaoatutti";
             const string newFileUrl = "https://github.com/DroneDB/test_data/raw/master/test-datasets/drone_dataset_brighton_beach/" + fileName;
 
             // ListBatches
@@ -316,8 +312,7 @@ namespace Registry.Web.Test
             var initRes = await shareManager.Initialize(new ShareInitDto
             {
                 Tag = $"{organizationTestSlug}/{datasetTestSlug}",
-                DatasetName = datasetTestName,
-                Password = testPassword
+                DatasetName = datasetTestName
             });
 
             initRes.Should().NotBeNull();
@@ -412,7 +407,7 @@ namespace Registry.Web.Test
                 _appSettingsMock.Object, ddbFactory, webUtils, _authManagerMock.Object, _cacheManagerMock.Object, _backgroundJobsProcessor);
 
             var datasetManager = new DatasetsManager(context, webUtils, _datasetsManagerLogger, objectManager,
-                _passwordHasher, _ddbFactoryMock.Object, _authManagerMock.Object);
+                _ddbFactoryMock.Object, _authManagerMock.Object);
             var organizationsManager = new OrganizationsManager(_authManagerMock.Object, context, webUtils, datasetManager, _organizationsManagerLogger);
 
             var shareManager = new ShareManager(_appSettingsMock.Object, _shareManagerLogger, objectManager, datasetManager, organizationsManager,
@@ -446,7 +441,6 @@ namespace Registry.Web.Test
             {
                 Tag = $"{organizationTestSlug}/{datasetTestSlug}",
                 DatasetName = datasetTestName,
-                Password = testPassword
             });
 
             initRes.Should().NotBeNull();
@@ -468,7 +462,6 @@ namespace Registry.Web.Test
             {
                 Tag = $"{organizationTestSlug}/{datasetTestSlug}",
                 DatasetName = datasetTestName,
-                Password = testPassword
             });
 
             initRes.Token.Should().NotBeNullOrWhiteSpace();
@@ -532,9 +525,7 @@ namespace Registry.Web.Test
 
         }
 
-
-
-
+        
         #region Test Data
 
         private readonly AppSettings _settings = JsonConvert.DeserializeObject<AppSettings>(@"{
@@ -570,13 +561,7 @@ namespace Registry.Web.Test
 }
   ");
 
-
-
-        public ShareManagerTest(IPasswordHasher passwordHasher)
-        {
-            _passwordHasher = passwordHasher;
-        }
-
+ 
         #endregion
 
         #region TestContexts
@@ -604,7 +589,6 @@ namespace Registry.Web.Test
                 {
                     Slug = MagicStrings.DefaultDatasetSlug,
                     Name = "Default",
-                    Description = "Default dataset",
                     //IsPublic = true,
                     CreationDate = DateTime.Now,
                     //LastUpdate = DateTime.Now,

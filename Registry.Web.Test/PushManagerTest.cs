@@ -369,7 +369,6 @@ namespace Registry.Web.Test
                 {
                     Slug = MagicStrings.DefaultDatasetSlug,
                     Name = "Default",
-                    Description = "Default dataset",
                     //IsPublic = true,
                     CreationDate = DateTime.Now,
                     //LastUpdate = DateTime.Now,
@@ -394,7 +393,6 @@ namespace Registry.Web.Test
                 {
                     Slug = "test",
                     Name = "Test",
-                    Description = "Test dataset",
                     //IsPublic = false,
                     CreationDate = DateTime.Now,
                     //LastUpdate = DateTime.Now,

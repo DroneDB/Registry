@@ -20,11 +20,8 @@ namespace Registry.Web.Data.Models
 
         [Required]
         public string Name { get; set; }
-        public string Description { get; set; }
         [Required]
         public DateTime CreationDate { get; set; }
-
-        public string PasswordHash { get; set; }
 
         [Required]
         public Organization Organization { get; set; }

@@ -634,7 +634,6 @@ namespace Registry.Web
                 {
                     Slug = MagicStrings.DefaultDatasetSlug,
                     Name = MagicStrings.DefaultDatasetSlug.ToPascalCase(false, CultureInfo.InvariantCulture),
-                    Description = "Default dataset",
                     //IsPublic = true,
                     CreationDate = DateTime.Now,
                     //LastUpdate = DateTime.Now,

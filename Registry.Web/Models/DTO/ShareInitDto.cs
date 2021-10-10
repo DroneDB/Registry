@@ -10,10 +10,8 @@ namespace Registry.Web.Models.DTO
     {
         public string Tag { get; set; }
 
-        public string Password { get; set; }
 
         public string DatasetName { get; set; }
-        public string DatasetDescription { get; set; }
         
     }
 }

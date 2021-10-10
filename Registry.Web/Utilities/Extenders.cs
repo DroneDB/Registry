@@ -62,7 +62,6 @@ namespace Registry.Web.Utilities
                 Id = dataset.Id,
                 Slug = dataset.Slug,
                 CreationDate = dataset.CreationDate,
-                Description = dataset.Description,
                 Name = string.IsNullOrEmpty(dataset.Name) ? dataset.Slug : dataset.Name
             };
             return entity;
@@ -77,7 +76,6 @@ namespace Registry.Web.Utilities
                 Id = dataset.Id,
                 Slug = dataset.Slug,
                 CreationDate = dataset.CreationDate,
-                Description = dataset.Description,
                 LastEdit = entry.ModifiedTime,
                 Name = dataset.Name,
                 Properties = entry.Properties,

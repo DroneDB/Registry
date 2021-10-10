@@ -19,7 +19,6 @@ namespace Registry.Web.Services.Managers
         private readonly IUtils _utils;
         private readonly ILogger<DatasetsManager> _logger;
         private readonly IObjectsManager _objectsManager;
-        private readonly IPasswordHasher _passwordHasher;
         private readonly IDdbManager _ddbManager;
         private readonly IAuthManager _authManager;
 
@@ -30,14 +29,12 @@ namespace Registry.Web.Services.Managers
             IUtils utils,
             ILogger<DatasetsManager> logger,
             IObjectsManager objectsManager,
-            IPasswordHasher passwordHasher,
             IDdbManager ddbManager, IAuthManager authManager)
         {
             _context = context;
             _utils = utils;
             _logger = logger;
             _objectsManager = objectsManager;
-            _passwordHasher = passwordHasher;
             _ddbManager = ddbManager;
             _authManager = authManager;
         }
@@ -60,7 +57,6 @@ namespace Registry.Web.Services.Managers
                     Id = ds.Id,
                     Slug = ds.Slug,
                     CreationDate = ds.CreationDate,
-                    Description = ds.Description,
                     LastEdit = attributes.LastUpdate,
                     IsPublic = attributes.IsPublic,
                     Name = ds.Name,
@@ -115,9 +111,6 @@ namespace Registry.Web.Services.Managers
 
             var now = DateTime.Now;
 
-            if (!string.IsNullOrEmpty(dataset.Password))
-                ds.PasswordHash = _passwordHasher.Hash(dataset.Password);
-
             if (ds.InternalRef == Guid.Empty)
                 ds.InternalRef = Guid.NewGuid();
 
@@ -149,16 +142,12 @@ namespace Registry.Web.Services.Managers
             if (!await _authManager.IsOwnerOrAdmin(ds))
                 throw new UnauthorizedException("The current user is not allowed to edit dataset");
 
-            ds.Description = dataset.Description;
             ds.Name = dataset.Name;
 
             var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
             var attributes = await ddb.GetAttributesAsync();
             attributes.IsPublic = dataset.IsPublic;
             attributes.LastUpdate = DateTime.Now;
-
-            if (!string.IsNullOrEmpty(dataset.Password))
-                ds.PasswordHash = _passwordHasher.Hash(dataset.Password);
 
             await _context.SaveChangesAsync();
 
