@@ -181,6 +181,7 @@ namespace Registry.Web.Services.Managers
             if (res.Type == EntryType.Directory)
                 throw new InvalidOperationException("Cannot get a folder, we are supposed to deal with a file!");
 
+            // We keep this because we need the actual ContextType
             var objInfo = await _objectSystem.GetObjectInfoAsync(bucketName, res.Path);
 
             if (objInfo == null)
@@ -781,11 +782,6 @@ namespace Registry.Web.Services.Managers
 
             if (!bucketExists)
                 throw new NotFoundException($"Cannot find bucket '{bucketName}'");
-
-            var objInfo = await _objectSystem.GetObjectInfoAsync(bucketName, path);
-
-            if (objInfo == null)
-                throw new NotFoundException($"Cannot find '{path}' in storage provider");
 
             _logger.LogInformation($"Getting object '{path}' in bucket '{bucketName}'");
 
