@@ -24,31 +24,15 @@ namespace Registry.Adapters
     {
         public static ServerSideEncryption ToSSE(this IServerEncryption encryption)
         {
-
-            if (encryption == null) return null;
-
-            if (encryption is EncryptionC ssec)
+            return encryption switch
             {
-                return new SSEC(ssec.Key);
-            }
-
-            if (encryption is EncryptionKMS ssekms)
-            {
-                return new SSEKMS(ssekms.Key, ssekms.Context);
-            }
-
-            if (encryption is EncryptionS3)
-            {
-                return new SSES3();
-            }
-
-            if (encryption is EncryptionCopy ssecopy)
-            {
-                return new SSECopy(ssecopy.Key);
-            }
-
-            throw new ArgumentException($"Encryption not supported: '{encryption.GetType().Name}'");
-
+                null => null,
+                EncryptionC ssec => new SSEC(ssec.Key),
+                EncryptionKMS ssekms => new SSEKMS(ssekms.Key, ssekms.Context),
+                EncryptionS3 => new SSES3(),
+                EncryptionCopy ssecopy => new SSECopy(ssecopy.Key),
+                _ => throw new ArgumentException($"Encryption not supported: '{encryption.GetType().Name}'")
+            };
         }
 
         #region ETag
@@ -201,11 +185,9 @@ namespace Registry.Adapters
 
             foreach (var obj in sourceObjects)
             {
-
                 if (obj.IsDir)
                     throw new NotSupportedException("Not supported folder copy");
                 
-
                 var newPath = CommonUtils.SafeCombine(dest, obj.Key[(source.Length + 1)..]);
 
                 await system.CopyObjectAsync(bucketName, obj.Key, bucketName, newPath);
