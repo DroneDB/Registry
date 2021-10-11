@@ -155,8 +155,16 @@ namespace Registry.Web
 
             }
 
+            if (string.IsNullOrWhiteSpace(appSettings.StaticFilesCachePath))
+            {
+                appSettings.StaticFilesCachePath = defaultAppSettings.StaticFilesCachePath;
+            }
+
+            Directory.CreateDirectory(appSettings.StaticFilesCachePath);
+            
             config["AppSettings"] = JObject.FromObject(appSettings);
 
+            
             // Update config
             File.WriteAllText(ConfigFilePath, JsonConvert.SerializeObject(config, Formatting.Indented));
 

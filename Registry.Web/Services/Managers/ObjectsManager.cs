@@ -517,9 +517,9 @@ namespace Registry.Web.Services.Managers
             _logger.LogInformation($"In GenerateThumbnail('{orgSlug}/{dsSlug}')");
 
             // Fix fox '/img.png' -> 'img.png'
-            if (path.StartsWith('/')) path = path.Substring(1);
+            if (path.StartsWith('/')) path = path[1..];
 
-            var entry = EnsurePathValidity(orgSlug, ds.InternalRef, path, out IDdb ddb);
+            var entry = EnsurePathValidity(orgSlug, ds.InternalRef, path, out var ddb);
 
             var fileName = Path.GetFileName(path);
             if (fileName == null)
@@ -528,7 +528,8 @@ namespace Registry.Web.Services.Managers
             var bucketName = _utils.GetBucketName(orgSlug, ds.InternalRef);
             var sourcePath = GetBuildSource(bucketName, entry);
 
-            var thumbData = await _cacheManager.GenerateThumbnail(ddb, sourcePath, entry.Hash, size ?? DefaultThumbnailSize);
+            var thumbData = await ddb.GenerateThumbnailAsync(sourcePath, size ?? DefaultThumbnailSize);
+            //var thumbData = await _cacheManager.GenerateThumbnail(ddb, sourcePath, entry.Hash, size ?? DefaultThumbnailSize);
             var memory = new MemoryStream(thumbData);
 
             return new FileDescriptorDto

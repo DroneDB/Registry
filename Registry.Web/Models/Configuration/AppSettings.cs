@@ -110,5 +110,9 @@ namespace Registry.Web.Models.Configuration
         /// </summary>
         public int WorkerThreads { get; set; }
 
+        /// <summary>
+        /// Static files cache path
+        /// </summary>
+        public string StaticFilesCachePath { get; set; }
     }
 }

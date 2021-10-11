@@ -26,6 +26,7 @@ using Microsoft.AspNetCore.Server.Kestrel.Core;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.FileProviders;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
@@ -97,19 +98,15 @@ namespace Registry.Web
             services.AddResponseCaching(options =>
             {
                 options.MaximumBodySize = 8 * 1024 * 1024; // 8MB
-                options.SizeLimit = 10 * 1024 * 1024;      // 10MB
+                options.SizeLimit = 10 * 1024 * 1024; // 10MB
                 options.UseCaseSensitivePaths = true;
             });
 
-            services.AddSpaStaticFiles(config =>
-            {
-                config.RootPath = "ClientApp/build";
-            });
+            services.AddSpaStaticFiles(config => { config.RootPath = "ClientApp/build"; });
 
             // Let's use a strongly typed class for settings
             var appSettingsSection = Configuration.GetSection("AppSettings");
             services.Configure<AppSettings>(appSettingsSection);
-
             var appSettings = appSettingsSection.Get<AppSettings>();
 
             ConfigureDbProvider<ApplicationDbContext>(services, appSettings.AuthProvider, IdentityConnectionName);
@@ -130,7 +127,6 @@ namespace Registry.Web
                     .AddSignInManager();
 
                 services.AddScoped<ILoginManager, LocalLoginManager>();
-
             }
 
             ConfigureDbProvider<RegistryContext>(services, appSettings.RegistryProvider, RegistryConnectionName);
@@ -195,10 +191,8 @@ namespace Registry.Web
                 .AddCheck<ObjectSystemHealthCheck>("Object system health check", null, new[] { "storage" })
                 .AddDiskSpaceHealthCheck(appSettings.DdbStoragePath, "Ddb storage path space health check", null,
                     new[] { "storage" })
-                .AddHangfire(options =>
-                {
-                    options.MinimumAvailableServers = 1;
-                }, "Hangfire health check", null, new[] { "database" });
+                .AddHangfire(options => { options.MinimumAvailableServers = 1; }, "Hangfire health check", null,
+                    new[] { "database" });
 
             /*
              * NOTE about services lifetime:
@@ -213,6 +207,7 @@ namespace Registry.Web
              *   followed by a Scoped service object and the least by a Transient object.
              */
 
+            services.AddTransient<LazyCacheMiddleware>();
             services.AddTransient<TokenManagerMiddleware>();
             services.AddTransient<JwtInCookieMiddleware>();
             services.AddTransient<ITokenManager, TokenManager>();
@@ -254,16 +249,10 @@ namespace Registry.Web
             services.AddHttpContextAccessor();
 
             // If using Kestrel:
-            services.Configure<KestrelServerOptions>(options =>
-            {
-                options.AllowSynchronousIO = true;
-            });
+            services.Configure<KestrelServerOptions>(options => { options.AllowSynchronousIO = true; });
 
             // If using IIS:
-            services.Configure<IISServerOptions>(options =>
-            {
-                options.AllowSynchronousIO = true;
-            });
+            services.Configure<IISServerOptions>(options => { options.AllowSynchronousIO = true; });
 
             // TODO: Enable when needed. Should check return object structure
             // services.AddOData();
@@ -287,17 +276,20 @@ namespace Registry.Web
             }
 
             app.UseDefaultFiles();
-            app.UseSpaStaticFiles(new StaticFileOptions
+
+            var appSettingsSection = Configuration.GetSection("AppSettings");
+            var appSettings = appSettingsSection.Get<AppSettings>();
+            
+            app.UseStaticFiles(new StaticFileOptions
             {
-                ServeUnknownFileTypes = true
+                FileProvider = new PhysicalFileProvider(Path.GetFullPath(appSettings.StaticFilesCachePath)),
+                RequestPath = "/static",
+                HttpsCompression = HttpsCompressionMode.Compress,
+                RedirectToAppendTrailingSlash = true,
             });
 
             app.UseSwagger();
-
-            app.UseSwaggerUI(c =>
-            {
-                c.SwaggerEndpoint("/swagger/v1/swagger.json", "Registry API");
-            });
+            app.UseSwaggerUI(c => { c.SwaggerEndpoint("/swagger/v1/swagger.json", "Registry API"); });
 
             app.UseRouting();
 
@@ -336,10 +328,12 @@ namespace Registry.Web
                     ResponseWriter = UIResponseWriter.WriteHealthCheckUIResponse
                 }).RequireAuthorization();
 
-                endpoints.MapGet("/version", async context =>
-                {
-                    await context.Response.WriteAsync(Assembly.GetExecutingAssembly().GetName().Version?.ToString() ?? "undefined");
-                });
+                endpoints.MapGet("/version",
+                    async context =>
+                    {
+                        await context.Response.WriteAsync(
+                            Assembly.GetExecutingAssembly().GetName().Version?.ToString() ?? "undefined");
+                    });
 
                 endpoints.MapHangfireDashboard().RequireAuthorization();
 
@@ -347,21 +341,28 @@ namespace Registry.Web
                 // endpoints.MapODataRoute("odata", "odata", GetEdmModel());
             });
 
-            app.UseSpa(spa =>
+            app.UseWhen(context => !context.Request.Path.StartsWithSegments("/static"), builder =>
             {
-                // To learn more about options for serving an Angular SPA from ASP.NET Core,
-                // see https://go.microsoft.com/fwlink/?linkid=864501
-
-                spa.Options.SourcePath = "ClientApp";
-
-                if (env.IsDevelopment())
+                builder.UseSpaStaticFiles(new StaticFileOptions
                 {
+                    ServeUnknownFileTypes = true,
+                });
 
-                }
+                builder.UseSpa(spa =>
+                {
+                    // To learn more about options for serving an Angular SPA from ASP.NET Core,
+                    // see https://go.microsoft.com/fwlink/?linkid=864501
+                    spa.Options.SourcePath = "ClientApp";
+
+                    if (env.IsDevelopment())
+                    {
+                    }
+                });
             });
 
-            SetupDatabase(app);
+            app.UseMiddleware<LazyCacheMiddleware>();
 
+            SetupDatabase(app);
         }
 
         // NOTE: Maybe put all this as stated in https://stackoverflow.com/a/55707949
@@ -416,7 +417,6 @@ namespace Registry.Web
 
             CreateInitialData(registryDbContext);
             CreateDefaultAdmin(registryDbContext, serviceScope.ServiceProvider).Wait();
-
         }
 
         private void RegisterHangfireProvider(IServiceCollection services, AppSettings appSettings)
@@ -463,12 +463,10 @@ namespace Registry.Web
 
             // Add the processing server as IHostedService
             services.AddHangfireServer();
-
         }
 
         private void RegisterCacheProvider(IServiceCollection services, AppSettings appSettings)
         {
-
             if (appSettings.CacheProvider == null)
             {
                 // Use memory caching
@@ -503,12 +501,10 @@ namespace Registry.Web
                     throw new InvalidOperationException(
                         $"Unsupported caching provider: '{(int)appSettings.CacheProvider.Type}'");
             }
-
         }
 
         private static void RegisterStorageProvider(IServiceCollection services, AppSettings appSettings)
         {
-
             ICollection<ValidationResult> results;
 
             switch (appSettings.StorageProvider.Type)
@@ -520,7 +516,8 @@ namespace Registry.Web
                         throw new ArgumentException("Invalid physical storage provider settings");
 
                     if (!CommonUtils.Validate(ps, out results))
-                        throw new ArgumentException("Invalid physical storage provider settings: " + results.ToErrorString());
+                        throw new ArgumentException("Invalid physical storage provider settings: " +
+                                                    results.ToErrorString());
 
                     Directory.CreateDirectory(ps.Path);
 
@@ -562,7 +559,8 @@ namespace Registry.Web
 
                 case StorageType.CachedS3:
 
-                    var cachedS3Settings = appSettings.StorageProvider.Settings.ToObject<CachedS3StorageStorageProviderSettings>();
+                    var cachedS3Settings = appSettings.StorageProvider.Settings
+                        .ToObject<CachedS3StorageStorageProviderSettings>();
 
                     if (cachedS3Settings == null)
                         throw new ArgumentException("Invalid S3 storage provider settings");
@@ -594,12 +592,11 @@ namespace Registry.Web
                     throw new InvalidOperationException(
                         $"Unsupported storage provider: '{(int)appSettings.StorageProvider.Type}'");
             }
-
         }
 
-        private void ConfigureDbProvider<T>(IServiceCollection services, DbProvider provider, string connectionStringName) where T : DbContext
+        private void ConfigureDbProvider<T>(IServiceCollection services, DbProvider provider,
+            string connectionStringName) where T : DbContext
         {
-
             var connectionString = Configuration.GetConnectionString(connectionStringName);
 
             services.AddDbContext<T>(options =>
@@ -611,7 +608,6 @@ namespace Registry.Web
                     DbProvider.Mssql => options.UseSqlServer(connectionString),
                     _ => throw new ArgumentOutOfRangeException(nameof(provider), $"Unrecognised provider: '{provider}'")
                 });
-
         }
 
         private void CreateInitialData(RegistryContext context)
@@ -619,7 +615,6 @@ namespace Registry.Web
             // If no organizations in database, let's create the public one
             if (!context.Organizations.Any())
             {
-
                 var entity = new Organization
                 {
                     Slug = MagicStrings.PublicOrganizationSlug,
@@ -648,7 +643,6 @@ namespace Registry.Web
 
         private async Task CreateDefaultAdmin(RegistryContext context, IServiceProvider provider)
         {
-
             var usersManager = provider.GetService<UserManager<User>>();
             var roleManager = provider.GetService<RoleManager<IdentityRole>>();
             var appSettings = provider.GetService<IOptions<AppSettings>>();
@@ -681,11 +675,13 @@ namespace Registry.Web
 
                 var usrRes = await usersManager.CreateAsync(user, defaultAdmin.Password);
                 if (!usrRes.Succeeded)
-                    throw new InvalidOperationException("Cannot create default admin: " + usrRes.Errors?.ToErrorString());
+                    throw new InvalidOperationException(
+                        "Cannot create default admin: " + usrRes.Errors?.ToErrorString());
 
                 var res = await usersManager.AddToRoleAsync(user, ApplicationDbContext.AdminRoleName);
                 if (!res.Succeeded)
-                    throw new InvalidOperationException("Cannot add admin to admin role: " + res.Errors?.ToErrorString());
+                    throw new InvalidOperationException(
+                        "Cannot add admin to admin role: " + res.Errors?.ToErrorString());
 
                 var entity = new Organization
                 {
@@ -702,7 +698,5 @@ namespace Registry.Web
                 await context.SaveChangesAsync();
             }
         }
-
-
     }
 }
