@@ -286,6 +286,7 @@ namespace Registry.Web
                 RequestPath = "/static",
                 HttpsCompression = HttpsCompressionMode.Compress,
                 RedirectToAppendTrailingSlash = true,
+                ServeUnknownFileTypes = true
             });
 
             app.UseSwagger();
