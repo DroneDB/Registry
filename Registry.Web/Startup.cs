@@ -5,6 +5,7 @@ using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Reflection;
+using System.Runtime.Caching;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
@@ -208,7 +209,6 @@ namespace Registry.Web
              *   followed by a Scoped service object and the least by a Transient object.
              */
 
-            services.AddTransient<LazyCacheMiddleware>();
             services.AddTransient<TokenManagerMiddleware>();
             services.AddTransient<JwtInCookieMiddleware>();
             services.AddTransient<ITokenManager, TokenManager>();
@@ -232,6 +232,11 @@ namespace Registry.Web
             services.AddSingleton<IBatchTokenGenerator, BatchTokenGenerator>();
             services.AddSingleton<INameGenerator, NameGenerator>();
             services.AddSingleton<ICacheManager, CacheManager>();
+            services.AddSingleton<ObjectCache>(provider => new FileCache(appSettings.StaticFilesCachePath, true, TimeSpan.FromMinutes(30))
+            {
+                PayloadReadMode = FileCache.PayloadMode.Filename,
+                PayloadWriteMode = FileCache.PayloadMode.RawBytes
+            });
 
             RegisterStorageProvider(services, appSettings);
 
@@ -281,6 +286,7 @@ namespace Registry.Web
             var appSettingsSection = Configuration.GetSection("AppSettings");
             var appSettings = appSettingsSection.Get<AppSettings>();
             
+            /*
             app.UseStaticFiles(new StaticFileOptions
             {
                 FileProvider = new PhysicalFileProvider(Path.GetFullPath(appSettings.StaticFilesCachePath)),
@@ -288,7 +294,7 @@ namespace Registry.Web
                 HttpsCompression = HttpsCompressionMode.Compress,
                 RedirectToAppendTrailingSlash = true,
                 ServeUnknownFileTypes = true
-            });
+            });*/
 
             app.UseSwagger();
             app.UseSwaggerUI(c => { c.SwaggerEndpoint("/swagger/v1/swagger.json", "Registry API"); });
@@ -361,8 +367,6 @@ namespace Registry.Web
                     }
                 });
             });
-
-            app.UseMiddleware<LazyCacheMiddleware>();
 
             SetupDatabase(app);
         }
