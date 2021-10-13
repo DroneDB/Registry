@@ -11,6 +11,7 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading;
+using System.Threading.Tasks;
 using ICSharpCode.SharpZipLib.GZip;
 using ICSharpCode.SharpZipLib.Tar;
 using ICSharpCode.SharpZipLib.Zip;
@@ -488,6 +489,31 @@ namespace Registry.Common
 
             return builder.ToString();
 
+        }
+        
+        public static async Task<FileStream> WaitForFile(string fullPath, FileMode mode, FileAccess access, FileShare share,
+            int delay = 50, int retries = 10)
+        {
+            for (var numTries = 0; numTries < retries; numTries++)
+            {
+                FileStream fs = null;
+                try
+                {
+                    fs = new FileStream(fullPath, mode, access, share);
+                    return fs;
+                }
+                catch (IOException)
+                {
+                    if (fs != null)
+                    {
+                        await fs.DisposeAsync();
+                    }
+
+                    await Task.Delay(delay); // Thread.Sleep (50);
+                }
+            }
+
+            return null;
         }
     }
 

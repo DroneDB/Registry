@@ -178,6 +178,7 @@ namespace Registry.Web
                     new BadRequestObjectResult(new ErrorResponse(actionContext.ModelState));
             });
 
+            services.AddMemoryCache();
             RegisterCacheProvider(services, appSettings);
             RegisterHangfireProvider(services, appSettings);
 
