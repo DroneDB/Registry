@@ -1,6 +1,7 @@
 ﻿using System;
 using System.IO;
 using System.Runtime.Caching;
+using System.Runtime.InteropServices.ComTypes;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Caching.Distributed;
 using Microsoft.Extensions.Options;
@@ -32,6 +33,21 @@ namespace Registry.Web.Services.Managers
                 ? (cacheSettings.Expiration.TotalSeconds > 1 ? cacheSettings.Expiration : _defaultCacheExpireTime)
                 : _defaultCacheExpireTime;*/
         }
+        
+        public async Task<byte[]> GenerateTile(IDdb ddb, string sourcePath, string sourceHash, int tz, int tx, int ty, bool retina)
+        {
+            var key = $"Tile-{sourceHash}-{tz}-{tx}-{ty}-{retina}";
+            var res = _cache.Get(key);
+
+            if (res != null)
+                return await File.ReadAllBytesAsync((string)res);
+
+            var tile = await ddb.GenerateTileAsync(sourcePath, tz, tx, ty, retina, sourceHash);
+
+            _cache.Set(key, tile, DateTime.Now + _expiration);
+
+            return tile;
+        }
 
         public async Task<byte[]> GenerateThumbnail(IDdb ddb, string sourcePath, string sourceHash, int size)
         {
@@ -56,8 +72,8 @@ namespace Registry.Web.Services.Managers
 
             if (res != null)
             {
-                await using (var file = File.OpenRead((string)res))
-                    await file.CopyToAsync(stream);
+                await using var file = File.OpenRead((string)res);
+                await file.CopyToAsync(stream);
             }
 
             var thumb = await ddb.GenerateThumbnailAsync(sourcePath, size);

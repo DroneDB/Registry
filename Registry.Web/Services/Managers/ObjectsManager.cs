@@ -510,7 +510,7 @@ namespace Registry.Web.Services.Managers
 
         }
 
-        public async Task<StreamableFileDescriptor> GenerateThumbnail(string orgSlug, string dsSlug, string path, int? size, bool recreate = false)
+        public async Task<FileDescriptorDto> GenerateThumbnail(string orgSlug, string dsSlug, string path, int? size, bool recreate = false)
         {
             var ds = await _utils.GetDataset(orgSlug, dsSlug);
 
@@ -529,15 +529,17 @@ namespace Registry.Web.Services.Managers
             var sourcePath = GetBuildSource(bucketName, entry);
 
             //var thumbData = await ddb.GenerateThumbnailAsync(sourcePath, size ?? DefaultThumbnailSize);
-            //var thumbData = await _cacheManager.GenerateThumbnail(ddb, sourcePath, entry.Hash, size ?? DefaultThumbnailSize);
+            var thumbData = await _cacheManager.GenerateThumbnail(ddb, sourcePath, entry.Hash, size ?? DefaultThumbnailSize);
+            
+            var memory = new MemoryStream(thumbData);
 
-            return new StreamableFileDescriptor(async (stream, cancellationToken) =>
+            return new FileDescriptorDto
             {
-                await _cacheManager.GenerateThumbnailStream(ddb, sourcePath, entry.Hash, size ?? DefaultThumbnailSize,
-                    stream);
-            }, Path.GetFileName(path), "image/jpeg");
+                ContentStream = memory,
+                ContentType = "image/jpeg",
+                Name = Path.ChangeExtension(fileName, ".jpg")
+            };
         }
-
         public async Task<FileDescriptorDto> GenerateTile(string orgSlug, string dsSlug, string path, int tz, int tx, int ty, bool retina)
         {
             var ds = await _utils.GetDataset(orgSlug, dsSlug);
@@ -555,7 +557,9 @@ namespace Registry.Web.Services.Managers
 
             try
             {
-                var tileData = await ddb.GenerateTileAsync(sourcePath, tz, tx, ty, retina, entry.Hash);
+                var tileData = await _cacheManager.GenerateTile(ddb, sourcePath, entry.Hash, tz, tx, ty, retina);
+
+                //var tileData = await ddb.GenerateTileAsync(sourcePath, tz, tx, ty, retina, entry.Hash);
                 var memory = new MemoryStream(tileData);
 
                 return new FileDescriptorDto

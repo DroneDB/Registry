@@ -66,13 +66,7 @@ namespace Registry.Web.Controllers
 
                 var res = await _objectsManager.GenerateThumbnail(orgSlug, dsSlug, path, size);
 
-                Response.StatusCode = 200;
-                Response.ContentType = res.ContentType;
-                Response.Headers.Add("Content-Disposition", "inline");
-                
-                await res.CopyToAsync(Response.Body);
-
-                return new EmptyResult();
+                return File(res.ContentStream, res.ContentType, res.Name);
 
             }
             catch (Exception ex)
