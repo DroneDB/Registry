@@ -32,6 +32,7 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
+using Newtonsoft.Json.Serialization;
 using Registry.Adapters.ObjectSystem;
 using Registry.Adapters.ObjectSystem.Model;
 using Registry.Common;
@@ -232,10 +233,12 @@ namespace Registry.Web
             services.AddSingleton<IBatchTokenGenerator, BatchTokenGenerator>();
             services.AddSingleton<INameGenerator, NameGenerator>();
             services.AddSingleton<ICacheManager, CacheManager>();
-            services.AddSingleton<ObjectCache>(provider => new FileCache(appSettings.StaticFilesCachePath, true, TimeSpan.FromMinutes(30))
+            services.AddSingleton<ObjectCache>(provider => new FileCache(FileCacheManagers.Hashed, 
+                appSettings.StaticFilesCachePath, new DefaultSerializationBinder(), 
+                true, appSettings.ClearCacheInterval ?? default)
             {
                 PayloadReadMode = FileCache.PayloadMode.Filename,
-                PayloadWriteMode = FileCache.PayloadMode.RawBytes
+                PayloadWriteMode = FileCache.PayloadMode.Filename
             });
 
             RegisterStorageProvider(services, appSettings);
@@ -590,7 +593,7 @@ namespace Registry.Web
                         MaxSize = cachedS3Settings.MaxSize
                     });
 
-                    services.AddScoped<IObjectSystem, CachedS3ObjectSystem>();
+                    services.AddSingleton<IObjectSystem, CachedS3ObjectSystem>();
 
                     break;
 

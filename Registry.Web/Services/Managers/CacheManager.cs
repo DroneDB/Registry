@@ -5,6 +5,7 @@ using System.Runtime.InteropServices.ComTypes;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Caching.Distributed;
 using Microsoft.Extensions.Options;
+using Registry.Common;
 using Registry.Ports.DroneDB;
 using Registry.Web.Models.Configuration;
 using Registry.Web.Services.Ports;
@@ -16,22 +17,21 @@ namespace Registry.Web.Services.Managers
     {
         private readonly ObjectCache _cache;
 
-        private readonly AppSettings _settings;
         //private readonly TimeSpan _defaultCacheExpireTime = new TimeSpan(0, 5, 0);
 
-        private readonly TimeSpan _expiration = new TimeSpan(0, 30, 0);
+        private readonly TimeSpan DefaultThumbnailsCacheExpiration = new TimeSpan(0, 30, 0);
+        private readonly TimeSpan DefaultTilesCacheExpiration = new TimeSpan(0, 30, 0);
 
+        private readonly TimeSpan _thumbnailsCacheExpiration;
+        private readonly TimeSpan _tilesCacheExpiration;
+        
         public CacheManager(ObjectCache cache, IOptions<AppSettings> settings)
         {
             _cache = cache;
-            _settings = settings.Value;
 
-            /*
-            var cacheSettings = _settings.CacheProvider?.Settings.ToObject<CacheProviderSettings>();
+            _thumbnailsCacheExpiration = settings.Value.ThumbnailsCacheExpiration ?? DefaultThumbnailsCacheExpiration;
+            _tilesCacheExpiration = settings.Value.TilesCacheExpiration ?? DefaultTilesCacheExpiration;
 
-            _expiration = cacheSettings != null
-                ? (cacheSettings.Expiration.TotalSeconds > 1 ? cacheSettings.Expiration : _defaultCacheExpireTime)
-                : _defaultCacheExpireTime;*/
         }
         
         public async Task<byte[]> GenerateTile(IDdb ddb, string sourcePath, string sourceHash, int tz, int tx, int ty, bool retina)
@@ -41,11 +41,21 @@ namespace Registry.Web.Services.Managers
 
             if (res != null)
                 return await File.ReadAllBytesAsync((string)res);
-
+            
             var tile = await ddb.GenerateTileAsync(sourcePath, tz, tx, ty, retina, sourceHash);
 
-            _cache.Set(key, tile, DateTime.Now + _expiration);
+            var tmpFile = Path.GetTempFileName();
 
+            try
+            {
+                await File.WriteAllBytesAsync(tmpFile, tile);
+                _cache.Set(key, tmpFile, new CacheItemPolicy { SlidingExpiration = _tilesCacheExpiration});
+            }
+            finally
+            {
+                CommonUtils.SafeDelete(tmpFile);
+            }
+            
             return tile;
         }
 
@@ -59,28 +69,20 @@ namespace Registry.Web.Services.Managers
 
             var thumb = await ddb.GenerateThumbnailAsync(sourcePath, size);
 
-            _cache.Set(key, thumb, DateTime.Now + _expiration);
+            var tmpFile = Path.GetTempFileName();
+
+            try
+            {
+                await File.WriteAllBytesAsync(tmpFile, thumb);
+                _cache.Set(key, tmpFile, new CacheItemPolicy { SlidingExpiration = _thumbnailsCacheExpiration});
+            }
+            finally
+            {
+                CommonUtils.SafeDelete(tmpFile);
+            }
 
             return thumb;
         }
 
-        public async Task GenerateThumbnailStream(IDdb ddb, string sourcePath, string sourceHash, int size,
-            Stream stream)
-        {
-            var key = $"Thumb-{sourceHash}-{size}";
-            var res = _cache.Get(key);
-
-            if (res != null)
-            {
-                await using var file = File.OpenRead((string)res);
-                await file.CopyToAsync(stream);
-            }
-
-            var thumb = await ddb.GenerateThumbnailAsync(sourcePath, size);
-
-            _cache.Set(key, thumb, DateTime.Now + _expiration);
-
-            stream.Write(thumb);
-        }
     }
 }

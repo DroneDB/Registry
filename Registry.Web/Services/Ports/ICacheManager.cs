@@ -11,12 +11,8 @@ namespace Registry.Web.Services.Ports
     {
         public Task<byte []> GenerateThumbnail(IDdb ddb, string sourcePath, string sourceHash, int size);
 
-        public Task GenerateThumbnailStream(IDdb ddb, string sourcePath, string sourceHash, int size,
-            Stream stream);
-
         public Task<byte[]> GenerateTile(IDdb ddb, string sourcePath, string sourceHash, int tz, int tx, int ty,
             bool retina);
-
 
     }
 }
