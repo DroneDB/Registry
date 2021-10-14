@@ -114,5 +114,25 @@ namespace Registry.Web.Models.Configuration
         /// Static files cache path
         /// </summary>
         public string StaticFilesCachePath { get; set; }
+
+        /// <summary>
+        /// Thumbnails cache expiration 
+        /// </summary>
+        public TimeSpan? ThumbnailsCacheExpiration { get; set; }
+        
+        /// <summary>
+        /// Tiles cache expiration
+        /// </summary>
+        public TimeSpan? TilesCacheExpiration { get; set; }
+        
+        /// <summary>
+        /// Bridge cache expiration
+        /// </summary>
+        public TimeSpan? BridgeCacheExpiration { get; set; }
+
+        /// <summary>
+        /// Clear cache interval
+        /// </summary>
+        public TimeSpan? ClearCacheInterval { get; set; }
     }
 }
