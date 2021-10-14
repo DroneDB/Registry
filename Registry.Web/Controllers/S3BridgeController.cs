@@ -3,11 +3,14 @@ using System.IO;
 using System.Linq;
 using System.Net.Http.Headers;
 using System.Reactive.Linq;
+using System.Runtime.Caching;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
 using MimeMapping;
+using Registry.Common;
+using Registry.Ports.DroneDB;
 using Registry.Ports.ObjectSystem;
 using Registry.Web.Attributes;
 using Registry.Web.Models;
@@ -25,6 +28,7 @@ namespace Registry.Web.Controllers
     {
         private readonly ILogger<S3BridgeController> _logger;
         private readonly IObjectSystem _objectSystem;
+        private readonly ObjectCache _objectCache;
 
         [ApiExplorerSettings(IgnoreApi = true)]
         [NonAction]
@@ -33,9 +37,11 @@ namespace Registry.Web.Controllers
             return _objectSystem.IsS3Based();
         }
 
-        public S3BridgeController(IObjectSystem objectSystem, ILogger<S3BridgeController> logger)
+        public S3BridgeController(IObjectSystem objectSystem, ObjectCache objectCache,
+            ILogger<S3BridgeController> logger)
         {
             _objectSystem = objectSystem;
+            _objectCache = objectCache;
             _logger = logger;
         }
 
@@ -46,7 +52,6 @@ namespace Registry.Web.Controllers
 
             try
             {
-
                 if (string.IsNullOrWhiteSpace(path))
                     throw new ArgumentException("Path cannot be empty", nameof(Path));
 
@@ -56,7 +61,6 @@ namespace Registry.Web.Controllers
                 Response.Headers.Add("Accept-Ranges", "bytes");
 
                 return Ok();
-
             }
             catch (Exception ex)
             {
@@ -77,11 +81,10 @@ namespace Registry.Web.Controllers
                 if (string.IsNullOrWhiteSpace(path))
                     throw new ArgumentException("Path cannot be empty", nameof(Path));
 
-                StreamableFileDescriptor res;
+                //StreamableFileDescriptor res;
 
                 if (Request.Headers.TryGetValue("Range", out var rangeHeaderRaw))
                 {
-
                     var rangeHeader = RangeHeaderValue.Parse(rangeHeaderRaw);
 
                     if (rangeHeader.Unit != "bytes")
@@ -101,27 +104,41 @@ namespace Registry.Web.Controllers
                     var offset = range.From.Value;
                     var length = range.To.Value - range.From.Value;
 
+                    await _objectSystem.GetObjectAsync(bucket, path, offset, length,
+                        source =>
+                        {
+                            Response.StatusCode = 200;
+                            Response.ContentType = MimeUtility.GetMimeMapping(path);
+                            source.CopyTo(Response.Body);
+                        });
+
+                    return new EmptyResult();
+                    /*
                     res = new StreamableFileDescriptor(async (stream, cancellationToken) =>
                     {
                         await _objectSystem.GetObjectAsync(bucket, path, offset, length,
-                                source => source.CopyTo(stream), cancellationToken: cancellationToken);
-                    }, Path.GetFileName(path), MimeUtility.GetMimeMapping(path));
-
+                            source => source.CopyTo(stream), cancellationToken: cancellationToken);
+                    }, Path.GetFileName(path), MimeUtility.GetMimeMapping(path));*/
                 }
                 else
                 {
-                    res = new StreamableFileDescriptor(async (stream, cancellationToken) =>
-                    {
-                        await _objectSystem.GetObjectAsync(bucket, path,
-                                source => source.CopyTo(stream), cancellationToken: cancellationToken);
-                    }, Path.GetFileName(path), MimeUtility.GetMimeMapping(path));
+                    // We should only cache files inside .build, otherwise we can absolutely shoot ourselves in the foot
+                    var key = $"Obj-{bucket}-{path.Replace('/', '-')}";
+
+                    var itm = _objectCache.Get(key);
+                    if (itm != null)
+                        return PhysicalFile(Path.GetFullPath((string)itm), MimeUtility.GetMimeMapping(path));
+                    
+                    // We need this because the object data needs to be saved and in cache and returned as file
+                    var memory = new MemoryStream();
+
+                    await _objectSystem.GetObjectAsync(bucket, path, source => source.CopyTo(memory));
+
+                    _objectCache.Set(key, memory.ToArray(), DateTime.Now.AddMinutes(30));
+
+                    return File(memory, MimeUtility.GetMimeMapping(path));
                 }
-
-                Response.StatusCode = 200;
-                Response.ContentType = res.ContentType;
-                await res.CopyToAsync(Response.Body);
-
-                return new EmptyResult();
+                
             }
             catch (Exception ex)
             {
