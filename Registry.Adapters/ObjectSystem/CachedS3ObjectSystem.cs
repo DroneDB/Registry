@@ -6,6 +6,8 @@ using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using Newtonsoft.Json;
+using Polly;
+using Polly.Retry;
 using Registry.Adapters.ObjectSystem.Model;
 using Registry.Common;
 using Registry.Common.Model;
@@ -27,6 +29,8 @@ namespace Registry.Adapters.ObjectSystem
 
         private const string GlobalLockFileName = "semaphore.lock";
 
+        private const int Retries = 3;
+        
         private readonly ConcurrentDictionary<string, ObjectInfo> _objectInfos;
 
         public CachedS3ObjectSystem(CachedS3ObjectSystemSettings settings, Func<IObjectSystem> objectSystemFactory,
@@ -57,28 +61,59 @@ namespace Registry.Adapters.ObjectSystem
             var descriptor = GetDescriptorFilePath(bucketName, objectName);
             var cachedFilePath = GetCachedFilePath(bucketName, objectName);
 
+            LogInformation(
+                $"In GetObjectAsync('{bucketName}', '{objectName}')");
+            LogInformation($"Descriptor = '{descriptor}'");
+            LogInformation($"CachedFile = '{cachedFilePath}'");
+
             try
             {
-                var stream = File.OpenRead(cachedFilePath);
+                await using var stream = File.OpenRead(cachedFilePath);
+
+                LogInformation("Cache HIT: returning cached file");
                 callback(stream);
             }
             catch (IOException ex)
             {
                 if (ex is DirectoryNotFoundException or FileNotFoundException)
                 {
-                    EnsurePathExists(cachedFilePath);
-                    EnsurePathExists(descriptor);
+                    LogInformation("Cache MISS: trying to retrieve file");
 
-                    await using var descriptorStream =
-                        new FileStream(descriptor, FileMode.CreateNew, FileAccess.Write, FileShare.None);
-                    await using var descriptorWriter = new StreamWriter(descriptorStream);
-                    await using var fileStream = new FileStream(cachedFilePath, FileMode.CreateNew, FileAccess.Write,
-                        FileShare.None);
+                    await CacheFileAndReturn(bucketName, objectName, callback, sse, cancellationToken);
+                }
+            }
+        }
 
-                    await _remoteStorage.GetObjectAsync(bucketName, objectName, (s) =>
+        private async Task CacheFileAndReturn(string bucketName, string objectName, Action<Stream> callback,
+            IServerEncryption sse,
+            CancellationToken cancellationToken)
+        {
+            var descriptor = GetDescriptorFilePath(bucketName, objectName);
+            var cachedFilePath = GetCachedFilePath(bucketName, objectName);
+            try
+            {
+                EnsurePathExists(cachedFilePath);
+                EnsurePathExists(descriptor);
+
+                await using var descriptorStream =
+                    new FileStream(descriptor, FileMode.CreateNew, FileAccess.Write, FileShare.None);
+                await using var descriptorWriter = new StreamWriter(descriptorStream);
+                await using var fileStream = new FileStream(cachedFilePath, FileMode.CreateNew, FileAccess.Write,
+                    FileShare.None);
+
+                LogInformation("Getting file from remote");
+
+                await Policy.Handle<Exception>().RetryAsync(Retries,
+                    (exception, i) => LogInformation($"Retrying S3 upload ({i}): {exception.Message}")
+                ).ExecuteAsync(async () =>
+                    await _remoteStorage.GetObjectAsync(bucketName, objectName, s =>
                     {
+                        LogInformation("Running callback");
+
                         callback(s);
                         s.Reset();
+                        LogInformation("Copying to cache file");
+
                         s.CopyTo(fileStream);
 
                         var obj = new ObjectDescriptor
@@ -87,21 +122,111 @@ namespace Registry.Adapters.ObjectSystem
                             SyncTime = DateTime.Now
                         };
 
+                        LogInformation("Writing descriptor");
+
                         descriptorWriter.Write(JsonConvert.SerializeObject(obj));
 
-                    }, sse, cancellationToken);
-                }
+                        s.Close();
+                        LogInformation("Callback OK");
+                    }, sse, cancellationToken));
             }
-
-            /*using (var stream = CommonUtils.WaitForFile(cachedFilePath, FileMode.Open, FileAccess.Read, FileShare.Read))
+            catch (IOException ex)
             {
-            }*/
+                LogInformation("File already existing, waiting for it to become available");
+
+                await using var stream =
+                    await CommonUtils.WaitForFile(descriptor, FileMode.Open, FileAccess.Read, FileShare.Read);
+
+                if (stream == null)
+                    throw new InvalidOperationException("Cannot get file from S3, timeout reached");
+
+                LogInformation("File is now available, running callback");
+                callback(stream);
+            }
         }
 
-        public Task GetObjectAsync(string bucketName, string objectName, long offset, long length, Action<Stream> cb,
-            IServerEncryption sse = null, CancellationToken cancellationToken = default)
+        private async Task CacheFileAndReturn(string bucketName, string objectName, string filePath,
+            IServerEncryption sse,
+            CancellationToken cancellationToken)
         {
-            return _remoteStorage.GetObjectAsync(bucketName, objectName, offset, length, cb, sse, cancellationToken);
+            var descriptor = GetDescriptorFilePath(bucketName, objectName);
+            var cachedFilePath = GetCachedFilePath(bucketName, objectName);
+            try
+            {
+                EnsurePathExists(cachedFilePath);
+                EnsurePathExists(descriptor);
+
+                await using var descriptorStream =
+                    new FileStream(descriptor, FileMode.CreateNew, FileAccess.Write, FileShare.None);
+                await using var descriptorWriter = new StreamWriter(descriptorStream);
+                
+                LogInformation("Getting file from remote");
+
+                await Policy.Handle<Exception>().RetryAsync(Retries, 
+                    (exception, i) => LogInformation($"Retrying S3 upload ({i}): {exception.Message}")
+                ).ExecuteAsync(async () =>
+                    await _remoteStorage.GetObjectAsync(bucketName, objectName, filePath, sse, cancellationToken));
+                
+                File.Copy(filePath, cachedFilePath);
+
+                var obj = new ObjectDescriptor
+                {
+                    LastError = null,
+                    SyncTime = DateTime.Now
+                };
+
+                LogInformation("Writing descriptor");
+
+                await descriptorWriter.WriteAsync(JsonConvert.SerializeObject(obj));
+
+                LogInformation("Descriptor written OK");
+            }
+            catch (IOException ex)
+            {
+                LogInformation("File already existing, waiting for it to become available");
+
+                await using var stream =
+                    await CommonUtils.WaitForFile(descriptor, FileMode.Open, FileAccess.Read, FileShare.Read);
+
+                if (stream == null)
+                    throw new InvalidOperationException("Cannot get file from S3, timeout reached");
+
+                LogInformation("File is now available, copy from cache");
+
+                File.Copy(cachedFilePath, filePath, true);
+            }
+        }
+
+        public async Task GetObjectAsync(string bucketName, string objectName, string filePath,
+            IServerEncryption sse = null,
+            CancellationToken cancellationToken = default)
+        {
+            var descriptor = GetDescriptorFilePath(bucketName, objectName);
+            var cachedFilePath = GetCachedFilePath(bucketName, objectName);
+
+            LogInformation(
+                $"In GetObjectAsync('{bucketName}', '{objectName}', '{filePath}')");
+            LogInformation($"Descriptor = '{descriptor}'");
+            LogInformation($"CachedFile = '{cachedFilePath}'");
+
+            try
+            {
+                await using var stream = File.OpenRead(cachedFilePath);
+
+                LogInformation("Cache HIT: returning cached file");
+
+                await using var output = File.OpenWrite(filePath);
+                await stream.CopyToAsync(output, cancellationToken);
+            }
+            catch (IOException ex)
+            {
+                if (ex is DirectoryNotFoundException or FileNotFoundException)
+                {
+                    LogInformation("Cache MISS: trying to retrieve file");
+
+                    await CacheFileAndReturn(bucketName, objectName, filePath, sse, cancellationToken);
+                }
+            }
         }
 
         public Task PutObjectAsync(string bucketName, string objectName, Stream data, long size,
@@ -135,14 +260,18 @@ namespace Registry.Adapters.ObjectSystem
             return _remoteStorage.RemoveObjectsAsync(bucketName, objectsNames, cancellationToken);
         }
 
+#pragma warning disable 1998
         public async Task<ObjectInfo> GetObjectInfoAsync(string bucketName, string objectName,
+#pragma warning restore 1998
             IServerEncryption sse = null,
             CancellationToken cancellationToken = default)
         {
             var key = GetMemoryKey(bucketName, objectName);
 
-            return _objectInfos.GetOrAdd(key,
-                s => _remoteStorage.GetObjectInfoAsync(bucketName, objectName, sse, cancellationToken).Result);
+            return _objectInfos.GetOrAdd(key, static (s, info) =>
+                    info.Storage.GetObjectInfoAsync(info.bucketName, info.objectName, info.sse, info.cancellationToken)
+                        .Result,
+                new { Storage = _remoteStorage, bucketName, objectName, sse, cancellationToken });
         }
 
         public Task PutObjectAsync(string bucketName, string objectName, string filePath, string contentType = null,
@@ -153,11 +282,6 @@ namespace Registry.Adapters.ObjectSystem
                 cancellationToken);
         }
 
-        public Task GetObjectAsync(string bucketName, string objectName, string filePath, IServerEncryption sse = null,
-            CancellationToken cancellationToken = default)
-        {
-            return _remoteStorage.GetObjectAsync(bucketName, objectName, filePath, sse, cancellationToken);
-        }
 
         public Task RemoveBucketAsync(string bucketName, bool force = true,
             CancellationToken cancellationToken = default)
@@ -167,6 +291,12 @@ namespace Registry.Adapters.ObjectSystem
 
 
         #region Proxied
+
+        public Task GetObjectAsync(string bucketName, string objectName, long offset, long length, Action<Stream> cb,
+            IServerEncryption sse = null, CancellationToken cancellationToken = default)
+        {
+            return _remoteStorage.GetObjectAsync(bucketName, objectName, offset, length, cb, sse, cancellationToken);
+        }
 
         public Task<bool> ObjectExistsAsync(string bucketName, string objectName, IServerEncryption sse = null,
             CancellationToken cancellationToken = default)

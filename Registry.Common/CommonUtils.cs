@@ -113,14 +113,12 @@ namespace Registry.Common
 
         public static void SmartExtractFolder(string archive, string dest, bool overwrite = true)
         {
-
             var ext = Path.GetExtension(archive).ToLowerInvariant();
 
             if (ext == ".tar.gz" || ext == ".tgz")
                 ExtractTGZ(archive, dest);
             else
                 ZipFile.ExtractToDirectory(archive, dest, overwrite);
-
         }
 
         public static void ExtractTGZ(string archive, string destFolder)
@@ -194,7 +192,6 @@ namespace Registry.Common
             }
 
             File.Copy(cachedFilePath, path, true);
-
         }
 
         /// <summary>
@@ -203,7 +200,6 @@ namespace Registry.Common
         /// <param name="url"></param>
         public static byte[] SmartDownloadData(string url)
         {
-
             var tmp = Path.GetTempFileName();
 
             SmartDownloadFile(url, tmp);
@@ -213,7 +209,6 @@ namespace Registry.Common
             File.Delete(tmp);
 
             return data;
-
         }
 
         // Credit: https://stackoverflow.com/questions/12166404/how-do-i-get-folder-size-in-c
@@ -240,7 +235,6 @@ namespace Registry.Common
         {
             try
             {
-
                 File.Delete(path);
                 return true;
             }
@@ -254,7 +248,6 @@ namespace Registry.Common
         {
             try
             {
-
                 Directory.Delete(path, true);
                 return true;
             }
@@ -299,7 +292,6 @@ namespace Registry.Common
             {
                 //
             }
-
         }
 
         /// <summary>
@@ -330,7 +322,6 @@ namespace Registry.Common
                 {
                     try
                     {
-
                         if (Directory.Exists(entry))
                         {
                             Directory.Delete(entry, true);
@@ -346,7 +337,6 @@ namespace Registry.Common
                         }
 
                         entries.Remove(entry);
-
                     }
                     catch (Exception ex)
                     {
@@ -488,11 +478,39 @@ namespace Registry.Common
             }
 
             return builder.ToString();
-
         }
-        
+        /*
         public static async Task<FileStream> WaitForFile(string fullPath, FileMode mode, FileAccess access, FileShare share,
-            int delay = 50, int retries = 10)
+            int hops = 15, int baseDelay = 10, int incrementDelay = 2)
+        {
+            int delay = baseDelay;
+            
+            for (var hop = 0; hop < hops; hops++)
+            {
+                FileStream fs = null;
+                try
+                {
+                    fs = new FileStream(fullPath, mode, access, share);
+                    return fs;
+                }
+                catch (IOException)
+                {
+                    if (fs != null)
+                    {
+                        await fs.DisposeAsync();
+                    }
+
+                    delay *= 2;
+                    await Task.Delay(delay);
+                }
+            }
+
+            return null;
+        }*/
+
+        public static async Task<FileStream> WaitForFile(string fullPath, FileMode mode, FileAccess access,
+            FileShare share,
+            int delay = 50, int retries = 1200)
         {
             for (var numTries = 0; numTries < retries; numTries++)
             {
@@ -516,8 +534,4 @@ namespace Registry.Common
             return null;
         }
     }
-
-
-
-
 }
