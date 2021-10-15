@@ -183,7 +183,7 @@ namespace Registry.Web.Services.Managers
 
         public SyncFilesResDto SyncFiles()
         {
-            var cachedS3 = _objectSystem as CachedS3ObjectSystem;
+            var cachedS3 = _objectSystem as OldCachedS3ObjectSystem;
 
             if (cachedS3 == null)
                 throw new NotSupportedException(

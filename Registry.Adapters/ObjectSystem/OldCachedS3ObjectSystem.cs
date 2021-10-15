@@ -20,11 +20,11 @@ using Exception = System.Exception;
 
 namespace Registry.Adapters.ObjectSystem
 {
-    public class CachedS3ObjectSystem : IObjectSystem
+    public class OldCachedS3ObjectSystem : IObjectSystem
     {
         [JsonProperty("settings")]
         private readonly CachedS3ObjectSystemSettings _settings;
-        private readonly ILogger<CachedS3ObjectSystem> _logger;
+        private readonly ILogger<OldCachedS3ObjectSystem> _logger;
         private S3ObjectSystem _remoteStorage;
 
         private const int MaxUploadAttempts = 5;
@@ -72,7 +72,7 @@ namespace Registry.Adapters.ObjectSystem
         }
 
         [JsonConstructor]
-        private CachedS3ObjectSystem()
+        private OldCachedS3ObjectSystem()
         {
             LogInformation = s => Debug.WriteLine(s);
             LogError = (exception, s) => Debug.WriteLine($"{s} -> {exception}");
@@ -88,7 +88,7 @@ namespace Registry.Adapters.ObjectSystem
             UpdateCurrentCacheSize();
         }
 
-        public CachedS3ObjectSystem(CachedS3ObjectSystemSettings settings, ILogger<CachedS3ObjectSystem> logger)
+        public OldCachedS3ObjectSystem(CachedS3ObjectSystemSettings settings, ILogger<OldCachedS3ObjectSystem> logger)
         {
             _settings = settings;
             _logger = logger;
