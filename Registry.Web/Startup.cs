@@ -593,7 +593,7 @@ namespace Registry.Web
                         MaxSize = cachedS3Settings.MaxSize
                     });
 
-                    services.AddSingleton<IObjectSystem, CachedObjectSystem>();
+                    services.AddSingleton<IObjectSystem, CachedS3ObjectSystem>();
 
                     break;
 

@@ -19,11 +19,11 @@ namespace Registry.Adapters.Test.ObjectSystem
     [TestFixture]
     public class CachedS3ObjectSystemTest
     {
-        private Logger<CachedObjectSystem> _objectSystemLogger;
+        private Logger<CachedS3ObjectSystem> _objectSystemLogger;
 
         public void Setup()
         {
-            _objectSystemLogger = new Logger<CachedObjectSystem>(LoggerFactory.Create(builder => builder.AddConsole()));
+            _objectSystemLogger = new Logger<CachedS3ObjectSystem>(LoggerFactory.Create(builder => builder.AddConsole()));
         }
 
         [Test]
@@ -58,7 +58,7 @@ namespace Registry.Adapters.Test.ObjectSystem
                     action(new MemoryStream(content)))
                 .Returns(Task.CompletedTask);
 
-            var objectSystem = new CachedObjectSystem(settings, () => remoteStorage.Object, _objectSystemLogger);
+            var objectSystem = new CachedS3ObjectSystem(settings, () => remoteStorage.Object, _objectSystemLogger);
 
             var memory = new MemoryStream();
 

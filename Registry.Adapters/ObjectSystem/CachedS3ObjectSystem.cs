@@ -14,10 +14,10 @@ using Registry.Ports.ObjectSystem.Model;
 
 namespace Registry.Adapters.ObjectSystem
 {
-    public class CachedObjectSystem : IObjectSystem
+    public class CachedS3ObjectSystem : IObjectSystem
     {
         private readonly CachedS3ObjectSystemSettings _settings;
-        private readonly ILogger<CachedObjectSystem> _logger;
+        private readonly ILogger<CachedS3ObjectSystem> _logger;
         private readonly IObjectSystem _remoteStorage;
 
         private readonly string _globalLockFilePath;
@@ -29,8 +29,8 @@ namespace Registry.Adapters.ObjectSystem
 
         private readonly ConcurrentDictionary<string, ObjectInfo> _objectInfos;
 
-        public CachedObjectSystem(CachedS3ObjectSystemSettings settings, Func<IObjectSystem> objectSystemFactory,
-            ILogger<CachedObjectSystem> logger)
+        public CachedS3ObjectSystem(CachedS3ObjectSystemSettings settings, Func<IObjectSystem> objectSystemFactory,
+            ILogger<CachedS3ObjectSystem> logger)
         {
             _settings = settings;
             _logger = logger;
@@ -45,7 +45,7 @@ namespace Registry.Adapters.ObjectSystem
             _objectInfos = new ConcurrentDictionary<string, ObjectInfo>();
         }
 
-        public CachedObjectSystem(CachedS3ObjectSystemSettings settings, ILogger<CachedObjectSystem> logger) :
+        public CachedS3ObjectSystem(CachedS3ObjectSystemSettings settings, ILogger<CachedS3ObjectSystem> logger) :
             this(settings, () => new S3ObjectSystem(settings), logger)
         {
         }
