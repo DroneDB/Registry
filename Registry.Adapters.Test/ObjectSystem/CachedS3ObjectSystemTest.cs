@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Security.Cryptography.X509Certificates;
 using System.Text;
@@ -133,6 +134,78 @@ namespace Registry.Adapters.Test.ObjectSystem
                 (await File.ReadAllBytesAsync(Path.Combine(fs.TestFolder, $"{n}.txt"))).Should()
                     .BeEquivalentTo(content);
             }
+        }
+        
+        [Test]
+        public async Task PutObject_Stream_ConcurrentMisses()
+        {
+            using var fs = new TestArea(nameof(PutObject_Stream_ConcurrentMisses));
+
+            var settings = new CachedS3ObjectSystemSettings
+            {
+                Endpoint = "localhost:9000",
+                AccessKey = "minioadmin",
+                SecretKey = "minioadmin",
+                UseSsl = false,
+                AppName = "Registry",
+                AppVersion = "1.0",
+                Region = "us-east-1",
+                CachePath = fs.TestFolder,
+                BridgeUrl = "http://localhost:5000/_bridge"
+            };
+
+            const string bucket = "admin";
+            const string name = "test.txt";
+
+            var remoteStorage = new Mock<IObjectSystem>();
+
+            var content = Encoding.UTF8.GetBytes("Test Test Test");
+            var memory = new MemoryStream(content);
+            var dict = new Dictionary<string, string>();
+
+            remoteStorage.Setup(system => system.PutObjectAsync(bucket, name, It.IsAny<Stream>(), It.IsAny<long>(),
+                    It.IsAny<string>(), It.IsAny<Dictionary<string, string>>(),
+                    It.IsAny<IServerEncryption>(), It.IsAny<CancellationToken>()))
+                .Callback((string bucketName, string objectName, Stream data, long size, string contentType,
+                    Dictionary<string, string> metaData, IServerEncryption sse, CancellationToken cancellationToken) =>
+                {
+                    using var reader = new StreamReader(data);
+                    dict.Add(objectName, reader.ReadToEnd());
+                    Thread.Sleep(2000);
+                }).Returns(Task.CompletedTask);
+            
+            var objectSystem = new CachedS3ObjectSystem(settings, () => remoteStorage.Object, _objectSystemLogger);
+
+            await objectSystem.PutObjectAsync(bucket, name, memory, memory.Length, "text/plain", null, null, default);
+/*            
+            remoteStorage.Verify(system => system.PutObjectAsync(bucket, name, It.IsAny<Stream>(), It.IsAny<long>(),
+                It.IsAny<string>(), It.IsAny<Dictionary<string, string>>(),
+                It.IsAny<IServerEncryption>(), It.IsAny<CancellationToken>()), Times.Once());
+            
+
+            remoteStorage
+                .Setup(system => system.GetObjectAsync(bucket, name, It.IsAny<Action<Stream>>(),
+                    It.IsAny<IServerEncryption>(), It.IsAny<CancellationToken>()))
+                .Callback((string bucketName, string objectName, Action<Stream> action, IServerEncryption sse,
+                    CancellationToken token) =>
+                {
+                    Thread.Sleep(2000);
+                    action(new MemoryStream(content));
+                })
+                .Returns(Task.CompletedTask);
+
+            var objectSystem = new CachedS3ObjectSystem(settings, () => remoteStorage.Object, _objectSystemLogger);
+
+            Parallel.For(0, 100,
+                i =>
+                {
+                    objectSystem.GetObjectAsync(bucket, name, stream => stream.CopyTo(new MemoryStream())).Wait();
+                });
+
+            remoteStorage.Verify(system => system.GetObjectAsync(bucket, name, It.IsAny<Action<Stream>>(),
+                It.IsAny<IServerEncryption>(), It.IsAny<CancellationToken>()), Times.Once());
+                
+                */
         }
     }
 }
