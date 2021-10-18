@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO;
 using System.Security.Cryptography.X509Certificates;
 using System.Text;
@@ -137,9 +138,9 @@ namespace Registry.Adapters.Test.ObjectSystem
         }
         
         [Test]
-        public async Task PutObject_Stream_ConcurrentMisses()
+        public async Task PutObject_File_Ok()
         {
-            using var fs = new TestArea(nameof(PutObject_Stream_ConcurrentMisses));
+            using var fs = new TestArea(nameof(PutObject_File_Ok));
 
             var settings = new CachedS3ObjectSystemSettings
             {
@@ -159,7 +160,8 @@ namespace Registry.Adapters.Test.ObjectSystem
 
             var remoteStorage = new Mock<IObjectSystem>();
 
-            var content = Encoding.UTF8.GetBytes("Test Test Test");
+            var contentStr = "Test Test Test";
+            var content = Encoding.UTF8.GetBytes(contentStr);
             var memory = new MemoryStream(content);
             var dict = new Dictionary<string, string>();
 
@@ -177,6 +179,15 @@ namespace Registry.Adapters.Test.ObjectSystem
             var objectSystem = new CachedS3ObjectSystem(settings, () => remoteStorage.Object, _objectSystemLogger);
 
             await objectSystem.PutObjectAsync(bucket, name, memory, memory.Length, "text/plain", null, null, default);
+
+            (await File.ReadAllTextAsync(Path.Combine(fs.TestFolder, bucket, "descriptors", name + ".json"))).Should().Be(
+                "{\"SyncTime\":null,\"LastError\":null,\"Info\":{\"ContentType\":\"text/plain\",\"MetaData\":null,\"SSE\":null}}");
+            
+            (await File.ReadAllTextAsync(Path.Combine(fs.TestFolder, bucket, "files", name))).Should().Be(contentStr);
+
+            
+            Debug.Write("Ciao");
+            
 /*            
             remoteStorage.Verify(system => system.PutObjectAsync(bucket, name, It.IsAny<Stream>(), It.IsAny<long>(),
                 It.IsAny<string>(), It.IsAny<Dictionary<string, string>>(),

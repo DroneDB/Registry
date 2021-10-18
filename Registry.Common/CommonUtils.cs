@@ -311,7 +311,7 @@ namespace Registry.Common
             return (file, new BufferedStream(File.Open(file, FileMode.CreateNew, FileAccess.ReadWrite), bufferSize));
         }
 
-        public static bool SafeTreeDelete(string baseTempFolder, int rounds = 3, int delay = 500)
+        public static string[] SafeTreeDelete(string baseTempFolder, int rounds = 3, int delay = 500)
         {
             var entries = new List<string>(
                 Directory.EnumerateFileSystemEntries(baseTempFolder, "*", SearchOption.AllDirectories));
@@ -344,12 +344,13 @@ namespace Registry.Common
                     }
                 }
 
-                if (!entries.Any()) return true;
+                if (!entries.Any()) 
+                    return Array.Empty<string>();
 
                 Thread.Sleep(delay);
             }
 
-            return !entries.Any();
+            return entries.ToArray();
         }
 
         private static readonly HashSet<string> _compressibleMimeTypes = new()
