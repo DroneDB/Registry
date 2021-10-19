@@ -181,16 +181,16 @@ namespace Registry.Web.Services.Managers
 
         }
 
-        public SyncFilesResDto SyncFiles()
+        public async Task Cleanup()
         {
-            var cachedS3 = _objectSystem as OldCachedS3ObjectSystem;
+            var cachedS3 = _objectSystem as CachedS3ObjectSystem;
 
             if (cachedS3 == null)
                 throw new NotSupportedException(
-                    "Current object system does not support SyncFiles method, only CachedS3ObjectSystem can");
+                    "Current object system does not support Cleanup method, only CachedS3ObjectSystem does");
 
-            var res = cachedS3.SyncFiles();
-
+            await cachedS3.Cleanup();
+/*
             return new SyncFilesResDto
             {
                 ErrorFiles = res?.ErrorFiles?.Select(err => new SyncFileErrorDto
@@ -199,7 +199,7 @@ namespace Registry.Web.Services.Managers
                     Path = err.Path
                 }).ToArray(),
                 SyncedFiles = res?.SyncedFiles
-            };
+            };*/
         }
     }
 }

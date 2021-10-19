@@ -79,19 +79,19 @@ namespace Registry.Web.Controllers
             }
         }
 
-        [HttpPost("syncfiles", Name = nameof(SystemController) + "." + nameof(SyncFiles))]
-        public IActionResult SyncFiles()
+        [HttpPost("cleanup", Name = nameof(SystemController) + "." + nameof(SyncFiles))]
+        public async Task<IActionResult> SyncFiles()
         {
             try
             {
-                _logger.LogDebug($"System controller SyncFiles()");
-
-                return Ok(_systemManager.SyncFiles());
+                _logger.LogDebug($"System controller Cleanup()");
+                await _systemManager.Cleanup();
+                return Ok();
 
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, $"Exception in System controller SyncFiles()");
+                _logger.LogError(ex, $"Exception in System controller Cleanup()");
 
                 return ExceptionResult(ex);
             }

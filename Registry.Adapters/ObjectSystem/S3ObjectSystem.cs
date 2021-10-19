@@ -244,9 +244,9 @@ namespace Registry.Adapters.ObjectSystem
             return null;
         }
 
-        public void Cleanup()
+        public Task Cleanup()
         {
-            //
+            return Task.CompletedTask;
         }
 
         public bool IsS3Based()

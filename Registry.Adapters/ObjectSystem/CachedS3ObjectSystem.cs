@@ -1,11 +1,14 @@
 ﻿using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO;
 using System.Linq;
+using System.Runtime.Serialization;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
+using Minio.DataModel;
 using Minio.Exceptions;
 using Newtonsoft.Json;
 using Polly;
@@ -15,14 +18,16 @@ using Registry.Common;
 using Registry.Common.Model;
 using Registry.Ports.ObjectSystem;
 using Registry.Ports.ObjectSystem.Model;
+using CopyConditions = Registry.Ports.ObjectSystem.Model.CopyConditions;
 
 namespace Registry.Adapters.ObjectSystem
 {
     public class CachedS3ObjectSystem : IObjectSystem
     {
+        [JsonProperty("settings")]
         private readonly CachedS3ObjectSystemSettings _settings;
         private readonly ILogger<CachedS3ObjectSystem> _logger;
-        private readonly IObjectSystem _remoteStorage;
+        private IObjectSystem _remoteStorage;
 
         private readonly string _globalLockFilePath;
 
@@ -39,10 +44,21 @@ namespace Registry.Adapters.ObjectSystem
 
         private const int RemoteCallRetries = 3;
 
-        private readonly ConcurrentDictionary<string, ObjectInfo> _objectInfos;
-
         #region Ctor
 
+        [JsonConstructor]
+        private CachedS3ObjectSystem()
+        {
+            LogInformation = s => Debug.WriteLine(s);
+            LogError = (exception, s) => Debug.WriteLine($"{s} -> {exception}");
+        }
+
+        [OnDeserialized]
+        internal void OnDeserializedMethod(StreamingContext context)
+        {
+            _remoteStorage = new S3ObjectSystem(_settings);            
+        }
+        
         public CachedS3ObjectSystem(CachedS3ObjectSystemSettings settings, Func<IObjectSystem> objectSystemFactory,
             ILogger<CachedS3ObjectSystem> logger)
         {
@@ -56,7 +72,6 @@ namespace Registry.Adapters.ObjectSystem
             Directory.CreateDirectory(_settings.CachePath);
 
             _remoteStorage = objectSystemFactory();
-            _objectInfos = new ConcurrentDictionary<string, ObjectInfo>();
         }
 
         public CachedS3ObjectSystem(CachedS3ObjectSystemSettings settings, ILogger<CachedS3ObjectSystem> logger) :
@@ -99,7 +114,28 @@ namespace Registry.Adapters.ObjectSystem
 
                     await CacheFileAndReturn(bucketName, objectName, callback, sse, cancellationToken);
                 }
-                else throw;
+                else
+                {
+                    LogInformation("Cache HIT: The file is in use, we wait for it");
+
+                    await using var descriptorStream =
+                        await CommonUtils.WaitForFile(descriptorFilePath, FileMode.OpenOrCreate, FileAccess.Read,
+                            FileShare.Read, FileRetriesDelay, FileRetries);
+
+                    if (descriptorStream == null)
+                        throw new InvalidOperationException("Cannot lock local file, timeout reached");
+
+                    await using var fileStream =
+                        await CommonUtils.WaitForFile(cachedFilePath, FileMode.OpenOrCreate, FileAccess.Read,
+                            FileShare.Read, FileRetriesDelay, FileRetries);
+
+                    if (cachedFilePath == null)
+                        throw new InvalidOperationException("Cannot lock local file, timeout reached");
+
+                    LogInformation("File is no longer in use, running callback");
+
+                    callback(fileStream);
+                }
             }
         }
 
@@ -136,7 +172,20 @@ namespace Registry.Adapters.ObjectSystem
 
                     await CacheFileAndReturn(bucketName, objectName, filePath, sse, cancellationToken);
                 }
-                else throw;
+                else
+                {
+                    LogInformation("Cache HIT: The file is in use, we wait for it");
+
+                    await using var descriptorStream =
+                        await CommonUtils.WaitForFile(descriptorFilePath, FileMode.OpenOrCreate, FileAccess.Read,
+                            FileShare.Read, FileRetriesDelay, FileRetries);
+
+                    if (descriptorStream == null)
+                        throw new InvalidOperationException("Cannot lock local file, timeout reached");
+
+                    LogInformation("File is no longer in use, copying requested file");
+                    File.Copy(cachedFilePath, filePath);
+                }
             }
         }
 
@@ -258,6 +307,92 @@ namespace Registry.Adapters.ObjectSystem
                 File.Copy(cachedFilePath, filePath, true);
             }
         }
+        
+#pragma warning disable 1998
+        public async Task<ObjectInfo> GetObjectInfoAsync(string bucketName, string objectName,
+#pragma warning restore 1998
+            IServerEncryption sse = null,
+            CancellationToken cancellationToken = default)
+        {
+            HandleBucketToBeDeleted(bucketName);
+
+            var descriptorFilePath = GetDescriptorFilePath(bucketName, objectName);
+            var cachedFilePath = GetCachedFilePath(bucketName, objectName);
+            var pendingFilePath = GetPendingFilePath(bucketName, objectName);
+            
+            try
+            {
+                EnsurePathExists(cachedFilePath);
+                EnsurePathExists(descriptorFilePath);
+                EnsurePathExists(pendingFilePath);
+
+                LogInformation($"Waiting for descriptor '{descriptorFilePath}' to become available");
+
+                await using var descriptorStream =
+                    await CommonUtils.WaitForFile(descriptorFilePath, FileMode.OpenOrCreate, FileAccess.ReadWrite,
+                        FileShare.None,
+                        FileRetriesDelay, FileRetries);
+
+                using var descriptorReader = new StreamReader(descriptorStream);
+                var obj = JsonConvert.DeserializeObject<ObjectDescriptor>(await descriptorReader.ReadToEndAsync()) ??
+                          new ObjectDescriptor();
+
+                if (obj.Stat != null)
+                    return new ObjectInfo(objectName, obj.Stat.Size, obj.Stat.LastModified, obj.Stat.ETag,
+                        obj.Stat.ContentType, obj.Stat.MetaData);
+
+                ObjectInfo stat;
+
+                if (File.Exists(pendingFilePath))
+                {
+                    // The file is pending, we have to generate a temporary stat
+                    var res = AdaptersUtils.GenerateObjectInfo(cachedFilePath, objectName);
+
+                    stat = new ObjectInfo(objectName, res.Size, res.LastModified, res.ETag, res.ContentType,
+                        res.MetaData);
+                }
+                else
+                {
+                    // Let's call the actual function
+                    stat = await Policy.Handle<Exception>().RetryAsync(RemoteCallRetries,
+                        (exception, i) => LogInformation($"Retrying S3 stat ({i}): {exception.Message}")
+                    ).ExecuteAsync(async () =>
+                        await _remoteStorage.GetObjectInfoAsync(bucketName, objectName, sse, cancellationToken));
+                }
+
+                obj.Stat = new ObjectInfoDto
+                {
+                    Name = stat.ObjectName,
+                    Size = stat.Size,
+                    ContentType = stat.ContentType,
+                    ETag = stat.ETag,
+                    LastModified = stat.LastModified,
+                    MetaData = stat.MetaData != null ? new Dictionary<string, string>(stat.MetaData) : null
+                };
+
+                descriptorStream.Reset();
+
+                await using var descriptorWriter = new StreamWriter(descriptorStream);
+                await descriptorWriter.WriteAsync(JsonConvert.SerializeObject(obj));
+
+                return stat;
+
+            }
+            catch (MinioException ex)
+            {
+                LogError(ex, "Cannot call remote");
+            }
+            catch (IOException ex)
+            {
+                LogError(ex, "Cannot write descriptor");
+            }
+
+            return await Policy.Handle<Exception>().RetryAsync(RemoteCallRetries,
+                (exception, i) => LogInformation($"Retrying S3 stat ({i}): {exception.Message}")
+            ).ExecuteAsync(async () =>
+                await _remoteStorage.GetObjectInfoAsync(bucketName, objectName, sse, cancellationToken));
+
+        }
 
         #endregion
 
@@ -268,6 +403,8 @@ namespace Registry.Adapters.ObjectSystem
             Dictionary<string, string> metaData = null, IServerEncryption sse = null,
             CancellationToken cancellationToken = default)
         {
+            LogInformation($"In PutObjectAsync('{bucketName}', '{objectName}', [Stream], {size}, '{contentType}')");
+
             HandleBucketToBeDeleted(bucketName);
 
             var descriptorFilePath = GetDescriptorFilePath(bucketName, objectName);
@@ -278,53 +415,63 @@ namespace Registry.Adapters.ObjectSystem
             EnsurePathExists(cachedFilePath);
             EnsurePathExists(pendingFilePath);
 
-            await using (var descriptorStream =
+            LogInformation($"Waiting for descriptor lock '{descriptorFilePath}'");
+
+            await using var descriptorStream =
                 await CommonUtils.WaitForFile(descriptorFilePath, FileMode.OpenOrCreate, FileAccess.Write,
-                    FileShare.None, FileRetriesDelay, FileRetries))
+                    FileShare.None, FileRetriesDelay, FileRetries);
+            if (descriptorStream == null)
+                throw new InvalidOperationException("Cannot lock local descriptor file, timeout reached");
+
+            LogInformation($"Descriptor lock '{descriptorFilePath}' acquired");
+
+            await using var fileStream =
+                await CommonUtils.WaitForFile(cachedFilePath, FileMode.OpenOrCreate, FileAccess.Write,
+                    FileShare.None, FileRetriesDelay, FileRetries);
+
+            if (fileStream == null)
+                throw new InvalidOperationException("Cannot lock local file, timeout reached");
+
+            LogInformation($"File lock '{cachedFilePath}' acquired");
+
+            // Delete any tbd file
+            ClearFileTbdFlag(bucketName, objectName);
+
+            // Empty descriptor
+            descriptorStream.SetLength(0);
+
+            // Empty file
+            fileStream.SetLength(0);
+
+            // This file is not synced yet, we take note about it
+            var obj = new ObjectDescriptor
             {
-                if (descriptorStream == null)
-                    throw new InvalidOperationException("Cannot lock local descriptor file, timeout reached");
-
-                await using var fileStream =
-                    await CommonUtils.WaitForFile(cachedFilePath, FileMode.OpenOrCreate, FileAccess.Write,
-                        FileShare.None, FileRetriesDelay, FileRetries);
-
-                if (fileStream == null)
-                    throw new InvalidOperationException("Cannot lock local file, timeout reached");
-
-                // Delete any tbd file
-                ClearFileTbdFlag(bucketName, objectName);
-
-                // Empty descriptor
-                descriptorStream.SetLength(0);
-
-                // Empty file
-                fileStream.SetLength(0);
-
-                // This file is not synced yet, we take note about it
-                var obj = new ObjectDescriptor
+                LastError = null,
+                SyncTime = null,
+                Info = new UploadInfo
                 {
-                    LastError = null,
-                    SyncTime = null,
-                    Info = new UploadInfo
-                    {
-                        ContentType = contentType,
-                        MetaData = metaData,
-                        SSE = sse
-                    }
-                };
+                    ContentType = contentType,
+                    MetaData = metaData,
+                    SSE = sse
+                }
+            };
 
-                await using var descriptorWriter = new StreamWriter(descriptorStream);
-                await descriptorWriter.WriteAsync(JsonConvert.SerializeObject(obj));
+            LogInformation($"Writing new descriptor");
 
-                // TODO: We are ignoring the lenght parameter, this could lead to problems if length != stream.Length
-                await data.CopyToAsync(fileStream, cancellationToken);
-                
-                await File.WriteAllTextAsync(pendingFilePath, DateTime.Now.ToString("yyyy-MM-dd-HH-mm-ss"), cancellationToken);
-                
-            }
+            await using var descriptorWriter = new StreamWriter(descriptorStream);
+            await descriptorWriter.WriteAsync(JsonConvert.SerializeObject(obj));
 
-            CommonUtils.SafeDelete(cachedFilePath);
+            LogInformation($"Copying data to file stream");
+
+            // Verificare perchè non tiene in cache il file di cui abbiamo fatto la put
+
+            // TODO: We are ignoring the lenght parameter, this could lead to problems if length != stream.Length
+            await data.CopyToAsync(fileStream, cancellationToken);
+
+            LogInformation($"Writing pending file '{pendingFilePath}'");
+
+            await File.WriteAllTextAsync(pendingFilePath, DateTime.Now.ToString("yyyy-MM-dd-HH-mm-ss"),
+                cancellationToken);
         }
 
         public async Task PutObjectAsync(string bucketName, string objectName, string filePath,
@@ -371,13 +518,13 @@ namespace Registry.Adapters.ObjectSystem
             await descriptorWriter.WriteAsync(JsonConvert.SerializeObject(obj));
 
             File.Copy(filePath, cachedFilePath, true);
-            await File.WriteAllTextAsync(pendingFilePath, DateTime.Now.ToString("yyyy-MM-dd-HH-mm-ss"), cancellationToken);
-
+            await File.WriteAllTextAsync(pendingFilePath, DateTime.Now.ToString("yyyy-MM-dd-HH-mm-ss"),
+                cancellationToken);
         }
 
         #endregion
 
-        #region RemoveObject
+        #region Remove
 
         public async Task RemoveObjectAsync(string bucketName, string objectName,
             CancellationToken cancellationToken = default)
@@ -395,24 +542,27 @@ namespace Registry.Adapters.ObjectSystem
             if (File.Exists(tbdFilePath) || !File.Exists(descriptorFilePath))
                 return;
 
-            await using var descriptorStream =
+            await using (var descriptorStream =
                 await CommonUtils.WaitForFile(descriptorFilePath, FileMode.Open, FileAccess.Write,
-                    FileShare.None, FileRetriesDelay, FileRetries);
+                    FileShare.None, FileRetriesDelay, FileRetries))
+            {
+                descriptorStream.SetLength(0);
 
-            descriptorStream.SetLength(0);
+                if (descriptorStream == null)
+                    throw new InvalidOperationException("Cannot lock local file, timeout reached");
 
-            if (descriptorStream == null)
-                throw new InvalidOperationException("Cannot lock local file, timeout reached");
+                // Delete cached file
+                CommonUtils.SafeDelete(cachedFilePath);
 
-            // Delete cached file
-            CommonUtils.SafeDelete(cachedFilePath);
+                // Mark it for deletion
+                await File.WriteAllTextAsync(tbdFilePath, $"{bucketName}/${objectName}", cancellationToken);
 
-            // Mark it for deletion
-            await File.WriteAllTextAsync(tbdFilePath, $"{bucketName}/${objectName}", cancellationToken);
+            }
 
-            // Remove object info (if exists)
-            var key = GetMemoryKey(bucketName, objectName);
-            _objectInfos.TryRemove(key, out _);
+            if (!CommonUtils.SafeDelete(descriptorFilePath))
+            {
+                LogInformation($"Cannot remove descriptor '{descriptorFilePath}'");
+            }
         }
 
         public Task RemoveObjectsAsync(string bucketName, string[] objectsNames,
@@ -424,24 +574,6 @@ namespace Registry.Adapters.ObjectSystem
                 objectsNames.Distinct().Select(objectName =>
                     RemoveObjectAsync(bucketName, objectName, cancellationToken)));
         }
-
-#pragma warning disable 1998
-        public async Task<ObjectInfo> GetObjectInfoAsync(string bucketName, string objectName,
-#pragma warning restore 1998
-            IServerEncryption sse = null,
-            CancellationToken cancellationToken = default)
-        {
-            HandleBucketToBeDeleted(bucketName);
-
-            var key = GetMemoryKey(bucketName, objectName);
-
-            return _objectInfos.GetOrAdd(key, static (s, info) =>
-                    info.Storage.GetObjectInfoAsync(info.bucketName, info.objectName, info.sse, info.cancellationToken)
-                        .Result,
-                new { Storage = _remoteStorage, bucketName, objectName, sse, cancellationToken });
-        }
-
-        #endregion
 
         public async Task RemoveBucketAsync(string bucketName, bool force = true,
             CancellationToken cancellationToken = default)
@@ -460,16 +592,26 @@ namespace Registry.Adapters.ObjectSystem
             await writer.WriteAsync(bucketName);
         }
 
+        #endregion
+
         #region Sync
 
         public async Task SyncBucket(string bucketName)
         {
+            LogInformation($"In SyncBucket('{bucketName}')");
+
             var bucketFolderPath = GetBucketFolder(bucketName);
             var bucketLockFilePath = Path.Combine(bucketFolderPath, LockFileName);
             var tbdLockFilePath = GetBucketTbdFilePath(bucketName);
 
+            Directory.CreateDirectory(bucketFolderPath);
+            EnsurePathExists(bucketLockFilePath);
+            EnsurePathExists(tbdLockFilePath);
+
             try
             {
+                LogInformation($"Waiting for bucket lock file '{bucketLockFilePath}'");
+
                 await using (var bucketLockFileStream = new FileStream(bucketLockFilePath, FileMode.CreateNew,
                     FileAccess.Write,
                     FileShare.None))
@@ -477,7 +619,7 @@ namespace Registry.Adapters.ObjectSystem
                     await using var writer = new StreamWriter(bucketLockFileStream);
                     await writer.WriteAsync(DateTime.Now.ToString("yyyy-MM-dd-HH-mm-ss"));
 
-                    LogInformation($"Acquired bucket '{bucketName}' lock");
+                    LogInformation($"Acquired log for bucket '{bucketName}'");
 
                     if (File.Exists(tbdLockFilePath))
                     {
@@ -524,6 +666,8 @@ namespace Registry.Adapters.ObjectSystem
             var bucketFolderPath = GetBucketFolder(bucketName);
             var pendingFolderPath = Path.Combine(bucketFolderPath, PendingFolderName);
 
+            Directory.CreateDirectory(pendingFolderPath);
+
             var pendingFiles = Directory.EnumerateFiles(pendingFolderPath, "*", SearchOption.AllDirectories);
 
             foreach (var pendingFilePath in pendingFiles)
@@ -532,7 +676,7 @@ namespace Registry.Adapters.ObjectSystem
                 var objectFilePath = GetCachedFilePath(bucketName, objectName);
                 var descriptorFilePath = GetDescriptorFilePath(bucketName, objectName);
 
-                LogInformation($"Synchronizing pending object '{objectName}'");
+                LogInformation($"Synchronizing pending object '{objectName}', waiting for lock");
 
                 await using var descriptorStream =
                     await CommonUtils.WaitForFile(descriptorFilePath, FileMode.Open, FileAccess.ReadWrite,
@@ -540,6 +684,8 @@ namespace Registry.Adapters.ObjectSystem
 
                 if (descriptorStream == null)
                     throw new InvalidOperationException("Cannot lock local file, timeout reached");
+
+                LogInformation($"Lock acquired for '{descriptorFilePath}'");
 
                 try
                 {
@@ -559,7 +705,7 @@ namespace Registry.Adapters.ObjectSystem
                         continue;
                     }
 
-                    LogInformation($"'{descriptorFilePath}' needs to be syncronized");
+                    LogInformation($"'{objectName}' needs to be syncronized");
 
                     try
                     {
@@ -569,6 +715,8 @@ namespace Registry.Adapters.ObjectSystem
                         ).ExecuteAsync(async () =>
                             await _remoteStorage.PutObjectAsync(bucketName, objectName, objectFilePath,
                                 descriptor.Info.ContentType, descriptor.Info.MetaData, descriptor.Info.SSE, default));
+
+                        LogInformation($"Syncronized '{objectName}'");
 
                         // Clear descriptor file
                         descriptorStream.SetLength(0);
@@ -581,11 +729,15 @@ namespace Registry.Adapters.ObjectSystem
                         await using var writer = new StreamWriter(descriptorStream);
                         await writer.WriteAsync(JsonConvert.SerializeObject(descriptor));
 
-                        CommonUtils.SafeDelete(pendingFilePath);
+                        LogInformation($"Deleting '{pendingFilePath}'");
+                        if (!CommonUtils.SafeDelete(pendingFilePath))
+                        {
+                            LogInformation($"Cannot delete '{pendingFilePath}'");
+                        }
                     }
-                    catch (MinioException ex)
+                    catch (Exception ex)
                     {
-                        LogError(ex, "Cannot upload: minio error");
+                        LogError(ex, $"Cannot sync file '{pendingFilePath}'");
 
                         // Clear descriptor file
                         descriptorStream.SetLength(0);
@@ -612,13 +764,111 @@ namespace Registry.Adapters.ObjectSystem
 
         private async Task DeleteAllTbdFiles(string bucketName)
         {
-            throw new NotImplementedException();
+            var bucketFolderPath = GetBucketFolder(bucketName);
+            var tbdFolderPath = Path.Combine(bucketFolderPath, TbdFolderName);
+
+            Directory.CreateDirectory(tbdFolderPath);
+
+            var tbdFiles = Directory.EnumerateFiles(tbdFolderPath, "*", SearchOption.AllDirectories).ToArray();
+
+            if (!tbdFiles.Any())
+            {
+                LogInformation($"No tbd files are present");
+                return;
+            }
+
+            var tbdRemoteList = new List<string>();
+
+            foreach (var tbdFile in tbdFiles)
+            {
+                var objectName = Path.GetRelativePath(tbdFolderPath, tbdFile);
+                var objectFilePath = GetCachedFilePath(bucketName, objectName);
+                var descriptorFilePath = GetDescriptorFilePath(bucketName, objectName);
+                var pendingFilePath = GetPendingFilePath(bucketName, objectName);
+
+                LogInformation($"Deleting object '{objectName}'");
+
+                try
+                {
+                    // // Open file descriptor
+                    // await using (var descriptorStream =
+                    //     await CommonUtils.WaitForFile(descriptorFilePath, FileMode.Open, FileAccess.ReadWrite,
+                    //         FileShare.None, FileRetriesDelay, FileRetries))
+                    // {
+                    //     if (descriptorStream == null)
+                    //         throw new InvalidOperationException("Cannot lock local file, timeout reached");
+                    //
+
+                    // Deserialize descriptor object from stream
+                    //using (var reader = new StreamReader(descriptorStream, leaveOpen: true))
+                    //    descriptor = JsonConvert.DeserializeObject<ObjectDescriptor>(await reader.ReadToEndAsync());
+
+                    //if (descriptor?.Info == null)
+                    //    throw new InvalidOperationException(
+                    //        $"No upload info, invalid descriptor: '{descriptorFilePath}'");
+
+
+                    LogInformation($"Deleting object file: '{objectFilePath}'");
+
+                    if (!CommonUtils.SafeDelete(objectFilePath))
+                        LogInformation($"Cannot delete object file '{objectFilePath}'");
+                    else
+                    {
+                        LogInformation($"Deleted object file '{objectName}'");
+                        
+                        tbdRemoteList.Add(objectName);
+                      
+                        if (!CommonUtils.SafeDelete(descriptorFilePath))
+                            LogInformation($"Cannot delete descriptor '{descriptorFilePath}'");
+
+                        if (!CommonUtils.SafeDelete(pendingFilePath))
+                            LogInformation($"Cannot delete pending '{pendingFilePath}'");
+                        
+                    }
+
+                }
+                catch (Exception ex)
+                {
+                    LogError(ex, $"An error occurred during sync '{descriptorFilePath}'");
+                }
+            }
+
+            if (!tbdRemoteList.Any())
+            {
+                LogInformation($"Remote tdb list is empty, nothing to do");
+                return;
+            }
+
+            try
+            {
+                // Attempt Delete all call
+                await Policy.Handle<Exception>().RetryAsync(RemoteCallRetries,
+                    (exception, i) =>
+                        LogInformation($"Retrying S3 object delete ({i}): {exception.Message}")
+                ).ExecuteAsync(async () =>
+                    await _remoteStorage.RemoveObjectsAsync(bucketName, tbdRemoteList.ToArray(), default));
+
+                var tbd = tbdRemoteList.Select(item => GetTbdFilePath(bucketName, item));
+
+                // Let's remove all the tdb signal files
+                foreach (var path in tbd)
+                {
+                    if (!CommonUtils.SafeDelete(path))
+                        LogInformation($"Cannot remove tdb file '{path}'");
+                }
+            }
+            catch (Exception ex)
+            {
+                LogError(ex, $"An error occurred during delete all");
+            }
         }
 
         public async Task Sync()
         {
             try
             {
+                LogInformation($"Waiting for global lock");
+
                 await using (var globalLockFileStream = new FileStream(_globalLockFilePath, FileMode.CreateNew,
                     FileAccess.Write,
                     FileShare.None))
@@ -633,48 +883,33 @@ namespace Registry.Adapters.ObjectSystem
                     // We could parallelize this
                     foreach (var bucket in buckets)
                     {
-                        LogInformation($"Synchronizing bucket '{bucket}'");
-                        await SyncBucket(bucket);
+                        var bucketName = Path.GetRelativePath(_settings.CachePath, bucket);
+                        LogInformation($"Synchronizing bucket '{bucketName}'");
+                        await SyncBucket(bucketName);
                     }
                 }
 
                 if (!CommonUtils.SafeDelete(_globalLockFilePath))
                     throw new InvalidOperationException("Cannot delete global lock, this is bad");
 
-                LogInformation("Released global lock");
+                LogInformation("Released global lock, sync OK");
             }
             catch (IOException ex)
             {
                 throw new InvalidOperationException("Cannot run multiple synchronizations at once", ex);
             }
-
-
-            // Go throught all the files and sync / remove
-            throw new NotImplementedException();
-            // We try to open or create the file descriptor with exclusive access
-            /*await using var descriptorStream = new FileStream(descriptorFilePath, FileMode.OpenOrCreate,
-                FileAccess.Write, FileShare.None);
-            await using var fileStream = new FileStream(cachedFilePath, FileMode.OpenOrCreate, FileAccess.Write,
-                FileShare.None);*/
-
-            // await Policy.Handle<Exception>().RetryAsync(RemoteCallRetries,
-            //     (exception, i) => LogInformation($"Retrying S3 delete ({i}): {exception.Message}")
-            // ).ExecuteAsync(async () =>
-            //     await _remoteStorage.RemoveObjectAsync(bucketName, objectName, cancellationToken));
-
-
-            //   return _remoteStorage.PutObjectAsync(bucketName, objectName, filePath, contentType, metaData, sse,
-            //       cancellationToken);
         }
 
         #endregion
 
         #region Proxied
 
-        public Task GetObjectAsync(string bucketName, string objectName, long offset, long length, Action<Stream> cb,
+        public Task GetObjectAsync(string bucketName, string objectName, long offset, long length,
+            Action<Stream> cb,
             IServerEncryption sse = null, CancellationToken cancellationToken = default)
         {
-            return _remoteStorage.GetObjectAsync(bucketName, objectName, offset, length, cb, sse, cancellationToken);
+            return _remoteStorage.GetObjectAsync(bucketName, objectName, offset, length, cb, sse,
+                cancellationToken);
         }
 
         public Task<bool> ObjectExistsAsync(string bucketName, string objectName, IServerEncryption sse = null,
@@ -723,7 +958,8 @@ namespace Registry.Adapters.ObjectSystem
             return _remoteStorage.BucketExistsAsync(bucketName, cancellationToken);
         }
 
-        public IObservable<ItemInfo> ListObjectsAsync(string bucketName, string prefix = null, bool recursive = false,
+        public IObservable<ItemInfo> ListObjectsAsync(string bucketName, string prefix = null,
+            bool recursive = false,
             CancellationToken cancellationToken = default)
         {
             return _remoteStorage.ListObjectsAsync(bucketName, prefix, recursive, cancellationToken);
@@ -734,7 +970,8 @@ namespace Registry.Adapters.ObjectSystem
             return _remoteStorage.GetPolicyAsync(bucketName, cancellationToken);
         }
 
-        public Task SetPolicyAsync(string bucketName, string policyJson, CancellationToken cancellationToken = default)
+        public Task SetPolicyAsync(string bucketName, string policyJson,
+            CancellationToken cancellationToken = default)
         {
             return _remoteStorage.SetPolicyAsync(bucketName, policyJson, cancellationToken);
         }
@@ -748,10 +985,116 @@ namespace Registry.Adapters.ObjectSystem
             return _remoteStorage.GetStorageInfo();
         }
 
-        public void Cleanup()
+        private class ObjectCarrier
         {
-            _remoteStorage.Cleanup();
+            public string FullPath { get; }
+            public string ObjectName { get; }
+            public string BucketName { get; }
+            public long Size { get; }
+            public DateTime CreationDate { get; }
 
+            public ObjectCarrier(string fullPath, string objectName, string bucketName, long size,
+                DateTime creationDate)
+            {
+                FullPath = fullPath;
+                ObjectName = objectName;
+                BucketName = bucketName;
+                Size = size;
+                CreationDate = creationDate;
+            }
+        }
+
+        public async Task Cleanup()
+        {
+            await _remoteStorage.Cleanup();
+
+            try
+            {
+                if (_settings.MaxSize == null)
+                {
+                    LogInformation($"Cache max size not set, cleanup ok");
+                    return;
+                }
+
+                var maxSize = _settings.MaxSize.Value;
+
+                var allFiles = (from filePath in
+                            Directory.EnumerateFiles(_settings.CachePath, "*", SearchOption.AllDirectories)
+                        let relPath = Path.GetRelativePath(_settings.CachePath, filePath).Replace('\\', '/')
+                        let segments = relPath.Split('/')
+                        where segments.Length > 2 && segments[1] == DescriptorsFolderName
+                        let info = new FileInfo(filePath)
+                        select new ObjectCarrier(
+                            filePath,
+                            // Python eat this
+                            relPath[(segments[0].Length + segments[1].Length + 2)..][0..^5],
+                            segments[0],
+                            info.Length,
+                            info.LastWriteTime)
+                    ).ToArray();
+
+                var tbds = new List<ObjectCarrier>();
+                var totalCacheSize = allFiles.Sum(file => file.Size);
+                var usage = (double)totalCacheSize / maxSize;
+
+                LogInformation($"MaxCacheSize = {CommonUtils.GetBytesReadable(maxSize)}");
+                LogInformation($"TotalCacheSize = {CommonUtils.GetBytesReadable(totalCacheSize)}");
+                LogInformation($"Usage = {usage:P2}");
+
+                if (totalCacheSize < maxSize)
+                {
+                    LogInformation($"No need to cleanup cache");
+                    return;
+                }
+
+                long cacheExcess = totalCacheSize - maxSize;
+                LogInformation($"CacheExcess = {CommonUtils.GetBytesReadable(cacheExcess)}");
+
+                long targetFreeSpace = 0;
+
+                if (_settings.CacheExpiration != null)
+                {
+                    LogInformation($"Checking expired files");
+
+                    var expr = DateTime.Now - _settings.CacheExpiration;
+                    tbds.AddRange(allFiles.Where(file => file.CreationDate > expr));
+
+                    targetFreeSpace = tbds.Sum(file => file.Size);
+                }
+
+                if (targetFreeSpace < cacheExcess)
+                {
+                    allFiles = allFiles.OrderBy(item => item.CreationDate).ToArray();
+
+                    foreach (var file in allFiles)
+                    {
+                        tbds.Add(file);
+                        targetFreeSpace += file.Size;
+
+                        if (targetFreeSpace > cacheExcess) break;
+                    }
+                }
+
+                // Let's group by bucket in order to minimize the actual remote calls
+                var tbdsGrouped = (from file in tbds
+                    group file by file.BucketName
+                    into grp
+                    select new
+                    {
+                        BucketName = grp.Key,
+                        ObjectNames = grp.Select(item => item.ObjectName).ToArray()
+                    }).ToArray();
+
+                // We could parallelize this
+                foreach (var file in tbdsGrouped)
+                {
+                    await RemoveObjectsAsync(file.BucketName, file.ObjectNames);
+                }
+            }
+            finally
+            {
+                await Sync();
+            }
             // Enforce cache limits
         }
 
@@ -802,6 +1145,8 @@ namespace Registry.Adapters.ObjectSystem
         private void ClearFileTbdFlag(string bucketName, string objectName)
         {
             var tbdFilePath = GetTbdFilePath(bucketName, objectName);
+
+            if (!File.Exists(tbdFilePath)) return;
 
             Policy.Handle<IOException>().Retry(10,
                 (exception, i) => LogInformation($"Retrying to clear TBD flag ({i}): {exception.Message}")
@@ -856,6 +1201,8 @@ namespace Registry.Adapters.ObjectSystem
             public DateTime? SyncTime { get; set; }
             public Error LastError { get; set; }
             public UploadInfo Info { get; set; }
+            
+            public ObjectInfoDto Stat { get; set; }
 
             [JsonIgnore] public bool IsSyncronized => SyncTime != null;
             [JsonIgnore] public bool IsError => LastError != null;

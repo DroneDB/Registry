@@ -498,9 +498,10 @@ namespace Registry.Adapters.ObjectSystem
             return CommonUtils.GetStorageInfo(_baseFolder);
         }
 
-        public void Cleanup()
+        public Task Cleanup()
         {
             //
+            return Task.CompletedTask;
         }
 
         #endregion

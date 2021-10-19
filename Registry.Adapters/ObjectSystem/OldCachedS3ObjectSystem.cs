@@ -306,10 +306,13 @@ namespace Registry.Adapters.ObjectSystem
             }
         }
 
-        public void Cleanup()
+        public Task Cleanup()
         {
-            CleanupFolder(CachePath);
-            CommonUtils.RemoveEmptyFolders(CachePath);
+            return Task.Run(() =>
+            {
+                CleanupFolder(CachePath);
+                CommonUtils.RemoveEmptyFolders(CachePath);
+            });
         }
 
         public void CleanupBucket(string bucketName)
