@@ -24,8 +24,7 @@ namespace Registry.Adapters.ObjectSystem
 {
     public class CachedS3ObjectSystem : IObjectSystem
     {
-        [JsonProperty("settings")]
-        private readonly CachedS3ObjectSystemSettings _settings;
+        [JsonProperty("settings")] private readonly CachedS3ObjectSystemSettings _settings;
         private readonly ILogger<CachedS3ObjectSystem> _logger;
         private IObjectSystem _remoteStorage;
 
@@ -34,6 +33,7 @@ namespace Registry.Adapters.ObjectSystem
         private const string FilesFolderName = "files";
         private const string DescriptorsFolderName = "descriptors";
         private const string TbdFolderName = "tbd";
+        private const string StatsFolderName = "stats";
         private const string PendingFolderName = "pending";
 
         private const string LockFileName = "sync.lock";
@@ -56,9 +56,9 @@ namespace Registry.Adapters.ObjectSystem
         [OnDeserialized]
         internal void OnDeserializedMethod(StreamingContext context)
         {
-            _remoteStorage = new S3ObjectSystem(_settings);            
+            _remoteStorage = new S3ObjectSystem(_settings);
         }
-        
+
         public CachedS3ObjectSystem(CachedS3ObjectSystemSettings settings, Func<IObjectSystem> objectSystemFactory,
             ILogger<CachedS3ObjectSystem> logger)
         {
@@ -242,15 +242,22 @@ namespace Registry.Adapters.ObjectSystem
                 LogInformation($"Suppressed IOException: '{ex.Message}'");
                 LogInformation("File already existing, waiting for it to become available");
 
-                await using var stream =
+                await using var descriptorStream =
                     await CommonUtils.WaitForFile(descriptorFilePath, FileMode.Open, FileAccess.Read, FileShare.Read,
                         FileRetriesDelay, FileRetries);
 
-                if (stream == null)
-                    throw new InvalidOperationException("Cannot get file from S3, timeout reached");
+                if (descriptorStream == null)
+                    throw new InvalidOperationException("File descriptor timeout reached");
+
+                await using var fileStream =
+                    await CommonUtils.WaitForFile(cachedFilePath, FileMode.Open, FileAccess.Read, FileShare.Read,
+                        FileRetriesDelay, FileRetries);
+
+                if (fileStream == null)
+                    throw new InvalidOperationException("File descriptor timeout reached");
 
                 LogInformation("File is now available, running callback");
-                callback(stream);
+                callback(fileStream);
             }
         }
 
@@ -307,7 +314,7 @@ namespace Registry.Adapters.ObjectSystem
                 File.Copy(cachedFilePath, filePath, true);
             }
         }
-        
+
 #pragma warning disable 1998
         public async Task<ObjectInfo> GetObjectInfoAsync(string bucketName, string objectName,
 #pragma warning restore 1998
@@ -316,32 +323,42 @@ namespace Registry.Adapters.ObjectSystem
         {
             HandleBucketToBeDeleted(bucketName);
 
-            var descriptorFilePath = GetDescriptorFilePath(bucketName, objectName);
+            var statFilePath = GetStatFilePath(bucketName, objectName);
             var cachedFilePath = GetCachedFilePath(bucketName, objectName);
             var pendingFilePath = GetPendingFilePath(bucketName, objectName);
-            
+
             try
             {
                 EnsurePathExists(cachedFilePath);
-                EnsurePathExists(descriptorFilePath);
+                EnsurePathExists(statFilePath);
                 EnsurePathExists(pendingFilePath);
 
-                LogInformation($"Waiting for descriptor '{descriptorFilePath}' to become available");
+                LogInformation($"Waiting for stat '{statFilePath}' to become available");
 
-                await using var descriptorStream =
-                    await CommonUtils.WaitForFile(descriptorFilePath, FileMode.OpenOrCreate, FileAccess.ReadWrite,
+                await using var statStream =
+                    await CommonUtils.WaitForFile(statFilePath, FileMode.OpenOrCreate, FileAccess.ReadWrite,
                         FileShare.None,
                         FileRetriesDelay, FileRetries);
 
-                using var descriptorReader = new StreamReader(descriptorStream);
-                var obj = JsonConvert.DeserializeObject<ObjectDescriptor>(await descriptorReader.ReadToEndAsync()) ??
-                          new ObjectDescriptor();
-
-                if (obj.Stat != null)
-                    return new ObjectInfo(objectName, obj.Stat.Size, obj.Stat.LastModified, obj.Stat.ETag,
-                        obj.Stat.ContentType, obj.Stat.MetaData);
+                using var statReader = new StreamReader(statStream);
 
                 ObjectInfo stat;
+
+                // If the file has any content, we try to deserialize it
+                if (statStream.Length != 0)
+                {
+                    try
+                    {
+                        var obj = JsonConvert.DeserializeObject<ObjectInfo>(await statReader.ReadToEndAsync());
+
+                        if (obj != null)
+                            return obj;
+                    }
+                    catch (Exception ex)
+                    {
+                        LogError(ex, $"Cannot deserialize file '{statFilePath}'");
+                    }
+                }
 
                 if (File.Exists(pendingFilePath))
                 {
@@ -360,23 +377,12 @@ namespace Registry.Adapters.ObjectSystem
                         await _remoteStorage.GetObjectInfoAsync(bucketName, objectName, sse, cancellationToken));
                 }
 
-                obj.Stat = new ObjectInfoDto
-                {
-                    Name = stat.ObjectName,
-                    Size = stat.Size,
-                    ContentType = stat.ContentType,
-                    ETag = stat.ETag,
-                    LastModified = stat.LastModified,
-                    MetaData = stat.MetaData != null ? new Dictionary<string, string>(stat.MetaData) : null
-                };
+                statStream.Reset();
 
-                descriptorStream.Reset();
-
-                await using var descriptorWriter = new StreamWriter(descriptorStream);
-                await descriptorWriter.WriteAsync(JsonConvert.SerializeObject(obj));
+                await using var statWriter = new StreamWriter(statStream);
+                await statWriter.WriteAsync(JsonConvert.SerializeObject(stat));
 
                 return stat;
-
             }
             catch (MinioException ex)
             {
@@ -384,14 +390,13 @@ namespace Registry.Adapters.ObjectSystem
             }
             catch (IOException ex)
             {
-                LogError(ex, "Cannot write descriptor");
+                LogError(ex, "Cannot write stat");
             }
 
             return await Policy.Handle<Exception>().RetryAsync(RemoteCallRetries,
                 (exception, i) => LogInformation($"Retrying S3 stat ({i}): {exception.Message}")
             ).ExecuteAsync(async () =>
                 await _remoteStorage.GetObjectInfoAsync(bucketName, objectName, sse, cancellationToken));
-
         }
 
         #endregion
@@ -410,10 +415,12 @@ namespace Registry.Adapters.ObjectSystem
             var descriptorFilePath = GetDescriptorFilePath(bucketName, objectName);
             var cachedFilePath = GetCachedFilePath(bucketName, objectName);
             var pendingFilePath = GetPendingFilePath(bucketName, objectName);
+            var statFilePath = GetStatFilePath(bucketName, objectName);
 
             EnsurePathExists(descriptorFilePath);
             EnsurePathExists(cachedFilePath);
             EnsurePathExists(pendingFilePath);
+            EnsurePathExists(statFilePath);
 
             LogInformation($"Waiting for descriptor lock '{descriptorFilePath}'");
 
@@ -425,53 +432,54 @@ namespace Registry.Adapters.ObjectSystem
 
             LogInformation($"Descriptor lock '{descriptorFilePath}' acquired");
 
-            await using var fileStream =
+            await using (var fileStream =
                 await CommonUtils.WaitForFile(cachedFilePath, FileMode.OpenOrCreate, FileAccess.Write,
-                    FileShare.None, FileRetriesDelay, FileRetries);
-
-            if (fileStream == null)
-                throw new InvalidOperationException("Cannot lock local file, timeout reached");
-
-            LogInformation($"File lock '{cachedFilePath}' acquired");
-
-            // Delete any tbd file
-            ClearFileTbdFlag(bucketName, objectName);
-
-            // Empty descriptor
-            descriptorStream.SetLength(0);
-
-            // Empty file
-            fileStream.SetLength(0);
-
-            // This file is not synced yet, we take note about it
-            var obj = new ObjectDescriptor
+                    FileShare.None, FileRetriesDelay, FileRetries))
             {
-                LastError = null,
-                SyncTime = null,
-                Info = new UploadInfo
+                if (fileStream == null)
+                    throw new InvalidOperationException("Cannot lock local file, timeout reached");
+
+                LogInformation($"File lock '{cachedFilePath}' acquired");
+
+                // Delete any tbd file
+                ClearFileTbdFlag(bucketName, objectName);
+
+                // Empty descriptor
+                descriptorStream.SetLength(0);
+
+                // Empty file
+                fileStream.SetLength(0);
+
+                // This file is not synced yet, we take note about it
+                var obj = new ObjectDescriptor
                 {
-                    ContentType = contentType,
-                    MetaData = metaData,
-                    SSE = sse
-                }
-            };
+                    LastError = null,
+                    SyncTime = null,
+                    Info = new UploadInfo
+                    {
+                        ContentType = contentType,
+                        MetaData = metaData,
+                        SSE = sse
+                    }
+                };
 
-            LogInformation($"Writing new descriptor");
+                LogInformation($"Writing new descriptor");
 
-            await using var descriptorWriter = new StreamWriter(descriptorStream);
-            await descriptorWriter.WriteAsync(JsonConvert.SerializeObject(obj));
+                await using var descriptorWriter = new StreamWriter(descriptorStream);
+                await descriptorWriter.WriteAsync(JsonConvert.SerializeObject(obj));
 
-            LogInformation($"Copying data to file stream");
+                LogInformation($"Copying data to file stream");
 
-            // Verificare perchè non tiene in cache il file di cui abbiamo fatto la put
+                // TODO: We are ignoring the lenght parameter, this could lead to problems if length != stream.Length
+                await data.CopyToAsync(fileStream, cancellationToken);
 
-            // TODO: We are ignoring the lenght parameter, this could lead to problems if length != stream.Length
-            await data.CopyToAsync(fileStream, cancellationToken);
+                LogInformation($"Writing pending file '{pendingFilePath}'");
 
-            LogInformation($"Writing pending file '{pendingFilePath}'");
+                await File.WriteAllTextAsync(pendingFilePath, DateTime.Now.ToString("yyyy-MM-dd-HH-mm-ss"),
+                    cancellationToken);
+            }
 
-            await File.WriteAllTextAsync(pendingFilePath, DateTime.Now.ToString("yyyy-MM-dd-HH-mm-ss"),
-                cancellationToken);
+            SafeGenerateStatFile(objectName, cachedFilePath, statFilePath);
         }
 
         public async Task PutObjectAsync(string bucketName, string objectName, string filePath,
@@ -484,10 +492,12 @@ namespace Registry.Adapters.ObjectSystem
             var descriptorFilePath = GetDescriptorFilePath(bucketName, objectName);
             var cachedFilePath = GetCachedFilePath(bucketName, objectName);
             var pendingFilePath = GetPendingFilePath(bucketName, objectName);
+            var statFilePath = GetStatFilePath(bucketName, objectName);
 
             EnsurePathExists(descriptorFilePath);
             EnsurePathExists(cachedFilePath);
             EnsurePathExists(pendingFilePath);
+            EnsurePathExists(statFilePath);
 
             await using var descriptorStream =
                 await CommonUtils.WaitForFile(descriptorFilePath, FileMode.OpenOrCreate, FileAccess.Write,
@@ -520,6 +530,8 @@ namespace Registry.Adapters.ObjectSystem
             File.Copy(filePath, cachedFilePath, true);
             await File.WriteAllTextAsync(pendingFilePath, DateTime.Now.ToString("yyyy-MM-dd-HH-mm-ss"),
                 cancellationToken);
+            
+            SafeGenerateStatFile(objectName, cachedFilePath, statFilePath);
         }
 
         #endregion
@@ -534,10 +546,12 @@ namespace Registry.Adapters.ObjectSystem
             var descriptorFilePath = GetDescriptorFilePath(bucketName, objectName);
             var cachedFilePath = GetCachedFilePath(bucketName, objectName);
             var tbdFilePath = GetTbdFilePath(bucketName, objectName);
+            var statFilePath = GetStatFilePath(bucketName, objectName);
 
             EnsurePathExists(descriptorFilePath);
             EnsurePathExists(cachedFilePath);
             EnsurePathExists(tbdFilePath);
+            EnsurePathExists(statFilePath);
 
             if (File.Exists(tbdFilePath) || !File.Exists(descriptorFilePath))
                 return;
@@ -551,18 +565,18 @@ namespace Registry.Adapters.ObjectSystem
                 if (descriptorStream == null)
                     throw new InvalidOperationException("Cannot lock local file, timeout reached");
 
+                if (!CommonUtils.SafeDelete(statFilePath))
+                    LogInformation($"Cannot remove stat '{statFilePath}'");
+
                 // Delete cached file
                 CommonUtils.SafeDelete(cachedFilePath);
 
                 // Mark it for deletion
                 await File.WriteAllTextAsync(tbdFilePath, $"{bucketName}/${objectName}", cancellationToken);
-
             }
 
             if (!CommonUtils.SafeDelete(descriptorFilePath))
-            {
                 LogInformation($"Cannot remove descriptor '{descriptorFilePath}'");
-            }
         }
 
         public Task RemoveObjectsAsync(string bucketName, string[] objectsNames,
@@ -579,10 +593,13 @@ namespace Registry.Adapters.ObjectSystem
             CancellationToken cancellationToken = default)
         {
             HandleBucketToBeDeleted(bucketName);
+            
             var tbdFilePath = GetBucketTbdFilePath(bucketName);
+            
+            EnsurePathExists(tbdFilePath);
 
             await using var stream =
-                await CommonUtils.WaitForFile(tbdFilePath, FileMode.Create, FileAccess.Write, FileShare.None,
+                await CommonUtils.WaitForFile(tbdFilePath, FileMode.OpenOrCreate, FileAccess.Write, FileShare.None,
                     FileRetriesDelay, FileRetries);
 
             if (stream == null)
@@ -590,6 +607,12 @@ namespace Registry.Adapters.ObjectSystem
 
             await using var writer = new StreamWriter(stream);
             await writer.WriteAsync(bucketName);
+            
+            await Policy.Handle<Exception>().RetryAsync(RemoteCallRetries,
+                (exception, i) => LogInformation($"Retrying S3 bucket delete ({i}): {exception.Message}")
+            ).ExecuteAsync(async () =>
+                await _remoteStorage.RemoveBucketAsync(bucketName, true, default));
+            
         }
 
         #endregion
@@ -672,7 +695,8 @@ namespace Registry.Adapters.ObjectSystem
 
             foreach (var pendingFilePath in pendingFiles)
             {
-                var objectName = Path.GetRelativePath(pendingFolderPath, pendingFilePath);
+                var objectName = Path.GetRelativePath(pendingFolderPath, pendingFilePath).ToS3Path();
+
                 var objectFilePath = GetCachedFilePath(bucketName, objectName);
                 var descriptorFilePath = GetDescriptorFilePath(bucketName, objectName);
 
@@ -731,9 +755,8 @@ namespace Registry.Adapters.ObjectSystem
 
                         LogInformation($"Deleting '{pendingFilePath}'");
                         if (!CommonUtils.SafeDelete(pendingFilePath))
-                        {
                             LogInformation($"Cannot delete '{pendingFilePath}'");
-                        }
+                        
                     }
                     catch (Exception ex)
                     {
@@ -781,7 +804,7 @@ namespace Registry.Adapters.ObjectSystem
 
             foreach (var tbdFile in tbdFiles)
             {
-                var objectName = Path.GetRelativePath(tbdFolderPath, tbdFile);
+                var objectName = Path.GetRelativePath(tbdFolderPath, tbdFile).ToS3Path();
                 var objectFilePath = GetCachedFilePath(bucketName, objectName);
                 var descriptorFilePath = GetDescriptorFilePath(bucketName, objectName);
                 var pendingFilePath = GetPendingFilePath(bucketName, objectName);
@@ -815,17 +838,15 @@ namespace Registry.Adapters.ObjectSystem
                     else
                     {
                         LogInformation($"Deleted object file '{objectName}'");
-                        
+
                         tbdRemoteList.Add(objectName);
-                      
+
                         if (!CommonUtils.SafeDelete(descriptorFilePath))
                             LogInformation($"Cannot delete descriptor '{descriptorFilePath}'");
 
                         if (!CommonUtils.SafeDelete(pendingFilePath))
                             LogInformation($"Cannot delete pending '{pendingFilePath}'");
-                        
                     }
-
                 }
                 catch (Exception ex)
                 {
@@ -865,39 +886,46 @@ namespace Registry.Adapters.ObjectSystem
 
         public async Task Sync()
         {
-            try
+            LogInformation($"Waiting for global lock");
+
+            await using (var globalLockFileStream = await CommonUtils.WaitForFile(_globalLockFilePath,
+                FileMode.OpenOrCreate,
+                FileAccess.Write, FileShare.None))
             {
-                LogInformation($"Waiting for global lock");
+                if (globalLockFileStream == null)
+                    throw new InvalidOperationException("Timeout reached waiting for lock");
 
-                await using (var globalLockFileStream = new FileStream(_globalLockFilePath, FileMode.CreateNew,
-                    FileAccess.Write,
-                    FileShare.None))
+                await using var writer = new StreamWriter(globalLockFileStream);
+                await writer.WriteAsync(DateTime.Now.ToString("yyyy-MM-dd-HH-mm-ss"));
+
+                LogInformation("Acquired global lock");
+
+                Directory.CreateDirectory(_settings.CachePath);
+
+                var buckets = Directory.EnumerateDirectories(_settings.CachePath);
+
+                // We could parallelize this
+                foreach (var bucketPath in buckets)
                 {
-                    await using var writer = new StreamWriter(globalLockFileStream);
-                    await writer.WriteAsync(DateTime.Now.ToString("yyyy-MM-dd-HH-mm-ss"));
-
-                    LogInformation("Acquired global lock");
-
-                    var buckets = Directory.EnumerateDirectories(_settings.CachePath);
-
-                    // We could parallelize this
-                    foreach (var bucket in buckets)
+                    var bucketName = Path.GetRelativePath(_settings.CachePath, bucketPath);
+                    try
                     {
-                        var bucketName = Path.GetRelativePath(_settings.CachePath, bucket);
                         LogInformation($"Synchronizing bucket '{bucketName}'");
                         await SyncBucket(bucketName);
                     }
+                    catch (Exception ex)
+                    {
+                        LogError(ex, $"Cannot synchronize bucket '{bucketName}'");
+                    }
                 }
-
-                if (!CommonUtils.SafeDelete(_globalLockFilePath))
-                    throw new InvalidOperationException("Cannot delete global lock, this is bad");
-
-                LogInformation("Released global lock, sync OK");
             }
-            catch (IOException ex)
-            {
-                throw new InvalidOperationException("Cannot run multiple synchronizations at once", ex);
-            }
+
+            CommonUtils.RemoveEmptyFolders(_settings.CachePath);
+            
+            if (!CommonUtils.SafeDelete(_globalLockFilePath))
+                throw new InvalidOperationException("Cannot delete global lock, this is bad");
+
+            LogInformation("Released global lock, sync OK");
         }
 
         #endregion
@@ -1047,7 +1075,7 @@ namespace Registry.Adapters.ObjectSystem
                     return;
                 }
 
-                long cacheExcess = totalCacheSize - maxSize;
+                var cacheExcess = totalCacheSize - maxSize;
                 LogInformation($"CacheExcess = {CommonUtils.GetBytesReadable(cacheExcess)}");
 
                 long targetFreeSpace = 0;
@@ -1114,10 +1142,21 @@ namespace Registry.Adapters.ObjectSystem
 
         private readonly Action<string> LogInformation;
         private readonly Action<Exception, string> LogError;
-
-        public string GetMemoryKey(string bucketName, string objectName)
+        
+        private void SafeGenerateStatFile(string objectName, string filePath, string destPath)
         {
-            return bucketName + "-" + objectName;
+            try
+            {
+                var info = AdaptersUtils.GenerateObjectInfo(filePath, objectName);
+
+                File.WriteAllText(destPath, JsonConvert.SerializeObject(info));
+
+                LogInformation($"Stat file generated '{destPath}'");
+            }
+            catch (Exception ex)
+            {
+                LogError(ex, $"Cannot generate stat file for '{filePath}'");
+            }
         }
 
         private string GetBucketTbdFilePath(string bucketName)
@@ -1180,6 +1219,11 @@ namespace Registry.Adapters.ObjectSystem
             return Path.GetFullPath(Path.Combine(_settings.CachePath, bucketName, FilesFolderName, objectName));
         }
 
+        private string GetStatFilePath(string bucketName, string objectName)
+        {
+            return Path.GetFullPath(Path.Combine(_settings.CachePath, bucketName, StatsFolderName, objectName + ".json"));
+        }
+
         private string GetDescriptorFilePath(string bucketName, string objectName)
         {
             return Path.GetFullPath(Path.Combine(_settings.CachePath, bucketName, DescriptorsFolderName,
@@ -1188,12 +1232,12 @@ namespace Registry.Adapters.ObjectSystem
 
         private string GetTbdFilePath(string bucketName, string objectName)
         {
-            return Path.GetFullPath(Path.Combine(_settings.CachePath, bucketName, TbdFolderName, objectName));
+            return Path.GetFullPath(Path.Combine(_settings.CachePath, bucketName, TbdFolderName, objectName + ".tbd"));
         }
 
         private string GetPendingFilePath(string bucketName, string objectName)
         {
-            return Path.GetFullPath(Path.Combine(_settings.CachePath, bucketName, PendingFolderName, objectName));
+            return Path.GetFullPath(Path.Combine(_settings.CachePath, bucketName, PendingFolderName, objectName + ".pending"));
         }
 
         private class ObjectDescriptor
@@ -1201,8 +1245,6 @@ namespace Registry.Adapters.ObjectSystem
             public DateTime? SyncTime { get; set; }
             public Error LastError { get; set; }
             public UploadInfo Info { get; set; }
-            
-            public ObjectInfoDto Stat { get; set; }
 
             [JsonIgnore] public bool IsSyncronized => SyncTime != null;
             [JsonIgnore] public bool IsError => LastError != null;
