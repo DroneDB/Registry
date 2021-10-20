@@ -530,7 +530,7 @@ namespace Registry.Adapters.ObjectSystem
             File.Copy(filePath, cachedFilePath, true);
             await File.WriteAllTextAsync(pendingFilePath, DateTime.Now.ToString("yyyy-MM-dd-HH-mm-ss"),
                 cancellationToken);
-            
+
             SafeGenerateStatFile(objectName, cachedFilePath, statFilePath);
         }
 
@@ -538,7 +538,7 @@ namespace Registry.Adapters.ObjectSystem
 
         #region Remove
 
-        public async Task RemoveObjectAsync(string bucketName, string objectName,
+        private async Task RemoveObjectFromCache(string bucketName, string objectName,
             CancellationToken cancellationToken = default)
         {
             HandleBucketToBeDeleted(bucketName);
@@ -553,7 +553,7 @@ namespace Registry.Adapters.ObjectSystem
             EnsurePathExists(tbdFilePath);
             EnsurePathExists(statFilePath);
 
-            if (File.Exists(tbdFilePath) || !File.Exists(descriptorFilePath))
+            if (!File.Exists(descriptorFilePath))
                 return;
 
             await using (var descriptorStream =
@@ -569,33 +569,117 @@ namespace Registry.Adapters.ObjectSystem
                     LogInformation($"Cannot remove stat '{statFilePath}'");
 
                 // Delete cached file
-                CommonUtils.SafeDelete(cachedFilePath);
+                if (!CommonUtils.SafeDelete(cachedFilePath))
+                    LogInformation($"Cannot remove cached file '{cachedFilePath}'");
 
                 // Mark it for deletion
-                await File.WriteAllTextAsync(tbdFilePath, $"{bucketName}/${objectName}", cancellationToken);
+                await File.WriteAllTextAsync(tbdFilePath, DateTime.Now.ToString("yyyy-MM-dd-HH-mm-ss"),
+                    cancellationToken);
             }
 
             if (!CommonUtils.SafeDelete(descriptorFilePath))
                 LogInformation($"Cannot remove descriptor '{descriptorFilePath}'");
         }
 
-        public Task RemoveObjectsAsync(string bucketName, string[] objectsNames,
+        public async Task RemoveObjectAsync(string bucketName, string objectName,
+            CancellationToken cancellationToken = default)
+        {
+
+            LogInformation($"In RemoveObjectAsync('{bucketName}', '{objectName})");
+
+            HandleBucketToBeDeleted(bucketName);
+
+            var descriptorFilePath = GetDescriptorFilePath(bucketName, objectName);
+            var cachedFilePath = GetCachedFilePath(bucketName, objectName);
+            var tbdFilePath = GetTbdFilePath(bucketName, objectName);
+            var statFilePath = GetStatFilePath(bucketName, objectName);
+
+            EnsurePathExists(descriptorFilePath);
+            EnsurePathExists(cachedFilePath);
+            EnsurePathExists(tbdFilePath);
+            EnsurePathExists(statFilePath);
+
+            if (!File.Exists(descriptorFilePath))
+                return;
+
+            await using (var descriptorStream =
+                await CommonUtils.WaitForFile(descriptorFilePath, FileMode.Open, FileAccess.Write,
+                    FileShare.None, FileRetriesDelay, FileRetries))
+            {
+                descriptorStream.SetLength(0);
+
+                if (descriptorStream == null)
+                    throw new InvalidOperationException("Cannot lock local file, timeout reached");
+
+                if (!CommonUtils.SafeDelete(statFilePath))
+                    LogInformation($"Cannot remove stat '{statFilePath}'");
+
+                // Delete cached file
+                if (!CommonUtils.SafeDelete(cachedFilePath))
+                    LogInformation($"Cannot remove cached file '{cachedFilePath}'");
+                
+                try
+                {
+                    await Policy.Handle<Exception>().RetryAsync(RemoteCallRetries,
+                        (exception, i) => LogInformation($"Retrying S3 object delete ({i}): {exception.Message}")
+                    ).ExecuteAsync(async () =>
+                        await _remoteStorage.RemoveObjectAsync(bucketName, objectName, cancellationToken));
+
+                    CommonUtils.SafeDelete(tbdFilePath);
+                }
+                catch (Exception ex)
+                {
+                    LogError(ex, "Cannot call RemoveObjectAsync");
+                
+                    // Mark it for deletion
+                    await File.WriteAllTextAsync(tbdFilePath, DateTime.Now.ToString("yyyy-MM-dd-HH-mm-ss"),
+                        cancellationToken);
+                }
+
+            }
+
+            if (!CommonUtils.SafeDelete(descriptorFilePath))
+                LogInformation($"Cannot remove descriptor '{descriptorFilePath}'");
+         
+        }
+
+        public async Task RemoveObjectsAsync(string bucketName, string[] objectsNames,
             CancellationToken cancellationToken = default)
         {
             HandleBucketToBeDeleted(bucketName);
 
-            return Task.WhenAll(
+            await Task.WhenAll(
                 objectsNames.Distinct().Select(objectName =>
-                    RemoveObjectAsync(bucketName, objectName, cancellationToken)));
+                    RemoveObjectFromCache(bucketName, objectName, cancellationToken)));
+
+            try
+            {
+                await Policy.Handle<Exception>().RetryAsync(RemoteCallRetries,
+                    (exception, i) => LogInformation($"Retrying S3 object delete ({i}): {exception.Message}")
+                ).ExecuteAsync(async () =>
+                    await _remoteStorage.RemoveObjectsAsync(bucketName, objectsNames, cancellationToken));
+
+                foreach (var objectName in objectsNames)
+                {
+                    var tbdFilePath = GetTbdFilePath(bucketName, objectName);
+
+                    if (!CommonUtils.SafeDelete(tbdFilePath))
+                        LogInformation($"Cannot delete tbd file '{tbdFilePath}'");
+                }
+            }
+            catch (Exception ex)
+            {
+                LogError(ex, "Cannot call RemoveObjectAsync");
+            }
         }
 
         public async Task RemoveBucketAsync(string bucketName, bool force = true,
             CancellationToken cancellationToken = default)
         {
             HandleBucketToBeDeleted(bucketName);
-            
+
             var tbdFilePath = GetBucketTbdFilePath(bucketName);
-            
+
             EnsurePathExists(tbdFilePath);
 
             await using var stream =
@@ -607,12 +691,11 @@ namespace Registry.Adapters.ObjectSystem
 
             await using var writer = new StreamWriter(stream);
             await writer.WriteAsync(bucketName);
-            
+
             await Policy.Handle<Exception>().RetryAsync(RemoteCallRetries,
                 (exception, i) => LogInformation($"Retrying S3 bucket delete ({i}): {exception.Message}")
             ).ExecuteAsync(async () =>
                 await _remoteStorage.RemoveBucketAsync(bucketName, true, default));
-            
         }
 
         #endregion
@@ -756,7 +839,6 @@ namespace Registry.Adapters.ObjectSystem
                         LogInformation($"Deleting '{pendingFilePath}'");
                         if (!CommonUtils.SafeDelete(pendingFilePath))
                             LogInformation($"Cannot delete '{pendingFilePath}'");
-                        
                     }
                     catch (Exception ex)
                     {
@@ -921,7 +1003,7 @@ namespace Registry.Adapters.ObjectSystem
             }
 
             CommonUtils.RemoveEmptyFolders(_settings.CachePath);
-            
+
             if (!CommonUtils.SafeDelete(_globalLockFilePath))
                 throw new InvalidOperationException("Cannot delete global lock, this is bad");
 
@@ -1142,7 +1224,7 @@ namespace Registry.Adapters.ObjectSystem
 
         private readonly Action<string> LogInformation;
         private readonly Action<Exception, string> LogError;
-        
+
         private void SafeGenerateStatFile(string objectName, string filePath, string destPath)
         {
             try
@@ -1221,7 +1303,8 @@ namespace Registry.Adapters.ObjectSystem
 
         private string GetStatFilePath(string bucketName, string objectName)
         {
-            return Path.GetFullPath(Path.Combine(_settings.CachePath, bucketName, StatsFolderName, objectName + ".json"));
+            return Path.GetFullPath(
+                Path.Combine(_settings.CachePath, bucketName, StatsFolderName, objectName));
         }
 
         private string GetDescriptorFilePath(string bucketName, string objectName)
@@ -1232,12 +1315,13 @@ namespace Registry.Adapters.ObjectSystem
 
         private string GetTbdFilePath(string bucketName, string objectName)
         {
-            return Path.GetFullPath(Path.Combine(_settings.CachePath, bucketName, TbdFolderName, objectName + ".tbd"));
+            return Path.GetFullPath(Path.Combine(_settings.CachePath, bucketName, TbdFolderName, objectName));
         }
 
         private string GetPendingFilePath(string bucketName, string objectName)
         {
-            return Path.GetFullPath(Path.Combine(_settings.CachePath, bucketName, PendingFolderName, objectName + ".pending"));
+            return Path.GetFullPath(Path.Combine(_settings.CachePath, bucketName, PendingFolderName,
+                objectName));
         }
 
         private class ObjectDescriptor

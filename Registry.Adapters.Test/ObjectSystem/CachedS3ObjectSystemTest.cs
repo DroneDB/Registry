@@ -199,6 +199,9 @@ namespace Registry.Adapters.Test.ObjectSystem
             remoteStorage.Verify(system => system.PutObjectAsync(bucket, name, It.IsAny<string>(),
                 It.IsAny<string>(), It.IsAny<Dictionary<string, string>>(),
                 It.IsAny<IServerEncryption>(), It.IsAny<CancellationToken>()), Times.Once());
+
+            (await objectSystem.GetObjectInfoAsync(bucket, name)).Should().NotBeNull();
+
         }
 
         [Test]
@@ -221,7 +224,7 @@ namespace Registry.Adapters.Test.ObjectSystem
 
             const string bucket = "admin";
             const string name = "test.txt";
-            const int count = 10;
+            //const int count = 10;
 
             var remoteStorage = new Mock<IObjectSystem>();
 
@@ -251,7 +254,7 @@ namespace Registry.Adapters.Test.ObjectSystem
 
             await objectSystem.RemoveObjectAsync(bucket, name);
 
-            File.Exists(Path.Combine(fs.TestFolder, bucket, "tbd", name)).Should().BeTrue();
+            File.Exists(Path.Combine(fs.TestFolder, bucket, "files", name)).Should().BeFalse();
         }
         /*
         [Test]
