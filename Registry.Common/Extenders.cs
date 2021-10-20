@@ -7,7 +7,6 @@ namespace Registry.Common
 {
     public static class Extenders
     {
-
         /// <summary>
         /// Safe reset to the beginning
         /// </summary>
@@ -16,6 +15,11 @@ namespace Registry.Common
         {
             if (stream.CanSeek)
                 stream.Seek(0, SeekOrigin.Begin);
+        }
+
+        public static string ToS3Path(this string path)
+        {
+            return path.Replace('\\', '/');
         }
     }
 }
