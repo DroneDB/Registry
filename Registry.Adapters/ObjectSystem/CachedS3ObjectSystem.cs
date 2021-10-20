@@ -103,7 +103,7 @@ namespace Registry.Adapters.ObjectSystem
 
             var descriptorFilePath = GetDescriptorFilePath(bucketName, objectName);
             var cachedFilePath = GetCachedFilePath(bucketName, objectName);
-            
+
             EnsurePathExists(descriptorFilePath);
             EnsurePathExists(cachedFilePath);
 
@@ -171,7 +171,7 @@ namespace Registry.Adapters.ObjectSystem
 
             EnsurePathExists(descriptorFilePath);
             EnsurePathExists(cachedFilePath);
-            
+
             LogInformation($"In GetObjectAsync('{bucketName}', '{objectName}', '{filePath}')");
 
             try
@@ -235,7 +235,6 @@ namespace Registry.Adapters.ObjectSystem
                 ).ExecuteAsync(async () =>
                     await _remoteStorage.GetObjectAsync(bucketName, objectName, s =>
                     {
-                       
                         LogInformation("Copying to cache file");
                         s.CopyTo(fileStream);
 
@@ -249,13 +248,12 @@ namespace Registry.Adapters.ObjectSystem
                         descriptorWriter.Write(JsonConvert.SerializeObject(obj));
 
                         s.Close();
-                        
+
                         LogInformation("Running callback");
                         fileStream.Reset();
                         callback(fileStream);
-                       
+
                         LogInformation("Callback OK");
-                        
                     }, sse, cancellationToken));
             }
             catch (IOException ex)
@@ -929,24 +927,6 @@ namespace Registry.Adapters.ObjectSystem
 
                 try
                 {
-                    // // Open file descriptor
-                    // await using (var descriptorStream =
-                    //     await CommonUtils.WaitForFile(descriptorFilePath, FileMode.Open, FileAccess.ReadWrite,
-                    //         FileShare.None, FileRetriesDelay, FileRetries))
-                    // {
-                    //     if (descriptorStream == null)
-                    //         throw new InvalidOperationException("Cannot lock local file, timeout reached");
-                    //
-
-                    // Deserialize descriptor object from stream
-                    //using (var reader = new StreamReader(descriptorStream, leaveOpen: true))
-                    //    descriptor = JsonConvert.DeserializeObject<ObjectDescriptor>(await reader.ReadToEndAsync());
-
-                    //if (descriptor?.Info == null)
-                    //    throw new InvalidOperationException(
-                    //        $"No upload info, invalid descriptor: '{descriptorFilePath}'");
-
-
                     LogInformation($"Deleting object file: '{objectFilePath}'");
 
                     if (!CommonUtils.SafeDelete(objectFilePath))
@@ -999,6 +979,110 @@ namespace Registry.Adapters.ObjectSystem
                 LogError(ex, $"An error occurred during delete all");
             }
         }
+
+        public async Task Cleanup()
+        {
+            await _remoteStorage.Cleanup();
+
+            try
+            {
+
+                var allFiles = (from filePath in Directory.EnumerateFiles(_settings.CachePath, "*", SearchOption.AllDirectories)
+                    let relPath = Path.GetRelativePath(_settings.CachePath, filePath).Replace('\\', '/')
+                    let segments = relPath.Split('/')
+                    where segments.Length > 2 && segments[1] == FilesFolderName
+                    let info = new FileInfo(filePath)
+                    let objectName = relPath[(segments[0].Length + segments[1].Length + 2)..][0..^5]
+                    let bucketName = segments[0]
+                    let pendingFilePath = GetPendingFilePath(bucketName, objectName)
+                    where !File.Exists(pendingFilePath)
+                    select new ObjectCarrier
+                    {
+                        Size = info.Length,
+                        FullPath = filePath,
+                        ObjectName = objectName,
+                        BucketName = bucketName,
+                        CreationDate = info.LastWriteTime,
+                        DescriptorFilePath = GetDescriptorFilePath(bucketName, objectName)
+                    }).ToArray();
+
+                var tbds = new List<ObjectCarrier>();
+
+                if (_settings.CacheExpiration != null)
+                {
+                    LogInformation($"Checking expired files");
+
+                    var expr = DateTime.Now - _settings.CacheExpiration;
+                    tbds.AddRange(allFiles.Where(file => file.CreationDate > expr));
+                }
+
+                if (_settings.MaxSize != null)
+                {
+                    var maxSize = _settings.MaxSize.Value;
+
+                    var totalCacheSize = allFiles.Sum(file => file.Size);
+                    var usage = (double)totalCacheSize / maxSize;
+
+                    LogInformation($"MaxCacheSize = {CommonUtils.GetBytesReadable(maxSize)}");
+                    LogInformation($"TotalCacheSize = {CommonUtils.GetBytesReadable(totalCacheSize)}");
+                    LogInformation($"Usage = {usage:P2}");
+
+                    if (totalCacheSize < maxSize)
+                    {
+                        LogInformation($"No need to cleanup cache");
+                        return;
+                    }
+
+                    var cacheExcess = totalCacheSize - maxSize;
+                    LogInformation($"CacheExcess = {CommonUtils.GetBytesReadable(cacheExcess)}");
+
+                    var tbdSum = tbds.Sum(file => file.Size);
+
+                    if (tbdSum < cacheExcess)
+                    {
+                        allFiles = allFiles.OrderBy(item => item.CreationDate).ToArray();
+
+                        foreach (var file in allFiles)
+                        {
+                            if (tbds.Contains(file))
+                                continue;
+
+                            tbds.Add(file);
+                            tbdSum += file.Size;
+
+                            if (tbdSum > cacheExcess) break;
+                        }
+                    }
+                }
+
+                if (!tbds.Any())
+                {
+                    LogInformation("Nothing to clean up");
+                    return;
+                }
+
+                // Let's group by bucket in order to minimize the actual remote calls
+                var tbdsGrouped = (from file in tbds
+                    group file by file.BucketName
+                    into grp
+                    select new
+                    {
+                        BucketName = grp.Key,
+                        ObjectNames = grp.Select(item => item.ObjectName).ToArray()
+                    }).ToArray();
+
+                // We could parallelize this
+                foreach (var file in tbdsGrouped)
+                {
+                    await RemoveObjectsAsync(file.BucketName, file.ObjectNames);
+                }
+            }
+            finally
+            {
+                await Sync();
+            }
+        }
+
 
         public async Task Sync()
         {
@@ -1131,122 +1215,12 @@ namespace Registry.Adapters.ObjectSystem
 
         private class ObjectCarrier
         {
-            public string FullPath { get; }
-            public string ObjectName { get; }
-            public string BucketName { get; }
-            public long Size { get; }
-            public DateTime CreationDate { get; }
-
-            public ObjectCarrier(string fullPath, string objectName, string bucketName, long size,
-                DateTime creationDate)
-            {
-                FullPath = fullPath;
-                ObjectName = objectName;
-                BucketName = bucketName;
-                Size = size;
-                CreationDate = creationDate;
-            }
-        }
-
-        public async Task Cleanup()
-        {
-            await _remoteStorage.Cleanup();
-
-            try
-            {
-                // TODO: Exclude files that are not synced
-                var allFiles = (from filePath in
-                            Directory.EnumerateFiles(_settings.CachePath, "*", SearchOption.AllDirectories)
-                        let relPath = Path.GetRelativePath(_settings.CachePath, filePath).Replace('\\', '/')
-                        let segments = relPath.Split('/')
-                        where segments.Length > 2 && segments[1] == FilesFolderName
-                        let info = new FileInfo(filePath)
-                        select new ObjectCarrier(
-                            filePath,
-                            // Python eat this
-                            relPath[(segments[0].Length + segments[1].Length + 2)..][0..^5],
-                            segments[0],
-                            info.Length,
-                            info.LastWriteTime)
-                    ).ToArray();
-                
-                var tbds = new List<ObjectCarrier>();
-
-                if (_settings.CacheExpiration != null)
-                {
-                    LogInformation($"Checking expired files");
-
-                    var expr = DateTime.Now - _settings.CacheExpiration;
-                    tbds.AddRange(allFiles.Where(file => file.CreationDate > expr));                
-                }
-
-                if (_settings.MaxSize != null)
-                {
-                    var maxSize = _settings.MaxSize.Value;
-                    
-                    var totalCacheSize = allFiles.Sum(file => file.Size);
-                    var usage = (double)totalCacheSize / maxSize;
-
-                    LogInformation($"MaxCacheSize = {CommonUtils.GetBytesReadable(maxSize)}");
-                    LogInformation($"TotalCacheSize = {CommonUtils.GetBytesReadable(totalCacheSize)}");
-                    LogInformation($"Usage = {usage:P2}");
-
-                    if (totalCacheSize < maxSize)
-                    {
-                        LogInformation($"No need to cleanup cache");
-                        return;
-                    }
-
-                    var cacheExcess = totalCacheSize - maxSize;
-                    LogInformation($"CacheExcess = {CommonUtils.GetBytesReadable(cacheExcess)}");
-
-                    var tbdSum = tbds.Sum(file => file.Size);
-
-                    if (tbdSum < cacheExcess)
-                    {
-                        allFiles = allFiles.OrderBy(item => item.CreationDate).ToArray();
-
-                        foreach (var file in allFiles)
-                        {
-                            if (tbds.Contains(file))
-                                continue;
-                            
-                            tbds.Add(file);
-                            tbdSum += file.Size;
-
-                            if (tbdSum > cacheExcess) break;
-                        }
-                    }
-                }
-
-                if (!tbds.Any())
-                {
-                    LogInformation("Nothing to clean up");
-                    return;
-                }
-                
-                // Let's group by bucket in order to minimize the actual remote calls
-                var tbdsGrouped = (from file in tbds
-                    group file by file.BucketName
-                    into grp
-                    select new
-                    {
-                        BucketName = grp.Key,
-                        ObjectNames = grp.Select(item => item.ObjectName).ToArray()
-                    }).ToArray();
-
-                // We could parallelize this
-                foreach (var file in tbdsGrouped)
-                {
-                    await RemoveObjectsAsync(file.BucketName, file.ObjectNames);
-                }
-                
-            }
-            finally
-            {
-                await Sync();
-            }
-
+            public string FullPath { get; set; }
+            public string ObjectName { get; set; }
+            public string BucketName { get; set; }
+            public long Size { get; set; }
+            public DateTime CreationDate { get; set; }
+            public string DescriptorFilePath { get; set; }
         }
 
         public bool IsS3Based()
