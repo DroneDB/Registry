@@ -87,16 +87,25 @@ namespace Registry.Adapters.ObjectSystem
             IServerEncryption sse = null,
             CancellationToken cancellationToken = default)
         {
+            LogInformation($"In GetObjectAsync('{bucketName}', '{objectName}', Action<Stream>)");
+
+            if (callback == null)
+                throw new ArgumentNullException(nameof(callback));
+
+            if (string.IsNullOrWhiteSpace(bucketName))
+                throw new ArgumentException("Value cannot be null or whitespace.", nameof(bucketName));
+
+            if (string.IsNullOrWhiteSpace(objectName))
+                throw new ArgumentException("Value cannot be null or whitespace.", nameof(objectName));
+
             HandleBucketToBeDeleted(bucketName);
             HandleFileToBeDeleted(bucketName, objectName);
 
             var descriptorFilePath = GetDescriptorFilePath(bucketName, objectName);
             var cachedFilePath = GetCachedFilePath(bucketName, objectName);
-
-            LogInformation(
-                $"In GetObjectAsync('{bucketName}', '{objectName}')");
-            LogInformation($"Descriptor = '{descriptorFilePath}'");
-            LogInformation($"CachedFile = '{cachedFilePath}'");
+            
+            EnsurePathExists(descriptorFilePath);
+            EnsurePathExists(cachedFilePath);
 
             try
             {
@@ -143,16 +152,27 @@ namespace Registry.Adapters.ObjectSystem
             IServerEncryption sse = null,
             CancellationToken cancellationToken = default)
         {
+            LogInformation($"In GetObjectAsync('{bucketName}', '{objectName}', '{filePath}')");
+
+            if (string.IsNullOrWhiteSpace(bucketName))
+                throw new ArgumentException("Value cannot be null or whitespace.", nameof(bucketName));
+
+            if (string.IsNullOrWhiteSpace(objectName))
+                throw new ArgumentException("Value cannot be null or whitespace.", nameof(objectName));
+
+            if (string.IsNullOrWhiteSpace(filePath))
+                throw new ArgumentException("Value cannot be null or whitespace.", nameof(filePath));
+
             HandleBucketToBeDeleted(bucketName);
             HandleFileToBeDeleted(bucketName, objectName);
 
             var descriptorFilePath = GetDescriptorFilePath(bucketName, objectName);
             var cachedFilePath = GetCachedFilePath(bucketName, objectName);
 
-            LogInformation(
-                $"In GetObjectAsync('{bucketName}', '{objectName}', '{filePath}')");
-            LogInformation($"Descriptor = '{descriptorFilePath}'");
-            LogInformation($"CachedFile = '{cachedFilePath}'");
+            EnsurePathExists(descriptorFilePath);
+            EnsurePathExists(cachedFilePath);
+            
+            LogInformation($"In GetObjectAsync('{bucketName}', '{objectName}', '{filePath}')");
 
             try
             {
@@ -205,7 +225,7 @@ namespace Registry.Adapters.ObjectSystem
                 await using var descriptorStream =
                     new FileStream(descriptorFilePath, FileMode.CreateNew, FileAccess.Write, FileShare.None);
                 await using var descriptorWriter = new StreamWriter(descriptorStream);
-                await using var fileStream = new FileStream(cachedFilePath, FileMode.CreateNew, FileAccess.Write,
+                await using var fileStream = new FileStream(cachedFilePath, FileMode.CreateNew, FileAccess.ReadWrite,
                     FileShare.None);
 
                 LogInformation("Getting file from remote");
@@ -215,12 +235,8 @@ namespace Registry.Adapters.ObjectSystem
                 ).ExecuteAsync(async () =>
                     await _remoteStorage.GetObjectAsync(bucketName, objectName, s =>
                     {
-                        LogInformation("Running callback");
-
-                        callback(s);
-                        s.Reset();
+                       
                         LogInformation("Copying to cache file");
-
                         s.CopyTo(fileStream);
 
                         var obj = new ObjectDescriptor
@@ -230,11 +246,16 @@ namespace Registry.Adapters.ObjectSystem
                         };
 
                         LogInformation("Writing descriptor");
-
                         descriptorWriter.Write(JsonConvert.SerializeObject(obj));
 
                         s.Close();
+                        
+                        LogInformation("Running callback");
+                        fileStream.Reset();
+                        callback(fileStream);
+                       
                         LogInformation("Callback OK");
+                        
                     }, sse, cancellationToken));
             }
             catch (IOException ex)
@@ -315,12 +336,19 @@ namespace Registry.Adapters.ObjectSystem
             }
         }
 
-#pragma warning disable 1998
+
         public async Task<ObjectInfo> GetObjectInfoAsync(string bucketName, string objectName,
-#pragma warning restore 1998
             IServerEncryption sse = null,
             CancellationToken cancellationToken = default)
         {
+            LogInformation($"In GetObjectInfoAsync('{bucketName}', '{objectName}')");
+
+            if (string.IsNullOrWhiteSpace(bucketName))
+                throw new ArgumentException("Value cannot be null or whitespace.", nameof(bucketName));
+
+            if (string.IsNullOrWhiteSpace(objectName))
+                throw new ArgumentException("Value cannot be null or whitespace.", nameof(objectName));
+
             HandleBucketToBeDeleted(bucketName);
 
             var statFilePath = GetStatFilePath(bucketName, objectName);
@@ -409,6 +437,15 @@ namespace Registry.Adapters.ObjectSystem
             CancellationToken cancellationToken = default)
         {
             LogInformation($"In PutObjectAsync('{bucketName}', '{objectName}', [Stream], {size}, '{contentType}')");
+
+            if (data == null)
+                throw new ArgumentNullException(nameof(data));
+
+            if (string.IsNullOrWhiteSpace(bucketName))
+                throw new ArgumentException("Value cannot be null or whitespace.", nameof(bucketName));
+
+            if (string.IsNullOrWhiteSpace(objectName))
+                throw new ArgumentException("Value cannot be null or whitespace.", nameof(objectName));
 
             HandleBucketToBeDeleted(bucketName);
 
@@ -584,7 +621,6 @@ namespace Registry.Adapters.ObjectSystem
         public async Task RemoveObjectAsync(string bucketName, string objectName,
             CancellationToken cancellationToken = default)
         {
-
             LogInformation($"In RemoveObjectAsync('{bucketName}', '{objectName})");
 
             HandleBucketToBeDeleted(bucketName);
@@ -617,7 +653,7 @@ namespace Registry.Adapters.ObjectSystem
                 // Delete cached file
                 if (!CommonUtils.SafeDelete(cachedFilePath))
                     LogInformation($"Cannot remove cached file '{cachedFilePath}'");
-                
+
                 try
                 {
                     await Policy.Handle<Exception>().RetryAsync(RemoteCallRetries,
@@ -630,17 +666,15 @@ namespace Registry.Adapters.ObjectSystem
                 catch (Exception ex)
                 {
                     LogError(ex, "Cannot call RemoveObjectAsync");
-                
+
                     // Mark it for deletion
                     await File.WriteAllTextAsync(tbdFilePath, DateTime.Now.ToString("yyyy-MM-dd-HH-mm-ss"),
                         cancellationToken);
                 }
-
             }
 
             if (!CommonUtils.SafeDelete(descriptorFilePath))
                 LogInformation($"Cannot remove descriptor '{descriptorFilePath}'");
-         
         }
 
         public async Task RemoveObjectsAsync(string bucketName, string[] objectsNames,
@@ -1120,19 +1154,12 @@ namespace Registry.Adapters.ObjectSystem
 
             try
             {
-                if (_settings.MaxSize == null)
-                {
-                    LogInformation($"Cache max size not set, cleanup ok");
-                    return;
-                }
-
-                var maxSize = _settings.MaxSize.Value;
-
+                // TODO: Exclude files that are not synced
                 var allFiles = (from filePath in
                             Directory.EnumerateFiles(_settings.CachePath, "*", SearchOption.AllDirectories)
                         let relPath = Path.GetRelativePath(_settings.CachePath, filePath).Replace('\\', '/')
                         let segments = relPath.Split('/')
-                        where segments.Length > 2 && segments[1] == DescriptorsFolderName
+                        where segments.Length > 2 && segments[1] == FilesFolderName
                         let info = new FileInfo(filePath)
                         select new ObjectCarrier(
                             filePath,
@@ -1142,49 +1169,62 @@ namespace Registry.Adapters.ObjectSystem
                             info.Length,
                             info.LastWriteTime)
                     ).ToArray();
-
+                
                 var tbds = new List<ObjectCarrier>();
-                var totalCacheSize = allFiles.Sum(file => file.Size);
-                var usage = (double)totalCacheSize / maxSize;
-
-                LogInformation($"MaxCacheSize = {CommonUtils.GetBytesReadable(maxSize)}");
-                LogInformation($"TotalCacheSize = {CommonUtils.GetBytesReadable(totalCacheSize)}");
-                LogInformation($"Usage = {usage:P2}");
-
-                if (totalCacheSize < maxSize)
-                {
-                    LogInformation($"No need to cleanup cache");
-                    return;
-                }
-
-                var cacheExcess = totalCacheSize - maxSize;
-                LogInformation($"CacheExcess = {CommonUtils.GetBytesReadable(cacheExcess)}");
-
-                long targetFreeSpace = 0;
 
                 if (_settings.CacheExpiration != null)
                 {
                     LogInformation($"Checking expired files");
 
                     var expr = DateTime.Now - _settings.CacheExpiration;
-                    tbds.AddRange(allFiles.Where(file => file.CreationDate > expr));
-
-                    targetFreeSpace = tbds.Sum(file => file.Size);
+                    tbds.AddRange(allFiles.Where(file => file.CreationDate > expr));                
                 }
 
-                if (targetFreeSpace < cacheExcess)
+                if (_settings.MaxSize != null)
                 {
-                    allFiles = allFiles.OrderBy(item => item.CreationDate).ToArray();
+                    var maxSize = _settings.MaxSize.Value;
+                    
+                    var totalCacheSize = allFiles.Sum(file => file.Size);
+                    var usage = (double)totalCacheSize / maxSize;
 
-                    foreach (var file in allFiles)
+                    LogInformation($"MaxCacheSize = {CommonUtils.GetBytesReadable(maxSize)}");
+                    LogInformation($"TotalCacheSize = {CommonUtils.GetBytesReadable(totalCacheSize)}");
+                    LogInformation($"Usage = {usage:P2}");
+
+                    if (totalCacheSize < maxSize)
                     {
-                        tbds.Add(file);
-                        targetFreeSpace += file.Size;
+                        LogInformation($"No need to cleanup cache");
+                        return;
+                    }
 
-                        if (targetFreeSpace > cacheExcess) break;
+                    var cacheExcess = totalCacheSize - maxSize;
+                    LogInformation($"CacheExcess = {CommonUtils.GetBytesReadable(cacheExcess)}");
+
+                    var tbdSum = tbds.Sum(file => file.Size);
+
+                    if (tbdSum < cacheExcess)
+                    {
+                        allFiles = allFiles.OrderBy(item => item.CreationDate).ToArray();
+
+                        foreach (var file in allFiles)
+                        {
+                            if (tbds.Contains(file))
+                                continue;
+                            
+                            tbds.Add(file);
+                            tbdSum += file.Size;
+
+                            if (tbdSum > cacheExcess) break;
+                        }
                     }
                 }
 
+                if (!tbds.Any())
+                {
+                    LogInformation("Nothing to clean up");
+                    return;
+                }
+                
                 // Let's group by bucket in order to minimize the actual remote calls
                 var tbdsGrouped = (from file in tbds
                     group file by file.BucketName
@@ -1200,12 +1240,13 @@ namespace Registry.Adapters.ObjectSystem
                 {
                     await RemoveObjectsAsync(file.BucketName, file.ObjectNames);
                 }
+                
             }
             finally
             {
                 await Sync();
             }
-            // Enforce cache limits
+
         }
 
         public bool IsS3Based()

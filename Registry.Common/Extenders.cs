@@ -13,6 +13,18 @@ namespace Registry.Common
         /// <param name="stream"></param>
         public static void Reset(this Stream stream)
         {
+            if (!stream.CanSeek)
+                throw new InvalidOperationException("Stream does not support seeking");
+            
+            stream.Seek(0, SeekOrigin.Begin);
+        }
+        
+        /// <summary>
+        /// Safe reset to the beginning
+        /// </summary>
+        /// <param name="stream"></param>
+        public static void SafeReset(this Stream stream)
+        {
             if (stream.CanSeek)
                 stream.Seek(0, SeekOrigin.Begin);
         }

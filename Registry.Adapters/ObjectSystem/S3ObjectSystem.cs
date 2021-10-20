@@ -75,8 +75,6 @@ namespace Registry.Adapters.ObjectSystem
         public async Task PutObjectAsync(string bucketName, string objectName, Stream data, long size, string contentType = null,
             Dictionary<string, string> metaData = null, IServerEncryption sse = null, CancellationToken cancellationToken = default)
         {
-            data.Reset();
-
             await _client.PutObjectAsync(bucketName, objectName, data, size, contentType, metaData, sse?.ToSSE(),
                 cancellationToken);
         }
