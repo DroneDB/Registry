@@ -122,7 +122,6 @@ namespace Registry.Web.Services.Adapters
 
                 if (org.OwnerId != null && org.OwnerId != currentUser.Id)
                     throw new UnauthorizedException("This organization does not belong to the current user");
-
             }
 
             return dataset;
@@ -137,7 +136,7 @@ namespace Registry.Web.Services.Adapters
 
             var res = slug;
 
-            for (var n = 1; ; n++)
+            for (var n = 1;; n++)
             {
                 var org = _context.Organizations.FirstOrDefault(item => item.Slug == res);
 
@@ -192,7 +191,6 @@ namespace Registry.Web.Services.Adapters
 
         public UserStorageInfo GetUserStorage(User user)
         {
-
             if (user == null)
                 throw new ArgumentException("User is null", nameof(user));
 
@@ -203,13 +201,13 @@ namespace Registry.Web.Services.Adapters
             var datasets = (from org in _context.Organizations
                 where org.OwnerId == user.Id
                 from dataset in org.Datasets
-                select new { OrgSlug = org.Slug, dataset.InternalRef}).ToArray();
+                select new { OrgSlug = org.Slug, dataset.InternalRef }).ToArray();
 
             // Get the size and sum
             var size =
                 (from ds in datasets
-                 let ddb = _ddbManager.Get(ds.OrgSlug, ds.InternalRef)
-                 select ddb.GetSize()).Sum();
+                    let ddb = _ddbManager.Get(ds.OrgSlug, ds.InternalRef)
+                    select ddb.GetSize()).Sum();
 
             return new UserStorageInfo
             {
@@ -217,14 +215,13 @@ namespace Registry.Web.Services.Adapters
                 Total = maxStorage * 1024 * 1024,
                 Used = size
             };
-
         }
 
         public async Task CheckCurrentUserStorage(long size = 0)
         {
             if (!_settings.EnableStorageLimiter) return;
 
-            // Admins don't have limits
+            // Admins do not have limits
             if (await _authManager.IsUserAdmin()) return;
 
             var storageInfo = GetUserStorage(await _authManager.GetCurrentUser());
@@ -232,8 +229,7 @@ namespace Registry.Web.Services.Adapters
             var currentUsage = storageInfo.Used + size;
 
             if (storageInfo.Total != null && currentUsage > storageInfo.Total)
-                throw new MaxUserStorageException(currentUsage, storageInfo.Total);
-
+                throw new QuotaExceededException(currentUsage, storageInfo.Total);
         }
     }
 }
