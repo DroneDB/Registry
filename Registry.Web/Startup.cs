@@ -228,13 +228,14 @@ namespace Registry.Web
             services.AddScoped<ISystemManager, SystemManager>();
             services.AddScoped<IBackgroundJobsProcessor, BackgroundJobsProcessor>();
             services.AddScoped<IMetaManager, MetaManager>();
+            services.AddScoped<IS3BridgeManager, S3BridgeManager>();
 
             services.AddSingleton<IPasswordHasher, PasswordHasher>();
             services.AddSingleton<IBatchTokenGenerator, BatchTokenGenerator>();
             services.AddSingleton<INameGenerator, NameGenerator>();
             services.AddSingleton<ICacheManager, CacheManager>();
             services.AddSingleton<ObjectCache>(provider => new FileCache(FileCacheManagers.Hashed, 
-                appSettings.StaticFilesCachePath, new DefaultSerializationBinder(), 
+                appSettings.BridgeCachePath, new DefaultSerializationBinder(), 
                 true, appSettings.ClearCacheInterval ?? default)
             {
                 PayloadReadMode = FileCache.PayloadMode.Filename,

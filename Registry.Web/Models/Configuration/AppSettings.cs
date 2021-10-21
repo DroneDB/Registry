@@ -111,9 +111,9 @@ namespace Registry.Web.Models.Configuration
         public int WorkerThreads { get; set; }
 
         /// <summary>
-        /// Static files cache path
+        /// Bridge cache path
         /// </summary>
-        public string StaticFilesCachePath { get; set; }
+        public string BridgeCachePath { get; set; }
 
         /// <summary>
         /// Thumbnails cache expiration 
