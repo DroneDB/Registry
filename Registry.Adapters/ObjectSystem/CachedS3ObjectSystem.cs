@@ -829,6 +829,7 @@ namespace Registry.Adapters.ObjectSystem
 
             var pendingFiles = Directory.EnumerateFiles(pendingFolderPath, "*", SearchOption.AllDirectories);
 
+            // NOTE: We can parallelize this with Parallel.ForEach
             foreach (var pendingFilePath in pendingFiles)
             {
                 var objectName = Path.GetRelativePath(pendingFolderPath, pendingFilePath).ToS3Path();
@@ -937,6 +938,7 @@ namespace Registry.Adapters.ObjectSystem
 
             var tbdRemoteList = new List<string>();
 
+            // NOTE: We can parallelize this with Parallel.ForEach
             foreach (var tbdFile in tbdFiles)
             {
                 var objectName = Path.GetRelativePath(tbdFolderPath, tbdFile).ToS3Path();
@@ -1123,7 +1125,7 @@ namespace Registry.Adapters.ObjectSystem
 
                 var buckets = Directory.EnumerateDirectories(_settings.CachePath);
 
-                // We could parallelize this
+                // NOTE: We can parallelize this with Parallel.ForEach
                 foreach (var bucketPath in buckets)
                 {
                     var bucketName = Path.GetRelativePath(_settings.CachePath, bucketPath);
