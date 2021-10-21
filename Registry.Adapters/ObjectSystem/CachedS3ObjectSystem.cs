@@ -582,11 +582,13 @@ namespace Registry.Adapters.ObjectSystem
             var cachedFilePath = GetCachedFilePath(bucketName, objectName);
             var tbdFilePath = GetTbdFilePath(bucketName, objectName);
             var statFilePath = GetStatFilePath(bucketName, objectName);
+            var pendingFilePath = GetPendingFilePath(bucketName, objectName);
 
             EnsurePathExists(descriptorFilePath);
             EnsurePathExists(cachedFilePath);
             EnsurePathExists(tbdFilePath);
             EnsurePathExists(statFilePath);
+            EnsurePathExists(pendingFilePath);
 
             if (!File.Exists(descriptorFilePath))
                 return;
@@ -603,13 +605,13 @@ namespace Registry.Adapters.ObjectSystem
                 if (!CommonUtils.SafeDelete(statFilePath))
                     LogInformation($"Cannot remove stat '{statFilePath}'");
 
+                if (!CommonUtils.SafeDelete(pendingFilePath))
+                    LogInformation($"Cannot remove pending '{pendingFilePath}'");
+
                 // Delete cached file
                 if (!CommonUtils.SafeDelete(cachedFilePath))
                     LogInformation($"Cannot remove cached file '{cachedFilePath}'");
 
-                // Mark it for deletion
-                await File.WriteAllTextAsync(tbdFilePath, DateTime.Now.ToString("yyyy-MM-dd-HH-mm-ss"),
-                    cancellationToken);
             }
 
             if (!CommonUtils.SafeDelete(descriptorFilePath))
@@ -627,52 +629,58 @@ namespace Registry.Adapters.ObjectSystem
             var cachedFilePath = GetCachedFilePath(bucketName, objectName);
             var tbdFilePath = GetTbdFilePath(bucketName, objectName);
             var statFilePath = GetStatFilePath(bucketName, objectName);
+            var pendingFilePath = GetPendingFilePath(bucketName, objectName);
 
             EnsurePathExists(descriptorFilePath);
             EnsurePathExists(cachedFilePath);
             EnsurePathExists(tbdFilePath);
             EnsurePathExists(statFilePath);
+            EnsurePathExists(pendingFilePath);
 
             if (!File.Exists(descriptorFilePath))
                 return;
 
-            await using (var descriptorStream =
-                await CommonUtils.WaitForFile(descriptorFilePath, FileMode.Open, FileAccess.Write,
-                    FileShare.None, FileRetriesDelay, FileRetries))
+            try
             {
-                descriptorStream.SetLength(0);
-
-                if (descriptorStream == null)
-                    throw new InvalidOperationException("Cannot lock local file, timeout reached");
-
-                if (!CommonUtils.SafeDelete(statFilePath))
-                    LogInformation($"Cannot remove stat '{statFilePath}'");
-
-                // Delete cached file
-                if (!CommonUtils.SafeDelete(cachedFilePath))
-                    LogInformation($"Cannot remove cached file '{cachedFilePath}'");
-
-                try
+                await using (var descriptorStream =
+                    await CommonUtils.WaitForFile(descriptorFilePath, FileMode.Open, FileAccess.Write,
+                        FileShare.None, FileRetriesDelay, FileRetries))
                 {
+                    descriptorStream.SetLength(0);
+
+                    if (descriptorStream == null)
+                        throw new InvalidOperationException("Cannot lock local file, timeout reached");
+
+                    if (!CommonUtils.SafeDelete(statFilePath))
+                        LogInformation($"Cannot remove stat '{statFilePath}'");
+
+                    if (!CommonUtils.SafeDelete(pendingFilePath))
+                        LogInformation($"Cannot remove pending '{pendingFilePath}'");
+
+                    // Delete cached file
+                    if (!CommonUtils.SafeDelete(cachedFilePath))
+                        LogInformation($"Cannot remove cached file '{cachedFilePath}'");
+
                     await Policy.Handle<Exception>().RetryAsync(RemoteCallRetries,
                         (exception, i) => LogInformation($"Retrying S3 object delete ({i}): {exception.Message}")
                     ).ExecuteAsync(async () =>
                         await _remoteStorage.RemoveObjectAsync(bucketName, objectName, cancellationToken));
 
-                    CommonUtils.SafeDelete(tbdFilePath);
+                    if (!CommonUtils.SafeDelete(tbdFilePath))
+                        LogInformation($"Cannot remove tbd '{tbdFilePath}'");
                 }
-                catch (Exception ex)
-                {
-                    LogError(ex, "Cannot call RemoveObjectAsync");
 
-                    // Mark it for deletion
-                    await File.WriteAllTextAsync(tbdFilePath, DateTime.Now.ToString("yyyy-MM-dd-HH-mm-ss"),
-                        cancellationToken);
-                }
+                if (!CommonUtils.SafeDelete(descriptorFilePath))
+                    LogInformation($"Cannot remove descriptor '{descriptorFilePath}'");
             }
+            catch (Exception ex)
+            {
+                LogError(ex, "Cannot call RemoveObjectAsync");
 
-            if (!CommonUtils.SafeDelete(descriptorFilePath))
-                LogInformation($"Cannot remove descriptor '{descriptorFilePath}'");
+                // Mark it for deletion
+                await File.WriteAllTextAsync(tbdFilePath, DateTime.Now.ToString("yyyy-MM-dd-HH-mm-ss"),
+                    cancellationToken);
+            }
         }
 
         public async Task RemoveObjectsAsync(string bucketName, string[] objectsNames,
@@ -986,25 +994,25 @@ namespace Registry.Adapters.ObjectSystem
 
             try
             {
-
-                var allFiles = (from filePath in Directory.EnumerateFiles(_settings.CachePath, "*", SearchOption.AllDirectories)
-                    let relPath = Path.GetRelativePath(_settings.CachePath, filePath).Replace('\\', '/')
-                    let segments = relPath.Split('/')
-                    where segments.Length > 2 && segments[1] == FilesFolderName
-                    let info = new FileInfo(filePath)
-                    let objectName = relPath[(segments[0].Length + segments[1].Length + 2)..][0..^5]
-                    let bucketName = segments[0]
-                    let pendingFilePath = GetPendingFilePath(bucketName, objectName)
-                    where !File.Exists(pendingFilePath)
-                    select new ObjectCarrier
-                    {
-                        Size = info.Length,
-                        FullPath = filePath,
-                        ObjectName = objectName,
-                        BucketName = bucketName,
-                        CreationDate = info.LastWriteTime,
-                        DescriptorFilePath = GetDescriptorFilePath(bucketName, objectName)
-                    }).ToArray();
+                var allFiles =
+                    (from filePath in Directory.EnumerateFiles(_settings.CachePath, "*", SearchOption.AllDirectories)
+                        let relPath = Path.GetRelativePath(_settings.CachePath, filePath).Replace('\\', '/')
+                        let segments = relPath.Split('/')
+                        where segments.Length > 2 && segments[1] == FilesFolderName
+                        let info = new FileInfo(filePath)
+                        let objectName = relPath[(segments[0].Length + segments[1].Length + 2)..]
+                        let bucketName = segments[0]
+                        let pendingFilePath = GetPendingFilePath(bucketName, objectName)
+                        where !File.Exists(pendingFilePath)
+                        select new ObjectCarrier
+                        {
+                            Size = info.Length,
+                            FullPath = filePath,
+                            ObjectName = objectName,
+                            BucketName = bucketName,
+                            CreationDate = info.LastWriteTime,
+                            DescriptorFilePath = GetDescriptorFilePath(bucketName, objectName)
+                        }).ToArray();
 
                 var tbds = new List<ObjectCarrier>();
 
@@ -1013,7 +1021,7 @@ namespace Registry.Adapters.ObjectSystem
                     LogInformation($"Checking expired files");
 
                     var expr = DateTime.Now - _settings.CacheExpiration;
-                    tbds.AddRange(allFiles.Where(file => file.CreationDate > expr));
+                    tbds.AddRange(allFiles.Where(file => file.CreationDate < expr));
                 }
 
                 if (_settings.MaxSize != null)
@@ -1027,32 +1035,30 @@ namespace Registry.Adapters.ObjectSystem
                     LogInformation($"TotalCacheSize = {CommonUtils.GetBytesReadable(totalCacheSize)}");
                     LogInformation($"Usage = {usage:P2}");
 
-                    if (totalCacheSize < maxSize)
+                    if (totalCacheSize > maxSize)
                     {
-                        LogInformation($"No need to cleanup cache");
-                        return;
-                    }
+                        var cacheExcess = totalCacheSize - maxSize;
+                        LogInformation($"CacheExcess = {CommonUtils.GetBytesReadable(cacheExcess)}");
 
-                    var cacheExcess = totalCacheSize - maxSize;
-                    LogInformation($"CacheExcess = {CommonUtils.GetBytesReadable(cacheExcess)}");
+                        var tbdSum = tbds.Sum(file => file.Size);
 
-                    var tbdSum = tbds.Sum(file => file.Size);
-
-                    if (tbdSum < cacheExcess)
-                    {
-                        allFiles = allFiles.OrderBy(item => item.CreationDate).ToArray();
-
-                        foreach (var file in allFiles)
+                        if (tbdSum < cacheExcess)
                         {
-                            if (tbds.Contains(file))
-                                continue;
+                            allFiles = allFiles.OrderBy(item => item.CreationDate).ToArray();
 
-                            tbds.Add(file);
-                            tbdSum += file.Size;
+                            foreach (var file in allFiles)
+                            {
+                                if (tbds.Contains(file))
+                                    continue;
 
-                            if (tbdSum > cacheExcess) break;
+                                tbds.Add(file);
+                                tbdSum += file.Size;
+
+                                if (tbdSum > cacheExcess) break;
+                            }
                         }
                     }
+
                 }
 
                 if (!tbds.Any())
@@ -1061,21 +1067,21 @@ namespace Registry.Adapters.ObjectSystem
                     return;
                 }
 
-                // Let's group by bucket in order to minimize the actual remote calls
-                var tbdsGrouped = (from file in tbds
-                    group file by file.BucketName
-                    into grp
-                    select new
-                    {
-                        BucketName = grp.Key,
-                        ObjectNames = grp.Select(item => item.ObjectName).ToArray()
-                    }).ToArray();
-
-                // We could parallelize this
-                foreach (var file in tbdsGrouped)
+                try
                 {
-                    await RemoveObjectsAsync(file.BucketName, file.ObjectNames);
+                    // Remove the cached files
+                    Task.WaitAll(tbds.Select(file => 
+                            RemoveObjectFromCache(file.BucketName, file.ObjectName)).ToArray());
                 }
+                catch (AggregateException aex)
+                {
+                    LogError(aex, "Aggregate exception when deleting objects from cache");
+                    
+                    foreach (var ex in aex.InnerExceptions)
+                        LogError(ex, "Exception in RemoveObjectFromCache");
+                    
+                }
+
             }
             finally
             {
