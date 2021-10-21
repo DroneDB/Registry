@@ -1,5 +1,6 @@
 ﻿using System;
 using System.IO;
+using System.Linq;
 using System.Runtime.Caching;
 using System.Runtime.InteropServices.ComTypes;
 using System.Threading.Tasks;
@@ -17,10 +18,8 @@ namespace Registry.Web.Services.Managers
     {
         private readonly ObjectCache _cache;
 
-        //private readonly TimeSpan _defaultCacheExpireTime = new TimeSpan(0, 5, 0);
-
-        private readonly TimeSpan DefaultThumbnailsCacheExpiration = new TimeSpan(0, 30, 0);
-        private readonly TimeSpan DefaultTilesCacheExpiration = new TimeSpan(0, 30, 0);
+        private readonly TimeSpan DefaultThumbnailsCacheExpiration = new(0, 30, 0);
+        private readonly TimeSpan DefaultTilesCacheExpiration = new(0, 30, 0);
 
         private readonly TimeSpan _thumbnailsCacheExpiration;
         private readonly TimeSpan _tilesCacheExpiration;
@@ -57,6 +56,30 @@ namespace Registry.Web.Services.Managers
             }
             
             return tile;
+        }
+
+        public Task ClearThumbnails(string sourceHash)
+        {
+            return Task.Run(() =>
+            {
+                var seed = $"Thumb-{sourceHash}";
+                var keys = _cache.Where(o => o.Key.StartsWith(seed)).Select(o => o.Key).ToArray();
+
+                foreach (var key in keys)
+                    _cache.Remove(key);
+            });
+        }
+
+        public Task ClearTiles(string sourceHash)
+        {
+            return Task.Run(() =>
+            {
+                var seed = $"Tile-{sourceHash}";
+                var keys = _cache.Where(o => o.Key.StartsWith(seed)).Select(o => o.Key).ToArray();
+
+                foreach (var key in keys)
+                    _cache.Remove(key);
+            });        
         }
 
         public async Task<byte[]> GenerateThumbnail(IDdb ddb, string sourcePath, string sourceHash, int size)

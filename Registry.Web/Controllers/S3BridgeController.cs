@@ -28,30 +28,22 @@ namespace Registry.Web.Controllers
     [Route(RoutesHelper.BridgeRadix + "/{bucket}/{*path}")]
     public class S3BridgeController : ControllerBaseEx
     {
+        private readonly IS3BridgeManager _bridgeManager;
         private readonly ILogger<S3BridgeController> _logger;
-        private readonly IObjectSystem _objectSystem;
-        private readonly ObjectCache _objectCache;
 
-        private readonly TimeSpan _cacheExpiration;
-        private readonly TimeSpan DefaultBridgeCacheExpiration = new TimeSpan(0, 30, 0);
+        public S3BridgeController(IS3BridgeManager bridgeManager, ILogger<S3BridgeController> logger)
+        {
+            _bridgeManager = bridgeManager;
+            _logger = logger;
+        }
 
         [ApiExplorerSettings(IgnoreApi = true)]
         [NonAction]
         public bool IsS3Enabled()
         {
-            return _objectSystem.IsS3Based();
+            return _bridgeManager.IsS3Based();
         }
-
-        public S3BridgeController(IObjectSystem objectSystem, ObjectCache objectCache, IOptions<AppSettings> settings,
-            ILogger<S3BridgeController> logger)
-        {
-            _objectSystem = objectSystem;
-            _objectCache = objectCache;
-            _logger = logger;
-            
-            _cacheExpiration = settings.Value.BridgeCacheExpiration ?? DefaultBridgeCacheExpiration;
-        }
-
+        
         [HttpHead(Name = nameof(S3BridgeController) + "." + nameof(Check))]
         public async Task<IActionResult> Check([FromRoute] string bucket, [FromRoute] string path)
         {
@@ -62,7 +54,7 @@ namespace Registry.Web.Controllers
                 if (string.IsNullOrWhiteSpace(path))
                     throw new ArgumentException("Path cannot be empty", nameof(Path));
 
-                if (!await _objectSystem.ObjectExistsAsync(bucket, path))
+                if (!await _bridgeManager.ObjectExists(bucket, path))
                     return NotFound();
 
                 Response.Headers.Add("Accept-Ranges", "bytes");
@@ -109,7 +101,7 @@ namespace Registry.Web.Controllers
                     var offset = range.From.Value;
                     var length = range.To.Value - range.From.Value;
 
-                    await _objectSystem.GetObjectAsync(bucket, path, offset, length,
+                    await _bridgeManager.GetObjectStream(bucket, path, offset, length,
                         source =>
                         {
                             Response.StatusCode = 200;
@@ -121,31 +113,7 @@ namespace Registry.Web.Controllers
 
                 }
 
-                // We should only cache files inside .build, otherwise we can absolutely shoot ourselves in the foot
-                var key = $"Obj-{bucket}-{path}";
-
-                var itm = _objectCache.Get(key);
-                string filePath;
-                
-                if (itm != null)
-                {
-                    filePath = (string)itm;
-                }
-                else
-                {
-                    var tmpFile = Path.GetTempFileName();
-                    try
-                    {
-                        await _objectSystem.GetObjectAsync(bucket, path, tmpFile);
-                        _objectCache.Set(key, tmpFile, new CacheItemPolicy { SlidingExpiration = _cacheExpiration});
-                    }
-                    finally
-                    {
-                        CommonUtils.SafeDelete(tmpFile);
-                    }
-
-                    filePath = (string)_objectCache.Get(key);
-                }
+                var filePath = await _bridgeManager.GetObject(bucket, path);
 
                 return PhysicalFile(Path.GetFullPath(filePath), MimeUtility.GetMimeMapping(path));
             }

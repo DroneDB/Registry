@@ -57,12 +57,14 @@ namespace Registry.Web.Test
         private Mock<IDatasetsManager> _datasetsManagerMock;
         private Mock<IHttpContextAccessor> _httpContextAccessorMock;
         private Mock<ICacheManager> _cacheManagerMock;
+        private Mock<IS3BridgeManager> _bridgeManagerMock;
         private IBackgroundJobsProcessor _backgroundJobsProcessor;
 
         private INameGenerator _nameGenerator;
         private IBatchTokenGenerator _batchTokenGenerator;
 
         private const string TestStorageFolder = @"Data/Storage";
+
         //private const string DdbTestDataFolder = @"Data/DdbTest";
         private const string StorageFolder = "Storage";
         private const string DdbFolder = "Ddb";
@@ -87,6 +89,7 @@ namespace Registry.Web.Test
             _ddbFactoryMock = new Mock<IDdbManager>();
             _authManagerMock = new Mock<IAuthManager>();
             _utilsMock = new Mock<IUtils>();
+            _bridgeManagerMock = new Mock<IS3BridgeManager>();
 
             _objectsManagerMock = new Mock<IObjectsManager>();
             _organizationsManagerMock = new Mock<IOrganizationsManager>();
@@ -99,9 +102,11 @@ namespace Registry.Web.Test
             _pushManagerLogger = new Logger<PushManager>(LoggerFactory.Create(builder => builder.AddConsole()));
             _objectManagerLogger = new Logger<ObjectsManager>(LoggerFactory.Create(builder => builder.AddConsole()));
             _ddbFactoryLogger = new Logger<DdbManager>(LoggerFactory.Create(builder => builder.AddConsole()));
-            _organizationsManagerLogger = new Logger<OrganizationsManager>(LoggerFactory.Create(builder => builder.AddConsole()));
+            _organizationsManagerLogger =
+                new Logger<OrganizationsManager>(LoggerFactory.Create(builder => builder.AddConsole()));
             _datasetsManagerLogger = new Logger<DatasetsManager>(LoggerFactory.Create(builder => builder.AddConsole()));
-            _batchTokenGeneratorLogger = new Logger<BatchTokenGenerator>(LoggerFactory.Create(builder => builder.AddConsole()));
+            _batchTokenGeneratorLogger =
+                new Logger<BatchTokenGenerator>(LoggerFactory.Create(builder => builder.AddConsole()));
             _nameGeneratorLogger = new Logger<NameGenerator>(LoggerFactory.Create(builder => builder.AddConsole()));
 
             _appSettingsMock.Setup(o => o.Value).Returns(_settings);
@@ -112,19 +117,18 @@ namespace Registry.Web.Test
             var ddbMock1 = new Mock<IDdb>();
             ddbMock1.Setup(x => x.GetAttributesRaw()).Returns(new Dictionary<string, object>
             {
-                {"public", true }
+                { "public", true }
             });
             var ddbMock2 = new Mock<IDdb>();
-            ddbMock2.Setup(x => x.GetAttributesAsync(default)).Returns(Task.FromResult(new DdbAttributes(ddbMock1.Object)));
+            ddbMock2.Setup(x => x.GetAttributesAsync(default))
+                .Returns(Task.FromResult(new DdbAttributes(ddbMock1.Object)));
 
             _ddbFactoryMock.Setup(x => x.Get(It.IsAny<string>(), It.IsAny<Guid>())).Returns(ddbMock2.Object);
-
         }
 
         [Test]
         public async Task Init_HappyPath_Ok()
         {
-
             /* INITIALIZATION & SETUP */
             const string userName = "admin";
             const string dsSlug = "test";
@@ -142,7 +146,8 @@ namespace Registry.Web.Test
             _authManagerMock.Setup(o => o.SafeGetCurrentUserName()).Returns(Task.FromResult(userName));
             _authManagerMock.Setup(o => o.IsOwnerOrAdmin(It.IsAny<Dataset>())).Returns(Task.FromResult(true));
 
-            var sys = new PhysicalObjectSystem(new PhysicalObjectSystemSettings { BasePath = Path.Combine(test.TestFolder, StorageFolder) });
+            var sys = new PhysicalObjectSystem(new PhysicalObjectSystemSettings
+                { BasePath = Path.Combine(test.TestFolder, StorageFolder) });
             sys.SyncBucket($"{userName}-{Test2ArchiveDatasetInternalGuid}");
 
             var ddbManager = new DdbManager(_appSettingsMock.Object, _ddbFactoryLogger);
@@ -150,14 +155,15 @@ namespace Registry.Web.Test
                 _httpContextAccessorMock.Object, _ddbFactoryMock.Object);
 
             var objectManager = new ObjectsManager(_objectManagerLogger, context, sys,
-                _appSettingsMock.Object, ddbManager, webUtils, _authManagerMock.Object, _cacheManagerMock.Object, _backgroundJobsProcessor);
+                _appSettingsMock.Object, ddbManager, webUtils, _authManagerMock.Object, _cacheManagerMock.Object,
+                _bridgeManagerMock.Object, _backgroundJobsProcessor);
 
             var pushManager = new PushManager(webUtils, ddbManager, sys, objectManager, _pushManagerLogger,
-                _datasetsManagerMock.Object, _authManagerMock.Object, _backgroundJobsProcessor, _appSettingsMock.Object);
+                _datasetsManagerMock.Object, _authManagerMock.Object, _backgroundJobsProcessor,
+                _appSettingsMock.Object);
 
             try
             {
-
                 await using (var stream = File.OpenRead(Path.Combine(test.TestFolder, "ClientDdb.zip")))
                 {
                     var result = await pushManager.Init(userName, dsSlug, stream);
@@ -176,7 +182,6 @@ namespace Registry.Web.Test
                         await using var up = File.OpenRead(filePath);
                         await pushManager.Upload(userName, dsSlug, file, up);
                     }
-
                 }
 
                 await pushManager.Commit(userName, dsSlug);
@@ -189,21 +194,18 @@ namespace Registry.Web.Test
                     TestContext.WriteLine(JsonConvert.SerializeObject(result));
 
                     result.NeededFiles.Should().BeEmpty();
-
                 }
             }
             finally
             {
                 await pushManager.Clean(userName, dsSlug);
             }
-
         }
 
         [Test]
         [Explicit]
         public async Task Init_HappyPath2_Ok()
         {
-
             /* INITIALIZATION & SETUP */
             const string userName = "admin";
             const string dsSlug = "test";
@@ -257,14 +259,15 @@ namespace Registry.Web.Test
                 _httpContextAccessorMock.Object, _ddbFactoryMock.Object);
 
             var objectManager = new ObjectsManager(_objectManagerLogger, context, sys,
-                _appSettingsMock.Object, ddbManager, webUtils, _authManagerMock.Object, _cacheManagerMock.Object, _backgroundJobsProcessor);
+                _appSettingsMock.Object, ddbManager, webUtils, _authManagerMock.Object, _cacheManagerMock.Object,
+                _bridgeManagerMock.Object, _backgroundJobsProcessor);
 
             var pushManager = new PushManager(webUtils, ddbManager, sys, objectManager, _pushManagerLogger,
-                _datasetsManagerMock.Object, _authManagerMock.Object, _backgroundJobsProcessor, _appSettingsMock.Object);
+                _datasetsManagerMock.Object, _authManagerMock.Object, _backgroundJobsProcessor,
+                _appSettingsMock.Object);
 
             try
             {
-
                 await using (var stream = File.OpenRead(Path.Combine(test.TestFolder, "ClientDdb.zip")))
                 {
                     var result = await pushManager.Init(userName, dsSlug, stream);
@@ -283,7 +286,6 @@ namespace Registry.Web.Test
                         await using var up = File.OpenRead(filePath);
                         await pushManager.Upload(userName, dsSlug, file, up);
                     }
-
                 }
 
                 await pushManager.Commit(userName, dsSlug);
@@ -296,15 +298,12 @@ namespace Registry.Web.Test
                     TestContext.WriteLine(JsonConvert.SerializeObject(result));
 
                     result.NeededFiles.Should().BeEmpty();
-
                 }
-
             }
             finally
             {
                 await pushManager.Clean(userName, dsSlug);
             }
-
         }
 
         #region Test Data
@@ -355,7 +354,6 @@ namespace Registry.Web.Test
             // Insert seed data into the database using one instance of the context
             using (var context = new RegistryContext(options))
             {
-
                 var entity = new Organization
                 {
                     Slug = MagicStrings.PublicOrganizationSlug,
@@ -410,7 +408,5 @@ namespace Registry.Web.Test
         }
 
         #endregion
-
-
     }
 }

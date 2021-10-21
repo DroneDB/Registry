@@ -212,9 +212,7 @@ namespace Registry.Web.Services.Managers
                 else
                 {
                     if (!CommonUtils.SafeDelete(tempFileName))
-                    {
                         _logger.LogWarning($"Cannot delete '{tempFileName}'");
-                    }
                 }
             }
         }
@@ -280,20 +278,20 @@ namespace Registry.Web.Services.Managers
 
                 var dest = rem.Path;
 
-                if (rem.Type != EntryType.Directory)
-                {
-                    _logger.LogInformation("Deleting file");
+                if (rem.Type == EntryType.Directory) 
+                    continue;
+                
+                _logger.LogInformation("Deleting file");
 
-                    if (await _objectSystem.ObjectExistsAsync(bucketName, dest))
-                    {
-                        _logger.LogInformation("File exists in dest, deleting it");
-                        await _objectSystem.RemoveObjectAsync(bucketName, dest);
-                        _logger.LogInformation("File deleted");
-                    }
-                    else
-                    {
-                        _logger.LogInformation("File does not exist in dest, nothing to do");
-                    }
+                if (await _objectSystem.ObjectExistsAsync(bucketName, dest))
+                {
+                    _logger.LogInformation("File exists in dest, deleting it");
+                    await _objectSystem.RemoveObjectAsync(bucketName, dest);
+                    _logger.LogInformation("File deleted");
+                }
+                else
+                {
+                    _logger.LogInformation("File does not exist in dest, nothing to do");
                 }
             }
 

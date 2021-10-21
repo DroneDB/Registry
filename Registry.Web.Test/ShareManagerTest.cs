@@ -55,12 +55,14 @@ namespace Registry.Web.Test
         private Mock<IDatasetsManager> _datasetsManagerMock;
         private Mock<IHttpContextAccessor> _httpContextAccessorMock;
         private Mock<ICacheManager> _cacheManagerMock;
+        private Mock<IS3BridgeManager> _bridgeManagerMock;
         private IBackgroundJobsProcessor _backgroundJobsProcessor;
 
         private INameGenerator _nameGenerator;
         private IBatchTokenGenerator _batchTokenGenerator;
 
         private const string TestStorageFolder = @"Data/Storage";
+
         //private const string DdbTestDataFolder = @"Data/DdbTest";
         private const string StorageFolder = "Storage";
         private const string DdbFolder = "Ddb";
@@ -89,21 +91,22 @@ namespace Registry.Web.Test
             _datasetsManagerMock = new Mock<IDatasetsManager>();
             _httpContextAccessorMock = new Mock<IHttpContextAccessor>();
             _backgroundJobsProcessor = new SimpleBackgroundJobsProcessor();
-
+            _bridgeManagerMock = new Mock<IS3BridgeManager>();
             _cacheManagerMock = new Mock<ICacheManager>();
 
             _shareManagerLogger = new Logger<ShareManager>(LoggerFactory.Create(builder => builder.AddConsole()));
             _objectManagerLogger = new Logger<ObjectsManager>(LoggerFactory.Create(builder => builder.AddConsole()));
             _ddbFactoryLogger = new Logger<DdbManager>(LoggerFactory.Create(builder => builder.AddConsole()));
-            _organizationsManagerLogger = new Logger<OrganizationsManager>(LoggerFactory.Create(builder => builder.AddConsole()));
+            _organizationsManagerLogger =
+                new Logger<OrganizationsManager>(LoggerFactory.Create(builder => builder.AddConsole()));
             _datasetsManagerLogger = new Logger<DatasetsManager>(LoggerFactory.Create(builder => builder.AddConsole()));
-            _batchTokenGeneratorLogger = new Logger<BatchTokenGenerator>(LoggerFactory.Create(builder => builder.AddConsole()));
+            _batchTokenGeneratorLogger =
+                new Logger<BatchTokenGenerator>(LoggerFactory.Create(builder => builder.AddConsole()));
             _nameGeneratorLogger = new Logger<NameGenerator>(LoggerFactory.Create(builder => builder.AddConsole()));
 
             _appSettingsMock.Setup(o => o.Value).Returns(_settings);
             _batchTokenGenerator = new BatchTokenGenerator(_appSettingsMock.Object, _batchTokenGeneratorLogger);
             _nameGenerator = new NameGenerator(_appSettingsMock.Object, _nameGeneratorLogger);
-
         }
 
         [Test]
@@ -120,14 +123,16 @@ namespace Registry.Web.Test
             _authManagerMock.Setup(o => o.SafeGetCurrentUserName()).Returns(Task.FromResult(userName));
 
 
-            var manager = new ShareManager(_appSettingsMock.Object, _shareManagerLogger, _objectsManagerMock.Object, _datasetsManagerMock.Object,
-                _organizationsManagerMock.Object, _utilsMock.Object, _authManagerMock.Object, _batchTokenGenerator, _nameGenerator, GetTest1Context());
+            var manager = new ShareManager(_appSettingsMock.Object, _shareManagerLogger, _objectsManagerMock.Object,
+                _datasetsManagerMock.Object,
+                _organizationsManagerMock.Object, _utilsMock.Object, _authManagerMock.Object, _batchTokenGenerator,
+                _nameGenerator, GetTest1Context());
 
             await manager.Invoking(x => x.Initialize(null)).Should().ThrowAsync<BadRequestException>();
             // Now empty tag is supported
             //manager.Invoking(x => x.Initialize(new ShareInitDto())).Should().Throw<BadRequestException>();
-           await manager.Invoking(x => x.Initialize(new ShareInitDto { Tag = "ciao" })).Should().ThrowAsync<BadRequestException>();
-
+            await manager.Invoking(x => x.Initialize(new ShareInitDto { Tag = "ciao" })).Should()
+                .ThrowAsync<BadRequestException>();
         }
 
         [Test]
@@ -153,7 +158,7 @@ namespace Registry.Web.Test
 
             var attributes = new Dictionary<string, object>
             {
-                {"public", true}
+                { "public", true }
             };
 
             var ddbMock = new Mock<IDdb>();
@@ -163,11 +168,13 @@ namespace Registry.Web.Test
             }));
             var ddbMock2 = new Mock<IDdb>();
             ddbMock2.Setup(x => x.GetAttributesRaw()).Returns(attributes);
-            ddbMock.Setup(x => x.GetAttributesAsync(default)).Returns(Task.FromResult(new DdbAttributes(ddbMock2.Object)));
+            ddbMock.Setup(x => x.GetAttributesAsync(default))
+                .Returns(Task.FromResult(new DdbAttributes(ddbMock2.Object)));
 
             _ddbFactoryMock.Setup(x => x.Get(It.IsAny<string>(), It.IsAny<Guid>())).Returns(ddbMock.Object);
 
-            var sys = new PhysicalObjectSystem(new PhysicalObjectSystemSettings { BasePath = Path.Combine(test.TestFolder, StorageFolder) });
+            var sys = new PhysicalObjectSystem(new PhysicalObjectSystemSettings
+                { BasePath = Path.Combine(test.TestFolder, StorageFolder) });
             sys.SyncBucket($"{MagicStrings.PublicOrganizationSlug}-{MagicStrings.DefaultDatasetSlug}");
 
             var ddbFactory = new DdbManager(_appSettingsMock.Object, _ddbFactoryLogger);
@@ -175,19 +182,24 @@ namespace Registry.Web.Test
                 _httpContextAccessorMock.Object, _ddbFactoryMock.Object);
 
             var objectManager = new ObjectsManager(_objectManagerLogger, context, sys,
-                _appSettingsMock.Object, ddbFactory, webUtils, _authManagerMock.Object, _cacheManagerMock.Object, _backgroundJobsProcessor);
+                _appSettingsMock.Object, ddbFactory, webUtils, _authManagerMock.Object, _cacheManagerMock.Object,
+                _bridgeManagerMock.Object, _backgroundJobsProcessor);
 
             var datasetManager = new DatasetsManager(context, webUtils, _datasetsManagerLogger, objectManager,
                 _ddbFactoryMock.Object, _authManagerMock.Object);
-            var organizationsManager = new OrganizationsManager(_authManagerMock.Object, context, webUtils, datasetManager, _organizationsManagerLogger);
+            var organizationsManager = new OrganizationsManager(_authManagerMock.Object, context, webUtils,
+                datasetManager, _organizationsManagerLogger);
 
-            var shareManager = new ShareManager(_appSettingsMock.Object, _shareManagerLogger, objectManager, datasetManager, organizationsManager,
+            var shareManager = new ShareManager(_appSettingsMock.Object, _shareManagerLogger, objectManager,
+                datasetManager, organizationsManager,
                 webUtils, _authManagerMock.Object, _batchTokenGenerator, _nameGenerator, context);
 
             /* TEST */
 
             // ListBatches
-            var batches = (await shareManager.ListBatches(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug)).ToArray();
+            var batches =
+                (await shareManager.ListBatches(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug))
+                .ToArray();
             batches.Should().BeEmpty();
 
             // Initialize
@@ -215,7 +227,8 @@ namespace Registry.Web.Test
             commitRes.Url.Should().Be($"/r/{commitRes.Tag.OrganizationSlug}/{commitRes.Tag.DatasetSlug}");
 
             // ListBatches
-            batches = (await shareManager.ListBatches(commitRes.Tag.OrganizationSlug, commitRes.Tag.DatasetSlug)).ToArray();
+            batches = (await shareManager.ListBatches(commitRes.Tag.OrganizationSlug, commitRes.Tag.DatasetSlug))
+                .ToArray();
 
             batches.Should().HaveCount(1);
 
@@ -250,7 +263,7 @@ namespace Registry.Web.Test
 
             var attributes = new Dictionary<string, object>
             {
-                {"public", true}
+                { "public", true }
             };
 
             var ddbMock = new Mock<IDdb>();
@@ -260,11 +273,13 @@ namespace Registry.Web.Test
             }));
             var ddbMock2 = new Mock<IDdb>();
             ddbMock2.Setup(x => x.GetAttributesRaw()).Returns(attributes);
-            ddbMock.Setup(x => x.GetAttributesAsync(default)).Returns(Task.FromResult(new DdbAttributes(ddbMock2.Object)));
+            ddbMock.Setup(x => x.GetAttributesAsync(default))
+                .Returns(Task.FromResult(new DdbAttributes(ddbMock2.Object)));
 
             _ddbFactoryMock.Setup(x => x.Get(It.IsAny<string>(), It.IsAny<Guid>())).Returns(ddbMock.Object);
 
-            var sys = new PhysicalObjectSystem(new PhysicalObjectSystemSettings { BasePath = Path.Combine(test.TestFolder, StorageFolder) });
+            var sys = new PhysicalObjectSystem(new PhysicalObjectSystemSettings
+                { BasePath = Path.Combine(test.TestFolder, StorageFolder) });
             sys.SyncBucket($"{MagicStrings.PublicOrganizationSlug}-{MagicStrings.DefaultDatasetSlug}");
 
             var ddbFactory = new DdbManager(_appSettingsMock.Object, _ddbFactoryLogger);
@@ -272,13 +287,16 @@ namespace Registry.Web.Test
                 _httpContextAccessorMock.Object, _ddbFactoryMock.Object);
 
             var objectManager = new ObjectsManager(_objectManagerLogger, context, sys,
-                _appSettingsMock.Object, ddbFactory, webUtils, _authManagerMock.Object, _cacheManagerMock.Object, _backgroundJobsProcessor);
+                _appSettingsMock.Object, ddbFactory, webUtils, _authManagerMock.Object, _cacheManagerMock.Object,
+                _bridgeManagerMock.Object, _backgroundJobsProcessor);
 
             var datasetManager = new DatasetsManager(context, webUtils, _datasetsManagerLogger, objectManager,
                 _ddbFactoryMock.Object, _authManagerMock.Object);
-            var organizationsManager = new OrganizationsManager(_authManagerMock.Object, context, webUtils, datasetManager, _organizationsManagerLogger);
+            var organizationsManager = new OrganizationsManager(_authManagerMock.Object, context, webUtils,
+                datasetManager, _organizationsManagerLogger);
 
-            var shareManager = new ShareManager(_appSettingsMock.Object, _shareManagerLogger, objectManager, datasetManager, organizationsManager,
+            var shareManager = new ShareManager(_appSettingsMock.Object, _shareManagerLogger, objectManager,
+                datasetManager, organizationsManager,
                 webUtils, _authManagerMock.Object, _batchTokenGenerator, _nameGenerator, context);
 
             /* TEST */
@@ -290,10 +308,14 @@ namespace Registry.Web.Test
             const string datasetTestName = "First";
             const string organizationTestSlug = "test";
             const string datasetTestSlug = "first";
-            const string newFileUrl = "https://github.com/DroneDB/test_data/raw/master/test-datasets/drone_dataset_brighton_beach/" + fileName;
+            const string newFileUrl =
+                "https://github.com/DroneDB/test_data/raw/master/test-datasets/drone_dataset_brighton_beach/" +
+                fileName;
 
             // ListBatches
-            var batches = (await shareManager.ListBatches(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug)).ToArray();
+            var batches =
+                (await shareManager.ListBatches(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug))
+                .ToArray();
             batches.Should().BeEmpty();
 
             var res = await organizationsManager.AddNew(new OrganizationDto
@@ -332,7 +354,8 @@ namespace Registry.Web.Test
             batch.End.Should().BeNull();
 
             // Upload
-            var uploadRes = await shareManager.Upload(initRes.Token, fileName, CommonUtils.SmartDownloadData(newFileUrl));
+            var uploadRes =
+                await shareManager.Upload(initRes.Token, fileName, CommonUtils.SmartDownloadData(newFileUrl));
 
             uploadRes.Path.Should().Be(fileName);
             uploadRes.Size.Should().Be(fileSize);
@@ -357,13 +380,11 @@ namespace Registry.Web.Test
             batch.End.Should().NotBeNull();
             batch.Status.Should().Be(BatchStatus.Committed);
             batch.Entries.Should().HaveCount(1);
-
         }
 
         [Test]
         public async Task EndToEnd_ShareInit_After_ShareInit()
         {
-
             /* INITIALIZATION & SETUP */
             const string userName = "admin";
 
@@ -382,7 +403,7 @@ namespace Registry.Web.Test
 
             var attributes = new Dictionary<string, object>
             {
-                {"public", true}
+                { "public", true }
             };
 
             var ddbMock = new Mock<IDdb>();
@@ -392,11 +413,13 @@ namespace Registry.Web.Test
             }));
             var ddbMock2 = new Mock<IDdb>();
             ddbMock2.Setup(x => x.GetAttributesRaw()).Returns(attributes);
-            ddbMock.Setup(x => x.GetAttributesAsync(default)).Returns(Task.FromResult(new DdbAttributes(ddbMock2.Object)));
+            ddbMock.Setup(x => x.GetAttributesAsync(default))
+                .Returns(Task.FromResult(new DdbAttributes(ddbMock2.Object)));
 
             _ddbFactoryMock.Setup(x => x.Get(It.IsAny<string>(), It.IsAny<Guid>())).Returns(ddbMock.Object);
 
-            var sys = new PhysicalObjectSystem(new PhysicalObjectSystemSettings { BasePath = Path.Combine(test.TestFolder, StorageFolder) });
+            var sys = new PhysicalObjectSystem(new PhysicalObjectSystemSettings
+                { BasePath = Path.Combine(test.TestFolder, StorageFolder) });
             sys.SyncBucket($"{MagicStrings.PublicOrganizationSlug}-{MagicStrings.DefaultDatasetSlug}");
 
             var ddbFactory = new DdbManager(_appSettingsMock.Object, _ddbFactoryLogger);
@@ -404,13 +427,16 @@ namespace Registry.Web.Test
                 _httpContextAccessorMock.Object, _ddbFactoryMock.Object);
 
             var objectManager = new ObjectsManager(_objectManagerLogger, context, sys,
-                _appSettingsMock.Object, ddbFactory, webUtils, _authManagerMock.Object, _cacheManagerMock.Object, _backgroundJobsProcessor);
+                _appSettingsMock.Object, ddbFactory, webUtils, _authManagerMock.Object, _cacheManagerMock.Object,
+                _bridgeManagerMock.Object, _backgroundJobsProcessor);
 
             var datasetManager = new DatasetsManager(context, webUtils, _datasetsManagerLogger, objectManager,
                 _ddbFactoryMock.Object, _authManagerMock.Object);
-            var organizationsManager = new OrganizationsManager(_authManagerMock.Object, context, webUtils, datasetManager, _organizationsManagerLogger);
+            var organizationsManager = new OrganizationsManager(_authManagerMock.Object, context, webUtils,
+                datasetManager, _organizationsManagerLogger);
 
-            var shareManager = new ShareManager(_appSettingsMock.Object, _shareManagerLogger, objectManager, datasetManager, organizationsManager,
+            var shareManager = new ShareManager(_appSettingsMock.Object, _shareManagerLogger, objectManager,
+                datasetManager, organizationsManager,
                 webUtils, _authManagerMock.Object, _batchTokenGenerator, _nameGenerator, context);
 
             /* TEST */
@@ -422,10 +448,14 @@ namespace Registry.Web.Test
             const string datasetTestName = "First";
             const string organizationTestSlug = "test";
             const string datasetTestSlug = "first";
-            const string newFileUrl = "https://github.com/DroneDB/test_data/raw/master/test-datasets/drone_dataset_brighton_beach/" + fileName;
+            const string newFileUrl =
+                "https://github.com/DroneDB/test_data/raw/master/test-datasets/drone_dataset_brighton_beach/" +
+                fileName;
 
             // ListBatches
-            var batches = (await shareManager.ListBatches(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug)).ToArray();
+            var batches =
+                (await shareManager.ListBatches(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug))
+                .ToArray();
             batches.Should().BeEmpty();
 
             await organizationsManager.AddNew(new OrganizationDto
@@ -485,7 +515,8 @@ namespace Registry.Web.Test
             newBatch.Status.Should().Be(BatchStatus.Running);
 
             // Upload to old batch -> Exception
-            await shareManager.Invoking(async x => await x.Upload(initRes.Token, fileName, CommonUtils.SmartDownloadData(newFileUrl)))
+            await shareManager.Invoking(async x =>
+                    await x.Upload(initRes.Token, fileName, CommonUtils.SmartDownloadData(newFileUrl)))
                 .Should().ThrowAsync<BadRequestException>();
 
             // Commit old batch -> Exception
@@ -496,7 +527,8 @@ namespace Registry.Web.Test
             context.Set<Entry>().Local.Clear();
 
             // Upload to new batch
-            var uploadRes = await shareManager.Upload(newInitRes.Token, fileName, CommonUtils.SmartDownloadData(newFileUrl));
+            var uploadRes =
+                await shareManager.Upload(newInitRes.Token, fileName, CommonUtils.SmartDownloadData(newFileUrl));
             uploadRes.Path.Should().Be(fileName);
             uploadRes.Size.Should().Be(fileSize);
             uploadRes.Hash.Should().Be(fileHash);
@@ -521,10 +553,9 @@ namespace Registry.Web.Test
             //batch.UserName.Should().Be("admin");
             //batch.Entries.Should().HaveCount(1);
             //batch.End.Should().NotBeNull();
-
         }
 
-        
+
         #region Test Data
 
         private readonly AppSettings _settings = JsonConvert.DeserializeObject<AppSettings>(@"{
@@ -560,7 +591,6 @@ namespace Registry.Web.Test
 }
   ");
 
- 
         #endregion
 
         #region TestContexts
@@ -574,7 +604,6 @@ namespace Registry.Web.Test
             // Insert seed data into the database using one instance of the context
             using (var context = new RegistryContext(options))
             {
-
                 var entity = new Organization
                 {
                     Slug = MagicStrings.PublicOrganizationSlug,
@@ -605,7 +634,5 @@ namespace Registry.Web.Test
         }
 
         #endregion
-
-
     }
 }

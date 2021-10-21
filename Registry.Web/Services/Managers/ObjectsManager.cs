@@ -42,6 +42,7 @@ namespace Registry.Web.Services.Managers
         private readonly IUtils _utils;
         private readonly IAuthManager _authManager;
         private readonly ICacheManager _cacheManager;
+        private readonly IS3BridgeManager _bridgeManager;
         private readonly IBackgroundJobsProcessor _backgroundJob;
         private readonly RegistryContext _context;
         private readonly AppSettings _settings;
@@ -64,6 +65,7 @@ namespace Registry.Web.Services.Managers
             IUtils utils,
             IAuthManager authManager,
             ICacheManager cacheManager,
+            IS3BridgeManager bridgeManager,
             IBackgroundJobsProcessor backgroundJob)
         {
             _logger = logger;
@@ -73,6 +75,7 @@ namespace Registry.Web.Services.Managers
             _utils = utils;
             _authManager = authManager;
             _cacheManager = cacheManager;
+            _bridgeManager = bridgeManager;
             _backgroundJob = backgroundJob;
             _settings = settings.Value;
 
@@ -455,7 +458,10 @@ namespace Registry.Web.Services.Managers
                 await _objectSystem.RemoveObjectAsync(bucketName, obj.Path);
 
                 await RemoveBuildFiles(bucketName, obj.Hash);
-
+             
+                await _cacheManager.ClearThumbnails(obj.Hash);
+                await _cacheManager.ClearTiles(obj.Hash);
+                await _bridgeManager.RemoveObjectFromCache(bucketName, obj.Path);
             }
 
             _logger.LogInformation("Deletion complete");
