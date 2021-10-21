@@ -39,7 +39,7 @@ namespace Registry.Adapters.ObjectSystem
         private const string LockFileName = "sync.lock";
         private const string BucketDeleteFlagFileName = "tbd.lock";
 
-        private const int FileRetries = 1200;
+        private const int FileRetries = 12000;
         private const int FileRetriesDelay = 50;
 
         private const int RemoteCallRetries = 3;

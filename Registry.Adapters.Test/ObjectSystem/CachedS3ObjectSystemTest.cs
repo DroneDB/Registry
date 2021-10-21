@@ -38,7 +38,7 @@ namespace Registry.Adapters.Test.ObjectSystem
         }
 
         [Test]
-        public async Task GetObject_Stream_ConcurrentMisses()
+        public void GetObject_Stream_ConcurrentMisses()
         {
             using var fs = new TestArea(nameof(GetObject_Stream_ConcurrentMisses));
 
