@@ -5,8 +5,10 @@ using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Runtime.Serialization;
+using System.Security.Cryptography;
 using System.Threading;
 using System.Threading.Tasks;
+using MicroKnights.IO.Streams;
 using Microsoft.Extensions.Logging;
 using Minio.DataModel;
 using Minio.Exceptions;
@@ -235,26 +237,37 @@ namespace Registry.Adapters.ObjectSystem
                 ).ExecuteAsync(async () =>
                     await _remoteStorage.GetObjectAsync(bucketName, objectName, s =>
                     {
-                        LogInformation("Copying to cache file");
-                        s.CopyTo(fileStream);
-
-                        var obj = new ObjectDescriptor
-                        {
-                            LastError = null,
-                            SyncTime = DateTime.Now
-                        };
-
-                        LogInformation("Writing descriptor");
-                        descriptorWriter.Write(JsonConvert.SerializeObject(obj));
-
-                        s.Close();
-
-                        LogInformation("Running callback");
-                        fileStream.Reset();
-                        callback(fileStream);
-
-                        LogInformation("Callback OK");
+                        using var splittableStream = new ReadableSplitStream(s);
+                        using var forCacheStream = splittableStream.GetForwardReadOnlyStream();
+                        using var forCallbackStream = splittableStream.GetForwardReadOnlyStream();
+                        
+                        splittableStream.StartReadAHead();
+                        
+                        Parallel.Invoke(new ParallelOptions { MaxDegreeOfParallelism = 2},
+                            () =>
+                            {
+                                LogInformation("Copying to cache file");
+                                forCacheStream.CopyTo(fileStream);
+                                LogInformation("Cache copy OK"); 
+                            },
+                            () =>
+                            {
+                                LogInformation("Running callback");
+                                callback(forCallbackStream);
+                                LogInformation("Callback OK");
+                            }
+                        );
+ 
                     }, sse, cancellationToken));
+                
+                var obj = new ObjectDescriptor
+                {
+                    LastError = null,
+                    SyncTime = DateTime.Now
+                };
+                
+                LogInformation("Writing descriptor");
+                await descriptorWriter.WriteAsync(JsonConvert.SerializeObject(obj));
             }
             catch (IOException ex)
             {
