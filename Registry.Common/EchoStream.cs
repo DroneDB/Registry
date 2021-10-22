@@ -7,6 +7,7 @@
 // for its suitability for use.  I'd appreciate it if you credited the
 // original author if you use this code.
 //
+// Ref: https://www.codeproject.com/Articles/3922/EchoStream-An-Echo-Tee-Stream-for-NET
 
 using System;
 using System.Diagnostics;
