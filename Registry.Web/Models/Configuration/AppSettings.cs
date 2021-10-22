@@ -25,13 +25,13 @@ namespace Registry.Web.Models.Configuration
         /// <summary>
         /// Provider for authentication database
         /// </summary>
-        [JsonConverter(typeof(StringEnumConverter))] 
+        [JsonConverter(typeof(StringEnumConverter))]
         public DbProvider AuthProvider { get; set; }
 
         /// <summary>
         /// Provider for registry database
         /// </summary>
-        [JsonConverter(typeof(StringEnumConverter))] 
+        [JsonConverter(typeof(StringEnumConverter))]
         public DbProvider RegistryProvider { get; set; }
 
         /// <summary>
@@ -39,7 +39,7 @@ namespace Registry.Web.Models.Configuration
         /// </summary>
         [JsonConverter(typeof(StringEnumConverter))]
         public HangfireProvider HangfireProvider { get; set; }
-        
+
         /// <summary>
         /// Default admin details
         /// </summary>
@@ -119,12 +119,12 @@ namespace Registry.Web.Models.Configuration
         /// Thumbnails cache expiration 
         /// </summary>
         public TimeSpan? ThumbnailsCacheExpiration { get; set; }
-        
+
         /// <summary>
         /// Tiles cache expiration
         /// </summary>
         public TimeSpan? TilesCacheExpiration { get; set; }
-        
+
         /// <summary>
         /// Bridge cache expiration
         /// </summary>
@@ -134,5 +134,10 @@ namespace Registry.Web.Models.Configuration
         /// Clear cache interval
         /// </summary>
         public TimeSpan? ClearCacheInterval { get; set; }
+
+        /// <summary>
+        /// When to perform storage cleanup in minutes
+        /// </summary>
+        public int? StorageCleanupMinutes { get; set; }
     }
 }

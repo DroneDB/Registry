@@ -25,7 +25,8 @@ namespace Registry.Adapters.ObjectSystem
 {
     public class CachedS3ObjectSystem : IObjectSystem
     {
-        [JsonProperty("settings")] private readonly CachedS3ObjectSystemSettings _settings;
+        [JsonProperty("settings")] 
+        private readonly CachedS3ObjectSystemSettings _settings;
         private readonly ILogger<CachedS3ObjectSystem> _logger;
         private IObjectSystem _remoteStorage;
 

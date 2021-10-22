@@ -287,19 +287,6 @@ namespace Registry.Web
 
             app.UseDefaultFiles();
 
-            var appSettingsSection = Configuration.GetSection("AppSettings");
-            var appSettings = appSettingsSection.Get<AppSettings>();
-            
-            /*
-            app.UseStaticFiles(new StaticFileOptions
-            {
-                FileProvider = new PhysicalFileProvider(Path.GetFullPath(appSettings.StaticFilesCachePath)),
-                RequestPath = "/static",
-                HttpsCompression = HttpsCompressionMode.Compress,
-                RedirectToAppendTrailingSlash = true,
-                ServeUnknownFileTypes = true
-            });*/
-
             app.UseSwagger();
             app.UseSwaggerUI(c => { c.SwaggerEndpoint("/swagger/v1/swagger.json", "Registry API"); });
 
@@ -325,7 +312,7 @@ namespace Registry.Web
             {
                 AsyncAuthorization = new[] { new HangfireAuthorizationFilter() }
             });
-
+            
             app.UseEndpoints(endpoints =>
             {
                 endpoints.MapControllers();
@@ -373,6 +360,27 @@ namespace Registry.Web
             });
 
             SetupDatabase(app);
+            SetupHangfire(app);
+        }
+
+        private void SetupHangfire(IApplicationBuilder app)
+        {
+            var appSettingsSection = Configuration.GetSection("AppSettings");
+            var appSettings = appSettingsSection.Get<AppSettings>();
+            
+            if (appSettings.StorageCleanupMinutes is > 0)
+            {
+                using var serviceScope = app.ApplicationServices
+                    .GetRequiredService<IServiceScopeFactory>()
+                    .CreateScope();
+            
+                var objectSystem = serviceScope.ServiceProvider.GetService<IObjectSystem>();
+                
+                RecurringJob.AddOrUpdate(MagicStrings.StorageCleanupJobId, () =>
+                    HangfireUtils.SyncAndCleanupWrapper(objectSystem, null),
+                    $"*/{appSettings.StorageCleanupMinutes} * * * *");
+
+            }
         }
 
         // NOTE: Maybe put all this as stated in https://stackoverflow.com/a/55707949

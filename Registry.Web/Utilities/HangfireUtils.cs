@@ -4,9 +4,11 @@ using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 using DDB.Bindings;
+using Hangfire;
 using Hangfire.Console;
 using Hangfire.Server;
 using Registry.Adapters.DroneDB;
+using Registry.Adapters.ObjectSystem;
 using Registry.Common;
 using Registry.Ports.DroneDB;
 using Registry.Ports.DroneDB.Models;
@@ -17,6 +19,39 @@ namespace Registry.Web.Utilities
     public static class HangfireUtils
     {
 
+        [AutomaticRetry(Attempts = 0, LogEvents = false, OnAttemptsExceeded = AttemptsExceededAction.Delete)]
+        public static void SyncAndCleanupWrapper(IObjectSystem objectSystem, PerformContext context)
+        {
+            Action<string> writeLine = context != null ? context.WriteLine : Console.WriteLine;
+
+            writeLine($"CleanupWrapper");
+
+            if (objectSystem is CachedS3ObjectSystem system)
+            {
+                writeLine("Synchronizing cache");
+                try
+                {
+                    system.Sync();
+                }
+                catch (Exception ex)
+                {
+                    writeLine("Cannot sync: " + ex.Message);
+                }
+            }
+
+            try
+            {
+                writeLine("Running cleanup");
+
+                objectSystem.Cleanup();
+            }
+            catch (Exception ex)
+            {
+                writeLine("Cannot sync: " + ex.Message);
+            }
+
+        }
+        
         public static void BuildWrapper(IDdb ddb, string path, string tempFile, string dest, bool force, PerformContext context)
         {
             Action<string> writeLine = context != null ? context.WriteLine : Console.WriteLine;
@@ -88,7 +123,7 @@ namespace Registry.Web.Utilities
 
             writeLine($"SyncFolder -> '{sourcePath}' to '{destPath}' on bucket '{bucketName}");
 
-            int cnt = 0;
+            var cnt = 0;
 
             foreach (var file in Directory.EnumerateFiles(sourcePath))
             {
