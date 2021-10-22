@@ -149,17 +149,17 @@ namespace Registry.Web.Controllers
 
                 _logger.LogDebug($"Objects controller DownloadExact('{orgSlug}', '{dsSlug}', '{path}', '{isInlineRaw}')");
 
-                var res = await _objectsManager.Download(orgSlug, dsSlug, new[] { path });
+                var res = await _objectsManager.DownloadStream(orgSlug, dsSlug, new[] { path });
 
-                if (!isInline)
-                {
-                    var stream = File(res.ContentStream, res.ContentType, res.Name);
-                    stream.EnableRangeProcessing = true;
-                    return stream;
-                }
+                Response.StatusCode = 200;
+                Response.ContentType = res.ContentType;
 
-                Response.Headers.Add("Content-Disposition", "inline");
-                return File(res.ContentStream, res.ContentType, true);
+                Response.Headers.Add("Content-Disposition",
+                    isInline ? "inline" : $"attachment; filename=\"{res.Name}\"");
+
+                await res.CopyToAsync(Response.Body);
+
+                return new EmptyResult();
 
             }
             catch (Exception ex)

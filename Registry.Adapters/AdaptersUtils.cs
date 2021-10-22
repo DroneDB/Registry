@@ -7,6 +7,7 @@ using System.Reactive.Linq;
 using System.Reflection;
 using System.Security.Cryptography;
 using System.Text;
+using System.Threading;
 using System.Threading.Tasks;
 using MimeMapping;
 using Minio.DataModel;
@@ -196,5 +197,13 @@ namespace Registry.Adapters
             }
 
         }
+
+        public static Task GetObjectAsync(this IObjectSystem objectSystem, string bucketName, string objectName,
+            Stream dest, IServerEncryption sse = null,
+            CancellationToken cancellationToken = default)
+        {
+            return objectSystem.GetObjectAsync(bucketName, objectName, s => s.CopyTo(dest), sse, cancellationToken);
+        }
+
     }
 }

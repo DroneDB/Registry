@@ -8,7 +8,6 @@ using System.Runtime.Serialization;
 using System.Security.Cryptography;
 using System.Threading;
 using System.Threading.Tasks;
-using MicroKnights.IO.Streams;
 using Microsoft.Extensions.Logging;
 using Minio.DataModel;
 using Minio.Exceptions;
@@ -232,33 +231,19 @@ namespace Registry.Adapters.ObjectSystem
 
                 LogInformation("Getting file from remote");
 
+                
                 await Policy.Handle<Exception>().RetryAsync(RemoteCallRetries,
                     (exception, i) => LogInformation($"Retrying S3 download ({i}): {exception.Message}")
                 ).ExecuteAsync(async () =>
                     await _remoteStorage.GetObjectAsync(bucketName, objectName, s =>
                     {
-                        using var splittableStream = new ReadableSplitStream(s);
-                        using var forCacheStream = splittableStream.GetForwardReadOnlyStream();
-                        using var forCallbackStream = splittableStream.GetForwardReadOnlyStream();
-                        
-                        splittableStream.StartReadAHead();
-                        
-                        Parallel.Invoke(new ParallelOptions { MaxDegreeOfParallelism = 2},
-                            () =>
-                            {
-                                LogInformation("Copying to cache file");
-                                forCacheStream.CopyTo(fileStream);
-                                LogInformation("Cache copy OK"); 
-                            },
-                            () =>
-                            {
-                                LogInformation("Running callback");
-                                callback(forCallbackStream);
-                                LogInformation("Callback OK");
-                            }
-                        );
- 
+
+                        var echo = new EchoStream(s, fileStream, EchoStream.StreamOwnership.OwnBoth);
+
+                        callback(echo);
+
                     }, sse, cancellationToken));
+                
                 
                 var obj = new ObjectDescriptor
                 {
