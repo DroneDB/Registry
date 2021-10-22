@@ -381,6 +381,10 @@ namespace Registry.Web
                     $"*/{appSettings.StorageCleanupMinutes} * * * *");
 
             }
+            else
+            {
+                RecurringJob.RemoveIfExists(MagicStrings.StorageCleanupJobId);
+            }
         }
 
         // NOTE: Maybe put all this as stated in https://stackoverflow.com/a/55707949
