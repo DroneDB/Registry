@@ -1161,10 +1161,17 @@ namespace Registry.Adapters.ObjectSystem
                 cancellationToken);
         }
 
-        public Task<bool> ObjectExistsAsync(string bucketName, string objectName, IServerEncryption sse = null,
+        public async Task<bool> ObjectExistsAsync(string bucketName, string objectName, IServerEncryption sse = null,
             CancellationToken cancellationToken = default)
         {
-            return _remoteStorage.ObjectExistsAsync(bucketName, objectName, sse, cancellationToken);
+
+            var cachedObjectFilePath = GetCachedFilePath(bucketName, objectName);
+            var descriptorFilePath = GetDescriptorFilePath(bucketName, objectName);
+            var tbdFilePath = GetTbdFilePath(bucketName, objectName);
+
+            return File.Exists(descriptorFilePath) && File.Exists(cachedObjectFilePath)
+                ? !File.Exists(tbdFilePath)
+                : await _remoteStorage.ObjectExistsAsync(bucketName, objectName, sse, cancellationToken);
         }
 
         public IObservable<ObjectUpload> ListIncompleteUploads(string bucketName, string prefix = "",

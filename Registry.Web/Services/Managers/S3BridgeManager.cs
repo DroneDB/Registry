@@ -85,6 +85,9 @@ namespace Registry.Web.Services.Managers
                 }
 
                 filePath = (string)_objectCache.Get(key);
+
+                if (filePath == null)
+                    throw new InvalidOperationException("Cannot get cached file after setting it!");
             }
 
             return filePath;
