@@ -355,12 +355,9 @@ namespace Registry.Web.Services.Managers
 
             _logger.LogInformation("Clearing temp folder");
 
-            var objects = _objectSystem.ListObjectsAsync(bucketName, tempFolderName, true).ToEnumerable().ToArray();
+            var objects = _objectSystem.ListObjectsAsync(bucketName, tempFolderName, true).ToEnumerable();
+            await _objectSystem.RemoveObjectsAsync(bucketName, objects.Select(obj => obj.Key).ToArray());
 
-            foreach (var obj in objects)
-            {
-                await _objectSystem.RemoveObjectAsync(bucketName, obj.Key);
-            }
         }
 
         private static void EnsureParentFolderExists(string folder)
