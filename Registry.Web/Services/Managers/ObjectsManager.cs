@@ -42,6 +42,7 @@ namespace Registry.Web.Services.Managers
         private readonly IUtils _utils;
         private readonly IAuthManager _authManager;
         private readonly ICacheManager _cacheManager;
+        private readonly IS3BridgeManager _bridgeManager;
         private readonly IBackgroundJobsProcessor _backgroundJob;
         private readonly RegistryContext _context;
         private readonly AppSettings _settings;
@@ -64,6 +65,7 @@ namespace Registry.Web.Services.Managers
             IUtils utils,
             IAuthManager authManager,
             ICacheManager cacheManager,
+            IS3BridgeManager bridgeManager,
             IBackgroundJobsProcessor backgroundJob)
         {
             _logger = logger;
@@ -73,6 +75,7 @@ namespace Registry.Web.Services.Managers
             _utils = utils;
             _authManager = authManager;
             _cacheManager = cacheManager;
+            _bridgeManager = bridgeManager;
             _backgroundJob = backgroundJob;
             _settings = settings.Value;
 
@@ -181,6 +184,7 @@ namespace Registry.Web.Services.Managers
             if (res.Type == EntryType.Directory)
                 throw new InvalidOperationException("Cannot get a folder, we are supposed to deal with a file!");
 
+            // We keep this because we need the actual ContextType
             var objInfo = await _objectSystem.GetObjectInfoAsync(bucketName, res.Path);
 
             if (objInfo == null)
@@ -454,7 +458,10 @@ namespace Registry.Web.Services.Managers
                 await _objectSystem.RemoveObjectAsync(bucketName, obj.Path);
 
                 await RemoveBuildFiles(bucketName, obj.Hash);
-
+             
+                await _cacheManager.ClearThumbnails(obj.Hash);
+                await _cacheManager.ClearTiles(obj.Hash);
+                await _bridgeManager.RemoveObjectFromCache(bucketName, obj.Path);
             }
 
             _logger.LogInformation("Deletion complete");
@@ -516,9 +523,9 @@ namespace Registry.Web.Services.Managers
             _logger.LogInformation($"In GenerateThumbnail('{orgSlug}/{dsSlug}')");
 
             // Fix fox '/img.png' -> 'img.png'
-            if (path.StartsWith('/')) path = path.Substring(1);
+            if (path.StartsWith('/')) path = path[1..];
 
-            var entry = EnsurePathValidity(orgSlug, ds.InternalRef, path, out IDdb ddb);
+            var entry = EnsurePathValidity(orgSlug, ds.InternalRef, path, out var ddb);
 
             var fileName = Path.GetFileName(path);
             if (fileName == null)
@@ -527,7 +534,9 @@ namespace Registry.Web.Services.Managers
             var bucketName = _utils.GetBucketName(orgSlug, ds.InternalRef);
             var sourcePath = GetBuildSource(bucketName, entry);
 
+            //var thumbData = await ddb.GenerateThumbnailAsync(sourcePath, size ?? DefaultThumbnailSize);
             var thumbData = await _cacheManager.GenerateThumbnail(ddb, sourcePath, entry.Hash, size ?? DefaultThumbnailSize);
+            
             var memory = new MemoryStream(thumbData);
 
             return new FileDescriptorDto
@@ -537,7 +546,6 @@ namespace Registry.Web.Services.Managers
                 Name = Path.ChangeExtension(fileName, ".jpg")
             };
         }
-
         public async Task<FileDescriptorDto> GenerateTile(string orgSlug, string dsSlug, string path, int tz, int tx, int ty, bool retina)
         {
             var ds = await _utils.GetDataset(orgSlug, dsSlug);
@@ -555,7 +563,9 @@ namespace Registry.Web.Services.Managers
 
             try
             {
-                var tileData = await ddb.GenerateTileAsync(sourcePath, tz, tx, ty, retina, entry.Hash);
+                var tileData = await _cacheManager.GenerateTile(ddb, sourcePath, entry.Hash, tz, tx, ty, retina);
+
+                //var tileData = await ddb.GenerateTileAsync(sourcePath, tz, tx, ty, retina, entry.Hash);
                 var memory = new MemoryStream(tileData);
 
                 return new FileDescriptorDto
@@ -781,11 +791,6 @@ namespace Registry.Web.Services.Managers
 
             if (!bucketExists)
                 throw new NotFoundException($"Cannot find bucket '{bucketName}'");
-
-            var objInfo = await _objectSystem.GetObjectInfoAsync(bucketName, path);
-
-            if (objInfo == null)
-                throw new NotFoundException($"Cannot find '{path}' in storage provider");
 
             _logger.LogInformation($"Getting object '{path}' in bucket '{bucketName}'");
 

@@ -9,7 +9,7 @@ namespace Registry.Web.Services.Ports
 {
     public interface ISystemManager
     {
-        public SyncFilesResDto SyncFiles();
+        public Task Cleanup();
         public Task<CleanupBatchesResultDto> CleanupBatches();
         Task<CleanupDatasetResultDto> CleanupEmptyDatasets();
         string GetVersion();

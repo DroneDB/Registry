@@ -14,7 +14,6 @@ namespace Registry.Web.Models.DTO
         public string Slug { get; set; }
         [Required]
         public string Name { get; set; }
-        public string Description { get; set; }
         public DateTime CreationDate { get; set; }
         public int ObjectsCount { get; set; }
         public DateTime? LastEdit { get; set; }
@@ -22,7 +21,6 @@ namespace Registry.Web.Models.DTO
         public bool IsPublic { get; set; }
 
         public long Size { get; set; }
-        public string Password { get; set; }
 
     }
 }

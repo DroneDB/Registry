@@ -100,7 +100,7 @@ namespace Registry.Web.Test
             const string fileName = "Sub/20200610_144436.jpg";
             const int expectedDepth = 1;
             const int expectedSize = 8248241;
-            const int expectedType = 3;
+            const EntryType expectedType = EntryType.GeoImage;
             const string expectedHash = "f27ddc96daf9aeff3c026de8292681296c3e9d952b647235878c50f2b7b39e94";
             var expectedModifiedTime = new DateTime(2020, 06, 10, 14, 44, 36);
             var expectedMeta = JsonConvert.DeserializeObject<Dictionary<string, object>>(
@@ -145,7 +145,7 @@ namespace Registry.Web.Test
             const string fileName = "DJI_0022.JPG";
             const int expectedDepth = 0;
             const int expectedSize = 3872682;
-            const int expectedType = 3;
+            const EntryType expectedType = EntryType.GeoImage;
             const string expectedHash = "e6e57187a33951a27f51e3a86cc66c6ce43d555f0d51ba3c715fc7b707ce1477";
             var expectedModifiedTime = new DateTime(2017, 04, 2, 20, 01, 27);
             var expectedMeta = JsonConvert.DeserializeObject<Dictionary<string, object>>(
@@ -188,7 +188,10 @@ namespace Registry.Web.Test
 
             var coords = polygon.Coordinates[0].Coordinates;
 
-            coords.Should().BeEquivalentTo(expectedCoordinates);
+            coords.Should().BeEquivalentTo(expectedCoordinates, options => 
+                options.Using<double>(ctx => 
+                    ctx.Subject.Should().BeApproximately(ctx.Expectation, 0.001))
+                        .WhenTypeIs<double>());
 
         }
 

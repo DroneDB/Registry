@@ -345,7 +345,7 @@ namespace Registry.Adapters.DroneDB
                 {
                     filePath = Path.Combine(DatasetFolderPath, path);
 
-                    stream.Reset();
+                    stream.SafeReset();
 
                     EnsureFolderExists(filePath);
 

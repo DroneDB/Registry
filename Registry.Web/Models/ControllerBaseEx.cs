@@ -16,14 +16,29 @@ namespace Registry.Web.Models
         protected IActionResult ExceptionResult(Exception ex)
         {
 
-            var err = new ErrorResponse(ex.Message);
-
+            // Do not retry if the quota is exceeded
+            var noRetry = ex is QuotaExceededException;
+            
+            var err = new ErrorResponse(ex.Message, noRetry);
+            
             return ex switch
             {
                 UnauthorizedException _ => Unauthorized(err),
                 ConflictException _ => Conflict(err),
                 NotFoundException _ => NotFound(err),
-                BadRequestException _ => BadRequest(err),
+                _ => BadRequest(err)
+            };
+        }
+        
+        protected IActionResult ExceptionResult(Exception ex, bool noRetry)
+        {
+            var err = new ErrorResponse(ex.Message, noRetry);
+            
+            return ex switch
+            {
+                UnauthorizedException _ => Unauthorized(err),
+                ConflictException _ => Conflict(err),
+                NotFoundException _ => NotFound(err),
                 _ => BadRequest(err)
             };
         }

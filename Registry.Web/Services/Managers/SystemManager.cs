@@ -126,7 +126,7 @@ namespace Registry.Web.Services.Managers
                 {
 
                     // Remove intermediate files
-                    if (batch.Status == BatchStatus.Rolledback || batch.Status == BatchStatus.Running)
+                    if (batch.Status is BatchStatus.Rolledback or BatchStatus.Running)
                     {
 
                         var entries = batch.Entries.ToArray();
@@ -181,25 +181,14 @@ namespace Registry.Web.Services.Managers
 
         }
 
-        public SyncFilesResDto SyncFiles()
+        public async Task Cleanup()
         {
-            var cachedS3 = _objectSystem as CachedS3ObjectSystem;
-
-            if (cachedS3 == null)
+            if (_objectSystem is not CachedS3ObjectSystem cachedS3)
                 throw new NotSupportedException(
-                    "Current object system does not support SyncFiles method, only CachedS3ObjectSystem can");
+                    "Current object system does not support Cleanup method, only CachedS3ObjectSystem does");
 
-            var res = cachedS3.SyncFiles();
+            await cachedS3.Cleanup();
 
-            return new SyncFilesResDto
-            {
-                ErrorFiles = res?.ErrorFiles?.Select(err => new SyncFileErrorDto
-                {
-                    ErrorMessage = err.ErrorMessage,
-                    Path = err.Path
-                }).ToArray(),
-                SyncedFiles = res?.SyncedFiles
-            };
         }
     }
 }

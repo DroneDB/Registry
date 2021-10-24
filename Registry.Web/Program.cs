@@ -155,8 +155,16 @@ namespace Registry.Web
 
             }
 
+            if (string.IsNullOrWhiteSpace(appSettings.BridgeCachePath))
+            {
+                appSettings.BridgeCachePath = defaultAppSettings.BridgeCachePath;
+            }
+
+            Directory.CreateDirectory(appSettings.BridgeCachePath);
+            
             config["AppSettings"] = JObject.FromObject(appSettings);
 
+            
             // Update config
             File.WriteAllText(ConfigFilePath, JsonConvert.SerializeObject(config, Formatting.Indented));
 

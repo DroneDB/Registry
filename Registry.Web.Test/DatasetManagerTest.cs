@@ -35,7 +35,6 @@ namespace Registry.Web.Test
         private Mock<IDdbManager> _ddbFactoryMock;
         private Mock<IObjectsManager> _objectsManagerMock;
         private Mock<IHttpContextAccessor> _httpContextAccessorMock;
-        private IPasswordHasher _passwordHasher;
 
         [SetUp]
         public void Setup()
@@ -47,7 +46,6 @@ namespace Registry.Web.Test
             _objectsManagerMock = new Mock<IObjectsManager>();
             _httpContextAccessorMock = new Mock<IHttpContextAccessor>();
             _datasetsManagerLogger = new Logger<DatasetsManager>(LoggerFactory.Create(builder => builder.AddConsole()));
-            _passwordHasher = new PasswordHasher();
         }
 
         [Test]
@@ -74,7 +72,7 @@ namespace Registry.Web.Test
             _ddbFactoryMock.Setup(x => x.Get(It.IsAny<string>(), It.IsAny<Guid>())).Returns(ddbMock.Object);
 
             var datasetsManager = new DatasetsManager(context, utils, _datasetsManagerLogger,
-                _objectsManagerMock.Object, _passwordHasher, _ddbFactoryMock.Object, _authManagerMock.Object);
+                _objectsManagerMock.Object, _ddbFactoryMock.Object, _authManagerMock.Object);
 
             var list = (await datasetsManager.List(MagicStrings.PublicOrganizationSlug)).ToArray();
 
@@ -82,11 +80,9 @@ namespace Registry.Web.Test
 
             var pub = list.First();
 
-            const string expectedDescription = "Default dataset";
             const string expectedSlug = MagicStrings.DefaultDatasetSlug;
             const string expectedName = "Default";
 
-            pub.Description.Should().Be(expectedDescription);
             pub.Slug.Should().Be(expectedSlug);
 
             // TODO: Check test data: this should be true
@@ -154,7 +150,6 @@ namespace Registry.Web.Test
                 {
                     Slug = MagicStrings.DefaultDatasetSlug,
                     Name = "Default",
-                    Description = "Default dataset",
                     //IsPublic = true,
                     CreationDate = DateTime.Now,
                     //LastUpdate = DateTime.Now,

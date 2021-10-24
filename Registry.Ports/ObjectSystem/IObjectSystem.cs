@@ -217,7 +217,7 @@ namespace Registry.Ports.ObjectSystem
         /// <summary>
         /// Cleans up any intermediate or temp file
         /// </summary>
-        void Cleanup();
+        Task Cleanup();
         
         /// <summary>
         /// Whether this object system is based on S3

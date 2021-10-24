@@ -4,13 +4,16 @@ using System.Linq;
 using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
+using System.Threading.Tasks;
 using DDB.Bindings.Model;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Identity;
 using Newtonsoft.Json;
-using Registry.Ports.DroneDB;
 using Registry.Ports.DroneDB.Models;
 using Registry.Web.Data.Models;
+using Registry.Web.Models;
 using Registry.Web.Models.DTO;
+using EntryType = Registry.Common.EntryType;
 
 namespace Registry.Web.Utilities
 {
@@ -23,9 +26,9 @@ namespace Registry.Web.Utilities
 
             return new DeltaDto
             {
-                Adds = delta.Adds?.Select(add => new AddActionDto { Path = add.Path, Type = (Common.EntryType)(int)add.Type }).ToArray(),
+                Adds = delta.Adds?.Select(add => new AddActionDto { Path = add.Path, Type = (EntryType)(int)add.Type }).ToArray(),
                 Copies = delta.Copies?.Select(cpy => new CopyActionDto { Destination = cpy.Destination, Source = cpy.Source }).ToArray(),
-                Removes = delta.Removes?.Select(rem => new RemoveActionDto { Path = rem.Path, Type = (Common.EntryType)(int)rem.Type }).ToArray()
+                Removes = delta.Removes?.Select(rem => new RemoveActionDto { Path = rem.Path, Type = (EntryType)(int)rem.Type }).ToArray()
             };
         }
 
@@ -62,7 +65,6 @@ namespace Registry.Web.Utilities
                 Id = dataset.Id,
                 Slug = dataset.Slug,
                 CreationDate = dataset.CreationDate,
-                Description = dataset.Description,
                 Name = string.IsNullOrEmpty(dataset.Name) ? dataset.Slug : dataset.Name
             };
             return entity;
@@ -77,7 +79,6 @@ namespace Registry.Web.Utilities
                 Id = dataset.Id,
                 Slug = dataset.Slug,
                 CreationDate = dataset.CreationDate,
-                Description = dataset.Description,
                 LastEdit = entry.ModifiedTime,
                 Name = dataset.Name,
                 Properties = entry.Properties,
@@ -205,6 +206,22 @@ namespace Registry.Web.Utilities
         public static string ToPrintableList(this IEnumerable<string> arr)
         {
             return arr == null ? "[]" : $"[{string.Join(", ", arr)}]";
+        }
+
+        public static async Task ErrorResult(this HttpResponse response, string message)
+        {
+            await Result(response, new ErrorResponse(message), StatusCodes.Status500InternalServerError);
+        }
+        
+        public static async Task ErrorResult(this HttpResponse response, Exception ex)
+        {
+            await ErrorResult(response, ex.Message);
+        }
+        
+        public static async Task Result<T>(this HttpResponse response, T result, int statusCode)
+        {
+            response.StatusCode = statusCode;
+            await response.WriteAsJsonAsync(result);
         }
 
 

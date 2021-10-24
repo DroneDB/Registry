@@ -52,6 +52,7 @@ namespace Registry.Web.Test
         private Mock<IAuthManager> _authManagerMock;
         private Mock<IHttpContextAccessor> _httpContextAccessorMock;
         private Mock<ICacheManager> _cacheManagerMock;
+        private Mock<IS3BridgeManager> _bridgeManagerMock;
         private IBackgroundJobsProcessor _backgroundJobsProcessor;
 
         //private const string DataFolder = "Data";
@@ -76,6 +77,7 @@ namespace Registry.Web.Test
             _authManagerMock = new Mock<IAuthManager>();
             _httpContextAccessorMock = new Mock<IHttpContextAccessor>();
             _cacheManagerMock = new Mock<ICacheManager>();
+            _bridgeManagerMock = new Mock<IS3BridgeManager>();
             _backgroundJobsProcessor = new SimpleBackgroundJobsProcessor();
 
             if (!Directory.Exists(TestStorageFolder))
@@ -93,32 +95,41 @@ namespace Registry.Web.Test
             var ddbMock1 = new Mock<IDdb>();
             ddbMock1.Setup(x => x.GetAttributesRaw()).Returns(new Dictionary<string, object>
             {
-                {"public", true }
+                { "public", true }
             });
             var ddbMock2 = new Mock<IDdb>();
-            ddbMock2.Setup(x => x.GetAttributesAsync(default)).Returns(Task.FromResult(new DdbAttributes(ddbMock1.Object)));
+            ddbMock2.Setup(x => x.GetAttributesAsync(default))
+                .Returns(Task.FromResult(new DdbAttributes(ddbMock1.Object)));
 
             _ddbFactoryMock.Setup(x => x.Get(It.IsAny<string>(), It.IsAny<Guid>())).Returns(ddbMock2.Object);
-
         }
 
         [Test]
-        public void List_NullParameters_BadRequestException()
+        public async Task List_NullParameters_BadRequestException()
         {
-            using var context = GetTest1Context();
+            await using var context = GetTest1Context();
             _appSettingsMock.Setup(o => o.Value).Returns(JsonConvert.DeserializeObject<AppSettings>(_settingsJson));
             _authManagerMock.Setup(o => o.IsUserAdmin()).Returns(Task.FromResult(true));
 
             var webUtils = new WebUtils(_authManagerMock.Object, context, _appSettingsMock.Object,
                 _httpContextAccessorMock.Object, _ddbFactoryMock.Object);
 
-            var objectManager = new ObjectsManager(_objectManagerLogger, context, _objectSystemMock.Object, _appSettingsMock.Object,
-                _ddbFactoryMock.Object, webUtils, _authManagerMock.Object, _cacheManagerMock.Object, _backgroundJobsProcessor);
+            var objectManager = new ObjectsManager(_objectManagerLogger, context, _objectSystemMock.Object,
+                _appSettingsMock.Object,
+                _ddbFactoryMock.Object, webUtils, _authManagerMock.Object, _cacheManagerMock.Object,
+                _bridgeManagerMock.Object, _backgroundJobsProcessor);
 
-            objectManager.Invoking(item => item.List(null, MagicStrings.DefaultDatasetSlug, "test")).Should().Throw<BadRequestException>();
-            objectManager.Invoking(item => item.List(MagicStrings.PublicOrganizationSlug, null, "test")).Should().Throw<BadRequestException>();
-            objectManager.Invoking(item => item.List(string.Empty, MagicStrings.DefaultDatasetSlug, "test")).Should().Throw<BadRequestException>();
-            objectManager.Invoking(item => item.List(MagicStrings.PublicOrganizationSlug, string.Empty, "test")).Should().Throw<BadRequestException>();
+            await objectManager.Invoking(item => item.List(null, MagicStrings.DefaultDatasetSlug, "test"))
+                .Should().ThrowAsync<BadRequestException>();
+
+            await objectManager.Invoking(item => item.List(MagicStrings.PublicOrganizationSlug, null, "test"))
+                .Should().ThrowAsync<BadRequestException>();
+
+            await objectManager.Invoking(item => item.List(string.Empty, MagicStrings.DefaultDatasetSlug, "test"))
+                .Should().ThrowAsync<BadRequestException>();
+
+            await objectManager.Invoking(item => item.List(MagicStrings.PublicOrganizationSlug, string.Empty, "test"))
+                .Should().ThrowAsync<BadRequestException>();
         }
 
         [Test]
@@ -136,10 +147,13 @@ namespace Registry.Web.Test
             var webUtils = new WebUtils(_authManagerMock.Object, context, _appSettingsMock.Object,
                 _httpContextAccessorMock.Object, _ddbFactoryMock.Object);
 
-            var objectManager = new ObjectsManager(_objectManagerLogger, context, _objectSystemMock.Object, _appSettingsMock.Object,
-                new DdbManager(_appSettingsMock.Object, _ddbFactoryLogger), webUtils, _authManagerMock.Object, _cacheManagerMock.Object, _backgroundJobsProcessor);
+            var objectManager = new ObjectsManager(_objectManagerLogger, context, _objectSystemMock.Object,
+                _appSettingsMock.Object,
+                new DdbManager(_appSettingsMock.Object, _ddbFactoryLogger), webUtils, _authManagerMock.Object,
+                _cacheManagerMock.Object, _bridgeManagerMock.Object, _backgroundJobsProcessor);
 
-            var res = await objectManager.List(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug, null, true);
+            var res = await objectManager.List(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug,
+                null, true);
 
             res.Should().HaveCount(26);
 
@@ -147,7 +161,6 @@ namespace Registry.Web.Test
 
             // We dont consider the naked folder 'Sub'
             res.Should().HaveCount(7);
-
         }
 
         [Test]
@@ -165,31 +178,36 @@ namespace Registry.Web.Test
             var webUtils = new WebUtils(_authManagerMock.Object, context, _appSettingsMock.Object,
                 _httpContextAccessorMock.Object, _ddbFactoryMock.Object);
 
-            var objectManager = new ObjectsManager(_objectManagerLogger, context, _objectSystemMock.Object, _appSettingsMock.Object,
-                new DdbManager(_appSettingsMock.Object, _ddbFactoryLogger), webUtils, _authManagerMock.Object, _cacheManagerMock.Object, _backgroundJobsProcessor);
+            var objectManager = new ObjectsManager(_objectManagerLogger, context, _objectSystemMock.Object,
+                _appSettingsMock.Object,
+                new DdbManager(_appSettingsMock.Object, _ddbFactoryLogger), webUtils, _authManagerMock.Object,
+                _cacheManagerMock.Object, _bridgeManagerMock.Object, _backgroundJobsProcessor);
 
-            var res = await objectManager.Search(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug, "DJI*");
+            var res = await objectManager.Search(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug,
+                "DJI*");
 
             res.Should().HaveCount(18);
 
-            res = await objectManager.Search(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug, "*1444*");
+            res = await objectManager.Search(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug,
+                "*1444*");
             res.Should().HaveCount(7);
 
-            res = await objectManager.Search(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug, "*438*");
+            res = await objectManager.Search(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug,
+                "*438*");
             res.Should().HaveCount(1);
 
-            res = await objectManager.Search(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug, "*438*", "Sub");
+            res = await objectManager.Search(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug,
+                "*438*", "Sub");
             res.Should().HaveCount(1);
 
-            res = await objectManager.Search(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug, "*438*", "Sub", false);
+            res = await objectManager.Search(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug,
+                "*438*", "Sub", false);
             res.Should().HaveCount(1);
-
         }
 
         [Test]
         public async Task Get_MissingFile_NotFound()
         {
-
             using var test = new TestFS(Test4ArchiveUrl, BaseTestFolder);
             await using var context = GetTest1Context();
 
@@ -203,12 +221,14 @@ namespace Registry.Web.Test
                 _httpContextAccessorMock.Object, _ddbFactoryMock.Object);
 
             var objectManager = new ObjectsManager(_objectManagerLogger, context,
-                new PhysicalObjectSystem(new PhysicalObjectSystemSettings { BasePath = Path.Combine(test.TestFolder, StorageFolder) }), _appSettingsMock.Object,
-                new DdbManager(_appSettingsMock.Object, _ddbFactoryLogger), webUtils, _authManagerMock.Object, _cacheManagerMock.Object, _backgroundJobsProcessor);
+                new PhysicalObjectSystem(new PhysicalObjectSystemSettings
+                    { BasePath = Path.Combine(test.TestFolder, StorageFolder) }), _appSettingsMock.Object,
+                new DdbManager(_appSettingsMock.Object, _ddbFactoryLogger), webUtils, _authManagerMock.Object,
+                _cacheManagerMock.Object, _bridgeManagerMock.Object, _backgroundJobsProcessor);
 
-            objectManager.Invoking(async x => await x.Get(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug, "weriufbgeiughegr"))
-                .Should().Throw<NotFoundException>();
-
+            await objectManager.Invoking(async x => await x.Get(MagicStrings.PublicOrganizationSlug,
+                    MagicStrings.DefaultDatasetSlug, "weriufbgeiughegr"))
+                .Should().ThrowAsync<NotFoundException>();
         }
 
         [Test]
@@ -229,14 +249,16 @@ namespace Registry.Web.Test
             _appSettingsMock.Setup(o => o.Value).Returns(settings);
             _authManagerMock.Setup(o => o.IsUserAdmin()).Returns(Task.FromResult(true));
 
-            var sys = new PhysicalObjectSystem(new PhysicalObjectSystemSettings { BasePath = Path.Combine(test.TestFolder, StorageFolder) });
+            var sys = new PhysicalObjectSystem(new PhysicalObjectSystemSettings
+                { BasePath = Path.Combine(test.TestFolder, StorageFolder) });
             sys.SyncBucket($"{MagicStrings.PublicOrganizationSlug}-{_defaultDatasetGuid}");
 
             var webUtils = new WebUtils(_authManagerMock.Object, context, _appSettingsMock.Object,
                 _httpContextAccessorMock.Object, _ddbFactoryMock.Object);
 
             var objectManager = new ObjectsManager(_objectManagerLogger, context, sys, _appSettingsMock.Object,
-                new DdbManager(_appSettingsMock.Object, _ddbFactoryLogger), webUtils, _authManagerMock.Object, _cacheManagerMock.Object, _backgroundJobsProcessor);
+                new DdbManager(_appSettingsMock.Object, _ddbFactoryLogger), webUtils, _authManagerMock.Object,
+                _cacheManagerMock.Object, _bridgeManagerMock.Object, _backgroundJobsProcessor);
 
             var obj = await objectManager.Get(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug,
                 "DJI_0019.JPG");
@@ -245,7 +267,6 @@ namespace Registry.Web.Test
             obj.Type.Should().Be(expectedObjectType);
             obj.ContentType.Should().Be(expectedContentType);
             MD5.Create().ComputeHash(obj.Data).Should().BeEquivalentTo(expectedHash);
-
         }
 
         [Test]
@@ -263,14 +284,16 @@ namespace Registry.Web.Test
             _appSettingsMock.Setup(o => o.Value).Returns(settings);
             _authManagerMock.Setup(o => o.IsUserAdmin()).Returns(Task.FromResult(true));
 
-            var sys = new PhysicalObjectSystem(new PhysicalObjectSystemSettings { BasePath = Path.Combine(test.TestFolder, StorageFolder) });
+            var sys = new PhysicalObjectSystem(new PhysicalObjectSystemSettings
+                { BasePath = Path.Combine(test.TestFolder, StorageFolder) });
             sys.SyncBucket($"{MagicStrings.PublicOrganizationSlug}-{_defaultDatasetGuid}");
 
             var webUtils = new WebUtils(_authManagerMock.Object, context, _appSettingsMock.Object,
                 _httpContextAccessorMock.Object, _ddbFactoryMock.Object);
 
             var objectManager = new ObjectsManager(_objectManagerLogger, context, sys, _appSettingsMock.Object,
-                new DdbManager(_appSettingsMock.Object, _ddbFactoryLogger), webUtils, _authManagerMock.Object, _cacheManagerMock.Object, _backgroundJobsProcessor);
+                new DdbManager(_appSettingsMock.Object, _ddbFactoryLogger), webUtils, _authManagerMock.Object,
+                _cacheManagerMock.Object, _bridgeManagerMock.Object, _backgroundJobsProcessor);
 
             var res = await objectManager.Download(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug,
                 new[] { expectedName });
@@ -282,14 +305,12 @@ namespace Registry.Web.Test
             var data = memory.ToArray();
 
             MD5.Create().ComputeHash(data).Should().BeEquivalentTo(expectedHash);
-
         }
 
 
         [Test]
         public async Task Download_ExistingFile_PackageRes()
         {
-
             string[] fileNames = { "DJI_0019.JPG", "DJI_0020.JPG", "DJI_0021.JPG", "DJI_0022.JPG" };
             using var test = new TestFS(Test4ArchiveUrl, BaseTestFolder);
 
@@ -300,14 +321,16 @@ namespace Registry.Web.Test
             _appSettingsMock.Setup(o => o.Value).Returns(settings);
             _authManagerMock.Setup(o => o.IsUserAdmin()).Returns(Task.FromResult(true));
 
-            var sys = new PhysicalObjectSystem(new PhysicalObjectSystemSettings { BasePath = Path.Combine(test.TestFolder, StorageFolder) });
+            var sys = new PhysicalObjectSystem(new PhysicalObjectSystemSettings
+                { BasePath = Path.Combine(test.TestFolder, StorageFolder) });
             sys.SyncBucket($"{MagicStrings.PublicOrganizationSlug}-{_defaultDatasetGuid}");
 
             var webUtils = new WebUtils(_authManagerMock.Object, context, _appSettingsMock.Object,
                 _httpContextAccessorMock.Object, _ddbFactoryMock.Object);
 
             var objectManager = new ObjectsManager(_objectManagerLogger, context, sys, _appSettingsMock.Object,
-                new DdbManager(_appSettingsMock.Object, _ddbFactoryLogger), webUtils, _authManagerMock.Object, _cacheManagerMock.Object, _backgroundJobsProcessor);
+                new DdbManager(_appSettingsMock.Object, _ddbFactoryLogger), webUtils, _authManagerMock.Object,
+                _cacheManagerMock.Object, _bridgeManagerMock.Object, _backgroundJobsProcessor);
 
             var res = await objectManager.Download(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug,
                 fileNames);
@@ -337,12 +360,12 @@ namespace Registry.Web.Test
         [Test]
         public async Task Download_ExistingFileInSubfolders_PackageRes()
         {
-
             const string organizationSlug = "admin";
             const string datasetSlug = "7kd0gxti9qoemsrk";
             Guid adminDatasetGuid = Guid.Parse("6c1f5555-d001-4411-9308-42aa6ccd7fd6");
 
-            string[] fileNames = { "DJI_0007.JPG", "DJI_0008.JPG", "DJI_0009.JPG", "Sub/DJI_0049.JPG", "Sub/DJI_0048.JPG" };
+            string[] fileNames =
+                { "DJI_0007.JPG", "DJI_0008.JPG", "DJI_0009.JPG", "Sub/DJI_0049.JPG", "Sub/DJI_0048.JPG" };
             using var test = new TestFS(Test5ArchiveUrl, BaseTestFolder);
 
             await using var context = GetTest1Context();
@@ -352,14 +375,16 @@ namespace Registry.Web.Test
             _appSettingsMock.Setup(o => o.Value).Returns(settings);
             _authManagerMock.Setup(o => o.IsUserAdmin()).Returns(Task.FromResult(true));
 
-            var sys = new PhysicalObjectSystem(new PhysicalObjectSystemSettings { BasePath = Path.Combine(test.TestFolder, StorageFolder) });
+            var sys = new PhysicalObjectSystem(new PhysicalObjectSystemSettings
+                { BasePath = Path.Combine(test.TestFolder, StorageFolder) });
             sys.SyncBucket($"{organizationSlug}-{adminDatasetGuid}");
 
             var webUtils = new WebUtils(_authManagerMock.Object, context, _appSettingsMock.Object,
                 _httpContextAccessorMock.Object, _ddbFactoryMock.Object);
 
             var objectManager = new ObjectsManager(_objectManagerLogger, context, sys, _appSettingsMock.Object,
-                new DdbManager(_appSettingsMock.Object, _ddbFactoryLogger), webUtils, _authManagerMock.Object, _cacheManagerMock.Object, _backgroundJobsProcessor);
+                new DdbManager(_appSettingsMock.Object, _ddbFactoryLogger), webUtils, _authManagerMock.Object,
+                _cacheManagerMock.Object, _bridgeManagerMock.Object, _backgroundJobsProcessor);
 
             var res = await objectManager.Download(organizationSlug, datasetSlug,
                 fileNames);
@@ -389,7 +414,6 @@ namespace Registry.Web.Test
         [Test]
         public async Task AddNew_File_FileRes()
         {
-
             const string fileName = "DJI_0028.JPG";
 
             await using var context = GetTest1Context();
@@ -402,14 +426,16 @@ namespace Registry.Web.Test
             _authManagerMock.Setup(o => o.IsUserAdmin()).Returns(Task.FromResult(true));
             _authManagerMock.Setup(o => o.IsOwnerOrAdmin(It.IsAny<Dataset>())).Returns(Task.FromResult(true));
 
-            var sys = new PhysicalObjectSystem(new PhysicalObjectSystemSettings { BasePath = Path.Combine(test.TestFolder, StorageFolder) });
+            var sys = new PhysicalObjectSystem(new PhysicalObjectSystemSettings
+                { BasePath = Path.Combine(test.TestFolder, StorageFolder) });
             sys.SyncBucket($"{MagicStrings.PublicOrganizationSlug}-{_defaultDatasetGuid}");
 
             var webUtils = new WebUtils(_authManagerMock.Object, context, _appSettingsMock.Object,
                 _httpContextAccessorMock.Object, _ddbFactoryMock.Object);
 
             var objectManager = new ObjectsManager(_objectManagerLogger, context, sys, _appSettingsMock.Object,
-                new DdbManager(_appSettingsMock.Object, _ddbFactoryLogger), webUtils, _authManagerMock.Object, _cacheManagerMock.Object, _backgroundJobsProcessor);
+                new DdbManager(_appSettingsMock.Object, _ddbFactoryLogger), webUtils, _authManagerMock.Object,
+                _cacheManagerMock.Object, _bridgeManagerMock.Object, _backgroundJobsProcessor);
 
             var res = await objectManager.List(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug,
                 fileName);
@@ -423,7 +449,9 @@ namespace Registry.Web.Test
 
             res.Should().HaveCount(0);
 
-            var newFileUrl = "https://github.com/DroneDB/test_data/raw/master/test-datasets/drone_dataset_brighton_beach/" + fileName;
+            var newFileUrl =
+                "https://github.com/DroneDB/test_data/raw/master/test-datasets/drone_dataset_brighton_beach/" +
+                fileName;
 
             var ret = await objectManager.AddNew(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug,
                 fileName, CommonUtils.SmartDownloadData(newFileUrl));
@@ -432,13 +460,11 @@ namespace Registry.Web.Test
                 fileName);
 
             res.Should().HaveCount(1);
-
         }
 
         [Test]
         public async Task EndToEnd_HappyPath()
         {
-
             /*
              * 1) List files
              * 3) Add folder 'Test'
@@ -463,37 +489,46 @@ namespace Registry.Web.Test
             _authManagerMock.Setup(o => o.IsUserAdmin()).Returns(Task.FromResult(true));
             _authManagerMock.Setup(o => o.IsOwnerOrAdmin(It.IsAny<Dataset>())).Returns(Task.FromResult(true));
 
-            var sys = new PhysicalObjectSystem(new PhysicalObjectSystemSettings { BasePath = Path.Combine(test.TestFolder, StorageFolder) });
+            var sys = new PhysicalObjectSystem(new PhysicalObjectSystemSettings
+                { BasePath = Path.Combine(test.TestFolder, StorageFolder) });
             sys.SyncBucket($"{MagicStrings.PublicOrganizationSlug}-{_defaultDatasetGuid}");
 
             var webUtils = new WebUtils(_authManagerMock.Object, context, _appSettingsMock.Object,
                 _httpContextAccessorMock.Object, _ddbFactoryMock.Object);
 
             var objectManager = new ObjectsManager(_objectManagerLogger, context, sys, _appSettingsMock.Object,
-                new DdbManager(_appSettingsMock.Object, _ddbFactoryLogger), webUtils, _authManagerMock.Object, _cacheManagerMock.Object, _backgroundJobsProcessor);
+                new DdbManager(_appSettingsMock.Object, _ddbFactoryLogger), webUtils, _authManagerMock.Object,
+                _cacheManagerMock.Object, _bridgeManagerMock.Object, _backgroundJobsProcessor);
 
-            (await objectManager.List(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug)).Should().HaveCount(19);
+            (await objectManager.List(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug)).Should()
+                .HaveCount(19);
 
-            var newres = await objectManager.AddNew(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug, "Test");
+            var newres = await objectManager.AddNew(MagicStrings.PublicOrganizationSlug,
+                MagicStrings.DefaultDatasetSlug, "Test");
             newres.Size.Should().Be(0);
             //newres.ContentType.Should().BeNull();
             newres.Path.Should().Be("Test");
 
-            const string newFileUrl = "https://github.com/DroneDB/test_data/raw/master/test-datasets/drone_dataset_brighton_beach/" + fileName;
+            const string newFileUrl =
+                "https://github.com/DroneDB/test_data/raw/master/test-datasets/drone_dataset_brighton_beach/" +
+                fileName;
 
             await objectManager.AddNew(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug,
                 "Test/" + fileName, CommonUtils.SmartDownloadData(newFileUrl));
 
-            (await objectManager.List(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug, "Test/" + fileName))
+            (await objectManager.List(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug,
+                    "Test/" + fileName))
                 .Should().HaveCount(1);
 
             await objectManager.Move(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug, fileName2,
                 "Test/" + fileName2);
 
-            (await objectManager.List(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug, "Test/" + fileName2))
+            (await objectManager.List(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug,
+                    "Test/" + fileName2))
                 .Should().HaveCount(1);
 
-            await objectManager.Move(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug, "Test", "Test2");
+            await objectManager.Move(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug, "Test",
+                "Test2");
 
             (await objectManager.List(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug, "Test2"))
                 .Should().HaveCount(2);
@@ -506,12 +541,10 @@ namespace Registry.Web.Test
             //res.Should().HaveCount(0);
 
 
-
             //res = await objectManager.List(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug,
             //    fileName);
 
             //res.Should().HaveCount(1);
-
         }
 
 
@@ -559,7 +592,6 @@ namespace Registry.Web.Test
             // Insert seed data into the database using one instance of the context
             using (var context = new RegistryContext(options))
             {
-
                 var entity = new Organization
                 {
                     Slug = MagicStrings.PublicOrganizationSlug,
@@ -573,7 +605,6 @@ namespace Registry.Web.Test
                 {
                     Slug = MagicStrings.DefaultDatasetSlug,
                     Name = "Default",
-                    Description = "Default dataset",
                     //IsPublic = true,
                     CreationDate = DateTime.Now,
                     //LastUpdate = DateTime.Now,
@@ -596,7 +627,6 @@ namespace Registry.Web.Test
                 {
                     Slug = "7kd0gxti9qoemsrk",
                     Name = "7kd0gxti9qoemsrk",
-                    Description = null,
                     //IsPublic = true,
                     CreationDate = DateTime.Now,
                     //LastUpdate = DateTime.Now,

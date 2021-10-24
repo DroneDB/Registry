@@ -20,7 +20,7 @@ namespace Registry.Web.Filters
             if (!string.IsNullOrWhiteSpace(_settings.ExternalUrlOverride))
                 swaggerDoc.Servers = new List<OpenApiServer>
                 {
-                    new OpenApiServer
+                    new()
                     {
                         Url = _settings.ExternalUrlOverride
                     }

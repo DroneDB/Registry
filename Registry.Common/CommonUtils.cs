@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.ComponentModel.DataAnnotations;
 using System.Diagnostics;
 using System.Globalization;
 using System.IO;
@@ -10,6 +11,7 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading;
+using System.Threading.Tasks;
 using ICSharpCode.SharpZipLib.GZip;
 using ICSharpCode.SharpZipLib.Tar;
 using ICSharpCode.SharpZipLib.Zip;
@@ -111,14 +113,12 @@ namespace Registry.Common
 
         public static void SmartExtractFolder(string archive, string dest, bool overwrite = true)
         {
-
             var ext = Path.GetExtension(archive).ToLowerInvariant();
 
             if (ext == ".tar.gz" || ext == ".tgz")
                 ExtractTGZ(archive, dest);
             else
                 ZipFile.ExtractToDirectory(archive, dest, overwrite);
-
         }
 
         public static void ExtractTGZ(string archive, string destFolder)
@@ -192,7 +192,6 @@ namespace Registry.Common
             }
 
             File.Copy(cachedFilePath, path, true);
-
         }
 
         /// <summary>
@@ -201,7 +200,6 @@ namespace Registry.Common
         /// <param name="url"></param>
         public static byte[] SmartDownloadData(string url)
         {
-
             var tmp = Path.GetTempFileName();
 
             SmartDownloadFile(url, tmp);
@@ -211,7 +209,6 @@ namespace Registry.Common
             File.Delete(tmp);
 
             return data;
-
         }
 
         // Credit: https://stackoverflow.com/questions/12166404/how-do-i-get-folder-size-in-c
@@ -238,7 +235,6 @@ namespace Registry.Common
         {
             try
             {
-
                 File.Delete(path);
                 return true;
             }
@@ -252,7 +248,6 @@ namespace Registry.Common
         {
             try
             {
-
                 Directory.Delete(path, true);
                 return true;
             }
@@ -267,7 +262,7 @@ namespace Registry.Common
             try
             {
                 if (!Directory.Exists(folder)) return;
-                
+
                 // Recursive call
                 Directory.EnumerateDirectories(folder).ToList().ForEach(f => RemoveEmptyFolders(f, true));
 
@@ -297,7 +292,6 @@ namespace Registry.Common
             {
                 //
             }
-
         }
 
         /// <summary>
@@ -317,7 +311,7 @@ namespace Registry.Common
             return (file, new BufferedStream(File.Open(file, FileMode.CreateNew, FileAccess.ReadWrite), bufferSize));
         }
 
-        public static bool SafeTreeDelete(string baseTempFolder, int rounds = 3, int delay = 500)
+        public static string[] SafeTreeDelete(string baseTempFolder, int rounds = 3, int delay = 500)
         {
             var entries = new List<string>(
                 Directory.EnumerateFileSystemEntries(baseTempFolder, "*", SearchOption.AllDirectories));
@@ -328,7 +322,6 @@ namespace Registry.Common
                 {
                     try
                     {
-
                         if (Directory.Exists(entry))
                         {
                             Directory.Delete(entry, true);
@@ -344,7 +337,6 @@ namespace Registry.Common
                         }
 
                         entries.Remove(entry);
-
                     }
                     catch (Exception ex)
                     {
@@ -352,12 +344,13 @@ namespace Registry.Common
                     }
                 }
 
-                if (!entries.Any()) return true;
+                if (!entries.Any()) 
+                    return Array.Empty<string>();
 
                 Thread.Sleep(delay);
             }
 
-            return !entries.Any();
+            return entries.ToArray();
         }
 
         private static readonly HashSet<string> _compressibleMimeTypes = new()
@@ -459,7 +452,87 @@ namespace Registry.Common
             // Return formatted number with suffix
             return readable.ToString("0.### ") + suffix;
         }
+
+        public static bool Validate<T>(T obj, out ICollection<ValidationResult> results)
+        {
+            results = new List<ValidationResult>();
+
+            return Validator.TryValidateObject(obj, new ValidationContext(obj), results, true);
+        }
+
+        public static string ToErrorString(this IEnumerable<ValidationResult> results)
+        {
+            var builder = new StringBuilder();
+
+            foreach (var res in results)
+            {
+                builder.Append(res.ErrorMessage);
+
+                if (res.MemberNames.Any())
+                {
+                    builder.Append(" (");
+                    builder.Append(string.Join(", ", res.MemberNames));
+                    builder.Append(')');
+                }
+
+                builder.Append("; ");
+            }
+
+            return builder.ToString();
+        }
+        /*
+        public static async Task<FileStream> WaitForFile(string fullPath, FileMode mode, FileAccess access, FileShare share,
+            int hops = 15, int baseDelay = 10, int incrementDelay = 2)
+        {
+            int delay = baseDelay;
+            
+            for (var hop = 0; hop < hops; hops++)
+            {
+                FileStream fs = null;
+                try
+                {
+                    fs = new FileStream(fullPath, mode, access, share);
+                    return fs;
+                }
+                catch (IOException)
+                {
+                    if (fs != null)
+                    {
+                        await fs.DisposeAsync();
+                    }
+
+                    delay *= 2;
+                    await Task.Delay(delay);
+                }
+            }
+
+            return null;
+        }*/
+
+        public static async Task<FileStream> WaitForFile(string fullPath, FileMode mode, FileAccess access,
+            FileShare share,
+            int delay = 50, int retries = 1200)
+        {
+            for (var numTries = 0; numTries < retries; numTries++)
+            {
+                FileStream fs = null;
+                try
+                {
+                    fs = new FileStream(fullPath, mode, access, share);
+                    return fs;
+                }
+                catch (IOException)
+                {
+                    if (fs != null)
+                    {
+                        await fs.DisposeAsync();
+                    }
+
+                    await Task.Delay(delay); // Thread.Sleep (50);
+                }
+            }
+
+            return null;
+        }
     }
-
-
 }

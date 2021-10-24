@@ -78,7 +78,6 @@ namespace Registry.Adapters.ObjectSystem
 
             foreach (var file in Directory.EnumerateFiles(bucketPath, "*.*", SearchOption.AllDirectories))
             {
-
                 var objectName = file.Replace(bucketPath, string.Empty);
                 if (objectName.StartsWith('/') || objectName.StartsWith('\\')) objectName = objectName[1..];
 
@@ -88,34 +87,40 @@ namespace Registry.Adapters.ObjectSystem
 
         #region Objects
 
-        #pragma warning disable 1998
-        public async Task GetObjectAsync(string bucketName, string objectName, Action<Stream> callback, IServerEncryption sse = null,
+        public Task GetObjectAsync(string bucketName, string objectName, Action<Stream> callback, IServerEncryption sse = null,
             CancellationToken cancellationToken = default)
         {
             EnsureBucketExists(bucketName);
             var objectPath = EnsureObjectExists(bucketName, objectName);
-
-            callback(File.OpenRead(objectPath));
+            
+            return Task.Run(() =>
+            {
+                callback(File.OpenRead(objectPath));
+            }, cancellationToken);
+            
         }
 
-        #pragma warning disable 1998
-        public async Task GetObjectAsync(string bucketName, string objectName, long offset, long length, Action<Stream> callback,
+        public Task GetObjectAsync(string bucketName, string objectName, long offset, long length, Action<Stream> callback,
             IServerEncryption sse = null, CancellationToken cancellationToken = default)
         {
             EnsureBucketExists(bucketName);
             var objectPath = EnsureObjectExists(bucketName, objectName);
+            
+            return Task.Run(() =>
+            {
+                var stream = new SubsetStream(File.OpenRead(objectPath), length);
+                stream.Seek(offset, SeekOrigin.Begin);
 
-            var stream = new SubsetStream(File.OpenRead(objectPath), length);
-            stream.Seek(offset, SeekOrigin.Begin);
+                callback(stream);
+            }, cancellationToken);
 
-            callback(stream);
         }
 
 
         public Task RemoveObjectAsync(string bucketName, string objectName, CancellationToken cancellationToken = default)
         {
             EnsureBucketExists(bucketName);
-            var objectPath = GetObjectPath(bucketName, objectName);
+            var objectPath = EnsureObjectExists(bucketName, objectName);
 
             return Task.Run(() =>
             {
@@ -135,7 +140,7 @@ namespace Registry.Adapters.ObjectSystem
             {
                 foreach (var obj in objectsNames)
                 {
-                    var objectPath = GetObjectPath(bucketName, obj);
+                    var objectPath = EnsureObjectExists(bucketName, obj);
 
                     File.Delete(objectPath);
 
@@ -225,8 +230,7 @@ namespace Registry.Adapters.ObjectSystem
 
             var destFolder = Path.GetDirectoryName(destPath);
 
-            if (!Directory.Exists(destFolder))
-                Directory.CreateDirectory(destFolder);
+            Directory.CreateDirectory(destFolder);
 
             File.Copy(objectPath, destPath, true);
 
@@ -253,16 +257,13 @@ namespace Registry.Adapters.ObjectSystem
             var objectPath = GetObjectPath(bucketName, objectName);
             var fileDirectory = Path.GetDirectoryName(objectPath);
 
-            if (!Directory.Exists(fileDirectory))
-                Directory.CreateDirectory(fileDirectory);
-
-            await using var writer = File.OpenWrite(objectPath);
-
+            Directory.CreateDirectory(fileDirectory);
+                
             data.Reset();
-            await data.CopyToAsync(writer, cancellationToken);
 
-            writer.Close();
-
+            await using (var writer = File.OpenWrite(objectPath))
+                await data.CopyToAsync(writer, cancellationToken);
+            
             if (contentType != null || metaData != null)
             {
 
@@ -284,7 +285,6 @@ namespace Registry.Adapters.ObjectSystem
             {
                 UpdateObjectInfo(bucketName, objectName);
             }
-
 
         }
 
@@ -468,12 +468,9 @@ namespace Registry.Adapters.ObjectSystem
 
             var bucketPolicyPath = GetBucketPolicyPath(bucketName);
 
-            if (File.Exists(bucketPolicyPath))
-                return await File.ReadAllTextAsync(bucketPolicyPath, Encoding.UTF8, cancellationToken);
-
-
-            return null;
-
+            return File.Exists(bucketPolicyPath)
+                ? await File.ReadAllTextAsync(bucketPolicyPath, Encoding.UTF8, cancellationToken)
+                : null;
         }
 
         public async Task SetPolicyAsync(string bucketName, string policyJson, CancellationToken cancellationToken = default)
@@ -501,9 +498,10 @@ namespace Registry.Adapters.ObjectSystem
             return CommonUtils.GetStorageInfo(_baseFolder);
         }
 
-        public void Cleanup()
+        public Task Cleanup()
         {
             //
+            return Task.CompletedTask;
         }
 
         #endregion

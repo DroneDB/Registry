@@ -36,6 +36,7 @@ namespace Registry.Web.Controllers
 
 
         [HttpGet(RoutesHelper.DatasetSlug + "/batches")]
+        [ProducesResponseType(typeof(IEnumerable<BatchDto>), 200)]
         public async Task<IActionResult> Batches([FromRoute] string orgSlug, string dsSlug)
         {
             try
@@ -56,6 +57,7 @@ namespace Registry.Web.Controllers
         }
 
         [HttpGet(Name = nameof(DatasetsController) + "." + nameof(GetAll))]
+        [ProducesResponseType(typeof(IEnumerable<DatasetDto>), 200)]
         public async Task<IActionResult> GetAll([FromRoute] string orgSlug)
         {
             try
@@ -71,6 +73,7 @@ namespace Registry.Web.Controllers
         }
 
         [HttpGet(RoutesHelper.DatasetSlug, Name = nameof(DatasetsController) + "." + nameof(Get))]
+        [ProducesResponseType(typeof(IEnumerable<EntryDto>), 200)]
         public async Task<IActionResult> Get([FromRoute] string orgSlug, string dsSlug)
         {
             try
@@ -87,6 +90,7 @@ namespace Registry.Web.Controllers
         }
 
         [HttpGet(RoutesHelper.DatasetSlug + "/ex", Name = nameof(DatasetsController) + "." + nameof(GetEx))]
+        [ProducesResponseType(typeof(DatasetDto), 200)]
         public async Task<IActionResult> GetEx([FromRoute] string orgSlug, string dsSlug)
         {
             try

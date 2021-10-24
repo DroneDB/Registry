@@ -66,7 +66,8 @@ namespace Registry.Web.Controllers
 
                 var res = await _objectsManager.GenerateThumbnail(orgSlug, dsSlug, path, size);
 
-                return File(res.ContentStream, res.ContentType);
+                return File(res.ContentStream, res.ContentType, res.Name);
+
             }
             catch (Exception ex)
             {
@@ -148,17 +149,17 @@ namespace Registry.Web.Controllers
 
                 _logger.LogDebug($"Objects controller DownloadExact('{orgSlug}', '{dsSlug}', '{path}', '{isInlineRaw}')");
 
-                var res = await _objectsManager.Download(orgSlug, dsSlug, new[] { path });
+                var res = await _objectsManager.DownloadStream(orgSlug, dsSlug, new[] { path });
 
-                if (!isInline)
-                {
-                    var stream = File(res.ContentStream, res.ContentType, res.Name);
-                    stream.EnableRangeProcessing = true;
-                    return stream;
-                }
+                Response.StatusCode = 200;
+                Response.ContentType = res.ContentType;
 
-                Response.Headers.Add("Content-Disposition", "inline");
-                return File(res.ContentStream, res.ContentType, true);
+                Response.Headers.Add("Content-Disposition",
+                    isInline ? "inline" : $"attachment; filename=\"{res.Name}\"");
+
+                await res.CopyToAsync(Response.Body);
+
+                return new EmptyResult();
 
             }
             catch (Exception ex)
@@ -225,6 +226,7 @@ namespace Registry.Web.Controllers
         }
 
         [HttpPost("getpackage", Name = nameof(ObjectsController) + "." + nameof(GetPackageUrl))]
+        [ProducesResponseType(typeof(DownloadPackageDto), 200)]
         public async Task<IActionResult> GetPackageUrl([FromRoute] string orgSlug, [FromRoute] string dsSlug,
             [FromForm(Name = "path")] string[] paths, [FromForm] DateTime? expiration, [FromForm] bool isPublic)
         {
@@ -280,6 +282,7 @@ namespace Registry.Web.Controllers
         }
 
         [HttpGet("list", Name = nameof(ObjectsController) + "." + nameof(GetInfo))]
+        [ProducesResponseType(typeof(IEnumerable<ObjectDto>), 200)]
         public async Task<IActionResult> GetInfo([FromRoute] string orgSlug, [FromRoute] string dsSlug, [FromQuery] string path)
         {
             try
@@ -298,6 +301,7 @@ namespace Registry.Web.Controllers
         }
 
         [HttpPost("list", Name = nameof(ObjectsController) + "." + nameof(GetInfoEx))]
+        [ProducesResponseType(typeof(IEnumerable<ObjectDto>), 200)]
         public async Task<IActionResult> GetInfoEx([FromRoute] string orgSlug, [FromRoute] string dsSlug, [FromForm] string path)
         {
             try
@@ -317,6 +321,7 @@ namespace Registry.Web.Controllers
 
 
         [HttpPost("search", Name = nameof(ObjectsController) + "." + nameof(Search))]
+        [ProducesResponseType(typeof(IEnumerable<ObjectDto>), 200)]
         public async Task<IActionResult> Search([FromRoute] string orgSlug, [FromRoute] string dsSlug, [FromForm] string query, [FromForm] string path, [FromForm] bool recursive = true)
         {
             try

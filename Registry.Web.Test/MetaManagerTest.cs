@@ -231,7 +231,6 @@ namespace Registry.Web.Test
                 {
                     Slug = MagicStrings.DefaultDatasetSlug,
                     Name = "Default",
-                    Description = "Default dataset",
                     //IsPublic = true,
                     CreationDate = DateTime.Now,
                     //LastUpdate = DateTime.Now,
@@ -254,7 +253,6 @@ namespace Registry.Web.Test
                 {
                     Slug = "7kd0gxti9qoemsrk",
                     Name = "7kd0gxti9qoemsrk",
-                    Description = null,
                     //IsPublic = true,
                     CreationDate = DateTime.Now,
                     //LastUpdate = DateTime.Now,

@@ -2,34 +2,34 @@
 using System.Runtime.Serialization;
 using Registry.Common;
 
-namespace Registry.Web.Services.Adapters
+namespace Registry.Web.Exceptions
 {
     [Serializable]
-    internal class MaxUserStorageException : InvalidOperationException
+    internal class QuotaExceededException : InvalidOperationException
     {
         private long userStorage;
         private long? maxStorage;
 
-        public MaxUserStorageException()
+        public QuotaExceededException()
         {
         }
 
-        public MaxUserStorageException(string message) : base(message)
+        public QuotaExceededException(string message) : base(message)
         {
         }
 
-        public MaxUserStorageException(long userStorage, long? maxStorage) : base(
+        public QuotaExceededException(long userStorage, long? maxStorage) : base(
             $"Storage quota exceeded: {CommonUtils.GetBytesReadable(userStorage)} out of {(maxStorage == null ? "UNLIMITED" : CommonUtils.GetBytesReadable(maxStorage.Value))}")
         {
             this.userStorage = userStorage;
             this.maxStorage = maxStorage;
         }
 
-        public MaxUserStorageException(string message, Exception innerException) : base(message, innerException)
+        public QuotaExceededException(string message, Exception innerException) : base(message, innerException)
         {
         }
 
-        protected MaxUserStorageException(SerializationInfo info, StreamingContext context) : base(info, context)
+        protected QuotaExceededException(SerializationInfo info, StreamingContext context) : base(info, context)
         {
         }
     }
