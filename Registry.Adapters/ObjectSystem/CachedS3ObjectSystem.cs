@@ -25,8 +25,7 @@ namespace Registry.Adapters.ObjectSystem
 {
     public class CachedS3ObjectSystem : IObjectSystem
     {
-        [JsonProperty("settings")] 
-        private readonly CachedS3ObjectSystemSettings _settings;
+        [JsonProperty("settings")] private readonly CachedS3ObjectSystemSettings _settings;
         private readonly ILogger<CachedS3ObjectSystem> _logger;
         private IObjectSystem _remoteStorage;
 
@@ -232,26 +231,24 @@ namespace Registry.Adapters.ObjectSystem
 
                 LogInformation("Getting file from remote");
 
-                
+
                 await Policy.Handle<Exception>().RetryAsync(RemoteCallRetries,
                     (exception, i) => LogInformation($"Retrying S3 download ({i}): {exception.Message}")
                 ).ExecuteAsync(async () =>
                     await _remoteStorage.GetObjectAsync(bucketName, objectName, s =>
                     {
-
                         var echo = new EchoStream(s, fileStream, EchoStream.StreamOwnership.OwnBoth);
 
                         callback(echo);
-
                     }, sse, cancellationToken));
-                
-                
+
+
                 var obj = new ObjectDescriptor
                 {
                     LastError = null,
                     SyncTime = DateTime.Now
                 };
-                
+
                 LogInformation("Writing descriptor");
                 await descriptorWriter.WriteAsync(JsonConvert.SerializeObject(obj));
             }
@@ -610,7 +607,6 @@ namespace Registry.Adapters.ObjectSystem
                 // Delete cached file
                 if (!CommonUtils.SafeDelete(cachedFilePath))
                     LogInformation($"Cannot remove cached file '{cachedFilePath}'");
-
             }
 
             if (!CommonUtils.SafeDelete(descriptorFilePath))
@@ -1059,7 +1055,6 @@ namespace Registry.Adapters.ObjectSystem
                             }
                         }
                     }
-
                 }
 
                 if (!tbds.Any())
@@ -1071,18 +1066,16 @@ namespace Registry.Adapters.ObjectSystem
                 try
                 {
                     // Remove the cached files
-                    Task.WaitAll(tbds.Select(file => 
-                            RemoveObjectFromCache(file.BucketName, file.ObjectName)).ToArray());
+                    Task.WaitAll(tbds.Select(file =>
+                        RemoveObjectFromCache(file.BucketName, file.ObjectName)).ToArray());
                 }
                 catch (AggregateException aex)
                 {
                     LogError(aex, "Aggregate exception when deleting objects from cache");
-                    
+
                     foreach (var ex in aex.InnerExceptions)
                         LogError(ex, "Exception in RemoveObjectFromCache");
-                    
                 }
-
             }
             finally
             {
@@ -1150,7 +1143,6 @@ namespace Registry.Adapters.ObjectSystem
         public async Task<bool> ObjectExistsAsync(string bucketName, string objectName, IServerEncryption sse = null,
             CancellationToken cancellationToken = default)
         {
-
             var cachedObjectFilePath = GetCachedFilePath(bucketName, objectName);
             var descriptorFilePath = GetDescriptorFilePath(bucketName, objectName);
             var tbdFilePath = GetTbdFilePath(bucketName, objectName);
@@ -1173,15 +1165,103 @@ namespace Registry.Adapters.ObjectSystem
             return _remoteStorage.RemoveIncompleteUploadAsync(bucketName, objectName, cancellationToken);
         }
 
-        public Task CopyObjectAsync(string bucketName, string objectName, string destBucketName,
+        public async Task CopyObjectAsync(string bucketName, string objectName, string destBucketName,
             string destObjectName = null,
             CopyConditions copyConditions = null, Dictionary<string, string> metadata = null,
             IServerEncryption sseSrc = null,
             IServerEncryption sseDest = null, CancellationToken cancellationToken = default)
         {
-            return _remoteStorage.CopyObjectAsync(bucketName, objectName, destBucketName, destObjectName,
-                copyConditions, metadata,
-                sseSrc, sseDest, cancellationToken);
+            LogInformation($"In CopyObjectAsync('{bucketName}', '{objectName})");
+
+            HandleBucketToBeDeleted(bucketName);
+
+            var descriptorFilePath = GetDescriptorFilePath(bucketName, objectName);
+            var cachedFilePath = GetCachedFilePath(bucketName, objectName);
+            var tbdFilePath = GetTbdFilePath(bucketName, objectName);
+            var statFilePath = GetStatFilePath(bucketName, objectName);
+            var pendingFilePath = GetPendingFilePath(bucketName, objectName);
+
+            EnsurePathExists(descriptorFilePath);
+            EnsurePathExists(cachedFilePath);
+            EnsurePathExists(tbdFilePath);
+            EnsurePathExists(statFilePath);
+            EnsurePathExists(pendingFilePath);
+
+            if (!File.Exists(descriptorFilePath))
+            {
+                await Policy.Handle<Exception>().RetryAsync(RemoteCallRetries,
+                    (exception, i) => LogInformation($"Retrying S3 object copy ({i}): {exception.Message}")
+                ).ExecuteAsync(async () =>
+                    await _remoteStorage.CopyObjectAsync(bucketName, objectName, destBucketName, destObjectName,
+                        copyConditions, metadata,
+                        sseSrc, sseDest, cancellationToken));
+
+                return;
+            }
+            
+            var destDescriptorFilePath = GetDescriptorFilePath(bucketName, destObjectName);
+            var destCachedFilePath = GetCachedFilePath(bucketName, destObjectName);
+            var destTbdFilePath = GetTbdFilePath(bucketName, destObjectName);
+            var destStatFilePath = GetStatFilePath(bucketName, destObjectName);
+            var destPendingFilePath = GetPendingFilePath(bucketName, destObjectName);
+
+            EnsurePathExists(destDescriptorFilePath);
+            EnsurePathExists(destCachedFilePath);
+            EnsurePathExists(destTbdFilePath);
+            EnsurePathExists(destStatFilePath);
+            EnsurePathExists(destPendingFilePath);
+
+            try
+            {
+                await using (var descriptorStream =
+                    await CommonUtils.WaitForFile(descriptorFilePath, FileMode.Open, FileAccess.Write,
+                        FileShare.None, FileRetriesDelay, FileRetries))
+                {
+                   
+                    if (descriptorStream == null)
+                        throw new InvalidOperationException("Cannot lock local file, timeout reached");
+                    
+                    await using (var destDescriptorStream =
+                        await CommonUtils.WaitForFile(destDescriptorFilePath, FileMode.OpenOrCreate, FileAccess.Write,
+                            FileShare.None, FileRetriesDelay, FileRetries))
+                    {
+                        
+                        if (destDescriptorStream == null)
+                            throw new InvalidOperationException("Cannot lock local file, timeout reached");
+
+                        if (!CommonUtils.SafeCopy(cachedFilePath, destCachedFilePath))
+                            LogInformation($"Cannot copy file '{cachedFilePath}' to '{destCachedFilePath}'");
+
+                        if (!CommonUtils.SafeCopy(tbdFilePath, destTbdFilePath))
+                            LogInformation($"Cannot copy file '{tbdFilePath}' to '{destTbdFilePath}'");
+
+                        if (!CommonUtils.SafeCopy(statFilePath, destStatFilePath))
+                            LogInformation($"Cannot copy file '{statFilePath}' to '{destStatFilePath}'");
+
+                        if (!File.Exists(pendingFilePath))
+                        {
+                            await Policy.Handle<Exception>().RetryAsync(RemoteCallRetries,
+                                (exception, i) => LogInformation($"Retrying S3 object copy ({i}): {exception.Message}")
+                            ).ExecuteAsync(async () =>
+                                await _remoteStorage.CopyObjectAsync(bucketName, objectName, destBucketName, destObjectName,
+                                    copyConditions, metadata,
+                                    sseSrc, sseDest, cancellationToken));
+                        }
+                        
+                        if (!CommonUtils.SafeCopy(pendingFilePath, destPendingFilePath))
+                            LogInformation($"Cannot copy file '{pendingFilePath}' to '{destPendingFilePath}'");
+
+                    }
+                }
+                
+                if (!CommonUtils.SafeCopy(descriptorFilePath, destDescriptorFilePath))
+                    LogInformation($"Cannot copy file '{descriptorFilePath}' to '{destDescriptorFilePath}'");
+
+            }
+            catch (Exception ex)
+            {
+                LogError(ex, "Cannot call CopyObjectAsync");
+            }
         }
 
         public Task MakeBucketAsync(string bucketName, string location = null,
