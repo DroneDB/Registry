@@ -243,6 +243,19 @@ namespace Registry.Common
                 return false;
             }
         }
+        
+        public static bool SafeCopy(string source, string dest, bool overwrite = true)
+        {
+            try
+            {
+                File.Copy(source, dest, overwrite);
+                return true;
+            }
+            catch
+            {
+                return false;
+            }
+        }
 
         public static bool SafeDeleteFolder(string path)
         {
