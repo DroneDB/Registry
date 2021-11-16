@@ -22,7 +22,6 @@ using Registry.Adapters.DroneDB;
 using Registry.Common;
 using Registry.Ports.DroneDB;
 using Registry.Ports.DroneDB.Models;
-using Registry.Ports.ObjectSystem;
 using Registry.Web.Data;
 using Registry.Web.Data.Models;
 using Registry.Web.Exceptions;
@@ -37,7 +36,6 @@ namespace Registry.Web.Services.Managers
     public class ObjectsManager : IObjectsManager
     {
         private readonly ILogger<ObjectsManager> _logger;
-        private readonly IObjectSystem _objectSystem;
         private readonly IDdbManager _ddbManager;
         private readonly IUtils _utils;
         private readonly IAuthManager _authManager;
@@ -59,7 +57,6 @@ namespace Registry.Web.Services.Managers
 
         public ObjectsManager(ILogger<ObjectsManager> logger,
             RegistryContext context,
-            IObjectSystem objectSystem,
             IOptions<AppSettings> settings,
             IDdbManager ddbManager,
             IUtils utils,
@@ -70,7 +67,6 @@ namespace Registry.Web.Services.Managers
         {
             _logger = logger;
             _context = context;
-            _objectSystem = objectSystem;
             _ddbManager = ddbManager;
             _utils = utils;
             _authManager = authManager;
@@ -133,37 +129,6 @@ namespace Registry.Web.Services.Managers
                 throw new ArgumentException("Path should not be null");
 
             return await InternalGet(orgSlug, ds.InternalRef, path);
-        }
-
-        private async Task SafeGetFile(string orgSlug, Guid internalRef, string path, string destFile, TimeSpan? maxWaitTime = null)
-        {
-            var bucketName = _utils.GetBucketName(orgSlug, internalRef);
-
-            maxWaitTime ??= new TimeSpan(0, 0, 1, 0);
-
-            if (!File.Exists(destFile))
-            {
-                // ReSharper disable once MethodHasAsyncOverload
-                File.WriteAllText(destFile + ".lock", Environment.TickCount.ToString());
-
-                await using var file = File.OpenWrite(destFile);
-                await _objectSystem.GetObjectAsync(bucketName, path, stream => stream.CopyTo(file));
-
-                File.Delete(destFile + ".lock");
-            }
-            else
-            {
-                var time = DateTime.Now;
-                while (File.Exists(destFile + ".lock"))
-                {
-                    Thread.Sleep(50);
-
-                    if (DateTime.Now > time + maxWaitTime.Value)
-                        throw new InvalidOperationException("Wait time expired, cannot get file");
-                }
-
-            }
-
         }
 
         private async Task<ObjectRes> InternalGet(string orgSlug, Guid internalRef, string path)

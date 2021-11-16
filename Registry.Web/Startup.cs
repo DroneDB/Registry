@@ -36,7 +36,6 @@ using Newtonsoft.Json.Serialization;
 using Registry.Adapters.ObjectSystem;
 using Registry.Adapters.ObjectSystem.Model;
 using Registry.Common;
-using Registry.Ports.ObjectSystem;
 using Registry.Web.Data;
 using Registry.Web.Data.Models;
 using Registry.Web.Filters;
@@ -191,7 +190,6 @@ namespace Registry.Web
                 .AddDbContextCheck<RegistryContext>("Registry database health check", null, new[] { "database" })
                 .AddDbContextCheck<ApplicationDbContext>("Registry identity database health check", null,
                     new[] { "database" })
-                .AddCheck<ObjectSystemHealthCheck>("Object system health check", null, new[] { "storage" })
                 .AddDiskSpaceHealthCheck(appSettings.DdbStoragePath, "Ddb storage path space health check", null,
                     new[] { "storage" })
                 .AddHangfire(options => { options.MinimumAvailableServers = 1; }, "Hangfire health check", null,
@@ -242,7 +240,7 @@ namespace Registry.Web
                 PayloadWriteMode = FileCache.PayloadMode.Filename
             });
 
-            RegisterStorageProvider(services, appSettings);
+            //RegisterStorageProvider(services, appSettings);
 
             services.AddResponseCompression();
 
@@ -360,32 +358,32 @@ namespace Registry.Web
             });
 
             SetupDatabase(app);
-            SetupHangfire(app);
+            //SetupHangfire(app);
         }
 
-        private void SetupHangfire(IApplicationBuilder app)
-        {
-            var appSettingsSection = Configuration.GetSection("AppSettings");
-            var appSettings = appSettingsSection.Get<AppSettings>();
-            
-            if (appSettings.StorageCleanupMinutes is > 0)
-            {
-                using var serviceScope = app.ApplicationServices
-                    .GetRequiredService<IServiceScopeFactory>()
-                    .CreateScope();
-            
-                var objectSystem = serviceScope.ServiceProvider.GetService<IObjectSystem>();
-                
-                RecurringJob.AddOrUpdate(MagicStrings.StorageCleanupJobId, () =>
-                    HangfireUtils.SyncAndCleanupWrapper(objectSystem, null),
-                    $"*/{appSettings.StorageCleanupMinutes} * * * *");
-
-            }
-            else
-            {
-                RecurringJob.RemoveIfExists(MagicStrings.StorageCleanupJobId);
-            }
-        }
+        // private void SetupHangfire(IApplicationBuilder app)
+        // {
+        //     var appSettingsSection = Configuration.GetSection("AppSettings");
+        //     var appSettings = appSettingsSection.Get<AppSettings>();
+        //     
+        //     if (appSettings.StorageCleanupMinutes is > 0)
+        //     {
+        //         using var serviceScope = app.ApplicationServices
+        //             .GetRequiredService<IServiceScopeFactory>()
+        //             .CreateScope();
+        //     
+        //         var objectSystem = serviceScope.ServiceProvider.GetService<IObjectSystem>();
+        //         
+        //         RecurringJob.AddOrUpdate(MagicStrings.StorageCleanupJobId, () =>
+        //             HangfireUtils.SyncAndCleanupWrapper(objectSystem, null),
+        //             $"*/{appSettings.StorageCleanupMinutes} * * * *");
+        //
+        //     }
+        //     else
+        //     {
+        //         RecurringJob.RemoveIfExists(MagicStrings.StorageCleanupJobId);
+        //     }
+        // }
 
         // NOTE: Maybe put all this as stated in https://stackoverflow.com/a/55707949
         private void SetupDatabase(IApplicationBuilder app)
@@ -525,96 +523,96 @@ namespace Registry.Web
             }
         }
 
-        private static void RegisterStorageProvider(IServiceCollection services, AppSettings appSettings)
-        {
-            ICollection<ValidationResult> results;
-
-            switch (appSettings.StorageProvider.Type)
-            {
-                case StorageType.Physical:
-
-                    var ps = appSettings.StorageProvider.Settings.ToObject<PhysicalProviderSettings>();
-                    if (ps == null)
-                        throw new ArgumentException("Invalid physical storage provider settings");
-
-                    if (!CommonUtils.Validate(ps, out results))
-                        throw new ArgumentException("Invalid physical storage provider settings: " +
-                                                    results.ToErrorString());
-
-                    Directory.CreateDirectory(ps.Path);
-
-                    services.AddSingleton(new PhysicalObjectSystemSettings
-                    {
-                        BasePath = ps.Path
-                    });
-
-                    services.AddScoped<IObjectSystem, PhysicalObjectSystem>();
-
-                    break;
-
-                case StorageType.S3:
-
-                    var s3Settings = appSettings.StorageProvider.Settings.ToObject<S3StorageProviderSettings>();
-
-                    if (s3Settings == null)
-                        throw new ArgumentException("Invalid S3 storage provider settings");
-
-                    if (!CommonUtils.Validate(s3Settings, out results))
-                        throw new ArgumentException("Invalid S3 storage provider settings: " + results.ToErrorString());
-
-                    services.AddSingleton(new S3ObjectSystemSettings
-                    {
-                        Endpoint = s3Settings.Endpoint,
-                        AccessKey = s3Settings.AccessKey,
-                        SecretKey = s3Settings.SecretKey,
-                        Region = s3Settings.Region,
-                        SessionToken = s3Settings.SessionToken,
-                        UseSsl = s3Settings.UseSsl ?? false,
-                        AppName = s3Settings.AppName,
-                        AppVersion = s3Settings.AppVersion,
-                        BridgeUrl = s3Settings.BridgeUrl
-                    });
-
-                    services.AddScoped<IObjectSystem, S3ObjectSystem>();
-
-                    break;
-
-                case StorageType.CachedS3:
-
-                    var cachedS3Settings = appSettings.StorageProvider.Settings
-                        .ToObject<CachedS3StorageStorageProviderSettings>();
-
-                    if (cachedS3Settings == null)
-                        throw new ArgumentException("Invalid S3 storage provider settings");
-
-                    if (!CommonUtils.Validate(cachedS3Settings, out results))
-                        throw new ArgumentException("Invalid S3 storage provider settings: " + results.ToErrorString());
-
-                    services.AddSingleton(new CachedS3ObjectSystemSettings
-                    {
-                        Endpoint = cachedS3Settings.Endpoint,
-                        AccessKey = cachedS3Settings.AccessKey,
-                        SecretKey = cachedS3Settings.SecretKey,
-                        Region = cachedS3Settings.Region,
-                        SessionToken = cachedS3Settings.SessionToken,
-                        UseSsl = cachedS3Settings.UseSsl ?? false,
-                        AppName = cachedS3Settings.AppName,
-                        AppVersion = cachedS3Settings.AppVersion,
-                        BridgeUrl = cachedS3Settings.BridgeUrl,
-                        CacheExpiration = cachedS3Settings.CacheExpiration,
-                        CachePath = cachedS3Settings.CachePath,
-                        MaxSize = cachedS3Settings.MaxSize
-                    });
-
-                    services.AddSingleton<IObjectSystem, CachedS3ObjectSystem>();
-
-                    break;
-
-                default:
-                    throw new InvalidOperationException(
-                        $"Unsupported storage provider: '{(int)appSettings.StorageProvider.Type}'");
-            }
-        }
+        // private static void RegisterStorageProvider(IServiceCollection services, AppSettings appSettings)
+        // {
+        //     ICollection<ValidationResult> results;
+        //
+        //     switch (appSettings.StorageProvider.Type)
+        //     {
+        //         case StorageType.Physical:
+        //
+        //             var ps = appSettings.StorageProvider.Settings.ToObject<PhysicalProviderSettings>();
+        //             if (ps == null)
+        //                 throw new ArgumentException("Invalid physical storage provider settings");
+        //
+        //             if (!CommonUtils.Validate(ps, out results))
+        //                 throw new ArgumentException("Invalid physical storage provider settings: " +
+        //                                             results.ToErrorString());
+        //
+        //             Directory.CreateDirectory(ps.Path);
+        //
+        //             services.AddSingleton(new PhysicalObjectSystemSettings
+        //             {
+        //                 BasePath = ps.Path
+        //             });
+        //
+        //             services.AddScoped<IObjectSystem, PhysicalObjectSystem>();
+        //
+        //             break;
+        //
+        //         case StorageType.S3:
+        //
+        //             var s3Settings = appSettings.StorageProvider.Settings.ToObject<S3StorageProviderSettings>();
+        //
+        //             if (s3Settings == null)
+        //                 throw new ArgumentException("Invalid S3 storage provider settings");
+        //
+        //             if (!CommonUtils.Validate(s3Settings, out results))
+        //                 throw new ArgumentException("Invalid S3 storage provider settings: " + results.ToErrorString());
+        //
+        //             services.AddSingleton(new S3ObjectSystemSettings
+        //             {
+        //                 Endpoint = s3Settings.Endpoint,
+        //                 AccessKey = s3Settings.AccessKey,
+        //                 SecretKey = s3Settings.SecretKey,
+        //                 Region = s3Settings.Region,
+        //                 SessionToken = s3Settings.SessionToken,
+        //                 UseSsl = s3Settings.UseSsl ?? false,
+        //                 AppName = s3Settings.AppName,
+        //                 AppVersion = s3Settings.AppVersion,
+        //                 BridgeUrl = s3Settings.BridgeUrl
+        //             });
+        //
+        //             services.AddScoped<IObjectSystem, S3ObjectSystem>();
+        //
+        //             break;
+        //
+        //         case StorageType.CachedS3:
+        //
+        //             var cachedS3Settings = appSettings.StorageProvider.Settings
+        //                 .ToObject<CachedS3StorageStorageProviderSettings>();
+        //
+        //             if (cachedS3Settings == null)
+        //                 throw new ArgumentException("Invalid S3 storage provider settings");
+        //
+        //             if (!CommonUtils.Validate(cachedS3Settings, out results))
+        //                 throw new ArgumentException("Invalid S3 storage provider settings: " + results.ToErrorString());
+        //
+        //             services.AddSingleton(new CachedS3ObjectSystemSettings
+        //             {
+        //                 Endpoint = cachedS3Settings.Endpoint,
+        //                 AccessKey = cachedS3Settings.AccessKey,
+        //                 SecretKey = cachedS3Settings.SecretKey,
+        //                 Region = cachedS3Settings.Region,
+        //                 SessionToken = cachedS3Settings.SessionToken,
+        //                 UseSsl = cachedS3Settings.UseSsl ?? false,
+        //                 AppName = cachedS3Settings.AppName,
+        //                 AppVersion = cachedS3Settings.AppVersion,
+        //                 BridgeUrl = cachedS3Settings.BridgeUrl,
+        //                 CacheExpiration = cachedS3Settings.CacheExpiration,
+        //                 CachePath = cachedS3Settings.CachePath,
+        //                 MaxSize = cachedS3Settings.MaxSize
+        //             });
+        //
+        //             services.AddSingleton<IObjectSystem, CachedS3ObjectSystem>();
+        //
+        //             break;
+        //
+        //         default:
+        //             throw new InvalidOperationException(
+        //                 $"Unsupported storage provider: '{(int)appSettings.StorageProvider.Type}'");
+        //     }
+        // }
 
         private void ConfigureDbProvider<T>(IServiceCollection services, DbProvider provider,
             string connectionStringName) where T : DbContext

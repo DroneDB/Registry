@@ -12,7 +12,6 @@ using Microsoft.Extensions.Options;
 using MimeMapping;
 using Registry.Common;
 using Registry.Ports.DroneDB;
-using Registry.Ports.ObjectSystem;
 using Registry.Web.Attributes;
 using Registry.Web.Models;
 using Registry.Web.Models.Configuration;

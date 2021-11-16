@@ -110,6 +110,11 @@ namespace Registry.Adapters.DroneDB
 #endif
         }
 
+        public string GetLocalPath(string path)
+        {
+            return Path.Combine(DatasetFolderPath, path);
+        }
+
         public DdbEntry GetEntry(string path)
         {
             var objs = Search(path, true).ToArray();

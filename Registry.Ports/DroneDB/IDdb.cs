@@ -64,6 +64,8 @@ namespace Registry.Ports.DroneDB
         /// <returns></returns>
         DdbEntry GetInfo(string path);
 
+        string GetLocalPath(string path);
+
         /// <summary>
         /// Gets the specified path inside the DDB database
         /// </summary>

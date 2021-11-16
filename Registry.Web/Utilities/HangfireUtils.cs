@@ -12,13 +12,12 @@ using Registry.Adapters.ObjectSystem;
 using Registry.Common;
 using Registry.Ports.DroneDB;
 using Registry.Ports.DroneDB.Models;
-using Registry.Ports.ObjectSystem;
 
 namespace Registry.Web.Utilities
 {
     public static class HangfireUtils
     {
-
+/*
         [AutomaticRetry(Attempts = 0, LogEvents = false, OnAttemptsExceeded = AttemptsExceededAction.Delete)]
         public static void SyncAndCleanupWrapper(IObjectSystem objectSystem, PerformContext context)
         {
@@ -50,7 +49,7 @@ namespace Registry.Web.Utilities
                 writeLine("Cannot sync: " + ex.Message);
             }
 
-        }
+        }*/
         
         public static void BuildWrapper(IDdb ddb, string path, string tempFile, string dest, bool force, PerformContext context)
         {
@@ -101,7 +100,7 @@ namespace Registry.Web.Utilities
             }
         }
 
-
+/*
         public static void SyncBuildFolder(IObjectSystem objectSystem, IDdb ddb, DdbEntry obj, string bucketName, PerformContext context)
         {
             Action<string> writeLine = context != null ? context.WriteLine : Console.WriteLine;
@@ -158,7 +157,7 @@ namespace Registry.Web.Utilities
 
             }
         }
-
+*/
 
     }
 }

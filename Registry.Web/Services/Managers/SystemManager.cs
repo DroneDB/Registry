@@ -23,19 +23,17 @@ namespace Registry.Web.Services.Managers
         private readonly RegistryContext _context;
         private readonly IDdbManager _ddbManager;
         private readonly ILogger<SystemManager> _logger;
-        private readonly IObjectSystem _objectSystem;
         private readonly IObjectsManager _objectManager;
         private readonly AppSettings _settings;
 
         public SystemManager(IAuthManager authManager,
-            RegistryContext context, IDdbManager ddbManager, ILogger<SystemManager> logger, IObjectSystem objectSystem,
+            RegistryContext context, IDdbManager ddbManager, ILogger<SystemManager> logger,
             IObjectsManager objectManager, IOptions<AppSettings> settings)
         {
             _authManager = authManager;
             _context = context;
             _ddbManager = ddbManager;
             _logger = logger;
-            _objectSystem = objectSystem;
             _objectManager = objectManager;
             _settings = settings.Value;
         }
