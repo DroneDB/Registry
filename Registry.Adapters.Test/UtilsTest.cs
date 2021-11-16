@@ -17,6 +17,7 @@ namespace Registry.Adapters.Test
 
         private static readonly string TestString = new string(Enumerable.Range(0, 1024 * 1024 * 5 + 731).Select(item => 'A').ToArray());
 
+        /*
         [Test]
         public void CalculateMultipartEtag_ShortFile_Ok()
         {
@@ -35,7 +36,7 @@ namespace Registry.Adapters.Test
 
             res.Should().Be(etag);
         }
-
+*/
         [Test]
         [Explicit]
         public void RandomString_Ok()
