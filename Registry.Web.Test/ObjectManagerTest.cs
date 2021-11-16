@@ -22,12 +22,9 @@ using Microsoft.Extensions.Options;
 using Moq;
 using Newtonsoft.Json;
 using NUnit.Framework;
-using Registry.Adapters.ObjectSystem;
-using Registry.Adapters.ObjectSystem.Model;
 using Registry.Common;
 using Registry.Ports.DroneDB;
 using Registry.Ports.DroneDB.Models;
-using Registry.Ports.ObjectSystem;
 using Registry.Web.Data;
 using Registry.Web.Data.Models;
 using Registry.Web.Exceptions;
@@ -46,7 +43,6 @@ namespace Registry.Web.Test
     {
         private Logger<DdbManager> _ddbFactoryLogger;
         private Logger<ObjectsManager> _objectManagerLogger;
-        private Mock<IObjectSystem> _objectSystemMock;
         private Mock<IOptions<AppSettings>> _appSettingsMock;
         private Mock<IDdbManager> _ddbFactoryMock;
         private Mock<IAuthManager> _authManagerMock;
@@ -67,11 +63,10 @@ namespace Registry.Web.Test
         private const string Test5ArchiveUrl = "https://github.com/DroneDB/test_data/raw/master/registry/Test5.zip";
 
         private readonly Guid _defaultDatasetGuid = Guid.Parse("0a223495-84a0-4c15-b425-c7ef88110e75");
-
+/*
         [SetUp]
         public void Setup()
         {
-            _objectSystemMock = new Mock<IObjectSystem>();
             _appSettingsMock = new Mock<IOptions<AppSettings>>();
             _ddbFactoryMock = new Mock<IDdbManager>();
             _authManagerMock = new Mock<IAuthManager>();
@@ -465,15 +460,15 @@ namespace Registry.Web.Test
         [Test]
         public async Task EndToEnd_HappyPath()
         {
-            /*
-             * 1) List files
-             * 3) Add folder 'Test'
-             * 4) Add file 'DJI_0021.JPG' inside folder 'Test'
-             * 5) Move file 'DJI_0020.JPG' inside folder 'Test'
-             * 6) Move folder 'Test' to 'Test1'
-             * 7) Delete file 'Test/DJI_0021.JPG'
-             * 8) Delete folder 'Test1'
-             */
+            
+             // 1) List files
+             // 3) Add folder 'Test'
+             // 4) Add file 'DJI_0021.JPG' inside folder 'Test'
+             // 5) Move file 'DJI_0020.JPG' inside folder 'Test'
+             // 6) Move folder 'Test' to 'Test1'
+             // 7) Delete file 'Test/DJI_0021.JPG'
+             // 8) Delete folder 'Test1'
+             
 
             const string fileName = "DJI_0028.JPG";
             const string fileName2 = "DJI_0020.JPG";
@@ -641,6 +636,6 @@ namespace Registry.Web.Test
             return new RegistryContext(options);
         }
 
-        #endregion
+        #endregion*/
     }
 }

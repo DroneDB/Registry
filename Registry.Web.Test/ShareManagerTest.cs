@@ -16,12 +16,9 @@ using Moq;
 using Newtonsoft.Json;
 using NUnit.Framework;
 using Registry.Adapters.DroneDB;
-using Registry.Adapters.ObjectSystem;
-using Registry.Adapters.ObjectSystem.Model;
 using Registry.Common;
 using Registry.Ports.DroneDB;
 using Registry.Ports.DroneDB.Models;
-using Registry.Ports.ObjectSystem;
 using Registry.Web.Data;
 using Registry.Web.Data.Models;
 using Registry.Web.Exceptions;
@@ -45,7 +42,6 @@ namespace Registry.Web.Test
         private Logger<BatchTokenGenerator> _batchTokenGeneratorLogger;
         private Logger<NameGenerator> _nameGeneratorLogger;
 
-        private Mock<IObjectSystem> _objectSystemMock;
         private Mock<IOptions<AppSettings>> _appSettingsMock;
         private Mock<IDdbManager> _ddbFactoryMock;
         private Mock<IAuthManager> _authManagerMock;
@@ -71,7 +67,7 @@ namespace Registry.Web.Test
 
         private const string Test1ArchiveUrl = "https://github.com/DroneDB/test_data/raw/master/registry/Test1.zip";
 
-
+/*
         public ShareManagerTest()
         {
             //
@@ -80,7 +76,6 @@ namespace Registry.Web.Test
         [SetUp]
         public void Setup()
         {
-            _objectSystemMock = new Mock<IObjectSystem>();
             _appSettingsMock = new Mock<IOptions<AppSettings>>();
             _ddbFactoryMock = new Mock<IDdbManager>();
             _authManagerMock = new Mock<IAuthManager>();
@@ -138,7 +133,7 @@ namespace Registry.Web.Test
         [Test]
         public async Task Initialize_WithoutTag_GeneratedTag()
         {
-            /* INITIALIZATION & SETUP */
+            // INITIALIZATION & SETUP
             const string userName = "admin";
 
             using var test = new TestFS(Test1ArchiveUrl, BaseTestFolder, true);
@@ -194,7 +189,7 @@ namespace Registry.Web.Test
                 datasetManager, organizationsManager,
                 webUtils, _authManagerMock.Object, _batchTokenGenerator, _nameGenerator, context);
 
-            /* TEST */
+            // TEST 
 
             // ListBatches
             var batches =
@@ -244,7 +239,7 @@ namespace Registry.Web.Test
         [Test]
         public async Task EndToEnd_HappyPath()
         {
-            /* INITIALIZATION & SETUP */
+            // INITIALIZATION & SETUP
             const string userName = "admin";
 
             using var test = new TestFS(Test1ArchiveUrl, BaseTestFolder, true);
@@ -299,7 +294,7 @@ namespace Registry.Web.Test
                 datasetManager, organizationsManager,
                 webUtils, _authManagerMock.Object, _batchTokenGenerator, _nameGenerator, context);
 
-            /* TEST */
+            // TEST
 
             const string fileName = "DJI_0028.JPG";
             const int fileSize = 3140384;
@@ -385,7 +380,7 @@ namespace Registry.Web.Test
         [Test]
         public async Task EndToEnd_ShareInit_After_ShareInit()
         {
-            /* INITIALIZATION & SETUP */
+            // INITIALIZATION & SETUP 
             const string userName = "admin";
 
             using var test = new TestFS(Test1ArchiveUrl, BaseTestFolder, true);
@@ -439,7 +434,7 @@ namespace Registry.Web.Test
                 datasetManager, organizationsManager,
                 webUtils, _authManagerMock.Object, _batchTokenGenerator, _nameGenerator, context);
 
-            /* TEST */
+            // TEST 
 
             const string fileName = "DJI_0028.JPG";
             const int fileSize = 3140384;
@@ -633,6 +628,6 @@ namespace Registry.Web.Test
             return new RegistryContext(options);
         }
 
-        #endregion
+        #endregion*/
     }
 }

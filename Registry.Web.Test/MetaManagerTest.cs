@@ -14,8 +14,6 @@ using Moq;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using NUnit.Framework;
-using Registry.Adapters.ObjectSystem;
-using Registry.Adapters.ObjectSystem.Model;
 using Registry.Common;
 using Registry.Ports.DroneDB;
 using Registry.Ports.DroneDB.Models;
@@ -53,7 +51,7 @@ namespace Registry.Web.Test
         private const string Test5ArchiveUrl = "https://github.com/DroneDB/test_data/raw/master/registry/Test5.zip";
 
         private readonly Guid _defaultDatasetGuid = Guid.Parse("0a223495-84a0-4c15-b425-c7ef88110e75");
-
+/*
         [SetUp]
         public void Setup()
         {
@@ -268,7 +266,7 @@ namespace Registry.Web.Test
 
         #endregion
 
-
+*/
     }
 }
 
