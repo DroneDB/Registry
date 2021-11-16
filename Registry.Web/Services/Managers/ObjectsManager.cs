@@ -26,6 +26,7 @@ using Registry.Web.Exceptions;
 using Registry.Web.Models;
 using Registry.Web.Models.Configuration;
 using Registry.Web.Models.DTO;
+using Registry.Web.Services.Adapters;
 using Registry.Web.Services.Ports;
 using Registry.Web.Utilities;
 
@@ -133,42 +134,24 @@ namespace Registry.Web.Services.Managers
         {
             var ddb = _ddbManager.Get(orgSlug, internalRef);
 
-            if (!await ddb.EntryExistsAsync(path))
+            var entry = await ddb.GetEntryAsync(path);
+
+            if (entry == null)
                 throw new NotFoundException($"Cannot find '{path}'");
-
-            var bucketName = _utils.GetBucketName(orgSlug, internalRef);
-
-            _logger.LogInformation($"Using bucket '{bucketName}'");
-
-            await _objectSystem.EnsureBucketExists(bucketName, _location, _logger);
-
-            var res = await ddb.GetEntryAsync(path);
-
-            if (res.Type == EntryType.Directory)
+    
+            if (entry.Type == EntryType.Directory)
                 throw new InvalidOperationException("Cannot get a folder, we are supposed to deal with a file!");
-
-            // We keep this because we need the actual ContextType
-            var objInfo = await _objectSystem.GetObjectInfoAsync(bucketName, res.Path);
-
-            if (objInfo == null)
-                throw new NotFoundException($"Cannot find '{res.Path}' in storage provider");
-
-            await using var memory = new MemoryStream();
-
-            _logger.LogInformation($"Getting object '{res.Path}' in bucket '{bucketName}'");
-
-            await _objectSystem.GetObjectAsync(bucketName, res.Path, stream => stream.CopyTo(memory));
 
             return new ObjectRes
             {
-                ContentType = objInfo.ContentType,
-                Name = objInfo.ObjectName,
-                Data = memory.ToArray(),
-                // TODO: We can add more fields from DDB if we need them
-                Type = res.Type,
-                Hash = res.Hash,
-                Size = res.Size
+                Hash = entry.Hash,
+                Name = Path.GetFileName(entry.Path),
+                Size = entry.Size,
+                Type = entry.Type,
+                ContentType = MimeTypes.GetMimeType(entry.Path),
+                PhysicalPath = ddb.GetLocalPath(entry.Path)
             };
+
         }
 
         public async Task<ObjectDto> AddNew(string orgSlug, string dsSlug, string path, byte[] data)
@@ -190,9 +173,6 @@ namespace Registry.Web.Services.Managers
             var bucketName = _utils.GetBucketName(orgSlug, ds.InternalRef);
 
             _logger.LogInformation($"Using bucket '{bucketName}'");
-
-            // If the bucket does not exist, let's create it
-            await _objectSystem.EnsureBucketExists(bucketName, _location, _logger);
 
             var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
 
@@ -223,77 +203,38 @@ namespace Registry.Web.Services.Managers
             // Check user storage space
             await _utils.CheckCurrentUserStorage(stream.Length);
 
-            // TODO: I highly doubt the robustness of this 
-            var contentType = MimeTypes.GetMimeType(path);
-
-            var tempFileName = Path.GetTempFileName();
+            var localFilePath = ddb.GetLocalPath(path);
+            CommonUtils.EnsureSafePath(localFilePath);
+            
+            _logger.LogInformation($"Local file path is '{localFilePath}'");
 
             // Write down the file
-            await using (var tempFileStream = File.OpenWrite(tempFileName))
-                await stream.CopyToAsync(tempFileStream);
+            await using (var localFileStream = File.OpenWrite(localFilePath))
+                await stream.CopyToAsync(localFileStream);
             
-            _logger.LogInformation("File uploaded, adding to DDB");
+            _logger.LogInformation("File saved, adding to DDB");
+            ddb.AddRaw(localFilePath);
 
-            // Add to DDB
-            await using (var tempFileStream = File.OpenRead(tempFileName))
-                await ddb.AddAsync(path, tempFileStream);
-
-            _logger.LogInformation("Added to DDB");
+            _logger.LogInformation("Added to DDB, checking entry now...");
 
             var entry = await ddb.GetEntryAsync(path);
 
             if (entry == null)
                 throw new InvalidOperationException("Cannot find just added file!");
 
+            _logger.LogInformation("Entry OK");
+            
             var obj = entry.ToDto();
-
-            // NOTE: We perform the actual upload asynchronously, we will move it to hangfire soon or later
-#pragma warning disable 4014
-            var uploadTask = Task.Run(async () =>
-#pragma warning restore 4014
-            {
-
-                _logger.LogInformation($"Uploading '{path}' (size {stream.Length}) to bucket '{bucketName}'");
-
-                await using var tmpStream = File.OpenRead(tempFileName);
-                await _objectSystem.PutObjectAsync(bucketName, path, tmpStream, tmpStream.Length, contentType);
-
-            });
 
             if (await ddb.IsBuildableAsync(obj.Path))
             {
                 _logger.LogInformation("This is a point cloud, we need to build it!");
 
-                var tempBuildFolder = Path.Combine(Path.GetTempPath(), nameof(HangfireUtils), CommonUtils.RandomString(16));
-                _logger.LogInformation($"Destination temp folder '{tempBuildFolder}'");
-
-                var jobId = _backgroundJob.Enqueue(() => HangfireUtils.BuildWrapper(ddb, path, tempFileName, tempBuildFolder, true, null));
+                var jobId = _backgroundJob.Enqueue(() => HangfireUtils.BuildWrapper(ddb, path, true, null));
 
                 _logger.LogInformation("Background job id is " + jobId);
 
-#pragma warning disable 4014
-                uploadTask.ContinueWith(_ =>
-#pragma warning restore 4014
-                {
-                    _logger.LogInformation(
-                        $"Scheduling deletion of temp file '{tempFileName}' after job {jobId} completes");
-
-                    var deleteId = _backgroundJob.ContinueJobWith(jobId, () => HangfireUtils.SafeDelete(tempFileName, null));
-
-                    var destBucketFolder = CommonUtils.SafeCombine(ddb.DatabaseFolderName, ddb.BuildFolderName);
-                    
-                    // NOTE: If the user deletes the LAZ file while it is being built this process goes on and saves it on storage anyways
-                    //       We could check if the file is still in ddb, otherwise cancel the folder sync. Too early for this?
-
-                    // Put it on storage
-                    var syncId = _backgroundJob.ContinueJobWith(deleteId, () =>
-                        HangfireUtils.SyncFolder(_objectSystem, tempBuildFolder, bucketName, destBucketFolder, null));
-
-                    _backgroundJob.ContinueJobWith(syncId, () => HangfireUtils.SafeDelete(tempBuildFolder, null));
-
-                });
             }
-
 
             return obj;
         }
@@ -311,9 +252,6 @@ namespace Registry.Web.Services.Managers
             var bucketName = _utils.GetBucketName(orgSlug, ds.InternalRef);
 
             _logger.LogInformation($"Using bucket '{bucketName}'");
-
-            // If the bucket does not exist, let's create it
-            await _objectSystem.EnsureBucketExists(bucketName, _location, _logger);
 
             var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
 

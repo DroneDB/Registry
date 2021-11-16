@@ -49,31 +49,18 @@ namespace Registry.Web.Utilities
             }
 
         }*/
-        
-        public static void BuildWrapper(IDdb ddb, string path, string tempFile, string dest, bool force, PerformContext context)
+
+        public static void BuildWrapper(IDdb ddb, string path, bool force,
+            PerformContext context)
         {
             Action<string> writeLine = context != null ? context.WriteLine : Console.WriteLine;
 
-            writeLine($"In BuildWrapper('{ddb.DatasetFolderPath}', '{path}', '{tempFile}', '{dest}', '{force}')");
-
-            var folderPath = Path.Combine(ddb.DatasetFolderPath, path);
-            Directory.CreateDirectory(Path.GetDirectoryName(folderPath)!);
-
-            writeLine($"Created folder structure: '{folderPath}'");
-
-            File.Copy(tempFile, folderPath, true);
-            writeLine("Temp file copied");
+            writeLine($"In BuildWrapper('{ddb.DatasetFolderPath}', '{path}', '{force}')");
 
             writeLine("Running build");
-            ddb.Build(path, dest, force);
-            
+            ddb.Build(path, force: force);
+
             writeLine("Done build");
-
-            SafeDelete(folderPath, context);
-
-            writeLine("Deleted copy of temp file");
-            writeLine("Done");
-
         }
 
         public static void SafeDelete(string path, PerformContext context)
@@ -94,7 +81,8 @@ namespace Registry.Web.Utilities
                     writeLine(!CommonUtils.SafeDeleteFolder(path)
                         ? "Cannot delete folder"
                         : "Folder deleted successfully");
-                } else 
+                }
+                else
                     writeLine("No file or folder found");
             }
         }
@@ -157,6 +145,5 @@ namespace Registry.Web.Utilities
             }
         }
 */
-
     }
 }

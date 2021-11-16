@@ -41,7 +41,8 @@ namespace Registry.Ports.DroneDB
         IEnumerable<DdbEntry> Search(string path, bool recursive = false);
         void Add(string path, byte[] data);
         void Add(string path, Stream data = null);
-
+        void AddRaw(string path);
+        
         void Remove(string path);
         void Move(string source, string dest);
 

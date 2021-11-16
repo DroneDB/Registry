@@ -271,7 +271,7 @@ namespace Registry.Web.Controllers
                 _logger.LogDebug($"Objects controller Get('{orgSlug}', '{dsSlug}', '{path}')");
 
                 var res = await _objectsManager.Get(orgSlug, dsSlug, path);
-                return File(res.Data, res.ContentType, res.Name);
+                return PhysicalFile(res.PhysicalPath, res.ContentType, res.Name);
             }
             catch (Exception ex)
             {
