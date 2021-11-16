@@ -8,7 +8,6 @@ using Hangfire;
 using Hangfire.Console;
 using Hangfire.Server;
 using Registry.Adapters.DroneDB;
-using Registry.Adapters.ObjectSystem;
 using Registry.Common;
 using Registry.Ports.DroneDB;
 using Registry.Ports.DroneDB.Models;
