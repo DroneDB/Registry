@@ -33,8 +33,6 @@ using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
 using Newtonsoft.Json.Serialization;
-using Registry.Adapters.ObjectSystem;
-using Registry.Adapters.ObjectSystem.Model;
 using Registry.Common;
 using Registry.Web.Data;
 using Registry.Web.Data.Models;
@@ -47,7 +45,6 @@ using Registry.Web.Services.Adapters;
 using Registry.Web.Services.Managers;
 using Registry.Web.Services.Ports;
 using Registry.Web.Utilities;
-using RestSharp.Extensions;
 
 namespace Registry.Web
 {
@@ -190,7 +187,7 @@ namespace Registry.Web
                 .AddDbContextCheck<RegistryContext>("Registry database health check", null, new[] { "database" })
                 .AddDbContextCheck<ApplicationDbContext>("Registry identity database health check", null,
                     new[] { "database" })
-                .AddDiskSpaceHealthCheck(appSettings.DdbStoragePath, "Ddb storage path space health check", null,
+                .AddDiskSpaceHealthCheck(appSettings.StoragePath, "Ddb storage path space health check", null,
                     new[] { "storage" })
                 .AddHangfire(options => { options.MinimumAvailableServers = 1; }, "Hangfire health check", null,
                     new[] { "database" });

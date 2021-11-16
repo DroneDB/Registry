@@ -42,7 +42,7 @@ namespace Registry.Web.Test
             _appSettingsMock = new Mock<IOptions<AppSettings>>();
             _ddbFactoryLogger = new Logger<DdbManager>(LoggerFactory.Create(builder => builder.AddConsole()));
 
-            _settings.DdbStoragePath = TestDataFolder;
+            _settings.StoragePath = TestDataFolder;
             _appSettingsMock.Setup(o => o.Value).Returns(_settings);
 
         }
@@ -74,7 +74,7 @@ namespace Registry.Web.Test
 
             using var fs = new TestFS(DbTest1ArchiveUrl, nameof(DdbFactoryTest));
 
-            _settings.DdbStoragePath = fs.TestFolder;
+            _settings.StoragePath = fs.TestFolder;
             _appSettingsMock.Setup(o => o.Value).Returns(_settings);
 
             var factory = new DdbManager(_appSettingsMock.Object, _ddbFactoryLogger);
@@ -94,7 +94,7 @@ namespace Registry.Web.Test
 
             using var fs = new TestFS(DbTest1ArchiveUrl, nameof(DdbFactoryTest));
 
-            _settings.DdbStoragePath = fs.TestFolder;
+            _settings.StoragePath = fs.TestFolder;
             _appSettingsMock.Setup(o => o.Value).Returns(_settings);
 
             const string fileName = "Sub/20200610_144436.jpg";
@@ -139,7 +139,7 @@ namespace Registry.Web.Test
 
             using var fs = new TestFS(DbTest1ArchiveUrl, nameof(DdbFactoryTest));
 
-            _settings.DdbStoragePath = fs.TestFolder;
+            _settings.StoragePath = fs.TestFolder;
             _appSettingsMock.Setup(o => o.Value).Returns(_settings);
 
             const string fileName = "DJI_0022.JPG";
@@ -202,7 +202,7 @@ namespace Registry.Web.Test
 
             using var fs = new TestFS(DbTest1ArchiveUrl, nameof(DdbFactoryTest));
 
-            _settings.DdbStoragePath = fs.TestFolder;
+            _settings.StoragePath = fs.TestFolder;
             _appSettingsMock.Setup(o => o.Value).Returns(_settings);
 
             var factory = new DdbManager(_appSettingsMock.Object, _ddbFactoryLogger);
