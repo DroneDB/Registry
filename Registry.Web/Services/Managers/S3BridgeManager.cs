@@ -13,18 +13,16 @@ namespace Registry.Web.Services.Managers
 {
     public class S3BridgeManager : IS3BridgeManager
     {
-        private readonly IObjectSystem _objectSystem;
         private readonly IOptions<AppSettings> _settings;
-        private readonly ILogger<IS3BridgeManager> _logger;
+        private readonly ILogger<S3BridgeManager> _logger;
         private readonly ObjectCache _objectCache;
         private readonly TimeSpan _cacheExpiration;
         private readonly TimeSpan DefaultBridgeCacheExpiration = new(0, 30, 0);
 
 
-        public S3BridgeManager(IObjectSystem objectSystem, ObjectCache objectCache, IOptions<AppSettings> settings,
-            ILogger<IS3BridgeManager> logger)
+        public S3BridgeManager(ObjectCache objectCache, IOptions<AppSettings> settings,
+            ILogger<S3BridgeManager> logger)
         {
-            _objectSystem = objectSystem;
             _objectCache = objectCache;
             _settings = settings;
             _logger = logger;

@@ -14,6 +14,7 @@ using Registry.Web.Utilities;
 
 namespace Registry.Web.Services.Managers
 {
+    /*
     public class CacheManager : ICacheManager
     {
         private readonly ObjectCache _cache;
@@ -107,5 +108,5 @@ namespace Registry.Web.Services.Managers
             return thumb;
         }
 
-    }
+    }*/
 }

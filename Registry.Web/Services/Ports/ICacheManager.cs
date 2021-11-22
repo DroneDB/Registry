@@ -7,7 +7,7 @@ using Registry.Ports.DroneDB;
 
 namespace Registry.Web.Services.Ports
 {
-    public interface ICacheManager
+    /*public interface ICacheManager
     {
         public Task<byte []> GenerateThumbnail(IDdb ddb, string sourcePath, string sourceHash, int size);
 
@@ -17,5 +17,5 @@ namespace Registry.Web.Services.Ports
         public Task ClearThumbnails(string sourceHash);
         public Task ClearTiles(string sourceHash);
 
-    }
+    }*/
 }

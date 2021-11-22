@@ -176,13 +176,6 @@ namespace Registry.Web.Services.Adapters
             return datasetUrl;
         }
 
-        private const string BucketNameFormat = "{0}-{1}";
-
-        public string GetBucketName(string orgSlug, Guid internalRef)
-        {
-            return string.Format(BucketNameFormat, orgSlug, internalRef.ToString()).ToLowerInvariant();
-        }
-
         // NOTE: This function can be optimized down the line.
         // It currently enumerates all the datasets and asks DDB for size.
         // If we notice a slowdown of the upload/share/push process this could be the culprit

@@ -13,6 +13,7 @@ using Microsoft.AspNetCore.Routing;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using MimeMapping;
 using Registry.Common;
 using Registry.Web.Data;
 using Registry.Web.Data.Models;
@@ -66,7 +67,7 @@ namespace Registry.Web.Controllers
 
                 var res = await _objectsManager.GenerateThumbnail(orgSlug, dsSlug, path, size);
 
-                return File(res.ContentStream, res.ContentType, res.Name);
+                return PhysicalFile(res, MimeUtility.GetMimeMapping(res));
 
             }
             catch (Exception ex)
@@ -444,12 +445,7 @@ namespace Registry.Web.Controllers
 
                 var res = await _objectsManager.GetBuildFile(orgSlug, dsSlug, hash, path);
 
-                Response.StatusCode = 200;
-                Response.ContentType = res.ContentType;
-
-                await res.CopyToAsync(Response.Body);
-
-                return new EmptyResult();
+                return PhysicalFile(res, MimeUtility.GetMimeMapping(res));
 
             }
             catch (Exception ex)

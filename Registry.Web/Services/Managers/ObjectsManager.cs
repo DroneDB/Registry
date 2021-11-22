@@ -15,9 +15,11 @@ using Hangfire.Console;
 using Hangfire.Server;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using MimeMapping;
 using Registry.Adapters;
 using Registry.Adapters.DroneDB;
 using Registry.Common;
+using Registry.Ports;
 using Registry.Ports.DroneDB;
 using Registry.Ports.DroneDB.Models;
 using Registry.Web.Data;
@@ -38,8 +40,9 @@ namespace Registry.Web.Services.Managers
         private readonly IDdbManager _ddbManager;
         private readonly IUtils _utils;
         private readonly IAuthManager _authManager;
-        private readonly ICacheManager _cacheManager;
+        //private readonly ICacheManager _cacheManager;
         private readonly IS3BridgeManager _bridgeManager;
+        private readonly IFileSystem _fs;
         private readonly IBackgroundJobsProcessor _backgroundJob;
         private readonly RegistryContext _context;
         private readonly AppSettings _settings;
@@ -60,8 +63,9 @@ namespace Registry.Web.Services.Managers
             IDdbManager ddbManager,
             IUtils utils,
             IAuthManager authManager,
-            ICacheManager cacheManager,
+            //ICacheManager cacheManager,
             IS3BridgeManager bridgeManager,
+            IFileSystem fs,
             IBackgroundJobsProcessor backgroundJob)
         {
             _logger = logger;
@@ -69,18 +73,18 @@ namespace Registry.Web.Services.Managers
             _ddbManager = ddbManager;
             _utils = utils;
             _authManager = authManager;
-            _cacheManager = cacheManager;
+            //_cacheManager = cacheManager;
             _bridgeManager = bridgeManager;
+            _fs = fs;
             _backgroundJob = backgroundJob;
             _settings = settings.Value;
 
             _location = _settings.SafeGetLocation(_logger);
-
         }
 
-        public async Task<IEnumerable<ObjectDto>> List(string orgSlug, string dsSlug, string path = null, bool recursive = false)
+        public async Task<IEnumerable<ObjectDto>> List(string orgSlug, string dsSlug, string path = null,
+            bool recursive = false)
         {
-
             var ds = await _utils.GetDataset(orgSlug, dsSlug);
 
             _logger.LogInformation($"In List('{orgSlug}/{dsSlug}')");
@@ -96,9 +100,9 @@ namespace Registry.Web.Services.Managers
             return files;
         }
 
-        public async Task<IEnumerable<ObjectDto>> Search(string orgSlug, string dsSlug, string query = null, string path = null, bool recursive = true)
+        public async Task<IEnumerable<ObjectDto>> Search(string orgSlug, string dsSlug, string query = null,
+            string path = null, bool recursive = true)
         {
-
             var ds = await _utils.GetDataset(orgSlug, dsSlug);
 
             _logger.LogInformation($"In Search('{orgSlug}/{dsSlug}')");
@@ -108,9 +112,9 @@ namespace Registry.Web.Services.Managers
             _logger.LogInformation($"Searching in '{path}' -> {query} ({(recursive ? 'r' : 'n')}");
 
             var files = (from entry in await ddb.SearchAsync(path, recursive)
-                        let name = Path.GetFileName(entry.Path)
-                        where FileSystemName.MatchesSimpleExpression(query, name)
-                        select entry.ToDto()).ToArray();
+                let name = Path.GetFileName(entry.Path)
+                where FileSystemName.MatchesSimpleExpression(query, name)
+                select entry.ToDto()).ToArray();
 
             _logger.LogInformation($"Found {files.Length} objects");
 
@@ -119,7 +123,6 @@ namespace Registry.Web.Services.Managers
 
         public async Task<ObjectRes> Get(string orgSlug, string dsSlug, string path)
         {
-
             var ds = await _utils.GetDataset(orgSlug, dsSlug);
 
             _logger.LogInformation($"In Get('{orgSlug}/{dsSlug}')");
@@ -138,7 +141,7 @@ namespace Registry.Web.Services.Managers
 
             if (entry == null)
                 throw new NotFoundException($"Cannot find '{path}'");
-    
+
             if (entry.Type == EntryType.Directory)
                 throw new InvalidOperationException("Cannot get a folder, we are supposed to deal with a file!");
 
@@ -151,7 +154,6 @@ namespace Registry.Web.Services.Managers
                 ContentType = MimeTypes.GetMimeType(entry.Path),
                 PhysicalPath = ddb.GetLocalPath(entry.Path)
             };
-
         }
 
         public async Task<ObjectDto> AddNew(string orgSlug, string dsSlug, string path, byte[] data)
@@ -169,10 +171,6 @@ namespace Registry.Web.Services.Managers
 
             if (!await _authManager.IsOwnerOrAdmin(ds))
                 throw new UnauthorizedException("The current user is not allowed to edit dataset");
-
-            var bucketName = _utils.GetBucketName(orgSlug, ds.InternalRef);
-
-            _logger.LogInformation($"Using bucket '{bucketName}'");
 
             var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
 
@@ -205,13 +203,13 @@ namespace Registry.Web.Services.Managers
 
             var localFilePath = ddb.GetLocalPath(path);
             CommonUtils.EnsureSafePath(localFilePath);
-            
+
             _logger.LogInformation($"Local file path is '{localFilePath}'");
 
             // Write down the file
             await using (var localFileStream = File.OpenWrite(localFilePath))
                 await stream.CopyToAsync(localFileStream);
-            
+
             _logger.LogInformation("File saved, adding to DDB");
             ddb.AddRaw(localFilePath);
 
@@ -223,7 +221,7 @@ namespace Registry.Web.Services.Managers
                 throw new InvalidOperationException("Cannot find just added file!");
 
             _logger.LogInformation("Entry OK");
-            
+
             var obj = entry.ToDto();
 
             if (await ddb.IsBuildableAsync(obj.Path))
@@ -233,7 +231,6 @@ namespace Registry.Web.Services.Managers
                 var jobId = _backgroundJob.Enqueue(() => HangfireUtils.BuildWrapper(ddb, path, true, null));
 
                 _logger.LogInformation("Background job id is " + jobId);
-
             }
 
             return obj;
@@ -241,17 +238,12 @@ namespace Registry.Web.Services.Managers
 
         public async Task Move(string orgSlug, string dsSlug, string source, string dest)
         {
-
             var ds = await _utils.GetDataset(orgSlug, dsSlug);
 
             _logger.LogInformation($"In Move('{orgSlug}/{dsSlug}')");
 
             if (!await _authManager.IsOwnerOrAdmin(ds))
                 throw new UnauthorizedException("The current user is not allowed to edit dataset");
-
-            var bucketName = _utils.GetBucketName(orgSlug, ds.InternalRef);
-
-            _logger.LogInformation($"Using bucket '{bucketName}'");
 
             var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
 
@@ -267,7 +259,7 @@ namespace Registry.Web.Services.Managers
             // Short circuit!
             if ((dest + "/").StartsWith(source + "/"))
                 throw new InvalidOperationException("Cannot move a path onto itself or one of its descendants");
-            
+
             var destEntry = await ddb.GetEntryAsync(dest);
 
             if (destEntry != null)
@@ -292,11 +284,12 @@ namespace Registry.Web.Services.Managers
 
                 case 1:
 
-                    _logger.LogInformation($"Copying object '{source}' to '{dest}'");
-                    await _objectSystem.CopyObjectAsync(bucketName, source, bucketName, dest);
-
-                    _logger.LogInformation("Removing source object");
-                    await _objectSystem.RemoveObjectAsync(bucketName, source);
+                    var sourceLocalFilePath = ddb.GetLocalPath(source);
+                    var destLocalFilePath = ddb.GetLocalPath(dest);
+                    
+                    _logger.LogInformation($"Moving object '{source}' to '{dest}'");
+                    
+                    _fs.Move(sourceLocalFilePath, destLocalFilePath);
 
                     break;
 
@@ -305,7 +298,11 @@ namespace Registry.Web.Services.Managers
 
                     _logger.LogInformation($"Moving folder '{source}' to '{dest}'");
 
-                    await _objectSystem.MoveDirectory(bucketName, source, dest);
+                    var sourceLocalFolderPath = ddb.GetLocalPath(source);
+                    var destLocalFolderPath = ddb.GetLocalPath(dest);
+                    
+                    _fs.FolderMove(sourceLocalFolderPath, destLocalFolderPath);
+                    //await _objectSystem.MoveDirectory(bucketName, source, dest);
                     _logger.LogInformation("Move OK");
 
                     break;
@@ -315,11 +312,10 @@ namespace Registry.Web.Services.Managers
             await ddb.MoveAsync(source, dest);
 
             if (!await ddb.EntryExistsAsync(dest))
-                throw new InvalidOperationException($"Cannot find destination '{dest}' after move, something wrong with ddb");
+                throw new InvalidOperationException(
+                    $"Cannot find destination '{dest}' after move, something wrong with ddb");
 
             _logger.LogInformation("Move OK");
-
-
         }
 
         public async Task Delete(string orgSlug, string dsSlug, string path)
@@ -339,14 +335,6 @@ namespace Registry.Web.Services.Managers
             if (!await ddb.EntryExistsAsync(path))
                 throw new BadRequestException($"Path '{path}' not found in dataset");
 
-            var bucketName = _utils.GetBucketName(orgSlug, ds.InternalRef);
-
-            _logger.LogInformation($"Using bucket '{bucketName}'");
-
-            var bucketExists = await _objectSystem.BucketExistsAsync(bucketName);
-            if (!bucketExists)
-                throw new BadRequestException($"Cannot find bucket '{bucketName}'");
-
             _logger.LogInformation("Removing from DDB");
 
             var objs = (await ddb.SearchAsync(path, true)).ToArray();
@@ -356,33 +344,21 @@ namespace Registry.Web.Services.Managers
             foreach (var obj in objs.Where(item => item.Type != EntryType.Directory))
             {
                 _logger.LogInformation($"Deleting '{obj.Path}'");
-                await _objectSystem.RemoveObjectAsync(bucketName, obj.Path);
 
-                await RemoveBuildFiles(bucketName, obj.Hash);
-             
-                await _cacheManager.ClearThumbnails(obj.Hash);
-                await _cacheManager.ClearTiles(obj.Hash);
-                await _bridgeManager.RemoveObjectFromCache(bucketName, obj.Path);
+                var objLocalPath = ddb.GetLocalPath(obj.Path);
+
+                if (!_fs.Exists(objLocalPath))
+                    throw new InvalidOperationException(
+                        $"Cannot find local file '{objLocalPath}' for object '{obj.Path}'");
+
+                _fs.Delete(objLocalPath);
+
+                //await _cacheManager.ClearThumbnails(obj.Hash);
+                //await _cacheManager.ClearTiles(obj.Hash);
+                //await _bridgeManager.RemoveObjectFromCache(bucketName, obj.Path);
             }
 
             _logger.LogInformation("Deletion complete");
-
-
-        }
-
-        private async Task RemoveBuildFiles(string bucketName, string hash, CancellationToken cancellationToken = default)
-        {
-            // TODO: This path calculation should not be done here (IMHO)
-            var buildPath = CommonUtils.SafeCombine(_ddbManager.DatabaseFolderName, _ddbManager.BuildFolderName, hash);
-
-            var buildFiles = _objectSystem.ListObjectsAsync(bucketName, buildPath, true)
-                .ToEnumerable()
-                .Where(item => !item.IsDir)
-                .Select(item => item.Key)
-                .ToArray();
-
-            await _objectSystem.RemoveObjectsAsync(bucketName, buildFiles, cancellationToken);
-
         }
 
         public async Task DeleteAll(string orgSlug, string dsSlug)
@@ -393,31 +369,12 @@ namespace Registry.Web.Services.Managers
 
             if (!await _authManager.IsOwnerOrAdmin(ds))
                 throw new UnauthorizedException("The current user is not allowed to edit dataset");
-
-            var bucketName = _utils.GetBucketName(orgSlug, ds.InternalRef);
-
-            _logger.LogInformation($"Using bucket '{bucketName}'");
-
-            var bucketExists = await _objectSystem.BucketExistsAsync(bucketName);
-
-            if (!bucketExists)
-            {
-                _logger.LogWarning($"Asked to remove non-existing bucket '{bucketName}'");
-            }
-            else
-            {
-                _logger.LogInformation("Deleting bucket");
-                await _objectSystem.RemoveBucketAsync(bucketName);
-                _logger.LogInformation("Bucket deleted");
-            }
-
-            _logger.LogInformation("Removing DDB");
-
+            
             _ddbManager.Delete(orgSlug, ds.InternalRef);
-
         }
 
-        public async Task<FileDescriptorDto> GenerateThumbnail(string orgSlug, string dsSlug, string path, int? size, bool recreate = false)
+        public async Task<FileDescriptorStreamDto> GenerateThumbnail(string orgSlug, string dsSlug, string path, int? size,
+            bool recreate = false)
         {
             var ds = await _utils.GetDataset(orgSlug, dsSlug);
 
@@ -432,44 +389,47 @@ namespace Registry.Web.Services.Managers
             if (fileName == null)
                 throw new ArgumentException("Path is not valid");
 
-            var bucketName = _utils.GetBucketName(orgSlug, ds.InternalRef);
-            var sourcePath = GetBuildSource(bucketName, entry);
+            //var bucketName = _utils.GetBucketName(orgSlug, ds.InternalRef);
+            var sourcePath = GetBuildSource(entry);
+            var localPath = ddb.GetLocalPath(sourcePath);
 
-            //var thumbData = await ddb.GenerateThumbnailAsync(sourcePath, size ?? DefaultThumbnailSize);
-            var thumbData = await _cacheManager.GenerateThumbnail(ddb, sourcePath, entry.Hash, size ?? DefaultThumbnailSize);
-            
+            var thumbData = await ddb.GenerateThumbnailAsync(sourcePath, size ?? DefaultThumbnailSize);
+            //var thumbData = await _cacheManager.GenerateThumbnail(ddb, localPath, entry.Hash, size ?? DefaultThumbnailSize);
+
             var memory = new MemoryStream(thumbData);
 
-            return new FileDescriptorDto
+            return new FileDescriptorStreamDto
             {
                 ContentStream = memory,
                 ContentType = "image/jpeg",
                 Name = Path.ChangeExtension(fileName, ".jpg")
             };
         }
-        public async Task<FileDescriptorDto> GenerateTile(string orgSlug, string dsSlug, string path, int tz, int tx, int ty, bool retina)
+
+        public async Task<FileDescriptorStreamDto> GenerateTile(string orgSlug, string dsSlug, string path, int tz, int tx,
+            int ty, bool retina)
         {
             var ds = await _utils.GetDataset(orgSlug, dsSlug);
 
             _logger.LogInformation($"In GenerateTile('{orgSlug}/{dsSlug}')");
 
-            var bucketName = _utils.GetBucketName(orgSlug, ds.InternalRef);
-            var entry = EnsurePathValidity(orgSlug, ds.InternalRef, path, out var ddb);
-
             var fileName = Path.GetFileName(path);
             if (fileName == null)
                 throw new ArgumentException("Path is not valid");
 
-            var sourcePath = GetBuildSource(bucketName, entry);
+            var entry = EnsurePathValidity(orgSlug, ds.InternalRef, path, out var ddb);
+
+            var sourcePath = GetBuildSource(entry);
+            var localPath = ddb.GetLocalPath(sourcePath);
 
             try
             {
-                var tileData = await _cacheManager.GenerateTile(ddb, sourcePath, entry.Hash, tz, tx, ty, retina);
+                //var tileData = await _cacheManager.GenerateTile(ddb, localPath, entry.Hash, tz, tx, ty, retina);
 
-                //var tileData = await ddb.GenerateTileAsync(sourcePath, tz, tx, ty, retina, entry.Hash);
+                var tileData = await ddb.GenerateTileAsync(sourcePath, tz, tx, ty, retina, entry.Hash);
                 var memory = new MemoryStream(tileData);
 
-                return new FileDescriptorDto
+                return new FileDescriptorStreamDto
                 {
                     ContentStream = memory,
                     ContentType = "image/png",
@@ -479,7 +439,8 @@ namespace Registry.Web.Services.Managers
             catch (InvalidOperationException ex)
             {
                 // NOTE: This is the definition of self-inflicted wound
-                if (ex.InnerException != null && ex.InnerException.Message.Contains("Out of bounds", StringComparison.OrdinalIgnoreCase))
+                if (ex.InnerException != null &&
+                    ex.InnerException.Message.Contains("Out of bounds", StringComparison.OrdinalIgnoreCase))
                     throw new NotFoundException("Tile out of bounds");
 
                 throw;
@@ -487,7 +448,9 @@ namespace Registry.Web.Services.Managers
         }
 
         #region Downloads
-        public async Task<string> GetDownloadPackage(string orgSlug, string dsSlug, string[] paths, DateTime? expiration = null, bool isPublic = false)
+
+        public async Task<string> GetDownloadPackage(string orgSlug, string dsSlug, string[] paths,
+            DateTime? expiration = null, bool isPublic = false)
         {
             var ds = await _utils.GetDataset(orgSlug, dsSlug);
 
@@ -513,7 +476,7 @@ namespace Registry.Web.Services.Managers
             return downloadPackage.Id.ToString();
         }
 
-        public async Task<FileDescriptorDto> DownloadPackage(string orgSlug, string dsSlug, string packageId)
+        public async Task<FileDescriptorStreamDto> DownloadPackage(string orgSlug, string dsSlug, string packageId)
         {
             var ds = await _utils.GetDataset(orgSlug, dsSlug, checkOwnership: false);
 
@@ -556,7 +519,6 @@ namespace Registry.Web.Services.Managers
             }
 
             return await GetOfflineFileDescriptor(orgSlug, dsSlug, ds.InternalRef, package.Paths);
-
         }
 
 
@@ -571,7 +533,7 @@ namespace Registry.Web.Services.Managers
             return GetFileStreamDescriptor(orgSlug, dsSlug, ds.InternalRef, paths);
         }
 
-        public async Task<FileDescriptorDto> Download(string orgSlug, string dsSlug, string[] paths)
+        public async Task<FileDescriptorStreamDto> Download(string orgSlug, string dsSlug, string[] paths)
         {
             var ds = await _utils.GetDataset(orgSlug, dsSlug);
 
@@ -582,7 +544,8 @@ namespace Registry.Web.Services.Managers
             return await GetOfflineFileDescriptor(orgSlug, dsSlug, ds.InternalRef, paths);
         }
 
-        private FileStreamDescriptor GetFileStreamDescriptor(string orgSlug, string dsSlug, Guid internalRef, string[] paths)
+        private FileStreamDescriptor GetFileStreamDescriptor(string orgSlug, string dsSlug, Guid internalRef,
+            string[] paths)
         {
             var ddb = _ddbManager.Get(orgSlug, internalRef);
 
@@ -597,30 +560,29 @@ namespace Registry.Web.Services.Managers
 
                 _logger.LogInformation($"Only one path found: '{filePath}'");
 
-                streamDescriptor = new FileStreamDescriptor(Path.GetFileName(filePath), MimeUtility.GetMimeMapping(filePath),
-                    orgSlug, internalRef, files, null, FileDescriptorType.Single, _objectSystem, this, _logger, _ddbManager, _utils);
-
+                streamDescriptor = new FileStreamDescriptor(Path.GetFileName(filePath),
+                    MimeUtility.GetMimeMapping(filePath),
+                    orgSlug, internalRef, files, null, FileDescriptorType.Single,_logger, _ddbManager);
             }
             // Otherwise we zip everything together and return the package
             else
             {
                 streamDescriptor = new FileStreamDescriptor($"{orgSlug}-{dsSlug}-{CommonUtils.RandomString(8)}.zip",
                     "application/zip", orgSlug, internalRef, files, folders,
-                    includeDdb ? FileDescriptorType.Dataset : FileDescriptorType.Multiple, _objectSystem, this,
-                    _logger, _ddbManager, _utils);
-
+                    includeDdb ? FileDescriptorType.Dataset : FileDescriptorType.Multiple, _logger, _ddbManager);
             }
 
             return streamDescriptor;
         }
-
-        private async Task<FileDescriptorDto> GetOfflineFileDescriptor(string orgSlug, string dsSlug, Guid internalRef, string[] paths)
+        
+        private async Task<FileDescriptorStreamDto> GetOfflineFileDescriptor(string orgSlug, string dsSlug, Guid internalRef,
+            string[] paths)
         {
             var ddb = _ddbManager.Get(orgSlug, internalRef);
 
             var (files, folders, includeDdb) = GetFilePaths(paths, ddb);
 
-            FileDescriptorDto descriptor;
+            FileDescriptorStreamDto descriptorStream;
 
             // If there is just one file we return it
             if (files.Length == 1 && paths?.Length == 1 && files[0] == paths[0])
@@ -629,28 +591,27 @@ namespace Registry.Web.Services.Managers
 
                 _logger.LogInformation($"Only one path found: '{filePath}'");
 
-                descriptor = new FileDescriptorDto
+                var localPath = ddb.GetLocalPath(filePath);
+
+                descriptorStream = new FileDescriptorStreamDto
                 {
-                    ContentStream = new MemoryStream(),
+                    ContentStream = File.OpenRead(localPath),
                     Name = Path.GetFileName(filePath),
                     ContentType = MimeUtility.GetMimeMapping(filePath)
                 };
 
-                await WriteObjectContentStream(orgSlug, internalRef, filePath, descriptor.ContentStream);
-
-                descriptor.ContentStream.Reset();
             }
             // Otherwise we zip everything together and return the package
             else
             {
-                descriptor = new FileDescriptorDto
+                descriptorStream = new FileDescriptorStreamDto
                 {
                     Name = $"{orgSlug}-{dsSlug}-{CommonUtils.RandomString(8)}.zip",
                     ContentStream = new MemoryStream(),
                     ContentType = "application/zip"
                 };
 
-                using (var archive = new ZipArchive(descriptor.ContentStream, ZipArchiveMode.Create, true))
+                using (var archive = new ZipArchive(descriptorStream.ContentStream, ZipArchiveMode.Create, true))
                 {
                     foreach (var path in files)
                     {
@@ -659,7 +620,11 @@ namespace Registry.Web.Services.Managers
                         var entry = archive.CreateEntry(path, CompressionLevel.NoCompression);
                         await using var entryStream = entry.Open();
 
-                        await WriteObjectContentStream(orgSlug, internalRef, path, entryStream);
+                        var localPath = ddb.GetLocalPath(path);
+                        
+                        await using var fileStream = File.OpenRead(localPath);
+                        await fileStream.CopyToAsync(entryStream);
+
                     }
 
                     // We treat folders separately because if they are empty they would not be included in the archive
@@ -672,31 +637,15 @@ namespace Registry.Web.Services.Managers
                     // Include ddb folder
                     if (includeDdb)
                     {
-                        archive.CreateEntryFromAny(Path.Combine(ddb.DatasetFolderPath, ddb.DatabaseFolderName), string.Empty, new[] { ddb.BuildFolderPath });
+                        archive.CreateEntryFromAny(Path.Combine(ddb.DatasetFolderPath, ddb.DatabaseFolderName),
+                            string.Empty, new[] { ddb.BuildFolderPath });
                     }
                 }
 
-                descriptor.ContentStream.Reset();
+                descriptorStream.ContentStream.Reset();
             }
 
-            return descriptor;
-        }
-
-        private async Task WriteObjectContentStream(string orgSlug, Guid internalRef, string path, Stream stream)
-        {
-            var bucketName = _utils.GetBucketName(orgSlug, internalRef);
-
-            _logger.LogInformation($"Using bucket '{bucketName}'");
-
-            var bucketExists = await _objectSystem.BucketExistsAsync(bucketName);
-
-            if (!bucketExists)
-                throw new NotFoundException($"Cannot find bucket '{bucketName}'");
-
-            _logger.LogInformation($"Getting object '{path}' in bucket '{bucketName}'");
-
-            await _objectSystem.GetObjectAsync(bucketName, path, s => s.CopyTo(stream));
-
+            return descriptorStream;
         }
 
         private (string[] files, string[] folders, bool includeDdb) GetFilePaths(string[] paths, IDdb ddb)
@@ -724,8 +673,10 @@ namespace Registry.Web.Services.Managers
                             throw new InvalidOperationException("Ddb is empty, what should I get?");
 
                         tempFolders.Add(path);
-                        tempFiles.AddRange(items.Where(item => item.Type != EntryType.Directory).Select(item => item.Path));
-                        tempFolders.AddRange(items.Where(item => item.Type == EntryType.Directory).Select(item => item.Path));
+                        tempFiles.AddRange(items.Where(item => item.Type != EntryType.Directory)
+                            .Select(item => item.Path));
+                        tempFolders.AddRange(items.Where(item => item.Type == EntryType.Directory)
+                            .Select(item => item.Path));
                     }
                     else
                     {
@@ -776,7 +727,6 @@ namespace Registry.Web.Services.Managers
 
         private DdbEntry EnsurePathValidity(string orgSlug, Guid internalRef, string path, out IDdb ddb)
         {
-
             EnsureNoWildcardOrEmptyPaths(path);
 
             ddb = _ddbManager.Get(orgSlug, internalRef);
@@ -819,13 +769,12 @@ namespace Registry.Web.Services.Managers
             foreach (var path in paths)
                 if (!ddb.EntryExists(path))
                     throw new ArgumentException($"Invalid path: '{path}'");
-
         }
 
         #endregion
 
 
-        public async Task<FileDescriptorDto> GetDdb(string orgSlug, string dsSlug)
+        public async Task<FileDescriptorStreamDto> GetDdb(string orgSlug, string dsSlug)
         {
             var ds = await _utils.GetDataset(orgSlug, dsSlug);
 
@@ -845,13 +794,12 @@ namespace Registry.Web.Services.Managers
                 await s.CopyToAsync(memory);
                 memory.Reset();
 
-                return new FileDescriptorDto
+                return new FileDescriptorStreamDto
                 {
                     ContentStream = memory,
                     ContentType = "application/zip",
                     Name = $"{orgSlug}-{dsSlug}-ddb.zip"
                 };
-
             }
             finally
             {
@@ -868,13 +816,6 @@ namespace Registry.Web.Services.Managers
             if (!await _authManager.IsOwnerOrAdmin(ds))
                 throw new UnauthorizedException("The current user is not allowed to build dataset");
 
-            var bucketName = _utils.GetBucketName(orgSlug, ds.InternalRef);
-
-            _logger.LogInformation($"Using bucket '{bucketName}'");
-
-            // If the bucket does not exist, let's create it
-            await _objectSystem.EnsureBucketExists(bucketName, _location, _logger);
-
             var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
 
             var entry = await ddb.GetEntryAsync(path);
@@ -890,32 +831,13 @@ namespace Registry.Web.Services.Managers
                 return;
             }
 
-            var obj = await InternalGet(orgSlug, ds.InternalRef, path);
-
-            var tempFileName = Path.GetTempFileName();
-            try
-            {
-                await File.WriteAllBytesAsync(tempFileName, obj.Data);
-
-                HangfireUtils.BuildWrapper(ddb, path, tempFileName, null, false, null);
-
-                // Put it on storage
-                HangfireUtils.SyncBuildFolder(_objectSystem, ddb, entry, bucketName, null);
-
-                // Delete local build folder
-                CommonUtils.SafeDeleteFolder(Path.Combine(BuildBasePath, entry.Hash));
-
-            }
-            finally
-            {
-                CommonUtils.SafeDelete(tempFileName);
-            }
-
+            HangfireUtils.BuildWrapper(ddb, path, force, null);
         }
 
         #region Build
 
-        public async Task<StreamableFileDescriptor> GetBuildFile(string orgSlug, string dsSlug, string hash, string path)
+        public async Task<string> GetBuildFile(string orgSlug, string dsSlug, string hash,
+            string path)
         {
             _logger.LogInformation($"In GetBuildFile('{orgSlug}/{dsSlug}', '{hash}', '{path}')");
 
@@ -927,26 +849,30 @@ namespace Registry.Web.Services.Managers
             if (Path.IsPathRooted(path) || path.Contains(".."))
                 throw new ArgumentException("Rooted or relative paths are not supported");
 
-            var bucketName = _utils.GetBucketName(orgSlug, ds.InternalRef);
-            _logger.LogInformation($"Using bucket '{bucketName}'");
-
-            var destPath = CommonUtils.SafeCombine(BuildBasePath, hash, path);
-
-            _logger.LogInformation($"Getting object '{destPath}' in bucket '{bucketName}'");
+            var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
             
-            return new StreamableFileDescriptor(async (stream, cancellationToken) => {
-                await _objectSystem.GetObjectAsync(bucketName, destPath, 
-                        source => source.CopyTo(stream), cancellationToken: cancellationToken);
-                }, Path.GetFileName(path), MimeUtility.GetMimeMapping(path));
+            var destPath = CommonUtils.SafeCombine(BuildBasePath, hash, path);
+            
+            _logger.LogInformation($"Getting object '{destPath}'");
 
+            var localPath = ddb.GetLocalPath(destPath);
+
+            return localPath;
+            
+/*
+            return new StreamableFileDescriptor(async (stream, cancellationToken) =>
+            {
+                await _objectSystem.GetObjectAsync(bucketName, destPath,
+                    source => source.CopyTo(stream), cancellationToken: cancellationToken);
+            }, Path.GetFileName(path), MimeUtility.GetMimeMapping(path));*/
         }
 
         // Base build folder path (example: .ddb/build)
-        private string BuildBasePath => CommonUtils.SafeCombine(_ddbManager.DatabaseFolderName, _ddbManager.BuildFolderName);
+        private string BuildBasePath =>
+            CommonUtils.SafeCombine(_ddbManager.DatabaseFolderName, _ddbManager.BuildFolderName);
 
         public async Task<bool> CheckBuildFile(string orgSlug, string dsSlug, string hash, string path)
         {
-
             _logger.LogInformation($"In CheckBuildFile('{orgSlug}/{dsSlug}', '{hash}', '{path}')");
 
             var ds = await _utils.GetDataset(orgSlug, dsSlug);
@@ -957,24 +883,21 @@ namespace Registry.Web.Services.Managers
             if (Path.IsPathRooted(path) || path.Contains(".."))
                 throw new ArgumentException("Rooted or relative paths are not supported");
 
-            var bucketName = _utils.GetBucketName(orgSlug, ds.InternalRef);
-            _logger.LogInformation($"Using bucket '{bucketName}'");
+            var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
 
-            var destPath = CommonUtils.SafeCombine(BuildBasePath, hash, path);
-            _logger.LogInformation($"Using actual path '{destPath}'");
-
-            var objInfo = await _objectSystem.GetObjectInfoAsync(bucketName, destPath);
-
-            return objInfo != null;
+            return _fs.Exists(ddb.GetLocalPath(path));
         }
 
-        public string GetBuildSource(string bucketName, DdbEntry entry)
+        public string GetBuildSource(DdbEntry entry)
         {
-            string path = entry.Path;
-            if (entry.Type == EntryType.PointCloud) path = CommonUtils.SafeCombine(BuildBasePath, entry.Hash, "ept", "ept.json");
-            else if (entry.Type == EntryType.GeoRaster) path = CommonUtils.SafeCombine(BuildBasePath, entry.Hash, "cog", "cog.tif");
-            
-            return _objectSystem.GetInternalPath(bucketName, path);
+            var path = entry.Type switch
+            {
+                EntryType.PointCloud => CommonUtils.SafeCombine(BuildBasePath, entry.Hash, "ept", "ept.json"),
+                EntryType.GeoRaster => CommonUtils.SafeCombine(BuildBasePath, entry.Hash, "cog", "cog.tif"),
+                _ => entry.Path
+            };
+
+            return path;
         }
 
         #endregion
