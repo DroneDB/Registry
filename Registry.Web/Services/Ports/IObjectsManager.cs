@@ -21,11 +21,11 @@ namespace Registry.Web.Services.Ports
         Task Move(string orgSlug, string dsSlug, string source, string dest);
         Task Delete(string orgSlug, string dsSlug, string path);
         Task DeleteAll(string orgSlug, string dsSlug);
-        Task<FileDescriptorStreamDto> Download(string orgSlug, string dsSlug, string[] paths);
+        //Task<FileDescriptorStreamDto> Download(string orgSlug, string dsSlug, string[] paths);
         Task<FileStreamDescriptor> DownloadStream(string orgSlug, string dsSlug, string[] paths);
         Task<string> GetDownloadPackage(string orgSlug, string dsSlug, string[] paths, DateTime? expiration = null, bool isPublic = false);
-        Task<FileDescriptorStreamDto> GenerateThumbnail(string orgSlug, string dsSlug, string path, int? size, bool recreate = false);
-        Task<FileDescriptorStreamDto> GenerateTile(string orgSlug, string dsSlug, string path, int tz, int tx, int ty, bool retina);
+        Task<ObjectRes> GenerateThumbnail(string orgSlug, string dsSlug, string path, int? size, bool recreate = false);
+        Task<ObjectRes> GenerateTile(string orgSlug, string dsSlug, string path, int tz, int tx, int ty, bool retina);
         Task<FileDescriptorStreamDto> GetDdb(string orgSlug, string dsSlug);
         Task Build(string orgSlug, string dsSlug, string path, bool background = false, bool force = false);
         Task<string> GetBuildFile(string orgSlug, string dsSlug, string hash, string path);

@@ -40,7 +40,7 @@ namespace Registry.Web.Services.Managers
         private readonly IDdbManager _ddbManager;
         private readonly IUtils _utils;
         private readonly IAuthManager _authManager;
-        //private readonly ICacheManager _cacheManager;
+        private readonly ICacheManager _cacheManager;
         //private readonly IS3BridgeManager _bridgeManager;
         private readonly IFileSystem _fs;
         private readonly IBackgroundJobsProcessor _backgroundJob;
@@ -61,7 +61,7 @@ namespace Registry.Web.Services.Managers
             IDdbManager ddbManager,
             IUtils utils,
             IAuthManager authManager,
-            //ICacheManager cacheManager,
+            ICacheManager cacheManager,
             //IS3BridgeManager bridgeManager,
             IFileSystem fs,
             IBackgroundJobsProcessor backgroundJob)
@@ -71,7 +71,7 @@ namespace Registry.Web.Services.Managers
             _ddbManager = ddbManager;
             _utils = utils;
             _authManager = authManager;
-            //_cacheManager = cacheManager;
+            _cacheManager = cacheManager;
             //_bridgeManager = bridgeManager;
             _fs = fs;
             _backgroundJob = backgroundJob;
@@ -349,9 +349,9 @@ namespace Registry.Web.Services.Managers
 
                 _fs.Delete(objLocalPath);
 
-                //await _cacheManager.ClearThumbnails(obj.Hash);
-                //await _cacheManager.ClearTiles(obj.Hash);
-                //await _bridgeManager.RemoveObjectFromCache(bucketName, obj.Path);
+                await _cacheManager.Clear(MagicStrings.ThumbnailCacheSeed,obj.Hash);
+                await _cacheManager.Clear(MagicStrings.TileCacheSeed,obj.Hash);
+                
             }
 
             _logger.LogInformation("Deletion complete");
@@ -369,7 +369,7 @@ namespace Registry.Web.Services.Managers
             _ddbManager.Delete(orgSlug, ds.InternalRef);
         }
 
-        public async Task<FileDescriptorStreamDto> GenerateThumbnail(string orgSlug, string dsSlug, string path, int? size,
+        public async Task<ObjectRes> GenerateThumbnail(string orgSlug, string dsSlug, string path, int? size,
             bool recreate = false)
         {
             var ds = await _utils.GetDataset(orgSlug, dsSlug);
@@ -385,24 +385,21 @@ namespace Registry.Web.Services.Managers
             if (fileName == null)
                 throw new ArgumentException("Path is not valid");
 
-            //var bucketName = _utils.GetBucketName(orgSlug, ds.InternalRef);
             var sourcePath = GetBuildSource(entry);
             var localPath = ddb.GetLocalPath(sourcePath);
 
-            var thumbData = await ddb.GenerateThumbnailAsync(localPath, size ?? DefaultThumbnailSize);
-            //var thumbData = await _cacheManager.GenerateThumbnail(ddb, localPath, entry.Hash, size ?? DefaultThumbnailSize);
+            var thumbPath = await _cacheManager.Get(MagicStrings.ThumbnailCacheSeed, entry.Hash, ddb, localPath, size ?? DefaultThumbnailSize);
 
-            var memory = new MemoryStream(thumbData);
-
-            return new FileDescriptorStreamDto
+            return new ObjectRes
             {
-                ContentStream = memory,
-                ContentType = "image/jpeg",
-                Name = Path.ChangeExtension(fileName, ".jpg")
+                Name = Path.ChangeExtension(fileName, ".jpg"),
+                PhysicalPath = Path.GetFullPath(thumbPath),
+                ContentType = "image/jpeg"
             };
+
         }
 
-        public async Task<FileDescriptorStreamDto> GenerateTile(string orgSlug, string dsSlug, string path, int tz, int tx,
+        public async Task<ObjectRes> GenerateTile(string orgSlug, string dsSlug, string path, int tz, int tx,
             int ty, bool retina)
         {
             var ds = await _utils.GetDataset(orgSlug, dsSlug);
@@ -420,17 +417,16 @@ namespace Registry.Web.Services.Managers
 
             try
             {
-                //var tileData = await _cacheManager.GenerateTile(ddb, localPath, entry.Hash, tz, tx, ty, retina);
 
-                var tileData = await ddb.GenerateTileAsync(localPath, tz, tx, ty, retina, entry.Hash);
-                var memory = new MemoryStream(tileData);
-
-                return new FileDescriptorStreamDto
+                var tilePath = await _cacheManager.Get("tile", entry.Hash, ddb, localPath, entry.Hash, tx, ty, tz, retina);
+                
+                return new ObjectRes
                 {
-                    ContentStream = memory,
+                    PhysicalPath = Path.GetFullPath(tilePath),
                     ContentType = "image/png",
                     Name = $"{ty}.png"
                 };
+                
             }
             catch (InvalidOperationException ex)
             {
@@ -472,50 +468,50 @@ namespace Registry.Web.Services.Managers
             return downloadPackage.Id.ToString();
         }
 
-        public async Task<FileDescriptorStreamDto> DownloadPackage(string orgSlug, string dsSlug, string packageId)
-        {
-            var ds = await _utils.GetDataset(orgSlug, dsSlug, checkOwnership: false);
-
-            _logger.LogInformation($"In DownloadPackage('{orgSlug}/{dsSlug}')");
-
-            if (packageId == null)
-                throw new ArgumentException("No package id provided");
-
-            if (!Guid.TryParse(packageId, out var packageGuid))
-                throw new ArgumentException("Invalid package id: expected guid");
-
-            var package = _context.DownloadPackages.FirstOrDefault(item => item.Id == packageGuid);
-
-            if (package == null)
-                throw new ArgumentException($"Cannot find package with id '{packageId}'");
-
-            var user = await _authManager.GetCurrentUser();
-
-            // If we are not logged-in and this is not a public package
-            if (user == null && !package.IsPublic)
-                throw new UnauthorizedException("Download not allowed");
-
-            // If it has and expiration date
-            if (package.ExpirationDate != null)
-            {
-                // If expired
-                if (DateTime.Now > package.ExpirationDate)
-                {
-                    _context.DownloadPackages.Remove(package);
-                    await _context.SaveChangesAsync();
-
-                    throw new ArgumentException("This package is expired");
-                }
-            }
-            // It's a one-time download
-            else
-            {
-                _context.DownloadPackages.Remove(package);
-                await _context.SaveChangesAsync();
-            }
-
-            return await GetOfflineFileDescriptor(orgSlug, dsSlug, ds.InternalRef, package.Paths);
-        }
+        // public async Task<FileDescriptorStreamDto> DownloadPackage(string orgSlug, string dsSlug, string packageId)
+        // {
+        //     var ds = await _utils.GetDataset(orgSlug, dsSlug, checkOwnership: false);
+        //
+        //     _logger.LogInformation($"In DownloadPackage('{orgSlug}/{dsSlug}')");
+        //
+        //     if (packageId == null)
+        //         throw new ArgumentException("No package id provided");
+        //
+        //     if (!Guid.TryParse(packageId, out var packageGuid))
+        //         throw new ArgumentException("Invalid package id: expected guid");
+        //
+        //     var package = _context.DownloadPackages.FirstOrDefault(item => item.Id == packageGuid);
+        //
+        //     if (package == null)
+        //         throw new ArgumentException($"Cannot find package with id '{packageId}'");
+        //
+        //     var user = await _authManager.GetCurrentUser();
+        //
+        //     // If we are not logged-in and this is not a public package
+        //     if (user == null && !package.IsPublic)
+        //         throw new UnauthorizedException("Download not allowed");
+        //
+        //     // If it has and expiration date
+        //     if (package.ExpirationDate != null)
+        //     {
+        //         // If expired
+        //         if (DateTime.Now > package.ExpirationDate)
+        //         {
+        //             _context.DownloadPackages.Remove(package);
+        //             await _context.SaveChangesAsync();
+        //
+        //             throw new ArgumentException("This package is expired");
+        //         }
+        //     }
+        //     // It's a one-time download
+        //     else
+        //     {
+        //         _context.DownloadPackages.Remove(package);
+        //         await _context.SaveChangesAsync();
+        //     }
+        //
+        //     return await GetOfflineFileDescriptor(orgSlug, dsSlug, ds.InternalRef, package.Paths);
+        // }
 
 
         public async Task<FileStreamDescriptor> DownloadStream(string orgSlug, string dsSlug, string[] paths)
@@ -529,16 +525,16 @@ namespace Registry.Web.Services.Managers
             return GetFileStreamDescriptor(orgSlug, dsSlug, ds.InternalRef, paths);
         }
 
-        public async Task<FileDescriptorStreamDto> Download(string orgSlug, string dsSlug, string[] paths)
-        {
-            var ds = await _utils.GetDataset(orgSlug, dsSlug);
-
-            _logger.LogInformation($"In Download('{orgSlug}/{dsSlug}')");
-
-            EnsurePathsValidity(orgSlug, ds.InternalRef, paths);
-
-            return await GetOfflineFileDescriptor(orgSlug, dsSlug, ds.InternalRef, paths);
-        }
+        // public async Task<FileDescriptorStreamDto> Download(string orgSlug, string dsSlug, string[] paths)
+        // {
+        //     var ds = await _utils.GetDataset(orgSlug, dsSlug);
+        //
+        //     _logger.LogInformation($"In Download('{orgSlug}/{dsSlug}')");
+        //
+        //     EnsurePathsValidity(orgSlug, ds.InternalRef, paths);
+        //
+        //     return await GetOfflineFileDescriptor(orgSlug, dsSlug, ds.InternalRef, paths);
+        // }
 
         private FileStreamDescriptor GetFileStreamDescriptor(string orgSlug, string dsSlug, Guid internalRef,
             string[] paths)
@@ -571,78 +567,78 @@ namespace Registry.Web.Services.Managers
             return streamDescriptor;
         }
         
-        private async Task<FileDescriptorStreamDto> GetOfflineFileDescriptor(string orgSlug, string dsSlug, Guid internalRef,
-            string[] paths)
-        {
-            var ddb = _ddbManager.Get(orgSlug, internalRef);
-
-            var (files, folders, includeDdb) = GetFilePaths(paths, ddb);
-
-            FileDescriptorStreamDto descriptorStream;
-
-            // If there is just one file we return it
-            if (files.Length == 1 && paths?.Length == 1 && files[0] == paths[0])
-            {
-                var filePath = files.First();
-
-                _logger.LogInformation($"Only one path found: '{filePath}'");
-
-                var localPath = ddb.GetLocalPath(filePath);
-
-                descriptorStream = new FileDescriptorStreamDto
-                {
-                    ContentStream = File.OpenRead(localPath),
-                    Name = Path.GetFileName(filePath),
-                    ContentType = MimeUtility.GetMimeMapping(filePath)
-                };
-
-            }
-            // Otherwise we zip everything together and return the package
-            else
-            {
-                descriptorStream = new FileDescriptorStreamDto
-                {
-                    Name = $"{orgSlug}-{dsSlug}-{CommonUtils.RandomString(8)}.zip",
-                    ContentStream = new MemoryStream(),
-                    ContentType = "application/zip"
-                };
-
-                using (var archive = new ZipArchive(descriptorStream.ContentStream, ZipArchiveMode.Create, true))
-                {
-                    foreach (var path in files)
-                    {
-                        _logger.LogInformation($"Zipping: '{path}'");
-
-                        var entry = archive.CreateEntry(path, CompressionLevel.NoCompression);
-                        await using var entryStream = entry.Open();
-
-                        var localPath = ddb.GetLocalPath(path);
-                        
-                        await using var fileStream = File.OpenRead(localPath);
-                        await fileStream.CopyToAsync(entryStream);
-
-                    }
-
-                    // We treat folders separately because if they are empty they would not be included in the archive
-                    if (folders != null)
-                    {
-                        foreach (var folder in folders)
-                            archive.CreateEntry(folder + "/");
-                    }
-
-                    // Include ddb folder
-                    if (includeDdb)
-                    {
-                        archive.CreateEntryFromAny(Path.Combine(ddb.DatasetFolderPath, ddb.DatabaseFolderName),
-                            string.Empty, new[] { ddb.BuildFolderPath });
-                    }
-                }
-
-                descriptorStream.ContentStream.Reset();
-            }
-
-            return descriptorStream;
-        }
+        // private async Task<FileDescriptorStreamDto> GetOfflineFileDescriptor(string orgSlug, string dsSlug, Guid internalRef,
+        //     string[] paths)
+        // {
+        //     var ddb = _ddbManager.Get(orgSlug, internalRef);
+        //
+        //     var (files, folders, includeDdb) = GetFilePaths(paths, ddb);
+        //
+        //     FileDescriptorStreamDto descriptorStream;
+        //
+        //     // If there is just one file we return it
+        //     if (files.Length == 1 && paths?.Length == 1 && files[0] == paths[0])
+        //     {
+        //         var filePath = files.First();
+        //
+        //         _logger.LogInformation($"Only one path found: '{filePath}'");
+        //
+        //         var localPath = ddb.GetLocalPath(filePath);
+        //
+        //         descriptorStream = new FileDescriptorStreamDto
+        //         {
+        //             ContentStream = File.OpenRead(localPath),
+        //             Name = Path.GetFileName(filePath),
+        //             ContentType = MimeUtility.GetMimeMapping(filePath)
+        //         };
+        //
+        //     }
+        //     // Otherwise we zip everything together and return the package
+        //     else
+        //     {
+        //         descriptorStream = new FileDescriptorStreamDto
+        //         {
+        //             Name = $"{orgSlug}-{dsSlug}-{CommonUtils.RandomString(8)}.zip",
+        //             ContentStream = new MemoryStream(),
+        //             ContentType = "application/zip"
+        //         };
+        //
+        //         using (var archive = new ZipArchive(descriptorStream.ContentStream, ZipArchiveMode.Create, true))
+        //         {
+        //             foreach (var path in files)
+        //             {
+        //                 _logger.LogInformation($"Zipping: '{path}'");
+        //
+        //                 var entry = archive.CreateEntry(path, CompressionLevel.NoCompression);
+        //                 await using var entryStream = entry.Open();
+        //
+        //                 var localPath = ddb.GetLocalPath(path);
+        //                 
+        //                 await using var fileStream = File.OpenRead(localPath);
+        //                 await fileStream.CopyToAsync(entryStream);
+        //
+        //             }
+        //
+        //             // We treat folders separately because if they are empty they would not be included in the archive
+        //             if (folders != null)
+        //             {
+        //                 foreach (var folder in folders)
+        //                     archive.CreateEntry(folder + "/");
+        //             }
+        //
+        //             // Include ddb folder
+        //             if (includeDdb)
+        //             {
+        //                 archive.CreateEntryFromAny(Path.Combine(ddb.DatasetFolderPath, ddb.DatabaseFolderName),
+        //                     string.Empty, new[] { ddb.BuildFolderPath });
+        //             }
+        //         }
+        //
+        //         descriptorStream.ContentStream.Reset();
+        //     }
+        //
+        //     return descriptorStream;
+        // }
 
         private (string[] files, string[] folders, bool includeDdb) GetFilePaths(string[] paths, IDdb ddb)
         {
@@ -869,13 +865,7 @@ namespace Registry.Web.Services.Managers
             var localPath = ddb.GetLocalPath(destPath);
 
             return Path.GetFullPath(localPath);
-            
-/*
-            return new StreamableFileDescriptor(async (stream, cancellationToken) =>
-            {
-                await _objectSystem.GetObjectAsync(bucketName, destPath,
-                    source => source.CopyTo(stream), cancellationToken: cancellationToken);
-            }, Path.GetFileName(path), MimeUtility.GetMimeMapping(path));*/
+
         }
 
         // Base build folder path (example: .ddb/build)

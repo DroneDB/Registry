@@ -39,7 +39,6 @@ namespace Registry.Web.Controllers
             _logger = logger;
         }
 
-
         [HttpGet("ddb", Name = nameof(ObjectsController) + "." + nameof(GetDdb))]
         public async Task<IActionResult> GetDdb([FromRoute] string orgSlug, [FromRoute] string dsSlug)
         {
@@ -67,7 +66,7 @@ namespace Registry.Web.Controllers
 
                 var res = await _objectsManager.GenerateThumbnail(orgSlug, dsSlug, path, size);
 
-                return File(res.ContentStream, res.ContentType, res.Name);
+                return PhysicalFile(res.PhysicalPath, res.ContentType, res.Name);
 
             }
             catch (Exception ex)
@@ -93,7 +92,8 @@ namespace Registry.Web.Controllers
 
                 var res = await _objectsManager.GenerateTile(orgSlug, dsSlug, path, tz, tx, ty, retina);
 
-                return File(res.ContentStream, res.ContentType, res.Name);
+                return PhysicalFile(res.PhysicalPath, res.ContentType, res.Name);
+                
             }
             catch (Exception ex)
             {
@@ -118,6 +118,13 @@ namespace Registry.Web.Controllers
 
                 _logger.LogDebug($"Objects controller Download('{orgSlug}', '{dsSlug}', '{pathsRaw}', '{isInlineRaw}')");
 
+                // If only one file is requested, we can leverage the local file system
+                if (paths?.Length == 1)
+                {
+                    var r = await _objectsManager.Get(orgSlug, dsSlug, paths[0]);
+                    return PhysicalFile(r.PhysicalPath, r.ContentType, isInline ? null : r.Name, true);
+                }
+                
                 var res = await _objectsManager.DownloadStream(orgSlug, dsSlug, paths);
 
                 Response.StatusCode = 200;
@@ -150,17 +157,9 @@ namespace Registry.Web.Controllers
 
                 _logger.LogDebug($"Objects controller DownloadExact('{orgSlug}', '{dsSlug}', '{path}', '{isInlineRaw}')");
 
-                var res = await _objectsManager.DownloadStream(orgSlug, dsSlug, new[] { path });
+                var res = await _objectsManager.Get(orgSlug, dsSlug, path);
 
-                Response.StatusCode = 200;
-                Response.ContentType = res.ContentType;
-
-                Response.Headers.Add("Content-Disposition",
-                    isInline ? "inline" : $"attachment; filename=\"{res.Name}\"");
-
-                await res.CopyToAsync(Response.Body);
-
-                return new EmptyResult();
+                return PhysicalFile(res.PhysicalPath, res.ContentType, isInline ? null : res.Name, true);
 
             }
             catch (Exception ex)

@@ -7,15 +7,12 @@ using Registry.Ports.DroneDB;
 
 namespace Registry.Web.Services.Ports
 {
-    /*public interface ICacheManager
+    public interface ICacheManager
     {
-        public Task<byte []> GenerateThumbnail(IDdb ddb, string sourcePath, string sourceHash, int size);
-
-        public Task<byte[]> GenerateTile(IDdb ddb, string sourcePath, string sourceHash, int tz, int tx, int ty,
-            bool retina);
-
-        public Task ClearThumbnails(string sourceHash);
-        public Task ClearTiles(string sourceHash);
-
-    }*/
+        void Register(string seed, Func<object[], byte[]> getData, TimeSpan? expiration = null);
+        void Unregister(string seed);
+        Task<string> Get(string seed, string category, params object[] parameters);
+        Task Clear(string seed, string category = null);
+        void Remove(string seed, string category, params object[] parameters);
+    }
 }
