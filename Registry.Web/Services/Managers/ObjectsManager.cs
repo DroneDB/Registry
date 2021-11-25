@@ -41,7 +41,7 @@ namespace Registry.Web.Services.Managers
         private readonly IUtils _utils;
         private readonly IAuthManager _authManager;
         //private readonly ICacheManager _cacheManager;
-        private readonly IS3BridgeManager _bridgeManager;
+        //private readonly IS3BridgeManager _bridgeManager;
         private readonly IFileSystem _fs;
         private readonly IBackgroundJobsProcessor _backgroundJob;
         private readonly RegistryContext _context;
@@ -49,8 +49,6 @@ namespace Registry.Web.Services.Managers
 
         // TODO: Could be moved to config
         private const int DefaultThumbnailSize = 512;
-
-        private readonly string _location;
 
         private bool IsReservedPath(string path)
         {
@@ -64,7 +62,7 @@ namespace Registry.Web.Services.Managers
             IUtils utils,
             IAuthManager authManager,
             //ICacheManager cacheManager,
-            IS3BridgeManager bridgeManager,
+            //IS3BridgeManager bridgeManager,
             IFileSystem fs,
             IBackgroundJobsProcessor backgroundJob)
         {
@@ -74,12 +72,10 @@ namespace Registry.Web.Services.Managers
             _utils = utils;
             _authManager = authManager;
             //_cacheManager = cacheManager;
-            _bridgeManager = bridgeManager;
+            //_bridgeManager = bridgeManager;
             _fs = fs;
             _backgroundJob = backgroundJob;
             _settings = settings.Value;
-
-            _location = _settings.SafeGetLocation(_logger);
         }
 
         public async Task<IEnumerable<ObjectDto>> List(string orgSlug, string dsSlug, string path = null,
@@ -152,7 +148,7 @@ namespace Registry.Web.Services.Managers
                 Size = entry.Size,
                 Type = entry.Type,
                 ContentType = MimeTypes.GetMimeType(entry.Path),
-                PhysicalPath = ddb.GetLocalPath(entry.Path)
+                PhysicalPath = Path.GetFullPath(ddb.GetLocalPath(entry.Path))
             };
         }
 
@@ -393,7 +389,7 @@ namespace Registry.Web.Services.Managers
             var sourcePath = GetBuildSource(entry);
             var localPath = ddb.GetLocalPath(sourcePath);
 
-            var thumbData = await ddb.GenerateThumbnailAsync(sourcePath, size ?? DefaultThumbnailSize);
+            var thumbData = await ddb.GenerateThumbnailAsync(localPath, size ?? DefaultThumbnailSize);
             //var thumbData = await _cacheManager.GenerateThumbnail(ddb, localPath, entry.Hash, size ?? DefaultThumbnailSize);
 
             var memory = new MemoryStream(thumbData);
@@ -426,7 +422,7 @@ namespace Registry.Web.Services.Managers
             {
                 //var tileData = await _cacheManager.GenerateTile(ddb, localPath, entry.Hash, tz, tx, ty, retina);
 
-                var tileData = await ddb.GenerateTileAsync(sourcePath, tz, tx, ty, retina, entry.Hash);
+                var tileData = await ddb.GenerateTileAsync(localPath, tz, tx, ty, retina, entry.Hash);
                 var memory = new MemoryStream(tileData);
 
                 return new FileDescriptorStreamDto
@@ -857,7 +853,7 @@ namespace Registry.Web.Services.Managers
 
             var localPath = ddb.GetLocalPath(destPath);
 
-            return localPath;
+            return Path.GetFullPath(localPath);
             
 /*
             return new StreamableFileDescriptor(async (stream, cancellationToken) =>
@@ -884,8 +880,10 @@ namespace Registry.Web.Services.Managers
                 throw new ArgumentException("Rooted or relative paths are not supported");
 
             var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
+            
+            var destPath = CommonUtils.SafeCombine(BuildBasePath, hash, path);
 
-            return _fs.Exists(ddb.GetLocalPath(path));
+            return _fs.Exists(ddb.GetLocalPath(destPath));
         }
 
         public string GetBuildSource(DdbEntry entry)

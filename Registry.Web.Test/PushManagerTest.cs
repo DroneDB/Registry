@@ -31,7 +31,7 @@ using Registry.Web.Services.Ports;
 using Registry.Web.Test.Adapters;
 
 namespace Registry.Web.Test
-{
+{/*
     class PushManagerTest
     {
         private Logger<PushManager> _pushManagerLogger;
@@ -76,7 +76,7 @@ namespace Registry.Web.Test
         {
             //
         }
-/*
+
         [SetUp]
         public void Setup()
         {
@@ -402,6 +402,6 @@ namespace Registry.Web.Test
             return new RegistryContext(options);
         }
 
-        #endregion*/
-    }
+        #endregion
+    }*/
 }

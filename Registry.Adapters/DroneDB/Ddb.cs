@@ -106,7 +106,7 @@ namespace Registry.Adapters.DroneDB
 
         public string GetLocalPath(string path)
         {
-            return Path.Combine(DatasetFolderPath, path);
+            return CommonUtils.SafeCombine(DatasetFolderPath, path);
         }
 
         public DdbEntry GetEntry(string path)

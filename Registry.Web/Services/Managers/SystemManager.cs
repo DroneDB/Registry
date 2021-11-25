@@ -6,8 +6,6 @@ using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
-using Registry.Adapters.ObjectSystem;
-using Registry.Ports.ObjectSystem;
 using Registry.Web.Data;
 using Registry.Web.Data.Models;
 using Registry.Web.Exceptions;
@@ -176,16 +174,6 @@ namespace Registry.Web.Services.Managers
                 RemovedBatches = removed.ToArray(),
                 RemoveBatchErrors = errors.ToArray()
             };
-
-        }
-
-        public async Task Cleanup()
-        {
-            if (_objectSystem is not CachedS3ObjectSystem cachedS3)
-                throw new NotSupportedException(
-                    "Current object system does not support Cleanup method, only CachedS3ObjectSystem does");
-
-            await cachedS3.Cleanup();
 
         }
     }

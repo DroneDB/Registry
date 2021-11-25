@@ -95,7 +95,6 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\Registry.Adapters.DroneDB\Registry.Adapters.DroneDB.csproj" />
     <ProjectReference Include="..\Registry.Adapters\Registry.Adapters.csproj" />
     <ProjectReference Include="..\Registry.Common\Registry.Common.csproj" />
     <ProjectReference Include="..\Registry.Ports\Registry.Ports.csproj" />

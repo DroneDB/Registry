@@ -28,7 +28,7 @@ namespace Registry.Web.Services
         //     }
         //
         // }
-
+        /*
         public static string SafeGetLocation<T>(this AppSettings settings, ILogger<T> logger)
         {
             if (settings.StorageProvider.Type != StorageType.S3 && settings.StorageProvider.Type != StorageType.CachedS3) return null;
@@ -44,7 +44,7 @@ namespace Registry.Web.Services
                 logger.LogWarning("No region specified in storage provider config");
 
             return st.Region;
-        }
+        }*/
 
     }
 }

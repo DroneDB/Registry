@@ -50,8 +50,8 @@ namespace Registry.Web.Test
         private Mock<IOrganizationsManager> _organizationsManagerMock;
         private Mock<IDatasetsManager> _datasetsManagerMock;
         private Mock<IHttpContextAccessor> _httpContextAccessorMock;
-        private Mock<ICacheManager> _cacheManagerMock;
-        private Mock<IS3BridgeManager> _bridgeManagerMock;
+        //private Mock<ICacheManager> _cacheManagerMock;
+        //private Mock<IS3BridgeManager> _bridgeManagerMock;
         private IBackgroundJobsProcessor _backgroundJobsProcessor;
 
         private INameGenerator _nameGenerator;

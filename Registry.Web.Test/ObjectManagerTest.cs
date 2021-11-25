@@ -47,8 +47,8 @@ namespace Registry.Web.Test
         private Mock<IDdbManager> _ddbFactoryMock;
         private Mock<IAuthManager> _authManagerMock;
         private Mock<IHttpContextAccessor> _httpContextAccessorMock;
-        private Mock<ICacheManager> _cacheManagerMock;
-        private Mock<IS3BridgeManager> _bridgeManagerMock;
+        //private Mock<ICacheManager> _cacheManagerMock;
+        //private Mock<IS3BridgeManager> _bridgeManagerMock;
         private IBackgroundJobsProcessor _backgroundJobsProcessor;
 
         //private const string DataFolder = "Data";

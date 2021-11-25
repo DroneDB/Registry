@@ -8,7 +8,6 @@ namespace Registry.Web.Services.Ports
 {
     public interface ISystemManager
     {
-        public Task Cleanup();
         public Task<CleanupBatchesResultDto> CleanupBatches();
         Task<CleanupDatasetResultDto> CleanupEmptyDatasets();
         string GetVersion();

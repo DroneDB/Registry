@@ -67,7 +67,7 @@ namespace Registry.Web.Controllers
 
                 var res = await _objectsManager.GenerateThumbnail(orgSlug, dsSlug, path, size);
 
-                return PhysicalFile(res, MimeUtility.GetMimeMapping(res));
+                return File(res.ContentStream, res.ContentType, res.Name);
 
             }
             catch (Exception ex)
@@ -171,6 +171,7 @@ namespace Registry.Web.Controllers
             }
         }
 
+        /*
         [AllowAnonymous]
         [HttpGet("package/{id}", Name = nameof(ObjectsController) + "." + nameof(DownloadPackage))]
         public async Task<IActionResult> DownloadPackage([FromRoute] string orgSlug, [FromRoute] string dsSlug, string id)
@@ -191,7 +192,7 @@ namespace Registry.Web.Controllers
                 return ExceptionResult(ex);
             }
 
-        }
+        }*/
 
         [HttpPost("download", Name = nameof(ObjectsController) + "." + nameof(DownloadPost))]
         public async Task<IActionResult> DownloadPost([FromRoute] string orgSlug, [FromRoute] string dsSlug,
@@ -225,7 +226,7 @@ namespace Registry.Web.Controllers
                 return ExceptionResult(ex);
             }
         }
-
+/*
         [HttpPost("getpackage", Name = nameof(ObjectsController) + "." + nameof(GetPackageUrl))]
         [ProducesResponseType(typeof(DownloadPackageDto), 200)]
         public async Task<IActionResult> GetPackageUrl([FromRoute] string orgSlug, [FromRoute] string dsSlug,
@@ -261,7 +262,7 @@ namespace Registry.Web.Controllers
 
                 return ExceptionResult(ex);
             }
-        }
+        }*/
         #endregion
 
         [HttpGet(RoutesHelper.ObjectsRadix, Name = nameof(ObjectsController) + "." + nameof(Get))]

@@ -79,6 +79,7 @@ namespace Registry.Web.Controllers
             }
         }
 
+        /*
         [HttpPost("cleanup", Name = nameof(SystemController) + "." + nameof(SyncFiles))]
         public async Task<IActionResult> SyncFiles()
         {
@@ -95,6 +96,6 @@ namespace Registry.Web.Controllers
 
                 return ExceptionResult(ex);
             }
-        }
+        }*/
     }
 }

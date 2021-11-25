@@ -33,7 +33,9 @@ using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
 using Newtonsoft.Json.Serialization;
+using Registry.Adapters;
 using Registry.Common;
+using Registry.Ports;
 using Registry.Web.Data;
 using Registry.Web.Data.Models;
 using Registry.Web.Filters;
@@ -218,17 +220,17 @@ namespace Registry.Web
             services.AddScoped<IDatasetsManager, DatasetsManager>();
             services.AddScoped<IObjectsManager, ObjectsManager>();
             services.AddScoped<IShareManager, ShareManager>();
-            services.AddScoped<IPushManager, PushManager>();
+            //services.AddScoped<IPushManager, PushManager>();
             services.AddScoped<IDdbManager, DdbManager>();
             services.AddScoped<ISystemManager, SystemManager>();
             services.AddScoped<IBackgroundJobsProcessor, BackgroundJobsProcessor>();
             services.AddScoped<IMetaManager, MetaManager>();
-            services.AddScoped<IS3BridgeManager, S3BridgeManager>();
 
+            services.AddSingleton<IFileSystem, FileSystem>();
             services.AddSingleton<IPasswordHasher, PasswordHasher>();
             services.AddSingleton<IBatchTokenGenerator, BatchTokenGenerator>();
             services.AddSingleton<INameGenerator, NameGenerator>();
-            services.AddSingleton<ICacheManager, CacheManager>();
+            //services.AddSingleton<ICacheManager, CacheManager>();
             services.AddSingleton<ObjectCache>(provider => new FileCache(FileCacheManagers.Hashed, 
                 appSettings.BridgeCachePath, new DefaultSerializationBinder(), 
                 true, appSettings.ClearCacheInterval ?? default)
