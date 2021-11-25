@@ -803,7 +803,7 @@ namespace Registry.Web.Services.Managers
             }
         }
 
-        public async Task Build(string orgSlug, string dsSlug, string path, bool force = false)
+        public async Task Build(string orgSlug, string dsSlug, string path, bool background = false, bool force = false)
         {
             var ds = await _utils.GetDataset(orgSlug, dsSlug);
 
@@ -827,7 +827,22 @@ namespace Registry.Web.Services.Managers
                 return;
             }
 
-            HangfireUtils.BuildWrapper(ddb, path, force, null);
+            if (background)
+            {
+                
+                _logger.LogInformation("Building '{path}' asynchronously", path);
+
+                var jobId = _backgroundJob.Enqueue(() => HangfireUtils.BuildWrapper(ddb, path, force, null));
+
+                _logger.LogInformation("Background job id is " + jobId);
+ 
+            }
+            else
+            {
+                _logger.LogInformation("Building '{path}' synchronously", path);
+
+                HangfireUtils.BuildWrapper(ddb, path, force, null);
+            }
         }
 
         #region Build

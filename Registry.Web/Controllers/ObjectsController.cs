@@ -420,13 +420,13 @@ namespace Registry.Web.Controllers
         }
 
         [HttpPost("build", Name = nameof(ObjectsController) + "." + nameof(Build))]
-        public async Task<IActionResult> Build([FromRoute] string orgSlug, [FromRoute] string dsSlug, [FromForm] string path, [FromForm] bool force = false)
+        public async Task<IActionResult> Build([FromRoute] string orgSlug, [FromRoute] string dsSlug, [FromForm] string path, [FromForm] bool background = false, [FromForm] bool force = false)
         {
             try
             {
                 _logger.LogDebug($"Objects controller Build('{orgSlug}', '{dsSlug}', '{path}')");
 
-                await _objectsManager.Build(orgSlug, dsSlug, path, force);
+                await _objectsManager.Build(orgSlug, dsSlug, path, background, force);
                 return Ok();
             }
             catch (Exception ex)

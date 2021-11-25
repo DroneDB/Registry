@@ -27,7 +27,7 @@ namespace Registry.Web.Services.Ports
         Task<FileDescriptorStreamDto> GenerateThumbnail(string orgSlug, string dsSlug, string path, int? size, bool recreate = false);
         Task<FileDescriptorStreamDto> GenerateTile(string orgSlug, string dsSlug, string path, int tz, int tx, int ty, bool retina);
         Task<FileDescriptorStreamDto> GetDdb(string orgSlug, string dsSlug);
-        Task Build(string orgSlug, string dsSlug, string path, bool force = false);
+        Task Build(string orgSlug, string dsSlug, string path, bool background = false, bool force = false);
         Task<string> GetBuildFile(string orgSlug, string dsSlug, string hash, string path);
         Task<bool> CheckBuildFile(string orgSlug, string dsSlug, string hash, string path);
     }
