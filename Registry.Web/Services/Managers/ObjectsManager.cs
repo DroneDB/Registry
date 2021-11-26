@@ -7,6 +7,7 @@ using System.IO;
 using System.IO.Compression;
 using System.IO.Enumeration;
 using System.Linq;
+using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using DDB.Bindings;
@@ -778,9 +779,12 @@ namespace Registry.Web.Services.Managers
 
             try
             {
+               
                 // We could do this fully in memory BUT it's not a strict requirement by now: ddb folders are not huge (yet)
-                ZipFile.CreateFromDirectory(ddb.DatasetFolderPath, tempFile, CompressionLevel.NoCompression, false);
-
+                ZipUtils.CreateFromDirectory(ddb.DatasetFolderPath, tempFile, CompressionLevel.NoCompression, false,
+                    Encoding.UTF8,
+                    fileName => fileName.Contains(@"\build\") || !fileName.Contains(@".ddb\"));
+                
                 await using var s = File.OpenRead(tempFile);
                 var memory = new MemoryStream();
                 await s.CopyToAsync(memory);
