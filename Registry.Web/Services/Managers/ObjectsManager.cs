@@ -42,7 +42,6 @@ namespace Registry.Web.Services.Managers
         private readonly IUtils _utils;
         private readonly IAuthManager _authManager;
         private readonly ICacheManager _cacheManager;
-        //private readonly IS3BridgeManager _bridgeManager;
         private readonly IFileSystem _fs;
         private readonly IBackgroundJobsProcessor _backgroundJob;
         private readonly RegistryContext _context;
@@ -63,7 +62,6 @@ namespace Registry.Web.Services.Managers
             IUtils utils,
             IAuthManager authManager,
             ICacheManager cacheManager,
-            //IS3BridgeManager bridgeManager,
             IFileSystem fs,
             IBackgroundJobsProcessor backgroundJob)
         {
@@ -73,13 +71,12 @@ namespace Registry.Web.Services.Managers
             _utils = utils;
             _authManager = authManager;
             _cacheManager = cacheManager;
-            //_bridgeManager = bridgeManager;
             _fs = fs;
             _backgroundJob = backgroundJob;
             _settings = settings.Value;
         }
 
-        public async Task<IEnumerable<ObjectDto>> List(string orgSlug, string dsSlug, string path = null,
+        public async Task<IEnumerable<EntryGeoDto>> List(string orgSlug, string dsSlug, string path = null,
             bool recursive = false)
         {
             var ds = await _utils.GetDataset(orgSlug, dsSlug);
@@ -97,7 +94,7 @@ namespace Registry.Web.Services.Managers
             return files;
         }
 
-        public async Task<IEnumerable<ObjectDto>> Search(string orgSlug, string dsSlug, string query = null,
+        public async Task<IEnumerable<EntryGeoDto>> Search(string orgSlug, string dsSlug, string query = null,
             string path = null, bool recursive = true)
         {
             var ds = await _utils.GetDataset(orgSlug, dsSlug);
@@ -118,7 +115,7 @@ namespace Registry.Web.Services.Managers
             return files;
         }
 
-        public async Task<ObjectRes> Get(string orgSlug, string dsSlug, string path)
+        public async Task<StorageEntryDto> Get(string orgSlug, string dsSlug, string path)
         {
             var ds = await _utils.GetDataset(orgSlug, dsSlug);
 
@@ -130,7 +127,7 @@ namespace Registry.Web.Services.Managers
             return await InternalGet(orgSlug, ds.InternalRef, path);
         }
 
-        private async Task<ObjectRes> InternalGet(string orgSlug, Guid internalRef, string path)
+        private async Task<StorageEntryDto> InternalGet(string orgSlug, Guid internalRef, string path)
         {
             var ddb = _ddbManager.Get(orgSlug, internalRef);
 
@@ -142,7 +139,7 @@ namespace Registry.Web.Services.Managers
             if (entry.Type == EntryType.Directory)
                 throw new InvalidOperationException("Cannot get a folder, we are supposed to deal with a file!");
 
-            return new ObjectRes
+            return new StorageEntryDto
             {
                 Hash = entry.Hash,
                 Name = Path.GetFileName(entry.Path),
@@ -153,14 +150,14 @@ namespace Registry.Web.Services.Managers
             };
         }
 
-        public async Task<ObjectDto> AddNew(string orgSlug, string dsSlug, string path, byte[] data)
+        public async Task<EntryGeoDto> AddNew(string orgSlug, string dsSlug, string path, byte[] data)
         {
             await using var stream = new MemoryStream(data);
             stream.Reset();
             return await AddNew(orgSlug, dsSlug, path, stream);
         }
 
-        public async Task<ObjectDto> AddNew(string orgSlug, string dsSlug, string path, Stream stream = null)
+        public async Task<EntryGeoDto> AddNew(string orgSlug, string dsSlug, string path, Stream stream = null)
         {
             var ds = await _utils.GetDataset(orgSlug, dsSlug);
 
@@ -187,7 +184,7 @@ namespace Registry.Web.Services.Managers
 
                 _logger.LogInformation("Added to DDB");
 
-                return new ObjectDto
+                return new EntryGeoDto
                 {
                     Path = path,
                     Type = EntryType.Directory,
@@ -370,7 +367,7 @@ namespace Registry.Web.Services.Managers
             _ddbManager.Delete(orgSlug, ds.InternalRef);
         }
 
-        public async Task<ObjectRes> GenerateThumbnail(string orgSlug, string dsSlug, string path, int? size,
+        public async Task<StorageFileDto> GenerateThumbnail(string orgSlug, string dsSlug, string path, int? size,
             bool recreate = false)
         {
             var ds = await _utils.GetDataset(orgSlug, dsSlug);
@@ -391,7 +388,7 @@ namespace Registry.Web.Services.Managers
 
             var thumbPath = await _cacheManager.Get(MagicStrings.ThumbnailCacheSeed, entry.Hash, ddb, localPath, size ?? DefaultThumbnailSize);
 
-            return new ObjectRes
+            return new StorageEntryDto
             {
                 Name = Path.ChangeExtension(fileName, ".jpg"),
                 PhysicalPath = Path.GetFullPath(thumbPath),
@@ -400,7 +397,7 @@ namespace Registry.Web.Services.Managers
 
         }
 
-        public async Task<ObjectRes> GenerateTile(string orgSlug, string dsSlug, string path, int tz, int tx,
+        public async Task<StorageFileDto> GenerateTile(string orgSlug, string dsSlug, string path, int tz, int tx,
             int ty, bool retina)
         {
             var ds = await _utils.GetDataset(orgSlug, dsSlug);
@@ -421,7 +418,7 @@ namespace Registry.Web.Services.Managers
 
                 var tilePath = await _cacheManager.Get("tile", entry.Hash, ddb, localPath, entry.Hash, tx, ty, tz, retina);
                 
-                return new ObjectRes
+                return new StorageEntryDto
                 {
                     PhysicalPath = Path.GetFullPath(tilePath),
                     ContentType = "image/png",
@@ -442,79 +439,6 @@ namespace Registry.Web.Services.Managers
 
         #region Downloads
 
-        public async Task<string> GetDownloadPackage(string orgSlug, string dsSlug, string[] paths,
-            DateTime? expiration = null, bool isPublic = false)
-        {
-            var ds = await _utils.GetDataset(orgSlug, dsSlug);
-
-            _logger.LogInformation($"In GetDownloadPackage('{orgSlug}/{dsSlug}')");
-
-            EnsurePathsValidity(orgSlug, ds.InternalRef, paths);
-
-            var currentUser = await _authManager.GetCurrentUser();
-
-            var downloadPackage = new DownloadPackage
-            {
-                CreationDate = DateTime.Now,
-                Dataset = ds,
-                ExpirationDate = expiration,
-                Paths = paths,
-                UserName = currentUser.UserName,
-                IsPublic = isPublic
-            };
-
-            await _context.DownloadPackages.AddAsync(downloadPackage);
-            await _context.SaveChangesAsync();
-
-            return downloadPackage.Id.ToString();
-        }
-
-        // public async Task<FileDescriptorStreamDto> DownloadPackage(string orgSlug, string dsSlug, string packageId)
-        // {
-        //     var ds = await _utils.GetDataset(orgSlug, dsSlug, checkOwnership: false);
-        //
-        //     _logger.LogInformation($"In DownloadPackage('{orgSlug}/{dsSlug}')");
-        //
-        //     if (packageId == null)
-        //         throw new ArgumentException("No package id provided");
-        //
-        //     if (!Guid.TryParse(packageId, out var packageGuid))
-        //         throw new ArgumentException("Invalid package id: expected guid");
-        //
-        //     var package = _context.DownloadPackages.FirstOrDefault(item => item.Id == packageGuid);
-        //
-        //     if (package == null)
-        //         throw new ArgumentException($"Cannot find package with id '{packageId}'");
-        //
-        //     var user = await _authManager.GetCurrentUser();
-        //
-        //     // If we are not logged-in and this is not a public package
-        //     if (user == null && !package.IsPublic)
-        //         throw new UnauthorizedException("Download not allowed");
-        //
-        //     // If it has and expiration date
-        //     if (package.ExpirationDate != null)
-        //     {
-        //         // If expired
-        //         if (DateTime.Now > package.ExpirationDate)
-        //         {
-        //             _context.DownloadPackages.Remove(package);
-        //             await _context.SaveChangesAsync();
-        //
-        //             throw new ArgumentException("This package is expired");
-        //         }
-        //     }
-        //     // It's a one-time download
-        //     else
-        //     {
-        //         _context.DownloadPackages.Remove(package);
-        //         await _context.SaveChangesAsync();
-        //     }
-        //
-        //     return await GetOfflineFileDescriptor(orgSlug, dsSlug, ds.InternalRef, package.Paths);
-        // }
-
-
         public async Task<FileStreamDescriptor> DownloadStream(string orgSlug, string dsSlug, string[] paths)
         {
             var ds = await _utils.GetDataset(orgSlug, dsSlug);
@@ -525,17 +449,6 @@ namespace Registry.Web.Services.Managers
 
             return GetFileStreamDescriptor(orgSlug, dsSlug, ds.InternalRef, paths);
         }
-
-        // public async Task<FileDescriptorStreamDto> Download(string orgSlug, string dsSlug, string[] paths)
-        // {
-        //     var ds = await _utils.GetDataset(orgSlug, dsSlug);
-        //
-        //     _logger.LogInformation($"In Download('{orgSlug}/{dsSlug}')");
-        //
-        //     EnsurePathsValidity(orgSlug, ds.InternalRef, paths);
-        //
-        //     return await GetOfflineFileDescriptor(orgSlug, dsSlug, ds.InternalRef, paths);
-        // }
 
         private FileStreamDescriptor GetFileStreamDescriptor(string orgSlug, string dsSlug, Guid internalRef,
             string[] paths)
@@ -567,79 +480,6 @@ namespace Registry.Web.Services.Managers
 
             return streamDescriptor;
         }
-        
-        // private async Task<FileDescriptorStreamDto> GetOfflineFileDescriptor(string orgSlug, string dsSlug, Guid internalRef,
-        //     string[] paths)
-        // {
-        //     var ddb = _ddbManager.Get(orgSlug, internalRef);
-        //
-        //     var (files, folders, includeDdb) = GetFilePaths(paths, ddb);
-        //
-        //     FileDescriptorStreamDto descriptorStream;
-        //
-        //     // If there is just one file we return it
-        //     if (files.Length == 1 && paths?.Length == 1 && files[0] == paths[0])
-        //     {
-        //         var filePath = files.First();
-        //
-        //         _logger.LogInformation($"Only one path found: '{filePath}'");
-        //
-        //         var localPath = ddb.GetLocalPath(filePath);
-        //
-        //         descriptorStream = new FileDescriptorStreamDto
-        //         {
-        //             ContentStream = File.OpenRead(localPath),
-        //             Name = Path.GetFileName(filePath),
-        //             ContentType = MimeUtility.GetMimeMapping(filePath)
-        //         };
-        //
-        //     }
-        //     // Otherwise we zip everything together and return the package
-        //     else
-        //     {
-        //         descriptorStream = new FileDescriptorStreamDto
-        //         {
-        //             Name = $"{orgSlug}-{dsSlug}-{CommonUtils.RandomString(8)}.zip",
-        //             ContentStream = new MemoryStream(),
-        //             ContentType = "application/zip"
-        //         };
-        //
-        //         using (var archive = new ZipArchive(descriptorStream.ContentStream, ZipArchiveMode.Create, true))
-        //         {
-        //             foreach (var path in files)
-        //             {
-        //                 _logger.LogInformation($"Zipping: '{path}'");
-        //
-        //                 var entry = archive.CreateEntry(path, CompressionLevel.NoCompression);
-        //                 await using var entryStream = entry.Open();
-        //
-        //                 var localPath = ddb.GetLocalPath(path);
-        //                 
-        //                 await using var fileStream = File.OpenRead(localPath);
-        //                 await fileStream.CopyToAsync(entryStream);
-        //
-        //             }
-        //
-        //             // We treat folders separately because if they are empty they would not be included in the archive
-        //             if (folders != null)
-        //             {
-        //                 foreach (var folder in folders)
-        //                     archive.CreateEntry(folder + "/");
-        //             }
-        //
-        //             // Include ddb folder
-        //             if (includeDdb)
-        //             {
-        //                 archive.CreateEntryFromAny(Path.Combine(ddb.DatasetFolderPath, ddb.DatabaseFolderName),
-        //                     string.Empty, new[] { ddb.BuildFolderPath });
-        //             }
-        //         }
-        //
-        //         descriptorStream.ContentStream.Reset();
-        //     }
-        //
-        //     return descriptorStream;
-        // }
 
         private (string[] files, string[] folders, bool includeDdb) GetFilePaths(string[] paths, IDdb ddb)
         {
@@ -767,40 +607,16 @@ namespace Registry.Web.Services.Managers
         #endregion
 
 
-        public async Task<FileDescriptorStreamDto> GetDdb(string orgSlug, string dsSlug)
+        public async Task<FileStreamDescriptor> GetDdb(string orgSlug, string dsSlug)
         {
             var ds = await _utils.GetDataset(orgSlug, dsSlug);
 
             _logger.LogInformation($"In GetDdb('{orgSlug}/{dsSlug}')");
+           
+            return new FileStreamDescriptor($"{orgSlug}-{dsSlug}-ddb.zip",
+                "application/zip", orgSlug, ds.InternalRef, Array.Empty<string>(), Array.Empty<string>(),
+                FileDescriptorType.Dataset, _logger, _ddbManager);
 
-            var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
-
-            var tempFile = Path.Combine(Path.GetTempPath(), Path.GetRandomFileName());
-
-            try
-            {
-               
-                // We could do this fully in memory BUT it's not a strict requirement by now: ddb folders are not huge (yet)
-                ZipUtils.CreateFromDirectory(ddb.DatasetFolderPath, tempFile, CompressionLevel.NoCompression, false,
-                    Encoding.UTF8,
-                    fileName => fileName.Contains(@"\build\") || !fileName.Contains(@".ddb\"));
-                
-                await using var s = File.OpenRead(tempFile);
-                var memory = new MemoryStream();
-                await s.CopyToAsync(memory);
-                memory.Reset();
-
-                return new FileDescriptorStreamDto
-                {
-                    ContentStream = memory,
-                    ContentType = "application/zip",
-                    Name = $"{orgSlug}-{dsSlug}-ddb.zip"
-                };
-            }
-            finally
-            {
-                if (File.Exists(tempFile)) File.Delete(tempFile);
-            }
         }
 
         public async Task Build(string orgSlug, string dsSlug, string path, bool background = false, bool force = false)

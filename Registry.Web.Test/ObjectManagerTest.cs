@@ -22,7 +22,9 @@ using Microsoft.Extensions.Options;
 using Moq;
 using Newtonsoft.Json;
 using NUnit.Framework;
+using Registry.Adapters;
 using Registry.Common;
+using Registry.Ports;
 using Registry.Ports.DroneDB;
 using Registry.Ports.DroneDB.Models;
 using Registry.Web.Data;
@@ -35,6 +37,7 @@ using Registry.Web.Services.Adapters;
 using Registry.Web.Services.Managers;
 using Registry.Web.Services.Ports;
 using Registry.Web.Test.Adapters;
+using Registry.Web.Utilities;
 
 namespace Registry.Web.Test
 {
@@ -47,9 +50,9 @@ namespace Registry.Web.Test
         private Mock<IDdbManager> _ddbFactoryMock;
         private Mock<IAuthManager> _authManagerMock;
         private Mock<IHttpContextAccessor> _httpContextAccessorMock;
-        //private Mock<ICacheManager> _cacheManagerMock;
-        //private Mock<IS3BridgeManager> _bridgeManagerMock;
+        private Mock<ICacheManager> _cacheManagerMock;
         private IBackgroundJobsProcessor _backgroundJobsProcessor;
+        private readonly IFileSystem _fileSystem = new FileSystem();
 
         //private const string DataFolder = "Data";
         private const string TestStorageFolder = @"Data/Storage";
@@ -59,11 +62,11 @@ namespace Registry.Web.Test
 
         private const string BaseTestFolder = "ObjectManagerTest";
 
-        private const string Test4ArchiveUrl = "https://github.com/DroneDB/test_data/raw/master/registry/Test4.zip";
-        private const string Test5ArchiveUrl = "https://github.com/DroneDB/test_data/raw/master/registry/Test5.zip";
+        private const string Test4ArchiveUrl = "https://github.com/DroneDB/test_data/raw/master/registry/Test4-new.zip";
+        private const string Test5ArchiveUrl = "https://github.com/DroneDB/test_data/raw/master/registry/Test5-new.zip";
 
         private readonly Guid _defaultDatasetGuid = Guid.Parse("0a223495-84a0-4c15-b425-c7ef88110e75");
-/*
+
         [SetUp]
         public void Setup()
         {
@@ -72,17 +75,7 @@ namespace Registry.Web.Test
             _authManagerMock = new Mock<IAuthManager>();
             _httpContextAccessorMock = new Mock<IHttpContextAccessor>();
             _cacheManagerMock = new Mock<ICacheManager>();
-            _bridgeManagerMock = new Mock<IS3BridgeManager>();
             _backgroundJobsProcessor = new SimpleBackgroundJobsProcessor();
-
-            if (!Directory.Exists(TestStorageFolder))
-                Directory.CreateDirectory(TestStorageFolder);
-
-            if (!Directory.Exists(DdbTestDataFolder))
-            {
-                Directory.CreateDirectory(DdbTestDataFolder);
-                File.WriteAllText(Path.Combine(DdbTestDataFolder, "ddbcmd.exe"), string.Empty);
-            }
 
             _ddbFactoryLogger = new Logger<DdbManager>(LoggerFactory.Create(builder => builder.AddConsole()));
             _objectManagerLogger = new Logger<ObjectsManager>(LoggerFactory.Create(builder => builder.AddConsole()));
@@ -109,10 +102,9 @@ namespace Registry.Web.Test
             var webUtils = new WebUtils(_authManagerMock.Object, context, _appSettingsMock.Object,
                 _httpContextAccessorMock.Object, _ddbFactoryMock.Object);
 
-            var objectManager = new ObjectsManager(_objectManagerLogger, context, _objectSystemMock.Object,
-                _appSettingsMock.Object,
+            var objectManager = new ObjectsManager(_objectManagerLogger, context, _appSettingsMock.Object,
                 _ddbFactoryMock.Object, webUtils, _authManagerMock.Object, _cacheManagerMock.Object,
-                _bridgeManagerMock.Object, _backgroundJobsProcessor);
+                _fileSystem, _backgroundJobsProcessor);
 
             await objectManager.Invoking(item => item.List(null, MagicStrings.DefaultDatasetSlug, "test"))
                 .Should().ThrowAsync<BadRequestException>();
@@ -135,27 +127,27 @@ namespace Registry.Web.Test
 
             var settings = JsonConvert.DeserializeObject<AppSettings>(_settingsJson);
 
-            settings.DdbStoragePath = Path.Combine(test.TestFolder, DdbFolder);
+            settings.StoragePath = test.TestFolder;
             _appSettingsMock.Setup(o => o.Value).Returns(settings);
             _authManagerMock.Setup(o => o.IsUserAdmin()).Returns(Task.FromResult(true));
 
             var webUtils = new WebUtils(_authManagerMock.Object, context, _appSettingsMock.Object,
                 _httpContextAccessorMock.Object, _ddbFactoryMock.Object);
 
-            var objectManager = new ObjectsManager(_objectManagerLogger, context, _objectSystemMock.Object,
+            var objectManager = new ObjectsManager(_objectManagerLogger, context,
                 _appSettingsMock.Object,
                 new DdbManager(_appSettingsMock.Object, _ddbFactoryLogger), webUtils, _authManagerMock.Object,
-                _cacheManagerMock.Object, _bridgeManagerMock.Object, _backgroundJobsProcessor);
+                _cacheManagerMock.Object, _fileSystem, _backgroundJobsProcessor);
 
             var res = await objectManager.List(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug,
                 null, true);
 
-            res.Should().HaveCount(26);
+            res.Should().HaveCount(24);
 
-            res = await objectManager.List(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug, "Sub");
+            res = await objectManager.List(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug, "Pub");
 
-            // We dont consider the naked folder 'Sub'
-            res.Should().HaveCount(7);
+            // We dont consider the naked folder 'Pub'
+            res.Should().HaveCount(4);
         }
 
         [Test]
@@ -166,17 +158,17 @@ namespace Registry.Web.Test
 
             var settings = JsonConvert.DeserializeObject<AppSettings>(_settingsJson);
 
-            settings.DdbStoragePath = Path.Combine(test.TestFolder, DdbFolder);
+            settings.StoragePath = test.TestFolder;
             _appSettingsMock.Setup(o => o.Value).Returns(settings);
             _authManagerMock.Setup(o => o.IsUserAdmin()).Returns(Task.FromResult(true));
 
             var webUtils = new WebUtils(_authManagerMock.Object, context, _appSettingsMock.Object,
                 _httpContextAccessorMock.Object, _ddbFactoryMock.Object);
 
-            var objectManager = new ObjectsManager(_objectManagerLogger, context, _objectSystemMock.Object,
+            var objectManager = new ObjectsManager(_objectManagerLogger, context,
                 _appSettingsMock.Object,
                 new DdbManager(_appSettingsMock.Object, _ddbFactoryLogger), webUtils, _authManagerMock.Object,
-                _cacheManagerMock.Object, _bridgeManagerMock.Object, _backgroundJobsProcessor);
+                _cacheManagerMock.Object, _fileSystem, _backgroundJobsProcessor);
 
             var res = await objectManager.Search(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug,
                 "DJI*");
@@ -184,19 +176,19 @@ namespace Registry.Web.Test
             res.Should().HaveCount(18);
 
             res = await objectManager.Search(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug,
-                "*1444*");
-            res.Should().HaveCount(7);
+                "*003*");
+            res.Should().HaveCount(6);
 
             res = await objectManager.Search(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug,
-                "*438*");
+                "*0033*");
             res.Should().HaveCount(1);
 
             res = await objectManager.Search(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug,
-                "*438*", "Sub");
+                "*217*", "Pub");
             res.Should().HaveCount(1);
 
             res = await objectManager.Search(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug,
-                "*438*", "Sub", false);
+                "*201*", "Pub", false);
             res.Should().HaveCount(1);
         }
 
@@ -208,18 +200,16 @@ namespace Registry.Web.Test
 
             var settings = JsonConvert.DeserializeObject<AppSettings>(_settingsJson);
 
-            settings.DdbStoragePath = Path.Combine(test.TestFolder, DdbFolder);
+            settings.StoragePath = test.TestFolder;
             _appSettingsMock.Setup(o => o.Value).Returns(settings);
             _authManagerMock.Setup(o => o.IsUserAdmin()).Returns(Task.FromResult(true));
 
             var webUtils = new WebUtils(_authManagerMock.Object, context, _appSettingsMock.Object,
                 _httpContextAccessorMock.Object, _ddbFactoryMock.Object);
 
-            var objectManager = new ObjectsManager(_objectManagerLogger, context,
-                new PhysicalObjectSystem(new PhysicalObjectSystemSettings
-                    { BasePath = Path.Combine(test.TestFolder, StorageFolder) }), _appSettingsMock.Object,
+            var objectManager = new ObjectsManager(_objectManagerLogger, context, _appSettingsMock.Object,
                 new DdbManager(_appSettingsMock.Object, _ddbFactoryLogger), webUtils, _authManagerMock.Object,
-                _cacheManagerMock.Object, _bridgeManagerMock.Object, _backgroundJobsProcessor);
+                _cacheManagerMock.Object, _fileSystem, _backgroundJobsProcessor);
 
             await objectManager.Invoking(async x => await x.Get(MagicStrings.PublicOrganizationSlug,
                     MagicStrings.DefaultDatasetSlug, "weriufbgeiughegr"))
@@ -240,20 +230,16 @@ namespace Registry.Web.Test
             await using var context = GetTest1Context();
             var settings = JsonConvert.DeserializeObject<AppSettings>(_settingsJson);
 
-            settings.DdbStoragePath = Path.Combine(test.TestFolder, DdbFolder);
+            settings.StoragePath = test.TestFolder;
             _appSettingsMock.Setup(o => o.Value).Returns(settings);
             _authManagerMock.Setup(o => o.IsUserAdmin()).Returns(Task.FromResult(true));
-
-            var sys = new PhysicalObjectSystem(new PhysicalObjectSystemSettings
-                { BasePath = Path.Combine(test.TestFolder, StorageFolder) });
-            sys.SyncBucket($"{MagicStrings.PublicOrganizationSlug}-{_defaultDatasetGuid}");
 
             var webUtils = new WebUtils(_authManagerMock.Object, context, _appSettingsMock.Object,
                 _httpContextAccessorMock.Object, _ddbFactoryMock.Object);
 
-            var objectManager = new ObjectsManager(_objectManagerLogger, context, sys, _appSettingsMock.Object,
+            var objectManager = new ObjectsManager(_objectManagerLogger, context, _appSettingsMock.Object,
                 new DdbManager(_appSettingsMock.Object, _ddbFactoryLogger), webUtils, _authManagerMock.Object,
-                _cacheManagerMock.Object, _bridgeManagerMock.Object, _backgroundJobsProcessor);
+                _cacheManagerMock.Object, _fileSystem, _backgroundJobsProcessor);
 
             var obj = await objectManager.Get(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug,
                 "DJI_0019.JPG");
@@ -261,7 +247,8 @@ namespace Registry.Web.Test
             obj.Name.Should().Be(expectedName);
             obj.Type.Should().Be(expectedObjectType);
             obj.ContentType.Should().Be(expectedContentType);
-            MD5.Create().ComputeHash(obj.Data).Should().BeEquivalentTo(expectedHash);
+            
+            (await MD5.Create().ComputeHashAsync(obj.PhysicalPath)).Should().BeEquivalentTo(expectedHash);
         }
 
         [Test]
@@ -275,31 +262,25 @@ namespace Registry.Web.Test
             await using var context = GetTest1Context();
             var settings = JsonConvert.DeserializeObject<AppSettings>(_settingsJson);
 
-            settings.DdbStoragePath = Path.Combine(test.TestFolder, DdbFolder);
+            settings.StoragePath = test.TestFolder;
             _appSettingsMock.Setup(o => o.Value).Returns(settings);
             _authManagerMock.Setup(o => o.IsUserAdmin()).Returns(Task.FromResult(true));
-
-            var sys = new PhysicalObjectSystem(new PhysicalObjectSystemSettings
-                { BasePath = Path.Combine(test.TestFolder, StorageFolder) });
-            sys.SyncBucket($"{MagicStrings.PublicOrganizationSlug}-{_defaultDatasetGuid}");
 
             var webUtils = new WebUtils(_authManagerMock.Object, context, _appSettingsMock.Object,
                 _httpContextAccessorMock.Object, _ddbFactoryMock.Object);
 
-            var objectManager = new ObjectsManager(_objectManagerLogger, context, sys, _appSettingsMock.Object,
+            var objectManager = new ObjectsManager(_objectManagerLogger, context, _appSettingsMock.Object,
                 new DdbManager(_appSettingsMock.Object, _ddbFactoryLogger), webUtils, _authManagerMock.Object,
-                _cacheManagerMock.Object, _bridgeManagerMock.Object, _backgroundJobsProcessor);
+                _cacheManagerMock.Object, _fileSystem, _backgroundJobsProcessor);
 
-            var res = await objectManager.Download(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug,
-                new[] { expectedName });
+            var res = await objectManager.Get(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug,
+                expectedName);
 
             res.Name.Should().Be(expectedName);
+            res.Type.Should().Be(EntryType.GeoImage);
 
-            await using var memory = new MemoryStream();
-            await res.ContentStream.CopyToAsync(memory);
-            var data = memory.ToArray();
-
-            MD5.Create().ComputeHash(data).Should().BeEquivalentTo(expectedHash);
+            (await MD5.Create().ComputeHashAsync(res.PhysicalPath)).Should().BeEquivalentTo(expectedHash);
+           
         }
 
 
@@ -312,30 +293,30 @@ namespace Registry.Web.Test
             await using var context = GetTest1Context();
             var settings = JsonConvert.DeserializeObject<AppSettings>(_settingsJson);
 
-            settings.DdbStoragePath = Path.Combine(test.TestFolder, DdbFolder);
+            settings.StoragePath = test.TestFolder;
             _appSettingsMock.Setup(o => o.Value).Returns(settings);
             _authManagerMock.Setup(o => o.IsUserAdmin()).Returns(Task.FromResult(true));
-
-            var sys = new PhysicalObjectSystem(new PhysicalObjectSystemSettings
-                { BasePath = Path.Combine(test.TestFolder, StorageFolder) });
-            sys.SyncBucket($"{MagicStrings.PublicOrganizationSlug}-{_defaultDatasetGuid}");
 
             var webUtils = new WebUtils(_authManagerMock.Object, context, _appSettingsMock.Object,
                 _httpContextAccessorMock.Object, _ddbFactoryMock.Object);
 
-            var objectManager = new ObjectsManager(_objectManagerLogger, context, sys, _appSettingsMock.Object,
+            var objectManager = new ObjectsManager(_objectManagerLogger, context,  _appSettingsMock.Object,
                 new DdbManager(_appSettingsMock.Object, _ddbFactoryLogger), webUtils, _authManagerMock.Object,
-                _cacheManagerMock.Object, _bridgeManagerMock.Object, _backgroundJobsProcessor);
+                _cacheManagerMock.Object, _fileSystem, _backgroundJobsProcessor);
 
-            var res = await objectManager.Download(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug,
+            var res = await objectManager.DownloadStream(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug,
                 fileNames);
 
             res.Name.Should().EndWith(".zip");
 
+            await using var memoryStream = new MemoryStream();
+            await res.CopyToAsync(memoryStream);
+            memoryStream.Reset();
+
             var md5 = MD5.Create();
 
             // Let's check if the archive is not corrupted and all the files have the right checksums
-            using var archive = new ZipArchive(res.ContentStream, ZipArchiveMode.Read);
+            using var archive = new ZipArchive(memoryStream, ZipArchiveMode.Read);
             foreach (var entry in archive.Entries)
             {
                 Debug.WriteLine(entry.FullName);
@@ -344,7 +325,7 @@ namespace Registry.Web.Test
 
                 // We could use entry.Crc32 but md5 comes so handy
                 await using var stream = entry.Open();
-                var expectedHash = md5.ComputeHash(obj.Data);
+                var expectedHash = await md5.ComputeHashAsync(obj.PhysicalPath);
                 var hash = await md5.ComputeHashAsync(stream);
 
                 hash.Should().BeEquivalentTo(expectedHash);
@@ -366,30 +347,30 @@ namespace Registry.Web.Test
             await using var context = GetTest1Context();
             var settings = JsonConvert.DeserializeObject<AppSettings>(_settingsJson);
 
-            settings.DdbStoragePath = Path.Combine(test.TestFolder, DdbFolder);
+            settings.StoragePath = test.TestFolder;
             _appSettingsMock.Setup(o => o.Value).Returns(settings);
             _authManagerMock.Setup(o => o.IsUserAdmin()).Returns(Task.FromResult(true));
-
-            var sys = new PhysicalObjectSystem(new PhysicalObjectSystemSettings
-                { BasePath = Path.Combine(test.TestFolder, StorageFolder) });
-            sys.SyncBucket($"{organizationSlug}-{adminDatasetGuid}");
 
             var webUtils = new WebUtils(_authManagerMock.Object, context, _appSettingsMock.Object,
                 _httpContextAccessorMock.Object, _ddbFactoryMock.Object);
 
-            var objectManager = new ObjectsManager(_objectManagerLogger, context, sys, _appSettingsMock.Object,
+            var objectManager = new ObjectsManager(_objectManagerLogger, context, _appSettingsMock.Object,
                 new DdbManager(_appSettingsMock.Object, _ddbFactoryLogger), webUtils, _authManagerMock.Object,
-                _cacheManagerMock.Object, _bridgeManagerMock.Object, _backgroundJobsProcessor);
+                _cacheManagerMock.Object, _fileSystem, _backgroundJobsProcessor);
 
-            var res = await objectManager.Download(organizationSlug, datasetSlug,
+            var res = await objectManager.DownloadStream(organizationSlug, datasetSlug,
                 fileNames);
 
             res.Name.Should().EndWith(".zip");
 
             var md5 = MD5.Create();
+            
+            await using var memoryStream = new MemoryStream();
+            await res.CopyToAsync(memoryStream);
+            memoryStream.Reset();
 
             // Let's check if the archive is not corrupted and all the files have the right checksums
-            using var archive = new ZipArchive(res.ContentStream, ZipArchiveMode.Read);
+            using var archive = new ZipArchive(memoryStream, ZipArchiveMode.Read);
             foreach (var entry in archive.Entries)
             {
                 Debug.WriteLine(entry.FullName);
@@ -398,7 +379,7 @@ namespace Registry.Web.Test
 
                 // We could use entry.Crc32 but md5 comes so handy
                 await using var stream = entry.Open();
-                var expectedHash = md5.ComputeHash(obj.Data);
+                var expectedHash = await md5.ComputeHashAsync(obj.PhysicalPath);
                 var hash = await md5.ComputeHashAsync(stream);
 
                 hash.Should().BeEquivalentTo(expectedHash);
@@ -416,21 +397,17 @@ namespace Registry.Web.Test
 
             var settings = JsonConvert.DeserializeObject<AppSettings>(_settingsJson);
 
-            settings.DdbStoragePath = Path.Combine(test.TestFolder, DdbFolder);
+            settings.StoragePath = test.TestFolder;
             _appSettingsMock.Setup(o => o.Value).Returns(settings);
             _authManagerMock.Setup(o => o.IsUserAdmin()).Returns(Task.FromResult(true));
             _authManagerMock.Setup(o => o.IsOwnerOrAdmin(It.IsAny<Dataset>())).Returns(Task.FromResult(true));
 
-            var sys = new PhysicalObjectSystem(new PhysicalObjectSystemSettings
-                { BasePath = Path.Combine(test.TestFolder, StorageFolder) });
-            sys.SyncBucket($"{MagicStrings.PublicOrganizationSlug}-{_defaultDatasetGuid}");
-
             var webUtils = new WebUtils(_authManagerMock.Object, context, _appSettingsMock.Object,
                 _httpContextAccessorMock.Object, _ddbFactoryMock.Object);
 
-            var objectManager = new ObjectsManager(_objectManagerLogger, context, sys, _appSettingsMock.Object,
+            var objectManager = new ObjectsManager(_objectManagerLogger, context, _appSettingsMock.Object,
                 new DdbManager(_appSettingsMock.Object, _ddbFactoryLogger), webUtils, _authManagerMock.Object,
-                _cacheManagerMock.Object, _bridgeManagerMock.Object, _backgroundJobsProcessor);
+                _cacheManagerMock.Object, _fileSystem, _backgroundJobsProcessor);
 
             var res = await objectManager.List(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug,
                 fileName);
@@ -478,25 +455,20 @@ namespace Registry.Web.Test
 
             var settings = JsonConvert.DeserializeObject<AppSettings>(_settingsJson);
 
-            settings.DdbStoragePath = Path.Combine(test.TestFolder, DdbFolder);
-
+            settings.StoragePath = test.TestFolder;
             _appSettingsMock.Setup(o => o.Value).Returns(settings);
             _authManagerMock.Setup(o => o.IsUserAdmin()).Returns(Task.FromResult(true));
             _authManagerMock.Setup(o => o.IsOwnerOrAdmin(It.IsAny<Dataset>())).Returns(Task.FromResult(true));
 
-            var sys = new PhysicalObjectSystem(new PhysicalObjectSystemSettings
-                { BasePath = Path.Combine(test.TestFolder, StorageFolder) });
-            sys.SyncBucket($"{MagicStrings.PublicOrganizationSlug}-{_defaultDatasetGuid}");
-
             var webUtils = new WebUtils(_authManagerMock.Object, context, _appSettingsMock.Object,
                 _httpContextAccessorMock.Object, _ddbFactoryMock.Object);
 
-            var objectManager = new ObjectsManager(_objectManagerLogger, context, sys, _appSettingsMock.Object,
+            var objectManager = new ObjectsManager(_objectManagerLogger, context, _appSettingsMock.Object,
                 new DdbManager(_appSettingsMock.Object, _ddbFactoryLogger), webUtils, _authManagerMock.Object,
-                _cacheManagerMock.Object, _bridgeManagerMock.Object, _backgroundJobsProcessor);
+                _cacheManagerMock.Object, _fileSystem, _backgroundJobsProcessor);
 
             (await objectManager.List(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug)).Should()
-                .HaveCount(19);
+                .HaveCount(20);
 
             var newres = await objectManager.AddNew(MagicStrings.PublicOrganizationSlug,
                 MagicStrings.DefaultDatasetSlug, "Test");
@@ -636,6 +608,6 @@ namespace Registry.Web.Test
             return new RegistryContext(options);
         }
 
-        #endregion*/
+        #endregion
     }
 }

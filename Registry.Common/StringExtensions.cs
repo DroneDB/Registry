@@ -293,7 +293,7 @@ namespace Registry.Common
                 " "
             );
 
-        internal static bool IsEmpty(this string? value) => string.IsNullOrWhiteSpace(value);
+        internal static bool IsEmpty(this string value) => string.IsNullOrWhiteSpace(value);
 
         internal static bool IsNotEmpty(this string value) => !string.IsNullOrWhiteSpace(value);
 

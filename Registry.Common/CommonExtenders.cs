@@ -8,7 +8,7 @@ using System.Text;
 
 namespace Registry.Common
 {
-    public static class Extenders
+    public static class CommonExtenders
     {
         /// <summary>
         /// Safe reset to the beginning
