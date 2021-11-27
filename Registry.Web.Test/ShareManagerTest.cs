@@ -55,15 +55,11 @@ namespace Registry.Web.Test
         private Mock<ICacheManager> _cacheManagerMock;
         private IBackgroundJobsProcessor _backgroundJobsProcessor;
 
-        private INameGenerator _nameGenerator;
-        private IBatchTokenGenerator _batchTokenGenerator;
-
         private readonly IFileSystem _fileSystem = new FileSystem();
 
         private const string BaseTestFolder = "ShareManagerTest";
 
         private const string Test4ArchiveUrl = "https://github.com/DroneDB/test_data/raw/master/registry/Test4-new.zip";
-
 
         public ShareManagerTest()
         {
