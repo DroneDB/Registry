@@ -56,10 +56,10 @@ namespace Registry.Web.Services.Managers
             _settings = settings.Value;
         }
 
-        public async Task<PushInitResultDto> Init(string orgSlug, string dsSlug, Stream stream)
+        public async Task<PushInitResultDto> Init(string orgSlug, string dsSlug, string checksum, DDB.Bindings.Model.Stamp stamp)
         {
             var ds = await _utils.GetDataset(orgSlug, dsSlug, true);
-
+            /*
             if (!await _authManager.IsOwnerOrAdmin(ds))
                 throw new UnauthorizedException("The current user is not allowed to init push");
 
@@ -107,6 +107,11 @@ namespace Registry.Web.Services.Managers
                     .Where(item => item.Type != Common.EntryType.Directory)
                     .Select(item => item.Path)
                     .ToArray()
+            };*/
+
+            return new PushInitResultDto
+            {
+                PullRequired = true
             };
         }
 

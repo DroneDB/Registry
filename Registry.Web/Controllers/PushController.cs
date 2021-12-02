@@ -5,6 +5,7 @@ using System.Threading.Tasks;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
+using Newtonsoft.Json;
 using Registry.Web.Models;
 using Registry.Web.Services.Ports;
 using Registry.Web.Utilities;
@@ -29,24 +30,22 @@ namespace Registry.Web.Controllers
         }
 
         [HttpPost("init")]
-        public async Task<IActionResult> Init([FromRoute] string orgSlug, [FromRoute] string dsSlug, IFormFile file)
+        public async Task<IActionResult> Init([FromRoute] string orgSlug, [FromRoute] string dsSlug, [FromForm] string checksum, [FromForm(Name="stamp")] string stampJson)
         {
             try
             {
-                _logger.LogDebug($"Push controller Init('{orgSlug}', '{dsSlug}', '{file?.FileName}')");
+                _logger.LogDebug($"Push controller Init('{orgSlug}', '{dsSlug}', '{checksum}', '{stampJson}')");
 
-                if (file == null)
-                    throw new ArgumentException("No file uploaded");
+                // Stamp JSON parse: TODO
+                var stamp = JsonConvert.DeserializeObject<DDB.Bindings.Model.Stamp>(stampJson);
 
-                await using var stream = file.OpenReadStream();
-                
-                var res = await _pushManager.Init(orgSlug, dsSlug, stream);
+                var res = await _pushManager.Init(orgSlug, dsSlug, checksum, stamp);
 
                 return Ok(res);
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, $"Exception in Push controller Init('{orgSlug}', '{dsSlug}', '{file?.FileName}')");
+                _logger.LogError(ex, $"Exception in Push controller Init('{orgSlug}', '{dsSlug}', '{checksum}', '{stampJson}')");
 
                 return ExceptionResult(ex);
             }
