@@ -380,6 +380,11 @@ namespace Registry.Adapters.DroneDB
             return DatasetFolderPath;
         }
 
+        DDB.Bindings.Model.Stamp GetStamp()
+        {
+            return DDB.Bindings.DroneDB.GetStamp(DatasetFolderPath);
+        }
+
         #region Async
 
 

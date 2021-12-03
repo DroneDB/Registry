@@ -59,9 +59,11 @@ namespace Registry.Web.Services.Managers
         public async Task<PushInitResultDto> Init(string orgSlug, string dsSlug, string checksum, DDB.Bindings.Model.Stamp stamp)
         {
             var ds = await _utils.GetDataset(orgSlug, dsSlug, true);
-            /*
+
             if (!await _authManager.IsOwnerOrAdmin(ds))
                 throw new UnauthorizedException("The current user is not allowed to init push");
+
+            bool validateChecksum = ds != null;
 
             if (ds == null)
             {
@@ -75,25 +77,29 @@ namespace Registry.Web.Services.Managers
                 _logger.LogInformation($"New dataset {orgSlug}/{dsSlug} created");
                 ds = await _utils.GetDataset(orgSlug, dsSlug);
             }
-            else
+
+            var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
+            
+            if (validateChecksum)
             {
-                if (!await _authManager.IsOwnerOrAdmin(ds))
-                    throw new UnauthorizedException("The current user is not allowed to push to this dataset");
+                if (string.IsNullOrEmpty(checksum))
+                    throw new InvalidOperationException("Checksum parameter missing (dataset exists)");
+
+                // Is a pull required? The checksum passed by client is the checksum of the stamp
+                // of the last sync. If it's different, the client should pull first.
+                var ourStamp = DroneDB.GetStamp(ddb.DatasetFolderPath);
+                if (ourStamp.Checksum != checksum)
+                {
+                    return new PushInitResultDto
+                    {
+                        PullRequired = true
+                    };
+                }
             }
 
-            // 0) Setup temp folders
-            var baseTempFolder = Path.Combine(Path.GetTempPath(), PushFolderName, orgSlug, dsSlug);
-            Directory.CreateDirectory(baseTempFolder);
-
-            var ddbTempFolder = Path.Combine(baseTempFolder, DdbTempFolder);
-            Directory.CreateDirectory(ddbTempFolder);
-
-            // 1) Unzip stream contents in temp ddb folder
-            using var archive = new ZipArchive(stream, ZipArchiveMode.Read);
-            archive.ExtractToDirectory(Path.Combine(ddbTempFolder, _ddbManager.DatabaseFolderName), true);
-
             // 2) Perform delta with our ddb
-            var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
+            // TODO: use new bindings
+            
             var delta = DroneDB.Delta(ddbTempFolder, ddb.DatasetFolderPath).ToDto();
 
             // 3) Save delta json in temp folder
@@ -106,12 +112,8 @@ namespace Registry.Web.Services.Managers
                 NeededFiles = delta.Adds
                     .Where(item => item.Type != Common.EntryType.Directory)
                     .Select(item => item.Path)
-                    .ToArray()
-            };*/
-
-            return new PushInitResultDto
-            {
-                PullRequired = true
+                    .ToArray(),
+                PullRequired = false
             };
         }
 
