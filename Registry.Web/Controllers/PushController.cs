@@ -56,42 +56,42 @@ namespace Registry.Web.Controllers
         [DisableRequestSizeLimit]
         [RequestFormLimits(ValueLengthLimit = int.MaxValue, MultipartBodyLengthLimit = long.MaxValue)]
         [HttpPost("upload")]
-        public async Task<IActionResult> Upload([FromRoute] string orgSlug, [FromRoute] string dsSlug, [FromForm] string path, IFormFile file)
+        public async Task<IActionResult> Upload([FromRoute] string orgSlug, [FromRoute] string dsSlug, [FromForm] string path, [FromForm] string token, IFormFile file)
         {
             try
             {
-                _logger.LogDebug($"Push controller Upload('{orgSlug}', '{dsSlug}', '{file?.FileName}')");
+                _logger.LogDebug($"Push controller Upload('{orgSlug}', '{dsSlug}', '{token}', '{file?.FileName}')");
 
                 if (file == null)
                     throw new ArgumentException("No file uploaded");
 
                 await using var stream = file.OpenReadStream();
-                await _pushManager.Upload(orgSlug, dsSlug, path, stream);
+                await _pushManager.Upload(orgSlug, dsSlug, path, token, stream);
 
                 return Ok();
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, $"Exception in Push controller Upload('{orgSlug}', '{dsSlug}', '{file?.FileName}')");
+                _logger.LogError(ex, $"Exception in Push controller Upload('{orgSlug}', '{dsSlug}', '{token}', '{file?.FileName}')");
 
                 return ExceptionResult(ex);
             }
         }
 
         [HttpPost("commit")]
-        public async Task<IActionResult> Commit([FromRoute] string orgSlug, [FromRoute] string dsSlug)
+        public async Task<IActionResult> Commit([FromRoute] string orgSlug, [FromRoute] string dsSlug, [FromForm] string token)
         {
             try
             {
-                _logger.LogDebug($"Push controller Commit('{orgSlug}', '{dsSlug}')");
+                _logger.LogDebug($"Push controller Commit('{orgSlug}', '{dsSlug}', '{token}')");
 
-                await _pushManager.Commit(orgSlug, dsSlug);
+                await _pushManager.Commit(orgSlug, dsSlug, token);
 
                 return Ok();
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, $"Exception in Push controller Commit('{orgSlug}', '{dsSlug}')");
+                _logger.LogError(ex, $"Exception in Push controller Commit('{orgSlug}', '{dsSlug}', '{token}')");
 
                 return ExceptionResult(ex);
             }

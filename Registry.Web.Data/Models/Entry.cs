@@ -1,5 +1,6 @@
 ﻿using System;
 using System.ComponentModel.DataAnnotations;
+using DDB.Bindings.Model;
 using Registry.Common;
 
 namespace Registry.Web.Data.Models

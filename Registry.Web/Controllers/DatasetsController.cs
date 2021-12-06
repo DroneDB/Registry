@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
+using DDB.Bindings.Model;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
@@ -102,6 +103,23 @@ namespace Registry.Web.Controllers
             catch (Exception ex)
             {
                 _logger.LogError(ex, $"Exception in Dataset controller GetEx('{orgSlug}', '{dsSlug}')");
+                return ExceptionResult(ex);
+            }
+        }
+
+        [HttpGet(RoutesHelper.DatasetSlug + "/stamp", Name = nameof(DatasetsController) + "." + nameof(GetStamp))]
+        [ProducesResponseType(typeof(Stamp), 200)]
+        public async Task<IActionResult> GetStamp([FromRoute] string orgSlug, string dsSlug)
+        {
+            try
+            {
+                _logger.LogDebug($"Dataset controller GetStamp('{orgSlug}', '{dsSlug}')");
+
+                return Ok(await _datasetsManager.GetStamp(orgSlug, dsSlug));
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, $"Exception in Dataset controller GetStamp('{orgSlug}', '{dsSlug}')");
                 return ExceptionResult(ex);
             }
         }

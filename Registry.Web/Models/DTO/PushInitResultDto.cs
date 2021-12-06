@@ -11,6 +11,8 @@ namespace Registry.Web.Models.DTO
     {
         public string[] NeededFiles { get; set; }
         public bool PullRequired { get; set; }
+
+        public string Token { get; set; }
     }
 
 

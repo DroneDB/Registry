@@ -1,4 +1,5 @@
-﻿using Registry.Common;
+﻿using DDB.Bindings.Model;
+using Registry.Common;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -10,8 +11,6 @@ namespace Registry.Web.Models.DTO
     {
 
         public AddActionDto[] Adds { get; set; }
-
-        public CopyActionDto[] Copies { get; set; }
 
         public RemoveActionDto[] Removes { get; set; }
 
@@ -27,13 +26,6 @@ namespace Registry.Web.Models.DTO
             $"ADD -> [{(Type == EntryType.Directory ? 'D' : 'F')}] {Path}";
 
 
-    }
-
-    public class CopyActionDto
-    {
-        public string Source { get; set; }
-        public string Destination { get; set; }
-        public override string ToString() => $"CPY -> {Source} TO {Destination}";
     }
 
     public class RemoveActionDto

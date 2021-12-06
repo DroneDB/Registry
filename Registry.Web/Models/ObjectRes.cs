@@ -1,4 +1,5 @@
-﻿using Registry.Common;
+﻿using DDB.Bindings.Model;
+using Registry.Common;
 using Registry.Web.Models.DTO;
 
 namespace Registry.Web.Models

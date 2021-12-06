@@ -3,6 +3,7 @@ using System.IO;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
+using DDB.Bindings.Model;
 using Registry.Ports.DroneDB.Models;
 
 namespace Registry.Ports.DroneDB
@@ -22,6 +23,11 @@ namespace Registry.Ports.DroneDB
         /// Name of the build folder (example: build)
         /// </summary>
         string BuildFolderName { get; }
+
+        ///<summary>
+        /// Name of the tmp folder
+        /// </summary>
+        string TmpFolderName { get; }
         
         /// <summary>
         /// DroneDB client version
@@ -76,6 +82,10 @@ namespace Registry.Ports.DroneDB
         void BuildAll(string dest = null, bool force = false);
 
         bool IsBuildable(string path);
+
+        string GetTmpFolder(string path);
+
+        Stamp GetStamp();
 
         IDdbMetaManager Meta { get;  }
         long GetSize();

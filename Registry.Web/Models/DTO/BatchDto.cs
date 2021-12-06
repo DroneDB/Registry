@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
+using DDB.Bindings.Model;
 using Registry.Common;
 using Registry.Web.Data.Models;
 

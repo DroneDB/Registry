@@ -390,7 +390,7 @@ namespace Registry.Web.Services.Managers
 
             entry = new Entry
             {
-                Type = (EntryType)(int)info.Type,
+                Type = info.Type,
                 Hash = info.Hash,
                 AddedOn = DateTime.Now,
                 Path = path,

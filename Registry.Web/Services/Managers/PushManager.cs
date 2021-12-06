@@ -19,7 +19,6 @@ using Registry.Web.Models.Configuration;
 using Registry.Web.Models.DTO;
 using Registry.Web.Services.Ports;
 using Registry.Web.Utilities;
-using EntryType = Registry.Common.EntryType;
 
 namespace Registry.Web.Services.Managers
 {
@@ -28,7 +27,8 @@ namespace Registry.Web.Services.Managers
         private const string PushFolderName = "push";
         private const string DdbTempFolder = "ddb";
         private const string AddsTempFolder = "add";
-        private const string DeltaFileName = "delta.json";
+        private const string StampFileName = "stamp.json";
+        private const string OurStampFileName = "our_stamp.json";
 
         private readonly IUtils _utils;
         private readonly IDdbManager _ddbManager;
@@ -56,7 +56,7 @@ namespace Registry.Web.Services.Managers
             _settings = settings.Value;
         }
 
-        public async Task<PushInitResultDto> Init(string orgSlug, string dsSlug, string checksum, DDB.Bindings.Model.Stamp stamp)
+        public async Task<PushInitResultDto> Init(string orgSlug, string dsSlug, string checksum, Stamp stamp)
         {
             var ds = await _utils.GetDataset(orgSlug, dsSlug, true);
 
@@ -79,7 +79,8 @@ namespace Registry.Web.Services.Managers
             }
 
             var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
-            
+            Stamp ourStamp = null;
+
             if (validateChecksum)
             {
                 if (string.IsNullOrEmpty(checksum))
@@ -87,7 +88,7 @@ namespace Registry.Web.Services.Managers
 
                 // Is a pull required? The checksum passed by client is the checksum of the stamp
                 // of the last sync. If it's different, the client should pull first.
-                var ourStamp = DroneDB.GetStamp(ddb.DatasetFolderPath);
+                ourStamp = DroneDB.GetStamp(ddb.DatasetFolderPath);
                 if (ourStamp.Checksum != checksum)
                 {
                     return new PushInitResultDto
@@ -97,27 +98,36 @@ namespace Registry.Web.Services.Managers
                 }
             }
 
-            // 2) Perform delta with our ddb
-            // TODO: use new bindings
+            if (ourStamp == null) ourStamp = DroneDB.GetStamp(ddb.DatasetFolderPath);
+
+            // Perform delta with our ddb
+            var delta = DroneDB.Delta(stamp, ourStamp);
+
+            // Generate UUID
+            var uuid = Guid.NewGuid().ToString();
+
+            // Create tmp folder
+            var baseTempFolder = ddb.GetTmpFolder("push-" + uuid);
+
+            // Save incoming stamp as well as our stamp in temp folder
+            await File.WriteAllTextAsync(Path.Combine(baseTempFolder, StampFileName),
+                JsonConvert.SerializeObject(stamp));
+            await File.WriteAllTextAsync(Path.Combine(baseTempFolder, OurStampFileName),
+                            JsonConvert.SerializeObject(ourStamp));
             
-            var delta = DroneDB.Delta(ddbTempFolder, ddb.DatasetFolderPath).ToDto();
-
-            // 3) Save delta json in temp folder
-            await File.WriteAllTextAsync(Path.Combine(baseTempFolder, DeltaFileName),
-                JsonConvert.SerializeObject(delta));
-
-            // 4) Return missing files list (excluding folders)
+            // Return missing files list (excluding folders)
             return new PushInitResultDto
             {
+                Token = uuid,
                 NeededFiles = delta.Adds
-                    .Where(item => item.Type != Common.EntryType.Directory)
+                    .Where(item => item.Hash.Length > 0)
                     .Select(item => item.Path)
                     .ToArray(),
                 PullRequired = false
             };
         }
 
-        public async Task Upload(string orgSlug, string dsSlug, string path, Stream stream)
+        public async Task Upload(string orgSlug, string dsSlug, string path, string token, Stream stream)
         {
             if (string.IsNullOrWhiteSpace(path))
                 throw new ArgumentException("Path cannot be empty");
@@ -136,7 +146,9 @@ namespace Registry.Web.Services.Managers
             if (path.Contains(".."))
                 throw new InvalidOperationException("Path cannot contain dot notation");
 
-            var baseTempFolder = Path.Combine(Path.GetTempPath(), PushFolderName, orgSlug, dsSlug);
+            var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
+
+            var baseTempFolder = ddb.GetTmpFolder("push-" + token);
 
             if (!Directory.Exists(baseTempFolder))
                 throw new InvalidOperationException("Cannot upload file before initializing push");
@@ -156,45 +168,63 @@ namespace Registry.Web.Services.Managers
             await stream.CopyToAsync(file);
         }
 
-        public async Task Commit(string orgSlug, string dsSlug)
+        public async Task Commit(string orgSlug, string dsSlug, string token)
         {
             var ds = await _utils.GetDataset(orgSlug, dsSlug);
 
             if (!await _authManager.IsOwnerOrAdmin(ds))
                 throw new UnauthorizedException("The current user is not allowed to commit to this dataset");
 
-            var baseTempFolder = Path.Combine(Path.GetTempPath(), PushFolderName, orgSlug, dsSlug);
-            var deltaFilePath = Path.Combine(baseTempFolder, DeltaFileName);
+            var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
+
+            var baseTempFolder = ddb.GetTmpFolder("push-" + token);
+            var stampFilePath = Path.Combine(baseTempFolder, StampFileName);
+            var ourStampFilePath = Path.Combine(baseTempFolder, OurStampFileName);
             var addTempFolder = Path.Combine(baseTempFolder, AddsTempFolder);
-            var ddbTempFolder = Path.Combine(baseTempFolder, DdbTempFolder);
 
-            // Check push folder integrity (delta and files)
-            if (!File.Exists(deltaFilePath))
-                throw new InvalidOperationException("Delta not found");
+            // Check push folder integrity
+            if (!File.Exists(stampFilePath))
+                throw new InvalidOperationException("Stamp not found");
 
-            var delta = JsonConvert.DeserializeObject<DeltaDto>(await File.ReadAllTextAsync(deltaFilePath));
+            if (!File.Exists(ourStampFilePath))
+                throw new InvalidOperationException("Our stamp not found");
 
-            if (delta == null)
-                throw new ArgumentException("Provided delta is not deserializable");
+            Stamp stamp = JsonConvert.DeserializeObject<Stamp>(await File.ReadAllTextAsync(stampFilePath));
+            Stamp ourStamp = JsonConvert.DeserializeObject<Stamp>(await File.ReadAllTextAsync(ourStampFilePath));
 
-            foreach (var add in delta.Adds.Where(item => item.Type != EntryType.Directory))
+            // Check that our stamp has not changed! If it has, another client
+            // might have performed changes that could conflict with our operation
+            // TODO: we could check for conflicts rather than failing and continue
+            // the operation if no conflicts are detected.
+
+            var currentStamp = DroneDB.GetStamp(ddb.DatasetFolderPath);
+            if (currentStamp.Checksum != ourStamp.Checksum)
+            {
+                throw new InvalidOperationException("The dataset has been changed by another user while pushing. Please try again!");
+            }
+
+            // Recompute delta
+            var delta = DroneDB.Delta(stamp, currentStamp);
+
+            foreach (var add in delta.Adds.Where(item => item.Hash.Length > 0))
                 if (!File.Exists(Path.Combine(addTempFolder, add.Path)))
                     throw new InvalidOperationException($"Cannot commit: missing '{add.Path}'");
 
-            var bucketName = _utils.GetBucketName(orgSlug, ds.InternalRef);
-            await _objectSystem.EnsureBucketExists(bucketName, _settings.SafeGetLocation(_logger), _logger);
-
             // Applies delta 
-            await ApplyDelta(bucketName, delta, addTempFolder);
+            var conflicts = DroneDB.ApplyDelta(delta, addTempFolder, ddb.DatasetFolderPath, MergeStrategy.KeepTheirs);
 
-            var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
+            if (conflicts.Count > 0)
+            {
+                // This should never happen, since we merge conflicts using keep theirs
+                throw new InvalidOperationException("Merge conflicts detected, try pulling first.");
+            }
 
-            // Replaces ddb folder
-            FolderUtils.Move(ddbTempFolder, ddb.DatasetFolderPath);
+            // Delete temp folder
+            Directory.Delete(baseTempFolder, true);
 
-            // Delete delta file
-            File.Delete(deltaFilePath);
-
+            // TODO: should this be delegated to ddb?
+            
+            /*
             foreach (var item in delta.Adds)
             {
                 var tempFileName = Path.Combine(addTempFolder, item.Path);
@@ -221,7 +251,7 @@ namespace Registry.Web.Services.Managers
                     if (!CommonUtils.SafeDelete(tempFileName))
                         _logger.LogWarning($"Cannot delete '{tempFileName}'");
                 }
-            }
+            }*/
         }
 
         public async Task Clean(string orgSlug, string dsSlug)
@@ -250,121 +280,6 @@ namespace Registry.Web.Services.Managers
             {
                 _logger.LogInformation("Nothing to clean");
             }
-        }
-
-        private async Task ApplyDelta(string bucketName, DeltaDto delta, string addTempFolder)
-        {
-            const string tempFolderName = ".tmp";
-
-            _logger.LogInformation("Moving copies to temp folder ");
-
-            for (var index = 0; index < delta.Copies.Length; index++)
-            {
-                var copy = delta.Copies[index];
-                _logger.LogInformation(copy.ToString());
-
-                var source = copy.Source;
-                var dest = CommonUtils.SafeCombine(tempFolderName, copy.Source);
-
-                EnsureParentFolderExists(dest);
-
-                _logger.LogInformation(
-                    $"Changed copy path from {copy.Source} to {dest}");
-
-                await _objectSystem.CopyObjectAsync(bucketName, source, bucketName, dest);
-
-                delta.Copies[index] = new CopyActionDto { Source = dest, Destination = copy.Destination };
-            }
-
-
-            _logger.LogInformation("Working on removes");
-
-            foreach (var rem in delta.Removes)
-            {
-                _logger.LogInformation(rem.ToString());
-
-                var dest = rem.Path;
-
-                if (rem.Type == EntryType.Directory) 
-                    continue;
-                
-                _logger.LogInformation("Deleting file");
-
-                if (await _objectSystem.ObjectExistsAsync(bucketName, dest))
-                {
-                    _logger.LogInformation("File exists in dest, deleting it");
-                    await _objectSystem.RemoveObjectAsync(bucketName, dest);
-                    _logger.LogInformation("File deleted");
-                }
-                else
-                {
-                    _logger.LogInformation("File does not exist in dest, nothing to do");
-                }
-            }
-
-
-            _logger.LogInformation("Working on adds");
-
-            foreach (var add in delta.Adds)
-            {
-                _logger.LogInformation(add.ToString());
-
-                if (add.Type == EntryType.Directory)
-                {
-                    _logger.LogInformation("Cant do much on directories");
-                    continue;
-                }
-
-                var source = CommonUtils.SafeCombine(addTempFolder, add.Path);
-
-                _logger.LogInformation("Uploading file");
-
-                await _objectSystem.PutObjectAsync(bucketName, add.Path, source);
-            }
-
-            _logger.LogInformation("Working on direct copies");
-
-            foreach (var copy in delta.Copies)
-            {
-                _logger.LogInformation(copy.ToString());
-
-                var source = copy.Source;
-                var dest = copy.Destination;
-
-                if (await _objectSystem.ObjectExistsAsync(bucketName, dest))
-                {
-                    _logger.LogInformation("Dest file exists, writing shadow");
-                    await _objectSystem.CopyObjectAsync(bucketName, dest, bucketName, dest + ".replace");
-                }
-                else
-                {
-                    _logger.LogInformation("Dest file does not exist, performing copy");
-                    await _objectSystem.CopyObjectAsync(bucketName, source, bucketName, dest);
-                }
-            }
-
-            _logger.LogInformation("Working on shadow copies");
-
-            foreach (var copy in delta.Copies)
-            {
-                var dest = copy.Destination;
-
-                if (await _objectSystem.ObjectExistsAsync(bucketName, dest + ".replace"))
-                {
-                    _logger.LogInformation(copy.ToString());
-                    _logger.LogInformation("Shadow file exists, replacing original one");
-
-                    // Basically a move
-                    await _objectSystem.CopyObjectAsync(bucketName, dest + ".replace", bucketName, dest);
-                    await _objectSystem.RemoveObjectAsync(bucketName, dest + ".replace");
-                }
-            }
-
-            _logger.LogInformation("Clearing temp folder");
-
-            var objects = _objectSystem.ListObjectsAsync(bucketName, tempFolderName, true).ToEnumerable();
-            await _objectSystem.RemoveObjectsAsync(bucketName, objects.Select(obj => obj.Key).ToArray());
-
         }
 
         private static void EnsureParentFolderExists(string folder)

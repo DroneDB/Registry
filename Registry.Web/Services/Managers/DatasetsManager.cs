@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
+using DDB.Bindings.Model;
 using Microsoft.Extensions.Logging;
 using Registry.Common;
 using Registry.Ports.DroneDB.Models;
@@ -94,7 +95,7 @@ namespace Registry.Web.Services.Managers
                 Depth = 0,
                 Size = info.Size,
                 Path = _utils.GenerateDatasetUrl(dataset),
-                Type = EntryType.DroneDb,
+                Type = EntryType.DroneDB,
                 Properties = info.Properties
             };
 
@@ -206,6 +207,13 @@ namespace Registry.Web.Services.Managers
 
             return attrs;
 
+        }
+
+        public async Task<Stamp> GetStamp(string orgSlug, string dsSlug)
+        {
+            var ds = await _utils.GetDataset(orgSlug, dsSlug);
+            var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
+            return ddb.GetStamp();
         }
     }
 }

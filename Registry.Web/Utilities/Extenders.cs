@@ -13,24 +13,12 @@ using Registry.Ports.DroneDB.Models;
 using Registry.Web.Data.Models;
 using Registry.Web.Models;
 using Registry.Web.Models.DTO;
-using EntryType = Registry.Common.EntryType;
+using EntryType = DDB.Bindings.Model.EntryType;
 
 namespace Registry.Web.Utilities
 {
     public static class Extenders
     {
-
-        public static DeltaDto ToDto(this Delta delta)
-        {
-            if (delta == null) return null;
-
-            return new DeltaDto
-            {
-                Adds = delta.Adds?.Select(add => new AddActionDto { Path = add.Path, Type = (EntryType)(int)add.Type }).ToArray(),
-                Copies = delta.Copies?.Select(cpy => new CopyActionDto { Destination = cpy.Destination, Source = cpy.Source }).ToArray(),
-                Removes = delta.Removes?.Select(rem => new RemoveActionDto { Path = rem.Path, Type = (EntryType)(int)rem.Type }).ToArray()
-            };
-        }
 
         public static Organization ToEntity(this OrganizationDto organization)
         {

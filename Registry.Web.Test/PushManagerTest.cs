@@ -130,6 +130,8 @@ namespace Registry.Web.Test
         public async Task Init_HappyPath_Ok()
         {
             /* INITIALIZATION & SETUP */
+
+            /*
             const string userName = "admin";
             const string dsSlug = "test";
 
@@ -180,11 +182,11 @@ namespace Registry.Web.Test
                         }
 
                         await using var up = File.OpenRead(filePath);
-                        await pushManager.Upload(userName, dsSlug, file, up);
+                        await pushManager.Upload(userName, dsSlug, file, token, up);
                     }
                 }
 
-                await pushManager.Commit(userName, dsSlug);
+                await pushManager.Commit(userName, dsSlug, token);
 
                 // Verify that all the files are in the correct places
                 await using (var stream = File.OpenRead(Path.Combine(test.TestFolder, "ClientDdb.zip")))
@@ -199,7 +201,7 @@ namespace Registry.Web.Test
             finally
             {
                 await pushManager.Clean(userName, dsSlug);
-            }
+            }*/
         }
 
         [Test]
@@ -207,6 +209,7 @@ namespace Registry.Web.Test
         public async Task Init_HappyPath2_Ok()
         {
             /* INITIALIZATION & SETUP */
+            /*
             const string userName = "admin";
             const string dsSlug = "test";
 
@@ -284,7 +287,7 @@ namespace Registry.Web.Test
                         }
 
                         await using var up = File.OpenRead(filePath);
-                        await pushManager.Upload(userName, dsSlug, file, up);
+                        await pushManager.Upload(userName, dsSlug, file, result.Token, up);
                     }
                 }
 
@@ -303,7 +306,7 @@ namespace Registry.Web.Test
             finally
             {
                 await pushManager.Clean(userName, dsSlug);
-            }
+            }*/
         }
 
         #region Test Data

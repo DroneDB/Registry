@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using DDB.Bindings.Model;
 using GeoJSON.Net.Feature;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;

@@ -11,6 +11,7 @@ using System.Reactive.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using DDB.Bindings;
+using DDB.Bindings.Model;
 using Hangfire;
 using Hangfire.Console;
 using Hangfire.Server;
@@ -31,6 +32,7 @@ using Registry.Web.Models.Configuration;
 using Registry.Web.Models.DTO;
 using Registry.Web.Services.Ports;
 using Registry.Web.Utilities;
+using EntryType = DDB.Bindings.Model.EntryType;
 
 namespace Registry.Web.Services.Managers
 {

@@ -80,9 +80,11 @@ namespace Registry.Adapters.DroneDB
         // These consts are like magic strings: if anything changes this goes kaboom!
         public const string DatabaseFolderName = ".ddb";
         public const string BuildFolderName = "build";
+        public const string TmpFolderName = "tmp";
 
         string IDdb.DatabaseFolderName => DatabaseFolderName;
         string IDdb.BuildFolderName => BuildFolderName;
+        string IDdb.TmpFolderName => TmpFolderName;
 
         [JsonIgnore]
         public string Version => DDB.Bindings.DroneDB.GetVersion();
@@ -160,7 +162,7 @@ namespace Registry.Adapters.DroneDB
                                 ModifiedTime = entry.ModifiedTime,
                                 Path = entry.Path,
                                 Size = entry.Size,
-                                Type = (EntryType)(int)entry.Type,
+                                Type = entry.Type,
 
                                 PointGeometry = (Point)entry.PointGeometry?.ToObject<Feature>()?.Geometry,
                                 PolygonGeometry = (Polygon)entry.PolygonGeometry?.ToObject<Feature>()?.Geometry
@@ -233,6 +235,13 @@ namespace Registry.Adapters.DroneDB
             }
         }
 
+        public string GetTmpFolder(string path)
+        {
+            string fullPath = Path.Combine(DatasetFolderPath, DatabaseFolderName, TmpFolderName, path);
+            if (!Directory.Exists(fullPath)) Directory.CreateDirectory(fullPath);
+            return fullPath;
+        }
+
         public bool IsBuildable(string path)
         {
             try
@@ -280,7 +289,7 @@ namespace Registry.Adapters.DroneDB
                 ModifiedTime = entry.ModifiedTime,
                 Path = entry.Path,
                 Size = entry.Size,
-                Type = (EntryType)(int)entry.Type,
+                Type = entry.Type,
 
                 PointGeometry = (Point)entry.PointGeometry?.ToObject<Feature>()?.Geometry,
                 PolygonGeometry = (Polygon)entry.PolygonGeometry?.ToObject<Feature>()?.Geometry
@@ -380,7 +389,7 @@ namespace Registry.Adapters.DroneDB
             return DatasetFolderPath;
         }
 
-        DDB.Bindings.Model.Stamp GetStamp()
+        public DDB.Bindings.Model.Stamp GetStamp()
         {
             return DDB.Bindings.DroneDB.GetStamp(DatasetFolderPath);
         }
