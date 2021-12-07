@@ -1,23 +1,10 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Diagnostics;
-using System.IO;
-using System.Linq;
 using System.Threading.Tasks;
-using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
-using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.AspNetCore.Mvc.Abstractions;
-using Microsoft.AspNetCore.Routing;
-using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Options;
 using MimeMapping;
-using Registry.Common;
-using Registry.Web.Data;
-using Registry.Web.Data.Models;
-using Registry.Web.Exceptions;
 using Registry.Web.Models;
 using Registry.Web.Models.DTO;
 using Registry.Web.Services.Ports;
@@ -44,7 +31,7 @@ namespace Registry.Web.Controllers
         {
             try
             {
-                _logger.LogDebug($"Objects controller GetDdb('{orgSlug}', '{dsSlug}')");
+                _logger.LogDebug("Objects controller GetDdb('{OrgSlug}', '{DsSlug}')", orgSlug, dsSlug);
 
                 var res = await _objectsManager.GetDdb(orgSlug, dsSlug);
 
@@ -59,7 +46,7 @@ namespace Registry.Web.Controllers
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, $"Exception in Objects controller GetDdb('{orgSlug}', '{dsSlug}')");
+                _logger.LogError(ex, "Exception in Objects controller GetDdb('{OrgSlug}', '{DsSlug}')", orgSlug, dsSlug);
                 return ExceptionResult(ex);
             }
         }
@@ -69,7 +56,7 @@ namespace Registry.Web.Controllers
         {
             try
             {
-                _logger.LogDebug($"Objects controller GenerateThumbnail('{orgSlug}', '{dsSlug}', '{path}', '{size}')");
+                _logger.LogDebug("Objects controller GenerateThumbnail('{OrgSlug}', '{DsSlug}', '{Path}', '{Size}')", orgSlug, dsSlug, path, size);
 
                 var res = await _objectsManager.GenerateThumbnail(orgSlug, dsSlug, path, size);
 
@@ -78,7 +65,7 @@ namespace Registry.Web.Controllers
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, $"Exception in Objects controller GenerateThumbnail('{orgSlug}', '{dsSlug}', '{path}', '{size}')");
+                _logger.LogError(ex, "Exception in Objects controller GenerateThumbnail('{OrgSlug}', '{DsSlug}', '{Path}', '{Size}')", orgSlug, dsSlug, path, size);
                 return ExceptionResult(new Exception("Cannot generate thumbnail"));
             }
         }
@@ -90,7 +77,7 @@ namespace Registry.Web.Controllers
 
             try
             {
-                _logger.LogDebug($"Objects controller GenerateTile('{orgSlug}', '{dsSlug}', '{path}', '{tz}', '{tx}', '{tyRaw}')");
+                _logger.LogDebug("Objects controller GenerateTile('{OrgSlug}', '{DsSlug}', '{Path}', '{Tz}', '{Tx}', '{TyRaw}')", orgSlug, dsSlug, path, tz, tx, tyRaw);
 
                 var retina = tyRaw.EndsWith("@2x");
 
@@ -104,7 +91,7 @@ namespace Registry.Web.Controllers
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, $"Exception in Objects controller GenerateTile('{orgSlug}', '{dsSlug}', '{path}', '{tz}', '{tx}', '{tyRaw}')");
+                _logger.LogError(ex, "Exception in Objects controller GenerateTile('{OrgSlug}', '{DsSlug}', '{Path}', '{Tz}', '{Tx}', '{TyRaw}')", orgSlug, dsSlug, path, tz, tx, tyRaw);
                 return ExceptionResult(ex);
             }
 
@@ -123,7 +110,7 @@ namespace Registry.Web.Controllers
                 var paths = pathsRaw?.Split(",", StringSplitOptions.RemoveEmptyEntries);
                 var isInline = isInlineRaw == 1;
 
-                _logger.LogDebug($"Objects controller Download('{orgSlug}', '{dsSlug}', '{pathsRaw}', '{isInlineRaw}')");
+                _logger.LogDebug("Objects controller Download('{OrgSlug}', '{DsSlug}', '{PathsRaw}', '{IsInlineRaw}')", orgSlug, dsSlug, pathsRaw, isInlineRaw);
 
                 // If only one file is requested, we can leverage the local file system
                 if (paths?.Length == 1)
@@ -147,7 +134,7 @@ namespace Registry.Web.Controllers
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, $"Exception in Objects controller Download('{orgSlug}', '{dsSlug}', '{pathsRaw}')");
+                _logger.LogError(ex, "Exception in Objects controller Download('{OrgSlug}', '{DsSlug}', '{PathsRaw}')", orgSlug, dsSlug, pathsRaw);
 
                 return ExceptionResult(ex);
             }
@@ -162,7 +149,7 @@ namespace Registry.Web.Controllers
 
                 bool isInline = isInlineRaw == 1;
 
-                _logger.LogDebug($"Objects controller DownloadExact('{orgSlug}', '{dsSlug}', '{path}', '{isInlineRaw}')");
+                _logger.LogDebug("Objects controller DownloadExact('{OrgSlug}', '{DsSlug}', '{Path}', '{IsInlineRaw}')", orgSlug, dsSlug, path, isInlineRaw);
 
                 var res = await _objectsManager.Get(orgSlug, dsSlug, path);
 
@@ -171,34 +158,11 @@ namespace Registry.Web.Controllers
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, $"Exception in Objects controller DownloadExact('{orgSlug}', '{dsSlug}', '{path}')");
+                _logger.LogError(ex, "Exception in Objects controller DownloadExact('{OrgSlug}', '{DsSlug}', '{Path}')", orgSlug, dsSlug, path);
 
                 return ExceptionResult(ex);
             }
         }
-
-        /*
-        [AllowAnonymous]
-        [HttpGet("package/{id}", Name = nameof(ObjectsController) + "." + nameof(DownloadPackage))]
-        public async Task<IActionResult> DownloadPackage([FromRoute] string orgSlug, [FromRoute] string dsSlug, string id)
-        {
-            try
-            {
-                _logger.LogDebug($"Objects controller DownloadPackage('{orgSlug}', '{dsSlug}', '{id}')");
-
-                var res = await _objectsManager.DownloadPackage(orgSlug, dsSlug, id);
-
-                return File(res.ContentStream, res.ContentType, res.Name);
-
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, $"Exception in Objects controller DownloadPackage('{orgSlug}', '{dsSlug}', '{id}')");
-
-                return ExceptionResult(ex);
-            }
-
-        }*/
 
         [HttpPost("download", Name = nameof(ObjectsController) + "." + nameof(DownloadPost))]
         public async Task<IActionResult> DownloadPost([FromRoute] string orgSlug, [FromRoute] string dsSlug,
@@ -210,7 +174,7 @@ namespace Registry.Web.Controllers
                 var paths = pathsRaw?.Split(",", StringSplitOptions.RemoveEmptyEntries);
                 var isInline = isInlineRaw == 1;
 
-                _logger.LogDebug($"Objects controller DownloadPost('{orgSlug}', '{dsSlug}', '{pathsRaw}', '{isInlineRaw}')");
+                _logger.LogDebug("Objects controller DownloadPost('{OrgSlug}', '{DsSlug}', '{PathsRaw}', '{IsInlineRaw}')", orgSlug, dsSlug, pathsRaw, isInlineRaw);
 
                 var res = await _objectsManager.DownloadStream(orgSlug, dsSlug, paths);
 
@@ -227,48 +191,12 @@ namespace Registry.Web.Controllers
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, $"Exception in Objects controller DownloadPost('{orgSlug}', '{dsSlug}', '{pathsRaw}')");
+                _logger.LogError(ex, "Exception in Objects controller DownloadPost('{OrgSlug}', '{DsSlug}', '{PathsRaw}')", orgSlug, dsSlug, pathsRaw);
 
                 return ExceptionResult(ex);
             }
         }
-/*
-        [HttpPost("getpackage", Name = nameof(ObjectsController) + "." + nameof(GetPackageUrl))]
-        [ProducesResponseType(typeof(DownloadPackageDto), 200)]
-        public async Task<IActionResult> GetPackageUrl([FromRoute] string orgSlug, [FromRoute] string dsSlug,
-            [FromForm(Name = "path")] string[] paths, [FromForm] DateTime? expiration, [FromForm] bool isPublic)
-        {
-            var pathsJoined = paths != null ? string.Join(',', paths) : null;
 
-            try
-            {
-                _logger.LogDebug(
-                    $"Objects controller Download('{orgSlug}', '{dsSlug}', '{pathsJoined}', '{expiration}')");
-
-                var res = await _objectsManager.GetDownloadPackage(orgSlug, dsSlug, paths, expiration, isPublic);
-
-                var downloadUrl = Url.Link(nameof(ObjectsController) + "." + nameof(DownloadPackage), new
-                {
-                    orgSlug,
-                    dsSlug,
-                    id = res
-                });
-
-                return Ok(new DownloadPackageDto
-                {
-                    DownloadUrl = downloadUrl,
-                    Expiration = expiration
-                });
-
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex,
-                    $"Exception in Objects controller Download('{orgSlug}', '{dsSlug}', '{pathsJoined}')");
-
-                return ExceptionResult(ex);
-            }
-        }*/
         #endregion
 
         [HttpGet(RoutesHelper.ObjectsRadix, Name = nameof(ObjectsController) + "." + nameof(Get))]
@@ -276,14 +204,14 @@ namespace Registry.Web.Controllers
         {
             try
             {
-                _logger.LogDebug($"Objects controller Get('{orgSlug}', '{dsSlug}', '{path}')");
+                _logger.LogDebug("Objects controller Get('{OrgSlug}', '{DsSlug}', '{Path}')", orgSlug, dsSlug, path);
 
                 var res = await _objectsManager.Get(orgSlug, dsSlug, path);
                 return PhysicalFile(res.PhysicalPath, res.ContentType, res.Name);
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, $"Exception in Objects controller Get('{orgSlug}', '{dsSlug}', '{path}')");
+                _logger.LogError(ex, "Exception in Objects controller Get('{OrgSlug}', '{DsSlug}', '{Path}')", orgSlug, dsSlug, path);
 
                 return ExceptionResult(ex);
             }
@@ -295,14 +223,14 @@ namespace Registry.Web.Controllers
         {
             try
             {
-                _logger.LogDebug($"Objects controller GetInfo('{orgSlug}', '{dsSlug}', '{path}')");
+                _logger.LogDebug("Objects controller GetInfo('{OrgSlug}', '{DsSlug}', '{Path}')", orgSlug, dsSlug, path);
 
                 var res = await _objectsManager.List(orgSlug, dsSlug, path);
                 return Ok(res);
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, $"Exception in Objects controller GetInfo('{orgSlug}', '{dsSlug}', '{path}')");
+                _logger.LogError(ex, "Exception in Objects controller GetInfo('{OrgSlug}', '{DsSlug}', '{Path}')", orgSlug, dsSlug, path);
 
                 return ExceptionResult(ex);
             }
@@ -314,14 +242,14 @@ namespace Registry.Web.Controllers
         {
             try
             {
-                _logger.LogDebug($"Objects controller GetInfoEx('{orgSlug}', '{dsSlug}', '{path}')");
+                _logger.LogDebug("Objects controller GetInfoEx('{OrgSlug}', '{DsSlug}', '{Path}')", orgSlug, dsSlug, path);
 
                 var res = await _objectsManager.List(orgSlug, dsSlug, path);
                 return Ok(res);
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, $"Exception in Objects controller GetInfoEx('{orgSlug}', '{dsSlug}', '{path}')");
+                _logger.LogError(ex, "Exception in Objects controller GetInfoEx('{OrgSlug}', '{DsSlug}', '{Path}')", orgSlug, dsSlug, path);
 
                 return ExceptionResult(ex);
             }
@@ -334,14 +262,14 @@ namespace Registry.Web.Controllers
         {
             try
             {
-                _logger.LogDebug($"Objects controller Search('{orgSlug}', '{dsSlug}', '{path}')");
+                _logger.LogDebug("Objects controller Search('{OrgSlug}', '{DsSlug}', '{Path}')", orgSlug, dsSlug, path);
 
                 var res = await _objectsManager.Search(orgSlug, dsSlug, query, path, recursive);
                 return Ok(res);
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, $"Exception in Objects controller Search('{orgSlug}', '{dsSlug}', '{path}')");
+                _logger.LogError(ex, "Exception in Objects controller Search('{OrgSlug}', '{DsSlug}', '{Path}')", orgSlug, dsSlug, path);
 
                 return ExceptionResult(ex);
             }
@@ -354,7 +282,7 @@ namespace Registry.Web.Controllers
         {
             try
             {
-                _logger.LogDebug($"Objects controller Post('{orgSlug}', '{dsSlug}', '{path}', '{file?.FileName}')");
+                _logger.LogDebug("Objects controller Post('{OrgSlug}', '{DsSlug}', '{Path}', '{file?.FileName}')", orgSlug, dsSlug, path, file?.FileName);
 
                 EntryGeoDto newObj;
 
@@ -378,7 +306,7 @@ namespace Registry.Web.Controllers
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, $"Exception in Objects controller Post('{orgSlug}', '{dsSlug}', '{path}', '{file?.FileName}')");
+                _logger.LogError(ex, "Exception in Objects controller Post('{OrgSlug}', '{DsSlug}', '{Path}', '{file?.FileName}')", orgSlug, dsSlug, path, file?.FileName);
 
                 return ExceptionResult(ex);
             }
@@ -391,14 +319,14 @@ namespace Registry.Web.Controllers
 
             try
             {
-                _logger.LogDebug($"Objects controller Delete('{orgSlug}', '{dsSlug}', '{path}')");
+                _logger.LogDebug("Objects controller Delete('{OrgSlug}', '{DsSlug}', '{Path}')", orgSlug, dsSlug, path);
 
                 await _objectsManager.Delete(orgSlug, dsSlug, path);
                 return NoContent();
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, $"Exception in Objects controller Delete('{orgSlug}', '{dsSlug}', '{path}')");
+                _logger.LogError(ex, "Exception in Objects controller Delete('{OrgSlug}', '{DsSlug}', '{Path}')", orgSlug, dsSlug, path);
 
                 return ExceptionResult(ex);
             }
@@ -411,14 +339,14 @@ namespace Registry.Web.Controllers
 
             try
             {
-                _logger.LogDebug($"Objects controller Move('{orgSlug}', '{dsSlug}', '{source}', '{dest}')");
+                _logger.LogDebug("Objects controller Move('{OrgSlug}', '{DsSlug}', '{Source}', '{Dest}')", orgSlug, dsSlug, source, dest);
 
                 await _objectsManager.Move(orgSlug, dsSlug, source, dest);
                 return NoContent();
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, $"Exception in Objects controller Move('{orgSlug}', '{dsSlug}', '{source}', '{dest}')");
+                _logger.LogError(ex, "Exception in Objects controller Move('{OrgSlug}', '{DsSlug}', '{Source}', '{Dest}')", orgSlug, dsSlug, source, dest);
 
                 return ExceptionResult(ex);
             }
@@ -430,14 +358,14 @@ namespace Registry.Web.Controllers
         {
             try
             {
-                _logger.LogDebug($"Objects controller Build('{orgSlug}', '{dsSlug}', '{path}')");
+                _logger.LogDebug("Objects controller Build('{OrgSlug}', '{DsSlug}', '{Path}')", orgSlug, dsSlug, path);
 
                 await _objectsManager.Build(orgSlug, dsSlug, path, background, force);
                 return Ok();
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, $"Exception in Objects controller Build('{orgSlug}', '{dsSlug}', '{path}')");
+                _logger.LogError(ex, "Exception in Objects controller Build('{OrgSlug}', '{DsSlug}', '{Path}')", orgSlug, dsSlug, path);
 
                 return ExceptionResult(ex);
             }
@@ -448,7 +376,7 @@ namespace Registry.Web.Controllers
         {
             try
             {
-                _logger.LogDebug($"Objects controller BuildFile('{orgSlug}', '{dsSlug}', '{path}')");
+                _logger.LogDebug("Objects controller BuildFile('{OrgSlug}', '{DsSlug}', '{Path}')", orgSlug, dsSlug, path);
 
                 var res = await _objectsManager.GetBuildFile(orgSlug, dsSlug, hash, path);
 
@@ -457,7 +385,7 @@ namespace Registry.Web.Controllers
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, $"Exception in Objects controller BuildFile('{orgSlug}', '{dsSlug}', '{path}')");
+                _logger.LogError(ex, "Exception in Objects controller BuildFile('{OrgSlug}', '{DsSlug}', '{Path}')", orgSlug, dsSlug, path);
 
                 return ExceptionResult(ex);
             }
@@ -468,7 +396,7 @@ namespace Registry.Web.Controllers
         {
             try
             {
-                _logger.LogDebug($"Objects controller CheckBuildFile('{orgSlug}', '{dsSlug}', '{path}')");
+                _logger.LogDebug("Objects controller CheckBuildFile('{OrgSlug}', '{DsSlug}', '{Path}')", orgSlug, dsSlug, path);
 
                 var res = await _objectsManager.CheckBuildFile(orgSlug, dsSlug, hash, path);
 
@@ -477,7 +405,7 @@ namespace Registry.Web.Controllers
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, $"Exception in Objects controller CheckBuildFile('{orgSlug}', '{dsSlug}', '{path}')");
+                _logger.LogError(ex, "Exception in Objects controller CheckBuildFile('{OrgSlug}', '{DsSlug}', '{Path}')", orgSlug, dsSlug, path);
 
                 return ExceptionResult(ex);
             }

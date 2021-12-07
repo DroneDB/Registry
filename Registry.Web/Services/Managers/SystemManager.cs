@@ -43,14 +43,14 @@ namespace Registry.Web.Services.Managers
 
             var datasets = _context.Datasets.Include(ds => ds.Organization).ToArray();
 
-            _logger.LogInformation($"Found {datasets.Length} with objects count zero");
+            _logger.LogInformation("Found {DatasetsCount} with objects count zero", datasets.Length);
 
             var deleted = new List<string>();
             var notDeleted = new List<CleanupDatasetErrorDto>();
 
             foreach (var ds in datasets)
             {
-                _logger.LogInformation($"Analyzing dataset {ds.Organization.Slug}/{ds.Slug}");
+                _logger.LogInformation("Analyzing dataset {OrgSlug}/{DsSlug}", ds.Organization.Slug, ds.Slug);
 
                 try
                 {
@@ -70,7 +70,7 @@ namespace Registry.Web.Services.Managers
                 }
                 catch (Exception ex)
                 {
-                    _logger.LogError(ex, $"Cannot remove dataset '{ds.Slug}'");
+                    _logger.LogError(ex, "Cannot remove dataset '{DsSlug}'", ds.Slug);
                     notDeleted.Add(new CleanupDatasetErrorDto
                     {
                         Dataset = ds.Slug,
@@ -129,7 +129,7 @@ namespace Registry.Web.Services.Managers
 
                         foreach (var entry in entries)
                         {
-                            _logger.LogInformation($"Deleting '{entry.Path}' of '{org.Slug}/{ds.Slug}'");
+                            _logger.LogInformation("Deleting '{EntryPath}' of '{OrgSlug}/{DsSlug}'", entry.Path, org.Slug, ds.Slug);
                             await _objectManager.Delete(org.Slug, ds.Slug, entry.Path);
                         }
 
@@ -158,7 +158,7 @@ namespace Registry.Web.Services.Managers
                 }
                 catch (Exception ex)
                 {
-                    _logger.LogError(ex, $"Cannot remove batch '{batch.Token}'");
+                    _logger.LogError(ex, "Cannot remove batch '{BatchToken}'", batch.Token);
                     errors.Add(new RemoveBatchErrorDto
                     {
                         Message = ex.Message,

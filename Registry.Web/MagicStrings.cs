@@ -13,7 +13,6 @@ namespace Registry.Web
         public const string DefaultDatasetSlug = "default";
         public const string AnonymousUserName = "anonymous";
         public const string MaxStorageKey = "maxStorageMB";
-        public const string StorageCleanupJobId = "cleanup-storage";
 
         public const string TileCacheSeed = "tile";
         public const string ThumbnailCacheSeed = "thumb";

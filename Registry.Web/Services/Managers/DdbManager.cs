@@ -33,11 +33,11 @@ namespace Registry.Web.Services.Managers
             {
 
                 ddb.Init();
-                _logger.LogInformation($"Initialized new ddb in '{baseDdbPath}'");
+                _logger.LogInformation("Initialized new ddb in '{DaseDdbPath}'", baseDdbPath);
 
             }
             else
-                _logger.LogInformation($"Opened ddb in '{baseDdbPath}'");
+                _logger.LogInformation("Opened ddb in '{BaseDdbPath}'", baseDdbPath);
             
             return ddb;
         }
@@ -48,11 +48,11 @@ namespace Registry.Web.Services.Managers
             var baseDdbPath = GetDdbPath(orgSlug, internalRef);
 
             if (!Directory.Exists(baseDdbPath)) {
-                _logger.LogWarning($"Asked to remove the folder '{baseDdbPath}' but it does not exist");
+                _logger.LogWarning("Asked to remove the folder '{BaseDdbPath}' but it does not exist", baseDdbPath);
                 return;
             }
 
-            _logger.LogInformation($"Removing ddb '{baseDdbPath}'");
+            _logger.LogInformation("Removing ddb '{BaseDdbPath}'", baseDdbPath);
 
             Directory.Delete(baseDdbPath, true);
 

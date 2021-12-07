@@ -16,39 +16,6 @@ namespace Registry.Web.Utilities
 {
     public static class HangfireUtils
     {
-/*
-        [AutomaticRetry(Attempts = 0, LogEvents = false, OnAttemptsExceeded = AttemptsExceededAction.Delete)]
-        public static void SyncAndCleanupWrapper(IObjectSystem objectSystem, PerformContext context)
-        {
-            Action<string> writeLine = context != null ? context.WriteLine : Console.WriteLine;
-
-            writeLine($"CleanupWrapper");
-
-            if (objectSystem is CachedS3ObjectSystem system)
-            {
-                writeLine("Synchronizing cache");
-                try
-                {
-                    system.Sync();
-                }
-                catch (Exception ex)
-                {
-                    writeLine("Cannot sync: " + ex.Message);
-                }
-            }
-
-            try
-            {
-                writeLine("Running cleanup");
-
-                objectSystem.Cleanup();
-            }
-            catch (Exception ex)
-            {
-                writeLine("Cannot sync: " + ex.Message);
-            }
-
-        }*/
 
         public static void BuildWrapper(IDdb ddb, string path, bool force,
             PerformContext context)
@@ -87,63 +54,5 @@ namespace Registry.Web.Utilities
             }
         }
 
-/*
-        public static void SyncBuildFolder(IObjectSystem objectSystem, IDdb ddb, DdbEntry obj, string bucketName, PerformContext context)
-        {
-            Action<string> writeLine = context != null ? context.WriteLine : Console.WriteLine;
-
-            // TODO: We are assuming this convention, if ddb changes this policy we are screwed
-            var buildPath = Path.GetFullPath(Path.Combine(ddb.BuildFolderPath, obj.Hash));
-            var destFolder = CommonUtils.SafeCombine(ddb.DatabaseFolderName, ddb.BuildFolderName, obj.Hash);
-
-            writeLine($"SyncBuildFolder -> '{buildPath}' to '{destFolder}'");
-
-            // Put it on storage
-            SyncFolder(objectSystem, buildPath, bucketName, destFolder, context);
-
-        }
-
-        public static void SyncFolder(IObjectSystem objectSystem, string sourcePath, string bucketName, string destPath, PerformContext context)
-        {
-            Action<string> writeLine = context != null ? context.WriteLine : Console.WriteLine;
-
-            writeLine($"SyncFolder -> '{sourcePath}' to '{destPath}' on bucket '{bucketName}");
-
-            var cnt = 0;
-
-            foreach (var file in Directory.EnumerateFiles(sourcePath))
-            {
-                var name = Path.GetFileName(file);
-                var source = Path.GetFullPath(Path.Combine(sourcePath, name));
-                var dest = CommonUtils.SafeCombine(destPath, name);
-
-                var contentType = MimeTypes.GetMimeType(file);
-
-#if DEBUG
-                writeLine($"'{file}' -> PutObjectAsync('{name}', '{source}', '{dest}', '{contentType}')");
-#endif
-                // Retry if it fails. After N tries throw and exception. Hangfire will retry the job later
-                Policies.Base.Execute(async () => 
-                    await objectSystem.PutObjectAsync(bucketName, dest, source, contentType));
-
-                cnt++;
-            }
-
-            writeLine($"Synced {cnt} files");
-
-            foreach (var folder in Directory.EnumerateDirectories(sourcePath))
-            {
-                var name = Path.GetFileName(folder);
-
-                var source = Path.Combine(sourcePath, name);
-                var dest = CommonUtils.SafeCombine(destPath, name);
-
-                writeLine($"'{folder}' -> SyncFolder('{name}', '{source}', '{dest}')");
-
-                SyncFolder(objectSystem, source, bucketName, dest, context);
-
-            }
-        }
-*/
     }
 }

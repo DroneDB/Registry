@@ -43,8 +43,11 @@ namespace Registry.Web.Controllers
 
             try
             {
-                _logger.LogDebug($"Users controller Authenticate('{model.Username}')");
+                _logger.LogDebug("Users controller Authenticate('{Username}')", model?.Username);
 
+                if (model == null)
+                    return BadRequest(new ErrorResponse("No auth data provided"));
+                
                 var res = string.IsNullOrWhiteSpace(model.Token) ?
                     await _usersManager.Authenticate(model.Username, model.Password) :
                     await _usersManager.Authenticate(model.Token);
@@ -56,7 +59,7 @@ namespace Registry.Web.Controllers
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, $"Exception in Users controller Authenticate('{model.Username}')");
+                _logger.LogError(ex, "Exception in Users controller Authenticate('{Username}')", model?.Username);
 
                 return ExceptionResult(ex);
             }
@@ -69,7 +72,7 @@ namespace Registry.Web.Controllers
 
             try
             {
-                _logger.LogDebug($"Users controller Refresh()");
+                _logger.LogDebug("Users controller Refresh()");
 
                 var res = await _usersManager.Refresh();
 
@@ -80,7 +83,7 @@ namespace Registry.Web.Controllers
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, $"Exception in Users controller Refresh()");
+                _logger.LogError(ex, "Exception in Users controller Refresh()");
 
                 return ExceptionResult(ex);
             }
@@ -93,15 +96,19 @@ namespace Registry.Web.Controllers
 
             try
             {
-                _logger.LogDebug($"Users controller CreateUser('{model.UserName}', '{model.Email}')");
+                _logger.LogDebug("Users controller CreateUser('{UserName}', '{Email}')", model?.UserName, model?.Email);
 
+                if (model == null)
+                    return BadRequest(new ErrorResponse("No user data provided"));
+                
                 await _usersManager.CreateUser(model.UserName, model.Email, model.Password);
 
                 return Ok();
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, $"Exception in Users controller CreateUser()");
+                _logger.LogError(ex, "Exception in Users controller CreateUser('{UserName}', '{Email}')",
+                    model?.UserName, model?.Email);
 
                 return ExceptionResult(ex);
             }
@@ -114,15 +121,18 @@ namespace Registry.Web.Controllers
 
             try
             {
-                _logger.LogDebug($"Users controller ChangePassword('{model.UserName}')");
+                _logger.LogDebug("Users controller ChangePassword('{UserName}')", model?.UserName);
 
+                if (model == null)
+                    return BadRequest(new ErrorResponse("No user data provided"));
+                
                 await _usersManager.ChangePassword(model.UserName, model.CurrentPassword, model.NewPassword);
 
                 return Ok();
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, $"Exception in Users controller ChangePassword()");
+                _logger.LogError(ex, "Exception in Users controller ChangePassword('{UserName}')", model?.UserName);
 
                 return ExceptionResult(ex);
             }
@@ -135,7 +145,7 @@ namespace Registry.Web.Controllers
 
             try
             {
-                _logger.LogDebug($"Users controller DeleteUser('{userName}')");
+                _logger.LogDebug("Users controller DeleteUser('{UserName}')", userName);
 
                 await _usersManager.DeleteUser(userName);
 
@@ -143,7 +153,7 @@ namespace Registry.Web.Controllers
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, $"Exception in Users controller DeleteUser()");
+                _logger.LogError(ex, "Exception in Users controller DeleteUser('{UserName}')", userName);
 
                 return ExceptionResult(ex);
             }
@@ -165,7 +175,7 @@ namespace Registry.Web.Controllers
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, $"Exception in Users controller GetAll()");
+                _logger.LogError(ex, "Exception in Users controller GetAll()");
 
                 return ExceptionResult(ex);
             }
@@ -178,7 +188,7 @@ namespace Registry.Web.Controllers
         {
             try
             {
-                _logger.LogDebug($"Users controller GetUserQuotaInfo()");
+                _logger.LogDebug("Users controller GetUserQuotaInfo()");
 
                 var res = await _usersManager.GetUserStorageInfo();
 
@@ -186,7 +196,7 @@ namespace Registry.Web.Controllers
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, $"Exception in Users controller GetUserQuotaInfo()");
+                _logger.LogError(ex, "Exception in Users controller GetUserQuotaInfo()");
 
                 return ExceptionResult(ex);
             }
@@ -199,7 +209,7 @@ namespace Registry.Web.Controllers
         {
             try
             {
-                _logger.LogDebug($"Users controller GetUserQuotaInfo('{userName}')");
+                _logger.LogDebug("Users controller GetUserQuotaInfo('{UserName}')", userName);
 
                 var res = await _usersManager.GetUserStorageInfo(userName);
 
@@ -207,7 +217,7 @@ namespace Registry.Web.Controllers
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, $"Exception in Users controller GetUserQuotaInfo('{userName}')");
+                _logger.LogError(ex, "Exception in Users controller GetUserQuotaInfo('{UserName}')", userName);
 
                 return ExceptionResult(ex);
             }
@@ -221,7 +231,7 @@ namespace Registry.Web.Controllers
 
             try
             {
-                _logger.LogDebug($"Users controller GetUserMeta()");
+                _logger.LogDebug("Users controller GetUserMeta()");
 
                 var meta = await _usersManager.GetUserMeta();
 
@@ -229,7 +239,7 @@ namespace Registry.Web.Controllers
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, $"Exception in Users controller GetUserMeta()");
+                _logger.LogError(ex, "Exception in Users controller GetUserMeta()");
 
                 return ExceptionResult(ex);
             }
@@ -243,7 +253,7 @@ namespace Registry.Web.Controllers
 
             try
             {
-                _logger.LogDebug($"Users controller GetUserMeta('{userName}')");
+                _logger.LogDebug("Users controller GetUserMeta('{UserName}')", userName);
 
                 var meta = await _usersManager.GetUserMeta(userName);
 
@@ -251,7 +261,7 @@ namespace Registry.Web.Controllers
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, $"Exception in Users controller GetUserMeta('{userName}')");
+                _logger.LogError(ex, "Exception in Users controller GetUserMeta('{UserName}')", userName);
 
                 return ExceptionResult(ex);
             }
@@ -264,7 +274,7 @@ namespace Registry.Web.Controllers
 
             try
             {
-                _logger.LogDebug($"Users controller SetUserMeta('{userName}')");
+                _logger.LogDebug("Users controller SetUserMeta('{UserName}')", userName);
 
                 await _usersManager.SetUserMeta(userName, meta);
 
@@ -272,7 +282,7 @@ namespace Registry.Web.Controllers
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, $"Exception in Users controller SetUserMeta('{userName}')");
+                _logger.LogError(ex, "Exception in Users controller SetUserMeta('{UserName}')", userName);
 
                 return ExceptionResult(ex);
             }

@@ -42,7 +42,7 @@ namespace Registry.Web.Controllers
         {
             try
             {
-                _logger.LogDebug($"Share controller Init('{parameters}')");
+                _logger.LogDebug("Share controller Init('{Tag}', '{DatasetName}')", parameters?.Tag, parameters?.DatasetName);
 
                 var initRes = await _shareManager.Initialize(parameters);
 
@@ -51,7 +51,7 @@ namespace Registry.Web.Controllers
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, $"Exception in Share controller Init('{parameters}')");
+                _logger.LogError(ex, "Exception in Share controller Init('{Tag}', '{DatasetName}')", parameters?.Tag, parameters?.DatasetName);
 
                 return ExceptionResult(ex);
             }
@@ -65,7 +65,7 @@ namespace Registry.Web.Controllers
             try
             {
 
-                _logger.LogDebug($"Share controller Upload('{token}', '{path}', '{file?.FileName}')");
+                _logger.LogDebug("Share controller Upload('{Token}', '{Path}', '{file?.FileName}')", token, path, file?.FileName);
 
                 if (file == null)
                     throw new ArgumentException("No file uploaded");
@@ -76,7 +76,7 @@ namespace Registry.Web.Controllers
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, $"Exception in Share controller Upload('{token}', '{path}', '{file?.FileName}')");
+                _logger.LogError(ex, "Exception in Share controller Upload('{Token}', '{Path}', '{file?.FileName}')", token, path, file?.FileName);
 
                 return ExceptionResult(ex);
             }
@@ -88,7 +88,7 @@ namespace Registry.Web.Controllers
             try
             {
 
-                _logger.LogDebug($"Share controller Commit('{token}')");
+                _logger.LogDebug("Share controller Commit('{Token}')", token);
 
                 var res = await _shareManager.Commit(token);
 
@@ -97,7 +97,7 @@ namespace Registry.Web.Controllers
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, $"Exception in Share controller Commit('{token}')");
+                _logger.LogError(ex, "Exception in Share controller Commit('{Token}')", token);
 
                 return ExceptionResult(ex);
             }

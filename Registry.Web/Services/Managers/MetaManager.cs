@@ -66,7 +66,7 @@ namespace Registry.Web.Services.Managers
             if (!await _authManager.IsOwnerOrAdmin(ds))
                 throw new UnauthorizedException("The current user is not allowed to set meta");
 
-            _logger.LogInformation($"In Set('{orgSlug}/{dsSlug}', {key}, {path})");
+            _logger.LogInformation("In Set('{OrgSlug}/{DsSlug}', {Key}, {Path})", orgSlug, dsSlug, key, path);
 
             if (string.IsNullOrWhiteSpace(key))
                 throw new ArgumentException("Key should not be null or empty");
@@ -96,7 +96,7 @@ namespace Registry.Web.Services.Managers
             if (!await _authManager.IsOwnerOrAdmin(ds))
                 throw new UnauthorizedException("The current user is not allowed to remove meta");
 
-            _logger.LogInformation($"In Remove('{orgSlug}/{dsSlug}', {id})");
+            _logger.LogInformation("In Remove('{OrgSlug}/{DsSlug}', {Id})", orgSlug, dsSlug, id);
 
             if (string.IsNullOrWhiteSpace(id))
                 throw new ArgumentException("Id should not be null or empty");
@@ -110,7 +110,7 @@ namespace Registry.Web.Services.Managers
         {
             var dataset = await _utils.GetDataset(orgSlug, dsSlug);
 
-            _logger.LogInformation($"In Get('{orgSlug}/{dsSlug}', {key}, {path})");
+            _logger.LogInformation("In Get('{OrgSlug}/{DsSlug}', {Key}, {Path})", orgSlug, dsSlug, key, path);
 
             if (string.IsNullOrWhiteSpace(key))
                 throw new ArgumentException("Key should not be null or empty");
@@ -133,7 +133,7 @@ namespace Registry.Web.Services.Managers
             if (!await _authManager.IsOwnerOrAdmin(ds))
                 throw new UnauthorizedException("The current user is not allowed to unset meta");
 
-            _logger.LogInformation($"In Unset('{orgSlug}/{dsSlug}', {key}, {path})");
+            _logger.LogInformation("In Unset('{OrgSlug}/{DsSlug}', {Key}, {Path})", orgSlug, dsSlug, key, path);
 
             if (string.IsNullOrWhiteSpace(key))
                 throw new ArgumentException("Key should not be null or empty");
@@ -151,7 +151,7 @@ namespace Registry.Web.Services.Managers
         {
             var dataset = await _utils.GetDataset(orgSlug, dsSlug);
 
-            _logger.LogInformation($"In List('{orgSlug}/{dsSlug}', {path})");
+            _logger.LogInformation("In List('{OrgSlug}/{DsSlug}', {Path})", orgSlug, dsSlug, path);
 
             var ddb = _ddbManager.Get(orgSlug, dataset.InternalRef);
 

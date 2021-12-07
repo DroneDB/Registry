@@ -81,15 +81,15 @@ namespace Registry.Web.Services.Managers
         {
             var ds = await _utils.GetDataset(orgSlug, dsSlug);
 
-            _logger.LogInformation($"In List('{orgSlug}/{dsSlug}')");
+            _logger.LogInformation("In List('{OrgSlug}/{DsSlug}')", orgSlug, dsSlug);
 
             var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
 
-            _logger.LogInformation($"Searching in '{path}'");
+            _logger.LogInformation("Searching in '{Path}'", path);
 
             var files = (await ddb.SearchAsync(path, recursive)).Select(file => file.ToDto()).ToArray();
 
-            _logger.LogInformation($"Found {files.Length} objects");
+            _logger.LogInformation("Found {FilesCount} objects", files.Length);
 
             return files;
         }
@@ -99,18 +99,18 @@ namespace Registry.Web.Services.Managers
         {
             var ds = await _utils.GetDataset(orgSlug, dsSlug);
 
-            _logger.LogInformation($"In Search('{orgSlug}/{dsSlug}')");
+            _logger.LogInformation("In Search('{OrgSlug}/{DsSlug}')", orgSlug, dsSlug);
 
             var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
 
-            _logger.LogInformation($"Searching in '{path}' -> {query} ({(recursive ? 'r' : 'n')}");
+            _logger.LogInformation("Searching in '{Path}' -> {Query} ({Recursive}", path, query, recursive ? 'r' : 'n');
 
             var files = (from entry in await ddb.SearchAsync(path, recursive)
                 let name = Path.GetFileName(entry.Path)
                 where FileSystemName.MatchesSimpleExpression(query, name)
                 select entry.ToDto()).ToArray();
 
-            _logger.LogInformation($"Found {files.Length} objects");
+            _logger.LogInformation("Found {FilesCount} objects", files.Length);
 
             return files;
         }
@@ -119,7 +119,7 @@ namespace Registry.Web.Services.Managers
         {
             var ds = await _utils.GetDataset(orgSlug, dsSlug);
 
-            _logger.LogInformation($"In Get('{orgSlug}/{dsSlug}')");
+            _logger.LogInformation("In Get('{OrgSlug}/{DsSlug}')", orgSlug, dsSlug);
 
             if (string.IsNullOrWhiteSpace(path))
                 throw new ArgumentException("Path should not be null");
@@ -161,7 +161,7 @@ namespace Registry.Web.Services.Managers
         {
             var ds = await _utils.GetDataset(orgSlug, dsSlug);
 
-            _logger.LogInformation($"In AddNew('{orgSlug}/{dsSlug}')");
+            _logger.LogInformation("In AddNew('{OrgSlug}/{DsSlug}')", orgSlug, dsSlug);
 
             if (!await _authManager.IsOwnerOrAdmin(ds))
                 throw new UnauthorizedException("The current user is not allowed to edit dataset");
@@ -198,7 +198,7 @@ namespace Registry.Web.Services.Managers
             var localFilePath = ddb.GetLocalPath(path);
             CommonUtils.EnsureSafePath(localFilePath);
 
-            _logger.LogInformation($"Local file path is '{localFilePath}'");
+            _logger.LogInformation("Local file path is '{LocalFilePath}'", localFilePath);
 
             // Write down the file
             await using (var localFileStream = File.OpenWrite(localFilePath))
@@ -224,7 +224,7 @@ namespace Registry.Web.Services.Managers
 
                 var jobId = _backgroundJob.Enqueue(() => HangfireUtils.BuildWrapper(ddb, path, true, null));
 
-                _logger.LogInformation("Background job id is " + jobId);
+                _logger.LogInformation("Background job id is {JobId}", jobId);
             }
 
             return obj;
@@ -234,7 +234,7 @@ namespace Registry.Web.Services.Managers
         {
             var ds = await _utils.GetDataset(orgSlug, dsSlug);
 
-            _logger.LogInformation($"In Move('{orgSlug}/{dsSlug}')");
+            _logger.LogInformation("In Move('{OrgSlug}/{DsSlug}')", orgSlug, dsSlug);
 
             if (!await _authManager.IsOwnerOrAdmin(ds))
                 throw new UnauthorizedException("The current user is not allowed to edit dataset");
@@ -281,7 +281,7 @@ namespace Registry.Web.Services.Managers
                     var sourceLocalFilePath = ddb.GetLocalPath(source);
                     var destLocalFilePath = ddb.GetLocalPath(dest);
                     
-                    _logger.LogInformation($"Moving object '{source}' to '{dest}'");
+                    _logger.LogInformation("Moving object '{Source}' to '{Dest}'", source, dest);
                     
                     _fs.Move(sourceLocalFilePath, destLocalFilePath);
 
@@ -290,7 +290,7 @@ namespace Registry.Web.Services.Managers
                 // If it's a folder
                 default:
 
-                    _logger.LogInformation($"Moving folder '{source}' to '{dest}'");
+                    _logger.LogInformation("Moving folder '{Source}' to '{Dest}'", source, dest);
 
                     var sourceLocalFolderPath = ddb.GetLocalPath(source);
                     var destLocalFolderPath = ddb.GetLocalPath(dest);
@@ -316,7 +316,7 @@ namespace Registry.Web.Services.Managers
         {
             var ds = await _utils.GetDataset(orgSlug, dsSlug);
 
-            _logger.LogInformation($"In Delete('{orgSlug}/{dsSlug}')");
+            _logger.LogInformation("In Delete('{OrgSlug}/{DsSlug}')", orgSlug, dsSlug);
 
             if (!await _authManager.IsOwnerOrAdmin(ds))
                 throw new UnauthorizedException("The current user is not allowed to edit dataset");
@@ -337,7 +337,7 @@ namespace Registry.Web.Services.Managers
 
             foreach (var obj in objs.Where(item => item.Type != EntryType.Directory))
             {
-                _logger.LogInformation($"Deleting '{obj.Path}'");
+                _logger.LogInformation("Deleting '{ObjPath}'", obj.Path);
 
                 var objLocalPath = ddb.GetLocalPath(obj.Path);
 
@@ -359,7 +359,7 @@ namespace Registry.Web.Services.Managers
         {
             var ds = await _utils.GetDataset(orgSlug, dsSlug);
 
-            _logger.LogInformation($"In DeleteAll('{orgSlug}/{dsSlug}')");
+            _logger.LogInformation("In DeleteAll('{OrgSlug}/{DsSlug}')", orgSlug, dsSlug);
 
             if (!await _authManager.IsOwnerOrAdmin(ds))
                 throw new UnauthorizedException("The current user is not allowed to edit dataset");
@@ -372,7 +372,7 @@ namespace Registry.Web.Services.Managers
         {
             var ds = await _utils.GetDataset(orgSlug, dsSlug);
 
-            _logger.LogInformation($"In GenerateThumbnail('{orgSlug}/{dsSlug}')");
+            _logger.LogInformation("In GenerateThumbnail('{OrgSlug}/{DsSlug}')", orgSlug, dsSlug);
 
             // Fix fox '/img.png' -> 'img.png'
             if (path.StartsWith('/')) path = path[1..];
@@ -402,7 +402,7 @@ namespace Registry.Web.Services.Managers
         {
             var ds = await _utils.GetDataset(orgSlug, dsSlug);
 
-            _logger.LogInformation($"In GenerateTile('{orgSlug}/{dsSlug}')");
+            _logger.LogInformation("In GenerateTile('{OrgSlug}/{DsSlug}')", orgSlug, dsSlug);
 
             var fileName = Path.GetFileName(path);
             if (fileName == null)
@@ -443,7 +443,7 @@ namespace Registry.Web.Services.Managers
         {
             var ds = await _utils.GetDataset(orgSlug, dsSlug);
 
-            _logger.LogInformation($"In DownloadStream('{orgSlug}/{dsSlug}')");
+            _logger.LogInformation("In DownloadStream('{OrgSlug}/{DsSlug}')", orgSlug, dsSlug);
 
             EnsurePathsValidity(orgSlug, ds.InternalRef, paths);
 
@@ -464,7 +464,7 @@ namespace Registry.Web.Services.Managers
             {
                 var filePath = files.First();
 
-                _logger.LogInformation($"Only one path found: '{filePath}'");
+                _logger.LogInformation("Only one path found: '{FilePath}'", filePath);
 
                 streamDescriptor = new FileStreamDescriptor(Path.GetFileName(filePath),
                     MimeUtility.GetMimeMapping(filePath),
@@ -545,18 +545,13 @@ namespace Registry.Web.Services.Managers
                 includeDdb = true;
             }
 
-            _logger.LogInformation($"Found {files.Length} paths");
+            _logger.LogInformation("Found {FilesCount} paths", files.Length);
             return (files, folders, includeDdb);
         }
 
         #endregion
 
         #region Utils
-
-        private DdbEntry EnsurePathValidity(string orgSlug, Guid internalRef, string path)
-        {
-            return EnsurePathValidity(orgSlug, internalRef, path, out IDdb ddb);
-        }
 
         private DdbEntry EnsurePathValidity(string orgSlug, Guid internalRef, string path, out IDdb ddb)
         {
@@ -580,7 +575,7 @@ namespace Registry.Web.Services.Managers
 
         private void EnsurePathsValidity(string orgSlug, Guid internalRef, string[] paths)
         {
-            EnsurePathsValidity(orgSlug, internalRef, paths, out IDdb ddb);
+            EnsurePathsValidity(orgSlug, internalRef, paths, out _);
         }
 
         private void EnsurePathsValidity(string orgSlug, Guid internalRef, string[] paths, out IDdb ddb)
@@ -611,7 +606,7 @@ namespace Registry.Web.Services.Managers
         {
             var ds = await _utils.GetDataset(orgSlug, dsSlug);
 
-            _logger.LogInformation($"In GetDdb('{orgSlug}/{dsSlug}')");
+            _logger.LogInformation("In GetDdb('{OrgSlug}/{DsSlug}')", orgSlug, dsSlug);
            
             return new FileStreamDescriptor($"{orgSlug}-{dsSlug}-ddb.zip",
                 "application/zip", orgSlug, ds.InternalRef, Array.Empty<string>(), Array.Empty<string>(),
@@ -623,7 +618,7 @@ namespace Registry.Web.Services.Managers
         {
             var ds = await _utils.GetDataset(orgSlug, dsSlug);
 
-            _logger.LogInformation($"In Build('{orgSlug}/{dsSlug}')");
+            _logger.LogInformation("In Build('{OrgSlug}/{DsSlug}')", orgSlug, dsSlug);
 
             if (!await _authManager.IsOwnerOrAdmin(ds))
                 throw new UnauthorizedException("The current user is not allowed to build dataset");
@@ -639,23 +634,23 @@ namespace Registry.Web.Services.Managers
             // Nothing to do here
             if (!await ddb.IsBuildableAsync(entry.Path))
             {
-                _logger.LogInformation($"'{entry.Path}' is not buildable, nothing to do here");
+                _logger.LogInformation("'{EntryPath}' is not buildable, nothing to do here", entry.Path);
                 return;
             }
 
             if (background)
             {
                 
-                _logger.LogInformation("Building '{path}' asynchronously", path);
+                _logger.LogInformation("Building '{Path}' asynchronously", path);
 
                 var jobId = _backgroundJob.Enqueue(() => HangfireUtils.BuildWrapper(ddb, path, force, null));
 
-                _logger.LogInformation("Background job id is " + jobId);
+                _logger.LogInformation("Background job id is {JobId}", jobId);
  
             }
             else
             {
-                _logger.LogInformation("Building '{path}' synchronously", path);
+                _logger.LogInformation("Building '{Path}' synchronously", path);
 
                 HangfireUtils.BuildWrapper(ddb, path, force, null);
             }
@@ -666,7 +661,7 @@ namespace Registry.Web.Services.Managers
         public async Task<string> GetBuildFile(string orgSlug, string dsSlug, string hash,
             string path)
         {
-            _logger.LogInformation($"In GetBuildFile('{orgSlug}/{dsSlug}', '{hash}', '{path}')");
+            _logger.LogInformation("In GetBuildFile('{OrgSlug}/{DsSlug}', '{Hash}', '{Path}')", orgSlug, dsSlug, hash, path);
 
             var ds = await _utils.GetDataset(orgSlug, dsSlug);
 
@@ -680,7 +675,7 @@ namespace Registry.Web.Services.Managers
             
             var destPath = CommonUtils.SafeCombine(BuildBasePath, hash, path);
             
-            _logger.LogInformation($"Getting object '{destPath}'");
+            _logger.LogInformation("Getting object '{DestPath}'", destPath);
 
             var localPath = ddb.GetLocalPath(destPath);
 
@@ -694,7 +689,7 @@ namespace Registry.Web.Services.Managers
 
         public async Task<bool> CheckBuildFile(string orgSlug, string dsSlug, string hash, string path)
         {
-            _logger.LogInformation($"In CheckBuildFile('{orgSlug}/{dsSlug}', '{hash}', '{path}')");
+            _logger.LogInformation("In CheckBuildFile('{OrgSlug}/{DsSlug}', '{Hash}', '{Path}')", orgSlug, dsSlug, hash, path);
 
             var ds = await _utils.GetDataset(orgSlug, dsSlug);
 

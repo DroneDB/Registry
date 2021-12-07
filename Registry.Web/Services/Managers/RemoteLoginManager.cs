@@ -22,7 +22,7 @@ namespace Registry.Web.Services.Managers
         private readonly ILogger<ILoginManager> _logger;
         private readonly AppSettings _settings;
 
-        public RemoteLoginManager(ILogger<ILoginManager> logger,
+        public RemoteLoginManager(ILogger<RemoteLoginManager> logger,
             IOptions<AppSettings> settings)
         {
             _logger = logger;

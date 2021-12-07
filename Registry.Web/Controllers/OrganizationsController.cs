@@ -38,13 +38,13 @@ namespace Registry.Web.Controllers
         {
             try
             {
-                _logger.LogDebug($"Organizations controller GetAll()");
+                _logger.LogDebug("Organizations controller GetAll()");
 
                 return Ok(await _organizationsManager.List());
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, $"Exception in Organizations controller GetAll()");
+                _logger.LogError(ex, "Exception in Organizations controller GetAll()");
 
                 return ExceptionResult(ex);
             }
@@ -56,13 +56,13 @@ namespace Registry.Web.Controllers
         {
             try
             {
-                _logger.LogDebug($"Organizations controller Get('{orgSlug}')");
+                _logger.LogDebug("Organizations controller Get('{OrgSlug}')", orgSlug);
 
                 return Ok(await _organizationsManager.Get(orgSlug));
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, $"Exception in Organizations controller Get('{orgSlug}')");
+                _logger.LogError(ex, "Exception in Organizations controller Get('{OrgSlug}')", orgSlug);
 
                 return ExceptionResult(ex);
             }
@@ -75,7 +75,7 @@ namespace Registry.Web.Controllers
 
             try
             {
-                _logger.LogDebug($"Organizations controller Post('{organization?.Slug}')");
+                _logger.LogDebug("Organizations controller Post('{organization?.Slug}')", organization?.Slug);
 
                 var newOrg = await _organizationsManager.AddNew(organization);
                 return CreatedAtRoute(nameof(OrganizationsController) + "." + nameof(Get), new { orgSlug = newOrg.Slug },
@@ -83,7 +83,7 @@ namespace Registry.Web.Controllers
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, $"Exception in Organizations controller Post('{organization?.Slug}')");
+                _logger.LogError(ex, "Exception in Organizations controller Post('{organization?.Slug}')", organization?.Slug);
 
                 return ExceptionResult(ex);
             }
@@ -96,14 +96,14 @@ namespace Registry.Web.Controllers
 
             try
             {
-                _logger.LogDebug($"Organizations controller Put('{orgSlug}', {organization?.Slug}')");
+                _logger.LogDebug("Organizations controller Put('{OrgSlug}', {organization?.Slug}')",orgSlug, organization?.Slug);
 
                 await _organizationsManager.Edit(orgSlug, organization);
                 return NoContent();
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, $"Exception in Organizations controller Put('{orgSlug}', {organization?.Slug}')");
+                _logger.LogError(ex, "Exception in Organizations controller Put('{OrgSlug}', {organization?.Slug}')", orgSlug, organization?.Slug);
 
                 return ExceptionResult(ex);
             }
@@ -116,14 +116,14 @@ namespace Registry.Web.Controllers
 
             try
             {
-                _logger.LogDebug($"Organizations controller Delete('{orgSlug}')");
+                _logger.LogDebug("Organizations controller Delete('{OrgSlug}')", orgSlug);
 
                 await _organizationsManager.Delete(orgSlug);
                 return NoContent();
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, $"Exception in Organizations controller Delete('{orgSlug}')");
+                _logger.LogError(ex, "Exception in Organizations controller Delete('{OrgSlug}')", orgSlug);
 
                 return ExceptionResult(ex);
             }

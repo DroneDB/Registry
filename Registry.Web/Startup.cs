@@ -241,8 +241,6 @@ namespace Registry.Web
                 PayloadWriteMode = FileCache.PayloadMode.Filename
             });
             
-            //RegisterStorageProvider(services, appSettings);
-
             services.AddResponseCompression();
 
             if (appSettings.MaxRequestBodySize.HasValue)
