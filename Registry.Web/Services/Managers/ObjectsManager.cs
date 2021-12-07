@@ -14,6 +14,7 @@ using DDB.Bindings;
 using Hangfire;
 using Hangfire.Console;
 using Hangfire.Server;
+using Microsoft.AspNetCore.DataProtection.Repositories;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using MimeMapping;
@@ -139,6 +140,7 @@ namespace Registry.Web.Services.Managers
             if (entry.Type == EntryType.Directory)
                 throw new InvalidOperationException("Cannot get a folder, we are supposed to deal with a file!");
 
+            Debug.Assert(entry.Path != null, "entry.Path != null");
             return new StorageEntryDto
             {
                 Hash = entry.Hash,
@@ -280,9 +282,9 @@ namespace Registry.Web.Services.Managers
 
                     var sourceLocalFilePath = ddb.GetLocalPath(source);
                     var destLocalFilePath = ddb.GetLocalPath(dest);
-                    
+
                     _logger.LogInformation("Moving object '{Source}' to '{Dest}'", source, dest);
-                    
+
                     _fs.Move(sourceLocalFilePath, destLocalFilePath);
 
                     break;
@@ -294,7 +296,7 @@ namespace Registry.Web.Services.Managers
 
                     var sourceLocalFolderPath = ddb.GetLocalPath(source);
                     var destLocalFolderPath = ddb.GetLocalPath(dest);
-                    
+
                     _fs.FolderMove(sourceLocalFolderPath, destLocalFolderPath);
                     //await _objectSystem.MoveDirectory(bucketName, source, dest);
                     _logger.LogInformation("Move OK");
@@ -329,11 +331,7 @@ namespace Registry.Web.Services.Managers
             if (!await ddb.EntryExistsAsync(path))
                 throw new BadRequestException($"Path '{path}' not found in dataset");
 
-            _logger.LogInformation("Removing from DDB");
-
             var objs = (await ddb.SearchAsync(path, true)).ToArray();
-
-            await ddb.RemoveAsync(path);
 
             foreach (var obj in objs.Where(item => item.Type != EntryType.Directory))
             {
@@ -341,15 +339,33 @@ namespace Registry.Web.Services.Managers
 
                 var objLocalPath = ddb.GetLocalPath(obj.Path);
 
-                if (!_fs.Exists(objLocalPath))
-                    throw new InvalidOperationException(
-                        $"Cannot find local file '{objLocalPath}' for object '{obj.Path}'");
+                try
+                {
+                    if (!_fs.Exists(objLocalPath))
+                        throw new InvalidOperationException(
+                            $"Cannot find local file '{objLocalPath}' for object '{obj.Path}'");
 
-                _fs.Delete(objLocalPath);
+                    _fs.Delete(objLocalPath);
 
-                await _cacheManager.Clear(MagicStrings.ThumbnailCacheSeed,obj.Hash);
-                await _cacheManager.Clear(MagicStrings.TileCacheSeed,obj.Hash);
-                
+                    await _cacheManager.Clear(MagicStrings.ThumbnailCacheSeed, obj.Hash);
+                    await _cacheManager.Clear(MagicStrings.TileCacheSeed, obj.Hash);
+                }
+                catch (Exception ex)
+                {
+                    // We basically ignore this error, it's not critical. We should perform a cleanup later
+                    _logger.LogWarning("Cannot delete local file '{ObjPath}': {Reason}", objLocalPath, ex.Message);
+                }
+            }
+
+            try
+            {
+                _logger.LogInformation("Removing from DDB");
+                await ddb.RemoveAsync(path);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning("Cannot delete '{ObjPath}' from DDB: {Reason}", path, ex.Message);
+                throw new InvalidOperationException("Cannot delete object from database", ex);
             }
 
             _logger.LogInformation("Deletion complete");
@@ -363,7 +379,7 @@ namespace Registry.Web.Services.Managers
 
             if (!await _authManager.IsOwnerOrAdmin(ds))
                 throw new UnauthorizedException("The current user is not allowed to edit dataset");
-            
+
             _ddbManager.Delete(orgSlug, ds.InternalRef);
         }
 
@@ -386,7 +402,8 @@ namespace Registry.Web.Services.Managers
             var sourcePath = GetBuildSource(entry);
             var localPath = ddb.GetLocalPath(sourcePath);
 
-            var thumbPath = await _cacheManager.Get(MagicStrings.ThumbnailCacheSeed, entry.Hash, ddb, localPath, size ?? DefaultThumbnailSize);
+            var thumbPath = await _cacheManager.Get(MagicStrings.ThumbnailCacheSeed, entry.Hash, ddb, localPath,
+                size ?? DefaultThumbnailSize);
 
             return new StorageEntryDto
             {
@@ -394,7 +411,6 @@ namespace Registry.Web.Services.Managers
                 PhysicalPath = Path.GetFullPath(thumbPath),
                 ContentType = "image/jpeg"
             };
-
         }
 
         public async Task<StorageFileDto> GenerateTile(string orgSlug, string dsSlug, string path, int tz, int tx,
@@ -415,16 +431,15 @@ namespace Registry.Web.Services.Managers
 
             try
             {
+                var tilePath =
+                    await _cacheManager.Get("tile", entry.Hash, ddb, localPath, entry.Hash, tx, ty, tz, retina);
 
-                var tilePath = await _cacheManager.Get("tile", entry.Hash, ddb, localPath, entry.Hash, tx, ty, tz, retina);
-                
                 return new StorageEntryDto
                 {
                     PhysicalPath = Path.GetFullPath(tilePath),
                     ContentType = "image/png",
                     Name = $"{ty}.png"
                 };
-                
             }
             catch (InvalidOperationException ex)
             {
@@ -468,7 +483,7 @@ namespace Registry.Web.Services.Managers
 
                 streamDescriptor = new FileStreamDescriptor(Path.GetFileName(filePath),
                     MimeUtility.GetMimeMapping(filePath),
-                    orgSlug, internalRef, files, null, FileDescriptorType.Single,_logger, _ddbManager);
+                    orgSlug, internalRef, files, null, FileDescriptorType.Single, _logger, _ddbManager);
             }
             // Otherwise we zip everything together and return the package
             else
@@ -607,11 +622,10 @@ namespace Registry.Web.Services.Managers
             var ds = await _utils.GetDataset(orgSlug, dsSlug);
 
             _logger.LogInformation("In GetDdb('{OrgSlug}/{DsSlug}')", orgSlug, dsSlug);
-           
+
             return new FileStreamDescriptor($"{orgSlug}-{dsSlug}-ddb.zip",
                 "application/zip", orgSlug, ds.InternalRef, Array.Empty<string>(), Array.Empty<string>(),
                 FileDescriptorType.Dataset, _logger, _ddbManager);
-
         }
 
         public async Task Build(string orgSlug, string dsSlug, string path, bool background = false, bool force = false)
@@ -640,13 +654,11 @@ namespace Registry.Web.Services.Managers
 
             if (background)
             {
-                
                 _logger.LogInformation("Building '{Path}' asynchronously", path);
 
                 var jobId = _backgroundJob.Enqueue(() => HangfireUtils.BuildWrapper(ddb, path, force, null));
 
                 _logger.LogInformation("Background job id is {JobId}", jobId);
- 
             }
             else
             {
@@ -661,7 +673,8 @@ namespace Registry.Web.Services.Managers
         public async Task<string> GetBuildFile(string orgSlug, string dsSlug, string hash,
             string path)
         {
-            _logger.LogInformation("In GetBuildFile('{OrgSlug}/{DsSlug}', '{Hash}', '{Path}')", orgSlug, dsSlug, hash, path);
+            _logger.LogInformation("In GetBuildFile('{OrgSlug}/{DsSlug}', '{Hash}', '{Path}')", orgSlug, dsSlug, hash,
+                path);
 
             var ds = await _utils.GetDataset(orgSlug, dsSlug);
 
@@ -672,15 +685,14 @@ namespace Registry.Web.Services.Managers
                 throw new ArgumentException("Rooted or relative paths are not supported");
 
             var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
-            
+
             var destPath = CommonUtils.SafeCombine(BuildBasePath, hash, path);
-            
+
             _logger.LogInformation("Getting object '{DestPath}'", destPath);
 
             var localPath = ddb.GetLocalPath(destPath);
 
             return Path.GetFullPath(localPath);
-
         }
 
         // Base build folder path (example: .ddb/build)
@@ -689,7 +701,8 @@ namespace Registry.Web.Services.Managers
 
         public async Task<bool> CheckBuildFile(string orgSlug, string dsSlug, string hash, string path)
         {
-            _logger.LogInformation("In CheckBuildFile('{OrgSlug}/{DsSlug}', '{Hash}', '{Path}')", orgSlug, dsSlug, hash, path);
+            _logger.LogInformation("In CheckBuildFile('{OrgSlug}/{DsSlug}', '{Hash}', '{Path}')", orgSlug, dsSlug, hash,
+                path);
 
             var ds = await _utils.GetDataset(orgSlug, dsSlug);
 
@@ -700,7 +713,7 @@ namespace Registry.Web.Services.Managers
                 throw new ArgumentException("Rooted or relative paths are not supported");
 
             var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
-            
+
             var destPath = CommonUtils.SafeCombine(BuildBasePath, hash, path);
 
             return _fs.Exists(ddb.GetLocalPath(destPath));
