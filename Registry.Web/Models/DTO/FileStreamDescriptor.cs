@@ -56,7 +56,7 @@ namespace Registry.Web.Models.DTO
             {
                 var filePath = _paths.First();
 
-                _logger.LogInformation($"Only one path found: '{filePath}'");
+                _logger.LogInformation("Only one path found: '{FilePath}'", filePath);
 
                 var localPath = _ddb.GetLocalPath(filePath);
                 
@@ -70,7 +70,7 @@ namespace Registry.Web.Models.DTO
                 using var archive = new ZipArchive(stream, ZipArchiveMode.Create, true);
                 foreach (var path in _paths)
                 {
-                    _logger.LogInformation($"Zipping: '{path}'");
+                    _logger.LogInformation("Zipping: '{Path}'", path);
 
                     var entry = archive.CreateEntry(path, CommonUtils.GetCompressionLevel(path));
                     await using var entryStream = entry.Open();

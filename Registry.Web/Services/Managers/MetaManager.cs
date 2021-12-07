@@ -36,7 +36,7 @@ namespace Registry.Web.Services.Managers
             if (!await _authManager.IsOwnerOrAdmin(ds))
                 throw new UnauthorizedException("The current user is not allowed to add meta");
             
-            _logger.LogInformation($"In Add('{orgSlug}/{dsSlug}', {key}, {path})");
+            _logger.LogInformation("In Add('{OrgSlug}/{DsSlug}', {Key}, {Path})", orgSlug, dsSlug, key, path);
 
             if (string.IsNullOrWhiteSpace(key))
                 throw new ArgumentException("Key should not be null or empty");
