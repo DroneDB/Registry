@@ -167,8 +167,7 @@ namespace Registry.Web.Services.Managers
             if (!res.Succeeded)
             {
                 var errors = string.Join(";", res.Errors.Select(item => $"{item.Code} - {item.Description}"));
-                _logger.LogWarning("Error in creating user");
-                _logger.LogWarning(errors);
+                _logger.LogWarning("Errors in creating user: {Errors}", errors);
 
                 throw new InvalidOperationException("Error in creating user");
             }
@@ -192,8 +191,7 @@ namespace Registry.Web.Services.Managers
             if (!res.Succeeded)
             {
                 var errors = string.Join(";", res.Errors.Select(item => $"{item.Code} - {item.Description}"));
-                _logger.LogWarning("Error in creating user");
-                _logger.LogWarning(errors);
+                _logger.LogWarning("Errors in creating user: {Errors}", errors);
 
                 throw new InvalidOperationException("Error in creating user");
             }
@@ -230,8 +228,7 @@ namespace Registry.Web.Services.Managers
             if (!res.Succeeded)
             {
                 var errors = string.Join(";", res.Errors.Select(item => $"{item.Code} - {item.Description}"));
-                _logger.LogWarning("Error in changing user password");
-                _logger.LogWarning(errors);
+                _logger.LogWarning("Errors in changing user password: {Errors}", errors);
 
                 throw new InvalidOperationException("Cannot change user password: " + errors);
 
@@ -344,8 +341,7 @@ namespace Registry.Web.Services.Managers
             if (!res.Succeeded)
             {
                 var errors = string.Join(";", res.Errors.Select(item => $"{item.Code} - {item.Description}"));
-                _logger.LogWarning("Error in deleting user");
-                _logger.LogWarning(errors);
+                _logger.LogWarning("Errors in deleting user: {Errors}", errors);
 
                 throw new InvalidOperationException("Cannot delete user: " + errors);
             }

@@ -25,7 +25,7 @@ namespace Registry.Web.Services.Adapters
 
             if (_tokenLength < MinTokenLength)
             {
-                logger.LogWarning($"Invalid BatchTokenLength ({_tokenLength}), capped to {MinTokenLength}");
+                logger.LogWarning("Invalid BatchTokenLength ({TokenLength}), capped to {MinTokenLength}", _tokenLength, MinTokenLength);
                 _tokenLength = MinTokenLength;
             }
         }

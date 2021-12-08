@@ -1,13 +1,14 @@
 ﻿using System;
 using System.Buffers;
 using System.Collections.Generic;
+using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Text;
 
 namespace Registry.Common
 {
-    public static class Extenders
+    public static class CommonExtenders
     {
         /// <summary>
         /// Safe reset to the beginning
@@ -65,5 +66,7 @@ namespace Registry.Common
                 ArrayPool<byte>.Shared.Return(buffer);
             }
         }
+
+
     }
 }

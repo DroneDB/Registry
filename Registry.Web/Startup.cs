@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
+using System.Diagnostics;
 using System.Globalization;
 using System.IO;
 using System.Linq;
@@ -33,10 +34,10 @@ using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
 using Newtonsoft.Json.Serialization;
-using Registry.Adapters.ObjectSystem;
-using Registry.Adapters.ObjectSystem.Model;
+using Registry.Adapters;
 using Registry.Common;
-using Registry.Ports.ObjectSystem;
+using Registry.Ports;
+using Registry.Ports.DroneDB;
 using Registry.Web.Data;
 using Registry.Web.Data.Models;
 using Registry.Web.Filters;
@@ -48,7 +49,6 @@ using Registry.Web.Services.Adapters;
 using Registry.Web.Services.Managers;
 using Registry.Web.Services.Ports;
 using Registry.Web.Utilities;
-using RestSharp.Extensions;
 
 namespace Registry.Web
 {
@@ -191,8 +191,7 @@ namespace Registry.Web
                 .AddDbContextCheck<RegistryContext>("Registry database health check", null, new[] { "database" })
                 .AddDbContextCheck<ApplicationDbContext>("Registry identity database health check", null,
                     new[] { "database" })
-                .AddCheck<ObjectSystemHealthCheck>("Object system health check", null, new[] { "storage" })
-                .AddDiskSpaceHealthCheck(appSettings.DdbStoragePath, "Ddb storage path space health check", null,
+                .AddDiskSpaceHealthCheck(appSettings.StoragePath, "Ddb storage path space health check", null,
                     new[] { "storage" })
                 .AddHangfire(options => { options.MinimumAvailableServers = 1; }, "Hangfire health check", null,
                     new[] { "database" });
@@ -223,27 +222,25 @@ namespace Registry.Web
             services.AddScoped<IDatasetsManager, DatasetsManager>();
             services.AddScoped<IObjectsManager, ObjectsManager>();
             services.AddScoped<IShareManager, ShareManager>();
-            services.AddScoped<IPushManager, PushManager>();
+            //services.AddScoped<IPushManager, PushManager>();
             services.AddScoped<IDdbManager, DdbManager>();
             services.AddScoped<ISystemManager, SystemManager>();
             services.AddScoped<IBackgroundJobsProcessor, BackgroundJobsProcessor>();
             services.AddScoped<IMetaManager, MetaManager>();
-            services.AddScoped<IS3BridgeManager, S3BridgeManager>();
 
+            services.AddSingleton<IFileSystem, FileSystem>();
             services.AddSingleton<IPasswordHasher, PasswordHasher>();
             services.AddSingleton<IBatchTokenGenerator, BatchTokenGenerator>();
             services.AddSingleton<INameGenerator, NameGenerator>();
             services.AddSingleton<ICacheManager, CacheManager>();
             services.AddSingleton<ObjectCache>(provider => new FileCache(FileCacheManagers.Hashed, 
-                appSettings.BridgeCachePath, new DefaultSerializationBinder(), 
+                appSettings.CachePath, new DefaultSerializationBinder(), 
                 true, appSettings.ClearCacheInterval ?? default)
             {
                 PayloadReadMode = FileCache.PayloadMode.Filename,
                 PayloadWriteMode = FileCache.PayloadMode.Filename
             });
-
-            RegisterStorageProvider(services, appSettings);
-
+            
             services.AddResponseCompression();
 
             if (appSettings.MaxRequestBodySize.HasValue)
@@ -360,32 +357,68 @@ namespace Registry.Web
             });
 
             SetupDatabase(app);
-            SetupHangfire(app);
+            SetupFileCache(app);
+            //SetupHangfire(app);
         }
 
-        private void SetupHangfire(IApplicationBuilder app)
+        private void SetupFileCache(IApplicationBuilder app)
         {
             var appSettingsSection = Configuration.GetSection("AppSettings");
             var appSettings = appSettingsSection.Get<AppSettings>();
-            
-            if (appSettings.StorageCleanupMinutes is > 0)
-            {
-                using var serviceScope = app.ApplicationServices
-                    .GetRequiredService<IServiceScopeFactory>()
-                    .CreateScope();
-            
-                var objectSystem = serviceScope.ServiceProvider.GetService<IObjectSystem>();
-                
-                RecurringJob.AddOrUpdate(MagicStrings.StorageCleanupJobId, () =>
-                    HangfireUtils.SyncAndCleanupWrapper(objectSystem, null),
-                    $"*/{appSettings.StorageCleanupMinutes} * * * *");
 
-            }
-            else
+            var cacheManager = app.ApplicationServices.GetService<ICacheManager>();
+
+            Debug.Assert(cacheManager != null, nameof(cacheManager) + " != null");
+            
+            cacheManager.Register(MagicStrings.TileCacheSeed, parameters =>
             {
-                RecurringJob.RemoveIfExists(MagicStrings.StorageCleanupJobId);
-            }
+                var ddb = (IDdb)parameters[0];
+                var sourcePath = (string)parameters[1];
+                var sourceHash = (string)parameters[2];
+                var tx = (int)parameters[3];
+                var ty = (int)parameters[4];
+                var tz = (int)parameters[5];
+                var retina = (bool)parameters[6];
+
+                return ddb.GenerateTile(sourcePath, tz, tx, ty, retina, sourceHash);
+
+            }, appSettings.TilesCacheExpiration);
+            
+            cacheManager.Register(MagicStrings.ThumbnailCacheSeed, parameters =>
+            {
+                var ddb = (IDdb)parameters[0];
+                var sourcePath = (string)parameters[1];
+                var size = (int)parameters[2];
+
+                return ddb.GenerateThumbnail(sourcePath, size);
+
+            }, appSettings.ThumbnailsCacheExpiration);
+            
         }
+
+        // private void SetupHangfire(IApplicationBuilder app)
+        // {
+        //     var appSettingsSection = Configuration.GetSection("AppSettings");
+        //     var appSettings = appSettingsSection.Get<AppSettings>();
+        //     
+        //     if (appSettings.StorageCleanupMinutes is > 0)
+        //     {
+        //         using var serviceScope = app.ApplicationServices
+        //             .GetRequiredService<IServiceScopeFactory>()
+        //             .CreateScope();
+        //     
+        //         var objectSystem = serviceScope.ServiceProvider.GetService<IObjectSystem>();
+        //         
+        //         RecurringJob.AddOrUpdate(MagicStrings.StorageCleanupJobId, () =>
+        //             HangfireUtils.SyncAndCleanupWrapper(objectSystem, null),
+        //             $"*/{appSettings.StorageCleanupMinutes} * * * *");
+        //
+        //     }
+        //     else
+        //     {
+        //         RecurringJob.RemoveIfExists(MagicStrings.StorageCleanupJobId);
+        //     }
+        // }
 
         // NOTE: Maybe put all this as stated in https://stackoverflow.com/a/55707949
         private void SetupDatabase(IApplicationBuilder app)
@@ -522,97 +555,6 @@ namespace Registry.Web
                 default:
                     throw new InvalidOperationException(
                         $"Unsupported caching provider: '{(int)appSettings.CacheProvider.Type}'");
-            }
-        }
-
-        private static void RegisterStorageProvider(IServiceCollection services, AppSettings appSettings)
-        {
-            ICollection<ValidationResult> results;
-
-            switch (appSettings.StorageProvider.Type)
-            {
-                case StorageType.Physical:
-
-                    var ps = appSettings.StorageProvider.Settings.ToObject<PhysicalProviderSettings>();
-                    if (ps == null)
-                        throw new ArgumentException("Invalid physical storage provider settings");
-
-                    if (!CommonUtils.Validate(ps, out results))
-                        throw new ArgumentException("Invalid physical storage provider settings: " +
-                                                    results.ToErrorString());
-
-                    Directory.CreateDirectory(ps.Path);
-
-                    services.AddSingleton(new PhysicalObjectSystemSettings
-                    {
-                        BasePath = ps.Path
-                    });
-
-                    services.AddScoped<IObjectSystem, PhysicalObjectSystem>();
-
-                    break;
-
-                case StorageType.S3:
-
-                    var s3Settings = appSettings.StorageProvider.Settings.ToObject<S3StorageProviderSettings>();
-
-                    if (s3Settings == null)
-                        throw new ArgumentException("Invalid S3 storage provider settings");
-
-                    if (!CommonUtils.Validate(s3Settings, out results))
-                        throw new ArgumentException("Invalid S3 storage provider settings: " + results.ToErrorString());
-
-                    services.AddSingleton(new S3ObjectSystemSettings
-                    {
-                        Endpoint = s3Settings.Endpoint,
-                        AccessKey = s3Settings.AccessKey,
-                        SecretKey = s3Settings.SecretKey,
-                        Region = s3Settings.Region,
-                        SessionToken = s3Settings.SessionToken,
-                        UseSsl = s3Settings.UseSsl ?? false,
-                        AppName = s3Settings.AppName,
-                        AppVersion = s3Settings.AppVersion,
-                        BridgeUrl = s3Settings.BridgeUrl
-                    });
-
-                    services.AddScoped<IObjectSystem, S3ObjectSystem>();
-
-                    break;
-
-                case StorageType.CachedS3:
-
-                    var cachedS3Settings = appSettings.StorageProvider.Settings
-                        .ToObject<CachedS3StorageStorageProviderSettings>();
-
-                    if (cachedS3Settings == null)
-                        throw new ArgumentException("Invalid S3 storage provider settings");
-
-                    if (!CommonUtils.Validate(cachedS3Settings, out results))
-                        throw new ArgumentException("Invalid S3 storage provider settings: " + results.ToErrorString());
-
-                    services.AddSingleton(new CachedS3ObjectSystemSettings
-                    {
-                        Endpoint = cachedS3Settings.Endpoint,
-                        AccessKey = cachedS3Settings.AccessKey,
-                        SecretKey = cachedS3Settings.SecretKey,
-                        Region = cachedS3Settings.Region,
-                        SessionToken = cachedS3Settings.SessionToken,
-                        UseSsl = cachedS3Settings.UseSsl ?? false,
-                        AppName = cachedS3Settings.AppName,
-                        AppVersion = cachedS3Settings.AppVersion,
-                        BridgeUrl = cachedS3Settings.BridgeUrl,
-                        CacheExpiration = cachedS3Settings.CacheExpiration,
-                        CachePath = cachedS3Settings.CachePath,
-                        MaxSize = cachedS3Settings.MaxSize
-                    });
-
-                    services.AddSingleton<IObjectSystem, CachedS3ObjectSystem>();
-
-                    break;
-
-                default:
-                    throw new InvalidOperationException(
-                        $"Unsupported storage provider: '{(int)appSettings.StorageProvider.Type}'");
             }
         }
 

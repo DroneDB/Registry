@@ -15,7 +15,6 @@ namespace Registry.Web.Services.Ports
 
         string GetFreeOrganizationSlug(string orgName);
         string GenerateDatasetUrl(Dataset dataset);
-        string GetBucketName(string orgSlug, Guid internalRef);
         
         UserStorageInfo GetUserStorage(User user);
         Task CheckCurrentUserStorage(long size = 0);

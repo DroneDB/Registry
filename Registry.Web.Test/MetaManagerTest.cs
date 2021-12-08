@@ -14,12 +14,9 @@ using Moq;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using NUnit.Framework;
-using Registry.Adapters.ObjectSystem;
-using Registry.Adapters.ObjectSystem.Model;
 using Registry.Common;
 using Registry.Ports.DroneDB;
 using Registry.Ports.DroneDB.Models;
-using Registry.Ports.ObjectSystem;
 using Registry.Web.Data;
 using Registry.Web.Data.Models;
 using Registry.Web.Exceptions;
@@ -37,12 +34,9 @@ namespace Registry.Web.Test
         private Logger<DdbManager> _ddbFactoryLogger;
         private Logger<MetaManager> _metaManagerLogger;
         private Mock<IOptions<AppSettings>> _appSettingsMock;
-        //private Mock<IDdbManager> _ddbFactoryMock;
         private Mock<IAuthManager> _authManagerMock;
         private Mock<IHttpContextAccessor> _httpContextAccessorMock;
-        //private DdbManager _ddbFactory;
 
-        //private const string DataFolder = "Data";
         private const string TestStorageFolder = @"Data/Storage";
         private const string DdbTestDataFolder = @"Data/DdbTest";
         private const string StorageFolder = "Storage";
@@ -50,8 +44,8 @@ namespace Registry.Web.Test
 
         private const string BaseTestFolder = "ObjectManagerTest";
 
-        private const string Test4ArchiveUrl = "https://github.com/DroneDB/test_data/raw/master/registry/Test4.zip";
-        private const string Test5ArchiveUrl = "https://github.com/DroneDB/test_data/raw/master/registry/Test5.zip";
+        private const string Test4ArchiveUrl = "https://github.com/DroneDB/test_data/raw/master/registry/Test4-new.zip";
+        private const string Test5ArchiveUrl = "https://github.com/DroneDB/test_data/raw/master/registry/Test5-new.zip";
 
         private readonly Guid _defaultDatasetGuid = Guid.Parse("0a223495-84a0-4c15-b425-c7ef88110e75");
 
@@ -59,18 +53,8 @@ namespace Registry.Web.Test
         public void Setup()
         {
             _appSettingsMock = new Mock<IOptions<AppSettings>>();
-            //_ddbFactoryMock = new Mock<IDdbManager>();
             _authManagerMock = new Mock<IAuthManager>();
             _httpContextAccessorMock = new Mock<IHttpContextAccessor>();
-
-            if (!Directory.Exists(TestStorageFolder))
-                Directory.CreateDirectory(TestStorageFolder);
-
-            if (!Directory.Exists(DdbTestDataFolder))
-            {
-                Directory.CreateDirectory(DdbTestDataFolder);
-                File.WriteAllText(Path.Combine(DdbTestDataFolder, "ddbcmd.exe"), string.Empty);
-            }
 
             _ddbFactoryLogger = new Logger<DdbManager>(LoggerFactory.Create(builder => builder.AddConsole()));
             _metaManagerLogger = new Logger<MetaManager>(LoggerFactory.Create(builder => builder.AddConsole()));
@@ -85,18 +69,10 @@ namespace Registry.Web.Test
 
             var settings = JsonConvert.DeserializeObject<AppSettings>(_settingsJson);
 
-            settings.DdbStoragePath = Path.Combine(test.TestFolder, DdbFolder);
+            settings.StoragePath = Path.Combine(test.TestFolder, DdbFolder);
             _appSettingsMock.Setup(o => o.Value).Returns(settings);
             _authManagerMock.Setup(o => o.IsUserAdmin()).Returns(Task.FromResult(true));
-
-            var poss = new PhysicalObjectSystemSettings
-            {
-                BasePath = Path.Combine(test.TestFolder, StorageFolder)
-            };
-
-            var sys = new PhysicalObjectSystem(poss);
-            sys.SyncBucket($"{MagicStrings.PublicOrganizationSlug}-{_defaultDatasetGuid}");
-
+            
             var ddbManager = new DdbManager(_appSettingsMock.Object, _ddbFactoryLogger);
 
             var webUtils = new WebUtils(_authManagerMock.Object, context, _appSettingsMock.Object,
@@ -118,18 +94,10 @@ namespace Registry.Web.Test
 
             var settings = JsonConvert.DeserializeObject<AppSettings>(_settingsJson);
 
-            settings.DdbStoragePath = Path.Combine(test.TestFolder, DdbFolder);
+            settings.StoragePath = Path.Combine(test.TestFolder, DdbFolder);
             _appSettingsMock.Setup(o => o.Value).Returns(settings);
             _authManagerMock.Setup(o => o.IsUserAdmin()).Returns(Task.FromResult(true));
             _authManagerMock.Setup(o => o.IsOwnerOrAdmin(It.IsAny<Dataset>())).Returns(Task.FromResult(true));
-
-            var poss = new PhysicalObjectSystemSettings
-            {
-                BasePath = Path.Combine(test.TestFolder, StorageFolder)
-            };
-
-            var sys = new PhysicalObjectSystem(poss);
-            sys.SyncBucket($"{MagicStrings.PublicOrganizationSlug}-{_defaultDatasetGuid}");
 
             var ddbManager = new DdbManager(_appSettingsMock.Object, _ddbFactoryLogger);
 

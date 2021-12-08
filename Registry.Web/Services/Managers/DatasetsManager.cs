@@ -161,11 +161,20 @@ namespace Registry.Web.Services.Managers
             if (!await _authManager.IsOwnerOrAdmin(ds))
                 throw new UnauthorizedException("The current user is not allowed to delete dataset");
 
-            await _objectsManager.DeleteAll(orgSlug, dsSlug);
+            try
+            {
+                await _objectsManager.DeleteAll(orgSlug, dsSlug);
 
-            _context.Datasets.Remove(ds);
+                _context.Datasets.Remove(ds);
 
-            await _context.SaveChangesAsync();
+                await _context.SaveChangesAsync();
+
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning("Error deleting dataset", ex);
+                throw new InvalidOperationException("Error deleting dataset", ex);
+            }
         }
 
         public async Task Rename(string orgSlug, string dsSlug, string newSlug)

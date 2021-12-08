@@ -23,7 +23,7 @@ namespace Registry.Web.Services.Adapters
 
             if (_nameLength < MinNameLength)
             {
-                logger.LogWarning($"Invalid RandomDatasetNameLength ({_nameLength}), capped to {MinNameLength}");
+                logger.LogWarning("Invalid RandomDatasetNameLength ({NameLength}), capped to {MinNameLength}", _nameLength, MinNameLength);
                 _nameLength = MinNameLength;
             }
 

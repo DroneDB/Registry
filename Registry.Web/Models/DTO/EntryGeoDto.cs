@@ -9,7 +9,7 @@ using Registry.Common;
 
 namespace Registry.Web.Models.DTO
 {
-    public class ObjectDto : EntryDto
+    public class EntryGeoDto : EntryDto
     {
         
         [JsonProperty("id")]

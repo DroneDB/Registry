@@ -1,6 +1,8 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
+using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
@@ -88,7 +90,7 @@ namespace Registry.Web.Utilities
             };
         }
 
-        public static ObjectDto ToDto(this DdbEntry obj)
+        public static EntryGeoDto ToDto(this DdbEntry obj)
         {
             return new()
             {
@@ -224,6 +226,17 @@ namespace Registry.Web.Utilities
             await response.WriteAsJsonAsync(result);
         }
 
+        public static byte[] ComputeHash(this HashAlgorithm hashAlgorithm, string inputFile)
+        {
+            using var stream = File.OpenRead(inputFile);
+            return hashAlgorithm.ComputeHash(stream);
+        }
+
+        public static async Task<byte[]> ComputeHashAsync(this HashAlgorithm hashAlgorithm, string inputFile)
+        {
+            await using var stream = File.OpenRead(inputFile);
+            return await hashAlgorithm.ComputeHashAsync(stream);
+        }
 
     }
 

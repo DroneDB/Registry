@@ -32,13 +32,13 @@ namespace Registry.Web.Controllers
         {
             try
             {
-                _logger.LogDebug($"System controller GetVersion()");
+                _logger.LogDebug("System controller GetVersion()");
 
                 return Ok(_systemManager.GetVersion());
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, $"Exception in System controller GetVersion()");
+                _logger.LogError(ex, "Exception in System controller GetVersion()");
 
                 return ExceptionResult(ex);
             }
@@ -49,13 +49,13 @@ namespace Registry.Web.Controllers
         {
             try
             {
-                _logger.LogDebug($"System controller CleanupBatches()");
+                _logger.LogDebug("System controller CleanupBatches()");
 
                 return Ok(await _systemManager.CleanupBatches());
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, $"Exception in System controller CleanupBatches()");
+                _logger.LogError(ex, "Exception in System controller CleanupBatches()");
 
                 return ExceptionResult(ex);
             }
@@ -67,34 +67,17 @@ namespace Registry.Web.Controllers
         {
             try
             {
-                _logger.LogDebug($"System controller CleanupDatasets()");
+                _logger.LogDebug("System controller CleanupDatasets()");
 
                 return Ok(await _systemManager.CleanupEmptyDatasets());
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, $"Exception in System controller CleanupDatasets()");
+                _logger.LogError(ex, "Exception in System controller CleanupDatasets()");
 
                 return ExceptionResult(ex);
             }
         }
 
-        [HttpPost("cleanup", Name = nameof(SystemController) + "." + nameof(SyncFiles))]
-        public async Task<IActionResult> SyncFiles()
-        {
-            try
-            {
-                _logger.LogDebug($"System controller Cleanup()");
-                await _systemManager.Cleanup();
-                return Ok();
-
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, $"Exception in System controller Cleanup()");
-
-                return ExceptionResult(ex);
-            }
-        }
     }
 }

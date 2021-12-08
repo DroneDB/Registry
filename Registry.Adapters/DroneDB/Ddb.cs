@@ -4,7 +4,6 @@ using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Runtime.Serialization;
-using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using DDB.Bindings;
@@ -14,7 +13,6 @@ using GeoJSON.Net.Feature;
 using GeoJSON.Net.Geometry;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
-using Registry.Adapters.ObjectSystem;
 using Registry.Common;
 using Registry.Ports.DroneDB;
 using Registry.Ports.DroneDB.Models;
@@ -25,7 +23,6 @@ namespace Registry.Adapters.DroneDB
 {
     public class Ddb : IDdb
     {
-
         [JsonConstructor]
         private Ddb()
         {
@@ -56,7 +53,8 @@ namespace Registry.Adapters.DroneDB
         {
             try
             {
-                return DDB.Bindings.DroneDB.GenerateMemoryTile(inputPath, tz, tx, ty, retina ? 512 : 256, true, false, inputPathHash);
+                return DDB.Bindings.DroneDB.GenerateMemoryTile(inputPath, tz, tx, ty, retina ? 512 : 256, true, false,
+                    inputPathHash);
             }
             catch (DDBException ex)
             {
@@ -84,17 +82,13 @@ namespace Registry.Adapters.DroneDB
         string IDdb.DatabaseFolderName => DatabaseFolderName;
         string IDdb.BuildFolderName => BuildFolderName;
 
-        [JsonIgnore]
-        public string Version => DDB.Bindings.DroneDB.GetVersion();
+        [JsonIgnore] public string Version => DDB.Bindings.DroneDB.GetVersion();
 
-        [JsonProperty]
-        public string DatasetFolderPath { get; private set; }
+        [JsonProperty] public string DatasetFolderPath { get; private set; }
 
-        [JsonProperty]
-        public string BuildFolderPath { get; private set; }
+        [JsonProperty] public string BuildFolderPath { get; private set; }
 
-        [JsonIgnore]
-        public IDdbMetaManager Meta { get; private set; }
+        [JsonIgnore] public IDdbMetaManager Meta { get; private set; }
 
         public long GetSize()
         {
@@ -108,6 +102,11 @@ namespace Registry.Adapters.DroneDB
 #else
             DDB.Bindings.DroneDB.RegisterProcess(false);
 #endif
+        }
+
+        public string GetLocalPath(string path)
+        {
+            return CommonUtils.SafeCombine(DatasetFolderPath, path);
         }
 
         public DdbEntry GetEntry(string path)
@@ -152,19 +151,19 @@ namespace Registry.Adapters.DroneDB
                 }
 
                 var query = from entry in entries
-                            select new DdbEntry
-                            {
-                                Depth = entry.Depth,
-                                Hash = entry.Hash,
-                                Properties = entry.Properties,
-                                ModifiedTime = entry.ModifiedTime,
-                                Path = entry.Path,
-                                Size = entry.Size,
-                                Type = (EntryType)(int)entry.Type,
+                    select new DdbEntry
+                    {
+                        Depth = entry.Depth,
+                        Hash = entry.Hash,
+                        Properties = entry.Properties,
+                        ModifiedTime = entry.ModifiedTime,
+                        Path = entry.Path,
+                        Size = entry.Size,
+                        Type = (EntryType)(int)entry.Type,
 
-                                PointGeometry = (Point)entry.PointGeometry?.ToObject<Feature>()?.Geometry,
-                                PolygonGeometry = (Polygon)entry.PolygonGeometry?.ToObject<Feature>()?.Geometry
-                            };
+                        PointGeometry = (Point)entry.PointGeometry?.ToObject<Feature>()?.Geometry,
+                        PolygonGeometry = (Polygon)entry.PolygonGeometry?.ToObject<Feature>()?.Geometry
+                    };
 
 
                 return query.ToArray();
@@ -312,6 +311,18 @@ namespace Registry.Adapters.DroneDB
             }
         }
 
+        public void AddRaw(string path)
+        {
+            try
+            {
+                DDB.Bindings.DroneDB.Add(DatasetFolderPath, path);
+            }
+            catch (DDBException ex)
+            {
+                throw new InvalidOperationException($"Cannot add '{path}' to ddb '{DatasetFolderPath}'", ex);
+            }
+        }
+
         public void Add(string path, Stream stream = null)
         {
             if (stream == null)
@@ -382,8 +393,8 @@ namespace Registry.Adapters.DroneDB
 
         #region Async
 
-
-        public async Task<IEnumerable<DdbEntry>> SearchAsync(string path, bool recursive = false, CancellationToken cancellationToken = default)
+        public async Task<IEnumerable<DdbEntry>> SearchAsync(string path, bool recursive = false,
+            CancellationToken cancellationToken = default)
         {
             return await Task<IEnumerable<DdbEntry>>.Factory.StartNew(() => Search(path, recursive), cancellationToken,
                 TaskCreationOptions.LongRunning, TaskScheduler.Default);
@@ -413,22 +424,27 @@ namespace Registry.Adapters.DroneDB
                 TaskCreationOptions.LongRunning, TaskScheduler.Default);
         }
 
-        public async Task<Dictionary<string, object>> ChangeAttributesRawAsync(Dictionary<string, object> attributes, CancellationToken cancellationToken = default)
+        public async Task<Dictionary<string, object>> ChangeAttributesRawAsync(Dictionary<string, object> attributes,
+            CancellationToken cancellationToken = default)
         {
-            return await Task<Dictionary<string, object>>.Factory.StartNew(() => ChangeAttributesRaw(attributes), cancellationToken,
+            return await Task<Dictionary<string, object>>.Factory.StartNew(() => ChangeAttributesRaw(attributes),
+                cancellationToken,
                 TaskCreationOptions.LongRunning, TaskScheduler.Default);
         }
 
-        public async Task<byte[]> GenerateThumbnailAsync(string imagePath, int size, CancellationToken cancellationToken = default)
+        public async Task<byte[]> GenerateThumbnailAsync(string imagePath, int size,
+            CancellationToken cancellationToken = default)
         {
             return await Task<byte[]>.Factory.StartNew(() => GenerateThumbnail(imagePath, size), cancellationToken,
                 TaskCreationOptions.LongRunning, TaskScheduler.Default);
         }
 
-        public async Task<byte []> GenerateTileAsync(string inputPath, int tz, int tx, int ty, bool retina, string inputPathHash,
+        public async Task<byte[]> GenerateTileAsync(string inputPath, int tz, int tx, int ty, bool retina,
+            string inputPathHash,
             CancellationToken cancellationToken = default)
         {
-            return await Task<byte[]>.Factory.StartNew(() => GenerateTile(inputPath, tz, tx, ty, retina, inputPathHash), cancellationToken,
+            return await Task<byte[]>.Factory.StartNew(() => GenerateTile(inputPath, tz, tx, ty, retina, inputPathHash),
+                cancellationToken,
                 TaskCreationOptions.LongRunning, TaskScheduler.Default);
         }
 
@@ -438,9 +454,10 @@ namespace Registry.Adapters.DroneDB
                 TaskCreationOptions.LongRunning, TaskScheduler.Default);
         }
 
-        public async Task<Dictionary<string, object>> GetAttributesRawAsync(CancellationToken cancellationToken = default)
+        public async Task<Dictionary<string, object>> GetAttributesRawAsync(
+            CancellationToken cancellationToken = default)
         {
-            return await Task<Dictionary<string,object>>.Factory.StartNew(GetAttributesRaw, cancellationToken,
+            return await Task<Dictionary<string, object>>.Factory.StartNew(GetAttributesRaw, cancellationToken,
                 TaskCreationOptions.LongRunning, TaskScheduler.Default);
         }
 
@@ -474,13 +491,15 @@ namespace Registry.Adapters.DroneDB
                 TaskCreationOptions.LongRunning, TaskScheduler.Default);
         }
 
-        public async Task BuildAsync(string path, string dest = null, bool force = false, CancellationToken cancellationToken = default)
+        public async Task BuildAsync(string path, string dest = null, bool force = false,
+            CancellationToken cancellationToken = default)
         {
             await Task.Factory.StartNew(() => Build(path, dest, force), cancellationToken,
                 TaskCreationOptions.LongRunning, TaskScheduler.Default);
         }
 
-        public async Task BuildAllAsync(string dest = null, bool force = false, CancellationToken cancellationToken = default)
+        public async Task BuildAllAsync(string dest = null, bool force = false,
+            CancellationToken cancellationToken = default)
         {
             await Task.Factory.StartNew(() => BuildAll(dest, force), cancellationToken,
                 TaskCreationOptions.LongRunning, TaskScheduler.Default);
