@@ -155,12 +155,12 @@ namespace Registry.Web
 
             }
 
-            if (string.IsNullOrWhiteSpace(appSettings.BridgeCachePath))
+            if (string.IsNullOrWhiteSpace(appSettings.CachePath))
             {
-                appSettings.BridgeCachePath = defaultAppSettings.BridgeCachePath;
+                appSettings.CachePath = defaultAppSettings.CachePath;
             }
 
-            Directory.CreateDirectory(appSettings.BridgeCachePath);
+            Directory.CreateDirectory(appSettings.CachePath);
             
             config["AppSettings"] = JObject.FromObject(appSettings);
 

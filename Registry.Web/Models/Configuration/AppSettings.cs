@@ -106,9 +106,9 @@ namespace Registry.Web.Models.Configuration
         public int WorkerThreads { get; set; }
 
         /// <summary>
-        /// Bridge cache path
+        /// File cache path
         /// </summary>
-        public string BridgeCachePath { get; set; }
+        public string CachePath { get; set; }
 
         /// <summary>
         /// Thumbnails cache expiration 
@@ -119,11 +119,6 @@ namespace Registry.Web.Models.Configuration
         /// Tiles cache expiration
         /// </summary>
         public TimeSpan? TilesCacheExpiration { get; set; }
-
-        /// <summary>
-        /// Bridge cache expiration
-        /// </summary>
-        public TimeSpan? BridgeCacheExpiration { get; set; }
 
         /// <summary>
         /// Clear cache interval

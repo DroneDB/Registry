@@ -234,7 +234,7 @@ namespace Registry.Web
             services.AddSingleton<INameGenerator, NameGenerator>();
             services.AddSingleton<ICacheManager, CacheManager>();
             services.AddSingleton<ObjectCache>(provider => new FileCache(FileCacheManagers.Hashed, 
-                appSettings.BridgeCachePath, new DefaultSerializationBinder(), 
+                appSettings.CachePath, new DefaultSerializationBinder(), 
                 true, appSettings.ClearCacheInterval ?? default)
             {
                 PayloadReadMode = FileCache.PayloadMode.Filename,
