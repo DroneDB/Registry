@@ -5,11 +5,8 @@
     </PropertyGroup>
 
     <ItemGroup>
+      <ProjectReference Include="..\Registry.Adapters.Ddb\Registry.Adapters.Ddb.csproj" />
       <ProjectReference Include="..\Registry.Ports\Registry.Ports.csproj" />
-    </ItemGroup>
-
-    <ItemGroup>
-      <PackageReference Include="DDB.Bindings" Version="1.0.21" />
     </ItemGroup>
 
 </Project>
