@@ -161,25 +161,44 @@ namespace Registry.Web.Test
         }
 
         [Test]
-        public void ToSlug_SimpleString_Exception()
+        public void ToSlug_SimpleString_ValidSlug()
         {
             const string str = "òàùè";
 
             var slug = str.ToSlug();
 
             slug.Should().Be("oaue");
+
+            slug.IsValidSlug().Should().BeTrue();
         }
 
         [Test]
-        public void ToSlug_ComplexString_Exception()
+        public void ToSlug_ComplexString_ValidSlug()
         {
-            const string str = ":;:ç°§ç§é*{1.↓-&%$/&%$)=(/\n\ta";
+            const string str = ":;:ç°§ç§é*{1._↓-&%$/&%$)=(/\n\ta";
 
             var slug = str.ToSlug();
 
-            slug.Should().Be("0---c--c-e--1.---------------a");
+            slug.Should().Be("0---c--c-e--1-_---------------a");
+            
+            slug.IsValidSlug().Should().BeTrue();
+
         }
 
+        [Test]
+        public void ToSlug_ComplexString2_ValidSlug()
+        {
+            const string str = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789éèàù°§ç§:;,.-_$&%()=+*{}[]|@#~?/*§!\"'<>";
+
+            var slug = str.ToSlug();
+
+            slug.Should()
+                .Be(
+                    "abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyz0123456789eeau--c------_-------------------------");
+           
+            slug.IsValidSlug().Should().BeTrue();
+
+        }
 
         #region Test Data
 
