@@ -16,7 +16,6 @@ using Registry.Ports.DroneDB.Models;
 using Registry.Web.Data.Models;
 using Registry.Web.Models;
 using Registry.Web.Models.DTO;
-using EntryType = Registry.Common.EntryType;
 
 namespace Registry.Web.Utilities
 {

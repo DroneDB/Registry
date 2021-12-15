@@ -8,7 +8,7 @@ using Newtonsoft.Json;
 using NUnit.Framework;
 using Registry.Adapters.Ddb.Model;
 using Registry.Common;
-using EntryType = Registry.Adapters.Ddb.Model.EntryType;
+using EntryType = Registry.Ports.DroneDB.Models.EntryType;
 
 namespace Registry.Adapters.Ddb.Test
 {

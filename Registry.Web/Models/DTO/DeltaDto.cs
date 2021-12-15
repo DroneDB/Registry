@@ -3,6 +3,8 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
+using Registry.Adapters.Ddb.Model;
+using Registry.Ports.DroneDB.Models;
 
 namespace Registry.Web.Models.DTO
 {

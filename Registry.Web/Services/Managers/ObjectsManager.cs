@@ -19,6 +19,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using MimeMapping;
 using Registry.Adapters;
+using Registry.Adapters.Ddb.Model;
 using Registry.Adapters.DroneDB;
 using Registry.Common;
 using Registry.Ports;

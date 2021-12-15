@@ -5,6 +5,7 @@ using DDB.Bindings.Model;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Converters;
 using Newtonsoft.Json.Linq;
+using Registry.Ports.DroneDB.Models;
 
 namespace Registry.Adapters.Ddb.Model
 {

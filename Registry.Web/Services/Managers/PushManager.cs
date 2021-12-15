@@ -17,7 +17,6 @@ using Registry.Web.Models.Configuration;
 using Registry.Web.Models.DTO;
 using Registry.Web.Services.Ports;
 using Registry.Web.Utilities;
-using EntryType = Registry.Common.EntryType;
 
 namespace Registry.Web.Services.Managers
 {

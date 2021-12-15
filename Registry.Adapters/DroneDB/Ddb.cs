@@ -13,6 +13,7 @@ using GeoJSON.Net.Geometry;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using Registry.Adapters.Ddb;
+using Registry.Adapters.Ddb.Model;
 using Registry.Common;
 using Registry.Ports.DroneDB;
 using Registry.Ports.DroneDB.Models;
