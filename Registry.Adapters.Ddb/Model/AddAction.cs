@@ -1,21 +1,24 @@
-﻿using Registry.Adapters.Ddb.Model;
+﻿using Newtonsoft.Json;
 
-namespace DDB.Bindings.Model
+namespace Registry.Adapters.Ddb.Model
 {
     public class AddAction
     {
+        [JsonProperty("path")]
         public string Path { get;  }
-        public EntryType Type { get;  }
 
-        public AddAction(string path, EntryType type = EntryType.Generic)
+        [JsonProperty("hash")]
+        public string Hash { get;  }
+
+        public AddAction(string path, string hash)
         {
             Path = path;
-            Type = type;
+            Hash = hash;
         }
 
         public override string ToString()
         {
-            return $"ADD -> [{(Type == EntryType.Directory ? 'D' : 'F')}] {Path}";
+            return $"ADD -> [{(string.IsNullOrEmpty(Hash) ? 'D' : 'F')}] {Path}";
         }
     }
 }

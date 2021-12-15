@@ -1,18 +1,23 @@
-﻿namespace Registry.Adapters.Ddb.Model
+﻿using Newtonsoft.Json;
+
+namespace Registry.Adapters.Ddb.Model
 {
     public class RemoveAction
     {
+        [JsonProperty("path")]
         public string Path { get; }
-        public EntryType Type { get; }
 
-        public RemoveAction(string path, EntryType type = EntryType.Generic)
+        [JsonProperty("hash")]
+        public string Hash { get; }
+
+        public RemoveAction(string path, string hash)
         {
             Path = path;
-            Type = type;
+            Hash = hash;
         }
         public override string ToString()
         {
-            return $"DEL -> [{(Type == EntryType.Directory ? 'D' : 'F')}] {Path}";
+            return $"DEL -> [{(string.IsNullOrEmpty(Hash) ? 'D' : 'F')}] {Path}";
         }
 
     }

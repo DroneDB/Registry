@@ -1,11 +1,14 @@
-﻿using Registry.Adapters.Ddb.Model;
+﻿using DDB.Bindings.Model;
+using Newtonsoft.Json;
 
-namespace DDB.Bindings.Model
+namespace Registry.Adapters.Ddb.Model
 {
     public class Delta
     {
+        [JsonProperty("adds")]
         public AddAction[] Adds { get; set; }
-        public CopyAction[] Copies { get; set; }
+
+        [JsonProperty("removes")]
         public RemoveAction[] Removes { get; set; }
     }
 }

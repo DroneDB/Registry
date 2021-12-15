@@ -514,25 +514,25 @@ namespace Registry.Adapters.Ddb
 
         }
 
-        [DllImport("ddb", EntryPoint = "DDBGetLastSync")]
-        static extern DDBError _GetLastSync([MarshalAs(UnmanagedType.LPStr)] string ddbPath, [MarshalAs(UnmanagedType.LPStr)] string registry, out long lastSync);
+        [DllImport("ddb", EntryPoint = "DDBGetStamp")]
+        static extern DDBError _DDBGetStamp([MarshalAs(UnmanagedType.LPStr)] string ddbPath, out IntPtr output);
 
-        public static DateTime? GetLastSync(string ddbPath, string registry = null)
+        public static Stamp GetStamp(string ddbPath)
         {
-
             if (ddbPath == null)
                 throw new ArgumentException("DDB path is null");
 
             try
             {
-
-                if (_GetLastSync(ddbPath, registry, out var outLastSync) !=
+                if (_DDBGetStamp(ddbPath, out var output) !=
                     DDBError.DDBERR_NONE) throw new DDBException(GetLastError());
 
-                if (outLastSync == 0) return null;
+                var json = Marshal.PtrToStringAnsi(output);
 
-                return Utils.UnixTimestampToDateTime(outLastSync);
+                if (json == null)
+                    throw new InvalidOperationException("No result from DDBGetStamp call");
 
+                return JsonConvert.DeserializeObject<Stamp>(json);
             }
             catch (EntryPointNotFoundException ex)
             {
@@ -542,56 +542,66 @@ namespace Registry.Adapters.Ddb
             {
                 throw new DDBException($"Error in calling ddb lib. Last error: \"{GetLastError()}\", check inner exception for details", ex);
             }
-
-        }
-
-        [DllImport("ddb", EntryPoint = "DDBSetLastSync")]
-        static extern DDBError _SetLastSync([MarshalAs(UnmanagedType.LPStr)] string ddbPath, [MarshalAs(UnmanagedType.LPStr)] string registry, long lastSync);
-
-        public static void SetLastSync(string ddbPath, string registry = null, DateTime? lastSync = null)
-        {
-
-            if (ddbPath == null)
-                throw new ArgumentException("DDB path is null");
-
-            try
-            {
-
-                var timestamp =
-                    lastSync == null ? 0 : ((DateTimeOffset)lastSync.Value).ToUnixTimeMilliseconds() / 1000;
-
-                if (_SetLastSync(ddbPath, registry, timestamp) !=
-                    DDBError.DDBERR_NONE) throw new DDBException(GetLastError());
-            }
-            catch (EntryPointNotFoundException ex)
-            {
-                throw new DDBException($"Error in calling ddb lib: incompatible versions ({ex.Message})", ex);
-            }
-            catch (Exception ex)
-            {
-                throw new DDBException($"Error in calling ddb lib. Last error: \"{GetLastError()}\", check inner exception for details", ex);
-            }
-
         }
 
         [DllImport("ddb", EntryPoint = "DDBDelta")]
-        private static extern DDBError _Delta([MarshalAs(UnmanagedType.LPStr)] string ddbSource,
-            [MarshalAs(UnmanagedType.LPStr)] string ddbTarget, out IntPtr output, [MarshalAs(UnmanagedType.LPStr)] string format);
+        private static extern DDBError _Delta([MarshalAs(UnmanagedType.LPStr)] string ddbSourceStamp,
+            [MarshalAs(UnmanagedType.LPStr)] string ddbTargetStamp, out IntPtr output, [MarshalAs(UnmanagedType.LPStr)] string format);
 
         public static Delta Delta(string ddbPath, string ddbTarget)
         {
+            return Delta(GetStamp(ddbPath), GetStamp(ddbTarget));
+        }
 
+
+        [DllImport("ddb", EntryPoint = "DDBApplyDelta")]
+        private static extern DDBError _ApplyDelta([MarshalAs(UnmanagedType.LPStr)] string delta,
+            [MarshalAs(UnmanagedType.LPStr)] string sourcePath, 
+            [MarshalAs(UnmanagedType.LPStr)] string ddbPath, int mergeStrategy, out IntPtr conflicts);
+
+        public static List<string> ApplyDelta(Delta delta, string sourcePath, string ddbPath, MergeStrategy mergeStrategy)
+        {
             try
             {
+                string deltaJson = JsonConvert.SerializeObject(delta);
 
-                if (_Delta(ddbPath, ddbTarget, out var output, "json") !=
+                if (_ApplyDelta(deltaJson, sourcePath, ddbPath, (int)mergeStrategy, out var conflictsPtr) !=
+                    DDBError.DDBERR_NONE) throw new DDBException(GetLastError());
+
+                var conflicts = Marshal.PtrToStringAnsi(conflictsPtr);
+
+                if (string.IsNullOrWhiteSpace(conflicts))
+                    throw new DDBException("Unable get applydelta result");
+
+                return JsonConvert.DeserializeObject<List<string>>(conflicts);
+            }
+            catch (EntryPointNotFoundException ex)
+            {
+                throw new DDBException($"Error in calling ddb lib: incompatible versions ({ex.Message})", ex);
+            }
+            catch (Exception ex)
+            {
+                throw new DDBException(
+                    $"Error in calling ddb lib. Last error: \"{GetLastError()}\", check inner exception for details",
+                    ex);
+            }
+        }
+
+
+        public static Delta Delta(Stamp source, Stamp target)
+        {
+            try
+            {
+                string sourceJson = JsonConvert.SerializeObject(source);
+                string targetJson = JsonConvert.SerializeObject(target);
+
+                if (_Delta(sourceJson, targetJson, out var output, "json") !=
                     DDBError.DDBERR_NONE) throw new DDBException(GetLastError());
 
                 var json = Marshal.PtrToStringAnsi(output);
 
                 if (string.IsNullOrWhiteSpace(json))
                     throw new DDBException("Unable get delta");
-
 
                 return JsonConvert.DeserializeObject<Delta>(json);
 
