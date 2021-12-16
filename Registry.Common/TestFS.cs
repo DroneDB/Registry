@@ -111,5 +111,11 @@ namespace Registry.Common
                    !path.StartsWith("http://") && (!path.StartsWith("https://") && !path.StartsWith("ftp://"));
         }
 
+        public static void ClearCache(string baseTestFolder)
+        {
+            var folder = Path.Combine(Path.GetTempPath(), baseTestFolder);
+            if (Directory.Exists(folder))
+                Directory.Delete(folder, true);
+        }
     }
 }

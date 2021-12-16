@@ -23,6 +23,7 @@ using Moq;
 using Newtonsoft.Json;
 using NUnit.Framework;
 using Registry.Adapters;
+using Registry.Adapters.Ddb.Model;
 using Registry.Common;
 using Registry.Ports;
 using Registry.Ports.DroneDB;

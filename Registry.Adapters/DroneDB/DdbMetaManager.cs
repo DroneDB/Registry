@@ -1,6 +1,7 @@
 ﻿using System.Linq;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
+using Registry.Adapters.Ddb;
 using Registry.Ports.DroneDB;
 using Registry.Ports.DroneDB.Models;
 
@@ -18,7 +19,7 @@ namespace Registry.Adapters.DroneDB
         public DdbMeta Add(string key, string data, string path = null)
         {
 
-            var m = DDB.Bindings.DroneDB.MetaAdd(_ddb.DatasetFolderPath, key, data, path);
+            var m = DroneDBWrapper.MetaAdd(_ddb.DatasetFolderPath, key, data, path);
 
             return new DdbMeta
             {
@@ -30,7 +31,7 @@ namespace Registry.Adapters.DroneDB
 
         public DdbMeta Set(string key, string data, string path = null)
         {
-            var m = DDB.Bindings.DroneDB.MetaSet(_ddb.DatasetFolderPath, key, data, path);
+            var m = DroneDBWrapper.MetaSet(_ddb.DatasetFolderPath, key, data, path);
 
             return new DdbMeta
             {
@@ -42,26 +43,26 @@ namespace Registry.Adapters.DroneDB
 
         public int Remove(string id)
         {
-            return DDB.Bindings.DroneDB.MetaRemove(_ddb.DatasetFolderPath, id);
+            return DroneDBWrapper.MetaRemove(_ddb.DatasetFolderPath, id);
         }
 
         public string Get(string key, string path = null)
         {
 
-            var m = DDB.Bindings.DroneDB.MetaGet(_ddb.DatasetFolderPath, key, path);
+            var m = DroneDBWrapper.MetaGet(_ddb.DatasetFolderPath, key, path);
 
             return m;
         }
 
         public int Unset(string key, string path = null)
         {
-            return DDB.Bindings.DroneDB.MetaUnset(_ddb.DatasetFolderPath, key, path);
+            return DroneDBWrapper.MetaUnset(_ddb.DatasetFolderPath, key, path);
         }
 
         public DdbMetaListItem[] List(string path = null)
         {
 
-            var list = DDB.Bindings.DroneDB.MetaList(_ddb.DatasetFolderPath, path);
+            var list = DroneDBWrapper.MetaList(_ddb.DatasetFolderPath, path);
 
             return list.Select(item => new DdbMetaListItem
             {

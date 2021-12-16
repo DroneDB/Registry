@@ -51,7 +51,6 @@
     <PackageReference Include="AspNetCore.HealthChecks.Hangfire" Version="5.0.1" />
     <PackageReference Include="AspNetCore.HealthChecks.UI.Client" Version="5.0.1" />
     <PackageReference Include="AspNetCore.HealthChecks.UI.Core" Version="5.0.1" />
-    <PackageReference Include="DDB.Bindings" Version="1.0.21" />
     <PackageReference Include="FileCache" Version="3.3.0" />
     <PackageReference Include="GeoJSON.Net" Version="1.2.19" />
     <PackageReference Include="Hangfire.AspNetCore" Version="1.7.27" />

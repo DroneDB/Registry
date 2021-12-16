@@ -6,13 +6,14 @@ using System.Linq;
 using System.Runtime.Serialization;
 using System.Threading;
 using System.Threading.Tasks;
-using DDB.Bindings;
 using GeoJSON.Net;
 using GeoJSON.Net.CoordinateReferenceSystem;
 using GeoJSON.Net.Feature;
 using GeoJSON.Net.Geometry;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
+using Registry.Adapters.Ddb;
+using Registry.Adapters.Ddb.Model;
 using Registry.Common;
 using Registry.Ports.DroneDB;
 using Registry.Ports.DroneDB.Models;
@@ -53,7 +54,7 @@ namespace Registry.Adapters.DroneDB
         {
             try
             {
-                return DDB.Bindings.DroneDB.GenerateMemoryTile(inputPath, tz, tx, ty, retina ? 512 : 256, true, false,
+                return DroneDBWrapper.GenerateMemoryTile(inputPath, tz, tx, ty, retina ? 512 : 256, true, false,
                     inputPathHash);
             }
             catch (DDBException ex)
@@ -66,7 +67,7 @@ namespace Registry.Adapters.DroneDB
         {
             try
             {
-                var res = DDB.Bindings.DroneDB.Init(DatasetFolderPath);
+                var res = DroneDBWrapper.Init(DatasetFolderPath);
                 Debug.WriteLine(res);
             }
             catch (DDBException ex)
@@ -82,7 +83,7 @@ namespace Registry.Adapters.DroneDB
         string IDdb.DatabaseFolderName => DatabaseFolderName;
         string IDdb.BuildFolderName => BuildFolderName;
 
-        [JsonIgnore] public string Version => DDB.Bindings.DroneDB.GetVersion();
+        [JsonIgnore] public string Version => DroneDBWrapper.GetVersion();
 
         [JsonProperty] public string DatasetFolderPath { get; private set; }
 
@@ -92,15 +93,15 @@ namespace Registry.Adapters.DroneDB
 
         public long GetSize()
         {
-            return DDB.Bindings.DroneDB.Info(DatasetFolderPath).FirstOrDefault()?.Size ?? 0;
+            return DroneDBWrapper.Info(DatasetFolderPath).FirstOrDefault()?.Size ?? 0;
         }
 
         static Ddb()
         {
 #if DEBUG
-            DDB.Bindings.DroneDB.RegisterProcess(true);
+            DroneDBWrapper.RegisterProcess(true);
 #else
-            DDB.Bindings.DroneDB.RegisterProcess(false);
+            DroneDBWrapper.RegisterProcess(false);
 #endif
         }
 
@@ -142,7 +143,7 @@ namespace Registry.Adapters.DroneDB
                 // If path is null we use the base ddb path
                 path ??= DatasetFolderPath;
 
-                var entries = DDB.Bindings.DroneDB.List(DatasetFolderPath, path, recursive);
+                var entries = DroneDBWrapper.List(DatasetFolderPath, path, recursive);
 
                 if (entries == null)
                 {
@@ -187,7 +188,7 @@ namespace Registry.Adapters.DroneDB
                 // If the path is not absolute let's rebase it on ddbPath
                 if (!Path.IsPathRooted(path)) path = Path.Combine(DatasetFolderPath, path);
 
-                DDB.Bindings.DroneDB.Remove(DatasetFolderPath, path);
+                DroneDBWrapper.Remove(DatasetFolderPath, path);
             }
             catch (DDBException ex)
             {
@@ -199,7 +200,7 @@ namespace Registry.Adapters.DroneDB
         {
             try
             {
-                DDB.Bindings.DroneDB.MoveEntry(DatasetFolderPath, source, dest);
+                DroneDBWrapper.MoveEntry(DatasetFolderPath, source, dest);
             }
             catch (DDBException ex)
             {
@@ -212,7 +213,7 @@ namespace Registry.Adapters.DroneDB
         {
             try
             {
-                DDB.Bindings.DroneDB.Build(DatasetFolderPath, path, dest, force);
+                DroneDBWrapper.Build(DatasetFolderPath, path, dest, force);
             }
             catch (DDBException ex)
             {
@@ -224,7 +225,7 @@ namespace Registry.Adapters.DroneDB
         {
             try
             {
-                DDB.Bindings.DroneDB.Build(DatasetFolderPath, null, dest, force);
+                DroneDBWrapper.Build(DatasetFolderPath, null, dest, force);
             }
             catch (DDBException ex)
             {
@@ -236,7 +237,7 @@ namespace Registry.Adapters.DroneDB
         {
             try
             {
-                return DDB.Bindings.DroneDB.IsBuildable(DatasetFolderPath, path);
+                return DroneDBWrapper.IsBuildable(DatasetFolderPath, path);
             }
             catch (DDBException ex)
             {
@@ -264,7 +265,7 @@ namespace Registry.Adapters.DroneDB
             if (string.IsNullOrWhiteSpace(path))
                 throw new ArgumentException("Path cannot be null or empty");
 
-            var info = DDB.Bindings.DroneDB.Info(DatasetFolderPath);
+            var info = DroneDBWrapper.Info(DatasetFolderPath);
 
             var entry = info.FirstOrDefault();
 
@@ -290,7 +291,7 @@ namespace Registry.Adapters.DroneDB
         {
             try
             {
-                return DDB.Bindings.DroneDB.ChangeAttributes(DatasetFolderPath, attributes);
+                return DroneDBWrapper.ChangeAttributes(DatasetFolderPath, attributes);
             }
             catch (DDBException ex)
             {
@@ -302,7 +303,7 @@ namespace Registry.Adapters.DroneDB
         {
             try
             {
-                return DDB.Bindings.DroneDB.GenerateThumbnail(imagePath, size);
+                return DroneDBWrapper.GenerateThumbnail(imagePath, size);
             }
             catch (DDBException ex)
             {
@@ -315,7 +316,7 @@ namespace Registry.Adapters.DroneDB
         {
             try
             {
-                DDB.Bindings.DroneDB.Add(DatasetFolderPath, path);
+                DroneDBWrapper.Add(DatasetFolderPath, path);
             }
             catch (DDBException ex)
             {
@@ -335,7 +336,7 @@ namespace Registry.Adapters.DroneDB
 
                     Directory.CreateDirectory(folderPath);
 
-                    DDB.Bindings.DroneDB.Add(DatasetFolderPath, folderPath);
+                    DroneDBWrapper.Add(DatasetFolderPath, folderPath);
                 }
                 catch (DDBException ex)
                 {
@@ -365,7 +366,7 @@ namespace Registry.Adapters.DroneDB
                         stream.CopyTo(writer);
                     }
 
-                    DDB.Bindings.DroneDB.Add(DatasetFolderPath, filePath);
+                    DroneDBWrapper.Add(DatasetFolderPath, filePath);
                 }
                 catch (DDBException ex)
                 {

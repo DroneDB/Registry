@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
+using Registry.Adapters.Ddb.Model;
 using Registry.Common;
 using Registry.Ports.DroneDB.Models;
 using Registry.Web.Data;
@@ -94,7 +95,7 @@ namespace Registry.Web.Services.Managers
                 Depth = 0,
                 Size = info.Size,
                 Path = _utils.GenerateDatasetUrl(dataset),
-                Type = EntryType.DroneDb,
+                Type = EntryType.DroneDB,
                 Properties = info.Properties
             };
 
