@@ -1,9 +1,8 @@
 ﻿using System;
-using System.Linq;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 
-namespace DDB.Bindings.Model
+namespace Registry.Adapters.Ddb.Model
 {
     [JsonConverter(typeof(CopyActionConverter))]
     public class CopyAction

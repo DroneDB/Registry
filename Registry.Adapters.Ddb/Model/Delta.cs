@@ -1,5 +1,4 @@
-﻿using DDB.Bindings.Model;
-using Newtonsoft.Json;
+﻿using Newtonsoft.Json;
 
 namespace Registry.Adapters.Ddb.Model
 {

@@ -2,7 +2,6 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using DDB.Bindings.Model;
 using FluentAssertions;
 using Newtonsoft.Json;
 using NUnit.Framework;
