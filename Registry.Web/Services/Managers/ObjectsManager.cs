@@ -268,42 +268,39 @@ namespace Registry.Web.Services.Managers
                     throw new ArgumentException("Cannot move a file on a folder");
             }
 
-            var src = (await ddb.SearchAsync(source)).Where(item => item.Type != EntryType.Directory).ToArray();
-
-            switch (src.Length)
+            switch (sourceEntry.Type)
             {
-                // If it's an empty folder
-                case 0:
-
-                    _logger.LogInformation("Moving empty folder, nothing to do in object system");
-
+                case EntryType.Directory:
+                {
+                
+                    var sourceLocalFilePath = ddb.GetLocalPath(source);
+                    var destLocalFilePath = ddb.GetLocalPath(dest);
+                    
+                    _logger.LogInformation("Moving directory '{Source}' to '{Dest}'", source, dest);
+                
+                    CommonUtils.EnsureSafePath(destLocalFilePath);
+                    _fs.FolderMove(sourceLocalFilePath, destLocalFilePath);
+                    
+                    _logger.LogInformation("FS move OK");
+                    
                     break;
-
-                case 1:
-
+                }
+                case EntryType.DroneDB:
+                    throw new InvalidOperationException("Cannot move a DroneDB file");
+                default:
+                {
                     var sourceLocalFilePath = ddb.GetLocalPath(source);
                     var destLocalFilePath = ddb.GetLocalPath(dest);
 
-                    _logger.LogInformation("Moving object '{Source}' to '{Dest}'", source, dest);
+                    _logger.LogInformation("Moving file '{Source}' to '{Dest}'", source, dest);
                     
                     CommonUtils.EnsureSafePath(destLocalFilePath);
                     _fs.Move(sourceLocalFilePath, destLocalFilePath);
 
+                    _logger.LogInformation("FS move OK");
+                    
                     break;
-
-                // If it's a folder
-                default:
-
-                    _logger.LogInformation("Moving folder '{Source}' to '{Dest}'", source, dest);
-
-                    var sourceLocalFolderPath = ddb.GetLocalPath(source);
-                    var destLocalFolderPath = ddb.GetLocalPath(dest);
-
-                    _fs.FolderMove(sourceLocalFolderPath, destLocalFolderPath);
-                    //await _objectSystem.MoveDirectory(bucketName, source, dest);
-                    _logger.LogInformation("Move OK");
-
-                    break;
+                }
             }
 
             _logger.LogInformation("Performing ddb move");
