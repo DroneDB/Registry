@@ -16,6 +16,7 @@ using Hangfire.Server;
 using Microsoft.AspNetCore.DataProtection.Repositories;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using Microsoft.VisualBasic.CompilerServices;
 using MimeMapping;
 using Registry.Adapters;
 using Registry.Adapters.Ddb.Model;
@@ -284,7 +285,8 @@ namespace Registry.Web.Services.Managers
                     var destLocalFilePath = ddb.GetLocalPath(dest);
 
                     _logger.LogInformation("Moving object '{Source}' to '{Dest}'", source, dest);
-
+                    
+                    CommonUtils.EnsureSafePath(destLocalFilePath);
                     _fs.Move(sourceLocalFilePath, destLocalFilePath);
 
                     break;

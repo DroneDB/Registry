@@ -359,7 +359,7 @@ namespace Registry.Adapters.DroneDB
 
                     stream.SafeReset();
 
-                    EnsureFolderExists(filePath);
+                    CommonUtils.EnsureSafePath(filePath);
 
                     using (var writer = File.OpenWrite(filePath))
                     {
@@ -379,12 +379,6 @@ namespace Registry.Adapters.DroneDB
                             Debug.WriteLine($"Cannot delete file '{filePath}'");
                 }
             }
-        }
-
-        private static void EnsureFolderExists(string filePath)
-        {
-            var folder = Path.GetDirectoryName(filePath);
-            if (folder != null) Directory.CreateDirectory(folder);
         }
 
         public override string ToString()
