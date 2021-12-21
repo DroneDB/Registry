@@ -11,7 +11,7 @@ RUN apt install -y --fix-missing --no-install-recommends ca-certificates cmake g
 RUN update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-10 1000 --slave /usr/bin/g++ g++ /usr/bin/g++-10
 
 # Build DroneDB
-RUN git clone --recurse-submodules https://github.com/uav4geo/DroneDB.git
+RUN git clone --recurse-submodules https://github.com/DroneDB/DroneDB.git
 RUN cd DroneDB && mkdir build && cd build && \
     cmake .. && \
     make -j $(cat /proc/cpuinfo | grep processor | wc -l)
