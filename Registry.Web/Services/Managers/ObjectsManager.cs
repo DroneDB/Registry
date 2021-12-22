@@ -479,7 +479,7 @@ namespace Registry.Web.Services.Managers
             return streamDescriptor;
         }
 
-        private (string[] files, string[] folders, bool includeDdb) GetFilePaths(string[] paths, DDB ddb)
+        private (string[] files, string[] folders, bool includeDdb) GetFilePaths(string[] paths, IDDB ddb)
         {
             string[] files;
             string[] folders;
@@ -551,7 +551,7 @@ namespace Registry.Web.Services.Managers
 
         #region Utils
 
-        private Entry EnsurePathValidity(string orgSlug, Guid internalRef, string path, out DDB ddb)
+        private Entry EnsurePathValidity(string orgSlug, Guid internalRef, string path, out IDDB ddb)
         {
             EnsureNoWildcardOrEmptyPaths(path);
 
@@ -576,7 +576,7 @@ namespace Registry.Web.Services.Managers
             EnsurePathsValidity(orgSlug, internalRef, paths, out _);
         }
 
-        private void EnsurePathsValidity(string orgSlug, Guid internalRef, string[] paths, out DDB ddb)
+        private void EnsurePathsValidity(string orgSlug, Guid internalRef, string[] paths, out IDDB ddb)
         {
             ddb = null;
 

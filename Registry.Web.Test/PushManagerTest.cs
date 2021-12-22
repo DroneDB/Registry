@@ -108,12 +108,12 @@ namespace Registry.Web.Test
             _nameGenerator = new NameGenerator(_appSettingsMock.Object, _nameGeneratorLogger);
             _backgroundJobsProcessor = new SimpleBackgroundJobsProcessor();
 
-            var ddbMock1 = new Mock<DDB>();
+            var ddbMock1 = new Mock<IDDB>();
             ddbMock1.Setup(x => x.GetAttributesRaw()).Returns(new Dictionary<string, object>
             {
                 { "public", true }
             });
-            var ddbMock2 = new Mock<DDB>();
+            var ddbMock2 = new Mock<IDDB>();
             ddbMock2.Setup(x => x.GetAttributesAsync(default))
                 .Returns(Task.FromResult(new DdbAttributes(ddbMock1.Object)));
 

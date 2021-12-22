@@ -5,9 +5,9 @@ namespace Registry.Adapters.DroneDB.Models
 {
     public class EntryAttributes : EntryProperties
     {
-        private readonly DDB _ddb;
+        private readonly IDDB _ddb;
 
-        public EntryAttributes(DDB ddb) : base(ddb.GetAttributesRaw()) 
+        public EntryAttributes(IDDB ddb) : base(ddb.GetAttributesRaw()) 
         {
             _ddb = ddb;
         }

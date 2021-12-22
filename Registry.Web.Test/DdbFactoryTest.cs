@@ -121,9 +121,9 @@ namespace Registry.Web.Test
             res.Type.Should().Be(expectedType);
             res.Properties.Should().BeEquivalentTo(expectedMeta);
 
-            res.PointGeometry["coordinates"][0].Value<double>().Should().BeApproximately(expectedLatitude, 0.00001);
-            res.PointGeometry["coordinates"][1].Value<double>().Should().BeApproximately(expectedLongitude, 0.00001);
-            res.PointGeometry["coordinates"][2].Value<double>().Should().BeApproximately(expectedAltitude, 0.1);
+            res.PointGeometry["geometry"]["coordinates"][0].Value<double>().Should().BeApproximately(expectedLongitude, 0.00001);
+            res.PointGeometry["geometry"]["coordinates"][1].Value<double>().Should().BeApproximately(expectedLatitude, 0.00001);
+            res.PointGeometry["geometry"]["coordinates"][2].Value<double>().Should().BeApproximately(expectedAltitude, 0.1);
 
         }
 
@@ -149,11 +149,11 @@ namespace Registry.Web.Test
             const double expectedAltitude = 198.51;
 
             List<List<double>> expectedCoordinates = new List<List<double>>();
-            expectedCoordinates.Add(new List<double> { 46.843311240786406, -91.99418833907131, 158.51 });
-            expectedCoordinates.Add(new List<double> { 46.843058237783886, -91.99457061482893, 158.51 });
-            expectedCoordinates.Add(new List<double> { 46.842591925708966, -91.99391510716002, 158.51 });
-            expectedCoordinates.Add(new List<double> { 46.842844926544224, -91.99353283170487, 158.51 });
-            expectedCoordinates.Add(new List<double> { 46.843311240786406, -91.99418833907131, 158.51 });
+            expectedCoordinates.Add(new List<double> { -91.99418833907131, 46.843311240786406, 158.51 });
+            expectedCoordinates.Add(new List<double> { -91.99457061482893, 46.843058237783886, 158.51 });
+            expectedCoordinates.Add(new List<double> { -91.99391510716002, 46.842591925708966, 158.51 });
+            expectedCoordinates.Add(new List<double> { -91.99353283170487, 46.842844926544224, 158.51 });
+            expectedCoordinates.Add(new List<double> { -91.99418833907131, 46.843311240786406, 158.51 });
 
             var factory = new DdbManager(_appSettingsMock.Object, _ddbFactoryLogger);
 
@@ -173,19 +173,20 @@ namespace Registry.Web.Test
             res.Size.Should().Be(expectedSize);
             res.Type.Should().Be(expectedType);
             res.Properties.Should().BeEquivalentTo(expectedMeta);
-            res.PointGeometry["coordinates"][0].Value<double>().Should().BeApproximately(expectedLatitude, 0.00001);
-            res.PointGeometry["coordinates"][1].Value<double>().Should().BeApproximately(expectedLongitude, 0.00001);
-            res.PointGeometry["coordinates"][1].Value<double>().Should().BeApproximately(expectedAltitude, 0.1);
+            res.PointGeometry["geometry"]["coordinates"][0].Value<double>().Should().BeApproximately(expectedLongitude, 0.00001);
+            res.PointGeometry["geometry"]["coordinates"][1].Value<double>().Should().BeApproximately(expectedLatitude, 0.00001);
+            res.PointGeometry["geometry"]["coordinates"][2].Value<double>().Should().BeApproximately(expectedAltitude, 0.1);
 
             var polygon = res.PolygonGeometry;
 
-            var coords = polygon["coordinates"][0];
-
-            coords.Should().BeEquivalentTo(expectedCoordinates, options => 
-                options.Using<double>(ctx => 
-                    ctx.Subject.Should().BeApproximately(ctx.Expectation, 0.001))
-                        .WhenTypeIs<double>());
-
+            var coords = polygon["geometry"]["coordinates"][0];
+            for (int i = 0; i < expectedCoordinates.Count; i++)
+            {   
+                for (int j = 0; j < expectedCoordinates[i].Count; j++)
+                {
+                    coords[i][j].Value<double>().Should().BeApproximately(expectedCoordinates[i][j], 0.001);
+                }
+            }
         }
 
 

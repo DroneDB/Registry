@@ -19,7 +19,7 @@ namespace Registry.Web.Services.Managers
             _settings = settings.Value;
         }
 
-        public DDB Get(string orgSlug, Guid internalRef)
+        public IDDB Get(string orgSlug, Guid internalRef)
         {
             var baseDdbPath = GetDdbPath(orgSlug, internalRef);
 

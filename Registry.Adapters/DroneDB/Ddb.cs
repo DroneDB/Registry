@@ -14,7 +14,7 @@ using Registry.Common;
 
 namespace Registry.Adapters.DroneDB
 {
-    public class DDB
+    public class DDB : IDDB
     {
         [JsonConstructor]
         private DDB()
@@ -436,7 +436,7 @@ namespace Registry.Adapters.DroneDB
                 TaskCreationOptions.LongRunning, TaskScheduler.Default);
         }
 
-        public async Task<Entry> GetInfoAsync(CancellationToken cancellationToken = default)
+        public virtual async Task<Entry> GetInfoAsync(CancellationToken cancellationToken = default)
         {
             return await Task<Entry>.Factory.StartNew(() => GetInfo(), cancellationToken,
                 TaskCreationOptions.LongRunning, TaskScheduler.Default);

@@ -10,7 +10,7 @@ namespace Registry.Web.Utilities
     public static class HangfireUtils
     {
 
-        public static void BuildWrapper(DDB ddb, string path, bool force,
+        public static void BuildWrapper(IDDB ddb, string path, bool force,
             PerformContext context)
         {
             Action<string> writeLine = context != null ? context.WriteLine : Console.WriteLine;

@@ -8,9 +8,9 @@ namespace Registry.Adapters.DroneDB
 {
     public class MetaManager
     {
-        private readonly DDB _ddb;
+        private readonly IDDB _ddb;
         
-        public MetaManager(DDB ddb)
+        public MetaManager(IDDB ddb)
         {
             _ddb = ddb;
         }

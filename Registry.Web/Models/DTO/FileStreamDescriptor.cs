@@ -26,7 +26,7 @@ namespace Registry.Web.Models.DTO
         private readonly FileDescriptorType _descriptorType;
         private readonly ILogger<ObjectsManager> _logger;
         private readonly IDdbManager _ddbManager;
-        private readonly DDB _ddb;
+        private readonly IDDB _ddb;
 
         public string Name { get; }
 

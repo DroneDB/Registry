@@ -153,12 +153,12 @@ namespace Registry.Web.Test
                 { "public", true }
             };
 
-            var ddbMock = new Mock<DDB>();
+            var ddbMock = new Mock<IDDB>();
             ddbMock.Setup(x => x.GetInfoAsync(default)).Returns(Task.FromResult(new Registry.Adapters.DroneDB.Models.Entry
             {
                 Properties = attributes
             }));
-            var ddbMock2 = new Mock<DDB>();
+            var ddbMock2 = new Mock<IDDB>();
             ddbMock2.Setup(x => x.GetAttributesRaw()).Returns(attributes);
             ddbMock.Setup(x => x.GetAttributesAsync(default))
                 .Returns(Task.FromResult(new Registry.Adapters.DroneDB.Models.EntryAttributes(ddbMock2.Object)));
@@ -259,12 +259,12 @@ namespace Registry.Web.Test
                 { "public", true }
             };
 
-            var ddbMock = new Mock<DDB>();
+            var ddbMock = new Mock<IDDB>();
             ddbMock.Setup(x => x.GetInfoAsync(default)).Returns(Task.FromResult(new Registry.Adapters.DroneDB.Models.Entry
             {
                 Properties = attributes
             }));
-            var ddbMock2 = new Mock<DDB>();
+            var ddbMock2 = new Mock<IDDB>();
             ddbMock2.Setup(x => x.GetAttributesRaw()).Returns(attributes);
             ddbMock.Setup(x => x.GetAttributesAsync(default))
                 .Returns(Task.FromResult(new EntryAttributes(ddbMock2.Object)));
@@ -400,12 +400,12 @@ namespace Registry.Web.Test
                 { "public", true }
             };
 
-            var ddbMock = new Mock<DDB>();
+            var ddbMock = new Mock<IDDB>();
             ddbMock.Setup(x => x.GetInfoAsync(default)).Returns(Task.FromResult(new Registry.Adapters.DroneDB.Models.Entry
             {
                 Properties = attributes
             }));
-            var ddbMock2 = new Mock<DDB>();
+            var ddbMock2 = new Mock<IDDB>();
             ddbMock2.Setup(x => x.GetAttributesRaw()).Returns(attributes);
             ddbMock.Setup(x => x.GetAttributesAsync(default))
                 .Returns(Task.FromResult(new EntryAttributes(ddbMock2.Object)));

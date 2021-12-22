@@ -54,7 +54,7 @@ namespace Registry.Web.Test
             
             var utils = new WebUtils(_authManagerMock.Object, context, _appSettingsMock.Object, _httpContextAccessorMock.Object, _ddbFactoryMock.Object);
 
-            var ddbMock = new Mock<DDB>();
+            var ddbMock = new Mock<IDDB>();
             ddbMock.Setup(x => x.GetInfoAsync(default)).Returns(Task.FromResult(new Registry.Adapters.DroneDB.Models.Entry{
                     Properties = new Dictionary<string, object>
                     {
