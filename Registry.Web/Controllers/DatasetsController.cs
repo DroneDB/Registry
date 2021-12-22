@@ -42,7 +42,7 @@ namespace Registry.Web.Controllers
         {
             try
             {
-                _logger.LogDebug($"Dataset controller Batches('{orgSlug}', '{dsSlug}')");
+                _logger.LogDebug("Dataset controller Batches('{OrgSlug}', '{DsSlug}')", orgSlug, dsSlug);
 
                 var lst = await _shareManager.ListBatches(orgSlug, dsSlug);
 
@@ -51,7 +51,7 @@ namespace Registry.Web.Controllers
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, $"Exception in Dataset controller Batches('{orgSlug}', '{dsSlug}')");
+                _logger.LogError(ex, "Exception in Dataset controller Batches('{OrgSlug}', '{DsSlug}')", orgSlug, dsSlug);
 
                 return ExceptionResult(ex);
             }
@@ -63,12 +63,12 @@ namespace Registry.Web.Controllers
         {
             try
             {
-                _logger.LogDebug($"Dataset controller GetAll('{orgSlug}')");
+                _logger.LogDebug("Dataset controller GetAll('{OrgSlug}')", orgSlug);
                 return Ok(await _datasetsManager.List(orgSlug));
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, $"Exception in Dataset controller GetAll('{orgSlug}')");
+                _logger.LogError(ex, "Exception in Dataset controller GetAll('{OrgSlug}')", orgSlug);
                 return ExceptionResult(ex);
             }
         }
@@ -79,13 +79,13 @@ namespace Registry.Web.Controllers
         {
             try
             {
-                _logger.LogDebug($"Dataset controller Get('{orgSlug}', '{dsSlug}')");
+                _logger.LogDebug("Dataset controller Get('{OrgSlug}', '{DsSlug}')", orgSlug, dsSlug);
 
                 return Ok(await _datasetsManager.GetEntry(orgSlug, dsSlug));
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, $"Exception in Dataset controller Get('{orgSlug}', '{dsSlug}')");
+                _logger.LogError(ex, "Exception in Dataset controller Get('{OrgSlug}', '{DsSlug}')", orgSlug, dsSlug);
                 return ExceptionResult(ex);
             }
         }
@@ -96,13 +96,13 @@ namespace Registry.Web.Controllers
         {
             try
             {
-                _logger.LogDebug($"Dataset controller GetEx('{orgSlug}', '{dsSlug}')");
+                _logger.LogDebug("Dataset controller GetEx('{OrgSlug}', '{DsSlug}')", orgSlug, dsSlug);
 
                 return Ok(await _datasetsManager.Get(orgSlug, dsSlug));
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, $"Exception in Dataset controller GetEx('{orgSlug}', '{dsSlug}')");
+                _logger.LogError(ex, "Exception in Dataset controller GetEx('{OrgSlug}', '{DsSlug}')", orgSlug, dsSlug);
                 return ExceptionResult(ex);
             }
         }
@@ -129,7 +129,7 @@ namespace Registry.Web.Controllers
         {
             try
             {
-                _logger.LogDebug($"Dataset controller Post('{orgSlug}', '{dataset?.Slug}')");
+                _logger.LogDebug("Dataset controller Post('{OrgSlug}', '{DatasetSlug}')", orgSlug, dataset?.Slug);
 
                 var newDs = await _datasetsManager.AddNew(orgSlug, dataset);
                 return CreatedAtRoute(nameof(DatasetsController) + "." + nameof(Get), new { dsSlug = newDs.Slug },
@@ -137,7 +137,7 @@ namespace Registry.Web.Controllers
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, $"Exception in Dataset controller Post('{orgSlug}', '{dataset?.Slug}')");
+                _logger.LogError(ex, "Exception in Dataset controller Post('{OrgSlug}', '{DatasetSlug}')", orgSlug, dataset?.Slug);
                 return ExceptionResult(ex);
             }
         }
@@ -147,7 +147,7 @@ namespace Registry.Web.Controllers
         {
             try
             {
-                _logger.LogDebug($"Dataset controller Rename('{orgSlug}', '{dsSlug}', '{newSlug}')");
+                _logger.LogDebug("Dataset controller Rename('{OrgSlug}', '{DsSlug}', '{NewSlug}')", orgSlug, dsSlug, newSlug);
 
                 await _datasetsManager.Rename(orgSlug, dsSlug, newSlug);
 
@@ -155,7 +155,7 @@ namespace Registry.Web.Controllers
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, $"Exception in Dataset controller Rename('{orgSlug}', '{dsSlug}', '{newSlug}')");
+                _logger.LogError(ex, "Exception in Dataset controller Rename('{OrgSlug}', '{Dslug}', '{NewSlug}')", orgSlug, dsSlug, newSlug);
                 return ExceptionResult(ex);
             }
         }
@@ -170,7 +170,7 @@ namespace Registry.Web.Controllers
                     new Dictionary<string, object>() : 
                     JsonConvert.DeserializeObject<Dictionary<string, object>>(rawAttributes);
 
-                _logger.LogDebug($"Dataset controller ChangeAttributes('{orgSlug}', '{dsSlug}', '{rawAttributes}')");
+                _logger.LogDebug("Dataset controller ChangeAttributes('{OrgSlug}', '{DsSlug}', {RawAttributes}')", orgSlug, dsSlug, rawAttributes);
 
                 var res = await _datasetsManager.ChangeAttributes(orgSlug, dsSlug, attributes);
 
@@ -178,7 +178,7 @@ namespace Registry.Web.Controllers
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, $"Exception in Dataset controller ChangeAttributes('{orgSlug}', '{dsSlug}', '{rawAttributes}')')");
+                _logger.LogError(ex, "Exception in Dataset controller ChangeAttributes('{OrgSlug}', '{DsSlug}', '{RawAttributes}')", orgSlug, dsSlug, rawAttributes);
                 return ExceptionResult(ex);
             }
         }
@@ -189,14 +189,14 @@ namespace Registry.Web.Controllers
 
             try
             {
-                _logger.LogDebug($"Dataset controller Put('{orgSlug}', '{dsSlug}', '{dataset?.Slug}')");
+                _logger.LogDebug("Dataset controller Put('{OrgSlug}', '{DsSlug}', '{DatasetSlug}')", orgSlug, dsSlug, dataset?.Slug);
 
                 await _datasetsManager.Edit(orgSlug, dsSlug, dataset);
                 return NoContent();
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, $"Exception in Dataset controller Put('{orgSlug}', '{dsSlug}', '{dataset?.Slug}')");
+                _logger.LogError(ex, "Exception in Dataset controller Put('{OrgSlug}', '{DsSlug}', '{DatasetSlug}')", orgSlug, dsSlug, dataset?.Slug);
                 return ExceptionResult(ex);
             }
 
@@ -208,14 +208,14 @@ namespace Registry.Web.Controllers
 
             try
             {
-                _logger.LogDebug($"Dataset controller Delete('{orgSlug}', '{dsSlug}')");
+                _logger.LogDebug("Dataset controller Delete('{OrgSlug}', '{DsSlug}')", orgSlug, dsSlug);
 
                 await _datasetsManager.Delete(orgSlug, dsSlug);
                 return NoContent();
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, $"Exception in Dataset controller Delete('{orgSlug}', '{dsSlug}')");
+                _logger.LogError(ex, "Exception in Dataset controller Delete('{OrgSlug}', '{DsSlug}')", orgSlug, dsSlug);
 
                 return ExceptionResult(ex);
             }

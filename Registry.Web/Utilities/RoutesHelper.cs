@@ -11,7 +11,7 @@ namespace Registry.Web.Utilities
         public const string DatasetRadix = "ds";
         public const string OrganizationSlug = "{orgSlug:regex(" + SlugRegex + ")}";
         public const string DatasetSlug = "{dsSlug:regex(" + SlugRegex + ")}";
-        public const string SlugRegex = "^[[a-z0-9_]][[a-z0-9_-]]{{0,127}}$";
+        public const string SlugRegex = "^[[a-z0-9]][[a-z0-9_-]]{{1,128}}$";
         public const string ShareRadix = "share";
         public const string UsersRadix = "users";
         public const string ObjectsRadix = "obj";

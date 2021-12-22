@@ -31,12 +31,16 @@ namespace Registry.Web.Services.Managers
 
         private string GetCurrent()
         {
-            var authorizationHeader = _httpContextAccessor
-                .HttpContext.Request.Headers["authorization"];
+            var request = _httpContextAccessor?.HttpContext?.Request;
+
+            if (request == null)
+                return null;
+
+            var authorizationHeader = request.Headers["authorization"];
 
             return 
                 authorizationHeader == StringValues.Empty ? 
-                    _httpContextAccessor.HttpContext.Request.Cookies[_appSettings.AuthCookieName] : 
+                    request.Cookies[_appSettings.AuthCookieName] : 
                     authorizationHeader.Single().Split(" ").Last();
         }
 

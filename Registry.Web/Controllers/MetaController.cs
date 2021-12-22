@@ -1,11 +1,8 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
-using Newtonsoft.Json;
-using Newtonsoft.Json.Linq;
 using Registry.Web.Models;
 using Registry.Web.Models.DTO;
 using Registry.Web.Services.Ports;
@@ -37,7 +34,7 @@ namespace Registry.Web.Controllers
         {
             try
             {
-                _logger.LogDebug($"Meta Controller Add('{orgSlug}', '{dsSlug}', '{key}', '{path}')");
+                _logger.LogDebug("Meta Controller Add('{OrgSlug}', '{DsSlug}', '{Key}', '{Path}')", orgSlug, dsSlug, key, path);
 
                 var res = await _metaManager.Add(orgSlug, dsSlug, key, data, path);
 
@@ -45,7 +42,7 @@ namespace Registry.Web.Controllers
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, $"Exception in Meta controller Add('{orgSlug}', '{dsSlug}', '{key}', '{path}')");
+                _logger.LogError(ex, "Exception in Meta controller Add('{OrgSlug}', '{DsSlug}', '{Key}', '{Path}')", orgSlug, dsSlug, key, path);
                 return ExceptionResult(ex);
             }
         }
@@ -65,7 +62,7 @@ namespace Registry.Web.Controllers
 
             try
             {
-                _logger.LogDebug($"Meta Controller AddAlt('{orgSlug}', '{dsSlug}', '{key}', '{path}')");
+                _logger.LogDebug("Meta Controller AddAlt('{OrgSlug}', '{DsSlug}', '{Key}', '{Path}')", orgSlug, dsSlug, key, path);
 
                 var res = await _metaManager.Add(orgSlug, dsSlug, key, data, path);
 
@@ -73,7 +70,7 @@ namespace Registry.Web.Controllers
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, $"Exception in Meta controller Add('{orgSlug}', '{dsSlug}', '{key}', '{path}')");
+                _logger.LogError(ex, "Exception in Meta controller Add('{OrgSlug}', '{DsSlug}', '{Key}', '{Path}')", orgSlug, dsSlug, key, path);
                 return ExceptionResult(ex);
             }
         }
@@ -84,7 +81,7 @@ namespace Registry.Web.Controllers
         {
             try
             {
-                _logger.LogDebug($"Meta Controller Set('{orgSlug}', '{dsSlug}', '{key}', '{path}')");
+                _logger.LogDebug("Meta Controller Set('{OrgSlug}', '{DsSlug}', '{Key}', '{Path}')", orgSlug, dsSlug, key, path);
 
                 var res = await _metaManager.Set(orgSlug, dsSlug, key, data, path);
 
@@ -92,7 +89,7 @@ namespace Registry.Web.Controllers
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, $"Exception in Meta controller Set('{orgSlug}', '{dsSlug}', '{key}', '{path}')");
+                _logger.LogError(ex, "Exception in Meta controller Set('{OrgSlug}', '{DsSlug}', '{Key}', '{Path}')", orgSlug, dsSlug, key, path);
                 return ExceptionResult(ex);
             }
         }
@@ -109,7 +106,7 @@ namespace Registry.Web.Controllers
 
             try
             {
-                _logger.LogDebug($"Meta Controller Set('{orgSlug}', '{dsSlug}', '{key}', '{path}')");
+                _logger.LogDebug("Meta Controller Set('{OrgSlug}', '{DsSlug}', '{Key}', '{Path}')", orgSlug, dsSlug, key, path);
 
                 var res = await _metaManager.Set(orgSlug, dsSlug, key, data, path);
 
@@ -117,7 +114,7 @@ namespace Registry.Web.Controllers
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, $"Exception in Meta controller Set('{orgSlug}', '{dsSlug}', '{key}', '{path}')");
+                _logger.LogError(ex, "Exception in Meta controller Set('{OrgSlug}', '{DsSlug}', '{Key}', '{Path}')", orgSlug, dsSlug, key, path);
                 return ExceptionResult(ex);
             }
         }
@@ -128,7 +125,7 @@ namespace Registry.Web.Controllers
         {
             try
             {
-                _logger.LogDebug($"Meta Controller Remove('{orgSlug}', '{dsSlug}', '{id}')");
+                _logger.LogDebug("Meta Controller Remove('{OrgSlug}', '{DsSlug}', '{Id}')", orgSlug, dsSlug, id);
 
                 var res = await _metaManager.Remove(orgSlug, dsSlug, id);
 
@@ -136,7 +133,7 @@ namespace Registry.Web.Controllers
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, $"Exception in Meta controller Remove('{orgSlug}', '{dsSlug}', '{id}')");
+                _logger.LogError(ex, "Exception in Meta controller Remove('{OrgSlug}', '{DsSlug}', '{Id}')", orgSlug, dsSlug, id);
                 return ExceptionResult(ex);
             }
         }
@@ -147,7 +144,7 @@ namespace Registry.Web.Controllers
         {
             try
             {
-                _logger.LogDebug($"Meta Controller RemoveAlt('{orgSlug}', '{dsSlug}', '{id}')");
+                _logger.LogDebug("Meta Controller RemoveAlt('{OrgSlug}', '{DsSlug}', '{Id}')", orgSlug, dsSlug, id);
 
                 var res = await _metaManager.Remove(orgSlug, dsSlug, id);
 
@@ -155,7 +152,7 @@ namespace Registry.Web.Controllers
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, $"Exception in Meta controller RemoveAlt('{orgSlug}', '{dsSlug}', '{id}')");
+                _logger.LogError(ex, "Exception in Meta controller RemoveAlt('{OrgSlug}', '{DsSlug}', '{Id}')", orgSlug, dsSlug, id);
                 return ExceptionResult(ex);
             }
         }
@@ -166,7 +163,7 @@ namespace Registry.Web.Controllers
         {
             try
             {
-                _logger.LogDebug($"Meta Controller Unset('{orgSlug}', '{dsSlug}', '{key}', '{path}')");
+                _logger.LogDebug("Meta Controller Unset('{OrgSlug}', '{DsSlug}', '{Key}', '{Path}')", orgSlug, dsSlug, key, path);
 
                 var res = await _metaManager.Unset(orgSlug, dsSlug, key, path);
 
@@ -175,7 +172,7 @@ namespace Registry.Web.Controllers
             catch (Exception ex)
             {
                 _logger.LogError(ex,
-                    $"Exception in Meta controller Remove('{orgSlug}', '{dsSlug}', '{key}', '{path}')");
+                    "Exception in Meta controller Remove('{OrgSlug}', '{DsSlug}', '{Key}', '{Path}')", orgSlug, dsSlug, key, path);
                 return ExceptionResult(ex);
             }
         }
@@ -192,7 +189,7 @@ namespace Registry.Web.Controllers
 
             try
             {
-                _logger.LogDebug($"Meta Controller UnsetAlt('{orgSlug}', '{dsSlug}', '{key}', '{path}')");
+                _logger.LogDebug("Meta Controller UnsetAlt('{OrgSlug}', '{DsSlug}', '{Key}', '{Path}')", orgSlug, dsSlug, key, path);
 
                 var res = await _metaManager.Unset(orgSlug, dsSlug, key, path);
 
@@ -201,7 +198,7 @@ namespace Registry.Web.Controllers
             catch (Exception ex)
             {
                 _logger.LogError(ex,
-                    $"Exception in Meta controller UnsetAlt('{orgSlug}', '{dsSlug}', '{key}', '{path}')");
+                    "Exception in Meta controller UnsetAlt('{OrgSlug}', '{DsSlug}', '{Key}', '{Path}')", orgSlug, dsSlug, key, path);
                 return ExceptionResult(ex);
             }
         }
@@ -213,7 +210,7 @@ namespace Registry.Web.Controllers
         {
             try
             {
-                _logger.LogDebug($"Meta Controller List('{orgSlug}', '{dsSlug}', '{path}')");
+                _logger.LogDebug("Meta Controller List('{OrgSlug}', '{DsSlug}', '{Path}')", orgSlug, dsSlug, path);
 
                 var res = await _metaManager.List(orgSlug, dsSlug, path);
 
@@ -221,7 +218,7 @@ namespace Registry.Web.Controllers
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, $"Exception in Meta controller List('{orgSlug}', '{dsSlug}', '{path}')");
+                _logger.LogError(ex, "Exception in Meta controller List('{OrgSlug}', '{DsSlug}', '{Path}')", orgSlug, dsSlug, path);
                 return ExceptionResult(ex);
             }
         }
@@ -232,7 +229,7 @@ namespace Registry.Web.Controllers
         {
             try
             {
-                _logger.LogDebug($"Meta Controller Get('{orgSlug}', '{dsSlug}', '{key}', '{path}')");
+                _logger.LogDebug("Meta Controller Get('{OrgSlug}', '{DsSlug}', '{Key}', '{Path}')", orgSlug, dsSlug, key, path);
 
                 var res = await _metaManager.Get(orgSlug, dsSlug, key, path);
 
@@ -240,7 +237,7 @@ namespace Registry.Web.Controllers
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, $"Exception in Meta controller Get('{orgSlug}', '{dsSlug}', '{key}', '{path}')");
+                _logger.LogError(ex, "Exception in Meta controller Get('{OrgSlug}', '{DsSlug}', '{Key}', '{Path}')", orgSlug, dsSlug, key, path);
                 return ExceptionResult(ex);
             }
         }

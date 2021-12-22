@@ -46,9 +46,9 @@ namespace Registry.Web.Models.Configuration
         public AdminInfo DefaultAdmin { get; set; }
 
         /// <summary>
-        /// Storage path for Ddb databases
+        /// Storage path for datasets
         /// </summary>
-        public string DdbStoragePath { get; set; }
+        public string StoragePath { get; set; }
 
         /// <summary>
         /// Supported Ddb version
@@ -91,11 +91,6 @@ namespace Registry.Web.Models.Configuration
         public string ExternalAuthUrl { get; set; }
 
         /// <summary>
-        /// Storage provider settings
-        /// </summary>
-        public StorageProvider StorageProvider { get; set; }
-
-        /// <summary>
         /// Cache provider settings
         /// </summary>
         public CacheProvider CacheProvider { get; set; }
@@ -111,9 +106,9 @@ namespace Registry.Web.Models.Configuration
         public int WorkerThreads { get; set; }
 
         /// <summary>
-        /// Bridge cache path
+        /// File cache path
         /// </summary>
-        public string BridgeCachePath { get; set; }
+        public string CachePath { get; set; }
 
         /// <summary>
         /// Thumbnails cache expiration 
@@ -126,18 +121,9 @@ namespace Registry.Web.Models.Configuration
         public TimeSpan? TilesCacheExpiration { get; set; }
 
         /// <summary>
-        /// Bridge cache expiration
-        /// </summary>
-        public TimeSpan? BridgeCacheExpiration { get; set; }
-
-        /// <summary>
         /// Clear cache interval
         /// </summary>
         public TimeSpan? ClearCacheInterval { get; set; }
 
-        /// <summary>
-        /// When to perform storage cleanup in minutes
-        /// </summary>
-        public int? StorageCleanupMinutes { get; set; }
     }
 }

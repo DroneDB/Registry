@@ -16,12 +16,9 @@ using Moq;
 using Newtonsoft.Json;
 using NUnit.Framework;
 using Registry.Adapters.DroneDB;
-using Registry.Adapters.ObjectSystem;
-using Registry.Adapters.ObjectSystem.Model;
 using Registry.Common;
 using Registry.Ports.DroneDB;
 using Registry.Ports.DroneDB.Models;
-using Registry.Ports.ObjectSystem;
 using Registry.Web.Data;
 using Registry.Web.Data.Models;
 using Registry.Web.Exceptions;
@@ -34,7 +31,7 @@ using Registry.Web.Services.Ports;
 using Registry.Web.Test.Adapters;
 
 namespace Registry.Web.Test
-{
+{/*
     class PushManagerTest
     {
         private Logger<PushManager> _pushManagerLogger;
@@ -47,7 +44,6 @@ namespace Registry.Web.Test
 
         private IPasswordHasher _passwordHasher;
 
-        private Mock<IObjectSystem> _objectSystemMock;
         private Mock<IOptions<AppSettings>> _appSettingsMock;
         private Mock<IDdbManager> _ddbFactoryMock;
         private Mock<IAuthManager> _authManagerMock;
@@ -84,7 +80,6 @@ namespace Registry.Web.Test
         [SetUp]
         public void Setup()
         {
-            _objectSystemMock = new Mock<IObjectSystem>();
             _appSettingsMock = new Mock<IOptions<AppSettings>>();
             _ddbFactoryMock = new Mock<IDdbManager>();
             _authManagerMock = new Mock<IAuthManager>();
@@ -129,9 +124,7 @@ namespace Registry.Web.Test
         [Test]
         public async Task Init_HappyPath_Ok()
         {
-            /* INITIALIZATION & SETUP */
-
-            /*
+            // INITIALIZATION & SETUP 
             const string userName = "admin";
             const string dsSlug = "test";
 
@@ -182,11 +175,11 @@ namespace Registry.Web.Test
                         }
 
                         await using var up = File.OpenRead(filePath);
-                        await pushManager.Upload(userName, dsSlug, file, token, up);
+                        await pushManager.Upload(userName, dsSlug, file, up);
                     }
                 }
 
-                await pushManager.Commit(userName, dsSlug, token);
+                await pushManager.Commit(userName, dsSlug);
 
                 // Verify that all the files are in the correct places
                 await using (var stream = File.OpenRead(Path.Combine(test.TestFolder, "ClientDdb.zip")))
@@ -201,15 +194,14 @@ namespace Registry.Web.Test
             finally
             {
                 await pushManager.Clean(userName, dsSlug);
-            }*/
+            }
         }
 
         [Test]
         [Explicit]
         public async Task Init_HappyPath2_Ok()
         {
-            /* INITIALIZATION & SETUP */
-            /*
+            // INITIALIZATION & SETUP 
             const string userName = "admin";
             const string dsSlug = "test";
 
@@ -287,7 +279,7 @@ namespace Registry.Web.Test
                         }
 
                         await using var up = File.OpenRead(filePath);
-                        await pushManager.Upload(userName, dsSlug, file, result.Token, up);
+                        await pushManager.Upload(userName, dsSlug, file, up);
                     }
                 }
 
@@ -306,7 +298,7 @@ namespace Registry.Web.Test
             finally
             {
                 await pushManager.Clean(userName, dsSlug);
-            }*/
+            }
         }
 
         #region Test Data
@@ -411,5 +403,5 @@ namespace Registry.Web.Test
         }
 
         #endregion
-    }
+    }*/
 }

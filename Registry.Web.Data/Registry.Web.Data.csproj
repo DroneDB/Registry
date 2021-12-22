@@ -28,6 +28,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\Registry.Common\Registry.Common.csproj" />
+    <ProjectReference Include="..\Registry.Ports\Registry.Ports.csproj" />
   </ItemGroup>
 
 </Project>

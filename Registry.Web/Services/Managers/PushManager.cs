@@ -2,10 +2,7 @@
 using System.IO;
 using System.IO.Compression;
 using System.Linq;
-using System.Reactive.Linq;
 using System.Threading.Tasks;
-using DDB.Bindings;
-using DDB.Bindings.Model;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -13,7 +10,6 @@ using Microsoft.VisualStudio.Web.CodeGeneration;
 using Newtonsoft.Json;
 using Registry.Adapters.DroneDB;
 using Registry.Common;
-using Registry.Ports.ObjectSystem;
 using Registry.Web.Exceptions;
 using Registry.Web.Models.Configuration;
 using Registry.Web.Models.DTO;
@@ -22,6 +18,7 @@ using Registry.Web.Utilities;
 
 namespace Registry.Web.Services.Managers
 {
+    /*
     public class PushManager : IPushManager
     {
         private const string PushFolderName = "push";
@@ -35,19 +32,17 @@ namespace Registry.Web.Services.Managers
         private readonly IObjectsManager _objectsManager;
         private readonly IDatasetsManager _datasetsManager;
         private readonly IAuthManager _authManager;
-        private readonly IObjectSystem _objectSystem;
         private readonly ILogger<PushManager> _logger;
         private readonly AppSettings _settings;
         private readonly IBackgroundJobsProcessor _backgroundJob;
         
-        public PushManager(IUtils utils, IDdbManager ddbManager, IObjectSystem objectSystem,
+        public PushManager(IUtils utils, IDdbManager ddbManager, 
             IObjectsManager objectsManager, ILogger<PushManager> logger, IDatasetsManager datasetsManager,
             IAuthManager authManager,
             IBackgroundJobsProcessor backgroundJob, IOptions<AppSettings> settings)
         {
             _utils = utils;
             _ddbManager = ddbManager;
-            _objectSystem = objectSystem;
             _objectsManager = objectsManager;
             _logger = logger;
             _datasetsManager = datasetsManager;
@@ -287,5 +282,5 @@ namespace Registry.Web.Services.Managers
             var tempFolder = Path.GetDirectoryName(folder);
             if (tempFolder != null) Directory.CreateDirectory(tempFolder);
         }
-    }
+    }*/
 }

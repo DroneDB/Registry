@@ -47,7 +47,8 @@ namespace Registry.Ports.DroneDB
         IEnumerable<DdbEntry> Search(string path, bool recursive = false);
         void Add(string path, byte[] data);
         void Add(string path, Stream data = null);
-
+        void AddRaw(string path);
+        
         void Remove(string path);
         void Move(string source, string dest);
 
@@ -69,6 +70,8 @@ namespace Registry.Ports.DroneDB
         /// <param name="path"></param>
         /// <returns></returns>
         DdbEntry GetInfo(string path);
+
+        string GetLocalPath(string path);
 
         /// <summary>
         /// Gets the specified path inside the DDB database

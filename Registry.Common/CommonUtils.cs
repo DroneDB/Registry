@@ -103,14 +103,24 @@ namespace Registry.Common
 
                     var folder = Path.GetDirectoryName(dbPath);
 
-                    if (!Directory.Exists(folder))
-                    {
+                    if (folder != null)
                         Directory.CreateDirectory(folder);
-                    }
-                }
+                }   
             }
         }
 
+        /// <summary>
+        /// Creates the parent folder if it does not exist
+        /// </summary>
+        /// <param name="path"></param>
+        public static void EnsureSafePath(string path)
+        {
+            var folder = Path.GetDirectoryName(path);
+
+            if (folder != null)
+                Directory.CreateDirectory(folder);
+        }
+        
         public static void SmartExtractFolder(string archive, string dest, bool overwrite = true)
         {
             var ext = Path.GetExtension(archive).ToLowerInvariant();
@@ -547,5 +557,6 @@ namespace Registry.Common
 
             return null;
         }
+
     }
 }

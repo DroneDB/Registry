@@ -1,19 +1,20 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
+using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
-using DDB.Bindings.Model;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Identity;
 using Newtonsoft.Json;
+using Registry.Adapters.Ddb.Model;
 using Registry.Ports.DroneDB.Models;
 using Registry.Web.Data.Models;
 using Registry.Web.Models;
 using Registry.Web.Models.DTO;
-using EntryType = DDB.Bindings.Model.EntryType;
 
 namespace Registry.Web.Utilities
 {
@@ -76,7 +77,7 @@ namespace Registry.Web.Utilities
             };
         }
 
-        public static ObjectDto ToDto(this DdbEntry obj)
+        public static EntryGeoDto ToDto(this DdbEntry obj)
         {
             return new()
             {
@@ -93,11 +94,8 @@ namespace Registry.Web.Utilities
             };
         }
 
-        // A tag name must be valid ASCII and may contain lowercase and uppercase letters, digits, underscores, periods and dashes.
-        // A tag name may not start with a period or a dash and may contain a maximum of 128 characters.
-
-        // Only lowercase letters, numbers, - and _. Max length 255
-        private static readonly Regex SafeNameRegex = new(@"^[a-z0-9_][a-z0-9_-]{0,127}$", RegexOptions.Compiled | RegexOptions.Singleline);
+        // Only lowercase letters, numbers, dashes and underscore. Max length 128 and cannot start with a dash or underscore.
+        private static readonly Regex SafeNameRegex = new(@"^[a-z0-9][a-z0-9_-]{1,128}$", RegexOptions.Compiled | RegexOptions.Singleline);
 
         /// <summary>
         /// Checks if a string is a valid slug
@@ -137,11 +135,14 @@ namespace Registry.Web.Utilities
             var tempBytes = enc.GetBytes(name);
             var tmp = Encoding.UTF8.GetString(tempBytes);
 
-            var str = new string(tmp.Select(c => char.IsLetterOrDigit(c) || c == '.' ? c : '-').ToArray())
+            var str = new string(tmp.Select(c => 
+                    char.IsLetterOrDigit(c) || c is '_' or '-' ? c : '-').ToArray())
                 .ToLowerInvariant();
 
             // If it starts with a period or a dash pad it with a 0
-            return str[0] == '.' || str[0] == '-' ? "0" + str : str;
+            var res = str[0] == '_' || str[0] == '-' ? "0" + str : str;
+
+            return res.Length > 128 ? res[..128] : res;
         }
 
         /// <summary>
@@ -212,6 +213,17 @@ namespace Registry.Web.Utilities
             await response.WriteAsJsonAsync(result);
         }
 
+        public static byte[] ComputeHash(this HashAlgorithm hashAlgorithm, string inputFile)
+        {
+            using var stream = File.OpenRead(inputFile);
+            return hashAlgorithm.ComputeHash(stream);
+        }
+
+        public static async Task<byte[]> ComputeHashAsync(this HashAlgorithm hashAlgorithm, string inputFile)
+        {
+            await using var stream = File.OpenRead(inputFile);
+            return await hashAlgorithm.ComputeHashAsync(stream);
+        }
 
     }
 

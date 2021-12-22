@@ -17,9 +17,13 @@ You can use docker to setup Registry:
 ```
 git clone https://github.com/DroneDB/Registry
 cd Registry
+git submodule update --init --recursive
 docker build . -t dronedb/registry
 docker run -ti -p 5000:5000 -p 5001:5001 dronedb/registry
 ```
+Notes:
+- login credentials are `admin:password`
+- `ddb` commands must use the `127.0.0.1` syntax, not `localhost`
 
 ## Building Natively
 

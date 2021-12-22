@@ -6,7 +6,9 @@ using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using Registry.Adapters.Ddb.Model;
 using Registry.Common;
+using Registry.Ports.DroneDB.Models;
 using Registry.Web.Data;
 using Registry.Web.Data.Models;
 using Registry.Web.Exceptions;
@@ -14,6 +16,7 @@ using Registry.Web.Models.Configuration;
 using Registry.Web.Models.DTO;
 using Registry.Web.Services.Ports;
 using Registry.Web.Utilities;
+using Entry = Registry.Web.Data.Models.Entry;
 
 namespace Registry.Web.Services.Managers
 {
@@ -60,7 +63,7 @@ namespace Registry.Web.Services.Managers
             await _utils.GetOrganization(orgSlug);
             var dataset = await _utils.GetDataset(orgSlug, dsSlug);
 
-            _logger.LogInformation($"Listing batches of '{orgSlug}/{dsSlug}'");
+            _logger.LogInformation("Listing batches of '{OrgSlug}/{DsSlug}'", orgSlug, dsSlug);
 
             var batches = from batch in _context.Batches
                     .Include(x => x.Entries)
@@ -95,7 +98,7 @@ namespace Registry.Web.Services.Managers
 
             if (!res.IsReady)
             {
-                _logger.LogDebug($"The batch '{token}' is not ready");
+                _logger.LogDebug("The batch '{Token}' is not ready", token);
                 return false;
             }
             
@@ -103,7 +106,7 @@ namespace Registry.Web.Services.Managers
 
             if (entry != null)
             {
-                _logger.LogDebug($"The batch '{token}' already contains path '{path}'");
+                _logger.LogDebug("The batch '{Token}' already contains path '{Path}'", token, path);
                 return false;
             }
 
@@ -122,13 +125,13 @@ namespace Registry.Web.Services.Managers
 
             if (batch == null)
             {
-                _logger.LogDebug($"Cannot find batch '{token}'");
+                _logger.LogDebug("Cannot find batch '{Token}'", token);
                 return IsBatchReadyResult.NotReady;
             }
 
             if (batch.Status != BatchStatus.Running)
             {
-                _logger.LogDebug($"Cannot upload file to closed batch '{token}'");
+                _logger.LogDebug("Cannot upload file to closed batch '{Token}'", token);
                 return IsBatchReadyResult.NotReady;
             }
 
@@ -136,7 +139,7 @@ namespace Registry.Web.Services.Managers
 
             if (!(await _authManager.IsUserAdmin() || batch.UserName == currentUserName))
             {
-                _logger.LogDebug($"The batch '{token}' does not belong to you");
+                _logger.LogDebug("The batch '{Token}' does not belong to you", token);
                 return IsBatchReadyResult.NotReady;
             }
 
@@ -179,7 +182,7 @@ namespace Registry.Web.Services.Managers
                     // This section of code can be extracted and put in a separated utils method
                     orgSlug = _utils.GetFreeOrganizationSlug(currentUser.UserName);
 
-                    _logger.LogInformation($"No default user organization found, adding a new one: '{orgSlug}'");
+                    _logger.LogInformation("No default user organization found, adding a new one: '{OrgSlug}'", orgSlug);
 
                     var org = await _organizationsManager.AddNew(new OrganizationDto
                     {
@@ -195,17 +198,11 @@ namespace Registry.Web.Services.Managers
 
                 orgSlug = userOrganization.Slug;
 
-                _logger.LogInformation($"Using default user organization '{orgSlug}'");
+                _logger.LogInformation("Using default user organization '{OrgSlug}'", orgSlug);
                 
-                // We are pretty sure this is unique but ALWAYS CHECK
-                string dsSlug;
-                do
-                {
-                    // NOTE: We could generate a more language friendly slug, like docker does for its running containers
-                    dsSlug = _nameGenerator.GenerateName().ToSlug();
-                } while (_context.Datasets.FirstOrDefault(item => item.Slug == dsSlug) != null);
+                var dsSlug = GetUniqueDatasetSlug();
 
-                _logger.LogInformation($"Generated unique dataset slug '{dsSlug}'");
+                _logger.LogInformation("Generated unique dataset slug '{DsSlug}'", dsSlug);
                 
                 await _datasetsManager.AddNew(orgSlug, new DatasetDto
                 {
@@ -216,7 +213,7 @@ namespace Registry.Web.Services.Managers
 
                 dataset = await _utils.GetDataset(orgSlug, dsSlug);
 
-                _logger.LogInformation($"Created new dataset '{dsSlug}', creating batch");
+                _logger.LogInformation("Created new dataset '{DsSlug}', creating batch", dsSlug);
 
                 tag = new TagDto(orgSlug, dsSlug);
 
@@ -251,7 +248,7 @@ namespace Registry.Web.Services.Managers
 
                 if (dataset == null)
                 {
-                    _logger.LogInformation($"Dataset '{tag.DatasetSlug}' not found, creating it");
+                    _logger.LogInformation("Dataset '{DatasetSlug}' not found, creating it", tag.DatasetSlug);
 
                     await _datasetsManager.AddNew(tag.OrganizationSlug, new DatasetDto
                     {
@@ -273,7 +270,7 @@ namespace Registry.Web.Services.Managers
 
                     if (runningBatches.Any())
                     {
-                        _logger.LogInformation($"Found '{runningBatches.Length}' running batch(es), stopping and rolling back before starting a new one");
+                        _logger.LogInformation("Found '{RunningBatchesCount}' running batch(es), stopping and rolling back before starting a new one", runningBatches.Length);
 
                         foreach (var b in runningBatches)
                             await RollbackBatch(b);
@@ -291,7 +288,7 @@ namespace Registry.Web.Services.Managers
                 Status = BatchStatus.Running
             };
 
-            _logger.LogInformation($"Adding new batch for user '{batch.UserName}' with token '{batch.Token}'");
+            _logger.LogInformation("Adding new batch for user '{BatchUserName}' with token '{BatchToken}'", batch.UserName, batch.Token);
 
             await _context.Batches.AddAsync(batch);
             await _context.SaveChangesAsync();
@@ -307,9 +304,22 @@ namespace Registry.Web.Services.Managers
             };
         }
 
+        private string GetUniqueDatasetSlug()
+        {
+            // We are pretty sure this is unique but ALWAYS CHECK
+            string dsSlug;
+            do
+            {
+                // NOTE: We could generate a more language friendly slug, like docker does for its running containers
+                dsSlug = _nameGenerator.GenerateName().ToSlug();
+            } while (_context.Datasets.FirstOrDefault(item => item.Slug == dsSlug) != null);
+
+            return dsSlug;
+        }
+
         private async Task RollbackBatch(Batch batch)
         {
-            _logger.LogInformation($"Rolling back batch '{batch.Token}'");
+            _logger.LogInformation("Rolling back batch '{BatchToken}'", batch.Token);
 
             // I know we will have concurrency problems here because we could be in the middle of the rollback when another client calls for another one
             // To mitigate this issue we are going to commit the status change of the batch as soon as possible
@@ -376,7 +386,7 @@ namespace Registry.Web.Services.Managers
             if (entry != null)
                 throw new BadRequestException("Entry already uploaded");
 
-            _logger.LogInformation($"Adding '{path}' in batch '{batch.Token}'");
+            _logger.LogInformation("Adding '{Path}' in batch '{BatchToken}'", path, batch.Token);
 
             var orgSlug = batch.Dataset.Organization.Slug;
             var dsSlug = batch.Dataset.Slug;
@@ -440,23 +450,23 @@ namespace Registry.Web.Services.Managers
 
             if (rollback)
             {
-                _logger.LogInformation($"Rolling back batch '{token}' @ {batch.End.Value.ToLongDateString()} {batch.End.Value.ToLongTimeString()}");
+                _logger.LogInformation("Rolling back batch '{Token}' @ {BatchEndData} {BatchEndTime}", token, batch.End.Value.ToLongDateString(), batch.End.Value.ToLongTimeString());
 
                 await RollbackBatch(batch);
 
-                _logger.LogInformation($"Batch '{token}' rolled back");
+                _logger.LogInformation("Batch '{Token}' rolled back", token);
 
                 batch.Status = BatchStatus.Rolledback;
             }
             else
             {
-                _logger.LogInformation($"Committing batch '{token}' @ {batch.End.Value.ToLongDateString()} {batch.End.Value.ToLongTimeString()}");
+                _logger.LogInformation("Committing batch '{Token}' @ {BatchEndData} {BatchEndTime}", token, batch.End.Value.ToLongDateString(), batch.End.Value.ToLongTimeString());
 
                 batch.Status = BatchStatus.Committed;
 
                 // TODO: Are we supposed to do more operations here?
 
-                _logger.LogInformation($"Batch '{token}' committed");
+                _logger.LogInformation("Batch '{Token}' committed", token);
 
             }
 
@@ -466,6 +476,7 @@ namespace Registry.Web.Services.Managers
 
             return new CommitResultDto
             {
+                // NOTE: This url structure is so buried in the code that it's hard to find it, we should consider a better way to expose it
                 Url = "/r/" + batch.Dataset.Organization.Slug + "/" + batch.Dataset.Slug,
                 Tag = new TagDto(batch.Dataset.Organization.Slug, batch.Dataset.Slug)
             };

@@ -2,23 +2,18 @@
 using System.IO;
 using System.IO.Compression;
 using System.Linq;
-using System.Runtime.Serialization;
 using System.Threading.Tasks;
-using Microsoft.AspNetCore.Identity.UI.V4.Pages.Internal.Account;
 using Microsoft.Extensions.Logging;
-using MimeMapping;
 using Registry.Common;
-using Registry.Ports.ObjectSystem;
+using Registry.Ports.DroneDB;
 using Registry.Web.Exceptions;
-using Registry.Web.Services.Adapters;
 using Registry.Web.Services.Managers;
 using Registry.Web.Services.Ports;
 using Registry.Web.Utilities;
 
 namespace Registry.Web.Models.DTO
 {
-
-    public enum FileDescriptorType
+   public enum FileDescriptorType
     {
         Single, Multiple, Dataset
     }
@@ -30,31 +25,28 @@ namespace Registry.Web.Models.DTO
         private readonly string[] _paths;
         private readonly string[] _folders;
         private readonly FileDescriptorType _descriptorType;
-        private readonly IObjectSystem _objectSystem;
-        private readonly IObjectsManager _objectManager;
         private readonly ILogger<ObjectsManager> _logger;
         private readonly IDdbManager _ddbManager;
-        private readonly IUtils _utils;
+        private readonly IDdb _ddb;
 
         public string Name { get; }
 
         public string ContentType { get; }
 
         public FileStreamDescriptor(string name, string contentType, string orgSlug, Guid internalRef, string[] paths, string[] folders,
-            FileDescriptorType descriptorType, IObjectSystem objectSystem, IObjectsManager objectManager, ILogger<ObjectsManager> logger, IDdbManager ddbManager, IUtils utils)
+            FileDescriptorType descriptorType, ILogger<ObjectsManager> logger, IDdbManager ddbManager)
         {
             _orgSlug = orgSlug;
             _internalRef = internalRef;
             _paths = paths;
             _folders = folders;
             _descriptorType = descriptorType;
-            _objectSystem = objectSystem;
-            _objectManager = objectManager;
             _logger = logger;
             _ddbManager = ddbManager;
-            _utils = utils;
             Name = name;
             ContentType = contentType;
+
+            _ddb = ddbManager.Get(orgSlug, internalRef);
         }
 
         public async Task CopyToAsync(Stream stream)
@@ -64,9 +56,12 @@ namespace Registry.Web.Models.DTO
             {
                 var filePath = _paths.First();
 
-                _logger.LogInformation($"Only one path found: '{filePath}'");
+                _logger.LogInformation("Only one path found: '{FilePath}'", filePath);
 
-                await WriteObjectContentStream(_orgSlug, _internalRef, filePath, stream);
+                var localPath = _ddb.GetLocalPath(filePath);
+                
+                await using var fileStream = new FileStream(localPath, FileMode.Open, FileAccess.Read);
+                await fileStream.CopyToAsync(stream);
 
             }
             // Otherwise we zip everything together and return the package
@@ -75,12 +70,16 @@ namespace Registry.Web.Models.DTO
                 using var archive = new ZipArchive(stream, ZipArchiveMode.Create, true);
                 foreach (var path in _paths)
                 {
-                    _logger.LogInformation($"Zipping: '{path}'");
+                    _logger.LogInformation("Zipping: '{Path}'", path);
 
                     var entry = archive.CreateEntry(path, CommonUtils.GetCompressionLevel(path));
                     await using var entryStream = entry.Open();
 
-                    await WriteObjectContentStream(_orgSlug, _internalRef, path, entryStream);
+                    var localPath = _ddb.GetLocalPath(path);
+
+                    await using var fileStream = new FileStream(localPath, FileMode.Open, FileAccess.Read);
+                    await fileStream.CopyToAsync(entryStream);
+
                 }
 
                 // We treat folders separately because if they are empty they would not be included in the archive
@@ -102,21 +101,5 @@ namespace Registry.Web.Models.DTO
 
         }
 
-        private async Task WriteObjectContentStream(string orgSlug, Guid internalRef, string path, Stream stream)
-        {
-            var bucketName = _utils.GetBucketName(orgSlug, internalRef);
-
-            _logger.LogInformation($"Using bucket '{bucketName}'");
-
-            var bucketExists = await _objectSystem.BucketExistsAsync(bucketName);
-
-            if (!bucketExists)
-                throw new NotFoundException($"Cannot find bucket '{bucketName}'");
-
-            _logger.LogInformation($"Getting object '{path}' in bucket '{bucketName}'");
-
-            await _objectSystem.GetObjectAsync(bucketName, path, s => s.CopyTo(stream));
-
-        }
     }
 }

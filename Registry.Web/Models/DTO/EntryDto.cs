@@ -5,7 +5,9 @@ using System.Threading.Tasks;
 using DDB.Bindings.Model;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Converters;
+using Registry.Adapters.Ddb.Model;
 using Registry.Common;
+using Registry.Ports.DroneDB.Models;
 
 namespace Registry.Web.Models.DTO
 {

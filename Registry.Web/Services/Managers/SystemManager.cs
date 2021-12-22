@@ -6,8 +6,6 @@ using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
-using Registry.Adapters.ObjectSystem;
-using Registry.Ports.ObjectSystem;
 using Registry.Web.Data;
 using Registry.Web.Data.Models;
 using Registry.Web.Exceptions;
@@ -23,19 +21,17 @@ namespace Registry.Web.Services.Managers
         private readonly RegistryContext _context;
         private readonly IDdbManager _ddbManager;
         private readonly ILogger<SystemManager> _logger;
-        private readonly IObjectSystem _objectSystem;
         private readonly IObjectsManager _objectManager;
         private readonly AppSettings _settings;
 
         public SystemManager(IAuthManager authManager,
-            RegistryContext context, IDdbManager ddbManager, ILogger<SystemManager> logger, IObjectSystem objectSystem,
+            RegistryContext context, IDdbManager ddbManager, ILogger<SystemManager> logger,
             IObjectsManager objectManager, IOptions<AppSettings> settings)
         {
             _authManager = authManager;
             _context = context;
             _ddbManager = ddbManager;
             _logger = logger;
-            _objectSystem = objectSystem;
             _objectManager = objectManager;
             _settings = settings.Value;
         }
@@ -47,14 +43,14 @@ namespace Registry.Web.Services.Managers
 
             var datasets = _context.Datasets.Include(ds => ds.Organization).ToArray();
 
-            _logger.LogInformation($"Found {datasets.Length} with objects count zero");
+            _logger.LogInformation("Found {DatasetsCount} with objects count zero", datasets.Length);
 
             var deleted = new List<string>();
             var notDeleted = new List<CleanupDatasetErrorDto>();
 
             foreach (var ds in datasets)
             {
-                _logger.LogInformation($"Analyzing dataset {ds.Organization.Slug}/{ds.Slug}");
+                _logger.LogInformation("Analyzing dataset {OrgSlug}/{DsSlug}", ds.Organization.Slug, ds.Slug);
 
                 try
                 {
@@ -74,7 +70,7 @@ namespace Registry.Web.Services.Managers
                 }
                 catch (Exception ex)
                 {
-                    _logger.LogError(ex, $"Cannot remove dataset '{ds.Slug}'");
+                    _logger.LogError(ex, "Cannot remove dataset '{DsSlug}'", ds.Slug);
                     notDeleted.Add(new CleanupDatasetErrorDto
                     {
                         Dataset = ds.Slug,
@@ -133,7 +129,7 @@ namespace Registry.Web.Services.Managers
 
                         foreach (var entry in entries)
                         {
-                            _logger.LogInformation($"Deleting '{entry.Path}' of '{org.Slug}/{ds.Slug}'");
+                            _logger.LogInformation("Deleting '{EntryPath}' of '{OrgSlug}/{DsSlug}'", entry.Path, org.Slug, ds.Slug);
                             await _objectManager.Delete(org.Slug, ds.Slug, entry.Path);
                         }
 
@@ -162,7 +158,7 @@ namespace Registry.Web.Services.Managers
                 }
                 catch (Exception ex)
                 {
-                    _logger.LogError(ex, $"Cannot remove batch '{batch.Token}'");
+                    _logger.LogError(ex, "Cannot remove batch '{BatchToken}'", batch.Token);
                     errors.Add(new RemoveBatchErrorDto
                     {
                         Message = ex.Message,
@@ -178,16 +174,6 @@ namespace Registry.Web.Services.Managers
                 RemovedBatches = removed.ToArray(),
                 RemoveBatchErrors = errors.ToArray()
             };
-
-        }
-
-        public async Task Cleanup()
-        {
-            if (_objectSystem is not CachedS3ObjectSystem cachedS3)
-                throw new NotSupportedException(
-                    "Current object system does not support Cleanup method, only CachedS3ObjectSystem does");
-
-            await cachedS3.Cleanup();
 
         }
     }

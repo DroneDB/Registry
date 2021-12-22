@@ -10,7 +10,7 @@
             "request": "launch",
             "preLaunchTask": "build",
             // If you have changed target frameworks, make sure to update the program path.
-            "program": "${workspaceFolder}/Registry.Web/bin/Debug/netcoreapp3.1/Registry.Web.dll",
+            "program": "${workspaceFolder}/Registry.Web/bin/Debug/net5.0/Registry.Web.dll",
             "args": [],
             "cwd": "${workspaceFolder}/Registry.Web",
             "stopAtEntry": false,
