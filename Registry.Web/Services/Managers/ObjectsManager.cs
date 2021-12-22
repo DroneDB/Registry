@@ -1,40 +1,25 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.ComponentModel;
 using System.Diagnostics;
-using System.Globalization;
 using System.IO;
-using System.IO.Compression;
 using System.IO.Enumeration;
 using System.Linq;
-using System.Text;
-using System.Threading;
 using System.Threading.Tasks;
 using Hangfire;
-using Hangfire.Console;
-using Hangfire.Server;
-using Microsoft.AspNetCore.DataProtection.Repositories;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
-using Microsoft.VisualBasic.CompilerServices;
 using MimeMapping;
 using Registry.Adapters;
-using Registry.Adapters.Ddb.Model;
-using Registry.Adapters.DroneDB;
 using Registry.Common;
-using Registry.Ports;
-using Registry.Ports.DroneDB;
-using Registry.Ports.DroneDB.Models;
+using Registry.Adapters.DroneDB.Models;
 using Registry.Web.Data;
-using Registry.Web.Data.Models;
 using Registry.Web.Exceptions;
 using Registry.Web.Models;
 using Registry.Web.Models.Configuration;
 using Registry.Web.Models.DTO;
-using Registry.Web.Services.Adapters;
 using Registry.Web.Services.Ports;
 using Registry.Web.Utilities;
-using EntryType = DDB.Bindings.Model.EntryType;
+using Registry.Adapters.DroneDB;
 
 namespace Registry.Web.Services.Managers
 {
@@ -55,7 +40,7 @@ namespace Registry.Web.Services.Managers
 
         private bool IsReservedPath(string path)
         {
-            return path.StartsWith(_ddbManager.DatabaseFolderName);
+            return path.StartsWith(DDB.DatabaseFolderName);
         }
 
         public ObjectsManager(ILogger<ObjectsManager> logger,
@@ -79,7 +64,7 @@ namespace Registry.Web.Services.Managers
             _settings = settings.Value;
         }
 
-        public async Task<IEnumerable<EntryGeoDto>> List(string orgSlug, string dsSlug, string path = null,
+        public async Task<IEnumerable<Entry>> List(string orgSlug, string dsSlug, string path = null,
             bool recursive = false)
         {
             var ds = await _utils.GetDataset(orgSlug, dsSlug);
@@ -90,14 +75,14 @@ namespace Registry.Web.Services.Managers
 
             _logger.LogInformation("Searching in '{Path}'", path);
 
-            var files = (await ddb.SearchAsync(path, recursive)).Select(file => file.ToDto()).ToArray();
+            var files = (await ddb.SearchAsync(path, recursive)).ToArray();
 
             _logger.LogInformation("Found {FilesCount} objects", files.Length);
 
             return files;
         }
 
-        public async Task<IEnumerable<EntryGeoDto>> Search(string orgSlug, string dsSlug, string query = null,
+        public async Task<IEnumerable<Entry>> Search(string orgSlug, string dsSlug, string query = null,
             string path = null, bool recursive = true)
         {
             var ds = await _utils.GetDataset(orgSlug, dsSlug);
@@ -111,7 +96,7 @@ namespace Registry.Web.Services.Managers
             var files = (from entry in await ddb.SearchAsync(path, recursive)
                 let name = Path.GetFileName(entry.Path)
                 where FileSystemName.MatchesSimpleExpression(query, name)
-                select entry.ToDto()).ToArray();
+                select entry).ToArray();
 
             _logger.LogInformation("Found {FilesCount} objects", files.Length);
 
@@ -154,14 +139,14 @@ namespace Registry.Web.Services.Managers
             };
         }
 
-        public async Task<EntryGeoDto> AddNew(string orgSlug, string dsSlug, string path, byte[] data)
+        public async Task<Entry> AddNew(string orgSlug, string dsSlug, string path, byte[] data)
         {
             await using var stream = new MemoryStream(data);
             stream.Reset();
             return await AddNew(orgSlug, dsSlug, path, stream);
         }
 
-        public async Task<EntryGeoDto> AddNew(string orgSlug, string dsSlug, string path, Stream stream = null)
+        public async Task<Entry> AddNew(string orgSlug, string dsSlug, string path, Stream stream = null)
         {
             var ds = await _utils.GetDataset(orgSlug, dsSlug);
 
@@ -178,8 +163,8 @@ namespace Registry.Web.Services.Managers
                 if (await ddb.EntryExistsAsync(path))
                     throw new InvalidOperationException("Cannot create a folder on another entry");
 
-                if (path == ddb.DatabaseFolderName)
-                    throw new InvalidOperationException($"'{ddb.DatabaseFolderName}' is a reserved folder name");
+                if (path == DDB.DatabaseFolderName)
+                    throw new InvalidOperationException($"'{DDB.DatabaseFolderName}' is a reserved folder name");
 
                 _logger.LogInformation("Adding folder to DDB");
 
@@ -188,7 +173,7 @@ namespace Registry.Web.Services.Managers
 
                 _logger.LogInformation("Added to DDB");
 
-                return new EntryGeoDto
+                return new Entry
                 {
                     Path = path,
                     Type = EntryType.Directory,
@@ -220,9 +205,7 @@ namespace Registry.Web.Services.Managers
 
             _logger.LogInformation("Entry OK");
 
-            var obj = entry.ToDto();
-
-            if (await ddb.IsBuildableAsync(obj.Path))
+            if (await ddb.IsBuildableAsync(entry.Path))
             {
                 _logger.LogInformation("This is a point cloud, we need to build it!");
 
@@ -231,7 +214,7 @@ namespace Registry.Web.Services.Managers
                 _logger.LogInformation("Background job id is {JobId}", jobId);
             }
 
-            return obj;
+            return entry;
         }
 
         public async Task Move(string orgSlug, string dsSlug, string source, string dest)
@@ -496,7 +479,7 @@ namespace Registry.Web.Services.Managers
             return streamDescriptor;
         }
 
-        private (string[] files, string[] folders, bool includeDdb) GetFilePaths(string[] paths, IDdb ddb)
+        private (string[] files, string[] folders, bool includeDdb) GetFilePaths(string[] paths, DDB ddb)
         {
             string[] files;
             string[] folders;
@@ -568,7 +551,7 @@ namespace Registry.Web.Services.Managers
 
         #region Utils
 
-        private DdbEntry EnsurePathValidity(string orgSlug, Guid internalRef, string path, out IDdb ddb)
+        private Entry EnsurePathValidity(string orgSlug, Guid internalRef, string path, out DDB ddb)
         {
             EnsureNoWildcardOrEmptyPaths(path);
 
@@ -593,7 +576,7 @@ namespace Registry.Web.Services.Managers
             EnsurePathsValidity(orgSlug, internalRef, paths, out _);
         }
 
-        private void EnsurePathsValidity(string orgSlug, Guid internalRef, string[] paths, out IDdb ddb)
+        private void EnsurePathsValidity(string orgSlug, Guid internalRef, string[] paths, out DDB ddb)
         {
             ddb = null;
 
@@ -697,7 +680,7 @@ namespace Registry.Web.Services.Managers
 
         // Base build folder path (example: .ddb/build)
         private string BuildBasePath =>
-            CommonUtils.SafeCombine(_ddbManager.DatabaseFolderName, _ddbManager.BuildFolderName);
+            CommonUtils.SafeCombine(DDB.DatabaseFolderName, DDB.BuildFolderName);
 
         public async Task<bool> CheckBuildFile(string orgSlug, string dsSlug, string hash, string path)
         {
@@ -719,7 +702,7 @@ namespace Registry.Web.Services.Managers
             return _fs.Exists(ddb.GetLocalPath(destPath));
         }
 
-        public string GetBuildSource(DdbEntry entry)
+        public string GetBuildSource(Entry entry)
         {
             var path = entry.Type switch
             {

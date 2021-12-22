@@ -2,7 +2,7 @@
 using System.IO;
 using System.Text;
 
-namespace Registry.Ports
+namespace Registry.Adapters
 {
     public interface IFileSystem
     {

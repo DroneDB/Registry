@@ -1,6 +1,6 @@
 ﻿using System;
 
-namespace Registry.Adapters.Ddb
+namespace Registry.Adapters.DroneDB
 {
     public class DDBException : Exception
     {

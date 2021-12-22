@@ -2,7 +2,6 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
-using DDB.Bindings.Model;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
@@ -10,6 +9,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Newtonsoft.Json;
+using Registry.Adapters.DroneDB.Models;
 using Registry.Web.Data;
 using Registry.Web.Data.Models;
 using Registry.Web.Models;
@@ -74,7 +74,7 @@ namespace Registry.Web.Controllers
         }
 
         [HttpGet(RoutesHelper.DatasetSlug, Name = nameof(DatasetsController) + "." + nameof(Get))]
-        [ProducesResponseType(typeof(IEnumerable<EntryDto>), 200)]
+        [ProducesResponseType(typeof(IEnumerable<Adapters.DroneDB.Models.Entry>), 200)]
         public async Task<IActionResult> Get([FromRoute] string orgSlug, string dsSlug)
         {
             try

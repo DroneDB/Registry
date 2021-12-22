@@ -1,14 +1,12 @@
 ﻿using System;
 using System.IO;
-using System.IO.Compression;
 using System.Linq;
 using System.Threading.Tasks;
-using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
-using Microsoft.VisualStudio.Web.CodeGeneration;
 using Newtonsoft.Json;
 using Registry.Adapters.DroneDB;
+using Registry.Adapters.DroneDB.Models;
 using Registry.Common;
 using Registry.Web.Exceptions;
 using Registry.Web.Models.Configuration;
@@ -18,7 +16,6 @@ using Registry.Web.Utilities;
 
 namespace Registry.Web.Services.Managers
 {
-    /*
     public class PushManager : IPushManager
     {
         private const string PushFolderName = "push";
@@ -83,7 +80,7 @@ namespace Registry.Web.Services.Managers
 
                 // Is a pull required? The checksum passed by client is the checksum of the stamp
                 // of the last sync. If it's different, the client should pull first.
-                ourStamp = DroneDB.GetStamp(ddb.DatasetFolderPath);
+                ourStamp = DDBWrapper.GetStamp(ddb.DatasetFolderPath);
                 if (ourStamp.Checksum != checksum)
                 {
                     return new PushInitResultDto
@@ -93,10 +90,10 @@ namespace Registry.Web.Services.Managers
                 }
             }
 
-            if (ourStamp == null) ourStamp = DroneDB.GetStamp(ddb.DatasetFolderPath);
+            if (ourStamp == null) ourStamp = DDBWrapper.GetStamp(ddb.DatasetFolderPath);
 
             // Perform delta with our ddb
-            var delta = DroneDB.Delta(stamp, ourStamp);
+            var delta = DDBWrapper.Delta(stamp, ourStamp);
 
             // Generate UUID
             var uuid = Guid.NewGuid().ToString();
@@ -192,21 +189,21 @@ namespace Registry.Web.Services.Managers
             // TODO: we could check for conflicts rather than failing and continue
             // the operation if no conflicts are detected.
 
-            var currentStamp = DroneDB.GetStamp(ddb.DatasetFolderPath);
+            var currentStamp = DDBWrapper.GetStamp(ddb.DatasetFolderPath);
             if (currentStamp.Checksum != ourStamp.Checksum)
             {
                 throw new InvalidOperationException("The dataset has been changed by another user while pushing. Please try again!");
             }
 
             // Recompute delta
-            var delta = DroneDB.Delta(stamp, currentStamp);
+            var delta = DDBWrapper.Delta(stamp, currentStamp);
 
             foreach (var add in delta.Adds.Where(item => item.Hash.Length > 0))
                 if (!File.Exists(Path.Combine(addTempFolder, add.Path)))
                     throw new InvalidOperationException($"Cannot commit: missing '{add.Path}'");
 
             // Applies delta 
-            var conflicts = DroneDB.ApplyDelta(delta, addTempFolder, ddb.DatasetFolderPath, MergeStrategy.KeepTheirs);
+            var conflicts = DDBWrapper.ApplyDelta(delta, addTempFolder, ddb.DatasetFolderPath, MergeStrategy.KeepTheirs);
 
             if (conflicts.Count > 0)
             {
@@ -282,5 +279,5 @@ namespace Registry.Web.Services.Managers
             var tempFolder = Path.GetDirectoryName(folder);
             if (tempFolder != null) Directory.CreateDirectory(tempFolder);
         }
-    }*/
+    }
 }

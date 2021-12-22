@@ -6,6 +6,7 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
 using Newtonsoft.Json;
+using Registry.Adapters.DroneDB.Models;
 using Registry.Web.Models;
 using Registry.Web.Services.Ports;
 using Registry.Web.Utilities;
@@ -37,7 +38,7 @@ namespace Registry.Web.Controllers
                 _logger.LogDebug($"Push controller Init('{orgSlug}', '{dsSlug}', '{checksum}', '{stampJson}')");
 
                 // Stamp JSON parse: TODO
-                var stamp = JsonConvert.DeserializeObject<DDB.Bindings.Model.Stamp>(stampJson);
+                var stamp = JsonConvert.DeserializeObject<Stamp>(stampJson);
 
                 var res = await _pushManager.Init(orgSlug, dsSlug, checksum, stamp);
 

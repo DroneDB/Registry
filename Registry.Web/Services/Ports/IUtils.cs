@@ -1,7 +1,4 @@
-﻿using System;
-using System.Threading.Tasks;
-using Registry.Ports.DroneDB;
-using Registry.Ports.DroneDB.Models;
+﻿using System.Threading.Tasks;
 using Registry.Web.Data.Models;
 using Registry.Web.Models;
 using Registry.Web.Models.DTO;

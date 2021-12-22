@@ -1,7 +1,7 @@
 ﻿using System.Collections.Generic;
 using Newtonsoft.Json;
 
-namespace Registry.Adapters.Ddb.Model
+namespace Registry.Adapters.DroneDB.Models
 {
 
     public class Stamp

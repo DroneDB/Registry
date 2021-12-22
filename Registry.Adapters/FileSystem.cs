@@ -1,7 +1,6 @@
 ﻿using System.Collections.Generic;
 using System.IO;
 using System.Text;
-using Registry.Ports;
 
 namespace Registry.Adapters
 {

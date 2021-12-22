@@ -1,11 +1,9 @@
-﻿using DDB.Bindings.Model;
-using Registry.Common;
+﻿using Registry.Common;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
-using Registry.Adapters.Ddb.Model;
-using Registry.Ports.DroneDB.Models;
+using Registry.Adapters.DroneDB.Models;
 
 namespace Registry.Web.Models.DTO
 {

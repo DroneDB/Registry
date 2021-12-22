@@ -1,7 +1,4 @@
-﻿using Registry.Adapters.Ddb.Model;
-using Registry.Common;
-using Registry.Ports.DroneDB.Models;
-using Registry.Web.Models.DTO;
+﻿using Registry.Adapters.DroneDB.Models;
 
 namespace Registry.Web.Models
 {

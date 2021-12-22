@@ -12,7 +12,6 @@
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="DDB.Bindings" Version="1.0.22" />
     <PackageReference Include="GeoJSON.Net" Version="1.2.19" />
   </ItemGroup>
 

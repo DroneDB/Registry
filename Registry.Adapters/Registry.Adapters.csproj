@@ -5,8 +5,11 @@
     </PropertyGroup>
 
     <ItemGroup>
-      <ProjectReference Include="..\Registry.Adapters.Ddb\Registry.Adapters.Ddb.csproj" />
-      <ProjectReference Include="..\Registry.Ports\Registry.Ports.csproj" />
+      <PackageReference Include="Newtonsoft.Json" Version="13.0.1" />
+    </ItemGroup>
+
+    <ItemGroup>
+      <ProjectReference Include="..\Registry.Common\Registry.Common.csproj" />
     </ItemGroup>
 
 </Project>

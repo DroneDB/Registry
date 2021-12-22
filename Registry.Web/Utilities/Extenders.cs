@@ -10,8 +10,7 @@ using System.Threading.Tasks;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Identity;
 using Newtonsoft.Json;
-using Registry.Adapters.Ddb.Model;
-using Registry.Ports.DroneDB.Models;
+using Registry.Adapters.DroneDB.Models;
 using Registry.Web.Data.Models;
 using Registry.Web.Models;
 using Registry.Web.Models.DTO;
@@ -59,9 +58,9 @@ namespace Registry.Web.Utilities
             return entity;
         }
 
-        public static DatasetDto ToDto(this Dataset dataset, DdbEntry entry)
+        public static DatasetDto ToDto(this Dataset dataset, Adapters.DroneDB.Models.Entry entry)
         {
-            var attributes = new DdbProperties(entry.Properties);
+            var attributes = new EntryProperties(entry.Properties);
 
             return new()
             {
@@ -74,23 +73,6 @@ namespace Registry.Web.Utilities
                 ObjectsCount = attributes.ObjectsCount,
                 Size = entry.Size,
                 IsPublic = attributes.IsPublic
-            };
-        }
-
-        public static EntryGeoDto ToDto(this DdbEntry obj)
-        {
-            return new()
-            {
-                Depth = obj.Depth,
-                Hash = obj.Hash,
-                Id = obj.Id,
-                Properties = obj.Properties,
-                ModifiedTime = obj.ModifiedTime,
-                Path = obj.Path,
-                PointGeometry = obj.PointGeometry,
-                PolygonGeometry = obj.PolygonGeometry,
-                Size = obj.Size,
-                Type = obj.Type
             };
         }
 

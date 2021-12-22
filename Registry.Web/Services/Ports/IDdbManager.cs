@@ -1,21 +1,17 @@
-﻿using System;
+﻿using Registry.Adapters.DroneDB;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
-using Registry.Ports.DroneDB;
 
 namespace Registry.Web.Services.Ports
 {
     /// <summary>
-    /// Creates new instances of IDdb
+    /// Creates new instances of DDB
     /// </summary>
     public interface IDdbManager
     {
-        IDdb Get(string orgSlug, Guid internalRef);
+        DDB Get(string orgSlug, Guid internalRef);
         void Delete(string orgSlug, Guid internalRef);
-        
-        public string DatabaseFolderName { get; }
-        public string BuildFolderName { get; }
-
     }
 }

@@ -2,15 +2,11 @@
 using System.IO;
 using System.Linq;
 using System.Runtime.Caching;
-using System.Runtime.InteropServices.ComTypes;
 using System.Threading.Tasks;
-using Microsoft.Extensions.Caching.Distributed;
 using Microsoft.Extensions.Options;
 using Registry.Common;
-using Registry.Ports.DroneDB;
 using Registry.Web.Models.Configuration;
 using Registry.Web.Services.Ports;
-using Registry.Web.Utilities;
 
 namespace Registry.Web.Services.Managers
 {

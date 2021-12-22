@@ -17,8 +17,7 @@ using Newtonsoft.Json;
 using NUnit.Framework;
 using Registry.Adapters.DroneDB;
 using Registry.Common;
-using Registry.Ports.DroneDB;
-using Registry.Ports.DroneDB.Models;
+using Registry.Adapters.DroneDB.Models;
 using Registry.Web.Data;
 using Registry.Web.Data.Models;
 using Registry.Web.Exceptions;
@@ -109,12 +108,12 @@ namespace Registry.Web.Test
             _nameGenerator = new NameGenerator(_appSettingsMock.Object, _nameGeneratorLogger);
             _backgroundJobsProcessor = new SimpleBackgroundJobsProcessor();
 
-            var ddbMock1 = new Mock<IDdb>();
+            var ddbMock1 = new Mock<DDB>();
             ddbMock1.Setup(x => x.GetAttributesRaw()).Returns(new Dictionary<string, object>
             {
                 { "public", true }
             });
-            var ddbMock2 = new Mock<IDdb>();
+            var ddbMock2 = new Mock<DDB>();
             ddbMock2.Setup(x => x.GetAttributesAsync(default))
                 .Returns(Task.FromResult(new DdbAttributes(ddbMock1.Object)));
 

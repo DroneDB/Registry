@@ -2,11 +2,8 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
-using DDB.Bindings.Model;
 using Microsoft.Extensions.Logging;
-using Registry.Adapters.Ddb.Model;
-using Registry.Common;
-using Registry.Ports.DroneDB.Models;
+using Registry.Adapters.DroneDB.Models;
 using Registry.Web.Data;
 using Registry.Web.Exceptions;
 using Registry.Web.Models.DTO;
@@ -52,7 +49,7 @@ namespace Registry.Web.Services.Managers
             {
                 var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
                 var info = await ddb.GetInfoAsync();
-                var attributes = new DdbProperties(info.Properties);
+                var attributes = new EntryProperties(info.Properties);
 
                 res.Add(new DatasetDto
                 {
@@ -80,28 +77,13 @@ namespace Registry.Web.Services.Managers
             return dataset.ToDto(await ddb.GetInfoAsync());
         }
 
-        public async Task<EntryDto[]> GetEntry(string orgSlug, string dsSlug)
+        public async Task<Entry[]> GetEntry(string orgSlug, string dsSlug)
         {
-
             var dataset = await _utils.GetDataset(orgSlug, dsSlug);
 
             var ddb = _ddbManager.Get(orgSlug, dataset.InternalRef);
 
-            var info = await ddb.GetInfoAsync();
-            var attrs = new DdbProperties(info.Properties);
-            
-            var entry = new EntryDto
-            {
-                ModifiedTime = attrs.LastUpdate,
-                Depth = 0,
-                Size = info.Size,
-                Path = _utils.GenerateDatasetUrl(dataset),
-                Type = EntryType.DroneDB,
-                Properties = info.Properties
-            };
-
-
-            return new[] { entry };
+            return new[] { ddb.GetInfo() };
         }
 
         public async Task<DatasetDto> AddNew(string orgSlug, DatasetDto dataset)

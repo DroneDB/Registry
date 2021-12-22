@@ -4,9 +4,8 @@ using System.Globalization;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Converters;
 using Newtonsoft.Json.Linq;
-using Registry.Ports.DroneDB.Models;
 
-namespace Registry.Adapters.Ddb.Model
+namespace Registry.Adapters.DroneDB.Models
 {
 
     public class Entry

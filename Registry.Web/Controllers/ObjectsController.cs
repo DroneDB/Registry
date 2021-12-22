@@ -5,6 +5,7 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
 using MimeMapping;
+using Registry.Adapters.DroneDB.Models;
 using Registry.Web.Models;
 using Registry.Web.Models.DTO;
 using Registry.Web.Services.Ports;
@@ -218,7 +219,7 @@ namespace Registry.Web.Controllers
         }
 
         [HttpGet("list", Name = nameof(ObjectsController) + "." + nameof(GetInfo))]
-        [ProducesResponseType(typeof(IEnumerable<EntryGeoDto>), 200)]
+        [ProducesResponseType(typeof(IEnumerable<Entry>), 200)]
         public async Task<IActionResult> GetInfo([FromRoute] string orgSlug, [FromRoute] string dsSlug, [FromQuery] string path)
         {
             try
@@ -237,7 +238,7 @@ namespace Registry.Web.Controllers
         }
 
         [HttpPost("list", Name = nameof(ObjectsController) + "." + nameof(GetInfoEx))]
-        [ProducesResponseType(typeof(IEnumerable<EntryGeoDto>), 200)]
+        [ProducesResponseType(typeof(IEnumerable<Entry>), 200)]
         public async Task<IActionResult> GetInfoEx([FromRoute] string orgSlug, [FromRoute] string dsSlug, [FromForm] string path)
         {
             try
@@ -257,7 +258,7 @@ namespace Registry.Web.Controllers
 
 
         [HttpPost("search", Name = nameof(ObjectsController) + "." + nameof(Search))]
-        [ProducesResponseType(typeof(IEnumerable<EntryGeoDto>), 200)]
+        [ProducesResponseType(typeof(IEnumerable<Entry>), 200)]
         public async Task<IActionResult> Search([FromRoute] string orgSlug, [FromRoute] string dsSlug, [FromForm] string query, [FromForm] string path, [FromForm] bool recursive = true)
         {
             try
@@ -284,7 +285,7 @@ namespace Registry.Web.Controllers
             {
                 _logger.LogDebug("Objects controller Post('{OrgSlug}', '{DsSlug}', '{Path}', '{file?.FileName}')", orgSlug, dsSlug, path, file?.FileName);
 
-                EntryGeoDto newObj;
+                Entry newObj;
 
                 if (file == null)
                 {

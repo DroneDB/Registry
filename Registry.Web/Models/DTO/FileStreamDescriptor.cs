@@ -4,9 +4,8 @@ using System.IO.Compression;
 using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
+using Registry.Adapters.DroneDB;
 using Registry.Common;
-using Registry.Ports.DroneDB;
-using Registry.Web.Exceptions;
 using Registry.Web.Services.Managers;
 using Registry.Web.Services.Ports;
 using Registry.Web.Utilities;
@@ -27,7 +26,7 @@ namespace Registry.Web.Models.DTO
         private readonly FileDescriptorType _descriptorType;
         private readonly ILogger<ObjectsManager> _logger;
         private readonly IDdbManager _ddbManager;
-        private readonly IDdb _ddb;
+        private readonly DDB _ddb;
 
         public string Name { get; }
 
@@ -94,7 +93,7 @@ namespace Registry.Web.Models.DTO
                 {
                     var ddb = _ddbManager.Get(_orgSlug, _internalRef);
 
-                    archive.CreateEntryFromAny(Path.Combine(ddb.DatasetFolderPath, _ddbManager.DatabaseFolderName), string.Empty, new[] { ddb.BuildFolderPath });
+                    archive.CreateEntryFromAny(Path.Combine(ddb.DatasetFolderPath, DDB.DatabaseFolderName), string.Empty, new[] { ddb.BuildFolderPath });
                 }
 
             }

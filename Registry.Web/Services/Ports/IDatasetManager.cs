@@ -1,7 +1,6 @@
 ﻿using System.Collections.Generic;
 using System.Threading.Tasks;
-using DDB.Bindings.Model;
-using Registry.Web.Data.Models;
+using Registry.Adapters.DroneDB.Models;
 using Registry.Web.Models.DTO;
 
 namespace Registry.Web.Services.Ports
@@ -10,7 +9,7 @@ namespace Registry.Web.Services.Ports
     {
         public Task<IEnumerable<DatasetDto>> List(string orgSlug);
         public Task<DatasetDto> Get(string orgSlug, string dsSlug);
-        public Task<EntryDto[]> GetEntry(string orgSlug, string dsSlug);
+        public Task<Registry.Adapters.DroneDB.Models.Entry[]> GetEntry(string orgSlug, string dsSlug);
         public Task<DatasetDto> AddNew(string orgSlug, DatasetDto dataset);
         public Task Edit(string orgSlug, string dsSlug, DatasetDto dataset);
         public Task Delete(string orgSlug, string dsSlug);

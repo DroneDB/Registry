@@ -2,25 +2,16 @@
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using System.Net;
-using System.Text;
 using FluentAssertions;
-using GeoAPI.Geometries;
-using GeoJSON.Net.Feature;
-using GeoJSON.Net.Geometry;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Moq;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using NUnit.Framework;
-using Registry.Adapters.Ddb.Model;
-using Registry.Adapters.DroneDB;
 using Registry.Common;
-using Registry.Ports.DroneDB.Models;
-using Registry.Web.Models;
+using Registry.Adapters.DroneDB.Models;
 using Registry.Web.Models.Configuration;
-using Registry.Web.Services.Adapters;
 using Registry.Web.Services.Managers;
 
 namespace Registry.Web.Test
@@ -129,9 +120,10 @@ namespace Registry.Web.Test
             res.Size.Should().Be(expectedSize);
             res.Type.Should().Be(expectedType);
             res.Properties.Should().BeEquivalentTo(expectedMeta);
-            res.PointGeometry.Coordinates.Latitude.Should().BeApproximately(expectedLatitude, 0.00001);
-            res.PointGeometry.Coordinates.Longitude.Should().BeApproximately(expectedLongitude, 0.00001);
-            res.PointGeometry.Coordinates.Altitude.Should().BeApproximately(expectedAltitude, 0.1);
+
+            res.PointGeometry["coordinates"][0].Value<double>().Should().BeApproximately(expectedLatitude, 0.00001);
+            res.PointGeometry["coordinates"][1].Value<double>().Should().BeApproximately(expectedLongitude, 0.00001);
+            res.PointGeometry["coordinates"][2].Value<double>().Should().BeApproximately(expectedAltitude, 0.1);
 
         }
 
@@ -156,13 +148,12 @@ namespace Registry.Web.Test
             const double expectedLongitude = -91.994052;
             const double expectedAltitude = 198.51;
 
-            IPosition[] expectedCoordinates = {
-                new Position( 46.843311240786406, -91.99418833907131,158.51),
-                new Position( 46.843058237783886, -91.99457061482893,158.51),
-                new Position( 46.842591925708966, -91.99391510716002,158.51),
-                new Position( 46.842844926544224, -91.99353283170487,158.51),
-                new Position( 46.843311240786406, -91.99418833907131,158.51),
-            };
+            List<List<double>> expectedCoordinates = new List<List<double>>();
+            expectedCoordinates.Add(new List<double> { 46.843311240786406, -91.99418833907131, 158.51 });
+            expectedCoordinates.Add(new List<double> { 46.843058237783886, -91.99457061482893, 158.51 });
+            expectedCoordinates.Add(new List<double> { 46.842591925708966, -91.99391510716002, 158.51 });
+            expectedCoordinates.Add(new List<double> { 46.842844926544224, -91.99353283170487, 158.51 });
+            expectedCoordinates.Add(new List<double> { 46.843311240786406, -91.99418833907131, 158.51 });
 
             var factory = new DdbManager(_appSettingsMock.Object, _ddbFactoryLogger);
 
@@ -182,13 +173,13 @@ namespace Registry.Web.Test
             res.Size.Should().Be(expectedSize);
             res.Type.Should().Be(expectedType);
             res.Properties.Should().BeEquivalentTo(expectedMeta);
-            res.PointGeometry.Coordinates.Latitude.Should().BeApproximately(expectedLatitude, 0.00001);
-            res.PointGeometry.Coordinates.Longitude.Should().BeApproximately(expectedLongitude, 0.00001);
-            res.PointGeometry.Coordinates.Altitude.Should().BeApproximately(expectedAltitude, 0.1);
+            res.PointGeometry["coordinates"][0].Value<double>().Should().BeApproximately(expectedLatitude, 0.00001);
+            res.PointGeometry["coordinates"][1].Value<double>().Should().BeApproximately(expectedLongitude, 0.00001);
+            res.PointGeometry["coordinates"][1].Value<double>().Should().BeApproximately(expectedAltitude, 0.1);
 
             var polygon = res.PolygonGeometry;
 
-            var coords = polygon.Coordinates[0].Coordinates;
+            var coords = polygon["coordinates"][0];
 
             coords.Should().BeEquivalentTo(expectedCoordinates, options => 
                 options.Using<double>(ctx => 

@@ -1,8 +1,6 @@
-﻿using System;
+﻿using Registry.Adapters.DroneDB.Models;
+using System;
 using System.ComponentModel.DataAnnotations;
-using DDB.Bindings.Model;
-using Registry.Common;
-using Registry.Ports.DroneDB.Models;
 
 namespace Registry.Web.Data.Models
 {

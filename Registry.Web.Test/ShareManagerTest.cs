@@ -18,9 +18,6 @@ using NUnit.Framework;
 using Registry.Adapters;
 using Registry.Adapters.DroneDB;
 using Registry.Common;
-using Registry.Ports;
-using Registry.Ports.DroneDB;
-using Registry.Ports.DroneDB.Models;
 using Registry.Web.Data;
 using Registry.Web.Data.Models;
 using Registry.Web.Exceptions;
@@ -31,6 +28,9 @@ using Registry.Web.Services.Adapters;
 using Registry.Web.Services.Managers;
 using Registry.Web.Services.Ports;
 using Registry.Web.Test.Adapters;
+using Registry.Adapters.DroneDB.Models;
+
+using Attributes = Registry.Adapters.DroneDB.Models.EntryAttributes;
 
 namespace Registry.Web.Test
 {
@@ -55,7 +55,7 @@ namespace Registry.Web.Test
         private Mock<ICacheManager> _cacheManagerMock;
         private IBackgroundJobsProcessor _backgroundJobsProcessor;
 
-        private readonly IFileSystem _fileSystem = new FileSystem();
+        private readonly FileSystem _fileSystem = new FileSystem();
 
         private const string BaseTestFolder = "ShareManagerTest";
 
@@ -153,15 +153,15 @@ namespace Registry.Web.Test
                 { "public", true }
             };
 
-            var ddbMock = new Mock<IDdb>();
-            ddbMock.Setup(x => x.GetInfoAsync(default)).Returns(Task.FromResult(new DdbEntry
+            var ddbMock = new Mock<DDB>();
+            ddbMock.Setup(x => x.GetInfoAsync(default)).Returns(Task.FromResult(new Registry.Adapters.DroneDB.Models.Entry
             {
                 Properties = attributes
             }));
-            var ddbMock2 = new Mock<IDdb>();
+            var ddbMock2 = new Mock<DDB>();
             ddbMock2.Setup(x => x.GetAttributesRaw()).Returns(attributes);
             ddbMock.Setup(x => x.GetAttributesAsync(default))
-                .Returns(Task.FromResult(new DdbAttributes(ddbMock2.Object)));
+                .Returns(Task.FromResult(new Registry.Adapters.DroneDB.Models.EntryAttributes(ddbMock2.Object)));
 
             _ddbFactoryMock.Setup(x => x.Get(It.IsAny<string>(), It.IsAny<Guid>())).Returns(ddbMock.Object);
             
@@ -259,15 +259,15 @@ namespace Registry.Web.Test
                 { "public", true }
             };
 
-            var ddbMock = new Mock<IDdb>();
-            ddbMock.Setup(x => x.GetInfoAsync(default)).Returns(Task.FromResult(new DdbEntry
+            var ddbMock = new Mock<DDB>();
+            ddbMock.Setup(x => x.GetInfoAsync(default)).Returns(Task.FromResult(new Registry.Adapters.DroneDB.Models.Entry
             {
                 Properties = attributes
             }));
-            var ddbMock2 = new Mock<IDdb>();
+            var ddbMock2 = new Mock<DDB>();
             ddbMock2.Setup(x => x.GetAttributesRaw()).Returns(attributes);
             ddbMock.Setup(x => x.GetAttributesAsync(default))
-                .Returns(Task.FromResult(new DdbAttributes(ddbMock2.Object)));
+                .Returns(Task.FromResult(new EntryAttributes(ddbMock2.Object)));
 
             _ddbFactoryMock.Setup(x => x.Get(It.IsAny<string>(), It.IsAny<Guid>())).Returns(ddbMock.Object);
 
@@ -400,15 +400,15 @@ namespace Registry.Web.Test
                 { "public", true }
             };
 
-            var ddbMock = new Mock<IDdb>();
-            ddbMock.Setup(x => x.GetInfoAsync(default)).Returns(Task.FromResult(new DdbEntry
+            var ddbMock = new Mock<DDB>();
+            ddbMock.Setup(x => x.GetInfoAsync(default)).Returns(Task.FromResult(new Registry.Adapters.DroneDB.Models.Entry
             {
                 Properties = attributes
             }));
-            var ddbMock2 = new Mock<IDdb>();
+            var ddbMock2 = new Mock<DDB>();
             ddbMock2.Setup(x => x.GetAttributesRaw()).Returns(attributes);
             ddbMock.Setup(x => x.GetAttributesAsync(default))
-                .Returns(Task.FromResult(new DdbAttributes(ddbMock2.Object)));
+                .Returns(Task.FromResult(new EntryAttributes(ddbMock2.Object)));
 
             _ddbFactoryMock.Setup(x => x.Get(It.IsAny<string>(), It.IsAny<Guid>())).Returns(ddbMock.Object);
 
@@ -515,7 +515,7 @@ namespace Registry.Web.Test
                 .Should().ThrowAsync<BadRequestException>();
 
             // Fix
-            context.Set<Entry>().Local.Clear();
+            context.Set<Data.Models.Entry>().Local.Clear();
 
             // Upload to new batch
             var uploadRes =

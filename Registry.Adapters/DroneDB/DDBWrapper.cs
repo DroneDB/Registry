@@ -3,12 +3,12 @@ using System.Collections.Generic;
 using System.Runtime.InteropServices;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
-using Registry.Adapters.Ddb.Model;
+using Registry.Adapters.DroneDB.Models;
 
 
-namespace Registry.Adapters.Ddb
+namespace Registry.Adapters.DroneDB
 {
-    public static class DroneDBWrapper
+    public static class DDBWrapper
     {
         [DllImport("ddb", EntryPoint = "DDBRegisterProcess")]
         public static extern void RegisterProcess(bool verbose = false);
