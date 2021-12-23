@@ -1,6 +1,6 @@
-﻿namespace Registry.Adapters.DroneDB.Models
+﻿namespace Registry.Web.Models.DTO
 {
-    public class MetaListItem
+    public class MetaListItemDto
     {
         public int Count { get; set; }
         public string Key { get; set; }

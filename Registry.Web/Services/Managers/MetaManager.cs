@@ -1,16 +1,18 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
-using Registry.Adapters.DroneDB.Models;
+using Registry.Ports;
 using Registry.Web.Data;
 using Registry.Web.Exceptions;
 using Registry.Web.Models.Configuration;
 using Registry.Web.Models.DTO;
 using Registry.Web.Services.Ports;
+using Registry.Web.Utilities;
 
 namespace Registry.Web.Services.Managers
 {
@@ -30,7 +32,7 @@ namespace Registry.Web.Services.Managers
             _authManager = authManager;
         }
 
-        public async Task<Meta> Add(string orgSlug, string dsSlug, string key, string data, string path = null)
+        public async Task<MetaDto> Add(string orgSlug, string dsSlug, string key, string data, string path = null)
         {
             var ds = await _utils.GetDataset(orgSlug, dsSlug);
 
@@ -50,10 +52,10 @@ namespace Registry.Web.Services.Managers
             if (path != null && !await ddb.EntryExistsAsync(path))
                 throw new ArgumentException($"Path '{path}' does not exist");
 
-            return ddb.Meta.Add(key, data, path);
+            return ddb.Meta.Add(key, data, path).ToDto();
         }
 
-        public async Task<Meta> Set(string orgSlug, string dsSlug, string key, string data, string path = null)
+        public async Task<MetaDto> Set(string orgSlug, string dsSlug, string key, string data, string path = null)
         {
             var ds = await _utils.GetDataset(orgSlug, dsSlug);
 
@@ -73,7 +75,7 @@ namespace Registry.Web.Services.Managers
             if (path != null && !await ddb.EntryExistsAsync(path))
                 throw new ArgumentException($"Path '{path}' does not exist");
 
-            return ddb.Meta.Set(key, data, path);
+            return ddb.Meta.Set(key, data, path).ToDto();
         }
 
         public async Task<int> Remove(string orgSlug, string dsSlug, string id)
@@ -134,7 +136,7 @@ namespace Registry.Web.Services.Managers
             
         }
 
-        public async Task<MetaListItem[]> List(string orgSlug, string dsSlug, string path = null)
+        public async Task<IEnumerable<MetaListItemDto>> List(string orgSlug, string dsSlug, string path = null)
         {
             var dataset = await _utils.GetDataset(orgSlug, dsSlug);
 
@@ -145,7 +147,7 @@ namespace Registry.Web.Services.Managers
             if (path != null && !await ddb.EntryExistsAsync(path))
                 throw new ArgumentException($"Path '{path}' does not exist");
 
-            return ddb.Meta.List(path);
+            return ddb.Meta.List(path).Select(item => item.ToDto());
         }
     }
 }

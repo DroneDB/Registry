@@ -1,7 +1,7 @@
 ﻿using System;
 using System.Threading.Tasks;
 
-namespace Registry.Web.Services.Ports
+namespace Registry.Ports
 {
     public interface ICacheManager
     {

@@ -9,8 +9,9 @@ using System.Threading.Tasks;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using Registry.Adapters.DroneDB;
-using Registry.Adapters.DroneDB.Models;
 using Registry.Common;
+using Registry.Ports.DroneDB;
+using Registry.Ports.DroneDB.Models;
 
 namespace Registry.Adapters.DroneDB
 {
@@ -79,7 +80,7 @@ namespace Registry.Adapters.DroneDB
 
         [JsonProperty] public string BuildFolderPath { get; private set; }
 
-        [JsonIgnore] public MetaManager Meta { get; private set; }
+        [JsonIgnore] public IMetaManager Meta { get; private set; }
 
         public long GetSize()
         {

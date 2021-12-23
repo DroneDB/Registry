@@ -11,7 +11,6 @@ using Microsoft.Extensions.Options;
 using MimeMapping;
 using Registry.Adapters;
 using Registry.Common;
-using Registry.Adapters.DroneDB.Models;
 using Registry.Web.Data;
 using Registry.Web.Exceptions;
 using Registry.Web.Models;
@@ -20,6 +19,9 @@ using Registry.Web.Models.DTO;
 using Registry.Web.Services.Ports;
 using Registry.Web.Utilities;
 using Registry.Adapters.DroneDB;
+using Registry.Ports;
+using Registry.Ports.DroneDB;
+using Registry.Ports.DroneDB.Models;
 
 namespace Registry.Web.Services.Managers
 {
@@ -64,7 +66,7 @@ namespace Registry.Web.Services.Managers
             _settings = settings.Value;
         }
 
-        public async Task<IEnumerable<Entry>> List(string orgSlug, string dsSlug, string path = null,
+        public async Task<IEnumerable<EntryDto>> List(string orgSlug, string dsSlug, string path = null,
             bool recursive = false)
         {
             var ds = await _utils.GetDataset(orgSlug, dsSlug);
@@ -75,14 +77,14 @@ namespace Registry.Web.Services.Managers
 
             _logger.LogInformation("Searching in '{Path}'", path);
 
-            var files = (await ddb.SearchAsync(path, recursive)).ToArray();
+            var files = (await ddb.SearchAsync(path, recursive)).Select(item => item.ToDto()).ToArray();
 
             _logger.LogInformation("Found {FilesCount} objects", files.Length);
 
             return files;
         }
 
-        public async Task<IEnumerable<Entry>> Search(string orgSlug, string dsSlug, string query = null,
+        public async Task<IEnumerable<EntryDto>> Search(string orgSlug, string dsSlug, string query = null,
             string path = null, bool recursive = true)
         {
             var ds = await _utils.GetDataset(orgSlug, dsSlug);
@@ -96,7 +98,7 @@ namespace Registry.Web.Services.Managers
             var files = (from entry in await ddb.SearchAsync(path, recursive)
                 let name = Path.GetFileName(entry.Path)
                 where FileSystemName.MatchesSimpleExpression(query, name)
-                select entry).ToArray();
+                select entry.ToDto()).ToArray();
 
             _logger.LogInformation("Found {FilesCount} objects", files.Length);
 
@@ -139,14 +141,14 @@ namespace Registry.Web.Services.Managers
             };
         }
 
-        public async Task<Entry> AddNew(string orgSlug, string dsSlug, string path, byte[] data)
+        public async Task<EntryDto> AddNew(string orgSlug, string dsSlug, string path, byte[] data)
         {
             await using var stream = new MemoryStream(data);
             stream.Reset();
             return await AddNew(orgSlug, dsSlug, path, stream);
         }
 
-        public async Task<Entry> AddNew(string orgSlug, string dsSlug, string path, Stream stream = null)
+        public async Task<EntryDto> AddNew(string orgSlug, string dsSlug, string path, Stream stream = null)
         {
             var ds = await _utils.GetDataset(orgSlug, dsSlug);
 
@@ -173,7 +175,7 @@ namespace Registry.Web.Services.Managers
 
                 _logger.LogInformation("Added to DDB");
 
-                return new Entry
+                return new EntryDto
                 {
                     Path = path,
                     Type = EntryType.Directory,
@@ -214,7 +216,7 @@ namespace Registry.Web.Services.Managers
                 _logger.LogInformation("Background job id is {JobId}", jobId);
             }
 
-            return entry;
+            return entry.ToDto();
         }
 
         public async Task Move(string orgSlug, string dsSlug, string source, string dest)

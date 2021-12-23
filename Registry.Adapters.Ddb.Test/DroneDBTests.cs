@@ -6,8 +6,8 @@ using FluentAssertions;
 using Newtonsoft.Json;
 using NUnit.Framework;
 using Registry.Adapters.DroneDB;
-using Registry.Adapters.DroneDB.Models;
 using Registry.Common;
+using Registry.Ports.DroneDB.Models;
 
 namespace Registry.Adapters.Ddb.Test
 {

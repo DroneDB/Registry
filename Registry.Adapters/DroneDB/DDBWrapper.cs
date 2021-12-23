@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.Runtime.InteropServices;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
-using Registry.Adapters.DroneDB.Models;
+using Registry.Ports.DroneDB.Models;
 
 
 namespace Registry.Adapters.DroneDB

@@ -6,6 +6,8 @@ using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using Registry.Adapters.DroneDB;
 using Registry.Common;
+using Registry.Ports;
+using Registry.Ports.DroneDB;
 using Registry.Web.Services.Managers;
 using Registry.Web.Services.Ports;
 using Registry.Web.Utilities;

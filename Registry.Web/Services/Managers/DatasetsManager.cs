@@ -3,7 +3,8 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
-using Registry.Adapters.DroneDB.Models;
+using Registry.Ports;
+using Registry.Ports.DroneDB.Models;
 using Registry.Web.Data;
 using Registry.Web.Exceptions;
 using Registry.Web.Models.DTO;
@@ -77,13 +78,13 @@ namespace Registry.Web.Services.Managers
             return dataset.ToDto(await ddb.GetInfoAsync());
         }
 
-        public async Task<Entry[]> GetEntry(string orgSlug, string dsSlug)
+        public async Task<EntryDto[]> GetEntry(string orgSlug, string dsSlug)
         {
             var dataset = await _utils.GetDataset(orgSlug, dsSlug);
 
             var ddb = _ddbManager.Get(orgSlug, dataset.InternalRef);
 
-            return new[] { ddb.GetInfo() };
+            return new[] { (await ddb.GetInfoAsync()).ToDto() };
         }
 
         public async Task<DatasetDto> AddNew(string orgSlug, DatasetDto dataset)
@@ -201,11 +202,11 @@ namespace Registry.Web.Services.Managers
 
         }
 
-        public async Task<Stamp> GetStamp(string orgSlug, string dsSlug)
+        public async Task<StampDto> GetStamp(string orgSlug, string dsSlug)
         {
             var ds = await _utils.GetDataset(orgSlug, dsSlug);
             var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
-            return ddb.GetStamp();
+            return ddb.GetStamp().ToDto();
         }
     }
 }

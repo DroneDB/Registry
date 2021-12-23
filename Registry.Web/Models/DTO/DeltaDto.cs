@@ -3,39 +3,59 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
-using Registry.Adapters.DroneDB.Models;
+using Newtonsoft.Json;
+using Registry.Ports.DroneDB.Models;
 
 namespace Registry.Web.Models.DTO
 {
+    
     public class DeltaDto
     {
-
+        [JsonProperty("adds")]
         public AddActionDto[] Adds { get; set; }
 
-        public RemoveActionDto[] Removes { get; set; }
-
+        [JsonProperty("removes")]
+        public RemoveAction[] Removes { get; set; }
     }
-
+    
     public class AddActionDto
     {
-        public string Path { get; set; }
+        [JsonProperty("path")]
+        public string Path { get;  }
 
-        public EntryType Type { get; set; }
+        [JsonProperty("hash")]
+        public string Hash { get;  }
 
-        public override string ToString() =>
-            $"ADD -> [{(Type == EntryType.Directory ? 'D' : 'F')}] {Path}";
+        public AddActionDto(string path, string hash)
+        {
+            Path = path;
+            Hash = hash;
+        }
 
-
+        public override string ToString()
+        {
+            return $"ADD -> [{(string.IsNullOrEmpty(Hash) ? 'D' : 'F')}] {Path}";
+        }
     }
-
+    
     public class RemoveActionDto
     {
-        public string Path { get; set; }
+        [JsonProperty("path")]
+        public string Path { get; }
 
-        public EntryType Type { get; set; }
+        [JsonProperty("hash")]
+        public string Hash { get; }
 
-        public override string ToString() => $"DEL -> [{(Type == EntryType.Directory ? 'D' : 'F')}] {Path}";
-
+        public RemoveActionDto(string path, string hash)
+        {
+            Path = path;
+            Hash = hash;
+        }
+        public override string ToString()
+        {
+            return $"DEL -> [{(string.IsNullOrEmpty(Hash) ? 'D' : 'F')}] {Path}";
+        }
 
     }
+
 }

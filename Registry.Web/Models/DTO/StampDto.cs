@@ -1,10 +1,10 @@
 ﻿using System.Collections.Generic;
 using Newtonsoft.Json;
 
-namespace Registry.Adapters.DroneDB.Models
+namespace Registry.Web.Models.DTO
 {
 
-    public class Stamp
+    public class StampDto
     {
         [JsonProperty("checksum")]
         public string Checksum { get; set; }

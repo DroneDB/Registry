@@ -1,10 +1,10 @@
-﻿using Registry.Adapters.DroneDB.Models;
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
+using Registry.Ports.DroneDB.Models;
 
-namespace Registry.Adapters.DroneDB
+namespace Registry.Ports.DroneDB
 {
     public interface IDDB
     {
@@ -66,7 +66,7 @@ namespace Registry.Adapters.DroneDB
         public string GetTmpFolder(string path);
         bool IsBuildable(string path);
 
-        MetaManager Meta { get; }
+        IMetaManager Meta { get; }
         long GetSize();
         Stamp GetStamp();
 

@@ -1,4 +1,4 @@
-﻿namespace Registry.Web.Services.Ports
+﻿namespace Registry.Ports
 {
     public interface IPasswordHasher
     {

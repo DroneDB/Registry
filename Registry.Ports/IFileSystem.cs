@@ -1,8 +1,7 @@
 ﻿using System.Collections.Generic;
-using System.IO;
 using System.Text;
 
-namespace Registry.Adapters
+namespace Registry.Ports
 {
     public interface IFileSystem
     {

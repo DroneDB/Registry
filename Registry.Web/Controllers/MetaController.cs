@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
-using Registry.Adapters.DroneDB.Models;
+using Registry.Ports.DroneDB.Models;
 using Registry.Web.Models;
 using Registry.Web.Models.DTO;
 using Registry.Web.Services.Ports;

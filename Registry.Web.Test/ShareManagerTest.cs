@@ -18,6 +18,8 @@ using NUnit.Framework;
 using Registry.Adapters;
 using Registry.Adapters.DroneDB;
 using Registry.Common;
+using Registry.Ports;
+using Registry.Ports.DroneDB;
 using Registry.Web.Data;
 using Registry.Web.Data.Models;
 using Registry.Web.Exceptions;
@@ -28,9 +30,9 @@ using Registry.Web.Services.Adapters;
 using Registry.Web.Services.Managers;
 using Registry.Web.Services.Ports;
 using Registry.Web.Test.Adapters;
-using Registry.Adapters.DroneDB.Models;
-
-using Attributes = Registry.Adapters.DroneDB.Models.EntryAttributes;
+using Registry.Ports.DroneDB.Models;
+using Attributes = Registry.Ports.DroneDB.Models.EntryAttributes;
+using Entry = Registry.Ports.DroneDB.Models.Entry;
 
 namespace Registry.Web.Test
 {
@@ -154,14 +156,14 @@ namespace Registry.Web.Test
             };
 
             var ddbMock = new Mock<IDDB>();
-            ddbMock.Setup(x => x.GetInfoAsync(default)).Returns(Task.FromResult(new Registry.Adapters.DroneDB.Models.Entry
+            ddbMock.Setup(x => x.GetInfoAsync(default)).Returns(Task.FromResult(new Entry
             {
                 Properties = attributes
             }));
             var ddbMock2 = new Mock<IDDB>();
             ddbMock2.Setup(x => x.GetAttributesRaw()).Returns(attributes);
             ddbMock.Setup(x => x.GetAttributesAsync(default))
-                .Returns(Task.FromResult(new Registry.Adapters.DroneDB.Models.EntryAttributes(ddbMock2.Object)));
+                .Returns(Task.FromResult(new EntryAttributes(ddbMock2.Object)));
 
             _ddbFactoryMock.Setup(x => x.Get(It.IsAny<string>(), It.IsAny<Guid>())).Returns(ddbMock.Object);
             
@@ -260,7 +262,7 @@ namespace Registry.Web.Test
             };
 
             var ddbMock = new Mock<IDDB>();
-            ddbMock.Setup(x => x.GetInfoAsync(default)).Returns(Task.FromResult(new Registry.Adapters.DroneDB.Models.Entry
+            ddbMock.Setup(x => x.GetInfoAsync(default)).Returns(Task.FromResult(new Entry
             {
                 Properties = attributes
             }));
@@ -401,7 +403,7 @@ namespace Registry.Web.Test
             };
 
             var ddbMock = new Mock<IDDB>();
-            ddbMock.Setup(x => x.GetInfoAsync(default)).Returns(Task.FromResult(new Registry.Adapters.DroneDB.Models.Entry
+            ddbMock.Setup(x => x.GetInfoAsync(default)).Returns(Task.FromResult(new Entry
             {
                 Properties = attributes
             }));

@@ -5,6 +5,7 @@ using System.Runtime.Caching;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Options;
 using Registry.Common;
+using Registry.Ports;
 using Registry.Web.Models.Configuration;
 using Registry.Web.Services.Ports;
 

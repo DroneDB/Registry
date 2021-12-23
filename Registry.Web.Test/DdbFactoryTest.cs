@@ -10,7 +10,7 @@ using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using NUnit.Framework;
 using Registry.Common;
-using Registry.Adapters.DroneDB.Models;
+using Registry.Ports.DroneDB.Models;
 using Registry.Web.Models.Configuration;
 using Registry.Web.Services.Managers;
 

@@ -46,6 +46,7 @@ using Registry.Web.Services.Managers;
 using Registry.Web.Services.Ports;
 using Registry.Web.Utilities;
 using Registry.Adapters.DroneDB;
+using Registry.Ports;
 
 namespace Registry.Web
 {

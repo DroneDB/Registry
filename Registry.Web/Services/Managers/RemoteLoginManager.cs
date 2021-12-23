@@ -29,7 +29,7 @@ namespace Registry.Web.Services.Managers
             _settings = settings.Value;
         }
 
-        public async Task<LoginResult> CheckAccess(string token)
+        public async Task<LoginResultDto> CheckAccess(string token)
         {
 
             var client = new HttpClient();
@@ -44,7 +44,7 @@ namespace Registry.Web.Services.Managers
                 var res = await client.PostAsync(_settings.ExternalAuthUrl, content);
 
                 if (!res.IsSuccessStatusCode)
-                    return new LoginResult
+                    return new LoginResultDto
                     {
                         Success = false
                     };
@@ -55,7 +55,7 @@ namespace Registry.Web.Services.Managers
 
                 _logger.LogInformation(result);
 
-                return new LoginResult
+                return new LoginResultDto
                 {
                     Success = true,
                     UserName = obj?.SafeGetValue("username") as string,
@@ -65,7 +65,7 @@ namespace Registry.Web.Services.Managers
             catch (WebException ex)
             {
                 _logger.LogError(ex, "Exception in calling CanSignInAsync");
-                return new LoginResult
+                return new LoginResultDto
                 {
                     Success = false,
                 };
@@ -74,7 +74,7 @@ namespace Registry.Web.Services.Managers
 
 
         // This is basically a stub
-        public async Task<LoginResult> CheckAccess(string userName, string password)
+        public async Task<LoginResultDto> CheckAccess(string userName, string password)
         {
 
             var client = new HttpClient();
@@ -90,7 +90,7 @@ namespace Registry.Web.Services.Managers
                 var res = await client.PostAsync(_settings.ExternalAuthUrl, content);
 
                 if (!res.IsSuccessStatusCode)
-                    return new LoginResult
+                    return new LoginResultDto
                     {
                         UserName = userName,
                         Success = false
@@ -102,7 +102,7 @@ namespace Registry.Web.Services.Managers
                
                 _logger.LogInformation(result);
 
-                return new LoginResult
+                return new LoginResultDto
                 {
                     Success = true,
                     UserName = obj?.SafeGetValue("username") as string ?? userName,
@@ -112,7 +112,7 @@ namespace Registry.Web.Services.Managers
             catch (WebException ex)
             {
                 _logger.LogError(ex, "Exception in calling CanSignInAsync");
-                return new LoginResult
+                return new LoginResultDto
                 {
                     Success = false,
                     UserName = userName

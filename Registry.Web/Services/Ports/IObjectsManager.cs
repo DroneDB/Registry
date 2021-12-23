@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
-using Registry.Adapters.DroneDB.Models;
 using Registry.Web.Models;
 using Registry.Web.Models.DTO;
 
@@ -11,14 +10,14 @@ namespace Registry.Web.Services.Ports
 {
     public interface IObjectsManager
     {
-        Task<IEnumerable<Entry>> List(string orgSlug, string dsSlug, string path = null, bool recursive = false);
+        Task<IEnumerable<EntryDto>> List(string orgSlug, string dsSlug, string path = null, bool recursive = false);
 
-        Task<IEnumerable<Entry>> Search(string orgSlug, string dsSlug, string query = null, string path = null,
+        Task<IEnumerable<EntryDto>> Search(string orgSlug, string dsSlug, string query = null, string path = null,
             bool recursive = true);
 
         Task<StorageEntryDto> Get(string orgSlug, string dsSlug, string path);
-        Task<Entry> AddNew(string orgSlug, string dsSlug, string path, byte[] data);
-        Task<Entry> AddNew(string orgSlug, string dsSlug, string path, Stream stream = null);
+        Task<EntryDto> AddNew(string orgSlug, string dsSlug, string path, byte[] data);
+        Task<EntryDto> AddNew(string orgSlug, string dsSlug, string path, Stream stream = null);
         Task Move(string orgSlug, string dsSlug, string source, string dest);
         Task Delete(string orgSlug, string dsSlug, string path);
         Task DeleteAll(string orgSlug, string dsSlug);

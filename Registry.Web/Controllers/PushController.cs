@@ -6,8 +6,8 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
 using Newtonsoft.Json;
-using Registry.Adapters.DroneDB.Models;
 using Registry.Web.Models;
+using Registry.Web.Models.DTO;
 using Registry.Web.Services.Ports;
 using Registry.Web.Utilities;
 
@@ -35,10 +35,10 @@ namespace Registry.Web.Controllers
         {
             try
             {
-                _logger.LogDebug($"Push controller Init('{orgSlug}', '{dsSlug}', '{checksum}', '{stampJson}')");
+                _logger.LogDebug("Push controller Init('{OrgSlug}', '{DsSlug}', '{Checksum}', '{StampJson}')", orgSlug, dsSlug, checksum, stampJson);
 
                 // Stamp JSON parse: TODO
-                var stamp = JsonConvert.DeserializeObject<Stamp>(stampJson);
+                var stamp = JsonConvert.DeserializeObject<StampDto>(stampJson);
 
                 var res = await _pushManager.Init(orgSlug, dsSlug, checksum, stamp);
 
@@ -46,7 +46,7 @@ namespace Registry.Web.Controllers
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, $"Exception in Push controller Init('{orgSlug}', '{dsSlug}', '{checksum}', '{stampJson}')");
+                _logger.LogError(ex, "Exception in Push controller Init('{OrgSlug}', '{DsSlug}', '{Checksum}', '{StampJson}')", orgSlug, dsSlug, checksum, stampJson);
 
                 return ExceptionResult(ex);
             }
@@ -61,7 +61,7 @@ namespace Registry.Web.Controllers
         {
             try
             {
-                _logger.LogDebug($"Push controller Upload('{orgSlug}', '{dsSlug}', '{token}', '{file?.FileName}')");
+                _logger.LogDebug("Push controller Upload('{OrgSlug}', '{DsSlug}', '{Token}', '{FileName}')", orgSlug, dsSlug, token, file?.FileName);
 
                 if (file == null)
                     throw new ArgumentException("No file uploaded");
@@ -73,7 +73,7 @@ namespace Registry.Web.Controllers
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, $"Exception in Push controller Upload('{orgSlug}', '{dsSlug}', '{token}', '{file?.FileName}')");
+                _logger.LogError(ex, "Exception in Push controller Upload('{OrgSlug}', '{DsSlug}', '{Token}', '{FileName}')", orgSlug, dsSlug, token, file?.FileName);
 
                 return ExceptionResult(ex);
             }
@@ -84,7 +84,7 @@ namespace Registry.Web.Controllers
         {
             try
             {
-                _logger.LogDebug($"Push controller Commit('{orgSlug}', '{dsSlug}', '{token}')");
+                _logger.LogDebug("Push controller Commit('{OrgSlug}', '{DsSlug}', '{Token}')", orgSlug, dsSlug, token);
 
                 await _pushManager.Commit(orgSlug, dsSlug, token);
 
@@ -92,7 +92,7 @@ namespace Registry.Web.Controllers
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, $"Exception in Push controller Commit('{orgSlug}', '{dsSlug}', '{token}')");
+                _logger.LogError(ex, "Exception in Push controller Commit('{OrgSlug}', '{DsSlug}', '{Token}')", orgSlug, dsSlug, token);
 
                 return ExceptionResult(ex);
             }

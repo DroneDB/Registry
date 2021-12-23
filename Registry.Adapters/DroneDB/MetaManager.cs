@@ -2,11 +2,12 @@
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using Registry.Adapters.DroneDB;
-using Registry.Adapters.DroneDB.Models;
+using Registry.Ports.DroneDB;
+using Registry.Ports.DroneDB.Models;
 
 namespace Registry.Adapters.DroneDB
 {
-    public class MetaManager
+    public class MetaManager : IMetaManager
     {
         private readonly IDDB _ddb;
         

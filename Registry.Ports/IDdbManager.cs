@@ -1,10 +1,7 @@
-﻿using Registry.Adapters.DroneDB;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Threading.Tasks;
+﻿using System;
+using Registry.Ports.DroneDB;
 
-namespace Registry.Web.Services.Ports
+namespace Registry.Ports
 {
     /// <summary>
     /// Creates new instances of DDB

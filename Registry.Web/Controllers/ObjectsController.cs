@@ -5,7 +5,7 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
 using MimeMapping;
-using Registry.Adapters.DroneDB.Models;
+using Registry.Ports.DroneDB.Models;
 using Registry.Web.Models;
 using Registry.Web.Models.DTO;
 using Registry.Web.Services.Ports;
@@ -285,7 +285,7 @@ namespace Registry.Web.Controllers
             {
                 _logger.LogDebug("Objects controller Post('{OrgSlug}', '{DsSlug}', '{Path}', '{file?.FileName}')", orgSlug, dsSlug, path, file?.FileName);
 
-                Entry newObj;
+                EntryDto newObj;
 
                 if (file == null)
                 {

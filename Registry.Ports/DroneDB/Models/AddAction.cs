@@ -1,13 +1,8 @@
-﻿using Newtonsoft.Json;
-
-namespace Registry.Adapters.DroneDB.Models
+﻿namespace Registry.Ports.DroneDB.Models
 {
     public class AddAction
     {
-        [JsonProperty("path")]
         public string Path { get;  }
-
-        [JsonProperty("hash")]
         public string Hash { get;  }
 
         public AddAction(string path, string hash)

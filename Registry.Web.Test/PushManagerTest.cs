@@ -17,7 +17,6 @@ using Newtonsoft.Json;
 using NUnit.Framework;
 using Registry.Adapters.DroneDB;
 using Registry.Common;
-using Registry.Adapters.DroneDB.Models;
 using Registry.Web.Data;
 using Registry.Web.Data.Models;
 using Registry.Web.Exceptions;

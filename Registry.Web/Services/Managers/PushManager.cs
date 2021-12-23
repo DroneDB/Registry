@@ -6,8 +6,9 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Newtonsoft.Json;
 using Registry.Adapters.DroneDB;
-using Registry.Adapters.DroneDB.Models;
 using Registry.Common;
+using Registry.Ports;
+using Registry.Ports.DroneDB.Models;
 using Registry.Web.Exceptions;
 using Registry.Web.Models.Configuration;
 using Registry.Web.Models.DTO;
@@ -48,7 +49,7 @@ namespace Registry.Web.Services.Managers
             _settings = settings.Value;
         }
 
-        public async Task<PushInitResultDto> Init(string orgSlug, string dsSlug, string checksum, Stamp stamp)
+        public async Task<PushInitResultDto> Init(string orgSlug, string dsSlug, string checksum, StampDto stamp)
         {
             var ds = await _utils.GetDataset(orgSlug, dsSlug, true);
 
@@ -90,10 +91,14 @@ namespace Registry.Web.Services.Managers
                 }
             }
 
-            if (ourStamp == null) ourStamp = DDBWrapper.GetStamp(ddb.DatasetFolderPath);
+            ourStamp ??= DDBWrapper.GetStamp(ddb.DatasetFolderPath);
 
             // Perform delta with our ddb
-            var delta = DDBWrapper.Delta(stamp, ourStamp);
+            var delta = DDBWrapper.Delta(new Stamp
+            {
+                Checksum = stamp.Checksum, 
+                Entries = stamp.Entries
+            }, ourStamp);
 
             // Generate UUID
             var uuid = Guid.NewGuid().ToString();
@@ -181,8 +186,11 @@ namespace Registry.Web.Services.Managers
             if (!File.Exists(ourStampFilePath))
                 throw new InvalidOperationException("Our stamp not found");
 
-            Stamp stamp = JsonConvert.DeserializeObject<Stamp>(await File.ReadAllTextAsync(stampFilePath));
-            Stamp ourStamp = JsonConvert.DeserializeObject<Stamp>(await File.ReadAllTextAsync(ourStampFilePath));
+            var stamp = JsonConvert.DeserializeObject<Stamp>(await File.ReadAllTextAsync(stampFilePath));
+            var ourStamp = JsonConvert.DeserializeObject<Stamp>(await File.ReadAllTextAsync(ourStampFilePath));
+
+            if (ourStamp == null)
+                throw new InvalidOperationException("Our stamp is invalid (cannot deserialize)");
 
             // Check that our stamp has not changed! If it has, another client
             // might have performed changes that could conflict with our operation

@@ -15,7 +15,6 @@ using Newtonsoft.Json;
 using NUnit.Framework;
 using Registry.Adapters;
 using Registry.Common;
-using Registry.Adapters.DroneDB.Models;
 using Registry.Web.Data;
 using Registry.Web.Data.Models;
 using Registry.Web.Exceptions;
@@ -26,6 +25,9 @@ using Registry.Web.Services.Ports;
 using Registry.Web.Test.Adapters;
 using Registry.Web.Utilities;
 using Registry.Adapters.DroneDB;
+using Registry.Ports;
+using Registry.Ports.DroneDB;
+using Registry.Ports.DroneDB.Models;
 
 namespace Registry.Web.Test
 {

@@ -1,6 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
-using Registry.Adapters.DroneDB.Models;
+using Registry.Ports.DroneDB.Models;
 using Registry.Web.Data.Models;
 
 namespace Registry.Web.Models.DTO

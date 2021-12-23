@@ -3,6 +3,8 @@ using System.IO;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Registry.Adapters.DroneDB;
+using Registry.Ports;
+using Registry.Ports.DroneDB;
 using Registry.Web.Models.Configuration;
 using Registry.Web.Services.Ports;
 
