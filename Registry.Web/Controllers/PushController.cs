@@ -37,7 +37,6 @@ namespace Registry.Web.Controllers
             {
                 _logger.LogDebug("Push controller Init('{OrgSlug}', '{DsSlug}', '{Checksum}', '{StampJson}')", orgSlug, dsSlug, checksum, stampJson);
 
-                // Stamp JSON parse: TODO
                 var stamp = JsonConvert.DeserializeObject<StampDto>(stampJson);
 
                 var res = await _pushManager.Init(orgSlug, dsSlug, checksum, stamp);

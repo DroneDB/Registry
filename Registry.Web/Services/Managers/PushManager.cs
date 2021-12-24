@@ -19,8 +19,6 @@ namespace Registry.Web.Services.Managers
 {
     public class PushManager : IPushManager
     {
-        private const string PushFolderName = "push";
-        private const string DdbTempFolder = "ddb";
         private const string AddsTempFolder = "add";
         private const string StampFileName = "stamp.json";
         private const string OurStampFileName = "our_stamp.json";
@@ -222,70 +220,15 @@ namespace Registry.Web.Services.Managers
             // Delete temp folder
             Directory.Delete(baseTempFolder, true);
 
-            // TODO: should this be delegated to ddb?
-            
-            /*
+            // Build items
             foreach (var item in delta.Adds)
             {
-                var tempFileName = Path.Combine(addTempFolder, item.Path);
-
                 if (await ddb.IsBuildableAsync(item.Path))
                 {
-                    var jobId = _backgroundJob.Enqueue(() =>
-                        HangfireUtils.BuildWrapper(ddb, item.Path, tempFileName, null, true, null));
-                    
-                    var deleteId = _backgroundJob.ContinueJobWith(jobId, () =>
-                        HangfireUtils.SafeDelete(tempFileName, null));
-
-                    var entry = await ddb.GetEntryAsync(item.Path);
-
-                    // Put it on storage
-                    var syncId = _backgroundJob.ContinueJobWith(deleteId, () => HangfireUtils.SyncBuildFolder(_objectSystem, ddb, entry, bucketName, null));
-                    var buildFolder = Path.Combine(ddb.BuildFolderPath, entry.Hash);
-                    _backgroundJob.ContinueJobWith(syncId,
-                        () => HangfireUtils.SafeDelete(buildFolder, null));
-
-                }
-                else
-                {
-                    if (!CommonUtils.SafeDelete(tempFileName))
-                        _logger.LogWarning($"Cannot delete '{tempFileName}'");
-                }
-            }*/
-        }
-
-        public async Task Clean(string orgSlug, string dsSlug)
-        {
-            await _utils.GetDataset(orgSlug, dsSlug);
-
-            var baseTempFolder = Path.Combine(Path.GetTempPath(), PushFolderName, orgSlug, dsSlug);
-
-            _logger.LogInformation($"Cleaning '{baseTempFolder}'");
-
-            if (Directory.Exists(baseTempFolder))
-            {
-                try
-                {
-                    Directory.Delete(baseTempFolder, true);
-                    _logger.LogInformation("Done");
-                }
-                catch (Exception ex)
-                {
-                    _logger.LogError(ex, "Cannot cleanup, trying with safe delete");
-
-                    CommonUtils.SafeTreeDelete(baseTempFolder);
+                    _backgroundJob.Enqueue(() =>
+                        HangfireUtils.BuildWrapper(ddb, item.Path, false, null));
                 }
             }
-            else
-            {
-                _logger.LogInformation("Nothing to clean");
-            }
-        }
-
-        private static void EnsureParentFolderExists(string folder)
-        {
-            var tempFolder = Path.GetDirectoryName(folder);
-            if (tempFolder != null) Directory.CreateDirectory(tempFolder);
         }
     }
 }

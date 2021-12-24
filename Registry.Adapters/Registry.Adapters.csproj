@@ -5,16 +5,18 @@
     </PropertyGroup>
 
     <ItemGroup>
+      <Compile Remove="DroneDB\Models\**" />
+      <EmbeddedResource Remove="DroneDB\Models\**" />
+      <None Remove="DroneDB\Models\**" />
+    </ItemGroup>
+
+    <ItemGroup>
       <PackageReference Include="Newtonsoft.Json" Version="13.0.1" />
     </ItemGroup>
 
     <ItemGroup>
       <ProjectReference Include="..\Registry.Common\Registry.Common.csproj" />
       <ProjectReference Include="..\Registry.Ports\Registry.Ports.csproj" />
-    </ItemGroup>
-
-    <ItemGroup>
-      <Folder Include="DroneDB\Models" />
     </ItemGroup>
 
 </Project>
