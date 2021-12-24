@@ -84,7 +84,11 @@ namespace Registry.Web.Services.Managers
 
             var ddb = _ddbManager.Get(orgSlug, dataset.InternalRef);
 
-            return new[] { (await ddb.GetInfoAsync()).ToDto() };
+            var info = await ddb.GetInfoAsync();
+            info.Depth = 0;
+            info.Path = _utils.GenerateDatasetUrl(dataset);
+
+            return new[] { info.ToDto() };
         }
 
         public async Task<DatasetDto> AddNew(string orgSlug, DatasetDto dataset)

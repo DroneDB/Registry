@@ -1,9 +1,13 @@
-﻿namespace Registry.Ports.DroneDB.Models
+﻿using Newtonsoft.Json;
+
+namespace Registry.Ports.DroneDB.Models
 {
     public class RemoveAction
     {
+        [JsonProperty("path")]
         public string Path { get; }
 
+        [JsonProperty("hash")]
         public string Hash { get; }
 
         public RemoveAction(string path, string hash)
