@@ -12,6 +12,9 @@ namespace Registry.Web.Models.DTO
         [JsonProperty("entries")]
         public List<Dictionary<string,string>> Entries { get; set; }
 
+        [JsonProperty("meta")]
+        public List<string> Meta { get; set; }
+
     }
 
 }

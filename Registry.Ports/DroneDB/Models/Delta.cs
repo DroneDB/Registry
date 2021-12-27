@@ -9,5 +9,13 @@ namespace Registry.Ports.DroneDB.Models
 
         [JsonProperty("removes")]
         public RemoveAction[] Removes { get; set; }
+
+        [JsonProperty("metaAdds")]
+        public string[] MetaAdds { get; set; }
+        
+        [JsonProperty("metaRemoves")]
+        public string[] MetaRemoves { get; set; }
+
+
     }
 }

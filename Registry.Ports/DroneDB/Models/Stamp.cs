@@ -10,7 +10,12 @@ namespace Registry.Ports.DroneDB.Models
         public string Checksum { get; set; }
 
         [JsonProperty("entries")]
-        public List<Dictionary<string,string>> Entries { get; set; }
+        public List<Dictionary<string, string>> Entries { get; set; }
+
+        [JsonProperty("meta")]
+        public List<string> Meta { get; set; }
+
+
 
     }
 

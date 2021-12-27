@@ -13,5 +13,6 @@ namespace Registry.Web.Services.Ports
         public Task<JToken> Get(string orgSlug, string dsSlug, string key, string path = null);
         public Task<int> Unset(string orgSlug, string dsSlug, string key, string path = null);
         public Task<IEnumerable<MetaListItemDto>> List(string orgSlug, string dsSlug, string path = null);
+        public Task<IEnumerable<MetaDumpDto>> Dump(string orgSlug, string dsSlug, string ids = null);
     }
 }

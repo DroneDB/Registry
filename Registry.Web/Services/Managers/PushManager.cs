@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
@@ -22,6 +23,7 @@ namespace Registry.Web.Services.Managers
         private const string AddsTempFolder = "add";
         private const string StampFileName = "stamp.json";
         private const string OurStampFileName = "our_stamp.json";
+        private const string MetaFile = "meta.json";
 
         private readonly IUtils _utils;
         private readonly IDdbManager _ddbManager;
@@ -95,7 +97,8 @@ namespace Registry.Web.Services.Managers
             var delta = DDBWrapper.Delta(new Stamp
             {
                 Checksum = stamp.Checksum, 
-                Entries = stamp.Entries
+                Entries = stamp.Entries,
+                Meta = stamp.Meta
             }, ourStamp);
 
             // Generate UUID
@@ -118,6 +121,7 @@ namespace Registry.Web.Services.Managers
                     .Where(item => item.Hash.Length > 0)
                     .Select(item => item.Path)
                     .ToArray(),
+                NeededMeta = delta.MetaAdds.ToArray(),
                 PullRequired = false
             };
         }
@@ -163,6 +167,31 @@ namespace Registry.Web.Services.Managers
             await stream.CopyToAsync(file);
         }
 
+        public async Task SaveMeta(string orgSlug, string dsSlug, string token, string meta)
+        {
+            var ds = await _utils.GetDataset(orgSlug, dsSlug);
+
+            if (!await _authManager.IsOwnerOrAdmin(ds))
+                throw new UnauthorizedException("The current user is not allowed to upload to this dataset");
+
+            // Check if user has enough space to upload this
+            await _utils.CheckCurrentUserStorage(meta.Length);
+
+            var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
+
+            var baseTempFolder = ddb.GetTmpFolder("push-" + token);
+
+            if (!Directory.Exists(baseTempFolder))
+                throw new InvalidOperationException("Cannot save meta before initializing push");
+
+            var metaFile = Path.Combine(baseTempFolder, MetaFile);
+
+            // Validate
+            JsonConvert.DeserializeObject<List<MetaDump>>(meta);
+
+            // Save file
+            await File.WriteAllTextAsync(metaFile, meta);
+        }
         public async Task Commit(string orgSlug, string dsSlug, string token)
         {
             var ds = await _utils.GetDataset(orgSlug, dsSlug);
@@ -176,6 +205,7 @@ namespace Registry.Web.Services.Managers
             var stampFilePath = Path.Combine(baseTempFolder, StampFileName);
             var ourStampFilePath = Path.Combine(baseTempFolder, OurStampFileName);
             var addTempFolder = Path.Combine(baseTempFolder, AddsTempFolder);
+            var metaFile = Path.Combine(baseTempFolder, MetaFile);
 
             // Check push folder integrity
             if (!File.Exists(stampFilePath))
@@ -208,8 +238,15 @@ namespace Registry.Web.Services.Managers
                 if (!File.Exists(Path.Combine(addTempFolder, add.Path)))
                     throw new InvalidOperationException($"Cannot commit: missing '{add.Path}'");
 
+            // Read meta dump
+            string metaDump = null;
+            if (File.Exists(metaFile))
+            {
+                metaDump = File.ReadAllText(metaFile);
+            }
+
             // Applies delta 
-            var conflicts = DDBWrapper.ApplyDelta(delta, addTempFolder, ddb.DatasetFolderPath, MergeStrategy.KeepTheirs);
+            var conflicts = DDBWrapper.ApplyDelta(delta, addTempFolder, ddb.DatasetFolderPath, MergeStrategy.KeepTheirs, metaDump);
 
             if (conflicts.Count > 0)
             {

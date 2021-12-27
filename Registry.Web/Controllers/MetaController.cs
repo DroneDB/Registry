@@ -242,5 +242,25 @@ namespace Registry.Web.Controllers
                 return ExceptionResult(ex);
             }
         }
+
+        [HttpPost("dump", Name = nameof(MetaController) + "." + nameof(Dump))]
+        [ProducesResponseType(typeof(IEnumerable<MetaDump>), 200)]
+        public async Task<IActionResult> Dump([FromRoute] string orgSlug, [FromRoute] string dsSlug,
+            [FromForm] string ids = null)
+        {
+            try
+            {
+                _logger.LogDebug("Meta Controller Dump('{OrgSlug}', '{DsSlug}', '{Ids}')", orgSlug, dsSlug, ids);
+
+                var res = await _metaManager.Dump(orgSlug, dsSlug, ids);
+
+                return Ok(res);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Exception in Meta controller Dump('{OrgSlug}', '{DsSlug}', '{Ids}')", orgSlug, dsSlug, ids);
+                return ExceptionResult(ex);
+            }
+        }
     }
 }

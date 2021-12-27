@@ -10,5 +10,7 @@ namespace Registry.Ports.DroneDB
         string Get(string key, string path = null);
         int Unset(string key, string path = null);
         MetaListItem[] List(string path = null);
+        MetaDump[] Dump(string ids = null);
+
     }
 }

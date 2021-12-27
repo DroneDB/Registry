@@ -78,6 +78,31 @@ namespace Registry.Web.Controllers
             }
         }
 
+
+        [DisableRequestSizeLimit]
+        [RequestFormLimits(ValueLengthLimit = int.MaxValue, MultipartBodyLengthLimit = long.MaxValue)]
+        [HttpPost("meta")]
+        public async Task<IActionResult> Meta([FromRoute] string orgSlug, [FromRoute] string dsSlug, [FromForm] string token, [FromForm] string meta)
+        {
+            try
+            {
+                _logger.LogDebug("Push controller Meta('{OrgSlug}', '{DsSlug}', '{Token}', '{Meta}')", orgSlug, dsSlug, token, meta);
+
+                if (meta == null)
+                    throw new ArgumentException("No meta JSON in form");
+                
+                await _pushManager.SaveMeta(orgSlug, dsSlug, token, meta);
+
+                return Ok();
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Exception in Push controller Meta('{OrgSlug}', '{DsSlug}', '{Token}', '{Meta}')", orgSlug, dsSlug, token, meta);
+
+                return ExceptionResult(ex);
+            }
+        }
+
         [HttpPost("commit")]
         public async Task<IActionResult> Commit([FromRoute] string orgSlug, [FromRoute] string dsSlug, [FromForm] string token)
         {

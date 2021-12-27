@@ -16,6 +16,11 @@ namespace Registry.Web.Models.DTO
 
         [JsonProperty("removes")]
         public RemoveAction[] Removes { get; set; }
+
+        public string[] MetaAdds { get; set; }
+
+        [JsonProperty("metaRemoves")]
+        public string[] MetaRemoves { get; set; }
     }
     
     public class AddActionDto

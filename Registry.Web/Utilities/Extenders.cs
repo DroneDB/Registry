@@ -67,7 +67,8 @@ namespace Registry.Web.Utilities
             return new StampDto
             {
                 Checksum = stamp.Checksum,
-                Entries = stamp.Entries
+                Entries = stamp.Entries,
+                Meta = stamp.Meta
             };
         }
 
@@ -94,7 +95,21 @@ namespace Registry.Web.Utilities
                 Path = listItem.Path
             };
         }
-        
+
+        public static MetaDumpDto ToDto(this MetaDump md)
+        {
+            if (md == null) return null;
+
+            return new MetaDumpDto
+            {
+                Id = md.Id,
+                Path = md.Path,
+                Key = md.Key,
+                Data = md.Data,
+                ModifiedTime = md.ModifiedTime
+            };
+        }
+
         public static EntryDto ToDto(this Entry entry)
         {
             if (entry == null) return null;

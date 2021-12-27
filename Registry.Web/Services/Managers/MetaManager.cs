@@ -149,5 +149,13 @@ namespace Registry.Web.Services.Managers
 
             return ddb.Meta.List(path).Select(item => item.ToDto());
         }
+
+        public async Task<IEnumerable<MetaDumpDto>> Dump(string orgSlug, string dsSlug, string ids = null)
+        {
+            var dataset = await _utils.GetDataset(orgSlug, dsSlug);
+            var ddb = _ddbManager.Get(orgSlug, dataset.InternalRef);
+
+            return ddb.Meta.Dump(ids).Select(item => item.ToDto());
+        }
     }
 }

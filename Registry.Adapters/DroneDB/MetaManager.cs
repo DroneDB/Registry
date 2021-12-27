@@ -1,4 +1,5 @@
-﻿using System.Linq;
+﻿using System.Collections.Generic;
+using System.Linq;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using Registry.Adapters.DroneDB;
@@ -62,6 +63,11 @@ namespace Registry.Adapters.DroneDB
         public MetaListItem[] List(string path = null)
         {
             return DDBWrapper.MetaList(_ddb.DatasetFolderPath, path).ToArray();
+        }
+
+        public MetaDump[] Dump(string ids = null)
+        {
+            return DDBWrapper.MetaDump(_ddb.DatasetFolderPath, ids).ToArray();
         }
     }
 }
