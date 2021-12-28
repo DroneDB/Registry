@@ -588,6 +588,7 @@ namespace Registry.Adapters.DroneDB
         }
 
 
+
         public static Delta Delta(Stamp source, Stamp target)
         {
             try
@@ -618,6 +619,41 @@ namespace Registry.Adapters.DroneDB
             }
 
         }
+
+
+        [DllImport("ddb", EntryPoint = "DDBComputeDeltaLocals")]
+        private static extern DDBError _ComputeDeltaLocals([MarshalAs(UnmanagedType.LPStr)] string delta,
+    [MarshalAs(UnmanagedType.LPStr)] string ddbPath, [MarshalAs(UnmanagedType.LPStr)] string hlDestFolder,
+    out IntPtr output);
+
+        public static Dictionary<string, bool> ComputeDeltaLocals(Delta delta, string ddbPath, string hlDestFolder = "")
+        {
+            try
+            {
+                string deltaJson = JsonConvert.SerializeObject(delta);
+
+                if (_ComputeDeltaLocals(deltaJson, ddbPath, hlDestFolder, out var outputPtr) !=
+                    DDBError.DDBERR_NONE) throw new DDBException(GetLastError());
+
+                var output = Marshal.PtrToStringAnsi(outputPtr);
+
+                if (string.IsNullOrWhiteSpace(output))
+                    throw new DDBException("Unable get ComputeDeltaLocals result");
+
+                return JsonConvert.DeserializeObject<Dictionary<string, bool>>(output);
+            }
+            catch (EntryPointNotFoundException ex)
+            {
+                throw new DDBException($"Error in calling ddb lib: incompatible versions ({ex.Message})", ex);
+            }
+            catch (Exception ex)
+            {
+                throw new DDBException(
+                    $"Error in calling ddb lib. Last error: \"{GetLastError()}\", check inner exception for details",
+                    ex);
+            }
+        }
+
 
         [DllImport("ddb", EntryPoint = "DDBMoveEntry")]
         private static extern DDBError _MoveEntry([MarshalAs(UnmanagedType.LPStr)] string ddbSource,

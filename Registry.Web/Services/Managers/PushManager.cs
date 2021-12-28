@@ -101,6 +101,9 @@ namespace Registry.Web.Services.Managers
                 Meta = stamp.Meta
             }, ourStamp);
 
+            // Compute locals
+            var locals = DDBWrapper.ComputeDeltaLocals(delta, ddb.DatasetFolderPath);
+
             // Generate UUID
             var uuid = Guid.NewGuid().ToString();
 
@@ -118,7 +121,7 @@ namespace Registry.Web.Services.Managers
             {
                 Token = uuid,
                 NeededFiles = delta.Adds
-                    .Where(item => item.Hash.Length > 0)
+                    .Where(item => item.Hash.Length > 0 && !locals.ContainsKey(item.Hash))
                     .Select(item => item.Path)
                     .ToArray(),
                 NeededMeta = delta.MetaAdds.ToArray(),
@@ -233,6 +236,9 @@ namespace Registry.Web.Services.Managers
 
             // Recompute delta
             var delta = DDBWrapper.Delta(stamp, currentStamp);
+
+            // Create hard links for local files
+            var _ = DDBWrapper.ComputeDeltaLocals(delta, ddb.DatasetFolderPath, addTempFolder);
 
             foreach (var add in delta.Adds.Where(item => item.Hash.Length > 0))
                 if (!File.Exists(Path.Combine(addTempFolder, add.Path)))
