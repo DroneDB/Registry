@@ -1,7 +1,8 @@
 ﻿using Newtonsoft.Json;
 
-namespace Registry.Adapters.Ddb.Model
+namespace Registry.Ports.DroneDB.Models
 {
+    // Let's copy AddActionDto for no reason
     public class AddAction
     {
         [JsonProperty("path")]

@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Runtime.Caching;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
@@ -10,11 +11,11 @@ using System.Threading.Tasks;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Identity;
 using Newtonsoft.Json;
-using Registry.Adapters.Ddb.Model;
 using Registry.Ports.DroneDB.Models;
 using Registry.Web.Data.Models;
 using Registry.Web.Models;
 using Registry.Web.Models.DTO;
+using Entry = Registry.Ports.DroneDB.Models.Entry;
 
 namespace Registry.Web.Utilities
 {
@@ -59,9 +60,77 @@ namespace Registry.Web.Utilities
             return entity;
         }
 
-        public static DatasetDto ToDto(this Dataset dataset, DdbEntry entry)
+        public static StampDto ToDto(this Stamp stamp)
         {
-            var attributes = new DdbProperties(entry.Properties);
+            if (stamp == null) return null;
+
+            return new StampDto
+            {
+                Checksum = stamp.Checksum,
+                Entries = stamp.Entries,
+                Meta = stamp.Meta
+            };
+        }
+
+        public static MetaDto ToDto(this Meta meta)
+        {
+            if (meta == null) return null;
+
+            return new MetaDto
+            {
+                Data = meta.Data,
+                Id = meta.Id,
+                ModifiedTime = meta.ModifiedTime
+            };
+        }
+
+        public static MetaListItemDto ToDto(this MetaListItem listItem)
+        {
+            if (listItem == null) return null;
+
+            return new MetaListItemDto
+            {
+                Count = listItem.Count,
+                Key = listItem.Key,
+                Path = listItem.Path
+            };
+        }
+
+        public static MetaDumpDto ToDto(this MetaDump md)
+        {
+            if (md == null) return null;
+
+            return new MetaDumpDto
+            {
+                Id = md.Id,
+                Path = md.Path,
+                Key = md.Key,
+                Data = md.Data,
+                ModifiedTime = md.ModifiedTime
+            };
+        }
+
+        public static EntryDto ToDto(this Entry entry)
+        {
+            if (entry == null) return null;
+            
+            return new EntryDto
+            {
+                Depth = entry.Depth,
+                Path = entry.Path,
+                Hash = entry.Hash,
+                Properties = entry.Properties,
+                Size = entry.Size,
+                Type = entry.Type,
+                ModifiedTime = entry.ModifiedTime,
+                PointGeometry = entry.PointGeometry,
+                PolygonGeometry = entry.PolygonGeometry
+            };
+        }
+        
+        public static DatasetDto ToDto(this Dataset dataset, Entry entry)
+        {
+            var attributes = new EntryProperties(entry.Properties);
 
             return new()
             {
@@ -74,23 +143,6 @@ namespace Registry.Web.Utilities
                 ObjectsCount = attributes.ObjectsCount,
                 Size = entry.Size,
                 IsPublic = attributes.IsPublic
-            };
-        }
-
-        public static EntryGeoDto ToDto(this DdbEntry obj)
-        {
-            return new()
-            {
-                Depth = obj.Depth,
-                Hash = obj.Hash,
-                Id = obj.Id,
-                Properties = obj.Properties,
-                ModifiedTime = obj.ModifiedTime,
-                Path = obj.Path,
-                PointGeometry = obj.PointGeometry,
-                PolygonGeometry = obj.PolygonGeometry,
-                Size = obj.Size,
-                Type = obj.Type
             };
         }
 

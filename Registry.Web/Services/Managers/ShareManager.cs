@@ -6,9 +6,7 @@ using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
-using Registry.Adapters.Ddb.Model;
-using Registry.Common;
-using Registry.Ports.DroneDB.Models;
+using Registry.Ports;
 using Registry.Web.Data;
 using Registry.Web.Data.Models;
 using Registry.Web.Exceptions;
@@ -400,7 +398,7 @@ namespace Registry.Web.Services.Managers
 
             entry = new Entry
             {
-                Type = (EntryType)(int)info.Type,
+                Type = info.Type,
                 Hash = info.Hash,
                 AddedOn = DateTime.Now,
                 Path = path,

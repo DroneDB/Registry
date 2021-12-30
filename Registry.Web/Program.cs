@@ -14,9 +14,7 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
-using Registry.Adapters.Ddb;
 using Registry.Adapters.DroneDB;
-using Registry.Ports.DroneDB;
 using Registry.Web.Models;
 using Registry.Web.Models.Configuration;
 
@@ -46,7 +44,7 @@ namespace Registry.Web
 
             try
             {
-                Console.WriteLine(" !> Using DDB version " + DroneDBWrapper.GetVersion());
+                Console.WriteLine(" !> Using DDB version " + DDBWrapper.GetVersion());
             }
             catch (Exception e)
             {

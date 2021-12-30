@@ -1,22 +1,17 @@
 ﻿using System;
-using System.Collections.Generic;
 using System.IO;
-using System.Linq;
-using System.Threading.Tasks;
-using Hangfire;
 using Hangfire.Console;
 using Hangfire.Server;
 using Registry.Adapters.DroneDB;
 using Registry.Common;
 using Registry.Ports.DroneDB;
-using Registry.Ports.DroneDB.Models;
 
 namespace Registry.Web.Utilities
 {
     public static class HangfireUtils
     {
 
-        public static void BuildWrapper(IDdb ddb, string path, bool force,
+        public static void BuildWrapper(IDDB ddb, string path, bool force,
             PerformContext context)
         {
             Action<string> writeLine = context != null ? context.WriteLine : Console.WriteLine;

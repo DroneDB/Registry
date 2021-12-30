@@ -31,22 +31,22 @@ namespace Registry.Web.Services.Managers
             _settings = settings.Value;
         }
 
-        public Task<LoginResult> CheckAccess(string token)
+        public Task<LoginResultDto> CheckAccess(string token)
         {
             // No token login for local auth
-            return Task.FromResult(new LoginResult
+            return Task.FromResult(new LoginResultDto
             {
                 Success = false
             });
         }
 
         // This is basically a stub
-        public async Task<LoginResult> CheckAccess(string userName, string password)
+        public async Task<LoginResultDto> CheckAccess(string userName, string password)
         {
             var user = await _userManager.FindByNameAsync(userName);
 
             if (user == null)
-                return new LoginResult
+                return new LoginResultDto
                 {
                     Success = false,
                     UserName = userName
@@ -54,7 +54,7 @@ namespace Registry.Web.Services.Managers
             
             var res = await _signInManager.CheckPasswordSignInAsync(user, password, false);
 
-            return new LoginResult
+            return new LoginResultDto
             {
                 Success = res.Succeeded,
                 UserName = userName,

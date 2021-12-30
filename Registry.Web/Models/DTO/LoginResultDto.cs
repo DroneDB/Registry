@@ -8,7 +8,7 @@ namespace Registry.Web.Models.DTO
 
 
 
-    public class LoginResult
+    public class LoginResultDto
     {
         public string UserName { get; set; }
         public bool Success { get; set; }

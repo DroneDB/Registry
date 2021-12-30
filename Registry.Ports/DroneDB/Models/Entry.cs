@@ -3,12 +3,11 @@ using System.Collections.Generic;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using Registry.Common;
-using Registry.Ports.DroneDB.Models;
 
-namespace Registry.Web.Models.DTO
+namespace Registry.Ports.DroneDB.Models
 {
-
-    public class EntryDto
+    // Let's just duplicate EntryDtO for no good reason
+    public class Entry
     {
         [JsonProperty("path")]
         public string Path { get; set; }
@@ -38,4 +37,5 @@ namespace Registry.Web.Models.DTO
         [JsonProperty("polygon_geom")]
         public JObject PolygonGeometry { get; set; }
     }
+
 }

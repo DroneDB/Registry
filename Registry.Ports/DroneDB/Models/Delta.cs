@@ -1,6 +1,6 @@
 ﻿using Newtonsoft.Json;
 
-namespace Registry.Adapters.Ddb.Model
+namespace Registry.Ports.DroneDB.Models
 {
     public class Delta
     {
@@ -9,5 +9,13 @@ namespace Registry.Adapters.Ddb.Model
 
         [JsonProperty("removes")]
         public RemoveAction[] Removes { get; set; }
+
+        [JsonProperty("metaAdds")]
+        public string[] MetaAdds { get; set; }
+        
+        [JsonProperty("metaRemoves")]
+        public string[] MetaRemoves { get; set; }
+
+
     }
 }

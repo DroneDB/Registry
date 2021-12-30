@@ -8,7 +8,7 @@ namespace Registry.Web.Services.Ports
 {
     public interface ILoginManager
     {
-        public Task<LoginResult> CheckAccess(string userName, string password);
-        public Task<LoginResult> CheckAccess(string token);
+        public Task<LoginResultDto> CheckAccess(string userName, string password);
+        public Task<LoginResultDto> CheckAccess(string token);
     }
 }

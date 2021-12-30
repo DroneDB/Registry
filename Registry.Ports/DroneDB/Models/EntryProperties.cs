@@ -1,18 +1,15 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 using Newtonsoft.Json;
 using Registry.Common;
 
 namespace Registry.Ports.DroneDB.Models
 {
-    public class DdbProperties
+    public class EntryProperties
     {
         protected Dictionary<string, object> _properties;
 
-        public DdbProperties(Dictionary<string, object> properties)
+        public EntryProperties(Dictionary<string, object> properties)
         {
             _properties = properties;
         }

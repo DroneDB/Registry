@@ -4,7 +4,6 @@ using System.Linq;
 using System.Threading.Tasks;
 using FluentAssertions;
 using Microsoft.AspNetCore.Http;
-using Microsoft.AspNetCore.Routing;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -12,15 +11,15 @@ using Moq;
 using Newtonsoft.Json;
 using NUnit.Framework;
 using Registry.Adapters.DroneDB;
+using Registry.Ports;
 using Registry.Ports.DroneDB;
-using Registry.Ports.DroneDB.Models;
 using Registry.Web.Data;
 using Registry.Web.Data.Models;
-using Registry.Web.Models;
 using Registry.Web.Models.Configuration;
 using Registry.Web.Services.Adapters;
 using Registry.Web.Services.Managers;
 using Registry.Web.Services.Ports;
+using Entry = Registry.Ports.DroneDB.Models.Entry;
 
 namespace Registry.Web.Test
 {
@@ -58,8 +57,8 @@ namespace Registry.Web.Test
             
             var utils = new WebUtils(_authManagerMock.Object, context, _appSettingsMock.Object, _httpContextAccessorMock.Object, _ddbFactoryMock.Object);
 
-            var ddbMock = new Mock<IDdb>();
-            ddbMock.Setup(x => x.GetInfoAsync(default)).Returns(Task.FromResult(new DdbEntry{
+            var ddbMock = new Mock<IDDB>();
+            ddbMock.Setup(x => x.GetInfoAsync(default)).Returns(Task.FromResult(new Entry{
                     Properties = new Dictionary<string, object>
                     {
                         {"public", true }

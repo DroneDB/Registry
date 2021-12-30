@@ -10,14 +10,14 @@ namespace Registry.Web.Services.Ports
 {
     public interface IObjectsManager
     {
-        Task<IEnumerable<EntryGeoDto>> List(string orgSlug, string dsSlug, string path = null, bool recursive = false);
+        Task<IEnumerable<EntryDto>> List(string orgSlug, string dsSlug, string path = null, bool recursive = false);
 
-        Task<IEnumerable<EntryGeoDto>> Search(string orgSlug, string dsSlug, string query = null, string path = null,
+        Task<IEnumerable<EntryDto>> Search(string orgSlug, string dsSlug, string query = null, string path = null,
             bool recursive = true);
 
         Task<StorageEntryDto> Get(string orgSlug, string dsSlug, string path);
-        Task<EntryGeoDto> AddNew(string orgSlug, string dsSlug, string path, byte[] data);
-        Task<EntryGeoDto> AddNew(string orgSlug, string dsSlug, string path, Stream stream = null);
+        Task<EntryDto> AddNew(string orgSlug, string dsSlug, string path, byte[] data);
+        Task<EntryDto> AddNew(string orgSlug, string dsSlug, string path, Stream stream = null);
         Task Move(string orgSlug, string dsSlug, string source, string dest);
         Task Delete(string orgSlug, string dsSlug, string path);
         Task DeleteAll(string orgSlug, string dsSlug);

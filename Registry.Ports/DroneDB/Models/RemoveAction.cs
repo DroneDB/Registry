@@ -1,6 +1,6 @@
 ﻿using Newtonsoft.Json;
 
-namespace Registry.Adapters.Ddb.Model
+namespace Registry.Ports.DroneDB.Models
 {
     public class RemoveAction
     {

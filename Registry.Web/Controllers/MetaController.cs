@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
+using Registry.Ports.DroneDB.Models;
 using Registry.Web.Models;
 using Registry.Web.Models.DTO;
 using Registry.Web.Services.Ports;
@@ -204,7 +205,7 @@ namespace Registry.Web.Controllers
         }
 
         [HttpGet("list", Name = nameof(MetaController) + "." + nameof(List))]
-        [ProducesResponseType(typeof(IEnumerable<MetaListItemDto>), 200)]
+        [ProducesResponseType(typeof(IEnumerable<MetaListItem>), 200)]
         public async Task<IActionResult> List([FromRoute] string orgSlug, [FromRoute] string dsSlug,
             [FromQuery] string path = null)
         {
@@ -238,6 +239,26 @@ namespace Registry.Web.Controllers
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Exception in Meta controller Get('{OrgSlug}', '{DsSlug}', '{Key}', '{Path}')", orgSlug, dsSlug, key, path);
+                return ExceptionResult(ex);
+            }
+        }
+
+        [HttpPost("dump", Name = nameof(MetaController) + "." + nameof(Dump))]
+        [ProducesResponseType(typeof(IEnumerable<MetaDump>), 200)]
+        public async Task<IActionResult> Dump([FromRoute] string orgSlug, [FromRoute] string dsSlug,
+            [FromForm] string ids = null)
+        {
+            try
+            {
+                _logger.LogDebug("Meta Controller Dump('{OrgSlug}', '{DsSlug}', '{Ids}')", orgSlug, dsSlug, ids);
+
+                var res = await _metaManager.Dump(orgSlug, dsSlug, ids);
+
+                return Ok(res);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Exception in Meta controller Dump('{OrgSlug}', '{DsSlug}', '{Ids}')", orgSlug, dsSlug, ids);
                 return ExceptionResult(ex);
             }
         }

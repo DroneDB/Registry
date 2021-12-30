@@ -5,15 +5,15 @@ using System.Linq;
 using FluentAssertions;
 using Newtonsoft.Json;
 using NUnit.Framework;
-using Registry.Adapters.Ddb.Model;
+using Registry.Adapters.DroneDB;
 using Registry.Common;
-using EntryType = Registry.Ports.DroneDB.Models.EntryType;
+using Registry.Ports.DroneDB.Models;
 
 namespace Registry.Adapters.Ddb.Test
 {
-    public class DroneDBWrapperTests
+    public class DDBWrapperTests
     {
-        private const string BaseTestFolder = nameof(DroneDBWrapperTests);
+        private const string BaseTestFolder = nameof(DDBWrapperTests);
         private const string TestFileUrl =
             "https://github.com/DroneDB/test_data/raw/master/test-datasets/drone_dataset_brighton_beach/DJI_0023.JPG";
         private const string Test1ArchiveUrl = "https://github.com/DroneDB/test_data/raw/master/registry/DdbFactoryTest/testdb1.zip";
@@ -33,22 +33,22 @@ namespace Registry.Adapters.Ddb.Test
         [SetUp]
         public void Setup()
         {
-            DroneDBWrapper.RegisterProcess(true);
+            DDBWrapper.RegisterProcess(true);
         }
 
         [Test]
         public void GetVersion_HasValue()
         {
-            Assert.IsTrue(DroneDBWrapper.GetVersion().Length > 0, "Can call GetVersion()");
+            Assert.IsTrue(DDBWrapper.GetVersion().Length > 0, "Can call GetVersion()");
         }
 
         [Test]
         public void Init_NonExistant_Exception()
         {
-            Action act = () => DroneDBWrapper.Init("nonexistant");
+            Action act = () => DDBWrapper.Init("nonexistant");
             act.Should().Throw<DDBException>();
 
-            act = () => DroneDBWrapper.Init(null);
+            act = () => DDBWrapper.Init(null);
             act.Should().Throw<DDBException>();
 
         }
@@ -62,23 +62,23 @@ namespace Registry.Adapters.Ddb.Test
             if (Directory.Exists(folder)) Directory.Delete(folder, true);
             Directory.CreateDirectory(folder);
 
-            DroneDBWrapper.Init(folder).Should().Contain(folder);
+            DDBWrapper.Init(folder).Should().Contain(folder);
             Directory.Exists(Path.Join(folder, ".ddb")).Should().BeTrue();
         }
 
         [Test]
         public void Add_NonExistant_Exception()
         {
-            Action act = () => DroneDBWrapper.Add("nonexistant", "");
+            Action act = () => DDBWrapper.Add("nonexistant", "");
             act.Should().Throw<DDBException>();
 
-            act = () => DroneDBWrapper.Add("nonexistant", "test");
+            act = () => DDBWrapper.Add("nonexistant", "test");
             act.Should().Throw<DDBException>();
 
-            act = () => DroneDBWrapper.Add(null, "test");
+            act = () => DDBWrapper.Add(null, "test");
             act.Should().Throw<DDBException>();
 
-            act = () => DroneDBWrapper.Add("nonexistant", (string)null);
+            act = () => DDBWrapper.Add("nonexistant", (string)null);
             act.Should().Throw<DDBException>();
 
         }
@@ -92,33 +92,33 @@ namespace Registry.Adapters.Ddb.Test
             if (Directory.Exists(testFolder)) Directory.Delete(testFolder, true);
 
             Directory.CreateDirectory(testFolder);
-            DroneDBWrapper.Init(testFolder);
+            DDBWrapper.Init(testFolder);
 
             File.WriteAllText(Path.Join(testFolder, "file.txt"), "test");
             File.WriteAllText(Path.Join(testFolder, "file2.txt"), "test");
             File.WriteAllText(Path.Join(testFolder, "file3.txt"), "test");
 
-            Assert.Throws<DDBException>(() => DroneDBWrapper.Add(testFolder, "invalid"));
+            Assert.Throws<DDBException>(() => DDBWrapper.Add(testFolder, "invalid"));
 
-            var entry = DroneDBWrapper.Add(testFolder, Path.Join(testFolder, "file.txt"))[0];
+            var entry = DDBWrapper.Add(testFolder, Path.Join(testFolder, "file.txt"))[0];
             entry.Path.Should().Be("file.txt");
             entry.Hash.Should().NotBeNullOrWhiteSpace();
 
-            var entries = DroneDBWrapper.Add(testFolder, new[] { Path.Join(testFolder, "file2.txt"), Path.Join(testFolder, "file3.txt") });
+            var entries = DDBWrapper.Add(testFolder, new[] { Path.Join(testFolder, "file2.txt"), Path.Join(testFolder, "file3.txt") });
             entries.Should().HaveCount(2);
 
-            DroneDBWrapper.Remove(testFolder, Path.Combine(testFolder, "file.txt"));
+            DDBWrapper.Remove(testFolder, Path.Combine(testFolder, "file.txt"));
 
-            Assert.Throws<DDBException>(() => DroneDBWrapper.Remove(testFolder, "invalid"));
+            Assert.Throws<DDBException>(() => DDBWrapper.Remove(testFolder, "invalid"));
         }
 
         [Test]
         public void Info_InvalidFile_Exception()
         {
-            Action act = () => DroneDBWrapper.Info("invalid");
+            Action act = () => DDBWrapper.Info("invalid");
             act.Should().Throw<DDBException>();
 
-            act = () => DroneDBWrapper.Info((string)null);
+            act = () => DDBWrapper.Info((string)null);
             act.Should().Throw<DDBException>();
         }
 
@@ -134,11 +134,11 @@ namespace Registry.Adapters.Ddb.Test
             File.WriteAllText(Path.Join(testFolder, "file.txt"), "test");
             File.WriteAllText(Path.Join(testFolder, "file2.txt"), "test");
 
-            var e = DroneDBWrapper.Info(Path.Join(testFolder, "file.txt"), withHash: true)[0];
+            var e = DDBWrapper.Info(Path.Join(testFolder, "file.txt"), withHash: true)[0];
             Assert.IsNotEmpty(e.Hash);
 
             // TODO: troubleshoot this and use 
-            var es = DroneDBWrapper.Info(testFolder, true);
+            var es = DDBWrapper.Info(testFolder, true);
             Assert.AreEqual(2, es.Count);
             Assert.AreEqual(EntryType.Generic, es[0].Type);
             Assert.IsTrue(es[0].Size > 0);
@@ -155,13 +155,13 @@ namespace Registry.Adapters.Ddb.Test
 
             using var tempFile = new TempFile(TestFileUrl, BaseTestFolder);
 
-            DroneDBWrapper.Remove(ddbPath, Path.Combine(ddbPath, "DJI_0023.JPG"));
+            DDBWrapper.Remove(ddbPath, Path.Combine(ddbPath, "DJI_0023.JPG"));
 
             var destPath = Path.Combine(ddbPath, Path.GetFileName(tempFile.FilePath));
 
             File.Move(tempFile.FilePath, destPath);
 
-            var res = DroneDBWrapper.Add(ddbPath, destPath);
+            var res = DDBWrapper.Add(ddbPath, destPath);
 
             res.Count.Should().Be(1);
 
@@ -176,7 +176,7 @@ namespace Registry.Adapters.Ddb.Test
 
             using var tempFile = new TempFile(TestFileUrl, BaseTestFolder);
 
-            var res = DroneDBWrapper.Info(tempFile.FilePath, withHash: true);
+            var res = DDBWrapper.Info(tempFile.FilePath, withHash: true);
 
             res.Should().NotBeNull();
             res.Should().HaveCount(1);
@@ -204,16 +204,16 @@ namespace Registry.Adapters.Ddb.Test
         [Test]
         public void List_Nonexistant_Exception()
         {
-            Action act = () => DroneDBWrapper.List("invalid", "");
+            Action act = () => DDBWrapper.List("invalid", "");
             act.Should().Throw<DDBException>();
 
-            act = () => DroneDBWrapper.List("invalid", "wefrfwef");
+            act = () => DDBWrapper.List("invalid", "wefrfwef");
             act.Should().Throw<DDBException>();
 
-            act = () => DroneDBWrapper.List(null, "wefrfwef");
+            act = () => DDBWrapper.List(null, "wefrfwef");
             act.Should().Throw<DDBException>();
 
-            act = () => DroneDBWrapper.List("invalid", (string)null);
+            act = () => DDBWrapper.List("invalid", (string)null);
             act.Should().Throw<DDBException>();
 
         }
@@ -221,7 +221,7 @@ namespace Registry.Adapters.Ddb.Test
         [Test]
         public void List_ExistingFileSubFolder_Ok()
         {
-            using var fs = new TestFS(Test1ArchiveUrl, nameof(DroneDBWrapperTests));
+            using var fs = new TestFS(Test1ArchiveUrl, nameof(DDBWrapperTests));
 
             const string fileName = "Sub/20200610_144436.jpg";
             const int expectedDepth = 1;
@@ -238,7 +238,7 @@ namespace Registry.Adapters.Ddb.Test
 
             var ddbPath = Path.Combine(fs.TestFolder, "public", "default");
 
-            var res = DroneDBWrapper.List(ddbPath, Path.Combine(ddbPath, fileName));
+            var res = DDBWrapper.List(ddbPath, Path.Combine(ddbPath, fileName));
 
             res.Should().HaveCount(1);
 
@@ -266,7 +266,7 @@ namespace Registry.Adapters.Ddb.Test
 
             var ddbPath = Path.Combine(test.TestFolder, "public", "default");
 
-            var res = DroneDBWrapper.List(ddbPath, Path.Combine(ddbPath, "DJI_0027.JPG"));
+            var res = DDBWrapper.List(ddbPath, Path.Combine(ddbPath, "DJI_0027.JPG"));
 
             res.Should().HaveCount(1);
             var entry = res.First();
@@ -285,11 +285,11 @@ namespace Registry.Adapters.Ddb.Test
 
             var ddbPath = Path.Combine(test.TestFolder, "public", "default");
 
-            var res = DroneDBWrapper.List(ddbPath, Path.Combine(ddbPath, "."), true);
+            var res = DDBWrapper.List(ddbPath, Path.Combine(ddbPath, "."), true);
 
             res.Should().HaveCount(26);
 
-            res = DroneDBWrapper.List(ddbPath, ddbPath, true);
+            res = DDBWrapper.List(ddbPath, ddbPath, true);
 
             res.Should().HaveCount(26);
 
@@ -299,13 +299,13 @@ namespace Registry.Adapters.Ddb.Test
         [Test]
         public void Remove_Nonexistant_Exception()
         {
-            Action act = () => DroneDBWrapper.Remove("invalid", "");
+            Action act = () => DDBWrapper.Remove("invalid", "");
             act.Should().Throw<DDBException>();
 
-            act = () => DroneDBWrapper.Remove("invalid", "wefrfwef");
+            act = () => DDBWrapper.Remove("invalid", "wefrfwef");
             act.Should().Throw<DDBException>();
 
-            act = () => DroneDBWrapper.Remove(null, "wefrfwef");
+            act = () => DDBWrapper.Remove(null, "wefrfwef");
             act.Should().Throw<DDBException>();
 
         }
@@ -320,12 +320,12 @@ namespace Registry.Adapters.Ddb.Test
 
             var ddbPath = Path.Combine(test.TestFolder, "public", "default");
 
-            var res = DroneDBWrapper.List(ddbPath, Path.Combine(ddbPath, fileName));
+            var res = DDBWrapper.List(ddbPath, Path.Combine(ddbPath, fileName));
             res.Should().HaveCount(1);
 
-            DroneDBWrapper.Remove(ddbPath, Path.Combine(ddbPath, fileName));
+            DDBWrapper.Remove(ddbPath, Path.Combine(ddbPath, fileName));
 
-            res = DroneDBWrapper.List(ddbPath, Path.Combine(ddbPath, fileName));
+            res = DDBWrapper.List(ddbPath, Path.Combine(ddbPath, fileName));
             res.Should().HaveCount(0);
 
         }
@@ -339,9 +339,9 @@ namespace Registry.Adapters.Ddb.Test
 
             var ddbPath = Path.Combine(test.TestFolder, "public", "default");
 
-            DroneDBWrapper.Remove(ddbPath, Path.Combine(ddbPath, fileName));
+            DDBWrapper.Remove(ddbPath, Path.Combine(ddbPath, fileName));
 
-            var res = DroneDBWrapper.List(ddbPath, ".", true);
+            var res = DDBWrapper.List(ddbPath, ".", true);
             res.Should().HaveCount(0);
 
         }
@@ -355,7 +355,7 @@ namespace Registry.Adapters.Ddb.Test
 
             var ddbPath = Path.Combine(test.TestFolder, "public", "default");
 
-            Action act = () => DroneDBWrapper.Remove(ddbPath, Path.Combine(ddbPath, fileName));
+            Action act = () => DDBWrapper.Remove(ddbPath, Path.Combine(ddbPath, fileName));
 
             act.Should().Throw<DDBException>();
         }
@@ -378,15 +378,15 @@ namespace Registry.Adapters.Ddb.Test
 
             var ddbPath = Path.Combine(test.TestFolder, "public", "default");
 
-            DroneDBWrapper.VerifyPassword(ddbPath, string.Empty).Should().BeTrue();
+            DDBWrapper.VerifyPassword(ddbPath, string.Empty).Should().BeTrue();
 
-            DroneDBWrapper.AppendPassword(ddbPath, "testpassword");
+            DDBWrapper.AppendPassword(ddbPath, "testpassword");
 
-            DroneDBWrapper.VerifyPassword(ddbPath, "testpassword").Should().BeTrue();
-            DroneDBWrapper.VerifyPassword(ddbPath, "wrongpassword").Should().BeFalse();
+            DDBWrapper.VerifyPassword(ddbPath, "testpassword").Should().BeTrue();
+            DDBWrapper.VerifyPassword(ddbPath, "wrongpassword").Should().BeFalse();
 
-            DroneDBWrapper.ClearPasswords(ddbPath);
-            DroneDBWrapper.VerifyPassword(ddbPath, "testpassword").Should().BeFalse();
+            DDBWrapper.ClearPasswords(ddbPath);
+            DDBWrapper.VerifyPassword(ddbPath, "testpassword").Should().BeFalse();
 
 
         }
@@ -399,11 +399,11 @@ namespace Registry.Adapters.Ddb.Test
 
             var ddbPath = Path.Combine(test.TestFolder);
 
-            var res = DroneDBWrapper.ChangeAttributes(ddbPath, new Dictionary<string, object> { { "public", true } });
+            var res = DDBWrapper.ChangeAttributes(ddbPath, new Dictionary<string, object> { { "public", true } });
 
             res["public"].Should().Be(true);
 
-            res = DroneDBWrapper.ChangeAttributes(ddbPath, new Dictionary<string, object> { { "public", false } });
+            res = DDBWrapper.ChangeAttributes(ddbPath, new Dictionary<string, object> { { "public", false } });
 
             res["public"].Should().Be(false);
 
@@ -417,7 +417,7 @@ namespace Registry.Adapters.Ddb.Test
 
             var ddbPath = test.TestFolder;
 
-            Action act = () => DroneDBWrapper.ChangeAttributes(ddbPath, null);
+            Action act = () => DDBWrapper.ChangeAttributes(ddbPath, null);
 
             act.Should().Throw<ArgumentException>();
 
@@ -433,7 +433,7 @@ namespace Registry.Adapters.Ddb.Test
 
             try
             {
-                DroneDBWrapper.GenerateThumbnail(tempFile.FilePath, 300, destPath);
+                DDBWrapper.GenerateThumbnail(tempFile.FilePath, 300, destPath);
 
                 var info = new FileInfo(destPath);
                 info.Exists.Should().BeTrue();
@@ -450,7 +450,7 @@ namespace Registry.Adapters.Ddb.Test
         public void GenerateMemoryThumbnail_HappyPath_Ok()
         {
             using var tempFile = new TempFile(TestFileUrl, BaseTestFolder);
-            var buffer = DroneDBWrapper.GenerateThumbnail(tempFile.FilePath, 300);
+            var buffer = DDBWrapper.GenerateThumbnail(tempFile.FilePath, 300);
             buffer.Length.Should().BeGreaterThan(0);
         }
 
@@ -464,7 +464,7 @@ namespace Registry.Adapters.Ddb.Test
 
             try
             {
-                var path = DroneDBWrapper.GenerateTile(tempFile.FilePath, 18, 64083, 92370, 256, true);
+                var path = DDBWrapper.GenerateTile(tempFile.FilePath, 18, 64083, 92370, 256, true);
             }
             finally
             {
@@ -477,7 +477,7 @@ namespace Registry.Adapters.Ddb.Test
         {
             using var tempFile = new TempFile(TestGeoTiffUrl, BaseTestFolder);
 
-            var buffer = DroneDBWrapper.GenerateMemoryTile(tempFile.FilePath, 18, 64083, 92370, 256, true);
+            var buffer = DDBWrapper.GenerateMemoryTile(tempFile.FilePath, 18, 64083, 92370, 256, true);
             buffer.Length.Should().BeGreaterThan(0);
         }
 
@@ -492,19 +492,19 @@ namespace Registry.Adapters.Ddb.Test
 
             var ddbPath = Path.Combine(test.TestFolder, DdbFolder);
 
-            var tag = DroneDBWrapper.GetTag(ddbPath);
+            var tag = DDBWrapper.GetTag(ddbPath);
 
             tag.Should().BeNull();
 
-            DroneDBWrapper.SetTag(ddbPath, goodTag);
+            DDBWrapper.SetTag(ddbPath, goodTag);
 
-            tag = DroneDBWrapper.GetTag(ddbPath);
+            tag = DDBWrapper.GetTag(ddbPath);
 
             tag.Should().Be(goodTag);
 
-            DroneDBWrapper.SetTag(ddbPath, goodTagWithRegistry);
+            DDBWrapper.SetTag(ddbPath, goodTagWithRegistry);
 
-            tag = DroneDBWrapper.GetTag(ddbPath);
+            tag = DDBWrapper.GetTag(ddbPath);
 
             tag.Should().Be(goodTagWithRegistry);
 
@@ -521,19 +521,19 @@ namespace Registry.Adapters.Ddb.Test
 
             var ddbPath = Path.Combine(test.TestFolder, DdbFolder);
 
-            Action act = () => DroneDBWrapper.SetTag(ddbPath, badTag);
+            Action act = () => DDBWrapper.SetTag(ddbPath, badTag);
 
             act.Should().Throw<DDBException>();
 
-            act = () => DroneDBWrapper.SetTag(ddbPath, badTag2);
+            act = () => DDBWrapper.SetTag(ddbPath, badTag2);
 
             act.Should().Throw<DDBException>();
 
-            act = () => DroneDBWrapper.SetTag(ddbPath, string.Empty);
+            act = () => DDBWrapper.SetTag(ddbPath, string.Empty);
 
             act.Should().Throw<DDBException>();
 
-            act = () => DroneDBWrapper.SetTag(ddbPath, null);
+            act = () => DDBWrapper.SetTag(ddbPath, null);
 
             act.Should().Throw<ArgumentException>();
 
@@ -546,7 +546,7 @@ namespace Registry.Adapters.Ddb.Test
 
             var ddbPath = Path.Combine(test.TestFolder, DdbFolder);
 
-            var stamp = DroneDBWrapper.GetStamp(ddbPath);
+            var stamp = DDBWrapper.GetStamp(ddbPath);
             stamp.Checksum.Should().NotBeNull();
             stamp.Entries.Count.Should().BeGreaterThan(0);
         }
@@ -557,7 +557,7 @@ namespace Registry.Adapters.Ddb.Test
             using var source = new TestFS(TestDelta2ArchiveUrl, BaseTestFolder);
             using var destination = new TestFS(TestDelta1ArchiveUrl, BaseTestFolder);
 
-            var delta = DroneDBWrapper.Delta(source.TestFolder, destination.TestFolder);
+            var delta = DDBWrapper.Delta(source.TestFolder, destination.TestFolder);
 
             delta.Adds.Length.Should().BeGreaterThan(0);
             delta.Removes.Length.Should().BeGreaterThan(0);
@@ -569,9 +569,9 @@ namespace Registry.Adapters.Ddb.Test
         {
             using var test = new TestFS(TestDelta2ArchiveUrl, BaseTestFolder);
 
-            DroneDBWrapper.MoveEntry(test.TestFolder, "plutone.txt", "test.txt");
+            DDBWrapper.MoveEntry(test.TestFolder, "plutone.txt", "test.txt");
 
-            var res = DroneDBWrapper.List(test.TestFolder, test.TestFolder, true);
+            var res = DDBWrapper.List(test.TestFolder, test.TestFolder, true);
 
             res.Should().HaveCount(11);
             res[8].Path.Should().Be("test.txt");
@@ -591,11 +591,11 @@ namespace Registry.Adapters.Ddb.Test
 
             File.Move(tempFile.FilePath, destPath);
 
-            var res = DroneDBWrapper.Add(ddbPath, destPath);
+            var res = DDBWrapper.Add(ddbPath, destPath);
 
             res.Count.Should().Be(1);
 
-            DroneDBWrapper.Build(ddbPath);
+            DDBWrapper.Build(ddbPath);
 
         }
 
@@ -613,11 +613,11 @@ namespace Registry.Adapters.Ddb.Test
 
             File.Move(tempFile.FilePath, destPath);
 
-            var res = DroneDBWrapper.Add(ddbPath, destPath);
+            var res = DDBWrapper.Add(ddbPath, destPath);
 
             res.Count.Should().Be(1);
 
-            DroneDBWrapper.IsBuildable(ddbPath, Path.GetFileName(destPath)).Should().BeTrue();
+            DDBWrapper.IsBuildable(ddbPath, Path.GetFileName(destPath)).Should().BeTrue();
 
         }
 
@@ -627,7 +627,7 @@ namespace Registry.Adapters.Ddb.Test
 
             using var test = new TestFS(TestDelta2ArchiveUrl, BaseTestFolder);
 
-            DroneDBWrapper.IsBuildable(test.TestFolder, "lol.txt").Should().BeFalse();
+            DDBWrapper.IsBuildable(test.TestFolder, "lol.txt").Should().BeFalse();
 
         }
 
@@ -635,20 +635,20 @@ namespace Registry.Adapters.Ddb.Test
         public void MetaAdd_Ok()
         {
             using var area = new TestArea("metaAddOkTest");
-            DroneDBWrapper.Init(area.TestFolder);
+            DDBWrapper.Init(area.TestFolder);
 
-            FluentActions.Invoking(() => DroneDBWrapper.MetaAdd(area.TestFolder, "test", "123")).Should()
+            FluentActions.Invoking(() => DDBWrapper.MetaAdd(area.TestFolder, "test", "123")).Should()
                 .Throw<DDBException>(); // Needs plural key
-            // DroneDBWrapper.MetaAdd("metaAddTest", "", "tests", "123").Data.ToObject<int>().Should().Be(123);
+            // DDBWrapper.MetaAdd("metaAddTest", "", "tests", "123").Data.ToObject<int>().Should().Be(123);
         }
 
         [Test]
         public void MetaAdd_Json()
         {
             using var area = new TestArea("metaAddJsonTest");
-            DroneDBWrapper.Init(area.TestFolder);
+            DDBWrapper.Init(area.TestFolder);
 
-            var res = DroneDBWrapper.MetaAdd(area.TestFolder, "tests", "{\"test\": true}");
+            var res = DDBWrapper.MetaAdd(area.TestFolder, "tests", "{\"test\": true}");
             JsonConvert.SerializeObject(res.Data).Should().Be("{\"test\":true}");
             res.Id.Should().NotBeNull();
             res.ModifiedTime.Should().BeCloseTo(DateTime.UtcNow, new TimeSpan(0,0,1));
@@ -658,47 +658,47 @@ namespace Registry.Adapters.Ddb.Test
         public void MetaSet_Ok()
         {
             using var area = new TestArea("metaSetOkTest");
-            DroneDBWrapper.Init(area.TestFolder);
+            DDBWrapper.Init(area.TestFolder);
 
             var f = Path.Join(area.TestFolder, "test.txt");
             File.WriteAllText(f, null);
             
-            DroneDBWrapper.Add(area.TestFolder, f);
+            DDBWrapper.Add(area.TestFolder, f);
 
-            FluentActions.Invoking(() => DroneDBWrapper.MetaSet(area.TestFolder, "tests", "123", f)).Should()
+            FluentActions.Invoking(() => DDBWrapper.MetaSet(area.TestFolder, "tests", "123", f)).Should()
                 .Throw<DDBException>(); // Needs singular key
 
-            DroneDBWrapper.MetaSet(area.TestFolder, "test", "abc", f).Data.Should().Be("abc");
-            DroneDBWrapper.MetaSet(area.TestFolder, "test", "efg", f).Data.Should().Be("efg");
+            DDBWrapper.MetaSet(area.TestFolder, "test", "abc", f).Data.ToObject<string>().Should().Be("abc");
+            DDBWrapper.MetaSet(area.TestFolder, "test", "efg", f).Data.ToObject<string>().Should().Be("efg");
         }
 
         [Test]
         public void MetaRemove_Ok()
         {
             using var area = new TestArea("metaRemoveOkTest");
-            DroneDBWrapper.Init(area.TestFolder);
+            DDBWrapper.Init(area.TestFolder);
 
-            var id = DroneDBWrapper.MetaSet(area.TestFolder, "test", "123").Id;
-            DroneDBWrapper.MetaRemove(area.TestFolder, "invalid").Should().Be(0);
-            DroneDBWrapper.MetaRemove(area.TestFolder, id).Should().Be(1);
-            DroneDBWrapper.MetaRemove(area.TestFolder, id).Should().Be(0);
+            var id = DDBWrapper.MetaSet(area.TestFolder, "test", "123").Id;
+            DDBWrapper.MetaRemove(area.TestFolder, "invalid").Should().Be(0);
+            DDBWrapper.MetaRemove(area.TestFolder, id).Should().Be(1);
+            DDBWrapper.MetaRemove(area.TestFolder, id).Should().Be(0);
         }
 
         [Test]
         public void MetaGet_Ok()
         {
             using var area = new TestArea("metaGetOkTest");
-            DroneDBWrapper.Init(area.TestFolder);
+            DDBWrapper.Init(area.TestFolder);
 
-            DroneDBWrapper.MetaSet(area.TestFolder, "abc", "true");
+            DDBWrapper.MetaSet(area.TestFolder, "abc", "true");
 
-            FluentActions.Invoking(() => DroneDBWrapper.MetaGet(area.TestFolder, "nonexistant")).Should()
+            FluentActions.Invoking(() => DDBWrapper.MetaGet(area.TestFolder, "nonexistant")).Should()
                 .Throw<DDBException>();
 
-            FluentActions.Invoking(() => DroneDBWrapper.MetaGet(area.TestFolder, "abc", "123")).Should()
+            FluentActions.Invoking(() => DDBWrapper.MetaGet(area.TestFolder, "abc", "123")).Should()
                 .Throw<DDBException>();
 
-            JsonConvert.DeserializeObject<Meta>(DroneDBWrapper.MetaGet(area.TestFolder, "abc")).Data
+            JsonConvert.DeserializeObject<Meta>(DDBWrapper.MetaGet(area.TestFolder, "abc")).Data.ToObject<bool>()
                 .Should().Be(true);
         }
 
@@ -706,13 +706,13 @@ namespace Registry.Adapters.Ddb.Test
         public void MetaGet_Ok2()
         {
             using var area = new TestArea("metaGetOkTest");
-            DroneDBWrapper.Init(area.TestFolder);
+            DDBWrapper.Init(area.TestFolder);
 
-            DroneDBWrapper.MetaAdd(area.TestFolder, "tests", "{\"test\":true}");
-            DroneDBWrapper.MetaAdd(area.TestFolder, "tests", "{\"test\":false}");
-            DroneDBWrapper.MetaAdd(area.TestFolder, "tests", "{\"test\":null}");
+            DDBWrapper.MetaAdd(area.TestFolder, "tests", "{\"test\":true}");
+            DDBWrapper.MetaAdd(area.TestFolder, "tests", "{\"test\":false}");
+            DDBWrapper.MetaAdd(area.TestFolder, "tests", "{\"test\":null}");
 
-            var res = JsonConvert.DeserializeObject<Meta[]>(DroneDBWrapper.MetaGet(area.TestFolder, "tests"));
+            var res = JsonConvert.DeserializeObject<Meta[]>(DDBWrapper.MetaGet(area.TestFolder, "tests"));
 
             res.Should().HaveCount(3);
 
@@ -722,28 +722,28 @@ namespace Registry.Adapters.Ddb.Test
         public void MetaUnset_Ok()
         {
             using var area = new TestArea("metaUnsetOkTest");
-            DroneDBWrapper.Init(area.TestFolder);
+            DDBWrapper.Init(area.TestFolder);
             
             var f = Path.Join(area.TestFolder, "test.txt");
             File.WriteAllText(f, null);
 
-            DroneDBWrapper.Add(area.TestFolder, f);
+            DDBWrapper.Add(area.TestFolder, f);
 
-            DroneDBWrapper.MetaSet(area.TestFolder, "abc", "[1,2,3]");
-            DroneDBWrapper.MetaUnset(area.TestFolder, "abc", f).Should().Be(0);
-            DroneDBWrapper.MetaUnset(area.TestFolder, "abc").Should().Be(1);
-            DroneDBWrapper.MetaUnset(area.TestFolder, "abc").Should().Be(0);
+            DDBWrapper.MetaSet(area.TestFolder, "abc", "[1,2,3]");
+            DDBWrapper.MetaUnset(area.TestFolder, "abc", f).Should().Be(0);
+            DDBWrapper.MetaUnset(area.TestFolder, "abc").Should().Be(1);
+            DDBWrapper.MetaUnset(area.TestFolder, "abc").Should().Be(0);
         }
 
         [Test]
         public void MetaList_Ok()
         {
             using var area = new TestArea("metaListOkTest");
-            DroneDBWrapper.Init(area.TestFolder);
+            DDBWrapper.Init(area.TestFolder);
 
-            DroneDBWrapper.MetaAdd(area.TestFolder, "annotations", "123");
-            DroneDBWrapper.MetaAdd(area.TestFolder, "examples", "abc");
-            DroneDBWrapper.MetaList(area.TestFolder).Should().HaveCount(2);
+            DDBWrapper.MetaAdd(area.TestFolder, "annotations", "123");
+            DDBWrapper.MetaAdd(area.TestFolder, "examples", "abc");
+            DDBWrapper.MetaList(area.TestFolder).Should().HaveCount(2);
         }
 
         [Test]

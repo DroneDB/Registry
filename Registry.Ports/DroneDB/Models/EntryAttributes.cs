@@ -3,11 +3,11 @@ using System.Collections.Generic;
 
 namespace Registry.Ports.DroneDB.Models
 {
-    public class DdbAttributes : DdbProperties
+    public class EntryAttributes : EntryProperties
     {
-        private readonly IDdb _ddb;
+        private readonly IDDB _ddb;
 
-        public DdbAttributes(IDdb ddb) : base(ddb.GetAttributesRaw()) 
+        public EntryAttributes(IDDB ddb) : base(ddb.GetAttributesRaw()) 
         {
             _ddb = ddb;
         }

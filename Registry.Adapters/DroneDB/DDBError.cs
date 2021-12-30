@@ -1,4 +1,4 @@
-﻿namespace Registry.Adapters.Ddb
+﻿namespace Registry.Adapters.DroneDB
 {
     public enum DDBError
     {

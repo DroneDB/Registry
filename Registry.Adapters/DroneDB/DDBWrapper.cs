@@ -3,12 +3,12 @@ using System.Collections.Generic;
 using System.Runtime.InteropServices;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
-using Registry.Adapters.Ddb.Model;
+using Registry.Ports.DroneDB.Models;
 
 
-namespace Registry.Adapters.Ddb
+namespace Registry.Adapters.DroneDB
 {
-    public static class DroneDBWrapper
+    public static class DDBWrapper
     {
         [DllImport("ddb", EntryPoint = "DDBRegisterProcess")]
         public static extern void RegisterProcess(bool verbose = false);
@@ -556,15 +556,16 @@ namespace Registry.Adapters.Ddb
         [DllImport("ddb", EntryPoint = "DDBApplyDelta")]
         private static extern DDBError _ApplyDelta([MarshalAs(UnmanagedType.LPStr)] string delta,
             [MarshalAs(UnmanagedType.LPStr)] string sourcePath, 
-            [MarshalAs(UnmanagedType.LPStr)] string ddbPath, int mergeStrategy, out IntPtr conflicts);
+            [MarshalAs(UnmanagedType.LPStr)] string ddbPath, int mergeStrategy,
+            [MarshalAs(UnmanagedType.LPStr)] string sourceMetaDump, out IntPtr conflicts);
 
-        public static List<string> ApplyDelta(Delta delta, string sourcePath, string ddbPath, MergeStrategy mergeStrategy)
+        public static List<string> ApplyDelta(Delta delta, string sourcePath, string ddbPath, MergeStrategy mergeStrategy, string sourceMetaDump = null)
         {
             try
             {
                 string deltaJson = JsonConvert.SerializeObject(delta);
 
-                if (_ApplyDelta(deltaJson, sourcePath, ddbPath, (int)mergeStrategy, out var conflictsPtr) !=
+                if (_ApplyDelta(deltaJson, sourcePath, ddbPath, (int)mergeStrategy, sourceMetaDump ?? "[]", out var conflictsPtr) !=
                     DDBError.DDBERR_NONE) throw new DDBException(GetLastError());
 
                 var conflicts = Marshal.PtrToStringAnsi(conflictsPtr);
@@ -585,6 +586,7 @@ namespace Registry.Adapters.Ddb
                     ex);
             }
         }
+
 
 
         public static Delta Delta(Stamp source, Stamp target)
@@ -617,6 +619,41 @@ namespace Registry.Adapters.Ddb
             }
 
         }
+
+
+        [DllImport("ddb", EntryPoint = "DDBComputeDeltaLocals")]
+        private static extern DDBError _ComputeDeltaLocals([MarshalAs(UnmanagedType.LPStr)] string delta,
+    [MarshalAs(UnmanagedType.LPStr)] string ddbPath, [MarshalAs(UnmanagedType.LPStr)] string hlDestFolder,
+    out IntPtr output);
+
+        public static Dictionary<string, bool> ComputeDeltaLocals(Delta delta, string ddbPath, string hlDestFolder = "")
+        {
+            try
+            {
+                string deltaJson = JsonConvert.SerializeObject(delta);
+
+                if (_ComputeDeltaLocals(deltaJson, ddbPath, hlDestFolder, out var outputPtr) !=
+                    DDBError.DDBERR_NONE) throw new DDBException(GetLastError());
+
+                var output = Marshal.PtrToStringAnsi(outputPtr);
+
+                if (string.IsNullOrWhiteSpace(output))
+                    throw new DDBException("Unable get ComputeDeltaLocals result");
+
+                return JsonConvert.DeserializeObject<Dictionary<string, bool>>(output);
+            }
+            catch (EntryPointNotFoundException ex)
+            {
+                throw new DDBException($"Error in calling ddb lib: incompatible versions ({ex.Message})", ex);
+            }
+            catch (Exception ex)
+            {
+                throw new DDBException(
+                    $"Error in calling ddb lib. Last error: \"{GetLastError()}\", check inner exception for details",
+                    ex);
+            }
+        }
+
 
         [DllImport("ddb", EntryPoint = "DDBMoveEntry")]
         private static extern DDBError _MoveEntry([MarshalAs(UnmanagedType.LPStr)] string ddbSource,
@@ -863,7 +900,7 @@ namespace Registry.Adapters.Ddb
                 var json = Marshal.PtrToStringAnsi(output);
 
                 if (json == null)
-                    throw new InvalidOperationException("No result from DDBMetaUnset call");
+                    throw new InvalidOperationException("No result from DDBMetaList call");
 
                 return JsonConvert.DeserializeObject<List<MetaListItem>>(json);
             }
@@ -877,5 +914,32 @@ namespace Registry.Adapters.Ddb
             }
         }
 
+        [DllImport("ddb", EntryPoint = "DDBMetaDump")]
+        static extern DDBError _MetaDump([MarshalAs(UnmanagedType.LPStr)] string ddbPath,
+         [MarshalAs(UnmanagedType.LPStr)] string ids, out IntPtr output);
+
+        public static List<MetaDump> MetaDump(string ddbPath, string ids = null)
+        {
+            try
+            {
+                if (_MetaDump(ddbPath, ids ?? "[]", out var output) !=
+                    DDBError.DDBERR_NONE) throw new DDBException(GetLastError());
+
+                var json = Marshal.PtrToStringAnsi(output);
+
+                if (json == null)
+                    throw new InvalidOperationException("No result from DDBMetaDump call");
+
+                return JsonConvert.DeserializeObject<List<MetaDump>>(json);
+            }
+            catch (EntryPointNotFoundException ex)
+            {
+                throw new DDBException($"Error in calling ddb lib: incompatible versions ({ex.Message})", ex);
+            }
+            catch (Exception ex)
+            {
+                throw new DDBException($"Error in calling ddb lib. Last error: \"{GetLastError()}\", check inner exception for details", ex);
+            }
+        }
     }
 }

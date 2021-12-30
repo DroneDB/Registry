@@ -27,7 +27,7 @@
     </ItemGroup>
 
     <ItemGroup>
-      <ProjectReference Include="..\Registry.Adapters.Ddb\Registry.Adapters.Ddb.csproj" />
+      <ProjectReference Include="..\Registry.Adapters\Registry.Adapters.csproj" />
     </ItemGroup>
 
 </Project>

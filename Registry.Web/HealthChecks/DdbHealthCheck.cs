@@ -5,6 +5,7 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
+using Registry.Ports;
 using Registry.Web.Services.Ports;
 
 namespace Registry.Web.HealthChecks

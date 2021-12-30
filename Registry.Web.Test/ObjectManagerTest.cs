@@ -3,42 +3,31 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.IO.Compression;
-using System.Linq;
-using System.Net;
-using System.Runtime.CompilerServices;
 using System.Security.Cryptography;
-using System.Text;
-using System.Threading;
 using System.Threading.Tasks;
 using FluentAssertions;
 using Microsoft.AspNetCore.Http;
-using Microsoft.AspNetCore.Routing;
-using Microsoft.CodeAnalysis.Options;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Caching.Distributed;
 using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Logging.Console;
 using Microsoft.Extensions.Options;
 using Moq;
 using Newtonsoft.Json;
 using NUnit.Framework;
 using Registry.Adapters;
-using Registry.Adapters.Ddb.Model;
 using Registry.Common;
-using Registry.Ports;
-using Registry.Ports.DroneDB;
-using Registry.Ports.DroneDB.Models;
 using Registry.Web.Data;
 using Registry.Web.Data.Models;
 using Registry.Web.Exceptions;
-using Registry.Web.Models;
 using Registry.Web.Models.Configuration;
-using Registry.Web.Models.DTO;
 using Registry.Web.Services.Adapters;
 using Registry.Web.Services.Managers;
 using Registry.Web.Services.Ports;
 using Registry.Web.Test.Adapters;
 using Registry.Web.Utilities;
+using Registry.Adapters.DroneDB;
+using Registry.Ports;
+using Registry.Ports.DroneDB;
+using Registry.Ports.DroneDB.Models;
 
 namespace Registry.Web.Test
 {
@@ -81,14 +70,14 @@ namespace Registry.Web.Test
             _ddbFactoryLogger = new Logger<DdbManager>(LoggerFactory.Create(builder => builder.AddConsole()));
             _objectManagerLogger = new Logger<ObjectsManager>(LoggerFactory.Create(builder => builder.AddConsole()));
 
-            var ddbMock1 = new Mock<IDdb>();
+            var ddbMock1 = new Mock<IDDB>();
             ddbMock1.Setup(x => x.GetAttributesRaw()).Returns(new Dictionary<string, object>
             {
                 { "public", true }
             });
-            var ddbMock2 = new Mock<IDdb>();
+            var ddbMock2 = new Mock<IDDB>();
             ddbMock2.Setup(x => x.GetAttributesAsync(default))
-                .Returns(Task.FromResult(new DdbAttributes(ddbMock1.Object)));
+                .Returns(Task.FromResult(new EntryAttributes(ddbMock1.Object)));
 
             _ddbFactoryMock.Setup(x => x.Get(It.IsAny<string>(), It.IsAny<Guid>())).Returns(ddbMock2.Object);
         }

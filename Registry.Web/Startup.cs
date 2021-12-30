@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.ComponentModel.DataAnnotations;
 using System.Diagnostics;
 using System.Globalization;
 using System.IO;
@@ -28,7 +27,6 @@ using Microsoft.AspNetCore.Server.Kestrel.Core;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.FileProviders;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
@@ -36,8 +34,6 @@ using Microsoft.OpenApi.Models;
 using Newtonsoft.Json.Serialization;
 using Registry.Adapters;
 using Registry.Common;
-using Registry.Ports;
-using Registry.Ports.DroneDB;
 using Registry.Web.Data;
 using Registry.Web.Data.Models;
 using Registry.Web.Filters;
@@ -49,6 +45,8 @@ using Registry.Web.Services.Adapters;
 using Registry.Web.Services.Managers;
 using Registry.Web.Services.Ports;
 using Registry.Web.Utilities;
+using Registry.Adapters.DroneDB;
+using Registry.Ports;
 
 namespace Registry.Web
 {
@@ -222,11 +220,11 @@ namespace Registry.Web
             services.AddScoped<IDatasetsManager, DatasetsManager>();
             services.AddScoped<IObjectsManager, ObjectsManager>();
             services.AddScoped<IShareManager, ShareManager>();
-            //services.AddScoped<IPushManager, PushManager>();
+            services.AddScoped<IPushManager, PushManager>();
             services.AddScoped<IDdbManager, DdbManager>();
             services.AddScoped<ISystemManager, SystemManager>();
             services.AddScoped<IBackgroundJobsProcessor, BackgroundJobsProcessor>();
-            services.AddScoped<IMetaManager, MetaManager>();
+            services.AddScoped<IMetaManager, Services.Managers.MetaManager>();
 
             services.AddSingleton<IFileSystem, FileSystem>();
             services.AddSingleton<IPasswordHasher, PasswordHasher>();
@@ -372,7 +370,7 @@ namespace Registry.Web
             
             cacheManager.Register(MagicStrings.TileCacheSeed, parameters =>
             {
-                var ddb = (IDdb)parameters[0];
+                var ddb = (DDB)parameters[0];
                 var sourcePath = (string)parameters[1];
                 var sourceHash = (string)parameters[2];
                 var tx = (int)parameters[3];
@@ -386,7 +384,7 @@ namespace Registry.Web
             
             cacheManager.Register(MagicStrings.ThumbnailCacheSeed, parameters =>
             {
-                var ddb = (IDdb)parameters[0];
+                var ddb = (DDB)parameters[0];
                 var sourcePath = (string)parameters[1];
                 var size = (int)parameters[2];
 

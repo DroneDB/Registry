@@ -3,9 +3,10 @@ using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using Registry.Common;
 
-namespace Registry.Web.Models.DTO
+namespace Registry.Ports.DroneDB.Models
 {
-    public class MetaDto
+    // Let's duplicate MetaDto for no apparent reason
+    public class Meta
     {
         [JsonProperty("id")]
         public string Id { get; set; }
@@ -14,7 +15,7 @@ namespace Registry.Web.Models.DTO
         public JToken Data { get; set; }
 
         [JsonProperty("mtime")]
-        [JsonConverter(typeof(SecondEpochConverter))]
+        [JsonConverter(typeof(SecondEpochConverter))] 
         public DateTime ModifiedTime { get; set; }
     }
 }

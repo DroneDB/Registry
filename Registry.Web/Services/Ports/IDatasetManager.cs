@@ -1,6 +1,5 @@
 ﻿using System.Collections.Generic;
 using System.Threading.Tasks;
-using Registry.Web.Data.Models;
 using Registry.Web.Models.DTO;
 
 namespace Registry.Web.Services.Ports
@@ -16,5 +15,6 @@ namespace Registry.Web.Services.Ports
 
         public Task Rename(string orgSlug, string dsSlug, string newSlug);
         Task<Dictionary<string, object>> ChangeAttributes(string orgSlug, string dsSlug, Dictionary<string, object> attributes);
+        public Task<StampDto> GetStamp(string orgSlug, string dsSlug);
     }
 }

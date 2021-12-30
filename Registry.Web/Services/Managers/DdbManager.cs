@@ -3,6 +3,7 @@ using System.IO;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Registry.Adapters.DroneDB;
+using Registry.Ports;
 using Registry.Ports.DroneDB;
 using Registry.Web.Models.Configuration;
 using Registry.Web.Services.Ports;
@@ -20,16 +21,16 @@ namespace Registry.Web.Services.Managers
             _settings = settings.Value;
         }
 
-        public IDdb Get(string orgSlug, Guid internalRef)
+        public IDDB Get(string orgSlug, Guid internalRef)
         {
             var baseDdbPath = GetDdbPath(orgSlug, internalRef);
 
             Directory.CreateDirectory(baseDdbPath);
 
-            var ddb = new Ddb(baseDdbPath);
+            var ddb = new DDB(baseDdbPath);
 
             // TODO: It would be nice if we could use the bindings to check this
-            if (!Directory.Exists(Path.Combine(baseDdbPath, Ddb.DatabaseFolderName)))
+            if (!Directory.Exists(Path.Combine(baseDdbPath, DDB.DatabaseFolderName)))
             {
 
                 ddb.Init();
@@ -57,9 +58,6 @@ namespace Registry.Web.Services.Managers
             Directory.Delete(baseDdbPath, true);
 
         }
-
-        public string DatabaseFolderName => Ddb.DatabaseFolderName;
-        public string BuildFolderName => Ddb.BuildFolderName;
 
         private string GetDdbPath(string orgSlug, Guid internalRef)
         {
