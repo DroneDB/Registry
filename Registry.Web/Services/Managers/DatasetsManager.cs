@@ -178,6 +178,8 @@ namespace Registry.Web.Services.Managers
             if (!newSlug.IsValidSlug())
                 throw new ArgumentException($"Invalid slug '{newSlug}'");
 
+            if (dsSlug == newSlug) return; // Nothing to do
+
             if (await _utils.GetDataset(orgSlug, newSlug, true) != null)
                 throw new ArgumentException($"Dataset '{newSlug}' already exists");
 
