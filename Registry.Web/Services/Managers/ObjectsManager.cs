@@ -67,7 +67,7 @@ namespace Registry.Web.Services.Managers
         }
 
         public async Task<IEnumerable<EntryDto>> List(string orgSlug, string dsSlug, string path = null,
-            bool recursive = false)
+            bool recursive = false, EntryType? type = null)
         {
             var ds = await _utils.GetDataset(orgSlug, dsSlug);
 
@@ -77,7 +77,12 @@ namespace Registry.Web.Services.Managers
 
             _logger.LogInformation("Searching in '{Path}'", path);
 
-            var files = (await ddb.SearchAsync(path, recursive)).Select(item => item.ToDto()).ToArray();
+            var entities = await ddb.SearchAsync(path, recursive);
+
+            if (type != null)
+                entities = entities.Where(item => item.Type == type);
+            
+            var files = entities.Select(item => item.ToDto()).ToArray();
 
             _logger.LogInformation("Found {FilesCount} objects", files.Length);
 
@@ -85,7 +90,7 @@ namespace Registry.Web.Services.Managers
         }
 
         public async Task<IEnumerable<EntryDto>> Search(string orgSlug, string dsSlug, string query = null,
-            string path = null, bool recursive = true)
+            string path = null, bool recursive = true, EntryType? type = null)
         {
             var ds = await _utils.GetDataset(orgSlug, dsSlug);
 
@@ -95,7 +100,12 @@ namespace Registry.Web.Services.Managers
 
             _logger.LogInformation("Searching in '{Path}' -> {Query} ({Recursive}", path, query, recursive ? 'r' : 'n');
 
-            var files = (from entry in await ddb.SearchAsync(path, recursive)
+            var entities = await ddb.SearchAsync(path, recursive);
+            
+            if (type != null)
+                entities = entities.Where(item => item.Type == type);
+            
+            var files = (from entry in entities
                 let name = Path.GetFileName(entry.Path)
                 where FileSystemName.MatchesSimpleExpression(query, name)
                 select entry.ToDto()).ToArray();
