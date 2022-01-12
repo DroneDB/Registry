@@ -220,18 +220,18 @@ namespace Registry.Web.Controllers
 
         [HttpGet("list", Name = nameof(ObjectsController) + "." + nameof(GetInfo))]
         [ProducesResponseType(typeof(IEnumerable<Entry>), 200)]
-        public async Task<IActionResult> GetInfo([FromRoute] string orgSlug, [FromRoute] string dsSlug, [FromQuery] string path)
+        public async Task<IActionResult> GetInfo([FromRoute] string orgSlug, [FromRoute] string dsSlug, [FromQuery] string path, [FromQuery] EntryType? type = null)
         {
             try
             {
-                _logger.LogDebug("Objects controller GetInfo('{OrgSlug}', '{DsSlug}', '{Path}')", orgSlug, dsSlug, path);
+                _logger.LogDebug("Objects controller GetInfo('{OrgSlug}', '{DsSlug}', '{Path}', '{Type}')", orgSlug, dsSlug, path, type);
 
-                var res = await _objectsManager.List(orgSlug, dsSlug, path);
+                var res = await _objectsManager.List(orgSlug, dsSlug, path, false, type);
                 return Ok(res);
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Exception in Objects controller GetInfo('{OrgSlug}', '{DsSlug}', '{Path}')", orgSlug, dsSlug, path);
+                _logger.LogError(ex, "Exception in Objects controller GetInfo('{OrgSlug}', '{DsSlug}', '{Path}', '{Type}')", orgSlug, dsSlug, path, type);
 
                 return ExceptionResult(ex);
             }
@@ -239,19 +239,18 @@ namespace Registry.Web.Controllers
 
         [HttpPost("list", Name = nameof(ObjectsController) + "." + nameof(GetInfoEx))]
         [ProducesResponseType(typeof(IEnumerable<Entry>), 200)]
-        public async Task<IActionResult> GetInfoEx([FromRoute] string orgSlug, [FromRoute] string dsSlug, [FromForm] string path)
+        public async Task<IActionResult> GetInfoEx([FromRoute] string orgSlug, [FromRoute] string dsSlug, [FromForm] string path, [FromForm] EntryType? type = null)
         {
             try
             {
-                _logger.LogDebug("Objects controller GetInfoEx('{OrgSlug}', '{DsSlug}', '{Path}')", orgSlug, dsSlug, path);
+                _logger.LogDebug("Objects controller GetInfoEx('{OrgSlug}', '{DsSlug}', '{Path}', {Type})", orgSlug, dsSlug, path, type);
 
-                var res = await _objectsManager.List(orgSlug, dsSlug, path);
+                var res = await _objectsManager.List(orgSlug, dsSlug, path, false, type);
                 return Ok(res);
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Exception in Objects controller GetInfoEx('{OrgSlug}', '{DsSlug}', '{Path}')", orgSlug, dsSlug, path);
-
+                _logger.LogError(ex, "Exception in Objects controller GetInfoEx('{OrgSlug}', '{DsSlug}', '{Path}, {Type})", orgSlug, dsSlug, path, type);
                 return ExceptionResult(ex);
             }
         }
@@ -259,19 +258,18 @@ namespace Registry.Web.Controllers
 
         [HttpPost("search", Name = nameof(ObjectsController) + "." + nameof(Search))]
         [ProducesResponseType(typeof(IEnumerable<Entry>), 200)]
-        public async Task<IActionResult> Search([FromRoute] string orgSlug, [FromRoute] string dsSlug, [FromForm] string query, [FromForm] string path, [FromForm] bool recursive = true)
+        public async Task<IActionResult> Search([FromRoute] string orgSlug, [FromRoute] string dsSlug, [FromForm] string query, [FromForm] string path, [FromForm] bool recursive = true, [FromForm] EntryType? type = null)
         {
             try
             {
-                _logger.LogDebug("Objects controller Search('{OrgSlug}', '{DsSlug}', '{Path}')", orgSlug, dsSlug, path);
+                _logger.LogDebug("Objects controller Search('{OrgSlug}', '{DsSlug}', '{Path}', '{Type}')", orgSlug, dsSlug, path, type);
 
-                var res = await _objectsManager.Search(orgSlug, dsSlug, query, path, recursive);
+                var res = await _objectsManager.Search(orgSlug, dsSlug, query, path, recursive, type);
                 return Ok(res);
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Exception in Objects controller Search('{OrgSlug}', '{DsSlug}', '{Path}')", orgSlug, dsSlug, path);
-
+                _logger.LogError(ex, "Exception in Objects controller Search('{OrgSlug}', '{DsSlug}', '{Path}', '{Type}')", orgSlug, dsSlug, path, type);
                 return ExceptionResult(ex);
             }
         }
