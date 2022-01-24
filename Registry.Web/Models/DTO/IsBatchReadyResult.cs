@@ -22,6 +22,6 @@ namespace Registry.Web.Models.DTO
         public bool IsReady { get; }
         public Batch Batch { get; }
 
-        public static readonly IsBatchReadyResult NotReady = new IsBatchReadyResult(false);
+        public static readonly IsBatchReadyResult NotReady = new(false);
     }
 }
