@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Dynamic;
 using System.IO;
 using System.Linq;
 using System.Text;
@@ -230,6 +231,135 @@ namespace Registry.Web.Test
             batch.End.Should().NotBeNull();
             batch.Status.Should().Be(BatchStatus.Committed);
             batch.Entries.Should().HaveCount(0);
+        }
+        
+        [Test]
+        public async Task EndToEnd_HappyPathRollback()
+        {
+            // INITIALIZATION & SETUP
+            const string userName = "admin";
+
+            using var test = new TestFS(Test4ArchiveUrl, BaseTestFolder, true);
+
+            await using var context = GetTest1Context();
+
+            var settings = JsonConvert.DeserializeObject<AppSettings>(_settingsJson);
+            settings.StoragePath = test.TestFolder;
+            _appSettingsMock.Setup(o => o.Value).Returns(settings);
+            
+            _authManagerMock.Setup(o => o.IsUserAdmin()).Returns(Task.FromResult(true));
+            _authManagerMock.Setup(o => o.IsOwnerOrAdmin(It.IsAny<Dataset>())).Returns(Task.FromResult(true));
+
+            _authManagerMock.Setup(o => o.GetCurrentUser()).Returns(Task.FromResult(new User
+            {
+                UserName = userName,
+                Email = "admin@example.com"
+            }));
+            _authManagerMock.Setup(o => o.SafeGetCurrentUserName()).Returns(Task.FromResult(userName));
+
+            var attributes = new Dictionary<string, object>
+            {
+                { "public", true }
+            };
+
+            var ddbMock = new Mock<IDDB>();
+            ddbMock.Setup(x => x.GetInfoAsync(default)).Returns(Task.FromResult(new Entry
+            {
+                Properties = attributes
+            }));
+            var ddbMock2 = new Mock<IDDB>();
+            ddbMock2.Setup(x => x.GetAttributesRaw()).Returns(attributes);
+            ddbMock.Setup(x => x.GetAttributesAsync(default))
+                .Returns(Task.FromResult(new EntryAttributes(ddbMock2.Object)));
+
+            _ddbFactoryMock.Setup(x => x.Get(It.IsAny<string>(), It.IsAny<Guid>())).Returns(ddbMock.Object);
+
+            var ddbFactory = new DdbManager(_appSettingsMock.Object, _ddbFactoryLogger);
+            var webUtils = new WebUtils(_authManagerMock.Object, context, _appSettingsMock.Object,
+                _httpContextAccessorMock.Object, _ddbFactoryMock.Object);
+
+            var objectManager = new ObjectsManager(_objectManagerLogger, context, 
+                _appSettingsMock.Object, ddbFactory, webUtils, _authManagerMock.Object, _cacheManagerMock.Object,
+                _fileSystem, _backgroundJobsProcessor);
+
+            var datasetManager = new DatasetsManager(context, webUtils, _datasetsManagerLogger, objectManager,
+                _ddbFactoryMock.Object, _authManagerMock.Object);
+            var organizationsManager = new OrganizationsManager(_authManagerMock.Object, context, webUtils,
+                datasetManager, _organizationsManagerLogger);
+
+            var shareManager = new ShareManager(_appSettingsMock.Object, _shareManagerLogger, objectManager,
+                datasetManager, organizationsManager, webUtils, _authManagerMock.Object, 
+                new BatchTokenGenerator(_appSettingsMock.Object, _batchTokenGeneratorLogger), 
+                new NameGenerator(_appSettingsMock.Object, _nameGeneratorLogger), context);
+
+            // TEST
+
+            const string fileName = "DJI_0028.JPG";
+            const int fileSize = 3140384;
+            const string fileHash = "7cf58d0a06c56092aa5d6e108e385ad942225c75b462406cdf50d66f829572d3";
+            const string organizationTestName = "test";
+            const string datasetTestName = "First";
+            const string organizationTestSlug = "test";
+            const string datasetTestSlug = "first";
+            const string newFileUrl =
+                "https://github.com/DroneDB/test_data/raw/master/test-datasets/drone_dataset_brighton_beach/" +
+                fileName;
+
+            // ListBatches
+            var batches =
+                (await shareManager.ListBatches(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug))
+                .ToArray();
+            batches.Should().BeEmpty();
+
+            var res = await organizationsManager.AddNew(new OrganizationDto
+            {
+                Name = organizationTestName,
+                IsPublic = true,
+                Slug = organizationTestSlug
+            });
+
+            res.Description.Should().BeNull();
+            res.IsPublic.Should().BeTrue();
+            res.Slug.Should().Be(organizationTestSlug);
+            res.Name.Should().Be(organizationTestName);
+
+            // Initialize
+            var initRes = await shareManager.Initialize(new ShareInitDto
+            {
+                Tag = $"{organizationTestSlug}/{datasetTestSlug}",
+                DatasetName = datasetTestName
+            });
+
+            initRes.Should().NotBeNull();
+            initRes.Token.Should().NotBeNullOrWhiteSpace();
+            //initRes.Tag.DatasetSlug.Should().Be(datasetTestSlug);
+            //initRes.Tag.OrganizationSlug.Should().Be(organizationTestSlug);
+
+            // ListBatches
+            batches = (await shareManager.ListBatches(organizationTestSlug, datasetTestSlug)).ToArray();
+
+            batches.Should().HaveCount(1);
+
+            var batch = batches.First();
+
+            batch.UserName.Should().Be(userName);
+            batch.Status.Should().Be(BatchStatus.Running);
+            batch.End.Should().BeNull();
+
+            // Upload
+            var uploadRes =
+                await shareManager.Upload(initRes.Token, fileName, CommonUtils.SmartDownloadData(newFileUrl));
+
+            uploadRes.Path.Should().Be(fileName);
+            uploadRes.Size.Should().Be(fileSize);
+            uploadRes.Hash.Should().Be(fileHash);
+
+            // Rollback
+            await shareManager.Rollback(initRes.Token);
+
+            // Check cleanup
+            await datasetManager.Invoking(async o => await o.Get(organizationTestSlug, datasetTestSlug)).Should()
+                .ThrowAsync<NotFoundException>();
         }
 
         [Test]
