@@ -35,7 +35,6 @@ namespace Registry.Web.Controllers
             _logger = logger;
         }
 
-
         [HttpGet(RoutesHelper.DatasetSlug + "/batches")]
         [ProducesResponseType(typeof(IEnumerable<BatchDto>), 200)]
         public async Task<IActionResult> Batches([FromRoute] string orgSlug, string dsSlug)
@@ -113,27 +112,28 @@ namespace Registry.Web.Controllers
         {
             try
             {
-                _logger.LogDebug($"Dataset controller GetStamp('{orgSlug}', '{dsSlug}')");
+                _logger.LogDebug("Dataset controller GetStamp('{OrgSlug}', '{DsSlug}')", orgSlug, dsSlug);
 
                 return Ok(await _datasetsManager.GetStamp(orgSlug, dsSlug));
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, $"Exception in Dataset controller GetStamp('{orgSlug}', '{dsSlug}')");
+                _logger.LogError(ex, "Exception in Dataset controller GetStamp('{OrgSlug}', '{DsSlug}')", orgSlug, dsSlug);
                 return ExceptionResult(ex);
             }
         }
 
         [HttpPost]
-        public async Task<IActionResult> Post([FromRoute] string orgSlug, [FromForm] DatasetDto dataset)
+        public async Task<IActionResult> Post([FromRoute] string orgSlug, [FromForm] DatasetEditDto dataset)
         {
             try
             {
                 _logger.LogDebug("Dataset controller Post('{OrgSlug}', '{DatasetSlug}')", orgSlug, dataset?.Slug);
 
                 var newDs = await _datasetsManager.AddNew(orgSlug, dataset);
-                return CreatedAtRoute(nameof(DatasetsController) + "." + nameof(Get), new { dsSlug = newDs.Slug },
-                    newDs);
+                return CreatedAtRoute(
+                    nameof(DatasetsController) + "." + nameof(Get), 
+                    new { orgSlug = orgSlug, dsSlug = newDs.Slug }, newDs);
             }
             catch (Exception ex)
             {
@@ -167,9 +167,9 @@ namespace Registry.Web.Controllers
             {
 
                 var attributes = string.IsNullOrWhiteSpace(rawAttributes) ? 
-                    new Dictionary<string, object>() : 
-                    JsonConvert.DeserializeObject<Dictionary<string, object>>(rawAttributes);
-
+                    new AttributesDto() : 
+                    JsonConvert.DeserializeObject<AttributesDto>(rawAttributes);
+                
                 _logger.LogDebug("Dataset controller ChangeAttributes('{OrgSlug}', '{DsSlug}', {RawAttributes}')", orgSlug, dsSlug, rawAttributes);
 
                 var res = await _datasetsManager.ChangeAttributes(orgSlug, dsSlug, attributes);
@@ -184,9 +184,8 @@ namespace Registry.Web.Controllers
         }
 
         [HttpPut(RoutesHelper.DatasetSlug)]
-        public async Task<IActionResult> Put([FromRoute] string orgSlug, string dsSlug, [FromForm] DatasetDto dataset)
+        public async Task<IActionResult> Put([FromRoute] string orgSlug, string dsSlug, [FromForm] DatasetEditDto dataset)
         {
-
             try
             {
                 _logger.LogDebug("Dataset controller Put('{OrgSlug}', '{DsSlug}', '{DatasetSlug}')", orgSlug, dsSlug, dataset?.Slug);
@@ -199,13 +198,11 @@ namespace Registry.Web.Controllers
                 _logger.LogError(ex, "Exception in Dataset controller Put('{OrgSlug}', '{DsSlug}', '{DatasetSlug}')", orgSlug, dsSlug, dataset?.Slug);
                 return ExceptionResult(ex);
             }
-
         }
 
         [HttpDelete(RoutesHelper.DatasetSlug)]
         public async Task<IActionResult> Delete([FromRoute] string orgSlug, string dsSlug)
         {
-
             try
             {
                 _logger.LogDebug("Dataset controller Delete('{OrgSlug}', '{DsSlug}')", orgSlug, dsSlug);
@@ -216,12 +213,8 @@ namespace Registry.Web.Controllers
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Exception in Dataset controller Delete('{OrgSlug}', '{DsSlug}')", orgSlug, dsSlug);
-
                 return ExceptionResult(ex);
             }
-
         }
-
-
     }
 }

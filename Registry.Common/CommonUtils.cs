@@ -82,7 +82,7 @@ namespace Registry.Common
         public static TValueOut? SafeGetValue<TKey, TValue, TValueOut>(this IDictionary<TKey, TValue> dictionary,
             TKey key, Func<TValue, TValueOut> selector) where TValueOut : struct
         {
-            return !dictionary.TryGetValue(key, out var value) ? null : (TValueOut?)selector(value);
+            return !dictionary.TryGetValue(key, out var value) ? null : selector(value);
         }
 
         /// <summary>

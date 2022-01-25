@@ -34,6 +34,7 @@ using Registry.Web.Test.Adapters;
 using Registry.Ports.DroneDB.Models;
 using Attributes = Registry.Ports.DroneDB.Models.EntryAttributes;
 using Entry = Registry.Ports.DroneDB.Models.Entry;
+using IMetaManager = Registry.Ports.DroneDB.IMetaManager;
 
 namespace Registry.Web.Test
 {
@@ -161,6 +162,10 @@ namespace Registry.Web.Test
             {
                 Properties = attributes
             }));
+            
+            var mockMeta = new MockMeta();
+            ddbMock.Setup(x => x.Meta).Returns(mockMeta);
+
             var ddbMock2 = new Mock<IDDB>();
             ddbMock2.Setup(x => x.GetAttributesRaw()).Returns(attributes);
             ddbMock.Setup(x => x.GetAttributesAsync(default))
@@ -267,6 +272,10 @@ namespace Registry.Web.Test
             {
                 Properties = attributes
             }));
+            
+            var mockMeta = new MockMeta();
+            ddbMock.Setup(x => x.Meta).Returns(mockMeta);
+
             var ddbMock2 = new Mock<IDDB>();
             ddbMock2.Setup(x => x.GetAttributesRaw()).Returns(attributes);
             ddbMock.Setup(x => x.GetAttributesAsync(default))
@@ -396,6 +405,13 @@ namespace Registry.Web.Test
             {
                 Properties = attributes
             }));
+
+            var metaMock = new Mock<IMetaManager>();
+            metaMock.Setup(x => x.Set(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>()));
+
+            var mockMeta = new MockMeta();
+            ddbMock.Setup(x => x.Meta).Returns(mockMeta);
+            
             var ddbMock2 = new Mock<IDDB>();
             ddbMock2.Setup(x => x.GetAttributesRaw()).Returns(attributes);
             ddbMock.Setup(x => x.GetAttributesAsync(default))
@@ -537,6 +553,10 @@ namespace Registry.Web.Test
             {
                 Properties = attributes
             }));
+            
+            var mockMeta = new MockMeta();
+            ddbMock.Setup(x => x.Meta).Returns(mockMeta);
+
             var ddbMock2 = new Mock<IDDB>();
             ddbMock2.Setup(x => x.GetAttributesRaw()).Returns(attributes);
             ddbMock.Setup(x => x.GetAttributesAsync(default))

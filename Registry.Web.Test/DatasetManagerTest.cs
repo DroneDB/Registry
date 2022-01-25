@@ -50,6 +50,9 @@ namespace Registry.Web.Test
         [Test]
         public async Task List_Default_Ok()
         {
+            const string expectedSlug = MagicStrings.DefaultDatasetSlug;
+            const string expectedName = "Default";
+
 
             await using var context = GetTest1Context();
             _appSettingsMock.Setup(o => o.Value).Returns(_settings);
@@ -61,7 +64,8 @@ namespace Registry.Web.Test
             ddbMock.Setup(x => x.GetInfoAsync(default)).Returns(Task.FromResult(new Entry{
                     Properties = new Dictionary<string, object>
                     {
-                        {"public", true }
+                        {"public", true },
+                        {"name", expectedName}
                     },
                     Size = 1000,
                     ModifiedTime = DateTime.Now
@@ -79,14 +83,12 @@ namespace Registry.Web.Test
 
             var pub = list.First();
 
-            const string expectedSlug = MagicStrings.DefaultDatasetSlug;
-            const string expectedName = "Default";
-
             pub.Slug.Should().Be(expectedSlug);
-
+            
             // TODO: Check test data: this should be true
-            pub.IsPublic.Should().BeTrue();
-            pub.Name.Should().Be(expectedName);
+            pub.Properties["public"].Should().Be(true);
+            pub.Properties["name"].Should().Be(expectedName);
+
 
         }
 

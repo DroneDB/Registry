@@ -249,7 +249,7 @@ namespace Registry.Web.Services.Managers
 
                 _logger.LogInformation("Generated unique dataset slug '{DsSlug}'", dsSlug);
                 
-                await _datasetsManager.AddNew(orgSlug, new DatasetDto
+                await _datasetsManager.AddNew(orgSlug, new DatasetEditDto
                 {
                     Slug = dsSlug,
                     Name = parameters.DatasetName,
@@ -295,7 +295,7 @@ namespace Registry.Web.Services.Managers
                 {
                     _logger.LogInformation("Dataset '{DatasetSlug}' not found, creating it", tag.DatasetSlug);
 
-                    await _datasetsManager.AddNew(tag.OrganizationSlug, new DatasetDto
+                    await _datasetsManager.AddNew(tag.OrganizationSlug, new DatasetEditDto
                     {
                         Slug = tag.DatasetSlug,
                         Name = parameters.DatasetName,

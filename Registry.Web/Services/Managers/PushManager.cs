@@ -61,13 +61,13 @@ namespace Registry.Web.Services.Managers
             if (ds == null)
             {
                 _logger.LogInformation("Dataset does not exist, creating it");
-                await _datasetsManager.AddNew(orgSlug, new DatasetDto
+                await _datasetsManager.AddNew(orgSlug, new DatasetEditDto
                 {
                     Name = dsSlug,
                     Slug = dsSlug
                 });
 
-                _logger.LogInformation($"New dataset {orgSlug}/{dsSlug} created");
+                _logger.LogInformation("New dataset {OrgSlug}/{DsSlug} created", orgSlug, dsSlug);
                 ds = await _utils.GetDataset(orgSlug, dsSlug);
             }
 

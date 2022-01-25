@@ -3,9 +3,11 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
+using Registry.Adapters.DroneDB;
 using Registry.Ports;
 using Registry.Ports.DroneDB.Models;
 using Registry.Web.Data;
+using Registry.Web.Data.Models;
 using Registry.Web.Exceptions;
 using Registry.Web.Models.DTO;
 using Registry.Web.Services.Ports;
@@ -21,8 +23,6 @@ namespace Registry.Web.Services.Managers
         private readonly IObjectsManager _objectsManager;
         private readonly IDdbManager _ddbManager;
         private readonly IAuthManager _authManager;
-
-        // TODO: Add extensive testing
 
         public DatasetsManager(
             RegistryContext context,
@@ -41,7 +41,6 @@ namespace Registry.Web.Services.Managers
 
         public async Task<IEnumerable<DatasetDto>> List(string orgSlug)
         {
-
             var org = await _utils.GetOrganization(orgSlug);
 
             var res = new List<DatasetDto>();
@@ -54,24 +53,18 @@ namespace Registry.Web.Services.Managers
 
                 res.Add(new DatasetDto
                 {
-                    Id = ds.Id,
                     Slug = ds.Slug,
                     CreationDate = ds.CreationDate,
-                    LastEdit = attributes.LastUpdate,
-                    IsPublic = attributes.IsPublic,
-                    Name = ds.Name,
                     Properties = attributes.Properties,
-                    ObjectsCount = attributes.ObjectsCount,
                     Size = info.Size
                 });
             }
-            
+
             return res.ToArray();
         }
 
         public async Task<DatasetDto> Get(string orgSlug, string dsSlug)
         {
-
             var dataset = await _utils.GetDataset(orgSlug, dsSlug);
             var ddb = _ddbManager.Get(orgSlug, dataset.InternalRef);
 
@@ -91,55 +84,66 @@ namespace Registry.Web.Services.Managers
             return new[] { info.ToDto() };
         }
 
-        public async Task<DatasetDto> AddNew(string orgSlug, DatasetDto dataset)
+        public async Task<DatasetDto> AddNew(string orgSlug, DatasetEditDto dataset)
         {
-
             var org = await _utils.GetOrganization(orgSlug);
 
-            var ds = dataset.ToEntity();
+            if (dataset == null)
+                throw new BadRequestException("Dataset is null");
+            
+            if (dataset.Slug == null)
+                throw new BadRequestException("Dataset slug is null");
 
-            var now = DateTime.Now;
-
-            if (ds.InternalRef == Guid.Empty)
-                ds.InternalRef = Guid.NewGuid();
+            if (!dataset.Slug.IsValidSlug())
+                throw new BadRequestException("Dataset slug is invalid");
+            
+            if (_context.Datasets.Any(item => item.Slug == dataset.Slug && item.Organization.Slug == orgSlug))
+                throw new BadRequestException("Dataset with this slug already exists");
+            
+            var ds = new Dataset
+            {
+                Slug = dataset.Slug,
+                Organization = org,
+                InternalRef = Guid.NewGuid(),
+                CreationDate = DateTime.Now
+            };
 
             var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
-
-            if (dataset.Properties != null) 
-                await ddb.ChangeAttributesRawAsync(dataset.Properties);
+            
+            ddb.Meta.GetSafe().Name = dataset.Name ?? dataset.Slug;
 
             var attributes = await ddb.GetAttributesAsync();
 
-            attributes.IsPublic = dataset.IsPublic;
-            attributes.LastUpdate = now;
-
-            ds.CreationDate = now;
+            if (dataset.IsPublic.HasValue)
+                attributes.IsPublic = dataset.IsPublic.Value;
 
             org.Datasets.Add(ds);
 
             await _context.SaveChangesAsync();
 
             return ds.ToDto(await ddb.GetInfoAsync());
-
         }
 
-        public async Task Edit(string orgSlug, string dsSlug, DatasetDto dataset)
+        public async Task Edit(string orgSlug, string dsSlug, DatasetEditDto dataset)
         {
-
+            if (dataset == null)
+                throw new BadRequestException("Dataset is null");
+            
             var ds = await _utils.GetDataset(orgSlug, dsSlug);
 
             if (!await _authManager.IsOwnerOrAdmin(ds))
                 throw new UnauthorizedException("The current user is not allowed to edit dataset");
 
-            ds.Name = dataset.Name;
-
             var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
             var attributes = await ddb.GetAttributesAsync();
-            attributes.IsPublic = dataset.IsPublic;
-            attributes.LastUpdate = DateTime.Now;
+
+            if (dataset.IsPublic != null)
+                attributes.IsPublic = dataset.IsPublic.Value;
+
+            if (!string.IsNullOrWhiteSpace(dataset.Name))
+                ddb.Meta.GetSafe().Name = dataset.Name;
 
             await _context.SaveChangesAsync();
-
         }
 
 
@@ -157,7 +161,6 @@ namespace Registry.Web.Services.Managers
                 _context.Datasets.Remove(ds);
 
                 await _context.SaveChangesAsync();
-
             }
             catch (Exception ex)
             {
@@ -168,7 +171,6 @@ namespace Registry.Web.Services.Managers
 
         public async Task Rename(string orgSlug, string dsSlug, string newSlug)
         {
-
             if (string.IsNullOrWhiteSpace(newSlug))
                 throw new ArgumentException("New slug is empty");
 
@@ -191,21 +193,25 @@ namespace Registry.Web.Services.Managers
             ds.Slug = newSlug;
 
             await _context.SaveChangesAsync();
-
         }
 
-        public async Task<Dictionary<string, object>> ChangeAttributes(string orgSlug, string dsSlug, Dictionary<string, object> attributes)
+        public async Task<Dictionary<string, object>> ChangeAttributes(string orgSlug, string dsSlug,
+            AttributesDto attributes)
         {
+            
+            if (attributes == null)
+                throw new BadRequestException("Attributes are null");
+            
             var ds = await _utils.GetDataset(orgSlug, dsSlug);
 
             if (!await _authManager.IsOwnerOrAdmin(ds))
                 throw new UnauthorizedException("The current user is not allowed to change attributes");
 
             var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
-            var attrs = await ddb.ChangeAttributesRawAsync(attributes);
+            var attrs = await ddb.GetAttributesAsync();
+            attrs.IsPublic = attributes.IsPublic;
 
-            return attrs;
-
+            return await ddb.GetAttributesRawAsync();
         }
 
         public async Task<StampDto> GetStamp(string orgSlug, string dsSlug)
