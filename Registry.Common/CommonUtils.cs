@@ -26,7 +26,8 @@ namespace Registry.Common
         {
             const string valid = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890";
             var res = new StringBuilder();
-            using var rng = new RNGCryptoServiceProvider();
+
+            using var rng = RandomNumberGenerator.Create();
             var uintBuffer = new byte[sizeof(uint)];
 
             while (length-- > 0)
@@ -196,10 +197,7 @@ namespace Registry.Common
             var cachedFilePath = Path.Combine(smartFileCacheFolder, fileName);
 
             if (!File.Exists(cachedFilePath))
-            {
-                var client = new WebClient();
-                client.DownloadFile(url, cachedFilePath);
-            }
+                HttpHelper.DownloadFileAsync(url, cachedFilePath).Wait();
 
             File.Copy(cachedFilePath, path, true);
         }

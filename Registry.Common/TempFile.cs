@@ -2,6 +2,7 @@
 using System.Diagnostics;
 using System.IO;
 using System.Net;
+using System.Net.Http;
 
 namespace Registry.Common
 {
@@ -30,8 +31,9 @@ namespace Registry.Common
                 Directory.CreateDirectory(folder);
 
                 Debug.WriteLine("File does not exist, downloading it");
-                var client = new WebClient();
-                client.DownloadFile(url, FilePath);
+                
+                HttpHelper.DownloadFileAsync(url, FilePath).Wait();
+                
                 Debug.WriteLine("File downloaded");
             }
             else

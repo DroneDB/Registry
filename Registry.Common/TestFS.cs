@@ -51,7 +51,6 @@ namespace Registry.Common
 
                 Debug.WriteLine($"Archive path is an url");
 
-                var client = new WebClient();
                 var tempPath = Path.Combine(Path.GetTempPath(), baseTestFolder, uri.Segments.Last());
 
                 if (File.Exists(tempPath))
@@ -61,7 +60,7 @@ namespace Registry.Common
                 else
                 {
                     Debug.WriteLine("Downloading archive");
-                    client.DownloadFile(testArchivePath, tempPath);
+                    HttpHelper.DownloadFileAsync(testArchivePath, tempPath).Wait();
                 }
 
                 ZipFile.ExtractToDirectory(tempPath, TestFolder);

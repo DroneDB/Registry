@@ -18,7 +18,7 @@ RUN cd DroneDB && mkdir build && cd build && \
 RUN cd /DroneDB/build && checkinstall --install=no --pkgname DroneDB --default
 
 # ---> Dotnet stage
-FROM mcr.microsoft.com/dotnet/sdk:5.0-focal as runner
+FROM mcr.microsoft.com/dotnet/sdk:6.0-focal as runner
 
 # Install NodeJS
 RUN apt update && apt install -y --fix-missing sudo gpg-agent curl lsb-release
@@ -52,13 +52,13 @@ RUN dpkg -i *.deb
 ENV LD_LIBRARY_PATH="/usr/local/lib:${LD_LIBRARY_PATH}"
 
 # Copy compiled client app in the appropriate folder
-RUN mkdir -p /Registry/Registry.Web/bin/Release/net5.0/linux-x64/ClientApp/build
-RUN cp -r /Registry/Registry.Web/ClientApp/build /Registry/Registry.Web/bin/Release/net5.0/linux-x64/ClientApp
+RUN mkdir -p /Registry/Registry.Web/bin/Release/net6.0/linux-x64/ClientApp/build
+RUN cp -r /Registry/Registry.Web/ClientApp/build /Registry/Registry.Web/bin/Release/net6.0/linux-x64/ClientApp
 
 EXPOSE 5000/tcp
 EXPOSE 5001/tcp
 
-WORKDIR /Registry/Registry.Web/bin/Release/net5.0/linux-x64
+WORKDIR /Registry/Registry.Web/bin/Release/net6.0/linux-x64
 
 # Run registry
 ENTRYPOINT dotnet Registry.Web.dll --urls="http://0.0.0.0:5000;https://0.0.0.0:5001"
