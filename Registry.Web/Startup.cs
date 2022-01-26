@@ -590,10 +590,7 @@ namespace Registry.Web
                 var ds = new Dataset
                 {
                     Slug = MagicStrings.DefaultDatasetSlug,
-                    Name = MagicStrings.DefaultDatasetSlug.ToPascalCase(false, CultureInfo.InvariantCulture),
-                    //IsPublic = true,
                     CreationDate = DateTime.Now,
-                    //LastUpdate = DateTime.Now,
                     InternalRef = Guid.NewGuid()
                 };
                 entity.Datasets = new List<Dataset> { ds };

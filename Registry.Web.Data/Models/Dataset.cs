@@ -19,16 +19,14 @@ namespace Registry.Web.Data.Models
         public int Id { get; set; }
 
         [Required]
-        public string Name { get; set; }
-        [Required]
         public DateTime CreationDate { get; set; }
-
+        
+        public string[] FileTypes { get; set; }
+        
         [Required]
         public Organization Organization { get; set; }
 
         public virtual ICollection<Batch> Batches { get; set; }
-
-        public virtual ICollection<DownloadPackage> DownloadPackages { get; set; }
-
+        
     }
 }
