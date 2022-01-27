@@ -206,7 +206,12 @@ namespace Registry.Web
                 .ConfigureLogging((hostingContext, builder) =>
                 {
                     builder.AddFile("logs/registry-{Date}.txt");
-                    builder.AddConsole();
+                    builder.AddSimpleConsole(options =>
+                        {
+                            options.IncludeScopes = true;
+                            options.SingleLine = true;
+                            options.TimestampFormat = "hh:mm:ss ";
+                        });
                 })
                 .ConfigureWebHostDefaults(webBuilder =>
                 {
