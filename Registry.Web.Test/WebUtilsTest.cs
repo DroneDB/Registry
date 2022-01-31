@@ -259,7 +259,7 @@ namespace Registry.Web.Test
                 var ds = new Dataset
                 {
                     Slug = MagicStrings.DefaultDatasetSlug,
-                    Name = "Default",
+                    //Name = "Default",
                     //IsPublic = true,
                     CreationDate = DateTime.Now,
                     //LastUpdate = DateTime.Now,

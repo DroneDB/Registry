@@ -1,5 +1,7 @@
 ﻿using System;
+using System.Linq;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.ChangeTracking;
 using Registry.Web.Data.Models;
 
 namespace Registry.Web.Data
@@ -38,28 +40,27 @@ namespace Registry.Web.Data
                 .IsRequired()
                 .OnDelete(DeleteBehavior.Cascade);
 
-            modelBuilder
-                .Entity<DownloadPackage>()
-                .HasOne(e => e.Dataset)
-                .WithMany(e => e.DownloadPackages)
-                .IsRequired()
-                .OnDelete(DeleteBehavior.Cascade);
+            var valueComparer = new ValueComparer<string[]>(
+                (c1, c2) => c1.SequenceEqual(c2),
+                c => c.Aggregate(0, (a, v) => HashCode.Combine(a, v.GetHashCode())),
+                c => c.ToArray());
             
-            // TODO: Need to set value comparer
-            modelBuilder.Entity<DownloadPackage>()
-                .Property(e => e.Paths)
+            modelBuilder.Entity<Dataset>()
+                .Property(e => e.FileTypes)
                 .HasConversion(
                     v => string.Join(';', v),
-                    v => v.Split(';', StringSplitOptions.RemoveEmptyEntries));
+                    v => v.Split(';', StringSplitOptions.RemoveEmptyEntries))
+                .Metadata
+                .SetValueComparer(valueComparer);
+
 
         }
 
         protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
         {
-            base.OnConfiguring(optionsBuilder);
-
 #if DEBUG
             optionsBuilder.EnableSensitiveDataLogging();
+            optionsBuilder.EnableDetailedErrors();
 #endif
         }
 
@@ -67,8 +68,6 @@ namespace Registry.Web.Data
         public DbSet<Dataset> Datasets { get; set; }
 
         public DbSet<Batch> Batches { get; set; }
-
-        public DbSet<DownloadPackage> DownloadPackages { get; set; }
-
+        
     }
 }

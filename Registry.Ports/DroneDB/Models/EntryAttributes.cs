@@ -14,6 +14,7 @@ namespace Registry.Ports.DroneDB.Models
 
         #region Meta
 
+        
         public new bool IsPublic
         {
             get
@@ -22,7 +23,7 @@ namespace Registry.Ports.DroneDB.Models
 
                 return base.IsPublic;
             }
-            set => SafeSetPropertyField(PublicPropertyField, value);
+            set => SafeSetPropertyField(PublicField, value);
         }
 
         public new int ObjectsCount
@@ -90,12 +91,9 @@ namespace Registry.Ports.DroneDB.Models
 
             var tmp = new Dictionary<string, object>();
 
-            // We can only set LastUpdate and IsPublic
-            if (_properties.ContainsKey(LastUpdateField))
-                tmp.Add(LastUpdateField, _properties[LastUpdateField]);
-
-            if (_properties.ContainsKey(PublicPropertyField))
-                tmp.Add(PublicPropertyField, _properties[PublicPropertyField]);
+            // We can only set IsPublic
+            if (_properties.ContainsKey(PublicField))
+                tmp.Add(PublicField, _properties[PublicField]);
 
             _properties = _ddb.ChangeAttributesRaw(tmp);
         }

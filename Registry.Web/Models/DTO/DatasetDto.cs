@@ -9,18 +9,24 @@ namespace Registry.Web.Models.DTO
 {
     public class DatasetDto
     {
-        public int Id { get; set; }
+        
         [Required]
         public string Slug { get; set; }
         [Required]
-        public string Name { get; set; }
         public DateTime CreationDate { get; set; }
-        public int ObjectsCount { get; set; }
-        public DateTime? LastEdit { get; set; }
         public Dictionary<string, object> Properties { get; set; }
-        public bool IsPublic { get; set; }
 
         public long Size { get; set; }
+
+    }
+    
+    public class DatasetEditDto
+    {
+        [Required]
+        public string Slug { get; set; }
+
+        public string Name { get; set; }
+        public bool? IsPublic { get; set; }
 
     }
 }

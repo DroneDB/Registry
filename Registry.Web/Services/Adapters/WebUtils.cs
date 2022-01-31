@@ -215,5 +215,6 @@ namespace Registry.Web.Services.Adapters
             if (storageInfo.Total != null && currentUsage > storageInfo.Total)
                 throw new QuotaExceededException(currentUsage, storageInfo.Total);
         }
+
     }
 }

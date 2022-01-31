@@ -15,10 +15,10 @@ namespace Registry.Ports.DroneDB.Models
         }
 
         public const string LastUpdateField = "mtime";
-        public const string PublicPropertyField = "public";
+        public const string PublicField = "public";
         public const string ObjectsCountField = "entries";
         
-        public bool IsPublic => SafeGetMetaField<bool>(PublicPropertyField);
+        public bool IsPublic => SafeGetMetaField<bool>(PublicField);
 
         public int ObjectsCount => SafeGetMetaField<int>(ObjectsCountField);
 

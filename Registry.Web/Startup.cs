@@ -47,6 +47,8 @@ using Registry.Web.Services.Ports;
 using Registry.Web.Utilities;
 using Registry.Adapters.DroneDB;
 using Registry.Ports;
+using Serilog;
+using Serilog.Events;
 
 namespace Registry.Web
 {
@@ -279,7 +281,23 @@ namespace Registry.Web
             {
                 app.UseHsts();
             }
-
+           
+            app.UseSerilogRequestLogging(options =>
+            {
+                // Customize the message template
+                options.MessageTemplate = "Handled {RequestPath}";
+    
+                // Emit debug-level events instead of the defaults
+                options.GetLevel = (httpContext, elapsed, ex) => LogEventLevel.Debug;
+    
+                // Attach additional properties to the request completion event
+                options.EnrichDiagnosticContext = (diagnosticContext, httpContext) =>
+                {
+                    diagnosticContext.Set("RequestHost", httpContext.Request.Host.Value);
+                    diagnosticContext.Set("RequestScheme", httpContext.Request.Scheme);
+                };
+            });
+            
             app.UseDefaultFiles();
 
             app.UseSwagger();
@@ -590,10 +608,7 @@ namespace Registry.Web
                 var ds = new Dataset
                 {
                     Slug = MagicStrings.DefaultDatasetSlug,
-                    Name = MagicStrings.DefaultDatasetSlug.ToPascalCase(false, CultureInfo.InvariantCulture),
-                    //IsPublic = true,
                     CreationDate = DateTime.Now,
-                    //LastUpdate = DateTime.Now,
                     InternalRef = Guid.NewGuid()
                 };
                 entity.Datasets = new List<Dataset> { ds };

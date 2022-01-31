@@ -11,10 +11,12 @@ using System.Threading.Tasks;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Identity;
 using Newtonsoft.Json;
+using Registry.Ports.DroneDB;
 using Registry.Ports.DroneDB.Models;
 using Registry.Web.Data.Models;
 using Registry.Web.Models;
 using Registry.Web.Models.DTO;
+using Registry.Web.Services.Adapters;
 using Entry = Registry.Ports.DroneDB.Models.Entry;
 
 namespace Registry.Web.Utilities
@@ -48,7 +50,7 @@ namespace Registry.Web.Utilities
             };
         }
 
-        public static Dataset ToEntity(this DatasetDto dataset)
+        /*public static Dataset ToEntity(this DatasetDto dataset)
         {
             var entity = new Dataset
             {
@@ -58,7 +60,7 @@ namespace Registry.Web.Utilities
                 Name = string.IsNullOrEmpty(dataset.Name) ? dataset.Slug : dataset.Name
             };
             return entity;
-        }
+        }*/
 
         public static StampDto ToDto(this Stamp stamp)
         {
@@ -130,19 +132,12 @@ namespace Registry.Web.Utilities
         
         public static DatasetDto ToDto(this Dataset dataset, Entry entry)
         {
-            var attributes = new EntryProperties(entry.Properties);
-
             return new()
             {
-                Id = dataset.Id,
                 Slug = dataset.Slug,
                 CreationDate = dataset.CreationDate,
-                LastEdit = entry.ModifiedTime,
-                Name = dataset.Name,
                 Properties = entry.Properties,
-                ObjectsCount = attributes.ObjectsCount,
-                Size = entry.Size,
-                IsPublic = attributes.IsPublic
+                Size = entry.Size
             };
         }
 
@@ -275,6 +270,11 @@ namespace Registry.Web.Utilities
         {
             await using var stream = File.OpenRead(inputFile);
             return await hashAlgorithm.ComputeHashAsync(stream);
+        }
+        
+        public static SafeMetaManager GetSafe(this IMetaManager manager)
+        {
+            return new SafeMetaManager(manager);
         }
 
     }

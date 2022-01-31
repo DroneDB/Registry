@@ -56,6 +56,26 @@ namespace Registry.Web.Controllers
                 return ExceptionResult(ex);
             }
         }
+        
+        [HttpGet("info/{token}")]
+        public async Task<IActionResult> Info(string token)
+        {
+            try
+            {
+                _logger.LogDebug("Share controller Info('{Token}')", token);
+
+                var res = await _shareManager.GetBatchInfo(token);
+
+                return Ok(res);
+
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Exception in Share controller Info('{Token}')", token);
+
+                return ExceptionResult(ex);
+            }
+        }
 
         [HttpPost("upload/{token}")]
         [DisableRequestSizeLimit]
@@ -98,6 +118,27 @@ namespace Registry.Web.Controllers
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Exception in Share controller Commit('{Token}')", token);
+
+                return ExceptionResult(ex);
+            }
+        }
+        
+        [HttpPost("rollback/{token}")]
+        public async Task<IActionResult> Rollback(string token)
+        {
+            try
+            {
+
+                _logger.LogDebug("Share controller Rollback('{Token}')", token);
+
+                await _shareManager.Rollback(token);
+
+                return Ok();
+
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Exception in Share controller Rollback('{Token}')", token);
 
                 return ExceptionResult(ex);
             }

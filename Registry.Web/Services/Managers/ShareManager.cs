@@ -56,6 +56,53 @@ namespace Registry.Web.Services.Managers
             _context = context;
         }
 
+        public async Task<BatchDto> GetBatchInfo(string token)
+        {
+            var batch = await GetRunningBatchFromToken(token);
+            
+            return new BatchDto
+            {
+                End = batch.End,
+                Start = batch.Start,
+                Token = batch.Token,
+                UserName = batch.UserName,
+                Status = batch.Status,
+                Entries = from entry in batch.Entries
+                    select new BatchEntryDto
+                    {
+                        Hash = entry.Hash,
+                        Type = entry.Type,
+                        Size = entry.Size,
+                        AddedOn = entry.AddedOn,
+                        Path = entry.Path
+                    }
+            };
+        }
+
+        private async Task<Batch> GetRunningBatchFromToken(string token)
+        {
+            if (string.IsNullOrWhiteSpace(token))
+                throw new BadRequestException("Missing token");
+
+            var batch = _context.Batches
+                .Include(x => x.Dataset.Organization)
+                .Include(x => x.Entries)
+                .FirstOrDefault(item => item.Token == token);
+
+            if (batch == null)
+                throw new NotFoundException("Cannot find batch");
+
+            if (batch.Status != BatchStatus.Running)
+                throw new BadRequestException("Only running batches can be rollbacked");
+
+            var currentUserName = await _authManager.SafeGetCurrentUserName();
+
+            if (!(await _authManager.IsUserAdmin() || batch.UserName == currentUserName))
+                throw new BadRequestException("This batch does not belong to you");
+
+            return batch;
+        }
+        
         public async Task<IEnumerable<BatchDto>> ListBatches(string orgSlug, string dsSlug)
         {
             await _utils.GetOrganization(orgSlug);
@@ -202,7 +249,7 @@ namespace Registry.Web.Services.Managers
 
                 _logger.LogInformation("Generated unique dataset slug '{DsSlug}'", dsSlug);
                 
-                await _datasetsManager.AddNew(orgSlug, new DatasetDto
+                await _datasetsManager.AddNew(orgSlug, new DatasetEditDto
                 {
                     Slug = dsSlug,
                     Name = parameters.DatasetName,
@@ -248,7 +295,7 @@ namespace Registry.Web.Services.Managers
                 {
                     _logger.LogInformation("Dataset '{DatasetSlug}' not found, creating it", tag.DatasetSlug);
 
-                    await _datasetsManager.AddNew(tag.OrganizationSlug, new DatasetDto
+                    await _datasetsManager.AddNew(tag.OrganizationSlug, new DatasetEditDto
                     {
                         Slug = tag.DatasetSlug,
                         Name = parameters.DatasetName,
@@ -315,7 +362,7 @@ namespace Registry.Web.Services.Managers
             return dsSlug;
         }
 
-        private async Task RollbackBatch(Batch batch)
+        private async Task RollbackBatch(Batch batch, bool deleteDataset = false)
         {
             _logger.LogInformation("Rolling back batch '{BatchToken}'", batch.Token);
 
@@ -334,9 +381,22 @@ namespace Registry.Web.Services.Managers
             await _context.Entry(ds).Reference(item => item.Organization).LoadAsync();
             var org = ds.Organization;
 
-            foreach (var entry in batch.Entries)
-                await _objectsManager.Delete(org.Slug, ds.Slug, entry.Path);
+            if (deleteDataset)
+                await _datasetsManager.Delete(org.Slug, ds.Slug);
+            else
+            {
+                foreach (var entry in batch.Entries)
+                    await _objectsManager.Delete(org.Slug, ds.Slug, entry.Path);
+            }
+        }
 
+        public async Task Rollback(string token)
+        {
+            var batch = await GetRunningBatchFromToken(token);
+            
+            _logger.LogInformation("Rolling back  batch '{Token}'", token);
+            
+            await RollbackBatch(batch, true);
         }
 
 
@@ -348,36 +408,19 @@ namespace Registry.Web.Services.Managers
 
         public async Task<UploadResultDto> Upload(string token, string path, Stream stream)
         {
-            if (string.IsNullOrWhiteSpace(token))
-                throw new BadRequestException("Missing token");
-
             if (string.IsNullOrWhiteSpace(path))
                 throw new BadRequestException("Missing path");
 
             if (stream == null)
                 throw new BadRequestException("Missing data stream");
-
-            // Check if user has enough space to upload this
-            await _utils.CheckCurrentUserStorage(stream.Length);
-
+            
             if (!stream.CanRead)
                 throw new BadRequestException("Cannot read from data stream");
 
-            var batch = _context.Batches
-                .Include(x => x.Dataset.Organization)
-                .Include(x => x.Entries)
-                .FirstOrDefault(item => item.Token == token);
-
-            if (batch == null)
-                throw new NotFoundException("Cannot find batch");
-
-            if (batch.Status != BatchStatus.Running)
-                throw new BadRequestException("Cannot upload file to closed batch");
-
-            var currentUserName = await _authManager.SafeGetCurrentUserName();
-
-            if (!(await _authManager.IsUserAdmin() || batch.UserName == currentUserName))
-                throw new BadRequestException("This batch does not belong to you");
+            var batch = await GetRunningBatchFromToken(token);
+            
+            // Check if user has enough space to upload this
+            await _utils.CheckCurrentUserStorage(stream.Length);
 
             var entry = batch.Entries.FirstOrDefault(item => item.Path == path);
 
@@ -422,60 +465,25 @@ namespace Registry.Web.Services.Managers
             };
         }
 
-        public async Task<CommitResultDto> Commit(string token, bool rollback = false)
+        public async Task<CommitResultDto> Commit(string token)
         {
 
-            if (string.IsNullOrWhiteSpace(token))
-                throw new BadRequestException("Missing token");
-
-            var batch = _context.Batches
-                .Include(x => x.Dataset)
-                .Include(x => x.Dataset.Organization)
-                .FirstOrDefault(item => item.Token == token);
-
-            if (batch == null)
-                throw new NotFoundException("Cannot find batch");
-
-            if (batch.Status != BatchStatus.Running)
-                throw new BadRequestException("Cannot commit a closed batch");
-
-            var currentUserName = await _authManager.SafeGetCurrentUserName();
-
-            if (!(await _authManager.IsUserAdmin() || batch.UserName == currentUserName))
-                throw new BadRequestException("This batch does not belong to you");
+            var batch = await GetRunningBatchFromToken(token);
+            
+            _logger.LogInformation("Committing batch '{Token}' @ {BatchEndDate} {BatchEndTime}", token, batch.End?.ToLongDateString(), batch.End?.ToLongTimeString());
 
             batch.End = DateTime.Now;
-
-            if (rollback)
-            {
-                _logger.LogInformation("Rolling back batch '{Token}' @ {BatchEndData} {BatchEndTime}", token, batch.End.Value.ToLongDateString(), batch.End.Value.ToLongTimeString());
-
-                await RollbackBatch(batch);
-
-                _logger.LogInformation("Batch '{Token}' rolled back", token);
-
-                batch.Status = BatchStatus.Rolledback;
-            }
-            else
-            {
-                _logger.LogInformation("Committing batch '{Token}' @ {BatchEndData} {BatchEndTime}", token, batch.End.Value.ToLongDateString(), batch.End.Value.ToLongTimeString());
-
-                batch.Status = BatchStatus.Committed;
-
-                // TODO: Are we supposed to do more operations here?
-
-                _logger.LogInformation("Batch '{Token}' committed", token);
-
-            }
-
+            batch.Status = BatchStatus.Committed;
             await _context.SaveChangesAsync();
 
+            _logger.LogInformation("Batch '{Token}' committed", token);
+          
             await _context.Entry(batch).Collection(item => item.Entries).LoadAsync();
 
             return new CommitResultDto
             {
                 // NOTE: This url structure is so buried in the code that it's hard to find it, we should consider a better way to expose it
-                Url = "/r/" + batch.Dataset.Organization.Slug + "/" + batch.Dataset.Slug,
+                Url = $"/r/{batch.Dataset.Organization.Slug}/{batch.Dataset.Slug}",
                 Tag = new TagDto(batch.Dataset.Organization.Slug, batch.Dataset.Slug)
             };
         }

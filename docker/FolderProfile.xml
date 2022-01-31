@@ -10,10 +10,10 @@ https://go.microsoft.com/fwlink/?LinkID=208121.
     <LastUsedBuildConfiguration>Release</LastUsedBuildConfiguration>
     <LastUsedPlatform>Any CPU</LastUsedPlatform>
     <PublishProvider>FileSystem</PublishProvider>
-    <PublishUrl>bin\Release\net5.0\publish\</PublishUrl>
+    <PublishUrl>bin\Release\net6.0\publish\</PublishUrl>
     <WebPublishMethod>FileSystem</WebPublishMethod>
     <SiteUrlToLaunchAfterPublish />
-    <TargetFramework>net5.0</TargetFramework>
+    <TargetFramework>net6.0</TargetFramework>
     <RuntimeIdentifier>linux-x64</RuntimeIdentifier>
     <ProjectGuid>a56a6f28-f08a-4ed9-b3ad-b35d690db70e</ProjectGuid>
     <SelfContained>true</SelfContained>

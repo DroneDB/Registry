@@ -17,20 +17,11 @@ RUN cd DroneDB && mkdir build && cd build && \
     make -j $(cat /proc/cpuinfo | grep processor | wc -l)
 RUN cd /DroneDB/build && checkinstall --install=no --pkgname DroneDB --default
 
-# ---> Dotnet stage
-FROM mcr.microsoft.com/dotnet/sdk:5.0-focal as runner
-
-# Install NodeJS
-RUN apt update && apt install -y --fix-missing sudo gpg-agent curl lsb-release
-RUN curl -sL https://deb.nodesource.com/setup_14.x | sudo -E bash -
-RUN apt update && apt install -y --fix-missing nodejs
+# ---> Dotnet build stage
+FROM mcr.microsoft.com/dotnet/sdk:6.0-focal as dotnet-builder
 
 # Copy registry
 COPY . /Registry
-
-# Compile client app
-RUN npm install -g webpack@4 webpack-cli
-RUN cd /Registry/Registry.Web/ClientApp && npm install && webpack --mode=production
 
 # Copy publish profile
 COPY docker/FolderProfile.xml /Registry/Registry.Web/Properties/PublishProfiles/FolderProfile.pubxml
@@ -38,27 +29,47 @@ COPY docker/FolderProfile.xml /Registry/Registry.Web/Properties/PublishProfiles/
 # Publish Registry
 RUN cd /Registry/Registry.Web && dotnet dev-certs https && dotnet publish --configuration Release /p:PublishProfile=FolderProfile
 
-# Install DroneDB libraries (can be slimmed down somehow)
-ENV TZ=Europe/Rome
-RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone
-RUN apt update && apt install -y --fix-missing --no-install-recommends software-properties-common
-RUN add-apt-repository -y ppa:ubuntugis/ubuntugis-unstable
-RUN apt install -y --fix-missing --no-install-recommends ca-certificates sqlite3 spatialite-bin libgeos-dev libgdal-dev pdal libpdal-dev libzip-dev
+# ---> Node build stage
+FROM node:14-buster as node-builder
+
+# Copy Hub
+COPY ./Registry.Web/ClientApp /ClientApp
+
+# Compile client app
+RUN npm install -g webpack@4 webpack-cli
+RUN cd /ClientApp && npm install && webpack --mode=production 
+
+# ---> Dotnet stage run
+FROM mcr.microsoft.com/dotnet/aspnet:6.0-focal as runner
+
+ENV DOTNET_GENERATE_ASPNET_CERTIFICATE=false
+
+RUN apt update && apt install -y --fix-missing --no-install-recommends gnupg2 && \
+    echo "deb https://ppa.launchpadcontent.net/ubuntugis/ubuntugis-unstable/ubuntu focal main" >> /etc/apt/sources.list && \
+    echo "deb-src https://ppa.launchpadcontent.net/ubuntugis/ubuntugis-unstable/ubuntu focal main" >> /etc/apt/sources.list && \
+    apt-key adv --keyserver keyserver.ubuntu.com --recv-keys 6b827c12c2d425e227edca75089ebe08314df160 && \
+    apt-get update && apt-get install -y libspatialite7 libgdal30 libzip5 libpdal-base12 libgeos3.10.1 && \
+    apt-get remove -y gnupg2 && \
+    apt-get autoremove -y && \
+    rm -rf /var/lib/apt/lists/*
 
 # Install DroneDB from deb package and set library path
 COPY --from=builder /DroneDB/build/*.deb /
-RUN ls -l
 RUN dpkg -i *.deb
 ENV LD_LIBRARY_PATH="/usr/local/lib:${LD_LIBRARY_PATH}"
 
+# Copy compiled Registry
+COPY --from=dotnet-builder /Registry/Registry.Web/bin/Release/net6.0/linux-x64/ /Registry
+
 # Copy compiled client app in the appropriate folder
-RUN mkdir -p /Registry/Registry.Web/bin/Release/net5.0/linux-x64/ClientApp/build
-RUN cp -r /Registry/Registry.Web/ClientApp/build /Registry/Registry.Web/bin/Release/net5.0/linux-x64/ClientApp
+RUN mkdir -p /Registry/ClientApp/build
+COPY --from=node-builder /ClientApp/build/ /Registry/ClientApp/build
 
 EXPOSE 5000/tcp
-EXPOSE 5001/tcp
+VOLUME [ "/Registry/App_Data" ]
 
-WORKDIR /Registry/Registry.Web/bin/Release/net5.0/linux-x64
+WORKDIR /Registry
 
 # Run registry
-ENTRYPOINT dotnet Registry.Web.dll --urls="http://0.0.0.0:5000;https://0.0.0.0:5001"
+ENTRYPOINT dotnet Registry.Web.dll --urls="http://0.0.0.0:5000"
+
