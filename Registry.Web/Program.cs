@@ -17,6 +17,7 @@ using Newtonsoft.Json.Linq;
 using Registry.Adapters.DroneDB;
 using Registry.Web.Models;
 using Registry.Web.Models.Configuration;
+using Serilog;
 
 namespace Registry.Web
 {
@@ -52,7 +53,20 @@ namespace Registry.Web
                 return;
             }
 
-            CreateHostBuilder(args).Build().Run();
+            try
+            {
+                Log.Information("Starting web host");
+                CreateHostBuilder(args).Build().Run();
+            }
+            catch (Exception ex)
+            {
+                Log.Fatal(ex, "Host terminated unexpectedly");
+            }
+            finally
+            {
+                Log.CloseAndFlush();
+            }
+
         }
 
         private static void ShowHelp()
@@ -162,7 +176,6 @@ namespace Registry.Web
             Directory.CreateDirectory(appSettings.CachePath);
             
             config["AppSettings"] = JObject.FromObject(appSettings);
-
             
             // Update config
             File.WriteAllText(ConfigFilePath, JsonConvert.SerializeObject(config, Formatting.Indented));
@@ -203,21 +216,11 @@ namespace Registry.Web
 
         private static IHostBuilder CreateHostBuilder(string[] args) =>
             Host.CreateDefaultBuilder(args)
-                .ConfigureLogging((hostingContext, builder) =>
-                {
-                    builder.AddFile("logs/registry-{Date}.txt");
-                    builder.AddSimpleConsole(options =>
-                        {
-                            options.IncludeScopes = true;
-                            options.SingleLine = true;
-                            options.TimestampFormat = "hh:mm:ss ";
-                        });
-                })
-                .ConfigureWebHostDefaults(webBuilder =>
-                {
-                    webBuilder.UseStartup<Startup>();
-                });
-
+                .UseSerilog((context, services, configuration) => configuration
+                    .ReadFrom.Configuration(context.Configuration)
+                    .ReadFrom.Services(services)
+                    .Enrich.FromLogContext())
+                .ConfigureWebHostDefaults(webBuilder => webBuilder.UseStartup<Startup>());
 
     }
 }
