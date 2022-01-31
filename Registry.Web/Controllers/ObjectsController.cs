@@ -61,7 +61,7 @@ namespace Registry.Web.Controllers
 
                 var res = await _objectsManager.GenerateThumbnail(orgSlug, dsSlug, path, size);
 
-                return PhysicalFile(res.PhysicalPath, res.ContentType, res.Name);
+                return PhysicalFile(res.PhysicalPath, res.ContentType, res.Name, true);
 
             }
             catch (Exception ex)
@@ -87,7 +87,7 @@ namespace Registry.Web.Controllers
 
                 var res = await _objectsManager.GenerateTile(orgSlug, dsSlug, path, tz, tx, ty, retina);
 
-                return PhysicalFile(res.PhysicalPath, res.ContentType, res.Name);
+                return PhysicalFile(res.PhysicalPath, res.ContentType, res.Name, true);
                 
             }
             catch (Exception ex)
