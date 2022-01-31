@@ -101,7 +101,7 @@ namespace Registry.Web.Models.Configuration
         public bool EnableStorageLimiter { get; set; }
 
         /// <summary>
-        /// Number of worker threads (-1 to use ASP.NET default)
+        /// Number of worker threads (0 to use ASP.NET default)
         /// </summary>
         public int WorkerThreads { get; set; }
 
