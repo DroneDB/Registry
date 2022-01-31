@@ -4,31 +4,66 @@
 
 DroneDB Registry is a simple, user-friendly aerial data management and storage application . It features JWT authentication and implements a full REST API. 
 
-To learn more check the wiki article: [REST Interface Specification](https://github.com/DroneDB/registry/wiki/REST-Interface-Specification)
+To learn more about the APIs check the wiki article: [REST Interface Specification](https://github.com/DroneDB/registry/wiki/REST-Interface-Specification)
 
 ## Project architecture
 
-![dronedb-registry-architecture](https://user-images.githubusercontent.com/7868983/87065148-f4c46b80-c210-11ea-9f68-3e2dd13687bf.jpg)
+![dronedb-registry-architecture](https://user-images.githubusercontent.com/7868983/151846022-891685f7-ef47-4b93-8199-d4ac4e788c5d.png)
 
 ## Running
 
-You can use docker to setup Registry:
+The following steps start a new instance of `registry` with the default configuration:
+
+```
+wget -O appsettings.json https://raw.githubusercontent.com/DroneDB/Registry/master/Registry.Web/appsettings-default.json
+
+docker run -it --rm -p 5000:5000 -v ${PWD}/registry-data:/Registry/App_Data -v ${PWD}/appsettings.json:/Registry/appsettings.json dronedb/registry:latest
+```
+You can now open http://localhost:5000 in your browser, use `admin:password` as default credentials.
+
+If you want to build the image from scratch, you can use the following commands:
 
 ```
 git clone https://github.com/DroneDB/Registry
 cd Registry
 git submodule update --init --recursive
 docker build . -t dronedb/registry
-docker run -ti -p 5000:5000 -p 5001:5001 dronedb/registry
 ```
+
 Notes:
-- login credentials are `admin:password`
 - `ddb` commands must use the `127.0.0.1` syntax, not `localhost`
 
 ## Building Natively
 
+Registry is written in C# on .NET Core 6 platform and runs natively on both Linux and Windows.
+To install the latest .NET SDK see the [official download page](https://dotnet.microsoft.com/en-us/download/dotnet/6.0). Before building registry ensure you have `ddblib` in your path, if not download the [latest release](https://github.com/DroneDB/DroneDB/releases) and add it to `PATH`.
+
+Clone the repository:
+
+```
+git clone https://github.com/DroneDB/Registry
+cd Registry
+git submodule update --init --recursive
+```
+
+Build the solution from the command line:
+
 ```
 dotnet build
+```
+
+Run the tests to make sure the project is working correctly:
+```
+dotnet test
+```
+
+Then build the Hub interface (need [NodeJS 14+](https://nodejs.org/download/release/v14.18.3/)):
+
+```
+cd Registry.Web/ClientApp
+npm install -g webpack@4
+npm install
+webpack
 ```
 
 ## Running Natively
