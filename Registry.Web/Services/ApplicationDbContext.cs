@@ -38,6 +38,7 @@ namespace Registry.Web.Services
 
 #if DEBUG
             optionsBuilder.EnableSensitiveDataLogging();
+            optionsBuilder.EnableDetailedErrors();
 #endif
         }
 
