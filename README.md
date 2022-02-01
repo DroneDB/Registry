@@ -12,6 +12,8 @@ To learn more about the APIs check the wiki article: [REST Interface Specificati
 
 ## Running
 
+> Registry can use SQLite, MySQL (MariaDB) or SQL Server as a database. Nevertheless, the application is primarily designed to be used with MariaDB. There are no migration scripts for the other databases, so you have to manually upgrade the database schema between versions. The following steps are for test only, and should not be used in production.
+
 The following steps start a new instance of `registry` with the default configuration:
 
 ```
