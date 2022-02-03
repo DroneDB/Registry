@@ -51,11 +51,6 @@ namespace Registry.Web.Models.Configuration
         public string StoragePath { get; set; }
 
         /// <summary>
-        /// Supported Ddb version
-        /// </summary>
-        public PackageVersion SupportedDdbVersion { get; set; }
-
-        /// <summary>
         /// Max request body size
         /// </summary>
         public long? MaxRequestBodySize { get; set; }

@@ -526,12 +526,7 @@ namespace Registry.Web.Test
       ""Password"": ""password""
     },
     ""DdbStoragePath"": ""./Data/Ddb"",
-    ""DdbPath"": ""./ddb"",
-""SupportedDdbVersion"": {
-      ""Major"": 0,
-      ""Minor"": 9,
-      ""Build"": 13
-    }
+    ""DdbPath"": ""./ddb""
 }
   ";
 

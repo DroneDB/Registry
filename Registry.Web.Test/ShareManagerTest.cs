@@ -718,11 +718,6 @@ namespace Registry.Web.Test
     ""DdbPath"": """",
     ""MaxUploadChunkSize"": 512000,
     ""MaxRequestBodySize"": 52428800,
-    ""SupportedDdbVersion"": {
-      ""Major"": 0,
-      ""Minor"": 9,
-      ""Build"": 13
-    },
     ""BatchTokenLength"": 32,
     ""RandomDatasetNameLength"": 16 
 }
