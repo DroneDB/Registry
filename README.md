@@ -2,19 +2,22 @@
 
 ![commits](https://img.shields.io/github/commit-activity/m/DroneDB/registry) ![languages](https://img.shields.io/github/languages/top/DroneDB/registry) ![.NET Core](https://github.com/DroneDB/Registry/workflows/.NET%20Core/badge.svg?branch=master)
 
-DroneDB Registry is a simple, user-friendly aerial data management and storage application . It features JWT authentication and implements a full REST API. 
+DroneDB Registry is a simple, user-friendly aerial data management and storage application. It features JWT authentication and implements a full REST API. 
 
-To learn more about the APIs check the wiki article: [REST Interface Specification](https://github.com/DroneDB/registry/wiki/REST-Interface-Specification)
+Combined with [Hub](https://github.com/DroneDB/Hub), it provides a simple, fast and scalable platform for hosting and sharing geospatial images and data.
+It also allows you to view orthophotos and point clouds easily and effortlessly directly in the browser.
 
-## Project architecture
+![orthophoto](https://user-images.githubusercontent.com/7868983/152324827-d16949b8-dd96-4d3a-b5c5-a732e999f070.png)
 
-![dronedb-registry-architecture](https://user-images.githubusercontent.com/7868983/151846022-891685f7-ef47-4b93-8199-d4ac4e788c5d.png)
+![files](https://user-images.githubusercontent.com/7868983/152324902-abfe0910-6115-46c5-b561-59bc5a417dda.png)
 
-## Running
+![point-cloud](https://user-images.githubusercontent.com/7868983/152324757-4ee73f71-bf8e-4c72-9910-7073a68daee3.png)
+
+## Quickstart
 
 > Registry can use SQLite, MySQL (MariaDB) or SQL Server as a database. Nevertheless, the application is primarily designed to be used with MariaDB. There are no migration scripts for the other databases, so you have to manually upgrade the database schema between versions. The following steps are for test only, and should not be used in production.
 
-The following steps start a new instance of `registry` with the default configuration:
+The following steps start a new instance of `registry` with the default configuration and SQLite as backend database. They work both on linux and windows (powershell):
 
 ```
 wget -O appsettings.json https://raw.githubusercontent.com/DroneDB/Registry/master/Registry.Web/appsettings-default.json
@@ -79,6 +82,10 @@ You can change the endpoints using the `urls` parameter:
 ```
 dotnet run --project Registry.Web --urls="http://0.0.0.0:6000;https://0.0.0.0:6001"
 ```
+
+## Project architecture
+
+![dronedb-registry-architecture](https://user-images.githubusercontent.com/7868983/151846022-891685f7-ef47-4b93-8199-d4ac4e788c5d.png)
 
 ## Note
 
