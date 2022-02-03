@@ -4,7 +4,7 @@
 
 DroneDB Registry is a simple, user-friendly aerial data management and storage application. It features JWT authentication and implements a full REST API. 
 
-Combined with [Hub](https://github.com/DroneDB/Hub), it provides a simple, fast and scalable platform for hosting and sharing geospatial images and data.
+Combined with [Hub](https://github.com/DroneDB/Hub), it provides a simple, fast and reliable platform for hosting and sharing geospatial images and data.
 It also allows you to view orthophotos and point clouds easily and effortlessly directly in the browser.
 
 ### Orthophoto and flight path
@@ -107,7 +107,7 @@ Notes:
 
 ## Building Natively
 
-Registry is written in C# on .NET Core 6 platform and runs natively on both Linux and Windows.
+`Registry` is written in C# on .NET Core 6 platform and runs natively on both Linux and Windows.
 To install the latest .NET SDK see the [official download page](https://dotnet.microsoft.com/en-us/download/dotnet/6.0). Before building registry ensure you have `ddblib` in your path, if not download the [latest release](https://github.com/DroneDB/DroneDB/releases) and add it to `PATH`.
 
 Clone the repository:
@@ -141,6 +141,8 @@ webpack
 
 ## Running Natively
 
+On the first start `Registry` will create `appsettings.json` file with default values. Feel free to modify it to your needs following the [documentation](https://docs.dronedb.app/registry).
+
 ```bash
 dotnet run --project Registry.Web
 ```
@@ -158,4 +160,4 @@ dotnet run --project Registry.Web --urls="http://0.0.0.0:6000;https://0.0.0.0:60
 
 ## Note
 
-DroneDB Registry is in early development stages and is targeted at GIS developers and early adopters. It is not ready for mainstream use. To contribute to the project, please see the [contributing guidelines](CONTRIBUTING.md).
+DroneDB Registry is under development and is targeted at GIS developers and tech enthusiasts. To contribute to the project, please see the [contributing guidelines](CONTRIBUTING.md).
