@@ -27,8 +27,6 @@ services:
     registry:
         depends_on:
             - db
-            - redis
-            - seq
         image: dronedb/registry
         volumes:
             - ./data/App_Data:/Registry/App_Data

@@ -22,7 +22,7 @@ rm initialize.sql
 envsubst < appsettings-template.json > appsettings.json
 envsubst < initialize-template.sql > initialize.sql
 
-mkdir -p data
+mkdir data
 
 if [[ "${@#--dry}" = "$@" ]]; then
     docker-compose up -d    

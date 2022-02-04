@@ -64,9 +64,10 @@ You can stop the application by issuing:
 docker-compose down
 ```
 
-The `run.sh` script will create the default `appsettings.json` file, the database initialization script and start the Docker containers.
+The `run.sh` / `run.bat` script will create the default `appsettings.json` file, the database initialization script and start the Docker containers.
 It is possible to customize the startup settings by creating a `.env` file in the same folder. Here it is an example:
 
+### Linux (quotes are important)
 ```bash
 MYSQL_ROOT_PASSWORD="default-root-password"
 MYSQL_PASSWORD="default-mysql-password"
@@ -77,7 +78,16 @@ EXTERNAL_URL=""
 CONTROL_SWITCH="$controlSwitch"
 ```
 
-
+### Windows (values without quotes)
+```batch
+MYSQL_ROOT_PASSWORD=default-root-password
+MYSQL_PASSWORD=default-mysql-password"
+REGISTRY_ADMIN_MAIL=test@test.it
+REGISTRY_ADMIN_PASSWORD=password
+REGISTRY_SECRET=longandrandomsecrettobegeneratedusingcryptographicallystrongrandomnumbergenerator
+EXTERNAL_URL=
+CONTROL_SWITCH=$controlSwitch
+```
 
 ### Standalone installation with docker (only for testing)
 
