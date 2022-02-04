@@ -41,19 +41,22 @@ And then run the following commands:
 
 ```bash
 cd docker/production
+chmod +x run.sh
 ./run.sh
 ```
 
 ### Windows
 
 ```bash
-*** Coming soon ***
+cd docker/production
+run.bat
 ```
 
 Check that everything is running smoothly:
 
 ```bash
 docker-compose ps
+docker-compose logs -f
 ```
 
 When all the containers are running, you can then open http://localhost:5000 in your browser, use `admin:password` as default credentials.
@@ -75,7 +78,7 @@ REGISTRY_ADMIN_MAIL="test@test.it"
 REGISTRY_ADMIN_PASSWORD="password"
 REGISTRY_SECRET="longandrandomsecrettobegeneratedusingcryptographicallystrongrandomnumbergenerator"
 EXTERNAL_URL=""
-CONTROL_SWITCH="$controlSwitch"
+CONTROL_SWITCH='$controlSwitch'
 ```
 
 ### Windows (values without quotes)
@@ -88,6 +91,20 @@ REGISTRY_SECRET=longandrandomsecrettobegeneratedusingcryptographicallystrongrand
 EXTERNAL_URL=
 CONTROL_SWITCH=$controlSwitch
 ```
+
+If you want to reduce the log verbosity, you can change `"Information"` to `"Warning"` in `appsettings.json`:
+
+```json
+    "LevelSwitches": {
+        "$CONTROL_SWITCH": "Warning"
+    },
+```
+
+then run
+
+```
+docker-compose restart registry
+````
 
 ### Standalone installation with docker (only for testing)
 

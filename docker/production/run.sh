@@ -6,7 +6,7 @@ export REGISTRY_ADMIN_MAIL="test@test.it"
 export REGISTRY_ADMIN_PASSWORD="password"
 export REGISTRY_SECRET="e7er2yjacmbqjxsmf6h3rtrh7t6wjhef7bkv6kauv3wng3jb3t5hx7jtjry5z2ydd6utbufgq6jar2v3cvexhcescgzacfwvg5kqfa3gx3ppzchdtwcakx5hr3s6485z"
 export EXTERNAL_URL=""
-export CONTROL_SWITCH="$controlSwitch"
+export CONTROL_SWITCH='$controlSwitch'
 
 if test -f ".env"; then
     echo "Loading .env file"
