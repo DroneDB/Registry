@@ -2,9 +2,9 @@ version: "3.3"
 
 services:
     db:
-        image: mariadb:latest
+        image: mariadb:10.6
         volumes:
-            - ./data/mysql:/var/lib/mysql
+            - data-mysql:/var/lib/mysql
             - ./initialize.sql:/docker-entrypoint-initdb.d/initialize.sql
         restart: unless-stopped
         environment:
@@ -35,3 +35,7 @@ services:
         ports:
             - 5000:5000
         restart: unless-stopped
+
+volumes:
+  data-mysql:
+    driver: local

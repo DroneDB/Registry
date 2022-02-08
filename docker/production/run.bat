@@ -6,7 +6,7 @@ SET MYSQL_PASSWORD=default-mysql-password
 SET REGISTRY_ADMIN_MAIL=test@test.it
 SET REGISTRY_ADMIN_PASSWORD=password
 SET REGISTRY_SECRET=e7er2yjacmbqjxsmf6h3rtrh7t6wjhef7bkv6kauv3wng3jb3t5hx7jtjry5z2ydd6utbufgq6jar2v3cvexhcescgzacfwvg5kqfa3gx3ppzchdtwcakx5hr3s6485z
-SET EXTERNAL_URL=
+SET EXTERNAL_URL=""
 SET CONTROL_SWITCH=$controlSwitch
 
 del appsettings.json
