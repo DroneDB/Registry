@@ -386,12 +386,13 @@ namespace Registry.Web
 
             if (!Log.IsEnabled(LogEventLevel.Information))
             {
+                
                 var env = app.ApplicationServices.GetService<IHostEnvironment>();
                 Console.WriteLine(" -> Application startup");
                 Console.WriteLine(" ?> Environment: {0}", env?.EnvironmentName ?? "Unknown");
                 Console.WriteLine(" ?> Version: {0}", Assembly.GetExecutingAssembly().GetName().Version);
                 Console.WriteLine(" ?> Application started at {0}", DateTime.Now);
-
+                
                 var serverAddresses = app.ServerFeatures.Get<IServerAddressesFeature>()?.Addresses;
                 if (serverAddresses != null)
                 {
@@ -400,6 +401,15 @@ namespace Registry.Web
                         Console.WriteLine($" ?> Now listening on: {address}");
                     }
                 }
+                
+                var settings = app.ApplicationServices.GetService<IOptions<AppSettings>>();
+                
+                var appSettings = settings?.Value;
+                if (appSettings != null && !string.IsNullOrWhiteSpace(appSettings.ExternalUrlOverride))
+                {
+                    Console.WriteLine($" ?> External URL: {appSettings.ExternalUrlOverride}");
+                }
+
             }
         }
 
