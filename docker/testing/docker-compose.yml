@@ -1,14 +1,31 @@
 version: "3.3"
 
 services:
-    db:
+    db_identity:
         image: mariadb:10.6
         volumes:
-            - data-mysql:/var/lib/mysql
-            - ./initialize.sql:/docker-entrypoint-initdb.d/initialize.sql
+            - data-mariadb-identity:/var/lib/mysql            
         restart: unless-stopped
         environment:
-            - MYSQL_ROOT_PASSWORD=password
+            - MARIADB_RANDOM_ROOT_PASSWORD=yes
+            - MARIADB_USER=identity
+            - MARIADB_PASSWORD=password
+            - MARIADB_DATABASE=identity
+        healthcheck:
+            test: ["CMD", "mysqladmin" ,"ping", "-h", "localhost"]
+            timeout: 20s
+            retries: 10
+            
+    db_registry:
+        image: mariadb:10.6
+        volumes:
+            - data-mariadb-registry:/var/lib/mysql
+        restart: unless-stopped
+        environment:
+            - MARIADB_RANDOM_ROOT_PASSWORD=yes
+            - MARIADB_USER=registry
+            - MARIADB_PASSWORD=password
+            - MARIADB_DATABASE=registry
         healthcheck:
             test: ["CMD", "mysqladmin" ,"ping", "-h", "localhost"]
             timeout: 20s
@@ -16,13 +33,14 @@ services:
 
     phpmyadmin:
         depends_on:
-            - db
+            - db_identity
+            - db_registry
         image: phpmyadmin
         restart: unless-stopped
         ports:
             - 8080:80
         environment:
-            - PMA_HOST=db:3306
+            - PMA_HOSTS=db_identity:3306,db_registry:3306
 
     registry:
         depends_on:
@@ -37,5 +55,7 @@ services:
         restart: unless-stopped
 
 volumes:
-  data-mysql:
+  data-mariadb-identity:
+    driver: local
+  data-mariadb-registry:
     driver: local
