@@ -38,6 +38,4 @@ jobs:
       run: |
         cd registry
         export PATH="$HOME/ddb/build:$PATH"
-        pwd
-        echo $PATH
         dotnet test -c Release --verbosity minimal

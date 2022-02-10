@@ -139,6 +139,14 @@ namespace Registry.Web
 
             }
 
+            var externalUrl = appSettings.ExternalUrlOverride;
+
+            if (!string.IsNullOrWhiteSpace(externalUrl) && !Uri.TryCreate(externalUrl, UriKind.Absolute, out _))
+            {
+                Console.WriteLine(" !> ExternalUrlOverride is not a valid URL");
+                return false;
+            }
+
             var connectionStrings = config["ConnectionStrings"];
 
             if (connectionStrings == null)

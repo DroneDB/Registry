@@ -19,6 +19,7 @@ using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.Hosting.Server.Features;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Http.Features;
 using Microsoft.AspNetCore.Identity;
@@ -49,6 +50,7 @@ using Registry.Adapters.DroneDB;
 using Registry.Ports;
 using Serilog;
 using Serilog.Events;
+using IHostingEnvironment = Microsoft.Extensions.Hosting.IHostingEnvironment;
 
 namespace Registry.Web
 {
@@ -375,6 +377,40 @@ namespace Registry.Web
             SetupDatabase(app);
             SetupFileCache(app);
             //SetupHangfire(app);
+
+            PrintStartupInfo(app);
+        }
+
+        private void PrintStartupInfo(IApplicationBuilder app)
+        {
+
+            if (!Log.IsEnabled(LogEventLevel.Information))
+            {
+                
+                var env = app.ApplicationServices.GetService<IHostEnvironment>();
+                Console.WriteLine(" -> Application startup");
+                Console.WriteLine(" ?> Environment: {0}", env?.EnvironmentName ?? "Unknown");
+                Console.WriteLine(" ?> Version: {0}", Assembly.GetExecutingAssembly().GetName().Version);
+                Console.WriteLine(" ?> Application started at {0}", DateTime.Now);
+                
+                var serverAddresses = app.ServerFeatures.Get<IServerAddressesFeature>()?.Addresses;
+                if (serverAddresses != null)
+                {
+                    foreach (var address in serverAddresses)
+                    {
+                        Console.WriteLine($" ?> Now listening on: {address}");
+                    }
+                }
+                
+                var settings = app.ApplicationServices.GetService<IOptions<AppSettings>>();
+                
+                var appSettings = settings?.Value;
+                if (appSettings != null && !string.IsNullOrWhiteSpace(appSettings.ExternalUrlOverride))
+                {
+                    Console.WriteLine($" ?> External URL: {appSettings.ExternalUrlOverride}");
+                }
+
+            }
         }
 
         private void SetupFileCache(IApplicationBuilder app)

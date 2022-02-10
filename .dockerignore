@@ -17,3 +17,5 @@ Registry.Web/logs
 Registry.Web/temp
 Registry.Web/ddbstore
 Registry.Web/*.csv
+Registry.Web/App_Data
+
