@@ -68,7 +68,7 @@ docker-compose down
 ```
 
 The `run.sh` / `run.bat` script will create the default `appsettings.json` file, the database initialization script and start the Docker containers.
-It is possible to customize the startup settings by creating a `.env` file in the same folder. Here it is an example:
+It is possible to customize the startup settings by creating a `.env` file in the same folder. Here's an example:
 
 ### Linux (quotes are important)
 ```bash
@@ -168,7 +168,7 @@ webpack
 
 ## Running Natively
 
-On the first start `Registry` will create `appsettings.json` file with default values. Feel free to modify it to your needs following the [documentation](https://docs.dronedb.app/registry).
+On the first start `Registry` will create an `appsettings.json` file with default values. Feel free to modify it to your needs following the [documentation](https://docs.dronedb.app/registry).
 
 ```bash
 dotnet run --project Registry.Web
