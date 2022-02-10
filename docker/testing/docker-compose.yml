@@ -48,7 +48,7 @@ services:
         image: dronedb/registry
         volumes:
             - ./data/App_Data:/Registry/App_Data
-            - ./appsettings.json:/Registry/appsettings.json
+            - ./appsettings-testing.json:/Registry/appsettings.json
             - ./data/logs:/Registry/logs
         ports:
             - 5000:5000
