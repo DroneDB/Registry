@@ -1,0 +1,9 @@
+.git
+.github
+.gitignore
+.vscode
+.vs
+*.md
+
+.env
+data
