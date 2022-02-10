@@ -10,7 +10,7 @@ services:
         environment:
             - MYSQL_ROOT_PASSWORD
         healthcheck:
-            test: ["CMD", "mysqladmin" ,"ping", "-h", "localhost"]
+            test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
             timeout: 20s
             retries: 10
 
@@ -20,7 +20,7 @@ services:
         image: phpmyadmin
         restart: unless-stopped
         ports:
-            - 8080:80
+            - "8080:80"
         environment:
             - PMA_HOST=db:3306
 
@@ -33,7 +33,7 @@ services:
             - ./appsettings.json:/Registry/appsettings.json
             - ./data/logs:/Registry/logs
         ports:
-            - 5000:5000
+            - "5000:5000"
         restart: unless-stopped
 
 volumes:
