@@ -23,11 +23,45 @@ It also allows you to view orthophotos and point clouds easily and effortlessly 
 
 To get started, you need to install the following applications (if they are not installed already):
 
-  - [Git](https://git-scm.com/downloads)
   - [Docker](https://www.docker.com/)
   - [Docker-compose](https://docs.docker.com/compose/install/)
 
-Clone the repo and initialize submodules:
+Single command startup:
+
+### Linux
+
+```bash
+mkdir ddb-registry && cd ddb-registry && \ 
+  curl -O docker-compose.yml https://raw.githubusercontent.com/DroneDB/Registry/master/docker/testing/docker-compose.yml && \
+  curl -O appsettings-testing.json https://raw.githubusercontent.com/DroneDB/Registry/master/docker/testing/appsettings-testing.json && \
+  curl -O initialize.sql https://raw.githubusercontent.com/DroneDB/Registry/master/docker/testing/initialize.sql && \
+  docker-compose up
+```
+
+### Windows
+
+```powershell
+mkdir ddb-registry; cd ddb-registry; `
+curl -O docker-compose.yml https://raw.githubusercontent.com/DroneDB/Registry/master/docker/testing/docker-compose.yml; `
+curl -O appsettings-testing.json https://raw.githubusercontent.com/DroneDB/Registry/master/docker/testing/appsettings-testing.json; `
+curl -O initialize.sql https://raw.githubusercontent.com/DroneDB/Registry/master/docker/testing/initialize.sql; `
+docker-compose up -d
+```
+
+This command will start a new stack composed by 
+ - MariaDB database
+ - PHPMyAdmin, exposed on port [8080](http://localhost:8080)
+ - Registry, exposed on port [5000](http://localhost:5000)
+
+Default username and password are `admin` and `password`. After logging in you can check the health of the application by visiting [http://localhost:5000/status](http://localhost:5000/health).
+
+Registry supports Swagger API documentation on [http://localhost:5000/swagger/](http://localhost:5000/swagger/) and Hangfire as task runner on [http://localhost:5000/hangfire/](http://localhost:5000/hangfire/).
+
+> **_NOTE:_**  This configuration is for local testing only: **DO NOT USE IT IN PRODUCTION**. If you want to use the application in production check the following section.
+
+## Running in production
+
+You will need [Git](https://git-scm.com/downloads). Clone the repo and initialize submodules:
 
 ```bash
 git clone https://github.com/DroneDB/Registry
@@ -68,6 +102,7 @@ docker-compose down
 ```
 
 The `run.sh` / `run.bat` script will create the default `appsettings.json` file, the database initialization script and start the Docker containers.
+
 It is possible to customize the startup settings by creating a `.env` file in the same folder. Here's an example:
 
 ### Linux (quotes are important)
@@ -97,7 +132,7 @@ If you want to reduce the log verbosity, you can change `"Information"` to `"War
 ```json
     "LevelSwitches": {
         "$CONTROL_SWITCH": "Warning"
-    },
+    }
 ```
 
 then run
@@ -106,7 +141,10 @@ then run
 docker-compose restart registry
 ````
 
-### Standalone installation with docker (only for testing)
+> **_Info:_** Any changes to the configuration file need to restart the registry container  
+
+
+## Standalone installation with docker (only for testing)
 
 The following steps start a new instance of `registry` with the default configuration and `SQLite` as backend database. They work both on linux and windows (powershell):
 
@@ -135,7 +173,7 @@ Notes:
 ## Building Natively
 
 `Registry` is written in C# on .NET Core 6 platform and runs natively on both Linux and Windows.
-To install the latest .NET SDK see the [official download page](https://dotnet.microsoft.com/en-us/download/dotnet/6.0). Before building registry ensure you have `ddblib` in your path, if not download the [latest release](https://github.com/DroneDB/DroneDB/releases) and add it to `PATH`.
+To install the latest .NET SDK see the [official download page](https://dotnet.microsoft.com/en-us/download/dotnet/6.0). Before building registry ensure you have `ddblib` in your path, if not, download the [latest release](https://github.com/DroneDB/DroneDB/releases) and add it to `PATH`.
 
 Clone the repository:
 

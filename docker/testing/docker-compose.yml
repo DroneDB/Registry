@@ -8,7 +8,7 @@ services:
             - ./initialize.sql:/docker-entrypoint-initdb.d/initialize.sql
         restart: unless-stopped
         environment:
-            - MYSQL_ROOT_PASSWORD
+            - MYSQL_ROOT_PASSWORD=password
         healthcheck:
             test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
             timeout: 20s
@@ -30,7 +30,7 @@ services:
         image: dronedb/registry
         volumes:
             - ./data/App_Data:/Registry/App_Data
-            - ./appsettings.json:/Registry/appsettings.json
+            - ./appsettings-testing.json:/Registry/appsettings.json
             - ./data/logs:/Registry/logs
         ports:
             - "5000:5000"
