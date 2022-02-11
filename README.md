@@ -32,13 +32,13 @@ Single command startup:
 
 ```bash
 mkdir ddb-registry && cd ddb-registry && \ 
-  curl -O docker-compose.yml https://raw.githubusercontent.com/DroneDB/Registry/master/docker/testing/docker-compose.yml && \
-  curl -O appsettings-testing.json https://raw.githubusercontent.com/DroneDB/Registry/master/docker/testing/appsettings-testing.json && \
-  curl -O initialize.sql https://raw.githubusercontent.com/DroneDB/Registry/master/docker/testing/initialize.sql && \
-  docker-compose up
+  curl -o docker-compose.yml https://raw.githubusercontent.com/DroneDB/Registry/master/docker/testing/docker-compose.yml && \
+  curl -o appsettings-testing.json https://raw.githubusercontent.com/DroneDB/Registry/master/docker/testing/appsettings-testing.json && \
+  curl -o initialize.sql https://raw.githubusercontent.com/DroneDB/Registry/master/docker/testing/initialize.sql && \
+  docker-compose up -d
 ```
 
-### Windows
+### Windows (powershell)
 
 ```powershell
 mkdir ddb-registry; cd ddb-registry; `
@@ -48,16 +48,29 @@ curl -O initialize.sql https://raw.githubusercontent.com/DroneDB/Registry/master
 docker-compose up -d
 ```
 
+> **_NOTE:_**  This configuration is for local testing only: **DO NOT USE IT IN PRODUCTION**. If you want to use the application in production check the following section.
+
 This command will start a new stack composed by 
  - MariaDB database
  - PHPMyAdmin, exposed on port [8080](http://localhost:8080)
  - Registry, exposed on port [5000](http://localhost:5000)
 
-Default username and password are `admin` and `password`. After logging in you can check the health of the application by visiting [http://localhost:5000/status](http://localhost:5000/health).
+Default username and password are `admin` and `password`. After logging in you can check the health of the application by visiting [/status](http://localhost:5000/health).
 
-Registry supports Swagger API documentation on [http://localhost:5000/swagger/](http://localhost:5000/swagger/) and Hangfire as task runner on [http://localhost:5000/hangfire/](http://localhost:5000/hangfire/).
+You can follow the logs:
 
-> **_NOTE:_**  This configuration is for local testing only: **DO NOT USE IT IN PRODUCTION**. If you want to use the application in production check the following section.
+```bash
+docker-compose logs -f
+```
+
+In order to update the application
+
+```bash
+docker-compose pull
+docker-compose up -d
+```
+
+Registry supports Swagger API documentation on [/swagger](http://localhost:5000/swagger/) and Hangfire as task runner on [/hangfire](http://localhost:5000/hangfire/).
 
 ## Running in production
 
