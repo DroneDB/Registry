@@ -9,6 +9,10 @@ RUN apt update && apt install -y --fix-missing --no-install-recommends build-ess
 RUN add-apt-repository -y ppa:ubuntugis/ubuntugis-unstable
 RUN apt install -y --fix-missing --no-install-recommends ca-certificates cmake git checkinstall sqlite3 spatialite-bin libgeos-dev libgdal-dev g++-10 gcc-10 pdal libpdal-dev libzip-dev
 RUN update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-10 1000 --slave /usr/bin/g++ g++ /usr/bin/g++-10
+RUN apt install -y curl && curl -L https://github.com/DroneDB/libnexus/releases/download/v1.0.0/nxs-ubuntu-20.04-amd64.deb --output /tmp/nxs-ubuntu-20.04-amd64.deb && \
+    dpkg-deb -x /tmp/nxs-ubuntu-20.04-amd64.deb /usr && \
+    rm /tmp/nxs-ubuntu-20.04-amd64.deb && \
+    apt remove -y curl
 
 # Build DroneDB
 RUN git clone --recurse-submodules https://github.com/DroneDB/DroneDB.git

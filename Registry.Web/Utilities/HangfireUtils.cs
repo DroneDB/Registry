@@ -24,6 +24,18 @@ namespace Registry.Web.Utilities
             writeLine("Done build");
         }
 
+        public static void BuildPendingWrapper(IDDB ddb, PerformContext context)
+        {
+            Action<string> writeLine = context != null ? context.WriteLine : Console.WriteLine;
+
+            writeLine($"In BuildPendingWrapper('{ddb.DatasetFolderPath}')");
+
+            writeLine("Running build pending");
+            ddb.BuildPending();
+
+            writeLine("Done build pending");
+        }
+
         public static void SafeDelete(string path, PerformContext context)
         {
             Action<string> writeLine = context != null ? context.WriteLine : Console.WriteLine;

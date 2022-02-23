@@ -682,17 +682,14 @@ namespace Registry.Adapters.DroneDB
 
         [DllImport("ddb", EntryPoint = "DDBBuild")]
         private static extern DDBError _Build([MarshalAs(UnmanagedType.LPStr)] string ddbSource,
-            [MarshalAs(UnmanagedType.LPStr)] string source, [MarshalAs(UnmanagedType.LPStr)] string dest, bool force);
+            [MarshalAs(UnmanagedType.LPStr)] string source, [MarshalAs(UnmanagedType.LPStr)] string dest, bool force, bool pendingOnly);
 
-        public static void Build(string ddbPath, string source = null, string dest = null, bool force = false)
+        public static void Build(string ddbPath, string source = null, string dest = null, bool force = false, bool pendingOnly = false)
         {
-
             try
             {
-
-                if (_Build(ddbPath, source, dest, force) !=
-                    DDBError.DDBERR_NONE) throw new DDBException(GetLastError());
-
+                DDBError result = _Build(ddbPath, source, dest, force, pendingOnly);
+                if (result == DDBError.DDBERR_EXCEPTION) throw new DDBException(GetLastError());
             }
             catch (EntryPointNotFoundException ex)
             {
@@ -719,6 +716,32 @@ namespace Registry.Adapters.DroneDB
                     DDBError.DDBERR_NONE) throw new DDBException(GetLastError());
 
                 return isBuildable;
+
+            }
+            catch (EntryPointNotFoundException ex)
+            {
+                throw new DDBException($"Error in calling ddb lib: incompatible versions ({ex.Message})", ex);
+            }
+            catch (Exception ex)
+            {
+                throw new DDBException($"Error in calling ddb lib. Last error: \"{GetLastError()}\", check inner exception for details", ex);
+            }
+
+        }
+
+        [DllImport("ddb", EntryPoint = "DDBIsBuildPending")]
+        private static extern DDBError _IsBuildPending([MarshalAs(UnmanagedType.LPStr)] string ddbPath, out bool isBuildPending);
+
+        public static bool IsBuildPending(string ddbPath)
+        {
+
+            try
+            {
+
+                if (_IsBuildPending(ddbPath, out bool isBuildPending) !=
+                    DDBError.DDBERR_NONE) throw new DDBException(GetLastError());
+
+                return isBuildPending;
 
             }
             catch (EntryPointNotFoundException ex)
