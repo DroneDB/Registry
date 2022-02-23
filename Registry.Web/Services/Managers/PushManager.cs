@@ -272,6 +272,15 @@ namespace Registry.Web.Services.Managers
                         HangfireUtils.BuildWrapper(ddb, item.Path, false, null));
                 }
             }
+
+            if (await ddb.IsBuildPendingAsync())
+            {
+                _logger.LogInformation("Items are pending build, retriggering build");
+
+                var jobId = _backgroundJob.Enqueue(() => HangfireUtils.BuildPendingWrapper(ddb, null));
+
+                _logger.LogInformation("Background job id is {JobId}", jobId);
+            }
         }
     }
 }

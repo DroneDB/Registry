@@ -208,6 +208,18 @@ namespace Registry.Adapters.DroneDB
             }
         }
 
+        public void BuildPending(string dest = null, bool force = false)
+        {
+            try
+            {
+                DDBWrapper.Build(DatasetFolderPath, null, dest, force, true);
+            }
+            catch (DDBException ex)
+            {
+                throw new InvalidOperationException($"Cannot build pending from ddb '{DatasetFolderPath}'", ex);
+            }
+        }
+
         public string GetTmpFolder(string path)
         {
             string fullPath = Path.Combine(DatasetFolderPath, DatabaseFolderName, TmpFolderName, path);
@@ -224,6 +236,18 @@ namespace Registry.Adapters.DroneDB
             catch (DDBException ex)
             {
                 throw new InvalidOperationException($"Cannot call IsBuildable from ddb '{DatasetFolderPath}'", ex);
+            }
+        }
+
+        public bool IsBuildPending()
+        {
+            try
+            {
+                return DDBWrapper.IsBuildPending(DatasetFolderPath);
+            }
+            catch (DDBException ex)
+            {
+                throw new InvalidOperationException($"Cannot call IsBuildPending from ddb '{DatasetFolderPath}'", ex);
             }
         }
 
@@ -478,6 +502,12 @@ namespace Registry.Adapters.DroneDB
         public async Task<bool> IsBuildableAsync(string path, CancellationToken cancellationToken = default)
         {
             return await Task<bool>.Factory.StartNew(() => IsBuildable(path), cancellationToken,
+                TaskCreationOptions.LongRunning, TaskScheduler.Default);
+        }
+
+        public async Task<bool> IsBuildPendingAsync(CancellationToken cancellationToken = default)
+        {
+            return await Task<bool>.Factory.StartNew(() => IsBuildPending(), cancellationToken,
                 TaskCreationOptions.LongRunning, TaskScheduler.Default);
         }
 

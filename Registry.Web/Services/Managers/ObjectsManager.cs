@@ -219,9 +219,16 @@ namespace Registry.Web.Services.Managers
 
             if (await ddb.IsBuildableAsync(entry.Path))
             {
-                _logger.LogInformation("This is a point cloud, we need to build it!");
+                _logger.LogInformation("This item is buildable, build it!");
 
-                var jobId = _backgroundJob.Enqueue(() => HangfireUtils.BuildWrapper(ddb, path, true, null));
+                var jobId = _backgroundJob.Enqueue(() => HangfireUtils.BuildWrapper(ddb, path, false, null));
+
+                _logger.LogInformation("Background job id is {JobId}", jobId);
+            }else if (await ddb.IsBuildPendingAsync())
+            {
+                _logger.LogInformation("Items are pending build, retriggering build");
+
+                var jobId = _backgroundJob.Enqueue(() => HangfireUtils.BuildPendingWrapper(ddb, null));
 
                 _logger.LogInformation("Background job id is {JobId}", jobId);
             }

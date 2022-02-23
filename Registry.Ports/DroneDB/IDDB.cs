@@ -62,9 +62,11 @@ namespace Registry.Ports.DroneDB
         bool EntryExists(string path);
         void Build(string path, string dest = null, bool force = false);
         void BuildAll(string dest = null, bool force = false);
+        void BuildPending(string dest = null, bool force = false);
 
         public string GetTmpFolder(string path);
         bool IsBuildable(string path);
+        bool IsBuildPending();
 
         IMetaManager Meta { get; }
         long GetSize();
@@ -90,6 +92,8 @@ namespace Registry.Ports.DroneDB
         Task BuildAsync(string path, string dest = null, bool force = false, CancellationToken cancellationToken = default);
         Task BuildAllAsync(string dest = null, bool force = false, CancellationToken cancellationToken = default);
         Task<bool> IsBuildableAsync(string path, CancellationToken cancellationToken = default);
+        Task<bool> IsBuildPendingAsync(CancellationToken cancellationToken = default);
+
         Task<long> GetSizeAsync(CancellationToken cancellationToken = default);
 
         #endregion
