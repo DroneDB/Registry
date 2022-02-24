@@ -52,8 +52,11 @@ RUN apt update && apt install -y --fix-missing --no-install-recommends gnupg2 &&
     echo "deb https://ppa.launchpadcontent.net/ubuntugis/ubuntugis-unstable/ubuntu focal main" >> /etc/apt/sources.list && \
     echo "deb-src https://ppa.launchpadcontent.net/ubuntugis/ubuntugis-unstable/ubuntu focal main" >> /etc/apt/sources.list && \
     apt-key adv --keyserver keyserver.ubuntu.com --recv-keys 6b827c12c2d425e227edca75089ebe08314df160 && \
-    apt-get update && apt-get install -y libspatialite7 libgdal30 libzip5 libpdal-base12 libgeos3.10.1 && \
-    apt-get remove -y gnupg2 && \
+    apt-get update && apt-get install -y curl libspatialite7 libgdal30 libzip5 libpdal-base12 libgeos3.10.1 && \
+    curl -L https://github.com/DroneDB/libnexus/releases/download/v1.0.0/nxs-ubuntu-20.04-amd64.deb --output /tmp/nxs-ubuntu-20.04-amd64.deb && \
+    dpkg-deb -x /tmp/nxs-ubuntu-20.04-amd64.deb /usr && \
+    rm /tmp/nxs-ubuntu-20.04-amd64.deb && \
+    apt remove -y gnupg2 curl && \
     apt-get autoremove -y && \
     rm -rf /var/lib/apt/lists/*
 
@@ -76,4 +79,3 @@ WORKDIR /Registry
 
 # Run registry
 ENTRYPOINT dotnet Registry.Web.dll --urls="http://0.0.0.0:5000"
-
