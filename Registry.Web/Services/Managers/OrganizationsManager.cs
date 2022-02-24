@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Registry.Web.Data;
 using Registry.Web.Exceptions;
@@ -17,6 +18,7 @@ namespace Registry.Web.Services.Managers
         private readonly RegistryContext _context;
         private readonly IUtils _utils;
         private readonly IDatasetsManager _datasetManager;
+        private readonly ApplicationDbContext _appContext;
         private readonly ILogger<OrganizationsManager> _logger;
 
         // TODO: Add extensive logging
@@ -26,12 +28,14 @@ namespace Registry.Web.Services.Managers
             RegistryContext context,
             IUtils utils,
             IDatasetsManager datasetManager,
+            ApplicationDbContext appContext,
             ILogger<OrganizationsManager> logger)
         {
             _authManager = authManager;
             _context = context;
             _utils = utils;
             _datasetManager = datasetManager;
+            _appContext = appContext;
             _logger = logger;
         }
 
@@ -48,15 +52,20 @@ namespace Registry.Web.Services.Managers
 
                 query = query.Where(item => item.OwnerId == currentUser.Id || item.OwnerId == null || item.IsPublic);
             }
+            
+            // This can be optimized, but it's not a big deal because it's a cross database query anyway
+            var usersMapper = await _appContext.Users.Select(item => new { item.Id, item.UserName })
+                .ToDictionaryAsync(item => item.Id, item => item.UserName);
 
             return from org in query
+                   let userName = org.OwnerId != null ? (usersMapper.ContainsKey(org.OwnerId) ? usersMapper[org.OwnerId] : null) : null
                    select new OrganizationDto
                    {
                        CreationDate = org.CreationDate,
                        Description = org.Description,
                        Slug = org.Slug,
                        Name = org.Name,
-                       Owner = org.OwnerId,
+                       Owner = userName,
                        IsPublic = org.IsPublic
                    };
         }
