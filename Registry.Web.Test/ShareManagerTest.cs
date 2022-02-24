@@ -8,6 +8,7 @@ using System.Threading.Tasks;
 using FluentAssertions;
 using Hangfire;
 using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Caching.Distributed;
@@ -32,6 +33,7 @@ using Registry.Web.Services.Managers;
 using Registry.Web.Services.Ports;
 using Registry.Web.Test.Adapters;
 using Registry.Ports.DroneDB.Models;
+using Registry.Web.Services;
 using Attributes = Registry.Ports.DroneDB.Models.EntryAttributes;
 using Entry = Registry.Ports.DroneDB.Models.Entry;
 using IMetaManager = Registry.Ports.DroneDB.IMetaManager;
@@ -136,6 +138,7 @@ namespace Registry.Web.Test
             using var test = new TestFS(Test4ArchiveUrl, BaseTestFolder, true);
 
             await using var context = GetTest1Context();
+            await using var appContext = GetAppTest1Context();
 
             var settings = JsonConvert.DeserializeObject<AppSettings>(_settingsJson);
             settings.StoragePath = test.TestFolder;
@@ -184,7 +187,7 @@ namespace Registry.Web.Test
             var datasetManager = new DatasetsManager(context, webUtils, _datasetsManagerLogger, objectManager,
                 _ddbFactoryMock.Object, _authManagerMock.Object);
             var organizationsManager = new OrganizationsManager(_authManagerMock.Object, context, webUtils,
-                datasetManager, _organizationsManagerLogger);
+                datasetManager, appContext, _organizationsManagerLogger);
 
             var shareManager = new ShareManager(_appSettingsMock.Object, _shareManagerLogger, objectManager,
                 datasetManager, organizationsManager, webUtils, _authManagerMock.Object, 
@@ -247,6 +250,7 @@ namespace Registry.Web.Test
             using var test = new TestFS(Test4ArchiveUrl, BaseTestFolder, true);
 
             await using var context = GetTest1Context();
+            await using var appContext = GetAppTest1Context();
 
             var settings = JsonConvert.DeserializeObject<AppSettings>(_settingsJson);
             settings.StoragePath = test.TestFolder;
@@ -294,7 +298,7 @@ namespace Registry.Web.Test
             var datasetManager = new DatasetsManager(context, webUtils, _datasetsManagerLogger, objectManager,
                 _ddbFactoryMock.Object, _authManagerMock.Object);
             var organizationsManager = new OrganizationsManager(_authManagerMock.Object, context, webUtils,
-                datasetManager, _organizationsManagerLogger);
+                datasetManager, appContext, _organizationsManagerLogger);
 
             var shareManager = new ShareManager(_appSettingsMock.Object, _shareManagerLogger, objectManager,
                 datasetManager, organizationsManager, webUtils, _authManagerMock.Object, 
@@ -380,6 +384,7 @@ namespace Registry.Web.Test
             using var test = new TestFS(Test4ArchiveUrl, BaseTestFolder, true);
 
             await using var context = GetTest1Context();
+            await using var appContext = GetAppTest1Context();
 
             var settings = JsonConvert.DeserializeObject<AppSettings>(_settingsJson);
             settings.StoragePath = test.TestFolder;
@@ -430,7 +435,7 @@ namespace Registry.Web.Test
             var datasetManager = new DatasetsManager(context, webUtils, _datasetsManagerLogger, objectManager,
                 _ddbFactoryMock.Object, _authManagerMock.Object);
             var organizationsManager = new OrganizationsManager(_authManagerMock.Object, context, webUtils,
-                datasetManager, _organizationsManagerLogger);
+                datasetManager, appContext, _organizationsManagerLogger);
 
             var shareManager = new ShareManager(_appSettingsMock.Object, _shareManagerLogger, objectManager,
                 datasetManager, organizationsManager, webUtils, _authManagerMock.Object, 
@@ -529,6 +534,7 @@ namespace Registry.Web.Test
             using var test = new TestFS(Test4ArchiveUrl, BaseTestFolder, true);
 
             await using var context = GetTest1Context();
+            await using var appContext = GetAppTest1Context();
             
             var settings = JsonConvert.DeserializeObject<AppSettings>(_settingsJson);
             settings.StoragePath = test.TestFolder;
@@ -575,7 +581,7 @@ namespace Registry.Web.Test
             var datasetManager = new DatasetsManager(context, webUtils, _datasetsManagerLogger, objectManager,
                 _ddbFactoryMock.Object, _authManagerMock.Object);
             var organizationsManager = new OrganizationsManager(_authManagerMock.Object, context, webUtils,
-                datasetManager, _organizationsManagerLogger);
+                datasetManager, appContext, _organizationsManagerLogger);
 
             var shareManager = new ShareManager(_appSettingsMock.Object, _shareManagerLogger, objectManager,
                 datasetManager, organizationsManager, webUtils, _authManagerMock.Object, 
@@ -764,6 +770,59 @@ namespace Registry.Web.Test
 
             return new RegistryContext(options);
         }
+        
+        private static ApplicationDbContext GetAppTest1Context()
+        {
+            var options = new DbContextOptionsBuilder<ApplicationDbContext>()
+                .UseInMemoryDatabase(databaseName: "RegistryAppDatabase-" + Guid.NewGuid())
+                .Options;
+
+            // Insert seed data into the database using one instance of the context
+            using (var context = new ApplicationDbContext(options))
+            {
+
+                var adminRole = new IdentityRole
+                {
+                    Id = "1db5b539-6e54-4674-bb74-84732eb48204",
+                    Name = "admin",
+                    NormalizedName = "ADMIN",
+                    ConcurrencyStamp = "72c80593-64a2-40b4-b0c4-26a9dcc06400"
+                };
+                
+                context.Roles.Add(adminRole);
+
+                var standardRole = new IdentityRole
+                {
+                    Id = "7d02507e-8eab-48c0-ba19-fea3ae644ab9",
+                    Name = "standard",
+                    NormalizedName = "STANDARD",
+                    ConcurrencyStamp = "2e279a3c-4273-4f0a-abf6-8e97811651a9"
+                };
+
+                context.Roles.Add(standardRole);
+                
+                var admin = new User
+                {
+                    Id = "bfb579ce-8435-4c70-a365-158a3d93811f",
+                    UserName = "admin",
+                    Email = "admin@example.com",
+                    NormalizedUserName = "ADMIN"
+                };
+                
+                context.Users.Add(admin);
+
+                context.UserRoles.Add(new IdentityUserRole<string>
+                {
+                    RoleId = "1db5b539-6e54-4674-bb74-84732eb48204",
+                    UserId = "bfb579ce-8435-4c70-a365-158a3d93811f"
+                });
+
+                context.SaveChanges();
+            }
+
+            return new ApplicationDbContext(options);
+        }
+
 
         #endregion
     }
