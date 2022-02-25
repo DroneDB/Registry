@@ -379,7 +379,7 @@ namespace Registry.Web.Controllers
 
                 var res = await _objectsManager.GetBuildFile(orgSlug, dsSlug, hash, path);
 
-                return PhysicalFile(res, MimeUtility.GetMimeMapping(res));
+                return PhysicalFile(res, MimeUtility.GetMimeMapping(res), true);
 
             }
             catch (Exception ex)
