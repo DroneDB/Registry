@@ -70,6 +70,7 @@ namespace Registry.Web.Controllers
         }
 
         [HttpPost]
+        [ProducesResponseType(typeof(OrganizationDto), 201)]
         public async Task<IActionResult> Post([FromForm] OrganizationDto organization)
         {
 
@@ -91,6 +92,7 @@ namespace Registry.Web.Controllers
         }
 
         [HttpPut(RoutesHelper.OrganizationSlug)]
+        [ProducesResponseType(204)]
         public async Task<IActionResult> Put(string orgSlug, [FromForm] OrganizationDto organization)
         {
 
@@ -111,6 +113,7 @@ namespace Registry.Web.Controllers
         }
 
         [HttpDelete(RoutesHelper.OrganizationSlug)]
+        [ProducesResponseType(204)]
         public async Task<IActionResult> Delete(string orgSlug)
         {
 
