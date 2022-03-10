@@ -22,7 +22,6 @@ namespace Registry.Web.Controllers
     {
         private readonly IObjectsManager _objectsManager;
         private readonly ILogger<ObjectsController> _logger;
-        private readonly IAuthManager _authManager;
 
         public ObjectsController(IObjectsManager datasetsManager, ILogger<ObjectsController> logger)
         {
