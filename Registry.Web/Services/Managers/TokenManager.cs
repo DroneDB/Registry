@@ -41,7 +41,7 @@ namespace Registry.Web.Services.Managers
             return 
                 authorizationHeader == StringValues.Empty ? 
                     request.Cookies[_appSettings.AuthCookieName] : 
-                    authorizationHeader.Single().Split(" ").Last();
+                    authorizationHeader.SingleOrDefault(h => h.StartsWith("Bearer", System.StringComparison.OrdinalIgnoreCase), "").Split(" ").Last();
         }
 
     }

@@ -365,7 +365,7 @@ namespace Registry.Web.Services.Managers
             return query.ToArray();
 
         }
-        private async Task<JwtDescriptor> GenerateJwtToken(User user)
+        public async Task<JwtDescriptor> GenerateJwtToken(User user)
         {
             // generate token
             var tokenHandler = new JwtSecurityTokenHandler();

@@ -20,5 +20,6 @@ namespace Registry.Web.Services.Ports
 
         public Task<bool> IsOwnerOrAdmin(Dataset ds);
         public Task<bool> UserExists(string userId);
+
     }
 }

@@ -230,6 +230,8 @@ namespace Registry.Web
             services.AddScoped<IBackgroundJobsProcessor, BackgroundJobsProcessor>();
             services.AddScoped<IMetaManager, Services.Managers.MetaManager>();
 
+            services.AddScoped<BasicAuthFilter>();
+
             services.AddSingleton<IFileSystem, FileSystem>();
             services.AddSingleton<IPasswordHasher, PasswordHasher>();
             services.AddSingleton<IBatchTokenGenerator, BatchTokenGenerator>();
