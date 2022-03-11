@@ -22,14 +22,10 @@ namespace Registry.Web.Middlewares
 
             if (cookie != null)
             {
-
                 var authValue = "Bearer " + cookie;
 
                 if (!context.Request.Headers.ContainsKey(AuthorizationHeaderKey))
-                    context.Request.Headers.Append(AuthorizationHeaderKey, authValue);
-                else
                     context.Request.Headers[AuthorizationHeaderKey] = authValue;
-                
             }
 
             await next.Invoke(context);

@@ -6,7 +6,9 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
 using MimeMapping;
 using Registry.Ports.DroneDB.Models;
+using Registry.Web.Exceptions;
 using Registry.Web.Models;
+using Registry.Web.Filters;
 using Registry.Web.Models.DTO;
 using Registry.Web.Services.Ports;
 using Registry.Web.Utilities;
@@ -370,6 +372,7 @@ namespace Registry.Web.Controllers
             }
         }
 
+        [ServiceFilter(typeof(BasicAuthFilter))]
         [HttpGet("build/{hash}/{*path}", Name = nameof(ObjectsController) + "." + nameof(BuildFile))]
         public async Task<IActionResult> BuildFile([FromRoute] string orgSlug, [FromRoute] string dsSlug, [FromRoute] string hash, [FromRoute] string path)
         {
@@ -382,14 +385,17 @@ namespace Registry.Web.Controllers
                 return PhysicalFile(res, MimeUtility.GetMimeMapping(res), true);
 
             }
+            catch(UnauthorizedException ex){
+                BasicAuthFilter.SendBasicAuthRequest(Response);
+                return ExceptionResult(ex);
+            }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Exception in Objects controller BuildFile('{OrgSlug}', '{DsSlug}', '{Path}')", orgSlug, dsSlug, path);
-
                 return ExceptionResult(ex);
             }
         }
 
+        [ServiceFilter(typeof(BasicAuthFilter))]
         [HttpHead("build/{hash}/{*path}", Name = nameof(ObjectsController) + "." + nameof(BuildFile))]
         public async Task<IActionResult> CheckBuildFile([FromRoute] string orgSlug, [FromRoute] string dsSlug, [FromRoute] string hash, [FromRoute] string path)
         {
@@ -400,7 +406,11 @@ namespace Registry.Web.Controllers
                 var res = await _objectsManager.CheckBuildFile(orgSlug, dsSlug, hash, path);
 
                 return res ? Ok() : NotFound();
-
+            }
+            catch (UnauthorizedException ex)
+            {
+                BasicAuthFilter.SendBasicAuthRequest(Response);
+                return ExceptionResult(ex);
             }
             catch (Exception ex)
             {
