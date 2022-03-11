@@ -20,7 +20,6 @@ namespace Registry.Web.Services.Managers
 {
     public class ShareManager : IShareManager
     {
-
         private readonly IOrganizationsManager _organizationsManager;
         private readonly IDatasetsManager _datasetsManager;
         private readonly IObjectsManager _objectsManager;
@@ -59,7 +58,7 @@ namespace Registry.Web.Services.Managers
         public async Task<BatchDto> GetBatchInfo(string token)
         {
             var batch = await GetRunningBatchFromToken(token);
-            
+
             return new BatchDto
             {
                 End = batch.End,
@@ -102,7 +101,7 @@ namespace Registry.Web.Services.Managers
 
             return batch;
         }
-        
+
         public async Task<IEnumerable<BatchDto>> ListBatches(string orgSlug, string dsSlug)
         {
             await _utils.GetOrganization(orgSlug);
@@ -113,24 +112,24 @@ namespace Registry.Web.Services.Managers
             var batches = from batch in _context.Batches
                     .Include(x => x.Entries)
                     .Include(x => x.Dataset)
-                          where batch.Dataset.Id == dataset.Id
-                          select new BatchDto
-                          {
-                              End = batch.End,
-                              Start = batch.Start,
-                              Token = batch.Token,
-                              UserName = batch.UserName,
-                              Status = batch.Status,
-                              Entries = from entry in batch.Entries
-                                        select new BatchEntryDto
-                                        {
-                                            Hash = entry.Hash,
-                                            Type = entry.Type,
-                                            Size = entry.Size,
-                                            AddedOn = entry.AddedOn,
-                                            Path = entry.Path
-                                        }
-                          };
+                where batch.Dataset.Id == dataset.Id
+                select new BatchDto
+                {
+                    End = batch.End,
+                    Start = batch.Start,
+                    Token = batch.Token,
+                    UserName = batch.UserName,
+                    Status = batch.Status,
+                    Entries = from entry in batch.Entries
+                        select new BatchEntryDto
+                        {
+                            Hash = entry.Hash,
+                            Type = entry.Type,
+                            Size = entry.Size,
+                            AddedOn = entry.AddedOn,
+                            Path = entry.Path
+                        }
+                };
 
 
             return batches;
@@ -138,7 +137,6 @@ namespace Registry.Web.Services.Managers
 
         public async Task<bool> IsPathAllowed(string token, string path)
         {
-
             var res = await IsBatchReady(token);
 
             if (!res.IsReady)
@@ -146,7 +144,7 @@ namespace Registry.Web.Services.Managers
                 _logger.LogDebug("The batch '{Token}' is not ready", token);
                 return false;
             }
-            
+
             var entry = res.Batch.Entries.FirstOrDefault(item => item.Path == path);
 
             if (entry != null)
@@ -189,7 +187,6 @@ namespace Registry.Web.Services.Managers
             }
 
             return new IsBatchReadyResult(true, batch);
-            
         }
 
         public async Task<ShareInitResultDto> Initialize(ShareInitDto parameters)
@@ -205,29 +202,32 @@ namespace Registry.Web.Services.Managers
             await _utils.CheckCurrentUserStorage();
 
             Dataset dataset;
-            TagDto tag;
 
-            if (parameters.Tag == null)
+            // No organization requested
+            if (parameters.OrgSlug == null)
             {
-
-                _logger.LogInformation("No tag provided, generating a new one");
-
-                var nameSlug = currentUser.UserName.ToSlug();
-                
-                // We start from the principle that a default user organization begins with the username in slug form
-                // If we notice that this strategy is weak we have to add a new field to the db entry
-                var userOrganization = _context.Organizations.FirstOrDefault(item => item.OwnerId == currentUser.Id && item.Name.StartsWith(nameSlug));
+                if (parameters.DsSlug != null)
+                    throw new BadRequestException("Cannot specify a dataset without an organization");
 
                 string orgSlug;
+
+                _logger.LogInformation("No organization and dataset specified");
+
+                var nameSlug = currentUser.UserName.ToSlug();
+
+                // We start from the principle that a default user organization begins with the username in slug form
+                // If we notice that this strategy is weak we have to add a new field to the db entry
+                var userOrganization = _context.Organizations.FirstOrDefault(item =>
+                    item.OwnerId == currentUser.Id && item.Name.StartsWith(nameSlug));
 
                 // Some idiot removed its own organization, maybe we should prevent this, btw nevermind: let's take care of it
                 if (userOrganization == null)
                 {
-
                     // This section of code can be extracted and put in a separated utils method
                     orgSlug = _utils.GetFreeOrganizationSlug(currentUser.UserName);
 
-                    _logger.LogInformation("No default user organization found, adding a new one: '{OrgSlug}'", orgSlug);
+                    _logger.LogInformation("No default user organization found, adding a new one: '{OrgSlug}'",
+                        orgSlug);
 
                     var org = await _organizationsManager.AddNew(new OrganizationDto
                     {
@@ -244,11 +244,11 @@ namespace Registry.Web.Services.Managers
                 orgSlug = userOrganization.Slug;
 
                 _logger.LogInformation("Using default user organization '{OrgSlug}'", orgSlug);
-                
+
                 var dsSlug = GetUniqueDatasetSlug();
 
                 _logger.LogInformation("Generated unique dataset slug '{DsSlug}'", dsSlug);
-                
+
                 await _datasetsManager.AddNew(orgSlug, new DatasetEditDto
                 {
                     Slug = dsSlug,
@@ -259,67 +259,71 @@ namespace Registry.Web.Services.Managers
                 dataset = await _utils.GetDataset(orgSlug, dsSlug);
 
                 _logger.LogInformation("Created new dataset '{DsSlug}', creating batch", dsSlug);
-
-                tag = new TagDto(orgSlug, dsSlug);
-
             }
             else
             {
+                // Check if the requested organization exists
+                var organization = await _utils.GetOrganization(parameters.OrgSlug, true);
 
-                try
-                {
-                    tag = parameters.Tag.ToTag();
-                }
-                catch (FormatException ex)
-                {
-                    throw new BadRequestException($"Invalid tag: {ex.Message}");
-                }
-
-                // Let's fill the names if not provided
-                parameters.DatasetName ??= tag.DatasetSlug;
-
-                var org = await _utils.GetOrganization(tag.OrganizationSlug, true);
-
-                // Org must exist
-                if (org == null)
-                {
-                    throw new BadRequestException($"Organization '{tag.OrganizationSlug}' does not exist");
-                }
+                if (organization == null)
+                    throw new BadRequestException($"Cannot find organization '{parameters.OrgSlug}'");
 
                 _logger.LogInformation("Organization found");
 
-                // Create dataset if not exists
-                dataset = await _utils.GetDataset(tag.OrganizationSlug, tag.DatasetSlug, true);
-
-                if (dataset == null)
+                // If no dataset is specified, we create a new one with a random slug
+                if (parameters.DsSlug == null)
                 {
-                    _logger.LogInformation("Dataset '{DatasetSlug}' not found, creating it", tag.DatasetSlug);
+                    var dsSlug = GetUniqueDatasetSlug();
 
-                    await _datasetsManager.AddNew(tag.OrganizationSlug, new DatasetEditDto
+                    _logger.LogInformation("Generated unique dataset slug '{DsSlug}'", dsSlug);
+
+                    await _datasetsManager.AddNew(parameters.OrgSlug, new DatasetEditDto
                     {
-                        Slug = tag.DatasetSlug,
+                        Slug = dsSlug,
                         Name = parameters.DatasetName,
                         IsPublic = true
                     });
-                    dataset = await _utils.GetDataset(tag.OrganizationSlug, tag.DatasetSlug);
+
+                    dataset = _context.Datasets.First(ds => ds.Slug == dsSlug);
 
                     _logger.LogInformation("Dataset created");
                 }
                 else
                 {
-                    _logger.LogInformation("Dataset and organization already existing, checking for running batches");
+                    dataset = await _utils.GetDataset(parameters.OrgSlug, parameters.DsSlug, true);
 
-                    await _context.Entry(dataset).Collection(item => item.Batches).LoadAsync();
-
-                    var runningBatches = dataset.Batches.Where(item => item.End == null).ToArray();
-
-                    if (runningBatches.Any())
+                    // Create dataset if not exists
+                    if (dataset == null)
                     {
-                        _logger.LogInformation("Found '{RunningBatchesCount}' running batch(es), stopping and rolling back before starting a new one", runningBatches.Length);
+                        _logger.LogInformation("Dataset '{DatasetSlug}' not found, creating it", parameters.DsSlug);
 
-                        foreach (var b in runningBatches)
-                            await RollbackBatch(b);
+                        await _datasetsManager.AddNew(parameters.OrgSlug, new DatasetEditDto
+                        {
+                            Slug = parameters.DsSlug,
+                            Name = parameters.DatasetName,
+                            IsPublic = true
+                        });
 
+                        _logger.LogInformation("Dataset created");
+
+                        dataset = _context.Datasets.First(ds => ds.Slug == parameters.DsSlug);
+                    }
+                    else
+                    {
+                        _logger.LogInformation("Checking for running batches");
+                        await _context.Entry(dataset).Collection(item => item.Batches).LoadAsync();
+
+                        var runningBatches = dataset.Batches.Where(item => item.End == null).ToArray();
+
+                        if (runningBatches.Any())
+                        {
+                            _logger.LogInformation(
+                                "Found '{RunningBatchesCount}' running batch(es), stopping and rolling back before starting a new one",
+                                runningBatches.Length);
+
+                            foreach (var b in runningBatches)
+                                await RollbackBatch(b);
+                        }
                     }
                 }
             }
@@ -333,7 +337,8 @@ namespace Registry.Web.Services.Managers
                 Status = BatchStatus.Running
             };
 
-            _logger.LogInformation("Adding new batch for user '{BatchUserName}' with token '{BatchToken}'", batch.UserName, batch.Token);
+            _logger.LogInformation("Adding new batch for user '{BatchUserName}' with token '{BatchToken}'",
+                batch.UserName, batch.Token);
 
             await _context.Batches.AddAsync(batch);
             await _context.SaveChangesAsync();
@@ -393,9 +398,9 @@ namespace Registry.Web.Services.Managers
         public async Task Rollback(string token)
         {
             var batch = await GetRunningBatchFromToken(token);
-            
+
             _logger.LogInformation("Rolling back  batch '{Token}'", token);
-            
+
             await RollbackBatch(batch, true);
         }
 
@@ -413,12 +418,12 @@ namespace Registry.Web.Services.Managers
 
             if (stream == null)
                 throw new BadRequestException("Missing data stream");
-            
+
             if (!stream.CanRead)
                 throw new BadRequestException("Cannot read from data stream");
 
             var batch = await GetRunningBatchFromToken(token);
-            
+
             // Check if user has enough space to upload this
             await _utils.CheckCurrentUserStorage(stream.Length);
 
@@ -437,7 +442,8 @@ namespace Registry.Web.Services.Managers
             var info = (await _objectsManager.List(orgSlug, dsSlug, path)).FirstOrDefault();
 
             if (info == null)
-                throw new BadRequestException("Underlying object storage is not working correctly: cannot find object after adding it");
+                throw new BadRequestException(
+                    "Underlying object storage is not working correctly: cannot find object after adding it");
 
             entry = new Entry
             {
@@ -467,17 +473,17 @@ namespace Registry.Web.Services.Managers
 
         public async Task<CommitResultDto> Commit(string token)
         {
-
             var batch = await GetRunningBatchFromToken(token);
-            
-            _logger.LogInformation("Committing batch '{Token}' @ {BatchEndDate} {BatchEndTime}", token, batch.End?.ToLongDateString(), batch.End?.ToLongTimeString());
+
+            _logger.LogInformation("Committing batch '{Token}' @ {BatchEndDate} {BatchEndTime}", token,
+                batch.End?.ToLongDateString(), batch.End?.ToLongTimeString());
 
             batch.End = DateTime.Now;
             batch.Status = BatchStatus.Committed;
             await _context.SaveChangesAsync();
 
             _logger.LogInformation("Batch '{Token}' committed", token);
-          
+
             await _context.Entry(batch).Collection(item => item.Entries).LoadAsync();
 
             return new CommitResultDto

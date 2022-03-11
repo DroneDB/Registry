@@ -99,6 +99,7 @@ namespace Registry.Web.Test
             
         }
 
+        /*
         [Test]
         public async Task Initialize_NullParameters_BadRequest()
         {
@@ -127,8 +128,110 @@ namespace Registry.Web.Test
             //manager.Invoking(x => x.Initialize(new ShareInitDto())).Should().Throw<BadRequestException>();
             await manager.Invoking(x => x.Initialize(new ShareInitDto { Tag = "ciao" })).Should()
                 .ThrowAsync<BadRequestException>();
-        }
+        }*/
 
+                [Test]
+        public async Task Initialize_WithOrgWithoutDataset_GeneratedTag()
+        {
+            // INITIALIZATION & SETUP
+            const string userName = "admin";
+
+            using var test = new TestFS(Test4ArchiveUrl, BaseTestFolder, true);
+
+            await using var context = GetTest1Context();
+            await using var appContext = GetAppTest1Context();
+
+            var settings = JsonConvert.DeserializeObject<AppSettings>(_settingsJson);
+            settings.StoragePath = test.TestFolder;
+            _appSettingsMock.Setup(o => o.Value).Returns(settings);
+            
+            _authManagerMock.Setup(o => o.IsUserAdmin()).Returns(Task.FromResult(true));
+            var user = new User
+            {
+                UserName = userName,
+                Email = "admin@example.com",
+                Id = Guid.NewGuid().ToString()
+            };
+            _authManagerMock.Setup(o => o.GetCurrentUser()).Returns(Task.FromResult(user));
+            _authManagerMock.Setup(o => o.UserExists(user.Id)).Returns(Task.FromResult(true));
+            _authManagerMock.Setup(o => o.SafeGetCurrentUserName()).Returns(Task.FromResult(userName));
+
+            var attributes = new Dictionary<string, object>
+            {
+                { "public", true }
+            };
+
+            var ddbMock = new Mock<IDDB>();
+            ddbMock.Setup(x => x.GetInfoAsync(default)).Returns(Task.FromResult(new Entry
+            {
+                Properties = attributes
+            }));
+            
+            var mockMeta = new MockMeta();
+            ddbMock.Setup(x => x.Meta).Returns(mockMeta);
+
+            var ddbMock2 = new Mock<IDDB>();
+            ddbMock2.Setup(x => x.GetAttributesRaw()).Returns(attributes);
+            ddbMock.Setup(x => x.GetAttributesAsync(default))
+                .Returns(Task.FromResult(new EntryAttributes(ddbMock2.Object)));
+
+            _ddbFactoryMock.Setup(x => x.Get(It.IsAny<string>(), It.IsAny<Guid>())).Returns(ddbMock.Object);
+            
+            var ddbFactory = new DdbManager(_appSettingsMock.Object, _ddbFactoryLogger);
+            var webUtils = new WebUtils(_authManagerMock.Object, context, _appSettingsMock.Object,
+                _httpContextAccessorMock.Object, _ddbFactoryMock.Object);
+
+            var objectManager = new ObjectsManager(_objectManagerLogger, context, 
+                _appSettingsMock.Object, ddbFactory, webUtils, _authManagerMock.Object, _cacheManagerMock.Object,
+                _fileSystem, _backgroundJobsProcessor);
+
+            var datasetManager = new DatasetsManager(context, webUtils, _datasetsManagerLogger, objectManager,
+                _ddbFactoryMock.Object, _authManagerMock.Object);
+            var organizationsManager = new OrganizationsManager(_authManagerMock.Object, context, webUtils,
+                datasetManager, appContext, _organizationsManagerLogger);
+
+            var shareManager = new ShareManager(_appSettingsMock.Object, _shareManagerLogger, objectManager,
+                datasetManager, organizationsManager, webUtils, _authManagerMock.Object, 
+                new BatchTokenGenerator(_appSettingsMock.Object, _batchTokenGeneratorLogger), 
+                new NameGenerator(_appSettingsMock.Object, _nameGeneratorLogger), context);
+
+            // TEST 
+
+            // ListBatches
+            var batches =
+                (await shareManager.ListBatches(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug))
+                .ToArray();
+            batches.Should().BeEmpty();
+
+            // Initialize
+            var initRes = await shareManager.Initialize(new ShareInitDto
+            {
+                OrgSlug = MagicStrings.PublicOrganizationSlug
+            });
+
+            initRes.Should().NotBeNull();
+            initRes.Token.Should().NotBeNullOrWhiteSpace();
+
+            // Commit
+            var commitRes = await shareManager.Commit(initRes.Token);
+
+            commitRes.Tag.OrganizationSlug.Should().Be(MagicStrings.PublicOrganizationSlug);
+
+            // ListBatches
+            batches = (await shareManager.ListBatches(commitRes.Tag.OrganizationSlug, commitRes.Tag.DatasetSlug))
+                .ToArray();
+
+            batches.Should().HaveCount(1);
+
+            var batch = batches.First();
+
+            batch.Token.Should().Be(initRes.Token);
+            batch.UserName.Should().Be(userName);
+            batch.End.Should().NotBeNull();
+            batch.Status.Should().Be(BatchStatus.Committed);
+            batch.Entries.Should().HaveCount(0);
+        }
+        
         [Test]
         public async Task Initialize_WithoutTag_GeneratedTag()
         {
@@ -339,7 +442,8 @@ namespace Registry.Web.Test
             // Initialize
             var initRes = await shareManager.Initialize(new ShareInitDto
             {
-                Tag = $"{organizationTestSlug}/{datasetTestSlug}",
+                OrgSlug = organizationTestSlug,
+                DsSlug = datasetTestSlug,
                 DatasetName = datasetTestName
             });
 
@@ -476,7 +580,8 @@ namespace Registry.Web.Test
             // Initialize
             var initRes = await shareManager.Initialize(new ShareInitDto
             {
-                Tag = $"{organizationTestSlug}/{datasetTestSlug}",
+                DsSlug = datasetTestSlug,
+                OrgSlug = organizationTestSlug,
                 DatasetName = datasetTestName
             });
 
@@ -617,7 +722,8 @@ namespace Registry.Web.Test
             // Initialize
             var initRes = await shareManager.Initialize(new ShareInitDto
             {
-                Tag = $"{organizationTestSlug}/{datasetTestSlug}",
+                DsSlug = datasetTestSlug,
+                OrgSlug = organizationTestSlug,
                 DatasetName = datasetTestName,
             });
 
@@ -638,7 +744,8 @@ namespace Registry.Web.Test
             // Initialize
             var newInitRes = await shareManager.Initialize(new ShareInitDto
             {
-                Tag = $"{organizationTestSlug}/{datasetTestSlug}",
+                DsSlug = datasetTestSlug,
+                OrgSlug = organizationTestSlug,
                 DatasetName = datasetTestName,
             });
 

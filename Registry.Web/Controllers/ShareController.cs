@@ -42,21 +42,22 @@ namespace Registry.Web.Controllers
         {
             try
             {
-                _logger.LogDebug("Share controller Init('{Tag}', '{DatasetName}')", parameters?.Tag, parameters?.DatasetName);
+                _logger.LogDebug("Share controller Init('{OrgSlug}', '{DsSlug}', '{DatasetName}')", parameters.OrgSlug,
+                    parameters.DsSlug, parameters?.DatasetName);
 
                 var initRes = await _shareManager.Initialize(parameters);
 
                 return Ok(initRes);
-
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Exception in Share controller Init('{Tag}', '{DatasetName}')", parameters?.Tag, parameters?.DatasetName);
+                _logger.LogError(ex, "Exception in Share controller Init('{OrgSlug}', '{DsSlug}', '{DatasetName}')", parameters.OrgSlug,
+                    parameters.DsSlug, parameters?.DatasetName);
 
                 return ExceptionResult(ex);
             }
         }
-        
+
         [HttpGet("info/{token}")]
         public async Task<IActionResult> Info(string token)
         {
@@ -67,7 +68,6 @@ namespace Registry.Web.Controllers
                 var res = await _shareManager.GetBatchInfo(token);
 
                 return Ok(res);
-
             }
             catch (Exception ex)
             {
@@ -84,8 +84,8 @@ namespace Registry.Web.Controllers
         {
             try
             {
-
-                _logger.LogDebug("Share controller Upload('{Token}', '{Path}', '{file?.FileName}')", token, path, file?.FileName);
+                _logger.LogDebug("Share controller Upload('{Token}', '{Path}', '{file?.FileName}')", token, path,
+                    file?.FileName);
 
                 if (file == null)
                     throw new ArgumentException("No file uploaded");
@@ -96,24 +96,23 @@ namespace Registry.Web.Controllers
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Exception in Share controller Upload('{Token}', '{Path}', '{file?.FileName}')", token, path, file?.FileName);
+                _logger.LogError(ex, "Exception in Share controller Upload('{Token}', '{Path}', '{file?.FileName}')",
+                    token, path, file?.FileName);
 
                 return ExceptionResult(ex);
             }
         }
-        
+
         [HttpPost("commit/{token}")]
         public async Task<IActionResult> Commit(string token)
         {
             try
             {
-
                 _logger.LogDebug("Share controller Commit('{Token}')", token);
 
                 var res = await _shareManager.Commit(token);
 
                 return Ok(res);
-
             }
             catch (Exception ex)
             {
@@ -122,19 +121,17 @@ namespace Registry.Web.Controllers
                 return ExceptionResult(ex);
             }
         }
-        
+
         [HttpPost("rollback/{token}")]
         public async Task<IActionResult> Rollback(string token)
         {
             try
             {
-
                 _logger.LogDebug("Share controller Rollback('{Token}')", token);
 
                 await _shareManager.Rollback(token);
 
                 return Ok();
-
             }
             catch (Exception ex)
             {
@@ -143,6 +140,5 @@ namespace Registry.Web.Controllers
                 return ExceptionResult(ex);
             }
         }
-
     }
 }
