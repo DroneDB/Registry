@@ -132,7 +132,7 @@ CONTROL_SWITCH='$controlSwitch'
 ### Windows (values without quotes)
 ```batch
 MYSQL_ROOT_PASSWORD=default-root-password
-MYSQL_PASSWORD=default-mysql-password"
+MYSQL_PASSWORD=default-mysql-password
 REGISTRY_ADMIN_MAIL=test@test.it
 REGISTRY_ADMIN_PASSWORD=password
 REGISTRY_SECRET=longandrandomsecrettobegeneratedusingcryptographicallystrongrandomnumbergenerator
