@@ -10,7 +10,7 @@ services:
         environment:
             - MYSQL_ROOT_PASSWORD
         healthcheck:
-            test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+            test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-p$MYSQL_ROOT_PASSWORD"]
             timeout: 20s
             retries: 10
 
