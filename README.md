@@ -55,7 +55,7 @@ This command will start a new stack composed by
  - PHPMyAdmin, exposed on port [8080](http://localhost:8080)
  - Registry, exposed on port [5000](http://localhost:5000)
 
-Default username and password are `admin` and `password`. After logging in you can check the health of the application by visiting [/status](http://localhost:5000/health).
+Default username and password are `admin` and `password`. After logging in you can check the status of the application by visiting [/quickhealth](http://localhost:5000/quickhealth). The [/health](http://localhost:5000/health) endpoint gives more in-depth information.
 
 You can follow the logs:
 
