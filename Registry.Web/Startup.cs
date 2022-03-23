@@ -704,7 +704,7 @@ namespace Registry.Web
                     Name = defaultAdmin.UserName + " organization",
                     CreationDate = DateTime.Now,
                     Description = null,
-                    IsPublic = true,
+                    IsPublic = false,
                     // NOTE: Maybe this is a good idea to flag this org as "system"
                     OwnerId = user.Id
                 };
