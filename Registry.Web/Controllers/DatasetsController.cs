@@ -124,7 +124,7 @@ namespace Registry.Web.Controllers
         }
 
         [HttpPost]
-        public async Task<IActionResult> Post([FromRoute] string orgSlug, [FromForm] DatasetEditDto dataset)
+        public async Task<IActionResult> Post([FromRoute] string orgSlug, [FromForm] DatasetNewDto dataset)
         {
             try
             {
@@ -188,14 +188,14 @@ namespace Registry.Web.Controllers
         {
             try
             {
-                _logger.LogDebug("Dataset controller Put('{OrgSlug}', '{DsSlug}', '{DatasetSlug}')", orgSlug, dsSlug, dataset?.Slug);
+                _logger.LogDebug("Dataset controller Put('{OrgSlug}', '{DsSlug}')", orgSlug, dsSlug);
 
                 await _datasetsManager.Edit(orgSlug, dsSlug, dataset);
                 return NoContent();
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Exception in Dataset controller Put('{OrgSlug}', '{DsSlug}', '{DatasetSlug}')", orgSlug, dsSlug, dataset?.Slug);
+                _logger.LogError(ex, "Exception in Dataset controller Put('{OrgSlug}', '{DsSlug}')", orgSlug, dsSlug);
                 return ExceptionResult(ex);
             }
         }

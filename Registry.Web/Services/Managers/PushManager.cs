@@ -61,7 +61,7 @@ namespace Registry.Web.Services.Managers
             if (ds == null)
             {
                 _logger.LogInformation("Dataset does not exist, creating it");
-                await _datasetsManager.AddNew(orgSlug, new DatasetEditDto
+                await _datasetsManager.AddNew(orgSlug, new DatasetNewDto
                 {
                     Name = dsSlug,
                     Slug = dsSlug
