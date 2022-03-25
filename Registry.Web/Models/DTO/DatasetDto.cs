@@ -20,10 +20,18 @@ namespace Registry.Web.Models.DTO
 
     }
     
-    public class DatasetEditDto
+    public class DatasetNewDto
     {
         [Required]
         public string Slug { get; set; }
+
+        public string Name { get; set; }
+        public bool? IsPublic { get; set; }
+
+    }
+    
+    public class DatasetEditDto
+    {
 
         public string Name { get; set; }
         public bool? IsPublic { get; set; }
