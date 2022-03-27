@@ -202,11 +202,12 @@ namespace Registry.Web.Services.Managers
             await _utils.CheckCurrentUserStorage();
 
             Dataset dataset;
+            TagDto tag = parameters.Tag.ToTag();
 
             // No organization requested
-            if (parameters.OrgSlug == null)
+            if (tag.OrganizationSlug == null)
             {
-                if (parameters.DsSlug != null)
+                if (tag.DatasetSlug != null)
                     throw new BadRequestException("Cannot specify a dataset without an organization");
 
                 string orgSlug;
@@ -263,21 +264,21 @@ namespace Registry.Web.Services.Managers
             else
             {
                 // Check if the requested organization exists
-                var organization = await _utils.GetOrganization(parameters.OrgSlug, true);
+                var organization = await _utils.GetOrganization(tag.OrganizationSlug, true);
 
                 if (organization == null)
-                    throw new BadRequestException($"Cannot find organization '{parameters.OrgSlug}'");
+                    throw new BadRequestException($"Cannot find organization '{tag.OrganizationSlug}'");
 
                 _logger.LogInformation("Organization found");
 
                 // If no dataset is specified, we create a new one with a random slug
-                if (parameters.DsSlug == null)
+                if (tag.DatasetSlug == null)
                 {
                     var dsSlug = GetUniqueDatasetSlug();
 
                     _logger.LogInformation("Generated unique dataset slug '{DsSlug}'", dsSlug);
 
-                    await _datasetsManager.AddNew(parameters.OrgSlug, new DatasetNewDto
+                    await _datasetsManager.AddNew(tag.OrganizationSlug, new DatasetNewDto
                     {
                         Slug = dsSlug,
                         Name = parameters.DatasetName,
@@ -290,23 +291,23 @@ namespace Registry.Web.Services.Managers
                 }
                 else
                 {
-                    dataset = await _utils.GetDataset(parameters.OrgSlug, parameters.DsSlug, true);
+                    dataset = await _utils.GetDataset(tag.OrganizationSlug, tag.DatasetSlug, true);
 
                     // Create dataset if not exists
                     if (dataset == null)
                     {
-                        _logger.LogInformation("Dataset '{DatasetSlug}' not found, creating it", parameters.DsSlug);
+                        _logger.LogInformation("Dataset '{DatasetSlug}' not found, creating it", tag.DatasetSlug);
 
-                        await _datasetsManager.AddNew(parameters.OrgSlug, new DatasetNewDto
+                        await _datasetsManager.AddNew(tag.OrganizationSlug, new DatasetNewDto
                         {
-                            Slug = parameters.DsSlug,
+                            Slug = tag.DatasetSlug,
                             Name = parameters.DatasetName,
                             IsPublic = true
                         });
 
                         _logger.LogInformation("Dataset created");
 
-                        dataset = _context.Datasets.First(ds => ds.Slug == parameters.DsSlug);
+                        dataset = _context.Datasets.First(ds => ds.Slug == tag.DatasetSlug);
                     }
                     else
                     {

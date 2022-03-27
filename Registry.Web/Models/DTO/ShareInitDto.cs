@@ -8,10 +8,8 @@ namespace Registry.Web.Models.DTO
 {
     public class ShareInitDto
     {
-        public string OrgSlug { get; set; }
-        public string DsSlug { get; set; }
+        public string Tag { get; set; }
 
         public string DatasetName { get; set; }
-        
     }
 }

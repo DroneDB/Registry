@@ -42,8 +42,7 @@ namespace Registry.Web.Controllers
         {
             try
             {
-                _logger.LogDebug("Share controller Init('{OrgSlug}', '{DsSlug}', '{DatasetName}')", parameters.OrgSlug,
-                    parameters.DsSlug, parameters?.DatasetName);
+                _logger.LogDebug("Share controller Init('{Tag}')", parameters.Tag);
 
                 var initRes = await _shareManager.Initialize(parameters);
 
@@ -51,8 +50,7 @@ namespace Registry.Web.Controllers
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Exception in Share controller Init('{OrgSlug}', '{DsSlug}', '{DatasetName}')", parameters.OrgSlug,
-                    parameters.DsSlug, parameters?.DatasetName);
+                _logger.LogError(ex, "Exception in Share controller Init('{Tag}')", parameters.Tag);
 
                 return ExceptionResult(ex);
             }

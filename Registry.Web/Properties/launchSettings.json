@@ -10,12 +10,13 @@
   "$schema": "http://json.schemastore.org/launchsettings.json",
   "profiles": {
     "IIS Express": {
-      "commandName": "IISExpress",
+      "commandName": "Project",
       "launchUrl": "https://localhost:44359/",
       "environmentVariables": {
         "DDB_DEBUG": "1",
         "ASPNETCORE_ENVIRONMENT": "Development"
-      }
+      },
+      "applicationUrl": "http://0.0.0.0:5000"
     },
     "Registry.Web": {
       "commandName": "Project",
