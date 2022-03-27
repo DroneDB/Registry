@@ -206,7 +206,7 @@ namespace Registry.Web.Test
             // Initialize
             var initRes = await shareManager.Initialize(new ShareInitDto
             {
-                OrgSlug = MagicStrings.PublicOrganizationSlug
+                Tag = MagicStrings.PublicOrganizationSlug + "/test"
             });
 
             initRes.Should().NotBeNull();
@@ -440,10 +440,10 @@ namespace Registry.Web.Test
             res.Name.Should().Be(organizationTestName);
 
             // Initialize
+
             var initRes = await shareManager.Initialize(new ShareInitDto
             {
-                OrgSlug = organizationTestSlug,
-                DsSlug = datasetTestSlug,
+                Tag = organizationTestSlug + "/" + datasetTestSlug,
                 DatasetName = datasetTestName
             });
 
@@ -580,8 +580,7 @@ namespace Registry.Web.Test
             // Initialize
             var initRes = await shareManager.Initialize(new ShareInitDto
             {
-                DsSlug = datasetTestSlug,
-                OrgSlug = organizationTestSlug,
+                Tag = organizationTestSlug + "/" + datasetTestSlug,
                 DatasetName = datasetTestName
             });
 
@@ -722,8 +721,7 @@ namespace Registry.Web.Test
             // Initialize
             var initRes = await shareManager.Initialize(new ShareInitDto
             {
-                DsSlug = datasetTestSlug,
-                OrgSlug = organizationTestSlug,
+                Tag = organizationTestSlug + "/" + datasetTestSlug,
                 DatasetName = datasetTestName,
             });
 
@@ -744,8 +742,7 @@ namespace Registry.Web.Test
             // Initialize
             var newInitRes = await shareManager.Initialize(new ShareInitDto
             {
-                DsSlug = datasetTestSlug,
-                OrgSlug = organizationTestSlug,
+                Tag = organizationTestSlug + "/" + datasetTestSlug,
                 DatasetName = datasetTestName,
             });
 
