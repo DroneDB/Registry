@@ -201,7 +201,7 @@ namespace Registry.Web.Utilities
         {
 
             if (string.IsNullOrWhiteSpace(tag))
-                throw new FormatException("Tag is null or empty");
+                return new TagDto(null, null);
 
             var sections = tag.Split('/');
 
