@@ -7,7 +7,6 @@ namespace Registry.Web.Models.DTO
     [JsonConverter(typeof(TagConverter))]
     public class TagDto
     {
-
         public TagDto(string organizationSlug, string datasetSlug)
         {
             OrganizationSlug = organizationSlug;
