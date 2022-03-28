@@ -50,7 +50,7 @@ namespace Registry.Web.Services.Managers
                 if (currentUser == null)
                     throw new UnauthorizedException("Invalid user");
 
-                query = query.Where(item => item.OwnerId == currentUser.Id || item.OwnerId == null || item.IsPublic);
+                query = query.Where(item => item.OwnerId == currentUser.Id);
             }
             
             // This can be optimized, but it's not a big deal because it's a cross database query anyway
