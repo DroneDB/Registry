@@ -40,6 +40,13 @@ namespace Registry.Web.Services.Managers
             return currentUser != null && await _usersManager.IsInRoleAsync(currentUser, roleName);
         }
 
+        public async Task<bool> IsOwnerOrAdmin(Organization org)
+        {
+            var user = await GetCurrentUser();
+
+            return user != null && (await IsUserAdmin() || org.OwnerId == user.Id);
+        }
+
         public async Task<bool> UserExists(string userId)
         {
             var user = await _usersManager.FindByIdAsync(userId);

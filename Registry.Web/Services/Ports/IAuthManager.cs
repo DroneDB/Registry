@@ -19,6 +19,9 @@ namespace Registry.Web.Services.Ports
         public Task<string> SafeGetCurrentUserName();
 
         public Task<bool> IsOwnerOrAdmin(Dataset ds);
+        
+        public Task<bool> IsOwnerOrAdmin(Organization org);
+
         public Task<bool> UserExists(string userId);
 
     }
