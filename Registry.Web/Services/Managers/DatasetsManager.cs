@@ -88,6 +88,9 @@ namespace Registry.Web.Services.Managers
         {
             var org = await _utils.GetOrganization(orgSlug);
 
+            if (!await _authManager.IsOwnerOrAdmin(org)) 
+                throw new UnauthorizedException("You are not authorized to add datasets to this organization");
+            
             if (dataset == null)
                 throw new BadRequestException("Dataset is null");
             
