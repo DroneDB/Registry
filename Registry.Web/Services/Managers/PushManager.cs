@@ -53,12 +53,9 @@ namespace Registry.Web.Services.Managers
         {
             var ds = await _utils.GetDataset(orgSlug, dsSlug, true);
 
-            if (!await _authManager.IsOwnerOrAdmin(ds))
-                throw new UnauthorizedException("The current user is not allowed to init push");
+            var validateChecksum = false;
 
-            bool validateChecksum = ds != null;
-
-            if (ds == null)
+            if (ds is null)
             {
                 _logger.LogInformation("Dataset does not exist, creating it");
                 await _datasetsManager.AddNew(orgSlug, new DatasetNewDto
@@ -69,6 +66,14 @@ namespace Registry.Web.Services.Managers
 
                 _logger.LogInformation("New dataset {OrgSlug}/{DsSlug} created", orgSlug, dsSlug);
                 ds = await _utils.GetDataset(orgSlug, dsSlug);
+
+            }
+            else
+            {
+                if (!await _authManager.IsOwnerOrAdmin(ds))
+                    throw new UnauthorizedException("The current user is not allowed to init push");
+
+                validateChecksum = true;
             }
 
             var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
