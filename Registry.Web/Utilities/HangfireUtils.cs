@@ -10,7 +10,6 @@ namespace Registry.Web.Utilities
 {
     public static class HangfireUtils
     {
-
         public static void BuildWrapper(IDDB ddb, string path, bool force,
             PerformContext context)
         {
@@ -18,12 +17,6 @@ namespace Registry.Web.Utilities
 
             writeLine($"In BuildWrapper('{ddb.DatasetFolderPath}', '{path}', '{force}')");
 
-            if (!Directory.Exists(path) && !File.Exists(path))
-            {
-                writeLine($"BuildWrapper: '{path}' does not exist");
-                return; // nothing to do
-            }
-            
             writeLine("Running build");
             ddb.Build(path, force: force);
 
@@ -65,6 +58,5 @@ namespace Registry.Web.Utilities
                     writeLine("No file or folder found");
             }
         }
-
     }
 }

@@ -688,7 +688,7 @@ namespace Registry.Adapters.DroneDB
         {
             try
             {
-                DDBError result = _Build(ddbPath, source, dest, force, pendingOnly);
+                var result = _Build(ddbPath, source, dest, force, pendingOnly);
                 if (result == DDBError.DDBERR_EXCEPTION) throw new DDBException(GetLastError());
             }
             catch (EntryPointNotFoundException ex)
