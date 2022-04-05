@@ -18,6 +18,12 @@ namespace Registry.Web.Utilities
 
             writeLine($"In BuildWrapper('{ddb.DatasetFolderPath}', '{path}', '{force}')");
 
+            if (!Directory.Exists(path) && !File.Exists(path))
+            {
+                writeLine($"BuildWrapper: '{path}' does not exist");
+                return; // nothing to do
+            }
+            
             writeLine("Running build");
             ddb.Build(path, force: force);
 
