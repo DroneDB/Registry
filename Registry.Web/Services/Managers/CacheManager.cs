@@ -17,7 +17,6 @@ namespace Registry.Web.Services.Managers
         {
             public Func<object[], byte[]> GetData { get; set; }
             public TimeSpan Expiration { get; set; }
-            public string Seed { get; set; }
         }
 
         private readonly ObjectCache _cache;
@@ -26,7 +25,7 @@ namespace Registry.Web.Services.Managers
 
         private readonly DictionaryEx<string, Carrier> _providers = new();
 
-        public CacheManager(ObjectCache cache, IOptions<AppSettings> settings)
+        public CacheManager(ObjectCache cache)
         {
             _cache = cache;
         }
@@ -36,7 +35,6 @@ namespace Registry.Web.Services.Managers
             _providers.Add(seed, new Carrier
             {
                 Expiration = expiration ?? DefaultCacheExpiration, 
-                Seed = seed, 
                 GetData = getData
             });
         }

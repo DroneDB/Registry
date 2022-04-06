@@ -242,7 +242,11 @@ namespace Registry.Web
                 true, appSettings.ClearCacheInterval ?? default)
             {
                 PayloadReadMode = FileCache.PayloadMode.Filename,
-                PayloadWriteMode = FileCache.PayloadMode.Filename
+                PayloadWriteMode = FileCache.PayloadMode.Filename,
+                DefaultPolicy = new CacheItemPolicy
+                {
+                    SlidingExpiration = appSettings.ClearCacheInterval ?? TimeSpan.FromDays(1)
+                }
             });
             
             services.AddResponseCompression();

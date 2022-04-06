@@ -10,7 +10,6 @@ namespace Registry.Web.Utilities
 {
     public static class HangfireUtils
     {
-
         public static void BuildWrapper(IDDB ddb, string path, bool force,
             PerformContext context)
         {
@@ -59,6 +58,5 @@ namespace Registry.Web.Utilities
                     writeLine("No file or folder found");
             }
         }
-
     }
 }
