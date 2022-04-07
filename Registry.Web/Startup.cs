@@ -237,8 +237,8 @@ namespace Registry.Web
             services.AddSingleton<IBatchTokenGenerator, BatchTokenGenerator>();
             services.AddSingleton<INameGenerator, NameGenerator>();
             services.AddSingleton<ICacheManager, CacheManager>();
-            services.AddSingleton<ObjectCache>(provider => new FileCache(FileCacheManagers.Hashed, 
-                appSettings.CachePath, new DefaultSerializationBinder(), 
+            services.AddSingleton<ObjectCache>(provider => new FileCache(FileCacheManagers.Hashed,
+                appSettings.CachePath, new DefaultSerializationBinder(),
                 true, appSettings.ClearCacheInterval ?? default)
             {
                 PayloadReadMode = FileCache.PayloadMode.Filename,
@@ -248,7 +248,7 @@ namespace Registry.Web
                     SlidingExpiration = appSettings.ClearCacheInterval ?? TimeSpan.FromDays(1)
                 }
             });
-            
+
             services.AddResponseCompression();
 
             if (appSettings.MaxRequestBodySize.HasValue)
@@ -289,15 +289,15 @@ namespace Registry.Web
             {
                 app.UseHsts();
             }
-           
+
             app.UseSerilogRequestLogging(options =>
             {
                 // Customize the message template
                 options.MessageTemplate = "Handled {RequestPath}";
-    
+
                 // Emit debug-level events instead of the defaults
                 options.GetLevel = (httpContext, elapsed, ex) => LogEventLevel.Debug;
-    
+
                 // Attach additional properties to the request completion event
                 options.EnrichDiagnosticContext = (diagnosticContext, httpContext) =>
                 {
@@ -305,7 +305,7 @@ namespace Registry.Web
                     diagnosticContext.Set("RequestScheme", httpContext.Request.Scheme);
                 };
             });
-            
+
             app.UseDefaultFiles();
 
             app.UseSwagger();
@@ -333,7 +333,7 @@ namespace Registry.Web
             {
                 AsyncAuthorization = new[] { new HangfireAuthorizationFilter() }
             });
-            
+
             app.UseEndpoints(endpoints =>
             {
                 endpoints.MapControllers();
@@ -389,16 +389,14 @@ namespace Registry.Web
 
         private void PrintStartupInfo(IApplicationBuilder app)
         {
-
             if (!Log.IsEnabled(LogEventLevel.Information))
             {
-                
                 var env = app.ApplicationServices.GetService<IHostEnvironment>();
                 Console.WriteLine(" -> Application startup");
                 Console.WriteLine(" ?> Environment: {0}", env?.EnvironmentName ?? "Unknown");
                 Console.WriteLine(" ?> Version: {0}", Assembly.GetExecutingAssembly().GetName().Version);
                 Console.WriteLine(" ?> Application started at {0}", DateTime.Now);
-                
+
                 var serverAddresses = app.ServerFeatures.Get<IServerAddressesFeature>()?.Addresses;
                 if (serverAddresses != null)
                 {
@@ -407,15 +405,14 @@ namespace Registry.Web
                         Console.WriteLine($" ?> Now listening on: {address}");
                     }
                 }
-                
+
                 var settings = app.ApplicationServices.GetService<IOptions<AppSettings>>();
-                
+
                 var appSettings = settings?.Value;
                 if (appSettings != null && !string.IsNullOrWhiteSpace(appSettings.ExternalUrlOverride))
                 {
                     Console.WriteLine($" ?> External URL: {appSettings.ExternalUrlOverride}");
                 }
-
             }
         }
 
@@ -427,7 +424,7 @@ namespace Registry.Web
             var cacheManager = app.ApplicationServices.GetService<ICacheManager>();
 
             Debug.Assert(cacheManager != null, nameof(cacheManager) + " != null");
-            
+
             cacheManager.Register(MagicStrings.TileCacheSeed, parameters =>
             {
                 var ddb = (DDB)parameters[0];
@@ -439,9 +436,8 @@ namespace Registry.Web
                 var retina = (bool)parameters[6];
 
                 return ddb.GenerateTile(sourcePath, tz, tx, ty, retina, sourceHash);
-
             }, appSettings.TilesCacheExpiration);
-            
+
             cacheManager.Register(MagicStrings.ThumbnailCacheSeed, parameters =>
             {
                 var ddb = (DDB)parameters[0];
@@ -449,9 +445,7 @@ namespace Registry.Web
                 var size = (int)parameters[2];
 
                 return ddb.GenerateThumbnail(sourcePath, size);
-
             }, appSettings.ThumbnailsCacheExpiration);
-            
         }
 
         // private void SetupHangfire(IApplicationBuilder app)
@@ -675,29 +669,38 @@ namespace Registry.Web
             if (appSettings == null)
                 throw new InvalidOperationException("Cannot get app settings from service provider");
 
-            // If no users in database, let's create the default admin
-            if (!usersManager.Users.Any())
+            var defaultAdmin = appSettings.Value.DefaultAdmin;
+
+            // Check if admin role exists
+            var adminRole = await roleManager.FindByNameAsync(ApplicationDbContext.AdminRoleName);
+
+            if (adminRole == null)
             {
-                // first we create Admin role  
-                var role = new IdentityRole { Name = ApplicationDbContext.AdminRoleName };
-                var r = await roleManager.CreateAsync(role);
-
+                // Create admin role
+                adminRole = new IdentityRole(ApplicationDbContext.AdminRoleName);
+                var r = await roleManager.CreateAsync(adminRole);
                 if (!r.Succeeded)
-                    throw new InvalidOperationException("Cannot create admin role: " + r?.Errors.ToErrorString());
+                    throw new InvalidOperationException("Cannot create admin role: " + r.Errors.ToErrorString());
+            }
 
-                var defaultAdmin = appSettings.Value.DefaultAdmin;
-                var user = new User
+            // Check if default admin exists
+            var adminUser = usersManager.Users.FirstOrDefault(usr => usr.UserName == defaultAdmin.UserName);
+
+            if (adminUser == null)
+            {
+                // Create admin user
+                adminUser = new User
                 {
                     Email = defaultAdmin.Email,
                     UserName = defaultAdmin.UserName
                 };
 
-                var usrRes = await usersManager.CreateAsync(user, defaultAdmin.Password);
+                var usrRes = await usersManager.CreateAsync(adminUser, defaultAdmin.Password);
                 if (!usrRes.Succeeded)
                     throw new InvalidOperationException(
                         "Cannot create default admin: " + usrRes.Errors?.ToErrorString());
 
-                var res = await usersManager.AddToRoleAsync(user, ApplicationDbContext.AdminRoleName);
+                var res = await usersManager.AddToRoleAsync(adminUser, ApplicationDbContext.AdminRoleName);
                 if (!res.Succeeded)
                     throw new InvalidOperationException(
                         "Cannot add admin to admin role: " + res.Errors?.ToErrorString());
@@ -710,12 +713,54 @@ namespace Registry.Web
                     Description = null,
                     IsPublic = false,
                     // NOTE: Maybe this is a good idea to flag this org as "system"
-                    OwnerId = user.Id
+                    OwnerId = adminUser.Id
                 };
 
                 await context.Organizations.AddAsync(entity);
                 await context.SaveChangesAsync();
             }
+            else
+            {
+                // Ensure that admin has the admin role
+                if (!await usersManager.IsInRoleAsync(adminUser, ApplicationDbContext.AdminRoleName))
+                {
+                    var res = await usersManager.AddToRoleAsync(adminUser, ApplicationDbContext.AdminRoleName);
+                    if (!res.Succeeded)
+                        throw new InvalidOperationException(
+                            "Cannot add admin to admin role: " + res.Errors?.ToErrorString());
+                }
+                
+                // Ensure that admin is owner of the default org
+                var org = await context.Organizations.FirstOrDefaultAsync(o => o.OwnerId == adminUser.Id);
+                if (org == null)
+                {
+                    org = new Organization
+                    {
+                        Slug = defaultAdmin.UserName.ToSlug(),
+                        Name = defaultAdmin.UserName + " organization",
+                        CreationDate = DateTime.Now,
+                        Description = null,
+                        IsPublic = false,
+                        OwnerId = adminUser.Id
+                    };
+
+                    await context.Organizations.AddAsync(org);
+                    await context.SaveChangesAsync();
+                }
+                
+                // Set admin password
+                var passRes = await usersManager.RemovePasswordAsync(adminUser);
+                if (!passRes.Succeeded)
+                    throw new InvalidOperationException(
+                        "Cannot remove password for admin: " + passRes.Errors?.ToErrorString());
+                
+                passRes = await usersManager.AddPasswordAsync(adminUser, defaultAdmin.Password);
+                if (!passRes.Succeeded)
+                    throw new InvalidOperationException(
+                        "Cannot set password for admin: " + passRes.Errors?.ToErrorString());
+                
+            }
+
         }
     }
 }
