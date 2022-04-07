@@ -704,20 +704,7 @@ namespace Registry.Web
                 if (!res.Succeeded)
                     throw new InvalidOperationException(
                         "Cannot add admin to admin role: " + res.Errors?.ToErrorString());
-
-                var entity = new Organization
-                {
-                    Slug = defaultAdmin.UserName.ToSlug(),
-                    Name = defaultAdmin.UserName + " organization",
-                    CreationDate = DateTime.Now,
-                    Description = null,
-                    IsPublic = false,
-                    // NOTE: Maybe this is a good idea to flag this org as "system"
-                    OwnerId = adminUser.Id
-                };
-
-                await context.Organizations.AddAsync(entity);
-                await context.SaveChangesAsync();
+                
             }
             else
             {
@@ -729,38 +716,42 @@ namespace Registry.Web
                         throw new InvalidOperationException(
                             "Cannot add admin to admin role: " + res.Errors?.ToErrorString());
                 }
-                
-                // Ensure that admin is owner of the default org
-                var org = await context.Organizations.FirstOrDefaultAsync(o => o.OwnerId == adminUser.Id);
-                if (org == null)
-                {
-                    org = new Organization
-                    {
-                        Slug = defaultAdmin.UserName.ToSlug(),
-                        Name = defaultAdmin.UserName + " organization",
-                        CreationDate = DateTime.Now,
-                        Description = null,
-                        IsPublic = false,
-                        OwnerId = adminUser.Id
-                    };
 
-                    await context.Organizations.AddAsync(org);
-                    await context.SaveChangesAsync();
-                }
-                
                 // Set admin password
                 var passRes = await usersManager.RemovePasswordAsync(adminUser);
                 if (!passRes.Succeeded)
                     throw new InvalidOperationException(
                         "Cannot remove password for admin: " + passRes.Errors?.ToErrorString());
-                
+
                 passRes = await usersManager.AddPasswordAsync(adminUser, defaultAdmin.Password);
                 if (!passRes.Succeeded)
                     throw new InvalidOperationException(
                         "Cannot set password for admin: " + passRes.Errors?.ToErrorString());
                 
+                // Sets admin email
+                adminUser.Email = defaultAdmin.Email;
+                await context.SaveChangesAsync();
             }
+            
+            // Ensure that admin organization exists
+            var adminOrgSlug = defaultAdmin.UserName.ToSlug();
 
+            var org = await context.Organizations.FirstOrDefaultAsync(o => o.Slug == adminOrgSlug);
+            if (org == null)
+            {
+                org = new Organization
+                {
+                    Slug = adminOrgSlug,
+                    Name = defaultAdmin.UserName + " organization",
+                    CreationDate = DateTime.Now,
+                    Description = null,
+                    IsPublic = false,
+                    OwnerId = adminUser.Id
+                };
+
+                await context.Organizations.AddAsync(org);
+                await context.SaveChangesAsync();
+            }
         }
     }
 }
