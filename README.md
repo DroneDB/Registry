@@ -72,6 +72,10 @@ docker-compose up -d
 
 Registry supports Swagger API documentation on [/swagger](http://localhost:5000/swagger/) and Hangfire as task runner on [/hangfire](http://localhost:5000/hangfire/).
 
+### Change admin password
+
+You can change the admin password by changing the value of the field `DefaultAdmin.Password` in the `appsettings.json` file. After changing the password you need to restart the application.
+
 ## Running in production
 
 You will need [Git](https://git-scm.com/downloads). Clone the repo and initialize submodules:
