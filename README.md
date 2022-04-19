@@ -5,7 +5,7 @@
 DroneDB Registry is a simple, user-friendly aerial data management and storage application. It features JWT authentication and implements a full REST API. 
 
 Combined with [Hub](https://github.com/DroneDB/Hub), it provides a simple, fast and reliable platform for hosting and sharing geospatial images and data.
-It also allows you to view orthophotos and point clouds easily and effortlessly directly in the browser.
+It also allows you to view orthophotos, point clouds and 3d models (obj) easily and effortlessly directly in the browser.
 
 ### Orthophoto and flight path
 
