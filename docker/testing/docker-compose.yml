@@ -28,6 +28,8 @@ services:
         depends_on:
             - db
         image: dronedb/registry
+        tmpfs:
+            - /tmp
         volumes:
             - ./data/App_Data:/Registry/App_Data
             - ./appsettings-testing.json:/Registry/appsettings.json
