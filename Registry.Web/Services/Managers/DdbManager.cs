@@ -64,7 +64,7 @@ namespace Registry.Web.Services.Managers
             if (string.IsNullOrWhiteSpace(orgSlug))
                 throw new ArgumentException("Organization slug cannot be null or empty");
 
-            return Path.Combine(_settings.StoragePath, orgSlug, internalRef.ToString());
+            return Path.Combine(_settings.DatasetsPath, orgSlug, internalRef.ToString());
 
         }
     }

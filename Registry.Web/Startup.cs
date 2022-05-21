@@ -193,7 +193,7 @@ namespace Registry.Web
                 .AddDbContextCheck<RegistryContext>("Registry database health check", null, new[] { "database" })
                 .AddDbContextCheck<ApplicationDbContext>("Registry identity database health check", null,
                     new[] { "database" })
-                .AddDiskSpaceHealthCheck(appSettings.StoragePath, "Ddb storage path space health check", null,
+                .AddDiskSpaceHealthCheck(appSettings.DatasetsPath, "Ddb storage path space health check", null,
                     new[] { "storage" })
                 .AddHangfire(options => { options.MinimumAvailableServers = 1; }, "Hangfire health check", null,
                     new[] { "database" });

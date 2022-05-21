@@ -46,9 +46,14 @@ namespace Registry.Web.Models.Configuration
         public AdminInfo DefaultAdmin { get; set; }
 
         /// <summary>
-        /// Storage path for datasets
+        /// Main storage path
         /// </summary>
         public string StoragePath { get; set; }
+        
+        /// <summary>
+        /// Storage path for datasets
+        /// </summary>
+        public string DatasetsPath { get; set; }
 
         /// <summary>
         /// Max request body size

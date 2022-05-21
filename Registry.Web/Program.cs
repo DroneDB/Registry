@@ -5,7 +5,9 @@ using System.IO.Compression;
 using System.Linq;
 using System.Net;
 using System.Reflection;
+using System.Text.RegularExpressions;
 using System.Threading.Tasks;
+using CommandLine;
 using Registry.Common;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.Data.SqlClient;
@@ -17,46 +19,76 @@ using Newtonsoft.Json.Linq;
 using Registry.Adapters.DroneDB;
 using Registry.Web.Models;
 using Registry.Web.Models.Configuration;
+using Registry.Web.Services.Adapters;
 using Serilog;
 
 namespace Registry.Web
 {
     public class Program
     {
-
-        const string ConfigFilePath = "appsettings.json";
-        const string DefaultConfigFilePath = "appsettings-default.json";
+        public const int DefaultPort = 5000;
+        public const string DefaultHost = "localhost";
+        public const string SpaRoot = "ClientApp";
+        
         public static void Main(string[] args)
         {
-            // We could use a library to perform command line parsing, but this is sufficient so far
-            if (args.Any(a =>
-                    string.Equals(a, "--help", StringComparison.OrdinalIgnoreCase) ||
-                    string.Equals(a, "-h", StringComparison.OrdinalIgnoreCase)))
-            {
-                ShowHelp();
-                return;
-            }
+            Parser.Default.ParseArguments<Options>(args)
+                .WithParsed(RunOptions);
+        }
 
-            if (!CheckConfig())
-            {
-                Console.WriteLine(" ?> Errors occurred during config validation. Check console to find out what's wrong.");
-                return;
-            }
+        private static void RunOptions(Options opts)
+        {
+            
+            var appVersion = typeof(Program).Assembly.GetCustomAttribute<AssemblyFileVersionAttribute>()?.Version;
+            var appName = AppDomain.CurrentDomain.FriendlyName;
 
+            Console.WriteLine();
+            Console.ForegroundColor = ConsoleColor.Green;
+            Console.WriteLine($"\t\t*** {appName} - v{appVersion} ***");
+            Console.ResetColor();
+            Console.WriteLine();
+
+            if (!VerifyOptions(opts)) return;
+
+            Environment.CurrentDirectory = opts.StorageFolder;
+            
+            Console.WriteLine(" ?> Using storage folder '{0}'", opts.StorageFolder);
+            Console.WriteLine(" ?> Using address '{0}'", opts.Address);
+            
             try
             {
-                Console.WriteLine(" !> Using DDB version " + DDBWrapper.GetVersion());
+                Console.WriteLine(" ?> Using DDB version " + DDBWrapper.GetVersion());
             }
             catch (Exception e)
             {
+                Console.ForegroundColor = ConsoleColor.Red;
                 Console.WriteLine(" !> Error while invoking DDB bindings. Did you make sure to place the DDB DLLs? " + e.Message);
+                Console.ResetColor();
                 return;
             }
-
+            
+            SetupStorageFolder(opts.StorageFolder);
+            
             try
             {
                 Log.Information("Starting web host");
-                CreateHostBuilder(args).Build().Run();
+
+                var args = new[] { "--urls", $"http://{opts.Address}" };
+                
+                Host.CreateDefaultBuilder(args)
+                    /*.ConfigureHostConfiguration(config =>
+                    {
+                        config.AddJsonFile(Path.Combine(opts.StorageFolder, "appsettings.json"), optional: false, reloadOnChange: true);
+                    })*/
+                    .UseSerilog((context, services, configuration) => configuration
+                        .ReadFrom.Configuration(context.Configuration)
+                        .ReadFrom.Services(services)
+                        .Enrich.FromLogContext())
+                    .ConfigureWebHostDefaults(webBuilder => webBuilder.UseStartup<Startup>())
+                    .Build()
+                    .Run();
+                
+                //CreateHostBuilder(args).Build().Run();
             }
             catch (Exception ex)
             {
@@ -66,169 +98,90 @@ namespace Registry.Web
             {
                 Log.CloseAndFlush();
             }
-
         }
 
-        private static void ShowHelp()
+        private static bool VerifyOptions(Options opts)
         {
-            var appVersion = typeof(Program).Assembly
-                .GetCustomAttribute<AssemblyFileVersionAttribute>()
-                ?.Version;
-            var appName = AppDomain.CurrentDomain.FriendlyName;
-
-            Console.WriteLine($"{appName} - v{appVersion}");
-
-            Console.WriteLine("Hosts the API of the DroneDB Registry");
-            Console.WriteLine();
-            Console.WriteLine($"Usage: {appName} [flags]");
-            Console.WriteLine();
-            Console.WriteLine("Flags:");
-            Console.WriteLine("\t--urls\t\"https://host:https_port;http://host:http_port\"");
-            Console.WriteLine("\t\tAddresses to bind to. Defaults to \"http://localhost:5000;https://localhost:5001\"");
-            Console.WriteLine();
-
-        }
-
-        private static bool CheckConfig()
-        {
-
-            if (!File.Exists(ConfigFilePath))
+            if (opts.StorageFolder == null)
             {
-                Console.WriteLine($" !> Cannot find {ConfigFilePath}");
-                Console.WriteLine(" -> Copying default config");
-
-                File.Copy(DefaultConfigFilePath, ConfigFilePath, true);
-            }
-
-            var defaultConfig = JsonConvert.DeserializeObject<JObject>(File.ReadAllText(DefaultConfigFilePath));
-            var config = JsonConvert.DeserializeObject<JObject>(File.ReadAllText(ConfigFilePath));
-
-            var defaultAppSettings = defaultConfig["AppSettings"]?.ToObject<AppSettings>();
-            var appSettings = config["AppSettings"]?.ToObject<AppSettings>();
-
-            if (appSettings == null)
-            {
-                Console.WriteLine(" !> Cannot find AppSettings section in config file");
+                Console.ForegroundColor = ConsoleColor.Red;
+                Console.WriteLine(" !> Storage folder not specified");
+                Console.ResetColor();
                 return false;
             }
 
-            if (string.IsNullOrWhiteSpace(appSettings.AuthCookieName))
+            if (opts.Address != null)
             {
-                if (string.IsNullOrWhiteSpace(defaultAppSettings?.AuthCookieName))
+                if (opts.Address.Length == 0)
                 {
-                    Console.WriteLine(" !> AuthCookieName cannot be null or empty");
+                    Console.ForegroundColor = ConsoleColor.Red;
+                    Console.WriteLine(" !> Address not specified");
+                    Console.ResetColor();
+                    return false;
+                }
+                
+                var match = Regex.Match(opts.Address, @"(?<host>[a-z\.]+)?:?(?<port>\d+)?", RegexOptions.IgnoreCase);
+                
+                if (!match.Success)
+                {
+                    Console.ForegroundColor = ConsoleColor.Red;
+                    Console.WriteLine(" !> Address not valid");
+                    Console.ResetColor();
+                    return false;
+                }
+                
+                var host = match.Groups["host"].Success ? match.Groups["host"].Value : DefaultHost;
+                var port = match.Groups["port"].Success ? int.Parse(match.Groups["port"].Value) : DefaultPort;
+                
+                // Check valid port
+                if (port is < 1 or > 65535)
+                {
+                    Console.ForegroundColor = ConsoleColor.Red;
+                    Console.WriteLine(" !> Address not valid (port out of range");
+                    Console.ResetColor();
                     return false;
                 }
 
-                appSettings.AuthCookieName = defaultAppSettings.AuthCookieName;
-                Console.WriteLine($" -> Set auth cookie name to '{appSettings.AuthCookieName}'");
-            }
+                opts.Address = $"{host}:{port}";
 
-            var secret = appSettings.Secret;
-
-            // If secret does not exist
-            if (secret == null || string.IsNullOrWhiteSpace(secret))
-            {
-                Console.WriteLine(" !> Secret not found in config");
-
-                var str = CommonUtils.RandomString(64);
-
-                appSettings.Secret = str;
-
-                Console.WriteLine($" -> Generated secret: '{str}'");
-
-            }
-
-            var externalUrl = appSettings.ExternalUrlOverride;
-
-            if (!string.IsNullOrWhiteSpace(externalUrl) && !Uri.TryCreate(externalUrl, UriKind.Absolute, out _))
-            {
-                Console.WriteLine(" !> ExternalUrlOverride is not a valid URL");
-                return false;
-            }
-
-            var connectionStrings = config["ConnectionStrings"];
-
-            if (connectionStrings == null)
-            {
-                Console.WriteLine(" !> Cannot find ConnectionStrings section in config file");
-                return false;
-            }
-
-            var defaultConnectionStrings = defaultConfig["ConnectionStrings"];
-
-            if (!CheckConnection(connectionStrings, defaultConnectionStrings, "IdentityConnection")) return false;
-            if (!CheckConnection(connectionStrings, defaultConnectionStrings, "RegistryConnection")) return false;
-
-            var defaultAdmin = appSettings.DefaultAdmin;
-
-            if (defaultAdmin == null)
-            {
-                Console.WriteLine(" !> Cannot find default admin info, copying from default config");
-
-                if (defaultAppSettings == null)
-                {
-                    Console.WriteLine(" !> Cannot find default admin in default config");
-                    return false;
-                }
-
-                appSettings.DefaultAdmin = defaultAppSettings.DefaultAdmin;
-
-            }
-
-            if (string.IsNullOrWhiteSpace(appSettings.CachePath))
-            {
-                appSettings.CachePath = defaultAppSettings.CachePath;
-            }
-
-            Directory.CreateDirectory(appSettings.CachePath);
-            
-            config["AppSettings"] = JObject.FromObject(appSettings);
-            
-            // Update config
-            File.WriteAllText(ConfigFilePath, JsonConvert.SerializeObject(config, Formatting.Indented));
-
-            return true;
-
-        }
-
-        private static bool CheckConnection(JToken connectionStrings, JToken defaultConnectionStrings, string connectionName)
-        {
-            var connection = connectionStrings[connectionName];
-
-            if (connection == null || string.IsNullOrWhiteSpace(connection.Value<string>()))
-            {
-                Console.WriteLine(" !> Cannot find " + connectionName);
-
-                if (defaultConnectionStrings == null)
-                {
-                    Console.WriteLine(" !> Cannot find connection strings in default config");
-                    return false;
-                }
-
-                var defaultConnection = defaultConnectionStrings[connectionName];
-                if (defaultConnection == null || string.IsNullOrWhiteSpace(defaultConnection.Value<string>()))
-                {
-                    Console.WriteLine(" !> Cannot copy " + connectionName + " from default config");
-                    return false;
-                }
-
-                connectionStrings[connectionName] = defaultConnectionStrings[connectionName];
-
-                Console.WriteLine(" -> Setting " + connectionName + " to default");
-                Console.WriteLine($" ?> {connectionStrings[connectionName]}");
             }
 
             return true;
         }
 
-        private static IHostBuilder CreateHostBuilder(string[] args) =>
-            Host.CreateDefaultBuilder(args)
-                .UseSerilog((context, services, configuration) => configuration
-                    .ReadFrom.Configuration(context.Configuration)
-                    .ReadFrom.Services(services)
-                    .Enrich.FromLogContext())
-                .ConfigureWebHostDefaults(webBuilder => webBuilder.UseStartup<Startup>());
+        private static void SetupStorageFolder(string folder)
+        {
+            var spaRoot = Path.Combine(folder, SpaRoot);
+
+            var efp = new EmbeddedResourceQuery();
+
+            var executingAssembly = Assembly.GetExecutingAssembly();
+            
+            var resources = efp.GetResourceNames(executingAssembly);
+
+            var spaResources = from res in resources
+                where res.StartsWith(SpaRoot)
+                select res;
+            
+            var prefix = SpaRoot + ".build.";
+
+            foreach (var res in spaResources)
+            {
+                var fileName = res[prefix.Length..].Replace('.', '/');
+                var lastSlash = fileName.LastIndexOf('/');
+                fileName = $"{fileName[..lastSlash]}.{fileName[(lastSlash + 1)..]}";
+                
+   
+                var destFile = Path.Combine(spaRoot, fileName);
+                Directory.CreateDirectory(Path.GetDirectoryName(destFile)!);
+
+                using var writer = File.OpenWrite(destFile);
+                efp.Read(executingAssembly, res).CopyTo(writer);
+            }
+
+        }
+
+            
 
     }
 }

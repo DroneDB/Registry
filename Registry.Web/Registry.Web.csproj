@@ -8,37 +8,16 @@
     <DefaultItemExcludes>$(DefaultItemExcludes);$(SpaRoot)node_modules\**</DefaultItemExcludes>
     <AssemblyVersion>1.0.6.0</AssemblyVersion>
     <FileVersion>1.0.6.0</FileVersion>
-    <Version>1.0.5</Version>
+    <Version>1.0.6</Version>
     <Platforms>AnyCPU;x64</Platforms>
     <PackageVersion>1.0.6</PackageVersion>
   </PropertyGroup>
 
   <ItemGroup>
-    <Compile Remove="ddbstore\**" />
-    <Compile Remove="logs\**" />
-    <Compile Remove="temp\**" />
-    <Compile Remove="uploads\**" />
-    <Compile Remove="s3cache\**" />
-    
-    <Content Remove="ddbstore\**" />
-    <Content Remove="logs\**" />
-    <Content Remove="temp\**" />
-    <Content Remove="uploads\**" />
-    <Content Remove="s3cache\**" />
-
-    <EmbeddedResource Remove="ddbstore\**" />
-    <EmbeddedResource Remove="logs\**" />
-    <EmbeddedResource Remove="temp\**" />
-    <EmbeddedResource Remove="uploads\**" />
-    <EmbeddedResource Remove="s3cache\**" />
-
-    <None Remove="ddbstore\**" />
-    <None Remove="s3cache\**" />
-    <None Remove="logs\**" />
-    <None Remove="temp\**" />
-    <None Remove="uploads\**" />
     <None Remove="ddb-log*.csv" />
-
+    <Content Remove="appsettings-default.json" />
+    <EmbeddedResource Include="appsettings-default.json" />
+    <EmbeddedResource Include="ClientApp.zip" />
   </ItemGroup>
 
   <ItemGroup>
@@ -52,6 +31,7 @@
     <PackageReference Include="AspNetCore.HealthChecks.Hangfire" Version="6.0.2" />
     <PackageReference Include="AspNetCore.HealthChecks.UI.Client" Version="6.0.4" />
     <PackageReference Include="AspNetCore.HealthChecks.UI.Core" Version="6.0.4" />
+    <PackageReference Include="CommandLineParser" Version="2.9.1" />
     <PackageReference Include="FileCache" Version="3.3.0" />
     <PackageReference Include="Hangfire.AspNetCore" Version="1.7.28" />
     <PackageReference Include="Hangfire.Console" Version="1.4.2" />
@@ -108,10 +88,18 @@
   </ItemGroup>
 
   <ItemGroup>
-    <Folder Include="App_Data\" />
   </ItemGroup>
 
   <ProjectExtensions><VisualStudio><UserProperties appsettings_1json__JsonSchema="" /></VisualStudio></ProjectExtensions>
+
+  <Target Name="PreBuild" BeforeTargets="PreBuildEvent">
+    <Delete Files="./ClientApp.zip" />
+    <Exec Command="dotnet z -c ./ClientApp/build ./ClientApp.zip" />
+  </Target>
+
+  <Target Name="PostBuild" AfterTargets="PostBuildEvent">
+    <Delete Files="./ClientApp.zip" />
+  </Target>
 
   <!-- We could add this BUT it slows down the builds
   <Target Name="PostBuild" AfterTargets="PostBuildEvent">
