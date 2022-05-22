@@ -51,6 +51,7 @@ namespace Registry.Web
 
             if (!VerifyOptions(opts)) return;
 
+            Directory.CreateDirectory(opts.StorageFolder);
             Environment.CurrentDirectory = opts.StorageFolder;
 
             Console.WriteLine(" ?> Using storage folder '{0}'", opts.StorageFolder);
@@ -160,8 +161,7 @@ namespace Registry.Web
         {
             Console.WriteLine(" -> Setting up storage folder");
 
-            if (!Directory.Exists(folder))
-                Directory.CreateDirectory(folder);
+            Directory.CreateDirectory(folder);
 
             var spaRoot = Path.Combine(folder, SpaRoot);
 
@@ -180,25 +180,32 @@ namespace Registry.Web
 
             var settingsFilePath = Path.Combine(folder, AppSettingsFileName);
 
-            var defaultSettings = GetDefaultSettings();
-
+            var defaultSettingsConfig = GetDefaultSettings();
+            var defaultSettings = defaultSettingsConfig?["AppSettings"]!.ToObject<AppSettings>();
+            
             // The appsettings file does not contain only appsettings
             if (!File.Exists(settingsFilePath))
             {
                 Console.WriteLine(" -> Creating default appsettings.json");
-                File.WriteAllText(AppSettingsDefaultFileName, JsonConvert.SerializeObject(defaultSettings, Formatting.Indented));
+                File.WriteAllText(AppSettingsFileName, JsonConvert.SerializeObject(defaultSettingsConfig, Formatting.Indented));
             }
 
             Console.WriteLine(" -> Verifying settings");
             try
             {
-                var settings = JsonConvert.DeserializeObject<AppSettings>(File.ReadAllText(settingsFilePath));
+                var settingsConfig = JsonConvert.DeserializeObject<JObject>(File.ReadAllText(settingsFilePath));
+                var settings = settingsConfig?["AppSettings"]?.ToObject<AppSettings>();
 
                 if (!VerifySettings(settings, defaultSettings))
                 {
                     Console.WriteLine(" !> Error while verifying settings");
                     return false;
                 }
+                
+                // Update settings
+                Console.WriteLine(" -> Updating settings");
+                settingsConfig["AppSettings"] = JObject.FromObject(settings);
+                File.WriteAllText(settingsFilePath, JsonConvert.SerializeObject(settingsConfig, Formatting.Indented));
 
             }
             catch (Exception e)
@@ -212,26 +219,104 @@ namespace Registry.Web
             return true;
         }
 
-        private static AppSettings GetDefaultSettings()
+        private static JObject GetDefaultSettings()
         {
             var efp = new EmbeddedResourceQuery();
             var executingAssembly = Assembly.GetExecutingAssembly();
             using var reader = new StreamReader(efp.Read(executingAssembly, AppSettingsDefaultFileName));
-            return JsonConvert.DeserializeObject<AppSettings>(reader.ReadToEnd());
+            return JsonConvert.DeserializeObject<JObject>(reader.ReadToEnd());
         }   
 
         private static bool VerifySettings(AppSettings settings, AppSettings defaultSettings)
         {
+
+            if (settings == null)
+            {
+                Console.WriteLine(" !> Empty settings, check appsettings.json");
+                return false;
+            }
+            
             try
             {
 
                 if (string.IsNullOrWhiteSpace(settings.Secret))
                     settings.Secret = CommonUtils.RandomString(64);
                 
+                var externalUrl = settings.ExternalUrlOverride;
+
+                if (!string.IsNullOrWhiteSpace(externalUrl) && !Uri.TryCreate(externalUrl, UriKind.Absolute, out _))
+                {
+                    Console.WriteLine(" !> ExternalUrlOverride is not a valid URL");
+                    return false;
+                }
+                
+                if (settings.TokenExpirationInDays < 1)
+                {
+                    Console.WriteLine(" !> TokenExpirationInDays is not valid (must be greater than 0)");
+                    return false;
+                }
+
+                var defaultAdmin = settings.DefaultAdmin;
+                
+                if (defaultAdmin?.Email == null || defaultAdmin.Password == null || defaultAdmin.UserName == null)
+                {
+                    Console.WriteLine(" !> DefaultAdmin is not valid");
+                    return false;
+                }
+
+                if (string.IsNullOrWhiteSpace(settings.DatasetsPath))
+                {
+                    Console.WriteLine(" !> DatasetsPath is empty");
+                    return false;
+                }
+                
+                if (string.IsNullOrWhiteSpace(settings.CachePath))
+                {
+                    Console.WriteLine(" !> CachePath is empty");
+                    return false;
+                }
+                
+                if (settings.BatchTokenLength < 8)
+                {
+                    Console.WriteLine(" !> BatchTokenLength is not valid (must be at least 8)");
+                    return false;
+                }
+
+                if (settings.UploadBatchTimeout.TotalMinutes < 1)
+                {
+                    Console.WriteLine(" !> UploadBatchTimeout is not valid (must be at least 1 minute)");
+                    return false;
+                }
+
+                if (settings.RandomDatasetNameLength < 8)
+                {
+                    Console.WriteLine(" !> RandomDatasetNameLength is not valid (must be at least 8)");
+                    return false;
+                }
+
                 if (string.IsNullOrWhiteSpace(settings.AuthCookieName))
-                    settings.AuthCookieName = defaultSettings.AuthCookieName;
+                {
+                    Console.WriteLine(" !> AuthCookieName is empty");
+                    return false;
+                }
                 
+                if (settings.ThumbnailsCacheExpiration.HasValue && settings.ThumbnailsCacheExpiration.Value.TotalMinutes < 1)
+                {
+                    Console.WriteLine(" !> ThumbnailsCacheExpiration is not valid (must be at least 1 minute)");
+                    return false;
+                }
                 
+                if (settings.TilesCacheExpiration.HasValue && settings.TilesCacheExpiration.Value.TotalMinutes < 1)
+                {
+                    Console.WriteLine(" !> TilesCacheExpiration is not valid (must be at least 1 minute)");
+                    return false;
+                }
+                
+                if (settings.ClearCacheInterval.HasValue && settings.ClearCacheInterval.Value.TotalMinutes < 1)
+                {
+                    Console.WriteLine(" !> ClearCacheInterval is not valid (must be at least 1 minute)");
+                    return false;
+                }
 
             }
             catch (Exception ex)

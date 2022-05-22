@@ -106,7 +106,7 @@ namespace Registry.Web
                 options.UseCaseSensitivePaths = true;
             });
 
-            services.AddSpaStaticFiles(config => { config.RootPath = "ClientApp/build"; });
+            services.AddSpaStaticFiles(config => { config.RootPath = "ClientApp"; });
 
             // Let's use a strongly typed class for settings
             var appSettingsSection = Configuration.GetSection("AppSettings");
