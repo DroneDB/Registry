@@ -29,7 +29,9 @@ namespace Registry.Web
         public const int DefaultPort = 5000;
         public const string DefaultHost = "localhost";
         public const string SpaRoot = "ClientApp";
-        
+        public const string AppSettingsFileName = "appsettings.json";
+        private const string AppSettingsDefaultFileName = "appsettings-default.json";
+
         public static void Main(string[] args)
         {
             Parser.Default.ParseArguments<Options>(args)
@@ -38,7 +40,6 @@ namespace Registry.Web
 
         private static void RunOptions(Options opts)
         {
-            
             var appVersion = typeof(Program).Assembly.GetCustomAttribute<AssemblyFileVersionAttribute>()?.Version;
             var appName = AppDomain.CurrentDomain.FriendlyName;
 
@@ -51,10 +52,10 @@ namespace Registry.Web
             if (!VerifyOptions(opts)) return;
 
             Environment.CurrentDirectory = opts.StorageFolder;
-            
+
             Console.WriteLine(" ?> Using storage folder '{0}'", opts.StorageFolder);
             Console.WriteLine(" ?> Using address '{0}'", opts.Address);
-            
+
             try
             {
                 Console.WriteLine(" ?> Using DDB version " + DDBWrapper.GetVersion());
@@ -62,19 +63,26 @@ namespace Registry.Web
             catch (Exception e)
             {
                 Console.ForegroundColor = ConsoleColor.Red;
-                Console.WriteLine(" !> Error while invoking DDB bindings. Did you make sure to place the DDB DLLs? " + e.Message);
+                Console.WriteLine(" !> Error while invoking DDB bindings. Did you make sure to place the DDB DLLs? " +
+                                  e.Message);
                 Console.ResetColor();
                 return;
             }
-            
-            SetupStorageFolder(opts.StorageFolder);
-            
+
+            if (!SetupStorageFolder(opts.StorageFolder))
+            {
+                Console.ForegroundColor = ConsoleColor.Red;
+                Console.WriteLine(" !> Error while setting up storage folder");
+                Console.ResetColor();
+                return;
+            }
+
             try
             {
                 Log.Information("Starting web host");
 
                 var args = new[] { "--urls", $"http://{opts.Address}" };
-                
+
                 Host.CreateDefaultBuilder(args)
                     /*.ConfigureHostConfiguration(config =>
                     {
@@ -87,7 +95,7 @@ namespace Registry.Web
                     .ConfigureWebHostDefaults(webBuilder => webBuilder.UseStartup<Startup>())
                     .Build()
                     .Run();
-                
+
                 //CreateHostBuilder(args).Build().Run();
             }
             catch (Exception ex)
@@ -119,9 +127,9 @@ namespace Registry.Web
                     Console.ResetColor();
                     return false;
                 }
-                
+
                 var match = Regex.Match(opts.Address, @"(?<host>[a-z\.]+)?:?(?<port>\d+)?", RegexOptions.IgnoreCase);
-                
+
                 if (!match.Success)
                 {
                     Console.ForegroundColor = ConsoleColor.Red;
@@ -129,10 +137,10 @@ namespace Registry.Web
                     Console.ResetColor();
                     return false;
                 }
-                
+
                 var host = match.Groups["host"].Success ? match.Groups["host"].Value : DefaultHost;
                 var port = match.Groups["port"].Success ? int.Parse(match.Groups["port"].Value) : DefaultPort;
-                
+
                 // Check valid port
                 if (port is < 1 or > 65535)
                 {
@@ -143,45 +151,96 @@ namespace Registry.Web
                 }
 
                 opts.Address = $"{host}:{port}";
-
             }
 
             return true;
         }
 
-        private static void SetupStorageFolder(string folder)
+        private static bool SetupStorageFolder(string folder)
         {
+            Console.WriteLine(" -> Setting up storage folder");
+
+            if (!Directory.Exists(folder))
+                Directory.CreateDirectory(folder);
+
             var spaRoot = Path.Combine(folder, SpaRoot);
 
             var efp = new EmbeddedResourceQuery();
-
             var executingAssembly = Assembly.GetExecutingAssembly();
-            
-            var resources = efp.GetResourceNames(executingAssembly);
 
-            var spaResources = from res in resources
-                where res.StartsWith(SpaRoot)
-                select res;
-            
-            var prefix = SpaRoot + ".build.";
-
-            foreach (var res in spaResources)
+            if (!Directory.Exists(spaRoot))
             {
-                var fileName = res[prefix.Length..].Replace('.', '/');
-                var lastSlash = fileName.LastIndexOf('/');
-                fileName = $"{fileName[..lastSlash]}.{fileName[(lastSlash + 1)..]}";
-                
-   
-                var destFile = Path.Combine(spaRoot, fileName);
-                Directory.CreateDirectory(Path.GetDirectoryName(destFile)!);
+                Console.WriteLine(" -> Extracting SPA root");
 
-                using var writer = File.OpenWrite(destFile);
-                efp.Read(executingAssembly, res).CopyTo(writer);
+                // Read embedded resource and extract to storage folder
+                using var stream = efp.Read(executingAssembly, SpaRoot + ".zip");
+                using var zip = new ZipArchive(stream, ZipArchiveMode.Read);
+                zip.ExtractToDirectory(spaRoot);
             }
 
-        }
+            var settingsFilePath = Path.Combine(folder, AppSettingsFileName);
+
+            var defaultSettings = GetDefaultSettings();
+
+            // The appsettings file does not contain only appsettings
+            if (!File.Exists(settingsFilePath))
+            {
+                Console.WriteLine(" -> Creating default appsettings.json");
+                File.WriteAllText(AppSettingsDefaultFileName, JsonConvert.SerializeObject(defaultSettings, Formatting.Indented));
+            }
+
+            Console.WriteLine(" -> Verifying settings");
+            try
+            {
+                var settings = JsonConvert.DeserializeObject<AppSettings>(File.ReadAllText(settingsFilePath));
+
+                if (!VerifySettings(settings, defaultSettings))
+                {
+                    Console.WriteLine(" !> Error while verifying settings");
+                    return false;
+                }
+
+            }
+            catch (Exception e)
+            {
+                Console.WriteLine(" !> Error while verifying settings");
+                Console.WriteLine(e.Message);
+                return false;
+            }
 
             
+            return true;
+        }
 
+        private static AppSettings GetDefaultSettings()
+        {
+            var efp = new EmbeddedResourceQuery();
+            var executingAssembly = Assembly.GetExecutingAssembly();
+            using var reader = new StreamReader(efp.Read(executingAssembly, AppSettingsDefaultFileName));
+            return JsonConvert.DeserializeObject<AppSettings>(reader.ReadToEnd());
+        }   
+
+        private static bool VerifySettings(AppSettings settings, AppSettings defaultSettings)
+        {
+            try
+            {
+
+                if (string.IsNullOrWhiteSpace(settings.Secret))
+                    settings.Secret = CommonUtils.RandomString(64);
+                
+                if (string.IsNullOrWhiteSpace(settings.AuthCookieName))
+                    settings.AuthCookieName = defaultSettings.AuthCookieName;
+                
+                
+
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine(" !> Exception: " + ex.Message);
+                return false;
+            }
+
+            return true;
+        }
     }
 }

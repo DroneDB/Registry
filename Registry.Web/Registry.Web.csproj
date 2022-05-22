@@ -1,110 +1,111 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk.Web">
 
-  <PropertyGroup>
-    <TargetFramework>net6.0</TargetFramework>
-    <AssemblyName>Registry.Web</AssemblyName>
-    <UserSecretsId>4e006835-31cb-47c5-9dfe-7b73e210db92</UserSecretsId>
-    <SpaRoot>ClientApp\</SpaRoot>
-    <DefaultItemExcludes>$(DefaultItemExcludes);$(SpaRoot)node_modules\**</DefaultItemExcludes>
-    <AssemblyVersion>1.0.6.0</AssemblyVersion>
-    <FileVersion>1.0.6.0</FileVersion>
-    <Version>1.0.6</Version>
-    <Platforms>AnyCPU;x64</Platforms>
-    <PackageVersion>1.0.6</PackageVersion>
-  </PropertyGroup>
+    <PropertyGroup>
+        <TargetFramework>net6.0</TargetFramework>
+        <AssemblyName>Registry.Web</AssemblyName>
+        <UserSecretsId>4e006835-31cb-47c5-9dfe-7b73e210db92</UserSecretsId>
+        <SpaRoot>ClientApp\</SpaRoot>
+        <DefaultItemExcludes>$(DefaultItemExcludes);$(SpaRoot)node_modules\**</DefaultItemExcludes>
+        <AssemblyVersion>1.0.6.0</AssemblyVersion>
+        <FileVersion>1.0.6.0</FileVersion>
+        <Version>1.0.6</Version>
+        <Platforms>AnyCPU;x64</Platforms>
+        <PackageVersion>1.0.6</PackageVersion>
+    </PropertyGroup>
 
-  <ItemGroup>
-    <None Remove="ddb-log*.csv" />
-    <Content Remove="appsettings-default.json" />
-    <EmbeddedResource Include="appsettings-default.json" />
-    <EmbeddedResource Include="ClientApp.zip" />
-  </ItemGroup>
+    <ItemGroup>
+        <None Remove="ddb-log*.csv"/>
+        <Content Remove="appsettings-default.json"/>
+        <EmbeddedResource Include="appsettings-default.json"/>
+        <EmbeddedResource Include="ClientApp.zip"/>
+    </ItemGroup>
 
-  <ItemGroup>
-    <!-- Don't publish the SPA source files, but do show them in the project files list -->
-    <Content Remove="$(SpaRoot)**" />
-    <None Remove="$(SpaRoot)**" />
-    <None Include="$(SpaRoot)**" Exclude="$(SpaRoot)node_modules\**" />
-  </ItemGroup>
+    <ItemGroup>
+        <!-- Don't publish the SPA source files, but do show them in the project files list -->
+        <Content Remove="$(SpaRoot)**"/>
+        <None Remove="$(SpaRoot)**"/>
+        <None Include="$(SpaRoot)**" Exclude="$(SpaRoot)node_modules\**"/>
+    </ItemGroup>
 
-  <ItemGroup>
-    <PackageReference Include="AspNetCore.HealthChecks.Hangfire" Version="6.0.2" />
-    <PackageReference Include="AspNetCore.HealthChecks.UI.Client" Version="6.0.4" />
-    <PackageReference Include="AspNetCore.HealthChecks.UI.Core" Version="6.0.4" />
-    <PackageReference Include="CommandLineParser" Version="2.9.1" />
-    <PackageReference Include="FileCache" Version="3.3.0" />
-    <PackageReference Include="Hangfire.AspNetCore" Version="1.7.28" />
-    <PackageReference Include="Hangfire.Console" Version="1.4.2" />
-    <PackageReference Include="Hangfire.Core" Version="1.7.28" />
-    <PackageReference Include="Hangfire.InMemory" Version="0.3.4" />
-    <PackageReference Include="Hangfire.MySqlStorage" Version="2.0.3" />
-    <PackageReference Include="Microsoft.AspNetCore.ApiAuthorization.IdentityServer" Version="6.0.3" />
-    <PackageReference Include="Microsoft.AspNetCore.Authentication.Core" Version="2.2.0" />
-    <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="6.0.3" />
-    <PackageReference Include="Microsoft.AspNetCore.Mvc.NewtonsoftJson" Version="6.0.3" />
-    <PackageReference Include="Microsoft.AspNetCore.ResponseCompression" Version="2.2.0" />
-    <PackageReference Include="Microsoft.AspNetCore.SpaServices" Version="3.1.23" />
-    <PackageReference Include="Microsoft.AspNetCore.SpaServices.Extensions" Version="6.0.3" />
-    <PackageReference Include="Microsoft.EntityFrameworkCore" Version="6.0.3" />
-    <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="6.0.3" />
-    <PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" Version="6.0.3" />
-    <PackageReference Include="Microsoft.EntityFrameworkCore.Tools" Version="6.0.3">
-      <PrivateAssets>all</PrivateAssets>
-      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
-    </PackageReference>
-    <PackageReference Include="Microsoft.Extensions.Caching.StackExchangeRedis" Version="6.0.3" />
-    <PackageReference Include="Microsoft.Extensions.Diagnostics.HealthChecks.EntityFrameworkCore" Version="6.0.3" />
-    <PackageReference Include="Microsoft.Extensions.Hosting" Version="6.0.1" />
-    <PackageReference Include="Microsoft.VisualStudio.Web.CodeGeneration.Design" Version="6.0.2" />
-    <PackageReference Include="MimeMapping" Version="1.0.1.37" />
-    <PackageReference Include="MimeTypes" Version="2.4.0">
-      <PrivateAssets>all</PrivateAssets>
-      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
-    </PackageReference>
-    <PackageReference Include="Newtonsoft.Json" Version="13.0.1" />
-    <PackageReference Include="Polly" Version="7.2.3" />
-    <PackageReference Include="Polly.Extensions.Http" Version="3.0.0" />
-    <PackageReference Include="Pomelo.EntityFrameworkCore.MySql" Version="6.0.1" />
-    <PackageReference Include="Scrutor" Version="4.1.0" />
-    <PackageReference Include="Scrutor.AspNetCore" Version="3.3.0" />
-    <PackageReference Include="Serilog.AspNetCore" Version="5.0.0" />
-    <PackageReference Include="Serilog.Aspnetcore.Middleware" Version="1.0.0" />
-    <PackageReference Include="Serilog.Enrichers.AspNetCore" Version="1.0.0" />
-    <PackageReference Include="Serilog.Enrichers.Environment" Version="2.2.0" />
-    <PackageReference Include="Serilog.Enrichers.Thread" Version="3.1.0" />
-    <PackageReference Include="Serilog.Extensions.Hosting" Version="4.2.0" />
-    <PackageReference Include="Serilog.Sinks.File" Version="5.0.0" />
-    <PackageReference Include="Serilog.Sinks.Seq" Version="5.1.1" />
-    <PackageReference Include="Swashbuckle.AspNetCore" Version="6.3.0" />
-    <PackageReference Include="Swashbuckle.AspNetCore.Newtonsoft" Version="6.3.0" />
-    <PackageReference Include="System.IdentityModel.Tokens.Jwt" Version="6.16.0" />
-    <PackageReference Include="System.Text.Encoding.CodePages" Version="6.0.0" />
-  </ItemGroup>
+    <ItemGroup>
+        <PackageReference Include="AspNetCore.HealthChecks.Hangfire" Version="6.0.2"/>
+        <PackageReference Include="AspNetCore.HealthChecks.UI.Client" Version="6.0.4"/>
+        <PackageReference Include="AspNetCore.HealthChecks.UI.Core" Version="6.0.4"/>
+        <PackageReference Include="CommandLineParser" Version="2.9.1"/>
+        <PackageReference Include="FileCache" Version="3.3.0"/>
+        <PackageReference Include="Hangfire.AspNetCore" Version="1.7.28"/>
+        <PackageReference Include="Hangfire.Console" Version="1.4.2"/>
+        <PackageReference Include="Hangfire.Core" Version="1.7.28"/>
+        <PackageReference Include="Hangfire.InMemory" Version="0.3.4"/>
+        <PackageReference Include="Hangfire.MySqlStorage" Version="2.0.3"/>
+        <PackageReference Include="Microsoft.AspNetCore.ApiAuthorization.IdentityServer" Version="6.0.3"/>
+        <PackageReference Include="Microsoft.AspNetCore.Authentication.Core" Version="2.2.0"/>
+        <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="6.0.3"/>
+        <PackageReference Include="Microsoft.AspNetCore.Mvc.NewtonsoftJson" Version="6.0.3"/>
+        <PackageReference Include="Microsoft.AspNetCore.ResponseCompression" Version="2.2.0"/>
+        <PackageReference Include="Microsoft.AspNetCore.SpaServices" Version="3.1.23"/>
+        <PackageReference Include="Microsoft.AspNetCore.SpaServices.Extensions" Version="6.0.3"/>
+        <PackageReference Include="Microsoft.EntityFrameworkCore" Version="6.0.3"/>
+        <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="6.0.3"/>
+        <PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" Version="6.0.3"/>
+        <PackageReference Include="Microsoft.EntityFrameworkCore.Tools" Version="6.0.3">
+            <PrivateAssets>all</PrivateAssets>
+            <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+        </PackageReference>
+        <PackageReference Include="Microsoft.Extensions.Caching.StackExchangeRedis" Version="6.0.3"/>
+        <PackageReference Include="Microsoft.Extensions.Diagnostics.HealthChecks.EntityFrameworkCore" Version="6.0.3"/>
+        <PackageReference Include="Microsoft.Extensions.Hosting" Version="6.0.1"/>
+        <PackageReference Include="Microsoft.VisualStudio.Web.CodeGeneration.Design" Version="6.0.2"/>
+        <PackageReference Include="MimeMapping" Version="1.0.1.37"/>
+        <PackageReference Include="MimeTypes" Version="2.4.0">
+            <PrivateAssets>all</PrivateAssets>
+            <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+        </PackageReference>
+        <PackageReference Include="Newtonsoft.Json" Version="13.0.1"/>
+        <PackageReference Include="Polly" Version="7.2.3"/>
+        <PackageReference Include="Polly.Extensions.Http" Version="3.0.0"/>
+        <PackageReference Include="Pomelo.EntityFrameworkCore.MySql" Version="6.0.1"/>
+        <PackageReference Include="Scrutor" Version="4.1.0"/>
+        <PackageReference Include="Scrutor.AspNetCore" Version="3.3.0"/>
+        <PackageReference Include="Serilog.AspNetCore" Version="5.0.0"/>
+        <PackageReference Include="Serilog.Aspnetcore.Middleware" Version="1.0.0"/>
+        <PackageReference Include="Serilog.Enrichers.AspNetCore" Version="1.0.0"/>
+        <PackageReference Include="Serilog.Enrichers.Environment" Version="2.2.0"/>
+        <PackageReference Include="Serilog.Enrichers.Thread" Version="3.1.0"/>
+        <PackageReference Include="Serilog.Extensions.Hosting" Version="4.2.0"/>
+        <PackageReference Include="Serilog.Sinks.File" Version="5.0.0"/>
+        <PackageReference Include="Serilog.Sinks.Seq" Version="5.1.1"/>
+        <PackageReference Include="Swashbuckle.AspNetCore" Version="6.3.0"/>
+        <PackageReference Include="Swashbuckle.AspNetCore.Newtonsoft" Version="6.3.0"/>
+        <PackageReference Include="System.IdentityModel.Tokens.Jwt" Version="6.16.0"/>
+        <PackageReference Include="System.Text.Encoding.CodePages" Version="6.0.0"/>
+    </ItemGroup>
 
-  <ItemGroup>
-    <ProjectReference Include="..\Registry.Adapters\Registry.Adapters.csproj" />
-    <ProjectReference Include="..\Registry.Common\Registry.Common.csproj" />
-    <ProjectReference Include="..\Registry.Web.Data\Registry.Web.Data.csproj" />
-  </ItemGroup>
+    <ItemGroup>
+        <ProjectReference Include="..\Registry.Adapters\Registry.Adapters.csproj"/>
+        <ProjectReference Include="..\Registry.Common\Registry.Common.csproj"/>
+        <ProjectReference Include="..\Registry.Web.Data\Registry.Web.Data.csproj"/>
+    </ItemGroup>
 
-  <ItemGroup>
-  </ItemGroup>
+    <ItemGroup>
+    </ItemGroup>
 
-  <ProjectExtensions><VisualStudio><UserProperties appsettings_1json__JsonSchema="" /></VisualStudio></ProjectExtensions>
+    <ProjectExtensions>
+        <VisualStudio>
+            <UserProperties appsettings_1json__JsonSchema=""/>
+        </VisualStudio>
+    </ProjectExtensions>
 
-  <Target Name="PreBuild" BeforeTargets="PreBuildEvent">
-    <Delete Files="./ClientApp.zip" />
-    <Exec Command="dotnet z -c ./ClientApp/build ./ClientApp.zip" />
-  </Target>
+    <Target Name="PreBuild" BeforeTargets="PreBuildEvent">
+        <Delete Files="./ClientApp.zip"/>
+        <!-- We could add this BUT it slows down the builds -->
+        <!-- <Exec Command="cd ClientApp&#xD;&#xA;call npm install&#xD;&#xA;call webpack"/> -->
+        <Exec Command="dotnet z -c ./ClientApp/build ./ClientApp.zip"/>
+    </Target>
 
-  <Target Name="PostBuild" AfterTargets="PostBuildEvent">
-    <Delete Files="./ClientApp.zip" />
-  </Target>
+    <Target Name="PostBuild" AfterTargets="PostBuildEvent">
+        <Delete Files="./ClientApp.zip"/>
+    </Target>
 
-  <!-- We could add this BUT it slows down the builds
-  <Target Name="PostBuild" AfterTargets="PostBuildEvent">
-    <Exec Command="cd wwwroot&#xD;&#xA;call npm install&#xD;&#xA;call webpack" />
-  </Target>
--->
 
 </Project>
