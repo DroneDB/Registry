@@ -1,8 +1,8 @@
 ﻿using Microsoft.EntityFrameworkCore.Migrations;
 
-namespace Registry.Web.Data.Migrations
+namespace Registry.Web.Data.Migrations.Mysql
 {
-    public partial class EntryAndBatchDeleteCascade : Migration
+    public partial class FixCascadeAll : Migration
     {
         protected override void Up(MigrationBuilder migrationBuilder)
         {
@@ -14,13 +14,17 @@ namespace Registry.Web.Data.Migrations
                 name: "FK_DownloadPackages_Datasets_DatasetId",
                 table: "DownloadPackages");
 
+            migrationBuilder.DropForeignKey(
+                name: "FK_Entries_Batches_BatchToken",
+                table: "Entries");
+
             migrationBuilder.AddForeignKey(
                 name: "FK_Batches_Datasets_DatasetId",
                 table: "Batches",
                 column: "DatasetId",
                 principalTable: "Datasets",
                 principalColumn: "Id",
-                onDelete: ReferentialAction.Restrict);
+                onDelete: ReferentialAction.Cascade);
 
             migrationBuilder.AddForeignKey(
                 name: "FK_DownloadPackages_Datasets_DatasetId",
@@ -28,7 +32,15 @@ namespace Registry.Web.Data.Migrations
                 column: "DatasetId",
                 principalTable: "Datasets",
                 principalColumn: "Id",
-                onDelete: ReferentialAction.Restrict);
+                onDelete: ReferentialAction.Cascade);
+
+            migrationBuilder.AddForeignKey(
+                name: "FK_Entries_Batches_BatchToken",
+                table: "Entries",
+                column: "BatchToken",
+                principalTable: "Batches",
+                principalColumn: "Token",
+                onDelete: ReferentialAction.Cascade);
         }
 
         protected override void Down(MigrationBuilder migrationBuilder)
@@ -41,13 +53,17 @@ namespace Registry.Web.Data.Migrations
                 name: "FK_DownloadPackages_Datasets_DatasetId",
                 table: "DownloadPackages");
 
+            migrationBuilder.DropForeignKey(
+                name: "FK_Entries_Batches_BatchToken",
+                table: "Entries");
+
             migrationBuilder.AddForeignKey(
                 name: "FK_Batches_Datasets_DatasetId",
                 table: "Batches",
                 column: "DatasetId",
                 principalTable: "Datasets",
                 principalColumn: "Id",
-                onDelete: ReferentialAction.Cascade);
+                onDelete: ReferentialAction.Restrict);
 
             migrationBuilder.AddForeignKey(
                 name: "FK_DownloadPackages_Datasets_DatasetId",
@@ -55,7 +71,15 @@ namespace Registry.Web.Data.Migrations
                 column: "DatasetId",
                 principalTable: "Datasets",
                 principalColumn: "Id",
-                onDelete: ReferentialAction.Cascade);
+                onDelete: ReferentialAction.Restrict);
+
+            migrationBuilder.AddForeignKey(
+                name: "FK_Entries_Batches_BatchToken",
+                table: "Entries",
+                column: "BatchToken",
+                principalTable: "Batches",
+                principalColumn: "Token",
+                onDelete: ReferentialAction.Restrict);
         }
     }
 }

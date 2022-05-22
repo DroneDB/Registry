@@ -2,7 +2,7 @@
 using Microsoft.EntityFrameworkCore.Metadata;
 using Microsoft.EntityFrameworkCore.Migrations;
 
-namespace Registry.Web.Data.Migrations
+namespace Registry.Web.Data.Migrations.Mysql
 {
     public partial class SessionsRemoved : Migration
     {

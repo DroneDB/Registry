@@ -11,8 +11,9 @@ namespace Registry.Web.Data
         public RegistryContext(DbContextOptions<RegistryContext> options)
             : base(options)
         {
-
         }
+        
+        public RegistryContext() {}
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
@@ -68,6 +69,39 @@ namespace Registry.Web.Data
         public DbSet<Dataset> Datasets { get; set; }
 
         public DbSet<Batch> Batches { get; set; }
+        
+    }
+    
+    public class SqliteRegistryContext : RegistryContext
+    {
+        public SqliteRegistryContext(DbContextOptions<RegistryContext> options) : base(options)
+        {
+        }
+#if DEBUG_EF
+        protected override void OnConfiguring(DbContextOptionsBuilder options)
+        {
+            // connect to sqlite database
+            options.UseSqlite();
+        }
+#endif
+    }
+    
+    public class MysqlRegistryContext : RegistryContext
+    {
+        
+        private const string DevConnectionString = "Server=localhost;Database=registry;Uid=root;Pwd=root;";
+        
+        public MysqlRegistryContext(DbContextOptions<RegistryContext> options) : base(options)
+        {
+        }
+    
+#if DEBUG_EF
+        protected override void OnConfiguring(DbContextOptionsBuilder options)
+        {
+            // connect to sqlite database
+            options.UseMySql(DevConnectionString, ServerVersion.AutoDetect(DevConnectionString));
+        }
+#endif
         
     }
 }

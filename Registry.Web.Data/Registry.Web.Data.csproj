@@ -4,13 +4,22 @@
     <TargetFramework>net6.0</TargetFramework>
     <IsPackable>false</IsPackable>
     <Platforms>AnyCPU;x64</Platforms>
+    <Configurations>Debug;Release;DebugEf</Configurations>
   </PropertyGroup>
   
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|AnyCPU'">
     <WarningLevel>4</WarningLevel>
   </PropertyGroup>
   
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='DebugEf|AnyCPU'">
+    <WarningLevel>4</WarningLevel>
+  </PropertyGroup>
+  
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+    <WarningLevel>4</WarningLevel>
+  </PropertyGroup>
+  
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='DebugEf|x64'">
     <WarningLevel>4</WarningLevel>
   </PropertyGroup>
 
@@ -28,6 +37,10 @@
   <ItemGroup>
     <ProjectReference Include="..\Registry.Adapters\Registry.Adapters.csproj" />
     <ProjectReference Include="..\Registry.Common\Registry.Common.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Folder Include="Migrations\Sqlite" />
   </ItemGroup>
 
 </Project>

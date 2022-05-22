@@ -11,13 +11,13 @@
         <Version>1.0.6</Version>
         <Platforms>AnyCPU;x64</Platforms>
         <PackageVersion>1.0.6</PackageVersion>
+        <Configurations>Debug;Release;DebugEf</Configurations>
     </PropertyGroup>
 
     <ItemGroup>
         <None Remove="ddb-log*.csv" />
         <Content Remove="appsettings-default.json" />
         <EmbeddedResource Include="appsettings-default.json" />
-        <EmbeddedResource Include="ClientApp.zip" />
     </ItemGroup>
 
     <ItemGroup>

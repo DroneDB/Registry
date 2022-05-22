@@ -5,7 +5,7 @@ using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Registry.Web.Data;
 
-namespace Registry.Web.Data.Migrations
+namespace Registry.Web.Data.Mysql.Migrations
 {
     [DbContext(typeof(RegistryContext))]
     partial class RegistryContextModelSnapshot : ModelSnapshot
