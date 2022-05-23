@@ -98,6 +98,7 @@
 
     <Target Name="PreBuild" BeforeTargets="PreBuildEvent">
         <Delete Files="./ClientApp.zip" />
+        <Exec Command="dotnet tool restore" />
         <!-- We could add this BUT it slows down the builds -->
         <!-- <Exec Command="cd ClientApp&#xD;&#xA;call npm install&#xD;&#xA;call webpack"/> -->
         <Exec Command="dotnet z -c ./ClientApp/build ./ClientApp.zip" />
