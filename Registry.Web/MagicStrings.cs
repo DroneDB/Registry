@@ -31,5 +31,8 @@ namespace Registry.Web
         public const string SpaRoot = "ClientApp";
         public const string AppSettingsFileName = "appsettings.json";
         public const string AppSettingsDefaultFileName = "appsettings-default.json";
+
+        public const string DdbReleasesPageUrl = "https://github.com/DroneDB/DroneDB/releases";
+        public const string DdbInstallPageUrl = "https://docs.dronedb.app/download.html";
     }
 }
