@@ -81,6 +81,7 @@ namespace Registry.Web
             try
             {
                 Log.Information("Starting web host");
+                Console.WriteLine(" -> Starting web host");
 
                 var args = new[] { "--urls", $"http://{opts.Address}" };
 

@@ -56,10 +56,6 @@ namespace Registry.Web
 {
     public class Startup
     {
-        private const string IdentityConnectionName = "IdentityConnection";
-        private const string RegistryConnectionName = "RegistryConnection";
-        private const string HangfireConnectionName = "HangfireConnection";
-
         public Startup(IConfiguration configuration)
         {
             Configuration = configuration;
@@ -113,7 +109,8 @@ namespace Registry.Web
             services.Configure<AppSettings>(appSettingsSection);
             var appSettings = appSettingsSection.Get<AppSettings>();
 
-            ConfigureDbProvider<ApplicationDbContext>(services, appSettings.AuthProvider, IdentityConnectionName);
+            ConfigureDbProvider<ApplicationDbContext>(services, appSettings.AuthProvider,
+                MagicStrings.IdentityConnectionName);
 
             if (!string.IsNullOrWhiteSpace(appSettings.ExternalAuthUrl))
             {
@@ -133,7 +130,8 @@ namespace Registry.Web
                 services.AddScoped<ILoginManager, LocalLoginManager>();
             }
 
-            ConfigureDbProvider<RegistryContext>(services, appSettings.RegistryProvider, RegistryConnectionName);
+            ConfigureDbProvider<RegistryContext>(services, appSettings.RegistryProvider,
+                MagicStrings.RegistryConnectionName);
 
             var key = Encoding.ASCII.GetBytes(appSettings.Secret);
             services.AddAuthentication(auth =>
@@ -329,7 +327,7 @@ namespace Registry.Web
 
             app.UseMiddleware<TokenManagerMiddleware>();
 
-            app.UseHangfireDashboard("/hangfire", new DashboardOptions
+            app.UseHangfireDashboard(MagicStrings.HangFireUrl, new DashboardOptions
             {
                 AsyncAuthorization = new[] { new HangfireAuthorizationFilter() }
             });
@@ -338,17 +336,17 @@ namespace Registry.Web
             {
                 endpoints.MapControllers();
 
-                endpoints.MapHealthChecks("/quickhealth", new HealthCheckOptions
+                endpoints.MapHealthChecks(MagicStrings.QuickHealthUrl, new HealthCheckOptions
                 {
                     Predicate = _ => false
                 }).RequireAuthorization();
 
-                endpoints.MapHealthChecks("/health", new HealthCheckOptions
+                endpoints.MapHealthChecks(MagicStrings.HealthUrl, new HealthCheckOptions
                 {
                     ResponseWriter = UIResponseWriter.WriteHealthCheckUIResponse
                 }).RequireAuthorization();
 
-                endpoints.MapGet("/version",
+                endpoints.MapGet(MagicStrings.VersionUrl,
                     async context =>
                     {
                         await context.Response.WriteAsync(
@@ -387,33 +385,56 @@ namespace Registry.Web
             PrintStartupInfo(app);
         }
 
-        private void PrintStartupInfo(IApplicationBuilder app)
+        private static void PrintStartupInfo(IApplicationBuilder app)
         {
-            if (!Log.IsEnabled(LogEventLevel.Information))
+            if (Log.IsEnabled(LogEventLevel.Information)) return;
+            
+            var env = app.ApplicationServices.GetService<IHostEnvironment>();
+            Console.WriteLine(" -> Application started in {0} mode", env?.EnvironmentName ?? "unknown");
+            Console.WriteLine(" ?> Version: {0}", Assembly.GetExecutingAssembly().GetName().Version);
+            Console.WriteLine(" ?> Application started at {0}", DateTime.Now);
+
+            var serverAddresses = app.ServerFeatures.Get<IServerAddressesFeature>()?.Addresses;
+            if (serverAddresses != null)
             {
-                var env = app.ApplicationServices.GetService<IHostEnvironment>();
-                Console.WriteLine(" -> Application startup");
-                Console.WriteLine(" ?> Environment: {0}", env?.EnvironmentName ?? "Unknown");
-                Console.WriteLine(" ?> Version: {0}", Assembly.GetExecutingAssembly().GetName().Version);
-                Console.WriteLine(" ?> Application started at {0}", DateTime.Now);
-
-                var serverAddresses = app.ServerFeatures.Get<IServerAddressesFeature>()?.Addresses;
-                if (serverAddresses != null)
-                {
-                    foreach (var address in serverAddresses)
-                    {
-                        Console.WriteLine($" ?> Now listening on: {address}");
-                    }
-                }
-
-                var settings = app.ApplicationServices.GetService<IOptions<AppSettings>>();
-
-                var appSettings = settings?.Value;
-                if (appSettings != null && !string.IsNullOrWhiteSpace(appSettings.ExternalUrlOverride))
-                {
-                    Console.WriteLine($" ?> External URL: {appSettings.ExternalUrlOverride}");
-                }
+                foreach (var address in serverAddresses)
+                    Console.WriteLine($" ?> Now listening on: {address}");
             }
+
+            var settings = app.ApplicationServices.GetService<IOptions<AppSettings>>();
+
+            var url = serverAddresses?.FirstOrDefault();
+                
+            var appSettings = settings?.Value;
+            if (appSettings != null && !string.IsNullOrWhiteSpace(appSettings.ExternalUrlOverride))
+            {
+                Console.WriteLine($" ?> External URL: {appSettings.ExternalUrlOverride}");
+                url = appSettings.ExternalUrlOverride;
+            }
+
+            if (url != null)
+            {
+                var baseUri = new Uri(url);
+
+                Console.WriteLine();
+                Console.WriteLine(" ?> Useful links:");
+                    
+                var swaggerUri = new Uri(baseUri, MagicStrings.SwaggerUrl);
+                Console.WriteLine($" ?> Swagger: {swaggerUri}");
+                    
+                var healthUri = new Uri(baseUri, MagicStrings.HealthUrl);
+                Console.WriteLine($" ?> (req auth) Health: {healthUri}");
+                    
+                var quickHealthUri = new Uri(baseUri, MagicStrings.QuickHealthUrl);
+                Console.WriteLine($" ?> (req auth) Quick Health: {quickHealthUri}");
+                    
+                var versionUri = new Uri(baseUri, MagicStrings.VersionUrl);
+                Console.WriteLine($" ?> Version: {versionUri}");
+                Console.WriteLine();
+
+            }
+
+            Console.WriteLine(" ?> Press Ctrl+C to quit");
         }
 
         private void SetupFileCache(IApplicationBuilder app)
@@ -485,7 +506,7 @@ namespace Registry.Web
 
             if (applicationDbContext.Database.IsSqlite())
             {
-                CommonUtils.EnsureFolderCreated(Configuration.GetConnectionString(IdentityConnectionName));
+                CommonUtils.EnsureFolderCreated(Configuration.GetConnectionString(MagicStrings.IdentityConnectionName));
 
                 // No migrations
                 applicationDbContext.Database.EnsureCreated();
@@ -507,7 +528,7 @@ namespace Registry.Web
 
             if (registryDbContext.Database.IsSqlite())
             {
-                CommonUtils.EnsureFolderCreated(Configuration.GetConnectionString(RegistryConnectionName));
+                CommonUtils.EnsureFolderCreated(Configuration.GetConnectionString(MagicStrings.RegistryConnectionName));
                 // No migrations
                 registryDbContext.Database.EnsureCreated();
             }
@@ -548,7 +569,8 @@ namespace Registry.Web
                         .UseSimpleAssemblyNameTypeSerializer()
                         .UseRecommendedSerializerSettings()
                         .UseConsole()
-                        .UseStorage(new MySqlStorage(Configuration.GetConnectionString(HangfireConnectionName),
+                        .UseStorage(new MySqlStorage(
+                            Configuration.GetConnectionString(MagicStrings.HangfireConnectionName),
                             new MySqlStorageOptions
                             {
                                 TransactionIsolationLevel = IsolationLevel.ReadCommitted,
@@ -704,7 +726,6 @@ namespace Registry.Web
                 if (!res.Succeeded)
                     throw new InvalidOperationException(
                         "Cannot add admin to admin role: " + res.Errors?.ToErrorString());
-                
             }
             else
             {
@@ -727,12 +748,12 @@ namespace Registry.Web
                 if (!passRes.Succeeded)
                     throw new InvalidOperationException(
                         "Cannot set password for admin: " + passRes.Errors?.ToErrorString());
-                
+
                 // Sets admin email
                 adminUser.Email = defaultAdmin.Email;
                 await context.SaveChangesAsync();
             }
-            
+
             // Ensure that admin organization exists
             var adminOrgSlug = defaultAdmin.UserName.ToSlug();
 
