@@ -27,10 +27,6 @@ namespace Registry.Web
     public class Program
     {
         public const int DefaultPort = 5000;
-        public const string DefaultHost = "localhost";
-        public const string SpaRoot = "ClientApp";
-        public const string AppSettingsFileName = "appsettings.json";
-        private const string AppSettingsDefaultFileName = "appsettings-default.json";
 
         public static void Main(string[] args)
         {
@@ -134,7 +130,7 @@ namespace Registry.Web
                     return false;
                 }
 
-                var host = match.Groups["host"].Success ? match.Groups["host"].Value : DefaultHost;
+                var host = match.Groups["host"].Success ? match.Groups["host"].Value : MagicStrings.DefaultHost;
                 var port = match.Groups["port"].Success ? int.Parse(match.Groups["port"].Value) : DefaultPort;
 
                 // Check valid port
@@ -160,7 +156,7 @@ namespace Registry.Web
 
             SetupHub(folder, resetSpa);
 
-            var settingsFilePath = Path.Combine(folder, AppSettingsFileName);
+            var settingsFilePath = Path.Combine(folder, MagicStrings.AppSettingsFileName);
 
             var defaultSettingsConfig = GetDefaultSettings();
             var defaultSettings = defaultSettingsConfig?["AppSettings"]!.ToObject<AppSettings>();
@@ -169,7 +165,7 @@ namespace Registry.Web
             if (!File.Exists(settingsFilePath))
             {
                 Console.WriteLine(" -> Creating default appsettings.json");
-                File.WriteAllText(AppSettingsFileName,
+                File.WriteAllText(MagicStrings.AppSettingsFileName,
                     JsonConvert.SerializeObject(defaultSettingsConfig, Formatting.Indented));
             }
 
@@ -203,7 +199,7 @@ namespace Registry.Web
 
         private static void SetupHub(string folder, bool resetSpa)
         {
-            var hubRoot = Path.Combine(folder, SpaRoot);
+            var hubRoot = Path.Combine(folder, MagicStrings.SpaRoot);
 
             if (resetSpa)
             {
@@ -225,7 +221,7 @@ namespace Registry.Web
             Console.WriteLine(" -> Extracting Hub");
 
             // Read embedded resource and extract to storage folder
-            using var stream = efp.Read(executingAssembly, SpaRoot + ".zip");
+            using var stream = efp.Read(executingAssembly, MagicStrings.SpaRoot + ".zip");
             using var zip = new ZipArchive(stream, ZipArchiveMode.Read);
             zip.ExtractToDirectory(folder);
         }
@@ -234,7 +230,7 @@ namespace Registry.Web
         {
             var efp = new EmbeddedResourceQuery();
             var executingAssembly = Assembly.GetExecutingAssembly();
-            using var reader = new StreamReader(efp.Read(executingAssembly, AppSettingsDefaultFileName));
+            using var reader = new StreamReader(efp.Read(executingAssembly, MagicStrings.AppSettingsDefaultFileName));
             return JsonConvert.DeserializeObject<JObject>(reader.ReadToEnd());
         }
 
