@@ -398,18 +398,29 @@ namespace Registry.Web
             if (serverAddresses != null)
             {
                 foreach (var address in serverAddresses)
-                    Console.WriteLine($" ?> Now listening on: {address}");
+                    Console.WriteLine($" ?> Registry url: {address}");
             }
+            
+            var settingsOptions = app.ApplicationServices.GetService<IOptions<AppSettings>>();
 
-            var settings = app.ApplicationServices.GetService<IOptions<AppSettings>>();
+            if (settingsOptions == null)
+                throw new InvalidOperationException("AppSettings not found");
 
+            var settings = settingsOptions.Value;
+            
+            if (settings.DefaultAdmin == null)
+                throw new InvalidOperationException("DefaultAdmin not found");
+
+            Console.WriteLine(" ?> Admin credentials: ");
+            Console.WriteLine(" ?> Username: {0}", settings.DefaultAdmin.UserName);
+            Console.WriteLine(" ?> Password: {0}", settings.DefaultAdmin.Password);
+            
             var url = serverAddresses?.FirstOrDefault();
                 
-            var appSettings = settings?.Value;
-            if (appSettings != null && !string.IsNullOrWhiteSpace(appSettings.ExternalUrlOverride))
+            if (!string.IsNullOrWhiteSpace(settings.ExternalUrlOverride))
             {
-                Console.WriteLine($" ?> External URL: {appSettings.ExternalUrlOverride}");
-                url = appSettings.ExternalUrlOverride;
+                Console.WriteLine($" ?> External URL: {settings.ExternalUrlOverride}");
+                url = settings.ExternalUrlOverride;
             }
 
             if (url != null)
