@@ -11,7 +11,7 @@ public class Options
         HelpText = "Points to a directory on a filesystem where to store Registry data.", Required = true)]
     public string StorageFolder { get; set; }
 
-    [Option('a', "address", Default = "localhost:5000", HelpText = "Address to listen on. Default: localhost:5000")]
+    [Option('a', "address", Default = "localhost:5000", HelpText = "Address to listen on")]
     public string Address { get; set; }
 
     [Option('c', "check", HelpText = "Check configuration and exit.", Required = false)]
@@ -20,8 +20,8 @@ public class Options
     [Option('q', "quiet", HelpText = "Disable startup and info messages.", Required = false)]
     public bool Quiet { get; set; }
     
-    [Option('r', "reset-spa", HelpText = "Reset the SPA folder by re-creating it.", Required = false)]
-    public bool ResetSpa { get; set; }
+    [Option('r', "reset-hub", HelpText = "Reset the Hub folder by re-creating it.", Required = false)]
+    public bool ResetHub { get; set; }
 
     [Usage(ApplicationAlias = "registry.web")]
     public static IEnumerable<Example> Examples =>

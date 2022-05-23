@@ -97,6 +97,11 @@
     </ProjectExtensions>
 
     <Target Name="PreBuild" BeforeTargets="PreBuildEvent">
+        
+        <ItemGroup>
+            <EmbeddedResource Include="ClientApp.zip" />
+        </ItemGroup>
+        
         <Delete Files="./ClientApp.zip" />
         <Exec Command="dotnet tool restore" />
         <!-- We could add this BUT it slows down the builds -->
@@ -105,7 +110,7 @@
     </Target>
 
     <Target Name="PostBuild" AfterTargets="PostBuildEvent">
-        <Delete Files="./ClientApp.zip" />
+       <Delete Files="./ClientApp.zip" />
     </Target>
 
 

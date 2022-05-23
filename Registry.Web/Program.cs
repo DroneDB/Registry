@@ -70,7 +70,7 @@ namespace Registry.Web
                 return;
             }
 
-            if (!SetupStorageFolder(opts.StorageFolder, opts.ResetSpa))
+            if (!SetupStorageFolder(opts.StorageFolder, opts.ResetHub))
             {
                 Console.ForegroundColor = ConsoleColor.Red;
                 Console.WriteLine(" !> Error while setting up storage folder");
@@ -92,7 +92,6 @@ namespace Registry.Web
                     .ConfigureWebHostDefaults(webBuilder => webBuilder.UseStartup<Startup>())
                     .Build()
                     .Run();
-
             }
             catch (Exception ex)
             {
@@ -158,33 +157,19 @@ namespace Registry.Web
 
             Directory.CreateDirectory(folder);
 
-            var spaRoot = Path.Combine(folder, SpaRoot);
-
-            var efp = new EmbeddedResourceQuery();
-            var executingAssembly = Assembly.GetExecutingAssembly();
-
-            if (!Directory.Exists(spaRoot) || resetSpa)
-            {
-                Directory.Delete(spaRoot, true);
-                
-                Console.WriteLine(" -> Extracting SPA root");
-
-                // Read embedded resource and extract to storage folder
-                using var stream = efp.Read(executingAssembly, SpaRoot + ".zip");
-                using var zip = new ZipArchive(stream, ZipArchiveMode.Read);
-                zip.ExtractToDirectory(spaRoot);
-            }
+            SetupHub(folder, resetSpa);
 
             var settingsFilePath = Path.Combine(folder, AppSettingsFileName);
 
             var defaultSettingsConfig = GetDefaultSettings();
             var defaultSettings = defaultSettingsConfig?["AppSettings"]!.ToObject<AppSettings>();
-            
+
             // The appsettings file does not contain only appsettings
             if (!File.Exists(settingsFilePath))
             {
                 Console.WriteLine(" -> Creating default appsettings.json");
-                File.WriteAllText(AppSettingsFileName, JsonConvert.SerializeObject(defaultSettingsConfig, Formatting.Indented));
+                File.WriteAllText(AppSettingsFileName,
+                    JsonConvert.SerializeObject(defaultSettingsConfig, Formatting.Indented));
             }
 
             Console.WriteLine(" -> Verifying settings");
@@ -198,12 +183,11 @@ namespace Registry.Web
                     Console.WriteLine(" !> Error while verifying settings");
                     return false;
                 }
-                
+
                 // Update settings
                 Console.WriteLine(" -> Updating settings");
                 settingsConfig["AppSettings"] = JObject.FromObject(settings);
                 File.WriteAllText(settingsFilePath, JsonConvert.SerializeObject(settingsConfig, Formatting.Indented));
-
             }
             catch (Exception e)
             {
@@ -212,8 +196,37 @@ namespace Registry.Web
                 return false;
             }
 
-            
+
             return true;
+        }
+
+        private static void SetupHub(string folder, bool resetSpa)
+        {
+            var hubRoot = Path.Combine(folder, SpaRoot);
+
+            if (resetSpa)
+            {
+                Console.WriteLine(" -> Resetting Hub");
+                Directory.Delete(hubRoot, true);
+            }
+            else if (Directory.Exists(hubRoot)) return;
+
+            ExtractHub(hubRoot);
+        }
+
+        private static void ExtractHub(string folder)
+        {
+            var efp = new EmbeddedResourceQuery();
+            var executingAssembly = Assembly.GetExecutingAssembly();
+
+            Directory.CreateDirectory(folder);
+
+            Console.WriteLine(" -> Extracting Hub");
+
+            // Read embedded resource and extract to storage folder
+            using var stream = efp.Read(executingAssembly, SpaRoot + ".zip");
+            using var zip = new ZipArchive(stream, ZipArchiveMode.Read);
+            zip.ExtractToDirectory(folder);
         }
 
         private static JObject GetDefaultSettings()
@@ -222,23 +235,21 @@ namespace Registry.Web
             var executingAssembly = Assembly.GetExecutingAssembly();
             using var reader = new StreamReader(efp.Read(executingAssembly, AppSettingsDefaultFileName));
             return JsonConvert.DeserializeObject<JObject>(reader.ReadToEnd());
-        }   
+        }
 
         private static bool VerifySettings(AppSettings settings, AppSettings defaultSettings)
         {
-
             if (settings == null)
             {
                 Console.WriteLine(" !> Empty settings, check appsettings.json");
                 return false;
             }
-            
+
             try
             {
-
                 if (string.IsNullOrWhiteSpace(settings.Secret))
                     settings.Secret = CommonUtils.RandomString(64);
-                
+
                 var externalUrl = settings.ExternalUrlOverride;
 
                 if (!string.IsNullOrWhiteSpace(externalUrl) && !Uri.TryCreate(externalUrl, UriKind.Absolute, out _))
@@ -246,7 +257,7 @@ namespace Registry.Web
                     Console.WriteLine(" !> ExternalUrlOverride is not a valid URL");
                     return false;
                 }
-                
+
                 if (settings.TokenExpirationInDays < 1)
                 {
                     Console.WriteLine(" !> TokenExpirationInDays is not valid (must be greater than 0)");
@@ -254,7 +265,7 @@ namespace Registry.Web
                 }
 
                 var defaultAdmin = settings.DefaultAdmin;
-                
+
                 if (defaultAdmin?.Email == null || defaultAdmin.Password == null || defaultAdmin.UserName == null)
                 {
                     Console.WriteLine(" !> DefaultAdmin is not valid");
@@ -266,13 +277,13 @@ namespace Registry.Web
                     Console.WriteLine(" !> DatasetsPath is empty");
                     return false;
                 }
-                
+
                 if (string.IsNullOrWhiteSpace(settings.CachePath))
                 {
                     Console.WriteLine(" !> CachePath is empty");
                     return false;
                 }
-                
+
                 if (settings.BatchTokenLength < 8)
                 {
                     Console.WriteLine(" !> BatchTokenLength is not valid (must be at least 8)");
@@ -296,25 +307,25 @@ namespace Registry.Web
                     Console.WriteLine(" !> AuthCookieName is empty");
                     return false;
                 }
-                
-                if (settings.ThumbnailsCacheExpiration.HasValue && settings.ThumbnailsCacheExpiration.Value.TotalMinutes < 1)
+
+                if (settings.ThumbnailsCacheExpiration.HasValue &&
+                    settings.ThumbnailsCacheExpiration.Value.TotalMinutes < 1)
                 {
                     Console.WriteLine(" !> ThumbnailsCacheExpiration is not valid (must be at least 1 minute)");
                     return false;
                 }
-                
+
                 if (settings.TilesCacheExpiration.HasValue && settings.TilesCacheExpiration.Value.TotalMinutes < 1)
                 {
                     Console.WriteLine(" !> TilesCacheExpiration is not valid (must be at least 1 minute)");
                     return false;
                 }
-                
+
                 if (settings.ClearCacheInterval.HasValue && settings.ClearCacheInterval.Value.TotalMinutes < 1)
                 {
                     Console.WriteLine(" !> ClearCacheInterval is not valid (must be at least 1 minute)");
                     return false;
                 }
-
             }
             catch (Exception ex)
             {
