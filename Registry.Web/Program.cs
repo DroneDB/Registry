@@ -70,7 +70,7 @@ namespace Registry.Web
                 return;
             }
 
-            if (!SetupStorageFolder(opts.StorageFolder))
+            if (!SetupStorageFolder(opts.StorageFolder, opts.ResetSpa))
             {
                 Console.ForegroundColor = ConsoleColor.Red;
                 Console.WriteLine(" !> Error while setting up storage folder");
@@ -85,10 +85,6 @@ namespace Registry.Web
                 var args = new[] { "--urls", $"http://{opts.Address}" };
 
                 Host.CreateDefaultBuilder(args)
-                    /*.ConfigureHostConfiguration(config =>
-                    {
-                        config.AddJsonFile(Path.Combine(opts.StorageFolder, "appsettings.json"), optional: false, reloadOnChange: true);
-                    })*/
                     .UseSerilog((context, services, configuration) => configuration
                         .ReadFrom.Configuration(context.Configuration)
                         .ReadFrom.Services(services)
@@ -97,7 +93,6 @@ namespace Registry.Web
                     .Build()
                     .Run();
 
-                //CreateHostBuilder(args).Build().Run();
             }
             catch (Exception ex)
             {
@@ -157,7 +152,7 @@ namespace Registry.Web
             return true;
         }
 
-        private static bool SetupStorageFolder(string folder)
+        private static bool SetupStorageFolder(string folder, bool resetSpa = false)
         {
             Console.WriteLine(" -> Setting up storage folder");
 
@@ -168,8 +163,10 @@ namespace Registry.Web
             var efp = new EmbeddedResourceQuery();
             var executingAssembly = Assembly.GetExecutingAssembly();
 
-            if (!Directory.Exists(spaRoot))
+            if (!Directory.Exists(spaRoot) || resetSpa)
             {
+                Directory.Delete(spaRoot, true);
+                
                 Console.WriteLine(" -> Extracting SPA root");
 
                 // Read embedded resource and extract to storage folder

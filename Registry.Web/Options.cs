@@ -19,6 +19,9 @@ public class Options
 
     [Option('q', "quiet", HelpText = "Disable startup and info messages.", Required = false)]
     public bool Quiet { get; set; }
+    
+    [Option('r', "reset-spa", HelpText = "Reset the SPA folder by re-creating it.", Required = false)]
+    public bool ResetSpa { get; set; }
 
     [Usage(ApplicationAlias = "registry.web")]
     public static IEnumerable<Example> Examples =>
