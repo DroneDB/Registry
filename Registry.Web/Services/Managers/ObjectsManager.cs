@@ -130,7 +130,7 @@ namespace Registry.Web.Services.Managers
         private async Task<StorageEntryDto> InternalGet(string orgSlug, Guid internalRef, string path)
         {
             var ddb = _ddbManager.Get(orgSlug, internalRef);
-
+            
             var entry = await ddb.GetEntryAsync(path);
 
             if (entry == null)
@@ -719,6 +719,19 @@ namespace Registry.Web.Services.Managers
             var destPath = CommonUtils.SafeCombine(BuildBasePath, hash, path);
 
             return _fs.Exists(ddb.GetLocalPath(destPath));
+        }
+
+        public async Task<EntryType?> GetEntryType(string orgSlug, string dsSlug, string path)
+        {
+            var ds = await _utils.GetDataset(orgSlug, dsSlug);
+
+            _logger.LogInformation("In GetEntryType('{OrgSlug}/{DsSlug}')", orgSlug, dsSlug);
+            
+            var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
+            
+            var entry = await ddb.GetEntryAsync(path);
+
+            return entry?.Type;
         }
 
         public string GetBuildSource(Entry entry)
