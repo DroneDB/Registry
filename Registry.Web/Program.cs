@@ -29,9 +29,23 @@ namespace Registry.Web
         public const int DefaultPort = 5000;
 
         public static readonly Version MinDdbVersion = new(1, 0, 6);
-        
+
         public static void Main(string[] args)
         {
+            
+#if DEBUG_EF
+            // Fix ef core tools compatibility
+            if (args.Length == 2 && args[0] == "--applicationName")
+            {
+                Host.CreateDefaultBuilder(args)
+                    .ConfigureWebHostDefaults(webBuilder => webBuilder.UseStartup<Startup>())
+                    .Build()
+                    .Run();
+
+                return;
+            }
+#endif
+
             Parser.Default.ParseArguments<Options>(args)
                 .WithParsed(RunOptions);
         }
@@ -59,18 +73,18 @@ namespace Registry.Web
             {
                 var rawVersion = DDBWrapper.GetVersion();
                 Console.WriteLine(" ?> Detected DDB version " + rawVersion);
-                
+
                 // Remove git commit string
                 rawVersion = rawVersion.Contains(' ') ? rawVersion[..rawVersion.IndexOf(' ')] : rawVersion;
-                
+
                 var ddbVersion = new Version(rawVersion);
-                
+
                 if (ddbVersion < MinDdbVersion)
                 {
-                    Console.WriteLine($" !> DDB version is too old, please upgrade to {MinDdbVersion} or higher: {MagicStrings.DdbReleasesPageUrl}");
+                    Console.WriteLine(
+                        $" !> DDB version is too old, please upgrade to {MinDdbVersion} or higher: {MagicStrings.DdbReleasesPageUrl}");
                     return;
                 }
-                
             }
             catch (Exception e)
             {
@@ -78,10 +92,11 @@ namespace Registry.Web
                 Console.WriteLine($" !> Unable to load DDB lib: {e.Message}");
                 Console.ResetColor();
                 Console.WriteLine();
-                
-                Console.WriteLine($" ?> Check installation instructions on {MagicStrings.DdbInstallPageUrl} and try again.");
+
+                Console.WriteLine(
+                    $" ?> Check installation instructions on {MagicStrings.DdbInstallPageUrl} and try again.");
                 Console.WriteLine($" ?> Releases page: {MagicStrings.DdbReleasesPageUrl}");
-                
+
                 return;
             }
 

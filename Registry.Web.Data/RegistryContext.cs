@@ -15,6 +15,11 @@ namespace Registry.Web.Data
         
         public RegistryContext() {}
 
+        protected RegistryContext(DbContextOptions options) : base(options)
+        {
+            
+        }
+
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
             modelBuilder.Entity<Dataset>()
@@ -74,9 +79,16 @@ namespace Registry.Web.Data
     
     public class SqliteRegistryContext : RegistryContext
     {
-        public SqliteRegistryContext(DbContextOptions<RegistryContext> options) : base(options)
+/*
+        public SqliteRegistryContext(DbContextOptions options) : base(options)
+        {
+            
+        }
+        */
+        public SqliteRegistryContext(DbContextOptions<SqliteRegistryContext> options) : base(options)
         {
         }
+        
 #if DEBUG_EF
         protected override void OnConfiguring(DbContextOptionsBuilder options)
         {
@@ -90,8 +102,13 @@ namespace Registry.Web.Data
     {
         
         private const string DevConnectionString = "Server=localhost;Database=registry;Uid=root;Pwd=root;";
-        
-        public MysqlRegistryContext(DbContextOptions<RegistryContext> options) : base(options)
+        /*
+        public MysqlRegistryContext(DbContextOptions options) : base(options)
+        {
+            
+        }
+        */
+        public MysqlRegistryContext(DbContextOptions<MysqlRegistryContext> options) : base(options)
         {
         }
     
