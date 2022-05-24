@@ -13,6 +13,7 @@ using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
 using Newtonsoft.Json.Linq;
 using Registry.Common;
+using Registry.Web.Data;
 using Registry.Web.Exceptions;
 using Registry.Web.Models;
 using Registry.Web.Models.Configuration;
@@ -34,6 +35,7 @@ namespace Registry.Web.Services.Managers
         private readonly UserManager<User> _userManager;
         private readonly AppSettings _appSettings;
         private readonly ApplicationDbContext _applicationDbContext;
+        private readonly RegistryContext _registryContext;
 
         public UsersManager(
             IOptions<AppSettings> appSettings,
@@ -44,13 +46,14 @@ namespace Registry.Web.Services.Managers
             IAuthManager authManager,
             IOrganizationsManager organizationsManager,
             IUtils utils,
-            ILogger<UsersManager> logger)
+            ILogger<UsersManager> logger, RegistryContext registryContext)
         {
             _roleManager = roleManager;
             _authManager = authManager;
             _organizationsManager = organizationsManager;
             _utils = utils;
             _logger = logger;
+            _registryContext = registryContext;
             _applicationDbContext = applicationDbContext;
             _loginManager = loginManager;
             _userManager = userManager;
@@ -316,6 +319,13 @@ namespace Registry.Web.Services.Managers
 
         }
 
+        public Task<string[]> GetRoles()
+        {
+            var roles = _roleManager.Roles.Select(role => role.Name);
+
+            return Task.FromResult(roles.ToArray());
+        }
+
         public async Task DeleteUser(string userName)
         {
 
@@ -352,13 +362,15 @@ namespace Registry.Web.Services.Managers
         {
             if (!await _authManager.IsUserAdmin())
                 throw new UnauthorizedException("User is not admin");
-
+            
+            // TODO: Da finire con query orgs e altro
+            
             var query = from user in _userManager.Users
                         select new UserDto
                         {
                             Email = user.Email,
                             UserName = user.UserName,
-                            Id = user.Id
+                            //Id = user.Id
                         };
 
 

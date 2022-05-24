@@ -20,5 +20,6 @@ namespace Registry.Web.Services.Ports
         Task<UserStorageInfo> GetUserStorageInfo(string userName = null);
         Task<Dictionary<string, object>> GetUserMeta(string userName = null);
         Task SetUserMeta(string userId, Dictionary<string, object> meta);
+        Task<string[]> GetRoles();
     }
 }

@@ -139,8 +139,48 @@ namespace Registry.Web.Controllers
 
         }
 
+        [HttpDelete("{userName}")]
+        [ProducesResponseType(StatusCodes.Status200OK)]
+        public async Task<IActionResult> DeleteUserRoute([FromForm] string userName)
+        {
+
+            try
+            {
+                _logger.LogDebug("Users controller DeleteUserRoute('{UserName}')", userName);
+
+                await _usersManager.DeleteUser(userName);
+
+                return Ok();
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Exception in Users controller DeleteUserRoute('{UserName}')", userName);
+                return ExceptionResult(ex);
+            }
+
+        }
+
+        [HttpGet("roles")]
+        [ProducesResponseType(StatusCodes.Status200OK)]
+        public async Task<IActionResult> GetRoles()
+        {
+            try
+            {
+                _logger.LogDebug("Users controller GetRoles()");
+
+                var roles = await _usersManager.GetRoles();
+
+                return Ok(roles);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Users controller GetRoles()");
+                return ExceptionResult(ex);
+            }
+        }
+        
         [HttpDelete]
-        public async Task<IActionResult> DeleteUser([FromForm] string userName)
+        public async Task<IActionResult> DeleteUser([FromRoute] string userName)
         {
 
             try
@@ -154,7 +194,6 @@ namespace Registry.Web.Controllers
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Exception in Users controller DeleteUser('{UserName}')", userName);
-
                 return ExceptionResult(ex);
             }
 

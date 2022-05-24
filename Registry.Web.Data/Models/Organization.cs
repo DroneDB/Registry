@@ -22,5 +22,15 @@ namespace Registry.Web.Data.Models
         public bool IsPublic { get; set; }
 
         public virtual ICollection<Dataset> Datasets { get; set; }
+        
+        public virtual ICollection<OrganizationUser> Users { get; set; }
+    }
+
+    public class OrganizationUser
+    {
+        [Required]
+        public Organization Organization { get; set; }
+        [Required]
+        public string UserId { get; set; }
     }
 }
