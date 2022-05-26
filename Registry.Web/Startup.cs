@@ -519,14 +519,18 @@ namespace Registry.Web
             {
                 CommonUtils.EnsureFolderCreated(Configuration.GetConnectionString(MagicStrings.IdentityConnectionName));
 
+                if (applicationDbContext.Database.GetPendingMigrations().Any())
+                {
+                    applicationDbContext.Database.Migrate();
+                }
+                
                 // No migrations
-                applicationDbContext.Database.EnsureCreated();
+                //applicationDbContext.Database.EnsureCreated();
             }
 
             if (applicationDbContext.Database.IsSqlServer())
                 // No migrations
                 applicationDbContext.Database.EnsureCreated();
-
 
             if (applicationDbContext.Database.IsMySql() && applicationDbContext.Database.GetPendingMigrations().Any())
                 // Use migrations
@@ -540,8 +544,8 @@ namespace Registry.Web
             if (registryDbContext.Database.IsSqlite())
             {
                 CommonUtils.EnsureFolderCreated(Configuration.GetConnectionString(MagicStrings.RegistryConnectionName));
-                // No migrations
-                registryDbContext.Database.EnsureCreated();
+                // Use migrations
+                registryDbContext.Database.Migrate();
             }
 
             if (registryDbContext.Database.IsSqlServer())
@@ -651,9 +655,13 @@ namespace Registry.Web
             services.AddDbContext<T>(options =>
                 _ = provider switch
                 {
-                    DbProvider.Sqlite => options.UseSqlite(connectionString),
+                    DbProvider.Sqlite => options.UseSqlite(connectionString, x => x.MigrationsAssembly("Registry.Web.Data.SqliteMigrations")),
                     DbProvider.Mysql => options.UseMySql(connectionString, ServerVersion.AutoDetect(connectionString),
-                        builder => builder.EnableRetryOnFailure()),
+                        x =>
+                        {
+                            x.EnableRetryOnFailure();
+                            x.MigrationsAssembly("Registry.Web.Data.MySqlMigrations");
+                        }),
                     DbProvider.Mssql => options.UseSqlServer(connectionString),
                     _ => throw new ArgumentOutOfRangeException(nameof(provider), $"Unrecognised provider: '{provider}'")
                 });

@@ -91,7 +91,8 @@
     <ItemGroup>
         <ProjectReference Include="..\Registry.Adapters\Registry.Adapters.csproj" />
         <ProjectReference Include="..\Registry.Common\Registry.Common.csproj" />
-        <ProjectReference Include="..\Registry.Web.Data.Migrations\Registry.Web.Data.Migrations.csproj" />
+        <ProjectReference Include="..\Registry.Web.Data.MySqlMigrations\Registry.Web.Data.MySqlMigrations.csproj" />
+        <ProjectReference Include="..\Registry.Web.Data.SqliteMigrations\Registry.Web.Data.SqliteMigrations.csproj" />
         <ProjectReference Include="..\Registry.Web.Data\Registry.Web.Data.csproj" />
     </ItemGroup>
 

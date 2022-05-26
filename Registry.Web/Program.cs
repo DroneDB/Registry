@@ -11,17 +11,21 @@ using CommandLine;
 using Registry.Common;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.Data.SqlClient;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using Registry.Adapters.DroneDB;
+using Registry.Web.Data;
 using Registry.Web.Models;
 using Registry.Web.Models.Configuration;
 using Registry.Web.Services.Adapters;
 using Serilog;
-
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
 namespace Registry.Web
 {
     public class Program
@@ -32,24 +36,25 @@ namespace Registry.Web
 
         public static void Main(string[] args)
         {
-            
-#if DEBUG_EF
-            // Fix ef core tools compatibility
-            if (args.Length == 2 && args[0] == "--applicationName")
-            {
-                Host.CreateDefaultBuilder(args)
-                    .ConfigureWebHostDefaults(webBuilder => webBuilder.UseStartup<Startup>())
-                    .Build()
-                    .Run();
 
+#if DEBUG_EF
+            
+            //  dotnet ef migrations add InitialCreate --project Registry.Web.Data.SqliteMigrations --context Registry.Web.Data.RegistryContext --configuration DebugEF --startup-project Registry.Web --verbose -- --provider Sqlite
+            //  dotnet ef migrations add InitialCreate --project Registry.Web.Data.MysqlMigrations  --context Registry.Web.Data.RegistryContext --configuration DebugEF --startup-project Registry.Web --verbose -- --provider MySql
+            
+            // Fix ef core tools compatibility
+            if (IsEfTool(args))
+            {
+                RunEfToolsHost(args);
                 return;
             }
 #endif
-
+            
             Parser.Default.ParseArguments<Options>(args)
                 .WithParsed(RunOptions);
         }
 
+        
         private static void RunOptions(Options opts)
         {
             var appVersion = typeof(Program).Assembly.GetCustomAttribute<AssemblyFileVersionAttribute>()?.Version;
@@ -366,5 +371,50 @@ namespace Registry.Web
 
             return true;
         }
+        
+        #region EF Tool
+        
+        private static bool IsEfTool(string[] args)
+        {
+            return args.Length == 4 && args[0] == "--provider" && args[2] == "--applicationName";
+        }
+        
+        private static void RunEfToolsHost(string[] args)
+        {
+            Host.CreateDefaultBuilder(args)
+                .ConfigureAppConfiguration(x => x.AddJsonFile("appsettings-eftools.json"))
+                .ConfigureServices(
+                    (hostContext, services) =>
+                    {
+                        // Set the active provider via configuration
+                        var configuration = hostContext.Configuration;
+                        var provider = configuration.GetValue("Provider", "SqlServer");
+
+                        var sqliteConnectionString =
+                            configuration.GetConnectionString("RegistrySqliteConnection");
+                        var mysqlConnectionString =
+                            configuration.GetConnectionString("RegistryMysqlConnection");
+                        var sqlserverConnectionString =
+                            configuration.GetConnectionString("RegistrySqlServerConnection");
+
+                        services.AddDbContext<RegistryContext>(
+                            options => _ = provider switch
+                            {
+                                "Sqlite" => options.UseSqlite(
+                                    sqliteConnectionString,
+                                    x => x.MigrationsAssembly("Registry.Web.Data.SqliteMigrations")),
+
+                                "MySql" => options.UseMySql(
+                                    mysqlConnectionString, ServerVersion.AutoDetect(mysqlConnectionString),
+                                    x => x.MigrationsAssembly("Registry.Web.Data.MySqlMigrations")),
+
+                                _ => throw new Exception($"Unsupported provider: {provider}")
+                            });
+                    })
+                .Build()
+                .Run();
+        }
+        #endregion
+
     }
 }

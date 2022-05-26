@@ -1,8 +1,7 @@
-﻿using System;
-using Microsoft.EntityFrameworkCore.Metadata;
+﻿using Microsoft.EntityFrameworkCore.Metadata;
 using Microsoft.EntityFrameworkCore.Migrations;
 
-namespace Registry.Web.Data.Migrations.Mysql
+namespace Registry.Web.Data.MySqlMigrations.Migrations
 {
     public partial class InitialCreate : Migration
     {

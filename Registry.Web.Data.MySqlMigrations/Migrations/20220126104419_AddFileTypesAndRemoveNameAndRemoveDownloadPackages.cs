@@ -1,7 +1,6 @@
-﻿using System;
-using Microsoft.EntityFrameworkCore.Migrations;
+﻿using Microsoft.EntityFrameworkCore.Migrations;
 
-namespace Registry.Web.Data.Migrations.Mysql
+namespace Registry.Web.Data.MySqlMigrations.Migrations
 {
     public partial class AddFileTypesAndRemoveNameAndRemoveDownloadPackages : Migration
     {

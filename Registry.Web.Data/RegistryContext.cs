@@ -6,18 +6,11 @@ using Registry.Web.Data.Models;
 
 namespace Registry.Web.Data
 {
-    public class RegistryContext: DbContext
+    public class RegistryContext : DbContext
     {
         public RegistryContext(DbContextOptions<RegistryContext> options)
             : base(options)
         {
-        }
-        
-        public RegistryContext() {}
-
-        protected RegistryContext(DbContextOptions options) : base(options)
-        {
-            
         }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
@@ -50,7 +43,7 @@ namespace Registry.Web.Data
                 (c1, c2) => c1.SequenceEqual(c2),
                 c => c.Aggregate(0, (a, v) => HashCode.Combine(a, v.GetHashCode())),
                 c => c.ToArray());
-            
+
             modelBuilder.Entity<Dataset>()
                 .Property(e => e.FileTypes)
                 .HasConversion(
@@ -66,7 +59,6 @@ namespace Registry.Web.Data
                 .WithMany(org => org.Users)
                 .IsRequired()
                 .OnDelete(DeleteBehavior.Cascade);*/
-
         }
 
         protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
@@ -78,54 +70,9 @@ namespace Registry.Web.Data
         }
 
         public DbSet<Organization> Organizations { get; set; }
+
         //public DbSet<OrganizationUser> OrganizationsUsers { get; set; }
         public DbSet<Dataset> Datasets { get; set; }
         public DbSet<Batch> Batches { get; set; }
-        
-    }
-    
-    public class SqliteRegistryContext : RegistryContext
-    {
-/*
-        public SqliteRegistryContext(DbContextOptions options) : base(options)
-        {
-            
-        }
-        */
-        public SqliteRegistryContext(DbContextOptions<SqliteRegistryContext> options) : base(options)
-        {
-        }
-        
-#if DEBUG_EF
-        protected override void OnConfiguring(DbContextOptionsBuilder options)
-        {
-            // connect to sqlite database
-            options.UseSqlite();
-        }
-#endif
-    }
-    
-    public class MysqlRegistryContext : RegistryContext
-    {
-        
-        private const string DevConnectionString = "Server=localhost;Database=registry.db;Uid=root;Pwd=root;";
-        /*
-        public MysqlRegistryContext(DbContextOptions options) : base(options)
-        {
-            
-        }
-        */
-        public MysqlRegistryContext(DbContextOptions<MysqlRegistryContext> options) : base(options)
-        {
-        }
-    
-#if DEBUG_EF
-        protected override void OnConfiguring(DbContextOptionsBuilder options)
-        {
-            // connect to sqlite database
-            options.UseMySql(DevConnectionString, ServerVersion.AutoDetect(DevConnectionString));
-        }
-#endif
-        
     }
 }
