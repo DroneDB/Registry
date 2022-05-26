@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Runtime.InteropServices;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
@@ -178,10 +179,21 @@ namespace Registry.Adapters.DroneDB
         {
             try
             {
+                
+                IntPtr output;
+                DDBError res;
 
-                if (_List(ddbPath, paths, paths?.Length ?? 0, out var output, "json", recursive, maxRecursionDepth) !=
-                    DDBError.DDBERR_NONE) throw new DDBException(GetLastError());
+                if (paths != null && paths.Length != 0)
+                {
+                    paths = paths.Select(item => item.Replace('\\', '/')).ToArray();
+                    res = _List(ddbPath, paths, paths.Length, out output, "json", recursive, maxRecursionDepth);
+                }
+                else
+                    res = _List(ddbPath, null, 0, out output, "json", recursive, maxRecursionDepth);
 
+                if (res != DDBError.DDBERR_NONE)
+                    throw new DDBException(GetLastError());
+                
                 var json = Marshal.PtrToStringAnsi(output);
 
                 if (string.IsNullOrWhiteSpace(json))
