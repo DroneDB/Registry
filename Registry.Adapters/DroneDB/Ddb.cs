@@ -110,9 +110,7 @@ namespace Registry.Adapters.DroneDB
 
             var parent = Path.GetDirectoryName(path);
 
-            if (string.IsNullOrEmpty(parent)) parent = "*";
-
-            objs = Search(parent, true).ToArray();
+            objs = Search(parent).ToArray();
 
             return objs.FirstOrDefault(item => item.Path == path);
         }
