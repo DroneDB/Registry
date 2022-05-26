@@ -102,26 +102,18 @@ namespace Registry.Web.Controllers
 
         #region Downloads
 
-
-        [HttpGet("download", Name = nameof(ObjectsController) + "." + nameof(Download))]
-        public async Task<IActionResult> Download([FromRoute] string orgSlug, [FromRoute] string dsSlug,
-            [FromQuery(Name = "path")] string pathsRaw, [FromQuery(Name = "inline")] int? isInlineRaw)
+        private async Task<IActionResult> InternalDownload(string orgSlug, string dsSlug, string[] paths, bool isInline)
         {
             try
             {
-
-                var paths = pathsRaw?.Split(",", StringSplitOptions.RemoveEmptyEntries);
-                var isInline = isInlineRaw == 1;
-
-                _logger.LogDebug("Objects controller Download('{OrgSlug}', '{DsSlug}', '{PathsRaw}', '{IsInlineRaw}')", orgSlug, dsSlug, pathsRaw, isInlineRaw);
-
                 // If only one file is requested, we can leverage the local file system
-                if (paths?.Length == 1)
+                if (paths?.Length == 1 &&
+                    await _objectsManager.GetEntryType(orgSlug, dsSlug, paths[0]) != EntryType.Directory)
                 {
                     var r = await _objectsManager.Get(orgSlug, dsSlug, paths[0]);
                     return PhysicalFile(r.PhysicalPath, r.ContentType, isInline ? null : r.Name, true);
                 }
-                
+
                 var res = await _objectsManager.DownloadStream(orgSlug, dsSlug, paths);
 
                 Response.StatusCode = 200;
@@ -133,72 +125,56 @@ namespace Registry.Web.Controllers
                 await res.CopyToAsync(Response.Body);
 
                 return new EmptyResult();
-
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Exception in Objects controller Download('{OrgSlug}', '{DsSlug}', '{PathsRaw}')", orgSlug, dsSlug, pathsRaw);
+                _logger.LogError(ex,
+                    "Exception in Objects controller Download('{OrgSlug}', '{DsSlug}', '{Paths}', '{IsInline}')",
+                    orgSlug, dsSlug, paths != null ? string.Join("; ", paths) : string.Empty, isInline);
 
                 return ExceptionResult(ex);
             }
         }
 
-        [HttpGet("download/{*path}", Name = nameof(ObjectsController) + "." + nameof(DownloadExact))]
-        public async Task<IActionResult> DownloadExact([FromRoute] string orgSlug, [FromRoute] string dsSlug, string path,
-            [FromQuery(Name = "inline")] int? isInlineRaw)
+        [HttpGet("download", Name = nameof(ObjectsController) + "." + nameof(Download))]
+        public Task<IActionResult> Download([FromRoute] string orgSlug, [FromRoute] string dsSlug,
+            [FromQuery(Name = "path")] string pathsRaw, [FromQuery(Name = "inline")] int? isInlineRaw)
         {
-            try
-            {
+            var paths = pathsRaw?.Split(",", StringSplitOptions.RemoveEmptyEntries);
+            var isInline = isInlineRaw == 1;
 
-                bool isInline = isInlineRaw == 1;
+            _logger.LogDebug("Objects controller Download('{OrgSlug}', '{DsSlug}', '{PathsRaw}', '{IsInlineRaw}')",
+                orgSlug, dsSlug, pathsRaw, isInlineRaw);
 
-                _logger.LogDebug("Objects controller DownloadExact('{OrgSlug}', '{DsSlug}', '{Path}', '{IsInlineRaw}')", orgSlug, dsSlug, path, isInlineRaw);
-
-                var res = await _objectsManager.Get(orgSlug, dsSlug, path);
-
-                return PhysicalFile(res.PhysicalPath, res.ContentType, isInline ? null : res.Name, true);
-
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Exception in Objects controller DownloadExact('{OrgSlug}', '{DsSlug}', '{Path}')", orgSlug, dsSlug, path);
-
-                return ExceptionResult(ex);
-            }
+            return InternalDownload(orgSlug, dsSlug, paths, isInline);
         }
 
         [HttpPost("download", Name = nameof(ObjectsController) + "." + nameof(DownloadPost))]
-        public async Task<IActionResult> DownloadPost([FromRoute] string orgSlug, [FromRoute] string dsSlug,
+        public Task<IActionResult> DownloadPost([FromRoute] string orgSlug, [FromRoute] string dsSlug,
             [FromForm(Name = "path")] string pathsRaw, [FromForm(Name = "inline")] int? isInlineRaw)
         {
-            try
-            {
+            var paths = pathsRaw?.Split(",", StringSplitOptions.RemoveEmptyEntries);
+            var isInline = isInlineRaw == 1;
 
-                var paths = pathsRaw?.Split(",", StringSplitOptions.RemoveEmptyEntries);
-                var isInline = isInlineRaw == 1;
+            _logger.LogDebug(
+                "Objects controller DownloadPost('{OrgSlug}', '{DsSlug}', '{PathsRaw}', '{IsInlineRaw}')", orgSlug,
+                dsSlug, pathsRaw, isInlineRaw);
 
-                _logger.LogDebug("Objects controller DownloadPost('{OrgSlug}', '{DsSlug}', '{PathsRaw}', '{IsInlineRaw}')", orgSlug, dsSlug, pathsRaw, isInlineRaw);
-
-                var res = await _objectsManager.DownloadStream(orgSlug, dsSlug, paths);
-
-                Response.StatusCode = 200;
-                Response.ContentType = res.ContentType;
-
-                Response.Headers.Add("Content-Disposition",
-                    isInline ? "inline" : $"attachment; filename=\"{res.Name}\"");
-
-                await res.CopyToAsync(Response.Body);
-
-                return new EmptyResult();
-
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Exception in Objects controller DownloadPost('{OrgSlug}', '{DsSlug}', '{PathsRaw}')", orgSlug, dsSlug, pathsRaw);
-
-                return ExceptionResult(ex);
-            }
+            return InternalDownload(orgSlug, dsSlug, paths, isInline);
         }
+
+        [HttpGet("download/{*path}", Name = nameof(ObjectsController) + "." + nameof(DownloadExact))]
+        public async Task<IActionResult> DownloadExact([FromRoute] string orgSlug, [FromRoute] string dsSlug,
+            string path, [FromQuery(Name = "inline")] int? isInlineRaw)
+        {
+            var isInline = isInlineRaw == 1;
+
+            _logger.LogDebug("Objects controller DownloadExact('{OrgSlug}', '{DsSlug}', '{Path}', '{IsInlineRaw}')",
+                orgSlug, dsSlug, path, isInlineRaw);
+
+            return await InternalDownload(orgSlug, dsSlug, new[] { path }, isInline);
+        }
+
 
         #endregion
 

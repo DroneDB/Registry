@@ -720,6 +720,19 @@ namespace Registry.Web.Services.Managers
 
             return _fs.Exists(ddb.GetLocalPath(destPath));
         }
+        
+        public async Task<EntryType?> GetEntryType(string orgSlug, string dsSlug, string path)
+        {
+            var ds = await _utils.GetDataset(orgSlug, dsSlug);
+
+            _logger.LogInformation("In GetEntryType('{OrgSlug}/{DsSlug}')", orgSlug, dsSlug);
+            
+            var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
+            
+            var entry = await ddb.GetEntryAsync(path);
+
+            return entry?.Type;
+        }
 
         public string GetBuildSource(Entry entry)
         {
