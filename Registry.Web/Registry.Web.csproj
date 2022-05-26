@@ -37,29 +37,29 @@
         <PackageReference Include="AspNetCore.HealthChecks.UI.Core" Version="6.0.4" />
         <PackageReference Include="CommandLineParser" Version="2.9.1" />
         <PackageReference Include="FileCache" Version="3.3.0" />
-        <PackageReference Include="Hangfire.AspNetCore" Version="1.7.28" />
+        <PackageReference Include="Hangfire.AspNetCore" Version="1.7.29" />
         <PackageReference Include="Hangfire.Console" Version="1.4.2" />
-        <PackageReference Include="Hangfire.Core" Version="1.7.28" />
+        <PackageReference Include="Hangfire.Core" Version="1.7.29" />
         <PackageReference Include="Hangfire.InMemory" Version="0.3.4" />
         <PackageReference Include="Hangfire.MySqlStorage" Version="2.0.3" />
-        <PackageReference Include="Microsoft.AspNetCore.ApiAuthorization.IdentityServer" Version="6.0.3" />
+        <PackageReference Include="Microsoft.AspNetCore.ApiAuthorization.IdentityServer" Version="6.0.5" />
         <PackageReference Include="Microsoft.AspNetCore.Authentication.Core" Version="2.2.0" />
-        <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="6.0.3" />
-        <PackageReference Include="Microsoft.AspNetCore.Mvc.NewtonsoftJson" Version="6.0.3" />
+        <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="6.0.5" />
+        <PackageReference Include="Microsoft.AspNetCore.Mvc.NewtonsoftJson" Version="6.0.5" />
         <PackageReference Include="Microsoft.AspNetCore.ResponseCompression" Version="2.2.0" />
-        <PackageReference Include="Microsoft.AspNetCore.SpaServices" Version="3.1.23" />
-        <PackageReference Include="Microsoft.AspNetCore.SpaServices.Extensions" Version="6.0.3" />
-        <PackageReference Include="Microsoft.EntityFrameworkCore" Version="6.0.3" />
-        <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="6.0.3" />
-        <PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" Version="6.0.3" />
-        <PackageReference Include="Microsoft.EntityFrameworkCore.Tools" Version="6.0.3">
+        <PackageReference Include="Microsoft.AspNetCore.SpaServices" Version="3.1.25" />
+        <PackageReference Include="Microsoft.AspNetCore.SpaServices.Extensions" Version="6.0.5" />
+        <PackageReference Include="Microsoft.EntityFrameworkCore" Version="6.0.5" />
+        <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="6.0.5" />
+        <PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" Version="6.0.5" />
+        <PackageReference Include="Microsoft.EntityFrameworkCore.Tools" Version="6.0.5">
             <PrivateAssets>all</PrivateAssets>
             <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
         </PackageReference>
-        <PackageReference Include="Microsoft.Extensions.Caching.StackExchangeRedis" Version="6.0.3" />
-        <PackageReference Include="Microsoft.Extensions.Diagnostics.HealthChecks.EntityFrameworkCore" Version="6.0.3" />
+        <PackageReference Include="Microsoft.Extensions.Caching.StackExchangeRedis" Version="6.0.5" />
+        <PackageReference Include="Microsoft.Extensions.Diagnostics.HealthChecks.EntityFrameworkCore" Version="6.0.5" />
         <PackageReference Include="Microsoft.Extensions.Hosting" Version="6.0.1" />
-        <PackageReference Include="Microsoft.VisualStudio.Web.CodeGeneration.Design" Version="6.0.2" />
+        <PackageReference Include="Microsoft.VisualStudio.Web.CodeGeneration.Design" Version="6.0.5" />
         <PackageReference Include="MimeMapping" Version="1.0.1.37" />
         <PackageReference Include="MimeTypes" Version="2.4.0">
             <PrivateAssets>all</PrivateAssets>
@@ -79,10 +79,13 @@
         <PackageReference Include="Serilog.Extensions.Hosting" Version="4.2.0" />
         <PackageReference Include="Serilog.Sinks.File" Version="5.0.0" />
         <PackageReference Include="Serilog.Sinks.Seq" Version="5.1.1" />
-        <PackageReference Include="Swashbuckle.AspNetCore" Version="6.3.0" />
-        <PackageReference Include="Swashbuckle.AspNetCore.Newtonsoft" Version="6.3.0" />
-        <PackageReference Include="System.IdentityModel.Tokens.Jwt" Version="6.16.0" />
+        <PackageReference Include="Swashbuckle.AspNetCore" Version="6.3.1" />
+        <PackageReference Include="Swashbuckle.AspNetCore.Newtonsoft" Version="6.3.1" />
+        <PackageReference Include="System.IdentityModel.Tokens.Jwt" Version="6.18.0" />
         <PackageReference Include="System.Text.Encoding.CodePages" Version="6.0.0" />
+        <PackageReference Update="Packaging.Targets">
+          <Version>0.1.220</Version>
+        </PackageReference>
     </ItemGroup>
 
     <ItemGroup>
