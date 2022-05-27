@@ -101,7 +101,7 @@ namespace Registry.Web.Controllers
                 if (model == null)
                     return BadRequest(new ErrorResponse("No user data provided"));
                 
-                await _usersManager.CreateUser(model.UserName, model.Email, model.Password);
+                await _usersManager.CreateUser(model.UserName, model.Email, model.Password, model.Roles);
 
                 return Ok();
             }

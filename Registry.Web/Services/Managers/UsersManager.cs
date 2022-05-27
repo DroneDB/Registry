@@ -8,6 +8,7 @@ using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
@@ -27,7 +28,6 @@ namespace Registry.Web.Services.Managers
 {
     public class UsersManager : IUsersManager
     {
-
         private readonly RoleManager<IdentityRole> _roleManager;
         private readonly IAuthManager _authManager;
         private readonly IOrganizationsManager _organizationsManager;
@@ -60,19 +60,17 @@ namespace Registry.Web.Services.Managers
             _loginManager = loginManager;
             _userManager = userManager;
             _appSettings = appSettings.Value;
-
         }
 
         public async Task<AuthenticateResponse> Authenticate(string userName, string password)
         {
-
             var res = await _loginManager.CheckAccess(userName, password);
 
             if (!res.Success)
                 return null;
 
             // Create user if not exists because login manager has greenlighed us
-            var user = await _userManager.FindByNameAsync(userName) ?? 
+            var user = await _userManager.FindByNameAsync(userName) ??
                        await CreateUserInternal(new User { UserName = userName }, password);
 
             await SyncRoles(user);
@@ -104,7 +102,6 @@ namespace Registry.Web.Services.Managers
             var tokenDescriptor = await GenerateJwtToken(user);
 
             return new AuthenticateResponse(user, tokenDescriptor.Token, tokenDescriptor.ExpiresOn);
-
         }
 
         private async Task SyncRoles(User user)
@@ -133,7 +130,6 @@ namespace Registry.Web.Services.Managers
 
                 await _userManager.AddToRoleAsync(user, role);
                 edited = true;
-
             }
 
             if (edited)
@@ -143,9 +139,8 @@ namespace Registry.Web.Services.Managers
             }
         }
 
-        public async Task<User> CreateUser(string userName, string email, string password)
+        public async Task<User> CreateUser(string userName, string email, string password, string[] roles)
         {
-
             if (!await _authManager.IsUserAdmin())
                 throw new UnauthorizedException("Only admins can create new users");
 
@@ -157,15 +152,15 @@ namespace Registry.Web.Services.Managers
             if (user != null)
                 throw new InvalidOperationException("User already exists");
 
-            return await CreateUserInternal(userName, email, password);
+            return await CreateUserInternal(userName, email, password, roles);
         }
 
-        private bool IsValidUserName(string userName)
+        private static bool IsValidUserName(string userName)
         {
             return Regex.IsMatch(userName, "^[a-z0-9]{1,127}$", RegexOptions.Singleline);
         }
 
-        private async Task<User> CreateUserInternal(User user, string password)
+        private async Task<User> CreateUserInternal(User user, string password, string[] roles)
         {
             var res = await _userManager.CreateAsync(user, password);
 
@@ -183,7 +178,7 @@ namespace Registry.Web.Services.Managers
             return user;
         }
 
-        private async Task<User> CreateUserInternal(string userName, string email, string password)
+        private async Task<User> CreateUserInternal(string userName, string email, string password, string[] roles)
         {
             var user = new User
             {
@@ -191,6 +186,8 @@ namespace Registry.Web.Services.Managers
                 Email = email
             };
 
+            await ValidateRoles(roles);
+
             var res = await _userManager.CreateAsync(user, password);
 
             if (!res.Succeeded)
@@ -204,7 +201,26 @@ namespace Registry.Web.Services.Managers
             // Create a default organization for the user
             await CreateUserDefaultOrganization(user);
 
+            // Add user roles
+            if (roles != null && roles.Any())
+            {
+                foreach (var role in roles)
+                    await _userManager.AddToRoleAsync(user, role);
+            }
+
             return user;
+        }
+
+        private async Task ValidateRoles(string[] roles)
+        {
+            if (roles == null || !roles.Any())
+                return;
+            
+            foreach (var role in roles)
+            {
+                if (!await _roleManager.RoleExistsAsync(role))
+                    throw new ArgumentException($"Role {role} does not exist");
+            }
         }
 
         private async Task CreateUserDefaultOrganization(User user)
@@ -236,9 +252,7 @@ namespace Registry.Web.Services.Managers
                 _logger.LogWarning("Errors in changing user password: {Errors}", errors);
 
                 throw new InvalidOperationException("Cannot change user password: " + errors);
-
             }
-
         }
 
         public async Task<AuthenticateResponse> Refresh()
@@ -251,7 +265,6 @@ namespace Registry.Web.Services.Managers
             var tokenDescriptor = await GenerateJwtToken(user);
 
             return new AuthenticateResponse(user, tokenDescriptor.Token, tokenDescriptor.ExpiresOn);
-
         }
 
         public async Task<UserStorageInfo> GetUserStorageInfo(string userName = null)
@@ -268,12 +281,11 @@ namespace Registry.Web.Services.Managers
                 throw new UnauthorizedException("Cannot get other user's storage info");
 
             user = await _userManager.FindByNameAsync(userName);
-            
+
             if (user == null)
                 throw new BadRequestException("Cannot find user " + userName);
 
             return _utils.GetUserStorage(user);
-
         }
 
         public async Task<Dictionary<string, object>> GetUserMeta(string userName = null)
@@ -295,7 +307,6 @@ namespace Registry.Web.Services.Managers
                 throw new BadRequestException("Cannot find user " + userName);
 
             return user.Metadata;
-
         }
 
         public async Task SetUserMeta(string userName, Dictionary<string, object> meta)
@@ -318,7 +329,6 @@ namespace Registry.Web.Services.Managers
 
             user.Metadata = meta;
             await _applicationDbContext.SaveChangesAsync();
-
         }
 
         public Task<string[]> GetRoles()
@@ -330,7 +340,6 @@ namespace Registry.Web.Services.Managers
 
         public async Task DeleteUser(string userName)
         {
-
             if (!await _authManager.IsUserAdmin())
                 throw new UnauthorizedException("Only admins can delete users");
 
@@ -357,28 +366,47 @@ namespace Registry.Web.Services.Managers
 
                 throw new InvalidOperationException("Cannot delete user: " + errors);
             }
-
         }
 
         public async Task<IEnumerable<UserDto>> GetAll()
         {
             if (!await _authManager.IsUserAdmin())
                 throw new UnauthorizedException("User is not admin");
+
+            var userOrg = (from orgusr in _registryContext.OrganizationsUsers
+                    group orgusr by orgusr.UserId
+                    into g
+                    select new { UserId = g.Key, OrgIds = g.Select(item => item.OrganizationSlug).ToArray() })
+                .ToDictionary(item => item.UserId, item => item.OrgIds);
+
+            var query = (from user in _applicationDbContext.Users
+                join userRole in _applicationDbContext.UserRoles on user.Id equals userRole.UserId into userRoles
+                from userRole in userRoles.DefaultIfEmpty()
+                join role in _applicationDbContext.Roles on userRole.RoleId equals role.Id into roles
+                from role in roles.DefaultIfEmpty()
+                select new
+                {
+                    UserId = user.Id,
+                    user.UserName,
+                    user.Email,
+                    RoleName = role.Name
+                }).ToArray();
+
+            var users = from item in query
+                group item by item.UserId
+                into grp
+                let first = grp.First()
+                select new UserDto
+                {
+                    UserName = first.UserName,
+                    Email = first.Email,
+                    Roles = grp.Select(item => item.RoleName).ToArray(),
+                    Organizations = userOrg.SafeGetValue(first.UserId)
+                };
             
-            // TODO: Da finire con query orgs e altro
-            
-            var query = from user in _userManager.Users
-                        select new UserDto
-                        {
-                            Email = user.Email,
-                            UserName = user.UserName,
-                            //Id = user.Id
-                        };
-
-
-            return query.ToArray();
-
+            return users;
         }
+
         private async Task<JwtDescriptor> GenerateJwtToken(User user)
         {
             // generate token
@@ -392,10 +420,12 @@ namespace Registry.Web.Services.Managers
                 Subject = new ClaimsIdentity(new[]
                 {
                     new Claim(ClaimTypes.Name, user.Id),
-                    new Claim(ApplicationDbContext.AdminRoleName.ToLowerInvariant(), (await _userManager.IsInRoleAsync(user, ApplicationDbContext.AdminRoleName)).ToString()),
+                    new Claim(ApplicationDbContext.AdminRoleName.ToLowerInvariant(),
+                        (await _userManager.IsInRoleAsync(user, ApplicationDbContext.AdminRoleName)).ToString()),
                 }),
                 Expires = expiresOn,
-                SigningCredentials = new SigningCredentials(new SymmetricSecurityKey(key), SecurityAlgorithms.HmacSha256Signature)
+                SigningCredentials = new SigningCredentials(new SymmetricSecurityKey(key),
+                    SecurityAlgorithms.HmacSha256Signature)
             };
             var token = tokenHandler.CreateToken(tokenDescriptor);
 
@@ -405,6 +435,5 @@ namespace Registry.Web.Services.Managers
                 ExpiresOn = expiresOn
             };
         }
-
     }
 }

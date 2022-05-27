@@ -112,8 +112,9 @@ namespace Registry.Web.Services.Adapters
                 if (currentUser == null)
                     throw new UnauthorizedException("Invalid user");
 
-                if (org.OwnerId != null && org.OwnerId != currentUser.Id)
-                    throw new UnauthorizedException("This organization does not belong to the current user");
+                if (org.OwnerId != null && org.OwnerId != currentUser.Id && org.Users.All(usr => usr.UserId != currentUser.Id))
+                    throw new UnauthorizedException("The current user does not have access to this dataset");
+
             }
 
             return dataset;
@@ -152,7 +153,7 @@ namespace Registry.Web.Services.Adapters
 
                 // Mmmm
                 if (uri.Port != 443 && uri.Port != 80)
-                    host += ":" + uri.Port;
+                    host += $":{uri.Port}";
             }
             else
             {

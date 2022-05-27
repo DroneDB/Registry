@@ -14,7 +14,7 @@ namespace Registry.Web.Services.Ports
         Task<AuthenticateResponse> Authenticate(string userName, string password);
         Task<AuthenticateResponse> Authenticate(string token);
         Task<IEnumerable<UserDto>> GetAll();
-        Task<User> CreateUser(string userName, string email, string password);
+        Task<User> CreateUser(string userName, string email, string password, string[] roles);
         Task DeleteUser(string userName);
         Task ChangePassword(string userName, string currentPassword, string newPassword);
         Task<AuthenticateResponse> Refresh();

@@ -370,7 +370,6 @@ namespace Registry.Web
         
         #region EF Tool
         
-        
         /*
             Add new migration (RegistryContext)
             dotnet ef migrations add NewMigration --project Registry.Web.Data.SqliteMigrations --context Registry.Web.Data.RegistryContext --configuration DebugEF --startup-project Registry.Web --verbose -- --provider Sqlite
@@ -388,8 +387,7 @@ namespace Registry.Web
             dotnet ef migrations script --project Registry.Web.Identity.SqliteMigrations --context Registry.Web.Identity.ApplicationDbContext --configuration DebugEF --startup-project Registry.Web -o sqlite.sql --verbose -- --provider Sqlite
             dotnet ef migrations script --project Registry.Web.Identity.MysqlMigrations  --context Registry.Web.Identity.ApplicationDbContext --configuration DebugEF --startup-project Registry.Web -o mysql.sql --verbose -- --provider MySql
 
-         * 
-         */
+        */
         
         #if DEBUG_EF
         

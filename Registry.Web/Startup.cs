@@ -377,7 +377,7 @@ namespace Registry.Web
                 });
             });
 
-            SetupDatabase(app);
+            SetupDatabase(app).Wait();
             SetupFileCache(app);
             //SetupHangfire(app);
 
@@ -503,50 +503,60 @@ namespace Registry.Web
         // }
 
         // NOTE: Maybe put all this as stated in https://stackoverflow.com/a/55707949
-        private void SetupDatabase(IApplicationBuilder app)
+        private async Task SetupDatabase(IApplicationBuilder app)
         {
             using var serviceScope = app.ApplicationServices
                 .GetRequiredService<IServiceScopeFactory>()
                 .CreateScope();
-            using var applicationDbContext = serviceScope.ServiceProvider.GetService<ApplicationDbContext>();
+            await using var applicationDbContext = serviceScope.ServiceProvider.GetService<ApplicationDbContext>();
 
             if (applicationDbContext == null)
                 throw new InvalidOperationException("Cannot get application db context from service provider");
 
-            if (applicationDbContext.Database.IsSqlite())
-            {
-                CommonUtils.EnsureFolderCreated(Configuration.GetConnectionString(MagicStrings.IdentityConnectionName));
+            var identityIsSqlite = applicationDbContext.Database.IsSqlite();
 
-                if (applicationDbContext.Database.GetPendingMigrations().Any())
-                    applicationDbContext.Database.Migrate();
+            if (identityIsSqlite)
+                CommonUtils.EnsureFolderCreated(Configuration.GetConnectionString(MagicStrings.IdentityConnectionName));
+            
+            if (identityIsSqlite || applicationDbContext.Database.IsMySql())
+            {
                 
-                // No migrations
-                //applicationDbContext.Database.EnsureCreated();
+                var pendingMigrations = (await applicationDbContext.Database.GetPendingMigrationsAsync()).ToArray();
+                
+                if (pendingMigrations.Any())
+                {
+                    Console.WriteLine($" -> Running identity migrations: {string.Join(", ", pendingMigrations)}");
+                    await applicationDbContext.Database.MigrateAsync();
+                } else 
+                    Console.WriteLine(" -> Identity database is up to date");
+
             }
 
-            if (applicationDbContext.Database.IsMySql() && applicationDbContext.Database.GetPendingMigrations().Any())
-                // Use migrations
-                applicationDbContext.Database.Migrate();
-
-            using var registryDbContext = serviceScope.ServiceProvider.GetService<RegistryContext>();
+            await using var registryDbContext = serviceScope.ServiceProvider.GetService<RegistryContext>();
 
             if (registryDbContext == null)
                 throw new InvalidOperationException("Cannot get registry db context from service provider");
             
-            if (registryDbContext.Database.IsSqlite())
-            {
+            var registryIsSqlite = registryDbContext.Database.IsSqlite();
+            
+            if (registryIsSqlite)
                 CommonUtils.EnsureFolderCreated(Configuration.GetConnectionString(MagicStrings.RegistryConnectionName));
-                // Use migrations
-                registryDbContext.Database.Migrate();
+            
+            if (registryIsSqlite || registryDbContext.Database.IsMySql())
+            {
+                var pendingMigrations = (await registryDbContext.Database.GetPendingMigrationsAsync()).ToArray();
+
+                if (pendingMigrations.Any())
+                {
+                    Console.WriteLine($" -> Running registry migrations: {string.Join(", ", pendingMigrations)}");
+                    await registryDbContext.Database.MigrateAsync();
+                } else
+                    Console.WriteLine(" -> Registry database is up to date");
+                
             }
-
-            if (registryDbContext.Database.IsMySql() && registryDbContext.Database.GetPendingMigrations().Any())
-                // Use migrations
-                registryDbContext.Database.Migrate();
-
-
-            CreateInitialData(registryDbContext);
-            CreateDefaultAdmin(registryDbContext, serviceScope.ServiceProvider).Wait();
+            
+            await CreateInitialData(registryDbContext);
+            await CreateDefaultAdmin(registryDbContext, serviceScope.ServiceProvider);
         }
 
         private void RegisterHangfireProvider(IServiceCollection services, AppSettings appSettings)
@@ -596,7 +606,7 @@ namespace Registry.Web
             services.AddHangfireServer();
         }
 
-        private void RegisterCacheProvider(IServiceCollection services, AppSettings appSettings)
+        private static void RegisterCacheProvider(IServiceCollection services, AppSettings appSettings)
         {
             if (appSettings.CacheProvider == null)
             {
@@ -655,35 +665,35 @@ namespace Registry.Web
                 });
         }
 
-        private void CreateInitialData(RegistryContext context)
+        private static async Task CreateInitialData(RegistryContext context)
         {
             // If no organizations in database, let's create the public one
-            if (!context.Organizations.Any())
+            if (context.Organizations.Any())
+                return;
+            
+            var entity = new Organization
             {
-                var entity = new Organization
-                {
-                    Slug = MagicStrings.PublicOrganizationSlug,
-                    Name = MagicStrings.PublicOrganizationSlug.ToPascalCase(false, CultureInfo.InvariantCulture),
-                    CreationDate = DateTime.Now,
-                    Description = "Organization",
-                    IsPublic = true,
-                    // NOTE: Maybe this is a good idea to flag this org as "system"
-                    OwnerId = null
-                };
-                var ds = new Dataset
-                {
-                    Slug = MagicStrings.DefaultDatasetSlug,
-                    CreationDate = DateTime.Now,
-                    InternalRef = Guid.NewGuid()
-                };
-                entity.Datasets = new List<Dataset> { ds };
+                Slug = MagicStrings.PublicOrganizationSlug,
+                Name = MagicStrings.PublicOrganizationSlug.ToPascalCase(false, CultureInfo.InvariantCulture),
+                CreationDate = DateTime.Now,
+                Description = "Organization",
+                IsPublic = true,
+                // NOTE: Maybe this is a good idea to flag this org as "system"
+                OwnerId = null
+            };
+            var ds = new Dataset
+            {
+                Slug = MagicStrings.DefaultDatasetSlug,
+                CreationDate = DateTime.Now,
+                InternalRef = Guid.NewGuid()
+            };
+            entity.Datasets = new List<Dataset> { ds };
 
-                context.Organizations.Add(entity);
-                context.SaveChanges();
-            }
+            context.Organizations.Add(entity);
+            await context.SaveChangesAsync();
         }
 
-        private async Task CreateDefaultAdmin(RegistryContext context, IServiceProvider provider)
+        private static async Task CreateDefaultAdmin(RegistryContext context, IServiceProvider provider)
         {
             var usersManager = provider.GetService<UserManager<User>>();
             var roleManager = provider.GetService<RoleManager<IdentityRole>>();
@@ -770,7 +780,7 @@ namespace Registry.Web
                 org = new Organization
                 {
                     Slug = adminOrgSlug,
-                    Name = defaultAdmin.UserName + " organization",
+                    Name = $"{defaultAdmin.UserName} organization",
                     CreationDate = DateTime.Now,
                     Description = null,
                     IsPublic = false,
