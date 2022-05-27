@@ -2,7 +2,6 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Globalization;
-using System.IO;
 using System.Linq;
 using System.Reflection;
 using System.Runtime.Caching;
@@ -41,7 +40,6 @@ using Registry.Web.Filters;
 using Registry.Web.HealthChecks;
 using Registry.Web.Middlewares;
 using Registry.Web.Models.Configuration;
-using Registry.Web.Services;
 using Registry.Web.Services.Adapters;
 using Registry.Web.Services.Managers;
 using Registry.Web.Services.Ports;
@@ -52,7 +50,6 @@ using Registry.Web.Identity;
 using Registry.Web.Identity.Models;
 using Serilog;
 using Serilog.Events;
-using IHostingEnvironment = Microsoft.Extensions.Hosting.IHostingEnvironment;
 
 namespace Registry.Web
 {
@@ -63,7 +60,7 @@ namespace Registry.Web
             Configuration = configuration;
         }
 
-        public IConfiguration Configuration { get; }
+        private IConfiguration Configuration { get; }
 
         public void ConfigureServices(IServiceCollection services)
         {
