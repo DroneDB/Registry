@@ -33,6 +33,8 @@ using Registry.Web.Services.Managers;
 using Registry.Web.Services.Ports;
 using Registry.Web.Test.Adapters;
 using Registry.Ports.DroneDB.Models;
+using Registry.Web.Identity;
+using Registry.Web.Identity.Models;
 using Registry.Web.Services;
 using Attributes = Registry.Ports.DroneDB.Models.EntryAttributes;
 using Entry = Registry.Ports.DroneDB.Models.Entry;

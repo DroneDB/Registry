@@ -1,12 +1,6 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Security.Claims;
-using System.Text.Json.Serialization;
-using System.Threading.Tasks;
-using Microsoft.AspNetCore.Identity;
+﻿using Microsoft.AspNetCore.Identity;
 
-namespace Registry.Web.Models
+namespace Registry.Web.Identity.Models
 {
     /// <summary>
     /// This class represents an user

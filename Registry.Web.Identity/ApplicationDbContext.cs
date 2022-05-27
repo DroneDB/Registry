@@ -1,13 +1,9 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
+﻿using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.EntityFrameworkCore.ChangeTracking;
 using Newtonsoft.Json;
-using Registry.Web.Models;
+using Registry.Web.Identity.Models;
 
-namespace Registry.Web.Services
+namespace Registry.Web.Identity
 {
     public sealed class ApplicationDbContext : IdentityDbContext<User>
     {

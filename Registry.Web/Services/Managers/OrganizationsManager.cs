@@ -6,6 +6,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Registry.Web.Data;
 using Registry.Web.Exceptions;
+using Registry.Web.Identity;
 using Registry.Web.Models.DTO;
 using Registry.Web.Services.Ports;
 using Registry.Web.Utilities;

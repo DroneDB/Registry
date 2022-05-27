@@ -15,6 +15,8 @@ using System.Security.Principal;
 using System.Text;
 using System.Threading.Tasks;
 using System.Web;
+using Registry.Web.Identity;
+using Registry.Web.Identity.Models;
 
 namespace Registry.Web.Filters
 {

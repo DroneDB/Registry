@@ -1,5 +1,6 @@
 ﻿using System.Threading.Tasks;
 using Registry.Web.Data.Models;
+using Registry.Web.Identity.Models;
 using Registry.Web.Models;
 using Registry.Web.Models.DTO;
 

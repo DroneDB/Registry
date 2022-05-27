@@ -48,6 +48,8 @@ using Registry.Web.Services.Ports;
 using Registry.Web.Utilities;
 using Registry.Adapters.DroneDB;
 using Registry.Ports;
+using Registry.Web.Identity;
+using Registry.Web.Identity.Models;
 using Serilog;
 using Serilog.Events;
 using IHostingEnvironment = Microsoft.Extensions.Hosting.IHostingEnvironment;
@@ -110,7 +112,7 @@ namespace Registry.Web
             var appSettings = appSettingsSection.Get<AppSettings>();
 
             ConfigureDbProvider<ApplicationDbContext>(services, appSettings.AuthProvider,
-                MagicStrings.IdentityConnectionName);
+                MagicStrings.IdentityConnectionName, "Identity");
 
             if (!string.IsNullOrWhiteSpace(appSettings.ExternalAuthUrl))
             {
@@ -131,7 +133,7 @@ namespace Registry.Web
             }
 
             ConfigureDbProvider<RegistryContext>(services, appSettings.RegistryProvider,
-                MagicStrings.RegistryConnectionName);
+                MagicStrings.RegistryConnectionName, "Data");
 
             var key = Encoding.ASCII.GetBytes(appSettings.Secret);
             services.AddAuthentication(auth =>
@@ -388,7 +390,7 @@ namespace Registry.Web
         private static void PrintStartupInfo(IApplicationBuilder app)
         {
             if (Log.IsEnabled(LogEventLevel.Information)) return;
-            
+
             var env = app.ApplicationServices.GetService<IHostEnvironment>();
             Console.WriteLine(" -> Application started in {0} mode", env?.EnvironmentName ?? "unknown");
             Console.WriteLine(" ?> Version: {0}", Assembly.GetExecutingAssembly().GetName().Version);
@@ -400,23 +402,23 @@ namespace Registry.Web
                 foreach (var address in serverAddresses)
                     Console.WriteLine($" ?> Registry url: {address}");
             }
-            
+
             var settingsOptions = app.ApplicationServices.GetService<IOptions<AppSettings>>();
 
             if (settingsOptions == null)
                 throw new InvalidOperationException("AppSettings not found");
 
             var settings = settingsOptions.Value;
-            
+
             if (settings.DefaultAdmin == null)
                 throw new InvalidOperationException("DefaultAdmin not found");
 
             Console.WriteLine(" ?> Admin credentials: ");
             Console.WriteLine(" ?> Username: {0}", settings.DefaultAdmin.UserName);
             Console.WriteLine(" ?> Password: {0}", settings.DefaultAdmin.Password);
-            
+
             var url = serverAddresses?.FirstOrDefault();
-                
+
             if (!string.IsNullOrWhiteSpace(settings.ExternalUrlOverride))
             {
                 Console.WriteLine($" ?> External URL: {settings.ExternalUrlOverride}");
@@ -429,20 +431,19 @@ namespace Registry.Web
 
                 Console.WriteLine();
                 Console.WriteLine(" ?> Useful links:");
-                    
+
                 var swaggerUri = new Uri(baseUri, MagicStrings.SwaggerUrl);
                 Console.WriteLine($" ?> Swagger: {swaggerUri}");
-                    
+
                 var healthUri = new Uri(baseUri, MagicStrings.HealthUrl);
                 Console.WriteLine($" ?> (req auth) Health: {healthUri}");
-                    
+
                 var quickHealthUri = new Uri(baseUri, MagicStrings.QuickHealthUrl);
                 Console.WriteLine($" ?> (req auth) Quick Health: {quickHealthUri}");
-                    
+
                 var versionUri = new Uri(baseUri, MagicStrings.VersionUrl);
                 Console.WriteLine($" ?> Version: {versionUri}");
                 Console.WriteLine();
-
             }
 
             Console.WriteLine(" ?> Press Ctrl+C to quit");
@@ -520,17 +521,11 @@ namespace Registry.Web
                 CommonUtils.EnsureFolderCreated(Configuration.GetConnectionString(MagicStrings.IdentityConnectionName));
 
                 if (applicationDbContext.Database.GetPendingMigrations().Any())
-                {
                     applicationDbContext.Database.Migrate();
-                }
                 
                 // No migrations
                 //applicationDbContext.Database.EnsureCreated();
             }
-
-            if (applicationDbContext.Database.IsSqlServer())
-                // No migrations
-                applicationDbContext.Database.EnsureCreated();
 
             if (applicationDbContext.Database.IsMySql() && applicationDbContext.Database.GetPendingMigrations().Any())
                 // Use migrations
@@ -540,18 +535,13 @@ namespace Registry.Web
 
             if (registryDbContext == null)
                 throw new InvalidOperationException("Cannot get registry db context from service provider");
-
+            
             if (registryDbContext.Database.IsSqlite())
             {
                 CommonUtils.EnsureFolderCreated(Configuration.GetConnectionString(MagicStrings.RegistryConnectionName));
                 // Use migrations
                 registryDbContext.Database.Migrate();
             }
-
-            if (registryDbContext.Database.IsSqlServer())
-                // No migrations
-                registryDbContext.Database.EnsureCreated();
-
 
             if (registryDbContext.Database.IsMySql() && registryDbContext.Database.GetPendingMigrations().Any())
                 // Use migrations
@@ -648,21 +638,22 @@ namespace Registry.Web
         }
 
         private void ConfigureDbProvider<T>(IServiceCollection services, DbProvider provider,
-            string connectionStringName) where T : DbContext
+            string connectionStringName, string migrationsNamespace) where T : DbContext
         {
             var connectionString = Configuration.GetConnectionString(connectionStringName);
 
             services.AddDbContext<T>(options =>
                 _ = provider switch
                 {
-                    DbProvider.Sqlite => options.UseSqlite(connectionString, x => x.MigrationsAssembly("Registry.Web.Data.SqliteMigrations")),
+                    DbProvider.Sqlite => options.UseSqlite(connectionString,
+                        x => x.MigrationsAssembly("Registry.Web." + migrationsNamespace + ".SqliteMigrations")),
                     DbProvider.Mysql => options.UseMySql(connectionString, ServerVersion.AutoDetect(connectionString),
                         x =>
                         {
                             x.EnableRetryOnFailure();
-                            x.MigrationsAssembly("Registry.Web.Data.MySqlMigrations");
+                            x.MigrationsAssembly("Registry.Web." + migrationsNamespace + ".MySqlMigrations");
                         }),
-                    DbProvider.Mssql => options.UseSqlServer(connectionString),
+                    // DbProvider.Mssql => options.UseSqlServer(connectionString),
                     _ => throw new ArgumentOutOfRangeException(nameof(provider), $"Unrecognised provider: '{provider}'")
                 });
         }

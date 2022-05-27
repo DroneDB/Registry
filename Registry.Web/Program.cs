@@ -20,12 +20,11 @@ using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using Registry.Adapters.DroneDB;
 using Registry.Web.Data;
+using Registry.Web.Identity;
 using Registry.Web.Models;
 using Registry.Web.Models.Configuration;
 using Registry.Web.Services.Adapters;
 using Serilog;
-using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Hosting;
 namespace Registry.Web
 {
     public class Program
@@ -39,10 +38,7 @@ namespace Registry.Web
 
 #if DEBUG_EF
             
-            //  dotnet ef migrations add InitialCreate --project Registry.Web.Data.SqliteMigrations --context Registry.Web.Data.RegistryContext --configuration DebugEF --startup-project Registry.Web --verbose -- --provider Sqlite
-            //  dotnet ef migrations add InitialCreate --project Registry.Web.Data.MysqlMigrations  --context Registry.Web.Data.RegistryContext --configuration DebugEF --startup-project Registry.Web --verbose -- --provider MySql
-            
-            // Fix ef core tools compatibility
+            // EF core tools compatibility
             if (IsEfTool(args))
             {
                 RunEfToolsHost(args);
@@ -374,6 +370,29 @@ namespace Registry.Web
         
         #region EF Tool
         
+        
+        /*
+            Add new migration (RegistryContext)
+            dotnet ef migrations add NewMigration --project Registry.Web.Data.SqliteMigrations --context Registry.Web.Data.RegistryContext --configuration DebugEF --startup-project Registry.Web --verbose -- --provider Sqlite
+            dotnet ef migrations add NewMigration --project Registry.Web.Data.MysqlMigrations  --context Registry.Web.Data.RegistryContext --configuration DebugEF --startup-project Registry.Web --verbose -- --provider MySql
+
+            Generate SQL script (RegistryContext)
+            dotnet ef migrations script --project Registry.Web.Data.SqliteMigrations --context Registry.Web.Data.RegistryContext --configuration DebugEF --startup-project Registry.Web -o sqlite.sql --verbose -- --provider Sqlite
+            dotnet ef migrations script --project Registry.Web.Data.MysqlMigrations  --context Registry.Web.Data.RegistryContext --configuration DebugEF --startup-project Registry.Web -o mysql.sql --verbose -- --provider MySql
+
+            Add new migration (ApplicationDbContext)
+            dotnet ef migrations add NewMigration --project Registry.Web.Identity.SqliteMigrations --context Registry.Web.Identity.ApplicationDbContext --configuration DebugEF --startup-project Registry.Web --verbose -- --provider Sqlite
+            dotnet ef migrations add NewMigration --project Registry.Web.Identity.MysqlMigrations  --context Registry.Web.Identity.ApplicationDbContext --configuration DebugEF --startup-project Registry.Web --verbose -- --provider MySql
+
+            Generate SQL script (ApplicationDbContext)
+            dotnet ef migrations script --project Registry.Web.Identity.SqliteMigrations --context Registry.Web.Identity.ApplicationDbContext --configuration DebugEF --startup-project Registry.Web -o sqlite.sql --verbose -- --provider Sqlite
+            dotnet ef migrations script --project Registry.Web.Identity.MysqlMigrations  --context Registry.Web.Identity.ApplicationDbContext --configuration DebugEF --startup-project Registry.Web -o mysql.sql --verbose -- --provider MySql
+
+         * 
+         */
+        
+        #if DEBUG_EF
+        
         private static bool IsEfTool(string[] args)
         {
             return args.Length == 4 && args[0] == "--provider" && args[2] == "--applicationName";
@@ -388,32 +407,67 @@ namespace Registry.Web
                     {
                         // Set the active provider via configuration
                         var configuration = hostContext.Configuration;
-                        var provider = configuration.GetValue("Provider", "SqlServer");
+                        var provider = configuration.GetValue("Provider", "Sqlite");
 
-                        var sqliteConnectionString =
+                        var registrySqliteConnectionString =
                             configuration.GetConnectionString("RegistrySqliteConnection");
-                        var mysqlConnectionString =
+                        var registryMysqlConnectionString =
                             configuration.GetConnectionString("RegistryMysqlConnection");
-                        var sqlserverConnectionString =
-                            configuration.GetConnectionString("RegistrySqlServerConnection");
+                        
+                        /*var registrySqlServerConnectionString =
+                            configuration.GetConnectionString("RegistrySqlServerConnection");*/
 
                         services.AddDbContext<RegistryContext>(
                             options => _ = provider switch
                             {
                                 "Sqlite" => options.UseSqlite(
-                                    sqliteConnectionString,
+                                    registrySqliteConnectionString,
                                     x => x.MigrationsAssembly("Registry.Web.Data.SqliteMigrations")),
 
                                 "MySql" => options.UseMySql(
-                                    mysqlConnectionString, ServerVersion.AutoDetect(mysqlConnectionString),
+                                    registryMysqlConnectionString, ServerVersion.AutoDetect(registryMysqlConnectionString),
                                     x => x.MigrationsAssembly("Registry.Web.Data.MySqlMigrations")),
 
+                                /* NOTE: This is not implemented yet
+                                "SqlServer" => options.UseSqlServer(registrySqlServerConnectionString, 
+                                    x => x.MigrationsAssembly("Registry.Web.Data.SqlServerMigrations")),
+                                    */
+                                
+                                _ => throw new Exception($"Unsupported provider: {provider}")
+                            });
+                        
+                        var identitySqliteConnectionString =
+                            configuration.GetConnectionString("IdentitySqliteConnection");
+                        var identityMysqlConnectionString =
+                            configuration.GetConnectionString("IdentityMysqlConnection");
+                        
+                        /*var identitySqlServerConnectionString =
+                            configuration.GetConnectionString("IdentitySqlServerConnection");*/
+
+                        services.AddDbContext<ApplicationDbContext>(
+                            options => _ = provider switch
+                            {
+                                "Sqlite" => options.UseSqlite(
+                                    identitySqliteConnectionString,
+                                    x => x.MigrationsAssembly("Registry.Web.Identity.SqliteMigrations")),
+
+                                "MySql" => options.UseMySql(
+                                    identityMysqlConnectionString, ServerVersion.AutoDetect(identityMysqlConnectionString),
+                                    x => x.MigrationsAssembly("Registry.Web.Identity.MySqlMigrations")),
+
+                                /* NOTE: This is not implemented yet
+                                "SqlServer" => options.UseSqlServer(identitySqlServerConnectionString, 
+                                    x => x.MigrationsAssembly("Registry.Web.Identity.SqlServerMigrations")),
+                                    */
+                                
                                 _ => throw new Exception($"Unsupported provider: {provider}")
                             });
                     })
                 .Build()
                 .Run();
         }
+#endif
+        
         #endregion
 
     }
