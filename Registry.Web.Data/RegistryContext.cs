@@ -52,13 +52,15 @@ namespace Registry.Web.Data
                 .Metadata
                 .SetValueComparer(valueComparer);
 
-            /*
+            modelBuilder.Entity<OrganizationUser>()
+                .HasKey(c => new { c.OrganizationSlug, c.UserId });
+
             modelBuilder
                 .Entity<OrganizationUser>()
                 .HasOne(ds => ds.Organization)
                 .WithMany(org => org.Users)
                 .IsRequired()
-                .OnDelete(DeleteBehavior.Cascade);*/
+                .OnDelete(DeleteBehavior.Cascade);
         }
 
         protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
@@ -71,7 +73,7 @@ namespace Registry.Web.Data
 
         public DbSet<Organization> Organizations { get; set; }
 
-        //public DbSet<OrganizationUser> OrganizationsUsers { get; set; }
+        public DbSet<OrganizationUser> OrganizationsUsers { get; set; }
         public DbSet<Dataset> Datasets { get; set; }
         public DbSet<Batch> Batches { get; set; }
     }

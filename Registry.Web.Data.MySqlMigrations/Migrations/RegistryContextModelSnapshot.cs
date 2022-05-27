@@ -5,6 +5,8 @@ using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Registry.Web.Data;
 
+#nullable disable
+
 namespace Registry.Web.Data.Mysql.Migrations
 {
     [DbContext(typeof(RegistryContext))]
@@ -14,8 +16,8 @@ namespace Registry.Web.Data.Mysql.Migrations
         {
 #pragma warning disable 612, 618
             modelBuilder
-                .HasAnnotation("Relational:MaxIdentifierLength", 64)
-                .HasAnnotation("ProductVersion", "5.0.10");
+                .HasAnnotation("ProductVersion", "6.0.5")
+                .HasAnnotation("Relational:MaxIdentifierLength", 64);
 
             modelBuilder.Entity("Registry.Web.Data.Models.Batch", b =>
                 {
@@ -139,6 +141,19 @@ namespace Registry.Web.Data.Mysql.Migrations
                     b.ToTable("Organizations");
                 });
 
+            modelBuilder.Entity("Registry.Web.Data.Models.OrganizationUser", b =>
+                {
+                    b.Property<string>("OrganizationSlug")
+                        .HasColumnType("varchar(128)");
+
+                    b.Property<string>("UserId")
+                        .HasColumnType("varchar(255)");
+
+                    b.HasKey("OrganizationSlug", "UserId");
+
+                    b.ToTable("OrganizationsUsers");
+                });
+
             modelBuilder.Entity("Registry.Web.Data.Models.Batch", b =>
                 {
                     b.HasOne("Registry.Web.Data.Models.Dataset", "Dataset")
@@ -172,6 +187,17 @@ namespace Registry.Web.Data.Mysql.Migrations
                     b.Navigation("Batch");
                 });
 
+            modelBuilder.Entity("Registry.Web.Data.Models.OrganizationUser", b =>
+                {
+                    b.HasOne("Registry.Web.Data.Models.Organization", "Organization")
+                        .WithMany("Users")
+                        .HasForeignKey("OrganizationSlug")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Organization");
+                });
+
             modelBuilder.Entity("Registry.Web.Data.Models.Batch", b =>
                 {
                     b.Navigation("Entries");
@@ -185,6 +211,8 @@ namespace Registry.Web.Data.Mysql.Migrations
             modelBuilder.Entity("Registry.Web.Data.Models.Organization", b =>
                 {
                     b.Navigation("Datasets");
+
+                    b.Navigation("Users");
                 });
 #pragma warning restore 612, 618
         }
