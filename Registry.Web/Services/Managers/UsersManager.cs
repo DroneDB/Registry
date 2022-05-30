@@ -70,10 +70,13 @@ namespace Registry.Web.Services.Managers
                 return null;
 
             // Create user if not exists because login manager has greenlighed us
-            var user = await _userManager.FindByNameAsync(userName) ??
-                       await CreateUserInternal(new User { UserName = userName }, password);
-
-            await SyncRoles(user);
+            var user = await _userManager.FindByNameAsync(userName);
+            
+            if (user == null)
+            {
+                user = await CreateUserInternal(new User { UserName = userName }, password);
+                await SyncRoles(user);
+            }
 
             // authentication successful so generate jwt token
             var tokenDescriptor = await GenerateJwtToken(user);
@@ -160,10 +163,12 @@ namespace Registry.Web.Services.Managers
             return Regex.IsMatch(userName, "^[a-z0-9]{1,127}$", RegexOptions.Singleline);
         }
 
-        private async Task<User> CreateUserInternal(User user, string password, string[] roles)
+        private async Task<User> CreateUserInternal(User user, string password, string[] roles = null)
         {
+            await ValidateRoles(roles);
+            
             var res = await _userManager.CreateAsync(user, password);
-
+            
             if (!res.Succeeded)
             {
                 var errors = string.Join(";", res.Errors.Select(item => $"{item.Code} - {item.Description}"));
@@ -172,10 +177,20 @@ namespace Registry.Web.Services.Managers
                 throw new InvalidOperationException("Error in creating user");
             }
 
-            // Create a default organization for the user
             await CreateUserDefaultOrganization(user);
+            await AddUserToRoles(user, roles);
 
             return user;
+        }
+
+        private async Task AddUserToRoles(User user, string[] roles)
+        {
+            // Add user roles
+            if (roles != null && roles.Any())
+            {
+                foreach (var role in roles)
+                    await _userManager.AddToRoleAsync(user, role);
+            }
         }
 
         private async Task<User> CreateUserInternal(string userName, string email, string password, string[] roles)
@@ -186,29 +201,7 @@ namespace Registry.Web.Services.Managers
                 Email = email
             };
 
-            await ValidateRoles(roles);
-
-            var res = await _userManager.CreateAsync(user, password);
-
-            if (!res.Succeeded)
-            {
-                var errors = string.Join(";", res.Errors.Select(item => $"{item.Code} - {item.Description}"));
-                _logger.LogWarning("Errors in creating user: {Errors}", errors);
-
-                throw new InvalidOperationException("Error in creating user");
-            }
-
-            // Create a default organization for the user
-            await CreateUserDefaultOrganization(user);
-
-            // Add user roles
-            if (roles != null && roles.Any())
-            {
-                foreach (var role in roles)
-                    await _userManager.AddToRoleAsync(user, role);
-            }
-
-            return user;
+            return await CreateUserInternal(user, password, roles);
         }
 
         private async Task ValidateRoles(string[] roles)
@@ -253,6 +246,27 @@ namespace Registry.Web.Services.Managers
 
                 throw new InvalidOperationException("Cannot change user password: " + errors);
             }
+        }
+
+        public async Task ChangePassword(string currentPassword, string newPassword)
+        {
+
+            var currentUser = await _authManager.GetCurrentUser();
+
+            if (currentUser == null)
+                throw new BadRequestException("User is not authenticated");
+            
+            var res = await _userManager.ChangePasswordAsync(currentUser, currentPassword, newPassword);
+
+            if (!res.Succeeded)
+            {
+                var errors = string.Join(";", res.Errors.Select(item => $"{item.Code} - {item.Description}"));
+                _logger.LogWarning("Errors in changing user password: {Errors}", errors);
+
+                throw new InvalidOperationException("Cannot change user password: " + errors);
+            }
+
+            _logger.LogInformation("User {UserName} changed password", currentUser.UserName);
         }
 
         public async Task<AuthenticateResponse> Refresh()

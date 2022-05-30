@@ -114,6 +114,27 @@ namespace Registry.Web.Controllers
             }
 
         }
+        
+        [HttpPost("changepwd")]
+        public async Task<IActionResult> ChangePasswordPost([FromForm] string oldPassword, [FromForm] string newPassword)
+        {
+
+            try
+            {
+                _logger.LogDebug("Users controller ChangePasswordPost('XXX','XXX')");
+
+                await _usersManager.ChangePassword(oldPassword, newPassword);
+
+                return Ok();
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Exception in Users controller ChangePasswordPost('XXX','XXX')");
+
+                return ExceptionResult(ex);
+            }
+
+        }
 
         [HttpPut]
         public async Task<IActionResult> ChangePassword([FromForm] ChangeUserPasswordRequest model)
