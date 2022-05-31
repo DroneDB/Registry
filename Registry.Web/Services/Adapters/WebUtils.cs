@@ -10,7 +10,6 @@ using Registry.Web.Data;
 using Registry.Web.Data.Models;
 using Registry.Web.Exceptions;
 using Registry.Web.Identity.Models;
-using Registry.Web.Models;
 using Registry.Web.Models.Configuration;
 using Registry.Web.Models.DTO;
 using Registry.Web.Services.Ports;
@@ -217,6 +216,5 @@ namespace Registry.Web.Services.Adapters
             if (storageInfo.Total != null && currentUsage > storageInfo.Total)
                 throw new QuotaExceededException(currentUsage, storageInfo.Total);
         }
-
     }
 }
