@@ -149,7 +149,12 @@ namespace Registry.Web.Controllers
                 
                 await _usersManager.ChangePassword(model.UserName, model.CurrentPassword, model.NewPassword);
 
-                return Ok();
+                return Ok(new ChangeUserPasswordResult
+                {
+                    Password = model.NewPassword,
+                    Token = null,
+                    UserName = model.UserName
+                });
             }
             catch (Exception ex)
             {
