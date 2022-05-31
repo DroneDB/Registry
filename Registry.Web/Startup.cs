@@ -526,7 +526,7 @@ namespace Registry.Web
                 if (pendingMigrations.Any())
                 {
                     Console.WriteLine($" -> Running identity migrations: {string.Join(", ", pendingMigrations)}");
-                    await applicationDbContext.Database.MigrateAsync();
+                    await applicationDbContext.Database.SafeMigrateAsync();
                 } else 
                     Console.WriteLine(" -> Identity database is up to date");
 
@@ -549,7 +549,7 @@ namespace Registry.Web
                 if (pendingMigrations.Any())
                 {
                     Console.WriteLine($" -> Running registry migrations: {string.Join(", ", pendingMigrations)}");
-                    await registryDbContext.Database.MigrateAsync();
+                    await registryDbContext.Database.SafeMigrateAsync();
                 } else
                     Console.WriteLine(" -> Registry database is up to date");
                 
