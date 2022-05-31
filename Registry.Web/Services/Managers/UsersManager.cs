@@ -8,7 +8,6 @@ using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
@@ -22,7 +21,6 @@ using Registry.Web.Models;
 using Registry.Web.Models.Configuration;
 using Registry.Web.Models.DTO;
 using Registry.Web.Services.Ports;
-using SignInResult = Microsoft.AspNetCore.Identity.SignInResult;
 
 namespace Registry.Web.Services.Managers
 {
@@ -38,6 +36,7 @@ namespace Registry.Web.Services.Managers
         private readonly AppSettings _appSettings;
         private readonly ApplicationDbContext _applicationDbContext;
         private readonly RegistryContext _registryContext;
+        private readonly IConfigurationHelper<AppSettings> _configurationHelper;
 
         public UsersManager(
             IOptions<AppSettings> appSettings,
@@ -48,7 +47,9 @@ namespace Registry.Web.Services.Managers
             IAuthManager authManager,
             IOrganizationsManager organizationsManager,
             IUtils utils,
-            ILogger<UsersManager> logger, RegistryContext registryContext)
+            ILogger<UsersManager> logger, 
+            RegistryContext registryContext,
+            IConfigurationHelper<AppSettings> configurationHelper)
         {
             _roleManager = roleManager;
             _authManager = authManager;
@@ -56,6 +57,7 @@ namespace Registry.Web.Services.Managers
             _utils = utils;
             _logger = logger;
             _registryContext = registryContext;
+            _configurationHelper = configurationHelper;
             _applicationDbContext = applicationDbContext;
             _loginManager = loginManager;
             _userManager = userManager;
@@ -71,7 +73,7 @@ namespace Registry.Web.Services.Managers
 
             // Create user if not exists because login manager has greenlighed us
             var user = await _userManager.FindByNameAsync(userName);
-            
+
             if (user == null)
             {
                 user = await CreateUserInternal(new User { UserName = userName }, password);
@@ -166,9 +168,9 @@ namespace Registry.Web.Services.Managers
         private async Task<User> CreateUserInternal(User user, string password, string[] roles = null)
         {
             await ValidateRoles(roles);
-            
+
             var res = await _userManager.CreateAsync(user, password);
-            
+
             if (!res.Succeeded)
             {
                 var errors = string.Join(";", res.Errors.Select(item => $"{item.Code} - {item.Description}"));
@@ -208,7 +210,7 @@ namespace Registry.Web.Services.Managers
         {
             if (roles == null || !roles.Any())
                 return;
-            
+
             foreach (var role in roles)
             {
                 if (!await _roleManager.RoleExistsAsync(role))
@@ -230,13 +232,29 @@ namespace Registry.Web.Services.Managers
             }, true);
         }
 
-        public async Task ChangePassword(string userName, string currentPassword, string newPassword)
+        public async Task<ChangePasswordResult> ChangePassword(string userName, string currentPassword, string newPassword)
         {
             var user = await _userManager.FindByNameAsync(userName);
 
             if (user == null)
                 throw new BadRequestException("User does not exist");
 
+            return await ChangePasswordInternal(user, currentPassword, newPassword);
+            
+        }
+
+        public async Task<ChangePasswordResult> ChangePassword(string currentPassword, string newPassword)
+        {
+            var currentUser = await _authManager.GetCurrentUser();
+
+            if (currentUser == null)
+                throw new BadRequestException("User is not authenticated");
+
+            return await ChangePasswordInternal(currentUser, currentPassword, newPassword);
+        }
+        
+        private async Task<ChangePasswordResult> ChangePasswordInternal(User user, string currentPassword, string newPassword)
+        {
             var res = await _userManager.ChangePasswordAsync(user, currentPassword, newPassword);
 
             if (!res.Succeeded)
@@ -246,27 +264,22 @@ namespace Registry.Web.Services.Managers
 
                 throw new InvalidOperationException("Cannot change user password: " + errors);
             }
-        }
 
-        public async Task ChangePassword(string currentPassword, string newPassword)
-        {
-
-            var currentUser = await _authManager.GetCurrentUser();
-
-            if (currentUser == null)
-                throw new BadRequestException("User is not authenticated");
-            
-            var res = await _userManager.ChangePasswordAsync(currentUser, currentPassword, newPassword);
-
-            if (!res.Succeeded)
+            // If this is the default admin password, we should persist it in the config
+            if (user.UserName == _appSettings.DefaultAdmin.UserName)
             {
-                var errors = string.Join(";", res.Errors.Select(item => $"{item.Code} - {item.Description}"));
-                _logger.LogWarning("Errors in changing user password: {Errors}", errors);
-
-                throw new InvalidOperationException("Cannot change user password: " + errors);
+                _appSettings.DefaultAdmin.Password = newPassword;
+                _configurationHelper.SaveConfiguration(_appSettings);
             }
+            
+            _logger.LogInformation("User {UserName} changed password", user.UserName);
 
-            _logger.LogInformation("User {UserName} changed password", currentUser.UserName);
+            return new ChangePasswordResult
+            {
+                UserName = user.UserName,
+                Password = newPassword
+            };
+
         }
 
         public async Task<AuthenticateResponse> Refresh()
@@ -417,7 +430,7 @@ namespace Registry.Web.Services.Managers
                     Roles = grp.Select(item => item.RoleName).ToArray(),
                     Organizations = userOrg.SafeGetValue(first.UserId)
                 };
-            
+
             return users;
         }
 

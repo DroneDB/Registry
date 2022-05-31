@@ -25,6 +25,7 @@ using Registry.Web.Models;
 using Registry.Web.Models.Configuration;
 using Registry.Web.Services.Adapters;
 using Serilog;
+
 namespace Registry.Web
 {
     public class Program
@@ -200,6 +201,7 @@ namespace Registry.Web
             if (!File.Exists(settingsFilePath))
             {
                 Console.WriteLine(" -> Creating default appsettings.json");
+               
                 File.WriteAllText(MagicStrings.AppSettingsFileName,
                     JsonConvert.SerializeObject(defaultSettingsConfig, Formatting.Indented));
             }

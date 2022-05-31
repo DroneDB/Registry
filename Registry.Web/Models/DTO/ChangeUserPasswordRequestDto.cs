@@ -1,8 +1,8 @@
 ﻿using System.ComponentModel.DataAnnotations;
 
-namespace Registry.Web.Models
+namespace Registry.Web.Models.DTO
 {
-    public class ChangeUserPasswordRequest
+    public class ChangeUserPasswordRequestDto
     {
         [Required]
         public string UserName { get; set; }
