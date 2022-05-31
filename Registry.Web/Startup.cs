@@ -226,6 +226,9 @@ namespace Registry.Web
             services.AddScoped<ISystemManager, SystemManager>();
             services.AddScoped<IBackgroundJobsProcessor, BackgroundJobsProcessor>();
             services.AddScoped<IMetaManager, Services.Managers.MetaManager>();
+            
+            services.AddScoped<IConfigurationHelper<AppSettings>, ConfigurationHelper>(_ =>
+                new ConfigurationHelper(MagicStrings.AppSettingsFileName));
 
             services.AddScoped<BasicAuthFilter>();
 
@@ -517,31 +520,30 @@ namespace Registry.Web
 
             if (identityIsSqlite)
                 CommonUtils.EnsureFolderCreated(Configuration.GetConnectionString(MagicStrings.IdentityConnectionName));
-            
+
             if (identityIsSqlite || applicationDbContext.Database.IsMySql())
             {
-                
                 var pendingMigrations = (await applicationDbContext.Database.GetPendingMigrationsAsync()).ToArray();
-                
+
                 if (pendingMigrations.Any())
                 {
                     Console.WriteLine($" -> Running identity migrations: {string.Join(", ", pendingMigrations)}");
                     await applicationDbContext.Database.SafeMigrateAsync();
-                } else 
+                }
+                else
                     Console.WriteLine(" -> Identity database is up to date");
-
             }
 
             await using var registryDbContext = serviceScope.ServiceProvider.GetService<RegistryContext>();
 
             if (registryDbContext == null)
                 throw new InvalidOperationException("Cannot get registry db context from service provider");
-            
+
             var registryIsSqlite = registryDbContext.Database.IsSqlite();
-            
+
             if (registryIsSqlite)
                 CommonUtils.EnsureFolderCreated(Configuration.GetConnectionString(MagicStrings.RegistryConnectionName));
-            
+
             if (registryIsSqlite || registryDbContext.Database.IsMySql())
             {
                 var pendingMigrations = (await registryDbContext.Database.GetPendingMigrationsAsync()).ToArray();
@@ -550,11 +552,11 @@ namespace Registry.Web
                 {
                     Console.WriteLine($" -> Running registry migrations: {string.Join(", ", pendingMigrations)}");
                     await registryDbContext.Database.SafeMigrateAsync();
-                } else
+                }
+                else
                     Console.WriteLine(" -> Registry database is up to date");
-                
             }
-            
+
             await CreateInitialData(registryDbContext);
             await CreateDefaultAdmin(registryDbContext, serviceScope.ServiceProvider);
         }
@@ -670,7 +672,7 @@ namespace Registry.Web
             // If no organizations in database, let's create the public one
             if (context.Organizations.Any())
                 return;
-            
+
             var entity = new Organization
             {
                 Slug = MagicStrings.PublicOrganizationSlug,
