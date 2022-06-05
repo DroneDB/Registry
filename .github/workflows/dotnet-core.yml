@@ -23,7 +23,7 @@ jobs:
       with:
         dotnet-version: |
           '3.1.x'
-          '6.0'
+          '6.0.x'
     - name: setup utils
       run: sudo apt-get update && sudo apt-get install -y spatialite-bin libsqlite3-mod-spatialite
     - name: Build C++ lib
