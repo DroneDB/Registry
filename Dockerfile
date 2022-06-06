@@ -51,7 +51,7 @@ COPY --from=node-builder /ClientApp/build/ /Registry/ClientApp/build
 COPY docker/FolderProfile.xml /Registry/Registry.Web/Properties/PublishProfiles/FolderProfile.pubxml
 
 # Publish Registry
-RUN cd /Registry/Registry.Web && dotnet dev-certs https && dotnet publish --configuration Release /p:PublishProfile=FolderProfile
+RUN cd /Registry/Registry.Web && dotnet dev-certs https && dotnet publish -p:PublishProfile=FolderProfile
 
 # ---> Dotnet stage run
 FROM mcr.microsoft.com/dotnet/aspnet:6.0-focal as runner
@@ -76,12 +76,12 @@ RUN dpkg -i *.deb
 ENV LD_LIBRARY_PATH="/usr/local/lib:${LD_LIBRARY_PATH}"
 
 # Copy compiled Registry
-COPY --from=dotnet-builder /Registry/Registry.Web/bin/Release/net6.0/linux-x64/ /Registry
+COPY --from=dotnet-builder /Registry/Registry.Web/bin/Release/net6.0/publish/ /Registry
+
+RUN chmod +x /Registry/Registry.Web && mkdir /data && chmod 777 /data
 
 EXPOSE 5000/tcp
-VOLUME [ "/Registry/App_Data" ]
-
-WORKDIR /Registry
+VOLUME [ "/data" ]
 
 # Run registry
-ENTRYPOINT dotnet Registry.Web.dll --urls="http://0.0.0.0:5000"
+ENTRYPOINT ./Registry/Registry.Web --address 0.0.0.0:5000 /data
