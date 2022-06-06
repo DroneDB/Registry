@@ -72,7 +72,7 @@ RUN apt update && apt install -y --fix-missing --no-install-recommends gnupg2 &&
 
 # Install DroneDB from deb package and set library path
 COPY --from=builder /DroneDB/build/*.deb /
-RUN dpkg -i *.deb
+RUN dpkg -i *.deb && rm *.deb
 ENV LD_LIBRARY_PATH="/usr/local/lib:${LD_LIBRARY_PATH}"
 
 # Copy compiled Registry

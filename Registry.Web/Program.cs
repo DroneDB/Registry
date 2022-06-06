@@ -37,6 +37,7 @@ namespace Registry.Web
 
         public static void Main(string[] args)
         {
+            
 #if DEBUG_EF
             // EF core tools compatibility
             if (IsEfTool(args))
@@ -60,7 +61,7 @@ namespace Registry.Web
             Console.CancelKeyPress += (sender, e) =>
             {
                 e.Cancel = true;
-                CommonUtils.WriteLineColor("\n -> Exiting...\n", ConsoleColor.DarkGray);
+                CommonUtils.WriteLineColor("\n -> Exiting...\n", ConsoleColor.Yellow);
             };
             
             if (!VerifyOptions(opts)) return;
