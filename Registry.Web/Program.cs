@@ -31,14 +31,13 @@ namespace Registry.Web
     public class Program
     {
         public const int DefaultPort = 5000;
+        public const string DefaultHost = "localhost";
 
         public static readonly Version MinDdbVersion = new(1, 0, 6);
 
         public static void Main(string[] args)
         {
-
 #if DEBUG_EF
-            
             // EF core tools compatibility
             if (IsEfTool(args))
             {
@@ -46,23 +45,24 @@ namespace Registry.Web
                 return;
             }
 #endif
-            
+
             Parser.Default.ParseArguments<Options>(args)
                 .WithParsed(RunOptions);
         }
 
-        
         private static void RunOptions(Options opts)
         {
             var appVersion = typeof(Program).Assembly.GetCustomAttribute<AssemblyFileVersionAttribute>()?.Version;
             var appName = AppDomain.CurrentDomain.FriendlyName;
 
-            Console.WriteLine();
-            Console.ForegroundColor = ConsoleColor.Green;
-            Console.WriteLine($"\t\t*** {appName} - v{appVersion} ***");
-            Console.ResetColor();
-            Console.WriteLine();
+            CommonUtils.WriteLineColor($"\n\t\t*** {appName} - v{appVersion} ***\n", ConsoleColor.Green);
 
+            Console.CancelKeyPress += (sender, e) =>
+            {
+                e.Cancel = true;
+                CommonUtils.WriteLineColor("\n -> Exiting...\n", ConsoleColor.DarkGray);
+            };
+            
             if (!VerifyOptions(opts)) return;
 
             Directory.CreateDirectory(opts.StorageFolder);
@@ -83,8 +83,8 @@ namespace Registry.Web
 
                 if (ddbVersion < MinDdbVersion)
                 {
-                    Console.WriteLine(
-                        $" !> DDB version is too old, please upgrade to {MinDdbVersion} or higher: {MagicStrings.DdbReleasesPageUrl}");
+                    CommonUtils.WriteLineColor(
+                        $" !> DDB version is too old, please upgrade to {MinDdbVersion} or higher: {MagicStrings.DdbReleasesPageUrl}", ConsoleColor.Red);
                     return;
                 }
             }
@@ -140,9 +140,7 @@ namespace Registry.Web
         {
             if (opts.StorageFolder == null)
             {
-                Console.ForegroundColor = ConsoleColor.Red;
-                Console.WriteLine(" !> Storage folder not specified");
-                Console.ResetColor();
+                CommonUtils.WriteColor(" !> Storage folder is not specified", ConsoleColor.Red);
                 return false;
             }
 
@@ -150,32 +148,66 @@ namespace Registry.Web
             {
                 if (opts.Address.Length == 0)
                 {
-                    Console.ForegroundColor = ConsoleColor.Red;
-                    Console.WriteLine(" !> Address not specified");
-                    Console.ResetColor();
+                    CommonUtils.WriteColor(" !> Address not specified", ConsoleColor.Red);
                     return false;
                 }
+                
+                var parts = opts.Address.Split(':');
 
-                var match = Regex.Match(opts.Address, @"(?<host>[a-z\.]+)?:?(?<port>\d+)?", RegexOptions.IgnoreCase);
-
-                if (!match.Success)
+                var host = DefaultHost;
+                var port = DefaultPort;
+                
+                switch (parts.Length)
                 {
-                    Console.ForegroundColor = ConsoleColor.Red;
-                    Console.WriteLine(" !> Address not valid");
-                    Console.ResetColor();
-                    return false;
-                }
+                    case 1:
+                    {
+                        if (!int.TryParse(parts[0], out port))
+                        {
+                            // Try to parse as hostname
+                            host = parts[0];
+                        
+                            if (!IPEndPoint.TryParse(host, out _))
+                            {
+                                CommonUtils.WriteColor(" !> Invalid address", ConsoleColor.Red);
+                                return false;
+                            }
+                        }
+                    
+                        if (port is < 1 or > 65535)
+                        {
+                            CommonUtils.WriteColor(" !> Invalid port", ConsoleColor.Red);
+                            return false;
+                        }
 
-                var host = match.Groups["host"].Success ? match.Groups["host"].Value : MagicStrings.DefaultHost;
-                var port = match.Groups["port"].Success ? int.Parse(match.Groups["port"].Value) : DefaultPort;
+                        break;
+                    }
+                    case 2:
+                    {
+                        host = parts[0];
+                    
+                        if (!IPEndPoint.TryParse(host, out _))
+                        {
+                            CommonUtils.WriteColor(" !> Invalid address", ConsoleColor.Red);
+                            return false;
+                        }
+                    
+                        if (!int.TryParse(parts[1], out port))
+                        {
+                            CommonUtils.WriteColor(" !> Invalid port", ConsoleColor.Red);
+                            return false;
+                        }
+                    
+                        if (port is < 1 or > 65535)
+                        {
+                            CommonUtils.WriteColor(" !> Invalid port", ConsoleColor.Red);
+                            return false;
+                        }
 
-                // Check valid port
-                if (port is < 1 or > 65535)
-                {
-                    Console.ForegroundColor = ConsoleColor.Red;
-                    Console.WriteLine(" !> Address not valid (port out of range");
-                    Console.ResetColor();
-                    return false;
+                        break;
+                    }
+                    default:
+                        CommonUtils.WriteColor(" !> Invalid address", ConsoleColor.Red);
+                        return false;
                 }
 
                 opts.Address = $"{host}:{port}";
@@ -201,7 +233,7 @@ namespace Registry.Web
             if (!File.Exists(settingsFilePath))
             {
                 Console.WriteLine(" -> Creating default appsettings.json");
-               
+
                 File.WriteAllText(MagicStrings.AppSettingsFileName,
                     JsonConvert.SerializeObject(defaultSettingsConfig, Formatting.Indented));
             }
@@ -369,9 +401,9 @@ namespace Registry.Web
 
             return true;
         }
-        
+
         #region EF Tool
-        
+
         /*
             Add new migration (RegistryContext)
             dotnet ef migrations add NewMigration --project Registry.Web.Data.SqliteMigrations --context Registry.Web.Data.RegistryContext --configuration DebugEF --startup-project Registry.Web --verbose -- --provider Sqlite
@@ -390,9 +422,8 @@ namespace Registry.Web
             dotnet ef migrations script --project Registry.Web.Identity.MysqlMigrations  --context Registry.Web.Identity.ApplicationDbContext --configuration DebugEF --startup-project Registry.Web -o mysql.sql --verbose -- --provider MySql
 
         */
-        
-        #if DEBUG_EF
-        
+
+#if DEBUG_EF
         private static bool IsEfTool(string[] args)
         {
             return args.Length == 4 && args[0] == "--provider" && args[2] == "--applicationName";
@@ -467,8 +498,7 @@ namespace Registry.Web
                 .Run();
         }
 #endif
-        
-        #endregion
 
+        #endregion
     }
 }

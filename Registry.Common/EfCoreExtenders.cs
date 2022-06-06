@@ -27,24 +27,23 @@ public static class EfCoreExtenders
 
         var historyRepository = databaseFacade.GetService<IHistoryRepository>();
 
-        if (await historyRepository.ExistsAsync(cancellationToken))
+        if (await databaseFacade.CanConnectAsync(cancellationToken) && !await historyRepository.ExistsAsync(cancellationToken))
         {
-            
-            if ((await databaseFacade.GetPendingMigrationsAsync(cancellationToken: cancellationToken)).Any())
-                await databaseFacade.MigrateAsync(cancellationToken);
+            var createScript = historyRepository.GetCreateScript();
+            await databaseFacade.ExecuteSqlRawAsync(createScript, cancellationToken);
+
+            var migrationsAssembly = databaseFacade.GetService<IMigrationsAssembly>();
+
+            // Get entity framework core version
+            var version = migrationsAssembly.ModelSnapshot?.Model.GetProductVersion() ?? "1.0.0";
+
+            var insertScript = historyRepository.GetInsertScript(new HistoryRow(migrations.First(), version));
+            await databaseFacade.ExecuteSqlRawAsync(insertScript, cancellationToken);
 
             return;
         }
 
-        var createScript = historyRepository.GetCreateScript();
-        await databaseFacade.ExecuteSqlRawAsync(createScript, cancellationToken);
-
-        var migrationsAssembly = databaseFacade.GetService<IMigrationsAssembly>();
-
-        // Get entity framework core version
-        var version = migrationsAssembly.ModelSnapshot?.Model.GetProductVersion() ?? "1.0.0";
-
-        var insertScript = historyRepository.GetInsertScript(new HistoryRow(migrations.First(), version));
-        await databaseFacade.ExecuteSqlRawAsync(insertScript, cancellationToken);
+        if ((await databaseFacade.GetPendingMigrationsAsync(cancellationToken: cancellationToken)).Any())
+            await databaseFacade.MigrateAsync(cancellationToken);
     }
 }
