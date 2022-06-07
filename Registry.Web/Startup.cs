@@ -522,17 +522,7 @@ namespace Registry.Web
                 CommonUtils.EnsureFolderCreated(Configuration.GetConnectionString(MagicStrings.IdentityConnectionName));
 
             if (identityIsSqlite || applicationDbContext.Database.IsMySql())
-            {
-                var pendingMigrations = (await applicationDbContext.Database.GetPendingMigrationsAsync()).ToArray();
-
-                if (pendingMigrations.Any())
-                {
-                    Console.WriteLine($" -> Running identity migrations: {string.Join(", ", pendingMigrations)}");
-                    await applicationDbContext.Database.SafeMigrateAsync();
-                }
-                else
-                    Console.WriteLine(" -> Identity database is up to date");
-            }
+                await applicationDbContext.Database.SafeMigrateAsync();
 
             await using var registryDbContext = serviceScope.ServiceProvider.GetService<RegistryContext>();
 
@@ -545,17 +535,7 @@ namespace Registry.Web
                 CommonUtils.EnsureFolderCreated(Configuration.GetConnectionString(MagicStrings.RegistryConnectionName));
 
             if (registryIsSqlite || registryDbContext.Database.IsMySql())
-            {
-                var pendingMigrations = (await registryDbContext.Database.GetPendingMigrationsAsync()).ToArray();
-
-                if (pendingMigrations.Any())
-                {
-                    Console.WriteLine($" -> Running registry migrations: {string.Join(", ", pendingMigrations)}");
-                    await registryDbContext.Database.SafeMigrateAsync();
-                }
-                else
-                    Console.WriteLine(" -> Registry database is up to date");
-            }
+                await registryDbContext.Database.SafeMigrateAsync();
 
             await CreateInitialData(registryDbContext);
             await CreateDefaultAdmin(registryDbContext, serviceScope.ServiceProvider);
