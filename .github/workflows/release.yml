@@ -25,11 +25,10 @@ jobs:
           dotnet-version: |
             3.1.x
             6.0.x
-      steps:
-        - uses: actions/checkout@v3
-        - uses: actions/setup-node@v3
-          with:
-            node-version: 14
+      - name: Setup Node
+        uses: actions/setup-node@v3
+        with:
+          node-version: 14
       - name: Build
         run: echo ${{ github.sha }} > Release.txt
       - name: Test
