@@ -25,10 +25,20 @@ jobs:
           dotnet-version: |
             3.1.x
             6.0.x
+      steps:
+        - uses: actions/checkout@v3
+        - uses: actions/setup-node@v3
+          with:
+            node-version: 14
       - name: Build
         run: echo ${{ github.sha }} > Release.txt
       - name: Test
         run: cat Release.txt
+      - name: Build ClientApp
+        run: |
+          cd registry/Registry.Web/ClientApp
+          npm install -g webpack@4 webpack-cli
+          npm install && webpack --mode=production
       - name: Publish
         run: |
           cd registry        
