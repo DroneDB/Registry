@@ -15,11 +15,7 @@ jobs:
       - uses: actions/checkout@v2
         with:
           path: registry
-      - uses: actions/checkout@v2
-        with:
-          repository: DroneDB/DroneDB
           submodules: "recursive"
-          path: ddb
       - name: Setup .NET Core
         uses: actions/setup-dotnet@v1
         with:
@@ -30,26 +26,10 @@ jobs:
         run: echo ${{ github.sha }} > Release.txt
       - name: Test
         run: cat Release.txt
-      - name: setup utils
-        run: sudo apt-get update && sudo apt-get install -y spatialite-bin libsqlite3-mod-spatialite
-      - name: Build C++ lib
-        run: |
-          cd ddb
-          scripts/ubuntu_deps.sh
-          mkdir -p build
-          cd build
-          cmake -DBUILD_TESTING=OFF ..
-          make -j$(nproc) ddb
-          sudo make -j$(nproc) install
-          sudo ldconfig          
-      - name: Test
-        run: |
-          cd registry
-          export PATH="$HOME/ddb/build:$PATH"
-          dotnet test -c Release --verbosity minimal
       - name: Publish
         run: |
           cd registry        
+          pwd
           dotnet publish -p:PublishProfile=win-x64.pubxml Registry.Web
           dotnet publish -p:PublishProfile=win-arm.pubxml Registry.Web
           dotnet publish -p:PublishProfile=win-arm64.pubxml Registry.Web
