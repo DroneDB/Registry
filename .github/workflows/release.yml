@@ -47,31 +47,28 @@ jobs:
           cd registry
           export PATH="$HOME/ddb/build:$PATH"
           dotnet test -c Release --verbosity minimal
-      - name: Publish win-x64
-        run: dotnet publish -p:PublishProfile=win-x64.pubxml Registry
-      - name: Publish win-arm
-        run: dotnet publish -p:PublishProfile=win-arm.pubxml Registry
-      - name: Publish win-arm64
-        run: dotnet publish -p:PublishProfile=win-arm64.pubxml Registry
-      - name: Publish linux-x64
-        run: dotnet publish -p:PublishProfile=linux-x64.pubxml Registry
-      - name: Publish linux-arm
-        run: dotnet publish -p:PublishProfile=linux-arm.pubxml Registry
-      - name: Publish osx-x64
-        run: dotnet publish -p:PublishProfile=osx-x64.pubxml Registry
-
+      - name: Publish
+        run: |
+          cd registry        
+          dotnet publish -p:PublishProfile=win-x64.pubxml Registry.Web
+          dotnet publish -p:PublishProfile=win-arm.pubxml Registry.Web
+          dotnet publish -p:PublishProfile=win-arm64.pubxml Registry.Web
+          dotnet publish -p:PublishProfile=linux-x64.pubxml Registry.Web
+          dotnet publish -p:PublishProfile=linux-arm.pubxml Registry.Web
+          dotnet publish -p:PublishProfile=osx-x64.pubxml Registry.Web
+          
       - name: Zip win-x64
-        run: cd Registry/bin/Release/net6.0/publish/win-x64/ && zip -r ../../../../../../Registry-Win64.zip *
+        run: cd registry/Registry.Web/bin/Release/net6.0/publish/win-x64/ && zip -r ../../../../../../../Registry-Win64.zip *
       - name: Zip win-arm
-        run: cd Registry/bin/Release/net6.0/publish/win-arm/ && zip -r ../../../../../../Registry-WinArm.zip *
+        run: cd registry/Registry.Web/bin/Release/net6.0/publish/win-arm/ && zip -r ../../../../../../../Registry-WinArm.zip *
       - name: Zip win-arm64
-        run: cd Registry/bin/Release/net6.0/publish/win-arm64/ && zip -r ../../../../../../Registry-WinArm64.zip *
+        run: cd registry/Registry.Web/bin/Release/net6.0/publish/win-arm64/ && zip -r ../../../../../../../Registry-WinArm64.zip *
       - name: Zip linux-x64
-        run: cd Registry/bin/Release/net6.0/publish/linux-x64/ && zip -r ../../../../../../Registry-Linux64.zip *
+        run: cd registry/Registry.Web/bin/Release/net6.0/publish/linux-x64/ && zip -r ../../../../../../../Registry-Linux64.zip *
       - name: Zip linux-arm
-        run: cd Registry/bin/Release/net6.0/publish/linux-arm/ && zip -r ../../../../../../Registry-LinuxArm.zip *
+        run: cd registry/Registry.Web/bin/Release/net6.0/publish/linux-arm/ && zip -r ../../../../../../../Registry-LinuxArm.zip *
       - name: Zip osx-x64
-        run: cd Registry/bin/Release/net6.0/publish/osx-x64/ && zip -r ../../../../../../Registry-Osx64.zip *
+        run: cd registry/Registry.Web/bin/Release/net6.0/publish/osx-x64/ && zip -r ../../../../../../../Registry-Osx64.zip *
 
       - name: Release
         uses: softprops/action-gh-release@v1
