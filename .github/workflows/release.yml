@@ -15,7 +15,10 @@ jobs:
       - uses: actions/checkout@v2
         with:
           path: registry
-          submodules: "recursive"
+      - name: Submodules
+        run: |
+          cd registry
+          git submodule update --init --recursive
       - name: Setup .NET Core
         uses: actions/setup-dotnet@v1
         with:
