@@ -18,7 +18,7 @@ jobs:
       - name: Submodules
         run: |
           cd registry
-          git submodule update --init --recursive
+          git submodule update --force --recursive --init --remote
       - name: Setup .NET Core
         uses: actions/setup-dotnet@v1
         with:
