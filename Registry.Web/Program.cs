@@ -66,6 +66,7 @@ namespace Registry.Web
             
             if (!VerifyOptions(opts)) return;
 
+            opts.StorageFolder = Path.GetFullPath(opts.StorageFolder);
             Directory.CreateDirectory(opts.StorageFolder);
             Environment.CurrentDirectory = opts.StorageFolder;
 
@@ -167,7 +168,7 @@ namespace Registry.Web
                             // Try to parse as hostname
                             host = parts[0];
                         
-                            if (!IPEndPoint.TryParse(host, out _))
+                            if (host.ToLowerInvariant() != "localhost" && !IPEndPoint.TryParse(host, out _))
                             {
                                 CommonUtils.WriteColor(" !> Invalid address", ConsoleColor.Red);
                                 return false;
@@ -186,7 +187,7 @@ namespace Registry.Web
                     {
                         host = parts[0];
                     
-                        if (!IPEndPoint.TryParse(host, out _))
+                        if (host.ToLowerInvariant() != "localhost" && !IPEndPoint.TryParse(host, out _))
                         {
                             CommonUtils.WriteColor(" !> Invalid address", ConsoleColor.Red);
                             return false;
