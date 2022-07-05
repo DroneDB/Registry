@@ -67,12 +67,14 @@ namespace Registry.Web.Data
         {
 #if DEBUG
             optionsBuilder.EnableSensitiveDataLogging();
-            optionsBuilder.EnableDetailedErrors();
+#else
+            optionsBuilder.EnableSensitiveDataLogging(false);
 #endif
+
+            optionsBuilder.EnableDetailedErrors();
         }
 
         public DbSet<Organization> Organizations { get; set; }
-
         public DbSet<OrganizationUser> OrganizationsUsers { get; set; }
         public DbSet<Dataset> Datasets { get; set; }
         public DbSet<Batch> Batches { get; set; }
