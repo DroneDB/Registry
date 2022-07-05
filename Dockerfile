@@ -5,14 +5,14 @@ LABEL Author="Luca Di Leo <ldileo@digipa.it>"
 # Prerequisites
 ENV TZ=Europe/Rome
 RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone
-RUN apt update && apt install -y --fix-missing --no-install-recommends build-essential software-properties-common
+RUN apt-get update && apt-get install -y --fix-missing --no-install-recommends build-essential software-properties-common
 RUN add-apt-repository -y ppa:ubuntugis/ubuntugis-unstable
-RUN apt install -y --fix-missing --no-install-recommends ca-certificates cmake git checkinstall sqlite3 spatialite-bin libgeos-dev libgdal-dev g++-10 gcc-10 pdal libpdal-dev libzip-dev
+RUN apt-get install -y --fix-missing --no-install-recommends ca-certificates cmake git checkinstall sqlite3 spatialite-bin libgeos-dev libgdal-dev g++-10 gcc-10 pdal libpdal-dev libzip-dev
 RUN update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-10 1000 --slave /usr/bin/g++ g++ /usr/bin/g++-10
-RUN apt install -y curl && curl -L https://github.com/DroneDB/libnexus/releases/download/v1.0.0/nxs-ubuntu-20.04-amd64.deb --output /tmp/nxs-ubuntu-20.04-amd64.deb && \
+RUN apt-get install -y curl && curl -L https://github.com/DroneDB/libnexus/releases/download/v1.0.0/nxs-ubuntu-20.04-amd64.deb --output /tmp/nxs-ubuntu-20.04-amd64.deb && \
     dpkg-deb -x /tmp/nxs-ubuntu-20.04-amd64.deb /usr && \
     rm /tmp/nxs-ubuntu-20.04-amd64.deb && \
-    apt remove -y curl
+    apt-get remove -y curl
 
 # Build DroneDB
 RUN git clone --recurse-submodules https://github.com/DroneDB/DroneDB.git
@@ -38,7 +38,7 @@ FROM mcr.microsoft.com/dotnet/sdk:6.0-focal as dotnet-builder
 RUN wget https://packages.microsoft.com/config/ubuntu/20.04/packages-microsoft-prod.deb -O packages-microsoft-prod.deb && \
     dpkg -i packages-microsoft-prod.deb && \
     rm packages-microsoft-prod.deb && \
-    apt update && apt install dotnet-sdk-3.1 -y
+    apt-get update && apt-get install dotnet-sdk-3.1 -y
 
 # Copy registry
 COPY . /Registry
@@ -58,7 +58,7 @@ FROM mcr.microsoft.com/dotnet/aspnet:6.0-focal as runner
 
 ENV DOTNET_GENERATE_ASPNET_CERTIFICATE=false
 
-RUN apt update && apt install -y --fix-missing --no-install-recommends gnupg2 && \
+RUN apt-get update && apt-get install -y --fix-missing --no-install-recommends gnupg2 && \
     echo "deb https://ppa.launchpadcontent.net/ubuntugis/ubuntugis-unstable/ubuntu focal main" >> /etc/apt/sources.list && \
     echo "deb-src https://ppa.launchpadcontent.net/ubuntugis/ubuntugis-unstable/ubuntu focal main" >> /etc/apt/sources.list && \
     apt-key adv --keyserver keyserver.ubuntu.com --recv-keys 6b827c12c2d425e227edca75089ebe08314df160 && \
@@ -66,7 +66,7 @@ RUN apt update && apt install -y --fix-missing --no-install-recommends gnupg2 &&
     curl -L https://github.com/DroneDB/libnexus/releases/download/v1.0.0/nxs-ubuntu-20.04-amd64.deb --output /tmp/nxs-ubuntu-20.04-amd64.deb && \
     dpkg-deb -x /tmp/nxs-ubuntu-20.04-amd64.deb /usr && \
     rm /tmp/nxs-ubuntu-20.04-amd64.deb && \
-    apt remove -y gnupg2 curl && \
+    apt-get remove -y gnupg2 curl && \
     apt-get autoremove -y && \
     rm -rf /var/lib/apt/lists/*
 
