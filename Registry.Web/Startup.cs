@@ -427,7 +427,10 @@ namespace Registry.Web
 
             if (url != null)
             {
-                var baseUri = new Uri(url);
+                var builder = new UriBuilder(url);
+                
+                if (builder.Host == "0.0.0.0") builder.Host = "localhost";
+                var baseUri = builder.Uri;
 
                 Console.WriteLine();
                 Console.WriteLine(" ?> Useful links:");
