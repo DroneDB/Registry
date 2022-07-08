@@ -19,33 +19,48 @@ It also allows you to view orthophotos, point clouds and 3d models (obj) easily 
 
 ![point-cloud](https://user-images.githubusercontent.com/7868983/152324757-4ee73f71-bf8e-4c72-9910-7073a68daee3.png)
 
-## Getting started
+## Getting started with Docker
 
-To get started, you need to install the following applications (if they are not installed already):
+To get started, download [Docker](https://www.docker.com/community-edition) and install it. Then run this command:
 
-  - [Docker](https://www.docker.com/)
-  - [Docker-compose](https://docs.docker.com/compose/install/)
+### Linux & Windows (powershell)
 
-Single command startup:
-
-### Linux
-
-```bash
-mkdir ddb-registry && cd ddb-registry && \ 
-  curl -o docker-compose.yml https://raw.githubusercontent.com/DroneDB/Registry/master/docker/testing/docker-compose.yml && \
-  curl -o appsettings-testing.json https://raw.githubusercontent.com/DroneDB/Registry/master/docker/testing/appsettings-testing.json && \
-  curl -o initialize.sql https://raw.githubusercontent.com/DroneDB/Registry/master/docker/testing/initialize.sql && \
-  docker-compose up -d
+```
+docker run -it --rm -p 5000:5000 -v ${PWD}/registry-data:/data dronedb/registry
 ```
 
-### Windows (powershell)
+The data will be stored in the local folder `registry-data`.
+Open https://localhost:5000 in your browser to start using the application.
 
-```powershell
-mkdir ddb-registry; cd ddb-registry; `
-curl -O docker-compose.yml https://raw.githubusercontent.com/DroneDB/Registry/master/docker/testing/docker-compose.yml; `
-curl -O appsettings-testing.json https://raw.githubusercontent.com/DroneDB/Registry/master/docker/testing/appsettings-testing.json; `
-curl -O initialize.sql https://raw.githubusercontent.com/DroneDB/Registry/master/docker/testing/initialize.sql; `
-docker-compose up -d
+Default credentials are `admin` and `password`. Go to https://localhost:5000/account to change password.
+
+Useful links:
+ - Swagger: http://localhost:5000/swagger
+ - (req auth) Health: http://localhost:5000/health
+ - (req auth) Quick Health: http://localhost:5000/quickhealth
+ - Version: http://localhost:5000/version
+
+The log file is located in `registry-data/logs/registry.txt`.
+
+## Getting started natively
+
+You need to install the latest version of the [DroneDB library](https://github.com/DroneDB/DroneDB/releases/latest) and add it to PATH. 
+
+Download the [latest release](https://github.com/DroneDB/Registry/releases/latest) and run the following command:
+
+```bash
+./Registry.Web ./registry-data
+```
+
+There are several other command line options:
+
+```
+-a, --address              (Default: localhost:5000) Address to listen on
+-c, --check                Check configuration and exit.
+-r, --reset-hub            Reset the Hub folder by re-creating it.
+--help                     Display this help screen.
+--version                  Display version information.
+Storage folder (pos. 0)    Required. Points to a directory on a filesystem where to store Registry data.
 ```
 
 > **_NOTE:_**  This configuration is for local testing only: **DO NOT USE IT IN PRODUCTION**. If you want to use the application in production check the following section.
@@ -55,7 +70,6 @@ This command will start a new stack composed by
  - PHPMyAdmin, exposed on port [8080](http://localhost:8080)
  - Registry, exposed on port [5000](http://localhost:5000)
 
-Default username and password are `admin` and `password`. After logging in you can check the status of the application by visiting [/quickhealth](http://localhost:5000/quickhealth). The [/health](http://localhost:5000/health) endpoint gives more in-depth information.
 
 You can follow the logs:
 
@@ -69,8 +83,6 @@ In order to update the application
 docker-compose pull
 docker-compose up -d
 ```
-
-Registry supports Swagger API documentation on [/swagger](http://localhost:5000/swagger/) and Hangfire as task runner on [/hangfire](http://localhost:5000/hangfire/).
 
 ### Change admin password
 
