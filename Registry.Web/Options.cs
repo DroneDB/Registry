@@ -16,10 +16,7 @@ public class Options
 
     [Option('c', "check", HelpText = "Check configuration and exit.", Required = false)]
     public bool CheckConfig { get; set; }
-
-    [Option('q', "quiet", HelpText = "Disable startup and info messages.", Required = false)]
-    public bool Quiet { get; set; }
-    
+   
     [Option('r', "reset-hub", HelpText = "Reset the Hub folder by re-creating it.", Required = false)]
     public bool ResetHub { get; set; }
 
