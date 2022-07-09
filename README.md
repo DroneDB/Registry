@@ -19,11 +19,17 @@ It also allows you to view orthophotos, point clouds and 3d models (obj) easily 
 
 ![point-cloud](https://user-images.githubusercontent.com/7868983/152324757-4ee73f71-bf8e-4c72-9910-7073a68daee3.png)
 
+### Example repositories
+
+- [Brighton Beach](https://hub.dronedb.app/r/hedo88/brighton-beach)
+- [ODM Seneca](https://hub.dronedb.app/r/hedo88/odm-seneca)
+- [ODM Sance](https://hub.dronedb.app/r/hedo88/odm-sance)
+- [Panorama Example](https://hub.dronedb.app/r/pierotofy/panoexample/)
+
 ## Getting started with Docker
 
 To get started, download [Docker](https://www.docker.com/community-edition) and install it. Then run this command:
 
-### Linux & Windows (powershell)
 
 ```
 docker run -it --rm -p 5000:5000 -v ${PWD}/registry-data:/data dronedb/registry
@@ -32,13 +38,14 @@ docker run -it --rm -p 5000:5000 -v ${PWD}/registry-data:/data dronedb/registry
 The data will be stored in the local folder `registry-data`.
 Open https://localhost:5000 in your browser to start using the application.
 
-Default credentials are `admin` and `password`. Go to https://localhost:5000/account to change password.
+Default credentials are `admin` and `password`. 
 
 Useful links:
  - Swagger: http://localhost:5000/swagger
- - (req auth) Health: http://localhost:5000/health
- - (req auth) Quick Health: http://localhost:5000/quickhealth
  - Version: http://localhost:5000/version
+ - (req auth) Quick Health: http://localhost:5000/quickhealth
+ - (req auth) Health: http://localhost:5000/health
+ - (req auth) Hangfire: http://localhost:5000/hangfire
 
 The log file is located in `registry-data/logs/registry.txt`.
 
@@ -46,7 +53,7 @@ The log file is located in `registry-data/logs/registry.txt`.
 
 You need to install the latest version of the [DroneDB library](https://github.com/DroneDB/DroneDB/releases/latest) and add it to PATH. 
 
-Download the [latest release](https://github.com/DroneDB/Registry/releases/latest) and run the following command:
+Download the [latest release](https://github.com/DroneDB/Registry/releases/latest) for your platform and run the following command:
 
 ```bash
 ./Registry.Web ./registry-data
@@ -63,30 +70,24 @@ There are several other command line options:
 Storage folder (pos. 0)    Required. Points to a directory on a filesystem where to store Registry data.
 ```
 
-> **_NOTE:_**  This configuration is for local testing only: **DO NOT USE IT IN PRODUCTION**. If you want to use the application in production check the following section.
-
-This command will start a new stack composed by 
- - MariaDB database
- - PHPMyAdmin, exposed on port [8080](http://localhost:8080)
- - Registry, exposed on port [5000](http://localhost:5000)
-
-
-You can follow the logs:
-
-```bash
-docker-compose logs -f
-```
-
-In order to update the application
-
-```bash
-docker-compose pull
-docker-compose up -d
-```
+> **_NOTE:_**  This configuration uses sqlite as database. It is for local testing only. If you want to use the application in a heavy load environment, check the following section.
 
 ### Change admin password
 
-You can change the admin password by changing the value of the field `DefaultAdmin.Password` in the `appsettings.json` file. After changing the password you need to restart the application.
+Go to https://localhost:5000/account to change password.
+Otherwise, you can change the admin password by changing the value of the field `DefaultAdmin.Password` in the `appsettings.json` file. After changing the password you need to restart the application.
+
+## Running with docker-compose
+
+```bash
+cd docker/testing
+docker-compose up -d
+```
+
+The stack is composed of:
+ - MariaDB database
+ - PHPMyAdmin, exposed on port [8080](http://localhost:8080)
+ - Registry, exposed on port [5000](http://localhost:5000)
 
 ## Running in production
 
@@ -172,19 +173,6 @@ docker-compose restart registry
 
 > **_Info:_** Any changes to the configuration file need to restart the registry container  
 
-
-## Standalone installation with docker (only for testing)
-
-The following steps start a new instance of `registry` with the default configuration and `SQLite` as backend database. They work both on linux and windows (powershell):
-
-```bash
-wget -O appsettings.json https://raw.githubusercontent.com/DroneDB/Registry/master/Registry.Web/appsettings-default.json
-
-docker run -it --rm -p 5000:5000 -v ${PWD}/registry-data:/Registry/App_Data -v ${PWD}/appsettings.json:/Registry/appsettings.json dronedb/registry:latest
-```
-
-> `Registry` can use `SQLite`, `MySQL` (`MariaDB`) or `SQL Server` as a database. Nevertheless, the application is primarily designed to be used with `MariaDB`. There are no migration scripts for the other databases, so you have to manually upgrade the schema between versions. The above steps are for test only, and should not be used in production.
-
 ## Build Docker image
 
 If you want to build the image from scratch, you can use the following commands:
@@ -196,10 +184,7 @@ git submodule update --init --recursive
 docker build . -t dronedb/registry
 ```
 
-Notes:
-- `ddb` commands must use the `127.0.0.1` syntax, not `localhost`
-
-## Building Natively
+## Running from source
 
 `Registry` is written in C# on .NET Core 6 platform and runs natively on both Linux and Windows.
 To install the latest .NET SDK see the [official download page](https://dotnet.microsoft.com/en-us/download/dotnet/6.0). Before building registry ensure you have `ddblib` in your path, if not, download the [latest release](https://github.com/DroneDB/DroneDB/releases) and add it to `PATH`.
@@ -210,6 +195,15 @@ Clone the repository:
 git clone https://github.com/DroneDB/Registry
 cd Registry
 git submodule update --init --recursive
+```
+
+Build the Hub interface (need [NodeJS 14+](https://nodejs.org/download/release/v14.18.3/)):
+
+```bash
+cd Registry.Web/ClientApp
+npm install -g webpack@4
+npm install
+webpack
 ```
 
 Build the solution from the command line:
@@ -224,28 +218,10 @@ Run the tests to make sure the project is working correctly:
 dotnet test
 ```
 
-Then build the Hub interface (need [NodeJS 14+](https://nodejs.org/download/release/v14.18.3/)):
+Then you can run the application:
 
 ```bash
-cd Registry.Web/ClientApp
-npm install -g webpack@4
-npm install
-webpack
-```
-
-## Running Natively
-
-On the first start `Registry` will create an `appsettings.json` file with default values. Feel free to modify it to your needs following the [documentation](https://docs.dronedb.app/registry).
-
-```bash
-dotnet run --project Registry.Web
-```
-
-It will start a web server listening on two endpoints: `https://localhost:5001` and `http://localhost:5000`. 
-You can change the endpoints using the `urls` parameter:
-
-```bash
-dotnet run --project Registry.Web --urls="http://0.0.0.0:6000;https://0.0.0.0:6001"
+dotnet run --project Registry.Web ./registry-data
 ```
 
 ## Project architecture
