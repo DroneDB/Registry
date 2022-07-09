@@ -437,15 +437,19 @@ namespace Registry.Web
 
                 var swaggerUri = new Uri(baseUri, MagicStrings.SwaggerUrl);
                 Console.WriteLine($" ?> Swagger: {swaggerUri}");
-
-                var healthUri = new Uri(baseUri, MagicStrings.HealthUrl);
-                Console.WriteLine($" ?> (req auth) Health: {healthUri}");
+                
+                var versionUri = new Uri(baseUri, MagicStrings.VersionUrl);
+                Console.WriteLine($" ?> Version: {versionUri}");
 
                 var quickHealthUri = new Uri(baseUri, MagicStrings.QuickHealthUrl);
                 Console.WriteLine($" ?> (req auth) Quick Health: {quickHealthUri}");
+                
+                var healthUri = new Uri(baseUri, MagicStrings.HealthUrl);
+                Console.WriteLine($" ?> (req auth) Health: {healthUri}");
 
-                var versionUri = new Uri(baseUri, MagicStrings.VersionUrl);
-                Console.WriteLine($" ?> Version: {versionUri}");
+                var hangfireUri = new Uri(baseUri, MagicStrings.HangFireUrl);
+                Console.WriteLine($" ?> (req auth) Hangfire: {hangfireUri}");
+
                 Console.WriteLine();
             }
 
