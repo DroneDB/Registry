@@ -33,7 +33,6 @@ services:
         volumes:
             - ./data:/data
             - ./appsettings.json:/data/appsettings.json
-            - ./data/logs:/Registry/logs
         ports:
             - "5000:5000"
         restart: unless-stopped
