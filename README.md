@@ -224,6 +224,17 @@ Then you can run the application:
 dotnet run --project Registry.Web ./registry-data
 ```
 
+## Updating
+
+In order to update the application, you need to replace the executable with the latest version. It will perform the required migrations and update the database at the next startup.
+
+With docker or docker-compose, you update the application by pulling the latest image and restarting the container:
+
+```bash
+docker-compose down
+docker-compose up -d --pull
+```
+
 ## Project architecture
 
 ![dronedb-registry-architecture](https://user-images.githubusercontent.com/7868983/151846022-891685f7-ef47-4b93-8199-d4ac4e788c5d.png)
