@@ -277,7 +277,9 @@ namespace Registry.Web
                 Console.WriteLine(" -> Resetting Hub");
                 Directory.Delete(hubRoot, true);
             }
-            else if (Directory.Exists(hubRoot)) return;
+            else if (
+                Directory.Exists(hubRoot) && 
+                Directory.GetFiles(hubRoot).Any()) return;
 
             ExtractHub(hubRoot);
         }
