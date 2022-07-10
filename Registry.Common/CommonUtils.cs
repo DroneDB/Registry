@@ -555,6 +555,22 @@ namespace Registry.Common
 
             return null;
         }
+        
+        
+        public static void WriteLineColor(string text, ConsoleColor color)
+        {
+            Console.ForegroundColor = color;
+            Console.WriteLine(text);
+            Console.ResetColor();
+        }
+
+        public static void WriteColor(string text, ConsoleColor color)
+        {
+            Console.ForegroundColor = color;
+            Console.Write(text);
+            Console.ResetColor();
+        }
+
 
     }
 }

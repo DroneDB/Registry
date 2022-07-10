@@ -6,6 +6,7 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Newtonsoft.Json;
+using Registry.Web.Identity.Models;
 using Registry.Web.Models;
 using Registry.Web.Models.Configuration;
 using Registry.Web.Models.DTO;
@@ -17,12 +18,12 @@ namespace Registry.Web.Services.Managers
     {
         private readonly UserManager<User> _userManager;
         private readonly SignInManager<User> _signInManager;
-        private readonly ILogger<ILoginManager> _logger;
+        private readonly ILogger<LocalLoginManager> _logger;
         private readonly AppSettings _settings;
 
         public LocalLoginManager(UserManager<User> userManager,
             SignInManager<User> signInManager,
-            ILogger<ILoginManager> logger,
+            ILogger<LocalLoginManager> logger,
             IOptions<AppSettings> settings)
         {
             _userManager = userManager;

@@ -22,5 +22,28 @@ namespace Registry.Web.Data.Models
         public bool IsPublic { get; set; }
 
         public virtual ICollection<Dataset> Datasets { get; set; }
+        public virtual ICollection<OrganizationUser> Users { get; set; }
     }
+
+    public class OrganizationUser
+    {
+        [Required]
+        public Organization Organization { get; set; }
+        [Required]
+        public string UserId { get; set; }
+
+        public string OrganizationSlug { get; set; }
+
+        // public AccessCapability DatasetCapability { get; set; }
+    }
+
+    /* TBA
+    [Flags]
+    public enum Capability
+    {
+        CanView = 0,
+        CanAdd = 1,
+        CanEdit = 2,
+        CanDelete = 4        
+    }*/
 }

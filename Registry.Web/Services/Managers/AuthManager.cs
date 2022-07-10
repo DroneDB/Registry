@@ -4,6 +4,8 @@ using System.Threading.Tasks;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Identity;
 using Registry.Web.Data.Models;
+using Registry.Web.Identity;
+using Registry.Web.Identity.Models;
 using Registry.Web.Models;
 using Registry.Web.Services.Ports;
 

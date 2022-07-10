@@ -33,6 +33,8 @@ using Registry.Web.Services.Managers;
 using Registry.Web.Services.Ports;
 using Registry.Web.Test.Adapters;
 using Registry.Ports.DroneDB.Models;
+using Registry.Web.Identity;
+using Registry.Web.Identity.Models;
 using Registry.Web.Services;
 using Attributes = Registry.Ports.DroneDB.Models.EntryAttributes;
 using Entry = Registry.Ports.DroneDB.Models.Entry;
@@ -142,7 +144,7 @@ namespace Registry.Web.Test
             await using var appContext = GetAppTest1Context();
 
             var settings = JsonConvert.DeserializeObject<AppSettings>(_settingsJson);
-            settings.StoragePath = test.TestFolder;
+            settings.DatasetsPath = test.TestFolder;
             _appSettingsMock.Setup(o => o.Value).Returns(settings);
             
             _authManagerMock.Setup(o => o.IsUserAdmin()).Returns(Task.FromResult(true));
@@ -245,7 +247,7 @@ namespace Registry.Web.Test
             await using var appContext = GetAppTest1Context();
 
             var settings = JsonConvert.DeserializeObject<AppSettings>(_settingsJson);
-            settings.StoragePath = test.TestFolder;
+            settings.DatasetsPath = test.TestFolder;
             _appSettingsMock.Setup(o => o.Value).Returns(settings);
             
             _authManagerMock.Setup(o => o.IsUserAdmin()).Returns(Task.FromResult(true));
@@ -358,7 +360,7 @@ namespace Registry.Web.Test
             await using var appContext = GetAppTest1Context();
 
             var settings = JsonConvert.DeserializeObject<AppSettings>(_settingsJson);
-            settings.StoragePath = test.TestFolder;
+            settings.DatasetsPath = test.TestFolder;
             _appSettingsMock.Setup(o => o.Value).Returns(settings);
             
             _authManagerMock.Setup(o => o.IsUserAdmin()).Returns(Task.FromResult(true));
@@ -494,7 +496,7 @@ namespace Registry.Web.Test
             await using var appContext = GetAppTest1Context();
 
             var settings = JsonConvert.DeserializeObject<AppSettings>(_settingsJson);
-            settings.StoragePath = test.TestFolder;
+            settings.DatasetsPath = test.TestFolder;
             _appSettingsMock.Setup(o => o.Value).Returns(settings);
             
             _authManagerMock.Setup(o => o.IsUserAdmin()).Returns(Task.FromResult(true));
@@ -645,7 +647,7 @@ namespace Registry.Web.Test
             await using var appContext = GetAppTest1Context();
             
             var settings = JsonConvert.DeserializeObject<AppSettings>(_settingsJson);
-            settings.StoragePath = test.TestFolder;
+            settings.DatasetsPath = test.TestFolder;
             _appSettingsMock.Setup(o => o.Value).Returns(settings);
 
             _authManagerMock.Setup(o => o.IsUserAdmin()).Returns(Task.FromResult(true));

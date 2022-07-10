@@ -15,19 +15,19 @@ using System.Security.Principal;
 using System.Text;
 using System.Threading.Tasks;
 using System.Web;
+using Registry.Web.Identity;
+using Registry.Web.Identity.Models;
 
 namespace Registry.Web.Filters
 {
     public class BasicAuthFilter : ActionFilterAttribute
     {
-        IAuthManager _authManager;
-        IUsersManager _usersManager;
-        UserManager<User> _userManager;
-        AppSettings _settings;
+        private readonly IUsersManager _usersManager;
+        private readonly UserManager<User> _userManager;
+        private readonly AppSettings _settings;
 
-        public BasicAuthFilter(IAuthManager authManager, IUsersManager usersManager, UserManager<User> userManager, IOptions<AppSettings> settings)
+        public BasicAuthFilter(IUsersManager usersManager, UserManager<User> userManager, IOptions<AppSettings> settings)
         {
-            _authManager = authManager;
             _usersManager = usersManager;
             _userManager = userManager;
             _settings = settings.Value;
@@ -39,9 +39,9 @@ namespace Registry.Web.Filters
             response.StatusCode = 401;
         }
 
-        override public async Task OnActionExecutionAsync(ActionExecutingContext context, ActionExecutionDelegate next)
+        public override async Task OnActionExecutionAsync(ActionExecutingContext context, ActionExecutionDelegate next)
         {
-            HttpContext httpContext = context.HttpContext;
+            var httpContext = context.HttpContext;
 
             string authHeader = httpContext.Request.Headers["Authorization"];
 
@@ -49,14 +49,14 @@ namespace Registry.Web.Filters
             {
                 if (authHeader != null && authHeader.StartsWith("Basic"))
                 {
-                    string encodedUsernamePassword = authHeader.Substring("Basic ".Length).Trim();
-                    Encoding encoding = Encoding.GetEncoding("iso-8859-1");
-                    string usernamePassword = encoding.GetString(Convert.FromBase64String(encodedUsernamePassword));
+                    var encodedUsernamePassword = authHeader["Basic ".Length..].Trim();
+                    var encoding = Encoding.GetEncoding("iso-8859-1");
+                    var usernamePassword = encoding.GetString(Convert.FromBase64String(encodedUsernamePassword));
 
-                    int seperatorIndex = usernamePassword.IndexOf(':');
+                    var seperatorIndex = usernamePassword.IndexOf(':');
 
-                    var username = usernamePassword.Substring(0, seperatorIndex);
-                    var password = usernamePassword.Substring(seperatorIndex + 1);
+                    var username = usernamePassword[..seperatorIndex];
+                    var password = usernamePassword[(seperatorIndex + 1)..];
                     
                     var res = await _usersManager.Authenticate(username, password);
                     if (res != null)

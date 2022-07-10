@@ -9,7 +9,7 @@ using Registry.Ports;
 using Registry.Web.Data;
 using Registry.Web.Data.Models;
 using Registry.Web.Exceptions;
-using Registry.Web.Models;
+using Registry.Web.Identity.Models;
 using Registry.Web.Models.Configuration;
 using Registry.Web.Models.DTO;
 using Registry.Web.Services.Ports;
@@ -111,8 +111,9 @@ namespace Registry.Web.Services.Adapters
                 if (currentUser == null)
                     throw new UnauthorizedException("Invalid user");
 
-                if (org.OwnerId != null && org.OwnerId != currentUser.Id)
-                    throw new UnauthorizedException("This organization does not belong to the current user");
+                if (org.OwnerId != null && org.OwnerId != currentUser.Id && org.Users.All(usr => usr.UserId != currentUser.Id))
+                    throw new UnauthorizedException("The current user does not have access to this dataset");
+
             }
 
             return dataset;
@@ -151,7 +152,7 @@ namespace Registry.Web.Services.Adapters
 
                 // Mmmm
                 if (uri.Port != 443 && uri.Port != 80)
-                    host += ":" + uri.Port;
+                    host += $":{uri.Port}";
             }
             else
             {
@@ -215,6 +216,5 @@ namespace Registry.Web.Services.Adapters
             if (storageInfo.Total != null && currentUsage > storageInfo.Total)
                 throw new QuotaExceededException(currentUsage, storageInfo.Total);
         }
-
     }
 }

@@ -31,9 +31,8 @@ services:
         tmpfs:
             - /tmp
         volumes:
-            - ./data/App_Data:/Registry/App_Data
-            - ./appsettings-testing.json:/Registry/appsettings.json
-            - ./data/logs:/Registry/logs
+            - ./data:/data
+            - ./appsettings-testing.json:/data/appsettings.json
         ports:
             - "5000:5000"
         restart: unless-stopped

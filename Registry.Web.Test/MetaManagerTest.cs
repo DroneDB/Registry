@@ -62,7 +62,7 @@ namespace Registry.Web.Test
 
             var settings = JsonConvert.DeserializeObject<AppSettings>(_settingsJson);
 
-            settings.StoragePath = Path.Combine(test.TestFolder, DdbFolder);
+            settings.DatasetsPath = Path.Combine(test.TestFolder, DdbFolder);
             _appSettingsMock.Setup(o => o.Value).Returns(settings);
             _authManagerMock.Setup(o => o.IsUserAdmin()).Returns(Task.FromResult(true));
             
@@ -87,7 +87,7 @@ namespace Registry.Web.Test
 
             var settings = JsonConvert.DeserializeObject<AppSettings>(_settingsJson);
 
-            settings.StoragePath = Path.Combine(test.TestFolder, DdbFolder);
+            settings.DatasetsPath = Path.Combine(test.TestFolder, DdbFolder);
             _appSettingsMock.Setup(o => o.Value).Returns(settings);
             _authManagerMock.Setup(o => o.IsUserAdmin()).Returns(Task.FromResult(true));
             _authManagerMock.Setup(o => o.IsOwnerOrAdmin(It.IsAny<Dataset>())).Returns(Task.FromResult(true));

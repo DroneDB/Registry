@@ -6,12 +6,11 @@ using Registry.Web.Data.Models;
 
 namespace Registry.Web.Data
 {
-    public class RegistryContext: DbContext
+    public class RegistryContext : DbContext
     {
         public RegistryContext(DbContextOptions<RegistryContext> options)
             : base(options)
         {
-
         }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
@@ -44,7 +43,7 @@ namespace Registry.Web.Data
                 (c1, c2) => c1.SequenceEqual(c2),
                 c => c.Aggregate(0, (a, v) => HashCode.Combine(a, v.GetHashCode())),
                 c => c.ToArray());
-            
+
             modelBuilder.Entity<Dataset>()
                 .Property(e => e.FileTypes)
                 .HasConversion(
@@ -53,21 +52,31 @@ namespace Registry.Web.Data
                 .Metadata
                 .SetValueComparer(valueComparer);
 
+            modelBuilder.Entity<OrganizationUser>()
+                .HasKey(c => new { c.OrganizationSlug, c.UserId });
 
+            modelBuilder
+                .Entity<OrganizationUser>()
+                .HasOne(ds => ds.Organization)
+                .WithMany(org => org.Users)
+                .IsRequired()
+                .OnDelete(DeleteBehavior.Cascade);
         }
 
         protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
         {
 #if DEBUG
             optionsBuilder.EnableSensitiveDataLogging();
-            optionsBuilder.EnableDetailedErrors();
+#else
+            optionsBuilder.EnableSensitiveDataLogging(false);
 #endif
+
+            optionsBuilder.EnableDetailedErrors();
         }
 
         public DbSet<Organization> Organizations { get; set; }
+        public DbSet<OrganizationUser> OrganizationsUsers { get; set; }
         public DbSet<Dataset> Datasets { get; set; }
-
         public DbSet<Batch> Batches { get; set; }
-        
     }
 }

@@ -31,8 +31,8 @@ services:
         tmpfs:
             - /tmp
         volumes:
-            - ./data/App_Data:/Registry/App_Data
-            - ./appsettings.json:/Registry/appsettings.json
+            - ./data:/data
+            - ./appsettings.json:/data/appsettings.json
             - ./data/logs:/Registry/logs
         ports:
             - "5000:5000"
