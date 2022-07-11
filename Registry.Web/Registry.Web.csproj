@@ -6,11 +6,11 @@
         <UserSecretsId>4e006835-31cb-47c5-9dfe-7b73e210db92</UserSecretsId>
         <SpaRoot>ClientApp\</SpaRoot>
         <DefaultItemExcludes>$(DefaultItemExcludes);$(SpaRoot)node_modules\**</DefaultItemExcludes>
-        <AssemblyVersion>1.0.10</AssemblyVersion>
-        <FileVersion>1.0.10</FileVersion>
-        <Version>1.0.10</Version>
+        <AssemblyVersion>1.0.11</AssemblyVersion>
+        <FileVersion>1.0.11</FileVersion>
+        <Version>1.0.11</Version>
         <Platforms>AnyCPU;x64</Platforms>
-        <PackageVersion>1.0.10</PackageVersion>
+        <PackageVersion>1.0.11</PackageVersion>
         <Configurations>Debug;Release;DebugEf</Configurations>
     </PropertyGroup>
 
@@ -111,20 +111,24 @@
     </ProjectExtensions>
 
     <Target Name="PreBuild" BeforeTargets="PreBuildEvent">
-        
+
+        <Exec Command="dotnet tool restore" />
+    
+        <!-- Build Hub if not built -->
+        <Exec Condition="!Exists('$(ProjectDir)/ClientApp/build')" WorkingDirectory="ClientApp" Command="npm install" />
+        <Exec Condition="!Exists('$(ProjectDir)/ClientApp/build')" WorkingDirectory="ClientApp" Command="webpack" />
+                
+        <Delete Files="$(ProjectDir)/ClientApp.zip" />
+
+        <ZipDirectory SourceDirectory="$(ProjectDir)/ClientApp/build" DestinationFile="$(ProjectDir)/ClientApp.zip" Overwrite="true" />
+       
         <ItemGroup>
             <EmbeddedResource Include="ClientApp.zip" />
         </ItemGroup>
-        
-        <Delete Files="./ClientApp.zip" />
-        <Exec Command="dotnet tool restore" />
-        <!-- We could add this BUT it slows down the builds -->
-        <!-- <Exec Command="cd ClientApp&#xD;&#xA;call npm install&#xD;&#xA;call webpack"/> -->
-        <Exec Command="dotnet z -c ./ClientApp/build ./ClientApp.zip" />
     </Target>
 
     <Target Name="PostBuild" AfterTargets="PostBuildEvent">
-       <Delete Files="./ClientApp.zip" />
+       <Delete Files="$(ProjectDir)/ClientApp.zip" />
     </Target>
 
 
