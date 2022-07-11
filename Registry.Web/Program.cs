@@ -224,7 +224,11 @@ namespace Registry.Web
 
             Directory.CreateDirectory(folder);
 
-            SetupHub(folder, resetSpa);
+            if (!SetupHub(folder, resetSpa))
+            {
+                Console.WriteLine(" !> Error while setting up Hub");
+                return false;
+            }
 
             var settingsFilePath = Path.Combine(folder, MagicStrings.AppSettingsFileName);
 
@@ -268,7 +272,7 @@ namespace Registry.Web
             return true;
         }
 
-        private static void SetupHub(string folder, bool resetSpa)
+        private static bool SetupHub(string folder, bool resetSpa)
         {
             var hubRoot = Path.Combine(folder, MagicStrings.SpaRoot);
 
@@ -278,13 +282,17 @@ namespace Registry.Web
                 Directory.Delete(hubRoot, true);
             }
             else if (
-                Directory.Exists(hubRoot) && 
-                Directory.GetFiles(hubRoot).Any()) return;
+                Directory.Exists(hubRoot) &&
+                Directory.GetFiles(hubRoot).Any())
+            {
+                Console.WriteLine(" ?> Hub folder is ok");
+                return true;
+            }
 
-            ExtractHub(hubRoot);
+            return ExtractHub(hubRoot);
         }
 
-        private static void ExtractHub(string folder)
+        private static bool ExtractHub(string folder)
         {
             var efp = new EmbeddedResourceQuery();
             var executingAssembly = Assembly.GetExecutingAssembly();
@@ -296,7 +304,18 @@ namespace Registry.Web
             // Read embedded resource and extract to storage folder
             using var stream = efp.Read(executingAssembly, MagicStrings.SpaRoot + ".zip");
             using var zip = new ZipArchive(stream, ZipArchiveMode.Read);
+
+            if (!zip.Entries.Any())
+            {
+                Console.WriteLine(" !> Error while extracting Hub, empty archive");
+                return false;
+            }
+
+            Console.WriteLine(" ?> Found {0} entries in archive", zip.Entries.Count);
+
             zip.ExtractToDirectory(folder);
+
+            return true;
         }
 
         private static JObject GetDefaultSettings()
