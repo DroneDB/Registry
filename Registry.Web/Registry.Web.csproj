@@ -113,7 +113,8 @@
     <Target Name="PreBuild" BeforeTargets="PreBuildEvent">
 
         <!-- Build Hub if not built -->
-        <Exec Condition="!Exists('$(ProjectDir)/ClientApp/build')" Command="cd ClientApp&#xD;&#xA;call npm install&#xD;&#xA;call webpack" />
+        <Exec Condition="!Exists('$(ProjectDir)/ClientApp/build')" WorkingDirectory="ClientApp" Command="npm install" />
+        <Exec Condition="!Exists('$(ProjectDir)/ClientApp/build')" WorkingDirectory="ClientApp" Command="webpack" />
                 
         <Delete Files="./ClientApp.zip" />
         <Exec Command="dotnet tool restore" />
