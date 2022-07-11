@@ -232,7 +232,8 @@ With docker or docker-compose, you update the application by pulling the latest 
 
 ```bash
 docker-compose down
-docker-compose up -d --pull
+docker-compose pull
+docker-compose up -d 
 ```
 
 ## Project architecture
