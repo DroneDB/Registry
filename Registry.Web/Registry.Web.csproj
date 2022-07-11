@@ -111,16 +111,18 @@
     </ProjectExtensions>
 
     <Target Name="PreBuild" BeforeTargets="PreBuildEvent">
+
+        <!-- Build Hub if not built -->
+        <Exec Condition="!Exists('$(ProjectDir)/ClientApp/build')" Command="cd ClientApp&#xD;&#xA;call npm install&#xD;&#xA;call webpack" />
+                
+        <Delete Files="./ClientApp.zip" />
+        <Exec Command="dotnet tool restore" />
+
+        <Exec Command="dotnet z -c ./ClientApp/build ./ClientApp.zip" />        
         
         <ItemGroup>
             <EmbeddedResource Include="ClientApp.zip" />
         </ItemGroup>
-        
-        <Delete Files="./ClientApp.zip" />
-        <Exec Command="dotnet tool restore" />
-        <!-- We could add this BUT it slows down the builds -->
-        <!-- <Exec Command="cd ClientApp&#xD;&#xA;call npm install&#xD;&#xA;call webpack"/> -->
-        <Exec Command="dotnet z -c ./ClientApp/build ./ClientApp.zip" />
     </Target>
 
     <Target Name="PostBuild" AfterTargets="PostBuildEvent">
