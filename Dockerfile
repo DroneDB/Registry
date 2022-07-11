@@ -21,31 +21,18 @@ RUN cd DroneDB && mkdir build && cd build && \
     make -j $(cat /proc/cpuinfo | grep processor | wc -l)
 RUN cd /DroneDB/build && checkinstall --install=no --pkgname DroneDB --default
 
-# ---> Node build stage
-FROM node:14-buster as node-builder
-
-# Copy Hub
-COPY ./Registry.Web/ClientApp /ClientApp
-
-# Compile client app
-RUN npm install -g webpack@4 webpack-cli
-RUN cd /ClientApp && npm install && webpack --mode=production 
-
-# ---> Dotnet build stage
+# ---> Dotnet build stage + nodejs build stage
 FROM mcr.microsoft.com/dotnet/sdk:6.0-focal as dotnet-builder
 
-# This is required until https://github.com/RealOrko/dotnet-cli-zip/pull/2 is merged
-RUN wget https://packages.microsoft.com/config/ubuntu/20.04/packages-microsoft-prod.deb -O packages-microsoft-prod.deb && \
-    dpkg -i packages-microsoft-prod.deb && \
-    rm packages-microsoft-prod.deb && \
-    apt-get update && apt-get install dotnet-sdk-3.1 -y
+RUN curl -sL https://deb.nodesource.com/setup_14.x | bash - 
+RUN apt-get install -y nodejs
 
 # Copy registry
 COPY . /Registry
 
-# Copy compiled client app in the appropriate folder
-RUN mkdir -p /Registry/ClientApp/build
-COPY --from=node-builder /ClientApp/build/ /Registry/ClientApp/build
+# Compile client app
+RUN npm install -g webpack@4 webpack-cli
+RUN cd /Registry/Registry.Web/ClientApp && npm install && webpack --mode=production 
 
 # Copy publish profile
 COPY docker/FolderProfile.xml /Registry/Registry.Web/Properties/PublishProfiles/FolderProfile.pubxml
