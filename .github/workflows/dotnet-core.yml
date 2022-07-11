@@ -31,6 +31,8 @@ jobs:
       uses: actions/setup-node@v3
       with:
         node-version: 14
+    - name: Install webpack 4
+      run: npm install -g webpack@4 webpack-cli
     - name: Setup utils
       run: sudo apt-get update && sudo apt-get install -y spatialite-bin libsqlite3-mod-spatialite
     - name: Build C++ lib
