@@ -400,7 +400,10 @@ namespace Registry.Web
             if (serverAddresses != null)
             {
                 foreach (var address in serverAddresses)
-                    Console.WriteLine($" ?> Registry url: {address}");
+                {
+                    var addr = address.Replace("0.0.0.0", "localhost");
+                    Console.WriteLine($" ?> Registry url: {addr}");
+                }
             }
 
             var settingsOptions = app.ApplicationServices.GetService<IOptions<AppSettings>>();
