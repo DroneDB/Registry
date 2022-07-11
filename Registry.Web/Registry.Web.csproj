@@ -112,22 +112,23 @@
 
     <Target Name="PreBuild" BeforeTargets="PreBuildEvent">
 
+        <Exec Command="dotnet tool restore" />
+    
         <!-- Build Hub if not built -->
         <Exec Condition="!Exists('$(ProjectDir)/ClientApp/build')" WorkingDirectory="ClientApp" Command="npm install" />
         <Exec Condition="!Exists('$(ProjectDir)/ClientApp/build')" WorkingDirectory="ClientApp" Command="webpack" />
                 
-        <Delete Files="./ClientApp.zip" />
-        <Exec Command="dotnet tool restore" />
+        <Delete Files="$(ProjectDir)/ClientApp.zip" />
 
-        <Exec Command="dotnet z -c ./ClientApp/build ./ClientApp.zip" />        
-        
+        <ZipDirectory SourceDirectory="$(ProjectDir)/ClientApp/build" DestinationFile="$(ProjectDir)/ClientApp.zip" Overwrite="true" />
+       
         <ItemGroup>
             <EmbeddedResource Include="ClientApp.zip" />
         </ItemGroup>
     </Target>
 
     <Target Name="PostBuild" AfterTargets="PostBuildEvent">
-       <Delete Files="./ClientApp.zip" />
+       <Delete Files="$(ProjectDir)/ClientApp.zip" />
     </Target>
 
 
