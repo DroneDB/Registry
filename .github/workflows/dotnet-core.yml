@@ -28,7 +28,11 @@ jobs:
         dotnet-version: |
           3.1.x
           6.0.x
-    - name: setup utils
+    - name: Setup Node
+      uses: actions/setup-node@v3
+      with:
+        node-version: 14
+    - name: Setup utils
       run: sudo apt-get update && sudo apt-get install -y spatialite-bin libsqlite3-mod-spatialite
     - name: Build C++ lib
       run: |
