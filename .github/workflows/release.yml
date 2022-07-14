@@ -43,6 +43,7 @@ jobs:
           dotnet publish -p:PublishProfile=win-arm64.pubxml Registry.Web
           dotnet publish -p:PublishProfile=linux-x64.pubxml Registry.Web
           dotnet publish -p:PublishProfile=linux-arm.pubxml Registry.Web
+          dotnet publish -p:PublishProfile=linux-arm64.pubxml Registry.Web
           dotnet publish -p:PublishProfile=osx-x64.pubxml Registry.Web
           
       - name: Zip win-x64
@@ -55,6 +56,8 @@ jobs:
         run: cd registry/Registry.Web/bin/Release/net6.0/publish/linux-x64/ && zip -r ../../../../../../../Registry-Linux64.zip *
       - name: Zip linux-arm
         run: cd registry/Registry.Web/bin/Release/net6.0/publish/linux-arm/ && zip -r ../../../../../../../Registry-LinuxArm.zip *
+      - name: Zip linux-arm64
+        run: cd registry/Registry.Web/bin/Release/net6.0/publish/linux-arm64/ && zip -r ../../../../../../../Registry-LinuxArm64.zip *
       - name: Zip osx-x64
         run: cd registry/Registry.Web/bin/Release/net6.0/publish/osx-x64/ && zip -r ../../../../../../../Registry-Osx64.zip *
 
@@ -70,4 +73,5 @@ jobs:
             Registry-WinArm64.zip
             Registry-Linux64.zip
             Registry-LinuxArm.zip
+            Registry-LinuxArm64.zip
             Registry-Osx64.zip   
