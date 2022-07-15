@@ -448,7 +448,7 @@ namespace Registry.Web.Services.Managers
                 {
                     new Claim(ClaimTypes.Name, user.Id),
                     new Claim(ApplicationDbContext.AdminRoleName.ToLowerInvariant(),
-                        (await _userManager.IsInRoleAsync(user, ApplicationDbContext.AdminRoleName)).ToString()),
+                        (await _userManager.IsInRoleAsync(user, ApplicationDbContext.AdminRoleName)).ToString(), ClaimValueTypes.Boolean),
                 }),
                 Expires = expiresOn,
                 SigningCredentials = new SigningCredentials(new SymmetricSecurityKey(key),
