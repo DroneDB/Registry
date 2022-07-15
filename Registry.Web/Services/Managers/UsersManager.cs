@@ -400,11 +400,38 @@ namespace Registry.Web.Services.Managers
             if (!await _authManager.IsUserAdmin())
                 throw new UnauthorizedException("User is not admin");
 
-            var userOrg = (from orgusr in _registryContext.OrganizationsUsers
-                    group orgusr by orgusr.UserId
-                    into g
-                    select new { UserId = g.Key, OrgIds = g.Select(item => item.OrganizationSlug).ToArray() })
-                .ToDictionary(item => item.UserId, item => item.OrgIds);
+            var userOrgQuery = from orgusr in _registryContext.OrganizationsUsers
+                group orgusr by orgusr.UserId
+                into g
+                select new
+                {
+                    UserId = g.Key, 
+                    OrgIds = g.Select(item => item.OrganizationSlug).ToArray()
+                };
+
+            var userOrgQuery2 = from org in _registryContext.Organizations
+                where org.OwnerId != null
+                group org by org.OwnerId
+                into g
+                select new
+                {
+                    UserId = g.Key,
+                    OrgIds = g.Select(item => item.Slug).ToArray()
+                };
+
+            var union = userOrgQuery.ToArray().Union(userOrgQuery2.ToArray());
+            
+            var merge = from m in union
+                group m by m.UserId
+                into g
+                select new
+                {
+                    UserId = g.Key,
+                    OrgIds = g.SelectMany(item => item.OrgIds).ToArray()
+                };
+            
+            var userOrg = merge.ToDictionary(item => item.UserId, item => item.OrgIds);
+            
 
             var query = (from user in _applicationDbContext.Users
                 join userRole in _applicationDbContext.UserRoles on user.Id equals userRole.UserId into userRoles
