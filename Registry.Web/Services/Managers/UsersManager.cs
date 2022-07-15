@@ -72,13 +72,15 @@ namespace Registry.Web.Services.Managers
                 return null;
 
             // Create user if not exists because login manager has greenlighed us
-            var user = await _userManager.FindByNameAsync(userName);
+            var user = await _userManager.FindByNameAsync(userName) ?? await CreateUserInternal(new User { UserName = userName }, password);
 
-            if (user == null)
+            if (!user.Metadata.IsSameAs(res.Metadata))
             {
-                user = await CreateUserInternal(new User { UserName = userName }, password);
-                await SyncRoles(user);
+                user.Metadata = res.Metadata;
+                await _applicationDbContext.SaveChangesAsync();
             }
+
+            await SyncRoles(user);
 
             // authentication successful so generate jwt token
             var tokenDescriptor = await GenerateJwtToken(user);
@@ -100,6 +102,12 @@ namespace Registry.Web.Services.Managers
             // Create user if not exists because login manager has greenlighed us
             var user = await _userManager.FindByNameAsync(res.UserName) ??
                        await CreateUserInternal(new User { UserName = res.UserName }, CommonUtils.RandomString(16));
+
+            if (!user.Metadata.IsSameAs(res.Metadata))
+            {
+                user.Metadata = res.Metadata;
+                await _applicationDbContext.SaveChangesAsync();
+            }
 
             await SyncRoles(user);
 
@@ -400,11 +408,38 @@ namespace Registry.Web.Services.Managers
             if (!await _authManager.IsUserAdmin())
                 throw new UnauthorizedException("User is not admin");
 
-            var userOrg = (from orgusr in _registryContext.OrganizationsUsers
-                    group orgusr by orgusr.UserId
-                    into g
-                    select new { UserId = g.Key, OrgIds = g.Select(item => item.OrganizationSlug).ToArray() })
-                .ToDictionary(item => item.UserId, item => item.OrgIds);
+            var userOrgQuery = from orgusr in _registryContext.OrganizationsUsers
+                group orgusr by orgusr.UserId
+                into g
+                select new
+                {
+                    UserId = g.Key, 
+                    OrgIds = g.Select(item => item.OrganizationSlug).ToArray()
+                };
+
+            var userOrgQuery2 = from org in _registryContext.Organizations
+                where org.OwnerId != null
+                group org by org.OwnerId
+                into g
+                select new
+                {
+                    UserId = g.Key,
+                    OrgIds = g.Select(item => item.Slug).ToArray()
+                };
+
+            var union = userOrgQuery.ToArray().Union(userOrgQuery2.ToArray());
+            
+            var merge = from m in union
+                group m by m.UserId
+                into g
+                select new
+                {
+                    UserId = g.Key,
+                    OrgIds = g.SelectMany(item => item.OrgIds).ToArray()
+                };
+            
+            var userOrg = merge.ToDictionary(item => item.UserId, item => item.OrgIds);
+            
 
             var query = (from user in _applicationDbContext.Users
                 join userRole in _applicationDbContext.UserRoles on user.Id equals userRole.UserId into userRoles
@@ -448,7 +483,7 @@ namespace Registry.Web.Services.Managers
                 {
                     new Claim(ClaimTypes.Name, user.Id),
                     new Claim(ApplicationDbContext.AdminRoleName.ToLowerInvariant(),
-                        (await _userManager.IsInRoleAsync(user, ApplicationDbContext.AdminRoleName)).ToString()),
+                        (await _userManager.IsInRoleAsync(user, ApplicationDbContext.AdminRoleName)).ToString(), ClaimValueTypes.Boolean),
                 }),
                 Expires = expiresOn,
                 SigningCredentials = new SigningCredentials(new SymmetricSecurityKey(key),
