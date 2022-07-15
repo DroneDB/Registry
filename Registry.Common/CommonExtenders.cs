@@ -66,6 +66,11 @@ namespace Registry.Common
                 ArrayPool<byte>.Shared.Return(buffer);
             }
         }
+        
+        public static bool IsSameAs(this Dictionary<string, object> a, Dictionary<string, object> b)
+        {
+            return a.Count == b.Count && !a.Except(b).Any();
+        }
 
     }
 }

@@ -72,13 +72,15 @@ namespace Registry.Web.Services.Managers
                 return null;
 
             // Create user if not exists because login manager has greenlighed us
-            var user = await _userManager.FindByNameAsync(userName);
+            var user = await _userManager.FindByNameAsync(userName) ?? await CreateUserInternal(new User { UserName = userName }, password);
 
-            if (user == null)
+            if (!user.Metadata.IsSameAs(res.Metadata))
             {
-                user = await CreateUserInternal(new User { UserName = userName }, password);
-                await SyncRoles(user);
+                user.Metadata = res.Metadata;
+                await _applicationDbContext.SaveChangesAsync();
             }
+
+            await SyncRoles(user);
 
             // authentication successful so generate jwt token
             var tokenDescriptor = await GenerateJwtToken(user);
@@ -100,6 +102,12 @@ namespace Registry.Web.Services.Managers
             // Create user if not exists because login manager has greenlighed us
             var user = await _userManager.FindByNameAsync(res.UserName) ??
                        await CreateUserInternal(new User { UserName = res.UserName }, CommonUtils.RandomString(16));
+
+            if (!user.Metadata.IsSameAs(res.Metadata))
+            {
+                user.Metadata = res.Metadata;
+                await _applicationDbContext.SaveChangesAsync();
+            }
 
             await SyncRoles(user);
 
