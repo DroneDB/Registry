@@ -7,6 +7,7 @@ using Newtonsoft.Json;
 using NUnit.Framework;
 using Registry.Adapters.DroneDB;
 using Registry.Common;
+using Registry.Common.Test;
 using Registry.Ports.DroneDB.Models;
 
 namespace Registry.Adapters.Ddb.Test

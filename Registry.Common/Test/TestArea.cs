@@ -1,10 +1,8 @@
 ﻿using System;
-using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
-using System.Text;
 
-namespace Registry.Common
+namespace Registry.Common.Test
 {
     public class TestArea : IDisposable
     {
