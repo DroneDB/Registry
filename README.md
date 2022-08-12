@@ -36,7 +36,7 @@ docker run -it --rm -p 5000:5000 -v ${PWD}/registry-data:/data dronedb/registry
 ```
 
 The data will be stored in the local folder `registry-data`.
-Open https://localhost:5000 in your browser to start using the application.
+Open http://localhost:5000 in your browser to start using the application.
 
 Default credentials are `admin` and `password`. 
 
@@ -74,7 +74,7 @@ Storage folder (pos. 0)    Required. Points to a directory on a filesystem where
 
 ### Change admin password
 
-Go to https://localhost:5000/account to change password.
+Go to http://localhost:5000/account to change password.
 Otherwise, you can change the admin password by changing the value of the field `DefaultAdmin.Password` in the `appsettings.json` file. After changing the password you need to restart the application.
 
 ## Running with docker-compose
