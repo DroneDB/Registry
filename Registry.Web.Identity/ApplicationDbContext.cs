@@ -2,6 +2,7 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.ChangeTracking;
 using Newtonsoft.Json;
+using Registry.Common;
 using Registry.Web.Identity.Models;
 
 namespace Registry.Web.Identity
@@ -20,11 +21,7 @@ namespace Registry.Web.Identity
             base.OnModelCreating(builder);
 
             var valueComparer = new ValueComparer<Dictionary<string, object>>(
-                (first, second) =>
-                    (second == null && first == null) || (
-                    second != null && first != null &&
-                    first.Count == second.Count &&
-                    first.All(pair => second.ContainsKey(pair.Key) && second[pair.Key].Equals(pair.Value))),
+                (x, y) => x.IsSameAs(y),
                 x => x.GetHashCode(),
                 x => JsonConvert.DeserializeObject<Dictionary<string, object>>(JsonConvert.SerializeObject(x)));
 
@@ -35,6 +32,7 @@ namespace Registry.Web.Identity
                     v => JsonConvert.SerializeObject(v),
                     v => JsonConvert.DeserializeObject<Dictionary<string, object>>(v),
                     valueComparer);
+
         }
 
         protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
@@ -46,9 +44,8 @@ namespace Registry.Web.Identity
 #else
             optionsBuilder.EnableSensitiveDataLogging(false);
 #endif
-            
-            optionsBuilder.EnableDetailedErrors();
 
+            optionsBuilder.EnableDetailedErrors();
         }
     }
 }
