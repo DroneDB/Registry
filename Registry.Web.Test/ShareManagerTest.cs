@@ -20,6 +20,7 @@ using NUnit.Framework;
 using Registry.Adapters;
 using Registry.Adapters.DroneDB;
 using Registry.Common;
+using Registry.Common.Test;
 using Registry.Ports;
 using Registry.Ports.DroneDB;
 using Registry.Web.Data;

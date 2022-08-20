@@ -11,22 +11,22 @@ namespace Registry.Common
     // Ref: https://github.com/restsharp/RestSharp/blob/dev/src/RestSharp/Extensions/StringExtensions.cs
     public static class StringExtensions
     {
-        static readonly Regex DateRegex = new Regex(@"\\?/Date\((-?\d+)(-|\+)?([0-9]{4})?\)\\?/");
-        static readonly Regex NewDateRegex = new Regex(@"newDate\((-?\d+)\)");
+        private static readonly Regex DateRegex = new Regex(@"\\?/Date\((-?\d+)(-|\+)?([0-9]{4})?\)\\?/");
+        private static readonly Regex NewDateRegex = new Regex(@"newDate\((-?\d+)\)");
 
-        static readonly Regex IsUpperCaseRegex = new Regex(@"^[A-Z]+$");
+        private static readonly Regex IsUpperCaseRegex = new Regex(@"^[A-Z]+$");
 
-        static readonly Regex AddUnderscoresRegex1 = new Regex(@"[-\s]");
-        static readonly Regex AddUnderscoresRegex2 = new Regex(@"([a-z\d])([A-Z])");
-        static readonly Regex AddUnderscoresRegex3 = new Regex(@"([A-Z]+)([A-Z][a-z])");
+        private static readonly Regex AddUnderscoresRegex1 = new Regex(@"[-\s]");
+        private static readonly Regex AddUnderscoresRegex2 = new Regex(@"([a-z\d])([A-Z])");
+        private static readonly Regex AddUnderscoresRegex3 = new Regex(@"([A-Z]+)([A-Z][a-z])");
 
-        static readonly Regex AddDashesRegex1 = new Regex(@"[\s]");
-        static readonly Regex AddDashesRegex2 = new Regex(@"([a-z\d])([A-Z])");
-        static readonly Regex AddDashesRegex3 = new Regex(@"([A-Z]+)([A-Z][a-z])");
+        private static readonly Regex AddDashesRegex1 = new Regex(@"[\s]");
+        private static readonly Regex AddDashesRegex2 = new Regex(@"([a-z\d])([A-Z])");
+        private static readonly Regex AddDashesRegex3 = new Regex(@"([A-Z]+)([A-Z][a-z])");
 
-        static readonly Regex AddSpacesRegex1 = new Regex(@"[-\s]");
-        static readonly Regex AddSpacesRegex2 = new Regex(@"([a-z\d])([A-Z])");
-        static readonly Regex AddSpacesRegex3 = new Regex(@"([A-Z]+)([A-Z][a-z])");
+        private static readonly Regex AddSpacesRegex1 = new Regex(@"[-\s]");
+        private static readonly Regex AddSpacesRegex2 = new Regex(@"([a-z\d])([A-Z])");
+        private static readonly Regex AddSpacesRegex3 = new Regex(@"([A-Z]+)([A-Z][a-z])");
         public static string UrlDecode(this string input) => HttpUtility.UrlDecode(input);
 
         /// <summary>
@@ -92,6 +92,8 @@ namespace Registry.Common
         /// <returns>DateTime</returns>
         public static DateTime ParseJsonDate(this string input, CultureInfo culture)
         {
+            if (input == null) throw new ArgumentNullException(nameof(input));
+            
             const long maxAllowedTimestamp = 253402300799;
 
             input = input.Replace("\n", "");
@@ -119,7 +121,7 @@ namespace Registry.Common
             return ParseFormattedDate(input, culture);
         }
 
-        static string RemoveSurroundingQuotes(this string input)
+        private static string RemoveSurroundingQuotes(this string input)
         {
             if (input.StartsWith("\"") && input.EndsWith("\""))
                 input = input.Substring(1, input.Length - 2);
@@ -127,7 +129,7 @@ namespace Registry.Common
             return input;
         }
 
-        static DateTime ParseFormattedDate(string input, CultureInfo culture)
+        private static DateTime ParseFormattedDate(string input, CultureInfo culture)
         {
             string[] formats =
             {
@@ -151,7 +153,7 @@ namespace Registry.Common
             return DateTime.TryParse(input, culture, DateTimeStyles.None, out date) ? date : default;
         }
 
-        static DateTime ExtractDate(string input, Regex regex, CultureInfo culture)
+        private static DateTime ExtractDate(string input, Regex regex, CultureInfo culture)
         {
             var dt = DateTime.MinValue;
 
@@ -209,7 +211,7 @@ namespace Registry.Common
 
             string CaseWord(string word)
             {
-                var restOfWord = word.Substring(1);
+                var restOfWord = word[1..];
                 var firstChar = char.ToUpper(word[0], culture);
 
                 if (restOfWord.IsUpperCase())
@@ -235,7 +237,7 @@ namespace Registry.Common
         /// <param name="culture"></param>
         /// <returns>string</returns>
         public static string MakeInitialLowerCase(this string word, CultureInfo culture) =>
-            string.Concat(word.Substring(0, 1).ToLower(culture), word.Substring(1));
+            string.Concat(word[..1].ToLower(culture), word[1..]);
 
         /// <summary>
         /// Add underscores to a pascal-cased string

@@ -97,11 +97,10 @@ namespace Registry.Web.Services.Managers
                     };
 
                 var result = await res.Content.ReadAsStringAsync();
+                _logger.LogInformation(result);
 
                 var obj = JsonConvert.DeserializeObject<Dictionary<string, object>>(result);
                
-                _logger.LogInformation(result);
-
                 return new LoginResultDto
                 {
                     Success = true,

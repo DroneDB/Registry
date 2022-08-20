@@ -1,10 +1,8 @@
 ﻿using System;
 using System.Diagnostics;
 using System.IO;
-using System.Net;
-using System.Net.Http;
 
-namespace Registry.Common
+namespace Registry.Common.Test
 {
     public class TempFile : IDisposable
     {

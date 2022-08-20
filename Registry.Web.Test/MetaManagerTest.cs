@@ -12,6 +12,7 @@ using Moq;
 using Newtonsoft.Json;
 using NUnit.Framework;
 using Registry.Common;
+using Registry.Common.Test;
 using Registry.Web.Data;
 using Registry.Web.Data.Models;
 using Registry.Web.Models.Configuration;

@@ -21,8 +21,10 @@ namespace Registry.Web.Identity
 
             var valueComparer = new ValueComparer<Dictionary<string, object>>(
                 (first, second) =>
+                    (second == null && first == null) || (
+                    second != null && first != null &&
                     first.Count == second.Count &&
-                    first.All(pair => second.ContainsKey(pair.Key) && second[pair.Key].Equals(pair.Value)),
+                    first.All(pair => second.ContainsKey(pair.Key) && second[pair.Key].Equals(pair.Value))),
                 x => x.GetHashCode(),
                 x => JsonConvert.DeserializeObject<Dictionary<string, object>>(JsonConvert.SerializeObject(x)));
 
