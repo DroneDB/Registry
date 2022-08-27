@@ -65,6 +65,12 @@ namespace Registry.Web
 
             var ddbFolder = newPath.FirstOrDefault(
                 p => File.Exists(Path.Combine(p, DroneDBDllName)));
+            
+            if (ddbFolder == null)
+            {
+                Console.WriteLine(" !> {0} not found in PATH", DroneDBDllName);
+                return;
+            }
 
             Console.WriteLine(" ?> Found {0} in {1}", DroneDBDllName, ddbFolder);
             Environment.SetEnvironmentVariable("PATH",
