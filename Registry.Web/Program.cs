@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO;
 using System.IO.Compression;
 using System.Linq;
@@ -38,7 +39,6 @@ namespace Registry.Web
 
         public static void Main(string[] args)
         {
-            
 #if DEBUG_EF
             // EF core tools compatibility
             if (IsEfTool(args))
@@ -54,7 +54,6 @@ namespace Registry.Web
 
         private static void FixPath()
         {
-            
             var path = Environment.GetEnvironmentVariable("PATH");
             if (path == null)
             {
@@ -63,14 +62,13 @@ namespace Registry.Web
             }
 
             var newPath = path.Split(Path.PathSeparator);
-            
+
             var ddbFolder = newPath.FirstOrDefault(
                 p => File.Exists(Path.Combine(p, DroneDBDllName)));
-                
+
             Console.WriteLine(" ?> Found {0} in {1}", DroneDBDllName, ddbFolder);
             Environment.SetEnvironmentVariable("PATH",
                 $"{ddbFolder}{Path.PathSeparator}{Environment.GetEnvironmentVariable("PATH")}");
-
         }
 
         private static void RunOptions(Options opts)
@@ -85,11 +83,17 @@ namespace Registry.Web
                 e.Cancel = true;
                 CommonUtils.WriteLineColor("\n -> Exiting...\n", ConsoleColor.Yellow);
             };
-            
+
             // Ensure the ddb.dll is in the PATH and fix it if needed (only on windows)
             if (Environment.OSVersion.Platform == PlatformID.Win32NT)
                 FixPath();
-            
+
+#if DEBUG
+            Console.WriteLine(" ?> Running in DEBUG");
+#else
+            Console.WriteLine(" ?> Running in RELEASE");
+#endif
+
             if (!VerifyOptions(opts)) return;
 
             opts.StorageFolder = Path.GetFullPath(opts.StorageFolder);
@@ -112,7 +116,8 @@ namespace Registry.Web
                 if (ddbVersion < MinDdbVersion)
                 {
                     CommonUtils.WriteLineColor(
-                        $" !> DDB version is too old, please upgrade to {MinDdbVersion} or higher: {MagicStrings.DdbReleasesPageUrl}", ConsoleColor.Red);
+                        $" !> DDB version is too old, please upgrade to {MinDdbVersion} or higher: {MagicStrings.DdbReleasesPageUrl}",
+                        ConsoleColor.Red);
                     return;
                 }
             }
@@ -179,12 +184,12 @@ namespace Registry.Web
                     CommonUtils.WriteColor(" !> Address not specified", ConsoleColor.Red);
                     return false;
                 }
-                
+
                 var parts = opts.Address.Split(':');
 
                 var host = DefaultHost;
                 var port = DefaultPort;
-                
+
                 switch (parts.Length)
                 {
                     case 1:
@@ -193,14 +198,14 @@ namespace Registry.Web
                         {
                             // Try to parse as hostname
                             host = parts[0];
-                        
+
                             if (host.ToLowerInvariant() != "localhost" && !IPEndPoint.TryParse(host, out _))
                             {
                                 CommonUtils.WriteColor(" !> Invalid address", ConsoleColor.Red);
                                 return false;
                             }
                         }
-                    
+
                         if (port is < 1 or > 65535)
                         {
                             CommonUtils.WriteColor(" !> Invalid port", ConsoleColor.Red);
@@ -212,19 +217,19 @@ namespace Registry.Web
                     case 2:
                     {
                         host = parts[0];
-                    
+
                         if (host.ToLowerInvariant() != "localhost" && !IPEndPoint.TryParse(host, out _))
                         {
                             CommonUtils.WriteColor(" !> Invalid address", ConsoleColor.Red);
                             return false;
                         }
-                    
+
                         if (!int.TryParse(parts[1], out port))
                         {
                             CommonUtils.WriteColor(" !> Invalid port", ConsoleColor.Red);
                             return false;
                         }
-                    
+
                         if (port is < 1 or > 65535)
                         {
                             CommonUtils.WriteColor(" !> Invalid port", ConsoleColor.Red);
