@@ -105,8 +105,17 @@ namespace Registry.Web
 
             try
             {
+                
+#if DEBUG
+                DDBWrapper.RegisterProcess(true);
+                Console.WriteLine(" ?> Initialized DDB - Verbose");
+#else
+                DDBWrapper.RegisterProcess(false);
+                Console.WriteLine(" ?> Initialized DDB");
+#endif
+                
                 var rawVersion = DDBWrapper.GetVersion();
-                Console.WriteLine(" ?> Detected DDB version " + rawVersion);
+                Console.WriteLine(" ?> DDB version " + rawVersion);
 
                 // Remove git commit string
                 rawVersion = rawVersion.Contains(' ') ? rawVersion[..rawVersion.IndexOf(' ')] : rawVersion;
