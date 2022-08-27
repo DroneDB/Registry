@@ -32,6 +32,7 @@ namespace Registry.Web
     {
         public const int DefaultPort = 5000;
         public const string DefaultHost = "localhost";
+        public const string DroneDBDllName = "ddb.dll";
 
         public static readonly Version MinDdbVersion = new(1, 0, 6);
 
@@ -51,6 +52,27 @@ namespace Registry.Web
                 .WithParsed(RunOptions);
         }
 
+        private static void FixPath()
+        {
+            
+            var path = Environment.GetEnvironmentVariable("PATH");
+            if (path == null)
+            {
+                Console.WriteLine(" !> PATH is not set");
+                return;
+            }
+
+            var newPath = path.Split(Path.PathSeparator);
+            
+            var ddbFolder = newPath.FirstOrDefault(
+                p => File.Exists(Path.Combine(p, DroneDBDllName)));
+                
+            Console.WriteLine(" ?> Found {0} in {1}", DroneDBDllName, ddbFolder);
+            Environment.SetEnvironmentVariable("PATH",
+                $"{ddbFolder}{Path.PathSeparator}{Environment.GetEnvironmentVariable("PATH")}");
+
+        }
+
         private static void RunOptions(Options opts)
         {
             var appVersion = typeof(Program).Assembly.GetCustomAttribute<AssemblyFileVersionAttribute>()?.Version;
@@ -63,6 +85,10 @@ namespace Registry.Web
                 e.Cancel = true;
                 CommonUtils.WriteLineColor("\n -> Exiting...\n", ConsoleColor.Yellow);
             };
+            
+            // Ensure the ddb.dll is in the PATH and fix it if needed (only on windows)
+            if (Environment.OSVersion.Platform == PlatformID.Win32NT)
+                FixPath();
             
             if (!VerifyOptions(opts)) return;
 
