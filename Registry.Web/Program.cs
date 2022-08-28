@@ -410,21 +410,21 @@ namespace Registry.Web
             return true;
         }
 
-        private static bool ExtractDdb(string folder)
+        private static bool ExtractEmbeddedArchive(string archiveName, string folder)
         {
             var efp = new EmbeddedResourceQuery();
             var executingAssembly = Assembly.GetExecutingAssembly();
 
             Directory.CreateDirectory(folder);
 
-            Console.WriteLine(" -> Extracting Ddb");
+            Console.WriteLine($" -> Extracting '{archiveName}'");
 
             // Read embedded resource and extract to storage folder
-            using var stream = efp.Read(executingAssembly, MagicStrings.DdbArchive + ".zip");
+            using var stream = efp.Read(executingAssembly, archiveName + ".zip");
 
             if (stream == null)
             {
-                Console.WriteLine( " !> Failed to read embedded Ddb archive");
+                Console.WriteLine($" !> Failed to read embedded archive");
                 return false;
             }
             
@@ -432,48 +432,25 @@ namespace Registry.Web
 
             if (!zip.Entries.Any())
             {
-                Console.WriteLine(" !> Error while extracting Ddb, empty archive");
+                Console.WriteLine($" !> Error while extracting '{archiveName}', empty archive");
                 return false;
             }
 
-            Console.WriteLine(" ?> Found {0} entries in archive", zip.Entries.Count);
+            Console.WriteLine(" ?> Found {0} entries", zip.Entries.Count);
 
             zip.ExtractToDirectory(folder);
 
             return true;
         }
+
+        private static bool ExtractDdb(string folder)
+        {
+            return ExtractEmbeddedArchive(MagicStrings.DdbArchive, folder);
+        }
         
         private static bool ExtractHub(string folder)
         {
-            var efp = new EmbeddedResourceQuery();
-            var executingAssembly = Assembly.GetExecutingAssembly();
-
-            Directory.CreateDirectory(folder);
-
-            Console.WriteLine(" -> Extracting Hub");
-
-            // Read embedded resource and extract to storage folder
-            using var stream = efp.Read(executingAssembly, MagicStrings.SpaRoot + ".zip");
-            
-            if (stream == null)
-            {
-                Console.WriteLine( " !> Failed to read embedded SPA archive");
-                return false;
-            }
-            
-            using var zip = new ZipArchive(stream, ZipArchiveMode.Read);
-
-            if (!zip.Entries.Any())
-            {
-                Console.WriteLine(" !> Error while extracting Hub, empty archive");
-                return false;
-            }
-
-            Console.WriteLine(" ?> Found {0} entries in archive", zip.Entries.Count);
-
-            zip.ExtractToDirectory(folder);
-
-            return true;
+            return ExtractEmbeddedArchive(MagicStrings.SpaRoot, folder);
         }
 
         private static JObject GetDefaultSettings()

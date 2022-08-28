@@ -128,7 +128,7 @@
     
     
     <Target Name="EmbedDdbRelease">
-        <Message Text="Embedding ddb version $(DdbVersion), download at $(DdbReleaseUrl)" Importance="high" />
+        <Message Text="Embedding ddb version $(DdbVersion), downloading from $(DdbReleaseUrl)" Importance="high" />
 
         <DownloadFile SourceUrl="$(DdbReleaseUrl)" DestinationFolder="$(OutputPath)" DestinationFileName="ddb.zip">
             <Output TaskParameter="DownloadedFile" PropertyName="DdbReleasePath" />
@@ -146,7 +146,6 @@
         
 
     <Target Name="PreBuild" BeforeTargets="PreBuildEvent">
-
         
         <Exec Command="dotnet tool restore" />
     
