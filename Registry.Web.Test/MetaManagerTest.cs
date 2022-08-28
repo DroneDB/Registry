@@ -11,6 +11,7 @@ using Microsoft.Extensions.Options;
 using Moq;
 using Newtonsoft.Json;
 using NUnit.Framework;
+using Registry.Adapters.DroneDB;
 using Registry.Common;
 using Registry.Common.Test;
 using Registry.Web.Data;
@@ -19,6 +20,7 @@ using Registry.Web.Models.Configuration;
 using Registry.Web.Services.Adapters;
 using Registry.Web.Services.Managers;
 using Registry.Web.Services.Ports;
+using MetaManager = Registry.Web.Services.Managers.MetaManager;
 
 namespace Registry.Web.Test
 {
@@ -46,6 +48,9 @@ namespace Registry.Web.Test
         [SetUp]
         public void Setup()
         {
+            
+            DDBWrapper.RegisterProcess(true);
+
             _appSettingsMock = new Mock<IOptions<AppSettings>>();
             _authManagerMock = new Mock<IAuthManager>();
             _httpContextAccessorMock = new Mock<IHttpContextAccessor>();

@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using FluentAssertions;
@@ -58,13 +59,10 @@ namespace Registry.Adapters.Ddb.Test
         public void Init_EmptyFolder_Ok()
         {
 
-            const string folder = "testInit";
-
-            if (Directory.Exists(folder)) Directory.Delete(folder, true);
-            Directory.CreateDirectory(folder);
-
-            DDBWrapper.Init(folder).Should().Contain(folder);
-            Directory.Exists(Path.Join(folder, ".ddb")).Should().BeTrue();
+            using var area = new TestArea(nameof(Init_EmptyFolder_Ok));
+            
+            DDBWrapper.Init(area.TestFolder).Should().Contain(area.TestFolder);
+            Directory.Exists(Path.Join(area.TestFolder, ".ddb")).Should().BeTrue();
         }
 
         [Test]
@@ -88,29 +86,26 @@ namespace Registry.Adapters.Ddb.Test
         public void EndToEnd_Add_Remove()
         {
 
-            const string testFolder = "testAdd";
+            using var area = new TestArea(nameof(EndToEnd_Add_Remove));
 
-            if (Directory.Exists(testFolder)) Directory.Delete(testFolder, true);
+            DDBWrapper.Init(area.TestFolder);
 
-            Directory.CreateDirectory(testFolder);
-            DDBWrapper.Init(testFolder);
+            File.WriteAllText(Path.Join(area.TestFolder, "file.txt"), "test");
+            File.WriteAllText(Path.Join(area.TestFolder, "file2.txt"), "test");
+            File.WriteAllText(Path.Join(area.TestFolder, "file3.txt"), "test");
 
-            File.WriteAllText(Path.Join(testFolder, "file.txt"), "test");
-            File.WriteAllText(Path.Join(testFolder, "file2.txt"), "test");
-            File.WriteAllText(Path.Join(testFolder, "file3.txt"), "test");
+            Assert.Throws<DDBException>(() => DDBWrapper.Add(area.TestFolder, "invalid"));
 
-            Assert.Throws<DDBException>(() => DDBWrapper.Add(testFolder, "invalid"));
-
-            var entry = DDBWrapper.Add(testFolder, Path.Join(testFolder, "file.txt"))[0];
+            var entry = DDBWrapper.Add(area.TestFolder, Path.Join(area.TestFolder, "file.txt"))[0];
             entry.Path.Should().Be("file.txt");
             entry.Hash.Should().NotBeNullOrWhiteSpace();
 
-            var entries = DDBWrapper.Add(testFolder, new[] { Path.Join(testFolder, "file2.txt"), Path.Join(testFolder, "file3.txt") });
+            var entries = DDBWrapper.Add(area.TestFolder, new[] { Path.Join(area.TestFolder, "file2.txt"), Path.Join(area.TestFolder, "file3.txt") });
             entries.Should().HaveCount(2);
 
-            DDBWrapper.Remove(testFolder, Path.Combine(testFolder, "file.txt"));
+            DDBWrapper.Remove(area.TestFolder, Path.Combine(area.TestFolder, "file.txt"));
 
-            Assert.Throws<DDBException>(() => DDBWrapper.Remove(testFolder, "invalid"));
+            Assert.Throws<DDBException>(() => DDBWrapper.Remove(area.TestFolder, "invalid"));
         }
 
         [Test]
@@ -127,19 +122,15 @@ namespace Registry.Adapters.Ddb.Test
         public void Info_GenericFile_Details()
         {
 
-            const string testFolder = "testInfo";
+            using var area = new TestArea(nameof(Info_GenericFile_Details));
 
-            if (Directory.Exists(testFolder)) Directory.Delete(testFolder, true);
-            Directory.CreateDirectory(testFolder);
+            File.WriteAllText(Path.Join(area.TestFolder, "file.txt"), "test");
+            File.WriteAllText(Path.Join(area.TestFolder, "file2.txt"), "test");
 
-            File.WriteAllText(Path.Join(testFolder, "file.txt"), "test");
-            File.WriteAllText(Path.Join(testFolder, "file2.txt"), "test");
-
-            var e = DDBWrapper.Info(Path.Join(testFolder, "file.txt"), withHash: true)[0];
+            var e = DDBWrapper.Info(Path.Join(area.TestFolder, "file.txt"), withHash: true)[0];
             Assert.IsNotEmpty(e.Hash);
 
-            // TODO: troubleshoot this and use 
-            var es = DDBWrapper.Info(testFolder, true);
+            var es = DDBWrapper.Info(area.TestFolder, true);
             Assert.AreEqual(2, es.Count);
             Assert.AreEqual(EntryType.Generic, es[0].Type);
             Assert.IsTrue(es[0].Size > 0);
@@ -300,7 +291,7 @@ namespace Registry.Adapters.Ddb.Test
         [Test]
         public void Remove_Nonexistant_Exception()
         {
-            Action act = () => DDBWrapper.Remove("invalid", "");
+            var act = () => DDBWrapper.Remove("invalid", "");
             act.Should().Throw<DDBException>();
 
             act = () => DDBWrapper.Remove("invalid", "wefrfwef");
@@ -356,7 +347,7 @@ namespace Registry.Adapters.Ddb.Test
 
             var ddbPath = Path.Combine(test.TestFolder, "public", "default");
 
-            Action act = () => DDBWrapper.Remove(ddbPath, Path.Combine(ddbPath, fileName));
+            var act = () => DDBWrapper.Remove(ddbPath, Path.Combine(ddbPath, fileName));
 
             act.Should().Throw<DDBException>();
         }
@@ -466,6 +457,7 @@ namespace Registry.Adapters.Ddb.Test
             try
             {
                 var path = DDBWrapper.GenerateTile(tempFile.FilePath, 18, 64083, 92370, 256, true);
+                Debug.WriteLine(path);
             }
             finally
             {
@@ -522,7 +514,7 @@ namespace Registry.Adapters.Ddb.Test
 
             var ddbPath = Path.Combine(test.TestFolder, DdbFolder);
 
-            Action act = () => DDBWrapper.SetTag(ddbPath, badTag);
+            var act = () => DDBWrapper.SetTag(ddbPath, badTag);
 
             act.Should().Throw<DDBException>();
 
@@ -635,7 +627,7 @@ namespace Registry.Adapters.Ddb.Test
         [Test]
         public void MetaAdd_Ok()
         {
-            using var area = new TestArea("metaAddOkTest");
+            using var area = new TestArea(nameof(MetaAdd_Ok));
             DDBWrapper.Init(area.TestFolder);
 
             FluentActions.Invoking(() => DDBWrapper.MetaAdd(area.TestFolder, "test", "123")).Should()
@@ -646,7 +638,7 @@ namespace Registry.Adapters.Ddb.Test
         [Test]
         public void MetaAdd_Json()
         {
-            using var area = new TestArea("metaAddJsonTest");
+            using var area = new TestArea(nameof(MetaAdd_Json));
             DDBWrapper.Init(area.TestFolder);
 
             var res = DDBWrapper.MetaAdd(area.TestFolder, "tests", "{\"test\": true}");
@@ -658,7 +650,7 @@ namespace Registry.Adapters.Ddb.Test
         [Test]
         public void MetaSet_Ok()
         {
-            using var area = new TestArea("metaSetOkTest");
+            using var area = new TestArea(nameof(MetaSet_Ok));
             DDBWrapper.Init(area.TestFolder);
 
             var f = Path.Join(area.TestFolder, "test.txt");
@@ -676,7 +668,7 @@ namespace Registry.Adapters.Ddb.Test
         [Test]
         public void MetaRemove_Ok()
         {
-            using var area = new TestArea("metaRemoveOkTest");
+            using var area = new TestArea(nameof(MetaRemove_Ok));
             DDBWrapper.Init(area.TestFolder);
 
             var id = DDBWrapper.MetaSet(area.TestFolder, "test", "123").Id;
@@ -688,7 +680,7 @@ namespace Registry.Adapters.Ddb.Test
         [Test]
         public void MetaGet_Ok()
         {
-            using var area = new TestArea("metaGetOkTest");
+            using var area = new TestArea(nameof(MetaGet_Ok));
             DDBWrapper.Init(area.TestFolder);
 
             DDBWrapper.MetaSet(area.TestFolder, "abc", "true");
@@ -706,7 +698,7 @@ namespace Registry.Adapters.Ddb.Test
         [Test]
         public void MetaGet_Ok2()
         {
-            using var area = new TestArea("metaGetOkTest");
+            using var area = new TestArea(nameof(MetaGet_Ok2));
             DDBWrapper.Init(area.TestFolder);
 
             DDBWrapper.MetaAdd(area.TestFolder, "tests", "{\"test\":true}");
@@ -722,7 +714,7 @@ namespace Registry.Adapters.Ddb.Test
         [Test]
         public void MetaUnset_Ok()
         {
-            using var area = new TestArea("metaUnsetOkTest");
+            using var area = new TestArea(nameof(MetaUnset_Ok));
             DDBWrapper.Init(area.TestFolder);
             
             var f = Path.Join(area.TestFolder, "test.txt");
@@ -739,7 +731,7 @@ namespace Registry.Adapters.Ddb.Test
         [Test]
         public void MetaList_Ok()
         {
-            using var area = new TestArea("metaListOkTest");
+            using var area = new TestArea(nameof(MetaList_Ok));
             DDBWrapper.Init(area.TestFolder);
 
             DDBWrapper.MetaAdd(area.TestFolder, "annotations", "123");

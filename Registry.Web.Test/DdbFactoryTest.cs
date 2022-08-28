@@ -9,6 +9,7 @@ using Moq;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using NUnit.Framework;
+using Registry.Adapters.DroneDB;
 using Registry.Common;
 using Registry.Common.Test;
 using Registry.Ports.DroneDB.Models;
@@ -33,6 +34,9 @@ namespace Registry.Web.Test
         [SetUp]
         public void Setup()
         {
+            
+            DDBWrapper.RegisterProcess(true);
+
             _appSettingsMock = new Mock<IOptions<AppSettings>>();
             _ddbFactoryLogger = new Logger<DdbManager>(LoggerFactory.Create(builder => builder.AddConsole()));
 
