@@ -6,11 +6,11 @@
         <UserSecretsId>4e006835-31cb-47c5-9dfe-7b73e210db92</UserSecretsId>
         <SpaRoot>ClientApp\</SpaRoot>
         <DefaultItemExcludes>$(DefaultItemExcludes);$(SpaRoot)node_modules\**</DefaultItemExcludes>
-        <AssemblyVersion>1.0.14</AssemblyVersion>
-        <FileVersion>1.0.14</FileVersion>
-        <Version>1.0.14</Version>
+        <AssemblyVersion>1.0.15</AssemblyVersion>
+        <FileVersion>1.0.15</FileVersion>
+        <Version>1.0.15</Version>
         <Platforms>AnyCPU;x64</Platforms>
-        <PackageVersion>1.0.14</PackageVersion>
+        <PackageVersion>1.0.15</PackageVersion>
         <Configurations>Debug;Release;DebugEf</Configurations>
         <DdbVersion>1.0.7</DdbVersion>
     </PropertyGroup>
