@@ -87,15 +87,6 @@ namespace Registry.Adapters.DroneDB
             return DDBWrapper.Info(DatasetFolderPath).FirstOrDefault()?.Size ?? 0;
         }
 
-        static DDB()
-        {
-#if DEBUG
-            DDBWrapper.RegisterProcess(true);
-#else
-            DDBWrapper.RegisterProcess(false);
-#endif
-        }
-
         public string GetLocalPath(string path)
         {
             return CommonUtils.SafeCombine(DatasetFolderPath, path);

@@ -12,6 +12,7 @@
         <Platforms>AnyCPU;x64</Platforms>
         <PackageVersion>1.0.14</PackageVersion>
         <Configurations>Debug;Release;DebugEf</Configurations>
+        <DdbVersion>1.0.7</DdbVersion>
     </PropertyGroup>
 
     <PropertyGroup Condition=" '$(Configuration)' == 'DebugEf' ">
@@ -109,14 +110,50 @@
             <UserProperties appsettings_1json__JsonSchema="" />
         </VisualStudio>
     </ProjectExtensions>
+    
+    <PropertyGroup>
+        <DdbReleaseUrl>https://github.com/DroneDB/DroneDB/releases/download/v$(DdbVersion)/ddb-$(DdbVersion)-windows.zip</DdbReleaseUrl>
+    </PropertyGroup>
+    
+    <Target Name="HandleNPMErrors">
+        <Error Text="Cannot build SPA: Check ClientApp submodule, NodeJS version (14) and install webpack@4 and webpack-cli in global" />
+    </Target>
+    
+    <Target Name="BuildSPA">
+        <Exec WorkingDirectory="ClientApp" Command="npm install" />
+        <Exec WorkingDirectory="ClientApp" Command="webpack" />
+        <Message Text="SPA built" />
+        <OnError ExecuteTargets="HandleNPMErrors" />
+    </Target>
+    
+    
+    <Target Name="EmbedDdbRelease">
+        <Message Text="Embedding ddb version $(DdbVersion), downloading from $(DdbReleaseUrl)" Importance="high" />
+
+        <DownloadFile SourceUrl="$(DdbReleaseUrl)" DestinationFolder="$(OutputPath)" DestinationFileName="ddb.zip">
+            <Output TaskParameter="DownloadedFile" PropertyName="DdbReleasePath" />
+        </DownloadFile>
+                
+        <Message Text="Ddb release downloaded to $(DdbReleasePath)" Importance="high" />
+
+        <ItemGroup>
+            <EmbeddedResource Include="$(DdbReleasePath)">
+                <LogicalName>Registry.Web.ddb.zip</LogicalName>
+            </EmbeddedResource>
+        </ItemGroup>        
+
+    </Target>
+        
 
     <Target Name="PreBuild" BeforeTargets="PreBuildEvent">
-
+        
         <Exec Command="dotnet tool restore" />
     
         <!-- Build Hub if not built -->
-        <Exec Condition="!Exists('$(ProjectDir)/ClientApp/build')" WorkingDirectory="ClientApp" Command="npm install" />
-        <Exec Condition="!Exists('$(ProjectDir)/ClientApp/build')" WorkingDirectory="ClientApp" Command="webpack" />
+        <CallTarget Condition="!Exists('$(ProjectDir)/ClientApp/build')" Targets="BuildSPA" />
+        
+        <!-- Embed ddb release on windows -->
+        <CallTarget Condition="$([MSBuild]::IsOSPlatform('Windows'))" Targets="EmbedDdbRelease" />
                 
         <Delete Files="$(ProjectDir)/ClientApp.zip" />
 

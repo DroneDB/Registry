@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO;
 using System.IO.Compression;
 using System.Linq;
@@ -32,12 +33,12 @@ namespace Registry.Web
     {
         public const int DefaultPort = 5000;
         public const string DefaultHost = "localhost";
+        public const string DroneDBDllName = "ddb.dll";
 
-        public static readonly Version MinDdbVersion = new(1, 0, 6);
+        public static readonly Version MinDdbVersion = new(1, 0, 7);
 
         public static void Main(string[] args)
         {
-            
 #if DEBUG_EF
             // EF core tools compatibility
             if (IsEfTool(args))
@@ -49,6 +50,34 @@ namespace Registry.Web
 
             Parser.Default.ParseArguments<Options>(args)
                 .WithParsed(RunOptions);
+        }
+
+        private static bool FixPath()
+        {
+            var path = Environment.GetEnvironmentVariable("PATH");
+            if (path == null)
+            {
+                Console.WriteLine(" !> PATH is not set");
+                return false;
+            }
+
+            var newPath = path.Split(Path.PathSeparator);
+
+            var ddbFolder = newPath.FirstOrDefault(
+                p => File.Exists(Path.Combine(p, DroneDBDllName)));
+            
+            if (ddbFolder == null)
+            {
+                Console.WriteLine(" !> {0} not found in PATH", DroneDBDllName);
+                return false;
+            }
+
+            Console.WriteLine(" ?> Found {0} in {1}", DroneDBDllName, ddbFolder);
+
+            Environment.SetEnvironmentVariable("PATH",
+                $"{ddbFolder}{Path.PathSeparator}{Environment.GetEnvironmentVariable("PATH")}");
+
+            return true;
         }
 
         private static void RunOptions(Options opts)
@@ -63,7 +92,20 @@ namespace Registry.Web
                 e.Cancel = true;
                 CommonUtils.WriteLineColor("\n -> Exiting...\n", ConsoleColor.Yellow);
             };
+
+            // If we need to initialize ddb from the storage folder
+            var lateDdbInit = false;
             
+            // Ensure the ddb.dll is in the PATH and fix it if needed (only on windows)
+            if (Environment.OSVersion.Platform == PlatformID.Win32NT)
+                lateDdbInit = !FixPath();
+
+#if DEBUG
+            Console.WriteLine(" ?> Running in DEBUG");
+#else
+            Console.WriteLine(" ?> Running in RELEASE");
+#endif
+
             if (!VerifyOptions(opts)) return;
 
             opts.StorageFolder = Path.GetFullPath(opts.StorageFolder);
@@ -73,44 +115,36 @@ namespace Registry.Web
             Console.WriteLine(" ?> Using storage folder '{0}'", opts.StorageFolder);
             Console.WriteLine(" ?> Using address '{0}'", opts.Address);
 
-            try
+            if (lateDdbInit)
             {
-                var rawVersion = DDBWrapper.GetVersion();
-                Console.WriteLine(" ?> Detected DDB version " + rawVersion);
-
-                // Remove git commit string
-                rawVersion = rawVersion.Contains(' ') ? rawVersion[..rawVersion.IndexOf(' ')] : rawVersion;
-
-                var ddbVersion = new Version(rawVersion);
-
-                if (ddbVersion < MinDdbVersion)
+                if (!SetupStorageFolder(opts.StorageFolder, opts.ResetHub, true))
                 {
-                    CommonUtils.WriteLineColor(
-                        $" !> DDB version is too old, please upgrade to {MinDdbVersion} or higher: {MagicStrings.DdbReleasesPageUrl}", ConsoleColor.Red);
+                    CommonUtils.WriteLineColor(" !> Failed to setup storage folder", ConsoleColor.Red);
+                    return;
+                }
+            
+                if (!InitializeDdb())
+                {
+                    CommonUtils.WriteLineColor(" !> Failed to initialize DroneDB", ConsoleColor.Red);
                     return;
                 }
             }
-            catch (Exception e)
+            else
             {
-                Console.ForegroundColor = ConsoleColor.Red;
-                Console.WriteLine($" !> Unable to load DDB lib: {e.Message}");
-                Console.ResetColor();
-                Console.WriteLine();
-
-                Console.WriteLine(
-                    $" ?> Check installation instructions on {MagicStrings.DdbInstallPageUrl} and try again.");
-                Console.WriteLine($" ?> Releases page: {MagicStrings.DdbReleasesPageUrl}");
-
-                return;
+                if (!InitializeDdb())
+                {
+                    CommonUtils.WriteLineColor(" !> Failed to initialize DroneDB", ConsoleColor.Red);
+                    return;
+                }
+                
+                if (!SetupStorageFolder(opts.StorageFolder, opts.ResetHub))
+                {
+                    CommonUtils.WriteLineColor(" !> Failed to setup storage folder", ConsoleColor.Red);
+                    return;
+                }
             }
 
-            if (!SetupStorageFolder(opts.StorageFolder, opts.ResetHub))
-            {
-                Console.ForegroundColor = ConsoleColor.Red;
-                Console.WriteLine(" !> Error while setting up storage folder");
-                Console.ResetColor();
-                return;
-            }
+            
 
             try
             {
@@ -138,6 +172,52 @@ namespace Registry.Web
             }
         }
 
+        private static bool InitializeDdb()
+        {
+            try
+            {
+#if DEBUG
+                DDBWrapper.RegisterProcess(true);
+                Console.WriteLine(" ?> Initialized DDB - Verbose");
+#else
+                DDBWrapper.RegisterProcess(false);
+                Console.WriteLine(" ?> Initialized DDB");
+#endif
+
+                var rawVersion = DDBWrapper.GetVersion();
+                Console.WriteLine(" ?> DDB version " + rawVersion);
+
+                // Remove git commit string
+                rawVersion = rawVersion.Contains(' ') ? rawVersion[..rawVersion.IndexOf(' ')] : rawVersion;
+
+                var ddbVersion = new Version(rawVersion);
+
+                if (ddbVersion < MinDdbVersion)
+                {
+                    CommonUtils.WriteLineColor(
+                        $" !> DDB version is too old, please upgrade to {MinDdbVersion} or higher: {MagicStrings.DdbReleasesPageUrl}",
+                        ConsoleColor.Red);
+                    return false;
+                }
+
+                return true;
+            }
+            catch (Exception e)
+            {
+                Console.ForegroundColor = ConsoleColor.Red;
+                Console.WriteLine($" !> Unable to load DDB lib: {e.Message}");
+                Console.ResetColor();
+                Console.WriteLine();
+
+                Console.WriteLine(
+                    $" ?> Check installation instructions on {MagicStrings.DdbInstallPageUrl} and try again.");
+                Console.WriteLine($" ?> Releases page: {MagicStrings.DdbReleasesPageUrl}");
+
+                return false;
+            }
+
+        }
+
         private static bool VerifyOptions(Options opts)
         {
             if (opts.StorageFolder == null)
@@ -153,12 +233,12 @@ namespace Registry.Web
                     CommonUtils.WriteColor(" !> Address not specified", ConsoleColor.Red);
                     return false;
                 }
-                
+
                 var parts = opts.Address.Split(':');
 
                 var host = DefaultHost;
                 var port = DefaultPort;
-                
+
                 switch (parts.Length)
                 {
                     case 1:
@@ -167,14 +247,14 @@ namespace Registry.Web
                         {
                             // Try to parse as hostname
                             host = parts[0];
-                        
+
                             if (host.ToLowerInvariant() != "localhost" && !IPEndPoint.TryParse(host, out _))
                             {
                                 CommonUtils.WriteColor(" !> Invalid address", ConsoleColor.Red);
                                 return false;
                             }
                         }
-                    
+
                         if (port is < 1 or > 65535)
                         {
                             CommonUtils.WriteColor(" !> Invalid port", ConsoleColor.Red);
@@ -186,19 +266,19 @@ namespace Registry.Web
                     case 2:
                     {
                         host = parts[0];
-                    
+
                         if (host.ToLowerInvariant() != "localhost" && !IPEndPoint.TryParse(host, out _))
                         {
                             CommonUtils.WriteColor(" !> Invalid address", ConsoleColor.Red);
                             return false;
                         }
-                    
+
                         if (!int.TryParse(parts[1], out port))
                         {
                             CommonUtils.WriteColor(" !> Invalid port", ConsoleColor.Red);
                             return false;
                         }
-                    
+
                         if (port is < 1 or > 65535)
                         {
                             CommonUtils.WriteColor(" !> Invalid port", ConsoleColor.Red);
@@ -218,11 +298,18 @@ namespace Registry.Web
             return true;
         }
 
-        private static bool SetupStorageFolder(string folder, bool resetSpa = false)
+        private static bool SetupStorageFolder(string folder, bool resetSpa = false, bool deployDdb = false)
         {
             Console.WriteLine(" -> Setting up storage folder");
 
             Directory.CreateDirectory(folder);
+
+            if (deployDdb && !SetupDdb(folder, false))
+            {
+                CommonUtils.WriteLineColor(" !> Failed to deploy DDB to storage folder", ConsoleColor.Red);
+                return false;
+            }
+                
 
             if (!SetupHub(folder, resetSpa))
             {
@@ -291,31 +378,79 @@ namespace Registry.Web
 
             return ExtractHub(hubRoot);
         }
+        
+        private static bool SetupDdb(string folder, bool resetDdb)
+        {
+            var ddbRoot = Path.Combine(folder, MagicStrings.DdbArchive);
 
-        private static bool ExtractHub(string folder)
+            if (resetDdb)
+            {
+                Console.WriteLine(" -> Resetting ddb installation");
+                Directory.Delete(ddbRoot, true);
+            }
+            else if (
+                Directory.Exists(ddbRoot) &&
+                Directory.GetFiles(ddbRoot).Any())
+            {
+                Console.WriteLine(" ?> Ddb folder is ok");
+                
+                Environment.SetEnvironmentVariable("PATH",
+                    $"{ddbRoot}{Path.PathSeparator}{Environment.GetEnvironmentVariable("PATH")}");
+                
+                return true;
+            }
+
+            var res = ExtractDdb(ddbRoot);
+
+            if (!res) return false;
+
+            Environment.SetEnvironmentVariable("PATH",
+                $"{ddbRoot}{Path.PathSeparator}{Environment.GetEnvironmentVariable("PATH")}");
+
+            return true;
+        }
+
+        private static bool ExtractEmbeddedArchive(string archiveName, string folder)
         {
             var efp = new EmbeddedResourceQuery();
             var executingAssembly = Assembly.GetExecutingAssembly();
 
             Directory.CreateDirectory(folder);
 
-            Console.WriteLine(" -> Extracting Hub");
+            Console.WriteLine($" -> Extracting '{archiveName}'");
 
             // Read embedded resource and extract to storage folder
-            using var stream = efp.Read(executingAssembly, MagicStrings.SpaRoot + ".zip");
+            using var stream = efp.Read(executingAssembly, archiveName + ".zip");
+
+            if (stream == null)
+            {
+                Console.WriteLine($" !> Failed to read embedded archive");
+                return false;
+            }
+            
             using var zip = new ZipArchive(stream, ZipArchiveMode.Read);
 
             if (!zip.Entries.Any())
             {
-                Console.WriteLine(" !> Error while extracting Hub, empty archive");
+                Console.WriteLine($" !> Error while extracting '{archiveName}', empty archive");
                 return false;
             }
 
-            Console.WriteLine(" ?> Found {0} entries in archive", zip.Entries.Count);
+            Console.WriteLine(" ?> Found {0} entries", zip.Entries.Count);
 
             zip.ExtractToDirectory(folder);
 
             return true;
+        }
+
+        private static bool ExtractDdb(string folder)
+        {
+            return ExtractEmbeddedArchive(MagicStrings.DdbArchive, folder);
+        }
+        
+        private static bool ExtractHub(string folder)
+        {
+            return ExtractEmbeddedArchive(MagicStrings.SpaRoot, folder);
         }
 
         private static JObject GetDefaultSettings()

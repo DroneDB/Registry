@@ -29,6 +29,7 @@ namespace Registry.Web
 
         public const string DefaultHost = "localhost";
         public const string SpaRoot = "ClientApp";
+        public const string DdbArchive = "ddb";
         public const string AppSettingsFileName = "appsettings.json";
         public const string AppSettingsDefaultFileName = "appsettings-default.json";
 
