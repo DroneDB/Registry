@@ -4,6 +4,7 @@ using System.Threading.Tasks;
 using Microsoft.AspNetCore.Http;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
+using Registry.Adapters.DroneDB;
 using Registry.Common;
 using Registry.Ports;
 using Registry.Web.Data;
@@ -102,8 +103,9 @@ namespace Registry.Web.Services.Adapters
             }
 
             var ddb = _ddbManager.Get(orgSlug, dataset.InternalRef);
-            var attributes = await ddb.GetAttributesAsync();
 
+            var attributes = ddb.Meta.GetSafe();
+            
             if (!attributes.IsPublic && !await _authManager.IsUserAdmin() && checkOwnership)
             {
                 var currentUser = await _authManager.GetCurrentUser();

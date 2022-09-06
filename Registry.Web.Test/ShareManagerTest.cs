@@ -37,7 +37,6 @@ using Registry.Ports.DroneDB.Models;
 using Registry.Web.Identity;
 using Registry.Web.Identity.Models;
 using Registry.Web.Services;
-using Attributes = Registry.Ports.DroneDB.Models.EntryAttributes;
 using Entry = Registry.Ports.DroneDB.Models.Entry;
 using IMetaManager = Registry.Ports.DroneDB.IMetaManager;
 
@@ -178,8 +177,8 @@ namespace Registry.Web.Test
 
             var ddbMock2 = new Mock<IDDB>();
             ddbMock2.Setup(x => x.GetAttributesRaw()).Returns(attributes);
-            ddbMock.Setup(x => x.GetAttributesAsync(default))
-                .Returns(Task.FromResult(new EntryAttributes(ddbMock2.Object)));
+            // ddbMock.Setup(x => x.GetAttributesAsync(default))
+            //     .Returns(Task.FromResult(new EntryAttributes(ddbMock2.Object)));
 
             _ddbFactoryMock.Setup(x => x.Get(It.IsAny<string>(), It.IsAny<Guid>())).Returns(ddbMock.Object);
             
@@ -281,8 +280,8 @@ namespace Registry.Web.Test
 
             var ddbMock2 = new Mock<IDDB>();
             ddbMock2.Setup(x => x.GetAttributesRaw()).Returns(attributes);
-            ddbMock.Setup(x => x.GetAttributesAsync(default))
-                .Returns(Task.FromResult(new EntryAttributes(ddbMock2.Object)));
+            // ddbMock.Setup(x => x.GetAttributesAsync(default))
+            //     .Returns(Task.FromResult(new EntryAttributes(ddbMock2.Object)));
 
             _ddbFactoryMock.Setup(x => x.Get(It.IsAny<string>(), It.IsAny<Guid>())).Returns(ddbMock.Object);
             
@@ -393,8 +392,8 @@ namespace Registry.Web.Test
 
             var ddbMock2 = new Mock<IDDB>();
             ddbMock2.Setup(x => x.GetAttributesRaw()).Returns(attributes);
-            ddbMock.Setup(x => x.GetAttributesAsync(default))
-                .Returns(Task.FromResult(new EntryAttributes(ddbMock2.Object)));
+            // ddbMock.Setup(x => x.GetAttributesAsync(default))
+            //     .Returns(Task.FromResult(new EntryAttributes(ddbMock2.Object)));
 
             _ddbFactoryMock.Setup(x => x.Get(It.IsAny<string>(), It.IsAny<Guid>())).Returns(ddbMock.Object);
 
@@ -532,8 +531,8 @@ namespace Registry.Web.Test
             
             var ddbMock2 = new Mock<IDDB>();
             ddbMock2.Setup(x => x.GetAttributesRaw()).Returns(attributes);
-            ddbMock.Setup(x => x.GetAttributesAsync(default))
-                .Returns(Task.FromResult(new EntryAttributes(ddbMock2.Object)));
+            // ddbMock.Setup(x => x.GetAttributesAsync(default))
+            //     .Returns(Task.FromResult(new EntryAttributes(ddbMock2.Object)));
 
             _ddbFactoryMock.Setup(x => x.Get(It.IsAny<string>(), It.IsAny<Guid>())).Returns(ddbMock.Object);
 
@@ -680,8 +679,8 @@ namespace Registry.Web.Test
 
             var ddbMock2 = new Mock<IDDB>();
             ddbMock2.Setup(x => x.GetAttributesRaw()).Returns(attributes);
-            ddbMock.Setup(x => x.GetAttributesAsync(default))
-                .Returns(Task.FromResult(new EntryAttributes(ddbMock2.Object)));
+            // ddbMock.Setup(x => x.GetAttributesAsync(default))
+            //     .Returns(Task.FromResult(new EntryAttributes(ddbMock2.Object)));
 
             _ddbFactoryMock.Setup(x => x.Get(It.IsAny<string>(), It.IsAny<Guid>())).Returns(ddbMock.Object);
 

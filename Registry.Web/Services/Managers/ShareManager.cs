@@ -7,6 +7,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Registry.Ports;
+using Registry.Ports.DroneDB.Models;
 using Registry.Web.Data;
 using Registry.Web.Data.Models;
 using Registry.Web.Exceptions;
@@ -254,7 +255,7 @@ namespace Registry.Web.Services.Managers
                 {
                     Slug = dsSlug,
                     Name = parameters.DatasetName,
-                    IsPublic = true
+                    Visibility = Visibility.Public
                 });
 
                 dataset = await _utils.GetDataset(orgSlug, dsSlug);
@@ -282,7 +283,7 @@ namespace Registry.Web.Services.Managers
                     {
                         Slug = dsSlug,
                         Name = parameters.DatasetName,
-                        IsPublic = true
+                        Visibility = Visibility.Public
                     });
 
                     dataset = _context.Datasets.First(ds => ds.Slug == dsSlug);
@@ -302,7 +303,7 @@ namespace Registry.Web.Services.Managers
                         {
                             Slug = tag.DatasetSlug,
                             Name = parameters.DatasetName,
-                            IsPublic = true
+                            Visibility = Visibility.Public
                         });
 
                         _logger.LogInformation("Dataset created");

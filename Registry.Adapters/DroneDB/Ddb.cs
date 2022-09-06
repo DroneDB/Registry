@@ -245,11 +245,6 @@ namespace Registry.Adapters.DroneDB
             return ChangeAttributesRaw(new Dictionary<string, object>());
         }
 
-        public EntryAttributes GetAttributes()
-        {
-            return new(this);
-        }
-
         public Entry GetInfo()
         {
             return GetInfo(DatasetFolderPath);
@@ -441,12 +436,6 @@ namespace Registry.Adapters.DroneDB
             CancellationToken cancellationToken = default)
         {
             return await Task<Dictionary<string, object>>.Factory.StartNew(GetAttributesRaw, cancellationToken,
-                TaskCreationOptions.LongRunning, TaskScheduler.Default);
-        }
-
-        public async Task<EntryAttributes> GetAttributesAsync(CancellationToken cancellationToken = default)
-        {
-            return await Task<EntryAttributes>.Factory.StartNew(GetAttributes, cancellationToken,
                 TaskCreationOptions.LongRunning, TaskScheduler.Default);
         }
 

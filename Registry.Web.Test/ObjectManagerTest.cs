@@ -77,8 +77,8 @@ namespace Registry.Web.Test
                 { "public", true }
             });
             var ddbMock2 = new Mock<IDDB>();
-            ddbMock2.Setup(x => x.GetAttributesAsync(default))
-                .Returns(Task.FromResult(new EntryAttributes(ddbMock1.Object)));
+            // ddbMock2.Setup(x => x.GetAttributesAsync(default))
+            //     .Returns(Task.FromResult(new EntryAttributes(ddbMock1.Object)));
 
             _ddbFactoryMock.Setup(x => x.Get(It.IsAny<string>(), It.IsAny<Guid>())).Returns(ddbMock2.Object);
         }

@@ -49,13 +49,12 @@ namespace Registry.Web.Services.Managers
             {
                 var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
                 var info = await ddb.GetInfoAsync();
-                var attributes = new EntryProperties(info.Properties);
 
                 res.Add(new DatasetDto
                 {
                     Slug = ds.Slug,
                     CreationDate = ds.CreationDate,
-                    Properties = attributes.Properties,
+                    Properties = info.Properties,
                     Size = info.Size
                 });
             }
@@ -112,14 +111,13 @@ namespace Registry.Web.Services.Managers
             };
 
             var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
+            var meta = ddb.Meta.GetSafe();
+
+            meta.Name = dataset.Name ?? dataset.Slug;
+
+            if (dataset.Visibility.HasValue)
+                meta.Visibility = dataset.Visibility.Value;
             
-            ddb.Meta.GetSafe().Name = dataset.Name ?? dataset.Slug;
-
-            var attributes = await ddb.GetAttributesAsync();
-
-            if (dataset.IsPublic.HasValue)
-                attributes.IsPublic = dataset.IsPublic.Value;
-
             org.Datasets.Add(ds);
 
             await _context.SaveChangesAsync();
@@ -138,13 +136,13 @@ namespace Registry.Web.Services.Managers
                 throw new UnauthorizedException("The current user is not allowed to edit dataset");
 
             var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
-            var attributes = await ddb.GetAttributesAsync();
+            var meta = ddb.Meta.GetSafe();
 
-            if (dataset.IsPublic != null)
-                attributes.IsPublic = dataset.IsPublic.Value;
+            if (dataset.Visibility.HasValue)
+                meta.Visibility = dataset.Visibility.Value;
 
             if (!string.IsNullOrWhiteSpace(dataset.Name))
-                ddb.Meta.GetSafe().Name = dataset.Name;
+                meta.Name = dataset.Name;
 
             await _context.SaveChangesAsync();
         }
@@ -198,6 +196,7 @@ namespace Registry.Web.Services.Managers
             await _context.SaveChangesAsync();
         }
 
+        [Obsolete("Use meta")]
         public async Task<Dictionary<string, object>> ChangeAttributes(string orgSlug, string dsSlug,
             AttributesDto attributes)
         {
@@ -211,10 +210,7 @@ namespace Registry.Web.Services.Managers
                 throw new UnauthorizedException("The current user is not allowed to change attributes");
 
             var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
-            var attrs = await ddb.GetAttributesAsync();
-            attrs.IsPublic = attributes.IsPublic;
-
-            return await ddb.GetAttributesRawAsync();
+            return await ddb.ChangeAttributesRawAsync(new Dictionary<string, object> { { "public", attributes.IsPublic } });;
         }
 
         public async Task<StampDto> GetStamp(string orgSlug, string dsSlug)

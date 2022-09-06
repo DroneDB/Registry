@@ -571,6 +571,11 @@ namespace Registry.Common
             Console.ResetColor();
         }
 
+        public static int? SafeParse(string str, IFormatProvider provider = null)
+        {
+            return int.TryParse(str, NumberStyles.Integer, provider, out var result) ? result : null;
+        }
+
 
     }
 }
