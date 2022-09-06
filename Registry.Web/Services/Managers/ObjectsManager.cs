@@ -42,7 +42,7 @@ namespace Registry.Web.Services.Managers
 
         private bool IsReservedPath(string path)
         {
-            return path.StartsWith(DDB.DatabaseFolderName);
+            return path.StartsWith(IDDB.DatabaseFolderName);
         }
 
         public ObjectsManager(ILogger<ObjectsManager> logger,
@@ -69,10 +69,13 @@ namespace Registry.Web.Services.Managers
         public async Task<IEnumerable<EntryDto>> List(string orgSlug, string dsSlug, string path = null,
             bool recursive = false, EntryType? type = null)
         {
-            var ds = await _utils.GetDataset(orgSlug, dsSlug);
-
+            var ds = _utils.GetDataset(orgSlug, dsSlug);
+            
             _logger.LogInformation("In List('{OrgSlug}/{DsSlug}')", orgSlug, dsSlug);
 
+            if (!await _authManager.RequestAccess(ds, AccessType.Read))
+                throw new UnauthorizedException("The current user is not allowed to list this dataset");
+            
             var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
 
             _logger.LogInformation("Searching in '{Path}'", path);
@@ -92,9 +95,12 @@ namespace Registry.Web.Services.Managers
         public async Task<IEnumerable<EntryDto>> Search(string orgSlug, string dsSlug, string query = null,
             string path = null, bool recursive = true, EntryType? type = null)
         {
-            var ds = await _utils.GetDataset(orgSlug, dsSlug);
-
+            var ds = _utils.GetDataset(orgSlug, dsSlug);
+            
             _logger.LogInformation("In Search('{OrgSlug}/{DsSlug}')", orgSlug, dsSlug);
+            
+            if (!await _authManager.RequestAccess(ds, AccessType.Read))
+                throw new UnauthorizedException("The current user is not allowed to search this dataset");
 
             var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
 
@@ -117,12 +123,15 @@ namespace Registry.Web.Services.Managers
 
         public async Task<StorageEntryDto> Get(string orgSlug, string dsSlug, string path)
         {
-            var ds = await _utils.GetDataset(orgSlug, dsSlug);
+            var ds = _utils.GetDataset(orgSlug, dsSlug);
 
-            _logger.LogInformation("In Get('{OrgSlug}/{DsSlug}')", orgSlug, dsSlug);
+            _logger.LogInformation("In Get('{OrgSlug}/{DsSlug}', {Path})", orgSlug, dsSlug, path);
 
             if (string.IsNullOrWhiteSpace(path))
                 throw new ArgumentException("Path should not be null");
+            
+            if (!await _authManager.RequestAccess(ds, AccessType.Read))
+                throw new UnauthorizedException("The current user is not allowed to read this dataset");
 
             return await InternalGet(orgSlug, ds.InternalRef, path);
         }
@@ -146,7 +155,7 @@ namespace Registry.Web.Services.Managers
                 Name = Path.GetFileName(entry.Path),
                 Size = entry.Size,
                 Type = entry.Type,
-                ContentType = MimeTypes.GetMimeType(entry.Path),
+                ContentType = entry.Path != null ? MimeTypes.GetMimeType(entry.Path) : null,
                 PhysicalPath = Path.GetFullPath(ddb.GetLocalPath(entry.Path))
             };
         }
@@ -160,12 +169,12 @@ namespace Registry.Web.Services.Managers
 
         public async Task<EntryDto> AddNew(string orgSlug, string dsSlug, string path, Stream stream = null)
         {
-            var ds = await _utils.GetDataset(orgSlug, dsSlug);
+            var ds = _utils.GetDataset(orgSlug, dsSlug);
 
             _logger.LogInformation("In AddNew('{OrgSlug}/{DsSlug}')", orgSlug, dsSlug);
 
-            if (!await _authManager.IsOwnerOrAdmin(ds))
-                throw new UnauthorizedException("The current user is not allowed to edit dataset");
+            if (!await _authManager.RequestAccess(ds, AccessType.Write))
+                throw new UnauthorizedException("The current user is not allowed to write to this dataset");
 
             var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
 
@@ -175,8 +184,8 @@ namespace Registry.Web.Services.Managers
                 if (await ddb.EntryExistsAsync(path))
                     throw new InvalidOperationException("Cannot create a folder on another entry");
 
-                if (path == DDB.DatabaseFolderName)
-                    throw new InvalidOperationException($"'{DDB.DatabaseFolderName}' is a reserved folder name");
+                if (path == IDDB.DatabaseFolderName)
+                    throw new InvalidOperationException($"'{IDDB.DatabaseFolderName}' is a reserved folder name");
 
                 _logger.LogInformation("Adding folder to DDB");
 
@@ -238,12 +247,12 @@ namespace Registry.Web.Services.Managers
 
         public async Task Move(string orgSlug, string dsSlug, string source, string dest)
         {
-            var ds = await _utils.GetDataset(orgSlug, dsSlug);
+            var ds = _utils.GetDataset(orgSlug, dsSlug);
 
             _logger.LogInformation("In Move('{OrgSlug}/{DsSlug}')", orgSlug, dsSlug);
 
-            if (!await _authManager.IsOwnerOrAdmin(ds))
-                throw new UnauthorizedException("The current user is not allowed to edit dataset");
+            if (!await _authManager.RequestAccess(ds, AccessType.Write))
+                throw new UnauthorizedException("The current user is not allowed to write to this dataset");
 
             var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
 
@@ -318,12 +327,12 @@ namespace Registry.Web.Services.Managers
 
         public async Task Delete(string orgSlug, string dsSlug, string path)
         {
-            var ds = await _utils.GetDataset(orgSlug, dsSlug);
+            var ds = _utils.GetDataset(orgSlug, dsSlug);
 
             _logger.LogInformation("In Delete('{OrgSlug}/{DsSlug}')", orgSlug, dsSlug);
 
-            if (!await _authManager.IsOwnerOrAdmin(ds))
-                throw new UnauthorizedException("The current user is not allowed to edit dataset");
+            if (!await _authManager.RequestAccess(ds, AccessType.Write))
+                throw new UnauthorizedException("The current user is not allowed to edit this dataset");
 
             if (IsReservedPath(path))
                 throw new InvalidOperationException($"'{path}' is a reserved path");
@@ -375,12 +384,12 @@ namespace Registry.Web.Services.Managers
 
         public async Task DeleteAll(string orgSlug, string dsSlug)
         {
-            var ds = await _utils.GetDataset(orgSlug, dsSlug);
+            var ds = _utils.GetDataset(orgSlug, dsSlug);
 
             _logger.LogInformation("In DeleteAll('{OrgSlug}/{DsSlug}')", orgSlug, dsSlug);
 
-            if (!await _authManager.IsOwnerOrAdmin(ds))
-                throw new UnauthorizedException("The current user is not allowed to edit dataset");
+            if (!await _authManager.RequestAccess(ds, AccessType.Write))
+                throw new UnauthorizedException("The current user is not allowed to edit this dataset");
 
             _ddbManager.Delete(orgSlug, ds.InternalRef);
         }
@@ -388,10 +397,13 @@ namespace Registry.Web.Services.Managers
         public async Task<StorageFileDto> GenerateThumbnail(string orgSlug, string dsSlug, string path, int? size,
             bool recreate = false)
         {
-            var ds = await _utils.GetDataset(orgSlug, dsSlug);
+            var ds = _utils.GetDataset(orgSlug, dsSlug);
 
             _logger.LogInformation("In GenerateThumbnail('{OrgSlug}/{DsSlug}')", orgSlug, dsSlug);
 
+            if (!await _authManager.RequestAccess(ds, AccessType.Read))
+                throw new UnauthorizedException("The current user is not allowed to read dataset");
+            
             // Fix fox '/img.png' -> 'img.png'
             if (path.StartsWith('/')) path = path[1..];
 
@@ -418,9 +430,12 @@ namespace Registry.Web.Services.Managers
         public async Task<StorageFileDto> GenerateTile(string orgSlug, string dsSlug, string path, int tz, int tx,
             int ty, bool retina)
         {
-            var ds = await _utils.GetDataset(orgSlug, dsSlug);
+            var ds = _utils.GetDataset(orgSlug, dsSlug);
 
             _logger.LogInformation("In GenerateTile('{OrgSlug}/{DsSlug}')", orgSlug, dsSlug);
+            
+            if (!await _authManager.RequestAccess(ds, AccessType.Read))
+                throw new UnauthorizedException("The current user is not allowed to read dataset");
 
             var fileName = Path.GetFileName(path);
             if (fileName == null)
@@ -458,10 +473,13 @@ namespace Registry.Web.Services.Managers
 
         public async Task<FileStreamDescriptor> DownloadStream(string orgSlug, string dsSlug, string[] paths)
         {
-            var ds = await _utils.GetDataset(orgSlug, dsSlug);
+            var ds = _utils.GetDataset(orgSlug, dsSlug);
 
             _logger.LogInformation("In DownloadStream('{OrgSlug}/{DsSlug}')", orgSlug, dsSlug);
 
+            if (!await _authManager.RequestAccess(ds, AccessType.Read))
+                throw new UnauthorizedException("The current user is not allowed to read dataset");
+            
             EnsurePathsValidity(orgSlug, ds.InternalRef, paths);
 
             return GetFileStreamDescriptor(orgSlug, dsSlug, ds.InternalRef, paths);
@@ -621,9 +639,12 @@ namespace Registry.Web.Services.Managers
 
         public async Task<FileStreamDescriptor> GetDdb(string orgSlug, string dsSlug)
         {
-            var ds = await _utils.GetDataset(orgSlug, dsSlug);
+            var ds = _utils.GetDataset(orgSlug, dsSlug);
 
             _logger.LogInformation("In GetDdb('{OrgSlug}/{DsSlug}')", orgSlug, dsSlug);
+            
+            if (!await _authManager.RequestAccess(ds, AccessType.Read))
+                throw new UnauthorizedException("The current user is not allowed to read dataset");
 
             return new FileStreamDescriptor($"{orgSlug}-{dsSlug}-ddb.zip",
                 "application/zip", orgSlug, ds.InternalRef, Array.Empty<string>(), Array.Empty<string>(),
@@ -632,11 +653,12 @@ namespace Registry.Web.Services.Managers
 
         public async Task Build(string orgSlug, string dsSlug, string path, bool background = false, bool force = false)
         {
-            var ds = await _utils.GetDataset(orgSlug, dsSlug);
+            var ds = _utils.GetDataset(orgSlug, dsSlug);
 
             _logger.LogInformation("In Build('{OrgSlug}/{DsSlug}')", orgSlug, dsSlug);
 
-            if (!await _authManager.IsOwnerOrAdmin(ds))
+            // TODO: Maybe request write?
+            if (!await _authManager.RequestAccess(ds, AccessType.Read))
                 throw new UnauthorizedException("The current user is not allowed to build dataset");
 
             var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
@@ -678,7 +700,10 @@ namespace Registry.Web.Services.Managers
             _logger.LogInformation("In GetBuildFile('{OrgSlug}/{DsSlug}', '{Hash}', '{Path}')", orgSlug, dsSlug, hash,
                 path);
 
-            var ds = await _utils.GetDataset(orgSlug, dsSlug);
+            var ds = _utils.GetDataset(orgSlug, dsSlug);
+            
+            if (!await _authManager.RequestAccess(ds, AccessType.Read))
+                throw new UnauthorizedException("The current user is not allowed to read dataset");
 
             EnsureNoWildcardOrEmptyPaths(path);
 
@@ -699,15 +724,19 @@ namespace Registry.Web.Services.Managers
 
         // Base build folder path (example: .ddb/build)
         private string BuildBasePath =>
-            CommonUtils.SafeCombine(DDB.DatabaseFolderName, DDB.BuildFolderName);
+            CommonUtils.SafeCombine(IDDB.DatabaseFolderName, IDDB.BuildFolderName);
 
         public async Task<bool> CheckBuildFile(string orgSlug, string dsSlug, string hash, string path)
         {
+
+            var ds = _utils.GetDataset(orgSlug, dsSlug);
+            
             _logger.LogInformation("In CheckBuildFile('{OrgSlug}/{DsSlug}', '{Hash}', '{Path}')", orgSlug, dsSlug, hash,
                 path);
 
-            var ds = await _utils.GetDataset(orgSlug, dsSlug);
-
+            if (!await _authManager.RequestAccess(ds, AccessType.Read))
+                throw new UnauthorizedException("The current user is not allowed to read dataset");
+            
             EnsureNoWildcardOrEmptyPaths(path);
 
             Debug.Assert(path != null, nameof(path) + " != null");
@@ -723,9 +752,12 @@ namespace Registry.Web.Services.Managers
 
         public async Task<EntryType?> GetEntryType(string orgSlug, string dsSlug, string path)
         {
-            var ds = await _utils.GetDataset(orgSlug, dsSlug);
+            var ds = _utils.GetDataset(orgSlug, dsSlug);
 
             _logger.LogInformation("In GetEntryType('{OrgSlug}/{DsSlug}')", orgSlug, dsSlug);
+            
+            if (!await _authManager.RequestAccess(ds, AccessType.Read))
+                throw new UnauthorizedException("The current user is not allowed to read dataset");
             
             var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
             

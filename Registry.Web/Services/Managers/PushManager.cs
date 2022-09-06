@@ -51,7 +51,7 @@ namespace Registry.Web.Services.Managers
 
         public async Task<PushInitResultDto> Init(string orgSlug, string dsSlug, string checksum, StampDto stamp)
         {
-            var ds = await _utils.GetDataset(orgSlug, dsSlug, true);
+            var ds = _utils.GetDataset(orgSlug, dsSlug, true);
 
             var validateChecksum = false;
 
@@ -65,12 +65,12 @@ namespace Registry.Web.Services.Managers
                 });
 
                 _logger.LogInformation("New dataset {OrgSlug}/{DsSlug} created", orgSlug, dsSlug);
-                ds = await _utils.GetDataset(orgSlug, dsSlug);
+                ds = _utils.GetDataset(orgSlug, dsSlug);
 
             }
             else
             {
-                if (!await _authManager.IsOwnerOrAdmin(ds))
+                if (!await _authManager.RequestAccess(ds, AccessType.Write))
                     throw new UnauthorizedException("The current user is not allowed to init push");
 
                 validateChecksum = true;
@@ -142,9 +142,9 @@ namespace Registry.Web.Services.Managers
             if (!stream.CanRead)
                 throw new ArgumentException("Stream is null or is not readable");
 
-            var ds = await _utils.GetDataset(orgSlug, dsSlug);
-
-            if (!await _authManager.IsOwnerOrAdmin(ds))
+            var ds = _utils.GetDataset(orgSlug, dsSlug);
+            
+            if (!await _authManager.RequestAccess(ds, AccessType.Write))
                 throw new UnauthorizedException("The current user is not allowed to upload to this dataset");
 
             // Check if user has enough space to upload this
@@ -177,9 +177,9 @@ namespace Registry.Web.Services.Managers
 
         public async Task SaveMeta(string orgSlug, string dsSlug, string token, string meta)
         {
-            var ds = await _utils.GetDataset(orgSlug, dsSlug);
-
-            if (!await _authManager.IsOwnerOrAdmin(ds))
+            var ds = _utils.GetDataset(orgSlug, dsSlug);
+            
+            if (!await _authManager.RequestAccess(ds, AccessType.Write))
                 throw new UnauthorizedException("The current user is not allowed to upload to this dataset");
 
             // Check if user has enough space to upload this
@@ -200,11 +200,12 @@ namespace Registry.Web.Services.Managers
             // Save file
             await File.WriteAllTextAsync(metaFile, meta);
         }
+        
         public async Task Commit(string orgSlug, string dsSlug, string token)
         {
-            var ds = await _utils.GetDataset(orgSlug, dsSlug);
+            var ds = _utils.GetDataset(orgSlug, dsSlug);
 
-            if (!await _authManager.IsOwnerOrAdmin(ds))
+            if (!await _authManager.RequestAccess(ds, AccessType.Write))
                 throw new UnauthorizedException("The current user is not allowed to commit to this dataset");
 
             var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
@@ -253,7 +254,7 @@ namespace Registry.Web.Services.Managers
             string metaDump = null;
             if (File.Exists(metaFile))
             {
-                metaDump = File.ReadAllText(metaFile);
+                metaDump = await File.ReadAllTextAsync(metaFile);
             }
 
             // Applies delta 

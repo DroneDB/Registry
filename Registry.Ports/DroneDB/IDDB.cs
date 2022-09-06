@@ -100,5 +100,10 @@ namespace Registry.Ports.DroneDB
         Task<long> GetSizeAsync(CancellationToken cancellationToken = default);
 
         #endregion
+        
+        // These consts are like magic strings: if anything changes this goes kaboom!
+        public static string DatabaseFolderName = ".ddb";
+        public static string BuildFolderName = "build";
+        public static string TmpFolderName = "tmp";
     }
 }

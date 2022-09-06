@@ -19,6 +19,9 @@ public class Options
    
     [Option('r', "reset-hub", HelpText = "Reset the Hub folder by re-creating it.", Required = false)]
     public bool ResetHub { get; set; }
+    
+    [Option('d', "reset-ddb", HelpText = "Reset the ddb folder by re-creating it.", Required = false)]
+    public bool ResetDdb { get; set; }
 
     [Usage(ApplicationAlias = "registry.web")]
     public static IEnumerable<Example> Examples =>

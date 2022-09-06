@@ -26,7 +26,7 @@ namespace Registry.Adapters.DroneDB
         [OnDeserialized]
         internal void OnDeserializedMethod(StreamingContext context)
         {
-            BuildFolderPath = Path.Combine(DatasetFolderPath, DatabaseFolderName, BuildFolderName);
+            BuildFolderPath = Path.Combine(DatasetFolderPath, IDDB.DatabaseFolderName, IDDB.BuildFolderName);
             Meta = new MetaManager(this);
         }
 
@@ -39,7 +39,7 @@ namespace Registry.Adapters.DroneDB
                 throw new ArgumentException($"Path '{ddbPath}' does not exist");
 
             DatasetFolderPath = ddbPath;
-            BuildFolderPath = Path.Combine(ddbPath, DatabaseFolderName, BuildFolderName);
+            BuildFolderPath = Path.Combine(ddbPath, IDDB.DatabaseFolderName, IDDB.BuildFolderName);
             Meta = new MetaManager(this);
         }
 
@@ -68,11 +68,6 @@ namespace Registry.Adapters.DroneDB
                 throw new InvalidOperationException($"Cannot initialize ddb in folder '{DatasetFolderPath}'", ex);
             }
         }
-
-        // These consts are like magic strings: if anything changes this goes kaboom!
-        public static string DatabaseFolderName = ".ddb";
-        public static string BuildFolderName = "build";
-        public static string TmpFolderName = "tmp";
 
         [JsonIgnore] public string Version => DDBWrapper.GetVersion();
 
@@ -211,7 +206,7 @@ namespace Registry.Adapters.DroneDB
 
         public string GetTmpFolder(string path)
         {
-            string fullPath = Path.Combine(DatasetFolderPath, DatabaseFolderName, TmpFolderName, path);
+            string fullPath = Path.Combine(DatasetFolderPath, IDDB.DatabaseFolderName, IDDB.TmpFolderName, path);
             if (!Directory.Exists(fullPath)) Directory.CreateDirectory(fullPath);
             return fullPath;
         }

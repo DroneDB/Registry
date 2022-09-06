@@ -18,10 +18,6 @@ using Registry.Web.Utilities;
 
 namespace Registry.Web.Services.Adapters
 {
-    // NOTE: This class is a fundamental piece of the architecture because 
-    // it encapsulates all the validation logic of the organizations and datasets
-    // The logic is centralized here because it could be subject to change
-
     public class WebUtils : IUtils
     {
         private readonly IAuthManager _authManager;
@@ -43,7 +39,7 @@ namespace Registry.Web.Services.Adapters
         }
 
 
-        public async Task<Organization> GetOrganization(string orgSlug, bool safe = false, bool checkOwnership = true)
+        public Organization GetOrganization(string orgSlug, bool safe = false)
         {
             if (string.IsNullOrWhiteSpace(orgSlug))
                 throw new BadRequestException("Missing organization id");
@@ -56,23 +52,11 @@ namespace Registry.Web.Services.Adapters
 
             if (org == null)
                 return safe ? null : throw new NotFoundException("Organization not found");
-
-            if (!org.IsPublic && checkOwnership && !await _authManager.IsUserAdmin())
-            {
-                var currentUser = await _authManager.GetCurrentUser();
-
-                if (currentUser == null)
-                    throw new UnauthorizedException("Invalid user");
-
-                if (org.OwnerId != currentUser.Id && org.OwnerId != null && !org.IsPublic)
-                    throw new UnauthorizedException("This organization does not belong to the current user");
-            }
-
+           
             return org;
         }
 
-        public async Task<Dataset> GetDataset(string orgSlug, string dsSlug, bool retNullIfNotFound = false,
-            bool checkOwnership = true)
+        public Dataset GetDataset(string orgSlug, string dsSlug, bool safe = false)
         {
             if (string.IsNullOrWhiteSpace(dsSlug))
                 throw new BadRequestException("Missing dataset id");
@@ -97,27 +81,11 @@ namespace Registry.Web.Services.Adapters
 
             if (dataset == null)
             {
-                if (retNullIfNotFound) return null;
+                if (safe) return null;
 
                 throw new NotFoundException("Cannot find dataset");
             }
-
-            var ddb = _ddbManager.Get(orgSlug, dataset.InternalRef);
-
-            var attributes = ddb.Meta.GetSafe();
             
-            if (!attributes.IsPublic && !await _authManager.IsUserAdmin() && checkOwnership)
-            {
-                var currentUser = await _authManager.GetCurrentUser();
-
-                if (currentUser == null)
-                    throw new UnauthorizedException("Invalid user");
-
-                if (org.OwnerId != null && org.OwnerId != currentUser.Id && org.Users.All(usr => usr.UserId != currentUser.Id))
-                    throw new UnauthorizedException("The current user does not have access to this dataset");
-
-            }
-
             return dataset;
         }
 

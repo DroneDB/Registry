@@ -4,6 +4,7 @@ using System.Threading.Tasks;
 using Registry.Web.Data.Models;
 using Registry.Web.Identity.Models;
 using Registry.Web.Models;
+using Registry.Web.Services.Managers;
 
 namespace Registry.Web.Services.Ports
 {
@@ -25,5 +26,8 @@ namespace Registry.Web.Services.Ports
 
         public Task<bool> UserExists(string userId);
 
+        Task<bool> RequestAccess<T>(T obj, AccessType access, User user);
+        Task<bool> RequestAccess<T>(T obj, AccessType access);
     }
+    
 }
