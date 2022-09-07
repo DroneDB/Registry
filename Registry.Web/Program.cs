@@ -95,11 +95,16 @@ namespace Registry.Web
 
             // If we need to initialize ddb from the storage folder
             var lateDdbInit = false;
-            
-            // Ensure the ddb.dll is in the PATH and fix it if needed (only on windows)
-            if (Environment.OSVersion.Platform == PlatformID.Win32NT)
-                lateDdbInit = !FixPath();
 
+            if (opts.ResetDdb)
+                lateDdbInit = true;
+            else
+            {
+                // Ensure the ddb.dll is in the PATH and fix it if needed (only on windows)
+                if (Environment.OSVersion.Platform == PlatformID.Win32NT)
+                    lateDdbInit = !FixPath();
+            }
+            
 #if DEBUG
             Console.WriteLine(" ?> Running in DEBUG");
 #else
@@ -117,7 +122,7 @@ namespace Registry.Web
 
             if (lateDdbInit)
             {
-                if (!SetupStorageFolder(opts.StorageFolder, opts.ResetHub, true))
+                if (!SetupStorageFolder(opts.StorageFolder, opts.ResetHub, opts.ResetDdb, true))
                 {
                     CommonUtils.WriteLineColor(" !> Failed to setup storage folder", ConsoleColor.Red);
                     return;
@@ -296,18 +301,17 @@ namespace Registry.Web
             return true;
         }
 
-        private static bool SetupStorageFolder(string folder, bool resetSpa = false, bool deployDdb = false)
+        private static bool SetupStorageFolder(string folder, bool resetSpa = false, bool resetDdb = false, bool deployDdb = false)
         {
             Console.WriteLine(" -> Setting up storage folder");
 
             Directory.CreateDirectory(folder);
 
-            if (deployDdb && !SetupDdb(folder, false))
+            if (deployDdb && !SetupDdb(folder, resetDdb))
             {
                 CommonUtils.WriteLineColor(" !> Failed to deploy DDB to storage folder", ConsoleColor.Red);
                 return false;
             }
-                
 
             if (!SetupHub(folder, resetSpa))
             {
