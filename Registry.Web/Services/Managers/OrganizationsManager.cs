@@ -49,7 +49,7 @@ namespace Registry.Web.Services.Managers
             
             var query = 
                 from org in _context.Organizations
-                where org.OwnerId == currentUser.Id
+                where org.OwnerId == currentUser.Id || org.Slug == MagicStrings.PublicOrganizationSlug
                 select org;
             
             // This can be optimized, but it's not a big deal because it's a cross database query anyway
