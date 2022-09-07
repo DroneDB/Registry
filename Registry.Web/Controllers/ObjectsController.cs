@@ -79,7 +79,7 @@ namespace Registry.Web.Controllers
             }
         }
 
-        [HttpGet("tiles/{tz}/{tx}/{tyRaw}.png", Name = nameof(ObjectsController) + "." + nameof(GenerateTile))]
+        [HttpGet("tiles/{tz:int}/{tx:int}/{tyRaw}.png", Name = nameof(ObjectsController) + "." + nameof(GenerateTile))]
         public async Task<IActionResult> GenerateTile([FromRoute] string orgSlug, [FromRoute] string dsSlug,
             [FromRoute] int tz, [FromRoute] int tx, [FromRoute] string tyRaw, [FromQuery] string path)
         {
