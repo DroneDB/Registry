@@ -71,6 +71,10 @@ namespace Registry.Web.Test
             settings.DatasetsPath = Path.Combine(test.TestFolder, DdbFolder);
             _appSettingsMock.Setup(o => o.Value).Returns(settings);
             _authManagerMock.Setup(o => o.IsUserAdmin()).Returns(Task.FromResult(true));
+            _authManagerMock.Setup(o => o.RequestAccess(It.IsAny<Dataset>(), 
+                It.IsAny<AccessType>())).Returns(Task.FromResult(true));
+            _authManagerMock.Setup(o => o.RequestAccess(It.IsAny<Organization>(), 
+                It.IsAny<AccessType>())).Returns(Task.FromResult(true));
             
             var ddbManager = new DdbManager(_appSettingsMock.Object, _ddbFactoryLogger);
 
@@ -97,7 +101,11 @@ namespace Registry.Web.Test
             _appSettingsMock.Setup(o => o.Value).Returns(settings);
             _authManagerMock.Setup(o => o.IsUserAdmin()).Returns(Task.FromResult(true));
             _authManagerMock.Setup(o => o.IsOwnerOrAdmin(It.IsAny<Dataset>())).Returns(Task.FromResult(true));
-
+            _authManagerMock.Setup(o => o.RequestAccess(It.IsAny<Dataset>(), 
+                It.IsAny<AccessType>())).Returns(Task.FromResult(true));
+            _authManagerMock.Setup(o => o.RequestAccess(It.IsAny<Organization>(), 
+                It.IsAny<AccessType>())).Returns(Task.FromResult(true));
+            
             var ddbManager = new DdbManager(_appSettingsMock.Object, _ddbFactoryLogger);
 
             var webUtils = new WebUtils(_authManagerMock.Object, context, _appSettingsMock.Object,

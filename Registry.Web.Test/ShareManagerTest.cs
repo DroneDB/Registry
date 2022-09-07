@@ -157,6 +157,12 @@ namespace Registry.Web.Test
                 Email = "admin@example.com",
                 Id = Guid.NewGuid().ToString()
             };
+            
+            _authManagerMock.Setup(o => o.RequestAccess(It.IsAny<Dataset>(), 
+                It.IsAny<AccessType>())).Returns(Task.FromResult(true));
+            _authManagerMock.Setup(o => o.RequestAccess(It.IsAny<Organization>(), 
+                It.IsAny<AccessType>())).Returns(Task.FromResult(true));
+            
             _authManagerMock.Setup(o => o.GetCurrentUser()).Returns(Task.FromResult(user));
             _authManagerMock.Setup(o => o.UserExists(user.Id)).Returns(Task.FromResult(true));
             _authManagerMock.Setup(o => o.SafeGetCurrentUserName()).Returns(Task.FromResult(userName));
@@ -263,7 +269,11 @@ namespace Registry.Web.Test
             _authManagerMock.Setup(o => o.GetCurrentUser()).Returns(Task.FromResult(user));
             _authManagerMock.Setup(o => o.UserExists(user.Id)).Returns(Task.FromResult(true));
             _authManagerMock.Setup(o => o.SafeGetCurrentUserName()).Returns(Task.FromResult(userName));
-
+            _authManagerMock.Setup(o => o.RequestAccess(It.IsAny<Dataset>(), 
+                It.IsAny<AccessType>())).Returns(Task.FromResult(true));
+            _authManagerMock.Setup(o => o.RequestAccess(It.IsAny<Organization>(), 
+                It.IsAny<AccessType>())).Returns(Task.FromResult(true));
+            
             var attributes = new Dictionary<string, object>
             {
                 { "public", true }
@@ -369,6 +379,11 @@ namespace Registry.Web.Test
             _authManagerMock.Setup(o => o.IsOwnerOrAdmin(It.IsAny<Dataset>())).Returns(Task.FromResult(true));
             _authManagerMock.Setup(o => o.IsOwnerOrAdmin(It.IsAny<Organization>())).Returns(Task.FromResult(true));
 
+            _authManagerMock.Setup(o => o.RequestAccess(It.IsAny<Dataset>(), 
+                It.IsAny<AccessType>())).Returns(Task.FromResult(true));
+            _authManagerMock.Setup(o => o.RequestAccess(It.IsAny<Organization>(), 
+                It.IsAny<AccessType>())).Returns(Task.FromResult(true));
+            
             _authManagerMock.Setup(o => o.GetCurrentUser()).Returns(Task.FromResult(new User
             {
                 UserName = userName,
@@ -504,12 +519,17 @@ namespace Registry.Web.Test
             _authManagerMock.Setup(o => o.IsUserAdmin()).Returns(Task.FromResult(true));
             _authManagerMock.Setup(o => o.IsOwnerOrAdmin(It.IsAny<Dataset>())).Returns(Task.FromResult(true));
             _authManagerMock.Setup(o => o.IsOwnerOrAdmin(It.IsAny<Organization>())).Returns(Task.FromResult(true));
+            _authManagerMock.Setup(o => o.RequestAccess(It.IsAny<Dataset>(), 
+                It.IsAny<AccessType>())).Returns(Task.FromResult(true));
+            _authManagerMock.Setup(o => o.RequestAccess(It.IsAny<Organization>(), 
+                It.IsAny<AccessType>())).Returns(Task.FromResult(true));
 
             _authManagerMock.Setup(o => o.GetCurrentUser()).Returns(Task.FromResult(new User
             {
                 UserName = userName,
                 Email = "admin@example.com"
             }));
+            
             _authManagerMock.Setup(o => o.SafeGetCurrentUserName()).Returns(Task.FromResult(userName));
 
             var attributes = new Dictionary<string, object>
@@ -656,6 +676,11 @@ namespace Registry.Web.Test
             _authManagerMock.Setup(o => o.IsOwnerOrAdmin(It.IsAny<Dataset>())).Returns(Task.FromResult(true));
             _authManagerMock.Setup(o => o.IsOwnerOrAdmin(It.IsAny<Organization>())).Returns(Task.FromResult(true));
 
+            _authManagerMock.Setup(o => o.RequestAccess(It.IsAny<Dataset>(), 
+                It.IsAny<AccessType>())).Returns(Task.FromResult(true));
+            _authManagerMock.Setup(o => o.RequestAccess(It.IsAny<Organization>(), 
+                It.IsAny<AccessType>())).Returns(Task.FromResult(true));
+            
             _authManagerMock.Setup(o => o.GetCurrentUser()).Returns(Task.FromResult(new User
             {
                 UserName = userName,

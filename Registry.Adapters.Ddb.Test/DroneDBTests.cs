@@ -105,7 +105,6 @@ namespace Registry.Adapters.Ddb.Test
 
             DDBWrapper.Remove(area.TestFolder, Path.Combine(area.TestFolder, "file.txt"));
 
-            Assert.Throws<DDBException>(() => DDBWrapper.Remove(area.TestFolder, "invalid"));
         }
 
         [Test]
@@ -380,24 +379,6 @@ namespace Registry.Adapters.Ddb.Test
             DDBWrapper.ClearPasswords(ddbPath);
             DDBWrapper.VerifyPassword(ddbPath, "testpassword").Should().BeFalse();
 
-
-        }
-
-        [Test]
-        public void Chaddr_HappyPath_Ok()
-        {
-
-            using var test = new TestFS(Test3ArchiveUrl, BaseTestFolder);
-
-            var ddbPath = Path.Combine(test.TestFolder);
-
-            var res = DDBWrapper.ChangeAttributes(ddbPath, new Dictionary<string, object> { { "public", true } });
-
-            res["public"].Should().Be(true);
-
-            res = DDBWrapper.ChangeAttributes(ddbPath, new Dictionary<string, object> { { "public", false } });
-
-            res["public"].Should().Be(false);
 
         }
 
