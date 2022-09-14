@@ -31,7 +31,6 @@ namespace Registry.Web.Controllers
             _logger = logger;
         }
 
-        [Authorize]
         [HttpGet(Name = nameof(OrganizationsController) + "." + nameof(GetAll))]
         [ProducesResponseType(typeof(IEnumerable<OrganizationDto>), 200)]
         public async Task<IActionResult> GetAll()

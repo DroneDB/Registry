@@ -219,6 +219,7 @@ namespace Registry.Web
             services.AddScoped<IUsersManager, UsersManager>();
             services.AddScoped<IOrganizationsManager, OrganizationsManager>();
             services.AddScoped<IDatasetsManager, DatasetsManager>();
+            services.AddScoped<IStacManager, StacManager>();
             services.AddScoped<IObjectsManager, ObjectsManager>();
             services.AddScoped<IShareManager, ShareManager>();
             services.AddScoped<IPushManager, PushManager>();
