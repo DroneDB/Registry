@@ -1,4 +1,5 @@
 ﻿using System;
+using Registry.Adapters.DroneDB;
 using Registry.Common;
 using Registry.Ports.DroneDB;
 using Registry.Ports.DroneDB.Models;
@@ -25,18 +26,54 @@ namespace Registry.Web.Services.Adapters
 
         public string Name
         {
-            get => _manager.Get(NameField);
-            set => _manager.Set(NameField, value);
+            get
+            {
+                try
+                {
+                    return  _manager.Get<string>(NameField);
+                }
+                catch (DDBException)
+                {
+                    return null;
+                }
+            }
+            set
+            {
+                if (value == null)
+                    throw new ArgumentException("Name cannot be null");
+
+                _manager.Set(NameField, value);
+            }
         }
 
-        public int Entries => CommonUtils.SafeParse(_manager.Get(ObjectsCountField)) ?? 0;
+        public int? Entries
+        {
+            get
+            {
+                try
+                {
+                    return _manager.Get<int>(ObjectsCountField);
+                }
+                catch (DDBException)
+                {
+                    return null;
+                }
+            }
+        }
 
         public Visibility? Visibility
         {
             get
             {
-                var val = CommonUtils.SafeParse(_manager.Get(VisibilityField));
-                return val == null ? null : (Visibility)val;
+
+                try
+                {
+                    return (Visibility)_manager.Get<int>(VisibilityField);
+                }
+                catch (DDBException)
+                {
+                    return null;
+                }
             }
             set
             {
@@ -46,29 +83,42 @@ namespace Registry.Web.Services.Adapters
             }
         }
 
-        public bool IsPublic
+        public bool? IsPublic
         {
             get
             {
-                var val = CommonUtils.SafeParse(_manager.Get(PublicField));
-                return val != null && val == 1;
+                try
+                {
+                    return _manager.Get<bool>(PublicField);
+                }
+                catch (DDBException)
+                {
+                    return null;
+                }
             }
-            set => _manager.Set(PublicField, value ? "1" : "0");
+            set
+            {
+                if (value == null) throw new InvalidOperationException("Cannot set null value");
+                _manager.Set(PublicField, value.Value ? "1" : "0");
+            }
         }
 
         public DateTime? LastUpdate
         {
             get
             {
-                var val = _manager.Get(LastUpdateField);
+                try
+                {
+                    var unixTime = _manager.Get<int>(LastUpdateField);
 
-                if (val == null) return null;
+                    var dateTimeOffset = DateTimeOffset.FromUnixTimeSeconds(unixTime);
 
-                if (!int.TryParse(val, out var unixTime)) return null;
-
-                var dateTimeOffset = DateTimeOffset.FromUnixTimeSeconds(unixTime);
-
-                return dateTimeOffset.LocalDateTime;
+                    return dateTimeOffset.LocalDateTime;
+                }
+                catch (DDBException)
+                {
+                    return null;
+                }
             }
             // Maybe this is not needed
             set

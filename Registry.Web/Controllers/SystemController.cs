@@ -78,6 +78,23 @@ namespace Registry.Web.Controllers
                 return ExceptionResult(ex);
             }
         }
+        
+        [HttpPost("migratevisibility", Name = nameof(SystemController) + "." + nameof(MigrateVisibility))]
+        public async Task<IActionResult> MigrateVisibility()
+        {
+            try
+            {
+                _logger.LogDebug("System controller MigrateVisibility()");
+
+                return Ok(await _systemManager.MigrateVisibility());
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Exception in System controller CleanupDatasets()");
+
+                return ExceptionResult(ex);
+            }
+        }
 
     }
 }

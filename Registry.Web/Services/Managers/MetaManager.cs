@@ -114,7 +114,7 @@ namespace Registry.Web.Services.Managers
 
             var res = ddb.Meta.Get(key, path);
 
-            return JsonConvert.DeserializeObject<JToken>(res);
+            return res.Data;
 
         }
 

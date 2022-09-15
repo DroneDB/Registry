@@ -47,12 +47,18 @@ namespace Registry.Adapters.DroneDB
             return DDBWrapper.MetaRemove(_ddb.DatasetFolderPath, id);
         }
 
-        public string Get(string key, string path = null)
+        public Meta Get(string key, string path = null)
         {
-
             var m = DDBWrapper.MetaGet(_ddb.DatasetFolderPath, key, path);
+            return JsonConvert.DeserializeObject<Meta>(m);
+        }
+        
+        public T? Get<T>(string key, string path = null)
+        {
+            var m = DDBWrapper.MetaGet(_ddb.DatasetFolderPath, key, path);
+            var obj = JsonConvert.DeserializeObject<Meta>(m);
 
-            return m;
+            return obj != null ? obj.Data.Value<T>("data") : default;
         }
 
         public int Unset(string key, string path = null)

@@ -11,5 +11,7 @@ namespace Registry.Web.Services.Ports
         public Task<CleanupBatchesResultDto> CleanupBatches();
         Task<CleanupDatasetResultDto> CleanupEmptyDatasets();
         string GetVersion();
+
+        Task<IEnumerable<MigrateVisibilityEntryDTO>> MigrateVisibility();
     }
 }
