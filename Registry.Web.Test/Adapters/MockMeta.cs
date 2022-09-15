@@ -1,5 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Linq;
+using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using Registry.Ports.DroneDB;
 using Registry.Ports.DroneDB.Models;
@@ -8,8 +10,7 @@ namespace Registry.Web.Test.Adapters
 {
     public class MockMeta : IMetaManager
     {
-        
-        private Dictionary<string, string> _meta = new Dictionary<string, string>();
+        private readonly List<Tuple<string, Meta>> _metas = new();
         
         public Meta Add(string key, string data, string path = null)
         {
@@ -18,33 +19,42 @@ namespace Registry.Web.Test.Adapters
 
         public Meta Set(string key, string data, string path = null)
         {
-            _meta.Add(key, data);
-            return new Meta { Data = JToken.FromObject(data), Id = Guid.NewGuid().ToString(), ModifiedTime = DateTime.Now };
+            var meta = new Meta
+                { Data = JToken.FromObject(data), Id = Guid.NewGuid().ToString(), ModifiedTime = DateTime.Now };
+            _metas.Add(Tuple.Create(path, meta));
+            return meta;
         }
 
         public int Remove(string id)
         {
-            throw new System.NotImplementedException();
+            return _metas.RemoveAll(item => item.Item2.Id == id);
         }
 
-        public string Get(string key, string path = null)
+        public JToken Get(string key, string path = null)
         {
-            return _meta[key];
+            var item2 = _metas.FirstOrDefault(item => item.Item1 == path)?.Item2;
+            return item2 != null ? JToken.FromObject(item2) : null;
         }
 
         public int Unset(string key, string path = null)
         {
-            throw new System.NotImplementedException();
+            throw new NotImplementedException();
         }
 
         public MetaListItem[] List(string path = null)
         {
-            throw new System.NotImplementedException();
+            throw new NotImplementedException();
         }
 
         public MetaDump[] Dump(string ids = null)
         {
-            throw new System.NotImplementedException();
+            throw new NotImplementedException();
+        }
+
+        public T Get<T>(string key, string path = null)
+        {
+            var res = _metas.FirstOrDefault(m => m.Item1 == path);
+            return res == null ? default : res.Item2.Data.ToObject<T>();
         }
     }
 }

@@ -112,9 +112,7 @@ namespace Registry.Web.Services.Managers
             if (path != null && !await ddb.EntryExistsAsync(path))
                 throw new ArgumentException($"Path '{path}' does not exist");
 
-            var res = ddb.Meta.Get(key, path);
-
-            return res.Data;
+            return ddb.Meta.Get(key, path);
 
         }
 
