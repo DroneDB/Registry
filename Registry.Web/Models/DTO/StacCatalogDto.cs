@@ -19,18 +19,5 @@ public class StacCatalogDto
     public string Description { get; set; }
     
     [JsonProperty("links")]
-    public IEnumerable<StacLink> Links { get; set; }
-}
-
-public class StacLink
-{
-    // href rel title
-    [JsonProperty("href")]
-    public string Href { get; set; }
-    
-    [JsonProperty("rel")]
-    public string Relationship { get; set; }
-    
-    [JsonProperty("title")]
-    public string Title { get; set; }
+    public IEnumerable<StacLinkDto> Links { get; set; }
 }

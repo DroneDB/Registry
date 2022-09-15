@@ -27,7 +27,6 @@ namespace Registry.Web.Services
         public static async Task<T> GetRecordAsync<T>(this IDistributedCache cache, string recordId)
         {
             var jsonData = await cache.GetStringAsync(recordId);
-
             return jsonData is null ? default : JsonConvert.DeserializeObject<T>(jsonData);
         }
     }

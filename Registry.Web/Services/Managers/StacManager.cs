@@ -1,14 +1,16 @@
-﻿using System.Collections.Generic;
+﻿using System;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using Registry.Web.Data;
 using Registry.Web.Exceptions;
-using Registry.Web.Identity;
 using Registry.Web.Models.DTO;
 using Registry.Web.Services.Ports;
 using System.Linq;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Caching.Distributed;
+using Microsoft.Extensions.Caching.Memory;
 using Registry.Common;
 using Registry.Ports;
 using Registry.Ports.DroneDB.Models;
@@ -21,27 +23,77 @@ public class StacManager : IStacManager
     private readonly IAuthManager _authManager;
     private readonly RegistryContext _context;
     private readonly IUtils _utils;
-    private readonly IDatasetsManager _datasetManager;
-    private readonly ApplicationDbContext _appContext;
     private readonly IDdbManager _ddbManager;
+    private readonly IDistributedCache _cache;
     private readonly ILogger<StacManager> _logger;
+
+    private const string CacheKey = "stac-catalog";
+    
+    // These could end up in the config
+    const string CatalogTitle = "DroneDB public datasets catalog";
+    private const string CatalogId = "DroneDB Catalog";
+    private readonly TimeSpan Expiration = TimeSpan.FromMinutes(5);
+    
+    // NOTE: We could implement a more sofisticated approach to cache invalidation
+    //       but for now we just invalidate the cache every 5 minutes
+    //       This is not a problem since the catalog is not updated that often
 
     public StacManager(
         IAuthManager authManager,
         RegistryContext context,
         IUtils utils,
-        IDatasetsManager datasetManager,
-        ApplicationDbContext appContext,
         IDdbManager ddbManager,
+        IDistributedCache cache,
         ILogger<StacManager> logger)
     {
         _authManager = authManager;
         _context = context;
         _utils = utils;
-        _datasetManager = datasetManager;
-        _appContext = appContext;
         _ddbManager = ddbManager;
+        _cache = cache;
         _logger = logger;
+    }
+
+    private StacCatalogDto _internalGetCatalog()
+    {
+
+        var stacUrl = _utils.GenerateStacUrl();
+
+        var links = new List<StacLinkDto>
+        {
+            new()
+            {
+                Href = stacUrl,
+                Relationship = "self",
+                Title = CatalogTitle
+            },
+            new()
+            {
+                Href = stacUrl,
+                Relationship = "root",
+                Title = CatalogTitle
+            }
+        };
+        
+        links.AddRange(from dataset in _context.Datasets.Include("Organization").ToArray()
+            let ddb = _ddbManager.Get(dataset.Organization.Slug, dataset.InternalRef)
+            let meta = ddb.Meta.GetSafe()
+            where meta.Visibility == Visibility.Public
+            select new StacLinkDto
+            {
+                Href = _utils.GenerateDatasetStacUrl(dataset.Organization.Slug, dataset.Slug),
+                Relationship = "child",
+                Title = meta.Name
+            });
+
+        return new StacCatalogDto
+        {
+            Type = "Catalog",
+            StacVersion = "1.0.0",
+            Id = CatalogId,
+            Description = CatalogTitle,
+            Links = links,
+        };
     }
     
     public async Task<StacCatalogDto> GetCatalog()
@@ -51,38 +103,32 @@ public class StacManager : IStacManager
         if (currentUser == null)
             throw new UnauthorizedException("Invalid user");
 
-        var query = (from dataset in _context.Datasets.Include("Organization").ToArray()
-            let ddb = _ddbManager.Get(dataset.Organization.Slug, dataset.InternalRef)
-            let visibility = ddb.Meta.GetSafe().Visibility
-            where visibility == Visibility.Public
-            select new { ds = dataset.Slug, org = dataset.Organization.Slug }).ToArray();
+        var cached = await _cache.GetRecordAsync<StacCatalogDto>(CacheKey);
+        if (cached != null)
+            return cached;
         
+        var catalog = _internalGetCatalog();
         
+        await _cache.SetRecordAsync(CacheKey, catalog, Expiration);
+        
+        return catalog;
 
-        /*
-        var query = 
-            from org in _context.Organizations
-            where org.OwnerId == currentUser.Id || org.Slug == MagicStrings.PublicOrganizationSlug
-            select org;
-            
-        // This can be optimized, but it's not a big deal because it's a cross database query anyway
-        var usersMapper = await _appContext.Users.Select(item => new { item.Id, item.UserName })
-            .ToDictionaryAsync(item => item.Id, item => item.UserName);
-
-        return from org in query
-            let userName = org.OwnerId != null ? usersMapper.SafeGetValue(org.OwnerId) : null
-            select new OrganizationDto
-            {
-                CreationDate = org.CreationDate,
-                Description = org.Description,
-                Slug = org.Slug,
-                Name = org.Name,
-                Owner = userName,
-                IsPublic = org.IsPublic
-            };
-            
-            */
-
-        return null;
     }
+    
+    
+    
+    /*router.get('/orgs/:org/ds/:ds/stac/:path?', cors(), security.allowDatasetRead, asyncHandle(async (req, res) => {
+    let entry = req.params.path !== undefined ? Buffer.from(req.params.path, 'base64').toString('utf8') : "";
+    
+    const stac = await ddb.stac(req.ddbPath, { 
+        stacCollectionRoot: stacCollectionRootFromReq(req), 
+        stacCatalogRoot: hostFromReq(req),
+        entry,
+        id: `${req.params.org}/${req.params.ds}`
+    });
+
+    //stac.links[0].href="http://localhost:5000/stac";
+
+    res.json(stac);
+}));*/
 }

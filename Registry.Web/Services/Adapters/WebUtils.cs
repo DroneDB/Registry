@@ -110,6 +110,16 @@ namespace Registry.Web.Services.Adapters
 
         public string GenerateDatasetUrl(Dataset dataset)
         {
+            return $"{GetLocalHost()}/{dataset.Organization.Slug}/{dataset.Slug}";
+        }
+        
+        public string GenerateStacUrl()
+        {
+            return $"{GetLocalHost()}/stac";
+        }
+
+        private string GetLocalHost()
+        {
             bool isHttps;
             string host;
 
@@ -131,11 +141,14 @@ namespace Registry.Web.Services.Adapters
                 isHttps = context?.Request.IsHttps ?? false;
             }
 
-            var scheme = isHttps ? "ddb" : "ddb+unsafe";
+            var scheme = isHttps ? "http" : "https";
 
-            var datasetUrl = string.Format($"{scheme}://{host}/{dataset.Organization.Slug}/{dataset.Slug}");
-
-            return datasetUrl;
+            return $"{scheme}://{host}";
+        }
+        
+        public string GenerateDatasetStacUrl(string orgSlug, string dsSlug)
+        {
+            return $"{GetLocalHost()}/orgs/{orgSlug}/ds/{dsSlug}/stac";
         }
 
         // NOTE: This function can be optimized down the line.

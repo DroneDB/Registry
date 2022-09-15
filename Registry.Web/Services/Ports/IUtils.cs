@@ -17,5 +17,7 @@ namespace Registry.Web.Services.Ports
         UserStorageInfo GetUserStorage(User user);
         Task CheckCurrentUserStorage(long size = 0);
 
+        string GenerateDatasetStacUrl(string orgSlug, string dsSlug);
+        string GenerateStacUrl();
     }
 }
