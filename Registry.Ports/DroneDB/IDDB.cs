@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
+using Newtonsoft.Json.Linq;
 using Registry.Ports.DroneDB.Models;
 
 namespace Registry.Ports.DroneDB
@@ -74,6 +75,8 @@ namespace Registry.Ports.DroneDB
         long GetSize();
         Stamp GetStamp();
 
+        JToken GetStac(string id, string stacCollectionRoot, string stacCatalogRoot, string path = null);
+
         #region Async
 
         Task<IEnumerable<Entry>> SearchAsync(string path, bool recursive = false, CancellationToken cancellationToken = default);
@@ -102,8 +105,8 @@ namespace Registry.Ports.DroneDB
         #endregion
         
         // These consts are like magic strings: if anything changes this goes kaboom!
-        public static string DatabaseFolderName = ".ddb";
-        public static string BuildFolderName = "build";
-        public static string TmpFolderName = "tmp";
+        public const string DatabaseFolderName = ".ddb";
+        public const string BuildFolderName = "build";
+        public const string TmpFolderName = "tmp";
     }
 }

@@ -11,6 +11,7 @@ using System.Linq;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Caching.Distributed;
 using Microsoft.Extensions.Caching.Memory;
+using Newtonsoft.Json.Linq;
 using Registry.Common;
 using Registry.Ports;
 using Registry.Ports.DroneDB.Models;
@@ -112,6 +113,25 @@ public class StacManager : IStacManager
         await _cache.SetRecordAsync(CacheKey, catalog, Expiration);
         
         return catalog;
+
+    }
+
+    public async Task<JToken> GetStacChild(string orgSlug, string dsSlug, string path = null)
+    {
+        var ds = _utils.GetDataset(orgSlug, dsSlug);
+            
+        _logger.LogInformation("In GetStacChild('{OrgSlug}/{DsSlug}', {Path})", orgSlug, dsSlug, path);
+
+        if (!await _authManager.RequestAccess(ds, AccessType.Read))
+            throw new UnauthorizedException("The current user is not allowed to list this dataset");
+            
+        var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
+
+        if (path != null && !await ddb.EntryExistsAsync(path))
+            throw new ArgumentException("Entry does not exist");
+        
+        return ddb.GetStac($"{orgSlug}/{dsSlug}", _utils.GenerateDatasetStacUrl(orgSlug, dsSlug), 
+            _utils.GenerateStacUrl(), path);
 
     }
     

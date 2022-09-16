@@ -353,6 +353,8 @@ namespace Registry.Adapters.DroneDB
                 }
             }
         }
+        
+        
 
         public override string ToString()
         {
@@ -364,8 +366,20 @@ namespace Registry.Adapters.DroneDB
             return DDBWrapper.GetStamp(DatasetFolderPath);
         }
 
+        public JToken GetStac(string id, string stacCollectionRoot, string stacCatalogRoot, string path = null)
+        {
+            return DDBWrapper.Stac(DatasetFolderPath, path, stacCollectionRoot, id, stacCatalogRoot);
+        }
+
         #region Async
 
+        public async Task<JToken> GetStacAsync(string id, string stacCollectionRoot, string stacCatalogRoot, string path = null,
+            CancellationToken cancellationToken = default)
+        {
+            return await Task<JToken>.Factory.StartNew(() => GetStac(id, stacCollectionRoot, stacCatalogRoot, path), cancellationToken,
+                TaskCreationOptions.LongRunning, TaskScheduler.Default);
+        }
+        
         public async Task<IEnumerable<Entry>> SearchAsync(string path, bool recursive = false,
             CancellationToken cancellationToken = default)
         {
