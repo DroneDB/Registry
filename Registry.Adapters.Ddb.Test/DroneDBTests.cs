@@ -719,6 +719,20 @@ namespace Registry.Adapters.Ddb.Test
             DDBWrapper.MetaAdd(area.TestFolder, "examples", "abc");
             DDBWrapper.MetaList(area.TestFolder).Should().HaveCount(2);
         }
+        
+        [Test]
+        public void Stac_Ok()
+        {
+            
+            using var test = new TestFS(Test1ArchiveUrl, BaseTestFolder);
+
+            var ddbPath = Path.Combine(test.TestFolder, "public", "default");
+
+            var res = DDBWrapper.Stac(ddbPath, "DJI_0025.JPG",
+                "https://localhost:5000/org/public/ds/default", "public/default", "https://localhost:5000");
+
+            res.Should().NotBeNull();
+        }
 
         [Test]
         [Explicit("Clean test directory")]
