@@ -12,7 +12,7 @@ namespace Registry.Web.Services.Ports
         Dataset GetDataset(string orgSlug, string dsSlug, bool safe = false);
 
         string GetFreeOrganizationSlug(string orgName);
-        string GenerateDatasetUrl(Dataset dataset);
+        string GenerateDatasetUrl(Dataset dataset, bool useDdbScheme = false);
         
         UserStorageInfo GetUserStorage(User user);
         Task CheckCurrentUserStorage(long size = 0);

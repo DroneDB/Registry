@@ -108,9 +108,9 @@ namespace Registry.Web.Services.Adapters
             }
         }
 
-        public string GenerateDatasetUrl(Dataset dataset)
+        public string GenerateDatasetUrl(Dataset dataset, bool useDdbScheme = false)
         {
-            return $"{GetLocalHost()}/{dataset.Organization.Slug}/{dataset.Slug}";
+            return $"{GetLocalHost(useDdbScheme)}/{dataset.Organization.Slug}/{dataset.Slug}";
         }
         
         public string GenerateStacUrl()
@@ -118,7 +118,7 @@ namespace Registry.Web.Services.Adapters
             return $"{GetLocalHost()}/stac";
         }
 
-        private string GetLocalHost()
+        private string GetLocalHost(bool useDdbScheme = false)
         {
             bool isHttps;
             string host;
@@ -141,7 +141,7 @@ namespace Registry.Web.Services.Adapters
                 isHttps = context?.Request.IsHttps ?? false;
             }
 
-            var scheme = isHttps ? "http" : "https";
+            var scheme = useDdbScheme ? isHttps ? "ddb" : "ddb+unsafe" : isHttps ? "https" : "http";
 
             return $"{scheme}://{host}";
         }

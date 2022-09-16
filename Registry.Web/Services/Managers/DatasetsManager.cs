@@ -88,7 +88,7 @@ namespace Registry.Web.Services.Managers
 
             var info = await ddb.GetInfoAsync();
             info.Depth = 0;
-            info.Path = _utils.GenerateDatasetUrl(dataset);
+            info.Path = _utils.GenerateDatasetUrl(dataset, true);
 
             return new[] { info.ToDto() };
         }
