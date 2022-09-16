@@ -130,25 +130,9 @@ public class StacManager : IStacManager
         if (path != null && !await ddb.EntryExistsAsync(path))
             throw new ArgumentException("Entry does not exist");
         
-        return ddb.GetStac($"{orgSlug}/{dsSlug}", _utils.GenerateDatasetStacUrl(orgSlug, dsSlug), 
+        return ddb.GetStac($"{orgSlug}/{dsSlug}", _utils.GenerateDatasetUrl(ds), 
             _utils.GenerateStacUrl(), path);
 
     }
-    
-    
-    
-    /*router.get('/orgs/:org/ds/:ds/stac/:path?', cors(), security.allowDatasetRead, asyncHandle(async (req, res) => {
-    let entry = req.params.path !== undefined ? Buffer.from(req.params.path, 'base64').toString('utf8') : "";
-    
-    const stac = await ddb.stac(req.ddbPath, { 
-        stacCollectionRoot: stacCollectionRootFromReq(req), 
-        stacCatalogRoot: hostFromReq(req),
-        entry,
-        id: `${req.params.org}/${req.params.ds}`
-    });
 
-    //stac.links[0].href="http://localhost:5000/stac";
-
-    res.json(stac);
-}));*/
 }
