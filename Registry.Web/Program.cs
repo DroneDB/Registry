@@ -35,7 +35,7 @@ namespace Registry.Web
         public const string DefaultHost = "localhost";
         public const string DroneDBDllName = "ddb.dll";
 
-        public static readonly Version MinDdbVersion = new(1, 0, 9);
+        public static readonly Version MinDdbVersion = new(1, 0, 10);
 
         public static void Main(string[] args)
         {

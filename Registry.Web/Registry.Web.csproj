@@ -12,7 +12,7 @@
         <Platforms>AnyCPU;x64</Platforms>
         <PackageVersion>1.0.15</PackageVersion>
         <Configurations>Debug;Release;DebugEf</Configurations>
-        <DdbVersion>1.0.9</DdbVersion>
+        <DdbVersion>1.0.10</DdbVersion>
     </PropertyGroup>
 
     <PropertyGroup Condition=" '$(Configuration)' == 'DebugEf' ">
