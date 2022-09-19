@@ -2,6 +2,7 @@
 
 using System.Threading.Tasks;
 using Newtonsoft.Json.Linq;
+using Registry.Web.Data.Models;
 using Registry.Web.Models.DTO;
 
 namespace Registry.Web.Services.Ports
@@ -10,5 +11,6 @@ namespace Registry.Web.Services.Ports
     {
         Task<StacCatalogDto> GetCatalog();
         Task<JToken> GetStacChild(string orgSlug, string dsSlug, string path = null);
+        Task ClearCache(Dataset ds);
     }
 }

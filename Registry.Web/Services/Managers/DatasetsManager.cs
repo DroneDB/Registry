@@ -21,6 +21,7 @@ namespace Registry.Web.Services.Managers
         private readonly IUtils _utils;
         private readonly ILogger<DatasetsManager> _logger;
         private readonly IObjectsManager _objectsManager;
+        private readonly IStacManager _stacManager;
         private readonly IDdbManager _ddbManager;
         private readonly IAuthManager _authManager;
 
@@ -29,12 +30,15 @@ namespace Registry.Web.Services.Managers
             IUtils utils,
             ILogger<DatasetsManager> logger,
             IObjectsManager objectsManager,
-            IDdbManager ddbManager, IAuthManager authManager)
+            IStacManager stacManager,
+            IDdbManager ddbManager, 
+            IAuthManager authManager)
         {
             _context = context;
             _utils = utils;
             _logger = logger;
             _objectsManager = objectsManager;
+            _stacManager = stacManager;
             _ddbManager = ddbManager;
             _authManager = authManager;
         }
@@ -149,7 +153,11 @@ namespace Registry.Web.Services.Managers
             var meta = ddb.Meta.GetSafe();
 
             if (dataset.Visibility.HasValue)
+            {
                 meta.Visibility = dataset.Visibility.Value;
+
+                await _stacManager.ClearCache(ds);
+            }
 
             if (!string.IsNullOrWhiteSpace(dataset.Name))
                 meta.Name = dataset.Name;
@@ -172,6 +180,9 @@ namespace Registry.Web.Services.Managers
                 _context.Datasets.Remove(ds);
 
                 await _context.SaveChangesAsync();
+                
+                await _stacManager.ClearCache(ds);
+
             }
             catch (Exception ex)
             {
@@ -219,7 +230,11 @@ namespace Registry.Web.Services.Managers
                 throw new UnauthorizedException("The current user is not allowed to change attributes");
 
             var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
-            return await ddb.ChangeAttributesRawAsync(new Dictionary<string, object> { { "public", attributes.IsPublic } });;
+            var res = await ddb.ChangeAttributesRawAsync(new Dictionary<string, object> { { "public", attributes.IsPublic } });;
+
+            await _stacManager.ClearCache(ds);
+            
+            return res;
         }
 
         public async Task<StampDto> GetStamp(string orgSlug, string dsSlug)

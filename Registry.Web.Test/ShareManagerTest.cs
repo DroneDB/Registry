@@ -63,6 +63,8 @@ namespace Registry.Web.Test
         private Mock<IDatasetsManager> _datasetsManagerMock;
         private Mock<IHttpContextAccessor> _httpContextAccessorMock;
         private Mock<ICacheManager> _cacheManagerMock;
+        private Mock<IStacManager> _stacManagerMock;
+
         private IBackgroundJobsProcessor _backgroundJobsProcessor;
 
         private readonly FileSystem _fileSystem = new FileSystem();
@@ -92,6 +94,7 @@ namespace Registry.Web.Test
             _httpContextAccessorMock = new Mock<IHttpContextAccessor>();
             _backgroundJobsProcessor = new SimpleBackgroundJobsProcessor();
             _cacheManagerMock = new Mock<ICacheManager>();
+            _stacManagerMock = new Mock<IStacManager>();
 
             _shareManagerLogger = new Logger<ShareManager>(LoggerFactory.Create(builder => builder.AddConsole()));
             _objectManagerLogger = new Logger<ObjectsManager>(LoggerFactory.Create(builder => builder.AddConsole()));
@@ -199,7 +202,7 @@ namespace Registry.Web.Test
                 _fileSystem, _backgroundJobsProcessor);
 
             var datasetManager = new DatasetsManager(context, webUtils, _datasetsManagerLogger, objectManager,
-                _ddbFactoryMock.Object, _authManagerMock.Object);
+                _stacManagerMock.Object, _ddbFactoryMock.Object, _authManagerMock.Object);
             var organizationsManager = new OrganizationsManager(_authManagerMock.Object, context, webUtils,
                 datasetManager, appContext, _organizationsManagerLogger);
 
@@ -306,7 +309,7 @@ namespace Registry.Web.Test
                 _fileSystem, _backgroundJobsProcessor);
 
             var datasetManager = new DatasetsManager(context, webUtils, _datasetsManagerLogger, objectManager,
-                _ddbFactoryMock.Object, _authManagerMock.Object);
+                _stacManagerMock.Object, _ddbFactoryMock.Object, _authManagerMock.Object);
             var organizationsManager = new OrganizationsManager(_authManagerMock.Object, context, webUtils,
                 datasetManager, appContext, _organizationsManagerLogger);
 
@@ -423,7 +426,7 @@ namespace Registry.Web.Test
                 _fileSystem, _backgroundJobsProcessor);
 
             var datasetManager = new DatasetsManager(context, webUtils, _datasetsManagerLogger, objectManager,
-                _ddbFactoryMock.Object, _authManagerMock.Object);
+                _stacManagerMock.Object, _ddbFactoryMock.Object, _authManagerMock.Object);
             var organizationsManager = new OrganizationsManager(_authManagerMock.Object, context, webUtils,
                 datasetManager, appContext, _organizationsManagerLogger);
 
@@ -567,7 +570,7 @@ namespace Registry.Web.Test
                 _fileSystem, _backgroundJobsProcessor);
 
             var datasetManager = new DatasetsManager(context, webUtils, _datasetsManagerLogger, objectManager,
-                _ddbFactoryMock.Object, _authManagerMock.Object);
+                _stacManagerMock.Object, _ddbFactoryMock.Object, _authManagerMock.Object);
             var organizationsManager = new OrganizationsManager(_authManagerMock.Object, context, webUtils,
                 datasetManager, appContext, _organizationsManagerLogger);
 
@@ -720,7 +723,7 @@ namespace Registry.Web.Test
                 _fileSystem, _backgroundJobsProcessor);
 
             var datasetManager = new DatasetsManager(context, webUtils, _datasetsManagerLogger, objectManager,
-                _ddbFactoryMock.Object, _authManagerMock.Object);
+                _stacManagerMock.Object, _ddbFactoryMock.Object, _authManagerMock.Object);
             var organizationsManager = new OrganizationsManager(_authManagerMock.Object, context, webUtils,
                 datasetManager, appContext, _organizationsManagerLogger);
 

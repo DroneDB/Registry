@@ -15,126 +15,145 @@ using Newtonsoft.Json.Linq;
 using Registry.Common;
 using Registry.Ports;
 using Registry.Ports.DroneDB.Models;
+using Registry.Web.Data.Models;
 using Registry.Web.Utilities;
 
-namespace Registry.Web.Services.Managers;
-
-public class StacManager : IStacManager
+namespace Registry.Web.Services.Managers
 {
-    private readonly IAuthManager _authManager;
-    private readonly RegistryContext _context;
-    private readonly IUtils _utils;
-    private readonly IDdbManager _ddbManager;
-    private readonly IDistributedCache _cache;
-    private readonly ILogger<StacManager> _logger;
 
-    private const string CacheKey = "stac-catalog";
-    
-    // These could end up in the config
-    const string CatalogTitle = "DroneDB public datasets catalog";
-    private const string CatalogId = "DroneDB Catalog";
-    private readonly TimeSpan Expiration = TimeSpan.FromMinutes(5);
-    
-    // NOTE: We could implement a more sofisticated approach to cache invalidation
-    //       but for now we just invalidate the cache every 5 minutes
-    //       This is not a problem since the catalog is not updated that often
-
-    public StacManager(
-        IAuthManager authManager,
-        RegistryContext context,
-        IUtils utils,
-        IDdbManager ddbManager,
-        IDistributedCache cache,
-        ILogger<StacManager> logger)
+    public class StacManager : IStacManager
     {
-        _authManager = authManager;
-        _context = context;
-        _utils = utils;
-        _ddbManager = ddbManager;
-        _cache = cache;
-        _logger = logger;
-    }
+        private readonly IAuthManager _authManager;
+        private readonly RegistryContext _context;
+        private readonly IUtils _utils;
+        private readonly IDdbManager _ddbManager;
+        private readonly IDistributedCache _cache;
+        private readonly ILogger<StacManager> _logger;
 
-    private StacCatalogDto _internalGetCatalog()
-    {
+        private const string CacheKey = "stac-catalog";
 
-        var stacUrl = _utils.GenerateStacUrl();
+        // These could end up in the config
+        private const string CatalogTitle = "DroneDB public datasets catalog";
+        private const string CatalogId = "DroneDB Catalog";
+        private readonly TimeSpan Expiration = TimeSpan.FromMinutes(5);
 
-        var links = new List<StacLinkDto>
+        public StacManager(
+            IAuthManager authManager,
+            RegistryContext context,
+            IUtils utils,
+            IDdbManager ddbManager,
+            IDistributedCache cache,
+            ILogger<StacManager> logger)
         {
-            new()
+            _authManager = authManager;
+            _context = context;
+            _utils = utils;
+            _ddbManager = ddbManager;
+            _cache = cache;
+            _logger = logger;
+        }
+
+        
+        public async Task<StacCatalogDto> GetCatalog()
+        {
+            var currentUser = await _authManager.GetCurrentUser();
+
+            if (currentUser == null)
+                throw new UnauthorizedException("Invalid user");
+
+            var stacUrl = _utils.GenerateStacUrl();
+
+            var links = new List<StacLinkDto>
             {
-                Href = stacUrl,
-                Relationship = "self",
-                Title = CatalogTitle
-            },
-            new()
+                new()
+                {
+                    Href = stacUrl,
+                    Relationship = "self",
+                    Title = CatalogTitle
+                },
+                new()
+                {
+                    Href = stacUrl,
+                    Relationship = "root",
+                    Title = CatalogTitle
+                }
+            };
+
+            var datasets = _context.Datasets.Include("Organization").ToArray();
+
+            foreach (var ds in datasets)
             {
-                Href = stacUrl,
-                Relationship = "root",
-                Title = CatalogTitle
+
+                var key = MakeCacheKey(ds);
+
+                var item = await _cache.GetRecordAsync<StacLinkDto>(key);
+
+                if (item != null)
+                {
+                    links.Add(item);
+                    await _cache.RefreshAsync(key);
+                    continue;
+                }
+                
+                var ddb = _ddbManager.Get(ds.Organization.Slug, ds.InternalRef);
+                var meta = ddb.Meta.GetSafe();
+                if (meta.Visibility != Visibility.Public) continue;
+
+                item = new StacLinkDto
+                {
+                    Href = _utils.GenerateDatasetStacUrl(ds.Organization.Slug, ds.Slug),
+                    Relationship = "child",
+                    Title = meta.Name
+                };
+                
+                await _cache.SetRecordAsync(key, item, Expiration);
+
+                links.Add(item);
             }
-        };
-        
-        links.AddRange(from dataset in _context.Datasets.Include("Organization").ToArray()
-            let ddb = _ddbManager.Get(dataset.Organization.Slug, dataset.InternalRef)
-            let meta = ddb.Meta.GetSafe()
-            where meta.Visibility == Visibility.Public
-            select new StacLinkDto
+
+            var catalog = new StacCatalogDto
             {
-                Href = _utils.GenerateDatasetStacUrl(dataset.Organization.Slug, dataset.Slug),
-                Relationship = "child",
-                Title = meta.Name
-            });
+                Type = "Catalog",
+                StacVersion = "1.0.0",
+                Id = CatalogId,
+                Description = CatalogTitle,
+                Links = links,
+            };
 
-        return new StacCatalogDto
+            return catalog;
+
+        }
+
+        public async Task ClearCache(Dataset ds)
         {
-            Type = "Catalog",
-            StacVersion = "1.0.0",
-            Id = CatalogId,
-            Description = CatalogTitle,
-            Links = links,
-        };
-    }
-    
-    public async Task<StacCatalogDto> GetCatalog()
-    {
-        var currentUser = await _authManager.GetCurrentUser();
+            _logger.LogInformation("In ClearCache('{DsSlug}')", ds.Slug);
 
-        if (currentUser == null)
-            throw new UnauthorizedException("Invalid user");
+            await _cache.RemoveAsync(MakeCacheKey(ds));
+        }
 
-        var cached = await _cache.GetRecordAsync<StacCatalogDto>(CacheKey);
-        if (cached != null)
-            return cached;
-        
-        var catalog = _internalGetCatalog();
-        
-        await _cache.SetRecordAsync(CacheKey, catalog, Expiration);
-        
-        return catalog;
+        public async Task<JToken> GetStacChild(string orgSlug, string dsSlug, string path = null)
+        {
+            var ds = _utils.GetDataset(orgSlug, dsSlug);
 
-    }
+            _logger.LogInformation("In GetStacChild('{OrgSlug}/{DsSlug}', {Path})", orgSlug, dsSlug, path);
 
-    public async Task<JToken> GetStacChild(string orgSlug, string dsSlug, string path = null)
-    {
-        var ds = _utils.GetDataset(orgSlug, dsSlug);
-            
-        _logger.LogInformation("In GetStacChild('{OrgSlug}/{DsSlug}', {Path})", orgSlug, dsSlug, path);
+            if (!await _authManager.RequestAccess(ds, AccessType.Read))
+                throw new UnauthorizedException("The current user is not allowed to list this dataset");
 
-        if (!await _authManager.RequestAccess(ds, AccessType.Read))
-            throw new UnauthorizedException("The current user is not allowed to list this dataset");
-            
-        var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
+            var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
 
-        if (path != null && !await ddb.EntryExistsAsync(path))
-            throw new ArgumentException("Entry does not exist");
+            if (path != null && !await ddb.EntryExistsAsync(path))
+                throw new ArgumentException("Entry does not exist");
 
-        var id = $"{orgSlug}/{dsSlug}"; // $"orgs/{orgSlug}/ds/{dsSlug}";
-        
-        return ddb.GetStac(id, _utils.GenerateDatasetUrl(ds), 
-            _utils.GetLocalHost(), path);
+            return ddb.GetStac($"{orgSlug}/{dsSlug}", _utils.GenerateDatasetUrl(ds),
+                _utils.GetLocalHost(), path);
+
+        }
+
+        private static string MakeCacheKey(Dataset ds)
+        {
+            return $"{CacheKey}-{ds.InternalRef}";
+        }
 
     }
-
 }

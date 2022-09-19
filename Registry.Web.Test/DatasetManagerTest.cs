@@ -35,6 +35,7 @@ namespace Registry.Web.Test
         private Mock<IDdbManager> _ddbFactoryMock;
         private Mock<IObjectsManager> _objectsManagerMock;
         private Mock<IHttpContextAccessor> _httpContextAccessorMock;
+        private Mock<IStacManager> _stacManagerMock;
 
         [SetUp]
         public void Setup()
@@ -44,6 +45,7 @@ namespace Registry.Web.Test
             _datasetManagerMock = new Mock<IDatasetsManager>();
             _ddbFactoryMock = new Mock<IDdbManager>();
             _objectsManagerMock = new Mock<IObjectsManager>();
+            _stacManagerMock = new Mock<IStacManager>();
             _httpContextAccessorMock = new Mock<IHttpContextAccessor>();
             _datasetsManagerLogger = new Logger<DatasetsManager>(LoggerFactory.Create(builder => builder.AddConsole()));
         }
@@ -80,7 +82,7 @@ namespace Registry.Web.Test
             _ddbFactoryMock.Setup(x => x.Get(It.IsAny<string>(), It.IsAny<Guid>())).Returns(ddbMock.Object);
 
             var datasetsManager = new DatasetsManager(context, utils, _datasetsManagerLogger,
-                _objectsManagerMock.Object, _ddbFactoryMock.Object, _authManagerMock.Object);
+                _objectsManagerMock.Object, _stacManagerMock.Object, _ddbFactoryMock.Object, _authManagerMock.Object);
 
             var list = (await datasetsManager.List(MagicStrings.PublicOrganizationSlug)).ToArray();
 
