@@ -388,7 +388,7 @@ namespace Registry.Web
             if (resetDdb)
             {
                 Console.WriteLine(" -> Resetting ddb installation");
-                Directory.Delete(ddbRoot, true);
+                if (Directory.Exists(ddbRoot)) Directory.Delete(ddbRoot, true);
             }
             else if (
                 Directory.Exists(ddbRoot) &&
