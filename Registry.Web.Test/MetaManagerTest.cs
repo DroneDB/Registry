@@ -14,6 +14,7 @@ using NUnit.Framework;
 using Registry.Adapters.DroneDB;
 using Registry.Common;
 using Registry.Common.Test;
+using Registry.Test.Common;
 using Registry.Web.Data;
 using Registry.Web.Data.Models;
 using Registry.Web.Models.Configuration;
@@ -25,7 +26,7 @@ using MetaManager = Registry.Web.Services.Managers.MetaManager;
 namespace Registry.Web.Test
 {
     [TestFixture]
-    class MetaManagerTest
+    class MetaManagerTest : TestBase
     {
         private Logger<DdbManager> _ddbFactoryLogger;
         private Logger<MetaManager> _metaManagerLogger;

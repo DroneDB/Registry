@@ -33,6 +33,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Registry.Web.Identity.MySql
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Registry.Web.Identity.SqliteMigrations", "Registry.Web.Identity.SqliteMigrations\Registry.Web.Identity.SqliteMigrations.csproj", "{AA19C241-9960-4EF8-8452-A5A826CD098A}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Registry.Test.Common", "Registry.Test.Common\Registry.Test.Common.csproj", "{67EA4955-30BB-4412-AD63-D3595F6A2AFC}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -199,6 +201,18 @@ Global
 		{AA19C241-9960-4EF8-8452-A5A826CD098A}.Release|Any CPU.Build.0 = Release|Any CPU
 		{AA19C241-9960-4EF8-8452-A5A826CD098A}.Release|x64.ActiveCfg = Release|Any CPU
 		{AA19C241-9960-4EF8-8452-A5A826CD098A}.Release|x64.Build.0 = Release|Any CPU
+		{67EA4955-30BB-4412-AD63-D3595F6A2AFC}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{67EA4955-30BB-4412-AD63-D3595F6A2AFC}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{67EA4955-30BB-4412-AD63-D3595F6A2AFC}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{67EA4955-30BB-4412-AD63-D3595F6A2AFC}.Debug|x64.Build.0 = Debug|Any CPU
+		{67EA4955-30BB-4412-AD63-D3595F6A2AFC}.DebugEf|Any CPU.ActiveCfg = Debug|Any CPU
+		{67EA4955-30BB-4412-AD63-D3595F6A2AFC}.DebugEf|Any CPU.Build.0 = Debug|Any CPU
+		{67EA4955-30BB-4412-AD63-D3595F6A2AFC}.DebugEf|x64.ActiveCfg = Debug|Any CPU
+		{67EA4955-30BB-4412-AD63-D3595F6A2AFC}.DebugEf|x64.Build.0 = Debug|Any CPU
+		{67EA4955-30BB-4412-AD63-D3595F6A2AFC}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{67EA4955-30BB-4412-AD63-D3595F6A2AFC}.Release|Any CPU.Build.0 = Release|Any CPU
+		{67EA4955-30BB-4412-AD63-D3595F6A2AFC}.Release|x64.ActiveCfg = Release|Any CPU
+		{67EA4955-30BB-4412-AD63-D3595F6A2AFC}.Release|x64.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
@@ -214,6 +228,7 @@ Global
 		{62B298D4-721F-451E-BC2F-19A1A94A34D9} = {D63B271F-AAD4-4596-BEF6-4978855D323A}
 		{EF817B2F-2953-492D-AA0E-951FC1F9BE4B} = {D63B271F-AAD4-4596-BEF6-4978855D323A}
 		{AA19C241-9960-4EF8-8452-A5A826CD098A} = {D63B271F-AAD4-4596-BEF6-4978855D323A}
+		{67EA4955-30BB-4412-AD63-D3595F6A2AFC} = {820298C1-685B-448D-8C4B-1C154BD66034}
 	EndGlobalSection
 	GlobalSection(RiderSharedRunConfigurations) = postSolution
 	EndGlobalSection

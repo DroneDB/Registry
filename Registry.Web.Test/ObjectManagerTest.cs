@@ -29,11 +29,12 @@ using Registry.Common.Test;
 using Registry.Ports;
 using Registry.Ports.DroneDB;
 using Registry.Ports.DroneDB.Models;
+using Registry.Test.Common;
 
 namespace Registry.Web.Test
 {
     [TestFixture]
-    public class ObjectManagerTest
+    public class ObjectManagerTest : TestBase
     {
         private Logger<DdbManager> _ddbFactoryLogger;
         private Logger<ObjectsManager> _objectManagerLogger;

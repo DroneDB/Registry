@@ -35,6 +35,7 @@
   <ItemGroup>
     <ProjectReference Include="..\Registry.Adapters\Registry.Adapters.csproj" />
     <ProjectReference Include="..\Registry.Common\Registry.Common.csproj" />
+    <ProjectReference Include="..\Registry.Test.Common\Registry.Test.Common.csproj" />
     <ProjectReference Include="..\Registry.Web.Data\Registry.Web.Data.csproj" />
     <ProjectReference Include="..\Registry.Web\Registry.Web.csproj" />
   </ItemGroup>

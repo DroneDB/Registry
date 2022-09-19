@@ -38,6 +38,7 @@
 
     <ItemGroup>
       <ProjectReference Include="..\Registry.Adapters\Registry.Adapters.csproj" />
+      <ProjectReference Include="..\Registry.Test.Common\Registry.Test.Common.csproj" />
     </ItemGroup>
 
 </Project>

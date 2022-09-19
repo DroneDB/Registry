@@ -34,6 +34,7 @@ using Registry.Web.Services.Managers;
 using Registry.Web.Services.Ports;
 using Registry.Web.Test.Adapters;
 using Registry.Ports.DroneDB.Models;
+using Registry.Test.Common;
 using Registry.Web.Identity;
 using Registry.Web.Identity.Models;
 using Registry.Web.Services;
@@ -42,7 +43,8 @@ using IMetaManager = Registry.Ports.DroneDB.IMetaManager;
 
 namespace Registry.Web.Test
 {
-    class ShareManagerTest
+    [TestFixture]
+    class ShareManagerTest : TestBase
     {
         private Logger<ShareManager> _shareManagerLogger;
         private Logger<ObjectsManager> _objectManagerLogger;
