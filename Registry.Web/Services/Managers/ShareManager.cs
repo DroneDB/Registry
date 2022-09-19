@@ -7,6 +7,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Registry.Ports;
+using Registry.Ports.DroneDB.Models;
 using Registry.Web.Data;
 using Registry.Web.Data.Models;
 using Registry.Web.Exceptions;
@@ -90,6 +91,9 @@ namespace Registry.Web.Services.Managers
 
             if (batch == null)
                 throw new NotFoundException("Cannot find batch");
+            
+            if (!await _authManager.RequestAccess(batch.Dataset, AccessType.Read))
+                throw new UnauthorizedException("The current user is not allowed to read token info");
 
             if (batch.Status != BatchStatus.Running)
                 throw new BadRequestException("Only running batches can be rollbacked");
@@ -104,15 +108,18 @@ namespace Registry.Web.Services.Managers
 
         public async Task<IEnumerable<BatchDto>> ListBatches(string orgSlug, string dsSlug)
         {
-            await _utils.GetOrganization(orgSlug);
-            var dataset = await _utils.GetDataset(orgSlug, dsSlug);
+            
+            var ds = _utils.GetDataset(orgSlug, dsSlug);
 
             _logger.LogInformation("Listing batches of '{OrgSlug}/{DsSlug}'", orgSlug, dsSlug);
+            
+            if (!await _authManager.RequestAccess(ds, AccessType.Read))
+                throw new UnauthorizedException("The current user is not allowed to read dataset");
 
             var batches = from batch in _context.Batches
                     .Include(x => x.Entries)
                     .Include(x => x.Dataset)
-                where batch.Dataset.Id == dataset.Id
+                where batch.Dataset.Id == ds.Id
                 select new BatchDto
                 {
                     End = batch.End,
@@ -254,17 +261,17 @@ namespace Registry.Web.Services.Managers
                 {
                     Slug = dsSlug,
                     Name = parameters.DatasetName,
-                    IsPublic = true
+                    Visibility = Visibility.Public
                 });
 
-                dataset = await _utils.GetDataset(orgSlug, dsSlug);
+                dataset = _utils.GetDataset(orgSlug, dsSlug);
 
                 _logger.LogInformation("Created new dataset '{DsSlug}', creating batch", dsSlug);
             }
             else
             {
                 // Check if the requested organization exists
-                var organization = await _utils.GetOrganization(tag.OrganizationSlug, true);
+                var organization = _utils.GetOrganization(tag.OrganizationSlug, true);
 
                 if (organization == null)
                     throw new BadRequestException($"Cannot find organization '{tag.OrganizationSlug}'");
@@ -282,7 +289,7 @@ namespace Registry.Web.Services.Managers
                     {
                         Slug = dsSlug,
                         Name = parameters.DatasetName,
-                        IsPublic = true
+                        Visibility = Visibility.Public
                     });
 
                     dataset = _context.Datasets.First(ds => ds.Slug == dsSlug);
@@ -291,7 +298,7 @@ namespace Registry.Web.Services.Managers
                 }
                 else
                 {
-                    dataset = await _utils.GetDataset(tag.OrganizationSlug, tag.DatasetSlug, true);
+                    dataset = _utils.GetDataset(tag.OrganizationSlug, tag.DatasetSlug, true);
 
                     // Create dataset if not exists
                     if (dataset == null)
@@ -302,7 +309,7 @@ namespace Registry.Web.Services.Managers
                         {
                             Slug = tag.DatasetSlug,
                             Name = parameters.DatasetName,
-                            IsPublic = true
+                            Visibility = Visibility.Public
                         });
 
                         _logger.LogInformation("Dataset created");

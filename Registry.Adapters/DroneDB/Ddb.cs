@@ -26,7 +26,7 @@ namespace Registry.Adapters.DroneDB
         [OnDeserialized]
         internal void OnDeserializedMethod(StreamingContext context)
         {
-            BuildFolderPath = Path.Combine(DatasetFolderPath, DatabaseFolderName, BuildFolderName);
+            BuildFolderPath = Path.Combine(DatasetFolderPath, IDDB.DatabaseFolderName, IDDB.BuildFolderName);
             Meta = new MetaManager(this);
         }
 
@@ -39,7 +39,7 @@ namespace Registry.Adapters.DroneDB
                 throw new ArgumentException($"Path '{ddbPath}' does not exist");
 
             DatasetFolderPath = ddbPath;
-            BuildFolderPath = Path.Combine(ddbPath, DatabaseFolderName, BuildFolderName);
+            BuildFolderPath = Path.Combine(ddbPath, IDDB.DatabaseFolderName, IDDB.BuildFolderName);
             Meta = new MetaManager(this);
         }
 
@@ -68,11 +68,6 @@ namespace Registry.Adapters.DroneDB
                 throw new InvalidOperationException($"Cannot initialize ddb in folder '{DatasetFolderPath}'", ex);
             }
         }
-
-        // These consts are like magic strings: if anything changes this goes kaboom!
-        public static string DatabaseFolderName = ".ddb";
-        public static string BuildFolderName = "build";
-        public static string TmpFolderName = "tmp";
 
         [JsonIgnore] public string Version => DDBWrapper.GetVersion();
 
@@ -211,7 +206,7 @@ namespace Registry.Adapters.DroneDB
 
         public string GetTmpFolder(string path)
         {
-            string fullPath = Path.Combine(DatasetFolderPath, DatabaseFolderName, TmpFolderName, path);
+            string fullPath = Path.Combine(DatasetFolderPath, IDDB.DatabaseFolderName, IDDB.TmpFolderName, path);
             if (!Directory.Exists(fullPath)) Directory.CreateDirectory(fullPath);
             return fullPath;
         }
@@ -243,11 +238,6 @@ namespace Registry.Adapters.DroneDB
         public Dictionary<string, object> GetAttributesRaw()
         {
             return ChangeAttributesRaw(new Dictionary<string, object>());
-        }
-
-        public EntryAttributes GetAttributes()
-        {
-            return new(this);
         }
 
         public Entry GetInfo()
@@ -363,6 +353,8 @@ namespace Registry.Adapters.DroneDB
                 }
             }
         }
+        
+        
 
         public override string ToString()
         {
@@ -374,8 +366,20 @@ namespace Registry.Adapters.DroneDB
             return DDBWrapper.GetStamp(DatasetFolderPath);
         }
 
+        public JToken GetStac(string id, string stacCollectionRoot, string stacCatalogRoot, string path = null)
+        {
+            return DDBWrapper.Stac(DatasetFolderPath, path, stacCollectionRoot, id, stacCatalogRoot);
+        }
+
         #region Async
 
+        public async Task<JToken> GetStacAsync(string id, string stacCollectionRoot, string stacCatalogRoot, string path = null,
+            CancellationToken cancellationToken = default)
+        {
+            return await Task<JToken>.Factory.StartNew(() => GetStac(id, stacCollectionRoot, stacCatalogRoot, path), cancellationToken,
+                TaskCreationOptions.LongRunning, TaskScheduler.Default);
+        }
+        
         public async Task<IEnumerable<Entry>> SearchAsync(string path, bool recursive = false,
             CancellationToken cancellationToken = default)
         {
@@ -441,12 +445,6 @@ namespace Registry.Adapters.DroneDB
             CancellationToken cancellationToken = default)
         {
             return await Task<Dictionary<string, object>>.Factory.StartNew(GetAttributesRaw, cancellationToken,
-                TaskCreationOptions.LongRunning, TaskScheduler.Default);
-        }
-
-        public async Task<EntryAttributes> GetAttributesAsync(CancellationToken cancellationToken = default)
-        {
-            return await Task<EntryAttributes>.Factory.StartNew(GetAttributes, cancellationToken,
                 TaskCreationOptions.LongRunning, TaskScheduler.Default);
         }
 

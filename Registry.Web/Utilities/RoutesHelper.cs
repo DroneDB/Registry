@@ -16,10 +16,9 @@ namespace Registry.Web.Utilities
         public const string UsersRadix = "users";
         public const string ObjectsRadix = "obj";
         public const string SystemRadix = "sys";
-        public const string SessionRadix = "session";
         public const string PushRadix = "push";
         public const string MetaRadix = "meta";
-        public const string BridgeRadix = "_bridge";
+        public const string StacRadix = "stac";
 
     }
 }

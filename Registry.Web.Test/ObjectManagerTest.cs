@@ -29,11 +29,12 @@ using Registry.Common.Test;
 using Registry.Ports;
 using Registry.Ports.DroneDB;
 using Registry.Ports.DroneDB.Models;
+using Registry.Test.Common;
 
 namespace Registry.Web.Test
 {
     [TestFixture]
-    public class ObjectManagerTest
+    public class ObjectManagerTest : TestBase
     {
         private Logger<DdbManager> _ddbFactoryLogger;
         private Logger<ObjectsManager> _objectManagerLogger;
@@ -77,8 +78,8 @@ namespace Registry.Web.Test
                 { "public", true }
             });
             var ddbMock2 = new Mock<IDDB>();
-            ddbMock2.Setup(x => x.GetAttributesAsync(default))
-                .Returns(Task.FromResult(new EntryAttributes(ddbMock1.Object)));
+            // ddbMock2.Setup(x => x.GetAttributesAsync(default))
+            //     .Returns(Task.FromResult(new EntryAttributes(ddbMock1.Object)));
 
             _ddbFactoryMock.Setup(x => x.Get(It.IsAny<string>(), It.IsAny<Guid>())).Returns(ddbMock2.Object);
         }
@@ -121,7 +122,11 @@ namespace Registry.Web.Test
             settings.DatasetsPath = test.TestFolder;
             _appSettingsMock.Setup(o => o.Value).Returns(settings);
             _authManagerMock.Setup(o => o.IsUserAdmin()).Returns(Task.FromResult(true));
-
+            _authManagerMock.Setup(o => o.RequestAccess(It.IsAny<Dataset>(), 
+                It.IsAny<AccessType>())).Returns(Task.FromResult(true));
+            _authManagerMock.Setup(o => o.RequestAccess(It.IsAny<Organization>(), 
+                It.IsAny<AccessType>())).Returns(Task.FromResult(true));
+            
             var webUtils = new WebUtils(_authManagerMock.Object, context, _appSettingsMock.Object,
                 _httpContextAccessorMock.Object, _ddbFactoryMock.Object);
 
@@ -151,7 +156,11 @@ namespace Registry.Web.Test
             settings.DatasetsPath = test.TestFolder;
             _appSettingsMock.Setup(o => o.Value).Returns(settings);
             _authManagerMock.Setup(o => o.IsUserAdmin()).Returns(Task.FromResult(true));
-
+            _authManagerMock.Setup(o => o.RequestAccess(It.IsAny<Dataset>(), 
+                It.IsAny<AccessType>())).Returns(Task.FromResult(true));
+            _authManagerMock.Setup(o => o.RequestAccess(It.IsAny<Organization>(), 
+                It.IsAny<AccessType>())).Returns(Task.FromResult(true));
+            
             var webUtils = new WebUtils(_authManagerMock.Object, context, _appSettingsMock.Object,
                 _httpContextAccessorMock.Object, _ddbFactoryMock.Object);
 
@@ -193,7 +202,11 @@ namespace Registry.Web.Test
             settings.DatasetsPath = test.TestFolder;
             _appSettingsMock.Setup(o => o.Value).Returns(settings);
             _authManagerMock.Setup(o => o.IsUserAdmin()).Returns(Task.FromResult(true));
-
+            _authManagerMock.Setup(o => o.RequestAccess(It.IsAny<Dataset>(), 
+                It.IsAny<AccessType>())).Returns(Task.FromResult(true));
+            _authManagerMock.Setup(o => o.RequestAccess(It.IsAny<Organization>(), 
+                It.IsAny<AccessType>())).Returns(Task.FromResult(true));
+            
             var webUtils = new WebUtils(_authManagerMock.Object, context, _appSettingsMock.Object,
                 _httpContextAccessorMock.Object, _ddbFactoryMock.Object);
 
@@ -223,7 +236,11 @@ namespace Registry.Web.Test
             settings.DatasetsPath = test.TestFolder;
             _appSettingsMock.Setup(o => o.Value).Returns(settings);
             _authManagerMock.Setup(o => o.IsUserAdmin()).Returns(Task.FromResult(true));
-
+            _authManagerMock.Setup(o => o.RequestAccess(It.IsAny<Dataset>(), 
+                It.IsAny<AccessType>())).Returns(Task.FromResult(true));
+            _authManagerMock.Setup(o => o.RequestAccess(It.IsAny<Organization>(), 
+                It.IsAny<AccessType>())).Returns(Task.FromResult(true));
+            
             var webUtils = new WebUtils(_authManagerMock.Object, context, _appSettingsMock.Object,
                 _httpContextAccessorMock.Object, _ddbFactoryMock.Object);
 
@@ -255,7 +272,10 @@ namespace Registry.Web.Test
             settings.DatasetsPath = test.TestFolder;
             _appSettingsMock.Setup(o => o.Value).Returns(settings);
             _authManagerMock.Setup(o => o.IsUserAdmin()).Returns(Task.FromResult(true));
-
+            _authManagerMock.Setup(o => o.RequestAccess(It.IsAny<Dataset>(), 
+                It.IsAny<AccessType>())).Returns(Task.FromResult(true));
+            _authManagerMock.Setup(o => o.RequestAccess(It.IsAny<Organization>(), 
+                It.IsAny<AccessType>())).Returns(Task.FromResult(true));
             var webUtils = new WebUtils(_authManagerMock.Object, context, _appSettingsMock.Object,
                 _httpContextAccessorMock.Object, _ddbFactoryMock.Object);
 
@@ -286,7 +306,10 @@ namespace Registry.Web.Test
             settings.DatasetsPath = test.TestFolder;
             _appSettingsMock.Setup(o => o.Value).Returns(settings);
             _authManagerMock.Setup(o => o.IsUserAdmin()).Returns(Task.FromResult(true));
-
+            _authManagerMock.Setup(o => o.RequestAccess(It.IsAny<Dataset>(), 
+                It.IsAny<AccessType>())).Returns(Task.FromResult(true));
+            _authManagerMock.Setup(o => o.RequestAccess(It.IsAny<Organization>(), 
+                It.IsAny<AccessType>())).Returns(Task.FromResult(true));
             var webUtils = new WebUtils(_authManagerMock.Object, context, _appSettingsMock.Object,
                 _httpContextAccessorMock.Object, _ddbFactoryMock.Object);
 
@@ -328,7 +351,6 @@ namespace Registry.Web.Test
         {
             const string organizationSlug = "admin";
             const string datasetSlug = "7kd0gxti9qoemsrk";
-            Guid adminDatasetGuid = Guid.Parse("6c1f5555-d001-4411-9308-42aa6ccd7fd6");
 
             string[] fileNames =
                 { "DJI_0007.JPG", "DJI_0008.JPG", "DJI_0009.JPG", "Sub/DJI_0049.JPG", "Sub/DJI_0048.JPG" };
@@ -340,7 +362,10 @@ namespace Registry.Web.Test
             settings.DatasetsPath = test.TestFolder;
             _appSettingsMock.Setup(o => o.Value).Returns(settings);
             _authManagerMock.Setup(o => o.IsUserAdmin()).Returns(Task.FromResult(true));
-
+            _authManagerMock.Setup(o => o.RequestAccess(It.IsAny<Dataset>(), 
+                It.IsAny<AccessType>())).Returns(Task.FromResult(true));
+            _authManagerMock.Setup(o => o.RequestAccess(It.IsAny<Organization>(), 
+                It.IsAny<AccessType>())).Returns(Task.FromResult(true));
             var webUtils = new WebUtils(_authManagerMock.Object, context, _appSettingsMock.Object,
                 _httpContextAccessorMock.Object, _ddbFactoryMock.Object);
 
@@ -391,7 +416,10 @@ namespace Registry.Web.Test
             _appSettingsMock.Setup(o => o.Value).Returns(settings);
             _authManagerMock.Setup(o => o.IsUserAdmin()).Returns(Task.FromResult(true));
             _authManagerMock.Setup(o => o.IsOwnerOrAdmin(It.IsAny<Dataset>())).Returns(Task.FromResult(true));
-
+            _authManagerMock.Setup(o => o.RequestAccess(It.IsAny<Dataset>(), 
+                It.IsAny<AccessType>())).Returns(Task.FromResult(true));
+            _authManagerMock.Setup(o => o.RequestAccess(It.IsAny<Organization>(), 
+                It.IsAny<AccessType>())).Returns(Task.FromResult(true));
             var webUtils = new WebUtils(_authManagerMock.Object, context, _appSettingsMock.Object,
                 _httpContextAccessorMock.Object, _ddbFactoryMock.Object);
 
@@ -449,7 +477,11 @@ namespace Registry.Web.Test
             _appSettingsMock.Setup(o => o.Value).Returns(settings);
             _authManagerMock.Setup(o => o.IsUserAdmin()).Returns(Task.FromResult(true));
             _authManagerMock.Setup(o => o.IsOwnerOrAdmin(It.IsAny<Dataset>())).Returns(Task.FromResult(true));
-
+            _authManagerMock.Setup(o => o.RequestAccess(It.IsAny<Dataset>(), 
+                It.IsAny<AccessType>())).Returns(Task.FromResult(true));
+            _authManagerMock.Setup(o => o.RequestAccess(It.IsAny<Organization>(), 
+                It.IsAny<AccessType>())).Returns(Task.FromResult(true));
+            
             var webUtils = new WebUtils(_authManagerMock.Object, context, _appSettingsMock.Object,
                 _httpContextAccessorMock.Object, _ddbFactoryMock.Object);
 

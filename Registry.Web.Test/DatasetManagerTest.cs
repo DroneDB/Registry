@@ -15,6 +15,7 @@ using Registry.Ports;
 using Registry.Ports.DroneDB;
 using Registry.Web.Data;
 using Registry.Web.Data.Models;
+using Registry.Web.Identity.Models;
 using Registry.Web.Models.Configuration;
 using Registry.Web.Services.Adapters;
 using Registry.Web.Services.Managers;
@@ -34,6 +35,7 @@ namespace Registry.Web.Test
         private Mock<IDdbManager> _ddbFactoryMock;
         private Mock<IObjectsManager> _objectsManagerMock;
         private Mock<IHttpContextAccessor> _httpContextAccessorMock;
+        private Mock<IStacManager> _stacManagerMock;
 
         [SetUp]
         public void Setup()
@@ -43,6 +45,7 @@ namespace Registry.Web.Test
             _datasetManagerMock = new Mock<IDatasetsManager>();
             _ddbFactoryMock = new Mock<IDdbManager>();
             _objectsManagerMock = new Mock<IObjectsManager>();
+            _stacManagerMock = new Mock<IStacManager>();
             _httpContextAccessorMock = new Mock<IHttpContextAccessor>();
             _datasetsManagerLogger = new Logger<DatasetsManager>(LoggerFactory.Create(builder => builder.AddConsole()));
         }
@@ -57,7 +60,11 @@ namespace Registry.Web.Test
             await using var context = GetTest1Context();
             _appSettingsMock.Setup(o => o.Value).Returns(_settings);
             _authManagerMock.Setup(o => o.IsUserAdmin()).Returns(Task.FromResult(true));
-            
+            _authManagerMock.Setup(o => o.RequestAccess(It.IsAny<Dataset>(), 
+                It.IsAny<AccessType>())).Returns(Task.FromResult(true));
+            _authManagerMock.Setup(o => o.RequestAccess(It.IsAny<Organization>(), 
+                It.IsAny<AccessType>())).Returns(Task.FromResult(true));
+           
             var utils = new WebUtils(_authManagerMock.Object, context, _appSettingsMock.Object, _httpContextAccessorMock.Object, _ddbFactoryMock.Object);
 
             var ddbMock = new Mock<IDDB>();
@@ -75,7 +82,7 @@ namespace Registry.Web.Test
             _ddbFactoryMock.Setup(x => x.Get(It.IsAny<string>(), It.IsAny<Guid>())).Returns(ddbMock.Object);
 
             var datasetsManager = new DatasetsManager(context, utils, _datasetsManagerLogger,
-                _objectsManagerMock.Object, _ddbFactoryMock.Object, _authManagerMock.Object);
+                _objectsManagerMock.Object, _stacManagerMock.Object, _ddbFactoryMock.Object, _authManagerMock.Object);
 
             var list = (await datasetsManager.List(MagicStrings.PublicOrganizationSlug)).ToArray();
 

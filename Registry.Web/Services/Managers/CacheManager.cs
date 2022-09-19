@@ -44,7 +44,7 @@ namespace Registry.Web.Services.Managers
             _providers.Remove(seed);
         }
 
-        public string MakeKey(string seed, string category, object[] parameters)
+        public static string MakeKey(string seed, string category, object[] parameters)
         {
             return parameters == null ? $"{seed}-{category}" : $"{seed}-{category}:{string.Join(",", parameters.Select(p => p.ToString()))}";
         }

@@ -976,5 +976,36 @@ namespace Registry.Adapters.DroneDB
                 throw new DDBException($"Error in calling ddb lib. Last error: \"{GetLastError()}\", check inner exception for details", ex);
             }
         }
+        
+        [DllImport("ddb", EntryPoint="DDBStac")]
+        static extern DDBError _Stac([MarshalAs(UnmanagedType.LPStr)] string ddbPath, [MarshalAs(UnmanagedType.LPStr)] string entry, 
+            [MarshalAs(UnmanagedType.LPStr)] string stacCollectionRoot, [MarshalAs(UnmanagedType.LPStr)] string id, 
+            [MarshalAs(UnmanagedType.LPStr)] string stacCatalogRoot, out IntPtr output);
+
+        public static JToken Stac(string ddbPath, string entry, string stacCollectionRoot, string id,
+            string stacCatalogRoot)
+        {
+            try
+            {
+                if (_Stac(ddbPath, entry ?? string.Empty, stacCollectionRoot, id, stacCatalogRoot, out var output) !=
+                    DDBError.DDBERR_NONE) throw new DDBException(GetLastError());
+
+                var json = Marshal.PtrToStringAnsi(output);
+
+                if (json == null)
+                    throw new InvalidOperationException("No result from DDBMetaDump call");
+
+                return JsonConvert.DeserializeObject<JToken>(json);
+            }
+            catch (EntryPointNotFoundException ex)
+            {
+                throw new DDBException($"Error in calling ddb lib: incompatible versions ({ex.Message})", ex);
+            }
+            catch (Exception ex)
+            {
+                throw new DDBException($"Error in calling ddb lib. Last error: \"{GetLastError()}\", check inner exception for details", ex);
+            }
+        }
+        
     }
 }

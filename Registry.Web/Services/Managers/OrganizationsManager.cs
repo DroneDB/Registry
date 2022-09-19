@@ -4,6 +4,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
+using Registry.Common;
 using Registry.Web.Data;
 using Registry.Web.Exceptions;
 using Registry.Web.Identity;
@@ -22,8 +23,6 @@ namespace Registry.Web.Services.Managers
         private readonly ApplicationDbContext _appContext;
         private readonly ILogger<OrganizationsManager> _logger;
 
-        // TODO: Add extensive logging
-        // TODO: Add extensive testing
         public OrganizationsManager(
             IAuthManager authManager,
             RegistryContext context,
@@ -42,24 +41,23 @@ namespace Registry.Web.Services.Managers
 
         public async Task<IEnumerable<OrganizationDto>> List()
         {
-            var query = from org in _context.Organizations select org;
+            
+            var currentUser = await _authManager.GetCurrentUser();
 
-            if (!await _authManager.IsUserAdmin())
-            {
-                var currentUser = await _authManager.GetCurrentUser();
-
-                if (currentUser == null)
-                    throw new UnauthorizedException("Invalid user");
-
-                query = query.Where(item => item.OwnerId == currentUser.Id);
-            }
+            if (currentUser == null)
+                throw new UnauthorizedException("Invalid user");
+            
+            var query = 
+                from org in _context.Organizations
+                where org.OwnerId == currentUser.Id || org.Slug == MagicStrings.PublicOrganizationSlug
+                select org;
             
             // This can be optimized, but it's not a big deal because it's a cross database query anyway
             var usersMapper = await _appContext.Users.Select(item => new { item.Id, item.UserName })
                 .ToDictionaryAsync(item => item.Id, item => item.UserName);
 
             return from org in query
-                   let userName = org.OwnerId != null ? (usersMapper.ContainsKey(org.OwnerId) ? usersMapper[org.OwnerId] : null) : null
+                   let userName = org.OwnerId != null ? usersMapper.SafeGetValue(org.OwnerId) : null
                    select new OrganizationDto
                    {
                        CreationDate = org.CreationDate,
@@ -73,14 +71,16 @@ namespace Registry.Web.Services.Managers
 
         public async Task<OrganizationDto> Get(string orgSlug)
         {
-            var org = await _utils.GetOrganization(orgSlug);
+            var org = _utils.GetOrganization(orgSlug);
+            
+            if (!await _authManager.RequestAccess(org, AccessType.Read))
+                throw new UnauthorizedException("Invalid user");
 
             return org.ToDto();
         }
 
         public async Task<OrganizationDto> AddNew(OrganizationDto organization, bool skipAuthCheck = false)
         {
-            // TODO: To change when implementing anonymous users
 
             if (!skipAuthCheck)
             {
@@ -138,14 +138,12 @@ namespace Registry.Web.Services.Managers
         public async Task Edit(string orgSlug, OrganizationDto organization)
         {
 
-            var org = await _utils.GetOrganization(orgSlug);
+            var org = _utils.GetOrganization(orgSlug);
+            
+            if (!await _authManager.RequestAccess(org, AccessType.Write))
+                throw new UnauthorizedException("Invalid user");
 
-            // TODO: To change when implementing anonymous users
             var currentUser = await _authManager.GetCurrentUser();
-
-            // NOTE: Is this a good idea? If activated there will be no way to change the public organization details
-            // if (organization.Id == MagicStrings.PublicOrganizationSlug)
-            //    return Unauthorized(new ErrorResponse("Cannot edit the public organization"));
 
             if (!await _authManager.IsUserAdmin())
             {
@@ -167,11 +165,12 @@ namespace Registry.Web.Services.Managers
                 {
                     // Otherwise check if user exists
                     if (!await _authManager.UserExists(organization.Owner))
-                        throw new BadRequestException($"Cannot find user with orgSlug '{organization.Owner}'");
+                        throw new BadRequestException($"Cannot find user with id '{organization.Owner}'");
 
                 }
             }
 
+            org.OwnerId = organization.Owner;
             org.IsPublic = organization.IsPublic;
             org.Name = organization.Name;
             org.Description = organization.Description;
@@ -183,28 +182,13 @@ namespace Registry.Web.Services.Managers
         public async Task Delete(string orgSlug)
         {
 
-            var org = await _utils.GetOrganization(orgSlug);
+            var org = _utils.GetOrganization(orgSlug);
 
-            if (org == null)
-                throw new NotFoundException("Cannot find organization with this orgSlug");
-
-            if (!await _authManager.IsUserAdmin())
-            {
-                var currentUser = await _authManager.GetCurrentUser();
-
-                // This seems a repeated check but it prevents the case in which a user tries to delete a public org without being the owner
-                if (org.OwnerId != currentUser.Id)
-                    throw new UnauthorizedException("The current user is not the owner of the organization");
-            }
-            else
-            {
-                if (org.Slug == MagicStrings.PublicOrganizationSlug)
-                    throw new UnauthorizedException("Cannot remove the default public organization");
-            }
+            if (!await _authManager.RequestAccess(org, AccessType.Delete))
+                throw new UnauthorizedException("Invalid user");
 
             foreach (var ds in org.Datasets.ToArray())
             {
-
                 // TODO: To check and re-check and re-check and re-check
                 await _datasetManager.Delete(org.Slug, ds.Slug);
                 _context.Datasets.Remove(ds);

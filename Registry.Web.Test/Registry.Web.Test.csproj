@@ -21,20 +21,21 @@
 
   <ItemGroup>
     <PackageReference Include="FluentAssertions" Version="6.7.0" />
-    <PackageReference Include="Hangfire.Core" Version="1.7.30" />
-    <PackageReference Include="Microsoft.EntityFrameworkCore" Version="6.0.8" />
-    <PackageReference Include="Microsoft.EntityFrameworkCore.InMemory" Version="6.0.8" />
-    <PackageReference Include="Microsoft.EntityFrameworkCore.Relational" Version="6.0.8" />
+    <PackageReference Include="Hangfire.Core" Version="1.7.31" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore" Version="6.0.9" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.InMemory" Version="6.0.9" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Relational" Version="6.0.9" />
     <PackageReference Include="Moq" Version="4.18.2" />
     <PackageReference Include="NetTopologySuite.Core" Version="1.15.3" />
     <PackageReference Include="nunit" Version="3.13.3" />
     <PackageReference Include="NUnit3TestAdapter" Version="4.2.1" />
-    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.3.0" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.3.1" />
   </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\Registry.Adapters\Registry.Adapters.csproj" />
     <ProjectReference Include="..\Registry.Common\Registry.Common.csproj" />
+    <ProjectReference Include="..\Registry.Test.Common\Registry.Test.Common.csproj" />
     <ProjectReference Include="..\Registry.Web.Data\Registry.Web.Data.csproj" />
     <ProjectReference Include="..\Registry.Web\Registry.Web.csproj" />
   </ItemGroup>

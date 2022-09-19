@@ -34,16 +34,17 @@ using Registry.Web.Services.Managers;
 using Registry.Web.Services.Ports;
 using Registry.Web.Test.Adapters;
 using Registry.Ports.DroneDB.Models;
+using Registry.Test.Common;
 using Registry.Web.Identity;
 using Registry.Web.Identity.Models;
 using Registry.Web.Services;
-using Attributes = Registry.Ports.DroneDB.Models.EntryAttributes;
 using Entry = Registry.Ports.DroneDB.Models.Entry;
 using IMetaManager = Registry.Ports.DroneDB.IMetaManager;
 
 namespace Registry.Web.Test
 {
-    class ShareManagerTest
+    [TestFixture]
+    class ShareManagerTest : TestBase
     {
         private Logger<ShareManager> _shareManagerLogger;
         private Logger<ObjectsManager> _objectManagerLogger;
@@ -62,6 +63,8 @@ namespace Registry.Web.Test
         private Mock<IDatasetsManager> _datasetsManagerMock;
         private Mock<IHttpContextAccessor> _httpContextAccessorMock;
         private Mock<ICacheManager> _cacheManagerMock;
+        private Mock<IStacManager> _stacManagerMock;
+
         private IBackgroundJobsProcessor _backgroundJobsProcessor;
 
         private readonly FileSystem _fileSystem = new FileSystem();
@@ -91,6 +94,7 @@ namespace Registry.Web.Test
             _httpContextAccessorMock = new Mock<IHttpContextAccessor>();
             _backgroundJobsProcessor = new SimpleBackgroundJobsProcessor();
             _cacheManagerMock = new Mock<ICacheManager>();
+            _stacManagerMock = new Mock<IStacManager>();
 
             _shareManagerLogger = new Logger<ShareManager>(LoggerFactory.Create(builder => builder.AddConsole()));
             _objectManagerLogger = new Logger<ObjectsManager>(LoggerFactory.Create(builder => builder.AddConsole()));
@@ -158,6 +162,12 @@ namespace Registry.Web.Test
                 Email = "admin@example.com",
                 Id = Guid.NewGuid().ToString()
             };
+            
+            _authManagerMock.Setup(o => o.RequestAccess(It.IsAny<Dataset>(), 
+                It.IsAny<AccessType>())).Returns(Task.FromResult(true));
+            _authManagerMock.Setup(o => o.RequestAccess(It.IsAny<Organization>(), 
+                It.IsAny<AccessType>())).Returns(Task.FromResult(true));
+            
             _authManagerMock.Setup(o => o.GetCurrentUser()).Returns(Task.FromResult(user));
             _authManagerMock.Setup(o => o.UserExists(user.Id)).Returns(Task.FromResult(true));
             _authManagerMock.Setup(o => o.SafeGetCurrentUserName()).Returns(Task.FromResult(userName));
@@ -178,8 +188,8 @@ namespace Registry.Web.Test
 
             var ddbMock2 = new Mock<IDDB>();
             ddbMock2.Setup(x => x.GetAttributesRaw()).Returns(attributes);
-            ddbMock.Setup(x => x.GetAttributesAsync(default))
-                .Returns(Task.FromResult(new EntryAttributes(ddbMock2.Object)));
+            // ddbMock.Setup(x => x.GetAttributesAsync(default))
+            //     .Returns(Task.FromResult(new EntryAttributes(ddbMock2.Object)));
 
             _ddbFactoryMock.Setup(x => x.Get(It.IsAny<string>(), It.IsAny<Guid>())).Returns(ddbMock.Object);
             
@@ -192,7 +202,7 @@ namespace Registry.Web.Test
                 _fileSystem, _backgroundJobsProcessor);
 
             var datasetManager = new DatasetsManager(context, webUtils, _datasetsManagerLogger, objectManager,
-                _ddbFactoryMock.Object, _authManagerMock.Object);
+                _stacManagerMock.Object, _ddbFactoryMock.Object, _authManagerMock.Object);
             var organizationsManager = new OrganizationsManager(_authManagerMock.Object, context, webUtils,
                 datasetManager, appContext, _organizationsManagerLogger);
 
@@ -264,7 +274,11 @@ namespace Registry.Web.Test
             _authManagerMock.Setup(o => o.GetCurrentUser()).Returns(Task.FromResult(user));
             _authManagerMock.Setup(o => o.UserExists(user.Id)).Returns(Task.FromResult(true));
             _authManagerMock.Setup(o => o.SafeGetCurrentUserName()).Returns(Task.FromResult(userName));
-
+            _authManagerMock.Setup(o => o.RequestAccess(It.IsAny<Dataset>(), 
+                It.IsAny<AccessType>())).Returns(Task.FromResult(true));
+            _authManagerMock.Setup(o => o.RequestAccess(It.IsAny<Organization>(), 
+                It.IsAny<AccessType>())).Returns(Task.FromResult(true));
+            
             var attributes = new Dictionary<string, object>
             {
                 { "public", true }
@@ -281,8 +295,8 @@ namespace Registry.Web.Test
 
             var ddbMock2 = new Mock<IDDB>();
             ddbMock2.Setup(x => x.GetAttributesRaw()).Returns(attributes);
-            ddbMock.Setup(x => x.GetAttributesAsync(default))
-                .Returns(Task.FromResult(new EntryAttributes(ddbMock2.Object)));
+            // ddbMock.Setup(x => x.GetAttributesAsync(default))
+            //     .Returns(Task.FromResult(new EntryAttributes(ddbMock2.Object)));
 
             _ddbFactoryMock.Setup(x => x.Get(It.IsAny<string>(), It.IsAny<Guid>())).Returns(ddbMock.Object);
             
@@ -295,7 +309,7 @@ namespace Registry.Web.Test
                 _fileSystem, _backgroundJobsProcessor);
 
             var datasetManager = new DatasetsManager(context, webUtils, _datasetsManagerLogger, objectManager,
-                _ddbFactoryMock.Object, _authManagerMock.Object);
+                _stacManagerMock.Object, _ddbFactoryMock.Object, _authManagerMock.Object);
             var organizationsManager = new OrganizationsManager(_authManagerMock.Object, context, webUtils,
                 datasetManager, appContext, _organizationsManagerLogger);
 
@@ -370,6 +384,11 @@ namespace Registry.Web.Test
             _authManagerMock.Setup(o => o.IsOwnerOrAdmin(It.IsAny<Dataset>())).Returns(Task.FromResult(true));
             _authManagerMock.Setup(o => o.IsOwnerOrAdmin(It.IsAny<Organization>())).Returns(Task.FromResult(true));
 
+            _authManagerMock.Setup(o => o.RequestAccess(It.IsAny<Dataset>(), 
+                It.IsAny<AccessType>())).Returns(Task.FromResult(true));
+            _authManagerMock.Setup(o => o.RequestAccess(It.IsAny<Organization>(), 
+                It.IsAny<AccessType>())).Returns(Task.FromResult(true));
+            
             _authManagerMock.Setup(o => o.GetCurrentUser()).Returns(Task.FromResult(new User
             {
                 UserName = userName,
@@ -393,8 +412,8 @@ namespace Registry.Web.Test
 
             var ddbMock2 = new Mock<IDDB>();
             ddbMock2.Setup(x => x.GetAttributesRaw()).Returns(attributes);
-            ddbMock.Setup(x => x.GetAttributesAsync(default))
-                .Returns(Task.FromResult(new EntryAttributes(ddbMock2.Object)));
+            // ddbMock.Setup(x => x.GetAttributesAsync(default))
+            //     .Returns(Task.FromResult(new EntryAttributes(ddbMock2.Object)));
 
             _ddbFactoryMock.Setup(x => x.Get(It.IsAny<string>(), It.IsAny<Guid>())).Returns(ddbMock.Object);
 
@@ -407,7 +426,7 @@ namespace Registry.Web.Test
                 _fileSystem, _backgroundJobsProcessor);
 
             var datasetManager = new DatasetsManager(context, webUtils, _datasetsManagerLogger, objectManager,
-                _ddbFactoryMock.Object, _authManagerMock.Object);
+                _stacManagerMock.Object, _ddbFactoryMock.Object, _authManagerMock.Object);
             var organizationsManager = new OrganizationsManager(_authManagerMock.Object, context, webUtils,
                 datasetManager, appContext, _organizationsManagerLogger);
 
@@ -505,12 +524,17 @@ namespace Registry.Web.Test
             _authManagerMock.Setup(o => o.IsUserAdmin()).Returns(Task.FromResult(true));
             _authManagerMock.Setup(o => o.IsOwnerOrAdmin(It.IsAny<Dataset>())).Returns(Task.FromResult(true));
             _authManagerMock.Setup(o => o.IsOwnerOrAdmin(It.IsAny<Organization>())).Returns(Task.FromResult(true));
+            _authManagerMock.Setup(o => o.RequestAccess(It.IsAny<Dataset>(), 
+                It.IsAny<AccessType>())).Returns(Task.FromResult(true));
+            _authManagerMock.Setup(o => o.RequestAccess(It.IsAny<Organization>(), 
+                It.IsAny<AccessType>())).Returns(Task.FromResult(true));
 
             _authManagerMock.Setup(o => o.GetCurrentUser()).Returns(Task.FromResult(new User
             {
                 UserName = userName,
                 Email = "admin@example.com"
             }));
+            
             _authManagerMock.Setup(o => o.SafeGetCurrentUserName()).Returns(Task.FromResult(userName));
 
             var attributes = new Dictionary<string, object>
@@ -532,8 +556,8 @@ namespace Registry.Web.Test
             
             var ddbMock2 = new Mock<IDDB>();
             ddbMock2.Setup(x => x.GetAttributesRaw()).Returns(attributes);
-            ddbMock.Setup(x => x.GetAttributesAsync(default))
-                .Returns(Task.FromResult(new EntryAttributes(ddbMock2.Object)));
+            // ddbMock.Setup(x => x.GetAttributesAsync(default))
+            //     .Returns(Task.FromResult(new EntryAttributes(ddbMock2.Object)));
 
             _ddbFactoryMock.Setup(x => x.Get(It.IsAny<string>(), It.IsAny<Guid>())).Returns(ddbMock.Object);
 
@@ -546,7 +570,7 @@ namespace Registry.Web.Test
                 _fileSystem, _backgroundJobsProcessor);
 
             var datasetManager = new DatasetsManager(context, webUtils, _datasetsManagerLogger, objectManager,
-                _ddbFactoryMock.Object, _authManagerMock.Object);
+                _stacManagerMock.Object, _ddbFactoryMock.Object, _authManagerMock.Object);
             var organizationsManager = new OrganizationsManager(_authManagerMock.Object, context, webUtils,
                 datasetManager, appContext, _organizationsManagerLogger);
 
@@ -657,6 +681,11 @@ namespace Registry.Web.Test
             _authManagerMock.Setup(o => o.IsOwnerOrAdmin(It.IsAny<Dataset>())).Returns(Task.FromResult(true));
             _authManagerMock.Setup(o => o.IsOwnerOrAdmin(It.IsAny<Organization>())).Returns(Task.FromResult(true));
 
+            _authManagerMock.Setup(o => o.RequestAccess(It.IsAny<Dataset>(), 
+                It.IsAny<AccessType>())).Returns(Task.FromResult(true));
+            _authManagerMock.Setup(o => o.RequestAccess(It.IsAny<Organization>(), 
+                It.IsAny<AccessType>())).Returns(Task.FromResult(true));
+            
             _authManagerMock.Setup(o => o.GetCurrentUser()).Returns(Task.FromResult(new User
             {
                 UserName = userName,
@@ -680,8 +709,8 @@ namespace Registry.Web.Test
 
             var ddbMock2 = new Mock<IDDB>();
             ddbMock2.Setup(x => x.GetAttributesRaw()).Returns(attributes);
-            ddbMock.Setup(x => x.GetAttributesAsync(default))
-                .Returns(Task.FromResult(new EntryAttributes(ddbMock2.Object)));
+            // ddbMock.Setup(x => x.GetAttributesAsync(default))
+            //     .Returns(Task.FromResult(new EntryAttributes(ddbMock2.Object)));
 
             _ddbFactoryMock.Setup(x => x.Get(It.IsAny<string>(), It.IsAny<Guid>())).Returns(ddbMock.Object);
 
@@ -694,7 +723,7 @@ namespace Registry.Web.Test
                 _fileSystem, _backgroundJobsProcessor);
 
             var datasetManager = new DatasetsManager(context, webUtils, _datasetsManagerLogger, objectManager,
-                _ddbFactoryMock.Object, _authManagerMock.Object);
+                _stacManagerMock.Object, _ddbFactoryMock.Object, _authManagerMock.Object);
             var organizationsManager = new OrganizationsManager(_authManagerMock.Object, context, webUtils,
                 datasetManager, appContext, _organizationsManagerLogger);
 

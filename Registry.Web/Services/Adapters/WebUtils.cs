@@ -4,6 +4,7 @@ using System.Threading.Tasks;
 using Microsoft.AspNetCore.Http;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
+using Registry.Adapters.DroneDB;
 using Registry.Common;
 using Registry.Ports;
 using Registry.Web.Data;
@@ -17,10 +18,6 @@ using Registry.Web.Utilities;
 
 namespace Registry.Web.Services.Adapters
 {
-    // NOTE: This class is a fundamental piece of the architecture because 
-    // it encapsulates all the validation logic of the organizations and datasets
-    // The logic is centralized here because it could be subject to change
-
     public class WebUtils : IUtils
     {
         private readonly IAuthManager _authManager;
@@ -42,7 +39,7 @@ namespace Registry.Web.Services.Adapters
         }
 
 
-        public async Task<Organization> GetOrganization(string orgSlug, bool safe = false, bool checkOwnership = true)
+        public Organization GetOrganization(string orgSlug, bool safe = false)
         {
             if (string.IsNullOrWhiteSpace(orgSlug))
                 throw new BadRequestException("Missing organization id");
@@ -55,23 +52,11 @@ namespace Registry.Web.Services.Adapters
 
             if (org == null)
                 return safe ? null : throw new NotFoundException("Organization not found");
-
-            if (!org.IsPublic && checkOwnership && !await _authManager.IsUserAdmin())
-            {
-                var currentUser = await _authManager.GetCurrentUser();
-
-                if (currentUser == null)
-                    throw new UnauthorizedException("Invalid user");
-
-                if (org.OwnerId != currentUser.Id && org.OwnerId != null && !org.IsPublic)
-                    throw new UnauthorizedException("This organization does not belong to the current user");
-            }
-
+           
             return org;
         }
 
-        public async Task<Dataset> GetDataset(string orgSlug, string dsSlug, bool retNullIfNotFound = false,
-            bool checkOwnership = true)
+        public Dataset GetDataset(string orgSlug, string dsSlug, bool safe = false)
         {
             if (string.IsNullOrWhiteSpace(dsSlug))
                 throw new BadRequestException("Missing dataset id");
@@ -96,26 +81,11 @@ namespace Registry.Web.Services.Adapters
 
             if (dataset == null)
             {
-                if (retNullIfNotFound) return null;
+                if (safe) return null;
 
                 throw new NotFoundException("Cannot find dataset");
             }
-
-            var ddb = _ddbManager.Get(orgSlug, dataset.InternalRef);
-            var attributes = await ddb.GetAttributesAsync();
-
-            if (!attributes.IsPublic && !await _authManager.IsUserAdmin() && checkOwnership)
-            {
-                var currentUser = await _authManager.GetCurrentUser();
-
-                if (currentUser == null)
-                    throw new UnauthorizedException("Invalid user");
-
-                if (org.OwnerId != null && org.OwnerId != currentUser.Id && org.Users.All(usr => usr.UserId != currentUser.Id))
-                    throw new UnauthorizedException("The current user does not have access to this dataset");
-
-            }
-
+            
             return dataset;
         }
 
@@ -138,7 +108,19 @@ namespace Registry.Web.Services.Adapters
             }
         }
 
-        public string GenerateDatasetUrl(Dataset dataset)
+        public string GenerateDatasetUrl(Dataset dataset, bool useDdbScheme = false)
+        {
+            return useDdbScheme ? 
+                $"{GetLocalHost(true)}/{dataset.Organization.Slug}/{dataset.Slug}" : 
+                $"{GetLocalHost(false)}/orgs/{dataset.Organization.Slug}/ds/{dataset.Slug}";
+        }
+        
+        public string GenerateStacUrl()
+        {
+            return $"{GetLocalHost()}/stac";
+        }
+
+        public string GetLocalHost(bool useDdbScheme = false)
         {
             bool isHttps;
             string host;
@@ -161,11 +143,14 @@ namespace Registry.Web.Services.Adapters
                 isHttps = context?.Request.IsHttps ?? false;
             }
 
-            var scheme = isHttps ? "ddb" : "ddb+unsafe";
+            var scheme = useDdbScheme ? isHttps ? "ddb" : "ddb+unsafe" : isHttps ? "https" : "http";
 
-            var datasetUrl = string.Format($"{scheme}://{host}/{dataset.Organization.Slug}/{dataset.Slug}");
-
-            return datasetUrl;
+            return $"{scheme}://{host}";
+        }
+        
+        public string GenerateDatasetStacUrl(string orgSlug, string dsSlug)
+        {
+            return $"{GetLocalHost()}/orgs/{orgSlug}/ds/{dsSlug}/stac";
         }
 
         // NOTE: This function can be optimized down the line.

@@ -21,6 +21,7 @@ namespace Registry.Web.Services.Managers
         private readonly IUtils _utils;
         private readonly ILogger<DatasetsManager> _logger;
         private readonly IObjectsManager _objectsManager;
+        private readonly IStacManager _stacManager;
         private readonly IDdbManager _ddbManager;
         private readonly IAuthManager _authManager;
 
@@ -29,19 +30,25 @@ namespace Registry.Web.Services.Managers
             IUtils utils,
             ILogger<DatasetsManager> logger,
             IObjectsManager objectsManager,
-            IDdbManager ddbManager, IAuthManager authManager)
+            IStacManager stacManager,
+            IDdbManager ddbManager, 
+            IAuthManager authManager)
         {
             _context = context;
             _utils = utils;
             _logger = logger;
             _objectsManager = objectsManager;
+            _stacManager = stacManager;
             _ddbManager = ddbManager;
             _authManager = authManager;
         }
 
         public async Task<IEnumerable<DatasetDto>> List(string orgSlug)
         {
-            var org = await _utils.GetOrganization(orgSlug);
+            var org = _utils.GetOrganization(orgSlug);
+            
+            if (!await _authManager.RequestAccess(org, AccessType.Read))
+                throw new UnauthorizedException("The current user cannot access this organization");
 
             var res = new List<DatasetDto>();
 
@@ -49,13 +56,12 @@ namespace Registry.Web.Services.Managers
             {
                 var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
                 var info = await ddb.GetInfoAsync();
-                var attributes = new EntryProperties(info.Properties);
 
                 res.Add(new DatasetDto
                 {
                     Slug = ds.Slug,
                     CreationDate = ds.CreationDate,
-                    Properties = attributes.Properties,
+                    Properties = info.Properties,
                     Size = info.Size
                 });
             }
@@ -65,7 +71,11 @@ namespace Registry.Web.Services.Managers
 
         public async Task<DatasetDto> Get(string orgSlug, string dsSlug)
         {
-            var dataset = await _utils.GetDataset(orgSlug, dsSlug);
+            var dataset = _utils.GetDataset(orgSlug, dsSlug);
+            
+            if (!await _authManager.RequestAccess(dataset, AccessType.Read))
+                throw new UnauthorizedException("The current user cannot access this dataset");
+            
             var ddb = _ddbManager.Get(orgSlug, dataset.InternalRef);
 
             return dataset.ToDto(await ddb.GetInfoAsync());
@@ -73,23 +83,26 @@ namespace Registry.Web.Services.Managers
 
         public async Task<EntryDto[]> GetEntry(string orgSlug, string dsSlug)
         {
-            var dataset = await _utils.GetDataset(orgSlug, dsSlug);
+            var dataset = _utils.GetDataset(orgSlug, dsSlug);
+            
+            if (!await _authManager.RequestAccess(dataset, AccessType.Read))
+                throw new UnauthorizedException("The current user cannot access this dataset");
 
             var ddb = _ddbManager.Get(orgSlug, dataset.InternalRef);
 
             var info = await ddb.GetInfoAsync();
             info.Depth = 0;
-            info.Path = _utils.GenerateDatasetUrl(dataset);
+            info.Path = _utils.GenerateDatasetUrl(dataset, true);
 
             return new[] { info.ToDto() };
         }
 
         public async Task<DatasetDto> AddNew(string orgSlug, DatasetNewDto dataset)
         {
-            var org = await _utils.GetOrganization(orgSlug);
+            var org = _utils.GetOrganization(orgSlug);
 
-            if (!await _authManager.IsOwnerOrAdmin(org)) 
-                throw new UnauthorizedException("You are not authorized to add datasets to this organization");
+            if (!await _authManager.RequestAccess(org, AccessType.Write))
+                throw new UnauthorizedException("The current user cannot add datasets to this organization");
             
             if (dataset == null)
                 throw new BadRequestException("Dataset is null");
@@ -112,14 +125,13 @@ namespace Registry.Web.Services.Managers
             };
 
             var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
+            var meta = ddb.Meta.GetSafe();
+
+            meta.Name = dataset.Name ?? dataset.Slug;
+
+            if (dataset.Visibility.HasValue)
+                meta.Visibility = dataset.Visibility.Value;
             
-            ddb.Meta.GetSafe().Name = dataset.Name ?? dataset.Slug;
-
-            var attributes = await ddb.GetAttributesAsync();
-
-            if (dataset.IsPublic.HasValue)
-                attributes.IsPublic = dataset.IsPublic.Value;
-
             org.Datasets.Add(ds);
 
             await _context.SaveChangesAsync();
@@ -132,19 +144,23 @@ namespace Registry.Web.Services.Managers
             if (dataset == null)
                 throw new BadRequestException("Dataset is null");
             
-            var ds = await _utils.GetDataset(orgSlug, dsSlug);
+            var ds = _utils.GetDataset(orgSlug, dsSlug);
 
-            if (!await _authManager.IsOwnerOrAdmin(ds))
-                throw new UnauthorizedException("The current user is not allowed to edit dataset");
+            if (!await _authManager.RequestAccess(ds, AccessType.Write))
+                throw new UnauthorizedException("The current user cannot edit this dataset");
 
             var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
-            var attributes = await ddb.GetAttributesAsync();
+            var meta = ddb.Meta.GetSafe();
 
-            if (dataset.IsPublic != null)
-                attributes.IsPublic = dataset.IsPublic.Value;
+            if (dataset.Visibility.HasValue)
+            {
+                meta.Visibility = dataset.Visibility.Value;
+
+                await _stacManager.ClearCache(ds);
+            }
 
             if (!string.IsNullOrWhiteSpace(dataset.Name))
-                ddb.Meta.GetSafe().Name = dataset.Name;
+                meta.Name = dataset.Name;
 
             await _context.SaveChangesAsync();
         }
@@ -152,10 +168,10 @@ namespace Registry.Web.Services.Managers
 
         public async Task Delete(string orgSlug, string dsSlug)
         {
-            var ds = await _utils.GetDataset(orgSlug, dsSlug);
+            var ds = _utils.GetDataset(orgSlug, dsSlug);
 
-            if (!await _authManager.IsOwnerOrAdmin(ds))
-                throw new UnauthorizedException("The current user is not allowed to delete dataset");
+            if (!await _authManager.RequestAccess(ds, AccessType.Delete))
+                throw new UnauthorizedException("The current user cannot delete this dataset");
 
             try
             {
@@ -164,6 +180,9 @@ namespace Registry.Web.Services.Managers
                 _context.Datasets.Remove(ds);
 
                 await _context.SaveChangesAsync();
+                
+                await _stacManager.ClearCache(ds);
+
             }
             catch (Exception ex)
             {
@@ -185,43 +204,47 @@ namespace Registry.Web.Services.Managers
 
             if (dsSlug == newSlug) return; // Nothing to do
 
-            if (await _utils.GetDataset(orgSlug, newSlug, true) != null)
+            if (_utils.GetDataset(orgSlug, newSlug, true) != null)
                 throw new ArgumentException($"Dataset '{newSlug}' already exists");
 
-            var ds = await _utils.GetDataset(orgSlug, dsSlug);
+            var ds = _utils.GetDataset(orgSlug, dsSlug);
 
-            if (!await _authManager.IsOwnerOrAdmin(ds))
-                throw new UnauthorizedException("The current user is not allowed to rename dataset");
+            if (!await _authManager.RequestAccess(ds, AccessType.Write))
+                throw new UnauthorizedException("The current user cannot rename this dataset");
 
             ds.Slug = newSlug;
 
             await _context.SaveChangesAsync();
         }
 
+        [Obsolete("Use meta")]
         public async Task<Dictionary<string, object>> ChangeAttributes(string orgSlug, string dsSlug,
             AttributesDto attributes)
         {
-            
             if (attributes == null)
                 throw new BadRequestException("Attributes are null");
             
-            var ds = await _utils.GetDataset(orgSlug, dsSlug);
+            var ds = _utils.GetDataset(orgSlug, dsSlug);
 
-            if (!await _authManager.IsOwnerOrAdmin(ds))
+            if (!await _authManager.RequestAccess(ds, AccessType.Write))
                 throw new UnauthorizedException("The current user is not allowed to change attributes");
 
             var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
-            var attrs = await ddb.GetAttributesAsync();
-            attrs.IsPublic = attributes.IsPublic;
+            var res = await ddb.ChangeAttributesRawAsync(new Dictionary<string, object> { { "public", attributes.IsPublic } });;
 
-            return await ddb.GetAttributesRawAsync();
+            await _stacManager.ClearCache(ds);
+            
+            return res;
         }
 
         public async Task<StampDto> GetStamp(string orgSlug, string dsSlug)
         {
-            var ds = await _utils.GetDataset(orgSlug, dsSlug);
-            var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
-            return ddb.GetStamp().ToDto();
+            var ds = _utils.GetDataset(orgSlug, dsSlug);
+            
+            if (!await _authManager.RequestAccess(ds, AccessType.Read))
+                throw new UnauthorizedException("The current user cannot access this dataset");
+
+            return _ddbManager.Get(orgSlug, ds.InternalRef).GetStamp().ToDto();
         }
     }
 }

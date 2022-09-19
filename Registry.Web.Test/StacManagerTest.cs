@@ -1,11 +1,10 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using FluentAssertions;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Identity;
-using Microsoft.AspNetCore.Routing;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -18,26 +17,24 @@ using Registry.Web.Data;
 using Registry.Web.Data.Models;
 using Registry.Web.Identity;
 using Registry.Web.Identity.Models;
-using Registry.Web.Models;
 using Registry.Web.Models.Configuration;
-using Registry.Web.Services;
 using Registry.Web.Services.Adapters;
 using Registry.Web.Services.Managers;
 using Registry.Web.Services.Ports;
 
 namespace Registry.Web.Test
 {
-    [TestFixture]
-    public class OrganizationManagerTest : TestBase
-    {
 
+    [TestFixture]
+    public class StacManagerTest : TestBase
+    {
         private Mock<IAuthManager> _authManagerMock;
         private Mock<IOptions<AppSettings>> _appSettingsMock;
         private Mock<IDatasetsManager> _datasetManagerMock;
-        private Logger<OrganizationsManager> _organizationsManagerLogger;
+        private Logger<StacManager> _stacManagerLogger;
         private Mock<IHttpContextAccessor> _httpContextAccessorMock;
         private Mock<IDdbManager> _ddbManagerMock;
-        
+
         [SetUp]
         public void Setup()
         {
@@ -47,51 +44,52 @@ namespace Registry.Web.Test
             _httpContextAccessorMock = new Mock<IHttpContextAccessor>();
             _ddbManagerMock = new Mock<IDdbManager>();
 
-            _organizationsManagerLogger = new Logger<OrganizationsManager>(LoggerFactory.Create(builder => builder.AddConsole()));
-
+            _stacManagerLogger =
+                new Logger<StacManager>(LoggerFactory.Create(builder => builder.AddConsole()));
         }
 
         [Test]
-        public async Task List_Default_Ok()
+        public async Task GetCatalog_Ok()
         {
-
             await using var context = GetTest1Context();
             await using var appContext = GetAppTest1Context();
-            
+
             _appSettingsMock.Setup(o => o.Value).Returns(_settings);
             _authManagerMock.Setup(o => o.IsUserAdmin()).Returns(Task.FromResult(true));
-            _authManagerMock.Setup(o => o.RequestAccess(It.IsAny<Dataset>(), 
+            _authManagerMock.Setup(o => o.RequestAccess(It.IsAny<Dataset>(),
                 It.IsAny<AccessType>())).Returns(Task.FromResult(true));
-            _authManagerMock.Setup(o => o.RequestAccess(It.IsAny<Organization>(), 
+            _authManagerMock.Setup(o => o.RequestAccess(It.IsAny<Organization>(),
                 It.IsAny<AccessType>())).Returns(Task.FromResult(true));
             _authManagerMock.Setup(o => o.GetCurrentUser()).Returns(Task.FromResult(new User
             {
                 UserName = "admin",
                 Email = "admin@example.com"
             }));
-            
-            var webUtils = new WebUtils(_authManagerMock.Object, context, _appSettingsMock.Object,
-                _httpContextAccessorMock.Object, _ddbManagerMock.Object);
+/*
+        var webUtils = new WebUtils(_authManagerMock.Object, context, _appSettingsMock.Object,
+            _httpContextAccessorMock.Object, _ddbManagerMock.Object);
+        
+        var datasetManager = new DatasetsManager()
 
-            var organizationsManager =
-                new OrganizationsManager(_authManagerMock.Object, context, webUtils, _datasetManagerMock.Object, appContext, _organizationsManagerLogger);
+        var stacManager =
+            new StacManager(_authManagerMock.Object, context, webUtils, _datasetManager)
 
-            var list = (await organizationsManager.List()).ToArray();
+        var list = (await organizationsManager.List()).ToArray();
 
-            list.Should().HaveCount(1);
+        list.Should().HaveCount(1);
 
-            var pub = list.First();
+        var pub = list.First();
 
-            const string expectedDescription = "Public organization";
-            const string expectedSlug = MagicStrings.PublicOrganizationSlug;
-            const string expectedName = "Public";
+        const string expectedDescription = "Public organization";
+        const string expectedSlug = MagicStrings.PublicOrganizationSlug;
+        const string expectedName = "Public";
 
-            pub.Description.Should().Be(expectedDescription);
-            pub.Slug.Should().Be(expectedSlug);
-            pub.IsPublic.Should().BeTrue();
-            pub.Owner.Should().BeNull();
-            pub.Name.Should().Be(expectedName);
-
+        pub.Description.Should().Be(expectedDescription);
+        pub.Slug.Should().Be(expectedSlug);
+        pub.IsPublic.Should().BeTrue();
+        pub.Owner.Should().BeNull();
+        pub.Name.Should().Be(expectedName);
+        */
         }
 
 
@@ -133,7 +131,6 @@ namespace Registry.Web.Test
             // Insert seed data into the database using one instance of the context
             using (var context = new RegistryContext(options))
             {
-
                 var entity = new Organization
                 {
                     Slug = MagicStrings.PublicOrganizationSlug,
@@ -161,7 +158,7 @@ namespace Registry.Web.Test
 
             return new RegistryContext(options);
         }
-        
+
         private static ApplicationDbContext GetAppTest1Context()
         {
             var options = new DbContextOptionsBuilder<ApplicationDbContext>()
@@ -171,7 +168,6 @@ namespace Registry.Web.Test
             // Insert seed data into the database using one instance of the context
             using (var context = new ApplicationDbContext(options))
             {
-
                 var adminRole = new IdentityRole
                 {
                     Id = "1db5b539-6e54-4674-bb74-84732eb48204",
@@ -179,7 +175,7 @@ namespace Registry.Web.Test
                     NormalizedName = "ADMIN",
                     ConcurrencyStamp = "72c80593-64a2-40b4-b0c4-26a9dcc06400"
                 };
-                
+
                 context.Roles.Add(adminRole);
 
                 var standardRole = new IdentityRole
@@ -191,7 +187,7 @@ namespace Registry.Web.Test
                 };
 
                 context.Roles.Add(standardRole);
-                
+
                 var admin = new User
                 {
                     Id = "bfb579ce-8435-4c70-a365-158a3d93811f",
@@ -199,7 +195,7 @@ namespace Registry.Web.Test
                     Email = "admin@example.com",
                     NormalizedUserName = "ADMIN"
                 };
-                
+
                 context.Users.Add(admin);
 
                 context.UserRoles.Add(new IdentityUserRole<string>
@@ -213,7 +209,6 @@ namespace Registry.Web.Test
 
             return new ApplicationDbContext(options);
         }
-
 
         #endregion
     }

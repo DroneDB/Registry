@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 using System.Linq;
 using System.Threading.Tasks;
+using Registry.Ports.DroneDB.Models;
 using Registry.Web.Data.Models;
 
 namespace Registry.Web.Models.DTO
@@ -26,7 +27,8 @@ namespace Registry.Web.Models.DTO
         public string Slug { get; set; }
 
         public string Name { get; set; }
-        public bool? IsPublic { get; set; }
+        
+        public Visibility? Visibility { get; set; }
 
     }
     
@@ -34,7 +36,8 @@ namespace Registry.Web.Models.DTO
     {
 
         public string Name { get; set; }
-        public bool? IsPublic { get; set; }
+        
+        public Visibility? Visibility { get; set; }
 
     }
 }

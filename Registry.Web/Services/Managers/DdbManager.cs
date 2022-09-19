@@ -30,7 +30,7 @@ namespace Registry.Web.Services.Managers
             var ddb = new DDB(baseDdbPath);
 
             // TODO: It would be nice if we could use the bindings to check this
-            if (!Directory.Exists(Path.Combine(baseDdbPath, DDB.DatabaseFolderName)))
+            if (!Directory.Exists(Path.Combine(baseDdbPath, IDDB.DatabaseFolderName)))
             {
 
                 ddb.Init();

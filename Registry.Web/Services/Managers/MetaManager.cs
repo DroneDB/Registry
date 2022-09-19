@@ -34,10 +34,10 @@ namespace Registry.Web.Services.Managers
 
         public async Task<MetaDto> Add(string orgSlug, string dsSlug, string key, string data, string path = null)
         {
-            var ds = await _utils.GetDataset(orgSlug, dsSlug);
+            var ds = _utils.GetDataset(orgSlug, dsSlug);
 
-            if (!await _authManager.IsOwnerOrAdmin(ds))
-                throw new UnauthorizedException("The current user is not allowed to add meta");
+            if (!await _authManager.RequestAccess(ds, AccessType.Write))
+                throw new UnauthorizedException("The current user is not allowed to write to this dataset");
             
             _logger.LogInformation("In Add('{OrgSlug}/{DsSlug}', {Key}, {Path})", orgSlug, dsSlug, key, path);
 
@@ -57,10 +57,10 @@ namespace Registry.Web.Services.Managers
 
         public async Task<MetaDto> Set(string orgSlug, string dsSlug, string key, string data, string path = null)
         {
-            var ds = await _utils.GetDataset(orgSlug, dsSlug);
+            var ds = _utils.GetDataset(orgSlug, dsSlug);
 
-            if (!await _authManager.IsOwnerOrAdmin(ds))
-                throw new UnauthorizedException("The current user is not allowed to set meta");
+            if (!await _authManager.RequestAccess(ds, AccessType.Write))
+                throw new UnauthorizedException("The current user is not allowed to write to this dataset");
 
             _logger.LogInformation("In Set('{OrgSlug}/{DsSlug}', {Key}, {Path})", orgSlug, dsSlug, key, path);
 
@@ -80,9 +80,9 @@ namespace Registry.Web.Services.Managers
 
         public async Task<int> Remove(string orgSlug, string dsSlug, string id)
         {
-            var ds = await _utils.GetDataset(orgSlug, dsSlug);
+            var ds = _utils.GetDataset(orgSlug, dsSlug);
 
-            if (!await _authManager.IsOwnerOrAdmin(ds))
+            if (!await _authManager.RequestAccess(ds, AccessType.Write))
                 throw new UnauthorizedException("The current user is not allowed to remove meta");
 
             _logger.LogInformation("In Remove('{OrgSlug}/{DsSlug}', {Id})", orgSlug, dsSlug, id);
@@ -97,29 +97,30 @@ namespace Registry.Web.Services.Managers
 
         public async Task<JToken> Get(string orgSlug, string dsSlug, string key, string path = null)
         {
-            var dataset = await _utils.GetDataset(orgSlug, dsSlug);
+            var ds = _utils.GetDataset(orgSlug, dsSlug);
+            
+            if (!await _authManager.RequestAccess(ds, AccessType.Read))
+                throw new UnauthorizedException("The current user is not allowed to read meta");
 
             _logger.LogInformation("In Get('{OrgSlug}/{DsSlug}', {Key}, {Path})", orgSlug, dsSlug, key, path);
 
             if (string.IsNullOrWhiteSpace(key))
                 throw new ArgumentException("Key should not be null or empty");
 
-            var ddb = _ddbManager.Get(orgSlug, dataset.InternalRef);
+            var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
 
             if (path != null && !await ddb.EntryExistsAsync(path))
                 throw new ArgumentException($"Path '{path}' does not exist");
 
-            var res = ddb.Meta.Get(key, path);
-
-            return JsonConvert.DeserializeObject<JToken>(res);
+            return ddb.Meta.Get(key, path);
 
         }
 
         public async Task<int> Unset(string orgSlug, string dsSlug, string key, string path = null)
         {
-            var ds = await _utils.GetDataset(orgSlug, dsSlug);
+            var ds = _utils.GetDataset(orgSlug, dsSlug);
 
-            if (!await _authManager.IsOwnerOrAdmin(ds))
+            if (!await _authManager.RequestAccess(ds, AccessType.Write))
                 throw new UnauthorizedException("The current user is not allowed to unset meta");
 
             _logger.LogInformation("In Unset('{OrgSlug}/{DsSlug}', {Key}, {Path})", orgSlug, dsSlug, key, path);
@@ -138,11 +139,14 @@ namespace Registry.Web.Services.Managers
 
         public async Task<IEnumerable<MetaListItemDto>> List(string orgSlug, string dsSlug, string path = null)
         {
-            var dataset = await _utils.GetDataset(orgSlug, dsSlug);
+            var ds = _utils.GetDataset(orgSlug, dsSlug);
+            
+            if (!await _authManager.RequestAccess(ds, AccessType.Read))
+                throw new UnauthorizedException("The current user is not allowed to list meta");
 
             _logger.LogInformation("In List('{OrgSlug}/{DsSlug}', {Path})", orgSlug, dsSlug, path);
 
-            var ddb = _ddbManager.Get(orgSlug, dataset.InternalRef);
+            var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
 
             if (path != null && !await ddb.EntryExistsAsync(path))
                 throw new ArgumentException($"Path '{path}' does not exist");
@@ -152,8 +156,14 @@ namespace Registry.Web.Services.Managers
 
         public async Task<IEnumerable<MetaDumpDto>> Dump(string orgSlug, string dsSlug, string ids = null)
         {
-            var dataset = await _utils.GetDataset(orgSlug, dsSlug);
-            var ddb = _ddbManager.Get(orgSlug, dataset.InternalRef);
+            var ds = _utils.GetDataset(orgSlug, dsSlug);
+            
+            if (!await _authManager.RequestAccess(ds, AccessType.Read))
+                throw new UnauthorizedException("The current user is not allowed to dump meta");
+            
+            _logger.LogInformation("In Dump('{OrgSlug}/{DsSlug}', {Ids})", orgSlug, dsSlug, ids);
+            
+            var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
 
             return ddb.Meta.Dump(ids).Select(item => item.ToDto());
         }

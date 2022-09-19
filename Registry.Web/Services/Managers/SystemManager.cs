@@ -6,13 +6,16 @@ using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using Registry.Common;
 using Registry.Ports;
+using Registry.Ports.DroneDB.Models;
 using Registry.Web.Data;
 using Registry.Web.Data.Models;
 using Registry.Web.Exceptions;
 using Registry.Web.Models.Configuration;
 using Registry.Web.Models.DTO;
 using Registry.Web.Services.Ports;
+using Registry.Web.Utilities;
 
 namespace Registry.Web.Services.Managers
 {
@@ -92,6 +95,47 @@ namespace Registry.Web.Services.Managers
         public string GetVersion()
         {
             return Assembly.GetExecutingAssembly().GetName().Version?.ToString();
+        }
+
+        public async Task<IEnumerable<MigrateVisibilityEntryDTO>> MigrateVisibility()
+        {
+            
+            var query = (from ds in _context.Datasets.Include("Organization")
+                select new { ds = ds.Slug, ds.InternalRef, Org = ds.Organization.Slug }).ToArray();
+
+            _logger.LogInformation("Migrating to visibility {DatasetsCount} datasets", query.Length);
+
+            var res = new List<MigrateVisibilityEntryDTO>();
+            
+            foreach (var pair in query)
+            {
+                var ddb = _ddbManager.Get(pair.Org, pair.InternalRef);
+                var meta = ddb.Meta.GetSafe();
+
+                if (meta.Visibility.HasValue) continue;
+                    
+                var attrs = await ddb.GetAttributesRawAsync();
+
+                var isPublic = attrs.SafeGetValue("public");
+
+                meta.Visibility = isPublic switch
+                {
+                    null => Visibility.Private,
+                    int @public => @public == 1 ? Visibility.Unlisted : Visibility.Private,
+                    bool @publicBool => @publicBool ? Visibility.Unlisted : Visibility.Private,
+                    _ => Visibility.Private
+                };
+                
+                res.Add(new MigrateVisibilityEntryDTO
+                {
+                    IsPublic = isPublic,
+                    DatasetSlug = pair.ds,
+                    OrganizationSlug = pair.Org,
+                    Visibility = meta.Visibility.Value
+                });
+            }
+
+            return res;
         }
 
         public async Task<CleanupBatchesResultDto> CleanupBatches()

@@ -14,6 +14,7 @@ using NUnit.Framework;
 using Registry.Adapters.DroneDB;
 using Registry.Common;
 using Registry.Common.Test;
+using Registry.Test.Common;
 using Registry.Web.Data;
 using Registry.Web.Data.Models;
 using Registry.Web.Models.Configuration;
@@ -25,7 +26,7 @@ using MetaManager = Registry.Web.Services.Managers.MetaManager;
 namespace Registry.Web.Test
 {
     [TestFixture]
-    class MetaManagerTest
+    class MetaManagerTest : TestBase
     {
         private Logger<DdbManager> _ddbFactoryLogger;
         private Logger<MetaManager> _metaManagerLogger;
@@ -71,6 +72,10 @@ namespace Registry.Web.Test
             settings.DatasetsPath = Path.Combine(test.TestFolder, DdbFolder);
             _appSettingsMock.Setup(o => o.Value).Returns(settings);
             _authManagerMock.Setup(o => o.IsUserAdmin()).Returns(Task.FromResult(true));
+            _authManagerMock.Setup(o => o.RequestAccess(It.IsAny<Dataset>(), 
+                It.IsAny<AccessType>())).Returns(Task.FromResult(true));
+            _authManagerMock.Setup(o => o.RequestAccess(It.IsAny<Organization>(), 
+                It.IsAny<AccessType>())).Returns(Task.FromResult(true));
             
             var ddbManager = new DdbManager(_appSettingsMock.Object, _ddbFactoryLogger);
 
@@ -97,7 +102,11 @@ namespace Registry.Web.Test
             _appSettingsMock.Setup(o => o.Value).Returns(settings);
             _authManagerMock.Setup(o => o.IsUserAdmin()).Returns(Task.FromResult(true));
             _authManagerMock.Setup(o => o.IsOwnerOrAdmin(It.IsAny<Dataset>())).Returns(Task.FromResult(true));
-
+            _authManagerMock.Setup(o => o.RequestAccess(It.IsAny<Dataset>(), 
+                It.IsAny<AccessType>())).Returns(Task.FromResult(true));
+            _authManagerMock.Setup(o => o.RequestAccess(It.IsAny<Organization>(), 
+                It.IsAny<AccessType>())).Returns(Task.FromResult(true));
+            
             var ddbManager = new DdbManager(_appSettingsMock.Object, _ddbFactoryLogger);
 
             var webUtils = new WebUtils(_authManagerMock.Object, context, _appSettingsMock.Object,

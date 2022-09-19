@@ -13,13 +13,14 @@ using Registry.Adapters.DroneDB;
 using Registry.Common;
 using Registry.Common.Test;
 using Registry.Ports.DroneDB.Models;
+using Registry.Test.Common;
 using Registry.Web.Models.Configuration;
 using Registry.Web.Services.Managers;
 
 namespace Registry.Web.Test
 {
     [TestFixture]
-    public class DdbFactoryTest
+    public class DdbFactoryTest : TestBase
     {
         private Mock<IOptions<AppSettings>> _appSettingsMock;
         private Logger<DdbManager> _ddbFactoryLogger;
