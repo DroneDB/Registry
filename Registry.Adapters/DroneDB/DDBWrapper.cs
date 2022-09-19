@@ -987,7 +987,7 @@ namespace Registry.Adapters.DroneDB
         {
             try
             {
-                if (_Stac(ddbPath, entry, stacCollectionRoot, id, stacCatalogRoot, out var output) !=
+                if (_Stac(ddbPath, entry ?? string.Empty, stacCollectionRoot, id, stacCatalogRoot, out var output) !=
                     DDBError.DDBERR_NONE) throw new DDBException(GetLastError());
 
                 var json = Marshal.PtrToStringAnsi(output);

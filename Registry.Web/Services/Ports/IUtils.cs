@@ -19,5 +19,6 @@ namespace Registry.Web.Services.Ports
 
         string GenerateDatasetStacUrl(string orgSlug, string dsSlug);
         string GenerateStacUrl();
+        string GetLocalHost(bool useDdbScheme = false);
     }
 }

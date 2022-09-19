@@ -129,9 +129,11 @@ public class StacManager : IStacManager
 
         if (path != null && !await ddb.EntryExistsAsync(path))
             throw new ArgumentException("Entry does not exist");
+
+        var id = $"{orgSlug}/{dsSlug}"; // $"orgs/{orgSlug}/ds/{dsSlug}";
         
-        return ddb.GetStac($"{orgSlug}/{dsSlug}", _utils.GenerateDatasetUrl(ds), 
-            _utils.GenerateStacUrl(), path);
+        return ddb.GetStac(id, _utils.GenerateDatasetUrl(ds), 
+            _utils.GetLocalHost(), path);
 
     }
 

@@ -110,7 +110,9 @@ namespace Registry.Web.Services.Adapters
 
         public string GenerateDatasetUrl(Dataset dataset, bool useDdbScheme = false)
         {
-            return $"{GetLocalHost(useDdbScheme)}/{dataset.Organization.Slug}/{dataset.Slug}";
+            return useDdbScheme ? 
+                $"{GetLocalHost(true)}/{dataset.Organization.Slug}/{dataset.Slug}" : 
+                $"{GetLocalHost(false)}/orgs/{dataset.Organization.Slug}/ds/{dataset.Slug}";
         }
         
         public string GenerateStacUrl()
@@ -118,7 +120,7 @@ namespace Registry.Web.Services.Adapters
             return $"{GetLocalHost()}/stac";
         }
 
-        private string GetLocalHost(bool useDdbScheme = false)
+        public string GetLocalHost(bool useDdbScheme = false)
         {
             bool isHttps;
             string host;

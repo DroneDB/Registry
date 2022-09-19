@@ -10,10 +10,12 @@ using Registry.Adapters.DroneDB;
 using Registry.Common;
 using Registry.Common.Test;
 using Registry.Ports.DroneDB.Models;
+using Registry.Test.Common;
 
 namespace Registry.Adapters.Ddb.Test
 {
-    public class DDBWrapperTests
+    [TestFixture]
+    public class DDBWrapperTests : TestBase
     {
         private const string BaseTestFolder = nameof(DDBWrapperTests);
         private const string TestFileUrl =
@@ -31,6 +33,7 @@ namespace Registry.Adapters.Ddb.Test
 
         private const string TestPointCloudUrl =
             "https://github.com/DroneDB/test_data/raw/master/brighton/point_cloud.laz";
+
 
         [SetUp]
         public void Setup()
@@ -729,10 +732,30 @@ namespace Registry.Adapters.Ddb.Test
             var ddbPath = Path.Combine(test.TestFolder, "public", "default");
 
             var res = DDBWrapper.Stac(ddbPath, "DJI_0025.JPG",
-                "https://localhost:5000/org/public/ds/default", "public/default", "https://localhost:5000");
+                "http://localhost:5000/orgs/public/ds/default", "public/default", "http://localhost:5000");
 
             res.Should().NotBeNull();
+            
+            TestContext.WriteLine(res);
         }
+        
+        [Test]
+        public void Stac_NullPath_Ok()
+        {
+            
+            using var test = new TestFS(Test1ArchiveUrl, BaseTestFolder);
+
+            var ddbPath = Path.Combine(test.TestFolder, "public", "default");
+
+            var res = DDBWrapper.Stac(ddbPath, null,
+                "http://localhost:5000/orgs/public/ds/default", "public/default", "http://localhost:5000");
+
+            res.Should().NotBeNull();
+            
+            TestContext.WriteLine(res);
+
+        }
+        
 
         [Test]
         [Explicit("Clean test directory")]
