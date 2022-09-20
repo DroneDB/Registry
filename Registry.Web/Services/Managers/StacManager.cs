@@ -56,10 +56,6 @@ namespace Registry.Web.Services.Managers
         
         public async Task<StacCatalogDto> GetCatalog()
         {
-            var currentUser = await _authManager.GetCurrentUser();
-
-            if (currentUser == null)
-                throw new UnauthorizedException("Invalid user");
 
             var stacUrl = _utils.GenerateStacUrl();
 
