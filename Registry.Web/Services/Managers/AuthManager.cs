@@ -81,9 +81,6 @@ namespace Registry.Web.Services.Managers
             if (obj == null) 
                 throw new ArgumentNullException(nameof(obj));
             
-            if (user == null) 
-                throw new ArgumentNullException(nameof(user));
-
             return typeof(T) switch
             {
                 _ when typeof(T) == typeof(Organization) => await RequestAccessToOrganization(obj as Organization, access,
@@ -109,7 +106,7 @@ namespace Registry.Web.Services.Managers
 
             var meta = ddb.Meta.GetSafe();
 
-            // Anonymous users can only read if the dataset is public or unlisted
+            // Anonymous users can only read if the dataset is public
             if (user == null) 
                 return access == AccessType.Read && (meta.Visibility == Visibility.Public || meta.Visibility == Visibility.Unlisted);
             
