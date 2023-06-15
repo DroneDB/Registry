@@ -383,7 +383,6 @@ namespace Registry.Web
 
             SetupDatabase(app).Wait();
             SetupFileCache(app);
-            //SetupHangfire(app);
 
             PrintStartupInfo(app);
         }
@@ -492,30 +491,6 @@ namespace Registry.Web
             }, appSettings.ThumbnailsCacheExpiration);
         }
 
-        // private void SetupHangfire(IApplicationBuilder app)
-        // {
-        //     var appSettingsSection = Configuration.GetSection("AppSettings");
-        //     var appSettings = appSettingsSection.Get<AppSettings>();
-        //     
-        //     if (appSettings.StorageCleanupMinutes is > 0)
-        //     {
-        //         using var serviceScope = app.ApplicationServices
-        //             .GetRequiredService<IServiceScopeFactory>()
-        //             .CreateScope();
-        //     
-        //         var objectSystem = serviceScope.ServiceProvider.GetService<IObjectSystem>();
-        //         
-        //         RecurringJob.AddOrUpdate(MagicStrings.StorageCleanupJobId, () =>
-        //             HangfireUtils.SyncAndCleanupWrapper(objectSystem, null),
-        //             $"*/{appSettings.StorageCleanupMinutes} * * * *");
-        //
-        //     }
-        //     else
-        //     {
-        //         RecurringJob.RemoveIfExists(MagicStrings.StorageCleanupJobId);
-        //     }
-        // }
-
         // NOTE: Maybe put all this as stated in https://stackoverflow.com/a/55707949
         private async Task SetupDatabase(IApplicationBuilder app)
         {
@@ -597,6 +572,9 @@ namespace Registry.Web
 
             // Add the processing server as IHostedService
             services.AddHangfireServer();
+            
+            // Specify the global number of retries
+            GlobalJobFilters.Filters.Add(new AutomaticRetryAttribute { Attempts = 1 });
         }
 
         private static void RegisterCacheProvider(IServiceCollection services, AppSettings appSettings)
