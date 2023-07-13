@@ -69,21 +69,16 @@ namespace Registry.Web.Services.Adapters
 
             if (!orgSlug.IsValidSlug())
                 throw new BadRequestException("Invalid organization id");
-
-            var org = _context.Organizations
-                .Include(item => item.Datasets)
-                .FirstOrDefault(item => item.Slug == orgSlug);
-
-            if (org == null)
-                throw new NotFoundException("Organization not found");
-
-            var dataset = org.Datasets.FirstOrDefault(item => item.Slug == dsSlug);
+            
+            var dataset = _context.Datasets
+                .Include(item => item.Organization)
+                .FirstOrDefault(item => item.Slug == dsSlug && item.Organization.Slug == orgSlug);
 
             if (dataset == null)
             {
                 if (safe) return null;
 
-                throw new NotFoundException("Cannot find dataset");
+                throw new NotFoundException($"Cannot find dataset {dsSlug} in organization {orgSlug}");
             }
             
             return dataset;
