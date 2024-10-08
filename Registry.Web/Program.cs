@@ -53,7 +53,6 @@ namespace Registry.Web
 
         private static bool FixPath()
         {
-
             var ddbFolder = CommonUtils.FindDdbFolder();
 
             if (ddbFolder == null)
@@ -94,7 +93,7 @@ namespace Registry.Web
                 if (Environment.OSVersion.Platform == PlatformID.Win32NT)
                     lateDdbInit = !FixPath();
             }
-            
+
 #if DEBUG
             Console.WriteLine(" ?> Running in DEBUG");
 #else
@@ -117,7 +116,7 @@ namespace Registry.Web
                     CommonUtils.WriteLineColor(" !> Failed to setup storage folder", ConsoleColor.Red);
                     return;
                 }
-            
+
                 if (!InitializeDdb())
                 {
                     CommonUtils.WriteLineColor(" !> Failed to initialize DroneDB", ConsoleColor.Red);
@@ -131,7 +130,7 @@ namespace Registry.Web
                     CommonUtils.WriteLineColor(" !> Failed to initialize DroneDB", ConsoleColor.Red);
                     return;
                 }
-                
+
                 if (!SetupStorageFolder(opts.StorageFolder, opts.ResetHub))
                 {
                     CommonUtils.WriteLineColor(" !> Failed to setup storage folder", ConsoleColor.Red);
@@ -208,7 +207,6 @@ namespace Registry.Web
 
                 return false;
             }
-
         }
 
         private static bool VerifyOptions(Options opts)
@@ -219,79 +217,81 @@ namespace Registry.Web
                 return false;
             }
 
-            if (opts.Address != null)
+            if (opts.Address == null)
+                return true;
+
+            if (opts.Address.Length == 0)
             {
-                if (opts.Address.Length == 0)
+                CommonUtils.WriteColor(" !> Address not specified", ConsoleColor.Red);
+                return false;
+            }
+
+            var parts = opts.Address.Split(':');
+
+            var host = DefaultHost;
+            var port = DefaultPort;
+
+            switch (parts.Length)
+            {
+                case 1:
                 {
-                    CommonUtils.WriteColor(" !> Address not specified", ConsoleColor.Red);
-                    return false;
-                }
-
-                var parts = opts.Address.Split(':');
-
-                var host = DefaultHost;
-                var port = DefaultPort;
-
-                switch (parts.Length)
-                {
-                    case 1:
+                    if (!int.TryParse(parts[0], out port))
                     {
-                        if (!int.TryParse(parts[0], out port))
-                        {
-                            // Try to parse as hostname
-                            host = parts[0];
-
-                            if (host.ToLowerInvariant() != "localhost" && !IPEndPoint.TryParse(host, out _))
-                            {
-                                CommonUtils.WriteColor(" !> Invalid address", ConsoleColor.Red);
-                                return false;
-                            }
-                        }
-
-                        if (port is < 1 or > 65535)
-                        {
-                            CommonUtils.WriteColor(" !> Invalid port", ConsoleColor.Red);
-                            return false;
-                        }
-
-                        break;
-                    }
-                    case 2:
-                    {
+                        // Try to parse as hostname
                         host = parts[0];
 
-                        if (host.ToLowerInvariant() != "localhost" && !IPEndPoint.TryParse(host, out _))
+                        if (!host.Equals("localhost", StringComparison.InvariantCultureIgnoreCase) &&
+                            !IPEndPoint.TryParse(host, out _))
                         {
                             CommonUtils.WriteColor(" !> Invalid address", ConsoleColor.Red);
                             return false;
                         }
-
-                        if (!int.TryParse(parts[1], out port))
-                        {
-                            CommonUtils.WriteColor(" !> Invalid port", ConsoleColor.Red);
-                            return false;
-                        }
-
-                        if (port is < 1 or > 65535)
-                        {
-                            CommonUtils.WriteColor(" !> Invalid port", ConsoleColor.Red);
-                            return false;
-                        }
-
-                        break;
                     }
-                    default:
+
+                    if (port is < 1 or > 65535)
+                    {
+                        CommonUtils.WriteColor(" !> Invalid port", ConsoleColor.Red);
+                        return false;
+                    }
+
+                    break;
+                }
+                case 2:
+                {
+                    host = parts[0];
+
+                    if (host.ToLowerInvariant() != "localhost" && !IPEndPoint.TryParse(host, out _))
+                    {
                         CommonUtils.WriteColor(" !> Invalid address", ConsoleColor.Red);
                         return false;
-                }
+                    }
 
-                opts.Address = $"{host}:{port}";
+                    if (!int.TryParse(parts[1], out port))
+                    {
+                        CommonUtils.WriteColor(" !> Invalid port", ConsoleColor.Red);
+                        return false;
+                    }
+
+                    if (port is < 1 or > 65535)
+                    {
+                        CommonUtils.WriteColor(" !> Invalid port", ConsoleColor.Red);
+                        return false;
+                    }
+
+                    break;
+                }
+                default:
+                    CommonUtils.WriteColor(" !> Invalid address", ConsoleColor.Red);
+                    return false;
             }
+
+            opts.Address = $"{host}:{port}";
 
             return true;
         }
 
-        private static bool SetupStorageFolder(string folder, bool resetSpa = false, bool resetDdb = false, bool deployDdb = false)
+        private static bool SetupStorageFolder(string folder, bool resetSpa = false, bool resetDdb = false,
+            bool deployDdb = false)
         {
             Console.WriteLine(" -> Setting up storage folder");
 
@@ -362,7 +362,7 @@ namespace Registry.Web
             }
             else if (
                 Directory.Exists(hubRoot) &&
-                Directory.GetFiles(hubRoot).Any())
+                Directory.GetFiles(hubRoot).Length != 0)
             {
                 Console.WriteLine(" ?> Hub folder is ok");
                 return true;
@@ -370,7 +370,7 @@ namespace Registry.Web
 
             return ExtractHub(hubRoot);
         }
-        
+
         private static bool SetupDdb(string folder, bool resetDdb)
         {
             var ddbRoot = Path.Combine(folder, MagicStrings.DdbArchive);
@@ -382,13 +382,13 @@ namespace Registry.Web
             }
             else if (
                 Directory.Exists(ddbRoot) &&
-                Directory.GetFiles(ddbRoot).Any())
+                Directory.GetFiles(ddbRoot).Length != 0)
             {
                 Console.WriteLine(" ?> Ddb folder is ok");
-                
+
                 Environment.SetEnvironmentVariable("PATH",
                     $"{ddbRoot}{Path.PathSeparator}{Environment.GetEnvironmentVariable("PATH")}");
-                
+
                 return true;
             }
 
@@ -419,10 +419,10 @@ namespace Registry.Web
                 Console.WriteLine($" !> Failed to read embedded archive");
                 return false;
             }
-            
+
             using var zip = new ZipArchive(stream, ZipArchiveMode.Read);
 
-            if (!zip.Entries.Any())
+            if (zip.Entries.Count == 0)
             {
                 Console.WriteLine($" !> Error while extracting '{archiveName}', empty archive");
                 return false;
@@ -439,7 +439,7 @@ namespace Registry.Web
         {
             return ExtractEmbeddedArchive(MagicStrings.DdbArchive, folder);
         }
-        
+
         private static bool ExtractHub(string folder)
         {
             return ExtractEmbeddedArchive(MagicStrings.SpaRoot, folder);
