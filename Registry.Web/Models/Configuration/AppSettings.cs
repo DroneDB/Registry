@@ -125,5 +125,10 @@ namespace Registry.Web.Models.Configuration
         /// </summary>
         public TimeSpan? ClearCacheInterval { get; set; }
 
+        /// <summary>
+        /// Disable processing of files
+        /// </summary>
+        public bool DisableProcessing { get; set; }
+
     }
 }

@@ -227,7 +227,7 @@ namespace Registry.Web
             services.AddScoped<ISystemManager, SystemManager>();
             services.AddScoped<IBackgroundJobsProcessor, BackgroundJobsProcessor>();
             services.AddScoped<IMetaManager, Services.Managers.MetaManager>();
-            
+
             services.AddScoped<IConfigurationHelper<AppSettings>, ConfigurationHelper>(_ =>
                 new ConfigurationHelper(MagicStrings.AppSettingsFileName));
 
@@ -431,7 +431,7 @@ namespace Registry.Web
             if (url != null)
             {
                 var builder = new UriBuilder(url);
-                
+
                 if (builder.Host == "0.0.0.0") builder.Host = "localhost";
                 var baseUri = builder.Uri;
 
@@ -440,13 +440,13 @@ namespace Registry.Web
 
                 var swaggerUri = new Uri(baseUri, MagicStrings.SwaggerUrl);
                 Console.WriteLine($" ?> Swagger: {swaggerUri}");
-                
+
                 var versionUri = new Uri(baseUri, MagicStrings.VersionUrl);
                 Console.WriteLine($" ?> Version: {versionUri}");
 
                 var quickHealthUri = new Uri(baseUri, MagicStrings.QuickHealthUrl);
                 Console.WriteLine($" ?> (req auth) Quick Health: {quickHealthUri}");
-                
+
                 var healthUri = new Uri(baseUri, MagicStrings.HealthUrl);
                 Console.WriteLine($" ?> (req auth) Health: {healthUri}");
 
@@ -561,7 +561,8 @@ namespace Registry.Web
                                 DashboardJobListLimit = 50000,
                                 TransactionTimeout = TimeSpan.FromMinutes(10),
                                 TablesPrefix = "hangfire"
-                            })));
+                            }))
+                        .WithJobExpirationTimeout(TimeSpan.FromDays(30)));
 
                     break;
 
@@ -570,11 +571,17 @@ namespace Registry.Web
                         $"Unsupported hangfire provider: '{appSettings.HangfireProvider}'");
             }
 
-            // Add the processing server as IHostedService
-            services.AddHangfireServer();
-            
+            if (!appSettings.DisableProcessing)
+                // Add the processing server as IHostedService
+                services.AddHangfireServer();
+
             // Specify the global number of retries
             GlobalJobFilters.Filters.Add(new AutomaticRetryAttribute { Attempts = 1 });
+
+            // Cleanup expired jobs
+            RecurringJob.AddOrUpdate("cleanup-expired-jobs",
+                () => HangfireUtils.CleanupExpiredJobs(null),
+                Cron.Daily);
         }
 
         private static void RegisterCacheProvider(IServiceCollection services, AppSettings appSettings)

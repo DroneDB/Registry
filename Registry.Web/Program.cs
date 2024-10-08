@@ -107,7 +107,6 @@ namespace Registry.Web
             Environment.CurrentDirectory = opts.StorageFolder;
 
             Console.WriteLine(" ?> Using storage folder '{0}'", opts.StorageFolder);
-            Console.WriteLine(" ?> Using address '{0}'", opts.Address);
 
             if (lateDdbInit)
             {
@@ -140,6 +139,12 @@ namespace Registry.Web
 
             try
             {
+
+                Console.WriteLine(" ?> Using address '{0}'", opts.Address);
+
+                // Aggiungere --no-processing per disabilitare il processing node
+                // Aggiungere la gestione di --node per avviare il processing node
+
                 Log.Information("Starting web host");
                 Console.WriteLine(" -> Starting web host");
 
@@ -260,7 +265,7 @@ namespace Registry.Web
                 {
                     host = parts[0];
 
-                    if (host.ToLowerInvariant() != "localhost" && !IPEndPoint.TryParse(host, out _))
+                    if (!host.Equals("localhost", StringComparison.InvariantCultureIgnoreCase) && !IPEndPoint.TryParse(host, out _))
                     {
                         CommonUtils.WriteColor(" !> Invalid address", ConsoleColor.Red);
                         return false;

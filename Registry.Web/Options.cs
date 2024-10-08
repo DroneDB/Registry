@@ -14,6 +14,9 @@ public class Options
     [Option('a', "address", Default = "localhost:5000", HelpText = "Address to listen on")]
     public string Address { get; set; }
 
+    [Option('n', "node", HelpText = "Run only as processing node", Required = false)]
+    public bool IsOnlyProcessingNode { get; set; }
+
     [Option('c', "check", HelpText = "Check configuration and exit.", Required = false)]
     public bool CheckConfig { get; set; }
    

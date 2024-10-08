@@ -1,10 +1,14 @@
 ﻿using System;
 using System.IO;
+using System.Linq;
+using Hangfire;
 using Hangfire.Console;
 using Hangfire.Server;
+using Hangfire.Storage;
 using Registry.Adapters.DroneDB;
 using Registry.Common;
 using Registry.Ports.DroneDB;
+using Serilog;
 
 namespace Registry.Web.Utilities
 {
@@ -13,7 +17,7 @@ namespace Registry.Web.Utilities
         public static void BuildWrapper(IDDB ddb, string path, bool force,
             PerformContext context)
         {
-            Action<string> writeLine = context != null ? context.WriteLine : Console.WriteLine;
+            Action<string> writeLine = context != null ? context.WriteLine : Log.Information;
 
             writeLine($"In BuildWrapper('{ddb.DatasetFolderPath}', '{path}', '{force}')");
 
@@ -25,7 +29,7 @@ namespace Registry.Web.Utilities
 
         public static void BuildPendingWrapper(IDDB ddb, PerformContext context)
         {
-            Action<string> writeLine = context != null ? context.WriteLine : Console.WriteLine;
+            Action<string> writeLine = context != null ? context.WriteLine : Log.Information;
 
             writeLine($"In BuildPendingWrapper('{ddb.DatasetFolderPath}')");
 
@@ -37,7 +41,7 @@ namespace Registry.Web.Utilities
 
         public static void SafeDelete(string path, PerformContext context)
         {
-            Action<string> writeLine = context != null ? context.WriteLine : Console.WriteLine;
+            Action<string> writeLine = context != null ? context.WriteLine : Log.Information;
 
             writeLine($"In SafeDelete('{path}')");
 
@@ -56,6 +60,25 @@ namespace Registry.Web.Utilities
                 }
                 else
                     writeLine("No file or folder found");
+            }
+        }
+
+        public static void CleanupExpiredJobs(PerformContext context)
+        {
+            using var connection = JobStorage.Current.GetConnection();
+
+            Action<string> writeLine = context != null ? context.WriteLine : Log.Information;
+
+            var toDelete = connection.GetRecurringJobs()
+                .Where(j => j.LastJobState == "Failed" && j.CreatedAt < DateTime.Now.AddDays(-30))
+                .ToList();
+
+            writeLine($"Found {toDelete.Count} jobs to delete");
+
+            foreach (var job in toDelete)
+            {
+                writeLine($"Deleting job {job.Id}");
+                RecurringJob.RemoveIfExists(job.Id);
             }
         }
     }
