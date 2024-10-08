@@ -33,7 +33,6 @@ namespace Registry.Web
     {
         public const int DefaultPort = 5000;
         public const string DefaultHost = "localhost";
-        public const string DroneDBDllName = "ddb.dll";
 
         public static readonly Version MinDdbVersion = new(1, 0, 12);
 
@@ -54,25 +53,16 @@ namespace Registry.Web
 
         private static bool FixPath()
         {
-            var path = Environment.GetEnvironmentVariable("PATH");
-            if (path == null)
-            {
-                Console.WriteLine(" !> PATH is not set");
-                return false;
-            }
 
-            var newPath = path.Split(Path.PathSeparator);
+            var ddbFolder = CommonUtils.FindDdbFolder();
 
-            var ddbFolder = newPath.FirstOrDefault(
-                p => File.Exists(Path.Combine(p, DroneDBDllName)));
-            
             if (ddbFolder == null)
             {
-                Console.WriteLine(" !> {0} not found in PATH", DroneDBDllName);
+                Console.WriteLine(" !> ddb library not found in PATH");
                 return false;
             }
 
-            Console.WriteLine(" ?> Found {0} in {1}", DroneDBDllName, ddbFolder);
+            Console.WriteLine(" ?> Found ddl library in {0}", ddbFolder);
 
             Environment.SetEnvironmentVariable("PATH",
                 $"{ddbFolder}{Path.PathSeparator}{Environment.GetEnvironmentVariable("PATH")}");

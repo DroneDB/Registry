@@ -48,7 +48,6 @@ namespace Registry.Web.Test
             _ddbManagerMock = new Mock<IDdbManager>();
 
             _organizationsManagerLogger = new Logger<OrganizationsManager>(LoggerFactory.Create(builder => builder.AddConsole()));
-
         }
 
         [Test]

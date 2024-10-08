@@ -7,6 +7,7 @@ using System.IO;
 using System.IO.Compression;
 using System.Linq;
 using System.Net;
+using System.Runtime.InteropServices;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.RegularExpressions;
@@ -574,6 +575,46 @@ namespace Registry.Common
         public static int? SafeParse(string str, IFormatProvider provider = null)
         {
             return int.TryParse(str, NumberStyles.Integer, provider, out var result) ? result : null;
+        }
+
+        public static void SetDefaultDllPath(string path)
+        {
+            const uint LOAD_LIBRARY_SEARCH_DEFAULT_DIRS = 0x00001000;
+
+            if (Environment.OSVersion.Platform != PlatformID.Win32NT)
+                return;
+
+            if (!SetDefaultDllDirectories(LOAD_LIBRARY_SEARCH_DEFAULT_DIRS))
+                throw new System.ComponentModel.Win32Exception(Marshal.GetLastWin32Error());
+
+            var dirHandle = AddDllDirectory(path);
+            if (dirHandle == IntPtr.Zero)
+                throw new System.ComponentModel.Win32Exception(Marshal.GetLastWin32Error());
+            return;
+
+            [DllImport("kernel32.dll", SetLastError = true)]
+            static extern IntPtr AddDllDirectory([MarshalAs(UnmanagedType.LPWStr)] string lpPathName);
+
+            [DllImport("kernel32.dll", SetLastError = true)]
+            static extern bool SetDefaultDllDirectories(uint flags);
+        }
+
+
+        public const string DroneDBDllName = "ddb.dll";
+
+        public static string FindDdbFolder()
+        {
+            var path = Environment.GetEnvironmentVariable("PATH");
+
+            if (path == null)
+                return null;
+
+            var newPath = path.Split(Path.PathSeparator);
+
+            var ddbFolder = newPath.FirstOrDefault(
+                p => File.Exists(Path.Combine(p, DroneDBDllName)));
+
+            return ddbFolder;
         }
 
 

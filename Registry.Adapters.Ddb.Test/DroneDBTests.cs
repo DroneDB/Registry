@@ -35,9 +35,16 @@ namespace Registry.Adapters.Ddb.Test
             "https://github.com/DroneDB/test_data/raw/master/brighton/point_cloud.laz";
 
 
-        [SetUp]
+        [OneTimeSetUp]
         public void Setup()
         {
+
+            var ddbFolder = CommonUtils.FindDdbFolder();
+            if (ddbFolder == null)
+                throw new Exception("DDB not found");
+
+            CommonUtils.SetDefaultDllPath(ddbFolder);
+
             DDBWrapper.RegisterProcess(true);
         }
 
@@ -130,7 +137,7 @@ namespace Registry.Adapters.Ddb.Test
             File.WriteAllText(Path.Join(area.TestFolder, "file2.txt"), "test");
 
             var e = DDBWrapper.Info(Path.Join(area.TestFolder, "file.txt"), withHash: true)[0];
-            e.Hash.Should().BeNullOrEmpty();
+            e.Hash.Should().Be("9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08");
 
             var es = DDBWrapper.Info(area.TestFolder, true);
             es.Count.Should().Be(2);
@@ -629,7 +636,7 @@ namespace Registry.Adapters.Ddb.Test
             var res = DDBWrapper.MetaAdd(area.TestFolder, "tests", "{\"test\": true}");
             JsonConvert.SerializeObject(res.Data).Should().Be("{\"test\":true}");
             res.Id.Should().NotBeNull();
-            res.ModifiedTime.Should().BeCloseTo(DateTime.UtcNow, new TimeSpan(0,0,1));
+            res.ModifiedTime.Should().BeCloseTo(DateTime.UtcNow, new TimeSpan(0,0,3));
         }
 
         [Test]

@@ -35,15 +35,11 @@ namespace Registry.Web.Test
         [SetUp]
         public void Setup()
         {
-            
-            DDBWrapper.RegisterProcess(true);
-
             _appSettingsMock = new Mock<IOptions<AppSettings>>();
             _ddbFactoryLogger = new Logger<DdbManager>(LoggerFactory.Create(builder => builder.AddConsole()));
 
             _settings.DatasetsPath = TestDataFolder;
             _appSettingsMock.Setup(o => o.Value).Returns(_settings);
-
         }
 
         [Test]
