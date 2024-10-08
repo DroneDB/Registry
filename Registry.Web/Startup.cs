@@ -184,16 +184,16 @@ namespace Registry.Web
             RegisterHangfireProvider(services, appSettings);
 
             services.AddHealthChecks()
-                .AddCheck<CacheHealthCheck>("Cache health check", null, new[] { "service" })
-                .AddCheck<DdbHealthCheck>("DroneDB health check", null, new[] { "service" })
-                .AddCheck<UserManagerHealthCheck>("User manager health check", null, new[] { "database" })
-                .AddDbContextCheck<RegistryContext>("Registry database health check", null, new[] { "database" })
+                .AddCheck<CacheHealthCheck>("Cache health check", null, ["service"])
+                .AddCheck<DdbHealthCheck>("DroneDB health check", null, ["service"])
+                .AddCheck<UserManagerHealthCheck>("User manager health check", null, ["database"])
+                .AddDbContextCheck<RegistryContext>("Registry database health check", null, ["database"])
                 .AddDbContextCheck<ApplicationDbContext>("Registry identity database health check", null,
-                    new[] { "database" })
+                    ["database"])
                 .AddDiskSpaceHealthCheck(appSettings.DatasetsPath, "Ddb storage path space health check", null,
-                    new[] { "storage" })
+                    ["storage"])
                 .AddHangfire(options => { options.MinimumAvailableServers = 1; }, "Hangfire health check", null,
-                    new[] { "database" });
+                    ["database"]);
 
             /*
              * NOTE about services lifetime:
@@ -332,7 +332,7 @@ namespace Registry.Web
 
             app.UseHangfireDashboard(MagicStrings.HangFireUrl, new DashboardOptions
             {
-                AsyncAuthorization = new[] { new HangfireAuthorizationFilter() }
+                AsyncAuthorization = [new HangfireAuthorizationFilter()]
             });
 
             app.UseEndpoints(endpoints =>
@@ -384,7 +384,22 @@ namespace Registry.Web
             SetupDatabase(app).Wait();
             SetupFileCache(app);
 
+            SetupCleanupJobs(app);
+
             PrintStartupInfo(app);
+        }
+
+        private static void SetupCleanupJobs(IApplicationBuilder app)
+        {
+            var manager = app.ApplicationServices.GetService<IRecurringJobManager>();
+
+            if (manager == null)
+                throw new InvalidOperationException("Cannot get recurring job manager from service provider");
+
+            // Cleanup expired jobs
+            manager.AddOrUpdate("cleanup-expired-jobs",
+                () => HangfireUtils.CleanupExpiredJobs(null),
+                Cron.Daily);
         }
 
         private static void PrintStartupInfo(IApplicationBuilder app)
@@ -577,11 +592,6 @@ namespace Registry.Web
 
             // Specify the global number of retries
             GlobalJobFilters.Filters.Add(new AutomaticRetryAttribute { Attempts = 1 });
-
-            // Cleanup expired jobs
-            RecurringJob.AddOrUpdate("cleanup-expired-jobs",
-                () => HangfireUtils.CleanupExpiredJobs(null),
-                Cron.Daily);
         }
 
         private static void RegisterCacheProvider(IServiceCollection services, AppSettings appSettings)

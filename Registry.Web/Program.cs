@@ -141,11 +141,6 @@ namespace Registry.Web
             {
 
                 Console.WriteLine(" ?> Using address '{0}'", opts.Address);
-
-                // Aggiungere --no-processing per disabilitare il processing node
-                // Aggiungere la gestione di --node per avviare il processing node
-
-                Log.Information("Starting web host");
                 Console.WriteLine(" -> Starting web host");
 
                 var args = new[] { "--urls", $"http://{opts.Address}" };
@@ -161,6 +156,8 @@ namespace Registry.Web
             }
             catch (Exception ex)
             {
+                Console.WriteLine(" !> Error while running application");
+                Console.WriteLine(ex.Message);
                 Log.Fatal(ex, "Host terminated unexpectedly");
             }
             finally
