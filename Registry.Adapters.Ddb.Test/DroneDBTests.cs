@@ -44,7 +44,7 @@ namespace Registry.Adapters.Ddb.Test
         [Test]
         public void GetVersion_HasValue()
         {
-            Assert.IsTrue(DDBWrapper.GetVersion().Length > 0, "Can call GetVersion()");
+            DDBWrapper.GetVersion().Length.Should().BeGreaterThan(0, "Can call GetVersion()");
         }
 
         [Test]
@@ -130,13 +130,14 @@ namespace Registry.Adapters.Ddb.Test
             File.WriteAllText(Path.Join(area.TestFolder, "file2.txt"), "test");
 
             var e = DDBWrapper.Info(Path.Join(area.TestFolder, "file.txt"), withHash: true)[0];
-            Assert.IsNotEmpty(e.Hash);
+            e.Hash.Should().BeNullOrEmpty();
 
             var es = DDBWrapper.Info(area.TestFolder, true);
-            Assert.AreEqual(2, es.Count);
-            Assert.AreEqual(EntryType.Generic, es[0].Type);
-            Assert.IsTrue(es[0].Size > 0);
-            Assert.AreEqual(DateTime.Now.Year, es[0].ModifiedTime.Year);
+            es.Count.Should().Be(2);
+
+            es[0].Type.Should().Be(EntryType.Generic);
+            es[0].Size.Should().BeGreaterThan(0);
+            es[0].ModifiedTime.Year.Should().Be(DateTime.Now.Year);
         }
 
         [Test]
@@ -357,9 +358,9 @@ namespace Registry.Adapters.Ddb.Test
         [Test]
         public void Entry_Deserialization_Ok()
         {
-            string json = "{'hash': 'abc', 'mtime': 5}";
-            Entry e = JsonConvert.DeserializeObject<Entry>(json);
-            Assert.IsTrue(e.ModifiedTime.Year == 1970);
+            var json = "{'hash': 'abc', 'mtime': 5}";
+            var e = JsonConvert.DeserializeObject<Entry>(json);
+            e.ModifiedTime.Year.Should().Be(1970);
         }
 
 
