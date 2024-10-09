@@ -3,6 +3,7 @@ using System.Configuration;
 using System.Transactions;
 using Hangfire;
 using Hangfire.Console;
+using Hangfire.Console.Progress;
 using Hangfire.MySql;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -32,24 +33,24 @@ public static class StartupUtils
             case HangfireProvider.Mysql:
 
                 services.AddHangfire(configuration => configuration
-                    .SetDataCompatibilityLevel(CompatibilityLevel.Version_170)
-                    .UseSimpleAssemblyNameTypeSerializer()
-                    .UseRecommendedSerializerSettings()
-                    .UseConsole()
-                    .UseStorage(new MySqlStorage(
-                        appConfig.GetConnectionString(MagicStrings.HangfireConnectionName),
-                        new MySqlStorageOptions
-                        {
-                            TransactionIsolationLevel = IsolationLevel.ReadCommitted,
-                            QueuePollInterval = TimeSpan.FromSeconds(15),
-                            JobExpirationCheckInterval = TimeSpan.FromHours(1),
-                            CountersAggregateInterval = TimeSpan.FromMinutes(5),
-                            PrepareSchemaIfNecessary = true,
-                            DashboardJobListLimit = 50000,
-                            TransactionTimeout = TimeSpan.FromMinutes(10),
-                            TablesPrefix = "hangfire"
-                        }))
-                    .WithJobExpirationTimeout(TimeSpan.FromDays(30)));
+                        .SetDataCompatibilityLevel(CompatibilityLevel.Version_170)
+                        .UseSimpleAssemblyNameTypeSerializer()
+                        .UseRecommendedSerializerSettings()
+                        .UseConsole()
+                        .UseStorage(new MySqlStorage(
+                            appConfig.GetConnectionString(MagicStrings.HangfireConnectionName),
+                            new MySqlStorageOptions
+                            {
+                                TransactionIsolationLevel = IsolationLevel.ReadCommitted,
+                                QueuePollInterval = TimeSpan.FromSeconds(3),
+                                JobExpirationCheckInterval = TimeSpan.FromHours(1),
+                                CountersAggregateInterval = TimeSpan.FromMinutes(5),
+                                PrepareSchemaIfNecessary = true,
+                                DashboardJobListLimit = 50000,
+                                TransactionTimeout = TimeSpan.FromMinutes(10),
+                                TablesPrefix = "hangfire"
+                            }))
+                        .WithJobExpirationTimeout(TimeSpan.FromDays(30)));
 
                 break;
 
