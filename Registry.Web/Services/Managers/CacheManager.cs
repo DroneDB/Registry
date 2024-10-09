@@ -21,7 +21,7 @@ namespace Registry.Web.Services.Managers
 
         private readonly ObjectCache _cache;
 
-        private readonly TimeSpan DefaultCacheExpiration = new(0, 30, 0);
+        private readonly TimeSpan _defaultCacheExpiration = new(0, 30, 0);
 
         private readonly DictionaryEx<string, Carrier> _providers = new();
 
@@ -34,7 +34,7 @@ namespace Registry.Web.Services.Managers
         {
             _providers.Add(seed, new Carrier
             {
-                Expiration = expiration ?? DefaultCacheExpiration, 
+                Expiration = expiration ?? _defaultCacheExpiration,
                 GetData = getData
             });
         }
@@ -46,20 +46,35 @@ namespace Registry.Web.Services.Managers
 
         public static string MakeKey(string seed, string category, object[] parameters)
         {
-            return parameters == null ? $"{seed}-{category}" : $"{seed}-{category}:{string.Join(",", parameters.Select(p => p.ToString()))}";
+            return parameters == null
+                ? $"{seed}-{category}"
+                : $"{seed}-{category}:{string.Join(",", parameters.Select(p => p.ToString()))}";
         }
-        
+
         public void Remove(string seed, string category, params object[] parameters)
         {
-            if (seed == null) throw new ArgumentNullException(nameof(seed));
-            if (category == null) throw new ArgumentNullException(nameof(category));
-            
+            ArgumentNullException.ThrowIfNull(seed);
+            ArgumentNullException.ThrowIfNull(category);
+
             _cache.Remove(MakeKey(seed, category, parameters));
+        }
+
+        public bool IsRegistered(string seed)
+        {
+            return _providers.ContainsKey(seed);
+        }
+
+        public bool IsCached(string seed, string category, params object[] parameters)
+        {
+            ArgumentNullException.ThrowIfNull(seed);
+            ArgumentNullException.ThrowIfNull(category);
+
+            return _cache.Contains(MakeKey(seed, category, parameters));
         }
 
         public async Task<string> Get(string seed, string category, params object[] parameters)
         {
-            if (seed == null) throw new ArgumentNullException(nameof(seed));
+            ArgumentNullException.ThrowIfNull(seed);
 
             if (!_providers.TryGetValue(seed, out var carrier))
                 throw new ArgumentException("No provider registered for seed: " + seed);
@@ -87,7 +102,33 @@ namespace Registry.Web.Services.Managers
 
             return (string)_cache.Get(key);
         }
-        
+
+        public async Task<string> GetOrFail(string seed, string category, params object[] parameters)
+        {
+            ArgumentNullException.ThrowIfNull(seed);
+
+            if (!_providers.TryGetValue(seed, out var carrier))
+                throw new ArgumentException("No provider registered for seed: " + seed);
+
+            var key = MakeKey(seed, category, parameters);
+
+            var res = _cache.Get(key);
+
+            return (string)res;
+
+        }
+
+        public void Set(string seed, string category, string data, params object[] parameters)
+        {
+            ArgumentNullException.ThrowIfNull(seed);
+            ArgumentNullException.ThrowIfNull(category);
+
+            var key = MakeKey(seed, category, parameters);
+            var policy = new CacheItemPolicy { SlidingExpiration = _providers[seed].Expiration };
+
+            _cache.Set(key, data, policy);
+        }
+
         public Task Clear(string seed, string category = null)
         {
             return Task.Run(() =>
@@ -97,8 +138,7 @@ namespace Registry.Web.Services.Managers
 
                 foreach (var key in keys)
                     _cache.Remove(key);
-            });        
+            });
         }
-
     }
 }

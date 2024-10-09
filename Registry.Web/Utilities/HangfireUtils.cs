@@ -39,6 +39,29 @@ namespace Registry.Web.Utilities
             writeLine("Done build pending");
         }
 
+        public static void GenerateThumbnailWrapper(IDDB ddb, string path, int size, string dest,
+            PerformContext context)
+        {
+            Action<string> writeLine = context != null ? context.WriteLine : Log.Information;
+
+            writeLine($"In GenerateThumbnailWrapper('{ddb.DatasetFolderPath}', '{path}', '{size}', '{dest}')");
+
+            writeLine("Running generate thumbnail");
+            var result = ddb.GenerateThumbnail(path, size);
+
+            if (result != null)
+            {
+                writeLine("Saving thumbnail");
+                File.WriteAllBytes(dest, result);
+            }
+            else
+            {
+                writeLine("Thumbnail generation failed");
+            }
+
+            writeLine("Done generate thumbnail");
+        }
+
         public static void SafeDelete(string path, PerformContext context)
         {
             Action<string> writeLine = context != null ? context.WriteLine : Log.Information;

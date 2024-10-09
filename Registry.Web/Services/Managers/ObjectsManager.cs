@@ -70,12 +70,12 @@ namespace Registry.Web.Services.Managers
             bool recursive = false, EntryType? type = null)
         {
             var ds = _utils.GetDataset(orgSlug, dsSlug);
-            
+
             _logger.LogInformation("In List('{OrgSlug}/{DsSlug}')", orgSlug, dsSlug);
 
             if (!await _authManager.RequestAccess(ds, AccessType.Read))
                 throw new UnauthorizedException("The current user is not allowed to list this dataset");
-            
+
             var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
 
             _logger.LogInformation("Searching in '{Path}'", path);
@@ -84,7 +84,7 @@ namespace Registry.Web.Services.Managers
 
             if (type != null)
                 entities = entities.Where(item => item.Type == type);
-            
+
             var files = entities.Select(item => item.ToDto()).ToArray();
 
             _logger.LogInformation("Found {FilesCount} objects", files.Length);
@@ -96,9 +96,9 @@ namespace Registry.Web.Services.Managers
             string path = null, bool recursive = true, EntryType? type = null)
         {
             var ds = _utils.GetDataset(orgSlug, dsSlug);
-            
+
             _logger.LogInformation("In Search('{OrgSlug}/{DsSlug}')", orgSlug, dsSlug);
-            
+
             if (!await _authManager.RequestAccess(ds, AccessType.Read))
                 throw new UnauthorizedException("The current user is not allowed to search this dataset");
 
@@ -107,10 +107,10 @@ namespace Registry.Web.Services.Managers
             _logger.LogInformation("Searching in '{Path}' -> {Query} ({Recursive}", path, query, recursive ? 'r' : 'n');
 
             var entities = await ddb.SearchAsync(path, recursive);
-            
+
             if (type != null)
                 entities = entities.Where(item => item.Type == type);
-            
+
             var files = (from entry in entities
                 let name = Path.GetFileName(entry.Path)
                 where FileSystemName.MatchesSimpleExpression(query, name)
@@ -129,7 +129,7 @@ namespace Registry.Web.Services.Managers
 
             if (string.IsNullOrWhiteSpace(path))
                 throw new ArgumentException("Path should not be null");
-            
+
             if (!await _authManager.RequestAccess(ds, AccessType.Read))
                 throw new UnauthorizedException("The current user is not allowed to read this dataset");
 
@@ -139,7 +139,7 @@ namespace Registry.Web.Services.Managers
         private async Task<StorageEntryDto> InternalGet(string orgSlug, Guid internalRef, string path)
         {
             var ddb = _ddbManager.Get(orgSlug, internalRef);
-            
+
             var entry = await ddb.GetEntryAsync(path);
 
             if (entry == null)
@@ -233,7 +233,8 @@ namespace Registry.Web.Services.Managers
                 var jobId = _backgroundJob.Enqueue(() => HangfireUtils.BuildWrapper(ddb, path, false, null));
 
                 _logger.LogInformation("Background job id is {JobId}", jobId);
-            }else if (await ddb.IsBuildPendingAsync())
+            }
+            else if (await ddb.IsBuildPendingAsync())
             {
                 _logger.LogInformation("Items are pending build, retriggering build");
 
@@ -284,17 +285,16 @@ namespace Registry.Web.Services.Managers
             {
                 case EntryType.Directory:
                 {
-                
                     var sourceLocalFilePath = ddb.GetLocalPath(source);
                     var destLocalFilePath = ddb.GetLocalPath(dest);
-                    
+
                     _logger.LogInformation("Moving directory '{Source}' to '{Dest}'", source, dest);
-                
+
                     CommonUtils.EnsureSafePath(destLocalFilePath);
                     _fs.FolderMove(sourceLocalFilePath, destLocalFilePath);
-                    
+
                     _logger.LogInformation("FS move OK");
-                    
+
                     break;
                 }
                 case EntryType.DroneDB:
@@ -305,12 +305,12 @@ namespace Registry.Web.Services.Managers
                     var destLocalFilePath = ddb.GetLocalPath(dest);
 
                     _logger.LogInformation("Moving file '{Source}' to '{Dest}'", source, dest);
-                    
+
                     CommonUtils.EnsureSafePath(destLocalFilePath);
                     _fs.Move(sourceLocalFilePath, destLocalFilePath);
 
                     _logger.LogInformation("FS move OK");
-                    
+
                     break;
                 }
             }
@@ -394,7 +394,7 @@ namespace Registry.Web.Services.Managers
             _ddbManager.Delete(orgSlug, ds.InternalRef);
         }
 
-        public async Task<StorageFileDto> GenerateThumbnail(string orgSlug, string dsSlug, string path, int? size,
+        public async Task<StorageFileDto> GenerateThumbnail(string orgSlug, string dsSlug, string path, int? sizeRaw,
             bool recreate = false)
         {
             var ds = _utils.GetDataset(orgSlug, dsSlug);
@@ -403,7 +403,7 @@ namespace Registry.Web.Services.Managers
 
             if (!await _authManager.RequestAccess(ds, AccessType.Read))
                 throw new UnauthorizedException("The current user is not allowed to read dataset");
-            
+
             // Fix fox '/img.png' -> 'img.png'
             if (path.StartsWith('/')) path = path[1..];
 
@@ -416,8 +416,47 @@ namespace Registry.Web.Services.Managers
             var sourcePath = GetBuildSource(entry);
             var localPath = ddb.GetLocalPath(sourcePath);
 
-            var thumbPath = await _cacheManager.Get(MagicStrings.ThumbnailCacheSeed, entry.Hash, ddb, localPath,
-                size ?? DefaultThumbnailSize);
+            if (!File.Exists(localPath))
+            {
+                _logger.LogWarning("Cannot find source file '{LocalPath}'", localPath);
+                return null;
+            }
+
+            var size = sizeRaw ?? DefaultThumbnailSize;
+
+            var tmpPath = Path.Combine(Path.GetTempPath(), entry.Hash);
+
+            string thumbPath;
+
+            if (CommonUtils.IsFileAccessable(tmpPath))
+            {
+                _logger.LogInformation("Thumbnail already exists in temp folder, let's cache it");
+
+                _cacheManager.Set(MagicStrings.ThumbnailCacheSeed, entry.Hash, tmpPath, ddb, localPath, size);
+
+                if (!CommonUtils.SafeDelete(tmpPath))
+                    _logger.LogWarning("Cannot delete temp file '{TmpPath}'", tmpPath);
+
+                thumbPath = await _cacheManager.Get(MagicStrings.ThumbnailCacheSeed, entry.Hash, ddb, localPath, size);
+            }
+            else
+            {
+                _logger.LogInformation("Thumbnail not found in temp folder, let's check the cache");
+
+                thumbPath = await _cacheManager.GetOrFail(MagicStrings.ThumbnailCacheSeed, entry.Hash, ddb, localPath,
+                    size);
+
+                if (thumbPath == null)
+                {
+                    _logger.LogInformation("Thumbnail not found in cache, generating in the background");
+                    _backgroundJob.Enqueue(() =>
+                        HangfireUtils.GenerateThumbnailWrapper(ddb, localPath, size, tmpPath, null));
+
+                    return null;
+                }
+
+                _logger.LogInformation("Thumbnail found in cache, returning it");
+            }
 
             return new StorageEntryDto
             {
@@ -433,7 +472,7 @@ namespace Registry.Web.Services.Managers
             var ds = _utils.GetDataset(orgSlug, dsSlug);
 
             _logger.LogInformation("In GenerateTile('{OrgSlug}/{DsSlug}')", orgSlug, dsSlug);
-            
+
             if (!await _authManager.RequestAccess(ds, AccessType.Read))
                 throw new UnauthorizedException("The current user is not allowed to read dataset");
 
@@ -479,7 +518,7 @@ namespace Registry.Web.Services.Managers
 
             if (!await _authManager.RequestAccess(ds, AccessType.Read))
                 throw new UnauthorizedException("The current user is not allowed to read dataset");
-            
+
             EnsurePathsValidity(orgSlug, ds.InternalRef, paths);
 
             return GetFileStreamDescriptor(orgSlug, dsSlug, ds.InternalRef, paths);
@@ -642,7 +681,7 @@ namespace Registry.Web.Services.Managers
             var ds = _utils.GetDataset(orgSlug, dsSlug);
 
             _logger.LogInformation("In GetDdb('{OrgSlug}/{DsSlug}')", orgSlug, dsSlug);
-            
+
             if (!await _authManager.RequestAccess(ds, AccessType.Read))
                 throw new UnauthorizedException("The current user is not allowed to read dataset");
 
@@ -701,7 +740,7 @@ namespace Registry.Web.Services.Managers
                 path);
 
             var ds = _utils.GetDataset(orgSlug, dsSlug);
-            
+
             if (!await _authManager.RequestAccess(ds, AccessType.Read))
                 throw new UnauthorizedException("The current user is not allowed to read dataset");
 
@@ -728,15 +767,14 @@ namespace Registry.Web.Services.Managers
 
         public async Task<bool> CheckBuildFile(string orgSlug, string dsSlug, string hash, string path)
         {
-
             var ds = _utils.GetDataset(orgSlug, dsSlug);
-            
+
             _logger.LogInformation("In CheckBuildFile('{OrgSlug}/{DsSlug}', '{Hash}', '{Path}')", orgSlug, dsSlug, hash,
                 path);
 
             if (!await _authManager.RequestAccess(ds, AccessType.Read))
                 throw new UnauthorizedException("The current user is not allowed to read dataset");
-            
+
             EnsureNoWildcardOrEmptyPaths(path);
 
             Debug.Assert(path != null, nameof(path) + " != null");
@@ -755,12 +793,12 @@ namespace Registry.Web.Services.Managers
             var ds = _utils.GetDataset(orgSlug, dsSlug);
 
             _logger.LogInformation("In GetEntryType('{OrgSlug}/{DsSlug}')", orgSlug, dsSlug);
-            
+
             if (!await _authManager.RequestAccess(ds, AccessType.Read))
                 throw new UnauthorizedException("The current user is not allowed to read dataset");
-            
+
             var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
-            
+
             var entry = await ddb.GetEntryAsync(path);
 
             return entry?.Type;

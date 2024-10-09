@@ -366,8 +366,8 @@ namespace Registry.Common
                     }
                 }
 
-                if (!entries.Any()) 
-                    return Array.Empty<string>();
+                if (entries.Count == 0)
+                    return [];
 
                 Thread.Sleep(delay);
             }
@@ -375,8 +375,8 @@ namespace Registry.Common
             return entries.ToArray();
         }
 
-        private static readonly HashSet<string> _compressibleMimeTypes = new()
-        {
+        private static readonly HashSet<string> AddCompressibleMimeTypes =
+        [
             "text/html",
             "text/css",
             "text/plain",
@@ -408,14 +408,14 @@ namespace Registry.Common
             "font/eot",
             "font/otf",
             "font/opentype"
-        };
+        ];
 
         public static CompressionLevel GetCompressionLevel(string path)
         {
             if (!MimeTypes.TryGetMimeType(path, out var mimeType))
                 return CompressionLevel.NoCompression;
 
-            return _compressibleMimeTypes.Contains(mimeType)
+            return AddCompressibleMimeTypes.Contains(mimeType)
                 ? CompressionLevel.Optimal
                 : CompressionLevel.NoCompression;
         }
@@ -555,6 +555,20 @@ namespace Registry.Common
             }
 
             return null;
+        }
+
+        public static bool IsFileAccessable(string path)
+        {
+            try
+            {
+                if (!File.Exists(path)) return false;
+                using var fs = File.Open(path, FileMode.Open, FileAccess.Read, FileShare.None);
+                return true;
+            }
+            catch
+            {
+                return false;
+            }
         }
         
         
