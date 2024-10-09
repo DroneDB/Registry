@@ -24,8 +24,16 @@
       "environmentVariables": {
         "ASPNETCORE_ENVIRONMENT": "Development"
       },
-      "commandLineArgs": "C:\\registry-data",
+      "commandLineArgs": "C:\\registry-data -t WebServer",
       "applicationUrl": "http://0.0.0.0:5000"
+    },
+    "Processing node": {
+      "commandName": "Project",
+      "launchBrowser": false,
+      "environmentVariables": {
+        "ASPNETCORE_ENVIRONMENT": "Development"
+      },
+      "commandLineArgs": "C:\\registry-data -t ProcessingNode"
     }
   }
 }

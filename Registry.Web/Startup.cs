@@ -55,12 +55,14 @@ namespace Registry.Web
 {
     public class Startup
     {
+
+        private IConfiguration Configuration { get; }
+
+
         public Startup(IConfiguration configuration)
         {
             Configuration = configuration;
         }
-
-        private IConfiguration Configuration { get; }
 
         public void ConfigureServices(IServiceCollection services)
         {
@@ -180,8 +182,13 @@ namespace Registry.Web
             });
 
             services.AddMemoryCache();
-            RegisterCacheProvider(services, appSettings);
-            RegisterHangfireProvider(services, appSettings);
+            services.AddCacheProvider(appSettings);
+            services.AddHangfireProvider(appSettings, Configuration);
+
+            var instanceType = Configuration.GetValue<InstanceType>("InstanceType");
+
+            if (instanceType == InstanceType.Default)
+                services.AddHangfireServer();
 
             services.AddHealthChecks()
                 .AddCheck<CacheHealthCheck>("Cache health check", null, ["service"])
@@ -542,95 +549,6 @@ namespace Registry.Web
             await CreateDefaultAdmin(registryDbContext, serviceScope.ServiceProvider);
         }
 
-        private void RegisterHangfireProvider(IServiceCollection services, AppSettings appSettings)
-        {
-            switch (appSettings.HangfireProvider)
-            {
-                case HangfireProvider.InMemory:
-
-                    services.AddHangfire(configuration => configuration
-                        .SetDataCompatibilityLevel(CompatibilityLevel.Version_170)
-                        .UseSimpleAssemblyNameTypeSerializer()
-                        .UseRecommendedSerializerSettings()
-                        .UseConsole()
-                        .UseInMemoryStorage());
-
-                    break;
-
-                case HangfireProvider.Mysql:
-
-                    services.AddHangfire(configuration => configuration
-                        .SetDataCompatibilityLevel(CompatibilityLevel.Version_170)
-                        .UseSimpleAssemblyNameTypeSerializer()
-                        .UseRecommendedSerializerSettings()
-                        .UseConsole()
-                        .UseStorage(new MySqlStorage(
-                            Configuration.GetConnectionString(MagicStrings.HangfireConnectionName),
-                            new MySqlStorageOptions
-                            {
-                                TransactionIsolationLevel = IsolationLevel.ReadCommitted,
-                                QueuePollInterval = TimeSpan.FromSeconds(15),
-                                JobExpirationCheckInterval = TimeSpan.FromHours(1),
-                                CountersAggregateInterval = TimeSpan.FromMinutes(5),
-                                PrepareSchemaIfNecessary = true,
-                                DashboardJobListLimit = 50000,
-                                TransactionTimeout = TimeSpan.FromMinutes(10),
-                                TablesPrefix = "hangfire"
-                            }))
-                        .WithJobExpirationTimeout(TimeSpan.FromDays(30)));
-
-                    break;
-
-                default:
-                    throw new InvalidOperationException(
-                        $"Unsupported hangfire provider: '{appSettings.HangfireProvider}'");
-            }
-
-            if (!appSettings.DisableProcessing)
-                // Add the processing server as IHostedService
-                services.AddHangfireServer();
-
-            // Specify the global number of retries
-            GlobalJobFilters.Filters.Add(new AutomaticRetryAttribute { Attempts = 1 });
-        }
-
-        private static void RegisterCacheProvider(IServiceCollection services, AppSettings appSettings)
-        {
-            if (appSettings.CacheProvider == null)
-            {
-                // Use memory caching
-                services.AddDistributedMemoryCache();
-                return;
-            }
-
-            switch (appSettings.CacheProvider.Type)
-            {
-                case CacheType.InMemory:
-
-                    services.AddDistributedMemoryCache();
-
-                    break;
-
-                case CacheType.Redis:
-
-                    var settings = appSettings.CacheProvider.Settings.ToObject<RedisProviderSettings>();
-
-                    if (settings == null)
-                        throw new ArgumentException("Invalid redis cache provider settings");
-
-                    services.AddStackExchangeRedisCache(options =>
-                    {
-                        options.Configuration = settings.InstanceAddress;
-                        options.InstanceName = settings.InstanceName;
-                    });
-
-                    break;
-
-                default:
-                    throw new InvalidOperationException(
-                        $"Unsupported caching provider: '{(int)appSettings.CacheProvider.Type}'");
-            }
-        }
 
         private void ConfigureDbProvider<T>(IServiceCollection services, DbProvider provider,
             string connectionStringName, string migrationsNamespace) where T : DbContext
