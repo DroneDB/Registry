@@ -18,7 +18,16 @@
       },
       "applicationUrl": "http://0.0.0.0:5000"
     },
-    "Registry.Web": {
+    "Default": {
+      "commandName": "Project",
+      "launchBrowser": true,
+      "environmentVariables": {
+        "ASPNETCORE_ENVIRONMENT": "Development"
+      },
+      "commandLineArgs": "C:\\registry-data",
+      "applicationUrl": "http://0.0.0.0:5000"
+    },
+    "WebServer": {
       "commandName": "Project",
       "launchBrowser": true,
       "environmentVariables": {
