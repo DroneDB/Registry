@@ -242,6 +242,17 @@ namespace Registry.Web.Services.Managers
 
                 _logger.LogInformation("Background job id is {JobId}", jobId);
             }
+            else if (entry.Type is EntryType.Image or EntryType.GeoImage)
+            {
+                _logger.LogInformation("This item is an image, generate thumbnail");
+
+                var tmpPath = Path.Combine(Path.GetTempPath(), entry.Hash);
+
+                var jobId = _backgroundJob.Enqueue(() =>
+                    HangfireUtils.GenerateThumbnailWrapper(ddb, localFilePath, DefaultThumbnailSize, tmpPath, null));
+
+                _logger.LogInformation("Background job id is {JobId}", jobId);
+            }
 
             return entry.ToDto();
         }
