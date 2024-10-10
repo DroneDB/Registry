@@ -426,36 +426,51 @@ namespace Registry.Web.Services.Managers
 
             var tmpPath = Path.Combine(Path.GetTempPath(), entry.Hash);
 
-            string thumbPath;
+            string thumbPath = null;
 
-            if (CommonUtils.IsFileAccessable(tmpPath))
+            if (!recreate)
             {
-                _logger.LogInformation("Thumbnail already exists in temp folder, let's cache it");
-
-                _cacheManager.Set(MagicStrings.ThumbnailCacheSeed, entry.Hash, tmpPath, ddb, localPath, size);
-
-                if (!CommonUtils.SafeDelete(tmpPath))
-                    _logger.LogWarning("Cannot delete temp file '{TmpPath}'", tmpPath);
-
-                thumbPath = await _cacheManager.Get(MagicStrings.ThumbnailCacheSeed, entry.Hash, ddb, localPath, size);
-            }
-            else
-            {
-                _logger.LogInformation("Thumbnail not found in temp folder, let's check the cache");
-
-                thumbPath = await _cacheManager.GetOrFail(MagicStrings.ThumbnailCacheSeed, entry.Hash, ddb, localPath,
-                    size);
-
-                if (thumbPath == null)
+                // Only check cache and temp folder if recreate is false
+                if (CommonUtils.IsFileAccessable(tmpPath))
                 {
-                    _logger.LogInformation("Thumbnail not found in cache, generating in the background");
-                    _backgroundJob.Enqueue(() =>
-                        HangfireUtils.GenerateThumbnailWrapper(ddb, localPath, size, tmpPath, null));
+                    _logger.LogInformation("Thumbnail already exists in temp folder, let's cache it");
 
-                    return null;
+                    _cacheManager.Set(MagicStrings.ThumbnailCacheSeed, entry.Hash, tmpPath, ddb, localPath, size);
+
+                    if (!CommonUtils.SafeDelete(tmpPath))
+                        _logger.LogWarning("Cannot delete temp file '{TmpPath}'", tmpPath);
+
+                    thumbPath = await _cacheManager.Get(MagicStrings.ThumbnailCacheSeed, entry.Hash, ddb, localPath,
+                        size);
                 }
+                else
+                {
+                    _logger.LogInformation("Thumbnail not found in temp folder, let's check the cache");
 
-                _logger.LogInformation("Thumbnail found in cache, returning it");
+                    thumbPath = await _cacheManager.GetOrFail(MagicStrings.ThumbnailCacheSeed, entry.Hash, ddb,
+                        localPath,
+                        size);
+
+                    if (thumbPath == null)
+                    {
+                        _logger.LogInformation("Thumbnail not found in cache, generating in the background");
+                        _backgroundJob.Enqueue(() =>
+                            HangfireUtils.GenerateThumbnailWrapper(ddb, localPath, size, tmpPath, null));
+
+                        return null;
+                    }
+
+                    _logger.LogInformation("Thumbnail found in cache, returning it");
+                }
+            }
+
+            if (recreate || thumbPath == null)
+            {
+                // Generate thumbnail if recreate is true or thumbnail not found
+                _logger.LogInformation("Generating thumbnail due to recreate flag or cache miss");
+                _backgroundJob.Enqueue(() =>
+                    HangfireUtils.GenerateThumbnailWrapper(ddb, localPath, size, tmpPath, null));
+                return null;
             }
 
             return new StorageEntryDto
@@ -465,6 +480,7 @@ namespace Registry.Web.Services.Managers
                 ContentType = "image/jpeg"
             };
         }
+
 
         public async Task<StorageFileDto> GenerateTile(string orgSlug, string dsSlug, string path, int tz, int tx,
             int ty, bool retina)
