@@ -24,6 +24,7 @@
         <Content Remove="appsettings-default.json" />
         <EmbeddedResource Include="appsettings-default.json" />
         <None Remove="ClientApp.zip" />
+        <None Remove="Properties\PublishProfiles\win-arm.pubxml" />
     </ItemGroup>
 
     <ItemGroup>

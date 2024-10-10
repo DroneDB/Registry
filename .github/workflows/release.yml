@@ -39,7 +39,6 @@ jobs:
           cd registry        
           pwd
           dotnet publish -p:PublishProfile=win-x64.pubxml Registry.Web
-          dotnet publish -p:PublishProfile=win-arm.pubxml Registry.Web
           dotnet publish -p:PublishProfile=win-arm64.pubxml Registry.Web
           dotnet publish -p:PublishProfile=linux-x64.pubxml Registry.Web
           dotnet publish -p:PublishProfile=linux-arm.pubxml Registry.Web
@@ -48,8 +47,6 @@ jobs:
           
       - name: Zip win-x64
         run: cd registry/Registry.Web/bin/Release/net7.0/publish/win-x64/ && zip -r ../../../../../../../Registry-Win64.zip *
-      - name: Zip win-arm
-        run: cd registry/Registry.Web/bin/Release/net7.0/publish/win-arm/ && zip -r ../../../../../../../Registry-WinArm.zip *
       - name: Zip win-arm64
         run: cd registry/Registry.Web/bin/Release/net7.0/publish/win-arm64/ && zip -r ../../../../../../../Registry-WinArm64.zip *
       - name: Zip linux-x64
@@ -69,7 +66,6 @@ jobs:
             Release.txt
             LICENSE.md
             Registry-Win64.zip
-            Registry-WinArm.zip
             Registry-WinArm64.zip
             Registry-Linux64.zip
             Registry-LinuxArm.zip
