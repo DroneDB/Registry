@@ -55,12 +55,14 @@ namespace Registry.Web
 {
     public class Startup
     {
+
+        private IConfiguration Configuration { get; }
+
+
         public Startup(IConfiguration configuration)
         {
             Configuration = configuration;
         }
-
-        private IConfiguration Configuration { get; }
 
         public void ConfigureServices(IServiceCollection services)
         {
@@ -180,20 +182,25 @@ namespace Registry.Web
             });
 
             services.AddMemoryCache();
-            RegisterCacheProvider(services, appSettings);
-            RegisterHangfireProvider(services, appSettings);
+            services.AddCacheProvider(appSettings);
+            services.AddHangfireProvider(appSettings, Configuration);
+
+            var instanceType = Configuration.GetValue<InstanceType>("InstanceType");
+
+            if (instanceType == InstanceType.Default)
+                services.AddHangfireServer();
 
             services.AddHealthChecks()
-                .AddCheck<CacheHealthCheck>("Cache health check", null, new[] { "service" })
-                .AddCheck<DdbHealthCheck>("DroneDB health check", null, new[] { "service" })
-                .AddCheck<UserManagerHealthCheck>("User manager health check", null, new[] { "database" })
-                .AddDbContextCheck<RegistryContext>("Registry database health check", null, new[] { "database" })
+                .AddCheck<CacheHealthCheck>("Cache health check", null, ["service"])
+                .AddCheck<DdbHealthCheck>("DroneDB health check", null, ["service"])
+                .AddCheck<UserManagerHealthCheck>("User manager health check", null, ["database"])
+                .AddDbContextCheck<RegistryContext>("Registry database health check", null, ["database"])
                 .AddDbContextCheck<ApplicationDbContext>("Registry identity database health check", null,
-                    new[] { "database" })
+                    ["database"])
                 .AddDiskSpaceHealthCheck(appSettings.DatasetsPath, "Ddb storage path space health check", null,
-                    new[] { "storage" })
+                    ["storage"])
                 .AddHangfire(options => { options.MinimumAvailableServers = 1; }, "Hangfire health check", null,
-                    new[] { "database" });
+                    ["database"]);
 
             /*
              * NOTE about services lifetime:
@@ -227,7 +234,7 @@ namespace Registry.Web
             services.AddScoped<ISystemManager, SystemManager>();
             services.AddScoped<IBackgroundJobsProcessor, BackgroundJobsProcessor>();
             services.AddScoped<IMetaManager, Services.Managers.MetaManager>();
-            
+
             services.AddScoped<IConfigurationHelper<AppSettings>, ConfigurationHelper>(_ =>
                 new ConfigurationHelper(MagicStrings.AppSettingsFileName));
 
@@ -332,7 +339,7 @@ namespace Registry.Web
 
             app.UseHangfireDashboard(MagicStrings.HangFireUrl, new DashboardOptions
             {
-                AsyncAuthorization = new[] { new HangfireAuthorizationFilter() }
+                AsyncAuthorization = [new HangfireAuthorizationFilter()]
             });
 
             app.UseEndpoints(endpoints =>
@@ -384,7 +391,22 @@ namespace Registry.Web
             SetupDatabase(app).Wait();
             SetupFileCache(app);
 
+            SetupCleanupJobs(app);
+
             PrintStartupInfo(app);
+        }
+
+        private static void SetupCleanupJobs(IApplicationBuilder app)
+        {
+            var manager = app.ApplicationServices.GetService<IRecurringJobManager>();
+
+            if (manager == null)
+                throw new InvalidOperationException("Cannot get recurring job manager from service provider");
+
+            // Cleanup expired jobs
+            manager.AddOrUpdate("cleanup-expired-jobs",
+                () => HangfireUtils.CleanupExpiredJobs(null),
+                Cron.Daily);
         }
 
         private static void PrintStartupInfo(IApplicationBuilder app)
@@ -431,7 +453,7 @@ namespace Registry.Web
             if (url != null)
             {
                 var builder = new UriBuilder(url);
-                
+
                 if (builder.Host == "0.0.0.0") builder.Host = "localhost";
                 var baseUri = builder.Uri;
 
@@ -440,13 +462,13 @@ namespace Registry.Web
 
                 var swaggerUri = new Uri(baseUri, MagicStrings.SwaggerUrl);
                 Console.WriteLine($" ?> Swagger: {swaggerUri}");
-                
+
                 var versionUri = new Uri(baseUri, MagicStrings.VersionUrl);
                 Console.WriteLine($" ?> Version: {versionUri}");
 
                 var quickHealthUri = new Uri(baseUri, MagicStrings.QuickHealthUrl);
                 Console.WriteLine($" ?> (req auth) Quick Health: {quickHealthUri}");
-                
+
                 var healthUri = new Uri(baseUri, MagicStrings.HealthUrl);
                 Console.WriteLine($" ?> (req auth) Health: {healthUri}");
 
@@ -527,93 +549,6 @@ namespace Registry.Web
             await CreateDefaultAdmin(registryDbContext, serviceScope.ServiceProvider);
         }
 
-        private void RegisterHangfireProvider(IServiceCollection services, AppSettings appSettings)
-        {
-            switch (appSettings.HangfireProvider)
-            {
-                case HangfireProvider.InMemory:
-
-                    services.AddHangfire(configuration => configuration
-                        .SetDataCompatibilityLevel(CompatibilityLevel.Version_170)
-                        .UseSimpleAssemblyNameTypeSerializer()
-                        .UseRecommendedSerializerSettings()
-                        .UseConsole()
-                        .UseInMemoryStorage());
-
-                    break;
-
-                case HangfireProvider.Mysql:
-
-                    services.AddHangfire(configuration => configuration
-                        .SetDataCompatibilityLevel(CompatibilityLevel.Version_170)
-                        .UseSimpleAssemblyNameTypeSerializer()
-                        .UseRecommendedSerializerSettings()
-                        .UseConsole()
-                        .UseStorage(new MySqlStorage(
-                            Configuration.GetConnectionString(MagicStrings.HangfireConnectionName),
-                            new MySqlStorageOptions
-                            {
-                                TransactionIsolationLevel = IsolationLevel.ReadCommitted,
-                                QueuePollInterval = TimeSpan.FromSeconds(15),
-                                JobExpirationCheckInterval = TimeSpan.FromHours(1),
-                                CountersAggregateInterval = TimeSpan.FromMinutes(5),
-                                PrepareSchemaIfNecessary = true,
-                                DashboardJobListLimit = 50000,
-                                TransactionTimeout = TimeSpan.FromMinutes(10),
-                                TablesPrefix = "hangfire"
-                            })));
-
-                    break;
-
-                default:
-                    throw new InvalidOperationException(
-                        $"Unsupported hangfire provider: '{appSettings.HangfireProvider}'");
-            }
-
-            // Add the processing server as IHostedService
-            services.AddHangfireServer();
-            
-            // Specify the global number of retries
-            GlobalJobFilters.Filters.Add(new AutomaticRetryAttribute { Attempts = 1 });
-        }
-
-        private static void RegisterCacheProvider(IServiceCollection services, AppSettings appSettings)
-        {
-            if (appSettings.CacheProvider == null)
-            {
-                // Use memory caching
-                services.AddDistributedMemoryCache();
-                return;
-            }
-
-            switch (appSettings.CacheProvider.Type)
-            {
-                case CacheType.InMemory:
-
-                    services.AddDistributedMemoryCache();
-
-                    break;
-
-                case CacheType.Redis:
-
-                    var settings = appSettings.CacheProvider.Settings.ToObject<RedisProviderSettings>();
-
-                    if (settings == null)
-                        throw new ArgumentException("Invalid redis cache provider settings");
-
-                    services.AddStackExchangeRedisCache(options =>
-                    {
-                        options.Configuration = settings.InstanceAddress;
-                        options.InstanceName = settings.InstanceName;
-                    });
-
-                    break;
-
-                default:
-                    throw new InvalidOperationException(
-                        $"Unsupported caching provider: '{(int)appSettings.CacheProvider.Type}'");
-            }
-        }
 
         private void ConfigureDbProvider<T>(IServiceCollection services, DbProvider provider,
             string connectionStringName, string migrationsNamespace) where T : DbContext

@@ -43,7 +43,7 @@ namespace Registry.Web.Controllers
                 Response.StatusCode = 200;
                 Response.ContentType = res.ContentType;
 
-                Response.Headers.Add("Content-Disposition", $"attachment; filename=\"{res.Name}\"");
+                Response.Headers.Append("Content-Disposition", $"attachment; filename=\"{res.Name}\"");
 
                 await res.CopyToAsync(Response.Body);
 
@@ -68,7 +68,7 @@ namespace Registry.Web.Controllers
 
                 var res = await _objectsManager.GenerateThumbnail(orgSlug, dsSlug, path, size);
 
-                return PhysicalFile(res.PhysicalPath, res.ContentType, res.Name, true);
+                return res == null ? NotFound() : PhysicalFile(res.PhysicalPath, res.ContentType, res.Name, true);
             }
             catch (Exception ex)
             {
@@ -126,7 +126,7 @@ namespace Registry.Web.Controllers
                 Response.StatusCode = 200;
                 Response.ContentType = res.ContentType;
 
-                Response.Headers.Add("Content-Disposition",
+                Response.Headers.Append("Content-Disposition",
                     isInline ? "inline" : $"attachment; filename=\"{res.Name}\"");
 
                 await res.CopyToAsync(Response.Body);

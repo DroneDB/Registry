@@ -26,7 +26,7 @@ jobs:
       uses: actions/setup-dotnet@v1
       with:
         dotnet-version: |
-          7.0.x
+          8.0.x
     - name: Setup Node
       uses: actions/setup-node@v3
       with:
@@ -48,5 +48,8 @@ jobs:
     - name: Install dependencies
       run: |
         cd registry
+        whereis ddb
         export PATH="$HOME/ddb/build:$PATH"
+        whereis ddb
+        ddb --version
         dotnet test -c Release --verbosity minimal

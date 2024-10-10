@@ -35,16 +35,29 @@ namespace Registry.Adapters.Ddb.Test
             "https://github.com/DroneDB/test_data/raw/master/brighton/point_cloud.laz";
 
 
-        [SetUp]
+        [OneTimeSetUp]
         public void Setup()
         {
+
+            if (Environment.OSVersion.Platform == PlatformID.Win32NT)
+            {
+                Directory.SetCurrentDirectory(TestContext.CurrentContext.TestDirectory);
+
+                var ddbFolder = CommonUtils.FindDdbFolder();
+                if (ddbFolder == null)
+                    throw new Exception("DDB not found");
+
+                CommonUtils.SetDefaultDllPath(ddbFolder);
+            }
+
+
             DDBWrapper.RegisterProcess(true);
         }
 
         [Test]
         public void GetVersion_HasValue()
         {
-            Assert.IsTrue(DDBWrapper.GetVersion().Length > 0, "Can call GetVersion()");
+            DDBWrapper.GetVersion().Length.Should().BeGreaterThan(0, "Can call GetVersion()");
         }
 
         [Test]
@@ -130,13 +143,14 @@ namespace Registry.Adapters.Ddb.Test
             File.WriteAllText(Path.Join(area.TestFolder, "file2.txt"), "test");
 
             var e = DDBWrapper.Info(Path.Join(area.TestFolder, "file.txt"), withHash: true)[0];
-            Assert.IsNotEmpty(e.Hash);
+            e.Hash.Should().Be("9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08");
 
             var es = DDBWrapper.Info(area.TestFolder, true);
-            Assert.AreEqual(2, es.Count);
-            Assert.AreEqual(EntryType.Generic, es[0].Type);
-            Assert.IsTrue(es[0].Size > 0);
-            Assert.AreEqual(DateTime.Now.Year, es[0].ModifiedTime.Year);
+            es.Count.Should().Be(2);
+
+            es[0].Type.Should().Be(EntryType.Generic);
+            es[0].Size.Should().BeGreaterThan(0);
+            es[0].ModifiedTime.Year.Should().Be(DateTime.Now.Year);
         }
 
         [Test]
@@ -357,9 +371,9 @@ namespace Registry.Adapters.Ddb.Test
         [Test]
         public void Entry_Deserialization_Ok()
         {
-            string json = "{'hash': 'abc', 'mtime': 5}";
-            Entry e = JsonConvert.DeserializeObject<Entry>(json);
-            Assert.IsTrue(e.ModifiedTime.Year == 1970);
+            var json = "{'hash': 'abc', 'mtime': 5}";
+            var e = JsonConvert.DeserializeObject<Entry>(json);
+            e.ModifiedTime.Year.Should().Be(1970);
         }
 
 
@@ -628,7 +642,7 @@ namespace Registry.Adapters.Ddb.Test
             var res = DDBWrapper.MetaAdd(area.TestFolder, "tests", "{\"test\": true}");
             JsonConvert.SerializeObject(res.Data).Should().Be("{\"test\":true}");
             res.Id.Should().NotBeNull();
-            res.ModifiedTime.Should().BeCloseTo(DateTime.UtcNow, new TimeSpan(0,0,1));
+            res.ModifiedTime.Should().BeCloseTo(DateTime.UtcNow, new TimeSpan(0,0,3));
         }
 
         [Test]

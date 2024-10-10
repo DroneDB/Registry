@@ -81,8 +81,6 @@ namespace Registry.Web.Test
         [SetUp]
         public void Setup()
         {
-            DDBWrapper.RegisterProcess(true);
-        
             _appSettingsMock = new Mock<IOptions<AppSettings>>();
             _ddbFactoryMock = new Mock<IDdbManager>();
             _authManagerMock = new Mock<IAuthManager>();
