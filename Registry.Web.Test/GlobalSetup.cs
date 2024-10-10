@@ -14,11 +14,14 @@ namespace Registry.Web.Test
         {
             Directory.SetCurrentDirectory(TestContext.CurrentContext.TestDirectory);
 
-            var ddbFolder = CommonUtils.FindDdbFolder();
-            if (ddbFolder == null)
-                throw new Exception("DDB not found");
+            if (Environment.OSVersion.Platform == PlatformID.Win32NT)
+            {
+                var ddbFolder = CommonUtils.FindDdbFolder();
+                if (ddbFolder == null)
+                    throw new Exception("DDB not found");
 
-            CommonUtils.SetDefaultDllPath(ddbFolder);
+                CommonUtils.SetDefaultDllPath(ddbFolder);
+            }
 
             DDBWrapper.RegisterProcess(true);
         }

@@ -615,7 +615,6 @@ namespace Registry.Common
 
 
         public const string DroneDBDllNameWindows = "ddb.dll";
-        public const string DroneDBLibraryNameLinux = "libddb.so";
 
         public static string FindDdbFolder()
         {
@@ -624,14 +623,10 @@ namespace Registry.Common
             if (path == null)
                 return null;
 
-            var libraryName = Environment.OSVersion.Platform == PlatformID.Win32NT
-                ? DroneDBDllNameWindows
-                : DroneDBLibraryNameLinux;
-
             var newPath = path.Split(Path.PathSeparator);
 
             var ddbFolder = newPath.FirstOrDefault(
-                p => File.Exists(Path.Combine(p, libraryName)));
+                p => File.Exists(Path.Combine(p, DroneDBDllNameWindows)));
 
             return ddbFolder;
         }

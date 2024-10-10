@@ -39,6 +39,10 @@ namespace Registry.Adapters.Ddb.Test
         public void Setup()
         {
 
+            if (Environment.OSVersion.Platform == PlatformID.Win32NT)
+            {
+                Directory.SetCurrentDirectory(TestContext.CurrentContext.TestDirectory);
+            }
             var ddbFolder = CommonUtils.FindDdbFolder();
             if (ddbFolder == null)
                 throw new Exception("DDB not found");
