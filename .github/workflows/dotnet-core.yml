@@ -48,5 +48,8 @@ jobs:
     - name: Install dependencies
       run: |
         cd registry
+        whereis ddb
         export PATH="$HOME/ddb/build:$PATH"
+        whereis ddb
+        ddb --version
         dotnet test -c Release --verbosity minimal
