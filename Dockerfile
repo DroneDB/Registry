@@ -5,17 +5,11 @@ LABEL Author="Luca Di Leo <ldileo@digipa.it>"
 # Prerequisites
 ENV TZ=Europe/Rome
 RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone
-RUN apt-get update && apt-get install -y --fix-missing --no-install-recommends build-essential software-properties-common gpg-agent
-RUN add-apt-repository -y ppa:ubuntugis/ubuntugis-unstable
-RUN apt-get install -y --fix-missing --no-install-recommends ca-certificates cmake git checkinstall sqlite3 spatialite-bin libgeos-dev libgdal-dev g++-10 gcc-10 pdal libpdal-dev libzip-dev
-RUN update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-10 1000 --slave /usr/bin/g++ g++ /usr/bin/g++-10
-RUN apt-get install -y curl && curl -L https://github.com/DroneDB/libnexus/releases/download/v1.0.0/nxs-ubuntu-22.04-amd64.deb --output /tmp/nxs-ubuntu-22.04-amd64.deb && \
-    dpkg-deb -x /tmp/nxs-ubuntu-22.04-amd64.deb /usr && \
-    rm /tmp/nxs-ubuntu-22.04-amd64.deb && \
-    apt-get remove -y curl
+RUN apt-get update && apt-get install -y --fix-missing --no-install-recommends git curl software-properties-common gpg-agent
 
 # Build DroneDB
 RUN git clone --recurse-submodules https://github.com/DroneDB/DroneDB.git
+RUN DroneDB/scripts/ubuntu_deps.sh
 RUN cd DroneDB && mkdir build && cd build && \
     cmake .. && \
     make -j $(cat /proc/cpuinfo | grep processor | wc -l)
@@ -24,7 +18,7 @@ RUN cd /DroneDB/build && checkinstall --install=no --pkgname DroneDB --default
 # ---> Dotnet build stage + nodejs build stage
 FROM mcr.microsoft.com/dotnet/sdk:8.0-jammy as dotnet-builder
 
-RUN curl -sL https://deb.nodesource.com/setup_14.x | bash - 
+RUN curl -sL https://deb.nodesource.com/setup_16.x | bash -
 RUN apt-get install -y nodejs
 
 # Copy registry
@@ -63,7 +57,7 @@ RUN dpkg -i *.deb && rm *.deb
 ENV LD_LIBRARY_PATH="/usr/local/lib:${LD_LIBRARY_PATH}"
 
 # Copy compiled Registry
-COPY --from=dotnet-builder /Registry/Registry.Web/bin/Release/net7.0/publish/ /Registry
+COPY --from=dotnet-builder /Registry/Registry.Web/bin/Release/net8.0/publish/ /Registry
 
 RUN chmod +x /Registry/Registry.Web && mkdir /data && chmod 777 /data
 
