@@ -22,7 +22,7 @@ RUN cd DroneDB && mkdir build && cd build && \
 RUN cd /DroneDB/build && checkinstall --install=no --pkgname DroneDB --default
 
 # ---> Dotnet build stage + nodejs build stage
-FROM mcr.microsoft.com/dotnet/sdk:7.0-jammy as dotnet-builder
+FROM mcr.microsoft.com/dotnet/sdk:8.0-jammy as dotnet-builder
 
 RUN curl -sL https://deb.nodesource.com/setup_14.x | bash - 
 RUN apt-get install -y nodejs
@@ -41,7 +41,7 @@ COPY docker/FolderProfile.xml /Registry/Registry.Web/Properties/PublishProfiles/
 RUN cd /Registry/Registry.Web && dotnet dev-certs https && dotnet publish -p:PublishProfile=FolderProfile
 
 # ---> Dotnet stage run
-FROM mcr.microsoft.com/dotnet/aspnet:7.0-jammy as runner
+FROM mcr.microsoft.com/dotnet/aspnet:8.0-jammy as runner
 
 ENV DOTNET_GENERATE_ASPNET_CERTIFICATE=false
 
