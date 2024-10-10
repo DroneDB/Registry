@@ -5,7 +5,7 @@ LABEL Author="Luca Di Leo <ldileo@digipa.it>"
 # Prerequisites
 ENV TZ=Europe/Rome
 RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone
-RUN apt-get update && apt-get install -y --fix-missing --no-install-recommends git curl software-properties-common gpg-agent
+RUN apt-get update && apt-get install -y --fix-missing --no-install-recommends git curl software-properties-common gpg-agent checkinstall
 
 # Build DroneDB
 RUN git clone --recurse-submodules https://github.com/DroneDB/DroneDB.git
