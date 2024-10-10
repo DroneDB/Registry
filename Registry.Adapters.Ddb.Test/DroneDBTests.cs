@@ -42,12 +42,14 @@ namespace Registry.Adapters.Ddb.Test
             if (Environment.OSVersion.Platform == PlatformID.Win32NT)
             {
                 Directory.SetCurrentDirectory(TestContext.CurrentContext.TestDirectory);
-            }
-            var ddbFolder = CommonUtils.FindDdbFolder();
-            if (ddbFolder == null)
-                throw new Exception("DDB not found");
 
-            CommonUtils.SetDefaultDllPath(ddbFolder);
+                var ddbFolder = CommonUtils.FindDdbFolder();
+                if (ddbFolder == null)
+                    throw new Exception("DDB not found");
+
+                CommonUtils.SetDefaultDllPath(ddbFolder);
+            }
+
 
             DDBWrapper.RegisterProcess(true);
         }
