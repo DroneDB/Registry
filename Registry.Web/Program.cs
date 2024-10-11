@@ -387,6 +387,8 @@ public class Program
                 return false;
             }
 
+            Directory.CreateDirectory(settings!.TempPath);
+
             // Update settings
             Console.WriteLine(" -> Updating settings");
             settingsConfig["AppSettings"] = JObject.FromObject(settings);
