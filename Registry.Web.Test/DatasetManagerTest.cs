@@ -122,6 +122,7 @@ namespace Registry.Web.Test
       ""Password"": ""password""
     },
     ""DdbStoragePath"": ""./Data/Ddb"",
+    ""TempPath"": ""./temp"",
     ""DdbPath"": ""./ddb""
 }
   ");

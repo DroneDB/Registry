@@ -148,7 +148,7 @@ namespace Registry.Web.Test
             await using var context = GetTest1Context();
             await using var appContext = GetAppTest1Context();
 
-            var settings = JsonConvert.DeserializeObject<AppSettings>(_settingsJson);
+            var settings = JsonConvert.DeserializeObject<AppSettings>(SettingsJson);
             settings.DatasetsPath = test.TestFolder;
             _appSettingsMock.Setup(o => o.Value).Returns(settings);
             
@@ -257,7 +257,7 @@ namespace Registry.Web.Test
             await using var context = GetTest1Context();
             await using var appContext = GetAppTest1Context();
 
-            var settings = JsonConvert.DeserializeObject<AppSettings>(_settingsJson);
+            var settings = JsonConvert.DeserializeObject<AppSettings>(SettingsJson);
             settings.DatasetsPath = test.TestFolder;
             _appSettingsMock.Setup(o => o.Value).Returns(settings);
             
@@ -374,7 +374,7 @@ namespace Registry.Web.Test
             await using var context = GetTest1Context();
             await using var appContext = GetAppTest1Context();
 
-            var settings = JsonConvert.DeserializeObject<AppSettings>(_settingsJson);
+            var settings = JsonConvert.DeserializeObject<AppSettings>(SettingsJson);
             settings.DatasetsPath = test.TestFolder;
             _appSettingsMock.Setup(o => o.Value).Returns(settings);
             
@@ -515,7 +515,7 @@ namespace Registry.Web.Test
             await using var context = GetTest1Context();
             await using var appContext = GetAppTest1Context();
 
-            var settings = JsonConvert.DeserializeObject<AppSettings>(_settingsJson);
+            var settings = JsonConvert.DeserializeObject<AppSettings>(SettingsJson);
             settings.DatasetsPath = test.TestFolder;
             _appSettingsMock.Setup(o => o.Value).Returns(settings);
             
@@ -671,7 +671,7 @@ namespace Registry.Web.Test
             await using var context = GetTest1Context();
             await using var appContext = GetAppTest1Context();
             
-            var settings = JsonConvert.DeserializeObject<AppSettings>(_settingsJson);
+            var settings = JsonConvert.DeserializeObject<AppSettings>(SettingsJson);
             settings.DatasetsPath = test.TestFolder;
             _appSettingsMock.Setup(o => o.Value).Returns(settings);
 
@@ -849,7 +849,7 @@ namespace Registry.Web.Test
 
         #region Test Data
 
-        private readonly string _settingsJson = @"{
+        private const string SettingsJson = @"{
     ""Secret"": ""a2780070a24cfcaf5a4a43f931200ba0d19d8b86b3a7bd5123d9ad75b125f480fcce1f9b7f41a53abe2ba8456bd142d38c455302e0081e5139bc3fc9bf614497"",
     ""TokenExpirationInDays"": 7,
     ""RevokedTokens"": [
@@ -863,6 +863,7 @@ namespace Registry.Web.Test
       ""Password"": ""password""
     },
     ""StoragePath"": ""./Data/Ddb"",
+    ""TempPath"": ""./temp"",
     ""DdbPath"": """",
     ""MaxUploadChunkSize"": 512000,
     ""MaxRequestBodySize"": 52428800,
