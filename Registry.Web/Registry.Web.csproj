@@ -6,8 +6,8 @@
         <UserSecretsId>4e006835-31cb-47c5-9dfe-7b73e210db92</UserSecretsId>
         <SpaRoot>ClientApp\</SpaRoot>
         <DefaultItemExcludes>$(DefaultItemExcludes);$(SpaRoot)node_modules\**</DefaultItemExcludes>
-        <AssemblyVersion>1.1.0</AssemblyVersion>
-        <FileVersion>1.1.0</FileVersion>
+        <AssemblyVersion>1.1.1</AssemblyVersion>
+        <FileVersion>1.1.1</FileVersion>
         <Version>1.0.16</Version>
         <Platforms>AnyCPU;x64</Platforms>
         <PackageVersion>1.0.17</PackageVersion>
