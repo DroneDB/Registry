@@ -14,6 +14,7 @@ namespace Registry.Web.Utilities
 {
     public static class HangfireUtils
     {
+        [AutomaticRetry(Attempts = 1, OnAttemptsExceeded = AttemptsExceededAction.Fail)]
         public static void BuildWrapper(IDDB ddb, string path, bool force,
             PerformContext context)
         {
@@ -27,6 +28,7 @@ namespace Registry.Web.Utilities
             writeLine("Done build");
         }
 
+        [AutomaticRetry(Attempts = 1, OnAttemptsExceeded = AttemptsExceededAction.Fail)]
         public static void BuildPendingWrapper(IDDB ddb, PerformContext context)
         {
             Action<string> writeLine = context != null ? context.WriteLine : Log.Information;
@@ -39,6 +41,7 @@ namespace Registry.Web.Utilities
             writeLine("Done build pending");
         }
 
+        [AutomaticRetry(Attempts = 1, OnAttemptsExceeded = AttemptsExceededAction.Fail)]
         public static void GenerateThumbnailWrapper(IDDB ddb, string path, int size, string dest,
             PerformContext context)
         {
@@ -62,6 +65,7 @@ namespace Registry.Web.Utilities
             writeLine("Done generate thumbnail");
         }
 
+        [AutomaticRetry(Attempts = 1, OnAttemptsExceeded = AttemptsExceededAction.Fail)]
         public static void SafeDelete(string path, PerformContext context)
         {
             Action<string> writeLine = context != null ? context.WriteLine : Log.Information;
@@ -86,6 +90,7 @@ namespace Registry.Web.Utilities
             }
         }
 
+        [AutomaticRetry(Attempts = 1, OnAttemptsExceeded = AttemptsExceededAction.Fail)]
         public static void CleanupExpiredJobs(PerformContext context)
         {
             using var connection = JobStorage.Current.GetConnection();

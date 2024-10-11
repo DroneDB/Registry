@@ -36,7 +36,10 @@ public static class StartupExtenders
                         .SetDataCompatibilityLevel(CompatibilityLevel.Version_170)
                         .UseSimpleAssemblyNameTypeSerializer()
                         .UseRecommendedSerializerSettings()
-                        .UseConsole()
+                        .UseConsole(new ConsoleOptions
+                        {
+                            FollowJobRetentionPolicy = true
+                        })
                         .UseStorage(new MySqlStorage(
                             appConfig.GetConnectionString(MagicStrings.HangfireConnectionName),
                             new MySqlStorageOptions
