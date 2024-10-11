@@ -12,7 +12,7 @@ using Registry.Web.Models.Configuration;
 
 namespace Registry.Web.Utilities;
 
-public static class StartupUtils
+public static class StartupExtenders
 {
     public static void AddHangfireProvider(this IServiceCollection services, AppSettings appSettings,
         IConfiguration appConfig)
