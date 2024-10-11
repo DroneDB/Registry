@@ -65,6 +65,7 @@ There are several other command line options:
 -a, --address              (Default: localhost:5000) Address to listen on
 -c, --check                Check configuration and exit.
 -r, --reset-hub            Reset the Hub folder by re-creating it.
+-t, --instance-type        Instance type to run as. (0: Default, 1: ProcessingNode, 2: WebServer)
 --help                     Display this help screen.
 --version                  Display version information.
 Storage folder (pos. 0)    Required. Points to a directory on a filesystem where to store Registry data.
