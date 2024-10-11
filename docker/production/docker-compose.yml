@@ -20,14 +20,21 @@ services:
         image: phpmyadmin
         restart: unless-stopped
         ports:
-            - "8080:80"
+            - "8010:80"
         environment:
             - PMA_HOST=db:3306
 
-    registry:
+    registry_webserver:
         depends_on:
             - db
-        image: dronedb/registry
+        image: dronedb/registry:latest
+        healthcheck:
+            test: [ "CMD", "curl", "-f", "http://localhost:5000/quickhealth" ]
+            interval: 30s
+            timeout: 10s
+            retries: 5
+        environment:
+            - INSTANCE_TYPE=2
         tmpfs:
             - /tmp
         volumes:
@@ -35,6 +42,32 @@ services:
             - ./appsettings.json:/data/appsettings.json
         ports:
             - "5000:5000"
+        restart: unless-stopped
+
+    registry_node_1:
+        depends_on:
+            - registry_webserver
+        image: dronedb/registry:latest
+        environment:
+            - INSTANCE_TYPE=1
+        tmpfs:
+            - /tmp
+        volumes:
+            - ./data:/data
+            - ./appsettings.json:/data/appsettings.json
+        restart: unless-stopped
+
+    registry_node_2:
+        depends_on:
+            - registry_webserver
+        image: dronedb/registry:latest
+        environment:
+            - INSTANCE_TYPE=1
+        tmpfs:
+            - /tmp
+        volumes:
+            - ./data:/data
+            - ./appsettings.json:/data/appsettings.json
         restart: unless-stopped
 
 volumes:

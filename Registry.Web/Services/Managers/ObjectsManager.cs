@@ -22,6 +22,7 @@ using Registry.Adapters.DroneDB;
 using Registry.Ports;
 using Registry.Ports.DroneDB;
 using Registry.Ports.DroneDB.Models;
+using Registry.Web.Services.Adapters;
 
 namespace Registry.Web.Services.Managers
 {
@@ -246,7 +247,7 @@ namespace Registry.Web.Services.Managers
             {
                 _logger.LogInformation("This item is an image, generate thumbnail");
 
-                var tmpPath = Path.Combine(Path.GetTempPath(), entry.Hash);
+                var tmpPath = Path.Combine(_settings.TempPath, WebUtils.MakeThumbTempFileName(entry.Hash));
 
                 var jobId = _backgroundJob.Enqueue(() =>
                     HangfireUtils.GenerateThumbnailWrapper(ddb, localFilePath, DefaultThumbnailSize, tmpPath, null));
@@ -435,7 +436,7 @@ namespace Registry.Web.Services.Managers
 
             var size = sizeRaw ?? DefaultThumbnailSize;
 
-            var tmpPath = Path.Combine(Path.GetTempPath(), entry.Hash);
+            var tmpPath = Path.Combine(_settings.TempPath, WebUtils.MakeThumbTempFileName(entry.Hash));
 
             string thumbPath = null;
 

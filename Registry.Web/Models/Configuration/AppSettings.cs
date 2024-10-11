@@ -56,6 +56,11 @@ namespace Registry.Web.Models.Configuration
         public string DatasetsPath { get; set; }
 
         /// <summary>
+        /// Storage path for temp files
+        /// </summary>
+        public string TempPath { get; set; }
+
+        /// <summary>
         /// Max request body size
         /// </summary>
         public long? MaxRequestBodySize { get; set; }
