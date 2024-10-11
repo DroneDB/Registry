@@ -185,13 +185,10 @@ public class Program
             })
             .Build();
 
-
-        host.Start();
-
         Console.WriteLine(" ?> Processing node started");
+        Console.WriteLine(" ?> Press Ctrl+C to quit");
 
-        Console.WriteLine(" ?> Press [enter] to exit...");
-        Console.ReadLine();
+        host.Run();
     }
 
     private static void RunAsWebApplication(Options opts)
@@ -553,6 +550,12 @@ public class Program
             {
                 Console.WriteLine(" !> CachePath is empty");
                 return false;
+            }
+
+            if (string.IsNullOrWhiteSpace(settings.TempPath))
+            {
+                settings.TempPath = defaultSettings.TempPath;
+                Console.WriteLine(" ?> TempPath is empty, using default");
             }
 
             if (settings.BatchTokenLength < 8)
