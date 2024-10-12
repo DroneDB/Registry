@@ -25,6 +25,7 @@ public static class StartupExtenders
                     .SetDataCompatibilityLevel(CompatibilityLevel.Version_170)
                     .UseSimpleAssemblyNameTypeSerializer()
                     .UseRecommendedSerializerSettings()
+                    .UseSerilogLogProvider()
                     .UseConsole()
                     .UseInMemoryStorage());
 
@@ -32,10 +33,13 @@ public static class StartupExtenders
 
             case HangfireProvider.Mysql:
 
+                // Specify only one worker
+
                 services.AddHangfire(configuration => configuration
                         .SetDataCompatibilityLevel(CompatibilityLevel.Version_170)
                         .UseSimpleAssemblyNameTypeSerializer()
                         .UseRecommendedSerializerSettings()
+                        .UseSerilogLogProvider()
                         .UseConsole(new ConsoleOptions
                         {
                             FollowJobRetentionPolicy = true
