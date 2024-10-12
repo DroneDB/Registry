@@ -187,8 +187,12 @@ namespace Registry.Web
 
             var instanceType = Configuration.GetValue<InstanceType>("InstanceType");
 
+            // If we are running both the webserver and the processing node
             if (instanceType == InstanceType.Default)
-                services.AddHangfireServer();
+            {
+                var workers = appSettings.WorkerThreads > 0 ? appSettings.WorkerThreads : Environment.ProcessorCount;
+                services.AddHangfireServer(options => { options.WorkerCount = workers; });
+            }
 
             services.AddHealthChecks()
                 .AddCheck<CacheHealthCheck>("Cache health check", null, ["service"])

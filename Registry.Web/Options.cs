@@ -43,7 +43,7 @@ public class Options
 public enum InstanceType
 {
     /// <summary>
-    /// Default behavior: run as both processing node and web server
+    /// Default behavior: run as both web server and processing node
     /// </summary>
     Default = 0,
 

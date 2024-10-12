@@ -180,8 +180,16 @@ public class Program
                 if (appSettings.HangfireProvider == HangfireProvider.InMemory)
                     throw new NotSupportedException("Hangfire in-memory provider is not supported for processing node");
 
+                var workers = appSettings.WorkerThreads > 0 ? appSettings.WorkerThreads : Environment.ProcessorCount;
+
+                Console.WriteLine(" ?> Using {0} worker threads", workers);
+
                 services.AddHangfireProvider(appSettings, configuration);
-                services.AddHangfireServer();
+                services.AddHangfireServer(options =>
+                {
+                    options.WorkerCount = workers;
+                });
+
             })
             .Build();
 
