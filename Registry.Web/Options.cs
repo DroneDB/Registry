@@ -55,5 +55,10 @@ public enum InstanceType
     /// <summary>
     /// Run as web server only
     /// </summary>
-    WebServer = 2
+    WebServer = 2,
+
+    /// <summary>
+    /// Run as thumbnail generator only
+    /// </summary>
+    ThumbnailGenerator = 3
 }

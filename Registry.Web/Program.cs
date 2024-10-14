@@ -10,14 +10,18 @@ using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using CommandLine;
 using Hangfire;
+using Microsoft.AspNetCore.Builder;
 using Registry.Common;
 using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.Http;
 using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
+using MimeMapping;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using Registry.Adapters.DroneDB;
@@ -141,10 +145,25 @@ public class Program
 
         try
         {
-            if (opts.InstanceType == InstanceType.ProcessingNode)
-                RunAsProcessingNode(opts);
-            else
-                RunAsWebApplication(opts);
+            switch (opts.InstanceType)
+            {
+                case InstanceType.Default:
+                case InstanceType.WebServer:
+                    RunAsWebApplication(opts);
+                    break;
+
+                case InstanceType.ProcessingNode:
+                    RunAsProcessingNode(opts);
+                    break;
+
+                case InstanceType.ThumbnailGenerator:
+                    RunAsThumbnailGenerator(opts);
+                    break;
+
+                default:
+                    CommonUtils.WriteLineColor(" !> Invalid instance type", ConsoleColor.Red);
+                    break;
+            }
         }
         catch (Exception ex)
         {
@@ -156,6 +175,88 @@ public class Program
         {
             Log.CloseAndFlush();
         }
+    }
+
+    private static void RunAsThumbnailGenerator(Options opts)
+    {
+        Console.WriteLine(" ?> Using address '{0}'", opts.Address);
+        Console.WriteLine(" -> Starting thumbnail generator");
+
+        var args = new[] { "--urls", $"http://{opts.Address}" };
+
+        var host = Host.CreateDefaultBuilder(args)
+            .UseSerilog((context, services, configuration) => configuration
+                .ReadFrom.Configuration(context.Configuration)
+                .ReadFrom.Services(services)
+                .Enrich.FromLogContext())
+            .ConfigureWebHostDefaults(webBuilder =>
+            {
+                webBuilder.Configure(app =>
+                {
+                    app.UseRouting();
+
+                    app.UseEndpoints(endpoints =>
+                    {
+                        // POST /generate-thumbnails accepts two parameters: filePath (string) and size (int)
+                        // Response is a bynary stream of the thumbnail taken from DDBWrapper.GenerateThumbnail
+                        endpoints.MapPost("/generate-thumbnail", async context =>
+                        {
+                            if (!context.Request.HasFormContentType || !context.Request.Form.ContainsKey("path") ||
+                                !context.Request.Form.ContainsKey("size"))
+                            {
+                                context.Response.StatusCode = StatusCodes.Status400BadRequest;
+                                return;
+                            }
+
+                            var filePath = context.Request.Form["path"];
+                            var size = context.Request.Form["size"];
+
+                            var logger = context.RequestServices.GetRequiredService<ILogger<Program>>();
+
+                            if (string.IsNullOrWhiteSpace(filePath) || !int.TryParse(size, out var sizeInt) ||
+                                sizeInt < 1)
+                            {
+                                context.Response.StatusCode = StatusCodes.Status400BadRequest;
+                                return;
+                            }
+
+                            if (!File.Exists(filePath))
+                            {
+                                logger.LogWarning("File {FilePath} not found", filePath);
+                                context.Response.StatusCode = StatusCodes.Status404NotFound;
+                                return;
+                            }
+
+                            logger.LogInformation("Generating thumbnail for {FilePath} with size {SizeInt}", filePath,
+                                sizeInt);
+
+                            try
+                            {
+                                var thumbnail = DDBWrapper.GenerateThumbnail(filePath, sizeInt);
+
+                                if (thumbnail == null || thumbnail.Length == 0)
+                                {
+                                    logger.LogWarning("Thumbnail for {FilePath} with size {SizeInt} not found",
+                                        filePath, sizeInt);
+                                    context.Response.StatusCode = StatusCodes.Status404NotFound;
+                                    return;
+                                }
+
+                                // TODO: This is hardcoded because we know it will be a jpeg but in the future we should get the mime type from the file
+                                context.Response.ContentType = "image/jpeg";
+                                await context.Response.Body.WriteAsync(thumbnail);
+                            }
+                            catch (Exception e)
+                            {
+                                logger.LogError(e, "Error while generating thumbnail: {Message}", e.Message);
+                                context.Response.StatusCode = StatusCodes.Status500InternalServerError;
+                            }
+                        });
+                    });
+                });
+            });
+
+        host.Build().Run();
     }
 
     private static void RunAsProcessingNode(Options opts)
@@ -185,11 +286,7 @@ public class Program
                 Console.WriteLine(" ?> Using {0} worker threads", workers);
 
                 services.AddHangfireProvider(appSettings, configuration);
-                services.AddHangfireServer(options =>
-                {
-                    options.WorkerCount = workers;
-                });
-
+                services.AddHangfireServer(options => { options.WorkerCount = workers; });
             })
             .Build();
 
@@ -207,18 +304,18 @@ public class Program
         var args = new[] { "--urls", $"http://{opts.Address}" };
 
         var host = Host.CreateDefaultBuilder(args)
-                .UseSerilog((context, services, configuration) => configuration
-                    .ReadFrom.Configuration(context.Configuration)
-                    .ReadFrom.Services(services)
-                    .Enrich.FromLogContext())
-                .ConfigureAppConfiguration((hostContext, config) =>
+            .UseSerilog((context, services, configuration) => configuration
+                .ReadFrom.Configuration(context.Configuration)
+                .ReadFrom.Services(services)
+                .Enrich.FromLogContext())
+            .ConfigureAppConfiguration((hostContext, config) =>
+            {
+                config.AddInMemoryCollection(new Dictionary<string, string>
                 {
-                    config.AddInMemoryCollection(new Dictionary<string, string>
-                    {
-                        {"InstanceType", opts.InstanceType.ToString()}
-                    });
-                })
-                .ConfigureWebHostDefaults(webBuilder => webBuilder.UseStartup<Startup>());
+                    { "InstanceType", opts.InstanceType.ToString() }
+                });
+            })
+            .ConfigureWebHostDefaults(webBuilder => webBuilder.UseStartup<Startup>());
 
         host.Build().Run();
     }

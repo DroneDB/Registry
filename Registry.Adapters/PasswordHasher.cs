@@ -1,10 +1,9 @@
 ﻿using System;
 using System.Linq;
 using System.Security.Cryptography;
-using Registry.Common;
 using Registry.Ports;
 
-namespace Registry.Web.Services.Adapters
+namespace Registry.Adapters
 {
     public sealed class PasswordHasher : IPasswordHasher
     {

@@ -1,5 +1,6 @@
 ﻿namespace Registry.Ports.DroneDB.Models
-{    public enum EntryType
+{
+    public enum EntryType
     {
         Undefined = 0,
         Directory = 1,

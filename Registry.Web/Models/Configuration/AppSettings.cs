@@ -116,6 +116,11 @@ namespace Registry.Web.Models.Configuration
         public string CachePath { get; set; }
 
         /// <summary>
+        /// Remote thumbnail generator url (if null the local one will be used)
+        /// </summary>
+        public string RemoteThumbnailGeneratorUrl { get; set; }
+
+        /// <summary>
         /// Thumbnails cache expiration 
         /// </summary>
         public TimeSpan? ThumbnailsCacheExpiration { get; set; }

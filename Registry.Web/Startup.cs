@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Globalization;
+using System.IO;
 using System.Linq;
 using System.Reflection;
 using System.Runtime.Caching;
@@ -45,6 +46,7 @@ using Registry.Web.Services.Managers;
 using Registry.Web.Services.Ports;
 using Registry.Web.Utilities;
 using Registry.Adapters.DroneDB;
+using Registry.Adapters.Thumbnail;
 using Registry.Ports;
 using Registry.Web.Identity;
 using Registry.Web.Identity.Models;
@@ -55,7 +57,6 @@ namespace Registry.Web
 {
     public class Startup
     {
-
         private IConfiguration Configuration { get; }
 
 
@@ -249,6 +250,17 @@ namespace Registry.Web
                 new ConfigurationHelper(MagicStrings.AppSettingsFileName));
 
             services.AddScoped<BasicAuthFilter>();
+
+            if (!string.IsNullOrWhiteSpace(appSettings.RemoteThumbnailGeneratorUrl))
+            {
+                services.Configure<RemoteThumbnailGeneratorSettings>(options =>
+                    options.Url = appSettings.RemoteThumbnailGeneratorUrl);
+                services.AddSingleton<IThumbnailGenerator, RemoteThumbnailGenerator>();
+            }
+            else
+            {
+                services.AddSingleton<IThumbnailGenerator, LocalThumbnailGenerator>();
+            }
 
             services.AddSingleton<IFileSystem, FileSystem>();
             services.AddSingleton<IPasswordHasher, PasswordHasher>();
@@ -497,6 +509,7 @@ namespace Registry.Web
             var appSettings = appSettingsSection.Get<AppSettings>();
 
             var cacheManager = app.ApplicationServices.GetService<ICacheManager>();
+            var thumbnailGenerator = app.ApplicationServices.GetService<IThumbnailGenerator>();
 
             Debug.Assert(cacheManager != null, nameof(cacheManager) + " != null");
 
@@ -515,11 +528,14 @@ namespace Registry.Web
 
             cacheManager.Register(MagicStrings.ThumbnailCacheSeed, parameters =>
             {
+                // TODO: Can be removed
                 var ddb = (DDB)parameters[0];
                 var sourcePath = (string)parameters[1];
                 var size = (int)parameters[2];
 
-                return ddb.GenerateThumbnail(sourcePath, size);
+                using var stream = new MemoryStream();
+                thumbnailGenerator.GenerateThumbnailAsync(sourcePath, size, stream).Wait();
+                return stream.ToArray();
             }, appSettings.ThumbnailsCacheExpiration);
         }
 

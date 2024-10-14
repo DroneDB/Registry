@@ -43,6 +43,14 @@
         "ASPNETCORE_ENVIRONMENT": "Development"
       },
       "commandLineArgs": "C:\\registry-data -t ProcessingNode"
+    },
+    "Thumbnail generator": {
+      "commandName": "Project",
+      "launchBrowser": false,
+      "environmentVariables": {
+        "ASPNETCORE_ENVIRONMENT": "Development"
+      },
+      "commandLineArgs": "C:\\registry-data -t ThumbnailGenerator -a localhost:5005"
     }
   }
 }
