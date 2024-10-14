@@ -14,7 +14,7 @@ public class Options
     [Option('a', "address", Default = "localhost:5000", HelpText = "Address to listen on")]
     public string Address { get; set; }
 
-    [Option('t', "instance-type", HelpText = "Instance type to run as. (0: Default, 1: ProcessingNode, 2: WebServer)",
+    [Option('t', "instance-type", HelpText = "Instance type to run as. (0: Default, 1: ProcessingNode, 2: WebServer, 3: Thumbnail generator)",
         Default = InstanceType.Default, Required = false)]
     public InstanceType InstanceType { get; set; }
 
