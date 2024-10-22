@@ -5,8 +5,9 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.Extensions.Logging;
 using Registry.Web.Data.Models;
 using Registry.Web.Identity.Models;
+using Registry.Web.Services.Managers;
 
-namespace Registry.Web.Services.Managers;
+namespace Registry.Web.Utilities.Auth;
 
 /// <summary>
 /// Handles organization-specific access control

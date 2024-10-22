@@ -3,7 +3,7 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.Extensions.Logging;
 using Registry.Web.Identity.Models;
 
-namespace Registry.Web.Services.Managers;
+namespace Registry.Web.Utilities.Auth;
 
 /// <summary>
 /// Handles resource-specific access control logic

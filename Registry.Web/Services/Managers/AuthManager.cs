@@ -15,6 +15,7 @@ using Registry.Web.Identity.Models;
 using Registry.Web.Models;
 using Registry.Web.Services.Adapters;
 using Registry.Web.Services.Ports;
+using Registry.Web.Utilities.Auth;
 
 namespace Registry.Web.Services.Managers;
 

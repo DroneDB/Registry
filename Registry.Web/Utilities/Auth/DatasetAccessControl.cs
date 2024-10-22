@@ -6,9 +6,9 @@ using Microsoft.Extensions.Logging;
 using Registry.Ports;
 using Registry.Web.Data.Models;
 using Registry.Web.Identity.Models;
-using Registry.Web.Utilities;
+using Registry.Web.Services.Managers;
 
-namespace Registry.Web.Services.Managers;
+namespace Registry.Web.Utilities.Auth;
 
 /// <summary>
 /// Handles dataset-specific access control

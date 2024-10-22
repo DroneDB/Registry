@@ -4,7 +4,7 @@ using Microsoft.Extensions.Logging;
 using Registry.Web.Identity;
 using Registry.Web.Identity.Models;
 
-namespace Registry.Web.Services.Managers;
+namespace Registry.Web.Utilities.Auth;
 
 public abstract class AccessControlBase
 {
