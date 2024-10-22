@@ -41,17 +41,16 @@ public class OrganizationsManager : IOrganizationsManager
 
     public async Task<IEnumerable<OrganizationDto>> List()
     {
-            
         var currentUser = await _authManager.GetCurrentUser();
 
-        if (currentUser == null)
+        if (!await _authManager.CanListOrganizations(currentUser))
             throw new UnauthorizedException("Invalid user");
-            
-        var query = 
+
+        var query =
             from org in _context.Organizations
             where org.OwnerId == currentUser.Id || org.Slug == MagicStrings.PublicOrganizationSlug
             select org;
-            
+
         // This can be optimized, but it's not a big deal because it's a cross database query anyway
         var usersMapper = await _appContext.Users.Select(item => new { item.Id, item.UserName })
             .ToDictionaryAsync(item => item.Id, item => item.UserName);
@@ -72,7 +71,7 @@ public class OrganizationsManager : IOrganizationsManager
     public async Task<OrganizationDto> Get(string orgSlug)
     {
         var org = _utils.GetOrganization(orgSlug);
-            
+
         if (!await _authManager.RequestAccess(org, AccessType.Read))
             throw new UnauthorizedException("Invalid user");
 
@@ -81,7 +80,6 @@ public class OrganizationsManager : IOrganizationsManager
 
     public async Task<OrganizationDto> AddNew(OrganizationDto organization, bool skipAuthCheck = false)
     {
-
         if (!skipAuthCheck)
         {
             var currentUser = await _authManager.GetCurrentUser();
@@ -137,9 +135,8 @@ public class OrganizationsManager : IOrganizationsManager
 
     public async Task Edit(string orgSlug, OrganizationDto organization)
     {
-
         var org = _utils.GetOrganization(orgSlug);
-            
+
         if (!await _authManager.RequestAccess(org, AccessType.Write))
             throw new UnauthorizedException("Invalid user");
 
@@ -147,14 +144,12 @@ public class OrganizationsManager : IOrganizationsManager
 
         if (!await _authManager.IsUserAdmin())
         {
-
             // If the owner is specified it should be the current user
             if (organization.Owner != null && organization.Owner != currentUser.Id)
                 throw new UnauthorizedException("Cannot create a new organization that belongs to a different user");
 
             // The current user is the owner
             organization.Owner = currentUser.Id;
-
         }
         else
         {
@@ -166,7 +161,6 @@ public class OrganizationsManager : IOrganizationsManager
                 // Otherwise check if user exists
                 if (!await _authManager.UserExists(organization.Owner))
                     throw new BadRequestException($"Cannot find user with id '{organization.Owner}'");
-
             }
         }
 
@@ -176,12 +170,10 @@ public class OrganizationsManager : IOrganizationsManager
         org.Description = organization.Description;
 
         await _context.SaveChangesAsync();
-
     }
 
     public async Task Delete(string orgSlug)
     {
-
         var org = _utils.GetOrganization(orgSlug);
 
         if (!await _authManager.RequestAccess(org, AccessType.Delete))

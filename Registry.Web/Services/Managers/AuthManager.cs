@@ -86,6 +86,17 @@ public class AuthManager : IAuthManager
         return await RequestAccess(obj, access, await GetCurrentUser());
     }
 
+    public async Task<bool> CanListOrganizations(User user)
+    {
+        // User can list organizations if it's not null and not deactivated
+        return user != null && !await _resourceAccess.IsUserDeactivated(user);
+    }
+
+    public async Task<bool> CanListOrganizations()
+    {
+        return await CanListOrganizations(await GetCurrentUser());
+    }
+
     public async Task<bool> RequestAccess<T>(T obj, AccessType access, User user) where T : IRequestAccess
     {
         ArgumentNullException.ThrowIfNull(obj);

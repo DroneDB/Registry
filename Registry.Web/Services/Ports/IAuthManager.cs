@@ -27,6 +27,9 @@ public interface IAuthManager
 
     public Task<bool> UserExists(string userId);
 
-    Task<bool> RequestAccess<T>(T obj, AccessType access, User user) where T: IRequestAccess;
-    Task<bool> RequestAccess<T>(T obj, AccessType access) where T : IRequestAccess;
+    public Task<bool> RequestAccess<T>(T obj, AccessType access, User user) where T: IRequestAccess;
+    public Task<bool> RequestAccess<T>(T obj, AccessType access) where T : IRequestAccess;
+
+    public Task<bool> CanListOrganizations(User user);
+    public Task<bool> CanListOrganizations();
 }

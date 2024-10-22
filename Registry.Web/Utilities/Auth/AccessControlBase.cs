@@ -20,7 +20,7 @@ public abstract class AccessControlBase
     /// <summary>
     /// Checks if a user is deactivated
     /// </summary>
-    protected async Task<bool> IsUserDeactivated(User user)
+    public async Task<bool> IsUserDeactivated(User user)
     {
         if (user == null) return false;
         return await UsersManager.IsInRoleAsync(user, ApplicationDbContext.DeactivatedRoleName);
@@ -29,7 +29,7 @@ public abstract class AccessControlBase
     /// <summary>
     /// Checks if a user has admin privileges
     /// </summary>
-    protected async Task<bool> IsUserAdmin(User user)
+    public async Task<bool> IsUserAdmin(User user)
     {
         if (user == null) return false;
         return await UsersManager.IsInRoleAsync(user, ApplicationDbContext.AdminRoleName);

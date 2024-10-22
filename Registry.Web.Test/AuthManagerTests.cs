@@ -37,6 +37,8 @@ public class AuthManagerTests
     private Dataset _publicDataset;
     private Dataset _privateDataset;
 
+    #region Setup
+
     [SetUp]
     public void Setup()
     {
@@ -96,11 +98,12 @@ public class AuthManagerTests
         // Setup DDB mock for dataset metadata
         var ddbMock = new Mock<IDDB>();
 
-        ddbMock.Setup(x => x.GetInfoAsync(default)).Returns(Task.FromResult(new Entry{
+        ddbMock.Setup(x => x.GetInfoAsync(default)).Returns(Task.FromResult(new Entry
+            {
                 Properties = new Dictionary<string, object>
                 {
-                    {"public", true },
-                    {"name", "public"}
+                    { "public", true },
+                    { "name", "public" }
                 },
                 Size = 1000,
                 ModifiedTime = DateTime.Now
@@ -118,11 +121,12 @@ public class AuthManagerTests
 
         var privateDdbMock = new Mock<IDDB>();
 
-        privateDdbMock.Setup(x => x.GetInfoAsync(default)).Returns(Task.FromResult(new Entry{
+        privateDdbMock.Setup(x => x.GetInfoAsync(default)).Returns(Task.FromResult(new Entry
+            {
                 Properties = new Dictionary<string, object>
                 {
-                    {"public", false },
-                    {"name", "ds"}
+                    { "public", false },
+                    { "name", "ds" }
                 },
                 Size = 1000,
                 ModifiedTime = DateTime.Now
@@ -142,7 +146,7 @@ public class AuthManagerTests
     private Mock<UserManager<User>> MockUserManager()
     {
         var store = new Mock<IUserStore<User>>();
-        var userManager = new Mock<UserManager<User>>(store.Object, null, null, null, null, null, null, null, null);
+        var userManager = new Mock<UserManager<User>>(store.Object, null!, null!, null!, null!, null!, null!, null!, null!);
 
         userManager.Setup(x => x.FindByIdAsync(It.IsAny<string>()))
             .Returns((string id) => Task.FromResult(new[] { _normalUser, _adminUser, _deactivatedUser }
@@ -156,6 +160,27 @@ public class AuthManagerTests
 
         return userManager;
     }
+
+    private void SetupCurrentUser(User user)
+    {
+        if (user != null)
+        {
+            var claims = new List<Claim>
+            {
+                new(ClaimTypes.Name, user.Id)
+            };
+            var identity = new ClaimsIdentity(claims);
+            var principal = new ClaimsPrincipal(identity);
+            var context = new DefaultHttpContext { User = principal };
+            _httpContextAccessorMock.Setup(x => x.HttpContext).Returns(context);
+        }
+        else
+        {
+            _httpContextAccessorMock.Setup(x => x.HttpContext).Returns((HttpContext)null);
+        }
+    }
+
+    #endregion
 
     #region Organization Access Tests
 
@@ -234,6 +259,42 @@ public class AuthManagerTests
         readResult.Should().BeFalse();
         writeResult.Should().BeFalse();
         deleteResult.Should().BeFalse();
+    }
+
+    public async Task CanListOrganizations_AnonymousUser_Denied()
+    {
+        // Arrange
+        SetupCurrentUser(null);
+
+        // Act
+        var result = await _authManager.CanListOrganizations();
+
+        // Assert
+        result.Should().BeFalse();
+    }
+
+    public async Task CanListOrganizations_DeactivatedUser_Denied()
+    {
+        // Arrange
+        SetupCurrentUser(_deactivatedUser);
+
+        // Act
+        var result = await _authManager.CanListOrganizations();
+
+        // Assert
+        result.Should().BeFalse();
+    }
+
+    public async Task CanListOrganizations_NormalUser_Allowed()
+    {
+        // Arrange
+        SetupCurrentUser(_normalUser);
+
+        // Act
+        var result = await _authManager.CanListOrganizations();
+
+        // Assert
+        result.Should().BeTrue();
     }
 
     #endregion
@@ -340,23 +401,4 @@ public class AuthManagerTests
     }
 
     #endregion
-
-    private void SetupCurrentUser(User user)
-    {
-        if (user != null)
-        {
-            var claims = new List<Claim>
-            {
-                new(ClaimTypes.Name, user.Id)
-            };
-            var identity = new ClaimsIdentity(claims);
-            var principal = new ClaimsPrincipal(identity);
-            var context = new DefaultHttpContext { User = principal };
-            _httpContextAccessorMock.Setup(x => x.HttpContext).Returns(context);
-        }
-        else
-        {
-            _httpContextAccessorMock.Setup(x => x.HttpContext).Returns((HttpContext)null);
-        }
-    }
 }
