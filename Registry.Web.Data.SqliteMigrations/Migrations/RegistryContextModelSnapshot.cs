@@ -15,7 +15,7 @@ namespace Registry.Web.Data.SqliteMigrations.Migrations
         protected override void BuildModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
-            modelBuilder.HasAnnotation("ProductVersion", "6.0.5");
+            modelBuilder.HasAnnotation("ProductVersion", "8.0.8");
 
             modelBuilder.Entity("Registry.Web.Data.Models.Batch", b =>
                 {
@@ -135,6 +135,8 @@ namespace Registry.Web.Data.SqliteMigrations.Migrations
                         .HasColumnType("TEXT");
 
                     b.HasKey("Slug");
+
+                    b.HasIndex("Slug");
 
                     b.ToTable("Organizations");
                 });

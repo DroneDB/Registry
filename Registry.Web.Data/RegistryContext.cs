@@ -18,6 +18,9 @@ public class RegistryContext : DbContext
         modelBuilder.Entity<Dataset>()
             .HasIndex(ds => ds.Slug);
 
+        modelBuilder.Entity<Organization>()
+            .HasIndex(d => d.Slug);
+
         modelBuilder
             .Entity<Dataset>()
             .HasOne(ds => ds.Organization)
