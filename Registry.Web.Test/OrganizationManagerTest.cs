@@ -1,219 +1,472 @@
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Threading.Tasks;
 using FluentAssertions;
 using Microsoft.AspNetCore.Http;
-using Microsoft.AspNetCore.Identity;
-using Microsoft.AspNetCore.Routing;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Moq;
-using Newtonsoft.Json;
 using NUnit.Framework;
-using Registry.Ports;
-using Registry.Test.Common;
 using Registry.Web.Data;
-using Registry.Web.Data.Models;
-using Registry.Web.Identity;
 using Registry.Web.Identity.Models;
-using Registry.Web.Models;
-using Registry.Web.Models.Configuration;
-using Registry.Web.Services;
-using Registry.Web.Services.Adapters;
+using Registry.Web.Models.DTO;
 using Registry.Web.Services.Managers;
 using Registry.Web.Services.Ports;
+using Registry.Web.Utilities;
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Threading.Tasks;
+using Microsoft.AspNetCore.Identity;
+using Registry.Ports;
+using Registry.Test.Common;
+using Registry.Web.Data.Models;
+using Registry.Web.Exceptions;
+using Registry.Web.Identity;
+using Registry.Web.Models.Configuration;
+using Registry.Web.Services.Adapters;
 
 namespace Registry.Web.Test;
 
 [TestFixture]
 public class OrganizationManagerTest : TestBase
 {
-
     private Mock<IAuthManager> _authManagerMock;
     private Mock<IOptions<AppSettings>> _appSettingsMock;
     private Mock<IDatasetsManager> _datasetManagerMock;
-    private Logger<OrganizationsManager> _organizationsManagerLogger;
     private Mock<IHttpContextAccessor> _httpContextAccessorMock;
     private Mock<IDdbManager> _ddbManagerMock;
+    private ILogger<OrganizationsManager> _logger;
+    private OrganizationsManager _organizationsManager;
+    private RegistryContext _context;
+    private ApplicationDbContext _appContext;
+    private IUtils _webUtils;
 
     [SetUp]
-    public void Setup()
+    public async Task Setup()
     {
-        _appSettingsMock = new Mock<IOptions<AppSettings>>();
+        // Initialize mocks
         _authManagerMock = new Mock<IAuthManager>();
+        _appSettingsMock = new Mock<IOptions<AppSettings>>();
         _datasetManagerMock = new Mock<IDatasetsManager>();
         _httpContextAccessorMock = new Mock<IHttpContextAccessor>();
         _ddbManagerMock = new Mock<IDdbManager>();
+        _logger = new Logger<OrganizationsManager>(LoggerFactory.Create(builder => builder.AddConsole()));
 
-        _organizationsManagerLogger = new Logger<OrganizationsManager>(LoggerFactory.Create(builder => builder.AddConsole()));
+        // Set up contexts
+        _context = await CreateTestRegistryContext();
+        _appContext = await CreateTestApplicationContext();
+
+        // Set up default auth manager behavior
+        SetupDefaultAuthManagerBehavior();
+
+        // Initialize utils and manager
+        _webUtils = new WebUtils(_authManagerMock.Object, _context, _appSettingsMock.Object,
+            _httpContextAccessorMock.Object, _ddbManagerMock.Object);
+
+        _organizationsManager = new OrganizationsManager(
+            _authManagerMock.Object,
+            _context,
+            _webUtils,
+            _datasetManagerMock.Object,
+            _appContext,
+            _logger);
+    }
+
+    [TearDown]
+    public async Task TearDown()
+    {
+        await _context.DisposeAsync();
+        await _appContext.DisposeAsync();
+    }
+
+    #region Tests
+
+    [Test]
+    public async Task List_AsAdmin_ReturnsAllOrganizations()
+    {
+        // Arrange
+        SetupAdminUser();
+
+        // Act
+        var organizations = (await _organizationsManager.List()).ToArray();
+
+        // Assert
+        organizations.Should().HaveCount(1);
+        var publicOrg = organizations.First();
+        AssertPublicOrganization(publicOrg);
     }
 
     [Test]
-    public async Task List_Default_Ok()
+    public async Task AddNew_ValidOrganization_CreatesSuccessfully()
     {
+        // Arrange
+        SetupAdminUser();
+        var newOrg = CreateTestOrganizationDto("test-org");
 
-        await using var context = GetTest1Context();
-        await using var appContext = GetAppTest1Context();
+        // Act
+        var result = await _organizationsManager.AddNew(newOrg);
 
-        _appSettingsMock.Setup(o => o.Value).Returns(_settings);
-        _authManagerMock.Setup(o => o.IsUserAdmin()).Returns(Task.FromResult(true));
-        _authManagerMock.Setup(o => o.RequestAccess(It.IsAny<Dataset>(),
-            It.IsAny<AccessType>())).Returns(Task.FromResult(true));
-        _authManagerMock.Setup(o => o.RequestAccess(It.IsAny<Organization>(),
-            It.IsAny<AccessType>())).Returns(Task.FromResult(true));
-        _authManagerMock.Setup(o => o.GetCurrentUser()).Returns(Task.FromResult(new User
-        {
-            UserName = "admin",
-            Email = "admin@example.com"
-        }));
-
-        var webUtils = new WebUtils(_authManagerMock.Object, context, _appSettingsMock.Object,
-            _httpContextAccessorMock.Object, _ddbManagerMock.Object);
-
-        var organizationsManager =
-            new OrganizationsManager(_authManagerMock.Object, context, webUtils, _datasetManagerMock.Object, appContext, _organizationsManagerLogger);
-
-        var list = (await organizationsManager.List()).ToArray();
-
-        list.Should().HaveCount(1);
-
-        var pub = list.First();
-
-        const string expectedDescription = "Public organization";
-        const string expectedSlug = MagicStrings.PublicOrganizationSlug;
-        const string expectedName = "Public";
-
-        pub.Description.Should().Be(expectedDescription);
-        pub.Slug.Should().Be(expectedSlug);
-        pub.IsPublic.Should().BeTrue();
-        pub.Owner.Should().BeNull();
-        pub.Name.Should().Be(expectedName);
-
+        // Assert
+        result.Should().NotBeNull();
+        result.Slug.Should().Be(newOrg.Slug);
+        result.Name.Should().Be(newOrg.Name);
+        result.Description.Should().Be(newOrg.Description);
     }
 
+    [Test]
+    public async Task Get_ExistingOrganization_ReturnsCorrectOrganization()
+    {
+        // Arrange
+        SetupAdminUser();
 
-    #region Test Data
+        // Act
+        var result = await _organizationsManager.Get(MagicStrings.PublicOrganizationSlug);
 
-    private readonly AppSettings _settings = JsonConvert.DeserializeObject<AppSettings>(@"{
-    ""Secret"": ""a2780070a24cfcaf5a4a43f931200ba0d19d8b86b3a7bd5123d9ad75b125f480fcce1f9b7f41a53abe2ba8456bd142d38c455302e0081e5139bc3fc9bf614497"",
-    ""TokenExpirationInDays"": 7,
-    ""RevokedTokens"": [
-      """"
-    ],
-    ""AuthProvider"": ""Sqlite"",
-    ""RegistryProvider"": ""Sqlite"",
-    ""StorageProvider"": {
-      ""type"": ""Physical"",
-      ""settings"": {
-        ""path"": ""./temp""
-      }
-    },
-    ""DefaultAdmin"": {
-      ""Email"": ""admin@example.com"",
-      ""UserName"": ""admin"",
-      ""Password"": ""password""
-    },
-    ""DdbStoragePath"": ""./Data/Ddb"",
-    ""TempPath"": ""./temp"",
-    ""DdbPath"": ""./ddb""}
-  ");
+        // Assert
+        result.Should().NotBeNull();
+        AssertPublicOrganization(result);
+    }
+
+    [Test]
+    public async Task Edit_ValidUpdate_UpdatesSuccessfully()
+    {
+        // Arrange
+        SetupAdminUser();
+        var updateDto = new OrganizationDto
+        {
+            Name = "Updated Public Org",
+            Description = "Updated description",
+            IsPublic = true
+        };
+
+        // Act
+        await _organizationsManager.Edit(MagicStrings.PublicOrganizationSlug, updateDto);
+        var updated = await _organizationsManager.Get(MagicStrings.PublicOrganizationSlug);
+
+        // Assert
+        updated.Name.Should().Be(updateDto.Name);
+        updated.Description.Should().Be(updateDto.Description);
+    }
+
+    [Test]
+    public async Task Delete_ExistingOrganization_DeletesSuccessfully()
+    {
+        // Arrange
+        SetupAdminUser();
+        _datasetManagerMock.Setup(x => x.Delete(It.IsAny<string>(), It.IsAny<string>()))
+            .Returns(Task.CompletedTask);
+
+        // Act
+        await _organizationsManager.Delete(MagicStrings.PublicOrganizationSlug);
+        var organizations = await _organizationsManager.List();
+
+        // Assert
+        organizations.Should().BeEmpty();
+    }
+
+    #region Authorization Tests
+
+    [Test]
+    public async Task List_StandardUser_ReturnsOnlyOwnedAndPublicOrganizations()
+    {
+        // Arrange
+        var standardUser = SetupStandardUser("standard-user");
+        var ownedOrg = await CreateOrganizationForUser(standardUser.Id);
+
+        // Act
+        var organizations = (await _organizationsManager.List()).ToArray();
+
+        // Assert
+        organizations.Should().HaveCount(2); // Public org + owned org
+        organizations.Should().Contain(org => org.Slug == MagicStrings.PublicOrganizationSlug);
+        organizations.Should().Contain(org => org.Slug == ownedOrg.Slug);
+    }
+
+    [Test]
+    public async Task List_AnonymousUser_ThrowsUnauthorizedException()
+    {
+        // Arrange
+        SetupAnonymousUser();
+
+        // Act & Assert
+        var action = () => _organizationsManager.List();
+        await action.Should().ThrowAsync<UnauthorizedException>()
+            .WithMessage("Invalid user");
+    }
+
+    [Test]
+    public async Task AddNew_StandardUser_CanOnlyCreateOwnOrganization()
+    {
+        // Arrange
+        var standardUser = SetupStandardUser("standard-user");
+        var newOrg = CreateTestOrganizationDto("test-org");
+        newOrg.Owner = "different-user"; // Trying to create org for different user
+
+        // Act & Assert
+        var action = () => _organizationsManager.AddNew(newOrg);
+        await action.Should().ThrowAsync<UnauthorizedException>()
+            .WithMessage("Cannot create a new organization that belongs to a different user");
+    }
+
+    [Test]
+    public async Task AddNew_AnonymousUser_ThrowsUnauthorizedException()
+    {
+        // Arrange
+        SetupAnonymousUser();
+        var newOrg = CreateTestOrganizationDto("test-org");
+
+        // Act & Assert
+        var action = () => _organizationsManager.AddNew(newOrg);
+        await action.Should().ThrowAsync<UnauthorizedException>()
+            .WithMessage("Invalid user");
+    }
+
+    [Test]
+    public async Task Edit_StandardUser_CanOnlyEditOwnOrganization()
+    {
+        // Arrange
+        var standardUser = SetupStandardUser("standard-user");
+        var ownedOrg = await CreateOrganizationForUser(standardUser.Id);
+        var updateDto = new OrganizationDto
+        {
+            Name = "Updated Org",
+            Description = "Updated description",
+            IsPublic = false
+        };
+
+        // Act
+        await _organizationsManager.Edit(ownedOrg.Slug, updateDto);
+        var updated = await _organizationsManager.Get(ownedOrg.Slug);
+
+        // Assert
+        updated.Name.Should().Be(updateDto.Name);
+        updated.Description.Should().Be(updateDto.Description);
+        updated.Owner.Should().Be(standardUser.UserName);
+    }
+
+    /*[Test]
+    public async Task Edit_StandardUser_CannotEditOthersOrganization()
+    {
+        // Arrange
+        SetupStandardUser("standard-user");
+        var updateDto = new OrganizationDto
+        {
+            Name = "Updated Public Org",
+            Description = "Updated description",
+            IsPublic = true
+        };
+
+
+        // Act & Assert
+        var action = () => _organizationsManager.Edit(MagicStrings.PublicOrganizationSlug, updateDto);
+        await action.Should().ThrowAsync<UnauthorizedException>()
+            .WithMessage("Invalid user");
+    }*/
+
+
+    [Test]
+    public async Task Delete_StandardUser_CanOnlyDeleteOwnOrganization()
+    {
+        // Arrange
+        var standardUser = SetupStandardUser("standard-user");
+        var ownedOrg = await CreateOrganizationForUser(standardUser.Id);
+        _datasetManagerMock.Setup(x => x.Delete(It.IsAny<string>(), It.IsAny<string>()))
+            .Returns(Task.CompletedTask);
+
+        // Act
+        await _organizationsManager.Delete(ownedOrg.Slug);
+
+        // Assert
+        var organizations = await _organizationsManager.List();
+        organizations.Should().NotContain(org => org.Slug == ownedOrg.Slug);
+    }
+/*
+    [Test]
+    public async Task Delete_StandardUser_CannotDeleteOthersOrganization()
+    {
+        // Arrange
+        SetupStandardUser("standard-user");
+
+        // Act & Assert
+        var action = () => _organizationsManager.Delete(MagicStrings.PublicOrganizationSlug);
+        await action.Should().ThrowAsync<UnauthorizedException>()
+            .WithMessage("Invalid user");
+    }*/
 
     #endregion
 
-    #region TestContexts
+    #region Additional Helper Methods
 
-    private static RegistryContext GetTest1Context()
+    private User SetupStandardUser(string userId)
+    {
+        var standardUser = new User
+        {
+            Id = userId,
+            UserName = userId,
+            Email = "standard@example.com"
+        };
+
+        _authManagerMock.Setup(x => x.GetCurrentUser()).ReturnsAsync(standardUser);
+        _authManagerMock.Setup(x => x.IsUserAdmin()).ReturnsAsync(false);
+        _authManagerMock.Setup(x => x.UserExists(It.IsAny<string>())).ReturnsAsync(true);
+        _authManagerMock.Setup(x => x.CanListOrganizations(It.IsAny<User>())).ReturnsAsync(true);
+
+        // Only allow access to owned organizations
+        _authManagerMock.Setup(x => x.RequestAccess(It.IsAny<Organization>(), It.IsAny<AccessType>()))
+            .ReturnsAsync((Organization org, AccessType _) => org.OwnerId == userId || org.IsPublic);
+
+        return standardUser;
+    }
+
+    private void SetupAnonymousUser()
+    {
+        _authManagerMock.Setup(x => x.GetCurrentUser()).ReturnsAsync((User)null);
+        _authManagerMock.Setup(x => x.IsUserAdmin()).ReturnsAsync(false);
+        _authManagerMock.Setup(x => x.CanListOrganizations(It.IsAny<User>())).ReturnsAsync(false);
+        _authManagerMock.Setup(x => x.RequestAccess(It.IsAny<Organization>(), It.IsAny<AccessType>()))
+            .ReturnsAsync(false);
+    }
+
+    private async Task<OrganizationDto> CreateOrganizationForUser(string userId)
+    {
+        var org = new Organization
+        {
+            Slug = "test-org",
+            Name = "Test Organization",
+            Description = "Test Description",
+            IsPublic = false,
+            OwnerId = userId,
+            CreationDate = DateTime.Now
+        };
+
+        await _context.Organizations.AddAsync(org);
+        await _context.SaveChangesAsync();
+
+        return org.ToDto();
+    }
+
+    #endregion
+
+    #endregion
+
+    #region Helper Methods
+
+    private void SetupAdminUser()
+    {
+        var adminUser = new User
+        {
+            UserName = "admin",
+            Email = "admin@example.com",
+            Id = "admin-id"
+        };
+
+        _authManagerMock.Setup(x => x.GetCurrentUser()).ReturnsAsync(adminUser);
+        _authManagerMock.Setup(x => x.IsUserAdmin()).ReturnsAsync(true);
+        _authManagerMock.Setup(x => x.UserExists(It.IsAny<string>())).ReturnsAsync(true);
+    }
+
+    private void SetupDefaultAuthManagerBehavior()
+    {
+        _authManagerMock.Setup(x => x.CanListOrganizations(It.IsAny<User>())).ReturnsAsync(true);
+        _authManagerMock.Setup(x => x.RequestAccess(It.IsAny<Organization>(), It.IsAny<AccessType>()))
+            .ReturnsAsync(true);
+    }
+
+    private static OrganizationDto CreateTestOrganizationDto(string slug)
+    {
+        return new OrganizationDto
+        {
+            Slug = slug,
+            Name = "Test Organization",
+            Description = "Test Description",
+            IsPublic = false,
+            CreationDate = DateTime.Now
+        };
+    }
+
+    private static void AssertPublicOrganization(OrganizationDto org)
+    {
+        org.Description.Should().Be("Public organization");
+        org.Slug.Should().Be(MagicStrings.PublicOrganizationSlug);
+        org.IsPublic.Should().BeTrue();
+        org.Owner.Should().BeNull();
+        org.Name.Should().Be("Public");
+    }
+
+    private static async Task<RegistryContext> CreateTestRegistryContext()
     {
         var options = new DbContextOptionsBuilder<RegistryContext>()
-            .UseInMemoryDatabase(databaseName: "RegistryDatabase-" + Guid.NewGuid())
+            .UseInMemoryDatabase(databaseName: $"RegistryDatabase-{Guid.NewGuid()}")
             .Options;
 
-        // Insert seed data into the database using one instance of the context
-        using (var context = new RegistryContext(options))
+        var context = new RegistryContext(options);
+
+        var publicOrg = new Organization
         {
-
-            var entity = new Organization
+            Slug = MagicStrings.PublicOrganizationSlug,
+            Name = "Public",
+            CreationDate = DateTime.Now,
+            Description = "Public organization",
+            IsPublic = true,
+            OwnerId = null,
+            Datasets = new List<Dataset>
             {
-                Slug = MagicStrings.PublicOrganizationSlug,
-                Name = "Public",
-                CreationDate = DateTime.Now,
-                Description = "Public organization",
-                IsPublic = true,
-                OwnerId = null
-            };
-            var ds = new Dataset
-            {
-                Slug = MagicStrings.DefaultDatasetSlug,
-                //Name = "Default",
-                //IsPublic = true,
-                CreationDate = DateTime.Now,
-                //LastUpdate = DateTime.Now,
-                InternalRef = Guid.Parse("0a223495-84a0-4c15-b425-c7ef88110e75")
-            };
-            entity.Datasets = new List<Dataset> { ds };
+                new Dataset
+                {
+                    Slug = MagicStrings.DefaultDatasetSlug,
+                    CreationDate = DateTime.Now,
+                    InternalRef = Guid.Parse("0a223495-84a0-4c15-b425-c7ef88110e75")
+                }
+            }
+        };
 
-            context.Organizations.Add(entity);
+        await context.Organizations.AddAsync(publicOrg);
+        await context.SaveChangesAsync();
 
-            context.SaveChanges();
-        }
-
-        return new RegistryContext(options);
+        return context;
     }
 
-    private static ApplicationDbContext GetAppTest1Context()
+    private static async Task<ApplicationDbContext> CreateTestApplicationContext()
     {
         var options = new DbContextOptionsBuilder<ApplicationDbContext>()
-            .UseInMemoryDatabase(databaseName: "RegistryAppDatabase-" + Guid.NewGuid())
+            .UseInMemoryDatabase(databaseName: $"RegistryAppDatabase-{Guid.NewGuid()}")
             .Options;
 
-        // Insert seed data into the database using one instance of the context
-        using (var context = new ApplicationDbContext(options))
+        var context = new ApplicationDbContext(options);
+
+        var adminRole = new IdentityRole
         {
+            Id = "admin-role-id",
+            Name = "admin",
+            NormalizedName = "ADMIN"
+        };
 
-            var adminRole = new IdentityRole
-            {
-                Id = "1db5b539-6e54-4674-bb74-84732eb48204",
-                Name = "admin",
-                NormalizedName = "ADMIN",
-                ConcurrencyStamp = "72c80593-64a2-40b4-b0c4-26a9dcc06400"
-            };
+        var standardRole = new IdentityRole
+        {
+            Id = "standard-role-id",
+            Name = "standard",
+            NormalizedName = "STANDARD"
+        };
 
-            context.Roles.Add(adminRole);
+        var adminUser = new User
+        {
+            Id = "admin-user-id",
+            UserName = "admin",
+            Email = "admin@example.com",
+            NormalizedUserName = "ADMIN"
+        };
 
-            var standardRole = new IdentityRole
-            {
-                Id = "7d02507e-8eab-48c0-ba19-fea3ae644ab9",
-                Name = "standard",
-                NormalizedName = "STANDARD",
-                ConcurrencyStamp = "2e279a3c-4273-4f0a-abf6-8e97811651a9"
-            };
+        await context.Roles.AddRangeAsync(adminRole, standardRole);
+        await context.Users.AddAsync(adminUser);
+        await context.UserRoles.AddAsync(new IdentityUserRole<string>
+        {
+            RoleId = adminRole.Id,
+            UserId = adminUser.Id
+        });
 
-            context.Roles.Add(standardRole);
+        await context.SaveChangesAsync();
 
-            var admin = new User
-            {
-                Id = "bfb579ce-8435-4c70-a365-158a3d93811f",
-                UserName = "admin",
-                Email = "admin@example.com",
-                NormalizedUserName = "ADMIN"
-            };
-
-            context.Users.Add(admin);
-
-            context.UserRoles.Add(new IdentityUserRole<string>
-            {
-                RoleId = "1db5b539-6e54-4674-bb74-84732eb48204",
-                UserId = "bfb579ce-8435-4c70-a365-158a3d93811f"
-            });
-
-            context.SaveChanges();
-        }
-
-        return new ApplicationDbContext(options);
+        return context;
     }
-
 
     #endregion
 }
