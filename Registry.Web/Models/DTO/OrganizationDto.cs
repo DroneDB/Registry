@@ -6,22 +6,20 @@ using System.Security.Cryptography;
 using System.Threading.Tasks;
 using Registry.Web.Data.Models;
 
-namespace Registry.Web.Models.DTO
+namespace Registry.Web.Models.DTO;
+
+public class OrganizationDto
 {
-    public class OrganizationDto
-    {
-        [Required]
-        public string Slug { get; set; }
+    [Required]
+    public string Slug { get; set; }
 
-        [Required]
-        public string Name { get; set; }
-        public string Description { get; set; }
-        public DateTime CreationDate { get; set; }
-        public string Owner { get; set; }
+    [Required]
+    public string Name { get; set; }
+    public string Description { get; set; }
+    public DateTime CreationDate { get; set; }
+    public string Owner { get; set; }
 
-        public bool IsPublic { get; set; }
+    public bool IsPublic { get; set; }
 
-
-    }
 
 }

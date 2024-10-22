@@ -1,9 +1,8 @@
-﻿namespace Registry.Adapters.DroneDB
+﻿namespace Registry.Adapters.DroneDB;
+
+public enum DDBError
 {
-    public enum DDBError
-    {
-        DDBERR_NONE = 0, // No error
-        DDBERR_EXCEPTION = 1, // Generic app exception
-        DDBERR_BUILDDEPMISSING = 2
-    };
-}
+    DDBERR_NONE = 0, // No error
+    DDBERR_EXCEPTION = 1, // Generic app exception
+    DDBERR_BUILDDEPMISSING = 2
+};

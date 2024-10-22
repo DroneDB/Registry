@@ -1,16 +1,15 @@
 ﻿using Newtonsoft.Json;
 
-namespace Registry.Web.Models.DTO
+namespace Registry.Web.Models.DTO;
+
+public class MetaListItemDto
 {
-    public class MetaListItemDto
-    {
-        [JsonProperty("count")]
-        public int Count { get; set; }
+    [JsonProperty("count")]
+    public int Count { get; set; }
 
-        [JsonProperty("key")]
-        public string Key { get; set; }
+    [JsonProperty("key")]
+    public string Key { get; set; }
 
-        [JsonProperty("path")]
-        public string Path { get; set; }
-    }
+    [JsonProperty("path")]
+    public string Path { get; set; }
 }

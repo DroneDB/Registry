@@ -4,13 +4,12 @@ using System.Linq;
 using System.Threading.Tasks;
 using Registry.Web.Data.Models;
 
-namespace Registry.Web.Models.DTO
+namespace Registry.Web.Models.DTO;
+
+public class UploadResultDto
 {
-    public class UploadResultDto
-    {
-        public string Path { get; set; }
-        public string Hash { get; set; }
-        public long Size { get; set; }
+    public string Path { get; set; }
+    public string Hash { get; set; }
+    public long Size { get; set; }
         
-    }
 }

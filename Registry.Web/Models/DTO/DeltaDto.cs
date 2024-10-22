@@ -6,61 +6,58 @@ using System.Threading.Tasks;
 using Newtonsoft.Json;
 using Registry.Ports.DroneDB.Models;
 
-namespace Registry.Web.Models.DTO
+namespace Registry.Web.Models.DTO;
+
+public class DeltaDto
 {
-    
-    public class DeltaDto
+    [JsonProperty("adds")]
+    public AddActionDto[] Adds { get; set; }
+
+    [JsonProperty("removes")]
+    public RemoveAction[] Removes { get; set; }
+
+    public string[] MetaAdds { get; set; }
+
+    [JsonProperty("metaRemoves")]
+    public string[] MetaRemoves { get; set; }
+}
+
+public class AddActionDto
+{
+    [JsonProperty("path")]
+    public string Path { get;  }
+
+    [JsonProperty("hash")]
+    public string Hash { get;  }
+
+    public AddActionDto(string path, string hash)
     {
-        [JsonProperty("adds")]
-        public AddActionDto[] Adds { get; set; }
-
-        [JsonProperty("removes")]
-        public RemoveAction[] Removes { get; set; }
-
-        public string[] MetaAdds { get; set; }
-
-        [JsonProperty("metaRemoves")]
-        public string[] MetaRemoves { get; set; }
+        Path = path;
+        Hash = hash;
     }
-    
-    public class AddActionDto
+
+    public override string ToString()
     {
-        [JsonProperty("path")]
-        public string Path { get;  }
-
-        [JsonProperty("hash")]
-        public string Hash { get;  }
-
-        public AddActionDto(string path, string hash)
-        {
-            Path = path;
-            Hash = hash;
-        }
-
-        public override string ToString()
-        {
-            return $"ADD -> [{(string.IsNullOrEmpty(Hash) ? 'D' : 'F')}] {Path}";
-        }
+        return $"ADD -> [{(string.IsNullOrEmpty(Hash) ? 'D' : 'F')}] {Path}";
     }
-    
-    public class RemoveActionDto
+}
+
+public class RemoveActionDto
+{
+    [JsonProperty("path")]
+    public string Path { get; }
+
+    [JsonProperty("hash")]
+    public string Hash { get; }
+
+    public RemoveActionDto(string path, string hash)
     {
-        [JsonProperty("path")]
-        public string Path { get; }
-
-        [JsonProperty("hash")]
-        public string Hash { get; }
-
-        public RemoveActionDto(string path, string hash)
-        {
-            Path = path;
-            Hash = hash;
-        }
-        public override string ToString()
-        {
-            return $"DEL -> [{(string.IsNullOrEmpty(Hash) ? 'D' : 'F')}] {Path}";
-        }
-
+        Path = path;
+        Hash = hash;
+    }
+    public override string ToString()
+    {
+        return $"DEL -> [{(string.IsNullOrEmpty(Hash) ? 'D' : 'F')}] {Path}";
     }
 
 }

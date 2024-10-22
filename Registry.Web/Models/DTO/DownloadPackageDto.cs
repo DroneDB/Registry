@@ -1,10 +1,9 @@
 ﻿using System;
 
-namespace Registry.Web.Models.DTO
+namespace Registry.Web.Models.DTO;
+
+public class DownloadPackageDto
 {
-    public class DownloadPackageDto
-    {
-        public string DownloadUrl { get; set; }
-        public DateTime? Expiration { get; set; }
-    }
+    public string DownloadUrl { get; set; }
+    public DateTime? Expiration { get; set; }
 }

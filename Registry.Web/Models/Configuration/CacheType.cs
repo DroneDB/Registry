@@ -1,8 +1,7 @@
-﻿namespace Registry.Web.Models.Configuration
+﻿namespace Registry.Web.Models.Configuration;
+
+public enum CacheType
 {
-    public enum CacheType
-    {
-        InMemory,
-        Redis
-    }
+    InMemory,
+    Redis
 }

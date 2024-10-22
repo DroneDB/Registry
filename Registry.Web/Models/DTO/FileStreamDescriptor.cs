@@ -12,97 +12,96 @@ using Registry.Web.Services.Managers;
 using Registry.Web.Services.Ports;
 using Registry.Web.Utilities;
 
-namespace Registry.Web.Models.DTO
+namespace Registry.Web.Models.DTO;
+
+public enum FileDescriptorType
 {
-   public enum FileDescriptorType
+    Single, Multiple, Dataset
+}
+
+public class FileStreamDescriptor
+{
+    private readonly string _orgSlug;
+    private readonly Guid _internalRef;
+    private readonly string[] _paths;
+    private readonly string[] _folders;
+    private readonly FileDescriptorType _descriptorType;
+    private readonly ILogger<ObjectsManager> _logger;
+    private readonly IDdbManager _ddbManager;
+    private readonly IDDB _ddb;
+
+    public string Name { get; }
+
+    public string ContentType { get; }
+
+    public FileStreamDescriptor(string name, string contentType, string orgSlug, Guid internalRef, string[] paths, string[] folders,
+        FileDescriptorType descriptorType, ILogger<ObjectsManager> logger, IDdbManager ddbManager)
     {
-        Single, Multiple, Dataset
+        _orgSlug = orgSlug;
+        _internalRef = internalRef;
+        _paths = paths;
+        _folders = folders;
+        _descriptorType = descriptorType;
+        _logger = logger;
+        _ddbManager = ddbManager;
+        Name = name;
+        ContentType = contentType;
+
+        _ddb = ddbManager.Get(orgSlug, internalRef);
     }
 
-    public class FileStreamDescriptor
+    public async Task CopyToAsync(Stream stream)
     {
-        private readonly string _orgSlug;
-        private readonly Guid _internalRef;
-        private readonly string[] _paths;
-        private readonly string[] _folders;
-        private readonly FileDescriptorType _descriptorType;
-        private readonly ILogger<ObjectsManager> _logger;
-        private readonly IDdbManager _ddbManager;
-        private readonly IDDB _ddb;
-
-        public string Name { get; }
-
-        public string ContentType { get; }
-
-        public FileStreamDescriptor(string name, string contentType, string orgSlug, Guid internalRef, string[] paths, string[] folders,
-            FileDescriptorType descriptorType, ILogger<ObjectsManager> logger, IDdbManager ddbManager)
+        // If there is just one file we return it
+        if (_descriptorType == FileDescriptorType.Single)
         {
-            _orgSlug = orgSlug;
-            _internalRef = internalRef;
-            _paths = paths;
-            _folders = folders;
-            _descriptorType = descriptorType;
-            _logger = logger;
-            _ddbManager = ddbManager;
-            Name = name;
-            ContentType = contentType;
+            var filePath = _paths.First();
 
-            _ddb = ddbManager.Get(orgSlug, internalRef);
+            _logger.LogInformation("Only one path found: '{FilePath}'", filePath);
+
+            var localPath = _ddb.GetLocalPath(filePath);
+
+            await using var fileStream = new FileStream(localPath, FileMode.Open, FileAccess.Read);
+            await fileStream.CopyToAsync(stream);
+
         }
-
-        public async Task CopyToAsync(Stream stream)
+        // Otherwise we zip everything together and return the package
+        else
         {
-            // If there is just one file we return it
-            if (_descriptorType == FileDescriptorType.Single)
+            using var archive = new ZipArchive(stream, ZipArchiveMode.Create, true);
+            foreach (var path in _paths)
             {
-                var filePath = _paths.First();
+                _logger.LogInformation("Zipping: '{Path}'", path);
 
-                _logger.LogInformation("Only one path found: '{FilePath}'", filePath);
+                var entry = archive.CreateEntry(path, CommonUtils.GetCompressionLevel(path));
+                await using var entryStream = entry.Open();
 
-                var localPath = _ddb.GetLocalPath(filePath);
-                
+                var localPath = _ddb.GetLocalPath(path);
+
                 await using var fileStream = new FileStream(localPath, FileMode.Open, FileAccess.Read);
-                await fileStream.CopyToAsync(stream);
+                await fileStream.CopyToAsync(entryStream);
 
             }
-            // Otherwise we zip everything together and return the package
-            else
+
+            // We treat folders separately because if they are empty they would not be included in the archive
+            if (_folders != null)
             {
-                using var archive = new ZipArchive(stream, ZipArchiveMode.Create, true);
-                foreach (var path in _paths)
-                {
-                    _logger.LogInformation("Zipping: '{Path}'", path);
+                foreach (var folder in _folders)
+                    archive.CreateEntry(folder + "/");
+            }
 
-                    var entry = archive.CreateEntry(path, CommonUtils.GetCompressionLevel(path));
-                    await using var entryStream = entry.Open();
+            // Include ddb folder
+            if (_descriptorType == FileDescriptorType.Dataset)
+            {
+                var ddb = _ddbManager.Get(_orgSlug, _internalRef);
 
-                    var localPath = _ddb.GetLocalPath(path);
-
-                    await using var fileStream = new FileStream(localPath, FileMode.Open, FileAccess.Read);
-                    await fileStream.CopyToAsync(entryStream);
-
-                }
-
-                // We treat folders separately because if they are empty they would not be included in the archive
-                if (_folders != null)
-                {
-                    foreach (var folder in _folders)
-                        archive.CreateEntry(folder + "/");
-                }
-
-                // Include ddb folder
-                if (_descriptorType == FileDescriptorType.Dataset)
-                {
-                    var ddb = _ddbManager.Get(_orgSlug, _internalRef);
-
-                    archive.CreateEntryFromAny(
-                        Path.Combine(ddb.DatasetFolderPath, IDDB.DatabaseFolderName), 
-                        string.Empty, new[] { ddb.BuildFolderPath });
-                }
-
+                archive.CreateEntryFromAny(
+                    Path.Combine(ddb.DatasetFolderPath, IDDB.DatabaseFolderName),
+                    string.Empty, new[] { ddb.BuildFolderPath });
             }
 
         }
 
     }
+
 }

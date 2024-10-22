@@ -9,258 +9,257 @@ using Registry.Web.Models.DTO;
 using Registry.Web.Services.Ports;
 using Registry.Web.Utilities;
 
-namespace Registry.Web.Controllers
+namespace Registry.Web.Controllers;
+
+[ApiController]
+[Route(RoutesHelper.OrganizationsRadix + "/" +
+       RoutesHelper.OrganizationSlug + "/" +
+       RoutesHelper.DatasetRadix + "/" +
+       RoutesHelper.DatasetSlug + "/" +
+       RoutesHelper.MetaRadix)]
+public class MetaController : ControllerBaseEx
 {
-    [ApiController]
-    [Route(RoutesHelper.OrganizationsRadix + "/" +
-           RoutesHelper.OrganizationSlug + "/" +
-           RoutesHelper.DatasetRadix + "/" +
-           RoutesHelper.DatasetSlug + "/" +
-           RoutesHelper.MetaRadix)]
-    public class MetaController : ControllerBaseEx
+    private readonly IMetaManager _metaManager;
+    private readonly ILogger<MetaController> _logger;
+
+    public MetaController(IMetaManager metaManager, ILogger<MetaController> logger)
     {
-        private readonly IMetaManager _metaManager;
-        private readonly ILogger<MetaController> _logger;
+        _metaManager = metaManager;
+        _logger = logger;
+    }
 
-        public MetaController(IMetaManager metaManager, ILogger<MetaController> logger)
+    // This is the correct approach
+    [HttpPost("add/{key}", Name = nameof(MetaController) + "." + nameof(Add))]
+    public async Task<IActionResult> Add([FromRoute] string orgSlug, [FromRoute] string dsSlug,
+        [FromRoute] string key, [FromBody] string data, [FromQuery] string path = null)
+    {
+        try
         {
-            _metaManager = metaManager;
-            _logger = logger;
+            _logger.LogDebug("Meta Controller Add('{OrgSlug}', '{DsSlug}', '{Key}', '{Path}')", orgSlug, dsSlug, key, path);
+
+            var res = await _metaManager.Add(orgSlug, dsSlug, key, data, path);
+
+            return Ok(res);
         }
-
-        // This is the correct approach
-        [HttpPost("add/{key}", Name = nameof(MetaController) + "." + nameof(Add))]
-        public async Task<IActionResult> Add([FromRoute] string orgSlug, [FromRoute] string dsSlug,
-            [FromRoute] string key, [FromBody] string data, [FromQuery] string path = null)
+        catch (Exception ex)
         {
-            try
-            {
-                _logger.LogDebug("Meta Controller Add('{OrgSlug}', '{DsSlug}', '{Key}', '{Path}')", orgSlug, dsSlug, key, path);
-
-                var res = await _metaManager.Add(orgSlug, dsSlug, key, data, path);
-
-                return Ok(res);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Exception in Meta controller Add('{OrgSlug}', '{DsSlug}', '{Key}', '{Path}')", orgSlug, dsSlug, key, path);
-                return ExceptionResult(ex);
-            }
+            _logger.LogError(ex, "Exception in Meta controller Add('{OrgSlug}', '{DsSlug}', '{Key}', '{Path}')", orgSlug, dsSlug, key, path);
+            return ExceptionResult(ex);
         }
+    }
 
-        // This is a monstrosity, but it works :)
-        // basically key and path can be either query or formdata parameters
-        [HttpPost("add", Name = nameof(MetaController) + "." + nameof(AddAlt))]
-        public async Task<IActionResult> AddAlt([FromRoute] string orgSlug, [FromRoute] string dsSlug,
-            [FromForm(Name = "key")] string keyFromForm, [FromForm] string data,
-            [FromForm(Name = "path")] string pathFromForm = null,
-            [FromQuery(Name = "path")] string pathFromQuery = null,
-            [FromQuery(Name = "key")] string keyFromQuery = null)
+    // This is a monstrosity, but it works :)
+    // basically key and path can be either query or formdata parameters
+    [HttpPost("add", Name = nameof(MetaController) + "." + nameof(AddAlt))]
+    public async Task<IActionResult> AddAlt([FromRoute] string orgSlug, [FromRoute] string dsSlug,
+        [FromForm(Name = "key")] string keyFromForm, [FromForm] string data,
+        [FromForm(Name = "path")] string pathFromForm = null,
+        [FromQuery(Name = "path")] string pathFromQuery = null,
+        [FromQuery(Name = "key")] string keyFromQuery = null)
+    {
+        // C# magics, precedence to form parameter
+        var path = pathFromForm ?? pathFromQuery;
+        var key = keyFromForm ?? keyFromQuery;
+
+        try
         {
-            // C# magics, precedence to form parameter
-            var path = pathFromForm ?? pathFromQuery;
-            var key = keyFromForm ?? keyFromQuery;
+            _logger.LogDebug("Meta Controller AddAlt('{OrgSlug}', '{DsSlug}', '{Key}', '{Path}')", orgSlug, dsSlug, key, path);
 
-            try
-            {
-                _logger.LogDebug("Meta Controller AddAlt('{OrgSlug}', '{DsSlug}', '{Key}', '{Path}')", orgSlug, dsSlug, key, path);
+            var res = await _metaManager.Add(orgSlug, dsSlug, key, data, path);
 
-                var res = await _metaManager.Add(orgSlug, dsSlug, key, data, path);
-
-                return Ok(res);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Exception in Meta controller Add('{OrgSlug}', '{DsSlug}', '{Key}', '{Path}')", orgSlug, dsSlug, key, path);
-                return ExceptionResult(ex);
-            }
+            return Ok(res);
         }
-
-        [HttpPost("set/{key}", Name = nameof(MetaController) + "." + nameof(Set))]
-        public async Task<IActionResult> Set([FromRoute] string orgSlug, [FromRoute] string dsSlug,
-            [FromRoute] string key, [FromBody] string data, [FromQuery] string path = null)
+        catch (Exception ex)
         {
-            try
-            {
-                _logger.LogDebug("Meta Controller Set('{OrgSlug}', '{DsSlug}', '{Key}', '{Path}')", orgSlug, dsSlug, key, path);
-
-                var res = await _metaManager.Set(orgSlug, dsSlug, key, data, path);
-
-                return Ok(res);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Exception in Meta controller Set('{OrgSlug}', '{DsSlug}', '{Key}', '{Path}')", orgSlug, dsSlug, key, path);
-                return ExceptionResult(ex);
-            }
+            _logger.LogError(ex, "Exception in Meta controller Add('{OrgSlug}', '{DsSlug}', '{Key}', '{Path}')", orgSlug, dsSlug, key, path);
+            return ExceptionResult(ex);
         }
+    }
 
-        [HttpPost("set", Name = nameof(MetaController) + "." + nameof(SetAlt))]
-        public async Task<IActionResult> SetAlt([FromRoute] string orgSlug, [FromRoute] string dsSlug,
-            [FromForm(Name = "key")] string keyFromForm, [FromForm] string data, [FromForm(Name = "path")] string pathFromForm = null,
-            [FromQuery(Name = "path")] string pathFromQuery = null,
-            [FromQuery(Name = "key")] string keyFromQuery = null)
+    [HttpPost("set/{key}", Name = nameof(MetaController) + "." + nameof(Set))]
+    public async Task<IActionResult> Set([FromRoute] string orgSlug, [FromRoute] string dsSlug,
+        [FromRoute] string key, [FromBody] string data, [FromQuery] string path = null)
+    {
+        try
         {
-            // C# magics, precedence to form parameter
-            var path = pathFromForm ?? pathFromQuery;
-            var key = keyFromForm ?? keyFromQuery;
+            _logger.LogDebug("Meta Controller Set('{OrgSlug}', '{DsSlug}', '{Key}', '{Path}')", orgSlug, dsSlug, key, path);
 
-            try
-            {
-                _logger.LogDebug("Meta Controller Set('{OrgSlug}', '{DsSlug}', '{Key}', '{Path}')", orgSlug, dsSlug, key, path);
+            var res = await _metaManager.Set(orgSlug, dsSlug, key, data, path);
 
-                var res = await _metaManager.Set(orgSlug, dsSlug, key, data, path);
-
-                return Ok(res);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Exception in Meta controller Set('{OrgSlug}', '{DsSlug}', '{Key}', '{Path}')", orgSlug, dsSlug, key, path);
-                return ExceptionResult(ex);
-            }
+            return Ok(res);
         }
-
-        [HttpDelete("remove/{id}", Name = nameof(MetaController) + "." + nameof(Remove))]
-        public async Task<IActionResult> Remove([FromRoute] string orgSlug, [FromRoute] string dsSlug,
-            [FromRoute] string id)
+        catch (Exception ex)
         {
-            try
-            {
-                _logger.LogDebug("Meta Controller Remove('{OrgSlug}', '{DsSlug}', '{Id}')", orgSlug, dsSlug, id);
-
-                var res = await _metaManager.Remove(orgSlug, dsSlug, id);
-
-                return Ok(new { Removed = res });
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Exception in Meta controller Remove('{OrgSlug}', '{DsSlug}', '{Id}')", orgSlug, dsSlug, id);
-                return ExceptionResult(ex);
-            }
+            _logger.LogError(ex, "Exception in Meta controller Set('{OrgSlug}', '{DsSlug}', '{Key}', '{Path}')", orgSlug, dsSlug, key, path);
+            return ExceptionResult(ex);
         }
+    }
 
-        [HttpPost("remove", Name = nameof(MetaController) + "." + nameof(RemoveAlt))]
-        public async Task<IActionResult> RemoveAlt([FromRoute] string orgSlug, [FromRoute] string dsSlug,
-            [FromForm] string id)
+    [HttpPost("set", Name = nameof(MetaController) + "." + nameof(SetAlt))]
+    public async Task<IActionResult> SetAlt([FromRoute] string orgSlug, [FromRoute] string dsSlug,
+        [FromForm(Name = "key")] string keyFromForm, [FromForm] string data, [FromForm(Name = "path")] string pathFromForm = null,
+        [FromQuery(Name = "path")] string pathFromQuery = null,
+        [FromQuery(Name = "key")] string keyFromQuery = null)
+    {
+        // C# magics, precedence to form parameter
+        var path = pathFromForm ?? pathFromQuery;
+        var key = keyFromForm ?? keyFromQuery;
+
+        try
         {
-            try
-            {
-                _logger.LogDebug("Meta Controller RemoveAlt('{OrgSlug}', '{DsSlug}', '{Id}')", orgSlug, dsSlug, id);
+            _logger.LogDebug("Meta Controller Set('{OrgSlug}', '{DsSlug}', '{Key}', '{Path}')", orgSlug, dsSlug, key, path);
 
-                var res = await _metaManager.Remove(orgSlug, dsSlug, id);
+            var res = await _metaManager.Set(orgSlug, dsSlug, key, data, path);
 
-                return Ok(new { Removed = res });
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Exception in Meta controller RemoveAlt('{OrgSlug}', '{DsSlug}', '{Id}')", orgSlug, dsSlug, id);
-                return ExceptionResult(ex);
-            }
+            return Ok(res);
         }
-
-        [HttpDelete("unset/{key}", Name = nameof(MetaController) + "." + nameof(Unset))]
-        public async Task<IActionResult> Unset([FromRoute] string orgSlug, [FromRoute] string dsSlug,
-            [FromRoute] string key, [FromQuery] string path = null)
+        catch (Exception ex)
         {
-            try
-            {
-                _logger.LogDebug("Meta Controller Unset('{OrgSlug}', '{DsSlug}', '{Key}', '{Path}')", orgSlug, dsSlug, key, path);
-
-                var res = await _metaManager.Unset(orgSlug, dsSlug, key, path);
-
-                return Ok(new { Removed = res });
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex,
-                    "Exception in Meta controller Remove('{OrgSlug}', '{DsSlug}', '{Key}', '{Path}')", orgSlug, dsSlug, key, path);
-                return ExceptionResult(ex);
-            }
+            _logger.LogError(ex, "Exception in Meta controller Set('{OrgSlug}', '{DsSlug}', '{Key}', '{Path}')", orgSlug, dsSlug, key, path);
+            return ExceptionResult(ex);
         }
+    }
 
-        [HttpPost("unset", Name = nameof(MetaController) + "." + nameof(UnsetAlt))]
-        public async Task<IActionResult> UnsetAlt([FromRoute] string orgSlug, [FromRoute] string dsSlug,
-            [FromForm(Name = "key")] string keyFromForm, [FromForm(Name = "path")] string pathFromForm = null,
-            [FromQuery(Name = "path")] string pathFromQuery = null,
-            [FromQuery(Name = "key")] string keyFromQuery = null)
+    [HttpDelete("remove/{id}", Name = nameof(MetaController) + "." + nameof(Remove))]
+    public async Task<IActionResult> Remove([FromRoute] string orgSlug, [FromRoute] string dsSlug,
+        [FromRoute] string id)
+    {
+        try
         {
-            // C# magics, precedence to form parameter
-            var path = pathFromForm ?? pathFromQuery;
-            var key = keyFromForm ?? keyFromQuery;
+            _logger.LogDebug("Meta Controller Remove('{OrgSlug}', '{DsSlug}', '{Id}')", orgSlug, dsSlug, id);
 
-            try
-            {
-                _logger.LogDebug("Meta Controller UnsetAlt('{OrgSlug}', '{DsSlug}', '{Key}', '{Path}')", orgSlug, dsSlug, key, path);
+            var res = await _metaManager.Remove(orgSlug, dsSlug, id);
 
-                var res = await _metaManager.Unset(orgSlug, dsSlug, key, path);
-
-                return Ok(new { Removed = res });
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex,
-                    "Exception in Meta controller UnsetAlt('{OrgSlug}', '{DsSlug}', '{Key}', '{Path}')", orgSlug, dsSlug, key, path);
-                return ExceptionResult(ex);
-            }
+            return Ok(new { Removed = res });
         }
-
-        [HttpGet("list", Name = nameof(MetaController) + "." + nameof(List))]
-        [ProducesResponseType(typeof(IEnumerable<MetaListItem>), 200)]
-        public async Task<IActionResult> List([FromRoute] string orgSlug, [FromRoute] string dsSlug,
-            [FromQuery] string path = null)
+        catch (Exception ex)
         {
-            try
-            {
-                _logger.LogDebug("Meta Controller List('{OrgSlug}', '{DsSlug}', '{Path}')", orgSlug, dsSlug, path);
-
-                var res = await _metaManager.List(orgSlug, dsSlug, path);
-
-                return Ok(res);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Exception in Meta controller List('{OrgSlug}', '{DsSlug}', '{Path}')", orgSlug, dsSlug, path);
-                return ExceptionResult(ex);
-            }
+            _logger.LogError(ex, "Exception in Meta controller Remove('{OrgSlug}', '{DsSlug}', '{Id}')", orgSlug, dsSlug, id);
+            return ExceptionResult(ex);
         }
+    }
 
-        [HttpGet("get/{key}", Name = nameof(MetaController) + "." + nameof(Get))]
-        public async Task<IActionResult> Get([FromRoute] string orgSlug, [FromRoute] string dsSlug,
-            [FromRoute] string key, [FromQuery] string path = null)
+    [HttpPost("remove", Name = nameof(MetaController) + "." + nameof(RemoveAlt))]
+    public async Task<IActionResult> RemoveAlt([FromRoute] string orgSlug, [FromRoute] string dsSlug,
+        [FromForm] string id)
+    {
+        try
         {
-            try
-            {
-                _logger.LogDebug("Meta Controller Get('{OrgSlug}', '{DsSlug}', '{Key}', '{Path}')", orgSlug, dsSlug, key, path);
+            _logger.LogDebug("Meta Controller RemoveAlt('{OrgSlug}', '{DsSlug}', '{Id}')", orgSlug, dsSlug, id);
 
-                var res = await _metaManager.Get(orgSlug, dsSlug, key, path);
+            var res = await _metaManager.Remove(orgSlug, dsSlug, id);
 
-                return Ok(res);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Exception in Meta controller Get('{OrgSlug}', '{DsSlug}', '{Key}', '{Path}')", orgSlug, dsSlug, key, path);
-                return ExceptionResult(ex);
-            }
+            return Ok(new { Removed = res });
         }
-
-        [HttpPost("dump", Name = nameof(MetaController) + "." + nameof(Dump))]
-        [ProducesResponseType(typeof(IEnumerable<MetaDump>), 200)]
-        public async Task<IActionResult> Dump([FromRoute] string orgSlug, [FromRoute] string dsSlug,
-            [FromForm] string ids = null)
+        catch (Exception ex)
         {
-            try
-            {
-                _logger.LogDebug("Meta Controller Dump('{OrgSlug}', '{DsSlug}', '{Ids}')", orgSlug, dsSlug, ids);
+            _logger.LogError(ex, "Exception in Meta controller RemoveAlt('{OrgSlug}', '{DsSlug}', '{Id}')", orgSlug, dsSlug, id);
+            return ExceptionResult(ex);
+        }
+    }
 
-                var res = await _metaManager.Dump(orgSlug, dsSlug, ids);
+    [HttpDelete("unset/{key}", Name = nameof(MetaController) + "." + nameof(Unset))]
+    public async Task<IActionResult> Unset([FromRoute] string orgSlug, [FromRoute] string dsSlug,
+        [FromRoute] string key, [FromQuery] string path = null)
+    {
+        try
+        {
+            _logger.LogDebug("Meta Controller Unset('{OrgSlug}', '{DsSlug}', '{Key}', '{Path}')", orgSlug, dsSlug, key, path);
 
-                return Ok(res);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Exception in Meta controller Dump('{OrgSlug}', '{DsSlug}', '{Ids}')", orgSlug, dsSlug, ids);
-                return ExceptionResult(ex);
-            }
+            var res = await _metaManager.Unset(orgSlug, dsSlug, key, path);
+
+            return Ok(new { Removed = res });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex,
+                "Exception in Meta controller Remove('{OrgSlug}', '{DsSlug}', '{Key}', '{Path}')", orgSlug, dsSlug, key, path);
+            return ExceptionResult(ex);
+        }
+    }
+
+    [HttpPost("unset", Name = nameof(MetaController) + "." + nameof(UnsetAlt))]
+    public async Task<IActionResult> UnsetAlt([FromRoute] string orgSlug, [FromRoute] string dsSlug,
+        [FromForm(Name = "key")] string keyFromForm, [FromForm(Name = "path")] string pathFromForm = null,
+        [FromQuery(Name = "path")] string pathFromQuery = null,
+        [FromQuery(Name = "key")] string keyFromQuery = null)
+    {
+        // C# magics, precedence to form parameter
+        var path = pathFromForm ?? pathFromQuery;
+        var key = keyFromForm ?? keyFromQuery;
+
+        try
+        {
+            _logger.LogDebug("Meta Controller UnsetAlt('{OrgSlug}', '{DsSlug}', '{Key}', '{Path}')", orgSlug, dsSlug, key, path);
+
+            var res = await _metaManager.Unset(orgSlug, dsSlug, key, path);
+
+            return Ok(new { Removed = res });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex,
+                "Exception in Meta controller UnsetAlt('{OrgSlug}', '{DsSlug}', '{Key}', '{Path}')", orgSlug, dsSlug, key, path);
+            return ExceptionResult(ex);
+        }
+    }
+
+    [HttpGet("list", Name = nameof(MetaController) + "." + nameof(List))]
+    [ProducesResponseType(typeof(IEnumerable<MetaListItem>), 200)]
+    public async Task<IActionResult> List([FromRoute] string orgSlug, [FromRoute] string dsSlug,
+        [FromQuery] string path = null)
+    {
+        try
+        {
+            _logger.LogDebug("Meta Controller List('{OrgSlug}', '{DsSlug}', '{Path}')", orgSlug, dsSlug, path);
+
+            var res = await _metaManager.List(orgSlug, dsSlug, path);
+
+            return Ok(res);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Exception in Meta controller List('{OrgSlug}', '{DsSlug}', '{Path}')", orgSlug, dsSlug, path);
+            return ExceptionResult(ex);
+        }
+    }
+
+    [HttpGet("get/{key}", Name = nameof(MetaController) + "." + nameof(Get))]
+    public async Task<IActionResult> Get([FromRoute] string orgSlug, [FromRoute] string dsSlug,
+        [FromRoute] string key, [FromQuery] string path = null)
+    {
+        try
+        {
+            _logger.LogDebug("Meta Controller Get('{OrgSlug}', '{DsSlug}', '{Key}', '{Path}')", orgSlug, dsSlug, key, path);
+
+            var res = await _metaManager.Get(orgSlug, dsSlug, key, path);
+
+            return Ok(res);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Exception in Meta controller Get('{OrgSlug}', '{DsSlug}', '{Key}', '{Path}')", orgSlug, dsSlug, key, path);
+            return ExceptionResult(ex);
+        }
+    }
+
+    [HttpPost("dump", Name = nameof(MetaController) + "." + nameof(Dump))]
+    [ProducesResponseType(typeof(IEnumerable<MetaDump>), 200)]
+    public async Task<IActionResult> Dump([FromRoute] string orgSlug, [FromRoute] string dsSlug,
+        [FromForm] string ids = null)
+    {
+        try
+        {
+            _logger.LogDebug("Meta Controller Dump('{OrgSlug}', '{DsSlug}', '{Ids}')", orgSlug, dsSlug, ids);
+
+            var res = await _metaManager.Dump(orgSlug, dsSlug, ids);
+
+            return Ok(res);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Exception in Meta controller Dump('{OrgSlug}', '{DsSlug}', '{Ids}')", orgSlug, dsSlug, ids);
+            return ExceptionResult(ex);
         }
     }
 }

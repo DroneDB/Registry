@@ -11,28 +11,27 @@ using Registry.Web.Models;
 using Registry.Web.Models.Configuration;
 using Registry.Web.Services.Ports;
 
-namespace Registry.Web.Services.Adapters
+namespace Registry.Web.Services.Adapters;
+
+public class BatchTokenGenerator : IBatchTokenGenerator
 {
-    public class BatchTokenGenerator : IBatchTokenGenerator
+    private readonly int _tokenLength;
+
+    public const int MinTokenLength = 8;
+
+    public BatchTokenGenerator(IOptions<AppSettings> settings, ILogger<BatchTokenGenerator> logger)
     {
-        private readonly int _tokenLength;
+        _tokenLength = settings.Value.BatchTokenLength;
 
-        public const int MinTokenLength = 8;
-
-        public BatchTokenGenerator(IOptions<AppSettings> settings, ILogger<BatchTokenGenerator> logger)
+        if (_tokenLength < MinTokenLength)
         {
-            _tokenLength = settings.Value.BatchTokenLength;
-
-            if (_tokenLength < MinTokenLength)
-            {
-                logger.LogWarning("Invalid BatchTokenLength ({TokenLength}), capped to {MinTokenLength}", _tokenLength, MinTokenLength);
-                _tokenLength = MinTokenLength;
-            }
+            logger.LogWarning("Invalid BatchTokenLength ({TokenLength}), capped to {MinTokenLength}", _tokenLength, MinTokenLength);
+            _tokenLength = MinTokenLength;
         }
+    }
 
-        public string GenerateToken()
-        {
-            return CommonUtils.RandomString(_tokenLength);
-        }
+    public string GenerateToken()
+    {
+        return CommonUtils.RandomString(_tokenLength);
     }
 }

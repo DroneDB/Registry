@@ -1,9 +1,8 @@
-﻿namespace Registry.Ports.DroneDB.Models
+﻿namespace Registry.Ports.DroneDB.Models;
+
+public enum MergeStrategy
 {
-    public enum MergeStrategy
-    {
-        DontMerge = 0,
-        KeepTheirs = 1,
-        KeepOurs = 2
-    }
+    DontMerge = 0,
+    KeepTheirs = 1,
+    KeepOurs = 2
 }

@@ -1,6 +1,5 @@
-﻿namespace Registry.Web.Models.Configuration
+﻿namespace Registry.Web.Models.Configuration;
+
+public class InMemoryProviderSettings : CacheProviderSettings
 {
-    public class InMemoryProviderSettings : CacheProviderSettings
-    {
-    }
 }

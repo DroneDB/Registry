@@ -6,38 +6,37 @@ using System.Threading.Tasks;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Registry.Common;
 
-namespace Registry.Web.HealthChecks
+namespace Registry.Web.HealthChecks;
+
+public class DiskSpaceHealthCheck : IHealthCheck
 {
-    public class DiskSpaceHealthCheck : IHealthCheck
+    private readonly string _path;
+    private readonly float _freeSpacePercWarningThreshold;
+
+    public const float DefaultFreeSpacePercWarningThreshold = 0.1f;
+
+    public DiskSpaceHealthCheck(string path, float freeSpacePercWarningThreshold = DefaultFreeSpacePercWarningThreshold)
     {
-        private readonly string _path;
-        private readonly float _freeSpacePercWarningThreshold;
+        _path = path;
+        _freeSpacePercWarningThreshold = freeSpacePercWarningThreshold;
+    }
 
-        public const float DefaultFreeSpacePercWarningThreshold = 0.1f;
+    public async Task<HealthCheckResult> CheckHealthAsync(HealthCheckContext context, CancellationToken cancellationToken = new CancellationToken())
+    {
 
-        public DiskSpaceHealthCheck(string path, float freeSpacePercWarningThreshold = DefaultFreeSpacePercWarningThreshold)
+        var info = CommonUtils.GetStorageInfo(_path);
+
+        var data = new Dictionary<string, object>
         {
-            _path = path;
-            _freeSpacePercWarningThreshold = freeSpacePercWarningThreshold;
-        }
-
-        public async Task<HealthCheckResult> CheckHealthAsync(HealthCheckContext context, CancellationToken cancellationToken = new CancellationToken())
-        {
-
-            var info = CommonUtils.GetStorageInfo(_path);
-
-            var data = new Dictionary<string, object>
-            {
-                {"StorageTotalSize", info?.TotalSize},
-                {"StorageFreeSpace", info?.FreeSpace},
-                {"StorageFreeSpacePerc", info?.FreeSpacePerc}
-            };
+            {"StorageTotalSize", info?.TotalSize},
+            {"StorageFreeSpace", info?.FreeSpace},
+            {"StorageFreeSpacePerc", info?.FreeSpacePerc}
+        };
             
-            if (info != null && info.FreeSpacePerc <= _freeSpacePercWarningThreshold)
-                return HealthCheckResult.Degraded("Low on available disk space", null, data);
+        if (info != null && info.FreeSpacePerc <= _freeSpacePercWarningThreshold)
+            return HealthCheckResult.Degraded("Low on available disk space", null, data);
 
-            return HealthCheckResult.Healthy("Free disk space is fine", data);
+        return HealthCheckResult.Healthy("Free disk space is fine", data);
 
-        }
     }
 }

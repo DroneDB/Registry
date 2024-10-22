@@ -4,131 +4,130 @@ using Registry.Common;
 using Registry.Ports.DroneDB;
 using Registry.Ports.DroneDB.Models;
 
-namespace Registry.Web.Services.Adapters
+namespace Registry.Web.Services.Adapters;
+
+/// <summary>
+/// Centralized meta manager to prevent magic strings proliferation
+/// </summary>
+public class SafeMetaManager
 {
-    /// <summary>
-    /// Centralized meta manager to prevent magic strings proliferation
-    /// </summary>
-    public class SafeMetaManager
+    public const string NameField = "name";
+    public const string LastUpdateField = "mtime";
+    public const string PublicField = "public";
+    public const string VisibilityField = "visibility";
+    public const string ObjectsCountField = "entries";
+
+    private readonly IMetaManager _manager;
+
+    public SafeMetaManager(IMetaManager manager)
     {
-        public const string NameField = "name";
-        public const string LastUpdateField = "mtime";
-        public const string PublicField = "public";
-        public const string VisibilityField = "visibility";
-        public const string ObjectsCountField = "entries";
+        _manager = manager;
+    }
 
-        private readonly IMetaManager _manager;
-
-        public SafeMetaManager(IMetaManager manager)
+    public string Name
+    {
+        get
         {
-            _manager = manager;
-        }
-
-        public string Name
-        {
-            get
+            try
             {
-                try
-                {
-                    return  _manager.Get<string>(NameField);
-                }
-                catch (DDBException)
-                {
-                    return null;
-                }
+                return  _manager.Get<string>(NameField);
             }
-            set
+            catch (DDBException)
             {
-                if (value == null)
-                    throw new ArgumentException("Name cannot be null");
-
-                _manager.Set(NameField, value);
+                return null;
             }
         }
-
-        public int? Entries
+        set
         {
-            get
+            if (value == null)
+                throw new ArgumentException("Name cannot be null");
+
+            _manager.Set(NameField, value);
+        }
+    }
+
+    public int? Entries
+    {
+        get
+        {
+            try
             {
-                try
-                {
-                    return _manager.Get<int>(ObjectsCountField);
-                }
-                catch (DDBException)
-                {
-                    return null;
-                }
+                return _manager.Get<int>(ObjectsCountField);
+            }
+            catch (DDBException)
+            {
+                return null;
             }
         }
+    }
 
-        public Visibility? Visibility
+    public Visibility? Visibility
+    {
+        get
         {
-            get
-            {
 
-                try
-                {
-                    return (Visibility)_manager.Get<int>(VisibilityField);
-                }
-                catch (DDBException)
-                {
-                    return null;
-                }
-            }
-            set
+            try
             {
-                if (value == null)
-                    throw new ArgumentException("Visibility cannot be null");
-                _manager.Set(VisibilityField, ((int)value).ToString());
+                return (Visibility)_manager.Get<int>(VisibilityField);
+            }
+            catch (DDBException)
+            {
+                return null;
             }
         }
-
-        public bool? IsPublic
+        set
         {
-            get
+            if (value == null)
+                throw new ArgumentException("Visibility cannot be null");
+            _manager.Set(VisibilityField, ((int)value).ToString());
+        }
+    }
+
+    public bool? IsPublic
+    {
+        get
+        {
+            try
             {
-                try
-                {
-                    return _manager.Get<bool>(PublicField);
-                }
-                catch (DDBException)
-                {
-                    return null;
-                }
+                return _manager.Get<bool>(PublicField);
             }
-            set
+            catch (DDBException)
             {
-                if (value == null) throw new InvalidOperationException("Cannot set null value");
-                _manager.Set(PublicField, value.Value ? "1" : "0");
+                return null;
             }
         }
-
-        public DateTime? LastUpdate
+        set
         {
-            get
-            {
-                try
-                {
-                    var unixTime = _manager.Get<int>(LastUpdateField);
+            if (value == null) throw new InvalidOperationException("Cannot set null value");
+            _manager.Set(PublicField, value.Value ? "1" : "0");
+        }
+    }
 
-                    var dateTimeOffset = DateTimeOffset.FromUnixTimeSeconds(unixTime);
-
-                    return dateTimeOffset.LocalDateTime;
-                }
-                catch (DDBException)
-                {
-                    return null;
-                }
-            }
-            // Maybe this is not needed
-            set
+    public DateTime? LastUpdate
+    {
+        get
+        {
+            try
             {
-                if (value == null)
-                    throw new ArgumentException("LastUpdate cannot be null");
-                
-                var val = ((DateTimeOffset)value.Value).ToUnixTimeSeconds().ToString();
-                _manager.Set(LastUpdateField, val);
+                var unixTime = _manager.Get<int>(LastUpdateField);
+
+                var dateTimeOffset = DateTimeOffset.FromUnixTimeSeconds(unixTime);
+
+                return dateTimeOffset.LocalDateTime;
             }
+            catch (DDBException)
+            {
+                return null;
+            }
+        }
+        // Maybe this is not needed
+        set
+        {
+            if (value == null)
+                throw new ArgumentException("LastUpdate cannot be null");
+
+            var val = ((DateTimeOffset)value.Value).ToUnixTimeSeconds().ToString();
+            _manager.Set(LastUpdateField, val);
         }
     }
 }

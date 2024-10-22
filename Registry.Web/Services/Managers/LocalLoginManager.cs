@@ -12,56 +12,55 @@ using Registry.Web.Models.Configuration;
 using Registry.Web.Models.DTO;
 using Registry.Web.Services.Ports;
 
-namespace Registry.Web.Services.Managers
+namespace Registry.Web.Services.Managers;
+
+public class LocalLoginManager : ILoginManager
 {
-    public class LocalLoginManager : ILoginManager
+    private readonly UserManager<User> _userManager;
+    private readonly SignInManager<User> _signInManager;
+    private readonly ILogger<LocalLoginManager> _logger;
+    private readonly AppSettings _settings;
+
+    public LocalLoginManager(UserManager<User> userManager,
+        SignInManager<User> signInManager,
+        ILogger<LocalLoginManager> logger,
+        IOptions<AppSettings> settings)
     {
-        private readonly UserManager<User> _userManager;
-        private readonly SignInManager<User> _signInManager;
-        private readonly ILogger<LocalLoginManager> _logger;
-        private readonly AppSettings _settings;
+        _userManager = userManager;
+        _logger = logger;
+        _signInManager = signInManager;
+        _settings = settings.Value;
+    }
 
-        public LocalLoginManager(UserManager<User> userManager,
-            SignInManager<User> signInManager,
-            ILogger<LocalLoginManager> logger,
-            IOptions<AppSettings> settings)
+    public Task<LoginResultDto> CheckAccess(string token)
+    {
+        // No token login for local auth
+        return Task.FromResult(new LoginResultDto
         {
-            _userManager = userManager;
-            _logger = logger;
-            _signInManager = signInManager;
-            _settings = settings.Value;
-        }
+            Success = false
+        });
+    }
 
-        public Task<LoginResultDto> CheckAccess(string token)
-        {
-            // No token login for local auth
-            return Task.FromResult(new LoginResultDto
-            {
-                Success = false
-            });
-        }
+    // This is basically a stub
+    public async Task<LoginResultDto> CheckAccess(string userName, string password)
+    {
+        var user = await _userManager.FindByNameAsync(userName);
 
-        // This is basically a stub
-        public async Task<LoginResultDto> CheckAccess(string userName, string password)
-        {
-            var user = await _userManager.FindByNameAsync(userName);
-
-            if (user == null)
-                return new LoginResultDto
-                {
-                    Success = false,
-                    UserName = userName
-                };
-            
-            var res = await _signInManager.CheckPasswordSignInAsync(user, password, false);
-
+        if (user == null)
             return new LoginResultDto
             {
-                Success = res.Succeeded,
-                UserName = userName,
-                Metadata = user.Metadata
+                Success = false,
+                UserName = userName
             };
-        }
 
+        var res = await _signInManager.CheckPasswordSignInAsync(user, password, false);
+
+        return new LoginResultDto
+        {
+            Success = res.Succeeded,
+            UserName = userName,
+            Metadata = user.Metadata
+        };
     }
+
 }

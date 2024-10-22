@@ -1,18 +1,17 @@
 ﻿using System.ComponentModel.DataAnnotations;
 
-namespace Registry.Web.Models
+namespace Registry.Web.Models;
+
+public class CreateUserRequest
 {
-    public class CreateUserRequest
-    {
-        [Required]
-        public string UserName { get; set; }
+    [Required]
+    public string UserName { get; set; }
 
-        [Required]
-        public string Password { get; set; }
+    [Required]
+    public string Password { get; set; }
         
-        public string Email { get; set; }   
+    public string Email { get; set; }
         
-        public string[] Roles { get; set; }
+    public string[] Roles { get; set; }
 
-    }
 }

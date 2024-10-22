@@ -1,8 +1,7 @@
-﻿namespace Registry.Web.Models.Configuration
+﻿namespace Registry.Web.Models.Configuration;
+
+public class RedisProviderSettings : CacheProviderSettings
 {
-    public class RedisProviderSettings : CacheProviderSettings
-    {
-        public string InstanceAddress { get; set; }
-        public string InstanceName { get; set; }
-    }
+    public string InstanceAddress { get; set; }
+    public string InstanceName { get; set; }
 }

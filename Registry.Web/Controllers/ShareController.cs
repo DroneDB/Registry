@@ -20,123 +20,122 @@ using Registry.Common;
 using Registry.Web.Attributes;
 using Registry.Web.Utilities;
 
-namespace Registry.Web.Controllers
+namespace Registry.Web.Controllers;
+
+[Authorize]
+[ApiController]
+[Route(RoutesHelper.ShareRadix)]
+public class ShareController : ControllerBaseEx
 {
-    [Authorize]
-    [ApiController]
-    [Route(RoutesHelper.ShareRadix)]
-    public class ShareController : ControllerBaseEx
+    private readonly IShareManager _shareManager;
+
+    private readonly ILogger<ShareController> _logger;
+
+    public ShareController(IShareManager shareManager, ILogger<ShareController> logger)
     {
-        private readonly IShareManager _shareManager;
+        _shareManager = shareManager;
+        _logger = logger;
+    }
 
-        private readonly ILogger<ShareController> _logger;
-
-        public ShareController(IShareManager shareManager, ILogger<ShareController> logger)
+    [HttpPost("init")]
+    public async Task<IActionResult> Init([FromForm] ShareInitDto parameters)
+    {
+        try
         {
-            _shareManager = shareManager;
-            _logger = logger;
+            _logger.LogDebug("Share controller Init('{Tag}')", parameters.Tag);
+
+            var initRes = await _shareManager.Initialize(parameters);
+
+            return Ok(initRes);
         }
-
-        [HttpPost("init")]
-        public async Task<IActionResult> Init([FromForm] ShareInitDto parameters)
+        catch (Exception ex)
         {
-            try
-            {
-                _logger.LogDebug("Share controller Init('{Tag}')", parameters.Tag);
+            _logger.LogError(ex, "Exception in Share controller Init('{Tag}')", parameters.Tag);
 
-                var initRes = await _shareManager.Initialize(parameters);
-
-                return Ok(initRes);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Exception in Share controller Init('{Tag}')", parameters.Tag);
-
-                return ExceptionResult(ex);
-            }
+            return ExceptionResult(ex);
         }
+    }
 
-        [HttpGet("info/{token}")]
-        public async Task<IActionResult> Info(string token)
+    [HttpGet("info/{token}")]
+    public async Task<IActionResult> Info(string token)
+    {
+        try
         {
-            try
-            {
-                _logger.LogDebug("Share controller Info('{Token}')", token);
+            _logger.LogDebug("Share controller Info('{Token}')", token);
 
-                var res = await _shareManager.GetBatchInfo(token);
+            var res = await _shareManager.GetBatchInfo(token);
 
-                return Ok(res);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Exception in Share controller Info('{Token}')", token);
-
-                return ExceptionResult(ex);
-            }
+            return Ok(res);
         }
-
-        [HttpPost("upload/{token}")]
-        [DisableRequestSizeLimit]
-        [RequestFormLimits(ValueLengthLimit = int.MaxValue, MultipartBodyLengthLimit = long.MaxValue)]
-        public async Task<IActionResult> Upload(string token, [FromForm] string path, IFormFile file)
+        catch (Exception ex)
         {
-            try
-            {
-                _logger.LogDebug("Share controller Upload('{Token}', '{Path}', '{file?.FileName}')", token, path,
-                    file?.FileName);
+            _logger.LogError(ex, "Exception in Share controller Info('{Token}')", token);
 
-                if (file == null)
-                    throw new ArgumentException("No file uploaded");
-
-                await using var stream = file.OpenReadStream();
-                var res = await _shareManager.Upload(token, path, stream);
-                return Ok(res);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Exception in Share controller Upload('{Token}', '{Path}', '{file?.FileName}')",
-                    token, path, file?.FileName);
-
-                return ExceptionResult(ex);
-            }
+            return ExceptionResult(ex);
         }
+    }
 
-        [HttpPost("commit/{token}")]
-        public async Task<IActionResult> Commit(string token)
+    [HttpPost("upload/{token}")]
+    [DisableRequestSizeLimit]
+    [RequestFormLimits(ValueLengthLimit = int.MaxValue, MultipartBodyLengthLimit = long.MaxValue)]
+    public async Task<IActionResult> Upload(string token, [FromForm] string path, IFormFile file)
+    {
+        try
         {
-            try
-            {
-                _logger.LogDebug("Share controller Commit('{Token}')", token);
+            _logger.LogDebug("Share controller Upload('{Token}', '{Path}', '{file?.FileName}')", token, path,
+                file?.FileName);
 
-                var res = await _shareManager.Commit(token);
+            if (file == null)
+                throw new ArgumentException("No file uploaded");
 
-                return Ok(res);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Exception in Share controller Commit('{Token}')", token);
-
-                return ExceptionResult(ex);
-            }
+            await using var stream = file.OpenReadStream();
+            var res = await _shareManager.Upload(token, path, stream);
+            return Ok(res);
         }
-
-        [HttpPost("rollback/{token}")]
-        public async Task<IActionResult> Rollback(string token)
+        catch (Exception ex)
         {
-            try
-            {
-                _logger.LogDebug("Share controller Rollback('{Token}')", token);
+            _logger.LogError(ex, "Exception in Share controller Upload('{Token}', '{Path}', '{file?.FileName}')",
+                token, path, file?.FileName);
 
-                await _shareManager.Rollback(token);
+            return ExceptionResult(ex);
+        }
+    }
 
-                return Ok();
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Exception in Share controller Rollback('{Token}')", token);
+    [HttpPost("commit/{token}")]
+    public async Task<IActionResult> Commit(string token)
+    {
+        try
+        {
+            _logger.LogDebug("Share controller Commit('{Token}')", token);
 
-                return ExceptionResult(ex);
-            }
+            var res = await _shareManager.Commit(token);
+
+            return Ok(res);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Exception in Share controller Commit('{Token}')", token);
+
+            return ExceptionResult(ex);
+        }
+    }
+
+    [HttpPost("rollback/{token}")]
+    public async Task<IActionResult> Rollback(string token)
+    {
+        try
+        {
+            _logger.LogDebug("Share controller Rollback('{Token}')", token);
+
+            await _shareManager.Rollback(token);
+
+            return Ok();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Exception in Share controller Rollback('{Token}')", token);
+
+            return ExceptionResult(ex);
         }
     }
 }

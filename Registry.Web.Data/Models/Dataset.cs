@@ -6,27 +6,26 @@ using System.Text.Json.Serialization;
 using Newtonsoft.Json;
 using Registry.Common;
 
-namespace Registry.Web.Data.Models
+namespace Registry.Web.Data.Models;
+
+public class Dataset : IRequestAccess
 {
-    public class Dataset : IRequestAccess
-    {
-        [MaxLength(128)]
-        [Required]
-        public string Slug { get; set; }
-        public Guid InternalRef { get; set; }
+    [MaxLength(128)]
+    [Required]
+    public string Slug { get; set; }
+    public Guid InternalRef { get; set; }
 
-        [Key]
-        public int Id { get; set; }
+    [Key]
+    public int Id { get; set; }
 
-        [Required]
-        public DateTime CreationDate { get; set; }
+    [Required]
+    public DateTime CreationDate { get; set; }
         
-        public string[] FileTypes { get; set; }
+    public string[] FileTypes { get; set; }
         
-        [Required]
-        public Organization Organization { get; set; }
+    [Required]
+    public Organization Organization { get; set; }
 
-        public virtual ICollection<Batch> Batches { get; set; }
+    public virtual ICollection<Batch> Batches { get; set; }
         
-    }
 }

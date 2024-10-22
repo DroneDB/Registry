@@ -2,53 +2,52 @@
 using System.Collections.Generic;
 using System.Text;
 
-namespace Registry.Common
-{
-    public class DictionaryEx<TKey, TValue> : Dictionary<TKey, TValue>
-    {
+namespace Registry.Common;
 
-        public new void Add(TKey key, TValue value)
+public class DictionaryEx<TKey, TValue> : Dictionary<TKey, TValue>
+{
+
+    public new void Add(TKey key, TValue value)
+    {
+        try
+        {
+            base.Add(key, value);
+        }
+        catch (ArgumentException ex)
+        {
+            throw new ArgumentException(
+                $"Cannot add duplicate key '{key}' with value '{value}' in dictionary <{typeof(TKey).Name}, {typeof(TValue).Name}>", ex);
+        }
+    }
+
+    public new TValue this[TKey key]
+    {
+        get
         {
             try
             {
-                base.Add(key, value);
+                return base[key];
             }
-            catch (ArgumentException ex)
+            catch (KeyNotFoundException ex)
             {
-                throw new ArgumentException(
-                    $"Cannot add duplicate key '{key}' with value '{value}' in dictionary <{typeof(TKey).Name}, {typeof(TValue).Name}>", ex);
+                throw new KeyNotFoundException(
+                    $"Cannot find key '{key}' in dictionary <{typeof(TKey).Name}, {typeof(TValue).Name}>", ex);
             }
         }
-
-        public new TValue this[TKey key]
+        set
         {
-            get
-            {
-                try
-                {
-                    return base[key];
-                }
-                catch (KeyNotFoundException ex)
-                {
-                    throw new KeyNotFoundException(
-                        $"Cannot find key '{key}' in dictionary <{typeof(TKey).Name}, {typeof(TValue).Name}>", ex);
-                }
-            }
-            set
-            {
 
-                try
-                {
-                    base[key] = value;
-                }
-                catch (KeyNotFoundException ex)
-                {
-                    throw new KeyNotFoundException(
-                        $"Cannot find key '{key}' in dictionary <{typeof(TKey).Name}, {typeof(TValue).Name}>", ex);
-                }
-
+            try
+            {
+                base[key] = value;
             }
+            catch (KeyNotFoundException ex)
+            {
+                throw new KeyNotFoundException(
+                    $"Cannot find key '{key}' in dictionary <{typeof(TKey).Name}, {typeof(TValue).Name}>", ex);
+            }
+
         }
-
     }
+
 }

@@ -2,56 +2,55 @@
 using System.Diagnostics;
 using System.IO;
 
-namespace Registry.Common.Test
+namespace Registry.Common.Test;
+
+public class TempFile : IDisposable
 {
-    public class TempFile : IDisposable
+
+    public string FilePath { get; }
+
+    public TempFile(string url, string domain = "temp")
     {
 
-        public string FilePath { get; }
+        var uri = new Uri(url);
 
-        public TempFile(string url, string domain = "temp")
+        var fileName = Path.GetFileName(uri.LocalPath);
+
+        var folder = Path.Combine(Path.GetTempPath(), domain);
+        FilePath = Path.Combine(folder, fileName);
+
+        Debug.WriteLine("Temp file: " + FilePath);
+
+        var info = new FileInfo(FilePath);
+
+        if (!info.Exists || info.Length == 0)
         {
 
-            var uri = new Uri(url);
+            Directory.CreateDirectory(folder);
 
-            var fileName = Path.GetFileName(uri.LocalPath);
-
-            var folder = Path.Combine(Path.GetTempPath(), domain);
-            FilePath = Path.Combine(folder, fileName);
-
-            Debug.WriteLine("Temp file: " + FilePath);
-
-            var info = new FileInfo(FilePath);
-
-            if (!info.Exists || info.Length == 0)
-            {
-
-                Directory.CreateDirectory(folder);
-
-                Debug.WriteLine("File does not exist, downloading it");
+            Debug.WriteLine("File does not exist, downloading it");
                 
-                HttpHelper.DownloadFileAsync(url, FilePath).Wait();
+            HttpHelper.DownloadFileAsync(url, FilePath).Wait();
                 
-                Debug.WriteLine("File downloaded");
-            }
-            else
-            {
-                Debug.WriteLine("File already existing, leveraging temp folder1");
-            }
+            Debug.WriteLine("File downloaded");
         }
-
-        public static void CleanDomain(string domain)
+        else
         {
-            var folder = Path.Combine(Path.GetTempPath(), domain);
-            if (Directory.Exists(folder))
-                Directory.Delete(folder, true);
+            Debug.WriteLine("File already existing, leveraging temp folder1");
         }
+    }
 
-        public void Dispose()
-        {
-            Debug.WriteLine("Deleting: " + FilePath);
-            File.Delete(FilePath);
-            Debug.WriteLine("Deleted temp file");
-        }
+    public static void CleanDomain(string domain)
+    {
+        var folder = Path.Combine(Path.GetTempPath(), domain);
+        if (Directory.Exists(folder))
+            Directory.Delete(folder, true);
+    }
+
+    public void Dispose()
+    {
+        Debug.WriteLine("Deleting: " + FilePath);
+        File.Delete(FilePath);
+        Debug.WriteLine("Deleted temp file");
     }
 }

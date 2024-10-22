@@ -1,7 +1,6 @@
-﻿namespace Registry.Ports
+﻿namespace Registry.Ports;
+
+public interface INameGenerator
 {
-    public interface INameGenerator
-    {
-        public string GenerateName();
-    }
+    public string GenerateName();
 }

@@ -6,38 +6,37 @@ using System.Threading.Tasks;
 using Registry.Ports.DroneDB.Models;
 using Registry.Web.Data.Models;
 
-namespace Registry.Web.Models.DTO
+namespace Registry.Web.Models.DTO;
+
+public class DatasetDto
 {
-    public class DatasetDto
-    {
         
-        [Required]
-        public string Slug { get; set; }
-        [Required]
-        public DateTime CreationDate { get; set; }
-        public Dictionary<string, object> Properties { get; set; }
+    [Required]
+    public string Slug { get; set; }
+    [Required]
+    public DateTime CreationDate { get; set; }
+    public Dictionary<string, object> Properties { get; set; }
 
-        public long Size { get; set; }
+    public long Size { get; set; }
 
-    }
+}
     
-    public class DatasetNewDto
-    {
-        [Required]
-        public string Slug { get; set; }
+public class DatasetNewDto
+{
+    [Required]
+    public string Slug { get; set; }
 
-        public string Name { get; set; }
+    public string Name { get; set; }
         
-        public Visibility? Visibility { get; set; }
+    public Visibility? Visibility { get; set; }
 
-    }
+}
     
-    public class DatasetEditDto
-    {
+public class DatasetEditDto
+{
 
-        public string Name { get; set; }
+    public string Name { get; set; }
         
-        public Visibility? Visibility { get; set; }
+    public Visibility? Visibility { get; set; }
 
-    }
 }

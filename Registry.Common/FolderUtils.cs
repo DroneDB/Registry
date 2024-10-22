@@ -5,48 +5,47 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace Registry.Common
+namespace Registry.Common;
+
+public static class FolderUtils
 {
-    public static class FolderUtils
+
+    // Credit https://stackoverflow.com/a/690980
+    public static void Copy(string sourceDirectory, string targetDirectory, bool overwrite = false, string[] excludes = null)
     {
+        var diSource = new DirectoryInfo(sourceDirectory);
+        var diTarget = new DirectoryInfo(targetDirectory);
 
-        // Credit https://stackoverflow.com/a/690980
-        public static void Copy(string sourceDirectory, string targetDirectory, bool overwrite = false, string[] excludes = null)
+        CopyAll(diSource, diTarget, overwrite, excludes);
+    }
+
+    public static void CopyAll(DirectoryInfo source, DirectoryInfo target, bool overwrite = false, string[] excludes = null)
+    {
+        Directory.CreateDirectory(target.FullName);
+
+        // Copy each file into the new directory.
+        foreach (var fi in source.GetFiles())
         {
-            var diSource = new DirectoryInfo(sourceDirectory);
-            var diTarget = new DirectoryInfo(targetDirectory);
+            if (excludes != null && excludes.Contains(fi.Name)) continue;
 
-            CopyAll(diSource, diTarget, overwrite, excludes);
+            var dest = Path.Combine(target.FullName, fi.Name);
+            if (File.Exists(dest) && !overwrite) continue;
+
+            fi.CopyTo(dest, overwrite);
         }
 
-        public static void CopyAll(DirectoryInfo source, DirectoryInfo target, bool overwrite = false, string[] excludes = null)
+        // Copy each subdirectory using recursion.
+        foreach (var diSourceSubDir in source.GetDirectories())
         {
-            Directory.CreateDirectory(target.FullName);
+            var nextTargetSubDir = target.CreateSubdirectory(diSourceSubDir.Name);
 
-            // Copy each file into the new directory.
-            foreach (var fi in source.GetFiles())
-            {
-                if (excludes != null && excludes.Contains(fi.Name)) continue;
-
-                var dest = Path.Combine(target.FullName, fi.Name);
-                if (File.Exists(dest) && !overwrite) continue;
-
-                fi.CopyTo(dest, overwrite);
-            }
-
-            // Copy each subdirectory using recursion.
-            foreach (var diSourceSubDir in source.GetDirectories())
-            {
-                var nextTargetSubDir = target.CreateSubdirectory(diSourceSubDir.Name);
-
-                CopyAll(diSourceSubDir, nextTargetSubDir, overwrite, excludes);
-            }
+            CopyAll(diSourceSubDir, nextTargetSubDir, overwrite, excludes);
         }
+    }
 
-        public static void Move(string sourceDirectory, string targetDirectory, string[] excludes = null)
-        {
-            Copy(sourceDirectory, targetDirectory, true, excludes);
-            Directory.Delete(sourceDirectory, true);
-        }
+    public static void Move(string sourceDirectory, string targetDirectory, string[] excludes = null)
+    {
+        Copy(sourceDirectory, targetDirectory, true, excludes);
+        Directory.Delete(sourceDirectory, true);
     }
 }

@@ -53,675 +53,685 @@ using Registry.Web.Identity.Models;
 using Serilog;
 using Serilog.Events;
 
-namespace Registry.Web
+namespace Registry.Web;
+
+public class Startup
 {
-    public class Startup
+    private IConfiguration Configuration { get; }
+
+
+    public Startup(IConfiguration configuration)
     {
-        private IConfiguration Configuration { get; }
+        Configuration = configuration;
+    }
 
+    public void ConfigureServices(IServiceCollection services)
+    {
+        services.AddCors();
+        services.AddControllers();
 
-        public Startup(IConfiguration configuration)
+        services.AddSwaggerGen(c =>
         {
-            Configuration = configuration;
-        }
-
-        public void ConfigureServices(IServiceCollection services)
-        {
-            services.AddCors();
-            services.AddControllers();
-
-            services.AddSwaggerGen(c =>
+            c.SwaggerDoc("v1", new OpenApiInfo
             {
-                c.SwaggerDoc("v1", new OpenApiInfo
+                Version = "v1",
+                Title = "Registry API",
+                Description = "API to manage DroneDB Registry",
+                Contact = new OpenApiContact
                 {
-                    Version = "v1",
-                    Title = "Registry API",
-                    Description = "API to manage DroneDB Registry",
-                    Contact = new OpenApiContact
-                    {
-                        Name = "Luca Di Leo",
-                        Email = "ldileo@digipa.it",
-                        Url = new Uri("https://digipa.it/"),
-                    },
-                    License = new OpenApiLicense
-                    {
-                        Name = "Use under AGPLv3 License",
-                        Url = new Uri("https://github.com/DroneDB/Registry/blob/master/LICENSE.md"),
-                    }
-                });
-                c.DocumentFilter<BasePathDocumentFilter>();
-            });
-            services.AddSwaggerGenNewtonsoftSupport();
-
-            services.AddMvcCore()
-                .AddApiExplorer()
-                .AddNewtonsoftJson();
-
-            services.AddResponseCaching(options =>
-            {
-                options.MaximumBodySize = 8 * 1024 * 1024; // 8MB
-                options.SizeLimit = 10 * 1024 * 1024; // 10MB
-                options.UseCaseSensitivePaths = true;
-            });
-
-            services.AddSpaStaticFiles(config => { config.RootPath = "ClientApp"; });
-
-            // Let's use a strongly typed class for settings
-            var appSettingsSection = Configuration.GetSection("AppSettings");
-            services.Configure<AppSettings>(appSettingsSection);
-            var appSettings = appSettingsSection.Get<AppSettings>();
-
-            ConfigureDbProvider<ApplicationDbContext>(services, appSettings.AuthProvider,
-                MagicStrings.IdentityConnectionName, "Identity");
-
-            if (!string.IsNullOrWhiteSpace(appSettings.ExternalAuthUrl))
-            {
-                services.AddIdentityCore<User>()
-                    .AddRoles<IdentityRole>()
-                    .AddEntityFrameworkStores<ApplicationDbContext>();
-
-                services.AddScoped<ILoginManager, RemoteLoginManager>();
-            }
-            else
-            {
-                services.AddIdentityCore<User>()
-                    .AddRoles<IdentityRole>()
-                    .AddEntityFrameworkStores<ApplicationDbContext>()
-                    .AddSignInManager();
-
-                services.AddScoped<ILoginManager, LocalLoginManager>();
-            }
-
-            ConfigureDbProvider<RegistryContext>(services, appSettings.RegistryProvider,
-                MagicStrings.RegistryConnectionName, "Data");
-
-            var key = Encoding.ASCII.GetBytes(appSettings.Secret);
-            services.AddAuthentication(auth =>
+                    Name = "Luca Di Leo",
+                    Email = "ldileo@digipa.it",
+                    Url = new Uri("https://digipa.it/"),
+                },
+                License = new OpenApiLicense
                 {
-                    auth.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
-                    auth.DefaultChallengeScheme = JwtBearerDefaults.AuthenticationScheme;
-                })
-                .AddJwtBearer(jwt =>
-                {
-                    jwt.RequireHttpsMetadata = false;
-                    jwt.SaveToken = true;
-                    jwt.TokenValidationParameters = new TokenValidationParameters
-                    {
-                        ValidateIssuerSigningKey = true,
-                        IssuerSigningKey = new SymmetricSecurityKey(key),
-                        ValidateIssuer = false,
-                        ValidateAudience = false
-                    };
-                });
-
-            services.Configure<IdentityOptions>(options =>
-            {
-                // Password settings.
-                options.Password.RequireDigit = false;
-                options.Password.RequireLowercase = false;
-                options.Password.RequireNonAlphanumeric = false;
-                options.Password.RequireUppercase = false;
-                options.Password.RequiredLength = 1;
-                options.Password.RequiredUniqueChars = 0;
-
-                // Lockout settings.
-                options.Lockout.DefaultLockoutTimeSpan = TimeSpan.FromMinutes(5);
-                options.Lockout.MaxFailedAccessAttempts = 5;
-                options.Lockout.AllowedForNewUsers = true;
-
-                // User settings.
-                options.User.AllowedUserNameCharacters =
-                    "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-._@+";
-                options.User.RequireUniqueEmail = false;
-            });
-
-            // Error messages that make sense
-            services.Configure<ApiBehaviorOptions>(o =>
-            {
-                o.InvalidModelStateResponseFactory = actionContext =>
-                    new BadRequestObjectResult(new ErrorResponse(actionContext.ModelState));
-            });
-
-            services.AddMemoryCache();
-            services.AddCacheProvider(appSettings);
-            services.AddHangfireProvider(appSettings, Configuration);
-
-            var instanceType = Configuration.GetValue<InstanceType>("InstanceType");
-
-            // If we are running both the webserver and the processing node
-            if (instanceType == InstanceType.Default)
-            {
-                var workers = appSettings.WorkerThreads > 0 ? appSettings.WorkerThreads : Environment.ProcessorCount;
-                services.AddHangfireServer(options => { options.WorkerCount = workers; });
-            }
-
-            services.AddHealthChecks()
-                .AddCheck<CacheHealthCheck>("Cache health check", null, ["service"])
-                .AddCheck<DdbHealthCheck>("DroneDB health check", null, ["service"])
-                .AddCheck<UserManagerHealthCheck>("User manager health check", null, ["database"])
-                .AddDbContextCheck<RegistryContext>("Registry database health check", null, ["database"])
-                .AddDbContextCheck<ApplicationDbContext>("Registry identity database health check", null,
-                    ["database"])
-                .AddDiskSpaceHealthCheck(appSettings.DatasetsPath, "Ddb datasets path space health check", null,
-                    ["storage"])
-                .AddDiskSpaceHealthCheck(appSettings.CachePath, "Ddb cache path space health check", null,
-                    ["storage"])
-                .AddDiskSpaceHealthCheck(appSettings.TempPath, "Ddb temp path space health check", null,
-                    ["storage"])
-                .AddDiskSpaceHealthCheck(appSettings.StoragePath, "Ddb storage path space health check", null,
-                    ["storage"])
-                .AddHangfire(options => { options.MinimumAvailableServers = 1; }, "Hangfire health check", null,
-                    ["database"]);
-
-            /*
-             * NOTE about services lifetime:
-             *
-             * - A type should be registered as a "Singleton" only when it is fully thread-safe and is not dependent on other services or types.
-             * - Scoped services are bound under a scope (request), and a new instance is created and reused inside a created "scope".
-             * - If a service is defined as Transient, it is instantiated whenever invoked within a request.
-             *   It is almost similar to creating an instance of the same type using "new" keyword and using it.
-             *   It is also the safest option among all other service types, since we don't need to bother about the thread-safety and memory leaks.
-             *
-             * = In terms of lifetime, the singleton object gets the highest life per instantiation,
-             *   followed by a Scoped service object and the least by a Transient object.
-             */
-
-            services.AddTransient<TokenManagerMiddleware>();
-            services.AddTransient<JwtInCookieMiddleware>();
-            services.AddTransient<ITokenManager, TokenManager>();
-            services.AddSingleton<IHttpContextAccessor, HttpContextAccessor>();
-
-            services.AddScoped<IUtils, WebUtils>();
-            services.AddScoped<IAuthManager, AuthManager>();
-
-            services.AddScoped<IUsersManager, UsersManager>();
-            services.AddScoped<IOrganizationsManager, OrganizationsManager>();
-            services.AddScoped<IDatasetsManager, DatasetsManager>();
-            services.AddScoped<IStacManager, StacManager>();
-            services.AddScoped<IObjectsManager, ObjectsManager>();
-            services.AddScoped<IShareManager, ShareManager>();
-            services.AddScoped<IPushManager, PushManager>();
-            services.AddScoped<IDdbManager, DdbManager>();
-            services.AddScoped<ISystemManager, SystemManager>();
-            services.AddScoped<IBackgroundJobsProcessor, BackgroundJobsProcessor>();
-            services.AddScoped<IMetaManager, Services.Managers.MetaManager>();
-
-            services.AddScoped<IConfigurationHelper<AppSettings>, ConfigurationHelper>(_ =>
-                new ConfigurationHelper(MagicStrings.AppSettingsFileName));
-
-            services.AddScoped<BasicAuthFilter>();
-
-            if (!string.IsNullOrWhiteSpace(appSettings.RemoteThumbnailGeneratorUrl))
-            {
-                services.Configure<RemoteThumbnailGeneratorSettings>(options =>
-                    options.Url = appSettings.RemoteThumbnailGeneratorUrl);
-                services.AddSingleton<IThumbnailGenerator, RemoteThumbnailGenerator>();
-            }
-            else
-            {
-                services.AddSingleton<IThumbnailGenerator, LocalThumbnailGenerator>();
-            }
-
-            services.AddSingleton<IFileSystem, FileSystem>();
-            services.AddSingleton<IPasswordHasher, PasswordHasher>();
-            services.AddSingleton<IBatchTokenGenerator, BatchTokenGenerator>();
-            services.AddSingleton<INameGenerator, NameGenerator>();
-            services.AddSingleton<ICacheManager, CacheManager>();
-            services.AddSingleton<ObjectCache>(provider => new FileCache(FileCacheManagers.Hashed,
-                appSettings.CachePath, new DefaultSerializationBinder(),
-                true, appSettings.ClearCacheInterval ?? default)
-            {
-                PayloadReadMode = FileCache.PayloadMode.Filename,
-                PayloadWriteMode = FileCache.PayloadMode.Filename,
-                DefaultPolicy = new CacheItemPolicy
-                {
-                    SlidingExpiration = appSettings.ClearCacheInterval ?? TimeSpan.FromDays(1)
+                    Name = "Use under AGPLv3 License",
+                    Url = new Uri("https://github.com/DroneDB/Registry/blob/master/LICENSE.md"),
                 }
             });
+            c.DocumentFilter<BasePathDocumentFilter>();
+        });
+        services.AddSwaggerGenNewtonsoftSupport();
 
-            services.AddResponseCompression();
+        services.AddMvcCore()
+            .AddApiExplorer()
+            .AddNewtonsoftJson();
 
-            if (appSettings.MaxRequestBodySize.HasValue)
-            {
-                services.Configure<FormOptions>(options =>
-                {
-                    // See https://docs.microsoft.com/it-it/aspnet/core/fundamentals/servers/kestrel?view=aspnetcore-3.1#maximum-client-connections
-                    // We could put this in config "Kestrel->Limits" section
-                    options.MultipartBodyLengthLimit = appSettings.MaxRequestBodySize.Value;
-                });
-            }
+        services.AddResponseCaching(options =>
+        {
+            options.MaximumBodySize = 8 * 1024 * 1024; // 8MB
+            options.SizeLimit = 10 * 1024 * 1024; // 10MB
+            options.UseCaseSensitivePaths = true;
+        });
 
-            services.AddHttpContextAccessor();
+        services.AddSpaStaticFiles(config => { config.RootPath = "ClientApp"; });
 
-            // If using Kestrel:
-            services.Configure<KestrelServerOptions>(options => { options.AllowSynchronousIO = true; });
+        // Let's use a strongly typed class for settings
+        var appSettingsSection = Configuration.GetSection("AppSettings");
+        services.Configure<AppSettings>(appSettingsSection);
+        var appSettings = appSettingsSection.Get<AppSettings>();
 
-            // If using IIS:
-            services.Configure<IISServerOptions>(options => { options.AllowSynchronousIO = true; });
+        ConfigureDbProvider<ApplicationDbContext>(services, appSettings.AuthProvider,
+            MagicStrings.IdentityConnectionName, "Identity");
 
-            // TODO: Enable when needed. Should check return object structure
-            // services.AddOData();
+        if (!string.IsNullOrWhiteSpace(appSettings.ExternalAuthUrl))
+        {
+            services.AddIdentityCore<User>()
+                .AddRoles<IdentityRole>()
+                .AddEntityFrameworkStores<ApplicationDbContext>();
 
-            if (appSettings.WorkerThreads > 0)
-            {
-                ThreadPool.GetMinThreads(out _, out var ioCompletionThreads);
-                ThreadPool.SetMinThreads(appSettings.WorkerThreads, ioCompletionThreads);
-            }
+            services.AddScoped<ILoginManager, RemoteLoginManager>();
+        }
+        else
+        {
+            services.AddIdentityCore<User>()
+                .AddRoles<IdentityRole>()
+                .AddEntityFrameworkStores<ApplicationDbContext>()
+                .AddSignInManager();
+
+            services.AddScoped<ILoginManager, LocalLoginManager>();
         }
 
-        public void Configure(IApplicationBuilder app, IWebHostEnvironment env)
-        {
-            if (env.IsDevelopment())
-            {
-                app.UseDeveloperExceptionPage();
-            }
-            else
-            {
-                app.UseHsts();
-            }
+        ConfigureDbProvider<RegistryContext>(services, appSettings.RegistryProvider,
+            MagicStrings.RegistryConnectionName, "Data");
 
-            app.UseSerilogRequestLogging(options =>
+        var key = Encoding.ASCII.GetBytes(appSettings.Secret);
+        services.AddAuthentication(auth =>
             {
-                // Customize the message template
-                options.MessageTemplate = "Handled {RequestPath}";
-
-                // Emit debug-level events instead of the defaults
-                options.GetLevel = (httpContext, elapsed, ex) => LogEventLevel.Debug;
-
-                // Attach additional properties to the request completion event
-                options.EnrichDiagnosticContext = (diagnosticContext, httpContext) =>
+                auth.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
+                auth.DefaultChallengeScheme = JwtBearerDefaults.AuthenticationScheme;
+            })
+            .AddJwtBearer(jwt =>
+            {
+                jwt.RequireHttpsMetadata = false;
+                jwt.SaveToken = true;
+                jwt.TokenValidationParameters = new TokenValidationParameters
                 {
-                    diagnosticContext.Set("RequestHost", httpContext.Request.Host.Value);
-                    diagnosticContext.Set("RequestScheme", httpContext.Request.Scheme);
+                    ValidateIssuerSigningKey = true,
+                    IssuerSigningKey = new SymmetricSecurityKey(key),
+                    ValidateIssuer = false,
+                    ValidateAudience = false
                 };
             });
 
-            app.UseDefaultFiles();
+        services.Configure<IdentityOptions>(options =>
+        {
+            // Password settings.
+            options.Password.RequireDigit = false;
+            options.Password.RequireLowercase = false;
+            options.Password.RequireNonAlphanumeric = false;
+            options.Password.RequireUppercase = false;
+            options.Password.RequiredLength = 1;
+            options.Password.RequiredUniqueChars = 0;
 
-            app.UseSwagger();
-            app.UseSwaggerUI(c => { c.SwaggerEndpoint("/swagger/v1/swagger.json", "Registry API"); });
+            // Lockout settings.
+            options.Lockout.DefaultLockoutTimeSpan = TimeSpan.FromMinutes(5);
+            options.Lockout.MaxFailedAccessAttempts = 5;
+            options.Lockout.AllowedForNewUsers = true;
 
-            app.UseRouting();
+            // User settings.
+            options.User.AllowedUserNameCharacters =
+                "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-._@+";
+            options.User.RequireUniqueEmail = false;
+        });
 
-            // We are permissive now
-            app.UseCors(cors => cors
-                .AllowAnyOrigin()
-                .AllowAnyMethod()
-                .AllowAnyHeader());
+        // Error messages that make sense
+        services.Configure<ApiBehaviorOptions>(o =>
+        {
+            o.InvalidModelStateResponseFactory = actionContext =>
+                new BadRequestObjectResult(new ErrorResponse(actionContext.ModelState));
+        });
 
-            app.UseMiddleware<JwtInCookieMiddleware>();
+        services.AddMemoryCache();
+        services.AddCacheProvider(appSettings);
+        services.AddHangfireProvider(appSettings, Configuration);
 
-            app.UseAuthentication();
-            app.UseAuthorization();
+        var instanceType = Configuration.GetValue<InstanceType>("InstanceType");
 
-            app.UseResponseCompression();
-            app.UseResponseCaching();
-
-            app.UseMiddleware<TokenManagerMiddleware>();
-
-            app.UseHangfireDashboard(MagicStrings.HangFireUrl, new DashboardOptions
-            {
-                AsyncAuthorization = [new HangfireAuthorizationFilter()]
-            });
-
-            app.UseEndpoints(endpoints =>
-            {
-                endpoints.MapControllers();
-
-                endpoints.MapHealthChecks(MagicStrings.QuickHealthUrl, new HealthCheckOptions
-                {
-                    Predicate = _ => false
-                }).RequireAuthorization();
-
-                endpoints.MapHealthChecks(MagicStrings.HealthUrl, new HealthCheckOptions
-                {
-                    ResponseWriter = UIResponseWriter.WriteHealthCheckUIResponse
-                }).RequireAuthorization();
-
-                endpoints.MapGet(MagicStrings.VersionUrl,
-                    async context =>
-                    {
-                        await context.Response.WriteAsync(
-                            Assembly.GetExecutingAssembly().GetName().Version?.ToString() ?? "undefined");
-                    });
-
-                endpoints.MapHangfireDashboard().RequireAuthorization();
-
-                // TODO: Enable when needed
-                // endpoints.MapODataRoute("odata", "odata", GetEdmModel());
-            });
-
-            app.UseWhen(context => !context.Request.Path.StartsWithSegments("/static"), builder =>
-            {
-                builder.UseSpaStaticFiles(new StaticFileOptions
-                {
-                    ServeUnknownFileTypes = true,
-                });
-
-                builder.UseSpa(spa =>
-                {
-                    // To learn more about options for serving an Angular SPA from ASP.NET Core,
-                    // see https://go.microsoft.com/fwlink/?linkid=864501
-                    spa.Options.SourcePath = "ClientApp";
-
-                    if (env.IsDevelopment())
-                    {
-                    }
-                });
-            });
-
-            SetupDatabase(app).Wait();
-            SetupFileCache(app);
-
-            SetupCleanupJobs(app);
-
-            PrintStartupInfo(app);
+        // If we are running both the webserver and the processing node
+        if (instanceType == InstanceType.Default)
+        {
+            var workers = appSettings.WorkerThreads > 0 ? appSettings.WorkerThreads : Environment.ProcessorCount;
+            services.AddHangfireServer(options => { options.WorkerCount = workers; });
         }
 
-        private static void SetupCleanupJobs(IApplicationBuilder app)
+        services.AddHealthChecks()
+            .AddCheck<CacheHealthCheck>("Cache health check", null, ["service"])
+            .AddCheck<DdbHealthCheck>("DroneDB health check", null, ["service"])
+            .AddCheck<UserManagerHealthCheck>("User manager health check", null, ["database"])
+            .AddDbContextCheck<RegistryContext>("Registry database health check", null, ["database"])
+            .AddDbContextCheck<ApplicationDbContext>("Registry identity database health check", null,
+                ["database"])
+            .AddDiskSpaceHealthCheck(appSettings.DatasetsPath, "Ddb datasets path space health check", null,
+                ["storage"])
+            .AddDiskSpaceHealthCheck(appSettings.CachePath, "Ddb cache path space health check", null,
+                ["storage"])
+            .AddDiskSpaceHealthCheck(appSettings.TempPath, "Ddb temp path space health check", null,
+                ["storage"])
+            .AddDiskSpaceHealthCheck(appSettings.StoragePath, "Ddb storage path space health check", null,
+                ["storage"])
+            .AddHangfire(options => { options.MinimumAvailableServers = 1; }, "Hangfire health check", null,
+                ["database"]);
+
+        /*
+         * NOTE about services lifetime:
+         *
+         * - A type should be registered as a "Singleton" only when it is fully thread-safe and is not dependent on other services or types.
+         * - Scoped services are bound under a scope (request), and a new instance is created and reused inside a created "scope".
+         * - If a service is defined as Transient, it is instantiated whenever invoked within a request.
+         *   It is almost similar to creating an instance of the same type using "new" keyword and using it.
+         *   It is also the safest option among all other service types, since we don't need to bother about the thread-safety and memory leaks.
+         *
+         * = In terms of lifetime, the singleton object gets the highest life per instantiation,
+         *   followed by a Scoped service object and the least by a Transient object.
+         */
+
+        services.AddTransient<TokenManagerMiddleware>();
+        services.AddTransient<JwtInCookieMiddleware>();
+        services.AddTransient<ITokenManager, TokenManager>();
+        services.AddSingleton<IHttpContextAccessor, HttpContextAccessor>();
+
+        services.AddScoped<IUtils, WebUtils>();
+        services.AddScoped<IAuthManager, AuthManager>();
+
+        services.AddScoped<IUsersManager, UsersManager>();
+        services.AddScoped<IOrganizationsManager, OrganizationsManager>();
+        services.AddScoped<IDatasetsManager, DatasetsManager>();
+        services.AddScoped<IStacManager, StacManager>();
+        services.AddScoped<IObjectsManager, ObjectsManager>();
+        services.AddScoped<IShareManager, ShareManager>();
+        services.AddScoped<IPushManager, PushManager>();
+        services.AddScoped<IDdbManager, DdbManager>();
+        services.AddScoped<ISystemManager, SystemManager>();
+        services.AddScoped<IBackgroundJobsProcessor, BackgroundJobsProcessor>();
+        services.AddScoped<IMetaManager, Services.Managers.MetaManager>();
+
+        services.AddScoped<IConfigurationHelper<AppSettings>, ConfigurationHelper>(_ =>
+            new ConfigurationHelper(MagicStrings.AppSettingsFileName));
+
+        services.AddScoped<BasicAuthFilter>();
+
+        if (!string.IsNullOrWhiteSpace(appSettings.RemoteThumbnailGeneratorUrl))
         {
-            var manager = app.ApplicationServices.GetService<IRecurringJobManager>();
-
-            if (manager == null)
-                throw new InvalidOperationException("Cannot get recurring job manager from service provider");
-
-            // Cleanup expired jobs
-            manager.AddOrUpdate("cleanup-expired-jobs",
-                () => HangfireUtils.CleanupExpiredJobs(null),
-                Cron.Daily);
+            services.Configure<RemoteThumbnailGeneratorSettings>(options =>
+                options.Url = appSettings.RemoteThumbnailGeneratorUrl);
+            services.AddSingleton<IThumbnailGenerator, RemoteThumbnailGenerator>();
+        }
+        else
+        {
+            services.AddSingleton<IThumbnailGenerator, LocalThumbnailGenerator>();
         }
 
-        private static void PrintStartupInfo(IApplicationBuilder app)
+        services.AddSingleton<IFileSystem, FileSystem>();
+        services.AddSingleton<IPasswordHasher, PasswordHasher>();
+        services.AddSingleton<IBatchTokenGenerator, BatchTokenGenerator>();
+        services.AddSingleton<INameGenerator, NameGenerator>();
+        services.AddSingleton<ICacheManager, CacheManager>();
+        services.AddSingleton<ObjectCache>(provider => new FileCache(FileCacheManagers.Hashed,
+            appSettings.CachePath, new DefaultSerializationBinder(),
+            true, appSettings.ClearCacheInterval ?? default)
         {
-            if (Log.IsEnabled(LogEventLevel.Information)) return;
-
-            var env = app.ApplicationServices.GetService<IHostEnvironment>();
-            Console.WriteLine(" -> Application started in {0} mode", env?.EnvironmentName ?? "unknown");
-            Console.WriteLine(" ?> Version: {0}", Assembly.GetExecutingAssembly().GetName().Version);
-            Console.WriteLine(" ?> Application started at {0}", DateTime.Now);
-
-            var serverAddresses = app.ServerFeatures.Get<IServerAddressesFeature>()?.Addresses;
-            if (serverAddresses != null)
+            PayloadReadMode = FileCache.PayloadMode.Filename,
+            PayloadWriteMode = FileCache.PayloadMode.Filename,
+            DefaultPolicy = new CacheItemPolicy
             {
-                foreach (var address in serverAddresses)
+                SlidingExpiration = appSettings.ClearCacheInterval ?? TimeSpan.FromDays(1)
+            }
+        });
+
+        services.AddResponseCompression();
+
+        if (appSettings.MaxRequestBodySize.HasValue)
+        {
+            services.Configure<FormOptions>(options =>
+            {
+                // See https://docs.microsoft.com/it-it/aspnet/core/fundamentals/servers/kestrel?view=aspnetcore-3.1#maximum-client-connections
+                // We could put this in config "Kestrel->Limits" section
+                options.MultipartBodyLengthLimit = appSettings.MaxRequestBodySize.Value;
+            });
+        }
+
+        services.AddHttpContextAccessor();
+
+        // If using Kestrel:
+        services.Configure<KestrelServerOptions>(options => { options.AllowSynchronousIO = true; });
+
+        // If using IIS:
+        services.Configure<IISServerOptions>(options => { options.AllowSynchronousIO = true; });
+
+        // TODO: Enable when needed. Should check return object structure
+        // services.AddOData();
+
+        if (appSettings.WorkerThreads > 0)
+        {
+            ThreadPool.GetMinThreads(out _, out var ioCompletionThreads);
+            ThreadPool.SetMinThreads(appSettings.WorkerThreads, ioCompletionThreads);
+        }
+    }
+
+    public void Configure(IApplicationBuilder app, IWebHostEnvironment env)
+    {
+        if (env.IsDevelopment())
+        {
+            app.UseDeveloperExceptionPage();
+        }
+        else
+        {
+            app.UseHsts();
+        }
+
+        app.UseSerilogRequestLogging(options =>
+        {
+            // Customize the message template
+            options.MessageTemplate = "Handled {RequestPath}";
+
+            // Emit debug-level events instead of the defaults
+            options.GetLevel = (httpContext, elapsed, ex) => LogEventLevel.Debug;
+
+            // Attach additional properties to the request completion event
+            options.EnrichDiagnosticContext = (diagnosticContext, httpContext) =>
+            {
+                diagnosticContext.Set("RequestHost", httpContext.Request.Host.Value);
+                diagnosticContext.Set("RequestScheme", httpContext.Request.Scheme);
+            };
+        });
+
+        app.UseDefaultFiles();
+
+        app.UseSwagger();
+        app.UseSwaggerUI(c => { c.SwaggerEndpoint("/swagger/v1/swagger.json", "Registry API"); });
+
+        app.UseRouting();
+
+        // We are permissive now
+        app.UseCors(cors => cors
+            .AllowAnyOrigin()
+            .AllowAnyMethod()
+            .AllowAnyHeader());
+
+        app.UseMiddleware<JwtInCookieMiddleware>();
+
+        app.UseAuthentication();
+        app.UseAuthorization();
+
+        app.UseResponseCompression();
+        app.UseResponseCaching();
+
+        app.UseMiddleware<TokenManagerMiddleware>();
+
+        app.UseHangfireDashboard(MagicStrings.HangFireUrl, new DashboardOptions
+        {
+            AsyncAuthorization = [new HangfireAuthorizationFilter()]
+        });
+
+        app.UseEndpoints(endpoints =>
+        {
+            endpoints.MapControllers();
+
+            endpoints.MapHealthChecks(MagicStrings.QuickHealthUrl, new HealthCheckOptions
+            {
+                Predicate = _ => false
+            }).RequireAuthorization();
+
+            endpoints.MapHealthChecks(MagicStrings.HealthUrl, new HealthCheckOptions
+            {
+                ResponseWriter = UIResponseWriter.WriteHealthCheckUIResponse
+            }).RequireAuthorization();
+
+            endpoints.MapGet(MagicStrings.VersionUrl,
+                async context =>
                 {
-                    var addr = address.Replace("0.0.0.0", "localhost");
-                    Console.WriteLine($" ?> Registry url: {addr}");
+                    await context.Response.WriteAsync(
+                        Assembly.GetExecutingAssembly().GetName().Version?.ToString() ?? "undefined");
+                });
+
+            endpoints.MapHangfireDashboard().RequireAuthorization();
+
+            // TODO: Enable when needed
+            // endpoints.MapODataRoute("odata", "odata", GetEdmModel());
+        });
+
+        app.UseWhen(context => !context.Request.Path.StartsWithSegments("/static"), builder =>
+        {
+            builder.UseSpaStaticFiles(new StaticFileOptions
+            {
+                ServeUnknownFileTypes = true,
+            });
+
+            builder.UseSpa(spa =>
+            {
+                // To learn more about options for serving an Angular SPA from ASP.NET Core,
+                // see https://go.microsoft.com/fwlink/?linkid=864501
+                spa.Options.SourcePath = "ClientApp";
+
+                if (env.IsDevelopment())
+                {
                 }
+            });
+        });
+
+        SetupDatabase(app).Wait();
+        SetupFileCache(app);
+
+        SetupCleanupJobs(app);
+
+        PrintStartupInfo(app);
+    }
+
+    private static void SetupCleanupJobs(IApplicationBuilder app)
+    {
+        var manager = app.ApplicationServices.GetService<IRecurringJobManager>();
+
+        if (manager == null)
+            throw new InvalidOperationException("Cannot get recurring job manager from service provider");
+
+        // Cleanup expired jobs
+        manager.AddOrUpdate("cleanup-expired-jobs",
+            () => HangfireUtils.CleanupExpiredJobs(null),
+            Cron.Daily);
+    }
+
+    private static void PrintStartupInfo(IApplicationBuilder app)
+    {
+        if (Log.IsEnabled(LogEventLevel.Information)) return;
+
+        var env = app.ApplicationServices.GetService<IHostEnvironment>();
+        Console.WriteLine(" -> Application started in {0} mode", env?.EnvironmentName ?? "unknown");
+        Console.WriteLine(" ?> Version: {0}", Assembly.GetExecutingAssembly().GetName().Version);
+        Console.WriteLine(" ?> Application started at {0}", DateTime.Now);
+
+        var serverAddresses = app.ServerFeatures.Get<IServerAddressesFeature>()?.Addresses;
+        if (serverAddresses != null)
+        {
+            foreach (var address in serverAddresses)
+            {
+                var addr = address.Replace("0.0.0.0", "localhost");
+                Console.WriteLine($" ?> Registry url: {addr}");
             }
-
-            var settingsOptions = app.ApplicationServices.GetService<IOptions<AppSettings>>();
-
-            if (settingsOptions == null)
-                throw new InvalidOperationException("AppSettings not found");
-
-            var settings = settingsOptions.Value;
-
-            if (settings.DefaultAdmin == null)
-                throw new InvalidOperationException("DefaultAdmin not found");
-
-            Console.WriteLine(" ?> Admin credentials: ");
-            Console.WriteLine(" ?> Username: {0}", settings.DefaultAdmin.UserName);
-            Console.WriteLine(" ?> Password: {0}", settings.DefaultAdmin.Password);
-
-            var url = serverAddresses?.FirstOrDefault();
-
-            if (!string.IsNullOrWhiteSpace(settings.ExternalUrlOverride))
-            {
-                Console.WriteLine($" ?> External URL: {settings.ExternalUrlOverride}");
-                url = settings.ExternalUrlOverride;
-            }
-
-            if (url != null)
-            {
-                var builder = new UriBuilder(url);
-
-                if (builder.Host == "0.0.0.0") builder.Host = "localhost";
-                var baseUri = builder.Uri;
-
-                Console.WriteLine();
-                Console.WriteLine(" ?> Useful links:");
-
-                var swaggerUri = new Uri(baseUri, MagicStrings.SwaggerUrl);
-                Console.WriteLine($" ?> Swagger: {swaggerUri}");
-
-                var versionUri = new Uri(baseUri, MagicStrings.VersionUrl);
-                Console.WriteLine($" ?> Version: {versionUri}");
-
-                var quickHealthUri = new Uri(baseUri, MagicStrings.QuickHealthUrl);
-                Console.WriteLine($" ?> (req auth) Quick Health: {quickHealthUri}");
-
-                var healthUri = new Uri(baseUri, MagicStrings.HealthUrl);
-                Console.WriteLine($" ?> (req auth) Health: {healthUri}");
-
-                var hangfireUri = new Uri(baseUri, MagicStrings.HangFireUrl);
-                Console.WriteLine($" ?> (req auth) Hangfire: {hangfireUri}");
-
-                Console.WriteLine();
-            }
-
-            Console.WriteLine(" ?> Press Ctrl+C to quit");
         }
 
-        private void SetupFileCache(IApplicationBuilder app)
+        var settingsOptions = app.ApplicationServices.GetService<IOptions<AppSettings>>();
+
+        if (settingsOptions == null)
+            throw new InvalidOperationException("AppSettings not found");
+
+        var settings = settingsOptions.Value;
+
+        if (settings.DefaultAdmin == null)
+            throw new InvalidOperationException("DefaultAdmin not found");
+
+        Console.WriteLine(" ?> Admin credentials: ");
+        Console.WriteLine(" ?> Username: {0}", settings.DefaultAdmin.UserName);
+        Console.WriteLine(" ?> Password: {0}", settings.DefaultAdmin.Password);
+
+        var url = serverAddresses?.FirstOrDefault();
+
+        if (!string.IsNullOrWhiteSpace(settings.ExternalUrlOverride))
         {
-            var appSettingsSection = Configuration.GetSection("AppSettings");
-            var appSettings = appSettingsSection.Get<AppSettings>();
-
-            var cacheManager = app.ApplicationServices.GetService<ICacheManager>();
-            var thumbnailGenerator = app.ApplicationServices.GetService<IThumbnailGenerator>();
-
-            Debug.Assert(cacheManager != null, nameof(cacheManager) + " != null");
-
-            cacheManager.Register(MagicStrings.TileCacheSeed, parameters =>
-            {
-                var ddb = (DDB)parameters[0];
-                var sourcePath = (string)parameters[1];
-                var sourceHash = (string)parameters[2];
-                var tx = (int)parameters[3];
-                var ty = (int)parameters[4];
-                var tz = (int)parameters[5];
-                var retina = (bool)parameters[6];
-
-                return ddb.GenerateTile(sourcePath, tz, tx, ty, retina, sourceHash);
-            }, appSettings.TilesCacheExpiration);
-
-            cacheManager.Register(MagicStrings.ThumbnailCacheSeed, parameters =>
-            {
-                // TODO: Can be removed
-                var ddb = (DDB)parameters[0];
-                var sourcePath = (string)parameters[1];
-                var size = (int)parameters[2];
-
-                using var stream = new MemoryStream();
-                thumbnailGenerator.GenerateThumbnailAsync(sourcePath, size, stream).Wait();
-                return stream.ToArray();
-            }, appSettings.ThumbnailsCacheExpiration);
+            Console.WriteLine($" ?> External URL: {settings.ExternalUrlOverride}");
+            url = settings.ExternalUrlOverride;
         }
 
-        // NOTE: Maybe put all this as stated in https://stackoverflow.com/a/55707949
-        private async Task SetupDatabase(IApplicationBuilder app)
+        if (url != null)
         {
-            using var serviceScope = app.ApplicationServices
-                .GetRequiredService<IServiceScopeFactory>()
-                .CreateScope();
-            await using var applicationDbContext = serviceScope.ServiceProvider.GetService<ApplicationDbContext>();
+            var builder = new UriBuilder(url);
 
-            if (applicationDbContext == null)
-                throw new InvalidOperationException("Cannot get application db context from service provider");
+            if (builder.Host == "0.0.0.0") builder.Host = "localhost";
+            var baseUri = builder.Uri;
 
-            var identityIsSqlite = applicationDbContext.Database.IsSqlite();
+            Console.WriteLine();
+            Console.WriteLine(" ?> Useful links:");
 
-            if (identityIsSqlite)
-                CommonUtils.EnsureFolderCreated(Configuration.GetConnectionString(MagicStrings.IdentityConnectionName));
+            var swaggerUri = new Uri(baseUri, MagicStrings.SwaggerUrl);
+            Console.WriteLine($" ?> Swagger: {swaggerUri}");
 
-            if (identityIsSqlite || applicationDbContext.Database.IsMySql())
-                await applicationDbContext.Database.SafeMigrateAsync();
+            var versionUri = new Uri(baseUri, MagicStrings.VersionUrl);
+            Console.WriteLine($" ?> Version: {versionUri}");
 
-            await using var registryDbContext = serviceScope.ServiceProvider.GetService<RegistryContext>();
+            var quickHealthUri = new Uri(baseUri, MagicStrings.QuickHealthUrl);
+            Console.WriteLine($" ?> (req auth) Quick Health: {quickHealthUri}");
 
-            if (registryDbContext == null)
-                throw new InvalidOperationException("Cannot get registry db context from service provider");
+            var healthUri = new Uri(baseUri, MagicStrings.HealthUrl);
+            Console.WriteLine($" ?> (req auth) Health: {healthUri}");
 
-            var registryIsSqlite = registryDbContext.Database.IsSqlite();
+            var hangfireUri = new Uri(baseUri, MagicStrings.HangFireUrl);
+            Console.WriteLine($" ?> (req auth) Hangfire: {hangfireUri}");
 
-            if (registryIsSqlite)
-                CommonUtils.EnsureFolderCreated(Configuration.GetConnectionString(MagicStrings.RegistryConnectionName));
-
-            if (registryIsSqlite || registryDbContext.Database.IsMySql())
-                await registryDbContext.Database.SafeMigrateAsync();
-
-            await CreateInitialData(registryDbContext);
-            await CreateDefaultAdmin(registryDbContext, serviceScope.ServiceProvider);
+            Console.WriteLine();
         }
 
+        Console.WriteLine(" ?> Press Ctrl+C to quit");
+    }
 
-        private void ConfigureDbProvider<T>(IServiceCollection services, DbProvider provider,
-            string connectionStringName, string migrationsNamespace) where T : DbContext
+    private void SetupFileCache(IApplicationBuilder app)
+    {
+        var appSettingsSection = Configuration.GetSection("AppSettings");
+        var appSettings = appSettingsSection.Get<AppSettings>();
+
+        var cacheManager = app.ApplicationServices.GetService<ICacheManager>();
+        var thumbnailGenerator = app.ApplicationServices.GetService<IThumbnailGenerator>();
+
+        Debug.Assert(cacheManager != null, nameof(cacheManager) + " != null");
+
+        cacheManager.Register(MagicStrings.TileCacheSeed, parameters =>
         {
-            var connectionString = Configuration.GetConnectionString(connectionStringName);
+            var ddb = (DDB)parameters[0];
+            var sourcePath = (string)parameters[1];
+            var sourceHash = (string)parameters[2];
+            var tx = (int)parameters[3];
+            var ty = (int)parameters[4];
+            var tz = (int)parameters[5];
+            var retina = (bool)parameters[6];
 
-            services.AddDbContext<T>(options =>
-                _ = provider switch
-                {
-                    DbProvider.Sqlite => options.UseSqlite(connectionString,
-                        x => x.MigrationsAssembly("Registry.Web." + migrationsNamespace + ".SqliteMigrations")),
-                    DbProvider.Mysql => options.UseMySql(connectionString, ServerVersion.AutoDetect(connectionString),
-                        x =>
-                        {
-                            x.EnableRetryOnFailure();
-                            x.MigrationsAssembly("Registry.Web." + migrationsNamespace + ".MySqlMigrations");
-                        }),
-                    // DbProvider.Mssql => options.UseSqlServer(connectionString),
-                    _ => throw new ArgumentOutOfRangeException(nameof(provider), $"Unrecognised provider: '{provider}'")
-                });
-        }
+            return ddb.GenerateTile(sourcePath, tz, tx, ty, retina, sourceHash);
+        }, appSettings.TilesCacheExpiration);
 
-        private static async Task CreateInitialData(RegistryContext context)
+        cacheManager.Register(MagicStrings.ThumbnailCacheSeed, parameters =>
         {
-            // If no organizations in database, let's create the public one
-            if (context.Organizations.Any())
-                return;
+            // TODO: Can be removed
+            var ddb = (DDB)parameters[0];
+            var sourcePath = (string)parameters[1];
+            var size = (int)parameters[2];
 
-            var entity = new Organization
+            using var stream = new MemoryStream();
+            thumbnailGenerator.GenerateThumbnailAsync(sourcePath, size, stream).Wait();
+            return stream.ToArray();
+        }, appSettings.ThumbnailsCacheExpiration);
+    }
+
+    // NOTE: Maybe put all this as stated in https://stackoverflow.com/a/55707949
+    private async Task SetupDatabase(IApplicationBuilder app)
+    {
+        using var serviceScope = app.ApplicationServices
+            .GetRequiredService<IServiceScopeFactory>()
+            .CreateScope();
+        await using var applicationDbContext = serviceScope.ServiceProvider.GetService<ApplicationDbContext>();
+
+        if (applicationDbContext == null)
+            throw new InvalidOperationException("Cannot get application db context from service provider");
+
+        var identityIsSqlite = applicationDbContext.Database.IsSqlite();
+
+        if (identityIsSqlite)
+            CommonUtils.EnsureFolderCreated(Configuration.GetConnectionString(MagicStrings.IdentityConnectionName));
+
+        if (identityIsSqlite || applicationDbContext.Database.IsMySql())
+            await applicationDbContext.Database.SafeMigrateAsync();
+
+        await using var registryDbContext = serviceScope.ServiceProvider.GetService<RegistryContext>();
+
+        if (registryDbContext == null)
+            throw new InvalidOperationException("Cannot get registry db context from service provider");
+
+        var registryIsSqlite = registryDbContext.Database.IsSqlite();
+
+        if (registryIsSqlite)
+            CommonUtils.EnsureFolderCreated(Configuration.GetConnectionString(MagicStrings.RegistryConnectionName));
+
+        if (registryIsSqlite || registryDbContext.Database.IsMySql())
+            await registryDbContext.Database.SafeMigrateAsync();
+
+        await CreateInitialData(registryDbContext);
+        await CreateDefaultAdmin(registryDbContext, serviceScope.ServiceProvider);
+    }
+
+
+    private void ConfigureDbProvider<T>(IServiceCollection services, DbProvider provider,
+        string connectionStringName, string migrationsNamespace) where T : DbContext
+    {
+        var connectionString = Configuration.GetConnectionString(connectionStringName);
+
+        services.AddDbContext<T>(options =>
+            _ = provider switch
             {
-                Slug = MagicStrings.PublicOrganizationSlug,
-                Name = MagicStrings.PublicOrganizationSlug.ToPascalCase(false, CultureInfo.InvariantCulture),
-                CreationDate = DateTime.Now,
-                Description = "Organization",
-                IsPublic = true,
-                // NOTE: Maybe this is a good idea to flag this org as "system"
-                OwnerId = null
+                DbProvider.Sqlite => options.UseSqlite(connectionString,
+                    x => x.MigrationsAssembly("Registry.Web." + migrationsNamespace + ".SqliteMigrations")),
+                DbProvider.Mysql => options.UseMySql(connectionString, ServerVersion.AutoDetect(connectionString),
+                    x =>
+                    {
+                        x.EnableRetryOnFailure();
+                        x.MigrationsAssembly("Registry.Web." + migrationsNamespace + ".MySqlMigrations");
+                    }),
+                // DbProvider.Mssql => options.UseSqlServer(connectionString),
+                _ => throw new ArgumentOutOfRangeException(nameof(provider), $"Unrecognised provider: '{provider}'")
+            });
+    }
+
+    private static async Task CreateInitialData(RegistryContext context)
+    {
+        // If no organizations in database, let's create the public one
+        if (context.Organizations.Any())
+            return;
+
+        var entity = new Organization
+        {
+            Slug = MagicStrings.PublicOrganizationSlug,
+            Name = MagicStrings.PublicOrganizationSlug.ToPascalCase(false, CultureInfo.InvariantCulture),
+            CreationDate = DateTime.Now,
+            Description = "Organization",
+            IsPublic = true,
+            // NOTE: Maybe this is a good idea to flag this org as "system"
+            OwnerId = null
+        };
+        var ds = new Dataset
+        {
+            Slug = MagicStrings.DefaultDatasetSlug,
+            CreationDate = DateTime.Now,
+            InternalRef = Guid.NewGuid()
+        };
+        entity.Datasets = new List<Dataset> { ds };
+
+        context.Organizations.Add(entity);
+        await context.SaveChangesAsync();
+    }
+
+    private static async Task CreateDefaultAdmin(RegistryContext context, IServiceProvider provider)
+    {
+        var usersManager = provider.GetService<UserManager<User>>();
+        var roleManager = provider.GetService<RoleManager<IdentityRole>>();
+        var appSettings = provider.GetService<IOptions<AppSettings>>();
+
+        if (usersManager == null)
+            throw new InvalidOperationException("Cannot get users manager from service provider");
+
+        if (roleManager == null)
+            throw new InvalidOperationException("Cannot get role manager from service provider");
+
+        if (appSettings == null)
+            throw new InvalidOperationException("Cannot get app settings from service provider");
+
+        var defaultAdmin = appSettings.Value.DefaultAdmin;
+
+        // Check if admin role exists
+        var adminRole = await roleManager.FindByNameAsync(ApplicationDbContext.AdminRoleName);
+
+        if (adminRole == null)
+        {
+            // Create admin role
+            adminRole = new IdentityRole(ApplicationDbContext.AdminRoleName);
+            var r = await roleManager.CreateAsync(adminRole);
+            if (!r.Succeeded)
+                throw new InvalidOperationException("Cannot create admin role: " + r.Errors.ToErrorString());
+        }
+
+        var deactivatedRole = await roleManager.FindByNameAsync(ApplicationDbContext.DeactivatedRoleName);
+
+        if (deactivatedRole == null)
+        {
+            // Create deactivated role
+            deactivatedRole = new IdentityRole(ApplicationDbContext.DeactivatedRoleName);
+            var r = await roleManager.CreateAsync(deactivatedRole);
+            if (!r.Succeeded)
+                throw new InvalidOperationException("Cannot create deactivated role: " + r.Errors.ToErrorString());
+        }
+
+        // Check if default admin exists
+        var adminUser = usersManager.Users.FirstOrDefault(usr => usr.UserName == defaultAdmin.UserName);
+
+        if (adminUser == null)
+        {
+            // Create admin user
+            adminUser = new User
+            {
+                Email = defaultAdmin.Email,
+                UserName = defaultAdmin.UserName
             };
-            var ds = new Dataset
-            {
-                Slug = MagicStrings.DefaultDatasetSlug,
-                CreationDate = DateTime.Now,
-                InternalRef = Guid.NewGuid()
-            };
-            entity.Datasets = new List<Dataset> { ds };
 
-            context.Organizations.Add(entity);
-            await context.SaveChangesAsync();
+            var usrRes = await usersManager.CreateAsync(adminUser, defaultAdmin.Password);
+            if (!usrRes.Succeeded)
+                throw new InvalidOperationException(
+                    "Cannot create default admin: " + usrRes.Errors?.ToErrorString());
+
+            var res = await usersManager.AddToRoleAsync(adminUser, ApplicationDbContext.AdminRoleName);
+            if (!res.Succeeded)
+                throw new InvalidOperationException(
+                    "Cannot add admin to admin role: " + res.Errors?.ToErrorString());
         }
-
-        private static async Task CreateDefaultAdmin(RegistryContext context, IServiceProvider provider)
+        else
         {
-            var usersManager = provider.GetService<UserManager<User>>();
-            var roleManager = provider.GetService<RoleManager<IdentityRole>>();
-            var appSettings = provider.GetService<IOptions<AppSettings>>();
-
-            if (usersManager == null)
-                throw new InvalidOperationException("Cannot get users manager from service provider");
-
-            if (roleManager == null)
-                throw new InvalidOperationException("Cannot get role manager from service provider");
-
-            if (appSettings == null)
-                throw new InvalidOperationException("Cannot get app settings from service provider");
-
-            var defaultAdmin = appSettings.Value.DefaultAdmin;
-
-            // Check if admin role exists
-            var adminRole = await roleManager.FindByNameAsync(ApplicationDbContext.AdminRoleName);
-
-            if (adminRole == null)
+            // Ensure that admin has the admin role
+            if (!await usersManager.IsInRoleAsync(adminUser, ApplicationDbContext.AdminRoleName))
             {
-                // Create admin role
-                adminRole = new IdentityRole(ApplicationDbContext.AdminRoleName);
-                var r = await roleManager.CreateAsync(adminRole);
-                if (!r.Succeeded)
-                    throw new InvalidOperationException("Cannot create admin role: " + r.Errors.ToErrorString());
-            }
-
-            // Check if default admin exists
-            var adminUser = usersManager.Users.FirstOrDefault(usr => usr.UserName == defaultAdmin.UserName);
-
-            if (adminUser == null)
-            {
-                // Create admin user
-                adminUser = new User
-                {
-                    Email = defaultAdmin.Email,
-                    UserName = defaultAdmin.UserName
-                };
-
-                var usrRes = await usersManager.CreateAsync(adminUser, defaultAdmin.Password);
-                if (!usrRes.Succeeded)
-                    throw new InvalidOperationException(
-                        "Cannot create default admin: " + usrRes.Errors?.ToErrorString());
-
                 var res = await usersManager.AddToRoleAsync(adminUser, ApplicationDbContext.AdminRoleName);
                 if (!res.Succeeded)
                     throw new InvalidOperationException(
                         "Cannot add admin to admin role: " + res.Errors?.ToErrorString());
             }
-            else
+
+            // Set admin password
+            var passRes = await usersManager.RemovePasswordAsync(adminUser);
+            if (!passRes.Succeeded)
+                throw new InvalidOperationException(
+                    "Cannot remove password for admin: " + passRes.Errors?.ToErrorString());
+
+            passRes = await usersManager.AddPasswordAsync(adminUser, defaultAdmin.Password);
+            if (!passRes.Succeeded)
+                throw new InvalidOperationException(
+                    "Cannot set password for admin: " + passRes.Errors?.ToErrorString());
+
+            // Sets admin email
+            adminUser.Email = defaultAdmin.Email;
+            await context.SaveChangesAsync();
+        }
+
+        // Ensure that admin organization exists
+        var adminOrgSlug = defaultAdmin.UserName.ToSlug();
+
+        var org = await context.Organizations.FirstOrDefaultAsync(o => o.Slug == adminOrgSlug);
+        if (org == null)
+        {
+            org = new Organization
             {
-                // Ensure that admin has the admin role
-                if (!await usersManager.IsInRoleAsync(adminUser, ApplicationDbContext.AdminRoleName))
-                {
-                    var res = await usersManager.AddToRoleAsync(adminUser, ApplicationDbContext.AdminRoleName);
-                    if (!res.Succeeded)
-                        throw new InvalidOperationException(
-                            "Cannot add admin to admin role: " + res.Errors?.ToErrorString());
-                }
+                Slug = adminOrgSlug,
+                Name = $"{defaultAdmin.UserName} organization",
+                CreationDate = DateTime.Now,
+                Description = null,
+                IsPublic = false,
+                OwnerId = adminUser.Id
+            };
 
-                // Set admin password
-                var passRes = await usersManager.RemovePasswordAsync(adminUser);
-                if (!passRes.Succeeded)
-                    throw new InvalidOperationException(
-                        "Cannot remove password for admin: " + passRes.Errors?.ToErrorString());
-
-                passRes = await usersManager.AddPasswordAsync(adminUser, defaultAdmin.Password);
-                if (!passRes.Succeeded)
-                    throw new InvalidOperationException(
-                        "Cannot set password for admin: " + passRes.Errors?.ToErrorString());
-
-                // Sets admin email
-                adminUser.Email = defaultAdmin.Email;
-                await context.SaveChangesAsync();
-            }
-
-            // Ensure that admin organization exists
-            var adminOrgSlug = defaultAdmin.UserName.ToSlug();
-
-            var org = await context.Organizations.FirstOrDefaultAsync(o => o.Slug == adminOrgSlug);
-            if (org == null)
-            {
-                org = new Organization
-                {
-                    Slug = adminOrgSlug,
-                    Name = $"{defaultAdmin.UserName} organization",
-                    CreationDate = DateTime.Now,
-                    Description = null,
-                    IsPublic = false,
-                    OwnerId = adminUser.Id
-                };
-
-                await context.Organizations.AddAsync(org);
-                await context.SaveChangesAsync();
-            }
+            await context.Organizations.AddAsync(org);
+            await context.SaveChangesAsync();
         }
     }
 }

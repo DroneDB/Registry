@@ -1,7 +1,6 @@
-﻿namespace Registry.Web.Models.DTO
+﻿namespace Registry.Web.Models.DTO;
+
+public class UploadNewSessionResultDto
 {
-    public class UploadNewSessionResultDto
-    {
-        public int SessionId { get; set; }
-    }
+    public int SessionId { get; set; }
 }

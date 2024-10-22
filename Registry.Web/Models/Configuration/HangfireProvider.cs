@@ -1,8 +1,7 @@
-﻿namespace Registry.Web.Models.Configuration
+﻿namespace Registry.Web.Models.Configuration;
+
+public enum HangfireProvider
 {
-    public enum HangfireProvider
-    {
-        InMemory,
-        Mysql
-    }
+    InMemory,
+    Mysql
 }

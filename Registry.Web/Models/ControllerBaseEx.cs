@@ -8,40 +8,39 @@ using Microsoft.AspNetCore.Mvc;
 using Registry.Web.Exceptions;
 using Registry.Web.Services.Ports;
 
-namespace Registry.Web.Models
+namespace Registry.Web.Models;
+
+public class ControllerBaseEx : ControllerBase
 {
-    public class ControllerBaseEx : ControllerBase
+
+    protected IActionResult ExceptionResult(Exception ex)
     {
 
-        protected IActionResult ExceptionResult(Exception ex)
+        // Do not retry if the quota is exceeded
+        var noRetry = ex is QuotaExceededException;
+            
+        var err = new ErrorResponse(ex.Message, noRetry);
+            
+        return ex switch
         {
-
-            // Do not retry if the quota is exceeded
-            var noRetry = ex is QuotaExceededException;
-            
-            var err = new ErrorResponse(ex.Message, noRetry);
-            
-            return ex switch
-            {
-                UnauthorizedException _ => Unauthorized(err),
-                ConflictException _ => Conflict(err),
-                NotFoundException _ => NotFound(err),
-                _ => BadRequest(err)
-            };
-        }
-        
-        protected IActionResult ExceptionResult(Exception ex, bool noRetry)
-        {
-            var err = new ErrorResponse(ex.Message, noRetry);
-            
-            return ex switch
-            {
-                UnauthorizedException _ => Unauthorized(err),
-                ConflictException _ => Conflict(err),
-                NotFoundException _ => NotFound(err),
-                _ => BadRequest(err)
-            };
-        }
- 
+            UnauthorizedException _ => Unauthorized(err),
+            ConflictException _ => Conflict(err),
+            NotFoundException _ => NotFound(err),
+            _ => BadRequest(err)
+        };
     }
+        
+    protected IActionResult ExceptionResult(Exception ex, bool noRetry)
+    {
+        var err = new ErrorResponse(ex.Message, noRetry);
+            
+        return ex switch
+        {
+            UnauthorizedException _ => Unauthorized(err),
+            ConflictException _ => Conflict(err),
+            NotFoundException _ => NotFound(err),
+            _ => BadRequest(err)
+        };
+    }
+ 
 }

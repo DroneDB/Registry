@@ -4,11 +4,10 @@ using System.Linq;
 using System.Threading.Tasks;
 using Registry.Web.Models.DTO;
 
-namespace Registry.Web.Services.Ports
+namespace Registry.Web.Services.Ports;
+
+public interface ILoginManager
 {
-    public interface ILoginManager
-    {
-        public Task<LoginResultDto> CheckAccess(string userName, string password);
-        public Task<LoginResultDto> CheckAccess(string token);
-    }
+    public Task<LoginResultDto> CheckAccess(string userName, string password);
+    public Task<LoginResultDto> CheckAccess(string token);
 }

@@ -3,32 +3,31 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Options;
 using Registry.Web.Models.Configuration;
 
-namespace Registry.Web.Middlewares
+namespace Registry.Web.Middlewares;
+
+public class JwtInCookieMiddleware : IMiddleware
 {
-    public class JwtInCookieMiddleware : IMiddleware
-    {
-        private readonly AppSettings _settings;
+    private readonly AppSettings _settings;
 
-        private const string AuthorizationHeaderKey = "Authorization";
+    private const string AuthorizationHeaderKey = "Authorization";
         
-        public JwtInCookieMiddleware(IOptions<AppSettings> settings)
+    public JwtInCookieMiddleware(IOptions<AppSettings> settings)
+    {
+        _settings = settings.Value;
+    }
+
+    public async Task InvokeAsync(HttpContext context, RequestDelegate next)
+    {
+        var cookie = context.Request.Cookies[_settings.AuthCookieName];
+
+        if (cookie != null)
         {
-            _settings = settings.Value;
+            var authValue = "Bearer " + cookie;
+
+            if (!context.Request.Headers.ContainsKey(AuthorizationHeaderKey))
+                context.Request.Headers[AuthorizationHeaderKey] = authValue;
         }
 
-        public async Task InvokeAsync(HttpContext context, RequestDelegate next)
-        {
-            var cookie = context.Request.Cookies[_settings.AuthCookieName];
-
-            if (cookie != null)
-            {
-                var authValue = "Bearer " + cookie;
-
-                if (!context.Request.Headers.ContainsKey(AuthorizationHeaderKey))
-                    context.Request.Headers[AuthorizationHeaderKey] = authValue;
-            }
-
-            await next.Invoke(context);
-        }
+        await next.Invoke(context);
     }
 }

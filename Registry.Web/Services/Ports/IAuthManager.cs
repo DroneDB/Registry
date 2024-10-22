@@ -7,28 +7,26 @@ using Registry.Web.Identity.Models;
 using Registry.Web.Models;
 using Registry.Web.Services.Managers;
 
-namespace Registry.Web.Services.Ports
+namespace Registry.Web.Services.Ports;
+
+public interface IAuthManager
 {
-    public interface IAuthManager
-    {
-        public Task<User> GetCurrentUser();
-        public Task<bool> IsUserAdmin();
-        public Task<bool> IsUserInRole(string roleName);
+    public Task<User> GetCurrentUser();
+    public Task<bool> IsUserAdmin();
+    public Task<bool> IsUserInRole(string roleName);
 
-        /// <summary>
-        /// Gets the current user name or anonymous user name if not logged in
-        /// </summary>
-        /// <returns></returns>
-        public Task<string> SafeGetCurrentUserName();
+    /// <summary>
+    /// Gets the current user name or anonymous user name if not logged in
+    /// </summary>
+    /// <returns></returns>
+    public Task<string> SafeGetCurrentUserName();
 
-        public Task<bool> IsOwnerOrAdmin(Dataset ds);
+    public Task<bool> IsOwnerOrAdmin(Dataset ds);
         
-        public Task<bool> IsOwnerOrAdmin(Organization org);
+    public Task<bool> IsOwnerOrAdmin(Organization org);
 
-        public Task<bool> UserExists(string userId);
+    public Task<bool> UserExists(string userId);
 
-        Task<bool> RequestAccess<T>(T obj, AccessType access, User user) where T: IRequestAccess;
-        Task<bool> RequestAccess<T>(T obj, AccessType access) where T : IRequestAccess;
-    }
-    
+    Task<bool> RequestAccess<T>(T obj, AccessType access, User user) where T: IRequestAccess;
+    Task<bool> RequestAccess<T>(T obj, AccessType access) where T : IRequestAccess;
 }

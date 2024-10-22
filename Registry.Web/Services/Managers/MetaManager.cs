@@ -14,158 +14,157 @@ using Registry.Web.Models.DTO;
 using Registry.Web.Services.Ports;
 using Registry.Web.Utilities;
 
-namespace Registry.Web.Services.Managers
+namespace Registry.Web.Services.Managers;
+
+public class MetaManager : IMetaManager
 {
-    public class MetaManager : IMetaManager
+    private readonly ILogger<MetaManager> _logger;
+    private readonly IDdbManager _ddbManager;
+    private readonly IAuthManager _authManager;
+    private readonly IUtils _utils;
+
+    public MetaManager(ILogger<MetaManager> logger,
+        IDdbManager ddbManager, IAuthManager authManager,IUtils utils)
     {
-        private readonly ILogger<MetaManager> _logger;
-        private readonly IDdbManager _ddbManager;
-        private readonly IAuthManager _authManager;
-        private readonly IUtils _utils;
+        _logger = logger;
+        _ddbManager = ddbManager;
+        _utils = utils;
+        _authManager = authManager;
+    }
 
-        public MetaManager(ILogger<MetaManager> logger,
-            IDdbManager ddbManager, IAuthManager authManager,IUtils utils)
-        {
-            _logger = logger;
-            _ddbManager = ddbManager;
-            _utils = utils;
-            _authManager = authManager;
-        }
+    public async Task<MetaDto> Add(string orgSlug, string dsSlug, string key, string data, string path = null)
+    {
+        var ds = _utils.GetDataset(orgSlug, dsSlug);
 
-        public async Task<MetaDto> Add(string orgSlug, string dsSlug, string key, string data, string path = null)
-        {
-            var ds = _utils.GetDataset(orgSlug, dsSlug);
+        if (!await _authManager.RequestAccess(ds, AccessType.Write))
+            throw new UnauthorizedException("The current user is not allowed to write to this dataset");
 
-            if (!await _authManager.RequestAccess(ds, AccessType.Write))
-                throw new UnauthorizedException("The current user is not allowed to write to this dataset");
-            
-            _logger.LogInformation("In Add('{OrgSlug}/{DsSlug}', {Key}, {Path})", orgSlug, dsSlug, key, path);
+        _logger.LogInformation("In Add('{OrgSlug}/{DsSlug}', {Key}, {Path})", orgSlug, dsSlug, key, path);
 
-            if (string.IsNullOrWhiteSpace(key))
-                throw new ArgumentException("Key should not be null or empty");
+        if (string.IsNullOrWhiteSpace(key))
+            throw new ArgumentException("Key should not be null or empty");
 
-            if (data == null)
-                throw new ArgumentException("Data should not be null");
+        if (data == null)
+            throw new ArgumentException("Data should not be null");
 
-            var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
+        var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
 
-            if (path != null && !await ddb.EntryExistsAsync(path))
-                throw new ArgumentException($"Path '{path}' does not exist");
+        if (path != null && !await ddb.EntryExistsAsync(path))
+            throw new ArgumentException($"Path '{path}' does not exist");
 
-            return ddb.Meta.Add(key, data, path).ToDto();
-        }
+        return ddb.Meta.Add(key, data, path).ToDto();
+    }
 
-        public async Task<MetaDto> Set(string orgSlug, string dsSlug, string key, string data, string path = null)
-        {
-            var ds = _utils.GetDataset(orgSlug, dsSlug);
+    public async Task<MetaDto> Set(string orgSlug, string dsSlug, string key, string data, string path = null)
+    {
+        var ds = _utils.GetDataset(orgSlug, dsSlug);
 
-            if (!await _authManager.RequestAccess(ds, AccessType.Write))
-                throw new UnauthorizedException("The current user is not allowed to write to this dataset");
+        if (!await _authManager.RequestAccess(ds, AccessType.Write))
+            throw new UnauthorizedException("The current user is not allowed to write to this dataset");
 
-            _logger.LogInformation("In Set('{OrgSlug}/{DsSlug}', {Key}, {Path})", orgSlug, dsSlug, key, path);
+        _logger.LogInformation("In Set('{OrgSlug}/{DsSlug}', {Key}, {Path})", orgSlug, dsSlug, key, path);
 
-            if (string.IsNullOrWhiteSpace(key))
-                throw new ArgumentException("Key should not be null or empty");
+        if (string.IsNullOrWhiteSpace(key))
+            throw new ArgumentException("Key should not be null or empty");
 
-            if (data == null)
-                throw new ArgumentException("Data should not be null");
+        if (data == null)
+            throw new ArgumentException("Data should not be null");
 
-            var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
+        var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
 
-            if (path != null && !await ddb.EntryExistsAsync(path))
-                throw new ArgumentException($"Path '{path}' does not exist");
+        if (path != null && !await ddb.EntryExistsAsync(path))
+            throw new ArgumentException($"Path '{path}' does not exist");
 
-            return ddb.Meta.Set(key, data, path).ToDto();
-        }
+        return ddb.Meta.Set(key, data, path).ToDto();
+    }
 
-        public async Task<int> Remove(string orgSlug, string dsSlug, string id)
-        {
-            var ds = _utils.GetDataset(orgSlug, dsSlug);
+    public async Task<int> Remove(string orgSlug, string dsSlug, string id)
+    {
+        var ds = _utils.GetDataset(orgSlug, dsSlug);
 
-            if (!await _authManager.RequestAccess(ds, AccessType.Write))
-                throw new UnauthorizedException("The current user is not allowed to remove meta");
+        if (!await _authManager.RequestAccess(ds, AccessType.Write))
+            throw new UnauthorizedException("The current user is not allowed to remove meta");
 
-            _logger.LogInformation("In Remove('{OrgSlug}/{DsSlug}', {Id})", orgSlug, dsSlug, id);
+        _logger.LogInformation("In Remove('{OrgSlug}/{DsSlug}', {Id})", orgSlug, dsSlug, id);
 
-            if (string.IsNullOrWhiteSpace(id))
-                throw new ArgumentException("Id should not be null or empty");
+        if (string.IsNullOrWhiteSpace(id))
+            throw new ArgumentException("Id should not be null or empty");
 
-            var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
+        var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
 
-            return ddb.Meta.Remove(id);
-        }
+        return ddb.Meta.Remove(id);
+    }
 
-        public async Task<JToken> Get(string orgSlug, string dsSlug, string key, string path = null)
-        {
-            var ds = _utils.GetDataset(orgSlug, dsSlug);
-            
-            if (!await _authManager.RequestAccess(ds, AccessType.Read))
-                throw new UnauthorizedException("The current user is not allowed to read meta");
+    public async Task<JToken> Get(string orgSlug, string dsSlug, string key, string path = null)
+    {
+        var ds = _utils.GetDataset(orgSlug, dsSlug);
 
-            _logger.LogInformation("In Get('{OrgSlug}/{DsSlug}', {Key}, {Path})", orgSlug, dsSlug, key, path);
+        if (!await _authManager.RequestAccess(ds, AccessType.Read))
+            throw new UnauthorizedException("The current user is not allowed to read meta");
 
-            if (string.IsNullOrWhiteSpace(key))
-                throw new ArgumentException("Key should not be null or empty");
+        _logger.LogInformation("In Get('{OrgSlug}/{DsSlug}', {Key}, {Path})", orgSlug, dsSlug, key, path);
 
-            var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
+        if (string.IsNullOrWhiteSpace(key))
+            throw new ArgumentException("Key should not be null or empty");
 
-            if (path != null && !await ddb.EntryExistsAsync(path))
-                throw new ArgumentException($"Path '{path}' does not exist");
+        var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
 
-            return ddb.Meta.Get(key, path);
+        if (path != null && !await ddb.EntryExistsAsync(path))
+            throw new ArgumentException($"Path '{path}' does not exist");
 
-        }
+        return ddb.Meta.Get(key, path);
 
-        public async Task<int> Unset(string orgSlug, string dsSlug, string key, string path = null)
-        {
-            var ds = _utils.GetDataset(orgSlug, dsSlug);
+    }
 
-            if (!await _authManager.RequestAccess(ds, AccessType.Write))
-                throw new UnauthorizedException("The current user is not allowed to unset meta");
+    public async Task<int> Unset(string orgSlug, string dsSlug, string key, string path = null)
+    {
+        var ds = _utils.GetDataset(orgSlug, dsSlug);
 
-            _logger.LogInformation("In Unset('{OrgSlug}/{DsSlug}', {Key}, {Path})", orgSlug, dsSlug, key, path);
+        if (!await _authManager.RequestAccess(ds, AccessType.Write))
+            throw new UnauthorizedException("The current user is not allowed to unset meta");
 
-            if (string.IsNullOrWhiteSpace(key))
-                throw new ArgumentException("Key should not be null or empty");
+        _logger.LogInformation("In Unset('{OrgSlug}/{DsSlug}', {Key}, {Path})", orgSlug, dsSlug, key, path);
 
-            var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
+        if (string.IsNullOrWhiteSpace(key))
+            throw new ArgumentException("Key should not be null or empty");
 
-            if (path != null && !await ddb.EntryExistsAsync(path))
-                throw new ArgumentException($"Path '{path}' does not exist");
+        var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
 
-            return ddb.Meta.Unset(key, path);
-            
-        }
+        if (path != null && !await ddb.EntryExistsAsync(path))
+            throw new ArgumentException($"Path '{path}' does not exist");
 
-        public async Task<IEnumerable<MetaListItemDto>> List(string orgSlug, string dsSlug, string path = null)
-        {
-            var ds = _utils.GetDataset(orgSlug, dsSlug);
-            
-            if (!await _authManager.RequestAccess(ds, AccessType.Read))
-                throw new UnauthorizedException("The current user is not allowed to list meta");
+        return ddb.Meta.Unset(key, path);
 
-            _logger.LogInformation("In List('{OrgSlug}/{DsSlug}', {Path})", orgSlug, dsSlug, path);
+    }
 
-            var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
+    public async Task<IEnumerable<MetaListItemDto>> List(string orgSlug, string dsSlug, string path = null)
+    {
+        var ds = _utils.GetDataset(orgSlug, dsSlug);
 
-            if (path != null && !await ddb.EntryExistsAsync(path))
-                throw new ArgumentException($"Path '{path}' does not exist");
+        if (!await _authManager.RequestAccess(ds, AccessType.Read))
+            throw new UnauthorizedException("The current user is not allowed to list meta");
 
-            return ddb.Meta.List(path).Select(item => item.ToDto());
-        }
+        _logger.LogInformation("In List('{OrgSlug}/{DsSlug}', {Path})", orgSlug, dsSlug, path);
 
-        public async Task<IEnumerable<MetaDumpDto>> Dump(string orgSlug, string dsSlug, string ids = null)
-        {
-            var ds = _utils.GetDataset(orgSlug, dsSlug);
-            
-            if (!await _authManager.RequestAccess(ds, AccessType.Read))
-                throw new UnauthorizedException("The current user is not allowed to dump meta");
-            
-            _logger.LogInformation("In Dump('{OrgSlug}/{DsSlug}', {Ids})", orgSlug, dsSlug, ids);
-            
-            var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
+        var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
 
-            return ddb.Meta.Dump(ids).Select(item => item.ToDto());
-        }
+        if (path != null && !await ddb.EntryExistsAsync(path))
+            throw new ArgumentException($"Path '{path}' does not exist");
+
+        return ddb.Meta.List(path).Select(item => item.ToDto());
+    }
+
+    public async Task<IEnumerable<MetaDumpDto>> Dump(string orgSlug, string dsSlug, string ids = null)
+    {
+        var ds = _utils.GetDataset(orgSlug, dsSlug);
+
+        if (!await _authManager.RequestAccess(ds, AccessType.Read))
+            throw new UnauthorizedException("The current user is not allowed to dump meta");
+
+        _logger.LogInformation("In Dump('{OrgSlug}/{DsSlug}', {Ids})", orgSlug, dsSlug, ids);
+
+        var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
+
+        return ddb.Meta.Dump(ids).Select(item => item.ToDto());
     }
 }

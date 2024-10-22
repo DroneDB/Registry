@@ -1,10 +1,9 @@
 ﻿using Newtonsoft.Json;
 
-namespace Registry.Web.Models.DTO
+namespace Registry.Web.Models.DTO;
+
+public class AttributesDto
 {
-    public class AttributesDto
-    {
-        [JsonProperty("public")]
-        public bool IsPublic { get; set; }
-    }
+    [JsonProperty("public")]
+    public bool IsPublic { get; set; }
 }

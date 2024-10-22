@@ -1,9 +1,8 @@
-﻿namespace Registry.Web.Models
+﻿namespace Registry.Web.Models;
+
+public class StorageFileDto
 {
-    public class StorageFileDto
-    {
-        public string PhysicalPath { get; set; }
-        public string Name { get; set; }
-        public string ContentType { get; set; }
-    }
+    public string PhysicalPath { get; set; }
+    public string Name { get; set; }
+    public string ContentType { get; set; }
 }

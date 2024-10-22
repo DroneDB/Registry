@@ -9,29 +9,28 @@ using Registry.Ports;
 using Registry.Web.Models;
 using Registry.Web.Models.Configuration;
 
-namespace Registry.Web.Services.Adapters
+namespace Registry.Web.Services.Adapters;
+
+public class NameGenerator : INameGenerator
 {
-    public class NameGenerator : INameGenerator
+
+    private readonly int _nameLength;
+    public const int MinNameLength = 8;
+
+    public NameGenerator(IOptions<AppSettings> settings, ILogger<NameGenerator> logger)
     {
+        _nameLength = settings.Value.RandomDatasetNameLength;
 
-        private readonly int _nameLength;
-        public const int MinNameLength = 8;
-
-        public NameGenerator(IOptions<AppSettings> settings, ILogger<NameGenerator> logger)
+        if (_nameLength < MinNameLength)
         {
-            _nameLength = settings.Value.RandomDatasetNameLength;
-
-            if (_nameLength < MinNameLength)
-            {
-                logger.LogWarning("Invalid RandomDatasetNameLength ({NameLength}), capped to {MinNameLength}", _nameLength, MinNameLength);
-                _nameLength = MinNameLength;
-            }
-
+            logger.LogWarning("Invalid RandomDatasetNameLength ({NameLength}), capped to {MinNameLength}", _nameLength, MinNameLength);
+            _nameLength = MinNameLength;
         }
 
-        public string GenerateName()
-        {
-            return CommonUtils.RandomString(_nameLength).ToLowerInvariant();
-        }
+    }
+
+    public string GenerateName()
+    {
+        return CommonUtils.RandomString(_nameLength).ToLowerInvariant();
     }
 }

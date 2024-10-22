@@ -1,9 +1,8 @@
-﻿namespace Registry.Web.Models.Configuration
+﻿namespace Registry.Web.Models.Configuration;
+
+public enum DbProvider
 {
-    public enum DbProvider
-    {
-        Sqlite,
-        Mysql,
-        // Mssql
-    }
+    Sqlite,
+    Mysql,
+    // Mssql
 }

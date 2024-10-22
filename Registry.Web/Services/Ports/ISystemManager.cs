@@ -4,14 +4,13 @@ using System.Linq;
 using System.Threading.Tasks;
 using Registry.Web.Models.DTO;
 
-namespace Registry.Web.Services.Ports
-{
-    public interface ISystemManager
-    {
-        public Task<CleanupBatchesResultDto> CleanupBatches();
-        Task<CleanupDatasetResultDto> CleanupEmptyDatasets();
-        string GetVersion();
+namespace Registry.Web.Services.Ports;
 
-        Task<IEnumerable<MigrateVisibilityEntryDTO>> MigrateVisibility();
-    }
+public interface ISystemManager
+{
+    public Task<CleanupBatchesResultDto> CleanupBatches();
+    Task<CleanupDatasetResultDto> CleanupEmptyDatasets();
+    string GetVersion();
+
+    Task<IEnumerable<MigrateVisibilityEntryDTO>> MigrateVisibility();
 }

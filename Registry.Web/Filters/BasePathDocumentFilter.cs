@@ -4,27 +4,26 @@ using Microsoft.OpenApi.Models;
 using Registry.Web.Models.Configuration;
 using Swashbuckle.AspNetCore.SwaggerGen;
 
-namespace Registry.Web.Filters
+namespace Registry.Web.Filters;
+
+public class BasePathDocumentFilter : IDocumentFilter
 {
-    public class BasePathDocumentFilter : IDocumentFilter
+    private readonly AppSettings _settings;
+
+    public BasePathDocumentFilter(IOptions<AppSettings> settings)
     {
-        private readonly AppSettings _settings;
+        _settings = settings.Value;
+    }
 
-        public BasePathDocumentFilter(IOptions<AppSettings> settings)
-        {
-            _settings = settings.Value;
-        }
-
-        public void Apply(OpenApiDocument swaggerDoc, DocumentFilterContext context)
-        {
-            if (!string.IsNullOrWhiteSpace(_settings.ExternalUrlOverride))
-                swaggerDoc.Servers = new List<OpenApiServer>
+    public void Apply(OpenApiDocument swaggerDoc, DocumentFilterContext context)
+    {
+        if (!string.IsNullOrWhiteSpace(_settings.ExternalUrlOverride))
+            swaggerDoc.Servers = new List<OpenApiServer>
+            {
+                new()
                 {
-                    new()
-                    {
-                        Url = _settings.ExternalUrlOverride
-                    }
-                };
-        }
+                    Url = _settings.ExternalUrlOverride
+                }
+            };
     }
 }

@@ -8,58 +8,57 @@ using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Registry.Ports;
 using Registry.Web.Services.Ports;
 
-namespace Registry.Web.HealthChecks
+namespace Registry.Web.HealthChecks;
+
+public class DdbHealthCheck : IHealthCheck
 {
-    public class DdbHealthCheck : IHealthCheck
+
+    private readonly IDdbManager _ddbManager;
+
+    public DdbHealthCheck(IDdbManager ddbManager)
+    {
+        _ddbManager = ddbManager;
+    }
+
+    public async Task<HealthCheckResult> CheckHealthAsync(HealthCheckContext context, CancellationToken cancellationToken = default)
     {
 
-        private readonly IDdbManager _ddbManager;
+        var tempOrg = "test-" + Guid.NewGuid();
+        var tempDs = Guid.NewGuid();
 
-        public DdbHealthCheck(IDdbManager ddbManager)
+        var data = new Dictionary<string, object>
         {
-            _ddbManager = ddbManager;
-        }
+            {"TempOrg", tempOrg},
+            {"TempDs", tempDs.ToString()},
+            {"Provider", _ddbManager.GetType().FullName}
+        };
 
-        public async Task<HealthCheckResult> CheckHealthAsync(HealthCheckContext context, CancellationToken cancellationToken = default)
+        var ddb = _ddbManager.Get(tempOrg, tempDs);
+
+        try
         {
+            var version = ddb.Version;
+            if (string.IsNullOrWhiteSpace(version))
+                return HealthCheckResult.Unhealthy("Cannot get ddb version", null, data);
 
-            var tempOrg = "test-" + Guid.NewGuid();
-            var tempDs = Guid.NewGuid();
+            data.Add("DdbVersion", version);
 
-            var data = new Dictionary<string, object>
-            {
-                {"TempOrg", tempOrg},
-                {"TempDs", tempDs.ToString()},
-                {"Provider", _ddbManager.GetType().FullName}
-            };
+            var entries = await ddb.SearchAsync(null, true, cancellationToken);
 
-            var ddb = _ddbManager.Get(tempOrg, tempDs);
+            if (entries == null || entries.Any())
+                return HealthCheckResult.Unhealthy("Something wrong with ddb behaviour", null, data);
 
-            try
-            {
-                var version = ddb.Version;
-                if (string.IsNullOrWhiteSpace(version))
-                    return HealthCheckResult.Unhealthy("Cannot get ddb version", null, data);
-
-                data.Add("DdbVersion", version);
-
-                var entries = await ddb.SearchAsync(null, true, cancellationToken);
-
-                if (entries == null || entries.Any())
-                    return HealthCheckResult.Unhealthy("Something wrong with ddb behaviour", null, data);
-                
-                return HealthCheckResult.Healthy("Ddb is working properly", data);
-
-            }
-            catch (Exception ex)
-            {
-                return HealthCheckResult.Unhealthy("Exception while testing ddb: " + ex.Message, ex, data);
-            }
-            finally
-            {
-                _ddbManager.Delete(tempOrg, tempDs);
-            }
+            return HealthCheckResult.Healthy("Ddb is working properly", data);
 
         }
+        catch (Exception ex)
+        {
+            return HealthCheckResult.Unhealthy("Exception while testing ddb: " + ex.Message, ex, data);
+        }
+        finally
+        {
+            _ddbManager.Delete(tempOrg, tempDs);
+        }
+
     }
 }

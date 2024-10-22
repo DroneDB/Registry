@@ -1,9 +1,8 @@
-﻿namespace Registry.Web.Models.Configuration
+﻿namespace Registry.Web.Models.Configuration;
+
+public class AdminInfo
 {
-    public class AdminInfo
-    {
-        public string Email { get; set; }
-        public string UserName { get; set; }
-        public string Password { get; set; }
-    }
+    public string Email { get; set; }
+    public string UserName { get; set; }
+    public string Password { get; set; }
 }

@@ -19,58 +19,57 @@ using Registry.Web.Services;
 using Registry.Web.Services.Ports;
 using Registry.Web.Utilities;
 
-namespace Registry.Web.Controllers
+namespace Registry.Web.Controllers;
+
+[ApiController]
+public class StacController : ControllerBaseEx
 {
-    [ApiController]
-    public class StacController : ControllerBaseEx
+    private readonly IStacManager _stacManager;
+    private readonly ILogger<StacController> _logger;
+
+    public StacController(IStacManager stacManager,
+        ILogger<StacController> logger)
     {
-        private readonly IStacManager _stacManager;
-        private readonly ILogger<StacController> _logger;
+        _stacManager = stacManager;
+        _logger = logger;
+    }
 
-        public StacController(IStacManager stacManager,
-            ILogger<StacController> logger)
+    [HttpGet("/stac", Name = nameof(StacController) + "." + nameof(GetCatalog))]
+    [ProducesResponseType(typeof(IEnumerable<StacCatalogDto>), 200)]
+    public async Task<IActionResult> GetCatalog()
+    {
+        try
         {
-            _stacManager = stacManager;
-            _logger = logger;
+            _logger.LogDebug("Stac controller GetCatalog()");
+
+            return Ok(await _stacManager.GetCatalog());
         }
-
-        [HttpGet("/stac", Name = nameof(StacController) + "." + nameof(GetCatalog))]
-        [ProducesResponseType(typeof(IEnumerable<StacCatalogDto>), 200)]
-        public async Task<IActionResult> GetCatalog()
+        catch (Exception ex)
         {
-            try
-            {
-                _logger.LogDebug("Stac controller GetCatalog()");
+            _logger.LogError(ex, "Exception in Stac controller GetCatalog()");
 
-                return Ok(await _stacManager.GetCatalog());
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Exception in Stac controller GetCatalog()");
-
-                return ExceptionResult(ex);
-            }
+            return ExceptionResult(ex);
         }
+    }
 
-        [HttpGet("/orgs/{orgSlug}/ds/{dsSlug}/stac/{pathBase64?}",
-            Name = nameof(StacController) + "." + nameof(GetStacChild))]
-        public async Task<IActionResult> GetStacChild([FromRoute] string orgSlug, [FromRoute] string dsSlug,
-            [FromRoute] string pathBase64 = null)
+    [HttpGet("/orgs/{orgSlug}/ds/{dsSlug}/stac/{pathBase64?}",
+        Name = nameof(StacController) + "." + nameof(GetStacChild))]
+    public async Task<IActionResult> GetStacChild([FromRoute] string orgSlug, [FromRoute] string dsSlug,
+        [FromRoute] string pathBase64 = null)
+    {
+        try
         {
-            try
-            {
-                _logger.LogDebug("Stac controller GetStacChild()");
+            _logger.LogDebug("Stac controller GetStacChild()");
 
-                var path = pathBase64 != null ? Encoding.UTF8.GetString(Convert.FromBase64String(pathBase64)) : null;
+            var path = pathBase64 != null ? Encoding.UTF8.GetString(Convert.FromBase64String(pathBase64)) : null;
 
-                return Ok(await _stacManager.GetStacChild(orgSlug, dsSlug, path));
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Exception in Stac controller GetStacChild()");
+            return Ok(await _stacManager.GetStacChild(orgSlug, dsSlug, path));
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Exception in Stac controller GetStacChild()");
 
-                return ExceptionResult(ex);
-            }
+            return ExceptionResult(ex);
         }
     }
 }
