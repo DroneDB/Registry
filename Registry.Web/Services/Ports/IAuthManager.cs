@@ -32,4 +32,7 @@ public interface IAuthManager
 
     public Task<bool> CanListOrganizations(User user);
     public Task<bool> CanListOrganizations();
+    public Task<bool> CanRefreshToken(User user);
+
+    public Task<bool> CanRefreshToken();
 }

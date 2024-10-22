@@ -97,6 +97,16 @@ public class AuthManager : IAuthManager
         return await CanListOrganizations(await GetCurrentUser());
     }
 
+    public async Task<bool> CanRefreshToken(User user)
+    {
+        return user != null && !await _resourceAccess.IsUserDeactivated(user);
+    }
+
+    public async Task<bool> CanRefreshToken()
+    {
+        return await CanRefreshToken(await GetCurrentUser());
+    }
+
     public async Task<bool> RequestAccess<T>(T obj, AccessType access, User user) where T : IRequestAccess
     {
         ArgumentNullException.ThrowIfNull(obj);

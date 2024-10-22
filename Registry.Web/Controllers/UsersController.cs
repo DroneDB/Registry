@@ -60,7 +60,6 @@ public class UsersController : ControllerBaseEx
         catch (Exception ex)
         {
             _logger.LogError(ex, "Exception in Users controller Authenticate('{Username}')", model?.Username);
-
             return ExceptionResult(ex);
         }
     }
@@ -83,7 +82,6 @@ public class UsersController : ControllerBaseEx
         catch (Exception ex)
         {
             _logger.LogError(ex, "Exception in Users controller Refresh()");
-
             return ExceptionResult(ex);
         }
     }
@@ -228,7 +226,6 @@ public class UsersController : ControllerBaseEx
         catch (Exception ex)
         {
             _logger.LogError(ex, "Exception in Users controller GetAll()");
-
             return ExceptionResult(ex);
         }
     }
@@ -248,7 +245,6 @@ public class UsersController : ControllerBaseEx
         catch (Exception ex)
         {
             _logger.LogError(ex, "Exception in Users controller GetUserQuotaInfo()");
-
             return ExceptionResult(ex);
         }
     }
@@ -268,7 +264,6 @@ public class UsersController : ControllerBaseEx
         catch (Exception ex)
         {
             _logger.LogError(ex, "Exception in Users controller GetUserQuotaInfo('{UserName}')", userName);
-
             return ExceptionResult(ex);
         }
     }
@@ -288,7 +283,6 @@ public class UsersController : ControllerBaseEx
         catch (Exception ex)
         {
             _logger.LogError(ex, "Exception in Users controller GetUserMeta()");
-
             return ExceptionResult(ex);
         }
     }
@@ -308,7 +302,6 @@ public class UsersController : ControllerBaseEx
         catch (Exception ex)
         {
             _logger.LogError(ex, "Exception in Users controller GetUserMeta('{UserName}')", userName);
-
             return ExceptionResult(ex);
         }
     }
@@ -328,7 +321,6 @@ public class UsersController : ControllerBaseEx
         catch (Exception ex)
         {
             _logger.LogError(ex, "Exception in Users controller SetUserMeta('{UserName}')", userName);
-
             return ExceptionResult(ex);
         }
     }

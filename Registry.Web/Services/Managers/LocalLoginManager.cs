@@ -6,6 +6,7 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Newtonsoft.Json;
+using Registry.Web.Identity;
 using Registry.Web.Identity.Models;
 using Registry.Web.Models;
 using Registry.Web.Models.Configuration;
@@ -46,7 +47,7 @@ public class LocalLoginManager : ILoginManager
     {
         var user = await _userManager.FindByNameAsync(userName);
 
-        if (user == null)
+        if (user == null || await _userManager.IsInRoleAsync(user, ApplicationDbContext.DeactivatedRoleName))
             return new LoginResultDto
             {
                 Success = false,

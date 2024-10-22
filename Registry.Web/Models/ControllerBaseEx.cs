@@ -16,8 +16,8 @@ public class ControllerBaseEx : ControllerBase
     protected IActionResult ExceptionResult(Exception ex)
     {
 
-        // Do not retry if the quota is exceeded
-        var noRetry = ex is QuotaExceededException;
+        // Do not retry if the quota is exceeded or the user is not authorized
+        var noRetry = ex is QuotaExceededException or UnauthorizedException;
             
         var err = new ErrorResponse(ex.Message, noRetry);
             

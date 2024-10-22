@@ -294,8 +294,8 @@ public class UsersManager : IUsersManager
     {
         var user = await _authManager.GetCurrentUser();
 
-        if (user == null)
-            throw new BadRequestException("User does not exist");
+        if (!await _authManager.CanRefreshToken(user))
+            throw new UnauthorizedException("User cannot refresh token");
 
         var tokenDescriptor = await GenerateJwtToken(user);
 
