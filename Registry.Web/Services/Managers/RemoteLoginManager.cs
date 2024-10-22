@@ -81,11 +81,10 @@ namespace Registry.Web.Services.Managers
 
             try
             {
-                var content = new FormUrlEncodedContent(new[]
-                {
+                var content = new FormUrlEncodedContent([
                     new KeyValuePair<string, string>("username", userName),
                     new KeyValuePair<string, string>("password", password)
-                });
+                ]);
 
                 var res = await client.PostAsync(_settings.ExternalAuthUrl, content);
 

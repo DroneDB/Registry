@@ -3,10 +3,11 @@ using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 using System.Data;
 using System.Text;
+using Registry.Common;
 
 namespace Registry.Web.Data.Models
 {
-    public class Organization
+    public class Organization : IRequestAccess
     {
         [Key]
         [MaxLength(128)]

@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
+using Registry.Common;
 using Registry.Web.Data.Models;
 using Registry.Web.Identity.Models;
 using Registry.Web.Models;
@@ -26,8 +27,8 @@ namespace Registry.Web.Services.Ports
 
         public Task<bool> UserExists(string userId);
 
-        Task<bool> RequestAccess<T>(T obj, AccessType access, User user);
-        Task<bool> RequestAccess<T>(T obj, AccessType access);
+        Task<bool> RequestAccess<T>(T obj, AccessType access, User user) where T: IRequestAccess;
+        Task<bool> RequestAccess<T>(T obj, AccessType access) where T : IRequestAccess;
     }
     
 }

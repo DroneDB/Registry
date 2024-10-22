@@ -8,7 +8,7 @@ using Registry.Common;
 
 namespace Registry.Web.Data.Models
 {
-    public class Dataset
+    public class Dataset : IRequestAccess
     {
         [MaxLength(128)]
         [Required]

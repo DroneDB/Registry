@@ -10,6 +10,7 @@ namespace Registry.Web.Identity
     public sealed class ApplicationDbContext : IdentityDbContext<User>
     {
         public const string AdminRoleName = "admin";
+        public const string DeactivatedRoleName = "deactivated";
 
         public ApplicationDbContext(DbContextOptions<ApplicationDbContext> options)
             : base(options)

@@ -277,6 +277,11 @@ namespace Registry.Web.Utilities
             return new SafeMetaManager(manager);
         }
 
+        public static bool IsPublicOrUnlisted(this SafeMetaManager meta)
+        {
+            return meta.Visibility is Visibility.Public or Visibility.Unlisted;
+        }
+
     }
 
 }
