@@ -35,15 +35,4 @@ public class OrganizationUser
 
     public string OrganizationSlug { get; set; }
 
-    // public AccessCapability DatasetCapability { get; set; }
 }
-
-/* TBA
-[Flags]
-public enum Capability
-{
-    CanView = 0,
-    CanAdd = 1,
-    CanEdit = 2,
-    CanDelete = 4
-}*/
