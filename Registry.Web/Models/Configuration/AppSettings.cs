@@ -135,4 +135,9 @@ public class AppSettings
     /// </summary>
     public TimeSpan? ClearCacheInterval { get; set; }
 
+    /// <summary>
+    /// Monitor token to call health checks
+    /// </summary>
+    public string MonitorToken { get; set; }
+
 }

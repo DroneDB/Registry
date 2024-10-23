@@ -50,6 +50,7 @@ using Registry.Adapters.Thumbnail;
 using Registry.Ports;
 using Registry.Web.Identity;
 using Registry.Web.Identity.Models;
+using Registry.Web.Utilities.Auth;
 using Serilog;
 using Serilog.Events;
 
@@ -374,12 +375,12 @@ public class Startup
             endpoints.MapHealthChecks(MagicStrings.QuickHealthUrl, new HealthCheckOptions
             {
                 Predicate = _ => false
-            }).RequireAuthorization();
+            }).RequireAuthorizationOrMonitorToken();
 
             endpoints.MapHealthChecks(MagicStrings.HealthUrl, new HealthCheckOptions
             {
                 ResponseWriter = UIResponseWriter.WriteHealthCheckUIResponse
-            }).RequireAuthorization();
+            }).RequireAuthorizationOrMonitorToken();
 
             endpoints.MapGet(MagicStrings.VersionUrl,
                 async context =>
@@ -481,6 +482,8 @@ public class Startup
 
             if (builder.Host == "0.0.0.0") builder.Host = "localhost";
             var baseUri = builder.Uri;
+            var monitorQuery = string.IsNullOrWhiteSpace(settings.MonitorToken) ? string.Empty : $"?token={settings.MonitorToken}";
+            var reqAuth = string.IsNullOrWhiteSpace(settings.MonitorToken) ? "(req auth)" : string.Empty;
 
             Console.WriteLine();
             Console.WriteLine(" ?> Useful links:");
@@ -492,10 +495,10 @@ public class Startup
             Console.WriteLine($" ?> Version: {versionUri}");
 
             var quickHealthUri = new Uri(baseUri, MagicStrings.QuickHealthUrl);
-            Console.WriteLine($" ?> (req auth) Quick Health: {quickHealthUri}");
+            Console.WriteLine($" ?> {reqAuth} Quick Health: {quickHealthUri}{monitorQuery}");
 
             var healthUri = new Uri(baseUri, MagicStrings.HealthUrl);
-            Console.WriteLine($" ?> (req auth) Health: {healthUri}");
+            Console.WriteLine($" ?> {reqAuth} Health: {healthUri}{monitorQuery}");
 
             var hangfireUri = new Uri(baseUri, MagicStrings.HangFireUrl);
             Console.WriteLine($" ?> (req auth) Hangfire: {hangfireUri}");
