@@ -32,10 +32,8 @@ public class DdbManager : IDdbManager
         // TODO: It would be nice if we could use the bindings to check this
         if (!Directory.Exists(Path.Combine(baseDdbPath, IDDB.DatabaseFolderName)))
         {
-
             ddb.Init();
             _logger.LogInformation("Initialized new ddb in '{DaseDdbPath}'", baseDdbPath);
-
         }
         else
             _logger.LogInformation("Opened ddb in '{BaseDdbPath}'", baseDdbPath);
