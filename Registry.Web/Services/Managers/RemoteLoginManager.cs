@@ -36,10 +36,9 @@ public class RemoteLoginManager : ILoginManager
 
         try
         {
-            var content = new FormUrlEncodedContent(new[]
-            {
-                new KeyValuePair<string, string>("token", token),
-            });
+            var content = new FormUrlEncodedContent([
+                new KeyValuePair<string, string>("token", token)
+            ]);
 
             var res = await client.PostAsync(_settings.ExternalAuthUrl, content);
 
@@ -53,7 +52,7 @@ public class RemoteLoginManager : ILoginManager
 
             var obj = JsonConvert.DeserializeObject<Dictionary<string, object>>(result);
 
-            _logger.LogInformation(result);
+            _logger.LogInformation("CheckAccess (token): {Result}", result);
 
             return new LoginResultDto
             {
@@ -64,7 +63,7 @@ public class RemoteLoginManager : ILoginManager
         }
         catch (WebException ex)
         {
-            _logger.LogError(ex, "Exception in calling CanSignInAsync");
+            _logger.LogError(ex, "Exception in calling CheckAccess (token)");
             return new LoginResultDto
             {
                 Success = false,
@@ -72,8 +71,6 @@ public class RemoteLoginManager : ILoginManager
         }
     }
 
-
-    // This is basically a stub
     public async Task<LoginResultDto> CheckAccess(string userName, string password)
     {
 
@@ -96,7 +93,7 @@ public class RemoteLoginManager : ILoginManager
                 };
 
             var result = await res.Content.ReadAsStringAsync();
-            _logger.LogInformation(result);
+            _logger.LogInformation("CheckAccess for user {User}: {Result}", userName, result);
 
             var obj = JsonConvert.DeserializeObject<Dictionary<string, object>>(result);
 
@@ -109,7 +106,7 @@ public class RemoteLoginManager : ILoginManager
         }
         catch (WebException ex)
         {
-            _logger.LogError(ex, "Exception in calling CanSignInAsync");
+            _logger.LogError(ex, "Exception in calling CheckAccess for user {User}", userName);
             return new LoginResultDto
             {
                 Success = false,
