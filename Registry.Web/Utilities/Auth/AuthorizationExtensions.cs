@@ -3,13 +3,16 @@ using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
+using Microsoft.VisualStudio.Web.CodeGenerators.Mvc.Templates.General;
+using Registry.Web.Data;
+using Registry.Web.Identity;
 using Registry.Web.Models.Configuration;
 
 namespace Registry.Web.Utilities.Auth;
 
 public static class AuthorizationExtensions
 {
-    public static IEndpointConventionBuilder RequireAuthorizationOrMonitorToken(
+    public static IEndpointConventionBuilder RequireAdminOrMonitorToken(
         this IEndpointConventionBuilder builder)
     {
         return builder.RequireAuthorization(policy =>
@@ -17,7 +20,12 @@ public static class AuthorizationExtensions
             policy.RequireAssertion(context =>
             {
                 if (context.Resource is not HttpContext httpContext)
-                    return context.User.Identity?.IsAuthenticated ?? false;
+                {
+                    if (!context.User.Identity?.IsAuthenticated ?? false)
+                        return false;
+
+                    return context.User.HasClaim(ApplicationDbContext.AdminRoleName, "true");
+                }
 
                 // Resolve the IOptions<AppSettings> from the service provider
                 var appSettings = httpContext.RequestServices.GetRequiredService<IOptions<AppSettings>>();
@@ -37,10 +45,19 @@ public static class AuthorizationExtensions
                 }
 
                 // Check if the token matches the MonitorToken from AppSettings
-                return !string.IsNullOrEmpty(token) && token == appSettings.Value.MonitorToken || (
+                if (!string.IsNullOrEmpty(token) && token == appSettings.Value.MonitorToken)
+                {
                     // Token is valid, bypass standard authorization
-                    // Proceed with normal authorization if token does not match
-                    context.User.Identity?.IsAuthenticated ?? false);
+                    return true;
+                }
+
+                // Check if the user is authenticated
+                if (!context.User.Identity?.IsAuthenticated ?? false)
+                    return false;
+
+                // Check if the user is admin
+                return context.User.HasClaim(ApplicationDbContext.AdminRoleName, "true");
+
             });
         });
     }

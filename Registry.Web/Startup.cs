@@ -375,12 +375,12 @@ public class Startup
             endpoints.MapHealthChecks(MagicStrings.QuickHealthUrl, new HealthCheckOptions
             {
                 Predicate = _ => false
-            }).RequireAuthorizationOrMonitorToken();
+            }).RequireAdminOrMonitorToken();
 
             endpoints.MapHealthChecks(MagicStrings.HealthUrl, new HealthCheckOptions
             {
                 ResponseWriter = UIResponseWriter.WriteHealthCheckUIResponse
-            }).RequireAuthorizationOrMonitorToken();
+            }).RequireAdminOrMonitorToken();
 
             endpoints.MapGet(MagicStrings.VersionUrl,
                 async context =>
