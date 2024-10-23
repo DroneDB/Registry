@@ -31,23 +31,45 @@ public class DatasetAccessControl : AccessControlBase
         // Check dataset visibility
         var ddb = _ddbManager.Get(org.Slug, dataset.InternalRef);
         var meta = ddb.Meta.GetSafe();
+        var isPublicOrUnlisted = meta.IsPublicOrUnlisted();
 
         // Anonymous access check
         if (user == null)
-            return access == AccessType.Read && meta.IsPublicOrUnlisted();
+        {
+            // Anonymous users can access only public or unlisted datasets with Read access
+            if (access != AccessType.Read || !isPublicOrUnlisted) return false;
+
+            var owner = await UsersManager.FindByIdAsync(org.OwnerId);
+            // Check if the owner is not deactivated
+            return owner != null && !await IsUserDeactivated(owner);
+        }
 
         // Deactivated user check
         if (await IsUserDeactivated(user))
             return false;
 
-        // Admin/owner privileges
-        if (org.OwnerId == user.Id || await IsUserAdmin(user))
+        // Admin privileges
+        var isAdmin = await IsUserAdmin(user);
+        if (isAdmin)
+        {
+            // Admin can access any dataset and perform any action
             return true;
+        }
+
+        // Owner privileges
+        if (org.OwnerId == user.Id)
+        {
+            // Owner can access and modify datasets
+            return true;
+        }
 
         // Organization member access
         var orgUser = org.Users.FirstOrDefault(u => u.UserId == user.Id);
         if (orgUser == null)
-            return access == AccessType.Read && meta.IsPublicOrUnlisted();
+        {
+            // Non-organization members can only read public or unlisted datasets
+            return access == AccessType.Read && isPublicOrUnlisted;
+        }
 
         var orgUserDetails = await UsersManager.FindByIdAsync(orgUser.UserId);
         if (orgUserDetails == null)

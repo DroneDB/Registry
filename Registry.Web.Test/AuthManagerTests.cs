@@ -30,6 +30,7 @@ public class AuthManagerTests
     private Mock<ILogger<AuthManager>> _loggerMock;
     private AuthManager _authManager;
     private User _normalUser;
+    private User _randomUser;
     private User _adminUser;
     private User _deactivatedUser;
     private Organization _publicOrg;
@@ -44,6 +45,7 @@ public class AuthManagerTests
     {
         // Setup mock users
         _normalUser = new User { Id = "user1", UserName = "normal" };
+        _randomUser = new User { Id = "random1", UserName = "random" };
         _adminUser = new User { Id = "admin1", UserName = "admin" };
         _deactivatedUser = new User { Id = "deactivated1", UserName = "deactivated" };
 
@@ -146,10 +148,11 @@ public class AuthManagerTests
     private Mock<UserManager<User>> MockUserManager()
     {
         var store = new Mock<IUserStore<User>>();
-        var userManager = new Mock<UserManager<User>>(store.Object, null!, null!, null!, null!, null!, null!, null!, null!);
+        var userManager =
+            new Mock<UserManager<User>>(store.Object, null!, null!, null!, null!, null!, null!, null!, null!);
 
         userManager.Setup(x => x.FindByIdAsync(It.IsAny<string>()))
-            .Returns((string id) => Task.FromResult(new[] { _normalUser, _adminUser, _deactivatedUser }
+            .Returns((string id) => Task.FromResult(new[] { _normalUser, _adminUser, _deactivatedUser, _randomUser }
                 .FirstOrDefault(u => u.Id == id)));
 
         userManager.Setup(x => x.IsInRoleAsync(_adminUser, ApplicationDbContext.AdminRoleName))
@@ -297,6 +300,64 @@ public class AuthManagerTests
         result.Should().BeTrue();
     }
 
+
+    [Test]
+    public async Task RequestAccess_PublicOrganization_DeactivatedOwner_AnonymousUser_ReadAccess_Denied()
+    {
+        // Arrange
+        _publicOrg.OwnerId = _deactivatedUser.Id;
+        SetupCurrentUser(null);
+
+        // Act
+        var result = await _authManager.RequestAccess(_publicOrg, AccessType.Read);
+
+        // Assert
+        result.Should().BeFalse();
+    }
+
+    [Test]
+    public async Task RequestAccess_PrivateOrganization_RandomUser_ReadAccess_Denied()
+    {
+        // Arrange
+        SetupCurrentUser(_randomUser);
+
+        // Act
+        var result = await _authManager.RequestAccess(_privateOrg, AccessType.Read);
+
+        // Assert
+        result.Should().BeFalse();
+    }
+
+    [Test]
+    public async Task RequestAccess_PrivateOrganization_DeactivatedUser_AllAccess_Denied()
+    {
+        // Arrange
+        SetupCurrentUser(_deactivatedUser);
+
+        // Act
+        var readResult = await _authManager.RequestAccess(_privateOrg, AccessType.Read);
+        var writeResult = await _authManager.RequestAccess(_privateOrg, AccessType.Write);
+        var deleteResult = await _authManager.RequestAccess(_privateOrg, AccessType.Delete);
+
+        // Assert
+        readResult.Should().BeFalse();
+        writeResult.Should().BeFalse();
+        deleteResult.Should().BeFalse();
+    }
+
+    [Test]
+    public async Task RequestAccess_PublicOrganization_RegularUser_ReadAccess_Allowed()
+    {
+        // Arrange
+        SetupCurrentUser(_normalUser);
+
+        // Act
+        var result = await _authManager.RequestAccess(_publicOrg, AccessType.Read);
+
+        // Assert
+        result.Should().BeTrue();
+    }
+
     #endregion
 
     #region Dataset Access Tests
@@ -362,6 +423,24 @@ public class AuthManagerTests
     }
 
     [Test]
+    public async Task RequestAccess_Dataset_Admin_DeactivatedOrganization_Allowed()
+    {
+        // Arrange
+        SetupCurrentUser(_adminUser);
+
+        // Act
+        var readResult = await _authManager.RequestAccess(_privateDataset, AccessType.Read);
+        var writeResult = await _authManager.RequestAccess(_privateDataset, AccessType.Write);
+        var deleteResult = await _authManager.RequestAccess(_privateDataset, AccessType.Delete);
+
+        // Assert
+        readResult.Should().BeTrue();
+        writeResult.Should().BeTrue();
+        deleteResult.Should().BeTrue();
+    }
+
+
+    [Test]
     public async Task RequestAccess_Dataset_DeactivatedUser_AllAccess_Denied()
     {
         // Arrange
@@ -401,4 +480,97 @@ public class AuthManagerTests
     }
 
     #endregion
+
+    [Test]
+    public async Task RequestAccess_PublicDataset_DeactivatedOwner_AnonymousUser_ReadAccess_Denied()
+    {
+        // Arrange
+        _publicOrg.OwnerId = _deactivatedUser.Id;
+        SetupCurrentUser(null);
+
+        // Act
+        var result = await _authManager.RequestAccess(_publicDataset, AccessType.Read);
+
+        // Assert
+        result.Should().BeFalse();
+    }
+
+    [Test]
+    public async Task RequestAccess_PrivateDataset_RandomUser_ReadAccess_Denied()
+    {
+        // Arrange
+        SetupCurrentUser(_randomUser);
+
+        // Act
+        var result = await _authManager.RequestAccess(_privateDataset, AccessType.Read);
+
+        // Assert
+        result.Should().BeFalse();
+    }
+
+    [Test]
+    public async Task RequestAccess_PrivateDataset_DeactivatedUser_AllAccess_Denied()
+    {
+        // Arrange
+        SetupCurrentUser(_deactivatedUser);
+
+        // Act
+        var readResult = await _authManager.RequestAccess(_privateDataset, AccessType.Read);
+        var writeResult = await _authManager.RequestAccess(_privateDataset, AccessType.Write);
+        var deleteResult = await _authManager.RequestAccess(_privateDataset, AccessType.Delete);
+
+        // Assert
+        readResult.Should().BeFalse();
+        writeResult.Should().BeFalse();
+        deleteResult.Should().BeFalse();
+    }
+
+    [Test]
+    public async Task RequestAccess_PublicDataset_RegularUser_ReadAccess_Allowed()
+    {
+        // Arrange
+        SetupCurrentUser(_normalUser);
+
+        // Act
+        var result = await _authManager.RequestAccess(_publicDataset, AccessType.Read);
+
+        // Assert
+        result.Should().BeTrue();
+    }
+
+    [Test]
+    public async Task RequestAccess_PrivateDataset_OrganizationMember_ReadAccess_Allowed()
+    {
+        // Arrange
+        var orgMember = new User { Id = "member1", UserName = "member" };
+        _privateOrg.Users.Add(new OrganizationUser { UserId = orgMember.Id });
+        SetupCurrentUser(orgMember);
+
+        _userManagerMock.Setup(x => x.FindByIdAsync(orgMember.Id))
+            .ReturnsAsync(orgMember);
+
+        // Act
+        var readResult = await _authManager.RequestAccess(_privateDataset, AccessType.Read);
+
+        // Assert
+        readResult.Should().BeTrue();
+    }
+
+    [Test]
+    public async Task RequestAccess_PrivateDataset_OrganizationMember_DeleteAccess_Denied()
+    {
+        // Arrange
+        var orgMember = new User { Id = "member1", UserName = "member" };
+        _privateOrg.Users.Add(new OrganizationUser { UserId = orgMember.Id });
+        SetupCurrentUser(orgMember);
+
+        _userManagerMock.Setup(x => x.FindByIdAsync(orgMember.Id))
+            .ReturnsAsync(orgMember);
+
+        // Act
+        var deleteResult = await _authManager.RequestAccess(_privateDataset, AccessType.Delete);
+
+        // Assert
+        deleteResult.Should().BeFalse();
+    }
 }
