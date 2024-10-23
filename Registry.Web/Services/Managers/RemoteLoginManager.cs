@@ -32,7 +32,7 @@ public class RemoteLoginManager : ILoginManager
     public async Task<LoginResultDto> CheckAccess(string token)
     {
 
-        var client = new HttpClient();
+        using var client = new HttpClient();
 
         try
         {
@@ -74,7 +74,7 @@ public class RemoteLoginManager : ILoginManager
     public async Task<LoginResultDto> CheckAccess(string userName, string password)
     {
 
-        var client = new HttpClient();
+        using var client = new HttpClient();
 
         try
         {
