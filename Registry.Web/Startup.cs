@@ -211,7 +211,10 @@ public class Startup
             .AddDiskSpaceHealthCheck(appSettings.StoragePath, "Ddb storage path space health check", null,
                 ["storage"])
             .AddHangfire(options => { options.MinimumAvailableServers = 1; }, "Hangfire health check", null,
-                ["database"]);
+                ["processing"])
+            .AddCheck<HangFireHealthCheck>("Hangfire processing health check", null, ["processing"])
+            .AddCheck<ThumbnailGeneratorHealthCheck>("Thumbnail generator health check", null, ["service"]);
+
 
         /*
          * NOTE about services lifetime:

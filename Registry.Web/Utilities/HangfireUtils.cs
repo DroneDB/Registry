@@ -109,4 +109,13 @@ public static class HangfireUtils
             RecurringJob.RemoveIfExists(job.Id);
         }
     }
+
+    [AutomaticRetry(Attempts = 1, OnAttemptsExceeded = AttemptsExceededAction.Fail)]
+    public static void DummyJob(PerformContext context)
+    {
+        using var connection = JobStorage.Current.GetConnection();
+
+        Action<string> writeLine = context != null ? context.WriteLine : Log.Information;
+        writeLine("Dummy job");
+    }
 }
