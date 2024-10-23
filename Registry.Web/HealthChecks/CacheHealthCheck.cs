@@ -22,9 +22,6 @@ public class CacheHealthCheck : IHealthCheck
 
     public async Task<HealthCheckResult> CheckHealthAsync(HealthCheckContext context, CancellationToken cancellationToken = new CancellationToken())
     {
-        if (_cache is DummyDistributedCache)
-            return HealthCheckResult.Healthy("No cache in use");
-
         var testKey = Guid.NewGuid().ToString();
 
         var data = new Dictionary<string, object> { { "TestKey", testKey }, { "Provider", _cache.GetType().FullName } };
@@ -46,10 +43,10 @@ public class CacheHealthCheck : IHealthCheck
             await _cache.RemoveAsync(testKey, cancellationToken);
 
             res = await _cache.GetAsync(testKey, cancellationToken);
-            if (res != null)
-                return HealthCheckResult.Unhealthy("Cache not working properly: cannot delete test key", null, data);
 
-            return HealthCheckResult.Healthy("Cache is working properly", data);
+            return res != null ?
+                HealthCheckResult.Unhealthy("Cache not working properly: cannot delete test key", null, data) :
+                HealthCheckResult.Healthy("Cache is working properly", data);
         }
         catch (Exception ex)
         {
