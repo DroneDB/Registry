@@ -363,6 +363,9 @@ public class UsersManager : IUsersManager
             throw new BadRequestException("Cannot find user " + userName);
 
         user.Metadata = meta;
+
+        await SyncRoles(user);
+
         await _applicationDbContext.SaveChangesAsync();
     }
 
