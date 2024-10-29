@@ -8,6 +8,7 @@ using Hangfire.Storage;
 using Registry.Adapters.DroneDB;
 using Registry.Common;
 using Registry.Ports.DroneDB;
+using Registry.Web.Attributes;
 using Serilog;
 
 namespace Registry.Web.Utilities;
@@ -111,6 +112,7 @@ public static class HangfireUtils
     }
 
     [AutomaticRetry(Attempts = 1, OnAttemptsExceeded = AttemptsExceededAction.Fail)]
+    [JobExpiration(ExpirationTimeoutInMinutes = 15)]
     public static void DummyJob(PerformContext context)
     {
         using var connection = JobStorage.Current.GetConnection();
