@@ -112,7 +112,7 @@ public static class HangfireUtils
     }
 
     [AutomaticRetry(Attempts = 1, OnAttemptsExceeded = AttemptsExceededAction.Fail)]
-    [JobExpiration(ExpirationTimeoutInMinutes = 15)]
+    [JobExpiration(ExpirationTimeoutInMinutes = 5)]
     public static void DummyJob(PerformContext context)
     {
         using var connection = JobStorage.Current.GetConnection();
