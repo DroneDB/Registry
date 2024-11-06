@@ -83,14 +83,22 @@ public class RemoteLoginManager : ILoginManager
                 new KeyValuePair<string, string>("password", password)
             ]);
 
+            client.DefaultRequestHeaders.Add("Accept", "application/json");
+
             var res = await client.PostAsync(_settings.ExternalAuthUrl, content);
 
             if (!res.IsSuccessStatusCode)
+            {
+                var c = await res.Content.ReadAsStringAsync();
+                _logger.LogInformation("Error while calling external auth service on url {Url}, result code: {ResultCode}, content {Result}",
+                    _settings.ExternalAuthUrl, res.StatusCode, c);
+
                 return new LoginResultDto
                 {
                     UserName = userName,
                     Success = false
                 };
+            }
 
             var result = await res.Content.ReadAsStringAsync();
             _logger.LogInformation("CheckAccess for user {User}: {Result}", userName, result);
