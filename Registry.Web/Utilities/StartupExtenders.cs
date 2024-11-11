@@ -36,7 +36,7 @@ public static class StartupExtenders
                 // Specify only one worker
 
                 services.AddHangfire(configuration => configuration
-                        .SetDataCompatibilityLevel(CompatibilityLevel.Version_170)
+                        .SetDataCompatibilityLevel(CompatibilityLevel.Version_180)
                         .UseSimpleAssemblyNameTypeSerializer()
                         .UseRecommendedSerializerSettings()
                         .UseSerilogLogProvider()
@@ -50,11 +50,11 @@ public static class StartupExtenders
                             {
                                 TransactionIsolationLevel = IsolationLevel.ReadCommitted,
                                 QueuePollInterval = TimeSpan.FromSeconds(3),
-                                JobExpirationCheckInterval = TimeSpan.FromHours(1),
+                                JobExpirationCheckInterval = TimeSpan.FromMinutes(15),
                                 CountersAggregateInterval = TimeSpan.FromMinutes(5),
                                 PrepareSchemaIfNecessary = true,
                                 DashboardJobListLimit = 50000,
-                                TransactionTimeout = TimeSpan.FromMinutes(10),
+                                TransactionTimeout = TimeSpan.FromMinutes(30),
                                 TablesPrefix = "hangfire"
                             }))
                         .WithJobExpirationTimeout(TimeSpan.FromDays(30)));
