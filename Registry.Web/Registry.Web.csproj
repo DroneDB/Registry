@@ -6,11 +6,11 @@
         <UserSecretsId>4e006835-31cb-47c5-9dfe-7b73e210db92</UserSecretsId>
         <SpaRoot>ClientApp\</SpaRoot>
         <DefaultItemExcludes>$(DefaultItemExcludes);$(SpaRoot)node_modules\**</DefaultItemExcludes>
-        <AssemblyVersion>1.1.7</AssemblyVersion>
-        <FileVersion>1.1.7</FileVersion>
+        <AssemblyVersion>1.1.8</AssemblyVersion>
+        <FileVersion>1.1.8</FileVersion>
         <Version>1.1.7</Version>
         <Platforms>AnyCPU;x64</Platforms>
-        <PackageVersion>1.1.7</PackageVersion>
+        <PackageVersion>1.1.8</PackageVersion>
         <Configurations>Debug;Release;DebugEf</Configurations>
         <DdbVersion>1.0.12</DdbVersion>
     </PropertyGroup>
@@ -70,7 +70,7 @@
         </PackageReference>
         <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
         <PackageReference Include="Pomelo.EntityFrameworkCore.MySql" Version="8.0.2" />
-        <PackageReference Include="Scrutor" Version="5.0.1" />
+        <PackageReference Include="Scrutor" Version="5.0.2" />
         <PackageReference Include="Scrutor.AspNetCore" Version="3.3.0" />
         <PackageReference Include="Serilog.AspNetCore" Version="8.0.3" />
         <PackageReference Include="Serilog.Aspnetcore.Middleware" Version="1.0.0" />
@@ -82,7 +82,7 @@
         <PackageReference Include="Serilog.Sinks.Seq" Version="8.0.0" />
         <PackageReference Include="Swashbuckle.AspNetCore" Version="6.9.0" />
         <PackageReference Include="Swashbuckle.AspNetCore.Newtonsoft" Version="6.9.0" />
-        <PackageReference Include="System.IdentityModel.Tokens.Jwt" Version="8.1.2" />
+        <PackageReference Include="System.IdentityModel.Tokens.Jwt" Version="8.2.0" />
         <PackageReference Include="System.Text.Encoding.CodePages" Version="8.0.0" />
         <PackageReference Update="Packaging.Targets">
           <Version>0.1.226</Version>
