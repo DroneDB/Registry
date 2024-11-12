@@ -51,10 +51,24 @@ public class DdbManager : IDdbManager
             return;
         }
 
-        _logger.LogInformation("Removing ddb '{BaseDdbPath}'", baseDdbPath);
+        _logger.LogInformation("Removing ddb dataset '{BaseDdbPath}'", baseDdbPath);
 
         Directory.Delete(baseDdbPath, true);
 
+    }
+
+    public void Delete(string orgSlug)
+    {
+        var orgPath = Path.Combine(_settings.DatasetsPath, orgSlug);
+
+        if (!Directory.Exists(orgPath)) {
+            _logger.LogWarning("Asked to remove the folder '{OrgPath}' but it does not exist", orgPath);
+            return;
+        }
+
+        _logger.LogInformation("Removing ddb '{OrgPath}'", orgPath);
+
+        Directory.Delete(orgPath, true);
     }
 
     private string GetDdbPath(string orgSlug, Guid internalRef)

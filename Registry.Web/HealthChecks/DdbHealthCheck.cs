@@ -57,7 +57,7 @@ public class DdbHealthCheck : IHealthCheck
         }
         finally
         {
-            _ddbManager.Delete(tempOrg, tempDs);
+            _ddbManager.Delete(tempOrg);
         }
 
     }

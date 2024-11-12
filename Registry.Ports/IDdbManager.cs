@@ -10,4 +10,6 @@ public interface IDdbManager
 {
     IDDB Get(string orgSlug, Guid internalRef);
     void Delete(string orgSlug, Guid internalRef);
+
+    void Delete(string orgSlug);
 }
