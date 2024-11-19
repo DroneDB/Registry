@@ -13,7 +13,7 @@ public interface ICacheManager
 
     void Set(string seed, string category, string data, params object[] parameters);
 
-    Task Clear(string seed, string category = null);
+    void Clear(string seed, string category = null);
     void Remove(string seed, string category, params object[] parameters);
 
     bool IsRegistered(string seed);
