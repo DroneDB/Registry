@@ -129,15 +129,16 @@ public class CacheManager : ICacheManager
         _cache.Set(key, data, policy);
     }
 
-    public Task Clear(string seed, string category = null)
+    public void Clear(string seed, string category = null)
     {
-        return Task.Run(() =>
-        {
-            var k = category != null ? MakeKey(seed, category, null) : seed;
-            var keys = _cache.Where(o => o.Key.StartsWith(k)).Select(o => o.Key).ToArray();
+        ArgumentNullException.ThrowIfNull(seed);
+        var k = category != null ? MakeKey(seed, category, null) : seed;
+        
+        var keys = _cache.Where(o => o.Key != null && o.Key.StartsWith(k))
+            .Select(o => o.Key).ToArray();
 
-            foreach (var key in keys)
-                _cache.Remove(key);
-        });
+        foreach (var key in keys)
+            _cache.Remove(key);
+        
     }
 }

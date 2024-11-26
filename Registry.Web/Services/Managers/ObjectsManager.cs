@@ -370,8 +370,8 @@ public class ObjectsManager : IObjectsManager
 
                 _fs.Delete(objLocalPath);
 
-                await _cacheManager.Clear(MagicStrings.ThumbnailCacheSeed, obj.Hash);
-                await _cacheManager.Clear(MagicStrings.TileCacheSeed, obj.Hash);
+                _cacheManager.Clear(MagicStrings.ThumbnailCacheSeed, obj.Hash);
+                _cacheManager.Clear(MagicStrings.TileCacheSeed, obj.Hash);
             }
             catch (Exception ex)
             {
