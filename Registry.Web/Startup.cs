@@ -232,6 +232,7 @@ public class Startup
 
         services.AddTransient<TokenManagerMiddleware>();
         services.AddTransient<JwtInCookieMiddleware>();
+        services.AddTransient<UserEnrichmentMiddleware>();
         services.AddTransient<ITokenManager, TokenManager>();
         services.AddSingleton<IHttpContextAccessor, HttpContextAccessor>();
 
@@ -362,6 +363,7 @@ public class Startup
         app.UseResponseCaching();
 
         app.UseMiddleware<TokenManagerMiddleware>();
+        app.UseMiddleware<UserEnrichmentMiddleware>();
 
         app.UseHangfireDashboard(MagicStrings.HangFireUrl, new DashboardOptions
         {
