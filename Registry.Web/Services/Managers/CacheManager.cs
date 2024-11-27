@@ -103,21 +103,6 @@ public class CacheManager : ICacheManager
         return (string)_cache.Get(key);
     }
 
-    public async Task<string> GetOrFail(string seed, string category, params object[] parameters)
-    {
-        ArgumentNullException.ThrowIfNull(seed);
-
-        if (!_providers.TryGetValue(seed, out var carrier))
-            throw new ArgumentException("No provider registered for seed: " + seed);
-
-        var key = MakeKey(seed, category, parameters);
-
-        var res = _cache.Get(key);
-
-        return (string)res;
-
-    }
-
     public void Set(string seed, string category, string data, params object[] parameters)
     {
         ArgumentNullException.ThrowIfNull(seed);

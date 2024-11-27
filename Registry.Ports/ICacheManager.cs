@@ -9,8 +9,6 @@ public interface ICacheManager
     void Unregister(string seed);
     Task<string> Get(string seed, string category, params object[] parameters);
 
-    public Task<string> GetOrFail(string seed, string category, params object[] parameters);
-
     void Set(string seed, string category, string data, params object[] parameters);
 
     void Clear(string seed, string category = null);
