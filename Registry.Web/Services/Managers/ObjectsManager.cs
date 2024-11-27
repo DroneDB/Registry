@@ -356,11 +356,28 @@ public class ObjectsManager : IObjectsManager
 
         var objs = (await ddb.SearchAsync(path, true)).ToArray();
 
-        foreach (var obj in objs.Where(item => item.Type != EntryType.Directory))
+        // Let's delete from DDB first
+        try
         {
-            _logger.LogInformation("Deleting '{ObjPath}'", obj.Path);
+            _logger.LogInformation("Removing from DDB");
+            await ddb.RemoveAsync(path);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning("Cannot delete {ObjPath} from DDB: {Reason}", path, ex.Message);
+            throw new InvalidOperationException("Cannot delete object from database", ex);
+        }
 
+        var filesToDelete = objs.Where(item => item.Type != EntryType.Directory).ToArray();
+
+        _logger.LogInformation("Deleting {FilesCount} files", filesToDelete.Length);
+
+        // Then we delete from the file system
+        foreach (var obj in filesToDelete)
+        {
             var objLocalPath = ddb.GetLocalPath(obj.Path);
+
+            _logger.LogInformation("Deleting {ObjPath} in physical path {PhysicalPath}", obj.Path, objLocalPath);
 
             try
             {
@@ -370,25 +387,18 @@ public class ObjectsManager : IObjectsManager
 
                 _fs.Delete(objLocalPath);
 
+                _logger.LogInformation("Local file deleted, now clearing cache with hash {Hash}", obj.Hash);
+
                 _cacheManager.Clear(MagicStrings.ThumbnailCacheSeed, obj.Hash);
                 _cacheManager.Clear(MagicStrings.TileCacheSeed, obj.Hash);
+
+                _logger.LogInformation("Cache cleared");
             }
             catch (Exception ex)
             {
                 // We basically ignore this error, it's not critical. We should perform a cleanup later
-                _logger.LogWarning("Cannot delete local file '{ObjPath}': {Reason}", objLocalPath, ex.Message);
+                _logger.LogWarning("Cannot delete local file {ObjPath}: {Reason}", objLocalPath, ex.Message);
             }
-        }
-
-        try
-        {
-            _logger.LogInformation("Removing from DDB");
-            await ddb.RemoveAsync(path);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogWarning("Cannot delete '{ObjPath}' from DDB: {Reason}", path, ex.Message);
-            throw new InvalidOperationException("Cannot delete object from database", ex);
         }
 
         _logger.LogInformation("Deletion complete");
