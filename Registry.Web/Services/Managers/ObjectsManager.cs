@@ -249,10 +249,10 @@ public class ObjectsManager : IObjectsManager
             _logger.LogInformation("This item is an image, generate thumbnail");
 
             // Run task in background
-            _ = _cacheManager.Get(MagicStrings.ThumbnailCacheSeed, entry.Hash, ddb, localFilePath, DefaultThumbnailSize);
+            _ = _cacheManager.Get(MagicStrings.ThumbnailCacheSeed, entry.Hash, ddb, localFilePath,
+                DefaultThumbnailSize);
 
             _logger.LogInformation("Thumbnail generation task started");
-
         }
 
         return entry.ToDto();
@@ -389,8 +389,23 @@ public class ObjectsManager : IObjectsManager
 
                 _logger.LogInformation("Local file deleted, now clearing cache with hash {Hash}", obj.Hash);
 
-                _cacheManager.Clear(MagicStrings.ThumbnailCacheSeed, obj.Hash);
-                _cacheManager.Clear(MagicStrings.TileCacheSeed, obj.Hash);
+                // Clear cache in a fire-and-forget task
+#pragma warning disable CS4014
+                Task.Run(() =>
+#pragma warning restore CS4014
+                {
+                    try
+                    {
+                        _cacheManager.Clear(MagicStrings.ThumbnailCacheSeed, obj.Hash);
+                        _cacheManager.Clear(MagicStrings.TileCacheSeed, obj.Hash);
+
+                        _logger.LogInformation("Cache cleared for hash {Hash}", obj.Hash);
+                    }
+                    catch (Exception cacheEx)
+                    {
+                        _logger.LogError(cacheEx, "Error while clearing cache for hash {Hash}", obj.Hash);
+                    }
+                });
 
                 _logger.LogInformation("Cache cleared");
             }
