@@ -13,6 +13,11 @@ public class RegistryContext : DbContext
     {
     }
 
+    public RegistryContext()
+    {
+        // Required for migrations
+    }
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         modelBuilder.Entity<Dataset>()
