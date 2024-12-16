@@ -26,7 +26,7 @@ public static class Extenders
 
     public static Organization ToEntity(this OrganizationDto organization)
     {
-        return new()
+        return new Organization
         {
             Slug = organization.Slug,
             Name = string.IsNullOrEmpty(organization.Name) ? organization.Slug : organization.Name,
@@ -39,7 +39,7 @@ public static class Extenders
 
     public static OrganizationDto ToDto(this Organization organization)
     {
-        return new()
+        return new OrganizationDto
         {
             Slug = organization.Slug,
             Name = organization.Name,

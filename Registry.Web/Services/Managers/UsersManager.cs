@@ -14,6 +14,7 @@ using Microsoft.IdentityModel.Tokens;
 using Newtonsoft.Json.Linq;
 using Registry.Common;
 using Registry.Web.Data;
+using Registry.Web.Data.Models;
 using Registry.Web.Exceptions;
 using Registry.Web.Identity;
 using Registry.Web.Identity.Models;
@@ -21,6 +22,7 @@ using Registry.Web.Models;
 using Registry.Web.Models.Configuration;
 using Registry.Web.Models.DTO;
 using Registry.Web.Services.Ports;
+using Registry.Web.Utilities;
 
 namespace Registry.Web.Services.Managers;
 
@@ -47,7 +49,7 @@ public class UsersManager : IUsersManager
         IAuthManager authManager,
         IOrganizationsManager organizationsManager,
         IUtils utils,
-        ILogger<UsersManager> logger, 
+        ILogger<UsersManager> logger,
         RegistryContext registryContext,
         IConfigurationHelper<AppSettings> configurationHelper)
     {
@@ -72,7 +74,8 @@ public class UsersManager : IUsersManager
             return null;
 
         // Create user if not exists because login manager has greenlighed us
-        var user = await _userManager.FindByNameAsync(userName) ?? await CreateUserInternal(new User { UserName = userName }, password);
+        var user = await _userManager.FindByNameAsync(userName) ??
+                   await CreateUserInternal(new User { UserName = userName }, password);
 
         if (!user.Metadata.IsSameAs(res.Metadata))
         {
@@ -196,7 +199,7 @@ public class UsersManager : IUsersManager
     private async Task AddUserToRoles(User user, string[] roles)
     {
         // Add user roles
-        if (roles != null && roles.Any())
+        if (roles != null && roles.Length != 0)
         {
             foreach (var role in roles)
                 await _userManager.AddToRoleAsync(user, role);
@@ -248,7 +251,6 @@ public class UsersManager : IUsersManager
             throw new BadRequestException("User does not exist");
 
         return await ChangePasswordInternal(user, currentPassword, newPassword);
-            
     }
 
     public async Task<ChangePasswordResult> ChangePassword(string currentPassword, string newPassword)
@@ -260,8 +262,9 @@ public class UsersManager : IUsersManager
 
         return await ChangePasswordInternal(currentUser, currentPassword, newPassword);
     }
-        
-    private async Task<ChangePasswordResult> ChangePasswordInternal(User user, string currentPassword, string newPassword)
+
+    private async Task<ChangePasswordResult> ChangePasswordInternal(User user, string currentPassword,
+        string newPassword)
     {
         var res = await _userManager.ChangePasswordAsync(user, currentPassword, newPassword);
 
@@ -279,7 +282,7 @@ public class UsersManager : IUsersManager
             _appSettings.DefaultAdmin.Password = newPassword;
             _configurationHelper.SaveConfiguration(_appSettings);
         }
-            
+
         _logger.LogInformation("User {UserName} changed password", user.UserName);
 
         return new ChangePasswordResult
@@ -287,7 +290,6 @@ public class UsersManager : IUsersManager
             UserName = user.UserName,
             Password = newPassword
         };
-
     }
 
     public async Task<AuthenticateResponse> Refresh()
@@ -376,6 +378,95 @@ public class UsersManager : IUsersManager
         return Task.FromResult(roles.ToArray());
     }
 
+    public async Task<OrganizationDto[]> GetUserOrganizations(string userName)
+    {
+        var currentUser = await _authManager.GetCurrentUser();
+
+        if (currentUser == null)
+            throw new BadRequestException("User does not exist");
+
+        if (!await _authManager.IsUserAdmin())
+            throw new UnauthorizedException("Cannot get other user's meta");
+
+        var user = await _userManager.FindByNameAsync(userName);
+
+        if (user == null)
+            throw new BadRequestException("Cannot find user " + userName);
+
+        var orgs = (from org in _registryContext.Organizations.Include(o => o.Users)
+            where org.OwnerId == user.Id || org.Users.Any(item => item.UserId == user.Id)
+            select org).ToArray();
+
+        return orgs.Select(o => o.ToDto()).ToArray();
+    }
+
+    public async Task SetUserOrganizations(string userName, string[] orgSlugs)
+    {
+        var currentUser = await _authManager.GetCurrentUser();
+
+        if (currentUser == null)
+            throw new BadRequestException("User does not exist");
+
+        if (!await _authManager.IsUserAdmin())
+            throw new UnauthorizedException("Cannot get other user's meta");
+
+        var user = await _userManager.FindByNameAsync(userName);
+
+        if (user == null)
+            throw new BadRequestException("Cannot find user " + userName);
+
+        var orgs = (from org in _registryContext.Organizations.Include(o => o.Users)
+            where org.OwnerId == user.Id || org.Users.Any(item => item.UserId == user.Id)
+            select org).ToArray();
+
+        _logger.LogInformation("User {UserName} is in {Count} organizations: {Orgs}", userName, orgs.Length,
+            orgs.Select(o => o.Slug).ToArray());
+
+        var orgsDict = orgs.ToDictionary(item => item.Slug, item => item);
+
+        // Find out what orgs to add
+        var toAdd = orgSlugs.Where(slug => !orgsDict.ContainsKey(slug)).ToArray();
+
+        _logger.LogInformation("User {UserName} will be added to {Count} organizations: {Orgs}", userName, toAdd.Length,
+            toAdd);
+
+        // Add user to orgs
+        foreach (var slug in toAdd)
+        {
+            var org = await _registryContext.Organizations.Include(o => o.Users)
+                .FirstOrDefaultAsync(item => item.Slug == slug);
+
+            if (org == null)
+                throw new BadRequestException("Organization does not exist: " + slug);
+
+            org.Users.Add(new OrganizationUser
+            {
+                UserId = user.Id,
+                OrganizationSlug = org.Slug
+            });
+        }
+
+        // Find out what orgs to remove
+        var toRemove = orgs.Where(org => !orgSlugs.Contains(org.Slug)).ToArray();
+
+        _logger.LogInformation("User {UserName} will be removed from {Count} organizations: {Orgs}", userName,
+            toRemove.Length, toRemove.Select(o => o.Slug).ToArray());
+
+        // Remove user from orgs
+        foreach (var org in toRemove)
+        {
+            var orgUser = await _registryContext.OrganizationsUsers.FirstOrDefaultAsync(item =>
+                item.OrganizationSlug == org.Slug && item.UserId == user.Id);
+
+            if (orgUser == null)
+                throw new BadRequestException("User is not in organization: " + org.Slug);
+
+            _registryContext.OrganizationsUsers.Remove(orgUser);
+        }
+
+        await _registryContext.SaveChangesAsync();
+    }
+
     public async Task DeleteUser(string userName)
     {
         if (!await _authManager.IsUserAdmin())
@@ -416,7 +507,7 @@ public class UsersManager : IUsersManager
             into g
             select new
             {
-                UserId = g.Key, 
+                UserId = g.Key,
                 OrgIds = g.Select(item => item.OrganizationSlug).ToArray()
             };
 
@@ -431,7 +522,7 @@ public class UsersManager : IUsersManager
             };
 
         var union = userOrgQuery.ToArray().Union(userOrgQuery2.ToArray());
-            
+
         var merge = from m in union
             group m by m.UserId
             into g
@@ -440,9 +531,9 @@ public class UsersManager : IUsersManager
                 UserId = g.Key,
                 OrgIds = g.SelectMany(item => item.OrgIds).ToArray()
             };
-            
+
         var userOrg = merge.ToDictionary(item => item.UserId, item => item.OrgIds);
-            
+
 
         var query = (from user in _applicationDbContext.Users
             join userRole in _applicationDbContext.UserRoles on user.Id equals userRole.UserId into userRoles
@@ -482,12 +573,12 @@ public class UsersManager : IUsersManager
 
         var tokenDescriptor = new SecurityTokenDescriptor
         {
-            Subject = new ClaimsIdentity(new[]
-            {
+            Subject = new ClaimsIdentity([
                 new Claim(ClaimTypes.Name, user.Id),
                 new Claim(ApplicationDbContext.AdminRoleName.ToLowerInvariant(),
-                    (await _userManager.IsInRoleAsync(user, ApplicationDbContext.AdminRoleName)).ToString(), ClaimValueTypes.Boolean),
-            }),
+                    (await _userManager.IsInRoleAsync(user, ApplicationDbContext.AdminRoleName)).ToString(),
+                    ClaimValueTypes.Boolean)
+            ]),
             Expires = expiresOn,
             SigningCredentials = new SigningCredentials(new SymmetricSecurityKey(key),
                 SecurityAlgorithms.HmacSha256Signature)

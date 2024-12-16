@@ -324,4 +324,47 @@ public class UsersController : ControllerBaseEx
             return ExceptionResult(ex);
         }
     }
+
+    #region Organizations
+
+    [HttpGet("{userName}/orgs")]
+    [ProducesResponseType(typeof(OrganizationDto[]), 200)]
+    public async Task<IActionResult> GetOrganizations([FromRoute] string userName)
+    {
+        try
+        {
+            _logger.LogDebug("Users controller GetOrganizations('{UserName}')", userName);
+
+            var organizations = await _usersManager.GetUserOrganizations(userName);
+
+            return Ok(organizations);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Exception in Users controller GetOrganizations('{UserName}')", userName);
+            return ExceptionResult(ex);
+        }
+    }
+
+    [HttpPut("{userName}/orgs")]
+    [ProducesResponseType(200)]
+
+    public async Task<IActionResult> SetUserOrganizations([FromRoute] string userName, string[] orgSlugs)
+    {
+        try
+        {
+            _logger.LogDebug("Users controller SetUserOrganizations('{UserName}')", userName);
+
+            await _usersManager.SetUserOrganizations(userName, orgSlugs);
+
+            return Ok();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Exception in Users controller SetUserOrganizations('{UserName}')", userName);
+            return ExceptionResult(ex);
+        }
+    }
+
+    #endregion
 }

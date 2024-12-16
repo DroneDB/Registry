@@ -4,6 +4,7 @@ using System.Threading.Tasks;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.Extensions.Logging;
 using Registry.Ports;
+using Registry.Web.Data;
 using Registry.Web.Data.Models;
 using Registry.Web.Identity.Models;
 using Registry.Web.Services.Managers;
@@ -17,8 +18,8 @@ public class DatasetAccessControl : AccessControlBase
 {
     private readonly IDdbManager _ddbManager;
 
-    public DatasetAccessControl(UserManager<User> usersManager, ILogger logger, IDdbManager ddbManager)
-        : base(usersManager, logger)
+    public DatasetAccessControl(UserManager<User> usersManager, RegistryContext context, ILogger logger, IDdbManager ddbManager)
+        : base(usersManager, context, logger)
     {
         _ddbManager = ddbManager;
     }
@@ -63,8 +64,11 @@ public class DatasetAccessControl : AccessControlBase
             return true;
         }
 
+        if (org.Users == null)
+            await _context.Entry(org).Collection(o => o.Users).LoadAsync();
+
         // Organization member access
-        var orgUser = org.Users.FirstOrDefault(u => u.UserId == user.Id);
+        var orgUser = org.Users?.FirstOrDefault(u => u.UserId == user.Id);
         if (orgUser == null)
         {
             // Non-organization members can only read public or unlisted datasets

@@ -1,6 +1,7 @@
 ﻿using System.Threading.Tasks;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.Extensions.Logging;
+using Registry.Web.Data;
 using Registry.Web.Identity;
 using Registry.Web.Identity.Models;
 
@@ -9,11 +10,13 @@ namespace Registry.Web.Utilities.Auth;
 public abstract class AccessControlBase
 {
     protected readonly UserManager<User> UsersManager;
+    protected readonly RegistryContext _context;
     protected readonly ILogger Logger;
 
-    protected AccessControlBase(UserManager<User> usersManager, ILogger logger)
+    protected AccessControlBase(UserManager<User> usersManager, RegistryContext context, ILogger logger)
     {
         UsersManager = usersManager;
+        _context = context;
         Logger = logger;
     }
 

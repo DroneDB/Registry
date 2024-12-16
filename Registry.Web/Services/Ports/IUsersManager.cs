@@ -23,4 +23,7 @@ public interface IUsersManager
     Task<Dictionary<string, object>> GetUserMeta(string userName = null);
     Task SetUserMeta(string userId, Dictionary<string, object> meta);
     Task<string[]> GetRoles();
+    Task<OrganizationDto[]> GetUserOrganizations(string userName);
+
+    Task SetUserOrganizations(string userName, string[] orgSlugs);
 }

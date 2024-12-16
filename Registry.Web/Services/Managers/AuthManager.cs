@@ -9,6 +9,7 @@ using Microsoft.Extensions.Logging;
 using Registry.Common;
 using Registry.Ports;
 using Registry.Ports.DroneDB.Models;
+using Registry.Web.Data;
 using Registry.Web.Data.Models;
 using Registry.Web.Identity;
 using Registry.Web.Identity.Models;
@@ -34,13 +35,14 @@ public class AuthManager : IAuthManager
         UserManager<User> usersManager,
         IHttpContextAccessor httpContextAccessor,
         IDdbManager ddbManager,
+        RegistryContext context,
         ILogger<AuthManager> logger)
     {
         _usersManager = usersManager;
         _httpContextAccessor = httpContextAccessor;
-        _resourceAccess = new ResourceAccessControl(usersManager, logger);
-        _organizationAccess = new OrganizationAccessControl(usersManager, logger);
-        _datasetAccess = new DatasetAccessControl(usersManager, logger, ddbManager);
+        _resourceAccess = new ResourceAccessControl(usersManager, context, logger);
+        _organizationAccess = new OrganizationAccessControl(usersManager, context, logger);
+        _datasetAccess = new DatasetAccessControl(usersManager, context, logger, ddbManager);
     }
 
     public async Task<User> GetCurrentUser()

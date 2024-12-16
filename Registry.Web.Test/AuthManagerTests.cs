@@ -12,6 +12,7 @@ using NUnit.Framework;
 using Registry.Ports;
 using Registry.Ports.DroneDB;
 using Registry.Ports.DroneDB.Models;
+using Registry.Web.Data;
 using Registry.Web.Data.Models;
 using Registry.Web.Identity;
 using Registry.Web.Identity.Models;
@@ -28,6 +29,8 @@ public class AuthManagerTests
     private Mock<IDdbManager> _ddbManagerMock;
     private Mock<UserManager<User>> _userManagerMock;
     private Mock<ILogger<AuthManager>> _loggerMock;
+    private Mock<RegistryContext> _context;
+
     private AuthManager _authManager;
     private User _normalUser;
     private User _randomUser;
@@ -88,12 +91,14 @@ public class AuthManagerTests
         _ddbManagerMock = new Mock<IDdbManager>();
         _userManagerMock = MockUserManager();
         _loggerMock = new Mock<ILogger<AuthManager>>();
+        _context = new Mock<RegistryContext>();
 
         // Setup AuthManager
         _authManager = new AuthManager(
             _userManagerMock.Object,
             _httpContextAccessorMock.Object,
             _ddbManagerMock.Object,
+            _context.Object,
             _loggerMock.Object
         );
 

@@ -3,6 +3,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.Extensions.Logging;
+using Registry.Web.Data;
 using Registry.Web.Data.Models;
 using Registry.Web.Identity.Models;
 using Registry.Web.Services.Managers;
@@ -14,8 +15,10 @@ namespace Registry.Web.Utilities.Auth;
 /// </summary>
 public class OrganizationAccessControl : AccessControlBase
 {
-    public OrganizationAccessControl(UserManager<User> usersManager, ILogger logger)
-        : base(usersManager, logger) { }
+    public OrganizationAccessControl(UserManager<User> usersManager, RegistryContext context, ILogger logger)
+        : base(usersManager, context, logger)
+    {
+    }
 
     public async Task<bool> CanAccessOrganization(Organization org, AccessType access, User user)
     {
@@ -58,7 +61,14 @@ public class OrganizationAccessControl : AccessControlBase
         if (access == AccessType.Delete)
             return false;
 
-        var orgUser = org.Users.FirstOrDefault(u => u.UserId == user.Id);
-        return orgUser != null && !await IsUserDeactivated(user);
+        if (await IsUserDeactivated(user))
+            return false;
+
+        if (org.Users == null)
+            await _context.Entry(org).Collection(o => o.Users).LoadAsync();
+
+        var orgUser = org.Users?.FirstOrDefault(u => u.UserId == user.Id);
+        return orgUser != null;
+
     }
 }

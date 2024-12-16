@@ -1,6 +1,7 @@
 ﻿using System.Threading.Tasks;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.Extensions.Logging;
+using Registry.Web.Data;
 using Registry.Web.Identity.Models;
 
 namespace Registry.Web.Utilities.Auth;
@@ -10,8 +11,8 @@ namespace Registry.Web.Utilities.Auth;
 /// </summary>
 public class ResourceAccessControl : AccessControlBase
 {
-    public ResourceAccessControl(UserManager<User> usersManager, ILogger logger)
-        : base(usersManager, logger) { }
+    public ResourceAccessControl(UserManager<User> usersManager, RegistryContext context,  ILogger logger)
+        : base(usersManager, context, logger) { }
 
     /// <summary>
     /// Validates if an owner exists and is not deactivated

@@ -47,8 +47,9 @@ public class OrganizationsManager : IOrganizationsManager
             throw new UnauthorizedException("Invalid user");
 
         var query =
-            from org in _context.Organizations
-            where org.OwnerId == currentUser.Id || org.Slug == MagicStrings.PublicOrganizationSlug
+            from org in _context.Organizations.Include(o => o.Users)
+            where org.OwnerId == currentUser.Id || org.Slug == MagicStrings.PublicOrganizationSlug ||
+                  org.Users.Any(u => u.UserId == currentUser.Id)
             select org;
 
         // This can be optimized, but it's not a big deal because it's a cross database query anyway
