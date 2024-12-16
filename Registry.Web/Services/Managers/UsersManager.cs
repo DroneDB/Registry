@@ -424,6 +424,9 @@ public class UsersManager : IUsersManager
 
         var orgsDict = orgs.ToDictionary(item => item.Slug, item => item);
 
+        // Remove duplicates
+        orgSlugs = orgSlugs.Distinct().ToArray();
+
         // Find out what orgs to add
         var toAdd = orgSlugs.Where(slug => !orgsDict.ContainsKey(slug)).ToArray();
 
@@ -446,8 +449,8 @@ public class UsersManager : IUsersManager
             });
         }
 
-        // Find out what orgs to remove
-        var toRemove = orgs.Where(org => !orgSlugs.Contains(org.Slug)).ToArray();
+        // Find out what orgs to remove (except the owner)
+        var toRemove = orgs.Where(org => !orgSlugs.Contains(org.Slug) && org.OwnerId != user.Id).ToArray();
 
         _logger.LogInformation("User {UserName} will be removed from {Count} organizations: {Orgs}", userName,
             toRemove.Length, toRemove.Select(o => o.Slug).ToArray());
