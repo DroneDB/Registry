@@ -1,6 +1,6 @@
 ﻿using Newtonsoft.Json;
 
-namespace Registry.Ports.DroneDB.Models;
+namespace Registry.Ports.DroneDB;
 
 public class MetaListItem
 {

@@ -1,11 +1,6 @@
 ﻿using Newtonsoft.Json;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 
-namespace Registry.Ports.DroneDB.Models;
+namespace Registry.Ports.DroneDB;
 
 public class MetaDump : Meta
 {

@@ -184,6 +184,8 @@ public class Program
 
         var args = new[] { "--urls", $"http://{opts.Address}" };
 
+        var nativeDdbWrapper = new NativeDdbWrapper();
+
         var host = Host.CreateDefaultBuilder(args)
             .UseSerilog((context, services, configuration) => configuration
                 .ReadFrom.Configuration(context.Configuration)
@@ -232,7 +234,7 @@ public class Program
 
                             try
                             {
-                                var thumbnail = DDBWrapper.GenerateThumbnail(filePath, sizeInt);
+                                var thumbnail = nativeDdbWrapper.GenerateThumbnail(filePath, sizeInt);
 
                                 if (thumbnail == null || thumbnail.Length == 0)
                                 {
@@ -324,15 +326,18 @@ public class Program
     {
         try
         {
+
+            var nativeDdbWrapper = new NativeDdbWrapper();
+
 #if DEBUG
-            DDBWrapper.RegisterProcess(true);
+            nativeDdbWrapper.RegisterProcess(true);
             Console.WriteLine(" ?> Initialized DDB - Verbose");
 #else
                 DDBWrapper.RegisterProcess(false);
                 Console.WriteLine(" ?> Initialized DDB");
 #endif
 
-            var rawVersion = DDBWrapper.GetVersion();
+            var rawVersion = nativeDdbWrapper.GetVersion();
             Console.WriteLine(" ?> DDB version " + rawVersion);
 
             // Remove git commit string

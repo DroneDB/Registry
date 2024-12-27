@@ -1,4 +1,4 @@
-﻿namespace Registry.Ports.DroneDB.Models;
+﻿namespace Registry.Ports.DroneDB;
 
 public enum MergeStrategy
 {

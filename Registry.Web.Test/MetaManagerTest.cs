@@ -14,6 +14,7 @@ using NUnit.Framework;
 using Registry.Adapters.DroneDB;
 using Registry.Common;
 using Registry.Common.Test;
+using Registry.Ports;
 using Registry.Test.Common;
 using Registry.Web.Data;
 using Registry.Web.Data.Models;
@@ -26,7 +27,7 @@ using MetaManager = Registry.Web.Services.Managers.MetaManager;
 namespace Registry.Web.Test;
 
 [TestFixture]
-class MetaManagerTest : TestBase
+internal class MetaManagerTest : TestBase
 {
     private Logger<DdbManager> _ddbFactoryLogger;
     private Logger<MetaManager> _metaManagerLogger;
@@ -45,6 +46,8 @@ class MetaManagerTest : TestBase
     private const string Test5ArchiveUrl = "https://github.com/DroneDB/test_data/raw/master/registry/Test5-new.zip";
 
     private readonly Guid _defaultDatasetGuid = Guid.Parse("0a223495-84a0-4c15-b425-c7ef88110e75");
+
+    private static readonly IDdbWrapper DdbWrapper = new NativeDdbWrapper(true);
 
     [SetUp]
     public void Setup()
@@ -74,12 +77,12 @@ class MetaManagerTest : TestBase
         _authManagerMock.Setup(o => o.RequestAccess(It.IsAny<Organization>(),
             It.IsAny<AccessType>())).Returns(Task.FromResult(true));
 
-        var ddbManager = new DdbManager(_appSettingsMock.Object, _ddbFactoryLogger);
+        var ddbManager = new DdbManager(_appSettingsMock.Object, _ddbFactoryLogger, DdbWrapper);
 
         var webUtils = new WebUtils(_authManagerMock.Object, context, _appSettingsMock.Object,
             _httpContextAccessorMock.Object, ddbManager);
 
-        var metaManager = new MetaManager(_metaManagerLogger, ddbManager, _authManagerMock.Object,  webUtils);
+        var metaManager = new MetaManager(_metaManagerLogger, ddbManager, _authManagerMock.Object, webUtils);
 
         var res = await metaManager.List(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug);
 
@@ -104,7 +107,7 @@ class MetaManagerTest : TestBase
         _authManagerMock.Setup(o => o.RequestAccess(It.IsAny<Organization>(),
             It.IsAny<AccessType>())).Returns(Task.FromResult(true));
 
-        var ddbManager = new DdbManager(_appSettingsMock.Object, _ddbFactoryLogger);
+        var ddbManager = new DdbManager(_appSettingsMock.Object, _ddbFactoryLogger, DdbWrapper);
 
         var webUtils = new WebUtils(_authManagerMock.Object, context, _appSettingsMock.Object,
             _httpContextAccessorMock.Object, ddbManager);
@@ -122,27 +125,30 @@ class MetaManagerTest : TestBase
         res.First().Count.Should().Be(1);
         res.First().Key.Should().Be("annotations");
 
-        var a2 = await metaManager.Add(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug, "annotations",
+        var a2 = await metaManager.Add(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug,
+            "annotations",
             "{\"test\":4124,\"pippo\":\"ciao\"}");
 
         a2.Data["test"].ToObject<int>().Should().Be(4124);
         a2.Data["pippo"].ToObject<string>().Should().Be("ciao");
 
-        (await metaManager.List(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug)).Should().HaveCount(1);
+        (await metaManager.List(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug)).Should()
+            .HaveCount(1);
 
         (await metaManager.Get(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug, "annotations"))
             .Should().HaveCount(2);
 
-        (await metaManager.Remove(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug, a.Id)).Should().Be(1);
+        (await metaManager.Remove(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug, a.Id)).Should()
+            .Be(1);
 
         (await metaManager.Get(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug, "annotations"))
             .Should().HaveCount(1);
 
-        (await metaManager.Unset(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug, "annotations")).Should().Be(1);
+        (await metaManager.Unset(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug, "annotations"))
+            .Should().Be(1);
 
         (await metaManager.List(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug)).Should()
             .BeEmpty();
-
     }
 
     #region Test Data
@@ -172,7 +178,6 @@ class MetaManagerTest : TestBase
 }
   ";
 
-
     #endregion
 
     #region TestContexts
@@ -186,7 +191,6 @@ class MetaManagerTest : TestBase
         // Insert seed data into the database using one instance of the context
         using (var context = new RegistryContext(options))
         {
-
             var entity = new Organization
             {
                 Slug = MagicStrings.PublicOrganizationSlug,
@@ -237,6 +241,4 @@ class MetaManagerTest : TestBase
     }
 
     #endregion
-
-
 }

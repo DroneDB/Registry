@@ -10,10 +10,12 @@ namespace Registry.Adapters.Thumbnail;
 public class LocalThumbnailGenerator : IThumbnailGenerator
 {
     private readonly ILogger<LocalThumbnailGenerator> _logger;
+    private readonly IDdbWrapper _ddbWrapper;
 
-    public LocalThumbnailGenerator(ILogger<LocalThumbnailGenerator> logger)
+    public LocalThumbnailGenerator(ILogger<LocalThumbnailGenerator> logger, IDdbWrapper ddbWrapper)
     {
         _logger = logger;
+        _ddbWrapper = ddbWrapper;
     }
 
     public async Task GenerateThumbnailAsync(string filePath, int size, Stream output)
@@ -31,7 +33,7 @@ public class LocalThumbnailGenerator : IThumbnailGenerator
 
         try
         {
-            var data = DDBWrapper.GenerateThumbnail(filePath, size);
+            var data = _ddbWrapper.GenerateThumbnail(filePath, size);
             await output.WriteAsync(data);
         }
         catch (Exception ex)

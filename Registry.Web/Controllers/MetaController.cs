@@ -3,11 +3,11 @@ using System.Collections.Generic;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
-using Registry.Ports.DroneDB.Models;
+using Registry.Ports.DroneDB;
 using Registry.Web.Models;
 using Registry.Web.Models.DTO;
-using Registry.Web.Services.Ports;
 using Registry.Web.Utilities;
+using IMetaManager = Registry.Web.Services.Ports.IMetaManager;
 
 namespace Registry.Web.Controllers;
 

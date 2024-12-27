@@ -1,4 +1,4 @@
-﻿using Registry.Ports.DroneDB.Models;
+﻿using Registry.Ports.DroneDB;
 
 namespace Registry.Web.Models.DTO;
 

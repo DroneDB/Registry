@@ -4,7 +4,6 @@ using System.Linq;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using Registry.Ports.DroneDB;
-using Registry.Ports.DroneDB.Models;
 
 namespace Registry.Web.Test.Adapters;
 

@@ -13,11 +13,13 @@ namespace Registry.Web.Services.Managers;
 public class DdbManager : IDdbManager
 {
     private readonly ILogger<DdbManager> _logger;
+    private readonly IDdbWrapper _ddbWrapper;
     private readonly AppSettings _settings;
 
-    public DdbManager(IOptions<AppSettings> settings, ILogger<DdbManager> logger)
+    public DdbManager(IOptions<AppSettings> settings, ILogger<DdbManager> logger, IDdbWrapper ddbWrapper)
     {
         _logger = logger;
+        _ddbWrapper = ddbWrapper;
         _settings = settings.Value;
     }
 
@@ -27,7 +29,7 @@ public class DdbManager : IDdbManager
 
         Directory.CreateDirectory(baseDdbPath);
 
-        var ddb = new DDB(baseDdbPath);
+        var ddb = new DDB(baseDdbPath, _ddbWrapper);
 
         // TODO: It would be nice if we could use the bindings to check this
         if (!Directory.Exists(Path.Combine(baseDdbPath, IDDB.DatabaseFolderName)))

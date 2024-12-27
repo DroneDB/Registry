@@ -8,13 +8,15 @@ using Microsoft.Extensions.Options;
 using Newtonsoft.Json;
 using Registry.Adapters.DroneDB;
 using Registry.Common;
+using Registry.Common.Model;
 using Registry.Ports;
-using Registry.Ports.DroneDB.Models;
+using Registry.Ports.DroneDB;
 using Registry.Web.Exceptions;
 using Registry.Web.Models.Configuration;
 using Registry.Web.Models.DTO;
 using Registry.Web.Services.Ports;
 using Registry.Web.Utilities;
+using Stamp = Registry.Ports.DroneDB.Stamp;
 
 namespace Registry.Web.Services.Managers;
 
@@ -30,13 +32,14 @@ public class PushManager : IPushManager
     private readonly IObjectsManager _objectsManager;
     private readonly IDatasetsManager _datasetsManager;
     private readonly IAuthManager _authManager;
+    private readonly IDdbWrapper _ddbWrapper;
     private readonly ILogger<PushManager> _logger;
     private readonly AppSettings _settings;
     private readonly IBackgroundJobsProcessor _backgroundJob;
 
     public PushManager(IUtils utils, IDdbManager ddbManager,
         IObjectsManager objectsManager, ILogger<PushManager> logger, IDatasetsManager datasetsManager,
-        IAuthManager authManager,
+        IAuthManager authManager, IDdbWrapper ddbWrapper,
         IBackgroundJobsProcessor backgroundJob, IOptions<AppSettings> settings)
     {
         _utils = utils;
@@ -45,6 +48,7 @@ public class PushManager : IPushManager
         _logger = logger;
         _datasetsManager = datasetsManager;
         _authManager = authManager;
+        _ddbWrapper = ddbWrapper;
         _backgroundJob = backgroundJob;
         _settings = settings.Value;
     }
@@ -86,7 +90,7 @@ public class PushManager : IPushManager
 
             // Is a pull required? The checksum passed by client is the checksum of the stamp
             // of the last sync. If it's different, the client should pull first.
-            ourStamp = DDBWrapper.GetStamp(ddb.DatasetFolderPath);
+            ourStamp = _ddbWrapper.GetStamp(ddb.DatasetFolderPath);
             if (ourStamp.Checksum != checksum)
             {
                 return new PushInitResultDto
@@ -96,10 +100,10 @@ public class PushManager : IPushManager
             }
         }
 
-        ourStamp ??= DDBWrapper.GetStamp(ddb.DatasetFolderPath);
+        ourStamp ??= _ddbWrapper.GetStamp(ddb.DatasetFolderPath);
 
         // Perform delta with our ddb
-        var delta = DDBWrapper.Delta(new Stamp
+        var delta = _ddbWrapper.Delta(new Stamp
         {
             Checksum = stamp.Checksum,
             Entries = stamp.Entries,
@@ -107,7 +111,7 @@ public class PushManager : IPushManager
         }, ourStamp);
 
         // Compute locals
-        var locals = DDBWrapper.ComputeDeltaLocals(delta, ddb.DatasetFolderPath);
+        var locals = _ddbWrapper.ComputeDeltaLocals(delta, ddb.DatasetFolderPath);
 
         // Generate UUID
         var uuid = Guid.NewGuid().ToString();
@@ -234,17 +238,17 @@ public class PushManager : IPushManager
         // TODO: we could check for conflicts rather than failing and continue
         // the operation if no conflicts are detected.
 
-        var currentStamp = DDBWrapper.GetStamp(ddb.DatasetFolderPath);
+        var currentStamp = _ddbWrapper.GetStamp(ddb.DatasetFolderPath);
         if (currentStamp.Checksum != ourStamp.Checksum)
         {
             throw new InvalidOperationException("The dataset has been changed by another user while pushing. Please try again!");
         }
 
         // Recompute delta
-        var delta = DDBWrapper.Delta(stamp, currentStamp);
+        var delta = _ddbWrapper.Delta(stamp, currentStamp);
 
         // Create hard links for local files
-        var _ = DDBWrapper.ComputeDeltaLocals(delta, ddb.DatasetFolderPath, addTempFolder);
+        var _ = _ddbWrapper.ComputeDeltaLocals(delta, ddb.DatasetFolderPath, addTempFolder);
 
         foreach (var add in delta.Adds.Where(item => item.Hash.Length > 0))
             if (!File.Exists(Path.Combine(addTempFolder, add.Path)))
@@ -258,7 +262,7 @@ public class PushManager : IPushManager
         }
 
         // Applies delta
-        var conflicts = DDBWrapper.ApplyDelta(delta, addTempFolder, ddb.DatasetFolderPath, MergeStrategy.KeepTheirs, metaDump);
+        var conflicts = _ddbWrapper.ApplyDelta(delta, addTempFolder, ddb.DatasetFolderPath, MergeStrategy.KeepTheirs, metaDump);
 
         if (conflicts.Count > 0)
         {

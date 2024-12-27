@@ -10,13 +10,24 @@ using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using Registry.Adapters.DroneDB;
 using Registry.Common;
+using Registry.Common.Model;
+using Registry.Ports;
 using Registry.Ports.DroneDB;
-using Registry.Ports.DroneDB.Models;
 
 namespace Registry.Adapters.DroneDB;
 
 public class DDB : IDDB
 {
+    private IDdbWrapper _ddbWrapper;
+
+    [JsonIgnore] public string Version => _ddbWrapper.GetVersion();
+
+    [JsonProperty] public string DatasetFolderPath { get; private set; }
+
+    [JsonProperty] public string BuildFolderPath { get; private set; }
+
+    [JsonIgnore] public IMetaManager Meta { get; private set; }
+
     [JsonConstructor]
     private DDB()
     {
@@ -27,30 +38,35 @@ public class DDB : IDDB
     internal void OnDeserializedMethod(StreamingContext context)
     {
         BuildFolderPath = Path.Combine(DatasetFolderPath, IDDB.DatabaseFolderName, IDDB.BuildFolderName);
-        Meta = new MetaManager(this);
+
+        // NOTE: If this was deserialized it's from hangfire, so we need the native wrapper
+        _ddbWrapper = new NativeDdbWrapper(false);
+        Meta = new MetaManager(this, _ddbWrapper);
     }
 
-    public DDB(string ddbPath)
+    public DDB(string ddbPath, IDdbWrapper ddbWrapper)
     {
         if (string.IsNullOrWhiteSpace(ddbPath))
             throw new ArgumentException("Path should not be null or empty");
+
+        _ddbWrapper = ddbWrapper;
 
         if (!Directory.Exists(ddbPath))
             throw new ArgumentException($"Path '{ddbPath}' does not exist");
 
         DatasetFolderPath = ddbPath;
         BuildFolderPath = Path.Combine(ddbPath, IDDB.DatabaseFolderName, IDDB.BuildFolderName);
-        Meta = new MetaManager(this);
+        Meta = new MetaManager(this, ddbWrapper);
     }
 
     public byte[] GenerateTile(string inputPath, int tz, int tx, int ty, bool retina, string inputPathHash)
     {
         try
         {
-            return DDBWrapper.GenerateMemoryTile(inputPath, tz, tx, ty, retina ? 512 : 256, true, false,
+            return _ddbWrapper.GenerateMemoryTile(inputPath, tz, tx, ty, retina ? 512 : 256, true, false,
                 inputPathHash);
         }
-        catch (DDBException ex)
+        catch (DdbException ex)
         {
             throw new InvalidOperationException($"Cannot generate tile of '{inputPath}'", ex);
         }
@@ -60,26 +76,20 @@ public class DDB : IDDB
     {
         try
         {
-            var res = DDBWrapper.Init(DatasetFolderPath);
+            var res = _ddbWrapper.Init(DatasetFolderPath);
             Debug.WriteLine(res);
         }
-        catch (DDBException ex)
+        catch (DdbException ex)
         {
             throw new InvalidOperationException($"Cannot initialize ddb in folder '{DatasetFolderPath}'", ex);
         }
     }
 
-    [JsonIgnore] public string Version => DDBWrapper.GetVersion();
 
-    [JsonProperty] public string DatasetFolderPath { get; private set; }
-
-    [JsonProperty] public string BuildFolderPath { get; private set; }
-
-    [JsonIgnore] public IMetaManager Meta { get; private set; }
 
     public long GetSize()
     {
-        return DDBWrapper.Info(DatasetFolderPath).FirstOrDefault()?.Size ?? 0;
+        return _ddbWrapper.Info(DatasetFolderPath).FirstOrDefault()?.Size ?? 0;
     }
 
     public string GetLocalPath(string path)
@@ -118,7 +128,7 @@ public class DDB : IDDB
             // If path is null we use the base ddb path
             path ??= DatasetFolderPath;
 
-            var entries = DDBWrapper.List(DatasetFolderPath, path, recursive);
+            var entries = _ddbWrapper.List(DatasetFolderPath, path, recursive);
 
             if (entries == null)
             {
@@ -128,7 +138,7 @@ public class DDB : IDDB
 
             return entries;
         }
-        catch (DDBException ex)
+        catch (DdbException ex)
         {
             throw new InvalidOperationException($"Cannot list '{path}' to ddb '{DatasetFolderPath}'", ex);
         }
@@ -147,9 +157,9 @@ public class DDB : IDDB
             // If the path is not absolute let's rebase it on ddbPath
             if (!Path.IsPathRooted(path)) path = Path.Combine(DatasetFolderPath, path);
 
-            DDBWrapper.Remove(DatasetFolderPath, path);
+            _ddbWrapper.Remove(DatasetFolderPath, path);
         }
-        catch (DDBException ex)
+        catch (DdbException ex)
         {
             throw new InvalidOperationException($"Cannot remove '{path}' from ddb '{DatasetFolderPath}'", ex);
         }
@@ -159,9 +169,9 @@ public class DDB : IDDB
     {
         try
         {
-            DDBWrapper.MoveEntry(DatasetFolderPath, source, dest);
+            _ddbWrapper.MoveEntry(DatasetFolderPath, source, dest);
         }
-        catch (DDBException ex)
+        catch (DdbException ex)
         {
             throw new InvalidOperationException($"Cannot move '{source}' to {dest} from ddb '{DatasetFolderPath}'",
                 ex);
@@ -172,9 +182,9 @@ public class DDB : IDDB
     {
         try
         {
-            DDBWrapper.Build(DatasetFolderPath, path, dest, force);
+            _ddbWrapper.Build(DatasetFolderPath, path, dest, force);
         }
-        catch (DDBException ex)
+        catch (DdbException ex)
         {
             throw new InvalidOperationException($"Cannot build '{path}' from ddb '{DatasetFolderPath}'", ex);
         }
@@ -184,9 +194,9 @@ public class DDB : IDDB
     {
         try
         {
-            DDBWrapper.Build(DatasetFolderPath, null, dest, force);
+            _ddbWrapper.Build(DatasetFolderPath, null, dest, force);
         }
-        catch (DDBException ex)
+        catch (DdbException ex)
         {
             throw new InvalidOperationException($"Cannot build all from ddb '{DatasetFolderPath}'", ex);
         }
@@ -196,9 +206,9 @@ public class DDB : IDDB
     {
         try
         {
-            DDBWrapper.Build(DatasetFolderPath, null, dest, force, true);
+            _ddbWrapper.Build(DatasetFolderPath, null, dest, force, true);
         }
-        catch (DDBException ex)
+        catch (DdbException ex)
         {
             throw new InvalidOperationException($"Cannot build pending from ddb '{DatasetFolderPath}'", ex);
         }
@@ -215,9 +225,9 @@ public class DDB : IDDB
     {
         try
         {
-            return DDBWrapper.IsBuildable(DatasetFolderPath, path);
+            return _ddbWrapper.IsBuildable(DatasetFolderPath, path);
         }
-        catch (DDBException ex)
+        catch (DdbException ex)
         {
             throw new InvalidOperationException($"Cannot call IsBuildable from ddb '{DatasetFolderPath}'", ex);
         }
@@ -227,9 +237,9 @@ public class DDB : IDDB
     {
         try
         {
-            return DDBWrapper.IsBuildPending(DatasetFolderPath);
+            return _ddbWrapper.IsBuildPending(DatasetFolderPath);
         }
-        catch (DDBException ex)
+        catch (DdbException ex)
         {
             throw new InvalidOperationException($"Cannot call IsBuildPending from ddb '{DatasetFolderPath}'", ex);
         }
@@ -250,7 +260,7 @@ public class DDB : IDDB
         if (string.IsNullOrWhiteSpace(path))
             throw new ArgumentException("Path cannot be null or empty");
 
-        var info = DDBWrapper.Info(DatasetFolderPath);
+        var info = _ddbWrapper.Info(DatasetFolderPath);
 
         var entry = info.FirstOrDefault();
 
@@ -264,9 +274,9 @@ public class DDB : IDDB
     {
         try
         {
-            return DDBWrapper.ChangeAttributes(DatasetFolderPath, attributes);
+            return _ddbWrapper.ChangeAttributes(DatasetFolderPath, attributes);
         }
-        catch (DDBException ex)
+        catch (DdbException ex)
         {
             throw new InvalidOperationException($"Cannot change attributes of ddb '{DatasetFolderPath}'", ex);
         }
@@ -276,9 +286,9 @@ public class DDB : IDDB
     {
         try
         {
-            return DDBWrapper.GenerateThumbnail(imagePath, size);
+            return _ddbWrapper.GenerateThumbnail(imagePath, size);
         }
-        catch (DDBException ex)
+        catch (DdbException ex)
         {
             throw new InvalidOperationException(
                 $"Cannot generate thumbnail of '{imagePath}' with size '{size}'", ex);
@@ -289,9 +299,9 @@ public class DDB : IDDB
     {
         try
         {
-            DDBWrapper.Add(DatasetFolderPath, path);
+            _ddbWrapper.Add(DatasetFolderPath, path);
         }
-        catch (DDBException ex)
+        catch (DdbException ex)
         {
             throw new InvalidOperationException($"Cannot add '{path}' to ddb '{DatasetFolderPath}'", ex);
         }
@@ -309,9 +319,9 @@ public class DDB : IDDB
 
                 Directory.CreateDirectory(folderPath);
 
-                DDBWrapper.Add(DatasetFolderPath, folderPath);
+                _ddbWrapper.Add(DatasetFolderPath, folderPath);
             }
-            catch (DDBException ex)
+            catch (DdbException ex)
             {
                 throw new InvalidOperationException($"Cannot add folder '{path}' to ddb '{DatasetFolderPath}'", ex);
             }
@@ -339,9 +349,9 @@ public class DDB : IDDB
                     stream.CopyTo(writer);
                 }
 
-                DDBWrapper.Add(DatasetFolderPath, filePath);
+                _ddbWrapper.Add(DatasetFolderPath, filePath);
             }
-            catch (DDBException ex)
+            catch (DdbException ex)
             {
                 throw new InvalidOperationException($"Cannot add '{path}' to ddb '{DatasetFolderPath}'", ex);
             }
@@ -363,12 +373,12 @@ public class DDB : IDDB
 
     public Stamp GetStamp()
     {
-        return DDBWrapper.GetStamp(DatasetFolderPath);
+        return _ddbWrapper.GetStamp(DatasetFolderPath);
     }
 
     public JToken GetStac(string id, string stacCollectionRoot, string stacCatalogRoot, string path = null)
     {
-        return DDBWrapper.Stac(DatasetFolderPath, path, stacCollectionRoot, id, stacCatalogRoot);
+        return _ddbWrapper.Stac(DatasetFolderPath, path, stacCollectionRoot, id, stacCatalogRoot);
     }
 
     #region Async

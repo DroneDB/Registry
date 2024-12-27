@@ -11,13 +11,13 @@ using System.Threading.Tasks;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Identity;
 using Newtonsoft.Json;
+using Registry.Common.Model;
 using Registry.Ports.DroneDB;
-using Registry.Ports.DroneDB.Models;
 using Registry.Web.Data.Models;
 using Registry.Web.Models;
 using Registry.Web.Models.DTO;
 using Registry.Web.Services.Adapters;
-using Entry = Registry.Ports.DroneDB.Models.Entry;
+using Entry = Registry.Ports.DroneDB.Entry;
 
 namespace Registry.Web.Utilities;
 

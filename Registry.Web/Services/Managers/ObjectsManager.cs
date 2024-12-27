@@ -20,9 +20,9 @@ using Registry.Web.Models.DTO;
 using Registry.Web.Services.Ports;
 using Registry.Web.Utilities;
 using Registry.Adapters.DroneDB;
+using Registry.Common.Model;
 using Registry.Ports;
 using Registry.Ports.DroneDB;
-using Registry.Ports.DroneDB.Models;
 using Registry.Web.Services.Adapters;
 
 namespace Registry.Web.Services.Managers;

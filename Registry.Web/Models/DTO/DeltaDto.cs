@@ -4,7 +4,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using Newtonsoft.Json;
-using Registry.Ports.DroneDB.Models;
+using Registry.Ports.DroneDB;
 
 namespace Registry.Web.Models.DTO;
 

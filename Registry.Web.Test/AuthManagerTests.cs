@@ -11,14 +11,13 @@ using Moq;
 using NUnit.Framework;
 using Registry.Ports;
 using Registry.Ports.DroneDB;
-using Registry.Ports.DroneDB.Models;
 using Registry.Web.Data;
 using Registry.Web.Data.Models;
 using Registry.Web.Identity;
 using Registry.Web.Identity.Models;
 using Registry.Web.Services.Adapters;
 using Registry.Web.Services.Managers;
-using Entry = Registry.Ports.DroneDB.Models.Entry;
+using Entry = Registry.Ports.DroneDB.Entry;
 
 namespace Registry.Web.Test;
 

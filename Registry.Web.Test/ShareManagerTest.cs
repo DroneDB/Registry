@@ -33,12 +33,11 @@ using Registry.Web.Services.Adapters;
 using Registry.Web.Services.Managers;
 using Registry.Web.Services.Ports;
 using Registry.Web.Test.Adapters;
-using Registry.Ports.DroneDB.Models;
 using Registry.Test.Common;
 using Registry.Web.Identity;
 using Registry.Web.Identity.Models;
 using Registry.Web.Services;
-using Entry = Registry.Ports.DroneDB.Models.Entry;
+using Entry = Registry.Ports.DroneDB.Entry;
 using IMetaManager = Registry.Ports.DroneDB.IMetaManager;
 
 namespace Registry.Web.Test;
@@ -68,6 +67,8 @@ class ShareManagerTest : TestBase
     private IBackgroundJobsProcessor _backgroundJobsProcessor;
 
     private readonly FileSystem _fileSystem = new FileSystem();
+
+    private static readonly IDdbWrapper DdbWrapper = new NativeDdbWrapper(true);
 
     private const string BaseTestFolder = "ShareManagerTest";
 
@@ -191,7 +192,7 @@ class ShareManagerTest : TestBase
 
         _ddbFactoryMock.Setup(x => x.Get(It.IsAny<string>(), It.IsAny<Guid>())).Returns(ddbMock.Object);
             
-        var ddbFactory = new DdbManager(_appSettingsMock.Object, _ddbFactoryLogger);
+        var ddbFactory = new DdbManager(_appSettingsMock.Object, _ddbFactoryLogger, DdbWrapper);
         var webUtils = new WebUtils(_authManagerMock.Object, context, _appSettingsMock.Object,
             _httpContextAccessorMock.Object, _ddbFactoryMock.Object);
 
@@ -298,7 +299,7 @@ class ShareManagerTest : TestBase
 
         _ddbFactoryMock.Setup(x => x.Get(It.IsAny<string>(), It.IsAny<Guid>())).Returns(ddbMock.Object);
             
-        var ddbFactory = new DdbManager(_appSettingsMock.Object, _ddbFactoryLogger);
+        var ddbFactory = new DdbManager(_appSettingsMock.Object, _ddbFactoryLogger, DdbWrapper);
         var webUtils = new WebUtils(_authManagerMock.Object, context, _appSettingsMock.Object,
             _httpContextAccessorMock.Object, _ddbFactoryMock.Object);
 
@@ -415,7 +416,7 @@ class ShareManagerTest : TestBase
 
         _ddbFactoryMock.Setup(x => x.Get(It.IsAny<string>(), It.IsAny<Guid>())).Returns(ddbMock.Object);
 
-        var ddbFactory = new DdbManager(_appSettingsMock.Object, _ddbFactoryLogger);
+        var ddbFactory = new DdbManager(_appSettingsMock.Object, _ddbFactoryLogger, DdbWrapper);
         var webUtils = new WebUtils(_authManagerMock.Object, context, _appSettingsMock.Object,
             _httpContextAccessorMock.Object, _ddbFactoryMock.Object);
 
@@ -559,7 +560,7 @@ class ShareManagerTest : TestBase
 
         _ddbFactoryMock.Setup(x => x.Get(It.IsAny<string>(), It.IsAny<Guid>())).Returns(ddbMock.Object);
 
-        var ddbFactory = new DdbManager(_appSettingsMock.Object, _ddbFactoryLogger);
+        var ddbFactory = new DdbManager(_appSettingsMock.Object, _ddbFactoryLogger, DdbWrapper);
         var webUtils = new WebUtils(_authManagerMock.Object, context, _appSettingsMock.Object,
             _httpContextAccessorMock.Object, _ddbFactoryMock.Object);
 
@@ -712,7 +713,7 @@ class ShareManagerTest : TestBase
 
         _ddbFactoryMock.Setup(x => x.Get(It.IsAny<string>(), It.IsAny<Guid>())).Returns(ddbMock.Object);
 
-        var ddbFactory = new DdbManager(_appSettingsMock.Object, _ddbFactoryLogger);
+        var ddbFactory = new DdbManager(_appSettingsMock.Object, _ddbFactoryLogger, DdbWrapper);
         var webUtils = new WebUtils(_authManagerMock.Object, context, _appSettingsMock.Object,
             _httpContextAccessorMock.Object, _ddbFactoryMock.Object);
 

@@ -48,11 +48,13 @@ using Registry.Web.Utilities;
 using Registry.Adapters.DroneDB;
 using Registry.Adapters.Thumbnail;
 using Registry.Ports;
+using Registry.Ports.DroneDB;
 using Registry.Web.Identity;
 using Registry.Web.Identity.Models;
 using Registry.Web.Utilities.Auth;
 using Serilog;
 using Serilog.Events;
+using IMetaManager = Registry.Web.Services.Ports.IMetaManager;
 
 namespace Registry.Web;
 
@@ -268,6 +270,10 @@ public class Startup
         }
 
         services.AddSingleton<IFileSystem, FileSystem>();
+
+        // To change
+        services.AddSingleton<IDdbWrapper, NativeDdbWrapper>();
+
         services.AddSingleton<IPasswordHasher, PasswordHasher>();
         services.AddSingleton<IBatchTokenGenerator, BatchTokenGenerator>();
         services.AddSingleton<INameGenerator, NameGenerator>();
@@ -523,7 +529,7 @@ public class Startup
 
         cacheManager.Register(MagicStrings.TileCacheSeed, parameters =>
         {
-            var ddb = (DDB)parameters[0];
+            var ddb = (IDDB)parameters[0];
             var sourcePath = (string)parameters[1];
             var sourceHash = (string)parameters[2];
             var tx = (int)parameters[3];
@@ -537,7 +543,7 @@ public class Startup
         cacheManager.Register(MagicStrings.ThumbnailCacheSeed, parameters =>
         {
             // TODO: Can be removed
-            var ddb = (DDB)parameters[0];
+            var ddb = (IDDB)parameters[0];
             var sourcePath = (string)parameters[1];
             var size = (int)parameters[2];
 
