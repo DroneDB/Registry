@@ -66,8 +66,11 @@ public static class CommonUtils
 
         for (var i = 0; i < iterations; i++)
         {
-            fs1.Read(one, 0, BytesToRead);
-            fs2.Read(two, 0, BytesToRead);
+            var c1 = fs1.Read(one, 0, BytesToRead);
+            var c2 = fs2.Read(two, 0, BytesToRead);
+
+            if (c1 != c2)
+                return false;
 
             if (BitConverter.ToInt64(one, 0) != BitConverter.ToInt64(two, 0))
                 return false;
