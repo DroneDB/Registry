@@ -36,7 +36,7 @@ jobs:
           npm install && webpack --mode=production
       - name: Publish
         run: |
-          cd registry        
+          cd registry
           pwd
           dotnet publish -p:PublishProfile=win-x64.pubxml Registry.Web
           dotnet publish -p:PublishProfile=win-arm64.pubxml Registry.Web
@@ -44,19 +44,19 @@ jobs:
           dotnet publish -p:PublishProfile=linux-arm.pubxml Registry.Web
           dotnet publish -p:PublishProfile=linux-arm64.pubxml Registry.Web
           dotnet publish -p:PublishProfile=osx-x64.pubxml Registry.Web
-          
+
       - name: Zip win-x64
-        run: cd registry/Registry.Web/bin/Release/net8.0/publish/win-x64/ && zip -r ../../../../../../../Registry-Win64.zip *
+        run: cd registry/Registry.Web/bin/Release/net9.0/publish/win-x64/ && zip -r ../../../../../../../Registry-Win64.zip *
       - name: Zip win-arm64
-        run: cd registry/Registry.Web/bin/Release/net8.0/publish/win-arm64/ && zip -r ../../../../../../../Registry-WinArm64.zip *
+        run: cd registry/Registry.Web/bin/Release/net9.0/publish/win-arm64/ && zip -r ../../../../../../../Registry-WinArm64.zip *
       - name: Zip linux-x64
-        run: cd registry/Registry.Web/bin/Release/net8.0/publish/linux-x64/ && zip -r ../../../../../../../Registry-Linux64.zip *
+        run: cd registry/Registry.Web/bin/Release/net9.0/publish/linux-x64/ && zip -r ../../../../../../../Registry-Linux64.zip *
       - name: Zip linux-arm
-        run: cd registry/Registry.Web/bin/Release/net8.0/publish/linux-arm/ && zip -r ../../../../../../../Registry-LinuxArm.zip *
+        run: cd registry/Registry.Web/bin/Release/net9.0/publish/linux-arm/ && zip -r ../../../../../../../Registry-LinuxArm.zip *
       - name: Zip linux-arm64
-        run: cd registry/Registry.Web/bin/Release/net8.0/publish/linux-arm64/ && zip -r ../../../../../../../Registry-LinuxArm64.zip *
+        run: cd registry/Registry.Web/bin/Release/net9.0/publish/linux-arm64/ && zip -r ../../../../../../../Registry-LinuxArm64.zip *
       - name: Zip osx-x64
-        run: cd registry/Registry.Web/bin/Release/net8.0/publish/osx-x64/ && zip -r ../../../../../../../Registry-Osx64.zip *
+        run: cd registry/Registry.Web/bin/Release/net9.0/publish/osx-x64/ && zip -r ../../../../../../../Registry-Osx64.zip *
 
       - name: Release
         uses: softprops/action-gh-release@v1
@@ -70,4 +70,4 @@ jobs:
             Registry-Linux64.zip
             Registry-LinuxArm.zip
             Registry-LinuxArm64.zip
-            Registry-Osx64.zip   
+            Registry-Osx64.zip

@@ -35,7 +35,7 @@ COPY . /Registry
 
 # Compile client app
 RUN npm install -g webpack@4 webpack-cli
-RUN cd /Registry/Registry.Web/ClientApp && npm install && webpack --mode=production 
+RUN cd /Registry/Registry.Web/ClientApp && npm install && webpack --mode=production
 
 # Publish Registry
 COPY docker/FolderProfile.xml /Registry/Registry.Web/Properties/PublishProfiles/FolderProfile.pubxml
@@ -74,7 +74,7 @@ RUN dpkg -i *.deb && rm *.deb
 ENV LD_LIBRARY_PATH="/usr/local/lib:${LD_LIBRARY_PATH}"
 
 # Copy compiled Registry
-COPY --from=dotnet-builder /Registry/Registry.Web/bin/Release/net8.0/publish/ /Registry
+COPY --from=dotnet-builder /Registry/Registry.Web/bin/Release/net9.0/publish/ /Registry
 
 RUN chmod +x /Registry/Registry.Web && mkdir /data && chmod 777 /data
 
