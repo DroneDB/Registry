@@ -64,7 +64,7 @@ RUN apt update && apt install -y --fix-missing --no-install-recommends gnupg2 &&
     curl -L https://github.com/DroneDB/libnexus/releases/download/v1.0.0/nxs-ubuntu-20.04-amd64.deb --output /tmp/nxs-ubuntu-20.04-amd64.deb && \
     dpkg-deb -x /tmp/nxs-ubuntu-20.04-amd64.deb /usr && \
     rm /tmp/nxs-ubuntu-20.04-amd64.deb && \
-    apt remove -y gnupg2 curl && \
+    apt remove -y gnupg2 && \
     apt-get autoremove -y && \
     rm -rf /var/lib/apt/lists/*
 
