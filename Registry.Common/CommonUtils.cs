@@ -84,6 +84,18 @@ public static class CommonUtils
         return !dictionary.TryGetValue(key, out var value) ? default : value;
     }
 
+    public static TValue GetOrAdd<TKey, TValue>(
+        this Dictionary<TKey, TValue> dict, TKey key, TValue value) where TKey : notnull
+    {
+        ref var val = ref CollectionsMarshal.GetValueRefOrAddDefault(dict, key, out var exists);
+
+        if (exists)
+            return val;
+
+        val = value;
+        return value;
+    }
+
     public static TValueOut? SafeGetValue<TKey, TValue, TValueOut>(this IDictionary<TKey, TValue> dictionary,
         TKey key, Func<TValue, TValueOut> selector) where TValueOut : struct
     {
