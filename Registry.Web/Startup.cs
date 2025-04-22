@@ -280,7 +280,7 @@ public class Startup
         services.AddSingleton<ICacheManager, CacheManager>();
         services.AddSingleton<ObjectCache>(provider => new FileCache(FileCacheManagers.Hashed,
             appSettings.CachePath, new DefaultSerializationBinder(),
-            true, appSettings.ClearCacheInterval ?? default)
+            true, appSettings.ClearCacheInterval ?? TimeSpan.Zero)
         {
             PayloadReadMode = FileCache.PayloadMode.Filename,
             PayloadWriteMode = FileCache.PayloadMode.Filename,
@@ -288,6 +288,7 @@ public class Startup
             {
                 SlidingExpiration = appSettings.ClearCacheInterval ?? TimeSpan.FromDays(1)
             }
+
         });
 
         services.AddResponseCompression();

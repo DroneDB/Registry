@@ -97,7 +97,7 @@ public class FileStreamDescriptor
 
                 archive.CreateEntryFromAny(
                     Path.Combine(ddb.DatasetFolderPath, IDDB.DatabaseFolderName),
-                    string.Empty, new[] { ddb.BuildFolderPath });
+                    string.Empty, [ddb.BuildFolderPath]);
             }
 
         }
