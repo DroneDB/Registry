@@ -12,5 +12,9 @@ public enum EntryType
     DroneDB = 7,
     Markdown = 8,
     Video = 9,
-    Geovideo = 10
+    Geovideo = 10,
+    Model = 11,
+    Panorama = 12,
+    GeoPanorama = 13,
+    Vector = 14
 }
