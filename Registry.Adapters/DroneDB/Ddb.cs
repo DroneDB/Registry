@@ -52,23 +52,31 @@ public class DDB : IDDB
         _ddbWrapper = ddbWrapper;
 
         if (!Directory.Exists(ddbPath))
-            throw new ArgumentException($"Path '{ddbPath}' does not exist");
-
-        DatasetFolderPath = ddbPath;
+            throw new ArgumentException($"Path '{ddbPath}' does not exist");        DatasetFolderPath = ddbPath;
         BuildFolderPath = Path.Combine(ddbPath, IDDB.DatabaseFolderName, IDDB.BuildFolderName);
         Meta = new MetaManager(this, ddbWrapper);
     }
 
     public byte[] GenerateTile(string inputPath, int tz, int tx, int ty, bool retina, string inputPathHash)
     {
+        // Get a lock for the database folder to prevent concurrent access to SQLite
+        var semaphore = DbSyncManager.GetDatabaseLock(DatasetFolderPath);
         try
         {
-            return _ddbWrapper.GenerateMemoryTile(inputPath, tz, tx, ty, retina ? 512 : 256, true, false,
-                inputPathHash);
+            semaphore.Wait();
+            try
+            {
+                return _ddbWrapper.GenerateMemoryTile(inputPath, tz, tx, ty, retina ? 512 : 256, true, false,
+                    inputPathHash);
+            }
+            catch (DdbException ex)
+            {
+                throw new InvalidOperationException($"Cannot generate tile of '{inputPath}'", ex);
+            }
         }
-        catch (DdbException ex)
+        finally
         {
-            throw new InvalidOperationException($"Cannot generate tile of '{inputPath}'", ex);
+            semaphore.Release();
         }
     }
 

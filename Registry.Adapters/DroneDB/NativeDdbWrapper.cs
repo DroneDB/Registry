@@ -1,6 +1,7 @@
 ﻿#nullable enable
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Runtime.InteropServices;
 using Newtonsoft.Json;
@@ -471,36 +472,53 @@ public class NativeDdbWrapper : IDdbWrapper
     [DllImport("ddb", EntryPoint = "DDBTile")]
     static extern DdbResult _GenerateTile(
         [MarshalAs(UnmanagedType.LPStr)] string inputPath, int tz, int tx, int ty, out IntPtr outputTilePath,
-        int tileSize, bool tms, bool forceRecreate);
-
-    public string GenerateTile(string inputPath, int tz, int tx, int ty, int tileSize, bool tms,
+        int tileSize, bool tms, bool forceRecreate);    public string GenerateTile(string inputPath, int tz, int tx, int ty, int tileSize, bool tms,
         bool forceRecreate = false)
     {
         if (inputPath == null)
             throw new ArgumentException("inputPath is null");
 
+        // Extract the directory path to determine the database location
+        var directory = Path.GetDirectoryName(inputPath);
+        var semaphore = DbSyncManager.GetDatabaseLock(directory);
+
         try
         {
-            if (_GenerateTile(inputPath, tz, tx, ty, out var output, tileSize, tms, forceRecreate) ==
-                DdbResult.Success)
+            // Acquire lock before accessing native library
+            semaphore.Wait();
+            
+            try
             {
-                var res = Marshal.PtrToStringAnsi(output);
+                if (_GenerateTile(inputPath, tz, tx, ty, out var output, tileSize, tms, forceRecreate) ==
+                    DdbResult.Success)
+                {
+                    var res = Marshal.PtrToStringAnsi(output);
 
-                if (string.IsNullOrWhiteSpace(res))
-                    throw new DdbException("Unable get tile path");
+                    if (string.IsNullOrWhiteSpace(res))
+                        throw new DdbException("Unable get tile path");
 
-                return res;
+                    return res;
+                }
             }
-        }
-        catch (EntryPointNotFoundException ex)
-        {
-            throw new DdbException($"Error in calling ddb lib: incompatible versions ({ex.Message})", ex);
+            catch (EntryPointNotFoundException ex)
+            {
+                throw new DdbException($"Error in calling ddb lib: incompatible versions ({ex.Message})", ex);
+            }
+            catch (Exception ex)
+            {
+                throw new DdbException(
+                    $"Error in calling ddb lib. Last error: \"{SafeGetLastError("generate tile")}\", check inner exception for details",
+                    ex);
+            }
+            finally
+            {
+                // Always release the lock
+                semaphore.Release();
+            }
         }
         catch (Exception ex)
         {
-            throw new DdbException(
-                $"Error in calling ddb lib. Last error: \"{SafeGetLastError("generate tile")}\", check inner exception for details",
-                ex);
+            throw new DdbException($"Failed to synchronize access for tile generation: {ex.Message}", ex);
         }
 
         throw new DdbException(SafeGetLastError("generate tile"));
@@ -510,37 +528,54 @@ public class NativeDdbWrapper : IDdbWrapper
     static extern DdbResult _GenerateMemoryTile(
         [MarshalAs(UnmanagedType.LPStr)] string inputPath, int tz, int tx, int ty, out IntPtr outBuffer,
         out int outBufferSize, int tileSize, bool tms, bool forceRecreate,
-        [MarshalAs(UnmanagedType.LPStr)] string inputPathHash);
-
-    public byte[] GenerateMemoryTile(string inputPath, int tz, int tx, int ty, int tileSize, bool tms,
+        [MarshalAs(UnmanagedType.LPStr)] string inputPathHash);    public byte[] GenerateMemoryTile(string inputPath, int tz, int tx, int ty, int tileSize, bool tms,
         bool forceRecreate = false, string inputPathHash = "")
     {
         if (inputPath == null)
             throw new ArgumentException("inputPath is null");
 
+        // Extract the directory path to determine the database location
+        var directory = Path.GetDirectoryName(inputPath);
+        var semaphore = DbSyncManager.GetDatabaseLock(directory);
+
         try
         {
-            if (_GenerateMemoryTile(inputPath, tz, tx, ty, out var outBuffer, out var outBufferSize, tileSize, tms,
-                    forceRecreate, inputPathHash) ==
-                DdbResult.Success)
+            // Acquire lock before accessing native library
+            semaphore.Wait();
+            
+            try
             {
-                var destBuf = new byte[outBufferSize];
-                Marshal.Copy(outBuffer, destBuf, 0, outBufferSize);
+                if (_GenerateMemoryTile(inputPath, tz, tx, ty, out var outBuffer, out var outBufferSize, tileSize, tms,
+                        forceRecreate, inputPathHash) ==
+                    DdbResult.Success)
+                {
+                    var destBuf = new byte[outBufferSize];
+                    Marshal.Copy(outBuffer, destBuf, 0, outBufferSize);
 
-                _DDBVSIFree(outBuffer);
+                    _DDBVSIFree(outBuffer);
 
-                return destBuf;
+                    return destBuf;
+                }
             }
-        }
-        catch (EntryPointNotFoundException ex)
-        {
-            throw new DdbException($"Error in calling ddb lib: incompatible versions ({ex.Message})", ex);
+            catch (EntryPointNotFoundException ex)
+            {
+                throw new DdbException($"Error in calling ddb lib: incompatible versions ({ex.Message})", ex);
+            }
+            catch (Exception ex)
+            {
+                throw new DdbException(
+                    $"Error in calling ddb lib. Last error: \"{SafeGetLastError("generate memory tile")}\", check inner exception for details",
+                    ex);
+            }
+            finally
+            {
+                // Always release the lock
+                semaphore.Release();
+            }
         }
         catch (Exception ex)
         {
-            throw new DdbException(
-                $"Error in calling ddb lib. Last error: \"{SafeGetLastError("generate memory tile")}\", check inner exception for details",
-                ex);
+            throw new DdbException($"Failed to synchronize access for tile generation: {ex.Message}", ex);
         }
 
         throw new DdbException(SafeGetLastError("generate memory tile"));
