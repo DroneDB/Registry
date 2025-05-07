@@ -522,7 +522,7 @@ public class Program
         if (resetSpa)
         {
             Console.WriteLine(" -> Resetting Hub");
-            Directory.Delete(hubRoot, true);
+            if (Directory.Exists(hubRoot)) Directory.Delete(hubRoot, true);
         }
         else if (
             Directory.Exists(hubRoot) &&
