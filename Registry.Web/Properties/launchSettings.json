@@ -24,7 +24,7 @@
       "environmentVariables": {
         "ASPNETCORE_ENVIRONMENT": "Development"
       },
-      "commandLineArgs": "C:\\registry-data",
+      "commandLineArgs": "C:\\registry-data --reset-hub",
       "applicationUrl": "http://0.0.0.0:5000"
     },
     "WebServer": {
