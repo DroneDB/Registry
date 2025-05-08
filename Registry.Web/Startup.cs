@@ -305,12 +305,6 @@ public class Startup
 
         services.AddHttpContextAccessor();
 
-        // If using Kestrel:
-        services.Configure<KestrelServerOptions>(options => { options.AllowSynchronousIO = true; });
-
-        // If using IIS:
-        services.Configure<IISServerOptions>(options => { options.AllowSynchronousIO = true; });
-
         // TODO: Enable when needed. Should check return object structure
         // services.AddOData();
 
