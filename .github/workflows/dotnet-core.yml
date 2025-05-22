@@ -40,5 +40,5 @@ jobs:
       run: |
         cd registry
         whereis ddb
-        ddb --version
+        ddb --version --debug
         dotnet test -c Release --verbosity minimal
