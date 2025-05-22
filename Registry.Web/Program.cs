@@ -333,8 +333,8 @@ public class Program
             nativeDdbWrapper.RegisterProcess(true);
             Console.WriteLine(" ?> Initialized DDB - Verbose");
 #else
-                DDBWrapper.RegisterProcess(false);
-                Console.WriteLine(" ?> Initialized DDB");
+            nativeDdbWrapper.RegisterProcess(false);
+            Console.WriteLine(" ?> Initialized DDB");
 #endif
 
             var rawVersion = nativeDdbWrapper.GetVersion();
