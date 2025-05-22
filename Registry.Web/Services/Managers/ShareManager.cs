@@ -31,7 +31,7 @@ public class ShareManager : IShareManager
     private readonly INameGenerator _nameGenerator;
     private readonly RegistryContext _context;
     private readonly ChunkedUploadManager _chunkedUploadManager;
-    private string _tempDirectory => Path.Combine(_settings.Value.CachePath, "ChunkedUploads");
+    private string TempDirectory => Path.Combine(_settings.Value.CachePath, "ChunkedUploads");
 
     public ShareManager(
         IOptions<AppSettings> settings,
@@ -57,8 +57,8 @@ public class ShareManager : IShareManager
         _context = context;
         
         // Assicura che esista la directory temporanea per gli upload a blocchi
-        Directory.CreateDirectory(_tempDirectory);
-        _chunkedUploadManager = new ChunkedUploadManager(_logger, _tempDirectory);
+        Directory.CreateDirectory(TempDirectory);
+        _chunkedUploadManager = new ChunkedUploadManager(_logger, TempDirectory);
     }
 
     public async Task<BatchDto> GetBatchInfo(string token)

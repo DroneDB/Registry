@@ -869,7 +869,8 @@ class ShareManagerTest : TestBase
     ""MaxUploadChunkSize"": 512000,
     ""MaxRequestBodySize"": 52428800,
     ""BatchTokenLength"": 32,
-    ""RandomDatasetNameLength"": 16 
+    ""RandomDatasetNameLength"": 16,
+    ""CachePath"": ""./cache""
 }
   ";
 
