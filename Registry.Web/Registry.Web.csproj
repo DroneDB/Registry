@@ -4,8 +4,8 @@
         <TargetFramework>net9.0</TargetFramework>
         <AssemblyName>Registry.Web</AssemblyName>
         <UserSecretsId>4e006835-31cb-47c5-9dfe-7b73e210db92</UserSecretsId>
-        <SpaRoot>ClientApp\</SpaRoot>
-        <DefaultItemExcludes>$(DefaultItemExcludes);$(SpaRoot)node_modules\**</DefaultItemExcludes>
+        <SpaRoot>ClientApp/</SpaRoot>
+        <DefaultItemExcludes>$(DefaultItemExcludes);$(SpaRoot)node_modules/**</DefaultItemExcludes>
         <AssemblyVersion>1.1.12</AssemblyVersion>
         <FileVersion>1.1.12</FileVersion>
         <Version>1.1.12</Version>
@@ -25,14 +25,14 @@
         <Content Remove="appsettings-default.json" />
         <EmbeddedResource Include="appsettings-default.json" />
         <None Remove="ClientApp.zip" />
-        <None Remove="Properties\PublishProfiles\win-arm.pubxml" />
+        <None Remove="Properties/PublishProfiles/win-arm.pubxml" />
     </ItemGroup>
 
     <ItemGroup>
         <!-- Don't publish the SPA source files, but do show them in the project files list -->
         <Content Remove="$(SpaRoot)**" />
         <None Remove="$(SpaRoot)**" />
-        <None Include="$(SpaRoot)**" Exclude="$(SpaRoot)node_modules\**" />
+        <None Include="$(SpaRoot)**" Exclude="$(SpaRoot)node_modules/**" />
     </ItemGroup>
 
     <ItemGroup>
@@ -90,14 +90,14 @@
     </ItemGroup>
 
     <ItemGroup>
-        <ProjectReference Include="..\Registry.Adapters\Registry.Adapters.csproj" />
-        <ProjectReference Include="..\Registry.Common\Registry.Common.csproj" />
-        <ProjectReference Include="..\Registry.Web.Data.MySqlMigrations\Registry.Web.Data.MySqlMigrations.csproj" />
-        <ProjectReference Include="..\Registry.Web.Data.SqliteMigrations\Registry.Web.Data.SqliteMigrations.csproj" />
-        <ProjectReference Include="..\Registry.Web.Data\Registry.Web.Data.csproj" />
-        <ProjectReference Include="..\Registry.Web.Identity\Registry.Web.Identity.csproj" />
-        <ProjectReference Include="..\Registry.Web.Identity.MySqlMigrations\Registry.Web.Identity.MySqlMigrations.csproj" />
-        <ProjectReference Include="..\Registry.Web.Identity.SqliteMigrations\Registry.Web.Identity.SqliteMigrations.csproj" />
+        <ProjectReference Include="../Registry.Adapters/Registry.Adapters.csproj" />
+        <ProjectReference Include="../Registry.Common/Registry.Common.csproj" />
+        <ProjectReference Include="../Registry.Web.Data.MySqlMigrations/Registry.Web.Data.MySqlMigrations.csproj" />
+        <ProjectReference Include="../Registry.Web.Data.SqliteMigrations/Registry.Web.Data.SqliteMigrations.csproj" />
+        <ProjectReference Include="../Registry.Web.Data/Registry.Web.Data.csproj" />
+        <ProjectReference Include="../Registry.Web.Identity/Registry.Web.Identity.csproj" />
+        <ProjectReference Include="../Registry.Web.Identity.MySqlMigrations/Registry.Web.Identity.MySqlMigrations.csproj" />
+        <ProjectReference Include="../Registry.Web.Identity.SqliteMigrations/Registry.Web.Identity.SqliteMigrations.csproj" />
     </ItemGroup>
 
     <ItemGroup>

@@ -630,6 +630,7 @@ public static class CommonUtils
 
 
     public const string DroneDBDllNameWindows = "ddb.dll";
+    public const string DroneDBDllNameLinux = "libddb.so";
 
     public static string FindDdbFolder()
     {
@@ -640,8 +641,12 @@ public static class CommonUtils
 
         var newPath = path.Split(Path.PathSeparator);
 
+        string libraryName = RuntimeInformation.IsOSPlatform(OSPlatform.Windows)
+            ? DroneDBDllNameWindows
+            : DroneDBDllNameLinux;
+
         var ddbFolder = newPath.FirstOrDefault(
-            p => File.Exists(Path.Combine(p, DroneDBDllNameWindows)));
+            p => File.Exists(Path.Combine(p, libraryName)));
 
         return ddbFolder;
     }
