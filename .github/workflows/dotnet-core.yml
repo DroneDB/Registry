@@ -22,10 +22,6 @@ jobs:
       with:
         dotnet-version: |
           9.0.x
-    - name: Build the project
-      run: |
-        cd registry
-        dotnet build -c Release --verbosity minimal
     - name: Setup Node
       uses: actions/setup-node@v4
       with:
@@ -36,6 +32,10 @@ jobs:
         echo "Downloading DroneDB from $LATEST_RELEASE_URL"
         curl -L -o dronedb.deb $LATEST_RELEASE_URL
         sudo apt-get update && sudo apt-get install -y ./dronedb.deb
+    - name: Build the project
+      run: |
+        cd registry
+        dotnet build -c Release --verbosity minimal
     - name: Run tests
       run: |
         cd registry
