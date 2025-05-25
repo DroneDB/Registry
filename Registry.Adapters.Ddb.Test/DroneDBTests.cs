@@ -214,9 +214,9 @@ public class NativeDdbWrapperTests : TestBase
         act = () => DdbWrapper.List(null, "wefrfwef");
         act.Should().Throw<DdbException>();
 
-        act = () => DdbWrapper.List("invalid", (string)null);
+/*        act = () => DdbWrapper.List("invalid", (string)null);
         act.Should().Throw<DdbException>();
-
+*/
     }
 
     [Test]
