@@ -7,7 +7,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Registry.Ports;
-using Registry.Ports.DroneDB.Models;
+using Registry.Ports.DroneDB;
 using Registry.Web.Data;
 using Registry.Web.Data.Models;
 using Registry.Web.Exceptions;
@@ -20,8 +20,7 @@ using Entry = Registry.Web.Data.Models.Entry;
 namespace Registry.Web.Services.Managers;
 
 public class ShareManager : IShareManager
-{
-    private readonly IOrganizationsManager _organizationsManager;
+{    private readonly IOrganizationsManager _organizationsManager;
     private readonly IDatasetsManager _datasetsManager;
     private readonly IObjectsManager _objectsManager;
     private readonly IOptions<AppSettings> _settings;
@@ -31,6 +30,8 @@ public class ShareManager : IShareManager
     private readonly IBatchTokenGenerator _batchTokenGenerator;
     private readonly INameGenerator _nameGenerator;
     private readonly RegistryContext _context;
+    private readonly ChunkedUploadManager _chunkedUploadManager;
+    private string TempDirectory => Path.Combine(_settings.Value.CachePath, "ChunkedUploads");
 
     public ShareManager(
         IOptions<AppSettings> settings,
@@ -54,6 +55,10 @@ public class ShareManager : IShareManager
         _batchTokenGenerator = batchTokenGenerator;
         _nameGenerator = nameGenerator;
         _context = context;
+        
+        // Assicura che esista la directory temporanea per gli upload a blocchi
+        Directory.CreateDirectory(TempDirectory);
+        _chunkedUploadManager = new ChunkedUploadManager(_logger, TempDirectory);
     }
 
     public async Task<BatchDto> GetBatchInfo(string token)
@@ -500,5 +505,126 @@ public class ShareManager : IShareManager
             Url = $"/r/{batch.Dataset.Organization.Slug}/{batch.Dataset.Slug}",
             Tag = new TagDto(batch.Dataset.Organization.Slug, batch.Dataset.Slug)
         };
+    }
+
+    public async Task<ChunkUploadResultDto> UploadChunk(string token, ChunkUploadDto chunkInfo, Stream chunkStream)
+    {
+        // Validate input parameters
+        if (string.IsNullOrWhiteSpace(token))
+            throw new BadRequestException("Missing token");
+            
+        if (chunkInfo == null)
+            throw new BadRequestException("Missing chunk information");
+            
+        if (chunkStream == null || !chunkStream.CanRead)
+            throw new BadRequestException("Invalid chunk data stream");
+            
+        // Verify the batch is valid and running
+        var batchReadyResult = await IsBatchReady(token);
+        if (!batchReadyResult.IsReady)
+            throw new BadRequestException("Batch is not ready for uploading");
+            
+        // Check if path is allowed for this batch
+        if (!string.IsNullOrEmpty(chunkInfo.Path) && !await IsPathAllowed(token, chunkInfo.Path))
+            throw new BadRequestException($"Path '{chunkInfo.Path}' is not allowed in this batch");
+            
+        // Check if user has enough storage for this file
+        await _utils.CheckCurrentUserStorage(chunkInfo.TotalFileSize);
+        
+        // Log the chunk upload
+        _logger.LogDebug("Processing chunk {ChunkIndex}/{TotalChunks} for file {FileName} (FileId: {FileId})",
+            chunkInfo.ChunkIndex, chunkInfo.TotalChunks, chunkInfo.FileName, chunkInfo.FileId);
+            
+        // Use the chunked upload manager to handle the chunk
+        var result = await _chunkedUploadManager.UploadChunk(chunkInfo, chunkStream);
+        
+        return result;
+    }
+
+    public async Task<UploadResultDto> FinalizeChunkedUpload(string token, string fileId, string path)
+    {
+        // Validate parameters
+        if (string.IsNullOrWhiteSpace(token))
+            throw new BadRequestException("Missing token");
+            
+        if (string.IsNullOrWhiteSpace(fileId))
+            throw new BadRequestException("Missing file ID");
+            
+        if (string.IsNullOrWhiteSpace(path))
+            throw new BadRequestException("Missing path");
+            
+        // Verify the batch is valid and running
+        var batch = await GetRunningBatchFromToken(token);
+        
+        // Verify the path is not already used
+        var entry = batch.Entries.FirstOrDefault(item => item.Path == path);
+        if (entry != null)
+            throw new BadRequestException($"Entry with path '{path}' already exists in this batch");
+            
+        _logger.LogInformation("Finalizing chunked upload for file ID {FileId} to path {Path}", fileId, path);
+        
+        try
+        {
+            // Use the chunked upload manager to assemble the final file
+            var tempFilePath = await _chunkedUploadManager.FinalizeChunkedUpload(fileId);
+            
+            // Check that the temporary file exists
+            if (!File.Exists(tempFilePath))
+                throw new BadRequestException("Failed to assemble chunked file");
+                
+            _logger.LogInformation("Assembled chunked file at {TempPath}, uploading to dataset", tempFilePath);
+            
+            // Use the temporary file to upload to the dataset
+            UploadResultDto result;
+            using (var fileStream = new FileStream(tempFilePath, FileMode.Open, FileAccess.Read, FileShare.Read))
+            {
+                var orgSlug = batch.Dataset.Organization.Slug;
+                var dsSlug = batch.Dataset.Slug;
+                
+                // Use the objects manager to add the file to the dataset
+                await _objectsManager.AddNew(orgSlug, dsSlug, path, fileStream);
+                
+                // Get file information
+                var info = (await _objectsManager.List(orgSlug, dsSlug, path)).FirstOrDefault();
+                
+                if (info == null)
+                    throw new BadRequestException("Underlying object storage is not working correctly: cannot find object after adding it");
+                    
+                // Create an entry in the batch
+                entry = new Entry
+                {
+                    Type = info.Type,
+                    Hash = info.Hash,
+                    AddedOn = DateTime.Now,
+                    Path = path,
+                    Size = info.Size,
+                    Batch = batch
+                };
+                
+                await _context.AddAsync(entry);
+                await _context.SaveChangesAsync();
+                
+                result = new UploadResultDto
+                {
+                    Hash = entry.Hash,
+                    Size = entry.Size,
+                    Path = entry.Path
+                };
+            }
+            
+            // Clean up temporary files
+            _chunkedUploadManager.CleanupTempFiles(fileId);
+            
+            return result;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error finalizing chunked upload for file ID {FileId}", fileId);
+            
+            // Clean up any temporary files
+            _chunkedUploadManager.CleanupTempFiles(fileId);
+            
+            throw;
+        }
     }
 }

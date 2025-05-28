@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Diagnostics;
 using System.IO;
 using NUnit.Framework;
 using Registry.Adapters.DroneDB;
@@ -23,6 +24,8 @@ public class GlobalSetup
             CommonUtils.SetDefaultDllPath(ddbFolder);
         }
 
-        DDBWrapper.RegisterProcess(true);
+        var nativeDdbWrapper = new NativeDdbWrapper(true);
+
+        Debug.WriteLine($"Initialized ddb version: {nativeDdbWrapper.GetVersion()}");
     }
 }

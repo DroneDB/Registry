@@ -14,7 +14,7 @@ using Microsoft.Extensions.Caching.Memory;
 using Newtonsoft.Json.Linq;
 using Registry.Common;
 using Registry.Ports;
-using Registry.Ports.DroneDB.Models;
+using Registry.Ports.DroneDB;
 using Registry.Web.Data.Models;
 using Registry.Web.Utilities;
 

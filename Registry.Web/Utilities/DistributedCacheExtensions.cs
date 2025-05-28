@@ -1,11 +1,9 @@
 ﻿using System;
-using System.Collections.Generic;
-using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Caching.Distributed;
 using Newtonsoft.Json;
 
-namespace Registry.Web.Services;
+namespace Registry.Web.Utilities;
 
 public static class DistributedCacheExtensions
 {

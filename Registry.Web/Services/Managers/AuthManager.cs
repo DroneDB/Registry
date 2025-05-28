@@ -8,7 +8,6 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.Extensions.Logging;
 using Registry.Common;
 using Registry.Ports;
-using Registry.Ports.DroneDB.Models;
 using Registry.Web.Data;
 using Registry.Web.Data.Models;
 using Registry.Web.Identity;

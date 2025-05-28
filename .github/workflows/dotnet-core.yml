@@ -8,48 +8,37 @@ on:
 
 jobs:
   build:
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     steps:
-    - uses: actions/checkout@v2
+    - uses: actions/checkout@v4
       with:
         path: registry
     - name: Submodules
       run: |
         cd registry
         git submodule update --force --recursive --init --remote
-    - uses: actions/checkout@v2
-      with:
-        repository: DroneDB/DroneDB
-        submodules: "recursive"
-        path: ddb
     - name: Setup .NET Core
-      uses: actions/setup-dotnet@v1
+      uses: actions/setup-dotnet@v4
       with:
         dotnet-version: |
-          8.0.x
+          9.0.x
     - name: Setup Node
-      uses: actions/setup-node@v3
+      uses: actions/setup-node@v4
       with:
         node-version: 14
-    - name: Install webpack 4
-      run: npm install -g webpack@4 webpack-cli
-    - name: Setup utils
-      run: sudo apt-get update && sudo apt-get install -y spatialite-bin libsqlite3-mod-spatialite
-    - name: Build C++ lib
+    - name: Download and install latest DroneDB release
       run: |
-          cd ddb
-          scripts/ubuntu_deps.sh
-          mkdir -p build
-          cd build
-          cmake -DBUILD_TESTING=OFF ..
-          make -j$(nproc) ddb
-          sudo make -j$(nproc) install
-          sudo ldconfig          
-    - name: Install dependencies
+        LATEST_RELEASE_URL=$(curl -s https://api.github.com/repos/DroneDB/DroneDB/releases/latest | grep "browser_download_url.*deb" | head -n 1 | cut -d '"' -f 4)
+        echo "Downloading DroneDB from $LATEST_RELEASE_URL"
+        curl -L -o dronedb.deb $LATEST_RELEASE_URL
+        sudo apt-get update && sudo apt-get install -y ./dronedb.deb
+    - name: Build the project
+      run: |
+        cd registry
+        dotnet build -c Release --verbosity minimal
+    - name: Run tests
       run: |
         cd registry
         whereis ddb
-        export PATH="$HOME/ddb/build:$PATH"
-        whereis ddb
-        ddb --version
+        ddb --version --debug
         dotnet test -c Release --verbosity minimal

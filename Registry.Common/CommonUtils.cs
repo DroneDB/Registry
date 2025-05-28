@@ -66,8 +66,11 @@ public static class CommonUtils
 
         for (var i = 0; i < iterations; i++)
         {
-            fs1.Read(one, 0, BytesToRead);
-            fs2.Read(two, 0, BytesToRead);
+            var c1 = fs1.Read(one, 0, BytesToRead);
+            var c2 = fs2.Read(two, 0, BytesToRead);
+
+            if (c1 != c2)
+                return false;
 
             if (BitConverter.ToInt64(one, 0) != BitConverter.ToInt64(two, 0))
                 return false;
@@ -79,6 +82,18 @@ public static class CommonUtils
     public static TValue SafeGetValue<TKey, TValue>(this IDictionary<TKey, TValue> dictionary, TKey key)
     {
         return !dictionary.TryGetValue(key, out var value) ? default : value;
+    }
+
+    public static TValue GetOrAdd<TKey, TValue>(
+        this Dictionary<TKey, TValue> dict, TKey key, TValue value) where TKey : notnull
+    {
+        ref var val = ref CollectionsMarshal.GetValueRefOrAddDefault(dict, key, out var exists);
+
+        if (exists)
+            return val;
+
+        val = value;
+        return value;
     }
 
     public static TValueOut? SafeGetValue<TKey, TValue, TValueOut>(this IDictionary<TKey, TValue> dictionary,
@@ -615,6 +630,7 @@ public static class CommonUtils
 
 
     public const string DroneDBDllNameWindows = "ddb.dll";
+    public const string DroneDBDllNameLinux = "libddb.so";
 
     public static string FindDdbFolder()
     {
@@ -625,8 +641,12 @@ public static class CommonUtils
 
         var newPath = path.Split(Path.PathSeparator);
 
+        string libraryName = RuntimeInformation.IsOSPlatform(OSPlatform.Windows)
+            ? DroneDBDllNameWindows
+            : DroneDBDllNameLinux;
+
         var ddbFolder = newPath.FirstOrDefault(
-            p => File.Exists(Path.Combine(p, DroneDBDllNameWindows)));
+            p => File.Exists(Path.Combine(p, libraryName)));
 
         return ddbFolder;
     }

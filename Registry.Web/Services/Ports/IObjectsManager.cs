@@ -3,7 +3,8 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
-using Registry.Ports.DroneDB.Models;
+using Registry.Common.Model;
+using Registry.Ports.DroneDB;
 using Registry.Web.Models;
 using Registry.Web.Models.DTO;
 

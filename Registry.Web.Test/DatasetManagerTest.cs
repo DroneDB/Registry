@@ -20,7 +20,7 @@ using Registry.Web.Models.Configuration;
 using Registry.Web.Services.Adapters;
 using Registry.Web.Services.Managers;
 using Registry.Web.Services.Ports;
-using Entry = Registry.Ports.DroneDB.Models.Entry;
+using Entry = Registry.Ports.DroneDB.Entry;
 
 namespace Registry.Web.Test;
 

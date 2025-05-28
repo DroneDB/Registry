@@ -2,7 +2,6 @@
 using Registry.Adapters.DroneDB;
 using Registry.Common;
 using Registry.Ports.DroneDB;
-using Registry.Ports.DroneDB.Models;
 
 namespace Registry.Web.Services.Adapters;
 
@@ -32,7 +31,7 @@ public class SafeMetaManager
             {
                 return  _manager.Get<string>(NameField);
             }
-            catch (DDBException)
+            catch (DdbException)
             {
                 return null;
             }
@@ -54,7 +53,7 @@ public class SafeMetaManager
             {
                 return _manager.Get<int>(ObjectsCountField);
             }
-            catch (DDBException)
+            catch (DdbException)
             {
                 return null;
             }
@@ -70,7 +69,7 @@ public class SafeMetaManager
             {
                 return (Visibility)_manager.Get<int>(VisibilityField);
             }
-            catch (DDBException)
+            catch (DdbException)
             {
                 return null;
             }
@@ -91,7 +90,7 @@ public class SafeMetaManager
             {
                 return _manager.Get<bool>(PublicField);
             }
-            catch (DDBException)
+            catch (DdbException)
             {
                 return null;
             }
@@ -115,7 +114,7 @@ public class SafeMetaManager
 
                 return dateTimeOffset.LocalDateTime;
             }
-            catch (DDBException)
+            catch (DdbException)
             {
                 return null;
             }

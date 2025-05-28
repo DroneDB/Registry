@@ -1,18 +1,19 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk.Web">
 
     <PropertyGroup>
-        <TargetFramework>net8.0</TargetFramework>
+        <TargetFramework>net9.0</TargetFramework>
         <AssemblyName>Registry.Web</AssemblyName>
         <UserSecretsId>4e006835-31cb-47c5-9dfe-7b73e210db92</UserSecretsId>
-        <SpaRoot>ClientApp\</SpaRoot>
-        <DefaultItemExcludes>$(DefaultItemExcludes);$(SpaRoot)node_modules\**</DefaultItemExcludes>
+        <SpaRoot>ClientApp/</SpaRoot>
+        <DefaultItemExcludes>$(DefaultItemExcludes);$(SpaRoot)node_modules/**</DefaultItemExcludes>
         <AssemblyVersion>1.1.12</AssemblyVersion>
         <FileVersion>1.1.12</FileVersion>
         <Version>1.1.12</Version>
         <Platforms>AnyCPU;x64</Platforms>
         <PackageVersion>1.1.12</PackageVersion>
         <Configurations>Debug;Release;DebugEf</Configurations>
-        <DdbVersion>1.0.12</DdbVersion>
+        <DdbVersion>1.1.0</DdbVersion>
+        <LangVersion>13</LangVersion>
     </PropertyGroup>
 
     <PropertyGroup Condition=" '$(Configuration)' == 'DebugEf' ">
@@ -24,80 +25,79 @@
         <Content Remove="appsettings-default.json" />
         <EmbeddedResource Include="appsettings-default.json" />
         <None Remove="ClientApp.zip" />
-        <None Remove="Properties\PublishProfiles\win-arm.pubxml" />
+        <None Remove="Properties/PublishProfiles/win-arm.pubxml" />
     </ItemGroup>
 
     <ItemGroup>
         <!-- Don't publish the SPA source files, but do show them in the project files list -->
         <Content Remove="$(SpaRoot)**" />
         <None Remove="$(SpaRoot)**" />
-        <None Include="$(SpaRoot)**" Exclude="$(SpaRoot)node_modules\**" />
+        <None Include="$(SpaRoot)**" Exclude="$(SpaRoot)node_modules/**" />
     </ItemGroup>
 
     <ItemGroup>
-        <PackageReference Include="AspNetCore.HealthChecks.Hangfire" Version="8.0.1" />
-        <PackageReference Include="AspNetCore.HealthChecks.UI.Client" Version="8.0.1" />
-        <PackageReference Include="AspNetCore.HealthChecks.UI.Core" Version="8.0.1" />
+        <PackageReference Include="AspNetCore.HealthChecks.Hangfire" Version="9.0.0" />
+        <PackageReference Include="AspNetCore.HealthChecks.UI.Client" Version="9.0.0" />
+        <PackageReference Include="AspNetCore.HealthChecks.UI.Core" Version="9.0.0" />
         <PackageReference Include="CommandLineParser" Version="2.9.1" />
         <PackageReference Include="FileCache" Version="3.3.0" />
-        <PackageReference Include="Hangfire.AspNetCore" Version="1.8.15" />
+        <PackageReference Include="Hangfire.AspNetCore" Version="1.8.18" />
         <PackageReference Include="Hangfire.Console" Version="1.4.3" />
-        <PackageReference Include="Hangfire.Core" Version="1.8.15" />
+        <PackageReference Include="Hangfire.Core" Version="1.8.18" />
         <PackageReference Include="Hangfire.InMemory" Version="1.0.0" />
         <PackageReference Include="Hangfire.MySqlStorage" Version="2.0.3" />
         <PackageReference Include="Microsoft.AspNetCore.ApiAuthorization.IdentityServer" Version="7.0.20" />
-        <PackageReference Include="Microsoft.AspNetCore.Authentication.Core" Version="2.2.0" />
-        <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="8.0.10" />
-        <PackageReference Include="Microsoft.AspNetCore.Mvc.NewtonsoftJson" Version="8.0.10" />
-        <PackageReference Include="Microsoft.AspNetCore.ResponseCompression" Version="2.2.0" />
+        <PackageReference Include="Microsoft.AspNetCore.Authentication.Core" Version="2.3.0" />
+        <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="9.0.4" />
+        <PackageReference Include="Microsoft.AspNetCore.Mvc.NewtonsoftJson" Version="9.0.4" />
+        <PackageReference Include="Microsoft.AspNetCore.ResponseCompression" Version="2.3.0" />
         <PackageReference Include="Microsoft.AspNetCore.SpaServices" Version="3.1.32" />
-        <PackageReference Include="Microsoft.AspNetCore.SpaServices.Extensions" Version="8.0.10" />
-        <PackageReference Include="Microsoft.EntityFrameworkCore" Version="8.0.10" />
-        <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="8.0.10" />
-        <PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" Version="8.0.10" />
-        <PackageReference Include="Microsoft.EntityFrameworkCore.Tools" Version="8.0.10">
+        <PackageReference Include="Microsoft.AspNetCore.SpaServices.Extensions" Version="9.0.4" />
+        <PackageReference Include="Microsoft.EntityFrameworkCore" Version="9.0.4" />
+        <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="9.0.4" />
+        <PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" Version="9.0.4" />
+        <PackageReference Include="Microsoft.EntityFrameworkCore.Tools" Version="9.0.4">
             <PrivateAssets>all</PrivateAssets>
             <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
         </PackageReference>
-        <PackageReference Include="Microsoft.Extensions.Caching.StackExchangeRedis" Version="8.0.10" />
-        <PackageReference Include="Microsoft.Extensions.Diagnostics.HealthChecks.EntityFrameworkCore" Version="8.0.10" />
-        <PackageReference Include="Microsoft.Extensions.Hosting" Version="8.0.1" />
-        <PackageReference Include="Microsoft.VisualStudio.Web.CodeGeneration.Design" Version="8.0.6" />
-        <PackageReference Include="MimeMapping" Version="3.0.1" />
+        <PackageReference Include="Microsoft.Extensions.Caching.StackExchangeRedis" Version="9.0.2" />
+        <PackageReference Include="Microsoft.Extensions.Diagnostics.HealthChecks.EntityFrameworkCore" Version="9.0.4" />
+        <PackageReference Include="Microsoft.Extensions.Hosting" Version="9.0.4" />
+        <PackageReference Include="Microsoft.VisualStudio.Web.CodeGeneration.Design" Version="9.0.0" />
+        <PackageReference Include="MimeMapping" Version="3.1.0" />
         <PackageReference Include="MimeTypes" Version="2.5.2">
             <PrivateAssets>all</PrivateAssets>
             <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
         </PackageReference>
         <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
-        <PackageReference Include="Pomelo.EntityFrameworkCore.MySql" Version="8.0.2" />
-        <PackageReference Include="Scrutor" Version="5.0.2" />
+        <PackageReference Include="Scrutor" Version="6.0.1" />
         <PackageReference Include="Scrutor.AspNetCore" Version="3.3.0" />
-        <PackageReference Include="Serilog.AspNetCore" Version="8.0.3" />
+        <PackageReference Include="Serilog.AspNetCore" Version="9.0.0" />
         <PackageReference Include="Serilog.Aspnetcore.Middleware" Version="1.0.0" />
         <PackageReference Include="Serilog.Enrichers.AspNetCore" Version="1.0.0" />
         <PackageReference Include="Serilog.Enrichers.Environment" Version="3.0.1" />
         <PackageReference Include="Serilog.Enrichers.Thread" Version="4.0.0" />
-        <PackageReference Include="Serilog.Extensions.Hosting" Version="8.0.0" />
+        <PackageReference Include="Serilog.Extensions.Hosting" Version="9.0.0" />
         <PackageReference Include="Serilog.Sinks.File" Version="6.0.0" />
-        <PackageReference Include="Serilog.Sinks.Seq" Version="8.0.0" />
-        <PackageReference Include="Swashbuckle.AspNetCore" Version="6.9.0" />
-        <PackageReference Include="Swashbuckle.AspNetCore.Newtonsoft" Version="6.9.0" />
-        <PackageReference Include="System.IdentityModel.Tokens.Jwt" Version="8.2.0" />
-        <PackageReference Include="System.Text.Encoding.CodePages" Version="8.0.0" />
+        <PackageReference Include="Serilog.Sinks.Seq" Version="9.0.0" />
+        <PackageReference Include="Swashbuckle.AspNetCore" Version="8.1.1" />
+        <PackageReference Include="Swashbuckle.AspNetCore.Newtonsoft" Version="8.1.1" />
+        <PackageReference Include="System.IdentityModel.Tokens.Jwt" Version="8.8.0" />
+        <PackageReference Include="System.Text.Encoding.CodePages" Version="9.0.4" />
         <PackageReference Update="Packaging.Targets">
-          <Version>0.1.226</Version>
+          <Version>0.1.232</Version>
         </PackageReference>
     </ItemGroup>
 
     <ItemGroup>
-        <ProjectReference Include="..\Registry.Adapters\Registry.Adapters.csproj" />
-        <ProjectReference Include="..\Registry.Common\Registry.Common.csproj" />
-        <ProjectReference Include="..\Registry.Web.Data.MySqlMigrations\Registry.Web.Data.MySqlMigrations.csproj" />
-        <ProjectReference Include="..\Registry.Web.Data.SqliteMigrations\Registry.Web.Data.SqliteMigrations.csproj" />
-        <ProjectReference Include="..\Registry.Web.Data\Registry.Web.Data.csproj" />
-        <ProjectReference Include="..\Registry.Web.Identity\Registry.Web.Identity.csproj" />
-        <ProjectReference Include="..\Registry.Web.Identity.MySqlMigrations\Registry.Web.Identity.MySqlMigrations.csproj" />
-        <ProjectReference Include="..\Registry.Web.Identity.SqliteMigrations\Registry.Web.Identity.SqliteMigrations.csproj" />
+        <ProjectReference Include="../Registry.Adapters/Registry.Adapters.csproj" />
+        <ProjectReference Include="../Registry.Common/Registry.Common.csproj" />
+        <ProjectReference Include="../Registry.Web.Data.MySqlMigrations/Registry.Web.Data.MySqlMigrations.csproj" />
+        <ProjectReference Include="../Registry.Web.Data.SqliteMigrations/Registry.Web.Data.SqliteMigrations.csproj" />
+        <ProjectReference Include="../Registry.Web.Data/Registry.Web.Data.csproj" />
+        <ProjectReference Include="../Registry.Web.Identity/Registry.Web.Identity.csproj" />
+        <ProjectReference Include="../Registry.Web.Identity.MySqlMigrations/Registry.Web.Identity.MySqlMigrations.csproj" />
+        <ProjectReference Include="../Registry.Web.Identity.SqliteMigrations/Registry.Web.Identity.SqliteMigrations.csproj" />
     </ItemGroup>
 
     <ItemGroup>
@@ -110,55 +110,55 @@
             <UserProperties appsettings_1json__JsonSchema="" />
         </VisualStudio>
     </ProjectExtensions>
-    
+
     <PropertyGroup>
         <DdbReleaseUrl>https://github.com/DroneDB/DroneDB/releases/download/v$(DdbVersion)/ddb-$(DdbVersion)-windows.zip</DdbReleaseUrl>
     </PropertyGroup>
-    
+
     <Target Name="HandleNPMErrors">
         <Error Text="Cannot build SPA: Check ClientApp submodule, NodeJS version (14) and install webpack@4 and webpack-cli in global" />
     </Target>
-    
+
     <Target Name="BuildSPA">
         <Exec WorkingDirectory="ClientApp" Command="npm install" />
         <Exec WorkingDirectory="ClientApp" Command="webpack" />
         <Message Text="SPA built" />
         <OnError ExecuteTargets="HandleNPMErrors" />
     </Target>
-    
-    
+
+
     <Target Name="EmbedDdbRelease">
         <Message Text="Embedding ddb version $(DdbVersion), downloading from $(DdbReleaseUrl)" Importance="high" />
 
         <DownloadFile SourceUrl="$(DdbReleaseUrl)" DestinationFolder="$(OutputPath)" DestinationFileName="ddb.zip">
             <Output TaskParameter="DownloadedFile" PropertyName="DdbReleasePath" />
         </DownloadFile>
-                
+
         <Message Text="Ddb release downloaded to $(DdbReleasePath)" Importance="high" />
 
         <ItemGroup>
             <EmbeddedResource Include="$(DdbReleasePath)">
                 <LogicalName>Registry.Web.ddb.zip</LogicalName>
             </EmbeddedResource>
-        </ItemGroup>        
+        </ItemGroup>
 
     </Target>
-        
+
 
     <Target Name="PreBuild" BeforeTargets="PreBuildEvent">
-        
+
         <Exec Command="dotnet tool restore" />
-    
+
         <!-- Build Hub if not built -->
         <CallTarget Condition="!Exists('$(ProjectDir)/ClientApp/build')" Targets="BuildSPA" />
-        
+
         <!-- Embed ddb release on windows -->
         <CallTarget Condition="$([MSBuild]::IsOSPlatform('Windows'))" Targets="EmbedDdbRelease" />
-                
+
         <Delete Files="$(ProjectDir)/ClientApp.zip" />
 
         <ZipDirectory SourceDirectory="$(ProjectDir)/ClientApp/build" DestinationFile="$(ProjectDir)/ClientApp.zip" Overwrite="true" />
-       
+
         <ItemGroup>
             <EmbeddedResource Include="ClientApp.zip" />
         </ItemGroup>

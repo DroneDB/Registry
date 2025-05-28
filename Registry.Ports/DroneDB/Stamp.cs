@@ -1,7 +1,7 @@
-﻿using Newtonsoft.Json;
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
+using Newtonsoft.Json;
 
-namespace Registry.Ports.DroneDB.Models;
+namespace Registry.Ports.DroneDB;
 
 // Let's duplicate StampDto for no apparent reason
 public class Stamp

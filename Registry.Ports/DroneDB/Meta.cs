@@ -3,7 +3,7 @@ using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using Registry.Common;
 
-namespace Registry.Ports.DroneDB.Models;
+namespace Registry.Ports.DroneDB;
 
 // Let's duplicate MetaDto for no apparent reason
 public class Meta

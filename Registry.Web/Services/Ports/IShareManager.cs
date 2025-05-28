@@ -20,4 +20,8 @@ public interface IShareManager
     public Task<IsBatchReadyResult> IsBatchReady(string token);
 
     public Task<BatchDto> GetBatchInfo(string token);
+    
+    // Chunked upload methods
+    public Task<ChunkUploadResultDto> UploadChunk(string token, ChunkUploadDto chunkInfo, Stream chunkStream);
+    public Task<UploadResultDto> FinalizeChunkedUpload(string token, string fileId, string path);
 }

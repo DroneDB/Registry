@@ -11,8 +11,10 @@ using Newtonsoft.Json.Linq;
 using NUnit.Framework;
 using Registry.Adapters.DroneDB;
 using Registry.Common;
+using Registry.Common.Model;
 using Registry.Common.Test;
-using Registry.Ports.DroneDB.Models;
+using Registry.Ports;
+using Registry.Ports.DroneDB;
 using Registry.Test.Common;
 using Registry.Web.Models.Configuration;
 using Registry.Web.Services.Managers;
@@ -32,6 +34,8 @@ public class DdbFactoryTest : TestBase
 
     private readonly Guid _datasetGuid = Guid.Parse("0a223495-84a0-4c15-b425-c7ef88110e75");
 
+    private static readonly IDdbWrapper DdbWrapper = new NativeDdbWrapper(true);
+
     [SetUp]
     public void Setup()
     {
@@ -46,7 +50,7 @@ public class DdbFactoryTest : TestBase
     public void Ctor_ExistingDatabase_Ok()
     {
 
-        var factory = new DdbManager(_appSettingsMock.Object, _ddbFactoryLogger);
+        var factory = new DdbManager(_appSettingsMock.Object, _ddbFactoryLogger, DdbWrapper);
 
         var ddb = factory.Get(MagicStrings.PublicOrganizationSlug, _datasetGuid);
 
@@ -56,7 +60,7 @@ public class DdbFactoryTest : TestBase
     [Test]
     public void Ctor_MissingDatabase_NoException()
     {
-        var factory = new DdbManager(_appSettingsMock.Object, _ddbFactoryLogger);
+        var factory = new DdbManager(_appSettingsMock.Object, _ddbFactoryLogger, DdbWrapper);
 
         factory.Invoking(x => x.Get("vlwefwef", _datasetGuid))
             .Should().NotThrow<IOException>();
@@ -72,7 +76,7 @@ public class DdbFactoryTest : TestBase
         _settings.DatasetsPath = fs.TestFolder;
         _appSettingsMock.Setup(o => o.Value).Returns(_settings);
 
-        var factory = new DdbManager(_appSettingsMock.Object, _ddbFactoryLogger);
+        var factory = new DdbManager(_appSettingsMock.Object, _ddbFactoryLogger, DdbWrapper);
 
         var ddb = factory.Get(MagicStrings.PublicOrganizationSlug, _datasetGuid);
 
@@ -104,7 +108,7 @@ public class DdbFactoryTest : TestBase
         const double expectedLongitude = 10.60667;
         const double expectedAltitude = 141;
 
-        var factory = new DdbManager(_appSettingsMock.Object, _ddbFactoryLogger);
+        var factory = new DdbManager(_appSettingsMock.Object, _ddbFactoryLogger, DdbWrapper);
 
         var ddb = factory.Get(MagicStrings.PublicOrganizationSlug, _datasetGuid);
 
@@ -157,7 +161,7 @@ public class DdbFactoryTest : TestBase
         expectedCoordinates.Add(new List<double> { -91.99353283170487, 46.842844926544224, 158.51 });
         expectedCoordinates.Add(new List<double> { -91.99418833907131, 46.843311240786406, 158.51 });
 
-        var factory = new DdbManager(_appSettingsMock.Object, _ddbFactoryLogger);
+        var factory = new DdbManager(_appSettingsMock.Object, _ddbFactoryLogger, DdbWrapper);
 
         var ddb = factory.Get(MagicStrings.PublicOrganizationSlug, _datasetGuid);
 
@@ -201,7 +205,7 @@ public class DdbFactoryTest : TestBase
         _settings.DatasetsPath = fs.TestFolder;
         _appSettingsMock.Setup(o => o.Value).Returns(_settings);
 
-        var factory = new DdbManager(_appSettingsMock.Object, _ddbFactoryLogger);
+        var factory = new DdbManager(_appSettingsMock.Object, _ddbFactoryLogger, DdbWrapper);
 
         var ddb = factory.Get(MagicStrings.PublicOrganizationSlug, _datasetGuid);
 

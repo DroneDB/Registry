@@ -4,24 +4,26 @@ using System.Linq;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using Registry.Adapters.DroneDB;
+using Registry.Ports;
 using Registry.Ports.DroneDB;
-using Registry.Ports.DroneDB.Models;
 
 namespace Registry.Adapters.DroneDB;
 
 public class MetaManager : IMetaManager
 {
     private readonly IDDB _ddb;
+    private readonly IDdbWrapper _ddbWrapper;
 
-    public MetaManager(IDDB ddb)
+    public MetaManager(IDDB ddb, IDdbWrapper ddbWrapper)
     {
         _ddb = ddb;
+        _ddbWrapper = ddbWrapper;
     }
 
-    public Meta Add(string key, string data, string path = null)
+    public Meta Add(string key, string data, string? path = null)
     {
 
-        var m = DDBWrapper.MetaAdd(_ddb.DatasetFolderPath, key, data, path);
+        var m = _ddbWrapper.MetaAdd(_ddb.DatasetFolderPath, key, data, path);
 
         return new Meta
         {
@@ -31,9 +33,9 @@ public class MetaManager : IMetaManager
         };
     }
 
-    public Meta Set(string key, string data, string path = null)
+    public Meta Set(string key, string data, string? path = null)
     {
-        var m = DDBWrapper.MetaSet(_ddb.DatasetFolderPath, key, data, path);
+        var m = _ddbWrapper.MetaSet(_ddb.DatasetFolderPath, key, data, path);
 
         return new Meta
         {
@@ -45,35 +47,35 @@ public class MetaManager : IMetaManager
 
     public int Remove(string id)
     {
-        return DDBWrapper.MetaRemove(_ddb.DatasetFolderPath, id);
+        return _ddbWrapper.MetaRemove(_ddb.DatasetFolderPath, id);
     }
 
-    public JToken Get(string key, string path = null)
+    public JToken Get(string key, string? path = null)
     {
-        var m = DDBWrapper.MetaGet(_ddb.DatasetFolderPath, key, path);
+        var m = _ddbWrapper.MetaGet(_ddb.DatasetFolderPath, key, path);
         return JsonConvert.DeserializeObject<JToken>(m);
     }
 
-    public T? Get<T>(string key, string path = null)
+    public T? Get<T>(string key, string? path = null)
     {
-        var m = DDBWrapper.MetaGet(_ddb.DatasetFolderPath, key, path);
+        var m = _ddbWrapper.MetaGet(_ddb.DatasetFolderPath, key, path);
         var obj = JsonConvert.DeserializeObject<Meta>(m);
 
         return obj != null ? obj.Data.ToObject<T>() : default;
     }
 
-    public int Unset(string key, string path = null)
+    public int Unset(string key, string? path = null)
     {
-        return DDBWrapper.MetaUnset(_ddb.DatasetFolderPath, key, path);
+        return _ddbWrapper.MetaUnset(_ddb.DatasetFolderPath, key, path);
     }
 
-    public MetaListItem[] List(string path = null)
+    public MetaListItem[] List(string? path = null)
     {
-        return DDBWrapper.MetaList(_ddb.DatasetFolderPath, path).ToArray();
+        return _ddbWrapper.MetaList(_ddb.DatasetFolderPath, path).ToArray();
     }
 
-    public MetaDump[] Dump(string ids = null)
+    public MetaDump[] Dump(string? ids = null)
     {
-        return DDBWrapper.MetaDump(_ddb.DatasetFolderPath, ids).ToArray();
+        return _ddbWrapper.MetaDump(_ddb.DatasetFolderPath, ids).ToArray();
     }
 }

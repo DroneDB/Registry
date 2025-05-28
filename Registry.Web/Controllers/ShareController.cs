@@ -138,4 +138,44 @@ public class ShareController : ControllerBaseEx
             return ExceptionResult(ex);
         }
     }
+
+    [HttpPost("upload-chunk/{token}")]
+    [DisableRequestSizeLimit]
+    [RequestFormLimits(ValueLengthLimit = int.MaxValue, MultipartBodyLengthLimit = long.MaxValue)]
+    public async Task<IActionResult> UploadChunked(string token, [FromForm] ChunkUploadDto chunkInfo, IFormFile chunk)
+    {
+        try
+        {
+            _logger.LogDebug("Share controller UploadChunked('{Token}', ChunkIndex: {ChunkIndex}, TotalChunks: {TotalChunks}, FileId: {FileId})", 
+                token, chunkInfo.ChunkIndex, chunkInfo.TotalChunks, chunkInfo.FileId);
+
+            if (chunk == null)
+                throw new ArgumentException("No chunk uploaded");
+
+            if (string.IsNullOrEmpty(chunkInfo.FileId))
+                throw new ArgumentException("FileId is required");
+
+            await using var stream = chunk.OpenReadStream();
+            
+            // Use a memory-efficient stream processing approach
+            var result = await _shareManager.UploadChunk(token, chunkInfo, stream);
+            
+            // Checking if this was the last chunk and all chunks are received
+            if (result.IsComplete)
+            {
+                _logger.LogInformation("All chunks received for file {FileName}, finalizing upload", chunkInfo.FileName);
+                var finalResult = await _shareManager.FinalizeChunkedUpload(token, chunkInfo.FileId, chunkInfo.Path);
+                return Ok(finalResult);
+            }
+            
+            return Ok(result);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Exception in Share controller UploadChunked('{Token}', FileId: {FileId}, ChunkIndex: {ChunkIndex})",
+                token, chunkInfo.FileId, chunkInfo.ChunkIndex);
+
+            return ExceptionResult(ex);
+        }
+    }
 }

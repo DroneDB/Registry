@@ -24,7 +24,7 @@
       "environmentVariables": {
         "ASPNETCORE_ENVIRONMENT": "Development"
       },
-      "commandLineArgs": "C:\\registry-data",
+      "commandLineArgs": "./registry-data --reset-hub",
       "applicationUrl": "http://0.0.0.0:5000"
     },
     "WebServer": {
@@ -33,7 +33,7 @@
       "environmentVariables": {
         "ASPNETCORE_ENVIRONMENT": "Development"
       },
-      "commandLineArgs": "C:\\registry-data -t WebServer",
+      "commandLineArgs": "./registry-data -t WebServer",
       "applicationUrl": "http://0.0.0.0:5000"
     },
     "Processing node": {
@@ -42,7 +42,7 @@
       "environmentVariables": {
         "ASPNETCORE_ENVIRONMENT": "Development"
       },
-      "commandLineArgs": "C:\\registry-data -t ProcessingNode"
+      "commandLineArgs": "./registry-data -t ProcessingNode"
     },
     "Thumbnail generator": {
       "commandName": "Project",
@@ -50,7 +50,7 @@
       "environmentVariables": {
         "ASPNETCORE_ENVIRONMENT": "Development"
       },
-      "commandLineArgs": "C:\\registry-data -t ThumbnailGenerator -a localhost:5005"
+      "commandLineArgs": "./registry-data -t ThumbnailGenerator -a localhost:5005"
     }
   }
 }

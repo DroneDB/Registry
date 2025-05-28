@@ -1,8 +1,10 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
     <PropertyGroup>
-        <TargetFramework>net8.0</TargetFramework>
+        <TargetFramework>net9.0</TargetFramework>
         <Configurations>Debug;Release;DebugEf</Configurations>
+        <Nullable>enable</Nullable>
+        <LangVersion>13</LangVersion>
     </PropertyGroup>
 
     <ItemGroup>
