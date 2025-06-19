@@ -462,9 +462,9 @@ public class ObjectsManager : IObjectsManager
 
         return new StorageEntryDto
         {
-            Name = Path.ChangeExtension(fileName, ".jpg"),
+            Name = Path.ChangeExtension(fileName, ".webp"),
             PhysicalPath = Path.GetFullPath(thumbPath),
-            ContentType = "image/jpeg"
+            ContentType = "image/webp"
         };
     }
 

@@ -353,3 +353,4 @@ appsettings.json
 /Registry.Web/uploads
 /Registry.Web/s3cache
 /Registry.Web/data
+/Registry.Web/registry-data

@@ -2,7 +2,7 @@ version: "3.3"
 
 services:
     db:
-        image: mariadb:10.6
+        image: mariadb:11
         volumes:
             - data-mysql:/var/lib/mysql
             - ./initialize.sql:/docker-entrypoint-initdb.d/initialize.sql
@@ -27,7 +27,7 @@ services:
     registry:
         depends_on:
             - db
-        image: dronedb/registry
+        image: dronedb/registry:dev
         tmpfs:
             - /tmp
         volumes:
