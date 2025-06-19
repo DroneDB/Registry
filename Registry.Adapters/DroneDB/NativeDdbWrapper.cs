@@ -18,7 +18,6 @@ public class NativeDdbWrapper : IDdbWrapper
 
     public NativeDdbWrapper()
     {
-
     }
 
     public NativeDdbWrapper(bool verbose)
@@ -472,7 +471,9 @@ public class NativeDdbWrapper : IDdbWrapper
     [DllImport("ddb", EntryPoint = "DDBTile")]
     static extern DdbResult _GenerateTile(
         [MarshalAs(UnmanagedType.LPStr)] string inputPath, int tz, int tx, int ty, out IntPtr outputTilePath,
-        int tileSize, bool tms, bool forceRecreate);    public string GenerateTile(string inputPath, int tz, int tx, int ty, int tileSize, bool tms,
+        int tileSize, bool tms, bool forceRecreate);
+
+    public string GenerateTile(string inputPath, int tz, int tx, int ty, int tileSize, bool tms,
         bool forceRecreate = false)
     {
         if (inputPath == null)
@@ -486,7 +487,7 @@ public class NativeDdbWrapper : IDdbWrapper
         {
             // Acquire lock before accessing native library
             semaphore.Wait();
-            
+
             try
             {
                 if (_GenerateTile(inputPath, tz, tx, ty, out var output, tileSize, tms, forceRecreate) ==
@@ -528,7 +529,9 @@ public class NativeDdbWrapper : IDdbWrapper
     static extern DdbResult _GenerateMemoryTile(
         [MarshalAs(UnmanagedType.LPStr)] string inputPath, int tz, int tx, int ty, out IntPtr outBuffer,
         out int outBufferSize, int tileSize, bool tms, bool forceRecreate,
-        [MarshalAs(UnmanagedType.LPStr)] string inputPathHash);    public byte[] GenerateMemoryTile(string inputPath, int tz, int tx, int ty, int tileSize, bool tms,
+        [MarshalAs(UnmanagedType.LPStr)] string inputPathHash);
+
+    public byte[] GenerateMemoryTile(string inputPath, int tz, int tx, int ty, int tileSize, bool tms,
         bool forceRecreate = false, string inputPathHash = "")
     {
         if (inputPath == null)
@@ -542,7 +545,7 @@ public class NativeDdbWrapper : IDdbWrapper
         {
             // Acquire lock before accessing native library
             semaphore.Wait();
-            
+
             try
             {
                 if (_GenerateMemoryTile(inputPath, tz, tx, ty, out var outBuffer, out var outBufferSize, tileSize, tms,
@@ -718,7 +721,6 @@ public class NativeDdbWrapper : IDdbWrapper
                     throw new InvalidOperationException($"Unable to deserialize apply delta result: {conflicts}");
 
                 return res;
-
             }
         }
         catch (EntryPointNotFoundException ex)
