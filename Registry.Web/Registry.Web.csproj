@@ -13,7 +13,7 @@
         <PackageVersion>1.2.3</PackageVersion>
         <Configurations>Debug;Release;DebugEf</Configurations>
         <DdbVersion>1.1.0</DdbVersion>
-        <LangVersion>14</LangVersion>
+        <LangVersion>13</LangVersion>
     </PropertyGroup>
 
     <PropertyGroup Condition=" '$(Configuration)' == 'DebugEf' ">
