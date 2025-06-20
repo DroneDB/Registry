@@ -24,7 +24,7 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: 14
+          node-version: 16
       - name: Build
         run: echo ${{ github.sha }} > Release.txt
       - name: Test
