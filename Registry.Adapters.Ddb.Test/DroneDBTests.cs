@@ -119,7 +119,8 @@ public class NativeDdbWrapperTests : TestBase
         entry.Path.Should().Be("file.txt");
         entry.Hash.Should().NotBeNullOrWhiteSpace();
 
-        var entries = DdbWrapper.Add(area.TestFolder, new[] { Path.Join(area.TestFolder, "file2.txt"), Path.Join(area.TestFolder, "file3.txt") });
+        var entries = DdbWrapper.Add(area.TestFolder, [Path.Join(area.TestFolder, "file2.txt"), Path.Join(area.TestFolder, "file3.txt")
+        ]);
         entries.Should().HaveCount(2);
 
         DdbWrapper.Remove(area.TestFolder, Path.Combine(area.TestFolder, "file.txt"));

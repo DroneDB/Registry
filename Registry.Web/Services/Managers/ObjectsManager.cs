@@ -689,7 +689,7 @@ public class ObjectsManager : IObjectsManager
             throw new UnauthorizedException("The current user is not allowed to read dataset");
 
         return new FileStreamDescriptor($"{orgSlug}-{dsSlug}-ddb.zip",
-            "application/zip", orgSlug, ds.InternalRef, Array.Empty<string>(), Array.Empty<string>(),
+            "application/zip", orgSlug, ds.InternalRef, [], [],
             FileDescriptorType.Dataset, _logger, _ddbManager);
     }
 

@@ -180,7 +180,7 @@ public class ObjectsController : ControllerBaseEx
         _logger.LogDebug("Objects controller DownloadExact('{OrgSlug}', '{DsSlug}', '{Path}', '{IsInlineRaw}')",
             orgSlug, dsSlug, path, isInlineRaw);
 
-        return await InternalDownload(orgSlug, dsSlug, new[] { path }, isInline);
+        return await InternalDownload(orgSlug, dsSlug, [path], isInline);
     }
 
 

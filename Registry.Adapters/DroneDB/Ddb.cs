@@ -141,7 +141,7 @@ public class DDB : IDDB
             if (entries == null)
             {
                 Debug.WriteLine("Strange null return value");
-                return Array.Empty<Entry>();
+                return [];
             }
 
             return entries;

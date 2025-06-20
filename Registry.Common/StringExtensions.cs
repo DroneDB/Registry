@@ -132,7 +132,7 @@ public static class StringExtensions
     private static DateTime ParseFormattedDate(string input, CultureInfo culture)
     {
         string[] formats =
-        {
+        [
             "u",
             "s",
             "yyyy'-'MM'-'dd'T'HH':'mm':'ss'Z'",
@@ -142,7 +142,7 @@ public static class StringExtensions
             "yyyy-MM-ddTHH:mm:sszzzzzz",
             "yyyy-MM-ddTHH:mm:ss.fffZ",
             "M/d/yyyy h:mm:ss tt" // default format for invariant culture
-        };
+        ];
 
         if (DateTime.TryParseExact(
                 input, formats, culture,

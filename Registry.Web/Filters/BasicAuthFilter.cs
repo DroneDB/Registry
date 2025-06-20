@@ -66,11 +66,10 @@ public class BasicAuthFilter : ActionFilterAttribute
 
                     httpContext.Response.Cookies.Append(_settings.AuthCookieName, res.Token);
 
-                    var identity = new ClaimsIdentity(new[]
-                    {
+                    var identity = new ClaimsIdentity([
                         new Claim(ClaimTypes.Name, user.Id),
-                        new Claim(ApplicationDbContext.AdminRoleName.ToLowerInvariant(), isAdmin.ToString()),
-                    }, "authenticated");
+                        new Claim(ApplicationDbContext.AdminRoleName.ToLowerInvariant(), isAdmin.ToString())
+                    ], "authenticated");
                     var principal = new ClaimsPrincipal(identity);
 
                     httpContext.User = principal;

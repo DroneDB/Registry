@@ -154,12 +154,14 @@ public class DdbFactoryTest : TestBase
         const double expectedLongitude = -91.994052;
         const double expectedAltitude = 198.51;
 
-        List<List<double>> expectedCoordinates = new List<List<double>>();
-        expectedCoordinates.Add(new List<double> { -91.99418833907131, 46.843311240786406, 158.51 });
-        expectedCoordinates.Add(new List<double> { -91.99457061482893, 46.843058237783886, 158.51 });
-        expectedCoordinates.Add(new List<double> { -91.99391510716002, 46.842591925708966, 158.51 });
-        expectedCoordinates.Add(new List<double> { -91.99353283170487, 46.842844926544224, 158.51 });
-        expectedCoordinates.Add(new List<double> { -91.99418833907131, 46.843311240786406, 158.51 });
+        List<List<double>> expectedCoordinates =
+        [
+            new List<double> { -91.99418833907131, 46.843311240786406, 158.51 },
+            new List<double> { -91.99457061482893, 46.843058237783886, 158.51 },
+            new List<double> { -91.99391510716002, 46.842591925708966, 158.51 },
+            new List<double> { -91.99353283170487, 46.842844926544224, 158.51 },
+            new List<double> { -91.99418833907131, 46.843311240786406, 158.51 }
+        ];
 
         var factory = new DdbManager(_appSettingsMock.Object, _ddbFactoryLogger, DdbWrapper);
 
