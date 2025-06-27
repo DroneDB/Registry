@@ -121,7 +121,8 @@ public class Startup
         {
             services.AddIdentityCore<User>()
                 .AddRoles<IdentityRole>()
-                .AddEntityFrameworkStores<ApplicationDbContext>();
+                .AddEntityFrameworkStores<ApplicationDbContext>()
+                .AddDefaultTokenProviders();
 
             services.AddScoped<ILoginManager, RemoteLoginManager>();
         }
@@ -130,7 +131,8 @@ public class Startup
             services.AddIdentityCore<User>()
                 .AddRoles<IdentityRole>()
                 .AddEntityFrameworkStores<ApplicationDbContext>()
-                .AddSignInManager();
+                .AddSignInManager()
+                .AddDefaultTokenProviders();
 
             services.AddScoped<ILoginManager, LocalLoginManager>();
         }
