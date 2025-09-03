@@ -9,7 +9,7 @@ namespace Registry.Web.Test.Adapters;
 
 public class MockMeta : IMetaManager
 {
-    private readonly List<Tuple<string, Meta>> _metas = new();
+    private readonly List<Tuple<string, Meta>> _metas = [];
 
     public Meta Add(string key, string data, string path = null)
     {

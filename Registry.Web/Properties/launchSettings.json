@@ -16,16 +16,30 @@
         "DDB_DEBUG": "1",
         "ASPNETCORE_ENVIRONMENT": "Development"
       },
-      "applicationUrl": "http://0.0.0.0:5000"
+      "applicationUrl": "http://localhost:5000"
     },
     "Default": {
       "commandName": "Project",
       "launchBrowser": true,
       "environmentVariables": {
-        "ASPNETCORE_ENVIRONMENT": "Development"
+        "ASPNETCORE_ENVIRONMENT": "Development",
+        "DDB_DEBUG": "1"
       },
       "commandLineArgs": "./registry-data --reset-hub",
-      "applicationUrl": "http://0.0.0.0:5000"
+      "applicationUrl": "http://localhost:5000"
+    },
+    "Default-All-Debug": {
+      "commandName": "Project",
+      "launchBrowser": true,
+      "environmentVariables": {
+        "ASPNETCORE_ENVIRONMENT": "Development",
+        "DDB_DEBUG": "1",
+        "CPL_DEBUG":"ON",
+        "CPL_LOG_ERRORS":"ON",
+        "PROJ_DEBUG":"3"
+      },
+      "commandLineArgs": "./registry-data --reset-hub",
+      "applicationUrl": "http://localhost:5000"
     },
     "WebServer": {
       "commandName": "Project",
@@ -34,7 +48,7 @@
         "ASPNETCORE_ENVIRONMENT": "Development"
       },
       "commandLineArgs": "./registry-data -t WebServer",
-      "applicationUrl": "http://0.0.0.0:5000"
+      "applicationUrl": "http://localhost:5000"
     },
     "Processing node": {
       "commandName": "Project",

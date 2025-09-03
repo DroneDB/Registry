@@ -39,7 +39,7 @@ public static class ZipUtils
     private static string[] GetEntryNames(string[] names, string sourceFolder, bool includeBaseName)
     {
         if (names == null || names.Length == 0)
-            return Array.Empty<string>();
+            return [];
 
         if (includeBaseName)
             sourceFolder = Path.GetDirectoryName(sourceFolder);

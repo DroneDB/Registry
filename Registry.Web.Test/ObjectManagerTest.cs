@@ -299,7 +299,7 @@ public class ObjectManagerTest : TestBase
     [Test]
     public async Task Download_ExistingFile_PackageRes()
     {
-        string[] fileNames = { "DJI_0019.JPG", "DJI_0020.JPG", "DJI_0021.JPG", "DJI_0022.JPG" };
+        string[] fileNames = ["DJI_0019.JPG", "DJI_0020.JPG", "DJI_0021.JPG", "DJI_0022.JPG"];
         using var test = new TestFS(Test4ArchiveUrl, BaseTestFolder);
 
         await using var context = GetTest1Context();
@@ -355,7 +355,7 @@ public class ObjectManagerTest : TestBase
         const string datasetSlug = "7kd0gxti9qoemsrk";
 
         string[] fileNames =
-            { "DJI_0007.JPG", "DJI_0008.JPG", "DJI_0009.JPG", "Sub/DJI_0049.JPG", "Sub/DJI_0048.JPG" };
+            ["DJI_0007.JPG", "DJI_0008.JPG", "DJI_0009.JPG", "Sub/DJI_0049.JPG", "Sub/DJI_0048.JPG"];
         using var test = new TestFS(Test5ArchiveUrl, BaseTestFolder);
 
         await using var context = GetTest1Context();

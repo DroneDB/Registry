@@ -93,7 +93,7 @@ public class DatasetsManager : IDatasetsManager
         info.Depth = 0;
         info.Path = _utils.GenerateDatasetUrl(dataset, true);
 
-        return new[] { info.ToDto() };
+        return [info.ToDto()];
     }
 
     public async Task<DatasetDto> AddNew(string orgSlug, DatasetNewDto dataset)

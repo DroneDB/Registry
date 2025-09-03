@@ -40,7 +40,7 @@ public class Program
     public const int DefaultPort = 5000;
     public const string DefaultHost = "localhost";
 
-    public static readonly Version MinDdbVersion = new(1, 0, 12);
+    public static readonly Version MinDdbVersion = new(1, 1, 5);
 
     public static void Main(string[] args)
     {
