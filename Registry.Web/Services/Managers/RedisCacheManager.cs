@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
@@ -11,7 +11,11 @@ using Registry.Ports;
 
 namespace Registry.Web.Services.Managers;
 
-public class CacheManager : ICacheManager
+/// <summary>
+/// Redis-based implementation of ICacheManager that maintains compatibility with the existing API.
+/// This implementation stores binary data directly in Redis and returns byte arrays directly.
+/// </summary>
+public class RedisCacheManager : ICacheManager
 {
     private class Carrier
     {
@@ -20,13 +24,11 @@ public class CacheManager : ICacheManager
     }
 
     private readonly IDistributedCache _cache;
-    private readonly ILogger<CacheManager> _logger;
-
+    private readonly ILogger<RedisCacheManager> _logger;
     private readonly TimeSpan _defaultCacheExpiration = new(0, 30, 0);
-
     private readonly DictionaryEx<string, Carrier> _providers = new();
 
-    public CacheManager(IDistributedCache cache, ILogger<CacheManager> logger)
+    public RedisCacheManager(IDistributedCache cache, ILogger<RedisCacheManager> logger)
     {
         _cache = cache ?? throw new ArgumentNullException(nameof(cache));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
@@ -57,8 +59,8 @@ public class CacheManager : ICacheManager
     public static string MakeKey(string seed, string category, object[]? parameters)
     {
         return parameters == null
-            ? $":{seed}:{category}"
-            : $":{seed}:{category}:{string.Join("-", parameters.Where(p => p is not Delegate).Select(p => p.ToString()))}";
+            ? $"{seed}-{category}"
+            : $"{seed}-{category}:{string.Join(",", parameters.Select(p => p.ToString()))}";
     }
 
     public async Task RemoveAsync(string seed, string category, params object[] parameters)
@@ -86,6 +88,27 @@ public class CacheManager : ICacheManager
         return _providers.ContainsKey(seed);
     }
 
+    public async Task<bool> IsCachedAsync(string seed, string category, params object[] parameters)
+    {
+        ArgumentNullException.ThrowIfNull(seed);
+        ArgumentNullException.ThrowIfNull(category);
+
+        var key = MakeKey(seed, category, parameters);
+
+        try
+        {
+            // For Redis, we need to actually try to get the value to check if it exists
+            // This is because IDistributedCache doesn't have a Contains method
+            var result = await _cache.GetAsync(key);
+            return result != null;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to check cache for key: {Key}", key);
+            return false;
+        }
+    }
+
     public async Task<byte[]> GetAsync(string seed, string category, params object[] parameters)
     {
         ArgumentNullException.ThrowIfNull(seed);
@@ -108,10 +131,10 @@ public class CacheManager : ICacheManager
 
             _logger.LogDebug("Cache miss for key: {Key}, generating data", key);
 
-            // Cache miss - generate data asynchronously
+            // Generate the data using the provider asynchronously
             var data = await carrier.GetDataAsync(parameters);
 
-            // Store in cache with expiration
+            // Store in Redis with expiration
             var options = new DistributedCacheEntryOptions
             {
                 SlidingExpiration = carrier.Expiration
@@ -119,7 +142,7 @@ public class CacheManager : ICacheManager
 
             await _cache.SetAsync(key, data, options);
 
-            _logger.LogDebug("Data generated and cached for key: {Key}, size: {Size} bytes", key, data.Length);
+            _logger.LogDebug("Cached data for key: {Key}, size: {Size} bytes", key, data.Length);
             return data;
         }
         catch (Exception ex)
@@ -156,6 +179,36 @@ public class CacheManager : ICacheManager
         catch (Exception ex)
         {
             _logger.LogError(ex, "Failed to set cache data for key: {Key}", key);
+            throw;
+        }
+    }
+
+    public async Task ClearAsync(string seed, string? category = null)
+    {
+        ArgumentNullException.ThrowIfNull(seed);
+
+        var keyPrefix = category != null ? MakeKey(seed, category, null) : seed;
+
+        try
+        {
+            // Unfortunately, Redis doesn't have a native way to get all keys with a prefix
+            // through IDistributedCache. This is a limitation we need to document.
+            // For now, we log the attempt but can't actually clear by prefix.
+
+            _logger.LogWarning("Clear operation requested for key prefix: {KeyPrefix}. " +
+                "Redis-based cache doesn't support prefix-based clearing through IDistributedCache. " +
+                "Individual keys must be removed explicitly.", keyPrefix);
+
+            // Alternative: if we really need this functionality, we'd need to:
+            // 1. Use StackExchange.Redis directly with SCAN command
+            // 2. Maintain a key registry
+            // 3. Use a different approach for cache invalidation
+
+            await Task.CompletedTask; // Placeholder for future implementation
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to clear cache for prefix: {KeyPrefix}", keyPrefix);
             throw;
         }
     }

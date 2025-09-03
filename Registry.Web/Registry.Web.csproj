@@ -12,7 +12,7 @@
         <Platforms>AnyCPU;x64</Platforms>
         <PackageVersion>1.2.5</PackageVersion>
         <Configurations>Debug;Release;DebugEf</Configurations>
-        <DdbVersion>1.2.0</DdbVersion>
+        <DdbVersion>1.1.5</DdbVersion>
         <LangVersion>13</LangVersion>
     </PropertyGroup>
 
@@ -40,7 +40,6 @@
         <PackageReference Include="AspNetCore.HealthChecks.UI.Client" Version="9.0.0" />
         <PackageReference Include="AspNetCore.HealthChecks.UI.Core" Version="9.0.0" />
         <PackageReference Include="CommandLineParser" Version="2.9.1" />
-        <PackageReference Include="FileCache" Version="3.3.0" />
         <PackageReference Include="Hangfire.AspNetCore" Version="1.8.20" />
         <PackageReference Include="Hangfire.Console" Version="1.4.3" />
         <PackageReference Include="Hangfire.Core" Version="1.8.20" />

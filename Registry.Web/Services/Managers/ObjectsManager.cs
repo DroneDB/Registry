@@ -248,9 +248,20 @@ public class ObjectsManager : IObjectsManager
         {
             _logger.LogInformation("This item is an image, generate thumbnail");
 
-            // Run task in background
-            _ = _cacheManager.Get(MagicStrings.ThumbnailCacheSeed, entry.Hash, ddb, localFilePath,
-                DefaultThumbnailSize);
+            // Run task in background (fire and forget)
+            _ = Task.Run(async () =>
+            {
+                try
+                {
+                    await _cacheManager.GetAsync(MagicStrings.ThumbnailCacheSeed, entry.Hash, DefaultThumbnailSize,
+                        new Func<Task<byte[]>>(() => ddb.GenerateThumbnailAsync(localFilePath, DefaultThumbnailSize)));
+                    _logger.LogInformation("Thumbnail generation completed for hash {Hash}", entry.Hash);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "Failed to generate thumbnail for hash {Hash}", entry.Hash);
+                }
+            });
 
             _logger.LogInformation("Thumbnail generation task started");
         }
@@ -311,6 +322,19 @@ public class ObjectsManager : IObjectsManager
             }
             case EntryType.DroneDB:
                 throw new InvalidOperationException("Cannot move a DroneDB file");
+            case EntryType.Undefined:
+            case EntryType.Generic:
+            case EntryType.GeoImage:
+            case EntryType.GeoRaster:
+            case EntryType.PointCloud:
+            case EntryType.Image:
+            case EntryType.Markdown:
+            case EntryType.Video:
+            case EntryType.Geovideo:
+            case EntryType.Model:
+            case EntryType.Panorama:
+            case EntryType.GeoPanorama:
+            case EntryType.Vector:
             default:
             {
                 var sourceLocalFilePath = ddb.GetLocalPath(source);
@@ -387,27 +411,6 @@ public class ObjectsManager : IObjectsManager
 
                 _fs.Delete(objLocalPath);
 
-                _logger.LogInformation("Local file deleted, now clearing cache with hash {Hash}", obj.Hash);
-
-                // Clear cache in a fire-and-forget task
-#pragma warning disable CS4014
-                Task.Run(() =>
-#pragma warning restore CS4014
-                {
-                    try
-                    {
-                        _cacheManager.Clear(MagicStrings.ThumbnailCacheSeed, obj.Hash);
-                        _cacheManager.Clear(MagicStrings.TileCacheSeed, obj.Hash);
-
-                        _logger.LogInformation("Cache cleared for hash {Hash}", obj.Hash);
-                    }
-                    catch (Exception cacheEx)
-                    {
-                        _logger.LogError(cacheEx, "Error while clearing cache for hash {Hash}", obj.Hash);
-                    }
-                });
-
-                _logger.LogInformation("Cache cleared");
             }
             catch (Exception ex)
             {
@@ -431,12 +434,12 @@ public class ObjectsManager : IObjectsManager
         _ddbManager.Delete(orgSlug, ds.InternalRef);
     }
 
-    public async Task<StorageFileDto> GenerateThumbnail(string orgSlug, string dsSlug, string path, int? sizeRaw,
+    public async Task<StorageDataDto> GenerateThumbnailData(string orgSlug, string dsSlug, string path, int? sizeRaw,
         bool recreate = false)
     {
         var ds = _utils.GetDataset(orgSlug, dsSlug);
 
-        _logger.LogInformation("In GenerateThumbnail('{OrgSlug}/{DsSlug}')", orgSlug, dsSlug);
+        _logger.LogInformation("In GenerateThumbnailData('{OrgSlug}/{DsSlug}')", orgSlug, dsSlug);
 
         if (!await _authManager.RequestAccess(ds, AccessType.Read))
             throw new UnauthorizedException("The current user is not allowed to read dataset");
@@ -456,25 +459,25 @@ public class ObjectsManager : IObjectsManager
         var size = sizeRaw ?? DefaultThumbnailSize;
 
         if (recreate)
-            _cacheManager.Remove(MagicStrings.ThumbnailCacheSeed, entry.Hash);
+            await _cacheManager.RemoveAsync(MagicStrings.ThumbnailCacheSeed, $"{orgSlug}/{dsSlug}", entry.Hash);
 
-        var thumbPath = await _cacheManager.Get(MagicStrings.ThumbnailCacheSeed, entry.Hash, ddb, localPath, size);
+        var thumbData = await _cacheManager.GetAsync(MagicStrings.ThumbnailCacheSeed, $"{orgSlug}/{dsSlug}", entry.Hash, size,
+            new Func<Task<byte[]>>(() => ddb.GenerateThumbnailAsync(localPath, size)));
 
-        return new StorageEntryDto
+        return new StorageDataDto
         {
             Name = Path.ChangeExtension(fileName, ".webp"),
-            PhysicalPath = Path.GetFullPath(thumbPath),
+            Data = thumbData,
             ContentType = "image/webp"
         };
     }
 
-
-    public async Task<StorageFileDto> GenerateTile(string orgSlug, string dsSlug, string path, int tz, int tx,
+    public async Task<StorageDataDto> GenerateTileData(string orgSlug, string dsSlug, string path, int tz, int tx,
         int ty, bool retina)
     {
         var ds = _utils.GetDataset(orgSlug, dsSlug);
 
-        _logger.LogInformation("In GenerateTile('{OrgSlug}/{DsSlug}')", orgSlug, dsSlug);
+        _logger.LogInformation("In GenerateTileData('{OrgSlug}/{DsSlug}')", orgSlug, dsSlug);
 
         if (!await _authManager.RequestAccess(ds, AccessType.Read))
             throw new UnauthorizedException("The current user is not allowed to read dataset");
@@ -490,12 +493,13 @@ public class ObjectsManager : IObjectsManager
 
         try
         {
-            var tilePath =
-                await _cacheManager.Get("tile", entry.Hash, ddb, localPath, entry.Hash, tx, ty, tz, retina);
+            var tileData =
+                await _cacheManager.GetAsync(MagicStrings.TileCacheSeed, $"{orgSlug}/{dsSlug}", entry.Hash, tx, ty, tz, retina,
+                    new Func<Task<byte[]>>(() => ddb.GenerateTileAsync(localPath, tz, tx, ty, retina, entry.Hash)));
 
-            return new StorageEntryDto
+            return new StorageDataDto
             {
-                PhysicalPath = Path.GetFullPath(tilePath),
+                Data = tileData,
                 ContentType = "image/png",
                 Name = $"{ty}.png"
             };
@@ -510,6 +514,7 @@ public class ObjectsManager : IObjectsManager
             throw;
         }
     }
+
 
     #region Downloads
 

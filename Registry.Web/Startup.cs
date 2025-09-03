@@ -5,7 +5,6 @@ using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Reflection;
-using System.Runtime.Caching;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
@@ -280,18 +279,6 @@ public class Startup
         services.AddSingleton<IBatchTokenGenerator, BatchTokenGenerator>();
         services.AddSingleton<INameGenerator, NameGenerator>();
         services.AddSingleton<ICacheManager, CacheManager>();
-        services.AddSingleton<ObjectCache>(provider => new FileCache(FileCacheManagers.Hashed,
-            appSettings.CachePath, new DefaultSerializationBinder(),
-            true, appSettings.ClearCacheInterval ?? TimeSpan.Zero)
-        {
-            PayloadReadMode = FileCache.PayloadMode.Filename,
-            PayloadWriteMode = FileCache.PayloadMode.Filename,
-            DefaultPolicy = new CacheItemPolicy
-            {
-                SlidingExpiration = appSettings.ClearCacheInterval ?? TimeSpan.FromDays(1)
-            }
-
-        });
 
         services.AddResponseCompression();
 
@@ -420,7 +407,7 @@ public class Startup
         });
 
         SetupDatabase(app).Wait();
-        SetupFileCache(app);
+        SetupCache(app);
 
         SetupCleanupJobs(app);
 
@@ -514,7 +501,7 @@ public class Startup
         Console.WriteLine(" ?> Press Ctrl+C to quit");
     }
 
-    private void SetupFileCache(IApplicationBuilder app)
+    private void SetupCache(IApplicationBuilder app)
     {
         var appSettingsSection = Configuration.GetSection("AppSettings");
         var appSettings = appSettingsSection.Get<AppSettings>();
@@ -524,29 +511,25 @@ public class Startup
 
         Debug.Assert(cacheManager != null, nameof(cacheManager) + " != null");
 
-        cacheManager.Register(MagicStrings.TileCacheSeed, parameters =>
+        cacheManager.Register(MagicStrings.TileCacheSeed, async parameters =>
         {
-            var ddb = (IDDB)parameters[0];
-            var sourcePath = (string)parameters[1];
-            var sourceHash = (string)parameters[2];
-            var tx = (int)parameters[3];
-            var ty = (int)parameters[4];
-            var tz = (int)parameters[5];
-            var retina = (bool)parameters[6];
+            var fileHash = (string)parameters[0];
+            var tx = (int)parameters[1];
+            var ty = (int)parameters[2];
+            var tz = (int)parameters[3];
+            var retina = (bool)parameters[4];
+            var generateFunc = (Func<Task<byte[]>>)parameters[5];
 
-            return ddb.GenerateTile(sourcePath, tz, tx, ty, retina, sourceHash);
+            return await generateFunc();
         }, appSettings.TilesCacheExpiration);
 
-        cacheManager.Register(MagicStrings.ThumbnailCacheSeed, parameters =>
+        cacheManager.Register(MagicStrings.ThumbnailCacheSeed, async parameters =>
         {
-            // TODO: Can be removed
-            var ddb = (IDDB)parameters[0];
-            var sourcePath = (string)parameters[1];
-            var size = (int)parameters[2];
+            var fileHash = (string)parameters[0];
+            var size = (int)parameters[1];
+            var generateFunc = (Func<Task<byte[]>>)parameters[2];
 
-            using var stream = new MemoryStream();
-            thumbnailGenerator.GenerateThumbnailAsync(sourcePath, size, stream).Wait();
-            return stream.ToArray();
+            return await generateFunc();
         }, appSettings.ThumbnailsCacheExpiration);
     }
 
