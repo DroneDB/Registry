@@ -281,7 +281,7 @@ public class UsersManager : IUsersManager
         IdentityResult res;
         if (currentPassword == null)
         {
-            // Dobbiamo controllare se l'utente è un admin, in questo caso procediamo al reset
+            // We need to check if the user is an admin, in this case we proceed with the reset
             if (!await _authManager.IsUserAdmin())
                 throw new UnauthorizedException("Current password is required for non-admin users");
 
@@ -435,11 +435,11 @@ public class UsersManager : IUsersManager
     {
         if (string.IsNullOrWhiteSpace(userName))
             throw new BadRequestException("User name cannot be empty");
-        
+
         // If the user is not an admin, they can only update their own data
         if (string.IsNullOrWhiteSpace(email))
             throw new BadRequestException("Email cannot be empty");
-        
+
         if (!await _authManager.IsUserAdmin())
         {
             // Check if the user is trying to update their own data
@@ -458,7 +458,7 @@ public class UsersManager : IUsersManager
 
         _applicationDbContext.Entry(user).State = EntityState.Modified;
         await _applicationDbContext.SaveChangesAsync();
-        
+
     }
 
     public async Task<OrganizationDto[]> GetUserOrganizations(string userName)
@@ -805,7 +805,7 @@ public class UsersManager : IUsersManager
 
         var currentRoles = await _userManager.GetRolesAsync(user);
 
-        // Rimuovi tutti i ruoli attuali
+        // Remove all current roles
         if (currentRoles.Any())
         {
             var removeResult = await _userManager.RemoveFromRolesAsync(user, currentRoles);

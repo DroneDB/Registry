@@ -398,7 +398,7 @@ public class UsersController : ControllerBaseEx
         {
             _logger.LogDebug("Users controller IsUserManagementEnabled()");
 
-            // La gestione degli utenti è disabilitata se è configurata un'URL di autenticazione esterna
+            // User management is disabled if an external authentication URL is configured
             var appSettings = HttpContext.RequestServices.GetRequiredService<IOptions<AppSettings>>().Value;
             var isEnabled = string.IsNullOrWhiteSpace(appSettings?.ExternalAuthUrl);
 
@@ -413,7 +413,7 @@ public class UsersController : ControllerBaseEx
 
     [HttpPost("roles")]
     [ProducesResponseType(StatusCodes.Status200OK)]
-    
+
     public async Task<IActionResult> CreateRole([FromBody] CreateRoleRequestDto request)
     {
         try
