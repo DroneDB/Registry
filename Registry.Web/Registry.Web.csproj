@@ -12,9 +12,13 @@
         <Platforms>AnyCPU;x64</Platforms>
         <PackageVersion>1.2.5</PackageVersion>
         <Configurations>Debug;Release;DebugEf</Configurations>
-        <DdbVersion>1.1.5</DdbVersion>
+        <DdbVersion>1.2.0</DdbVersion>
         <LangVersion>13</LangVersion>
     </PropertyGroup>
+
+    <ItemGroup>
+        <AssemblyMetadata Include="DdbVersion" Value="$(DdbVersion)" />
+    </ItemGroup>
 
     <PropertyGroup Condition=" '$(Configuration)' == 'DebugEf' ">
       <DefineConstants>TRACE;DEBUG_EF</DefineConstants>
