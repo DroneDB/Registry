@@ -38,11 +38,12 @@ public class ObjectsManager : IObjectsManager
     private readonly IBackgroundJobsProcessor _backgroundJob;
     private readonly RegistryContext _context;
     private readonly AppSettings _settings;
+    private readonly IDdbWrapper _ddbWrapper;
 
     // TODO: Could be moved to config
     private const int DefaultThumbnailSize = 512;
 
-    private bool IsReservedPath(string path)
+    private static bool IsReservedPath(string path)
     {
         return path.StartsWith(IDDB.DatabaseFolderName);
     }
@@ -55,7 +56,8 @@ public class ObjectsManager : IObjectsManager
         IAuthManager authManager,
         ICacheManager cacheManager,
         IFileSystem fs,
-        IBackgroundJobsProcessor backgroundJob)
+        IBackgroundJobsProcessor backgroundJob, 
+        IDdbWrapper ddbWrapper)
     {
         _logger = logger;
         _context = context;
@@ -65,6 +67,7 @@ public class ObjectsManager : IObjectsManager
         _cacheManager = cacheManager;
         _fs = fs;
         _backgroundJob = backgroundJob;
+        _ddbWrapper = ddbWrapper;
         _settings = settings.Value;
     }
 
@@ -464,11 +467,13 @@ public class ObjectsManager : IObjectsManager
         var thumbData = await _cacheManager.GetAsync(MagicStrings.ThumbnailCacheSeed, $"{orgSlug}/{dsSlug}", entry.Hash, size,
             new Func<Task<byte[]>>(() => ddb.GenerateThumbnailAsync(localPath, size)));
 
+        var extension = MimeUtility.GetExtensions(_ddbWrapper.ThumbnailMimeType)?.FirstOrDefault() ?? "webp";
+        
         return new StorageDataDto
         {
-            Name = Path.ChangeExtension(fileName, ".webp"),
+            Name = Path.ChangeExtension(fileName, extension),
             Data = thumbData,
-            ContentType = "image/webp"
+            ContentType = _ddbWrapper.ThumbnailMimeType
         };
     }
 
@@ -497,11 +502,13 @@ public class ObjectsManager : IObjectsManager
                 await _cacheManager.GetAsync(MagicStrings.TileCacheSeed, $"{orgSlug}/{dsSlug}", entry.Hash, tx, ty, tz, retina,
                     new Func<Task<byte[]>>(() => ddb.GenerateTileAsync(localPath, tz, tx, ty, retina, entry.Hash)));
 
+            var extension = MimeUtility.GetExtensions(_ddbWrapper.TileMimeType)?.FirstOrDefault() ?? "png";
+            
             return new StorageDataDto
             {
                 Data = tileData,
-                ContentType = "image/png",
-                Name = $"{ty}.png"
+                ContentType = _ddbWrapper.TileMimeType,
+                Name = $"{ty}.{extension}"
             };
         }
         catch (InvalidOperationException ex)

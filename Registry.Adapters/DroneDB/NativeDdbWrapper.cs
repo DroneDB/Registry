@@ -30,6 +30,9 @@ public class NativeDdbWrapper : IDdbWrapper
         _RegisterProcess(verbose);
     }
 
+    public string TileMimeType { get; } = "image/jpeg";
+    public string ThumbnailMimeType { get; } = "image/webp";
+
     [DllImport("ddb", EntryPoint = "DDBGetVersion")]
     private static extern IntPtr _GetVersion();
 
