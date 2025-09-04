@@ -773,7 +773,7 @@ public class UsersManager : IUsersManager
         if (string.IsNullOrWhiteSpace(roleName))
             throw new ArgumentException("Role name cannot be empty");
 
-        // Non permettere l'eliminazione del ruolo admin
+        // Do not allow deletion of the admin role
         if (roleName.Equals(ApplicationDbContext.AdminRoleName, StringComparison.OrdinalIgnoreCase))
             throw new ArgumentException("Cannot delete the admin role");
 
