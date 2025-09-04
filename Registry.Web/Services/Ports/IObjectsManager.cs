@@ -22,8 +22,8 @@ public interface IObjectsManager
     Task Delete(string orgSlug, string dsSlug, string path);
     Task DeleteAll(string orgSlug, string dsSlug);
     Task<FileStreamDescriptor> DownloadStream(string orgSlug, string dsSlug, string[] paths);
-    Task<StorageFileDto> GenerateThumbnail(string orgSlug, string dsSlug, string path, int? size, bool recreate = false);
-    Task<StorageFileDto> GenerateTile(string orgSlug, string dsSlug, string path, int tz, int tx, int ty, bool retina);
+    Task<StorageDataDto> GenerateThumbnailData(string orgSlug, string dsSlug, string path, int? size, bool recreate = false);
+    Task<StorageDataDto> GenerateTileData(string orgSlug, string dsSlug, string path, int tz, int tx, int ty, bool retina);
     Task<FileStreamDescriptor> GetDdb(string orgSlug, string dsSlug);
     Task Build(string orgSlug, string dsSlug, string path, bool background = false, bool force = false);
     Task<string> GetBuildFile(string orgSlug, string dsSlug, string hash, string path);

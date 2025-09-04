@@ -43,4 +43,9 @@
       <ProjectReference Include="..\Registry.Test.Common\Registry.Test.Common.csproj" />
     </ItemGroup>
 
+    <ItemGroup>
+      <None Remove="run-all.sh" />
+      <None Remove="tests.txt" />
+    </ItemGroup>
+
 </Project>

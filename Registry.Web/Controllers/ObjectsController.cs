@@ -67,9 +67,9 @@ public class ObjectsController : ControllerBaseEx
             _logger.LogDebug("Objects controller GenerateThumbnail('{OrgSlug}', '{DsSlug}', '{Path}', '{Size}')",
                 orgSlug, dsSlug, path, size);
 
-            var res = await _objectsManager.GenerateThumbnail(orgSlug, dsSlug, path, size);
+            var res = await _objectsManager.GenerateThumbnailData(orgSlug, dsSlug, path, size);
 
-            return res == null ? NotFound() : PhysicalFile(res.PhysicalPath, res.ContentType, res.Name, true);
+            return res == null ? NotFound() : File(res.Data, res.ContentType, res.Name);
         }
         catch (Exception ex)
         {
@@ -95,9 +95,9 @@ public class ObjectsController : ControllerBaseEx
             if (!int.TryParse(retina ? tyRaw.Replace("@2x", string.Empty) : tyRaw, out var ty))
                 throw new ArgumentException("Invalid input parameters (retina indicator should be '@2x')");
 
-            var res = await _objectsManager.GenerateTile(orgSlug, dsSlug, path, tz, tx, ty, retina);
+            var res = await _objectsManager.GenerateTileData(orgSlug, dsSlug, path, tz, tx, ty, retina);
 
-            return PhysicalFile(res.PhysicalPath, res.ContentType, res.Name, true);
+            return File(res.Data, res.ContentType, res.Name);
         }
         catch (Exception ex)
         {

@@ -114,7 +114,7 @@ public class UsersManager : IUsersManager
 
         await SyncRoles(user);
 
-        // authentication successful so generate jwt token
+        // Authentication successful so generate jwt token
         var tokenDescriptor = await GenerateJwtToken(user);
 
         return new AuthenticateResponse(user, tokenDescriptor.Token, tokenDescriptor.ExpiresOn);
@@ -155,7 +155,7 @@ public class UsersManager : IUsersManager
         }
     }
 
-    public async Task<User> CreateUser(string userName, string email, string password, string[] roles)
+    public async Task<UserDto> CreateUser(string userName, string email, string password, string[] roles)
     {
         if (!await _authManager.IsUserAdmin())
             throw new UnauthorizedException("Only admins can create new users");
@@ -168,7 +168,19 @@ public class UsersManager : IUsersManager
         if (user != null)
             throw new InvalidOperationException("User already exists");
 
-        return await CreateUserInternal(userName, email, password, roles);
+        user = await CreateUserInternal(userName, email, password, roles);
+
+        _logger.LogInformation("User {UserName} created successfully", user.UserName);
+
+        return new UserDto
+        {
+            UserName = user.UserName,
+            Email = user.Email,
+            Roles = roles ?? [],
+            Organizations = (from org in _registryContext.Organizations
+                where org.OwnerId == user.Id || org.Users.Any(item => item.UserId == user.Id)
+                select org.Slug).ToArray()
+        };
     }
 
     private static bool IsValidUserName(string userName)
@@ -219,7 +231,7 @@ public class UsersManager : IUsersManager
 
     private async Task ValidateRoles(string[] roles)
     {
-        if (roles == null || !roles.Any())
+        if (roles == null || roles.Length == 0)
             return;
 
         foreach (var role in roles)
@@ -266,7 +278,48 @@ public class UsersManager : IUsersManager
     private async Task<ChangePasswordResult> ChangePasswordInternal(User user, string currentPassword,
         string newPassword)
     {
-        var res = await _userManager.ChangePasswordAsync(user, currentPassword, newPassword);
+        IdentityResult res;
+        if (currentPassword == null)
+        {
+            // We need to check if the user is an admin, in this case we proceed with the reset
+            if (!await _authManager.IsUserAdmin())
+                throw new UnauthorizedException("Current password is required for non-admin users");
+
+            // If the user is an admin, we allow changing password without current password
+            _logger.LogInformation("Admin user {UserName} is changing password without current password",
+                user.UserName);
+
+            // If the user is an admin, we allow changing password without current password
+            if (newPassword == null)
+                throw new BadRequestException("New password cannot be null");
+
+            var resetToken = await _userManager.GeneratePasswordResetTokenAsync(user);
+            res = await _userManager.ResetPasswordAsync(user, resetToken, newPassword);
+
+            if (!res.Succeeded)
+            {
+                var errors = string.Join(";", res.Errors.Select(item => $"{item.Code} - {item.Description}"));
+                _logger.LogWarning("Errors in resetting user password: {Errors}", errors);
+                throw new InvalidOperationException("Cannot reset password: " + errors);
+            }
+
+            _logger.LogInformation("Admin user {UserName} changed password without current password", user.UserName);
+
+            // If this is the default admin password, we should persist it in the config
+            if (user.UserName == _appSettings.DefaultAdmin.UserName)
+            {
+                _appSettings.DefaultAdmin.Password = newPassword;
+                _configurationHelper.SaveConfiguration(_appSettings);
+            }
+
+            return new ChangePasswordResult
+            {
+                UserName = user.UserName,
+                Password = newPassword
+            };
+        }
+
+        res = await _userManager.ChangePasswordAsync(user, currentPassword, newPassword);
 
         if (!res.Succeeded)
         {
@@ -371,11 +424,41 @@ public class UsersManager : IUsersManager
         await _applicationDbContext.SaveChangesAsync();
     }
 
-    public Task<string[]> GetRoles()
+    public async Task<string[]> GetRoles()
     {
         var roles = _roleManager.Roles.Select(role => role.Name);
 
-        return Task.FromResult(roles.ToArray());
+        return await roles.ToArrayAsync();
+    }
+
+    public async Task UpdateUser(string userName, string email)
+    {
+        if (string.IsNullOrWhiteSpace(userName))
+            throw new BadRequestException("User name cannot be empty");
+
+        // If the user is not an admin, they can only update their own data
+        if (string.IsNullOrWhiteSpace(email))
+            throw new BadRequestException("Email cannot be empty");
+
+        if (!await _authManager.IsUserAdmin())
+        {
+            // Check if the user is trying to update their own data
+            var currentUser = await _authManager.GetCurrentUser();
+            if (currentUser == null || currentUser.UserName != userName)
+                throw new UnauthorizedException("Only admins can update users");
+        }
+
+        var user = await _userManager.FindByNameAsync(userName);
+
+        if (user == null)
+            throw new BadRequestException("User does not exist");
+
+        if (!string.IsNullOrWhiteSpace(email))
+            user.Email = email;
+
+        _applicationDbContext.Entry(user).State = EntityState.Modified;
+        await _applicationDbContext.SaveChangesAsync();
+
     }
 
     public async Task<OrganizationDto[]> GetUserOrganizations(string userName)
@@ -566,9 +649,184 @@ public class UsersManager : IUsersManager
         return users;
     }
 
+    public async Task<IEnumerable<UserDetailDto>> GetAllDetailed()
+    {
+        if (!await _authManager.IsUserAdmin())
+            throw new UnauthorizedException("User is not admin");
+
+        var userOrgQuery = from orgusr in _registryContext.OrganizationsUsers
+            group orgusr by orgusr.UserId
+            into g
+            select new
+            {
+                UserId = g.Key,
+                OrgIds = g.Select(item => item.OrganizationSlug).ToArray(),
+                OrgCount = g.Count()
+            };
+
+        var userOrgQuery2 = from org in _registryContext.Organizations
+            where org.OwnerId != null
+            group org by org.OwnerId
+            into g
+            select new
+            {
+                UserId = g.Key,
+                OrgIds = g.Select(item => item.Slug).ToArray(),
+                OrgCount = g.Count()
+            };
+
+        var union = userOrgQuery.ToArray().Union(userOrgQuery2.ToArray());
+
+        var merge = from m in union
+            group m by m.UserId
+            into g
+            select new
+            {
+                UserId = g.Key,
+                OrgIds = g.SelectMany(item => item.OrgIds).ToArray(),
+                OrgCount = g.Sum(item => item.OrgCount)
+            };
+
+        var userOrg = merge.ToDictionary(item => item.UserId,
+            item => new { OrgIds = item.OrgIds, OrgCount = item.OrgCount });
+
+        // Dataset count per organization
+        var datasetQuery = from ds in _registryContext.Datasets
+            group ds by ds.Organization.Slug
+            into g
+            select new
+            {
+                OrgSlug = g.Key,
+                DatasetCount = g.Count()
+            };
+
+        var datasetCounts = datasetQuery.ToDictionary(item => item.OrgSlug, item => item.DatasetCount);
+
+        var query = (from user in _applicationDbContext.Users
+            join userRole in _applicationDbContext.UserRoles on user.Id equals userRole.UserId into userRoles
+            from userRole in userRoles.DefaultIfEmpty()
+            join role in _applicationDbContext.Roles on userRole.RoleId equals role.Id into roles
+            from role in roles.DefaultIfEmpty()
+            select new
+            {
+                UserId = user.Id,
+                user.UserName,
+                user.Email,
+                RoleName = role.Name
+            }).ToArray();
+
+        var users = new List<UserDetailDto>();
+
+        foreach (var userGroup in query.GroupBy(item => item.UserId))
+        {
+            var first = userGroup.First();
+            var orgInfo = userOrg.SafeGetValue(first.UserId);
+            var storageInfo = await GetUserStorageInfo(first.UserName);
+
+            // Calculate total datasets for this user across all their organizations
+            var totalDatasets = 0;
+            if (orgInfo?.OrgIds != null)
+            {
+                totalDatasets = orgInfo.OrgIds.Sum(orgSlug => datasetCounts.SafeGetValue(orgSlug));
+            }
+
+            users.Add(new UserDetailDto
+            {
+                UserName = first.UserName,
+                Email = first.Email,
+                Roles = userGroup.Select(item => item.RoleName).Where(r => !string.IsNullOrEmpty(r)).ToArray(),
+                Organizations = orgInfo?.OrgIds ?? [],
+                StorageQuota = storageInfo.Total,
+                StorageUsed = storageInfo.Used,
+                OrganizationCount = orgInfo?.OrgCount ?? 0,
+                DatasetCount = totalDatasets,
+                CreatedDate = DateTime.UtcNow // Placeholder since User doesn't have Created field
+            });
+        }
+
+        return users;
+    }
+
+    public async Task CreateRole(string roleName)
+    {
+        if (!await _authManager.IsUserAdmin())
+            throw new UnauthorizedException("User is not admin");
+
+        if (string.IsNullOrWhiteSpace(roleName))
+            throw new ArgumentException("Role name cannot be empty");
+
+        var roleExists = await _roleManager.RoleExistsAsync(roleName);
+        if (roleExists)
+            throw new ArgumentException($"Role '{roleName}' already exists");
+
+        var result = await _roleManager.CreateAsync(new IdentityRole(roleName));
+        if (!result.Succeeded)
+            throw new InvalidOperationException(
+                $"Failed to create role: {string.Join(", ", result.Errors.Select(e => e.Description))}");
+    }
+
+    public async Task DeleteRole(string roleName)
+    {
+        if (!await _authManager.IsUserAdmin())
+            throw new UnauthorizedException("User is not admin");
+
+        if (string.IsNullOrWhiteSpace(roleName))
+            throw new ArgumentException("Role name cannot be empty");
+
+        // Do not allow deletion of the admin role
+        if (roleName.Equals(ApplicationDbContext.AdminRoleName, StringComparison.OrdinalIgnoreCase))
+            throw new ArgumentException("Cannot delete the admin role");
+
+        var role = await _roleManager.FindByNameAsync(roleName);
+        if (role == null)
+            throw new ArgumentException($"Role '{roleName}' does not exist");
+
+        var result = await _roleManager.DeleteAsync(role);
+        if (!result.Succeeded)
+            throw new InvalidOperationException(
+                $"Failed to delete role: {string.Join(", ", result.Errors.Select(e => e.Description))}");
+    }
+
+    public async Task UpdateUserRoles(string userName, string[] roles)
+    {
+        if (!await _authManager.IsUserAdmin())
+            throw new UnauthorizedException("User is not admin");
+
+        var user = await _userManager.FindByNameAsync(userName);
+        if (user == null)
+            throw new ArgumentException($"User '{userName}' not found");
+
+        // Do not allow removing the admin role from the admin user
+        if (userName.Equals("admin", StringComparison.OrdinalIgnoreCase))
+        {
+            if (!roles.Contains(ApplicationDbContext.AdminRoleName, StringComparer.OrdinalIgnoreCase))
+                throw new ArgumentException("Cannot remove admin role from admin user");
+        }
+
+        var currentRoles = await _userManager.GetRolesAsync(user);
+
+        // Remove all current roles
+        if (currentRoles.Any())
+        {
+            var removeResult = await _userManager.RemoveFromRolesAsync(user, currentRoles);
+            if (!removeResult.Succeeded)
+                throw new InvalidOperationException(
+                    $"Failed to remove current roles: {string.Join(", ", removeResult.Errors.Select(e => e.Description))}");
+        }
+
+        // Add new roles
+        if (roles?.Length > 0)
+        {
+            var addResult = await _userManager.AddToRolesAsync(user, roles);
+            if (!addResult.Succeeded)
+                throw new InvalidOperationException(
+                    $"Failed to add new roles: {string.Join(", ", addResult.Errors.Select(e => e.Description))}");
+        }
+    }
+
     private async Task<JwtDescriptor> GenerateJwtToken(User user)
     {
-        // generate token
+        // Generate token
         var tokenHandler = new JwtSecurityTokenHandler();
         var key = Encoding.ASCII.GetBytes(_appSettings.Secret);
 

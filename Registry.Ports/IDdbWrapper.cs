@@ -85,4 +85,7 @@ public interface IDdbWrapper
         string stacCatalogRoot);
 
     void RegisterProcess(bool verbose = false);
+
+    string TileMimeType { get; }
+    string ThumbnailMimeType { get; }
 }

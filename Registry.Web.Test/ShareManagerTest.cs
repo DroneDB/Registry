@@ -4,6 +4,7 @@ using System.Dynamic;
 using System.IO;
 using System.Linq;
 using System.Text;
+using System.Threading;
 using System.Threading.Tasks;
 using FluentAssertions;
 using Hangfire;
@@ -177,7 +178,7 @@ class ShareManagerTest : TestBase
         };
 
         var ddbMock = new Mock<IDDB>();
-        ddbMock.Setup(x => x.GetInfoAsync(default)).Returns(Task.FromResult(new Entry
+        ddbMock.Setup(x => x.GetInfoAsync(CancellationToken.None)).Returns(Task.FromResult(new Entry
         {
             Properties = attributes
         }));
@@ -198,7 +199,7 @@ class ShareManagerTest : TestBase
 
         var objectManager = new ObjectsManager(_objectManagerLogger, context, 
             _appSettingsMock.Object, ddbFactory, webUtils, _authManagerMock.Object, _cacheManagerMock.Object,
-            _fileSystem, _backgroundJobsProcessor);
+            _fileSystem, _backgroundJobsProcessor, DdbWrapper);
 
         var datasetManager = new DatasetsManager(context, webUtils, _datasetsManagerLogger, objectManager,
             _stacManagerMock.Object, _ddbFactoryMock.Object, _authManagerMock.Object);
@@ -305,7 +306,7 @@ class ShareManagerTest : TestBase
 
         var objectManager = new ObjectsManager(_objectManagerLogger, context, 
             _appSettingsMock.Object, ddbFactory, webUtils, _authManagerMock.Object, _cacheManagerMock.Object,
-            _fileSystem, _backgroundJobsProcessor);
+            _fileSystem, _backgroundJobsProcessor, DdbWrapper);
 
         var datasetManager = new DatasetsManager(context, webUtils, _datasetsManagerLogger, objectManager,
             _stacManagerMock.Object, _ddbFactoryMock.Object, _authManagerMock.Object);
@@ -422,7 +423,7 @@ class ShareManagerTest : TestBase
 
         var objectManager = new ObjectsManager(_objectManagerLogger, context, 
             _appSettingsMock.Object, ddbFactory, webUtils, _authManagerMock.Object, _cacheManagerMock.Object,
-            _fileSystem, _backgroundJobsProcessor);
+            _fileSystem, _backgroundJobsProcessor, DdbWrapper);
 
         var datasetManager = new DatasetsManager(context, webUtils, _datasetsManagerLogger, objectManager,
             _stacManagerMock.Object, _ddbFactoryMock.Object, _authManagerMock.Object);
@@ -566,7 +567,7 @@ class ShareManagerTest : TestBase
 
         var objectManager = new ObjectsManager(_objectManagerLogger, context, 
             _appSettingsMock.Object, ddbFactory, webUtils, _authManagerMock.Object, _cacheManagerMock.Object,
-            _fileSystem, _backgroundJobsProcessor);
+            _fileSystem, _backgroundJobsProcessor, DdbWrapper);
 
         var datasetManager = new DatasetsManager(context, webUtils, _datasetsManagerLogger, objectManager,
             _stacManagerMock.Object, _ddbFactoryMock.Object, _authManagerMock.Object);
@@ -719,7 +720,7 @@ class ShareManagerTest : TestBase
 
         var objectManager = new ObjectsManager(_objectManagerLogger, context, 
             _appSettingsMock.Object, ddbFactory, webUtils, _authManagerMock.Object, _cacheManagerMock.Object,
-            _fileSystem, _backgroundJobsProcessor);
+            _fileSystem, _backgroundJobsProcessor, DdbWrapper);
 
         var datasetManager = new DatasetsManager(context, webUtils, _datasetsManagerLogger, objectManager,
             _stacManagerMock.Object, _ddbFactoryMock.Object, _authManagerMock.Object);

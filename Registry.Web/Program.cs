@@ -37,10 +37,8 @@ namespace Registry.Web;
 
 public class Program
 {
-    public const int DefaultPort = 5000;
-    public const string DefaultHost = "localhost";
-
-    public static readonly Version MinDdbVersion = new(1, 1, 5);
+    private const int DefaultPort = 5000;
+    private const string DefaultHost = "localhost";
 
     public static void Main(string[] args)
     {
@@ -244,8 +242,7 @@ public class Program
                                     return;
                                 }
 
-                                // TODO: This is hardcoded because we know it will be a jpeg but in the future we should get the mime type from the file
-                                context.Response.ContentType = "image/jpeg";
+                                context.Response.ContentType = nativeDdbWrapper.ThumbnailMimeType;
                                 await context.Response.Body.WriteAsync(thumbnail);
                             }
                             catch (Exception e)
@@ -720,6 +717,26 @@ public class Program
         }
 
         return true;
+    }
+    
+    /// <summary>
+    /// The minimum required version of DroneDB (taken from assembly metadata)
+    /// </summary>
+    private static readonly Version MinDdbVersion = GetMinDdbVersion();
+
+    private static Version GetMinDdbVersion()
+    {
+        var assembly = typeof(Program).Assembly;
+        var ddbVersionAttribute = assembly.GetCustomAttributes<AssemblyMetadataAttribute>()
+            .FirstOrDefault(attr => attr.Key == "DdbVersion");
+
+        if (ddbVersionAttribute?.Value != null && Version.TryParse(ddbVersionAttribute.Value, out var version))
+        {
+            return version;
+        }
+
+        // Fallback to default version if not found
+        return new Version(1, 2, 0);
     }
 
     #region EF Tool

@@ -1,22 +1,15 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Diagnostics;
-using System.IdentityModel.Tokens.Jwt;
-using System.Linq;
-using System.Security.Claims;
-using System.Text;
 using System.Threading.Tasks;
 using Registry.Web.Models;
+using Registry.Web.Models.Configuration;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
-using Microsoft.AspNetCore.Identity;
-using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
-using Microsoft.IdentityModel.Tokens;
 using Registry.Web.Models.DTO;
-using Registry.Web.Services.Adapters;
 using Registry.Web.Services.Ports;
 using Registry.Web.Utilities;
 
@@ -88,7 +81,7 @@ public class UsersController : ControllerBaseEx
 
     [HttpPost]
     [ProducesResponseType(StatusCodes.Status200OK)]
-    public async Task<IActionResult> CreateUser([FromForm] CreateUserRequest model)
+    public async Task<IActionResult> CreateUser([FromBody] CreateUserRequest model)
     {
         try
         {
@@ -97,9 +90,9 @@ public class UsersController : ControllerBaseEx
             if (model == null)
                 return BadRequest(new ErrorResponse("No user data provided"));
 
-            await _usersManager.CreateUser(model.UserName, model.Email, model.Password, model.Roles);
+            var res = await _usersManager.CreateUser(model.UserName, model.Email, model.Password, model.Roles);
 
-            return Ok();
+            return Ok(res);
         }
         catch (Exception ex)
         {
@@ -123,7 +116,6 @@ public class UsersController : ControllerBaseEx
             var auth = await _usersManager.Authenticate(res.UserName, res.Password);
 
             return Ok(auth);
-
         }
         catch (Exception ex)
         {
@@ -133,23 +125,23 @@ public class UsersController : ControllerBaseEx
         }
     }
 
-    [HttpPut]
-    public async Task<IActionResult> ChangePassword([FromForm] ChangeUserPasswordRequestDto model)
+    [HttpPut("{userName}/changepwd")]
+    public async Task<IActionResult> ChangePassword([FromRoute] string userName, [FromBody] ChangeUserPasswordRequestDto model)
     {
         try
         {
-            _logger.LogDebug("Users controller ChangePassword('{UserName}')", model?.UserName);
+            _logger.LogDebug("Users controller ChangePassword('{UserName}')", userName);
 
             if (model == null)
                 return BadRequest(new ErrorResponse("No user data provided"));
 
-            await _usersManager.ChangePassword(model.UserName, model.CurrentPassword, model.NewPassword);
+            await _usersManager.ChangePassword(userName, model.CurrentPassword, model.NewPassword);
 
             return Ok();
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Exception in Users controller ChangePassword('{UserName}')", model?.UserName);
+            _logger.LogError(ex, "Exception in Users controller ChangePassword('{UserName}')", userName);
 
             return ExceptionResult(ex);
         }
@@ -157,7 +149,7 @@ public class UsersController : ControllerBaseEx
 
     [HttpDelete("{userName}")]
     [ProducesResponseType(StatusCodes.Status200OK)]
-    public async Task<IActionResult> DeleteUserRoute([FromForm] string userName)
+    public async Task<IActionResult> DeleteUserRoute([FromRoute] string userName)
     {
         try
         {
@@ -194,7 +186,8 @@ public class UsersController : ControllerBaseEx
     }
 
     [HttpDelete]
-    public async Task<IActionResult> DeleteUser([FromRoute] string userName)
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    public async Task<IActionResult> DeleteUser([FromForm] string userName)
     {
         try
         {
@@ -226,6 +219,25 @@ public class UsersController : ControllerBaseEx
         catch (Exception ex)
         {
             _logger.LogError(ex, "Exception in Users controller GetAll()");
+            return ExceptionResult(ex);
+        }
+    }
+
+    [HttpGet("detailed")]
+    [ProducesResponseType(typeof(IEnumerable<UserDetailDto>), 200)]
+    public async Task<IActionResult> GetAllDetailed()
+    {
+        try
+        {
+            _logger.LogDebug("Users controller GetAllDetailed()");
+
+            var res = await _usersManager.GetAllDetailed();
+
+            return Ok(res);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Exception in Users controller GetAllDetailed()");
             return ExceptionResult(ex);
         }
     }
@@ -348,8 +360,7 @@ public class UsersController : ControllerBaseEx
 
     [HttpPut("{userName}/orgs")]
     [ProducesResponseType(200)]
-
-    public async Task<IActionResult> SetUserOrganizations([FromRoute] string userName, string[] orgSlugs)
+    public async Task<IActionResult> SetUserOrganizations([FromRoute] string userName, [FromForm] string[] orgSlugs)
     {
         try
         {
@@ -367,4 +378,89 @@ public class UsersController : ControllerBaseEx
     }
 
     #endregion
+
+    [AllowAnonymous]
+    [HttpGet("management-enabled")]
+    [ProducesResponseType(typeof(bool), StatusCodes.Status200OK)]
+    public IActionResult IsUserManagementEnabled()
+    {
+        try
+        {
+            _logger.LogDebug("Users controller IsUserManagementEnabled()");
+
+            // User management is disabled if an external authentication URL is configured
+            var appSettings = HttpContext.RequestServices.GetRequiredService<IOptions<AppSettings>>().Value;
+            var isEnabled = string.IsNullOrWhiteSpace(appSettings?.ExternalAuthUrl);
+
+            return Ok(isEnabled);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Exception in Users controller IsUserManagementEnabled()");
+            return ExceptionResult(ex);
+        }
+    }
+
+    [HttpPost("roles")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+
+    public async Task<IActionResult> CreateRole([FromBody] CreateRoleRequestDto request)
+    {
+        try
+        {
+            _logger.LogDebug("Users controller CreateRole('{RoleName}')", request.RoleName);
+
+            if (string.IsNullOrWhiteSpace(request.RoleName))
+                return BadRequest(new ErrorResponse("Role name is required"));
+
+            await _usersManager.CreateRole(request.RoleName);
+
+            return Ok();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Exception in Users controller CreateRole('{RoleName}')", request.RoleName);
+            return ExceptionResult(ex);
+        }
+    }
+
+    [HttpDelete("roles/{roleName}")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    public async Task<IActionResult> DeleteRole([FromRoute] string roleName)
+    {
+        try
+        {
+            _logger.LogDebug("Users controller DeleteRole('{RoleName}')", roleName);
+
+            await _usersManager.DeleteRole(roleName);
+
+            return NoContent();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Exception in Users controller DeleteRole('{RoleName}')", roleName);
+            return ExceptionResult(ex);
+        }
+    }
+
+    [HttpPut("{userName}")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    public async Task<IActionResult> UpdateUser([FromRoute] string userName, [FromBody] EditUserRequestDto request)
+    {
+        try
+        {
+            _logger.LogDebug("Users controller UpdateUser('{UserName}')", userName);
+
+            await _usersManager.UpdateUser(userName, request.Email);
+            await _usersManager.UpdateUserRoles(userName, request.Roles);
+
+            return Ok();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Exception in Users controller UpdateUser('{UserName}')", userName);
+            return ExceptionResult(ex);
+        }
+    }
 }
+

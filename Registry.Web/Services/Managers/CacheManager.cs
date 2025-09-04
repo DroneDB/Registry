@@ -1,13 +1,13 @@
 ﻿using System;
 using System.IO;
 using System.Linq;
-using System.Runtime.Caching;
 using System.Threading.Tasks;
-using Microsoft.Extensions.Options;
+using Microsoft.Extensions.Caching.Distributed;
+using Microsoft.Extensions.Logging;
 using Registry.Common;
 using Registry.Ports;
-using Registry.Web.Models.Configuration;
-using Registry.Web.Services.Ports;
+
+#nullable enable
 
 namespace Registry.Web.Services.Managers;
 
@@ -15,115 +15,148 @@ public class CacheManager : ICacheManager
 {
     private class Carrier
     {
-        public Func<object[], byte[]> GetData { get; set; }
+        public required Func<object[], Task<byte[]>> GetDataAsync { get; set; }
         public TimeSpan Expiration { get; set; }
     }
 
-    private readonly ObjectCache _cache;
+    private readonly IDistributedCache _cache;
+    private readonly ILogger<CacheManager> _logger;
 
     private readonly TimeSpan _defaultCacheExpiration = new(0, 30, 0);
 
     private readonly DictionaryEx<string, Carrier> _providers = new();
 
-    public CacheManager(ObjectCache cache)
+    public CacheManager(IDistributedCache cache, ILogger<CacheManager> logger)
     {
-        _cache = cache;
+        _cache = cache ?? throw new ArgumentNullException(nameof(cache));
+        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
-    public void Register(string seed, Func<object[], byte[]> getData, TimeSpan? expiration = null)
+    public void Register(string seed, Func<object[], Task<byte[]>> getData, TimeSpan? expiration = null)
     {
+        ArgumentNullException.ThrowIfNull(seed);
+        ArgumentNullException.ThrowIfNull(getData);
+
         _providers.Add(seed, new Carrier
         {
             Expiration = expiration ?? _defaultCacheExpiration,
-            GetData = getData
+            GetDataAsync = getData
         });
+
+        _logger.LogDebug("Registered cache provider for seed: {Seed} with expiration: {Expiration}",
+            seed, expiration ?? _defaultCacheExpiration);
     }
 
     public void Unregister(string seed)
     {
+        ArgumentNullException.ThrowIfNull(seed);
         _providers.Remove(seed);
+        _logger.LogDebug("Unregistered cache provider for seed: {Seed}", seed);
     }
 
-    public static string MakeKey(string seed, string category, object[] parameters)
+    private static string MakeKey(string seed, string category, object[]? parameters)
     {
         return parameters == null
-            ? $"{seed}-{category}"
-            : $"{seed}-{category}:{string.Join(",", parameters.Select(p => p.ToString()))}";
+            ? $":{seed}:{category}"
+            : $":{seed}:{category}:{string.Join("-", parameters.Where(p => p is not Delegate).Select(p => p == null ? "null" : p.ToString()))}";
     }
 
-    public void Remove(string seed, string category, params object[] parameters)
+    public async Task RemoveAsync(string seed, string category, params object[] parameters)
     {
         ArgumentNullException.ThrowIfNull(seed);
         ArgumentNullException.ThrowIfNull(category);
 
-        _cache.Remove(MakeKey(seed, category, parameters));
+        var key = MakeKey(seed, category, parameters);
+
+        try
+        {
+            await _cache.RemoveAsync(key);
+            _logger.LogDebug("Removed cache entry with key: {Key}", key);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to remove cache entry with key: {Key}", key);
+            throw;
+        }
     }
 
     public bool IsRegistered(string seed)
     {
+        ArgumentNullException.ThrowIfNull(seed);
         return _providers.ContainsKey(seed);
     }
 
-    public bool IsCached(string seed, string category, params object[] parameters)
+    public async Task<byte[]> GetAsync(string seed, string category, params object[] parameters)
     {
         ArgumentNullException.ThrowIfNull(seed);
         ArgumentNullException.ThrowIfNull(category);
 
-        return _cache.Contains(MakeKey(seed, category, parameters));
-    }
-
-    public async Task<string> Get(string seed, string category, params object[] parameters)
-    {
-        ArgumentNullException.ThrowIfNull(seed);
-
         if (!_providers.TryGetValue(seed, out var carrier))
-            throw new ArgumentException("No provider registered for seed: " + seed);
+            throw new ArgumentException($"No provider registered for seed: {seed}");
 
         var key = MakeKey(seed, category, parameters);
-
-        var res = _cache.Get(key);
-
-        if (res != null)
-            return (string)res;
-
-        var data = carrier.GetData(parameters);
-
-        var tmpFile = Path.GetTempFileName();
 
         try
         {
-            await File.WriteAllBytesAsync(tmpFile, data);
-            _cache.Set(key, tmpFile, new CacheItemPolicy { SlidingExpiration = carrier.Expiration });
-        }
-        finally
-        {
-            CommonUtils.SafeDelete(tmpFile);
-        }
+            // Try to get from cache first
+            var cachedData = await _cache.GetAsync(key);
+            if (cachedData != null)
+            {
+                _logger.LogDebug("Cache hit for key: {Key}, size: {Size} bytes", key, cachedData.Length);
+                return cachedData;
+            }
 
-        return (string)_cache.Get(key);
+            _logger.LogDebug("Cache miss for key: {Key}, generating data", key);
+
+            // Cache miss - generate data asynchronously
+            var data = await carrier.GetDataAsync(parameters);
+
+            // Store in cache with expiration
+            var options = new DistributedCacheEntryOptions
+            {
+                SlidingExpiration = carrier.Expiration
+            };
+
+            await _cache.SetAsync(key, data, options);
+
+            _logger.LogDebug("Data generated and cached for key: {Key}, size: {Size} bytes", key, data.Length);
+            return data;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to get/generate data for key: {Key}", key);
+            throw;
+        }
     }
 
-    public void Set(string seed, string category, string data, params object[] parameters)
+    public async Task SetAsync(string seed, string category, byte[] data, params object[] parameters)
     {
         ArgumentNullException.ThrowIfNull(seed);
         ArgumentNullException.ThrowIfNull(category);
+        ArgumentNullException.ThrowIfNull(data);
+
+        if (!_providers.TryGetValue(seed, out var carrier))
+        {
+            _logger.LogWarning("Attempted to set cache data for unregistered seed: {Seed}", seed);
+            return;
+        }
 
         var key = MakeKey(seed, category, parameters);
-        var policy = new CacheItemPolicy { SlidingExpiration = _providers[seed].Expiration };
 
-        _cache.Set(key, data, policy);
-    }
+        try
+        {
+            var options = new DistributedCacheEntryOptions
+            {
+                SlidingExpiration = carrier.Expiration
+            };
 
-    public void Clear(string seed, string category = null)
-    {
-        ArgumentNullException.ThrowIfNull(seed);
-        var k = category != null ? MakeKey(seed, category, null) : seed;
-        
-        var keys = _cache.Where(o => o.Key != null && o.Key.StartsWith(k))
-            .Select(o => o.Key).ToArray();
-
-        foreach (var key in keys)
-            _cache.Remove(key);
-        
+            await _cache.SetAsync(key, data, options);
+            _logger.LogDebug("Set cache data for key: {Key}, size: {Size} bytes", key, data.Length);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to set cache data for key: {Key}", key);
+            throw;
+        }
     }
 }
