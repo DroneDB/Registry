@@ -54,11 +54,11 @@ public class CacheManager : ICacheManager
         _logger.LogDebug("Unregistered cache provider for seed: {Seed}", seed);
     }
 
-    public static string MakeKey(string seed, string category, object[]? parameters)
+    private static string MakeKey(string seed, string category, object[]? parameters)
     {
         return parameters == null
             ? $":{seed}:{category}"
-            : $":{seed}:{category}:{string.Join("-", parameters.Where(p => p is not Delegate).Select(p => p.ToString()))}";
+            : $":{seed}:{category}:{string.Join("-", parameters.Where(p => p is not Delegate).Select(p => p == null ? "null" : p.ToString()))}";
     }
 
     public async Task RemoveAsync(string seed, string category, params object[] parameters)
