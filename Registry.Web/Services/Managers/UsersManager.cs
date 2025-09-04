@@ -114,7 +114,7 @@ public class UsersManager : IUsersManager
 
         await SyncRoles(user);
 
-        // authentication successful so generate jwt token
+        // Authentication successful so generate jwt token
         var tokenDescriptor = await GenerateJwtToken(user);
 
         return new AuthenticateResponse(user, tokenDescriptor.Token, tokenDescriptor.ExpiresOn);
@@ -231,7 +231,7 @@ public class UsersManager : IUsersManager
 
     private async Task ValidateRoles(string[] roles)
     {
-        if (roles == null || !roles.Any())
+        if (roles == null || roles.Length == 0)
             return;
 
         foreach (var role in roles)
@@ -735,7 +735,7 @@ public class UsersManager : IUsersManager
                 UserName = first.UserName,
                 Email = first.Email,
                 Roles = userGroup.Select(item => item.RoleName).Where(r => !string.IsNullOrEmpty(r)).ToArray(),
-                Organizations = orgInfo?.OrgIds ?? new string[0],
+                Organizations = orgInfo?.OrgIds ?? [],
                 StorageQuota = storageInfo.Total,
                 StorageUsed = storageInfo.Used,
                 OrganizationCount = orgInfo?.OrgCount ?? 0,
@@ -773,7 +773,7 @@ public class UsersManager : IUsersManager
         if (string.IsNullOrWhiteSpace(roleName))
             throw new ArgumentException("Role name cannot be empty");
 
-        // Non permettere l'eliminazione del ruolo admin
+        // Do not allow deletion of the admin role
         if (roleName.Equals(ApplicationDbContext.AdminRoleName, StringComparison.OrdinalIgnoreCase))
             throw new ArgumentException("Cannot delete the admin role");
 
@@ -796,7 +796,7 @@ public class UsersManager : IUsersManager
         if (user == null)
             throw new ArgumentException($"User '{userName}' not found");
 
-        // Non permettere la rimozione del ruolo admin dall'utente admin
+        // Do not allow removing the admin role from the admin user
         if (userName.Equals("admin", StringComparison.OrdinalIgnoreCase))
         {
             if (!roles.Contains(ApplicationDbContext.AdminRoleName, StringComparer.OrdinalIgnoreCase))
@@ -814,7 +814,7 @@ public class UsersManager : IUsersManager
                     $"Failed to remove current roles: {string.Join(", ", removeResult.Errors.Select(e => e.Description))}");
         }
 
-        // Aggiungi i nuovi ruoli
+        // Add new roles
         if (roles?.Length > 0)
         {
             var addResult = await _userManager.AddToRolesAsync(user, roles);
@@ -826,7 +826,7 @@ public class UsersManager : IUsersManager
 
     private async Task<JwtDescriptor> GenerateJwtToken(User user)
     {
-        // generate token
+        // Generate token
         var tokenHandler = new JwtSecurityTokenHandler();
         var key = Encoding.ASCII.GetBytes(_appSettings.Secret);
 
