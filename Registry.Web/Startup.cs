@@ -407,6 +407,7 @@ public class Startup
         });
 
         SetupDatabase(app).Wait();
+        ValidateCache(app).Wait();
         SetupCache(app);
 
         SetupCleanupJobs(app);
@@ -501,18 +502,37 @@ public class Startup
         Console.WriteLine(" ?> Press Ctrl+C to quit");
     }
 
+    private async Task ValidateCache(IApplicationBuilder app)
+    {
+        var appSettingsSection = Configuration.GetSection("AppSettings");
+        var appSettings = appSettingsSection.Get<AppSettings>();
+
+        if (appSettings == null)
+            throw new InvalidOperationException("AppSettings not found");
+
+        try
+        {
+            await StartupExtenders.ValidateCacheConnection(appSettings);
+        }
+        catch (InvalidOperationException ex)
+        {
+            Console.WriteLine($" ?> ERROR: Cache validation failed - {ex.Message}");
+            throw new InvalidOperationException($"Cache validation failed: {ex.Message}", ex);
+        }
+    }
+
     private void SetupCache(IApplicationBuilder app)
     {
         var appSettingsSection = Configuration.GetSection("AppSettings");
         var appSettings = appSettingsSection.Get<AppSettings>();
 
         var cacheManager = app.ApplicationServices.GetService<ICacheManager>();
-        var thumbnailGenerator = app.ApplicationServices.GetService<IThumbnailGenerator>();
 
         Debug.Assert(cacheManager != null, nameof(cacheManager) + " != null");
 
         cacheManager.Register(MagicStrings.TileCacheSeed, async parameters =>
         {
+            // These parameters are used to make the cache key unique
             var fileHash = (string)parameters[0];
             var tx = (int)parameters[1];
             var ty = (int)parameters[2];
@@ -525,6 +545,7 @@ public class Startup
 
         cacheManager.Register(MagicStrings.ThumbnailCacheSeed, async parameters =>
         {
+            // These parameters are used to make the cache key unique
             var fileHash = (string)parameters[0];
             var size = (int)parameters[1];
             var generateFunc = (Func<Task<byte[]>>)parameters[2];
