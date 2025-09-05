@@ -16,6 +16,7 @@ using Registry.Web.Data.Models;
 using Registry.Web.Models;
 using Registry.Web.Models.DTO;
 using Registry.Web.Services.Adapters;
+using SkiaSharp;
 using Entry = Registry.Ports.DroneDB.Entry;
 
 namespace Registry.Web.Utilities;
@@ -279,6 +280,30 @@ public static class Extenders
     public static bool IsPublicOrUnlisted(this SafeMetaManager meta)
     {
         return meta.Visibility is Visibility.Public or Visibility.Unlisted;
+    }
+
+    /// <summary>
+    /// Converts an image byte array to WebP format with the specified quality.
+    /// </summary>
+    /// <param name="bytes">The source image byte array.</param>
+    /// <param name="quality">The quality of the WebP image (0-100). Default is 70.</param>
+    /// <returns>A byte array containing the WebP image.</returns>
+    /// <exception cref="ArgumentException"></exception>
+    /// <exception cref="ArgumentOutOfRangeException"></exception>
+    /// <exception cref="InvalidOperationException"></exception>
+    public static byte[] ToWebp(this byte[] bytes, int quality = 70)
+    {
+        if (bytes == null || bytes.Length == 0)
+            throw new ArgumentException("Source image is null or empty.", nameof(bytes));
+
+        if (quality is < 0 or > 100)
+            throw new ArgumentOutOfRangeException(nameof(quality), "Quality must be between 0 and 100.");
+
+        using var bitmap = SKBitmap.Decode(bytes) ?? throw new InvalidOperationException("Source image could not be decoded.");
+        using var image = SKImage.FromBitmap(bitmap) ?? throw new InvalidOperationException("Failed to create image from bitmap.");
+        using var data = image.Encode(SKEncodedImageFormat.Webp, quality) ?? throw new InvalidOperationException("Failed to encode image to WebP format.");
+
+        return data.ToArray();
     }
 
 }

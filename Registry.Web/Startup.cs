@@ -540,7 +540,10 @@ public class Startup
             var retina = (bool)parameters[4];
             var generateFunc = (Func<Task<byte[]>>)parameters[5];
 
-            return await generateFunc();
+            var data = await generateFunc();
+
+            return data.ToWebp(90);
+
         }, appSettings.TilesCacheExpiration);
 
         cacheManager.Register(MagicStrings.ThumbnailCacheSeed, async parameters =>

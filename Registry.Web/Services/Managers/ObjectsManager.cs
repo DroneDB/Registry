@@ -501,14 +501,12 @@ public class ObjectsManager : IObjectsManager
             var tileData =
                 await _cacheManager.GetAsync(MagicStrings.TileCacheSeed, $"{orgSlug}/{dsSlug}", entry.Hash, tx, ty, tz, retina,
                     new Func<Task<byte[]>>(() => ddb.GenerateTileAsync(localPath, tz, tx, ty, retina, entry.Hash)));
-
-            var extension = MimeUtility.GetExtensions(_ddbWrapper.TileMimeType)?.FirstOrDefault() ?? "png";
             
             return new StorageDataDto
             {
                 Data = tileData,
-                ContentType = _ddbWrapper.TileMimeType,
-                Name = $"{ty}.{extension}"
+                ContentType = "image/webp",
+                Name = $"{ty}.webp"
             };
         }
         catch (InvalidOperationException ex)
@@ -521,7 +519,6 @@ public class ObjectsManager : IObjectsManager
             throw;
         }
     }
-
 
     #region Downloads
 
