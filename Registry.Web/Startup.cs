@@ -527,7 +527,6 @@ public class Startup
         var appSettings = appSettingsSection.Get<AppSettings>();
 
         var cacheManager = app.ApplicationServices.GetService<ICacheManager>();
-        var ddbWrapper = app.ApplicationServices.GetService<IDdbWrapper>();
 
         Debug.Assert(cacheManager != null, nameof(cacheManager) + " != null");
 
