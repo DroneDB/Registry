@@ -527,6 +527,7 @@ public class Startup
         var appSettings = appSettingsSection.Get<AppSettings>();
 
         var cacheManager = app.ApplicationServices.GetService<ICacheManager>();
+        var ddbWrapper = app.ApplicationServices.GetService<IDdbWrapper>();
 
         Debug.Assert(cacheManager != null, nameof(cacheManager) + " != null");
 
@@ -540,7 +541,10 @@ public class Startup
             var retina = (bool)parameters[4];
             var generateFunc = (Func<Task<byte[]>>)parameters[5];
 
-            return await generateFunc();
+            var data = await generateFunc();
+
+            return data.ToWebp(90);
+
         }, appSettings.TilesCacheExpiration);
 
         cacheManager.Register(MagicStrings.ThumbnailCacheSeed, async parameters =>
