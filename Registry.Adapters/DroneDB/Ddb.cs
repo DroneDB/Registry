@@ -394,132 +394,130 @@ public class DDB : IDDB
     public async Task<JToken> GetStacAsync(string id, string stacCollectionRoot, string stacCatalogRoot, string path = null,
         CancellationToken cancellationToken = default)
     {
-        return await Task<JToken>.Factory.StartNew(() => GetStac(id, stacCollectionRoot, stacCatalogRoot, path), cancellationToken,
-            TaskCreationOptions.LongRunning, TaskScheduler.Default);
+        return await Task.Run(() => GetStac(id, stacCollectionRoot, stacCatalogRoot, path), cancellationToken)
+            .ConfigureAwait(false);
     }
 
     public async Task<IEnumerable<Entry>> SearchAsync(string path, bool recursive = false,
         CancellationToken cancellationToken = default)
     {
-        return await Task<IEnumerable<Entry>>.Factory.StartNew(() => Search(path, recursive), cancellationToken,
-            TaskCreationOptions.LongRunning, TaskScheduler.Default);
+        return await Task.Run(() => Search(path, recursive), cancellationToken)
+            .ConfigureAwait(false);
     }
 
     public async Task AddAsync(string path, byte[] data, CancellationToken cancellationToken = default)
     {
-        await Task.Factory.StartNew(() => Add(path, data), cancellationToken,
-            TaskCreationOptions.LongRunning, TaskScheduler.Default);
+        await Task.Run(() => Add(path, data), cancellationToken)
+            .ConfigureAwait(false);
     }
 
     public async Task AddAsync(string path, Stream data = null, CancellationToken cancellationToken = default)
     {
-        await Task.Factory.StartNew(() => Add(path, data), cancellationToken,
-            TaskCreationOptions.LongRunning, TaskScheduler.Default);
+        await Task.Run(() => Add(path, data), cancellationToken)
+            .ConfigureAwait(false);
     }
 
     public async Task RemoveAsync(string path, CancellationToken cancellationToken = default)
     {
-        await Task.Factory.StartNew(() => Remove(path), cancellationToken,
-            TaskCreationOptions.LongRunning, TaskScheduler.Default);
+        await Task.Run(() => Remove(path), cancellationToken)
+            .ConfigureAwait(false);
     }
 
     public async Task MoveAsync(string source, string dest, CancellationToken cancellationToken = default)
     {
-        await Task.Factory.StartNew(() => Move(source, dest), cancellationToken,
-            TaskCreationOptions.LongRunning, TaskScheduler.Default);
+        await Task.Run(() => Move(source, dest), cancellationToken)
+            .ConfigureAwait(false);
     }
 
     public async Task<Dictionary<string, object>> ChangeAttributesRawAsync(Dictionary<string, object> attributes,
         CancellationToken cancellationToken = default)
     {
-        return await Task<Dictionary<string, object>>.Factory.StartNew(() => ChangeAttributesRaw(attributes),
-            cancellationToken,
-            TaskCreationOptions.LongRunning, TaskScheduler.Default);
+        return await Task.Run(() => ChangeAttributesRaw(attributes), cancellationToken)
+            .ConfigureAwait(false);
     }
 
     public async Task<byte[]> GenerateThumbnailAsync(string imagePath, int size,
         CancellationToken cancellationToken = default)
     {
-        return await Task<byte[]>.Factory.StartNew(() => GenerateThumbnail(imagePath, size), cancellationToken,
-            TaskCreationOptions.LongRunning, TaskScheduler.Default);
+        return await Task.Run(() => GenerateThumbnail(imagePath, size), cancellationToken)
+            .ConfigureAwait(false);
     }
 
     public async Task<byte[]> GenerateTileAsync(string inputPath, int tz, int tx, int ty, bool retina,
         string inputPathHash,
         CancellationToken cancellationToken = default)
     {
-        return await Task<byte[]>.Factory.StartNew(() => GenerateTile(inputPath, tz, tx, ty, retina, inputPathHash),
-            cancellationToken,
-            TaskCreationOptions.LongRunning, TaskScheduler.Default);
+        return await Task.Run(() => GenerateTile(inputPath, tz, tx, ty, retina, inputPathHash), cancellationToken)
+            .ConfigureAwait(false);
     }
 
     public async Task InitAsync(CancellationToken cancellationToken = default)
     {
-        await Task.Factory.StartNew(Init, cancellationToken,
-            TaskCreationOptions.LongRunning, TaskScheduler.Default);
+        await Task.Run(Init, cancellationToken)
+            .ConfigureAwait(false);
     }
 
     public async Task<Dictionary<string, object>> GetAttributesRawAsync(
         CancellationToken cancellationToken = default)
     {
-        return await Task<Dictionary<string, object>>.Factory.StartNew(GetAttributesRaw, cancellationToken,
-            TaskCreationOptions.LongRunning, TaskScheduler.Default);
+        return await Task.Run(GetAttributesRaw, cancellationToken)
+            .ConfigureAwait(false);
     }
 
     public virtual async Task<Entry> GetInfoAsync(CancellationToken cancellationToken = default)
     {
-        return await Task<Entry>.Factory.StartNew(GetInfo, cancellationToken,
-            TaskCreationOptions.LongRunning, TaskScheduler.Default);
+        return await Task.Run(GetInfo, cancellationToken)
+            .ConfigureAwait(false);
     }
 
     public async Task<Entry> GetInfoAsync(string path, CancellationToken cancellationToken = default)
     {
-        return await Task<Entry>.Factory.StartNew(() => GetInfo(path), cancellationToken,
-            TaskCreationOptions.LongRunning, TaskScheduler.Default);
+        return await Task.Run(() => GetInfo(path), cancellationToken)
+            .ConfigureAwait(false);
     }
 
     public async Task<Entry> GetEntryAsync(string path, CancellationToken cancellationToken = default)
     {
-        return await Task<Entry>.Factory.StartNew(() => GetEntry(path), cancellationToken,
-            TaskCreationOptions.LongRunning, TaskScheduler.Default);
+        return await Task.Run(() => GetEntry(path), cancellationToken)
+            .ConfigureAwait(false);
     }
 
     public async Task<bool> EntryExistsAsync(string path, CancellationToken cancellationToken = default)
     {
-        return await Task<bool>.Factory.StartNew(() => EntryExists(path), cancellationToken,
-            TaskCreationOptions.LongRunning, TaskScheduler.Default);
+        return await Task.Run(() => EntryExists(path), cancellationToken)
+            .ConfigureAwait(false);
     }
 
     public async Task BuildAsync(string path, string dest = null, bool force = false,
         CancellationToken cancellationToken = default)
     {
-        await Task.Factory.StartNew(() => Build(path, dest, force), cancellationToken,
-            TaskCreationOptions.LongRunning, TaskScheduler.Default);
+        await Task.Run(() => Build(path, dest, force), cancellationToken)
+            .ConfigureAwait(false);
     }
 
     public async Task BuildAllAsync(string dest = null, bool force = false,
         CancellationToken cancellationToken = default)
     {
-        await Task.Factory.StartNew(() => BuildAll(dest, force), cancellationToken,
-            TaskCreationOptions.LongRunning, TaskScheduler.Default);
+        await Task.Run(() => BuildAll(dest, force), cancellationToken)
+            .ConfigureAwait(false);
     }
 
     public async Task<bool> IsBuildableAsync(string path, CancellationToken cancellationToken = default)
     {
-        return await Task<bool>.Factory.StartNew(() => IsBuildable(path), cancellationToken,
-            TaskCreationOptions.LongRunning, TaskScheduler.Default);
+        return await Task.Run(() => IsBuildable(path), cancellationToken)
+            .ConfigureAwait(false);
     }
 
     public async Task<bool> IsBuildPendingAsync(CancellationToken cancellationToken = default)
     {
-        return await Task<bool>.Factory.StartNew(() => IsBuildPending(), cancellationToken,
-            TaskCreationOptions.LongRunning, TaskScheduler.Default);
+        return await Task.Run(() => IsBuildPending(), cancellationToken)
+            .ConfigureAwait(false);
     }
 
     public async Task<long> GetSizeAsync(CancellationToken cancellationToken = default)
     {
-        return await Task<long>.Factory.StartNew(GetSize, cancellationToken,
-            TaskCreationOptions.LongRunning, TaskScheduler.Default);
+        return await Task.Run(GetSize, cancellationToken)
+            .ConfigureAwait(false);
     }
 
     #endregion
