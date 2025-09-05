@@ -124,7 +124,7 @@ public class WebUtils : IUtils
         {
             var uri = new Uri(_settings.ExternalUrlOverride);
 
-            isHttps = uri.Scheme.ToLowerInvariant() == "https";
+            isHttps = uri.Scheme.Equals("https", StringComparison.InvariantCultureIgnoreCase);
             host = uri.Host;
 
             // Mmmm
