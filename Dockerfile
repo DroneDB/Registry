@@ -37,9 +37,23 @@ ENV DOTNET_GENERATE_ASPNET_CERTIFICATE=false
 ENV TZ=Europe/Rome
 RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone
 
-# Install runtime dependencies in single layer
+# Install runtime dependencies in single layer including SkiaSharp dependencies
 RUN apt-get update \
-    && apt-get install -y --fix-missing --no-install-recommends ca-certificates wget curl \
+    && apt-get install -y --fix-missing --no-install-recommends \
+        ca-certificates \
+        wget \
+        curl \
+        libfontconfig1 \
+        libfreetype6 \
+        libgl1 \
+        libglib2.0-0 \
+        libharfbuzz0b \
+        libice6 \
+        libsm6 \
+        libx11-6 \
+        libxext6 \
+        libxrender1 \
+        zlib1g \
     && curl -sSL https://dot.net/v1/dotnet-install.sh | bash /dev/stdin --channel 9.0 --runtime aspnetcore \
     && LATEST_RELEASE_URL=$(curl -s https://api.github.com/repos/DroneDB/DroneDB/releases/latest | grep "browser_download_url.*deb" | head -n 1 | cut -d '"' -f 4) \
     && echo "Downloading DroneDB from $LATEST_RELEASE_URL" \
@@ -51,6 +65,8 @@ RUN apt-get update \
 # Add dotnet to PATH
 ENV PATH="/root/.dotnet:$PATH"
 ENV DOTNET_ROOT="/root/.dotnet"
+# Ensure SkiaSharp can find native libraries
+ENV LD_LIBRARY_PATH="/usr/lib/x86_64-linux-gnu:/usr/lib:/lib"
 
 # Copy compiled Registry
 COPY --from=dotnet-builder /Registry/Registry.Web/bin/Release/net9.0/publish/ /Registry
