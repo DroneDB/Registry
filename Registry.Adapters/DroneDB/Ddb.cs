@@ -52,7 +52,8 @@ public class DDB : IDDB
         _ddbWrapper = ddbWrapper;
 
         if (!Directory.Exists(ddbPath))
-            throw new ArgumentException($"Path '{ddbPath}' does not exist");        
+            throw new ArgumentException($"Path '{ddbPath}' does not exist");
+
         DatasetFolderPath = ddbPath;
         BuildFolderPath = Path.Combine(ddbPath, IDDB.DatabaseFolderName, IDDB.BuildFolderName);
         Meta = new MetaManager(this, ddbWrapper);
@@ -93,7 +94,6 @@ public class DDB : IDDB
             throw new InvalidOperationException($"Cannot initialize ddb in folder '{DatasetFolderPath}'", ex);
         }
     }
-
 
 
     public long GetSize()
@@ -374,7 +374,6 @@ public class DDB : IDDB
     }
 
 
-
     public override string ToString()
     {
         return DatasetFolderPath;
@@ -392,7 +391,8 @@ public class DDB : IDDB
 
     #region Async
 
-    public async Task<JToken> GetStacAsync(string id, string stacCollectionRoot, string stacCatalogRoot, string path = null,
+    public async Task<JToken> GetStacAsync(string id, string stacCollectionRoot, string stacCatalogRoot,
+        string path = null,
         CancellationToken cancellationToken = default)
     {
         return await Task.Run(() => GetStac(id, stacCollectionRoot, stacCatalogRoot, path), cancellationToken)
