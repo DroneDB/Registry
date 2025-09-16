@@ -52,7 +52,8 @@ public class DDB : IDDB
         _ddbWrapper = ddbWrapper;
 
         if (!Directory.Exists(ddbPath))
-            throw new ArgumentException($"Path '{ddbPath}' does not exist");        DatasetFolderPath = ddbPath;
+            throw new ArgumentException($"Path '{ddbPath}' does not exist");        
+        DatasetFolderPath = ddbPath;
         BuildFolderPath = Path.Combine(ddbPath, IDDB.DatabaseFolderName, IDDB.BuildFolderName);
         Meta = new MetaManager(this, ddbWrapper);
     }

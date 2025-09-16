@@ -9,7 +9,7 @@ namespace Registry.Adapters.DroneDB
     /// </summary>
     public static class DbSyncManager
     {
-        private static readonly ConcurrentDictionary<string, SemaphoreSlim> _databaseLocks = new ConcurrentDictionary<string, SemaphoreSlim>();
+        private static readonly ConcurrentDictionary<string, SemaphoreSlim> DatabaseLocks = new();
 
         /// <summary>
         /// Gets a semaphore for the specified database path
@@ -20,7 +20,7 @@ namespace Registry.Adapters.DroneDB
         {
             // If path is null, use a default key
             var key = databasePath ?? "default_db_lock";
-            return _databaseLocks.GetOrAdd(key, _ => new SemaphoreSlim(1, 1));
+            return DatabaseLocks.GetOrAdd(key, _ => new SemaphoreSlim(1, 1));
         }
     }
 }
