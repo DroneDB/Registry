@@ -39,6 +39,7 @@ public class ObjectsManager : IObjectsManager
     private readonly RegistryContext _context;
     private readonly AppSettings _settings;
     private readonly IDdbWrapper _ddbWrapper;
+    private readonly IThumbnailGenerator _thumbnailGenerator;
 
     // TODO: Could be moved to config
     private const int DefaultThumbnailSize = 512;
@@ -56,8 +57,9 @@ public class ObjectsManager : IObjectsManager
         IAuthManager authManager,
         ICacheManager cacheManager,
         IFileSystem fs,
-        IBackgroundJobsProcessor backgroundJob, 
-        IDdbWrapper ddbWrapper)
+        IBackgroundJobsProcessor backgroundJob,
+        IDdbWrapper ddbWrapper,
+        IThumbnailGenerator thumbnailGenerator)
     {
         _logger = logger;
         _context = context;
@@ -69,6 +71,7 @@ public class ObjectsManager : IObjectsManager
         _backgroundJob = backgroundJob;
         _ddbWrapper = ddbWrapper;
         _settings = settings.Value;
+        _thumbnailGenerator = thumbnailGenerator;
     }
 
     public async Task<IEnumerable<EntryDto>> List(string orgSlug, string dsSlug, string path = null,
@@ -257,12 +260,20 @@ public class ObjectsManager : IObjectsManager
                 try
                 {
                     await _cacheManager.GetAsync(MagicStrings.ThumbnailCacheSeed, entry.Hash, DefaultThumbnailSize,
-                        new Func<Task<byte[]>>(() => ddb.GenerateThumbnailAsync(localFilePath, DefaultThumbnailSize)));
+                        new Func<Task<byte[]>>(async () =>
+                        {
+                            _logger.LogDebug("Background thumbnail generation for new file: '{LocalFilePath}'", localFilePath);
+                            using var stream = new MemoryStream();
+                            await _thumbnailGenerator.GenerateThumbnailAsync(localFilePath, DefaultThumbnailSize, stream);
+                            var result = stream.ToArray();
+                            _logger.LogDebug("Background generated thumbnail of {Size} bytes for: '{LocalFilePath}'", result.Length, localFilePath);
+                            return result;
+                        }));
                     _logger.LogInformation("Thumbnail generation completed for hash {Hash}", entry.Hash);
                 }
                 catch (Exception ex)
                 {
-                    _logger.LogError(ex, "Failed to generate thumbnail for hash {Hash}", entry.Hash);
+                    _logger.LogError(ex, "Failed to generate thumbnail for hash {Hash}, file: '{LocalFilePath}'", entry.Hash, localFilePath);
                 }
             });
 
@@ -442,7 +453,8 @@ public class ObjectsManager : IObjectsManager
     {
         var ds = _utils.GetDataset(orgSlug, dsSlug);
 
-        _logger.LogInformation("In GenerateThumbnailData('{OrgSlug}/{DsSlug}')", orgSlug, dsSlug);
+        _logger.LogInformation("In GenerateThumbnailData('{OrgSlug}/{DsSlug}', path: '{Path}', size: {Size}, recreate: {Recreate})",
+            orgSlug, dsSlug, path, sizeRaw, recreate);
 
         if (!await _authManager.RequestAccess(ds, AccessType.Read))
             throw new UnauthorizedException("The current user is not allowed to read dataset");
@@ -461,14 +473,29 @@ public class ObjectsManager : IObjectsManager
 
         var size = sizeRaw ?? DefaultThumbnailSize;
 
+        _logger.LogDebug("Generating thumbnail for file: '{LocalPath}', size: {Size}", localPath, size);
+
         if (recreate)
+        {
+            _logger.LogDebug("Removing cached thumbnail for {OrgSlug}/{DsSlug}, hash: {Hash}", orgSlug, dsSlug, entry.Hash);
             await _cacheManager.RemoveAsync(MagicStrings.ThumbnailCacheSeed, $"{orgSlug}/{dsSlug}", entry.Hash);
+        }
 
         var thumbData = await _cacheManager.GetAsync(MagicStrings.ThumbnailCacheSeed, $"{orgSlug}/{dsSlug}", entry.Hash, size,
-            new Func<Task<byte[]>>(() => ddb.GenerateThumbnailAsync(localPath, size)));
+            new Func<Task<byte[]>>(async () =>
+            {
+                _logger.LogDebug("Cache miss - generating new thumbnail for: '{LocalPath}'", localPath);
+                using var stream = new MemoryStream();
+                await _thumbnailGenerator.GenerateThumbnailAsync(localPath, size, stream);
+                var result = stream.ToArray();
+                _logger.LogDebug("Generated thumbnail of {Size} bytes for: '{LocalPath}'", result.Length, localPath);
+                return result;
+            }));
 
         var extension = MimeUtility.GetExtensions(_ddbWrapper.ThumbnailMimeType)?.FirstOrDefault() ?? "webp";
-        
+
+        _logger.LogDebug("Returning thumbnail data: {Size} bytes, type: {ContentType}", thumbData.Length, _ddbWrapper.ThumbnailMimeType);
+
         return new StorageDataDto
         {
             Name = Path.ChangeExtension(fileName, extension),
@@ -501,7 +528,7 @@ public class ObjectsManager : IObjectsManager
             var tileData =
                 await _cacheManager.GetAsync(MagicStrings.TileCacheSeed, $"{orgSlug}/{dsSlug}", entry.Hash, tx, ty, tz, retina,
                     new Func<Task<byte[]>>(() => ddb.GenerateTileAsync(localPath, tz, tx, ty, retina, entry.Hash)));
-            
+
             return new StorageDataDto
             {
                 Data = tileData,
