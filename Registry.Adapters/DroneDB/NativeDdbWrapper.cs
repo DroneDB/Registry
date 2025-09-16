@@ -412,6 +412,13 @@ public class NativeDdbWrapper : IDdbWrapper
         if (destPath == null)
             throw new ArgumentException("destPath is null");
 
+        if (size <= 0)
+            throw new ArgumentException("size must be positive");
+
+        // Validate file exists before calling native code to prevent segfault
+        if (!File.Exists(filePath))
+            throw new DdbException($"File not found: '{filePath}'. Cannot generate thumbnail for non-existent file.");
+
         try
         {
             if (_GenerateThumbnail(filePath, size, destPath) ==
@@ -428,7 +435,7 @@ public class NativeDdbWrapper : IDdbWrapper
                 ex);
         }
 
-        throw new DdbException(SafeGetLastError("generate thumbnail"));
+        throw new DdbException($"{SafeGetLastError("generate thumbnail")} (file: '{filePath}', size: {size}, dest: '{destPath}')");
     }
 
     [DllImport("ddb", EntryPoint = "DDBVSIFree")]
@@ -443,6 +450,13 @@ public class NativeDdbWrapper : IDdbWrapper
     {
         if (filePath == null)
             throw new ArgumentException("filePath is null");
+
+        if (size <= 0)
+            throw new ArgumentException("size must be positive");
+
+        // Validate file exists before calling native code to prevent segfault
+        if (!File.Exists(filePath))
+            throw new DdbException($"File not found: '{filePath}'. Cannot generate thumbnail for non-existent file.");
 
         try
         {
@@ -468,7 +482,7 @@ public class NativeDdbWrapper : IDdbWrapper
                 ex);
         }
 
-        throw new DdbException(SafeGetLastError("generate memory thumbnail"));
+        throw new DdbException($"{SafeGetLastError("generate memory thumbnail")} (file: '{filePath}', size: {size})");
     }
 
     [DllImport("ddb", EntryPoint = "DDBTile")]

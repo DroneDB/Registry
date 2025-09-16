@@ -69,7 +69,17 @@ public class ObjectsController : ControllerBaseEx
 
             var res = await _objectsManager.GenerateThumbnailData(orgSlug, dsSlug, path, size);
 
-            return res == null ? NotFound() : File(res.Data, res.ContentType, res.Name);
+            if (res == null)
+            {
+                _logger.LogWarning("Thumbnail generation returned null for '{OrgSlug}/{DsSlug}' path: '{Path}'",
+                    orgSlug, dsSlug, path);
+                return NotFound();
+            }
+
+            _logger.LogInformation("Successfully generated thumbnail for '{OrgSlug}/{DsSlug}' path: '{Path}', size: {DataSize} bytes",
+                orgSlug, dsSlug, path, res.Data.Length);
+
+            return File(res.Data, res.ContentType, res.Name);
         }
         catch (Exception ex)
         {
@@ -80,15 +90,15 @@ public class ObjectsController : ControllerBaseEx
         }
     }
 
-    [HttpGet("tiles/{tz:int}/{tx:int}/{tyRaw}.png", Name = nameof(ObjectsController) + "." + nameof(GenerateTile))]
+    [HttpGet("tiles/{tz:int}/{tx:int}/{tyRaw}.{ext:regex(^(png|webp)$)}", Name = nameof(ObjectsController) + "." + nameof(GenerateTile))]
     public async Task<IActionResult> GenerateTile([FromRoute] string orgSlug, [FromRoute] string dsSlug,
-        [FromRoute] int tz, [FromRoute] int tx, [FromRoute] string tyRaw, [FromQuery] string path)
+        [FromRoute] int tz, [FromRoute] int tx, [FromRoute] string tyRaw, [FromQuery] string path, [FromRoute] string ext)
     {
         try
         {
             _logger.LogDebug(
-                "Objects controller GenerateTile('{OrgSlug}', '{DsSlug}', '{Path}', '{Tz}', '{Tx}', '{TyRaw}')",
-                orgSlug, dsSlug, path, tz, tx, tyRaw);
+                "Objects controller GenerateTile('{OrgSlug}', '{DsSlug}', '{Path}', '{Tz}', '{Tx}', '{TyRaw}', '{Ext}')",
+                orgSlug, dsSlug, path, tz, tx, tyRaw, ext);
 
             var retina = tyRaw.EndsWith("@2x");
 
