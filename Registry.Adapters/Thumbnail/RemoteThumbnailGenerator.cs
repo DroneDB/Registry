@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO;
 using System.Net.Http;
 using System.Threading.Tasks;
@@ -30,9 +31,14 @@ public class RemoteThumbnailGenerator : IThumbnailGenerator
             throw new ArgumentOutOfRangeException(nameof(size), "Size must be greater than 0.");
 
         if (!File.Exists(filePath))
-            throw new FileNotFoundException("File not found.", filePath);
+        {
+            _logger.LogError("File not found: '{FilePath}' - cannot generate remote thumbnail", filePath);
+            throw new FileNotFoundException($"File not found: '{filePath}'", filePath);
+        }
 
-        _logger.LogInformation("Generating remote thumbnail for {File} with size {Size}", filePath, size);
+        _logger.LogInformation("Starting remote thumbnail generation for file: '{FilePath}', size: {Size}, target URL: {Url}",
+            filePath, size, _settings.Url);
+        var stopwatch = Stopwatch.StartNew();
 
         try
         {
@@ -45,20 +51,30 @@ public class RemoteThumbnailGenerator : IThumbnailGenerator
             // Keep the timeout short to avoid blocking the thread for too long
             client.Timeout = TimeSpan.FromSeconds(30);
 
+            _logger.LogDebug("Sending POST request to remote thumbnail generator: {Url}", _settings.Url);
             var response = await client.PostAsync(_settings.Url, content);
 
             if (!response.IsSuccessStatusCode)
             {
-                _logger.LogError("Failed to generate remote thumbnail for {FilePath} with size {Size}", filePath, size);
-                throw new InvalidOperationException("Failed to generate remote thumbnail.");
+                stopwatch.Stop();
+                _logger.LogError("Remote thumbnail generation failed for '{FilePath}', size: {Size}. HTTP Status: {StatusCode}, Reason: {ReasonPhrase}, elapsed: {ElapsedMs}ms",
+                    filePath, size, response.StatusCode, response.ReasonPhrase, stopwatch.ElapsedMilliseconds);
+                throw new InvalidOperationException($"Remote thumbnail generation failed with status {response.StatusCode}: {response.ReasonPhrase}");
             }
 
             await response.Content.CopyToAsync(output);
+
+            stopwatch.Stop();
+            var contentLength = response.Content.Headers.ContentLength ?? output.Length;
+            _logger.LogInformation("Successfully generated remote thumbnail for '{FilePath}', size: {Size}, data: ~{DataSize} bytes, elapsed: {ElapsedMs}ms",
+                filePath, size, contentLength, stopwatch.ElapsedMilliseconds);
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Failed to generate remote thumbnail for {FilePath} with size {Size}", filePath, size);
-            throw new InvalidOperationException("Failed to generate remote thumbnail.", ex);
+            stopwatch.Stop();
+            _logger.LogError(ex, "Failed to generate remote thumbnail for '{FilePath}', size: {Size} after {ElapsedMs}ms. Error: {ErrorMessage}",
+                filePath, size, stopwatch.ElapsedMilliseconds, ex.Message);
+            throw new InvalidOperationException($"Failed to generate remote thumbnail for '{filePath}': {ex.Message}", ex);
         }
     }
 

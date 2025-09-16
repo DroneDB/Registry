@@ -43,6 +43,7 @@ public class ObjectManagerTest : TestBase
     private Mock<IAuthManager> _authManagerMock;
     private Mock<IHttpContextAccessor> _httpContextAccessorMock;
     private Mock<ICacheManager> _cacheManagerMock;
+    private Mock<IThumbnailGenerator> _thumbnailGeneratorMock;
     private IBackgroundJobsProcessor _backgroundJobsProcessor;
     private readonly IFileSystem _fileSystem = new FileSystem();
 
@@ -84,6 +85,9 @@ public class ObjectManagerTest : TestBase
         //     .Returns(Task.FromResult(new EntryAttributes(ddbMock1.Object)));
 
         _ddbFactoryMock.Setup(x => x.Get(It.IsAny<string>(), It.IsAny<Guid>())).Returns(ddbMock2.Object);
+        
+        _thumbnailGeneratorMock = new Mock<IThumbnailGenerator>();
+        
     }
 
     [Test]
@@ -98,7 +102,7 @@ public class ObjectManagerTest : TestBase
 
         var objectManager = new ObjectsManager(_objectManagerLogger, context, _appSettingsMock.Object,
             _ddbFactoryMock.Object, webUtils, _authManagerMock.Object, _cacheManagerMock.Object,
-            _fileSystem, _backgroundJobsProcessor, DdbWrapper);
+            _fileSystem, _backgroundJobsProcessor, DdbWrapper, _thumbnailGeneratorMock.Object);
 
         await objectManager.Invoking(item => item.List(null, MagicStrings.DefaultDatasetSlug, "test"))
             .Should().ThrowAsync<BadRequestException>();
@@ -135,7 +139,7 @@ public class ObjectManagerTest : TestBase
         var objectManager = new ObjectsManager(_objectManagerLogger, context,
             _appSettingsMock.Object,
             new DdbManager(_appSettingsMock.Object, _ddbFactoryLogger, DdbWrapper), webUtils, _authManagerMock.Object,
-            _cacheManagerMock.Object, _fileSystem, _backgroundJobsProcessor, DdbWrapper);
+            _cacheManagerMock.Object, _fileSystem, _backgroundJobsProcessor, DdbWrapper, _thumbnailGeneratorMock.Object);
 
         var res = await objectManager.List(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug,
             null, true);
@@ -169,7 +173,7 @@ public class ObjectManagerTest : TestBase
         var objectManager = new ObjectsManager(_objectManagerLogger, context,
             _appSettingsMock.Object,
             new DdbManager(_appSettingsMock.Object, _ddbFactoryLogger, DdbWrapper), webUtils, _authManagerMock.Object,
-            _cacheManagerMock.Object, _fileSystem, _backgroundJobsProcessor, DdbWrapper);
+            _cacheManagerMock.Object, _fileSystem, _backgroundJobsProcessor, DdbWrapper, _thumbnailGeneratorMock.Object);
 
         var res = await objectManager.Search(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug,
             "DJI*");
@@ -214,7 +218,7 @@ public class ObjectManagerTest : TestBase
 
         var objectManager = new ObjectsManager(_objectManagerLogger, context, _appSettingsMock.Object,
             new DdbManager(_appSettingsMock.Object, _ddbFactoryLogger, DdbWrapper), webUtils, _authManagerMock.Object,
-            _cacheManagerMock.Object, _fileSystem, _backgroundJobsProcessor, DdbWrapper);
+            _cacheManagerMock.Object, _fileSystem, _backgroundJobsProcessor, DdbWrapper, _thumbnailGeneratorMock.Object);
 
         await objectManager.Invoking(async x => await x.Get(MagicStrings.PublicOrganizationSlug,
                 MagicStrings.DefaultDatasetSlug, "weriufbgeiughegr"))
@@ -248,7 +252,7 @@ public class ObjectManagerTest : TestBase
 
         var objectManager = new ObjectsManager(_objectManagerLogger, context, _appSettingsMock.Object,
             new DdbManager(_appSettingsMock.Object, _ddbFactoryLogger, DdbWrapper), webUtils, _authManagerMock.Object,
-            _cacheManagerMock.Object, _fileSystem, _backgroundJobsProcessor, DdbWrapper);
+            _cacheManagerMock.Object, _fileSystem, _backgroundJobsProcessor, DdbWrapper, _thumbnailGeneratorMock.Object);
 
         var obj = await objectManager.Get(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug,
             "DJI_0019.JPG");
@@ -283,7 +287,7 @@ public class ObjectManagerTest : TestBase
 
         var objectManager = new ObjectsManager(_objectManagerLogger, context, _appSettingsMock.Object,
             new DdbManager(_appSettingsMock.Object, _ddbFactoryLogger, DdbWrapper), webUtils, _authManagerMock.Object,
-            _cacheManagerMock.Object, _fileSystem, _backgroundJobsProcessor, DdbWrapper);
+            _cacheManagerMock.Object, _fileSystem, _backgroundJobsProcessor, DdbWrapper, _thumbnailGeneratorMock.Object);
 
         var res = await objectManager.Get(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug,
             expectedName);
@@ -317,7 +321,7 @@ public class ObjectManagerTest : TestBase
 
         var objectManager = new ObjectsManager(_objectManagerLogger, context,  _appSettingsMock.Object,
             new DdbManager(_appSettingsMock.Object, _ddbFactoryLogger, DdbWrapper), webUtils, _authManagerMock.Object,
-            _cacheManagerMock.Object, _fileSystem, _backgroundJobsProcessor, DdbWrapper);
+            _cacheManagerMock.Object, _fileSystem, _backgroundJobsProcessor, DdbWrapper, _thumbnailGeneratorMock.Object);
 
         var res = await objectManager.DownloadStream(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug,
             fileNames);
@@ -373,7 +377,7 @@ public class ObjectManagerTest : TestBase
 
         var objectManager = new ObjectsManager(_objectManagerLogger, context, _appSettingsMock.Object,
             new DdbManager(_appSettingsMock.Object, _ddbFactoryLogger, DdbWrapper), webUtils, _authManagerMock.Object,
-            _cacheManagerMock.Object, _fileSystem, _backgroundJobsProcessor, DdbWrapper);
+            _cacheManagerMock.Object, _fileSystem, _backgroundJobsProcessor, DdbWrapper, _thumbnailGeneratorMock.Object);
 
         var res = await objectManager.DownloadStream(organizationSlug, datasetSlug,
             fileNames);
@@ -427,7 +431,7 @@ public class ObjectManagerTest : TestBase
 
         var objectManager = new ObjectsManager(_objectManagerLogger, context, _appSettingsMock.Object,
             new DdbManager(_appSettingsMock.Object, _ddbFactoryLogger, DdbWrapper), webUtils, _authManagerMock.Object,
-            _cacheManagerMock.Object, _fileSystem, _backgroundJobsProcessor, DdbWrapper);
+            _cacheManagerMock.Object, _fileSystem, _backgroundJobsProcessor, DdbWrapper, _thumbnailGeneratorMock.Object);
 
         var res = await objectManager.List(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug,
             fileName);
@@ -489,7 +493,7 @@ public class ObjectManagerTest : TestBase
 
         var objectManager = new ObjectsManager(_objectManagerLogger, context, _appSettingsMock.Object,
             new DdbManager(_appSettingsMock.Object, _ddbFactoryLogger, DdbWrapper), webUtils, _authManagerMock.Object,
-            _cacheManagerMock.Object, _fileSystem, _backgroundJobsProcessor, DdbWrapper);
+            _cacheManagerMock.Object, _fileSystem, _backgroundJobsProcessor, DdbWrapper, _thumbnailGeneratorMock.Object);
 
         (await objectManager.List(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug)).Should()
             .HaveCount(20);

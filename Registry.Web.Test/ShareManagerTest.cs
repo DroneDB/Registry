@@ -64,6 +64,7 @@ class ShareManagerTest : TestBase
     private Mock<IHttpContextAccessor> _httpContextAccessorMock;
     private Mock<ICacheManager> _cacheManagerMock;
     private Mock<IStacManager> _stacManagerMock;
+    private Mock<IThumbnailGenerator> _thumbnailGeneratorMock;
 
     private IBackgroundJobsProcessor _backgroundJobsProcessor;
 
@@ -95,6 +96,7 @@ class ShareManagerTest : TestBase
         _backgroundJobsProcessor = new SimpleBackgroundJobsProcessor();
         _cacheManagerMock = new Mock<ICacheManager>();
         _stacManagerMock = new Mock<IStacManager>();
+        _thumbnailGeneratorMock = new Mock<IThumbnailGenerator>();
 
         _shareManagerLogger = new Logger<ShareManager>(LoggerFactory.Create(builder => builder.AddConsole()));
         _objectManagerLogger = new Logger<ObjectsManager>(LoggerFactory.Create(builder => builder.AddConsole()));
@@ -199,7 +201,7 @@ class ShareManagerTest : TestBase
 
         var objectManager = new ObjectsManager(_objectManagerLogger, context, 
             _appSettingsMock.Object, ddbFactory, webUtils, _authManagerMock.Object, _cacheManagerMock.Object,
-            _fileSystem, _backgroundJobsProcessor, DdbWrapper);
+            _fileSystem, _backgroundJobsProcessor, DdbWrapper, _thumbnailGeneratorMock.Object);
 
         var datasetManager = new DatasetsManager(context, webUtils, _datasetsManagerLogger, objectManager,
             _stacManagerMock.Object, _ddbFactoryMock.Object, _authManagerMock.Object);
@@ -306,7 +308,7 @@ class ShareManagerTest : TestBase
 
         var objectManager = new ObjectsManager(_objectManagerLogger, context, 
             _appSettingsMock.Object, ddbFactory, webUtils, _authManagerMock.Object, _cacheManagerMock.Object,
-            _fileSystem, _backgroundJobsProcessor, DdbWrapper);
+            _fileSystem, _backgroundJobsProcessor, DdbWrapper, _thumbnailGeneratorMock.Object);
 
         var datasetManager = new DatasetsManager(context, webUtils, _datasetsManagerLogger, objectManager,
             _stacManagerMock.Object, _ddbFactoryMock.Object, _authManagerMock.Object);
@@ -423,7 +425,7 @@ class ShareManagerTest : TestBase
 
         var objectManager = new ObjectsManager(_objectManagerLogger, context, 
             _appSettingsMock.Object, ddbFactory, webUtils, _authManagerMock.Object, _cacheManagerMock.Object,
-            _fileSystem, _backgroundJobsProcessor, DdbWrapper);
+            _fileSystem, _backgroundJobsProcessor, DdbWrapper, _thumbnailGeneratorMock.Object);
 
         var datasetManager = new DatasetsManager(context, webUtils, _datasetsManagerLogger, objectManager,
             _stacManagerMock.Object, _ddbFactoryMock.Object, _authManagerMock.Object);
@@ -567,7 +569,7 @@ class ShareManagerTest : TestBase
 
         var objectManager = new ObjectsManager(_objectManagerLogger, context, 
             _appSettingsMock.Object, ddbFactory, webUtils, _authManagerMock.Object, _cacheManagerMock.Object,
-            _fileSystem, _backgroundJobsProcessor, DdbWrapper);
+            _fileSystem, _backgroundJobsProcessor, DdbWrapper, _thumbnailGeneratorMock.Object);
 
         var datasetManager = new DatasetsManager(context, webUtils, _datasetsManagerLogger, objectManager,
             _stacManagerMock.Object, _ddbFactoryMock.Object, _authManagerMock.Object);
@@ -720,7 +722,7 @@ class ShareManagerTest : TestBase
 
         var objectManager = new ObjectsManager(_objectManagerLogger, context, 
             _appSettingsMock.Object, ddbFactory, webUtils, _authManagerMock.Object, _cacheManagerMock.Object,
-            _fileSystem, _backgroundJobsProcessor, DdbWrapper);
+            _fileSystem, _backgroundJobsProcessor, DdbWrapper, _thumbnailGeneratorMock.Object);
 
         var datasetManager = new DatasetsManager(context, webUtils, _datasetsManagerLogger, objectManager,
             _stacManagerMock.Object, _ddbFactoryMock.Object, _authManagerMock.Object);

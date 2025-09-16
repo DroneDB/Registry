@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Diagnostics;
 using System.IO;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
@@ -27,19 +28,26 @@ public class LocalThumbnailGenerator : IThumbnailGenerator
             throw new ArgumentOutOfRangeException(nameof(size), "Size must be greater than 0.");
 
         if (!File.Exists(filePath))
-            throw new FileNotFoundException("File not found.", filePath);
+        {
+            _logger.LogError("File not found: '{FilePath}' - cannot generate thumbnail", filePath);
+            throw new FileNotFoundException($"File not found: '{filePath}'", filePath);
+        }
 
-        _logger.LogInformation("Generating thumbnail for {File} with size {Size}", filePath, size);
+        _logger.LogInformation("Starting local thumbnail generation for file: '{FilePath}', size: {Size}", filePath, size);
 
         try
         {
             var data = _ddbWrapper.GenerateThumbnail(filePath, size);
             await output.WriteAsync(data);
+
+            _logger.LogInformation("Successfully generated local thumbnail for '{FilePath}', size: {Size}, data: {DataSize} bytes",
+                filePath, size, data.Length);
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Failed to generate thumbnail for {File} with size {Size}", filePath, size);
-            throw new InvalidOperationException("Failed to generate thumbnail.", ex);
+            _logger.LogError(ex, "Failed to generate local thumbnail for '{FilePath}', size: {Size}. Error: {ErrorMessage}",
+                filePath, size, ex.Message);
+            throw new InvalidOperationException($"Failed to generate local thumbnail for '{filePath}': {ex.Message}", ex);
         }
     }
 }
