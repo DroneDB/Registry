@@ -910,6 +910,31 @@ public class NativeDdbWrapper : IDdbWrapper
         throw new DdbException(SafeGetLastError("is buildable"));
     }
 
+    [DllImport("ddb", EntryPoint = "DDBIsBuildActive")]
+    private static extern DdbResult _IsBuildActive([MarshalAs(UnmanagedType.LPStr)] string ddbPath,
+        [MarshalAs(UnmanagedType.LPStr)] string path, out bool isBuildActive);
+
+    public bool IsBuildActive(string ddbPath, string path)
+    {
+        try
+        {
+            if (_IsBuildActive(ddbPath, path, out var isBuildActive) ==
+                DdbResult.Success) return isBuildActive;
+        }
+        catch (EntryPointNotFoundException ex)
+        {
+            throw new DdbException($"Error in calling ddb lib: incompatible versions ({ex.Message})", ex);
+        }
+        catch (Exception ex)
+        {
+            throw new DdbException(
+                $"Error in calling ddb lib. Last error: \"{SafeGetLastError("is build active")}\", check inner exception for details",
+                ex);
+        }
+
+        throw new DdbException(SafeGetLastError("is build active"));
+    }
+
     [DllImport("ddb", EntryPoint = "DDBIsBuildPending")]
     private static extern DdbResult _IsBuildPending([MarshalAs(UnmanagedType.LPStr)] string ddbPath,
         out bool isBuildPending);

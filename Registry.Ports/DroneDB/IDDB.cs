@@ -69,6 +69,7 @@ public interface IDDB
 
     public string GetTmpFolder(string path);
     bool IsBuildable(string path);
+    bool IsBuildActive(string path);
     bool IsBuildPending();
 
     IMetaManager Meta { get; }
@@ -98,6 +99,7 @@ public interface IDDB
     Task BuildAsync(string path, string dest = null, bool force = false, CancellationToken cancellationToken = default);
     Task BuildAllAsync(string dest = null, bool force = false, CancellationToken cancellationToken = default);
     Task<bool> IsBuildableAsync(string path, CancellationToken cancellationToken = default);
+    Task<bool> IsBuildActiveAsync(string path, CancellationToken cancellationToken = default);
     Task<bool> IsBuildPendingAsync(CancellationToken cancellationToken = default);
 
     Task<long> GetSizeAsync(CancellationToken cancellationToken = default);

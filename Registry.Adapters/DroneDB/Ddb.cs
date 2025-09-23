@@ -242,6 +242,18 @@ public class DDB : IDDB
         }
     }
 
+    public bool IsBuildActive(string path)
+    {
+        try
+        {
+            return _ddbWrapper.IsBuildActive(DatasetFolderPath, path);
+        }
+        catch (DdbException ex)
+        {
+            throw new InvalidOperationException($"Cannot call IsBuildActive from ddb '{DatasetFolderPath}'", ex);
+        }
+    }
+
     public bool IsBuildPending()
     {
         try
@@ -506,6 +518,12 @@ public class DDB : IDDB
     public async Task<bool> IsBuildableAsync(string path, CancellationToken cancellationToken = default)
     {
         return await Task.Run(() => IsBuildable(path), cancellationToken)
+            .ConfigureAwait(false);
+    }
+
+    public async Task<bool> IsBuildActiveAsync(string path, CancellationToken cancellationToken = default)
+    {
+        return await Task.Run(() => IsBuildActive(path), cancellationToken)
             .ConfigureAwait(false);
     }
 

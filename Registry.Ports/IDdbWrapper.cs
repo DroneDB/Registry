@@ -65,6 +65,8 @@ public interface IDdbWrapper
 
     public bool IsBuildable(string ddbPath, string path);
 
+    public bool IsBuildActive(string ddbPath, string path);
+
     public bool IsBuildPending(string ddbPath);
 
     public Meta MetaAdd(string ddbPath, string key, string data, string? path = null);
