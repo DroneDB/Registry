@@ -189,6 +189,7 @@ public class Startup
         services.AddMemoryCache();
         services.AddCacheProvider(appSettings);
         services.AddHangfireProvider(appSettings, Configuration);
+        services.AddJobIndexing();
 
         var instanceType = Configuration.GetValue<InstanceType>("InstanceType");
 
@@ -302,6 +303,7 @@ public class Startup
             ThreadPool.GetMinThreads(out _, out var ioCompletionThreads);
             ThreadPool.SetMinThreads(appSettings.WorkerThreads, ioCompletionThreads);
         }
+        
     }
 
     public void Configure(IApplicationBuilder app, IWebHostEnvironment env)

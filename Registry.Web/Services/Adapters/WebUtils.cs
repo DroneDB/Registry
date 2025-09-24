@@ -74,14 +74,7 @@ public class WebUtils : IUtils
             .Include(item => item.Organization)
             .FirstOrDefault(item => item.Slug == dsSlug && item.Organization.Slug == orgSlug);
 
-        if (dataset == null)
-        {
-            if (safe) return null;
-
-            throw new NotFoundException($"Cannot find dataset {dsSlug} in organization {orgSlug}");
-        }
-
-        return dataset;
+        return dataset ?? (safe ? null : throw new NotFoundException($"Cannot find dataset {dsSlug} in organization {orgSlug}"));
     }
 
     public string GetFreeOrganizationSlug(string orgName)

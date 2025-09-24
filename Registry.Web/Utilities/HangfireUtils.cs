@@ -120,4 +120,25 @@ public static class HangfireUtils
         Action<string> writeLine = context != null ? context.WriteLine : Log.Information;
         writeLine("Dummy job");
     }
+
+    public static void SetJobParameters(string jobId, string orgSlug, string dsSlug, string userId, string path)
+    {
+        if (string.IsNullOrWhiteSpace(jobId))
+            throw new ArgumentException("Job ID cannot be null or empty", nameof(jobId));
+
+        if (string.IsNullOrWhiteSpace(orgSlug))
+            throw new ArgumentException("Organization slug cannot be null or empty", nameof(orgSlug));
+
+        if (string.IsNullOrWhiteSpace(dsSlug))
+            throw new ArgumentException("Dataset slug cannot be null or empty", nameof(dsSlug));
+
+        if (string.IsNullOrWhiteSpace(path))
+            throw new ArgumentException("Path cannot be null or empty", nameof(path));
+
+        using var conn = JobStorage.Current.GetConnection();
+        conn.SetJobParameter(jobId, "orgSlug", orgSlug);
+        conn.SetJobParameter(jobId, "dsSlug", dsSlug);
+        conn.SetJobParameter(jobId, "userId",  userId);
+        conn.SetJobParameter(jobId, "path",    path);
+    }
 }

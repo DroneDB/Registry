@@ -15,7 +15,7 @@ namespace Registry.Web.Data.SqliteMigrations.Migrations
         protected override void BuildModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
-            modelBuilder.HasAnnotation("ProductVersion", "8.0.8");
+            modelBuilder.HasAnnotation("ProductVersion", "9.0.9");
 
             modelBuilder.Entity("Registry.Web.Data.Models.Batch", b =>
                 {
@@ -110,6 +110,77 @@ namespace Registry.Web.Data.SqliteMigrations.Migrations
                     b.HasIndex("BatchToken");
 
                     b.ToTable("Entry");
+                });
+
+            modelBuilder.Entity("Registry.Web.Data.Models.JobIndex", b =>
+                {
+                    b.Property<string>("JobId")
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("CurrentState")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime?>("DeletedAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("DsSlug")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime?>("FailedAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime?>("LastStateChangeUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("MethodDisplay")
+                        .HasMaxLength(1024)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("OrgSlug")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Path")
+                        .HasMaxLength(1024)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime?>("ProcessingAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Queue")
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime?>("ScheduledAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime?>("SucceededAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("UserId")
+                        .HasMaxLength(128)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("JobId");
+
+                    b.HasIndex("CreatedAtUtc");
+
+                    b.HasIndex("UserId");
+
+                    b.HasIndex("OrgSlug", "DsSlug");
+
+                    b.HasIndex("OrgSlug", "DsSlug", "Path");
+
+                    b.ToTable("JobIndices");
                 });
 
             modelBuilder.Entity("Registry.Web.Data.Models.Organization", b =>

@@ -233,12 +233,16 @@ public class ObjectsManager : IObjectsManager
             throw new InvalidOperationException("Cannot find just added file!");
 
         _logger.LogInformation("Entry OK");
+        
+        var user = await _authManager.GetCurrentUser();
 
         if (await ddb.IsBuildableAsync(entry.Path))
         {
             _logger.LogInformation("This item is buildable, build it!");
 
             var jobId = _backgroundJob.Enqueue(() => HangfireUtils.BuildWrapper(ddb, path, false, null));
+
+            HangfireUtils.SetJobParameters(jobId, orgSlug, dsSlug, user.Id, entry.Path);
 
             _logger.LogInformation("Background job id is {JobId}", jobId);
         }
@@ -247,6 +251,8 @@ public class ObjectsManager : IObjectsManager
             _logger.LogInformation("Items are pending build, retriggering build");
 
             var jobId = _backgroundJob.Enqueue(() => HangfireUtils.BuildPendingWrapper(ddb, null));
+            
+            HangfireUtils.SetJobParameters(jobId, orgSlug, dsSlug, user.Id, entry.Path);
 
             _logger.LogInformation("Background job id is {JobId}", jobId);
         }
@@ -263,9 +269,9 @@ public class ObjectsManager : IObjectsManager
                         new Func<Task<byte[]>>(async () =>
                         {
                             _logger.LogDebug("Background thumbnail generation for new file: '{LocalFilePath}'", localFilePath);
-                            using var stream = new MemoryStream();
-                            await _thumbnailGenerator.GenerateThumbnailAsync(localFilePath, DefaultThumbnailSize, stream);
-                            var result = stream.ToArray();
+                            using var s = new MemoryStream();
+                            await _thumbnailGenerator.GenerateThumbnailAsync(localFilePath, DefaultThumbnailSize, s);
+                            var result = s.ToArray();
                             _logger.LogDebug("Background generated thumbnail of {Size} bytes for: '{LocalFilePath}'", result.Length, localFilePath);
                             return result;
                         }));
@@ -853,14 +859,16 @@ public class ObjectsManager : IObjectsManager
             FileDescriptorType.Dataset, _logger, _ddbManager);
     }
 
+    #region Build
+    
     public async Task Build(string orgSlug, string dsSlug, string path, bool background = false, bool force = false)
     {
         var ds = _utils.GetDataset(orgSlug, dsSlug);
 
         _logger.LogInformation("In Build('{OrgSlug}/{DsSlug}')", orgSlug, dsSlug);
 
-        // TODO: Maybe request write?
-        if (!await _authManager.RequestAccess(ds, AccessType.Read))
+        // You need write access to build
+        if (!await _authManager.RequestAccess(ds, AccessType.Write))
             throw new UnauthorizedException("The current user is not allowed to build dataset");
 
         var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
@@ -883,6 +891,10 @@ public class ObjectsManager : IObjectsManager
             _logger.LogInformation("Building '{Path}' asynchronously", path);
 
             var jobId = _backgroundJob.Enqueue(() => HangfireUtils.BuildWrapper(ddb, path, force, null));
+            
+            var user = await _authManager.GetCurrentUser();
+            
+            HangfireUtils.SetJobParameters(jobId, orgSlug, dsSlug, user.Id, entry.Path);
 
             _logger.LogInformation("Background job id is {JobId}", jobId);
         }
@@ -893,8 +905,6 @@ public class ObjectsManager : IObjectsManager
             HangfireUtils.BuildWrapper(ddb, path, force, null);
         }
     }
-
-    #region Build
 
     public async Task<string> GetBuildFile(string orgSlug, string dsSlug, string hash,
         string path)
@@ -925,7 +935,7 @@ public class ObjectsManager : IObjectsManager
     }
 
     // Base build folder path (example: .ddb/build)
-    private string BuildBasePath =>
+    private static string BuildBasePath =>
         CommonUtils.SafeCombine(IDDB.DatabaseFolderName, IDDB.BuildFolderName);
 
     public async Task<bool> CheckBuildFile(string orgSlug, string dsSlug, string hash, string path)

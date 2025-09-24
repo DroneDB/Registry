@@ -69,6 +69,24 @@ public class RegistryContext : DbContext
             .WithMany(org => org.Users)
             .IsRequired()
             .OnDelete(DeleteBehavior.Cascade);
+        
+        modelBuilder.Entity<JobIndex>(e =>
+        {
+            e.HasKey(x => x.JobId);
+            e.Property(x => x.JobId).HasMaxLength(64);
+            e.Property(x => x.OrgSlug).HasMaxLength(128).IsRequired();
+            e.Property(x => x.DsSlug).HasMaxLength(128).IsRequired();
+            e.Property(x => x.Path).HasMaxLength(1024);
+            e.Property(x => x.UserId).HasMaxLength(128);
+            e.Property(x => x.Queue).HasMaxLength(64);
+            e.Property(x => x.CurrentState).HasMaxLength(32).IsRequired();
+            e.Property(x => x.MethodDisplay).HasMaxLength(1024);
+            
+            e.HasIndex(x => new { x.OrgSlug, x.DsSlug });
+            e.HasIndex(x => new { x.OrgSlug, x.DsSlug, x.Path });
+            e.HasIndex(x => x.UserId);
+            e.HasIndex(x => x.CreatedAtUtc);
+        });
     }
 
     protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
@@ -86,4 +104,7 @@ public class RegistryContext : DbContext
     public DbSet<OrganizationUser> OrganizationsUsers { get; set; }
     public DbSet<Dataset> Datasets { get; set; }
     public DbSet<Batch> Batches { get; set; }
+    
+    public DbSet<JobIndex> JobIndices => Set<JobIndex>();
+
 }
