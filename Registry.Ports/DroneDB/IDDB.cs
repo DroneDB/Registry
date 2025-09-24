@@ -27,7 +27,7 @@ public interface IDDB
 
     IEnumerable<Entry> Search(string path, bool recursive = false);
     void Add(string path, byte[] data);
-    void Add(string path, Stream data = null);
+    void Add(string path, Stream? data = null);
     void AddRaw(string path);
 
     void Remove(string path);
@@ -60,7 +60,7 @@ public interface IDDB
     /// </summary>
     /// <param name="path"></param>
     /// <returns></returns>
-    Entry GetEntry(string path);
+    Entry? GetEntry(string path);
 
     bool EntryExists(string path);
     void Build(string path, string dest = null, bool force = false);
@@ -82,7 +82,7 @@ public interface IDDB
 
     Task<IEnumerable<Entry>> SearchAsync(string path, bool recursive = false, CancellationToken cancellationToken = default);
     Task AddAsync(string path, byte[] data, CancellationToken cancellationToken = default);
-    Task AddAsync(string path, Stream data = null, CancellationToken cancellationToken = default);
+    Task AddAsync(string path, Stream? data = null, CancellationToken cancellationToken = default);
     Task RemoveAsync(string path, CancellationToken cancellationToken = default);
     Task MoveAsync(string source, string dest, CancellationToken cancellationToken = default);
 
@@ -94,7 +94,7 @@ public interface IDDB
     Task<Dictionary<string, object>> GetAttributesRawAsync(CancellationToken cancellationToken = default);
     Task<Entry> GetInfoAsync(CancellationToken cancellationToken = default);
     Task<Entry> GetInfoAsync(string path, CancellationToken cancellationToken = default);
-    Task<Entry> GetEntryAsync(string path, CancellationToken cancellationToken = default);
+    Task<Entry?> GetEntryAsync(string path, CancellationToken cancellationToken = default);
     Task<bool> EntryExistsAsync(string path, CancellationToken cancellationToken = default);
     Task BuildAsync(string path, string dest = null, bool force = false, CancellationToken cancellationToken = default);
     Task BuildAllAsync(string dest = null, bool force = false, CancellationToken cancellationToken = default);

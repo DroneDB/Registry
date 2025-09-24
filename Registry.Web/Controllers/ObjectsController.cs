@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Net;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
@@ -367,6 +368,28 @@ public class ObjectsController : ControllerBaseEx
             return ExceptionResult(ex);
         }
     }
+    
+    [HttpPost("transfer", Name = nameof(ObjectsController) + "." + nameof(Transfer))]
+    public async Task<IActionResult> Transfer([FromRoute] string orgSlug, [FromRoute] string dsSlug, [FromForm] string sourcePath,
+        [FromForm] string destOrgSlug, [FromForm] string destDsSlug, [FromForm] string destPath, [FromForm] bool overwrite)
+    {
+        try
+        {
+            _logger.LogDebug("Objects controller Transfer('{SourceOrgSlug}', '{SourceDsSlug}', '{SourcePath}', '{DestOrgSlug}', '{DestDsSlug}', '{DestPath}', '{Overwrite}')", orgSlug,
+                dsSlug, sourcePath, destOrgSlug, destDsSlug, destPath, overwrite);
+
+            await _objectsManager.Transfer(orgSlug, dsSlug, sourcePath, destOrgSlug, destDsSlug, destPath, overwrite);
+            return NoContent();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex,
+                "Exception in Objects controller Transfer('{SourceOrgSlug}', '{SourceDsSlug}', '{SourcePath}', '{DestOrgSlug}', '{DestDsSlug}', '{DestPath}', '{Overwrite}')", orgSlug,
+                dsSlug, sourcePath, destOrgSlug, destDsSlug, destPath, overwrite);
+
+            return ExceptionResult(ex);
+        }
+    }
 
     [HttpPost("build", Name = nameof(ObjectsController) + "." + nameof(Build))]
     public async Task<IActionResult> Build([FromRoute] string orgSlug, [FromRoute] string dsSlug,
@@ -441,4 +464,6 @@ public class ObjectsController : ControllerBaseEx
             return ExceptionResult(ex);
         }
     }
+    
+    
 }

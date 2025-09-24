@@ -106,7 +106,7 @@ public class DDB : IDDB
         return CommonUtils.SafeCombine(DatasetFolderPath, path);
     }
 
-    public Entry GetEntry(string path)
+    public Entry? GetEntry(string path)
     {
         var objs = Search(path, true).ToArray();
 
@@ -328,11 +328,11 @@ public class DDB : IDDB
         }
     }
 
-    public void Add(string path, Stream stream = null)
+    public void Add(string path, Stream? stream = null)
     {
         if (stream == null)
         {
-            string folderPath = null;
+            string? folderPath = null;
 
             try
             {
@@ -355,7 +355,7 @@ public class DDB : IDDB
         }
         else
         {
-            string filePath = null;
+            string? filePath = null;
 
             try
             {
@@ -424,7 +424,7 @@ public class DDB : IDDB
             .ConfigureAwait(false);
     }
 
-    public async Task AddAsync(string path, Stream data = null, CancellationToken cancellationToken = default)
+    public async Task AddAsync(string path, Stream? data = null, CancellationToken cancellationToken = default)
     {
         await Task.Run(() => Add(path, data), cancellationToken)
             .ConfigureAwait(false);
@@ -489,7 +489,7 @@ public class DDB : IDDB
             .ConfigureAwait(false);
     }
 
-    public async Task<Entry> GetEntryAsync(string path, CancellationToken cancellationToken = default)
+    public async Task<Entry?> GetEntryAsync(string path, CancellationToken cancellationToken = default)
     {
         return await Task.Run(() => GetEntry(path), cancellationToken)
             .ConfigureAwait(false);

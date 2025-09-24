@@ -283,6 +283,132 @@ public class ObjectsManager : IObjectsManager
         return entry.ToDto();
     }
 
+    public async Task Transfer(string sourceOrgSlug, string sourceDsSlug, string sourcePath, string destOrgSlug,
+        string destDsSlug, string destPath, bool overwrite = false)
+    {
+
+        var sourceDs = _utils.GetDataset(sourceOrgSlug, sourceDsSlug);
+        var destDs = _utils.GetDataset(destOrgSlug, destDsSlug);
+
+        _logger.LogInformation(
+            "In Transfer('{SourceOrgSlug}/{SourceDsSlug}, {SourcePath}' -> '{DestOrgSlug}/{DestDsSlug}', {DestPath}; {Overwrite})",
+            sourceOrgSlug, sourceDsSlug, sourcePath, destOrgSlug, destDsSlug, destPath, overwrite);
+        
+        if (sourceOrgSlug == destOrgSlug && sourceDsSlug == destDsSlug) 
+            throw new InvalidOperationException("Source and destination cannot be the same");
+
+        if (!await _authManager.RequestAccess(sourceDs, AccessType.Read))
+            throw new UnauthorizedException("The current user is not allowed to read the source dataset");
+
+        if (!await _authManager.RequestAccess(destDs, AccessType.Write))
+            throw new UnauthorizedException("The current user is not allowed to write to the destination dataset");
+
+        var sourceDdb = _ddbManager.Get(sourceOrgSlug, sourceDs.InternalRef);
+        var destDdb = _ddbManager.Get(destOrgSlug, destDs.InternalRef);
+
+        var sourceEntry = await sourceDdb.GetEntryAsync(sourcePath);
+
+        // Checking if source exists
+        if (sourceEntry == null)
+            throw new InvalidOperationException("Cannot find source entry: '" + sourcePath + "'");
+
+        if (IsReservedPath(destPath))
+            throw new InvalidOperationException($"'{destPath}' is a reserved path");
+
+        var destEntry = await destDdb.GetEntryAsync(destPath);
+
+        if (destEntry != null)
+        {
+            if (!overwrite)
+                throw new InvalidOperationException("Destination entry already exists and overwrite is false");
+
+            if (sourceEntry.Type == EntryType.Directory && destEntry.Type != EntryType.Directory)
+                throw new ArgumentException("Cannot transfer a folder on a file");
+
+            if (sourceEntry.Type != EntryType.Directory && destEntry.Type == EntryType.Directory)
+                throw new ArgumentException("Cannot transfer a file on a folder");
+        }
+
+        switch (sourceEntry.Type)
+        {
+            case EntryType.Directory:
+            {
+                var sourceLocalFilePath = sourceDdb.GetLocalPath(sourcePath);
+                var destLocalFilePath = destDdb.GetLocalPath(destPath);
+
+                _logger.LogInformation("Transferring directory '{Source}' to '{Dest}'", sourcePath, destPath);
+
+                CommonUtils.EnsureSafePath(destLocalFilePath);
+
+                _fs.FolderCopy(sourceLocalFilePath, destLocalFilePath, true);
+                break;
+
+            }
+            case EntryType.DroneDB:
+                throw new InvalidOperationException("Cannot transfer a DroneDB file");
+
+            case EntryType.Undefined:
+            case EntryType.Generic:
+            case EntryType.GeoImage:
+            case EntryType.GeoRaster:
+            case EntryType.PointCloud:
+            case EntryType.Image:
+            case EntryType.Markdown:
+            case EntryType.Video:
+            case EntryType.Geovideo:
+            case EntryType.Model:
+            case EntryType.Panorama:
+            case EntryType.GeoPanorama:
+            case EntryType.Vector:
+            default:
+            {
+                var sourceLocalFilePath = sourceDdb.GetLocalPath(sourcePath);
+                var destLocalFilePath = destDdb.GetLocalPath(destPath);
+
+                _logger.LogInformation("Transferring file '{Source}' to '{Dest}'", sourcePath, destPath);
+
+                CommonUtils.EnsureSafePath(destLocalFilePath);
+
+                _fs.Copy(sourceLocalFilePath, destLocalFilePath, true);
+                break;
+            }
+
+        }
+        
+        _logger.LogInformation("FS copy OK");
+        
+        _logger.LogInformation("Performing ddb add");
+        destDdb.AddRaw(destDdb.GetLocalPath(destPath));
+        
+        if (!await destDdb.EntryExistsAsync(destPath))
+            throw new InvalidOperationException(
+                $"Cannot find destination '{destPath}' after transfer, something wrong with ddb");
+        
+        // We need to transfer the build folder (if exists), this is an optimization to avoid re-building everything
+        var sourceBuildPath = Path.Combine(sourceDdb.BuildFolderPath, sourceEntry.Hash);
+        
+        if (_fs.FolderExists(sourceBuildPath))
+        {
+            var destBuildPath = Path.Combine(destDdb.BuildFolderPath, sourceEntry.Hash);
+            _logger.LogInformation("Transferring build folder '{SourceBuildPath}' to '{DestBuildPath}'", sourceBuildPath, destBuildPath);
+            CommonUtils.EnsureSafePath(destBuildPath);
+            _fs.FolderCopy(sourceBuildPath, destBuildPath, true);
+        }
+        else
+        {
+            _logger.LogInformation("No build folder found at '{SourceBuildPath}'", sourceBuildPath);
+        }
+        
+        _logger.LogInformation("Removing source file");
+        
+        // Remove source file
+        await sourceDdb.RemoveAsync(sourcePath);
+        
+        
+        _logger.LogInformation("Transfer OK");
+
+    }
+
     public async Task Move(string orgSlug, string dsSlug, string source, string dest)
     {
         var ds = _utils.GetDataset(orgSlug, dsSlug);
@@ -330,8 +456,6 @@ public class ObjectsManager : IObjectsManager
                 CommonUtils.EnsureSafePath(destLocalFilePath);
                 _fs.FolderMove(sourceLocalFilePath, destLocalFilePath);
 
-                _logger.LogInformation("FS move OK");
-
                 break;
             }
             case EntryType.DroneDB:
@@ -359,11 +483,11 @@ public class ObjectsManager : IObjectsManager
                 CommonUtils.EnsureSafePath(destLocalFilePath);
                 _fs.Move(sourceLocalFilePath, destLocalFilePath);
 
-                _logger.LogInformation("FS move OK");
-
                 break;
             }
         }
+
+        _logger.LogInformation("FS move OK");
 
         _logger.LogInformation("Performing ddb move");
         await ddb.MoveAsync(source, dest);

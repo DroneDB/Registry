@@ -29,4 +29,7 @@ public interface IObjectsManager
     Task<string> GetBuildFile(string orgSlug, string dsSlug, string hash, string path);
     Task<bool> CheckBuildFile(string orgSlug, string dsSlug, string hash, string path);
     Task<EntryType?> GetEntryType(string orgSlug, string dsSlug, string path);
+
+    Task Transfer(string sourceOrgSlug, string sourceDsSlug, string sourcePath, string destOrgSlug,
+        string destDsSlug, string destPath, bool overwrite = false);
 }
