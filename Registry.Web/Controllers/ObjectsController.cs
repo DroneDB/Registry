@@ -368,7 +368,7 @@ public class ObjectsController : ControllerBaseEx
             return ExceptionResult(ex);
         }
     }
-    
+
     [HttpPost("transfer", Name = nameof(ObjectsController) + "." + nameof(Transfer))]
     public async Task<IActionResult> Transfer([FromRoute] string orgSlug, [FromRoute] string dsSlug, [FromForm] string sourcePath,
         [FromForm] string destOrgSlug, [FromForm] string destDsSlug, [FromForm] string destPath, [FromForm] bool overwrite)
@@ -393,13 +393,13 @@ public class ObjectsController : ControllerBaseEx
 
     [HttpPost("build", Name = nameof(ObjectsController) + "." + nameof(Build))]
     public async Task<IActionResult> Build([FromRoute] string orgSlug, [FromRoute] string dsSlug,
-        [FromForm] string path, [FromForm] bool background = false, [FromForm] bool force = false)
+        [FromForm] string path, [FromForm] bool force = false)
     {
         try
         {
             _logger.LogDebug("Objects controller Build('{OrgSlug}', '{DsSlug}', '{Path}')", orgSlug, dsSlug, path);
 
-            await _objectsManager.Build(orgSlug, dsSlug, path, background, force);
+            await _objectsManager.Build(orgSlug, dsSlug, path, force);
             return Ok();
         }
         catch (Exception ex)
@@ -464,6 +464,6 @@ public class ObjectsController : ControllerBaseEx
             return ExceptionResult(ex);
         }
     }
-    
-    
+
+
 }

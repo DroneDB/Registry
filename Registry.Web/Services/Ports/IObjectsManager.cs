@@ -25,7 +25,7 @@ public interface IObjectsManager
     Task<StorageDataDto> GenerateThumbnailData(string orgSlug, string dsSlug, string path, int? size, bool recreate = false);
     Task<StorageDataDto> GenerateTileData(string orgSlug, string dsSlug, string path, int tz, int tx, int ty, bool retina);
     Task<FileStreamDescriptor> GetDdb(string orgSlug, string dsSlug);
-    Task Build(string orgSlug, string dsSlug, string path, bool background = false, bool force = false);
+    Task Build(string orgSlug, string dsSlug, string path, bool force = false);
     Task<string> GetBuildFile(string orgSlug, string dsSlug, string hash, string path);
     Task<bool> CheckBuildFile(string orgSlug, string dsSlug, string hash, string path);
     Task<EntryType?> GetEntryType(string orgSlug, string dsSlug, string path);

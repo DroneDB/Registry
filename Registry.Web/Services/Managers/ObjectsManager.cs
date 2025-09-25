@@ -233,7 +233,7 @@ public class ObjectsManager : IObjectsManager
             throw new InvalidOperationException("Cannot find just added file!");
 
         _logger.LogInformation("Entry OK");
-        
+
         var user = await _authManager.GetCurrentUser();
 
         if (await ddb.IsBuildableAsync(entry.Path))
@@ -251,7 +251,7 @@ public class ObjectsManager : IObjectsManager
             _logger.LogInformation("Items are pending build, retriggering build");
 
             var jobId = _backgroundJob.Enqueue(() => HangfireUtils.BuildPendingWrapper(ddb, null));
-            
+
             HangfireUtils.SetJobParameters(jobId, orgSlug, dsSlug, user.Id, entry.Path);
 
             _logger.LogInformation("Background job id is {JobId}", jobId);
@@ -299,8 +299,8 @@ public class ObjectsManager : IObjectsManager
         _logger.LogInformation(
             "In Transfer('{SourceOrgSlug}/{SourceDsSlug}, {SourcePath}' -> '{DestOrgSlug}/{DestDsSlug}', {DestPath}; {Overwrite})",
             sourceOrgSlug, sourceDsSlug, sourcePath, destOrgSlug, destDsSlug, destPath, overwrite);
-        
-        if (sourceOrgSlug == destOrgSlug && sourceDsSlug == destDsSlug) 
+
+        if (sourceOrgSlug == destOrgSlug && sourceDsSlug == destDsSlug)
             throw new InvalidOperationException("Source and destination cannot be the same");
 
         if (!await _authManager.RequestAccess(sourceDs, AccessType.Read))
@@ -380,19 +380,19 @@ public class ObjectsManager : IObjectsManager
             }
 
         }
-        
+
         _logger.LogInformation("FS copy OK");
-        
+
         _logger.LogInformation("Performing ddb add");
         destDdb.AddRaw(destDdb.GetLocalPath(destPath));
-        
+
         if (!await destDdb.EntryExistsAsync(destPath))
             throw new InvalidOperationException(
                 $"Cannot find destination '{destPath}' after transfer, something wrong with ddb");
-        
+
         // We need to transfer the build folder (if exists), this is an optimization to avoid re-building everything
         var sourceBuildPath = Path.Combine(sourceDdb.BuildFolderPath, sourceEntry.Hash);
-        
+
         if (_fs.FolderExists(sourceBuildPath))
         {
             var destBuildPath = Path.Combine(destDdb.BuildFolderPath, sourceEntry.Hash);
@@ -404,13 +404,13 @@ public class ObjectsManager : IObjectsManager
         {
             _logger.LogInformation("No build folder found at '{SourceBuildPath}'", sourceBuildPath);
         }
-        
+
         _logger.LogInformation("Removing source file");
-        
+
         // Remove source file
         await sourceDdb.RemoveAsync(sourcePath);
-        
-        
+
+
         _logger.LogInformation("Transfer OK");
 
     }
@@ -671,7 +671,7 @@ public class ObjectsManager : IObjectsManager
             // NOTE: This is the definition of self-inflicted wound
             if (ex.InnerException != null &&
                 ex.InnerException.Message.Contains("Out of bounds", StringComparison.OrdinalIgnoreCase))
-                throw new NotFoundException("Tile out of bounds");
+                throw new NotFoundException("Tile out of bounds", ex);
 
             throw;
         }
@@ -860,8 +860,8 @@ public class ObjectsManager : IObjectsManager
     }
 
     #region Build
-    
-    public async Task Build(string orgSlug, string dsSlug, string path, bool background = false, bool force = false)
+
+    public async Task Build(string orgSlug, string dsSlug, string path, bool force = false)
     {
         var ds = _utils.GetDataset(orgSlug, dsSlug);
 
@@ -886,24 +886,16 @@ public class ObjectsManager : IObjectsManager
             return;
         }
 
-        if (background)
-        {
-            _logger.LogInformation("Building '{Path}' asynchronously", path);
+        // Always build asynchronously using background job
+        _logger.LogInformation("Building '{Path}' asynchronously", path);
 
-            var jobId = _backgroundJob.Enqueue(() => HangfireUtils.BuildWrapper(ddb, path, force, null));
-            
-            var user = await _authManager.GetCurrentUser();
-            
-            HangfireUtils.SetJobParameters(jobId, orgSlug, dsSlug, user.Id, entry.Path);
+        var jobId = _backgroundJob.Enqueue(() => HangfireUtils.BuildWrapper(ddb, path, force, null));
 
-            _logger.LogInformation("Background job id is {JobId}", jobId);
-        }
-        else
-        {
-            _logger.LogInformation("Building '{Path}' synchronously", path);
+        var user = await _authManager.GetCurrentUser();
 
-            HangfireUtils.BuildWrapper(ddb, path, force, null);
-        }
+        HangfireUtils.SetJobParameters(jobId, orgSlug, dsSlug, user.Id, entry.Path);
+
+        _logger.LogInformation("Background job id is {JobId}", jobId);
     }
 
     public async Task<string> GetBuildFile(string orgSlug, string dsSlug, string hash,
