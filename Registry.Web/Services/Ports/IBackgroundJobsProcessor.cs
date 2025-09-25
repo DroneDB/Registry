@@ -4,6 +4,7 @@ using System.Linq;
 using System.Linq.Expressions;
 using System.Threading.Tasks;
 using Hangfire.States;
+using Registry.Web.Models;
 
 namespace Registry.Web.Services.Ports;
 
@@ -26,6 +27,12 @@ public interface IBackgroundJobsProcessor
 
     public string ContinueJobWith(string parentId, Expression<Action> methodCall, BackgroundJobContinuationOptions options = BackgroundJobContinuationOptions.OnlyOnSucceededState);
     public string ContinueJobWith<T>(string parentId, Expression<Action<T>> methodCall, BackgroundJobContinuationOptions options = BackgroundJobContinuationOptions.OnlyOnSucceededState);
+
+    // New indexed job methods
+    public string EnqueueIndexed(Expression<Action> methodCall, IndexPayload meta);
+    public string EnqueueIndexed(Expression<Func<Task>> methodCall, IndexPayload meta);
+    public string EnqueueIndexed<T>(Expression<Action<T>> methodCall, IndexPayload meta);
+    public string EnqueueIndexed<T>(Expression<Func<T, Task>> methodCall, IndexPayload meta);
 }
 
 public enum BackgroundJobContinuationOptions

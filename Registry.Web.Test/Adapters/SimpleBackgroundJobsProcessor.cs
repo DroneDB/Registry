@@ -5,6 +5,7 @@ using System.Linq;
 using System.Linq.Expressions;
 using System.Text;
 using System.Threading.Tasks;
+using Registry.Web.Models;
 using Registry.Web.Services.Ports;
 
 namespace Registry.Web.Test.Adapters;
@@ -137,5 +138,34 @@ public class SimpleBackgroundJobsProcessor : IBackgroundJobsProcessor
         BackgroundJobContinuationOptions options = BackgroundJobContinuationOptions.OnlyOnSucceededState)
     {
         throw new NotImplementedException();
+    }
+
+    // Indexed job methods - for testing, we just execute immediately like regular Enqueue
+    public string EnqueueIndexed(Expression<Action> methodCall, IndexPayload meta)
+    {
+        // For testing purposes, we ignore the IndexPayload and just execute the job
+        return Enqueue(methodCall);
+    }
+
+    public string EnqueueIndexed(Expression<Func<Task>> methodCall, IndexPayload meta)
+    {
+        // For testing purposes, we ignore the IndexPayload and just execute the job
+        return Enqueue(methodCall);
+    }
+
+    public string EnqueueIndexed<T>(Expression<Action<T>> methodCall, IndexPayload meta)
+    {
+        // For now, we can't easily execute generic methods in testing, so we return a fake job ID
+        var newId = GetNewId();
+        _jobs.Add(newId, JobStatus.Succeeded);
+        return newId.ToString();
+    }
+
+    public string EnqueueIndexed<T>(Expression<Func<T, Task>> methodCall, IndexPayload meta)
+    {
+        // For now, we can't easily execute generic methods in testing, so we return a fake job ID
+        var newId = GetNewId();
+        _jobs.Add(newId, JobStatus.Succeeded);
+        return newId.ToString();
     }
 }

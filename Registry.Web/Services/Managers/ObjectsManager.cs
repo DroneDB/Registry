@@ -240,9 +240,8 @@ public class ObjectsManager : IObjectsManager
         {
             _logger.LogInformation("This item is buildable, build it!");
 
-            var jobId = _backgroundJob.Enqueue(() => HangfireUtils.BuildWrapper(ddb, path, false, null));
-
-            HangfireUtils.SetJobParameters(jobId, orgSlug, dsSlug, user.Id, entry.Path);
+            var meta = new IndexPayload(orgSlug, dsSlug, entry.Path, user.Id);
+            var jobId = _backgroundJob.EnqueueIndexed(() => HangfireUtils.BuildWrapper(ddb, path, false, null), meta);
 
             _logger.LogInformation("Background job id is {JobId}", jobId);
         }
@@ -250,9 +249,8 @@ public class ObjectsManager : IObjectsManager
         {
             _logger.LogInformation("Items are pending build, retriggering build");
 
-            var jobId = _backgroundJob.Enqueue(() => HangfireUtils.BuildPendingWrapper(ddb, null));
-
-            HangfireUtils.SetJobParameters(jobId, orgSlug, dsSlug, user.Id, entry.Path);
+            var meta = new IndexPayload(orgSlug, dsSlug, entry.Path, user.Id);
+            var jobId = _backgroundJob.EnqueueIndexed(() => HangfireUtils.BuildPendingWrapper(ddb, null), meta);
 
             _logger.LogInformation("Background job id is {JobId}", jobId);
         }
@@ -889,11 +887,9 @@ public class ObjectsManager : IObjectsManager
         // Always build asynchronously using background job
         _logger.LogInformation("Building '{Path}' asynchronously", path);
 
-        var jobId = _backgroundJob.Enqueue(() => HangfireUtils.BuildWrapper(ddb, path, force, null));
-
         var user = await _authManager.GetCurrentUser();
-
-        HangfireUtils.SetJobParameters(jobId, orgSlug, dsSlug, user.Id, entry.Path);
+        var meta = new IndexPayload(orgSlug, dsSlug, entry.Path, user.Id);
+        var jobId = _backgroundJob.EnqueueIndexed(() => HangfireUtils.BuildWrapper(ddb, path, force, null), meta);
 
         _logger.LogInformation("Background job id is {JobId}", jobId);
     }

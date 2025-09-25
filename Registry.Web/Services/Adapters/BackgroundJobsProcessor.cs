@@ -4,6 +4,7 @@ using System.Linq;
 using System.Linq.Expressions;
 using System.Threading.Tasks;
 using Hangfire;
+using Registry.Web.Models;
 using Registry.Web.Services.Ports;
 
 namespace Registry.Web.Services.Adapters;
@@ -11,10 +12,12 @@ namespace Registry.Web.Services.Adapters;
 public class BackgroundJobsProcessor : IBackgroundJobsProcessor
 {
     private readonly IBackgroundJobClient _client;
+    private readonly IIndexedJobEnqueuer _indexedEnqueuer;
 
-    public BackgroundJobsProcessor(IBackgroundJobClient client)
+    public BackgroundJobsProcessor(IBackgroundJobClient client, IIndexedJobEnqueuer indexedEnqueuer)
     {
         _client = client;
+        _indexedEnqueuer = indexedEnqueuer;
     }
 
     public string Enqueue(Expression<Action> methodCall) => _client.Enqueue(methodCall);
@@ -53,4 +56,17 @@ public class BackgroundJobsProcessor : IBackgroundJobsProcessor
 
     public string ContinueJobWith<T>(string parentId, Expression<Action<T>> methodCall,
         BackgroundJobContinuationOptions options = BackgroundJobContinuationOptions.OnlyOnSucceededState) => _client.ContinueJobWith(parentId, methodCall, (JobContinuationOptions)options);
+
+    // Indexed job methods - delegate to IIndexedJobEnqueuer
+    public string EnqueueIndexed(Expression<Action> methodCall, IndexPayload meta) =>
+        _indexedEnqueuer.Enqueue(methodCall, meta);
+
+    public string EnqueueIndexed(Expression<Func<Task>> methodCall, IndexPayload meta) =>
+        _indexedEnqueuer.Enqueue(methodCall, meta);
+
+    public string EnqueueIndexed<T>(Expression<Action<T>> methodCall, IndexPayload meta) =>
+        _indexedEnqueuer.Enqueue(methodCall, meta);
+
+    public string EnqueueIndexed<T>(Expression<Func<T, Task>> methodCall, IndexPayload meta) =>
+        _indexedEnqueuer.Enqueue(methodCall, meta);
 }

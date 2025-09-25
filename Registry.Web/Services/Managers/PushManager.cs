@@ -12,6 +12,7 @@ using Registry.Common.Model;
 using Registry.Ports;
 using Registry.Ports.DroneDB;
 using Registry.Web.Exceptions;
+using Registry.Web.Models;
 using Registry.Web.Models.Configuration;
 using Registry.Web.Models.DTO;
 using Registry.Web.Services.Ports;
@@ -274,12 +275,14 @@ public class PushManager : IPushManager
         Directory.Delete(baseTempFolder, true);
 
         // Build items
+        var user = await _authManager.GetCurrentUser();
         foreach (var item in delta.Adds)
         {
             if (await ddb.IsBuildableAsync(item.Path))
             {
-                _backgroundJob.Enqueue(() =>
-                    HangfireUtils.BuildWrapper(ddb, item.Path, false, null));
+                var meta = new IndexPayload(orgSlug, dsSlug, item.Path, user.Id);
+                _backgroundJob.EnqueueIndexed(() =>
+                    HangfireUtils.BuildWrapper(ddb, item.Path, false, null), meta);
             }
         }
 
@@ -287,7 +290,8 @@ public class PushManager : IPushManager
         {
             _logger.LogInformation("Items are pending build, retriggering build");
 
-            var jobId = _backgroundJob.Enqueue(() => HangfireUtils.BuildPendingWrapper(ddb, null));
+            var meta = new IndexPayload(orgSlug, dsSlug, null, user.Id);
+            var jobId = _backgroundJob.EnqueueIndexed(() => HangfireUtils.BuildPendingWrapper(ddb, null), meta);
 
             _logger.LogInformation("Background job id is {JobId}", jobId);
         }
