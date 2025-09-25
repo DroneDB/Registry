@@ -40,6 +40,7 @@ public class ObjectsManager : IObjectsManager
     private readonly AppSettings _settings;
     private readonly IDdbWrapper _ddbWrapper;
     private readonly IThumbnailGenerator _thumbnailGenerator;
+    private readonly IJobIndexQuery _jobIndexQuery;
 
     // TODO: Could be moved to config
     private const int DefaultThumbnailSize = 512;
@@ -59,7 +60,8 @@ public class ObjectsManager : IObjectsManager
         IFileSystem fs,
         IBackgroundJobsProcessor backgroundJob,
         IDdbWrapper ddbWrapper,
-        IThumbnailGenerator thumbnailGenerator)
+        IThumbnailGenerator thumbnailGenerator,
+        IJobIndexQuery jobIndexQuery)
     {
         _logger = logger;
         _context = context;
@@ -72,6 +74,7 @@ public class ObjectsManager : IObjectsManager
         _ddbWrapper = ddbWrapper;
         _settings = settings.Value;
         _thumbnailGenerator = thumbnailGenerator;
+        _jobIndexQuery = jobIndexQuery;
     }
 
     public async Task<IEnumerable<EntryDto>> List(string orgSlug, string dsSlug, string path = null,
@@ -975,6 +978,34 @@ public class ObjectsManager : IObjectsManager
         };
 
         return path;
+    }
+
+    public async Task<IEnumerable<BuildJobDto>> GetBuilds(string orgSlug, string dsSlug, int page = 1, int pageSize = 50)
+    {
+        var ds = _utils.GetDataset(orgSlug, dsSlug);
+
+        _logger.LogInformation("In GetBuilds('{OrgSlug}/{DsSlug}')", orgSlug, dsSlug);
+
+        if (!await _authManager.RequestAccess(ds, AccessType.Read))
+            throw new UnauthorizedException("The current user is not allowed to read dataset");
+
+        // Convert page/pageSize to skip/take
+        var skip = (page - 1) * pageSize;
+        var take = pageSize;
+
+        var jobIndexes = await _jobIndexQuery.GetByOrgDsAsync(orgSlug, dsSlug, skip, take);
+
+        return jobIndexes.Select(ji => new BuildJobDto
+        {
+            JobId = ji.JobId,
+            Path = ji.Path,
+            CurrentState = ji.CurrentState,
+            CreatedAt = ji.CreatedAtUtc,
+            ProcessingAt = ji.ProcessingAtUtc,
+            SucceededAt = ji.SucceededAtUtc,
+            FailedAt = ji.FailedAtUtc,
+            DeletedAt = ji.DeletedAtUtc
+        });
     }
 
     #endregion

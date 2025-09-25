@@ -32,4 +32,6 @@ public interface IObjectsManager
 
     Task Transfer(string sourceOrgSlug, string sourceDsSlug, string sourcePath, string destOrgSlug,
         string destDsSlug, string destPath, bool overwrite = false);
+
+    Task<IEnumerable<BuildJobDto>> GetBuilds(string orgSlug, string dsSlug, int page = 1, int pageSize = 50);
 }

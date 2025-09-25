@@ -465,5 +465,28 @@ public class ObjectsController : ControllerBaseEx
         }
     }
 
+    [HttpGet("builds", Name = nameof(ObjectsController) + "." + nameof(GetBuilds))]
+    public async Task<IActionResult> GetBuilds([FromRoute] string orgSlug, [FromRoute] string dsSlug,
+        [FromQuery] int page = 1, [FromQuery] int pageSize = 50)
+    {
+        try
+        {
+            _logger.LogDebug("Objects controller GetBuilds('{OrgSlug}', '{DsSlug}', page: {Page}, pageSize: {PageSize})",
+                orgSlug, dsSlug, page, pageSize);
+
+            var builds = await _objectsManager.GetBuilds(orgSlug, dsSlug, page, pageSize);
+
+            return Ok(builds);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex,
+                "Exception in Objects controller GetBuilds('{OrgSlug}', '{DsSlug}', page: {Page}, pageSize: {PageSize})",
+                orgSlug, dsSlug, page, pageSize);
+
+            return ExceptionResult(ex);
+        }
+    }
+
 
 }

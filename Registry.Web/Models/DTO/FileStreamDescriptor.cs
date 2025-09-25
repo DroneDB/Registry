@@ -68,38 +68,44 @@ public class FileStreamDescriptor
         // Otherwise we zip everything together and return the package
         else
         {
-            using var archive = new ZipArchive(stream, ZipArchiveMode.Create, true);
-            foreach (var path in _paths)
+            // Use MemoryStream to avoid synchronous operations with ZipArchive directly on HTTP response stream
+            using var memoryStream = new MemoryStream();
+            using (var archive = new ZipArchive(memoryStream, ZipArchiveMode.Create, true))
             {
-                _logger.LogInformation("Zipping: '{Path}'", path);
+                foreach (var path in _paths)
+                {
+                    _logger.LogInformation("Zipping: '{Path}'", path);
 
-                var entry = archive.CreateEntry(path, CommonUtils.GetCompressionLevel(path));
-                await using var entryStream = entry.Open();
+                    var entry = archive.CreateEntry(path, CommonUtils.GetCompressionLevel(path));
+                    await using var entryStream = entry.Open();
 
-                var localPath = _ddb.GetLocalPath(path);
+                    var localPath = _ddb.GetLocalPath(path);
 
-                await using var fileStream = new FileStream(localPath, FileMode.Open, FileAccess.Read);
-                await fileStream.CopyToAsync(entryStream);
+                    await using var fileStream = new FileStream(localPath, FileMode.Open, FileAccess.Read);
+                    await fileStream.CopyToAsync(entryStream);
+                }
 
-            }
+                // We treat folders separately because if they are empty they would not be included in the archive
+                if (_folders != null)
+                {
+                    foreach (var folder in _folders)
+                        archive.CreateEntry(folder + "/");
+                }
 
-            // We treat folders separately because if they are empty they would not be included in the archive
-            if (_folders != null)
-            {
-                foreach (var folder in _folders)
-                    archive.CreateEntry(folder + "/");
-            }
+                // Include ddb folder
+                if (_descriptorType == FileDescriptorType.Dataset)
+                {
+                    var ddb = _ddbManager.Get(_orgSlug, _internalRef);
 
-            // Include ddb folder
-            if (_descriptorType == FileDescriptorType.Dataset)
-            {
-                var ddb = _ddbManager.Get(_orgSlug, _internalRef);
+                    archive.CreateEntryFromAny(
+                        Path.Combine(ddb.DatasetFolderPath, IDDB.DatabaseFolderName),
+                        string.Empty, [ddb.BuildFolderPath]);
+                }
+            } // ZipArchive is disposed here safely on MemoryStream
 
-                archive.CreateEntryFromAny(
-                    Path.Combine(ddb.DatasetFolderPath, IDDB.DatabaseFolderName),
-                    string.Empty, [ddb.BuildFolderPath]);
-            }
-
+            // Copy the completed ZIP data to the response stream asynchronously
+            memoryStream.Seek(0, SeekOrigin.Begin);
+            await memoryStream.CopyToAsync(stream);
         }
 
     }
