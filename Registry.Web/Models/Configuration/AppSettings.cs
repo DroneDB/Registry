@@ -49,7 +49,7 @@ public class AppSettings
     /// Main storage path
     /// </summary>
     public string StoragePath { get; set; }
-        
+
     /// <summary>
     /// Storage path for datasets
     /// </summary>
@@ -121,7 +121,7 @@ public class AppSettings
     public string RemoteThumbnailGeneratorUrl { get; set; }
 
     /// <summary>
-    /// Thumbnails cache expiration 
+    /// Thumbnails cache expiration
     /// </summary>
     public TimeSpan? ThumbnailsCacheExpiration { get; set; }
 
@@ -139,5 +139,12 @@ public class AppSettings
     /// Monitor token to call health checks
     /// </summary>
     public string MonitorToken { get; set; }
+
+    /// <summary>
+    /// Maximum size in bytes for keeping ZIP creation in memory.
+    /// Files larger than this will use temporary files on disk.
+    /// Default: 1GB (1073741824 bytes)
+    /// </summary>
+    public long MaxZipMemoryThreshold { get; set; } = 1073741824; // 1GB
 
 }
