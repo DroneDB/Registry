@@ -39,7 +39,7 @@ public class WebUtils : IUtils
     }
 
 
-    public Organization GetOrganization(string orgSlug, bool safe = false)
+    public Organization GetOrganization(string orgSlug, bool safe = false, bool withTracking = false)
     {
         if (string.IsNullOrWhiteSpace(orgSlug))
             throw new BadRequestException("Missing organization id");
@@ -47,8 +47,13 @@ public class WebUtils : IUtils
         if (!orgSlug.IsValidSlug())
             throw new BadRequestException("Invalid organization id");
 
-        var org = _context.Organizations.Include(item => item.Datasets)
-            .FirstOrDefault(item => item.Slug == orgSlug);
+        IQueryable<Organization> query = _context.Organizations.Include(item => item.Datasets);
+
+        // Apply AsNoTracking only if withTracking is false (default behavior for read-only operations)
+        if (!withTracking)
+            query = query.AsNoTracking();
+
+        var org = query.FirstOrDefault(item => item.Slug == orgSlug);
 
         if (org == null)
             return safe ? null : throw new NotFoundException("Organization not found");
@@ -56,7 +61,7 @@ public class WebUtils : IUtils
         return org;
     }
 
-    public Dataset GetDataset(string orgSlug, string dsSlug, bool safe = false)
+    public Dataset GetDataset(string orgSlug, string dsSlug, bool safe = false, bool withTracking = false)
     {
         if (string.IsNullOrWhiteSpace(dsSlug))
             throw new BadRequestException("Missing dataset id");
@@ -70,9 +75,13 @@ public class WebUtils : IUtils
         if (!orgSlug.IsValidSlug())
             throw new BadRequestException("Invalid organization id");
 
-        var dataset = _context.Datasets
-            .Include(item => item.Organization)
-            .FirstOrDefault(item => item.Slug == dsSlug && item.Organization.Slug == orgSlug);
+        IQueryable<Dataset> query = _context.Datasets.Include(item => item.Organization);
+
+        // Apply AsNoTracking only if withTracking is false (default behavior for read-only operations)
+        if (!withTracking)
+            query = query.AsNoTracking();
+
+        var dataset = query.FirstOrDefault(item => item.Slug == dsSlug && item.Organization.Slug == orgSlug);
 
         return dataset ?? (safe ? null : throw new NotFoundException($"Cannot find dataset {dsSlug} in organization {orgSlug}"));
     }
@@ -88,7 +97,7 @@ public class WebUtils : IUtils
 
         for (var n = 1;; n++)
         {
-            var org = _context.Organizations.FirstOrDefault(item => item.Slug == res);
+            var org = _context.Organizations.AsNoTracking().FirstOrDefault(item => item.Slug == res);
 
             if (org == null) return res;
 
@@ -155,11 +164,13 @@ public class WebUtils : IUtils
         // This is pure C# magics
         var maxStorage = user.Metadata?.SafeGetValue(MagicStrings.MaxStorageKey) is long obj ? obj : (long?)null;
 
-        // Get all the datasets that belong to the user
-        var datasets = (from org in _context.Organizations
-            where org.OwnerId == user.Id
-            from dataset in org.Datasets
-            select new { OrgSlug = org.Slug, dataset.InternalRef }).ToArray();
+        // Get all the datasets that belong to the user - using projection for efficiency
+        var datasets = _context.Organizations
+            .AsNoTracking()
+            .Where(org => org.OwnerId == user.Id)
+            .SelectMany(org => org.Datasets)
+            .Select(dataset => new { OrgSlug = dataset.Organization.Slug, dataset.InternalRef })
+            .ToArray();
 
         // Get the size and sum
         var size =

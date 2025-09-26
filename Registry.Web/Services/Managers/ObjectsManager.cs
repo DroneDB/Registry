@@ -382,9 +382,7 @@ public class ObjectsManager : IObjectsManager
 
         }
 
-        _logger.LogInformation("FS copy OK");
-
-        _logger.LogInformation("Performing ddb add");
+        _logger.LogInformation("FS copy OK, performing ddb add");
         destDdb.AddRaw(destDdb.GetLocalPath(destPath));
 
         if (!await destDdb.EntryExistsAsync(destPath))
@@ -740,6 +738,9 @@ public class ObjectsManager : IObjectsManager
             foreach (var path in paths)
             {
                 var entry = ddb.GetEntry(path);
+                
+                if (entry == null)
+                    throw new InvalidOperationException($"Path '{path}' not found in ddb, cannot continue");
 
                 if (entry.Type == EntryType.Directory)
                 {

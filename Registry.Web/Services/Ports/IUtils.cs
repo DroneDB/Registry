@@ -8,12 +8,12 @@ namespace Registry.Web.Services.Ports;
 
 public interface IUtils
 {
-    Organization GetOrganization(string orgSlug, bool safe = false);
-    Dataset GetDataset(string orgSlug, string dsSlug, bool safe = false);
+    Organization GetOrganization(string orgSlug, bool safe = false, bool withTracking = false);
+    Dataset GetDataset(string orgSlug, string dsSlug, bool safe = false, bool withTracking = false);
 
     string GetFreeOrganizationSlug(string orgName);
     string GenerateDatasetUrl(Dataset dataset, bool useDdbScheme = false);
-        
+
     UserStorageInfo GetUserStorage(User user);
     Task CheckCurrentUserStorage(long size = 0);
 

@@ -177,9 +177,11 @@ public class UsersManager : IUsersManager
             UserName = user.UserName,
             Email = user.Email,
             Roles = roles ?? [],
-            Organizations = (from org in _registryContext.Organizations
-                where org.OwnerId == user.Id || org.Users.Any(item => item.UserId == user.Id)
-                select org.Slug).ToArray()
+            Organizations = _registryContext.Organizations
+                .AsNoTracking()
+                .Where(org => org.OwnerId == user.Id || org.Users.Any(item => item.UserId == user.Id))
+                .Select(org => org.Slug)
+                .ToArray()
         };
     }
 
@@ -476,11 +478,22 @@ public class UsersManager : IUsersManager
         if (user == null)
             throw new BadRequestException("Cannot find user " + userName);
 
-        var orgs = (from org in _registryContext.Organizations.Include(o => o.Users)
-            where org.OwnerId == user.Id || org.Users.Any(item => item.UserId == user.Id)
-            select org).ToArray();
+        // Use projection to load only necessary data for DTOs
+        var orgDtos = await _registryContext.Organizations
+            .AsNoTracking()
+            .Where(org => org.OwnerId == user.Id || org.Users.Any(item => item.UserId == user.Id))
+            .Select(org => new OrganizationDto
+            {
+                CreationDate = org.CreationDate,
+                Description = org.Description,
+                Slug = org.Slug,
+                Name = org.Name,
+                IsPublic = org.IsPublic,
+                Owner = org.OwnerId
+            })
+            .ToArrayAsync();
 
-        return orgs.Select(o => o.ToDto()).ToArray();
+        return orgDtos;
     }
 
     public async Task SetUserOrganizations(string userName, string[] orgSlugs)
@@ -498,7 +511,7 @@ public class UsersManager : IUsersManager
         if (user == null)
             throw new BadRequestException("Cannot find user " + userName);
 
-        var orgs = (from org in _registryContext.Organizations.Include(o => o.Users)
+        var orgs = (from org in _registryContext.Organizations.Include(o => o.Users).AsNoTracking()
             where org.OwnerId == user.Id || org.Users.Any(item => item.UserId == user.Id)
             select org).ToArray();
 

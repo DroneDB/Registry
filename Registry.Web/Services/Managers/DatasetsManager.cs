@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Registry.Adapters.DroneDB;
 using Registry.Ports;
@@ -98,7 +99,7 @@ public class DatasetsManager : IDatasetsManager
 
     public async Task<DatasetDto> AddNew(string orgSlug, DatasetNewDto dataset)
     {
-        var org = _utils.GetOrganization(orgSlug);
+        var org = _utils.GetOrganization(orgSlug, withTracking: true);
 
         if (!await _authManager.RequestAccess(org, AccessType.Write))
             throw new UnauthorizedException("The current user cannot add datasets to this organization");
@@ -112,7 +113,7 @@ public class DatasetsManager : IDatasetsManager
         if (!dataset.Slug.IsValidSlug())
             throw new BadRequestException("Dataset slug is invalid");
 
-        if (_context.Datasets.Any(item => item.Slug == dataset.Slug && item.Organization.Slug == orgSlug))
+        if (_context.Datasets.AsNoTracking().Any(item => item.Slug == dataset.Slug && item.Organization.Slug == orgSlug))
             throw new BadRequestException("Dataset with this slug already exists");
 
         var ds = new Dataset
@@ -143,7 +144,7 @@ public class DatasetsManager : IDatasetsManager
         if (dataset == null)
             throw new BadRequestException("Dataset is null");
 
-        var ds = _utils.GetDataset(orgSlug, dsSlug);
+        var ds = _utils.GetDataset(orgSlug, dsSlug, withTracking: true);
 
         if (!await _authManager.RequestAccess(ds, AccessType.Write))
             throw new UnauthorizedException("The current user cannot edit this dataset");
@@ -167,7 +168,7 @@ public class DatasetsManager : IDatasetsManager
 
     public async Task Delete(string orgSlug, string dsSlug)
     {
-        var ds = _utils.GetDataset(orgSlug, dsSlug);
+        var ds = _utils.GetDataset(orgSlug, dsSlug, withTracking: true);
 
         if (!await _authManager.RequestAccess(ds, AccessType.Delete))
             throw new UnauthorizedException("The current user cannot delete this dataset");
@@ -185,7 +186,7 @@ public class DatasetsManager : IDatasetsManager
         }
         catch (Exception ex)
         {
-            _logger.LogWarning("Error deleting dataset", ex);
+            _logger.LogWarning(ex, "Error deleting dataset");
             throw new InvalidOperationException("Error deleting dataset", ex);
         }
     }
@@ -206,7 +207,7 @@ public class DatasetsManager : IDatasetsManager
         if (_utils.GetDataset(orgSlug, newSlug, true) != null)
             throw new ArgumentException($"Dataset '{newSlug}' already exists");
 
-        var ds = _utils.GetDataset(orgSlug, dsSlug);
+        var ds = _utils.GetDataset(orgSlug, dsSlug, withTracking: true);
 
         if (!await _authManager.RequestAccess(ds, AccessType.Write))
             throw new UnauthorizedException("The current user cannot rename this dataset");
