@@ -289,7 +289,7 @@ class ShareManagerTest : TestBase
         };
 
         var ddbMock = new Mock<IDDB>();
-        ddbMock.Setup(x => x.GetInfoAsync(default)).Returns(Task.FromResult(new Entry
+        ddbMock.Setup(x => x.GetInfoAsync(CancellationToken.None)).Returns(Task.FromResult(new Entry
         {
             Properties = attributes
         }));
