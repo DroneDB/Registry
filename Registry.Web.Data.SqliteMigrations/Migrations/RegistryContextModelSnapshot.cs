@@ -42,6 +42,12 @@ namespace Registry.Web.Data.SqliteMigrations.Migrations
 
                     b.HasIndex("DatasetId");
 
+                    b.HasIndex("Start");
+
+                    b.HasIndex("Status");
+
+                    b.HasIndex("UserName", "Status");
+
                     b.ToTable("Batches");
                 });
 
@@ -70,6 +76,10 @@ namespace Registry.Web.Data.SqliteMigrations.Migrations
                         .HasColumnType("TEXT");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("CreationDate");
+
+                    b.HasIndex("InternalRef");
 
                     b.HasIndex("OrganizationSlug");
 
@@ -207,6 +217,8 @@ namespace Registry.Web.Data.SqliteMigrations.Migrations
 
                     b.HasKey("Slug");
 
+                    b.HasIndex("OwnerId");
+
                     b.HasIndex("Slug");
 
                     b.ToTable("Organizations");
@@ -221,6 +233,8 @@ namespace Registry.Web.Data.SqliteMigrations.Migrations
                         .HasColumnType("TEXT");
 
                     b.HasKey("OrganizationSlug", "UserId");
+
+                    b.HasIndex("UserId");
 
                     b.ToTable("OrganizationsUsers");
                 });

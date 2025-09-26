@@ -20,11 +20,42 @@ public class RegistryContext : DbContext
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
+        // Existing indexes
         modelBuilder.Entity<Dataset>()
             .HasIndex(ds => ds.Slug);
 
         modelBuilder.Entity<Organization>()
             .HasIndex(d => d.Slug);
+
+        // NEW STRATEGIC INDEXES for performance optimization
+
+        // For queries filtering by Organization.OwnerId (used frequently)
+        modelBuilder.Entity<Organization>()
+            .HasIndex(o => o.OwnerId);
+
+        // For dataset queries by InternalRef (used in GetUserStorage)
+        modelBuilder.Entity<Dataset>()
+            .HasIndex(ds => ds.InternalRef);
+
+        // For dataset queries by creation date (for sorting/filtering)
+        modelBuilder.Entity<Dataset>()
+            .HasIndex(ds => ds.CreationDate);
+
+        // For batch queries by status
+        modelBuilder.Entity<Batch>()
+            .HasIndex(b => b.Status);
+
+        // For batch queries by user and status
+        modelBuilder.Entity<Batch>()
+            .HasIndex(b => new { b.UserName, b.Status });
+
+        // For batch queries by start date
+        modelBuilder.Entity<Batch>()
+            .HasIndex(b => b.Start);
+
+        // For OrganizationUser queries by UserId
+        modelBuilder.Entity<OrganizationUser>()
+            .HasIndex(ou => ou.UserId);
 
         modelBuilder
             .Entity<Dataset>()
@@ -69,7 +100,7 @@ public class RegistryContext : DbContext
             .WithMany(org => org.Users)
             .IsRequired()
             .OnDelete(DeleteBehavior.Cascade);
-        
+
         modelBuilder.Entity<JobIndex>(e =>
         {
             e.HasKey(x => x.JobId);
@@ -81,7 +112,7 @@ public class RegistryContext : DbContext
             e.Property(x => x.Queue).HasMaxLength(64);
             e.Property(x => x.CurrentState).HasMaxLength(32).IsRequired();
             e.Property(x => x.MethodDisplay).HasMaxLength(1024);
-            
+
             e.HasIndex(x => new { x.OrgSlug, x.DsSlug });
             e.HasIndex(x => new { x.OrgSlug, x.DsSlug, x.Path });
             e.HasIndex(x => x.UserId);
@@ -104,7 +135,7 @@ public class RegistryContext : DbContext
     public DbSet<OrganizationUser> OrganizationsUsers { get; set; }
     public DbSet<Dataset> Datasets { get; set; }
     public DbSet<Batch> Batches { get; set; }
-    
+
     public DbSet<JobIndex> JobIndices => Set<JobIndex>();
 
 }
