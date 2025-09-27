@@ -1001,11 +1001,11 @@ public class ObjectsManager : IObjectsManager
             JobId = ji.JobId,
             Path = ji.Path,
             CurrentState = ji.CurrentState,
-            CreatedAt = ji.CreatedAtUtc,
-            ProcessingAt = ji.ProcessingAtUtc,
-            SucceededAt = ji.SucceededAtUtc,
-            FailedAt = ji.FailedAtUtc,
-            DeletedAt = ji.DeletedAtUtc
+            CreatedAt = DateTime.SpecifyKind(ji.CreatedAtUtc, DateTimeKind.Utc),
+            ProcessingAt = ji.ProcessingAtUtc.HasValue ? DateTime.SpecifyKind(ji.ProcessingAtUtc.Value, DateTimeKind.Utc) : null,
+            SucceededAt = ji.SucceededAtUtc.HasValue ? DateTime.SpecifyKind(ji.SucceededAtUtc.Value, DateTimeKind.Utc) : null,
+            FailedAt = ji.FailedAtUtc.HasValue ? DateTime.SpecifyKind(ji.FailedAtUtc.Value, DateTimeKind.Utc) : null,
+            DeletedAt = ji.DeletedAtUtc.HasValue ? DateTime.SpecifyKind(ji.DeletedAtUtc.Value, DateTimeKind.Utc) : null
         });
     }
 
