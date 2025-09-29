@@ -181,7 +181,7 @@ public class WebUtilsTest : TestBase
 
         var slug = str.ToSlug();
 
-        slug.Should().Be("0---c--c-e--1-_---------------a");
+        slug.Should().Be("0-c-c-e-1-_-a");
 
         slug.IsValidSlug().Should().BeTrue();
 
@@ -196,7 +196,7 @@ public class WebUtilsTest : TestBase
 
         slug.Should()
             .Be(
-                "abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyz0123456789eeau--c------_-------------------------");
+                "abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyz0123456789eeau-c-_-");
 
         slug.IsValidSlug().Should().BeTrue();
 

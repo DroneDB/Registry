@@ -1,5 +1,7 @@
 ﻿using System;
+using System.Buffers;
 using System.Collections.Generic;
+using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Security.Cryptography;
@@ -141,56 +143,133 @@ public static class Extenders
         };
     }
 
-    // Only lowercase letters, numbers, dashes and underscore. Max length 128 and cannot start with a dash or underscore.
-    private static readonly Regex SafeNameRegex = new(@"^[a-z0-9][a-z0-9_-]{1,128}$", RegexOptions.Compiled | RegexOptions.Singleline);
-
-    /// <summary>
-    /// Checks if a string is a valid slug
+        /// <summary>
+    /// Fast validator for slugs.
+    /// Rules:
+    /// - length 1..128
+    /// - first char must be [a-z0-9]
+    /// - allowed chars are [a-z0-9_-]
+    /// - no consecutive dashes ("--") to match ToSlug collapsing behavior
     /// </summary>
-    /// <param name="name"></param>
-    /// <returns></returns>
-    public static bool IsValidSlug(this string name)
+    public static bool IsValidSlug(this string? s)
     {
-        return SafeNameRegex.IsMatch(name);
+        if (string.IsNullOrEmpty(s)) return false;
+        if (s.Length > 128) return false;
+
+        // first must be [a-z0-9]
+        char first = s[0];
+        bool firstIsLower = first >= 'a' && first <= 'z';
+        bool firstIsDigit = first >= '0' && first <= '9';
+        if (!(firstIsLower || firstIsDigit)) return false;
+
+        bool prevDash = false;
+
+        for (int i = 0; i < s.Length; i++)
+        {
+            char c = s[i];
+
+            // [a-z]
+            if (c >= 'a' && c <= 'z') { prevDash = false; continue; }
+            // [0-9]
+            if (c >= '0' && c <= '9') { prevDash = false; continue; }
+            // underscore
+            if (c == '_') { prevDash = false; continue; }
+            // dash (reject if consecutive)
+            if (c == '-')
+            {
+                if (prevDash) return false;
+                prevDash = true;
+                continue;
+            }
+
+            // anything else -> invalid
+            return false;
+        }
+
+        return true;
     }
 
-
     /// <summary>
-    /// Converts a string to a slug
+    /// High-performance slug generator.
+    /// - Uses Unicode normalization (NFD) to strip diacritics.
+    /// - Emits only ASCII [a-z0-9_-].
+    /// - Replaces any non-allowed char with '-' and collapses consecutive dashes.
+    /// - Ensures max length 128 and that slug does not start with '-' or '_'
+    ///   (prefixes '0' if necessary, matching the original behavior).
     /// </summary>
-    /// <param name="name"></param>
-    /// <returns></returns>
     public static string ToSlug(this string name)
     {
-
         if (string.IsNullOrWhiteSpace(name))
-            throw new ArgumentException("Cannot make slug from empty string");
+            throw new ArgumentException("Cannot make slug from empty string", nameof(name));
 
-        Encoding enc;
+        // 1) Normalize to NFD so diacritics become NonSpacingMark and can be dropped
+        var normalized = name.Normalize(NormalizationForm.FormD);
+
+        // 2) Rent a buffer. Upper bound is min(128, normalized.Length) since we never write more than input length.
+        var capacity = Math.Min(128, normalized.Length);
+        if (capacity == 0) return "0";
+
+        var buffer = ArrayPool<char>.Shared.Rent(capacity);
+        var w = 0;                // write index
+        var prevDash = false;    // used to collapse consecutive dashes
 
         try
         {
-            enc = Encoding.GetEncoding("ISO-8859-8");
+            for (var i = 0; i < normalized.Length && w < capacity; i++)
+            {
+                var c = normalized[i];
+
+                // Drop combining marks (diacritics) produced by NFD
+                if (CharUnicodeInfo.GetUnicodeCategory(c) == UnicodeCategory.NonSpacingMark)
+                    continue;
+
+                // Fast ASCII lowercasing: if 'A'..'Z', map to 'a'..'z'
+                if (c >= 'A' && c <= 'Z') c = (char)(c | 0x20);
+
+                // Only ASCII [a-z0-9_-] are kept; everything else becomes '-'
+                var isLower = c is >= 'a' and <= 'z';
+                var isDigit = c is >= '0' and <= '9';
+                var isUnderscore = c == '_';
+                var isDash = c == '-';
+
+                var outc = (isLower || isDigit || isUnderscore || isDash) ? c : '-';
+
+                // Collapse consecutive dashes
+                if (outc == '-')
+                {
+                    if (prevDash) continue;
+                    prevDash = true;
+                }
+                else
+                {
+                    prevDash = false;
+                }
+
+                buffer[w++] = outc;
+            }
+
+            // Build the string from the written portion
+            var slug = new string(buffer, 0, w);
+
+            // If empty (e.g., all were dropped), return "0"
+            if (slug.Length == 0) return "0";
+
+            // If it starts with '-' or '_', prefix '0' (keeps original semantics)
+            if (slug[0] == '-' || slug[0] == '_')
+                slug = "0" + slug;
+
+            // Enforce max length 128 (after potential prefix)
+            if (slug.Length > 128)
+                slug = slug.Substring(0, 128);
+
+            return slug;
         }
-        catch (ArgumentException)
+        finally
         {
-            // Needed to use the ISO-8859-8 encoding
-            Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
-            enc = Encoding.GetEncoding("ISO-8859-8");
+            ArrayPool<char>.Shared.Return(buffer);
         }
-
-        var tempBytes = enc.GetBytes(name);
-        var tmp = Encoding.UTF8.GetString(tempBytes);
-
-        var str = new string(tmp.Select(c =>
-                char.IsLetterOrDigit(c) || c is '_' or '-' ? c : '-').ToArray())
-            .ToLowerInvariant();
-
-        // If it starts with a period or a dash pad it with a 0
-        var res = str[0] == '_' || str[0] == '-' ? "0" + str : str;
-
-        return res.Length > 128 ? res[..128] : res;
     }
+
 
     /// <summary>
     /// Converts a string tag (organization/dataset) and checks if valid
