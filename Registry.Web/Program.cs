@@ -284,6 +284,13 @@ public class Program
 
                 Console.WriteLine(" ?> Using {0} worker threads", workers);
 
+                // Register database contexts required for job processing
+                services.AddDbContextWithProvider<RegistryContext>(configuration, appSettings.RegistryProvider,
+                    MagicStrings.RegistryConnectionName, "Data");
+
+                // Register job indexing services required by SyncJobIndexStatesAsync
+                services.AddJobIndexing();
+
                 services.AddHangfireProvider(appSettings, configuration);
                 services.AddHangfireServer(options => { options.WorkerCount = workers; });
             })
@@ -718,7 +725,7 @@ public class Program
 
         return true;
     }
-    
+
     /// <summary>
     /// The minimum required version of DroneDB (taken from assembly metadata)
     /// </summary>

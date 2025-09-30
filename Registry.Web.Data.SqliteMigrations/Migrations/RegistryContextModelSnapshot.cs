@@ -147,6 +147,10 @@ namespace Registry.Web.Data.SqliteMigrations.Migrations
                     b.Property<DateTime?>("FailedAtUtc")
                         .HasColumnType("TEXT");
 
+                    b.Property<string>("Hash")
+                        .HasMaxLength(1024)
+                        .HasColumnType("TEXT");
+
                     b.Property<DateTime?>("LastStateChangeUtc")
                         .HasColumnType("TEXT");
 
@@ -160,7 +164,6 @@ namespace Registry.Web.Data.SqliteMigrations.Migrations
                         .HasColumnType("TEXT");
 
                     b.Property<string>("Path")
-                        .HasMaxLength(1024)
                         .HasColumnType("TEXT");
 
                     b.Property<DateTime?>("ProcessingAtUtc")
@@ -188,7 +191,7 @@ namespace Registry.Web.Data.SqliteMigrations.Migrations
 
                     b.HasIndex("OrgSlug", "DsSlug");
 
-                    b.HasIndex("OrgSlug", "DsSlug", "Path");
+                    b.HasIndex("OrgSlug", "DsSlug", "Hash");
 
                     b.ToTable("JobIndices");
                 });

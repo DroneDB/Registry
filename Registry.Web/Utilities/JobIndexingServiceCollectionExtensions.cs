@@ -19,6 +19,10 @@ public static class JobIndexingServiceCollectionExtensions
 
         // The filter depends on the DI provider, we register it for injection
         services.AddScoped<JobIndexStateFilter>();
+
+        // Service for sync jobs that need DI
+        services.AddScoped<JobIndexSyncService>();
+
         return services;
     }
 }

@@ -11,6 +11,8 @@ public class JobIndex
 
     public string OrgSlug { get; set; } = null!;
     public string DsSlug { get; set; } = null!;
+
+    public string? Hash { get; set; }
     public string? Path { get; set; }
     public string? UserId { get; set; }
 

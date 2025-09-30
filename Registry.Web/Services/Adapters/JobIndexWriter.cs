@@ -32,6 +32,7 @@ public class JobIndexWriter(RegistryContext db, ILogger<JobIndexWriter> log) : I
                 JobId = jobId,
                 OrgSlug = meta.OrgSlug,
                 DsSlug = meta.DsSlug,
+                Hash = meta.Hash,
                 Path = meta.Path,
                 UserId = meta.UserId,
                 Queue = meta.Queue,
@@ -45,6 +46,7 @@ public class JobIndexWriter(RegistryContext db, ILogger<JobIndexWriter> log) : I
         {
             existing.OrgSlug = meta.OrgSlug;
             existing.DsSlug = meta.DsSlug;
+            existing.Hash = meta.Hash;
             existing.Path = meta.Path;
             existing.UserId = meta.UserId;
             existing.Queue = meta.Queue ?? existing.Queue;

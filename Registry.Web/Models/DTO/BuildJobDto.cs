@@ -6,6 +6,7 @@ namespace Registry.Web.Models.DTO;
 public class BuildJobDto
 {
     public string JobId { get; set; } = null!;
+    public string? Hash { get; set; }
     public string? Path { get; set; }
     public string CurrentState { get; set; } = null!;
     public DateTime CreatedAt { get; set; }

@@ -6,7 +6,6 @@ using Registry.Common;
 
 namespace Registry.Ports.DroneDB;
 
-// Let's just duplicate EntryDtO for no good reason
 public class Entry
 {
     [JsonProperty("path")]

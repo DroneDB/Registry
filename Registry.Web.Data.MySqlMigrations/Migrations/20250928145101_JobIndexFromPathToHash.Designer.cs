@@ -3,17 +3,20 @@ using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Registry.Web.Data;
 
 #nullable disable
 
-namespace Registry.Web.Data.Mysql.Migrations
+namespace Registry.Web.Data.MySqlMigrations.Migrations
 {
     [DbContext(typeof(RegistryContext))]
-    partial class RegistryContextModelSnapshot : ModelSnapshot
+    [Migration("20250928145101_JobIndexFromPathToHash")]
+    partial class JobIndexFromPathToHash
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -171,9 +174,6 @@ namespace Registry.Web.Data.Mysql.Migrations
                         .IsRequired()
                         .HasMaxLength(128)
                         .HasColumnType("varchar(128)");
-
-                    b.Property<string>("Path")
-                        .HasColumnType("longtext");
 
                     b.Property<DateTime?>("ProcessingAtUtc")
                         .HasColumnType("datetime(6)");

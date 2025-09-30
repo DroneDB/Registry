@@ -3,7 +3,7 @@ using System;
 
 namespace Registry.Web.Models;
 
-public record IndexPayload(string OrgSlug, string DsSlug, string? Path, string? UserId, string? Queue = null)
+public record IndexPayload(string OrgSlug, string DsSlug, string? Hash, string? UserId, string? Queue = null, string? Path = null)
 {
     public void EnsureValid()
     {

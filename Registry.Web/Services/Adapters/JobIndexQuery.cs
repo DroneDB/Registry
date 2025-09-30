@@ -12,19 +12,26 @@ namespace Registry.Web.Services.Adapters;
 
 public class JobIndexQuery(RegistryContext db) : IJobIndexQuery
 {
-    public async Task<List<JobIndex>> GetByOrgDsAsync(string orgSlug, string dsSlug, int skip = 0, int take = 200, CancellationToken ct = default)
+    public async Task<JobIndex[]> GetByOrgDsAsync(string orgSlug, string dsSlug, int skip = 0, int take = 200, CancellationToken ct = default)
         => await db.JobIndices
             .AsNoTracking()
             .Where(x => x.OrgSlug == orgSlug && x.DsSlug == dsSlug)
             .OrderByDescending(x => x.CreatedAtUtc)
             .Skip(skip).Take(take)
-            .ToListAsync(ct);
+            .ToArrayAsync(ct);
 
-    public async Task<List<JobIndex>> GetByOrgDsPathAsync(string orgSlug, string dsSlug, string path, bool prefix = false, int skip = 0, int take = 200, CancellationToken ct = default)
+    public async Task<JobIndex[]> GetByOrgDsHashAsync(string orgSlug, string dsSlug, string hash, int skip = 0, int take = 200, CancellationToken ct = default)
     {
-        var q = db.JobIndices.AsNoTracking().Where(x => x.OrgSlug == orgSlug && x.DsSlug == dsSlug);
-        q = prefix ? q.Where(x => x.Path != null && x.Path.StartsWith(path))
-            : q.Where(x => x.Path == path);
-        return await q.OrderByDescending(x => x.CreatedAtUtc).Skip(skip).Take(take).ToListAsync(ct);
+        var q =
+            db.JobIndices.AsNoTracking().Where(x => x.OrgSlug == orgSlug && x.DsSlug == dsSlug && x.Hash == hash);
+        return await q.OrderByDescending(x => x.CreatedAtUtc).Skip(skip).Take(take).ToArrayAsync(cancellationToken: ct);
     }
+
+    public async Task<JobIndex[]> GetByStateAsync(string state, int skip = 0, int take = 1000, CancellationToken ct = default)
+        => await db.JobIndices
+            .AsNoTracking()
+            .Where(x => x.CurrentState == state)
+            .OrderBy(x => x.CreatedAtUtc)
+            .Skip(skip).Take(take)
+            .ToArrayAsync(ct);
 }

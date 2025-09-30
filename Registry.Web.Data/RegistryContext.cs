@@ -20,14 +20,11 @@ public class RegistryContext : DbContext
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
-        // Existing indexes
         modelBuilder.Entity<Dataset>()
             .HasIndex(ds => ds.Slug);
 
         modelBuilder.Entity<Organization>()
             .HasIndex(d => d.Slug);
-
-        // NEW STRATEGIC INDEXES for performance optimization
 
         // For queries filtering by Organization.OwnerId (used frequently)
         modelBuilder.Entity<Organization>()
@@ -107,14 +104,15 @@ public class RegistryContext : DbContext
             e.Property(x => x.JobId).HasMaxLength(64);
             e.Property(x => x.OrgSlug).HasMaxLength(128).IsRequired();
             e.Property(x => x.DsSlug).HasMaxLength(128).IsRequired();
-            e.Property(x => x.Path).HasMaxLength(1024);
+            e.Property(x => x.Hash).HasMaxLength(1024);
+            e.Property(x => x.Path).HasMaxLength(2048);
             e.Property(x => x.UserId).HasMaxLength(128);
             e.Property(x => x.Queue).HasMaxLength(64);
             e.Property(x => x.CurrentState).HasMaxLength(32).IsRequired();
             e.Property(x => x.MethodDisplay).HasMaxLength(1024);
 
             e.HasIndex(x => new { x.OrgSlug, x.DsSlug });
-            e.HasIndex(x => new { x.OrgSlug, x.DsSlug, x.Path });
+            e.HasIndex(x => new { x.OrgSlug, x.DsSlug, x.Hash });
             e.HasIndex(x => x.UserId);
             e.HasIndex(x => x.CreatedAtUtc);
         });

@@ -278,19 +278,18 @@ public class PushManager : IPushManager
         var user = await _authManager.GetCurrentUser();
         foreach (var item in delta.Adds)
         {
-            if (await ddb.IsBuildableAsync(item.Path))
-            {
-                var meta = new IndexPayload(orgSlug, dsSlug, item.Path, user.Id);
-                _backgroundJob.EnqueueIndexed(() =>
-                    HangfireUtils.BuildWrapper(ddb, item.Path, false, null), meta);
-            }
+            if (!await ddb.IsBuildableAsync(item.Path)) continue;
+
+            var meta = new IndexPayload(orgSlug, dsSlug, item.Hash, user.Id, null, item.Path);
+            _backgroundJob.EnqueueIndexed(() =>
+                HangfireUtils.BuildWrapper(ddb, item.Path, false, null), meta);
         }
 
         if (await ddb.IsBuildPendingAsync())
         {
             _logger.LogInformation("Items are pending build, retriggering build");
 
-            var meta = new IndexPayload(orgSlug, dsSlug, null, user.Id);
+            var meta = new IndexPayload(orgSlug, dsSlug, null, user.Id, null, null);
             var jobId = _backgroundJob.EnqueueIndexed(() => HangfireUtils.BuildPendingWrapper(ddb, null), meta);
 
             _logger.LogInformation("Background job id is {JobId}", jobId);

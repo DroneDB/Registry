@@ -243,7 +243,7 @@ public class ObjectsManager : IObjectsManager
         {
             _logger.LogInformation("This item is buildable, build it!");
 
-            var meta = new IndexPayload(orgSlug, dsSlug, entry.Path, user.Id);
+            var meta = new IndexPayload(orgSlug, dsSlug, entry.Hash, user.Id, null, entry.Path);
             var jobId = _backgroundJob.EnqueueIndexed(() => HangfireUtils.BuildWrapper(ddb, path, false, null), meta);
 
             _logger.LogInformation("Background job id is {JobId}", jobId);
@@ -252,7 +252,7 @@ public class ObjectsManager : IObjectsManager
         {
             _logger.LogInformation("Items are pending build, retriggering build");
 
-            var meta = new IndexPayload(orgSlug, dsSlug, entry.Path, user.Id);
+            var meta = new IndexPayload(orgSlug, dsSlug, entry.Hash, user.Id, null, entry.Path);
             var jobId = _backgroundJob.EnqueueIndexed(() => HangfireUtils.BuildPendingWrapper(ddb, null), meta);
 
             _logger.LogInformation("Background job id is {JobId}", jobId);
@@ -266,7 +266,7 @@ public class ObjectsManager : IObjectsManager
             {
                 try
                 {
-                    await _cacheManager.GetAsync(MagicStrings.ThumbnailCacheSeed, entry.Hash, DefaultThumbnailSize,
+                    await _cacheManager.GetAsync(MagicStrings.ThumbnailCacheSeed, $"{orgSlug}/{dsSlug}", entry.Hash, DefaultThumbnailSize,
                         new Func<Task<byte[]>>(async () =>
                         {
                             _logger.LogDebug("Background thumbnail generation for new file: '{LocalFilePath}'", localFilePath);
@@ -602,7 +602,6 @@ public class ObjectsManager : IObjectsManager
 
         var size = sizeRaw ?? DefaultThumbnailSize;
 
-        _logger.LogDebug("Generating thumbnail for file: '{LocalPath}', size: {Size}", localPath, size);
 
         if (recreate)
         {
@@ -738,7 +737,7 @@ public class ObjectsManager : IObjectsManager
             foreach (var path in paths)
             {
                 var entry = ddb.GetEntry(path);
-                
+
                 if (entry == null)
                     throw new InvalidOperationException($"Path '{path}' not found in ddb, cannot continue");
 
@@ -806,15 +805,15 @@ public class ObjectsManager : IObjectsManager
 
         var res = ddb.Search(path)?.ToArray();
 
-        if (res == null || !res.Any())
+        if (res == null || res.Length == 0)
             throw new ArgumentException($"Invalid path: '{path}'");
 
         return res.First();
     }
 
-    private void EnsureNoWildcardOrEmptyPaths(string path)
+    private static void EnsureNoWildcardOrEmptyPaths(string path)
     {
-        if (path.Contains("*") || path.Contains("?") || string.IsNullOrWhiteSpace(path))
+        if (path.Contains('*') || path.Contains('?') || string.IsNullOrWhiteSpace(path))
             throw new ArgumentException("Wildcards or empty paths are not supported");
     }
 
@@ -827,11 +826,11 @@ public class ObjectsManager : IObjectsManager
     {
         ddb = null;
 
-        if (paths == null || !paths.Any())
+        if (paths == null || paths.Length == 0)
             // Everything
             return;
 
-        if (paths.Any(path => path.Contains("*") || path.Contains("?") || string.IsNullOrWhiteSpace(path)))
+        if (paths.Any(path => path.Contains('*') || path.Contains('?') || string.IsNullOrWhiteSpace(path)))
             throw new ArgumentException("Wildcards or empty paths are not supported");
 
         if (paths.Length != paths.Distinct().Count())
@@ -892,7 +891,7 @@ public class ObjectsManager : IObjectsManager
         _logger.LogInformation("Building '{Path}' asynchronously", path);
 
         var user = await _authManager.GetCurrentUser();
-        var meta = new IndexPayload(orgSlug, dsSlug, entry.Path, user.Id);
+        var meta = new IndexPayload(orgSlug, dsSlug, entry.Hash , user.Id, null, path);
         var jobId = _backgroundJob.EnqueueIndexed(() => HangfireUtils.BuildWrapper(ddb, path, force, null), meta);
 
         _logger.LogInformation("Background job id is {JobId}", jobId);
@@ -969,12 +968,14 @@ public class ObjectsManager : IObjectsManager
         return entry?.Type;
     }
 
-    public string GetBuildSource(Entry entry)
+    public static string GetBuildSource(Entry entry)
     {
         var path = entry.Type switch
         {
             EntryType.PointCloud => CommonUtils.SafeCombine(BuildBasePath, entry.Hash, "ept", "ept.json"),
             EntryType.GeoRaster => CommonUtils.SafeCombine(BuildBasePath, entry.Hash, "cog", "cog.tif"),
+            EntryType.Vector => CommonUtils.SafeCombine(BuildBasePath, entry.Hash, "vec", "vector.fgb"),
+            EntryType.Model => CommonUtils.SafeCombine(BuildBasePath, entry.Hash, "nxs", "model.nxz"),
             _ => entry.Path
         };
 
@@ -992,13 +993,13 @@ public class ObjectsManager : IObjectsManager
 
         // Convert page/pageSize to skip/take
         var skip = (page - 1) * pageSize;
-        var take = pageSize;
 
-        var jobIndexes = await _jobIndexQuery.GetByOrgDsAsync(orgSlug, dsSlug, skip, take);
+        var jobIndexes = await _jobIndexQuery.GetByOrgDsAsync(orgSlug, dsSlug, skip, pageSize);
 
         return jobIndexes.Select(ji => new BuildJobDto
         {
             JobId = ji.JobId,
+            Hash = ji.Hash,
             Path = ji.Path,
             CurrentState = ji.CurrentState,
             CreatedAt = DateTime.SpecifyKind(ji.CreatedAtUtc, DateTimeKind.Utc),

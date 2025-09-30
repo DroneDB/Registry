@@ -17,6 +17,7 @@ public static class JobParamKeys
     public const string OrgSlug = "orgSlug";
     public const string DsSlug = "dsSlug";
     public const string Path = "path";
+    public const string Hash = "hash";
     public const string UserId = "userId";
     public const string Queue = "queue"; // Optional
 }
@@ -41,7 +42,7 @@ public class IndexedJobEnqueuer(IBackgroundJobClient client, IServiceProvider sp
         meta.EnsureValid();
         var createdAt = DateTime.UtcNow;
         var queue = meta.Queue;
-        
+
         var jobId = client.Create(job, new EnqueuedState(queue ?? EnqueuedState.DefaultQueue));
 
         // Set Job Parameters to track metadata in Hangfire storage
@@ -51,6 +52,7 @@ public class IndexedJobEnqueuer(IBackgroundJobClient client, IServiceProvider sp
             conn.SetJobParameter(jobId, JobParamKeys.OrgSlug, meta.OrgSlug);
             conn.SetJobParameter(jobId, JobParamKeys.DsSlug, meta.DsSlug);
             if (!string.IsNullOrWhiteSpace(meta.Path)) conn.SetJobParameter(jobId, JobParamKeys.Path, meta.Path);
+            if (!string.IsNullOrWhiteSpace(meta.Hash)) conn.SetJobParameter(jobId, JobParamKeys.Hash, meta.Hash);
             if (!string.IsNullOrWhiteSpace(meta.UserId)) conn.SetJobParameter(jobId, JobParamKeys.UserId, meta.UserId);
             if (!string.IsNullOrWhiteSpace(queue)) conn.SetJobParameter(jobId, JobParamKeys.Queue, queue);
         }
