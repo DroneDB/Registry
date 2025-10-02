@@ -278,14 +278,14 @@ public class PushManager : IPushManager
         var user = await _authManager.GetCurrentUser();
         foreach (var item in delta.Adds)
         {
-            if (!await ddb.IsBuildableAsync(item.Path)) continue;
+            if (!ddb.IsBuildable(item.Path)) continue;
 
             var meta = new IndexPayload(orgSlug, dsSlug, item.Hash, user.Id, null, item.Path);
             _backgroundJob.EnqueueIndexed(() =>
                 HangfireUtils.BuildWrapper(ddb, item.Path, false, null), meta);
         }
 
-        if (await ddb.IsBuildPendingAsync())
+        if (ddb.IsBuildPending())
         {
             _logger.LogInformation("Items are pending build, retriggering build");
 

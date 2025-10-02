@@ -49,7 +49,7 @@ public class MetaManager : IMetaManager
 
         var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
 
-        if (path != null && !await ddb.EntryExistsAsync(path))
+        if (path != null && !ddb.EntryExists(path))
             throw new ArgumentException($"Path '{path}' does not exist");
 
         return ddb.Meta.Add(key, data, path).ToDto();
@@ -72,7 +72,7 @@ public class MetaManager : IMetaManager
 
         var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
 
-        if (path != null && !await ddb.EntryExistsAsync(path))
+        if (path != null && !ddb.EntryExists(path))
             throw new ArgumentException($"Path '{path}' does not exist");
 
         return ddb.Meta.Set(key, data, path).ToDto();
@@ -109,7 +109,7 @@ public class MetaManager : IMetaManager
 
         var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
 
-        if (path != null && !await ddb.EntryExistsAsync(path))
+        if (path != null && !ddb.EntryExists(path))
             throw new ArgumentException($"Path '{path}' does not exist");
 
         return ddb.Meta.Get(key, path);
@@ -130,7 +130,7 @@ public class MetaManager : IMetaManager
 
         var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
 
-        if (path != null && !await ddb.EntryExistsAsync(path))
+        if (path != null && !ddb.EntryExists(path))
             throw new ArgumentException($"Path '{path}' does not exist");
 
         return ddb.Meta.Unset(key, path);
@@ -148,7 +148,7 @@ public class MetaManager : IMetaManager
 
         var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
 
-        if (path != null && !await ddb.EntryExistsAsync(path))
+        if (path != null && !ddb.EntryExists(path))
             throw new ArgumentException($"Path '{path}' does not exist");
 
         return ddb.Meta.List(path).Select(item => item.ToDto());

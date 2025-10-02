@@ -91,7 +91,7 @@ public class ObjectsManager : IObjectsManager
 
         _logger.LogInformation("Searching in '{Path}'", path);
 
-        var entities = await ddb.SearchAsync(path, recursive);
+        var entities = ddb.Search(path, recursive);
 
         if (type != null)
             entities = entities.Where(item => item.Type == type);
@@ -117,7 +117,7 @@ public class ObjectsManager : IObjectsManager
 
         _logger.LogInformation("Searching in '{Path}' -> {Query} ({Recursive}", path, query, recursive ? 'r' : 'n');
 
-        var entities = await ddb.SearchAsync(path, recursive);
+        var entities = ddb.Search(path, recursive);
 
         if (type != null)
             entities = entities.Where(item => item.Type == type);
@@ -151,7 +151,7 @@ public class ObjectsManager : IObjectsManager
     {
         var ddb = _ddbManager.Get(orgSlug, internalRef);
 
-        var entry = await ddb.GetEntryAsync(path);
+        var entry = ddb.GetEntry(path);
 
         if (entry == null)
             throw new NotFoundException($"Cannot find '{path}'");
@@ -192,7 +192,7 @@ public class ObjectsManager : IObjectsManager
         // If it's a folder
         if (stream == null)
         {
-            if (await ddb.EntryExistsAsync(path))
+            if (ddb.EntryExists(path))
                 throw new InvalidOperationException("Cannot create a folder on another entry");
 
             if (path == IDDB.DatabaseFolderName)
@@ -201,7 +201,7 @@ public class ObjectsManager : IObjectsManager
             _logger.LogInformation("Adding folder to DDB");
 
             // Add to DDB
-            await ddb.AddAsync(path);
+            ddb.Add(path);
 
             _logger.LogInformation("Added to DDB");
 
@@ -230,7 +230,7 @@ public class ObjectsManager : IObjectsManager
 
         _logger.LogInformation("Added to DDB, checking entry now...");
 
-        var entry = await ddb.GetEntryAsync(path);
+        var entry = ddb.GetEntry(path);
 
         if (entry == null)
             throw new InvalidOperationException("Cannot find just added file!");
@@ -239,7 +239,7 @@ public class ObjectsManager : IObjectsManager
 
         var user = await _authManager.GetCurrentUser();
 
-        if (await ddb.IsBuildableAsync(entry.Path))
+        if (ddb.IsBuildable(entry.Path))
         {
             _logger.LogInformation("This item is buildable, build it!");
 
@@ -248,7 +248,7 @@ public class ObjectsManager : IObjectsManager
 
             _logger.LogInformation("Background job id is {JobId}", jobId);
         }
-        else if (await ddb.IsBuildPendingAsync())
+        else if (ddb.IsBuildPending())
         {
             _logger.LogInformation("Items are pending build, retriggering build");
 
@@ -303,7 +303,7 @@ public class ObjectsManager : IObjectsManager
         if (entry.Type == EntryType.Directory)
         {
             // For directories, check all files inside
-            var allEntries = await ddb.SearchAsync(path, true);
+            var allEntries = ddb.Search(path, true);
             var filesWithActiveBuild = allEntries
                 .Where(item => item.Type != EntryType.Directory && ddb.IsBuildActive(item.Path))
                 .ToArray();
@@ -318,7 +318,7 @@ public class ObjectsManager : IObjectsManager
         else
         {
             // For single files, check if build is active
-            if (await ddb.IsBuildActiveAsync(path))
+            if (ddb.IsBuildActive(path))
                 throw new InvalidOperationException(
                     $"Cannot transfer file '{path}' because it has an active build in progress");
         }
@@ -347,7 +347,7 @@ public class ObjectsManager : IObjectsManager
         var sourceDdb = _ddbManager.Get(sourceOrgSlug, sourceDs.InternalRef);
         var destDdb = _ddbManager.Get(destOrgSlug, destDs.InternalRef);
 
-        var sourceEntry = await sourceDdb.GetEntryAsync(sourcePath);
+        var sourceEntry = sourceDdb.GetEntry(sourcePath);
 
         // Checking if source exists
         if (sourceEntry == null)
@@ -378,7 +378,7 @@ public class ObjectsManager : IObjectsManager
         // Check if user has enough storage space in destination
         await _utils.CheckCurrentUserStorage(entrySize);
 
-        var destEntry = await destDdb.GetEntryAsync(destPath);
+        var destEntry = destDdb.GetEntry(destPath);
 
         if (destEntry != null)
         {
@@ -453,7 +453,7 @@ public class ObjectsManager : IObjectsManager
             destDdb.AddRaw(destDdb.GetLocalPath(destPath));
             addedToDdb = true;
 
-            if (!await destDdb.EntryExistsAsync(destPath))
+            if (!destDdb.EntryExists(destPath))
                 throw new InvalidOperationException(
                     $"Cannot find destination '{destPath}' after transfer, something wrong with ddb");
 
@@ -483,7 +483,7 @@ public class ObjectsManager : IObjectsManager
             else
             {
                 // If this is a folder we need to copy all build folders for each file in the folder
-                var allEntries = await sourceDdb.SearchAsync(sourcePath, true);
+                var allEntries = sourceDdb.Search(sourcePath, true);
                 var files = allEntries.Where(item => item.Type != EntryType.Directory).ToArray();
                 _logger.LogInformation("This is a folder transfer, checking build folders for {FilesCount} files",
                     files.Length);
@@ -511,7 +511,7 @@ public class ObjectsManager : IObjectsManager
             _logger.LogInformation("Removing source file");
 
             // Remove source file
-            await sourceDdb.RemoveAsync(sourcePath);
+            sourceDdb.Remove(sourcePath);
 
             _logger.LogInformation("Transfer OK");
         }
@@ -539,7 +539,7 @@ public class ObjectsManager : IObjectsManager
                 try
                 {
                     _logger.LogWarning("Rolling back DDB add operation");
-                    await destDdb.RemoveAsync(destPath);
+                    destDdb.Remove(destPath);
                 }
                 catch (Exception rbEx)
                 {
@@ -585,7 +585,7 @@ public class ObjectsManager : IObjectsManager
 
         var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
 
-        var sourceEntry = await ddb.GetEntryAsync(source);
+        var sourceEntry = ddb.GetEntry(source);
 
         // Checking if source exists
         if (sourceEntry == null)
@@ -598,7 +598,7 @@ public class ObjectsManager : IObjectsManager
         if ((dest + "/").StartsWith(source + "/"))
             throw new InvalidOperationException("Cannot move a path onto itself or one of its descendants");
 
-        var destEntry = await ddb.GetEntryAsync(dest);
+        var destEntry = ddb.GetEntry(dest);
 
         if (destEntry != null)
         {
@@ -655,9 +655,9 @@ public class ObjectsManager : IObjectsManager
         _logger.LogInformation("FS move OK");
 
         _logger.LogInformation("Performing ddb move");
-        await ddb.MoveAsync(source, dest);
+        ddb.Move(source, dest);
 
-        if (!await ddb.EntryExistsAsync(dest))
+        if (!ddb.EntryExists(dest))
             throw new InvalidOperationException(
                 $"Cannot find destination '{dest}' after move, something wrong with ddb");
 
@@ -678,16 +678,16 @@ public class ObjectsManager : IObjectsManager
 
         var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
 
-        if (!await ddb.EntryExistsAsync(path))
+        if (!ddb.EntryExists(path))
             throw new BadRequestException($"Path '{path}' not found in dataset");
 
-        var objs = (await ddb.SearchAsync(path, true)).ToArray();
+        var objs = ddb.Search(path, true).ToArray();
 
         // Let's delete from DDB first
         try
         {
             _logger.LogInformation("Removing from DDB");
-            await ddb.RemoveAsync(path);
+            ddb.Remove(path);
         }
         catch (Exception ex)
         {
@@ -815,7 +815,7 @@ public class ObjectsManager : IObjectsManager
         {
             var tileData =
                 await _cacheManager.GetAsync(MagicStrings.TileCacheSeed, $"{orgSlug}/{dsSlug}", entry.Hash, tx, ty, tz, retina,
-                    new Func<Task<byte[]>>(() => ddb.GenerateTileAsync(localPath, tz, tx, ty, retina, entry.Hash)));
+                    new Func<Task<byte[]>>(() => Task.Run(() => ddb.GenerateTile(localPath, tz, tx, ty, retina, entry.Hash))));
 
             return new StorageDataDto
             {
@@ -1034,14 +1034,14 @@ public class ObjectsManager : IObjectsManager
 
         var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
 
-        var entry = await ddb.GetEntryAsync(path);
+        var entry = ddb.GetEntry(path);
 
         // Checking if path exists
         if (entry == null)
             throw new InvalidOperationException($"Cannot find source entry: '{path}'");
 
         // Nothing to do here
-        if (!await ddb.IsBuildableAsync(entry.Path))
+        if (!ddb.IsBuildable(entry.Path))
         {
             _logger.LogInformation("'{EntryPath}' is not buildable, nothing to do here", entry.Path);
             return;
@@ -1123,7 +1123,7 @@ public class ObjectsManager : IObjectsManager
 
         var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
 
-        var entry = await ddb.GetEntryAsync(path);
+        var entry = ddb.GetEntry(path);
 
         return entry?.Type;
     }

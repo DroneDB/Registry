@@ -137,7 +137,7 @@ public class StacManager : IStacManager
 
         var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
 
-        if (path != null && !await ddb.EntryExistsAsync(path))
+        if (path != null && !ddb.EntryExists(path))
             throw new ArgumentException("Entry does not exist");
 
         return ddb.GetStac($"{orgSlug}/{dsSlug}", _utils.GenerateDatasetUrl(ds),

@@ -55,7 +55,7 @@ public class DatasetsManager : IDatasetsManager
         foreach (var ds in org.Datasets.ToArray())
         {
             var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
-            var info = await ddb.GetInfoAsync();
+            var info = ddb.GetInfo();
 
             res.Add(new DatasetDto
             {
@@ -78,7 +78,7 @@ public class DatasetsManager : IDatasetsManager
 
         var ddb = _ddbManager.Get(orgSlug, dataset.InternalRef);
 
-        return dataset.ToDto(await ddb.GetInfoAsync());
+        return dataset.ToDto(ddb.GetInfo());
     }
 
     public async Task<EntryDto[]> GetEntry(string orgSlug, string dsSlug)
@@ -90,7 +90,7 @@ public class DatasetsManager : IDatasetsManager
 
         var ddb = _ddbManager.Get(orgSlug, dataset.InternalRef);
 
-        var info = await ddb.GetInfoAsync();
+        var info = ddb.GetInfo();
         info.Depth = 0;
         info.Path = _utils.GenerateDatasetUrl(dataset, true);
 
@@ -136,7 +136,7 @@ public class DatasetsManager : IDatasetsManager
 
         await _context.SaveChangesAsync();
 
-        return ds.ToDto(await ddb.GetInfoAsync());
+        return ds.ToDto(ddb.GetInfo());
     }
 
     public async Task Edit(string orgSlug, string dsSlug, DatasetEditDto dataset)
@@ -230,7 +230,7 @@ public class DatasetsManager : IDatasetsManager
             throw new UnauthorizedException("The current user is not allowed to change attributes");
 
         var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
-        var res = await ddb.ChangeAttributesRawAsync(new Dictionary<string, object> { { "public", attributes.IsPublic } });;
+        var res = ddb.ChangeAttributesRaw(new Dictionary<string, object> { { "public", attributes.IsPublic } });
 
         await _stacManager.ClearCache(ds);
 

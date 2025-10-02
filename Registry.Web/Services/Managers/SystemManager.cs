@@ -61,7 +61,7 @@ public class SystemManager : ISystemManager
                 // Check if objects count is ok
                 var ddb = _ddbManager.Get(ds.Organization.Slug, ds.InternalRef);
 
-                var entries = (await ddb.SearchAsync("*", true))?.ToArray();
+                var entries = ddb.Search("*", true)?.ToArray();
 
                 if (entries == null || !entries.Any())
                 {
@@ -114,7 +114,7 @@ public class SystemManager : ISystemManager
 
             if (meta.Visibility.HasValue) continue;
 
-            var attrs = await ddb.GetAttributesRawAsync();
+            var attrs = ddb.GetAttributesRaw();
 
             var isPublic = attrs.SafeGetValue("public");
 
@@ -181,7 +181,7 @@ public class SystemManager : ISystemManager
                     var ddb = _ddbManager.Get(org.Slug, ds.InternalRef);
 
                     // Remove empty ddb
-                    if (!(await ddb.SearchAsync("*", true)).Any())
+                    if (!ddb.Search("*", true).Any())
                         _ddbManager.Delete(org.Slug, ds.InternalRef);
 
                 }

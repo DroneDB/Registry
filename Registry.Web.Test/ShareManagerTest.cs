@@ -182,10 +182,10 @@ class ShareManagerTest : TestBase
         };
 
         var ddbMock = new Mock<IDDB>();
-        ddbMock.Setup(x => x.GetInfoAsync(CancellationToken.None)).Returns(Task.FromResult(new Entry
+        ddbMock.Setup(x => x.GetInfo()).Returns(new Entry
         {
             Properties = attributes
-        }));
+        });
 
         var mockMeta = new MockMeta();
         ddbMock.Setup(x => x.Meta).Returns(mockMeta);
@@ -289,10 +289,10 @@ class ShareManagerTest : TestBase
         };
 
         var ddbMock = new Mock<IDDB>();
-        ddbMock.Setup(x => x.GetInfoAsync(CancellationToken.None)).Returns(Task.FromResult(new Entry
+        ddbMock.Setup(x => x.GetInfo()).Returns(new Entry
         {
             Properties = attributes
-        }));
+        });
 
         var mockMeta = new MockMeta();
         ddbMock.Setup(x => x.Meta).Returns(mockMeta);
@@ -406,10 +406,10 @@ class ShareManagerTest : TestBase
         };
 
         var ddbMock = new Mock<IDDB>();
-        ddbMock.Setup(x => x.GetInfoAsync(default)).Returns(Task.FromResult(new Entry
+        ddbMock.Setup(x => x.GetInfo()).Returns(new Entry
         {
             Properties = attributes
-        }));
+        });
 
         var mockMeta = new MockMeta();
         ddbMock.Setup(x => x.Meta).Returns(mockMeta);
@@ -547,10 +547,10 @@ class ShareManagerTest : TestBase
         };
 
         var ddbMock = new Mock<IDDB>();
-        ddbMock.Setup(x => x.GetInfoAsync(default)).Returns(Task.FromResult(new Entry
+        ddbMock.Setup(x => x.GetInfo()).Returns(new Entry
         {
             Properties = attributes
-        }));
+        });
 
         var metaMock = new Mock<IMetaManager>();
         metaMock.Setup(x => x.Set(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>()));
@@ -703,10 +703,10 @@ class ShareManagerTest : TestBase
         };
 
         var ddbMock = new Mock<IDDB>();
-        ddbMock.Setup(x => x.GetInfoAsync(default)).Returns(Task.FromResult(new Entry
+        ddbMock.Setup(x => x.GetInfo()).Returns(new Entry
         {
             Properties = attributes
-        }));
+        });
 
         var mockMeta = new MockMeta();
         ddbMock.Setup(x => x.Meta).Returns(mockMeta);
