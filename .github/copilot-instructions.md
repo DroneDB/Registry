@@ -64,6 +64,7 @@ npx webpack
 - **Document API changes** with clear examples
 - **Explain architectural decisions** for future maintainers
 - **Keep README and docs updated** with significant changes
+- **Do not create new documentation files without approval from the user or explicit instructions to do so**
 
 ## Quality Assurance
 - **Run full test suite** before proposing changes
