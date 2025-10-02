@@ -356,9 +356,9 @@ public class ObjectsManager : IObjectsManager
         }
 
         // Track progress for rollback
-        bool fileSystemCopied = false;
-        bool addedToDdb = false;
-        bool buildFolderCopied = false;
+        var fileSystemCopied = false;
+        var addedToDdb = false;
+        var buildFolderCopied = false;
         string destLocalFilePath = null;
         string destBuildPath = null;
 
@@ -376,7 +376,6 @@ public class ObjectsManager : IObjectsManager
                     CommonUtils.EnsureSafePath(destLocalFilePath);
 
                     _fs.FolderCopy(sourceLocalFilePath, destLocalFilePath, true);
-                    fileSystemCopied = true;
                     break;
 
                 }
@@ -406,11 +405,12 @@ public class ObjectsManager : IObjectsManager
                     CommonUtils.EnsureSafePath(destLocalFilePath);
 
                     _fs.Copy(sourceLocalFilePath, destLocalFilePath, true);
-                    fileSystemCopied = true;
                     break;
                 }
 
             }
+
+            fileSystemCopied = true;
 
             _logger.LogInformation("FS copy OK, performing ddb add");
             destDdb.AddRaw(destDdb.GetLocalPath(destPath));
@@ -420,20 +420,55 @@ public class ObjectsManager : IObjectsManager
                 throw new InvalidOperationException(
                     $"Cannot find destination '{destPath}' after transfer, something wrong with ddb");
 
-            // We need to transfer the build folder (if exists), this is an optimization to avoid re-building everything
-            var sourceBuildPath = Path.Combine(sourceDdb.BuildFolderPath, sourceEntry.Hash);
+            _logger.LogInformation("DDB add OK");
 
-            if (_fs.FolderExists(sourceBuildPath))
+            // If it's not a folder, we may need to transfer the build folder (if exists)
+            if (sourceEntry.Type != EntryType.Directory)
             {
-                destBuildPath = Path.Combine(destDdb.BuildFolderPath, sourceEntry.Hash);
-                _logger.LogInformation("Transferring build folder '{SourceBuildPath}' to '{DestBuildPath}'", sourceBuildPath, destBuildPath);
-                CommonUtils.EnsureSafePath(destBuildPath);
-                _fs.FolderCopy(sourceBuildPath, destBuildPath, true);
-                buildFolderCopied = true;
+
+                // We need to transfer the build folder (if exists), this is an optimization to avoid re-building everything
+                var sourceBuildPath = Path.Combine(sourceDdb.BuildFolderPath, sourceEntry.Hash);
+
+                if (_fs.FolderExists(sourceBuildPath))
+                {
+                    destBuildPath = Path.Combine(destDdb.BuildFolderPath, sourceEntry.Hash);
+                    _logger.LogInformation("Transferring build folder '{SourceBuildPath}' to '{DestBuildPath}'",
+                        sourceBuildPath, destBuildPath);
+                    CommonUtils.EnsureSafePath(destBuildPath);
+                    _fs.FolderMove(sourceBuildPath, destBuildPath);
+                    buildFolderCopied = true;
+                }
+                else
+                {
+                    _logger.LogInformation("No build folder found at '{SourceBuildPath}'", sourceBuildPath);
+                }
             }
             else
             {
-                _logger.LogInformation("No build folder found at '{SourceBuildPath}'", sourceBuildPath);
+                // If this is a folder we need to copy all build folders for each file in the folder
+                var allEntries = await sourceDdb.SearchAsync(sourcePath, true);
+                var files = allEntries.Where(item => item.Type != EntryType.Directory).ToArray();
+                _logger.LogInformation("This is a folder transfer, checking build folders for {FilesCount} files",
+                    files.Length);
+                
+                foreach (var entry in files)
+                {
+                    var sourceBuildPath = Path.Combine(sourceDdb.BuildFolderPath, entry.Hash);
+
+                    if (_fs.FolderExists(sourceBuildPath))
+                    {
+                        var destBuildPathForEntry = Path.Combine(destDdb.BuildFolderPath, entry.Hash);
+                        _logger.LogInformation("Transferring build folder '{SourceBuildPath}' to '{DestBuildPath}'",
+                            sourceBuildPath, destBuildPathForEntry);
+                        CommonUtils.EnsureSafePath(destBuildPathForEntry);
+                        _fs.FolderMove(sourceBuildPath, destBuildPathForEntry);
+                        buildFolderCopied = true;
+                    }
+                    else
+                    {
+                        _logger.LogInformation("No build folder found at '{SourceBuildPath}'", sourceBuildPath);
+                    }
+                }
             }
 
             _logger.LogInformation("Removing source file");
