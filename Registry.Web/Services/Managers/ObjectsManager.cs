@@ -319,8 +319,22 @@ public class ObjectsManager : IObjectsManager
         if (sourceEntry == null)
             throw new InvalidOperationException("Cannot find source entry: '" + sourcePath + "'");
 
+        // Validate destination path to prevent path traversal attacks
+        if (string.IsNullOrWhiteSpace(destPath))
+            throw new ArgumentException("Destination path cannot be empty");
+
+        if (destPath.Contains("..") || Path.IsPathRooted(destPath))
+            throw new ArgumentException("Invalid destination path: path traversal or absolute paths are not allowed");
+
         if (IsReservedPath(destPath))
             throw new InvalidOperationException($"'{destPath}' is a reserved path");
+
+        // Calculate entry size for storage check
+        var entrySize = await GetEntrySizeAsync(sourceDdb, sourceEntry);
+        _logger.LogInformation("Source entry size: {Size} bytes", entrySize);
+
+        // Check if user has enough storage space in destination
+        await _utils.CheckCurrentUserStorage(entrySize);
 
         var destEntry = await destDdb.GetEntryAsync(destPath);
 
@@ -336,81 +350,150 @@ public class ObjectsManager : IObjectsManager
                 throw new ArgumentException("Cannot transfer a file on a folder");
         }
 
-        switch (sourceEntry.Type)
+        // Track progress for rollback
+        bool fileSystemCopied = false;
+        bool addedToDdb = false;
+        bool buildFolderCopied = false;
+        string destLocalFilePath = null;
+        string destBuildPath = null;
+
+        try
         {
-            case EntryType.Directory:
+            switch (sourceEntry.Type)
             {
-                var sourceLocalFilePath = sourceDdb.GetLocalPath(sourcePath);
-                var destLocalFilePath = destDdb.GetLocalPath(destPath);
+                case EntryType.Directory:
+                {
+                    var sourceLocalFilePath = sourceDdb.GetLocalPath(sourcePath);
+                    destLocalFilePath = destDdb.GetLocalPath(destPath);
 
-                _logger.LogInformation("Transferring directory '{Source}' to '{Dest}'", sourcePath, destPath);
+                    _logger.LogInformation("Transferring directory '{Source}' to '{Dest}'", sourcePath, destPath);
 
-                CommonUtils.EnsureSafePath(destLocalFilePath);
+                    CommonUtils.EnsureSafePath(destLocalFilePath);
 
-                _fs.FolderCopy(sourceLocalFilePath, destLocalFilePath, true);
-                break;
+                    _fs.FolderCopy(sourceLocalFilePath, destLocalFilePath, true);
+                    fileSystemCopied = true;
+                    break;
+
+                }
+                case EntryType.DroneDB:
+                    throw new InvalidOperationException("Cannot transfer a DroneDB file");
+
+                case EntryType.Undefined:
+                case EntryType.Generic:
+                case EntryType.GeoImage:
+                case EntryType.GeoRaster:
+                case EntryType.PointCloud:
+                case EntryType.Image:
+                case EntryType.Markdown:
+                case EntryType.Video:
+                case EntryType.Geovideo:
+                case EntryType.Model:
+                case EntryType.Panorama:
+                case EntryType.GeoPanorama:
+                case EntryType.Vector:
+                default:
+                {
+                    var sourceLocalFilePath = sourceDdb.GetLocalPath(sourcePath);
+                    destLocalFilePath = destDdb.GetLocalPath(destPath);
+
+                    _logger.LogInformation("Transferring file '{Source}' to '{Dest}'", sourcePath, destPath);
+
+                    CommonUtils.EnsureSafePath(destLocalFilePath);
+
+                    _fs.Copy(sourceLocalFilePath, destLocalFilePath, true);
+                    fileSystemCopied = true;
+                    break;
+                }
 
             }
-            case EntryType.DroneDB:
-                throw new InvalidOperationException("Cannot transfer a DroneDB file");
 
-            case EntryType.Undefined:
-            case EntryType.Generic:
-            case EntryType.GeoImage:
-            case EntryType.GeoRaster:
-            case EntryType.PointCloud:
-            case EntryType.Image:
-            case EntryType.Markdown:
-            case EntryType.Video:
-            case EntryType.Geovideo:
-            case EntryType.Model:
-            case EntryType.Panorama:
-            case EntryType.GeoPanorama:
-            case EntryType.Vector:
-            default:
+            _logger.LogInformation("FS copy OK, performing ddb add");
+            destDdb.AddRaw(destDdb.GetLocalPath(destPath));
+            addedToDdb = true;
+
+            if (!await destDdb.EntryExistsAsync(destPath))
+                throw new InvalidOperationException(
+                    $"Cannot find destination '{destPath}' after transfer, something wrong with ddb");
+
+            // We need to transfer the build folder (if exists), this is an optimization to avoid re-building everything
+            var sourceBuildPath = Path.Combine(sourceDdb.BuildFolderPath, sourceEntry.Hash);
+
+            if (_fs.FolderExists(sourceBuildPath))
             {
-                var sourceLocalFilePath = sourceDdb.GetLocalPath(sourcePath);
-                var destLocalFilePath = destDdb.GetLocalPath(destPath);
-
-                _logger.LogInformation("Transferring file '{Source}' to '{Dest}'", sourcePath, destPath);
-
-                CommonUtils.EnsureSafePath(destLocalFilePath);
-
-                _fs.Copy(sourceLocalFilePath, destLocalFilePath, true);
-                break;
+                destBuildPath = Path.Combine(destDdb.BuildFolderPath, sourceEntry.Hash);
+                _logger.LogInformation("Transferring build folder '{SourceBuildPath}' to '{DestBuildPath}'", sourceBuildPath, destBuildPath);
+                CommonUtils.EnsureSafePath(destBuildPath);
+                _fs.FolderCopy(sourceBuildPath, destBuildPath, true);
+                buildFolderCopied = true;
+            }
+            else
+            {
+                _logger.LogInformation("No build folder found at '{SourceBuildPath}'", sourceBuildPath);
             }
 
+            _logger.LogInformation("Removing source file");
+
+            // Remove source file
+            await sourceDdb.RemoveAsync(sourcePath);
+
+            _logger.LogInformation("Transfer OK");
         }
-
-        _logger.LogInformation("FS copy OK, performing ddb add");
-        destDdb.AddRaw(destDdb.GetLocalPath(destPath));
-
-        if (!await destDdb.EntryExistsAsync(destPath))
-            throw new InvalidOperationException(
-                $"Cannot find destination '{destPath}' after transfer, something wrong with ddb");
-
-        // We need to transfer the build folder (if exists), this is an optimization to avoid re-building everything
-        var sourceBuildPath = Path.Combine(sourceDdb.BuildFolderPath, sourceEntry.Hash);
-
-        if (_fs.FolderExists(sourceBuildPath))
+        catch (Exception ex)
         {
-            var destBuildPath = Path.Combine(destDdb.BuildFolderPath, sourceEntry.Hash);
-            _logger.LogInformation("Transferring build folder '{SourceBuildPath}' to '{DestBuildPath}'", sourceBuildPath, destBuildPath);
-            CommonUtils.EnsureSafePath(destBuildPath);
-            _fs.FolderCopy(sourceBuildPath, destBuildPath, true);
+            _logger.LogError(ex, "Transfer failed, attempting rollback");
+
+            // Rollback in reverse order
+            if (buildFolderCopied && destBuildPath != null)
+            {
+                try
+                {
+                    _logger.LogWarning("Rolling back build folder copy");
+                    if (_fs.FolderExists(destBuildPath))
+                        Directory.Delete(destBuildPath, true);
+                }
+                catch (Exception rbEx)
+                {
+                    _logger.LogError(rbEx, "Failed to rollback build folder copy");
+                }
+            }
+
+            if (addedToDdb)
+            {
+                try
+                {
+                    _logger.LogWarning("Rolling back DDB add operation");
+                    await destDdb.RemoveAsync(destPath);
+                }
+                catch (Exception rbEx)
+                {
+                    _logger.LogError(rbEx, "Failed to rollback DDB add");
+                }
+            }
+
+            if (fileSystemCopied && destLocalFilePath != null)
+            {
+                try
+                {
+                    _logger.LogWarning("Rolling back file system copy");
+                    if (sourceEntry.Type == EntryType.Directory)
+                    {
+                        if (_fs.FolderExists(destLocalFilePath))
+                            Directory.Delete(destLocalFilePath, true);
+                    }
+                    else
+                    {
+                        if (_fs.Exists(destLocalFilePath))
+                            _fs.Delete(destLocalFilePath);
+                    }
+                }
+                catch (Exception rbEx)
+                {
+                    _logger.LogError(rbEx, "Failed to rollback file system copy");
+                }
+            }
+
+            throw;
         }
-        else
-        {
-            _logger.LogInformation("No build folder found at '{SourceBuildPath}'", sourceBuildPath);
-        }
-
-        _logger.LogInformation("Removing source file");
-
-        // Remove source file
-        await sourceDdb.RemoveAsync(sourcePath);
-
-
-        _logger.LogInformation("Transfer OK");
 
     }
 
@@ -1008,6 +1091,42 @@ public class ObjectsManager : IObjectsManager
             FailedAt = ji.FailedAtUtc.HasValue ? DateTime.SpecifyKind(ji.FailedAtUtc.Value, DateTimeKind.Utc) : null,
             DeletedAt = ji.DeletedAtUtc.HasValue ? DateTime.SpecifyKind(ji.DeletedAtUtc.Value, DateTimeKind.Utc) : null
         });
+    }
+
+    /// <summary>
+    /// Calculates the total size of an entry (file or directory recursively)
+    /// </summary>
+    /// <param name="ddb">The DDB instance</param>
+    /// <param name="entry">The entry to calculate size for</param>
+    /// <returns>Total size in bytes</returns>
+    private async Task<long> GetEntrySizeAsync(IDDB ddb, Entry entry)
+    {
+        if (entry.Type == EntryType.Directory)
+        {
+            // For directories, we need to calculate the total size of all files recursively
+            var localPath = ddb.GetLocalPath(entry.Path);
+
+            if (!Directory.Exists(localPath))
+            {
+                _logger.LogWarning("Directory not found at '{LocalPath}', returning 0 size", localPath);
+                return 0;
+            }
+
+            try
+            {
+                return await Task.Run(() => CommonUtils.GetDirectorySize(localPath));
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to calculate directory size for '{Path}'", entry.Path);
+                throw new InvalidOperationException($"Cannot calculate directory size: {ex.Message}", ex);
+            }
+        }
+        else
+        {
+            // For files, use the size from the entry
+            return entry.Size;
+        }
     }
 
     #endregion
