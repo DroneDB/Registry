@@ -290,6 +290,40 @@ public class ObjectsManager : IObjectsManager
         return entry.ToDto();
     }
 
+    /// <summary>
+    /// Validates that the specified entry (file or directory) does not have any active builds.
+    /// Throws an exception if any active build is found.
+    /// </summary>
+    /// <param name="ddb">The DDB instance to check</param>
+    /// <param name="entry">The entry to validate</param>
+    /// <param name="path">The path of the entry</param>
+    /// <exception cref="InvalidOperationException">Thrown when an active build is detected</exception>
+    private static async Task ValidateNoBuildActive(IDDB ddb, Entry entry, string path)
+    {
+        if (entry.Type == EntryType.Directory)
+        {
+            // For directories, check all files inside
+            var allEntries = await ddb.SearchAsync(path, true);
+            var filesWithActiveBuild = allEntries
+                .Where(item => item.Type != EntryType.Directory && ddb.IsBuildActive(item.Path))
+                .ToArray();
+
+            if (filesWithActiveBuild.Length != 0)
+            {
+                var filesList = string.Join(", ", filesWithActiveBuild.Select(f => f.Path));
+                throw new InvalidOperationException(
+                    $"Cannot transfer directory '{path}' because the following files have an active build in progress: {filesList}");
+            }
+        }
+        else
+        {
+            // For single files, check if build is active
+            if (await ddb.IsBuildActiveAsync(path))
+                throw new InvalidOperationException(
+                    $"Cannot transfer file '{path}' because it has an active build in progress");
+        }
+    }
+
     public async Task Transfer(string sourceOrgSlug, string sourceDsSlug, string sourcePath, string destOrgSlug,
         string destDsSlug, string destPath = null, bool overwrite = false)
     {
@@ -318,6 +352,9 @@ public class ObjectsManager : IObjectsManager
         // Checking if source exists
         if (sourceEntry == null)
             throw new InvalidOperationException("Cannot find source entry: '" + sourcePath + "'");
+
+        // Validate that source has no active build
+        await ValidateNoBuildActive(sourceDdb, sourceEntry, sourcePath);
 
         // If destPath is not specified, use the source file/folder name in the root of the destination dataset
         if (string.IsNullOrWhiteSpace(destPath))
@@ -450,7 +487,7 @@ public class ObjectsManager : IObjectsManager
                 var files = allEntries.Where(item => item.Type != EntryType.Directory).ToArray();
                 _logger.LogInformation("This is a folder transfer, checking build folders for {FilesCount} files",
                     files.Length);
-                
+
                 foreach (var entry in files)
                 {
                     var sourceBuildPath = Path.Combine(sourceDdb.BuildFolderPath, entry.Hash);
