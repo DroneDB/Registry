@@ -50,23 +50,19 @@ public class DatasetsManager : IDatasetsManager
         if (!await _authManager.RequestAccess(org, AccessType.Read))
             throw new UnauthorizedException("The current user cannot access this organization");
 
-        var res = new List<DatasetDto>();
+        var datasets = org.Datasets.ToArray();
 
-        foreach (var ds in org.Datasets.ToArray())
-        {
-            var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
-            var info = ddb.GetInfo();
-
-            res.Add(new DatasetDto
-            {
-                Slug = ds.Slug,
-                CreationDate = ds.CreationDate,
-                Properties = info.Properties,
-                Size = info.Size
-            });
-        }
-
-        return res.ToArray();
+        return (from ds in datasets
+                let ddb = _ddbManager.Get(orgSlug, ds.InternalRef)
+                let info = ddb.GetInfo()
+                select new DatasetDto
+                {
+                    Slug = ds.Slug,
+                    CreationDate = ds.CreationDate,
+                    Properties = info.Properties,
+                    Size = info.Size
+                })
+            .ToArray();
     }
 
     public async Task<DatasetDto> Get(string orgSlug, string dsSlug)
@@ -113,7 +109,8 @@ public class DatasetsManager : IDatasetsManager
         if (!dataset.Slug.IsValidSlug())
             throw new BadRequestException("Dataset slug is invalid");
 
-        if (_context.Datasets.AsNoTracking().Any(item => item.Slug == dataset.Slug && item.Organization.Slug == orgSlug))
+        if (_context.Datasets.AsNoTracking()
+            .Any(item => item.Slug == dataset.Slug && item.Organization.Slug == orgSlug))
             throw new BadRequestException("Dataset with this slug already exists");
 
         var ds = new Dataset
@@ -182,7 +179,6 @@ public class DatasetsManager : IDatasetsManager
             await _context.SaveChangesAsync();
 
             await _stacManager.ClearCache(ds);
-
         }
         catch (Exception ex)
         {
