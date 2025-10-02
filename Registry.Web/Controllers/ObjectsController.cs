@@ -371,7 +371,7 @@ public class ObjectsController : ControllerBaseEx
 
     [HttpPost("transfer", Name = nameof(ObjectsController) + "." + nameof(Transfer))]
     public async Task<IActionResult> Transfer([FromRoute] string orgSlug, [FromRoute] string dsSlug, [FromForm] string sourcePath,
-        [FromForm] string destOrgSlug, [FromForm] string destDsSlug, [FromForm] string destPath, [FromForm] bool overwrite)
+        [FromForm] string destOrgSlug, [FromForm] string destDsSlug, [FromForm] string destPath = null, [FromForm] bool overwrite = false)
     {
         try
         {

@@ -705,14 +705,6 @@ public class ObjectManagerTest : TestBase
             false
         )).Should().ThrowAsync<ArgumentException>()
             .WithMessage("*path traversal*");
-
-        // Test empty path
-        await objectManager.Invoking(om => om.Transfer(
-            MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug, "DJI_0027.JPG",
-            "admin", "7kd0gxti9qoemsrk", "",
-            false
-        )).Should().ThrowAsync<ArgumentException>()
-            .WithMessage("*cannot be empty*");
     }
 
     [Test]
@@ -880,6 +872,55 @@ public class ObjectManagerTest : TestBase
             false
         )).Should().ThrowAsync<InvalidOperationException>()
             .WithMessage("*already exists*");
+    }
+
+    [Test]
+    public async Task Transfer_NullDestPath_UsesSourceNameInRoot()
+    {
+        using var test = new TestFS(Test4ArchiveUrl, BaseTestFolder);
+        await using var context = GetTest1Context();
+
+        var settings = JsonConvert.DeserializeObject<AppSettings>(_settingsJson);
+        settings.DatasetsPath = test.TestFolder;
+        settings.EnableStorageLimiter = false;
+
+        _appSettingsMock.Setup(o => o.Value).Returns(settings);
+        _authManagerMock.Setup(o => o.IsUserAdmin()).Returns(Task.FromResult(true));
+        _authManagerMock.Setup(o => o.RequestAccess(It.IsAny<Dataset>(), It.IsAny<AccessType>()))
+            .Returns(Task.FromResult(true));
+        _authManagerMock.Setup(o => o.GetCurrentUser()).Returns(Task.FromResult(new User
+        {
+            Id = Guid.NewGuid().ToString(),
+            UserName = "admin",
+            Email = "admin@test.com"
+        }));
+
+        var webUtils = new WebUtils(_authManagerMock.Object, context, _appSettingsMock.Object,
+            _httpContextAccessorMock.Object, _ddbFactoryMock.Object);
+
+        var ddbManager = new DdbManager(_appSettingsMock.Object, _ddbFactoryLogger, DdbWrapper);
+
+        var objectManager = new ObjectsManager(_objectManagerLogger, context, _appSettingsMock.Object,
+            ddbManager, webUtils, _authManagerMock.Object, _cacheManagerMock.Object, _fileSystem,
+            _backgroundJobsProcessor, DdbWrapper, _thumbnailGeneratorMock.Object, _jobIndexQueryMock.Object);
+
+        var fileToTransfer = "DJI_0027.JPG";
+
+        // Perform the transfer with null destPath
+        await objectManager.Transfer(
+            MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug, fileToTransfer,
+            "admin", "7kd0gxti9qoemsrk", null,
+            false
+        );
+
+        // Verify file was removed from source
+        var sourceFilesAfter = await objectManager.List(MagicStrings.PublicOrganizationSlug,
+            MagicStrings.DefaultDatasetSlug, null, true);
+        sourceFilesAfter.Should().NotContain(f => f.Path == fileToTransfer);
+
+        // Verify file exists in destination with the same name
+        var destFiles = await objectManager.List("admin", "7kd0gxti9qoemsrk", null, true);
+        destFiles.Should().Contain(f => f.Path == fileToTransfer, "file should be transferred with the same name when destPath is null");
     }
 
     #endregion

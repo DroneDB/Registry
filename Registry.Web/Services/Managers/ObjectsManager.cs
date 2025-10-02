@@ -291,7 +291,7 @@ public class ObjectsManager : IObjectsManager
     }
 
     public async Task Transfer(string sourceOrgSlug, string sourceDsSlug, string sourcePath, string destOrgSlug,
-        string destDsSlug, string destPath, bool overwrite = false)
+        string destDsSlug, string destPath = null, bool overwrite = false)
     {
 
         var sourceDs = _utils.GetDataset(sourceOrgSlug, sourceDsSlug);
@@ -319,9 +319,14 @@ public class ObjectsManager : IObjectsManager
         if (sourceEntry == null)
             throw new InvalidOperationException("Cannot find source entry: '" + sourcePath + "'");
 
-        // Validate destination path to prevent path traversal attacks
+        // If destPath is not specified, use the source file/folder name in the root of the destination dataset
         if (string.IsNullOrWhiteSpace(destPath))
-            throw new ArgumentException("Destination path cannot be empty");
+        {
+            destPath = Path.GetFileName(sourcePath);
+            _logger.LogInformation("Destination path not specified, using source name: '{DestPath}'", destPath);
+        }
+
+        // Validate destination path to prevent path traversal attacks
 
         if (destPath.Contains("..") || Path.IsPathRooted(destPath))
             throw new ArgumentException("Invalid destination path: path traversal or absolute paths are not allowed");
