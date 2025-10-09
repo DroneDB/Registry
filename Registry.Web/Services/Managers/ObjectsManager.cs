@@ -1046,7 +1046,11 @@ public class ObjectsManager : IObjectsManager
             _logger.LogInformation("'{EntryPath}' is not buildable, nothing to do here", entry.Path);
             return;
         }
-
+        
+        // Let's check if a build is already active
+        if (ddb.IsBuildActive(entry.Path))
+            throw new InvalidOperationException($"A build is already in progress for '{entry.Path}'");
+        
         // Always build asynchronously using background job
         _logger.LogInformation("Building '{Path}' asynchronously", path);
 
