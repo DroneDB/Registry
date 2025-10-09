@@ -15,7 +15,7 @@ namespace Registry.Adapters.Test;
 public class UtilsTest
 {
 
-    private static readonly string TestString = new string(Enumerable.Range(0, 1024 * 1024 * 5 + 731).Select(item => 'A').ToArray());
+    private static readonly string TestString = new(Enumerable.Range(0, 1024 * 1024 * 5 + 731).Select(item => 'A').ToArray());
 
     [Test]
     [Explicit]
