@@ -34,4 +34,5 @@ public interface IObjectsManager
         string destDsSlug, string destPath = null, bool overwrite = false);
 
     Task<IEnumerable<BuildJobDto>> GetBuilds(string orgSlug, string dsSlug, int page = 1, int pageSize = 50);
+    Task<int> ClearCompletedBuilds(string orgSlug, string dsSlug);
 }

@@ -488,5 +488,25 @@ public class ObjectsController : ControllerBaseEx
         }
     }
 
+    [HttpPost("builds/clear", Name = nameof(ObjectsController) + "." + nameof(ClearCompletedBuilds))]
+    public async Task<IActionResult> ClearCompletedBuilds([FromRoute] string orgSlug, [FromRoute] string dsSlug)
+    {
+        try
+        {
+            _logger.LogDebug("Objects controller ClearCompletedBuilds('{OrgSlug}', '{DsSlug}')", orgSlug, dsSlug);
+
+            var deletedCount = await _objectsManager.ClearCompletedBuilds(orgSlug, dsSlug);
+
+            return Ok(new { deletedCount });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex,
+                "Exception in Objects controller ClearCompletedBuilds('{OrgSlug}', '{DsSlug}')", orgSlug, dsSlug);
+
+            return ExceptionResult(ex);
+        }
+    }
+
 
 }

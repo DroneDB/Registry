@@ -1046,11 +1046,11 @@ public class ObjectsManager : IObjectsManager
             _logger.LogInformation("'{EntryPath}' is not buildable, nothing to do here", entry.Path);
             return;
         }
-        
+
         // Let's check if a build is already active
         if (ddb.IsBuildActive(entry.Path))
             throw new InvalidOperationException($"A build is already in progress for '{entry.Path}'");
-        
+
         // Always build asynchronously using background job
         _logger.LogInformation("Building '{Path}' asynchronously", path);
 
@@ -1208,6 +1208,37 @@ public class ObjectsManager : IObjectsManager
             // For files, use the size from the entry
             return entry.Size;
         }
+    }
+
+    public async Task<int> ClearCompletedBuilds(string orgSlug, string dsSlug)
+    {
+        var ds = _utils.GetDataset(orgSlug, dsSlug);
+
+        _logger.LogInformation("In ClearCompletedBuilds('{OrgSlug}/{DsSlug}')", orgSlug, dsSlug);
+
+        if (!await _authManager.RequestAccess(ds, AccessType.Write))
+            throw new UnauthorizedException("The current user is not allowed to clear builds for this dataset");
+
+        // Get all builds with Succeeded or Failed status
+        var allBuilds = await _jobIndexQuery.GetByOrgDsAsync(orgSlug, dsSlug, 0, int.MaxValue);
+        var completedBuilds = allBuilds.Where(b => b.CurrentState == "Succeeded" || b.CurrentState == "Failed").ToList();
+
+        _logger.LogInformation("Found {Count} completed/failed builds to delete", completedBuilds.Count);
+
+        if (completedBuilds.Count == 0)
+            return 0;
+
+        // Delete from database
+        foreach (var build in completedBuilds)
+        {
+            _context.JobIndices.Remove(build);
+        }
+
+        await _context.SaveChangesAsync();
+
+        _logger.LogInformation("Successfully deleted {Count} completed/failed builds", completedBuilds.Count);
+
+        return completedBuilds.Count;
     }
 
     #endregion
