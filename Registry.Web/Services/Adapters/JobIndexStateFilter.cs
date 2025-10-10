@@ -30,5 +30,9 @@ public sealed class JobIndexStateFilter(IServiceProvider sp, ILogger<JobIndexSta
     public void OnStateUnapplied(ApplyStateContext context, IWriteOnlyTransaction transaction)
     {
         // Not needed: we only care about the new state being applied
+        log.LogDebug("JobIndexStateFilter.OnStateUnapplied: job {JobId} state unapplied to {NewState}",
+            context.BackgroundJob?.Id,
+            context.NewState?.Name ?? "<null>");
+        
     }
 }
