@@ -61,24 +61,14 @@ public class DDB : IDDB
 
     public byte[] GenerateTile(string inputPath, int tz, int tx, int ty, bool retina, string inputPathHash)
     {
-        // Get a lock for the database folder to prevent concurrent access to SQLite
-        var semaphore = DbSyncManager.GetDatabaseLock(DatasetFolderPath);
         try
         {
-            semaphore.Wait();
-            try
-            {
-                return _ddbWrapper.GenerateMemoryTile(inputPath, tz, tx, ty, retina ? 512 : 256, true, false,
-                    inputPathHash);
-            }
-            catch (DdbException ex)
-            {
-                throw new InvalidOperationException($"Cannot generate tile of '{inputPath}'", ex);
-            }
+            return _ddbWrapper.GenerateMemoryTile(inputPath, tz, tx, ty, retina ? 512 : 256, true, false,
+                inputPathHash);
         }
-        finally
+        catch (DdbException ex)
         {
-            semaphore.Release();
+            throw new InvalidOperationException($"Cannot generate tile of '{inputPath}'", ex);
         }
     }
 

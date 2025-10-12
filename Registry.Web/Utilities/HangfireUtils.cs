@@ -16,7 +16,7 @@ using Serilog;
 
 namespace Registry.Web.Utilities;
 
-public class HangfireUtils
+public static class HangfireUtils
 {
     [AutomaticRetry(Attempts = 1, OnAttemptsExceeded = AttemptsExceededAction.Fail)]
     public static void BuildWrapper(IDDB ddb, string path, bool force,
