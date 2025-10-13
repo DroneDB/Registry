@@ -14,6 +14,7 @@ using Registry.Web.Data.Models;
 using Registry.Web.Exceptions;
 using Registry.Web.Models.Configuration;
 using Registry.Web.Models.DTO;
+using Registry.Web.Services.Adapters;
 using Registry.Web.Services.Ports;
 using Registry.Web.Utilities;
 
@@ -27,10 +28,11 @@ public class SystemManager : ISystemManager
     private readonly ILogger<SystemManager> _logger;
     private readonly IObjectsManager _objectManager;
     private readonly AppSettings _settings;
+    private readonly BuildPendingService _buildPendingService;
 
     public SystemManager(IAuthManager authManager,
         RegistryContext context, IDdbManager ddbManager, ILogger<SystemManager> logger,
-        IObjectsManager objectManager, IOptions<AppSettings> settings)
+        IObjectsManager objectManager, IOptions<AppSettings> settings, BuildPendingService buildPendingService)
     {
         _authManager = authManager;
         _context = context;
@@ -38,6 +40,7 @@ public class SystemManager : ISystemManager
         _logger = logger;
         _objectManager = objectManager;
         _settings = settings.Value;
+        _buildPendingService = buildPendingService;
     }
 
     public async Task<CleanupDatasetResultDto> CleanupEmptyDatasets()
@@ -99,6 +102,9 @@ public class SystemManager : ISystemManager
 
     public async Task<IEnumerable<MigrateVisibilityEntryDTO>> MigrateVisibility()
     {
+        
+        if (!await _authManager.IsUserAdmin())
+            throw new UnauthorizedException("Only admins can perform system related tasks");
 
         var query = (from ds in _context.Datasets.Include("Organization")
             select new { ds = ds.Slug, ds.InternalRef, Org = ds.Organization.Slug }).ToArray();
@@ -220,5 +226,13 @@ public class SystemManager : ISystemManager
             RemoveBatchErrors = errors.ToArray()
         };
 
+    }
+
+    public async Task<BuildPendingStatusDto> GetBuildPendingStatus()
+    {
+        if (!await _authManager.IsUserAdmin())
+            throw new UnauthorizedException("Only admins can perform system related tasks");
+
+        return _buildPendingService.GetStatus();
     }
 }

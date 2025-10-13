@@ -254,6 +254,7 @@ public class Startup
         services.AddScoped<ISystemManager, SystemManager>();
         services.AddScoped<IBackgroundJobsProcessor, BackgroundJobsProcessor>();
         services.AddScoped<IMetaManager, Services.Managers.MetaManager>();
+        services.AddScoped<BuildPendingService>();
 
         services.AddScoped<IConfigurationHelper<AppSettings>, ConfigurationHelper>(_ =>
             new ConfigurationHelper(MagicStrings.AppSettingsFileName));
@@ -429,6 +430,13 @@ public class Startup
             "sync-jobindex-states",
             service => service.SyncJobIndexStates(null),
             "*/5 * * * *"); // Every 5 minutes
+
+        // Process pending builds every minute
+        // Hangfire will automatically resolve BuildPendingService from DI and inject its dependencies
+        RecurringJob.AddOrUpdate<BuildPendingService>(
+            "process-pending-builds",
+            service => service.ProcessPendingBuilds(null),
+            "* * * * *"); // Every minute
     }
 
     private static void PrintStartupInfo(IApplicationBuilder app)

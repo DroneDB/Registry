@@ -243,6 +243,11 @@ public class ObjectsManager : IObjectsManager
         {
             _logger.LogInformation("This item is buildable, build it!");
 
+            // CRITICAL: Set pending flag BEFORE build starts
+            // This prevents race condition where build fails quickly and creates .pending
+            // but recurring job hasn't updated cache yet
+            await SetDatasetHasPendingBuilds(orgSlug, dsSlug, true);
+
             var meta = new IndexPayload(orgSlug, dsSlug, entry.Hash, user.Id, null, entry.Path);
             var jobId = _backgroundJob.EnqueueIndexed(() => HangfireUtils.BuildWrapper(ddb, path, false, null), meta);
 
@@ -813,7 +818,7 @@ public class ObjectsManager : IObjectsManager
 
         try
         {
-            
+
             // NOTE: We wrap GenerateTile in a Task to avoid blocking the main thread
             // This is needed because GenerateTile is CPU intensive and may take some time
             // We want to free up the main thread to handle other requests
@@ -1243,6 +1248,41 @@ public class ObjectsManager : IObjectsManager
         _logger.LogInformation("Successfully deleted {Count} completed/failed builds", completedBuilds.Count);
 
         return completedBuilds.Count;
+    }
+
+    /// <summary>
+    /// Updates the cache to indicate whether a dataset has pending builds.
+    /// Used to optimize the recurring build pending job.
+    /// </summary>
+    private async Task SetDatasetHasPendingBuilds(string orgSlug, string dsSlug, bool hasPending)
+    {
+        try
+        {
+            var cacheKey = $"{orgSlug}/{dsSlug}";
+
+            // Simple state: just HasPending flag and timestamp
+            var state = new
+            {
+                HasPending = hasPending,
+                LastCheckBinary = DateTime.UtcNow.ToBinary()
+            };
+
+            var json = System.Text.Json.JsonSerializer.Serialize(state);
+            var bytes = System.Text.Encoding.UTF8.GetBytes(json);
+
+            await _cacheManager.SetAsync(MagicStrings.BuildPendingTrackerCacheSeed, cacheKey, bytes);
+
+            _logger.LogDebug(
+                "Set pending flag for {Org}/{Ds}: HasPending={HasPending}",
+                orgSlug, dsSlug, hasPending);
+        }
+        catch (Exception ex)
+        {
+            // Non-critical - don't fail upload if cache update fails
+            _logger.LogWarning(ex,
+                "Failed to update pending cache for {Org}/{Ds}, continuing anyway",
+                orgSlug, dsSlug);
+        }
     }
 
     #endregion

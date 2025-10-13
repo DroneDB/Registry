@@ -37,11 +37,12 @@ public class PushManager : IPushManager
     private readonly ILogger<PushManager> _logger;
     private readonly AppSettings _settings;
     private readonly IBackgroundJobsProcessor _backgroundJob;
+    private readonly ICacheManager _cacheManager;
 
     public PushManager(IUtils utils, IDdbManager ddbManager,
         IObjectsManager objectsManager, ILogger<PushManager> logger, IDatasetsManager datasetsManager,
         IAuthManager authManager, IDdbWrapper ddbWrapper,
-        IBackgroundJobsProcessor backgroundJob, IOptions<AppSettings> settings)
+        IBackgroundJobsProcessor backgroundJob, IOptions<AppSettings> settings, ICacheManager cacheManager)
     {
         _utils = utils;
         _ddbManager = ddbManager;
@@ -52,6 +53,7 @@ public class PushManager : IPushManager
         _ddbWrapper = ddbWrapper;
         _backgroundJob = backgroundJob;
         _settings = settings.Value;
+        _cacheManager = cacheManager;
     }
 
     public async Task<PushInitResultDto> Init(string orgSlug, string dsSlug, string checksum, StampDto stamp)
@@ -276,15 +278,22 @@ public class PushManager : IPushManager
 
         // Build items
         var user = await _authManager.GetCurrentUser();
+        var hasBuildableFiles = false;
+
         foreach (var item in delta.Adds)
         {
             if (!ddb.IsBuildable(item.Path)) continue;
 
+            hasBuildableFiles = true;
             var meta = new IndexPayload(orgSlug, dsSlug, item.Hash, user.Id, null, item.Path);
             _backgroundJob.EnqueueIndexed(() =>
                 HangfireUtils.BuildWrapper(ddb, item.Path, false, null), meta);
         }
 
+        // If we enqueued any builds, mark dataset as having pending
+        if (hasBuildableFiles)
+            await SetDatasetHasPendingBuilds(orgSlug, dsSlug, true);
+        
         if (ddb.IsBuildPending())
         {
             _logger.LogInformation("Items are pending build, retriggering build");
@@ -293,6 +302,38 @@ public class PushManager : IPushManager
             var jobId = _backgroundJob.EnqueueIndexed(() => HangfireUtils.BuildPendingWrapper(ddb, null), meta);
 
             _logger.LogInformation("Background job id is {JobId}", jobId);
+        }
+    }
+
+    /// <summary>
+    /// Updates the cache to indicate whether a dataset has pending builds.
+    /// </summary>
+    private async Task SetDatasetHasPendingBuilds(string orgSlug, string dsSlug, bool hasPending)
+    {
+        try
+        {
+            var cacheKey = $"{orgSlug}/{dsSlug}";
+
+            var state = new
+            {
+                HasPending = hasPending,
+                LastCheckBinary = DateTime.UtcNow.ToBinary()
+            };
+
+            var json = System.Text.Json.JsonSerializer.Serialize(state);
+            var bytes = System.Text.Encoding.UTF8.GetBytes(json);
+
+            await _cacheManager.SetAsync(MagicStrings.BuildPendingTrackerCacheSeed, cacheKey, bytes);
+
+            _logger.LogDebug(
+                "Set pending flag for {Org}/{Ds}: HasPending={HasPending}",
+                orgSlug, dsSlug, hasPending);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex,
+                "Failed to update pending cache for {Org}/{Ds}, continuing anyway",
+                orgSlug, dsSlug);
         }
     }
 }
