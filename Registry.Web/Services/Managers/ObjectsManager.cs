@@ -813,6 +813,10 @@ public class ObjectsManager : IObjectsManager
 
         try
         {
+            
+            // NOTE: We wrap GenerateTile in a Task to avoid blocking the main thread
+            // This is needed because GenerateTile is CPU intensive and may take some time
+            // We want to free up the main thread to handle other requests
             var tileData =
                 await _cacheManager.GetAsync(MagicStrings.TileCacheSeed, $"{orgSlug}/{dsSlug}", entry.Hash, tx, ty, tz, retina,
                     new Func<Task<byte[]>>(() => Task.Run(() => ddb.GenerateTile(localPath, tz, tx, ty, retina, entry.Hash))));
@@ -929,7 +933,7 @@ public class ObjectsManager : IObjectsManager
         {
             var entries = ddb.Search(null, true)?.ToArray();
 
-            if (entries == null || !entries.Any())
+            if (entries == null || entries.Length == 0)
                 throw new InvalidOperationException("Ddb is empty, what should I get?");
 
             // Select everything and sort
