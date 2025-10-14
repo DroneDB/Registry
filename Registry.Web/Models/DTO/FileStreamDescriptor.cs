@@ -63,10 +63,11 @@ public class FileStreamDescriptor
             {
                 var localPath = _ddb.GetLocalPath(path);
                 var fileInfo = new FileInfo(localPath);
+                
+                // NOTE: This could be optimized by caching file sizes during initial listing or using Length without checking existence (catch exception if not found)
                 if (fileInfo.Exists)
-                {
                     totalSize += fileInfo.Length;
-                }
+                
             }
             catch (Exception ex)
             {

@@ -176,7 +176,7 @@ public static class HangfireUtils
                         // If the state in Hangfire is different from "Created", update it
                         if (currentState != "Created")
                         {
-                            // FIXED: Use the actual timestamp from Hangfire's state history instead of UtcNow
+                            // Use the actual timestamp from Hangfire's state history instead of UtcNow
                             var stateTimestamp = latestHistoryEntry.CreatedAt;
 
                             logger.Debug("Updating job {JobId} from 'Created' to '{CurrentState}' with timestamp {Timestamp}",

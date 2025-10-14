@@ -260,7 +260,7 @@ public static class Extenders
 
             // Enforce max length 128 (after potential prefix)
             if (slug.Length > 128)
-                slug = slug.Substring(0, 128);
+                slug = slug[..128];
 
             return slug;
         }

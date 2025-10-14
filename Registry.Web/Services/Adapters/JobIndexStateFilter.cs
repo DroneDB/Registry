@@ -9,7 +9,7 @@ using Registry.Web.Services.Ports;
 namespace Registry.Web.Services.Adapters;
 
 /// <summary>
-/// Aggiorna JobIndex ad ogni cambio stato (Processing, Succeeded, Failed, Deleted, Scheduled, ecc.).
+/// Updates the JobIndex on every state change (Processing, Succeeded, Failed, Deleted, Scheduled, etc.).
 /// </summary>
 public sealed class JobIndexStateFilter(IServiceProvider sp, ILogger<JobIndexStateFilter> log) : IApplyStateFilter
 {
