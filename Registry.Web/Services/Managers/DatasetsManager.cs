@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Registry.Adapters.DroneDB;
 using Registry.Ports;
@@ -49,23 +50,19 @@ public class DatasetsManager : IDatasetsManager
         if (!await _authManager.RequestAccess(org, AccessType.Read))
             throw new UnauthorizedException("The current user cannot access this organization");
 
-        var res = new List<DatasetDto>();
+        var datasets = org.Datasets.ToArray();
 
-        foreach (var ds in org.Datasets.ToArray())
-        {
-            var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
-            var info = await ddb.GetInfoAsync();
-
-            res.Add(new DatasetDto
-            {
-                Slug = ds.Slug,
-                CreationDate = ds.CreationDate,
-                Properties = info.Properties,
-                Size = info.Size
-            });
-        }
-
-        return res.ToArray();
+        return (from ds in datasets
+                let ddb = _ddbManager.Get(orgSlug, ds.InternalRef)
+                let info = ddb.GetInfo()
+                select new DatasetDto
+                {
+                    Slug = ds.Slug,
+                    CreationDate = ds.CreationDate,
+                    Properties = info.Properties,
+                    Size = info.Size
+                })
+            .ToArray();
     }
 
     public async Task<DatasetDto> Get(string orgSlug, string dsSlug)
@@ -77,7 +74,7 @@ public class DatasetsManager : IDatasetsManager
 
         var ddb = _ddbManager.Get(orgSlug, dataset.InternalRef);
 
-        return dataset.ToDto(await ddb.GetInfoAsync());
+        return dataset.ToDto(ddb.GetInfo());
     }
 
     public async Task<EntryDto[]> GetEntry(string orgSlug, string dsSlug)
@@ -89,7 +86,7 @@ public class DatasetsManager : IDatasetsManager
 
         var ddb = _ddbManager.Get(orgSlug, dataset.InternalRef);
 
-        var info = await ddb.GetInfoAsync();
+        var info = ddb.GetInfo();
         info.Depth = 0;
         info.Path = _utils.GenerateDatasetUrl(dataset, true);
 
@@ -98,7 +95,7 @@ public class DatasetsManager : IDatasetsManager
 
     public async Task<DatasetDto> AddNew(string orgSlug, DatasetNewDto dataset)
     {
-        var org = _utils.GetOrganization(orgSlug);
+        var org = _utils.GetOrganization(orgSlug, withTracking: true);
 
         if (!await _authManager.RequestAccess(org, AccessType.Write))
             throw new UnauthorizedException("The current user cannot add datasets to this organization");
@@ -112,7 +109,8 @@ public class DatasetsManager : IDatasetsManager
         if (!dataset.Slug.IsValidSlug())
             throw new BadRequestException("Dataset slug is invalid");
 
-        if (_context.Datasets.Any(item => item.Slug == dataset.Slug && item.Organization.Slug == orgSlug))
+        if (_context.Datasets.AsNoTracking()
+            .Any(item => item.Slug == dataset.Slug && item.Organization.Slug == orgSlug))
             throw new BadRequestException("Dataset with this slug already exists");
 
         var ds = new Dataset
@@ -135,7 +133,7 @@ public class DatasetsManager : IDatasetsManager
 
         await _context.SaveChangesAsync();
 
-        return ds.ToDto(await ddb.GetInfoAsync());
+        return ds.ToDto(ddb.GetInfo());
     }
 
     public async Task Edit(string orgSlug, string dsSlug, DatasetEditDto dataset)
@@ -143,7 +141,7 @@ public class DatasetsManager : IDatasetsManager
         if (dataset == null)
             throw new BadRequestException("Dataset is null");
 
-        var ds = _utils.GetDataset(orgSlug, dsSlug);
+        var ds = _utils.GetDataset(orgSlug, dsSlug, withTracking: true);
 
         if (!await _authManager.RequestAccess(ds, AccessType.Write))
             throw new UnauthorizedException("The current user cannot edit this dataset");
@@ -167,7 +165,7 @@ public class DatasetsManager : IDatasetsManager
 
     public async Task Delete(string orgSlug, string dsSlug)
     {
-        var ds = _utils.GetDataset(orgSlug, dsSlug);
+        var ds = _utils.GetDataset(orgSlug, dsSlug, withTracking: true);
 
         if (!await _authManager.RequestAccess(ds, AccessType.Delete))
             throw new UnauthorizedException("The current user cannot delete this dataset");
@@ -181,11 +179,10 @@ public class DatasetsManager : IDatasetsManager
             await _context.SaveChangesAsync();
 
             await _stacManager.ClearCache(ds);
-
         }
         catch (Exception ex)
         {
-            _logger.LogWarning("Error deleting dataset", ex);
+            _logger.LogWarning(ex, "Error deleting dataset");
             throw new InvalidOperationException("Error deleting dataset", ex);
         }
     }
@@ -206,7 +203,7 @@ public class DatasetsManager : IDatasetsManager
         if (_utils.GetDataset(orgSlug, newSlug, true) != null)
             throw new ArgumentException($"Dataset '{newSlug}' already exists");
 
-        var ds = _utils.GetDataset(orgSlug, dsSlug);
+        var ds = _utils.GetDataset(orgSlug, dsSlug, withTracking: true);
 
         if (!await _authManager.RequestAccess(ds, AccessType.Write))
             throw new UnauthorizedException("The current user cannot rename this dataset");
@@ -229,7 +226,7 @@ public class DatasetsManager : IDatasetsManager
             throw new UnauthorizedException("The current user is not allowed to change attributes");
 
         var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
-        var res = await ddb.ChangeAttributesRawAsync(new Dictionary<string, object> { { "public", attributes.IsPublic } });;
+        var res = ddb.ChangeAttributesRaw(new Dictionary<string, object> { { "public", attributes.IsPublic } });
 
         await _stacManager.ClearCache(ds);
 

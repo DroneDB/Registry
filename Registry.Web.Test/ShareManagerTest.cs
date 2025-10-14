@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Dynamic;
 using System.IO;
@@ -65,6 +65,7 @@ class ShareManagerTest : TestBase
     private Mock<ICacheManager> _cacheManagerMock;
     private Mock<IStacManager> _stacManagerMock;
     private Mock<IThumbnailGenerator> _thumbnailGeneratorMock;
+    private Mock<IJobIndexQuery> _jobIndexQueryMock;
 
     private IBackgroundJobsProcessor _backgroundJobsProcessor;
 
@@ -97,6 +98,7 @@ class ShareManagerTest : TestBase
         _cacheManagerMock = new Mock<ICacheManager>();
         _stacManagerMock = new Mock<IStacManager>();
         _thumbnailGeneratorMock = new Mock<IThumbnailGenerator>();
+        _jobIndexQueryMock = new Mock<IJobIndexQuery>();
 
         _shareManagerLogger = new Logger<ShareManager>(LoggerFactory.Create(builder => builder.AddConsole()));
         _objectManagerLogger = new Logger<ObjectsManager>(LoggerFactory.Create(builder => builder.AddConsole()));
@@ -107,7 +109,7 @@ class ShareManagerTest : TestBase
         _batchTokenGeneratorLogger =
             new Logger<BatchTokenGenerator>(LoggerFactory.Create(builder => builder.AddConsole()));
         _nameGeneratorLogger = new Logger<NameGenerator>(LoggerFactory.Create(builder => builder.AddConsole()));
-            
+
     }
 
     /*
@@ -155,7 +157,7 @@ class ShareManagerTest : TestBase
         var settings = JsonConvert.DeserializeObject<AppSettings>(SettingsJson);
         settings.DatasetsPath = test.TestFolder;
         _appSettingsMock.Setup(o => o.Value).Returns(settings);
-            
+
         _authManagerMock.Setup(o => o.IsUserAdmin()).Returns(Task.FromResult(true));
         _authManagerMock.Setup(o => o.IsOwnerOrAdmin(It.IsAny<Organization>())).Returns(Task.FromResult(true));
         var user = new User
@@ -164,12 +166,12 @@ class ShareManagerTest : TestBase
             Email = "admin@example.com",
             Id = Guid.NewGuid().ToString()
         };
-            
-        _authManagerMock.Setup(o => o.RequestAccess(It.IsAny<Dataset>(), 
+
+        _authManagerMock.Setup(o => o.RequestAccess(It.IsAny<Dataset>(),
             It.IsAny<AccessType>())).Returns(Task.FromResult(true));
-        _authManagerMock.Setup(o => o.RequestAccess(It.IsAny<Organization>(), 
+        _authManagerMock.Setup(o => o.RequestAccess(It.IsAny<Organization>(),
             It.IsAny<AccessType>())).Returns(Task.FromResult(true));
-            
+
         _authManagerMock.Setup(o => o.GetCurrentUser()).Returns(Task.FromResult(user));
         _authManagerMock.Setup(o => o.UserExists(user.Id)).Returns(Task.FromResult(true));
         _authManagerMock.Setup(o => o.SafeGetCurrentUserName()).Returns(Task.FromResult(userName));
@@ -180,11 +182,11 @@ class ShareManagerTest : TestBase
         };
 
         var ddbMock = new Mock<IDDB>();
-        ddbMock.Setup(x => x.GetInfoAsync(CancellationToken.None)).Returns(Task.FromResult(new Entry
+        ddbMock.Setup(x => x.GetInfo()).Returns(new Entry
         {
             Properties = attributes
-        }));
-            
+        });
+
         var mockMeta = new MockMeta();
         ddbMock.Setup(x => x.Meta).Returns(mockMeta);
 
@@ -194,14 +196,14 @@ class ShareManagerTest : TestBase
         //     .Returns(Task.FromResult(new EntryAttributes(ddbMock2.Object)));
 
         _ddbFactoryMock.Setup(x => x.Get(It.IsAny<string>(), It.IsAny<Guid>())).Returns(ddbMock.Object);
-            
+
         var ddbFactory = new DdbManager(_appSettingsMock.Object, _ddbFactoryLogger, DdbWrapper);
         var webUtils = new WebUtils(_authManagerMock.Object, context, _appSettingsMock.Object,
             _httpContextAccessorMock.Object, _ddbFactoryMock.Object);
 
-        var objectManager = new ObjectsManager(_objectManagerLogger, context, 
+        var objectManager = new ObjectsManager(_objectManagerLogger, context,
             _appSettingsMock.Object, ddbFactory, webUtils, _authManagerMock.Object, _cacheManagerMock.Object,
-            _fileSystem, _backgroundJobsProcessor, DdbWrapper, _thumbnailGeneratorMock.Object);
+            _fileSystem, _backgroundJobsProcessor, DdbWrapper, _thumbnailGeneratorMock.Object, _jobIndexQueryMock.Object);
 
         var datasetManager = new DatasetsManager(context, webUtils, _datasetsManagerLogger, objectManager,
             _stacManagerMock.Object, _ddbFactoryMock.Object, _authManagerMock.Object);
@@ -209,11 +211,11 @@ class ShareManagerTest : TestBase
             datasetManager, appContext, _organizationsManagerLogger);
 
         var shareManager = new ShareManager(_appSettingsMock.Object, _shareManagerLogger, objectManager,
-            datasetManager, organizationsManager, webUtils, _authManagerMock.Object, 
-            new BatchTokenGenerator(_appSettingsMock.Object, _batchTokenGeneratorLogger), 
+            datasetManager, organizationsManager, webUtils, _authManagerMock.Object,
+            new BatchTokenGenerator(_appSettingsMock.Object, _batchTokenGeneratorLogger),
             new NameGenerator(_appSettingsMock.Object, _nameGeneratorLogger), context);
 
-        // TEST 
+        // TEST
 
         // ListBatches
         var batches =
@@ -249,7 +251,7 @@ class ShareManagerTest : TestBase
         batch.Status.Should().Be(BatchStatus.Committed);
         batch.Entries.Should().HaveCount(0);
     }
-        
+
     [Test]
     public async Task Initialize_WithoutTag_GeneratedTag()
     {
@@ -264,7 +266,7 @@ class ShareManagerTest : TestBase
         var settings = JsonConvert.DeserializeObject<AppSettings>(SettingsJson);
         settings.DatasetsPath = test.TestFolder;
         _appSettingsMock.Setup(o => o.Value).Returns(settings);
-            
+
         _authManagerMock.Setup(o => o.IsUserAdmin()).Returns(Task.FromResult(true));
         _authManagerMock.Setup(o => o.IsOwnerOrAdmin(It.IsAny<Organization>())).Returns(Task.FromResult(true));
         var user = new User
@@ -276,22 +278,22 @@ class ShareManagerTest : TestBase
         _authManagerMock.Setup(o => o.GetCurrentUser()).Returns(Task.FromResult(user));
         _authManagerMock.Setup(o => o.UserExists(user.Id)).Returns(Task.FromResult(true));
         _authManagerMock.Setup(o => o.SafeGetCurrentUserName()).Returns(Task.FromResult(userName));
-        _authManagerMock.Setup(o => o.RequestAccess(It.IsAny<Dataset>(), 
+        _authManagerMock.Setup(o => o.RequestAccess(It.IsAny<Dataset>(),
             It.IsAny<AccessType>())).Returns(Task.FromResult(true));
-        _authManagerMock.Setup(o => o.RequestAccess(It.IsAny<Organization>(), 
+        _authManagerMock.Setup(o => o.RequestAccess(It.IsAny<Organization>(),
             It.IsAny<AccessType>())).Returns(Task.FromResult(true));
-            
+
         var attributes = new Dictionary<string, object>
         {
             { "public", true }
         };
 
         var ddbMock = new Mock<IDDB>();
-        ddbMock.Setup(x => x.GetInfoAsync(default)).Returns(Task.FromResult(new Entry
+        ddbMock.Setup(x => x.GetInfo()).Returns(new Entry
         {
             Properties = attributes
-        }));
-            
+        });
+
         var mockMeta = new MockMeta();
         ddbMock.Setup(x => x.Meta).Returns(mockMeta);
 
@@ -301,14 +303,14 @@ class ShareManagerTest : TestBase
         //     .Returns(Task.FromResult(new EntryAttributes(ddbMock2.Object)));
 
         _ddbFactoryMock.Setup(x => x.Get(It.IsAny<string>(), It.IsAny<Guid>())).Returns(ddbMock.Object);
-            
+
         var ddbFactory = new DdbManager(_appSettingsMock.Object, _ddbFactoryLogger, DdbWrapper);
         var webUtils = new WebUtils(_authManagerMock.Object, context, _appSettingsMock.Object,
             _httpContextAccessorMock.Object, _ddbFactoryMock.Object);
 
-        var objectManager = new ObjectsManager(_objectManagerLogger, context, 
+        var objectManager = new ObjectsManager(_objectManagerLogger, context,
             _appSettingsMock.Object, ddbFactory, webUtils, _authManagerMock.Object, _cacheManagerMock.Object,
-            _fileSystem, _backgroundJobsProcessor, DdbWrapper, _thumbnailGeneratorMock.Object);
+            _fileSystem, _backgroundJobsProcessor, DdbWrapper, _thumbnailGeneratorMock.Object, _jobIndexQueryMock.Object);
 
         var datasetManager = new DatasetsManager(context, webUtils, _datasetsManagerLogger, objectManager,
             _stacManagerMock.Object, _ddbFactoryMock.Object, _authManagerMock.Object);
@@ -316,11 +318,11 @@ class ShareManagerTest : TestBase
             datasetManager, appContext, _organizationsManagerLogger);
 
         var shareManager = new ShareManager(_appSettingsMock.Object, _shareManagerLogger, objectManager,
-            datasetManager, organizationsManager, webUtils, _authManagerMock.Object, 
-            new BatchTokenGenerator(_appSettingsMock.Object, _batchTokenGeneratorLogger), 
+            datasetManager, organizationsManager, webUtils, _authManagerMock.Object,
+            new BatchTokenGenerator(_appSettingsMock.Object, _batchTokenGeneratorLogger),
             new NameGenerator(_appSettingsMock.Object, _nameGeneratorLogger), context);
 
-        // TEST 
+        // TEST
 
         // ListBatches
         var batches =
@@ -366,7 +368,7 @@ class ShareManagerTest : TestBase
         batch.Status.Should().Be(BatchStatus.Committed);
         batch.Entries.Should().HaveCount(0);
     }
-        
+
     [Test]
     public async Task EndToEnd_HappyPathRollback()
     {
@@ -381,16 +383,16 @@ class ShareManagerTest : TestBase
         var settings = JsonConvert.DeserializeObject<AppSettings>(SettingsJson);
         settings.DatasetsPath = test.TestFolder;
         _appSettingsMock.Setup(o => o.Value).Returns(settings);
-            
+
         _authManagerMock.Setup(o => o.IsUserAdmin()).Returns(Task.FromResult(true));
         _authManagerMock.Setup(o => o.IsOwnerOrAdmin(It.IsAny<Dataset>())).Returns(Task.FromResult(true));
         _authManagerMock.Setup(o => o.IsOwnerOrAdmin(It.IsAny<Organization>())).Returns(Task.FromResult(true));
 
-        _authManagerMock.Setup(o => o.RequestAccess(It.IsAny<Dataset>(), 
+        _authManagerMock.Setup(o => o.RequestAccess(It.IsAny<Dataset>(),
             It.IsAny<AccessType>())).Returns(Task.FromResult(true));
-        _authManagerMock.Setup(o => o.RequestAccess(It.IsAny<Organization>(), 
+        _authManagerMock.Setup(o => o.RequestAccess(It.IsAny<Organization>(),
             It.IsAny<AccessType>())).Returns(Task.FromResult(true));
-            
+
         _authManagerMock.Setup(o => o.GetCurrentUser()).Returns(Task.FromResult(new User
         {
             UserName = userName,
@@ -404,11 +406,11 @@ class ShareManagerTest : TestBase
         };
 
         var ddbMock = new Mock<IDDB>();
-        ddbMock.Setup(x => x.GetInfoAsync(default)).Returns(Task.FromResult(new Entry
+        ddbMock.Setup(x => x.GetInfo()).Returns(new Entry
         {
             Properties = attributes
-        }));
-            
+        });
+
         var mockMeta = new MockMeta();
         ddbMock.Setup(x => x.Meta).Returns(mockMeta);
 
@@ -423,9 +425,9 @@ class ShareManagerTest : TestBase
         var webUtils = new WebUtils(_authManagerMock.Object, context, _appSettingsMock.Object,
             _httpContextAccessorMock.Object, _ddbFactoryMock.Object);
 
-        var objectManager = new ObjectsManager(_objectManagerLogger, context, 
+        var objectManager = new ObjectsManager(_objectManagerLogger, context,
             _appSettingsMock.Object, ddbFactory, webUtils, _authManagerMock.Object, _cacheManagerMock.Object,
-            _fileSystem, _backgroundJobsProcessor, DdbWrapper, _thumbnailGeneratorMock.Object);
+            _fileSystem, _backgroundJobsProcessor, DdbWrapper, _thumbnailGeneratorMock.Object, _jobIndexQueryMock.Object);
 
         var datasetManager = new DatasetsManager(context, webUtils, _datasetsManagerLogger, objectManager,
             _stacManagerMock.Object, _ddbFactoryMock.Object, _authManagerMock.Object);
@@ -433,8 +435,8 @@ class ShareManagerTest : TestBase
             datasetManager, appContext, _organizationsManagerLogger);
 
         var shareManager = new ShareManager(_appSettingsMock.Object, _shareManagerLogger, objectManager,
-            datasetManager, organizationsManager, webUtils, _authManagerMock.Object, 
-            new BatchTokenGenerator(_appSettingsMock.Object, _batchTokenGeneratorLogger), 
+            datasetManager, organizationsManager, webUtils, _authManagerMock.Object,
+            new BatchTokenGenerator(_appSettingsMock.Object, _batchTokenGeneratorLogger),
             new NameGenerator(_appSettingsMock.Object, _nameGeneratorLogger), context);
 
         // TEST
@@ -522,13 +524,13 @@ class ShareManagerTest : TestBase
         var settings = JsonConvert.DeserializeObject<AppSettings>(SettingsJson);
         settings.DatasetsPath = test.TestFolder;
         _appSettingsMock.Setup(o => o.Value).Returns(settings);
-            
+
         _authManagerMock.Setup(o => o.IsUserAdmin()).Returns(Task.FromResult(true));
         _authManagerMock.Setup(o => o.IsOwnerOrAdmin(It.IsAny<Dataset>())).Returns(Task.FromResult(true));
         _authManagerMock.Setup(o => o.IsOwnerOrAdmin(It.IsAny<Organization>())).Returns(Task.FromResult(true));
-        _authManagerMock.Setup(o => o.RequestAccess(It.IsAny<Dataset>(), 
+        _authManagerMock.Setup(o => o.RequestAccess(It.IsAny<Dataset>(),
             It.IsAny<AccessType>())).Returns(Task.FromResult(true));
-        _authManagerMock.Setup(o => o.RequestAccess(It.IsAny<Organization>(), 
+        _authManagerMock.Setup(o => o.RequestAccess(It.IsAny<Organization>(),
             It.IsAny<AccessType>())).Returns(Task.FromResult(true));
 
         _authManagerMock.Setup(o => o.GetCurrentUser()).Returns(Task.FromResult(new User
@@ -536,7 +538,7 @@ class ShareManagerTest : TestBase
             UserName = userName,
             Email = "admin@example.com"
         }));
-            
+
         _authManagerMock.Setup(o => o.SafeGetCurrentUserName()).Returns(Task.FromResult(userName));
 
         var attributes = new Dictionary<string, object>
@@ -545,17 +547,17 @@ class ShareManagerTest : TestBase
         };
 
         var ddbMock = new Mock<IDDB>();
-        ddbMock.Setup(x => x.GetInfoAsync(default)).Returns(Task.FromResult(new Entry
+        ddbMock.Setup(x => x.GetInfo()).Returns(new Entry
         {
             Properties = attributes
-        }));
+        });
 
         var metaMock = new Mock<IMetaManager>();
         metaMock.Setup(x => x.Set(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>()));
 
         var mockMeta = new MockMeta();
         ddbMock.Setup(x => x.Meta).Returns(mockMeta);
-            
+
         var ddbMock2 = new Mock<IDDB>();
         ddbMock2.Setup(x => x.GetAttributesRaw()).Returns(attributes);
         // ddbMock.Setup(x => x.GetAttributesAsync(default))
@@ -567,9 +569,9 @@ class ShareManagerTest : TestBase
         var webUtils = new WebUtils(_authManagerMock.Object, context, _appSettingsMock.Object,
             _httpContextAccessorMock.Object, _ddbFactoryMock.Object);
 
-        var objectManager = new ObjectsManager(_objectManagerLogger, context, 
+        var objectManager = new ObjectsManager(_objectManagerLogger, context,
             _appSettingsMock.Object, ddbFactory, webUtils, _authManagerMock.Object, _cacheManagerMock.Object,
-            _fileSystem, _backgroundJobsProcessor, DdbWrapper, _thumbnailGeneratorMock.Object);
+            _fileSystem, _backgroundJobsProcessor, DdbWrapper, _thumbnailGeneratorMock.Object, _jobIndexQueryMock.Object);
 
         var datasetManager = new DatasetsManager(context, webUtils, _datasetsManagerLogger, objectManager,
             _stacManagerMock.Object, _ddbFactoryMock.Object, _authManagerMock.Object);
@@ -577,8 +579,8 @@ class ShareManagerTest : TestBase
             datasetManager, appContext, _organizationsManagerLogger);
 
         var shareManager = new ShareManager(_appSettingsMock.Object, _shareManagerLogger, objectManager,
-            datasetManager, organizationsManager, webUtils, _authManagerMock.Object, 
-            new BatchTokenGenerator(_appSettingsMock.Object, _batchTokenGeneratorLogger), 
+            datasetManager, organizationsManager, webUtils, _authManagerMock.Object,
+            new BatchTokenGenerator(_appSettingsMock.Object, _batchTokenGeneratorLogger),
             new NameGenerator(_appSettingsMock.Object, _nameGeneratorLogger), context);
 
         // TEST
@@ -667,14 +669,14 @@ class ShareManagerTest : TestBase
     [Test]
     public async Task EndToEnd_ShareInit_After_ShareInit()
     {
-        // INITIALIZATION & SETUP 
+        // INITIALIZATION & SETUP
         const string userName = "admin";
 
         using var test = new TestFS(Test4ArchiveUrl, BaseTestFolder, true);
 
         await using var context = GetTest1Context();
         await using var appContext = GetAppTest1Context();
-            
+
         var settings = JsonConvert.DeserializeObject<AppSettings>(SettingsJson);
         settings.DatasetsPath = test.TestFolder;
         _appSettingsMock.Setup(o => o.Value).Returns(settings);
@@ -683,11 +685,11 @@ class ShareManagerTest : TestBase
         _authManagerMock.Setup(o => o.IsOwnerOrAdmin(It.IsAny<Dataset>())).Returns(Task.FromResult(true));
         _authManagerMock.Setup(o => o.IsOwnerOrAdmin(It.IsAny<Organization>())).Returns(Task.FromResult(true));
 
-        _authManagerMock.Setup(o => o.RequestAccess(It.IsAny<Dataset>(), 
+        _authManagerMock.Setup(o => o.RequestAccess(It.IsAny<Dataset>(),
             It.IsAny<AccessType>())).Returns(Task.FromResult(true));
-        _authManagerMock.Setup(o => o.RequestAccess(It.IsAny<Organization>(), 
+        _authManagerMock.Setup(o => o.RequestAccess(It.IsAny<Organization>(),
             It.IsAny<AccessType>())).Returns(Task.FromResult(true));
-            
+
         _authManagerMock.Setup(o => o.GetCurrentUser()).Returns(Task.FromResult(new User
         {
             UserName = userName,
@@ -701,11 +703,11 @@ class ShareManagerTest : TestBase
         };
 
         var ddbMock = new Mock<IDDB>();
-        ddbMock.Setup(x => x.GetInfoAsync(default)).Returns(Task.FromResult(new Entry
+        ddbMock.Setup(x => x.GetInfo()).Returns(new Entry
         {
             Properties = attributes
-        }));
-            
+        });
+
         var mockMeta = new MockMeta();
         ddbMock.Setup(x => x.Meta).Returns(mockMeta);
 
@@ -720,9 +722,9 @@ class ShareManagerTest : TestBase
         var webUtils = new WebUtils(_authManagerMock.Object, context, _appSettingsMock.Object,
             _httpContextAccessorMock.Object, _ddbFactoryMock.Object);
 
-        var objectManager = new ObjectsManager(_objectManagerLogger, context, 
+        var objectManager = new ObjectsManager(_objectManagerLogger, context,
             _appSettingsMock.Object, ddbFactory, webUtils, _authManagerMock.Object, _cacheManagerMock.Object,
-            _fileSystem, _backgroundJobsProcessor, DdbWrapper, _thumbnailGeneratorMock.Object);
+            _fileSystem, _backgroundJobsProcessor, DdbWrapper, _thumbnailGeneratorMock.Object, _jobIndexQueryMock.Object);
 
         var datasetManager = new DatasetsManager(context, webUtils, _datasetsManagerLogger, objectManager,
             _stacManagerMock.Object, _ddbFactoryMock.Object, _authManagerMock.Object);
@@ -730,11 +732,11 @@ class ShareManagerTest : TestBase
             datasetManager, appContext, _organizationsManagerLogger);
 
         var shareManager = new ShareManager(_appSettingsMock.Object, _shareManagerLogger, objectManager,
-            datasetManager, organizationsManager, webUtils, _authManagerMock.Object, 
-            new BatchTokenGenerator(_appSettingsMock.Object, _batchTokenGeneratorLogger), 
+            datasetManager, organizationsManager, webUtils, _authManagerMock.Object,
+            new BatchTokenGenerator(_appSettingsMock.Object, _batchTokenGeneratorLogger),
             new NameGenerator(_appSettingsMock.Object, _nameGeneratorLogger), context);
 
-        // TEST 
+        // TEST
 
         const string fileName = "DJI_0028.JPG";
         const int fileSize = 3140384;
@@ -918,7 +920,7 @@ class ShareManagerTest : TestBase
 
         return new RegistryContext(options);
     }
-        
+
     private static ApplicationDbContext GetAppTest1Context()
     {
         var options = new DbContextOptionsBuilder<ApplicationDbContext>()
@@ -936,7 +938,7 @@ class ShareManagerTest : TestBase
                 NormalizedName = "ADMIN",
                 ConcurrencyStamp = "72c80593-64a2-40b4-b0c4-26a9dcc06400"
             };
-                
+
             context.Roles.Add(adminRole);
 
             var standardRole = new IdentityRole
@@ -948,7 +950,7 @@ class ShareManagerTest : TestBase
             };
 
             context.Roles.Add(standardRole);
-                
+
             var admin = new User
             {
                 Id = "bfb579ce-8435-4c70-a365-158a3d93811f",
@@ -956,7 +958,7 @@ class ShareManagerTest : TestBase
                 Email = "admin@example.com",
                 NormalizedUserName = "ADMIN"
             };
-                
+
             context.Users.Add(admin);
 
             context.UserRoles.Add(new IdentityUserRole<string>

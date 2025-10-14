@@ -7,6 +7,7 @@ using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.Extensions.Logging;
 using Registry.Web.Models;
+using Registry.Web.Models.DTO;
 using Registry.Web.Services.Ports;
 using Registry.Web.Utilities;
 
@@ -91,6 +92,24 @@ public class SystemController : ControllerBaseEx
         catch (Exception ex)
         {
             _logger.LogError(ex, "Exception in System controller CleanupDatasets()");
+
+            return ExceptionResult(ex);
+        }
+    }
+
+    [HttpGet("build-pending-status", Name = nameof(SystemController) + "." + nameof(GetBuildPendingStatus))]
+    [ProducesResponseType(typeof(BuildPendingStatusDto), 200)]
+    public async Task<IActionResult> GetBuildPendingStatus()
+    {
+        try
+        {
+            _logger.LogDebug("System controller GetBuildPendingStatus()");
+
+            return Ok(await _systemManager.GetBuildPendingStatus());
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Exception in System controller GetBuildPendingStatus()");
 
             return ExceptionResult(ex);
         }

@@ -97,7 +97,11 @@ public class Startup
 
         services.AddMvcCore()
             .AddApiExplorer()
-            .AddNewtonsoftJson();
+            .AddNewtonsoftJson(options =>
+            {
+                options.SerializerSettings.DateTimeZoneHandling = Newtonsoft.Json.DateTimeZoneHandling.Utc;
+                options.SerializerSettings.DateFormatHandling = Newtonsoft.Json.DateFormatHandling.IsoDateFormat;
+            });
 
         services.AddResponseCaching(options =>
         {
@@ -113,7 +117,7 @@ public class Startup
         services.Configure<AppSettings>(appSettingsSection);
         var appSettings = appSettingsSection.Get<AppSettings>();
 
-        ConfigureDbProvider<ApplicationDbContext>(services, appSettings.AuthProvider,
+        services.AddDbContextWithProvider<ApplicationDbContext>(Configuration, appSettings.AuthProvider,
             MagicStrings.IdentityConnectionName, "Identity");
 
         if (!string.IsNullOrWhiteSpace(appSettings.ExternalAuthUrl))
@@ -136,7 +140,7 @@ public class Startup
             services.AddScoped<ILoginManager, LocalLoginManager>();
         }
 
-        ConfigureDbProvider<RegistryContext>(services, appSettings.RegistryProvider,
+        services.AddDbContextWithProvider<RegistryContext>(Configuration, appSettings.RegistryProvider,
             MagicStrings.RegistryConnectionName, "Data");
 
         var key = Encoding.ASCII.GetBytes(appSettings.Secret);
@@ -189,6 +193,7 @@ public class Startup
         services.AddMemoryCache();
         services.AddCacheProvider(appSettings);
         services.AddHangfireProvider(appSettings, Configuration);
+        services.AddJobIndexing();
 
         var instanceType = Configuration.GetValue<InstanceType>("InstanceType");
 
@@ -253,6 +258,7 @@ public class Startup
         services.AddScoped<ISystemManager, SystemManager>();
         services.AddScoped<IBackgroundJobsProcessor, BackgroundJobsProcessor>();
         services.AddScoped<IMetaManager, Services.Managers.MetaManager>();
+        services.AddScoped<BuildPendingService>();
 
         services.AddScoped<IConfigurationHelper<AppSettings>, ConfigurationHelper>(_ =>
             new ConfigurationHelper(MagicStrings.AppSettingsFileName));
@@ -417,15 +423,24 @@ public class Startup
 
     private static void SetupCleanupJobs(IApplicationBuilder app)
     {
-        var manager = app.ApplicationServices.GetService<IRecurringJobManager>();
-
-        if (manager == null)
-            throw new InvalidOperationException("Cannot get recurring job manager from service provider");
-
         // Cleanup expired jobs
-        manager.AddOrUpdate("cleanup-expired-jobs",
+        RecurringJob.AddOrUpdate("cleanup-expired-jobs",
             () => HangfireUtils.CleanupExpiredJobs(null),
             Cron.Daily);
+
+        // Sync JobIndex states every 5 minutes
+        // Hangfire will automatically resolve JobIndexSyncService from DI and inject its dependencies
+        RecurringJob.AddOrUpdate<JobIndexSyncService>(
+            "sync-jobindex-states",
+            service => service.SyncJobIndexStates(null),
+            "*/5 * * * *"); // Every 5 minutes
+
+        // Process pending builds every minute
+        // Hangfire will automatically resolve BuildPendingService from DI and inject its dependencies
+        RecurringJob.AddOrUpdate<BuildPendingService>(
+            "process-pending-builds",
+            service => service.ProcessPendingBuilds(null),
+            "* * * * *"); // Every minute
     }
 
     private static void PrintStartupInfo(IApplicationBuilder app)
@@ -475,7 +490,9 @@ public class Startup
 
             if (builder.Host == "0.0.0.0") builder.Host = "localhost";
             var baseUri = builder.Uri;
-            var monitorQuery = string.IsNullOrWhiteSpace(settings.MonitorToken) ? string.Empty : $"?token={settings.MonitorToken}";
+            var monitorQuery = string.IsNullOrWhiteSpace(settings.MonitorToken)
+                ? string.Empty
+                : $"?token={settings.MonitorToken}";
             var reqAuth = string.IsNullOrWhiteSpace(settings.MonitorToken) ? "(req auth)" : string.Empty;
 
             Console.WriteLine();
@@ -543,17 +560,24 @@ public class Startup
             var data = await generateFunc();
 
             return data.ToWebp(90);
-
         }, appSettings.TilesCacheExpiration);
 
         cacheManager.Register(MagicStrings.ThumbnailCacheSeed, async parameters =>
         {
-            // These parameters are used to make the cache key unique
-            var fileHash = (string)parameters[0];
-            var size = (int)parameters[1];
-            var generateFunc = (Func<Task<byte[]>>)parameters[2];
+            try
+            {
+                // These parameters are used to make the cache key unique
+                var fileHash = (string)parameters[0];
+                var size = (int)parameters[1];
+                var generateFunc = (Func<Task<byte[]>>)parameters[2];
 
-            return await generateFunc();
+                return await generateFunc();
+            }
+            catch (Exception ex)
+            {
+                Log.Error(ex, "Error generating thumbnail");
+                throw;
+            }
         }, appSettings.ThumbnailsCacheExpiration);
     }
 
@@ -594,26 +618,7 @@ public class Startup
     }
 
 
-    private void ConfigureDbProvider<T>(IServiceCollection services, DbProvider provider,
-        string connectionStringName, string migrationsNamespace) where T : DbContext
-    {
-        var connectionString = Configuration.GetConnectionString(connectionStringName);
 
-        services.AddDbContext<T>(options =>
-            _ = provider switch
-            {
-                DbProvider.Sqlite => options.UseSqlite(connectionString,
-                    x => x.MigrationsAssembly("Registry.Web." + migrationsNamespace + ".SqliteMigrations")),
-                DbProvider.Mysql => options.UseMySql(connectionString, ServerVersion.AutoDetect(connectionString),
-                    x =>
-                    {
-                        x.EnableRetryOnFailure();
-                        x.MigrationsAssembly("Registry.Web." + migrationsNamespace + ".MySqlMigrations");
-                    }),
-                // DbProvider.Mssql => options.UseSqlServer(connectionString),
-                _ => throw new ArgumentOutOfRangeException(nameof(provider), $"Unrecognised provider: '{provider}'")
-            });
-    }
 
     private static async Task CreateInitialData(RegistryContext context)
     {

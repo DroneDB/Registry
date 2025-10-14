@@ -46,27 +46,46 @@ public class OrganizationsManager : IOrganizationsManager
         if (!await _authManager.CanListOrganizations(currentUser))
             throw new UnauthorizedException("Invalid user");
 
-        var query =
-            from org in _context.Organizations.Include(o => o.Users)
-            where org.OwnerId == currentUser.Id || org.Slug == MagicStrings.PublicOrganizationSlug ||
-                  org.Users.Any(u => u.UserId == currentUser.Id)
-            select org;
-
-        // This can be optimized, but it's not a big deal because it's a cross database query anyway
-        var usersMapper = await _appContext.Users.Select(item => new { item.Id, item.UserName })
-            .ToDictionaryAsync(item => item.Id, item => item.UserName);
-
-        return from org in query
-            let userName = org.OwnerId != null ? usersMapper.SafeGetValue(org.OwnerId) : null
-            select new OrganizationDto
+        // Use projection to load only necessary data
+        var organizationsQuery = _context.Organizations
+            .AsNoTracking()
+            .Where(org => org.OwnerId == currentUser.Id ||
+                         org.Slug == MagicStrings.PublicOrganizationSlug ||
+                         org.Users.Any(u => u.UserId == currentUser.Id))
+            .Select(org => new OrganizationDto
             {
                 CreationDate = org.CreationDate,
                 Description = org.Description,
                 Slug = org.Slug,
                 Name = org.Name,
-                Owner = userName,
-                IsPublic = org.IsPublic
-            };
+                IsPublic = org.IsPublic,
+                Owner = org.OwnerId // Will be resolved to username later
+            });
+
+        var organizations = await organizationsQuery.ToListAsync();
+
+        // Resolve owner names in a separate, more efficient query
+        var ownerIds = organizations.Where(o => o.Owner != null)
+                                   .Select(o => o.Owner)
+                                   .Distinct()
+                                   .ToArray();
+
+        if (ownerIds.Length != 0)
+        {
+            var usersMapper = await _appContext.Users
+                .AsNoTracking()
+                .Where(u => ownerIds.Contains(u.Id))
+                .Select(u => new { u.Id, u.UserName })
+                .ToDictionaryAsync(u => u.Id, u => u.UserName);
+
+            // Update owner names
+            foreach (var org in organizations.Where(org => org.Owner != null))
+            {
+                org.Owner = usersMapper.SafeGetValue(org.Owner);
+            }
+        }
+
+        return organizations;
     }
 
     public async Task<OrganizationDto> Get(string orgSlug)
@@ -136,7 +155,7 @@ public class OrganizationsManager : IOrganizationsManager
 
     public async Task Edit(string orgSlug, OrganizationDto organization)
     {
-        var org = _utils.GetOrganization(orgSlug);
+        var org = _utils.GetOrganization(orgSlug, withTracking: true);
 
         if (!await _authManager.RequestAccess(org, AccessType.Write))
             throw new UnauthorizedException("Invalid user");
@@ -175,7 +194,7 @@ public class OrganizationsManager : IOrganizationsManager
 
     public async Task Delete(string orgSlug)
     {
-        var org = _utils.GetOrganization(orgSlug);
+        var org = _utils.GetOrganization(orgSlug, withTracking: true);
 
         if (!await _authManager.RequestAccess(org, AccessType.Delete))
             throw new UnauthorizedException("Invalid user");
@@ -184,7 +203,6 @@ public class OrganizationsManager : IOrganizationsManager
         {
             // TODO: To check and re-check and re-check and re-check
             await _datasetManager.Delete(org.Slug, ds.Slug);
-            _context.Datasets.Remove(ds);
         }
 
         _context.Organizations.Remove(org);

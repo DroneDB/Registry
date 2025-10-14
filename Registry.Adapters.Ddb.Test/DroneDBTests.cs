@@ -3,6 +3,8 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
 using FluentAssertions;
 using Newtonsoft.Json;
 using NUnit.Framework;
@@ -35,7 +37,10 @@ public class NativeDdbWrapperTests : TestBase
 
     private const string TestPointCloudUrl =
         "https://github.com/DroneDB/test_data/raw/master/brighton/point_cloud.laz";
-
+    
+    private const string TestPointCloud2Url =
+        "https://github.com/DroneDB/test_data/raw/master/point-clouds/brighton-beach.laz";
+    
     private static readonly IDdbWrapper DdbWrapper = new NativeDdbWrapper(true);
 
     [OneTimeSetUp]
@@ -79,7 +84,7 @@ public class NativeDdbWrapperTests : TestBase
     {
 
         using var area = new TestArea(nameof(Init_EmptyFolder_Ok));
-            
+
         DdbWrapper.Init(area.TestFolder).Should().Contain(area.TestFolder);
         Directory.Exists(Path.Join(area.TestFolder, ".ddb")).Should().BeTrue();
     }
@@ -617,6 +622,108 @@ public class NativeDdbWrapperTests : TestBase
     }
 
     [Test]
+    public void IsBuildActive_PointCloud_ConsistentBehavior()
+    {
+        using var test = new TestFS(Test1ArchiveUrl, BaseTestFolder);
+
+        var ddbPath = Path.Combine(test.TestFolder, "public", "default");
+
+        using var tempFile = new TempFile(TestPointCloudUrl, BaseTestFolder);
+
+        var destPath = Path.Combine(ddbPath, Path.GetFileName(tempFile.FilePath));
+
+        File.Move(tempFile.FilePath, destPath);
+
+        var res = DdbWrapper.Add(ddbPath, destPath);
+
+        res.Count.Should().Be(1);
+
+        // Test that IsBuildActive is consistent for buildable files
+        var isActive = DdbWrapper.IsBuildActive(ddbPath, Path.GetFileName(destPath));
+
+        // For buildable files, the API should work without exceptions
+        // The exact result depends on whether there are pending builds or not
+        TestContext.WriteLine($"IsBuildActive for point cloud file returns: {isActive}");
+
+        // Call it multiple times to ensure consistency
+        DdbWrapper.IsBuildActive(ddbPath, Path.GetFileName(destPath)).Should().Be(isActive);
+        DdbWrapper.IsBuildActive(ddbPath, Path.GetFileName(destPath)).Should().Be(isActive);
+    }
+
+    [Test]
+    public void IsBuildActive_TextFile_False()
+    {
+        using var test = new TestFS(TestDelta2ArchiveUrl, BaseTestFolder);
+
+        // Text files are not buildable, so build should never be active
+        DdbWrapper.IsBuildActive(test.TestFolder, "lol.txt").Should().BeFalse();
+    }
+
+    [Test]
+    public void IsBuildActive_PointCloudBuilding_True()
+    {
+        using var test = new TestFS(Test1ArchiveUrl, BaseTestFolder);
+        
+        var ddbPath = Path.Combine(test.TestFolder, "public", "default");
+
+        using var tempFile = new TempFile(TestPointCloud2Url, BaseTestFolder);
+
+        var destPath = Path.Combine(ddbPath, Path.GetFileName(tempFile.FilePath));
+
+        File.Move(tempFile.FilePath, destPath);
+
+        var res = DdbWrapper.Add(ddbPath, destPath);
+
+        res.Count.Should().Be(1);
+        
+        DdbWrapper.IsBuildActive(ddbPath, Path.GetFileName(destPath)).Should().BeFalse();
+
+        var isActive = false;
+        
+        var task = Task.Run(() =>
+        {
+            isActive = true;
+            TestContext.WriteLine($"Build started");
+            DdbWrapper.Build(ddbPath);
+            TestContext.WriteLine($"Build finished");
+            isActive = false;
+        });
+        
+        // Wait until the build starts
+        while(!isActive) Thread.Sleep(10);
+        
+        // While the build is in progress, IsBuildActive should return true
+        DdbWrapper.IsBuildActive(ddbPath, Path.GetFileName(destPath)).Should().BeTrue();
+        
+        task.Wait();
+
+        isActive.Should().BeFalse();
+        
+        DdbWrapper.IsBuildActive(ddbPath, Path.GetFileName(destPath)).Should().BeFalse();
+
+    }
+
+    [Test]
+    public void IsBuildActive_NonBuildableFile_ExpectedBehavior()
+    {
+        using var test = new TestFS(TestDelta2ArchiveUrl, BaseTestFolder);
+
+        // Test with a non-buildable file (text file)
+        var textFile = "lol.txt";
+
+        // Verify it's not buildable
+        DdbWrapper.IsBuildable(test.TestFolder, textFile).Should().BeFalse();
+
+        // Test IsBuildActive on non-buildable file
+        var isActive = DdbWrapper.IsBuildActive(test.TestFolder, textFile);
+
+        // For non-buildable files, build should never be active
+        isActive.Should().BeFalse();
+
+        TestContext.WriteLine($"IsBuildActive for non-buildable file returns: {isActive}");
+    }
+
+    [Test]
     public void MetaAdd_Ok()
     {
         using var area = new TestArea(nameof(MetaAdd_Ok));
@@ -647,7 +754,7 @@ public class NativeDdbWrapperTests : TestBase
 
         var f = Path.Join(area.TestFolder, "test.txt");
         File.WriteAllText(f, null);
-            
+
         DdbWrapper.Add(area.TestFolder, f);
 
         FluentActions.Invoking(() => DdbWrapper.MetaSet(area.TestFolder, "tests", "123", f)).Should()
@@ -708,7 +815,7 @@ public class NativeDdbWrapperTests : TestBase
     {
         using var area = new TestArea(nameof(MetaUnset_Ok));
         DdbWrapper.Init(area.TestFolder);
-            
+
         var f = Path.Join(area.TestFolder, "test.txt");
         File.WriteAllText(f, null);
 
@@ -730,11 +837,11 @@ public class NativeDdbWrapperTests : TestBase
         DdbWrapper.MetaAdd(area.TestFolder, "examples", "abc");
         DdbWrapper.MetaList(area.TestFolder).Should().HaveCount(2);
     }
-        
+
     [Test]
     public void Stac_Ok()
     {
-            
+
         using var test = new TestFS(Test1ArchiveUrl, BaseTestFolder);
 
         var ddbPath = Path.Combine(test.TestFolder, "public", "default");
@@ -743,14 +850,14 @@ public class NativeDdbWrapperTests : TestBase
             "http://localhost:5000/orgs/public/ds/default", "public/default", "http://localhost:5000");
 
         res.Should().NotBeNull();
-            
+
         TestContext.WriteLine(res);
     }
-        
+
     [Test]
     public void Stac_NullPath_Ok()
     {
-            
+
         using var test = new TestFS(Test1ArchiveUrl, BaseTestFolder);
 
         var ddbPath = Path.Combine(test.TestFolder, "public", "default");
@@ -759,11 +866,11 @@ public class NativeDdbWrapperTests : TestBase
             "http://localhost:5000/orgs/public/ds/default", "public/default", "http://localhost:5000");
 
         res.Should().NotBeNull();
-            
+
         TestContext.WriteLine(res);
 
     }
-        
+
 
     [Test]
     [Explicit("Clean test directory")]

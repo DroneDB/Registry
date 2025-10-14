@@ -43,7 +43,7 @@ public class DdbHealthCheck : IHealthCheck
 
             data.Add("DdbVersion", version);
 
-            var entries = await ddb.SearchAsync(null, true, cancellationToken);
+            var entries = ddb.Search(null, true);
 
             if (entries == null || entries.Any())
                 return HealthCheckResult.Unhealthy("Something wrong with ddb behaviour", null, data);

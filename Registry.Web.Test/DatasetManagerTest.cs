@@ -68,7 +68,7 @@ public class DatasetManagerTest
         var utils = new WebUtils(_authManagerMock.Object, context, _appSettingsMock.Object, _httpContextAccessorMock.Object, _ddbFactoryMock.Object);
 
         var ddbMock = new Mock<IDDB>();
-        ddbMock.Setup(x => x.GetInfoAsync(default)).Returns(Task.FromResult(new Entry{
+        ddbMock.Setup(x => x.GetInfo()).Returns(new Entry{
                 Properties = new Dictionary<string, object>
                 {
                     {"public", true },
@@ -77,7 +77,7 @@ public class DatasetManagerTest
                 Size = 1000,
                 ModifiedTime = DateTime.Now
             }
-        ));
+        );
 
         _ddbFactoryMock.Setup(x => x.Get(It.IsAny<string>(), It.IsAny<Guid>())).Returns(ddbMock.Object);
 

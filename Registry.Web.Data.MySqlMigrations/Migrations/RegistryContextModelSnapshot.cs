@@ -17,7 +17,7 @@ namespace Registry.Web.Data.Mysql.Migrations
         {
 #pragma warning disable 612, 618
             modelBuilder
-                .HasAnnotation("ProductVersion", "8.0.8")
+                .HasAnnotation("ProductVersion", "9.0.9")
                 .HasAnnotation("Relational:MaxIdentifierLength", 64);
 
             MySqlModelBuilderExtensions.AutoIncrementColumns(modelBuilder);
@@ -41,11 +41,17 @@ namespace Registry.Web.Data.Mysql.Migrations
 
                     b.Property<string>("UserName")
                         .IsRequired()
-                        .HasColumnType("longtext");
+                        .HasColumnType("varchar(255)");
 
                     b.HasKey("Token");
 
                     b.HasIndex("DatasetId");
+
+                    b.HasIndex("Start");
+
+                    b.HasIndex("Status");
+
+                    b.HasIndex("UserName", "Status");
 
                     b.ToTable("Batches");
                 });
@@ -77,6 +83,10 @@ namespace Registry.Web.Data.Mysql.Migrations
                         .HasColumnType("varchar(128)");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("CreationDate");
+
+                    b.HasIndex("InternalRef");
 
                     b.HasIndex("OrganizationSlug");
 
@@ -121,6 +131,80 @@ namespace Registry.Web.Data.Mysql.Migrations
                     b.ToTable("Entry");
                 });
 
+            modelBuilder.Entity("Registry.Web.Data.Models.JobIndex", b =>
+                {
+                    b.Property<string>("JobId")
+                        .HasMaxLength(64)
+                        .HasColumnType("varchar(64)");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("datetime(6)");
+
+                    b.Property<string>("CurrentState")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("varchar(32)");
+
+                    b.Property<DateTime?>("DeletedAtUtc")
+                        .HasColumnType("datetime(6)");
+
+                    b.Property<string>("DsSlug")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("varchar(128)");
+
+                    b.Property<DateTime?>("FailedAtUtc")
+                        .HasColumnType("datetime(6)");
+
+                    b.Property<string>("Hash")
+                        .HasMaxLength(1024)
+                        .HasColumnType("varchar(1024)");
+
+                    b.Property<DateTime?>("LastStateChangeUtc")
+                        .HasColumnType("datetime(6)");
+
+                    b.Property<string>("MethodDisplay")
+                        .HasMaxLength(1024)
+                        .HasColumnType("varchar(1024)");
+
+                    b.Property<string>("OrgSlug")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("varchar(128)");
+
+                    b.Property<string>("Path")
+                        .HasColumnType("longtext");
+
+                    b.Property<DateTime?>("ProcessingAtUtc")
+                        .HasColumnType("datetime(6)");
+
+                    b.Property<string>("Queue")
+                        .HasMaxLength(64)
+                        .HasColumnType("varchar(64)");
+
+                    b.Property<DateTime?>("ScheduledAtUtc")
+                        .HasColumnType("datetime(6)");
+
+                    b.Property<DateTime?>("SucceededAtUtc")
+                        .HasColumnType("datetime(6)");
+
+                    b.Property<string>("UserId")
+                        .HasMaxLength(128)
+                        .HasColumnType("varchar(128)");
+
+                    b.HasKey("JobId");
+
+                    b.HasIndex("CreatedAtUtc");
+
+                    b.HasIndex("UserId");
+
+                    b.HasIndex("OrgSlug", "DsSlug");
+
+                    b.HasIndex("OrgSlug", "DsSlug", "Hash");
+
+                    b.ToTable("JobIndices");
+                });
+
             modelBuilder.Entity("Registry.Web.Data.Models.Organization", b =>
                 {
                     b.Property<string>("Slug")
@@ -141,9 +225,11 @@ namespace Registry.Web.Data.Mysql.Migrations
                         .HasColumnType("longtext");
 
                     b.Property<string>("OwnerId")
-                        .HasColumnType("longtext");
+                        .HasColumnType("varchar(255)");
 
                     b.HasKey("Slug");
+
+                    b.HasIndex("OwnerId");
 
                     b.HasIndex("Slug");
 
@@ -159,6 +245,8 @@ namespace Registry.Web.Data.Mysql.Migrations
                         .HasColumnType("varchar(255)");
 
                     b.HasKey("OrganizationSlug", "UserId");
+
+                    b.HasIndex("UserId");
 
                     b.ToTable("OrganizationsUsers");
                 });

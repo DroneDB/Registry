@@ -15,7 +15,7 @@ namespace Registry.Web.Data.SqliteMigrations.Migrations
         protected override void BuildModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
-            modelBuilder.HasAnnotation("ProductVersion", "8.0.8");
+            modelBuilder.HasAnnotation("ProductVersion", "9.0.9");
 
             modelBuilder.Entity("Registry.Web.Data.Models.Batch", b =>
                 {
@@ -41,6 +41,12 @@ namespace Registry.Web.Data.SqliteMigrations.Migrations
                     b.HasKey("Token");
 
                     b.HasIndex("DatasetId");
+
+                    b.HasIndex("Start");
+
+                    b.HasIndex("Status");
+
+                    b.HasIndex("UserName", "Status");
 
                     b.ToTable("Batches");
                 });
@@ -70,6 +76,10 @@ namespace Registry.Web.Data.SqliteMigrations.Migrations
                         .HasColumnType("TEXT");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("CreationDate");
+
+                    b.HasIndex("InternalRef");
 
                     b.HasIndex("OrganizationSlug");
 
@@ -112,6 +122,80 @@ namespace Registry.Web.Data.SqliteMigrations.Migrations
                     b.ToTable("Entry");
                 });
 
+            modelBuilder.Entity("Registry.Web.Data.Models.JobIndex", b =>
+                {
+                    b.Property<string>("JobId")
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("CurrentState")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime?>("DeletedAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("DsSlug")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime?>("FailedAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Hash")
+                        .HasMaxLength(1024)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime?>("LastStateChangeUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("MethodDisplay")
+                        .HasMaxLength(1024)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("OrgSlug")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Path")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime?>("ProcessingAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Queue")
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime?>("ScheduledAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime?>("SucceededAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("UserId")
+                        .HasMaxLength(128)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("JobId");
+
+                    b.HasIndex("CreatedAtUtc");
+
+                    b.HasIndex("UserId");
+
+                    b.HasIndex("OrgSlug", "DsSlug");
+
+                    b.HasIndex("OrgSlug", "DsSlug", "Hash");
+
+                    b.ToTable("JobIndices");
+                });
+
             modelBuilder.Entity("Registry.Web.Data.Models.Organization", b =>
                 {
                     b.Property<string>("Slug")
@@ -136,6 +220,8 @@ namespace Registry.Web.Data.SqliteMigrations.Migrations
 
                     b.HasKey("Slug");
 
+                    b.HasIndex("OwnerId");
+
                     b.HasIndex("Slug");
 
                     b.ToTable("Organizations");
@@ -150,6 +236,8 @@ namespace Registry.Web.Data.SqliteMigrations.Migrations
                         .HasColumnType("TEXT");
 
                     b.HasKey("OrganizationSlug", "UserId");
+
+                    b.HasIndex("UserId");
 
                     b.ToTable("OrganizationsUsers");
                 });

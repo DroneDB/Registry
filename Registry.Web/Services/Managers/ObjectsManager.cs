@@ -40,6 +40,7 @@ public class ObjectsManager : IObjectsManager
     private readonly AppSettings _settings;
     private readonly IDdbWrapper _ddbWrapper;
     private readonly IThumbnailGenerator _thumbnailGenerator;
+    private readonly IJobIndexQuery _jobIndexQuery;
 
     // TODO: Could be moved to config
     private const int DefaultThumbnailSize = 512;
@@ -59,7 +60,8 @@ public class ObjectsManager : IObjectsManager
         IFileSystem fs,
         IBackgroundJobsProcessor backgroundJob,
         IDdbWrapper ddbWrapper,
-        IThumbnailGenerator thumbnailGenerator)
+        IThumbnailGenerator thumbnailGenerator,
+        IJobIndexQuery jobIndexQuery)
     {
         _logger = logger;
         _context = context;
@@ -72,6 +74,7 @@ public class ObjectsManager : IObjectsManager
         _ddbWrapper = ddbWrapper;
         _settings = settings.Value;
         _thumbnailGenerator = thumbnailGenerator;
+        _jobIndexQuery = jobIndexQuery;
     }
 
     public async Task<IEnumerable<EntryDto>> List(string orgSlug, string dsSlug, string path = null,
@@ -88,7 +91,7 @@ public class ObjectsManager : IObjectsManager
 
         _logger.LogInformation("Searching in '{Path}'", path);
 
-        var entities = await ddb.SearchAsync(path, recursive);
+        var entities = ddb.Search(path, recursive);
 
         if (type != null)
             entities = entities.Where(item => item.Type == type);
@@ -114,7 +117,7 @@ public class ObjectsManager : IObjectsManager
 
         _logger.LogInformation("Searching in '{Path}' -> {Query} ({Recursive}", path, query, recursive ? 'r' : 'n');
 
-        var entities = await ddb.SearchAsync(path, recursive);
+        var entities = ddb.Search(path, recursive);
 
         if (type != null)
             entities = entities.Where(item => item.Type == type);
@@ -148,7 +151,7 @@ public class ObjectsManager : IObjectsManager
     {
         var ddb = _ddbManager.Get(orgSlug, internalRef);
 
-        var entry = await ddb.GetEntryAsync(path);
+        var entry = ddb.GetEntry(path);
 
         if (entry == null)
             throw new NotFoundException($"Cannot find '{path}'");
@@ -189,7 +192,7 @@ public class ObjectsManager : IObjectsManager
         // If it's a folder
         if (stream == null)
         {
-            if (await ddb.EntryExistsAsync(path))
+            if (ddb.EntryExists(path))
                 throw new InvalidOperationException("Cannot create a folder on another entry");
 
             if (path == IDDB.DatabaseFolderName)
@@ -198,7 +201,7 @@ public class ObjectsManager : IObjectsManager
             _logger.LogInformation("Adding folder to DDB");
 
             // Add to DDB
-            await ddb.AddAsync(path);
+            ddb.Add(path);
 
             _logger.LogInformation("Added to DDB");
 
@@ -227,26 +230,35 @@ public class ObjectsManager : IObjectsManager
 
         _logger.LogInformation("Added to DDB, checking entry now...");
 
-        var entry = await ddb.GetEntryAsync(path);
+        var entry = ddb.GetEntry(path);
 
         if (entry == null)
             throw new InvalidOperationException("Cannot find just added file!");
 
         _logger.LogInformation("Entry OK");
 
-        if (await ddb.IsBuildableAsync(entry.Path))
+        var user = await _authManager.GetCurrentUser();
+
+        if (ddb.IsBuildable(entry.Path))
         {
             _logger.LogInformation("This item is buildable, build it!");
 
-            var jobId = _backgroundJob.Enqueue(() => HangfireUtils.BuildWrapper(ddb, path, false, null));
+            // CRITICAL: Set pending flag BEFORE build starts
+            // This prevents race condition where build fails quickly and creates .pending
+            // but recurring job hasn't updated cache yet
+            await SetDatasetHasPendingBuilds(orgSlug, dsSlug, true);
+
+            var meta = new IndexPayload(orgSlug, dsSlug, entry.Hash, user.Id, null, entry.Path);
+            var jobId = _backgroundJob.EnqueueIndexed(() => HangfireUtils.BuildWrapper(ddb, path, false, null), meta);
 
             _logger.LogInformation("Background job id is {JobId}", jobId);
         }
-        else if (await ddb.IsBuildPendingAsync())
+        else if (ddb.IsBuildPending())
         {
             _logger.LogInformation("Items are pending build, retriggering build");
 
-            var jobId = _backgroundJob.Enqueue(() => HangfireUtils.BuildPendingWrapper(ddb, null));
+            var meta = new IndexPayload(orgSlug, dsSlug, entry.Hash, user.Id, null, entry.Path);
+            var jobId = _backgroundJob.EnqueueIndexed(() => HangfireUtils.BuildPendingWrapper(ddb, null), meta);
 
             _logger.LogInformation("Background job id is {JobId}", jobId);
         }
@@ -259,13 +271,13 @@ public class ObjectsManager : IObjectsManager
             {
                 try
                 {
-                    await _cacheManager.GetAsync(MagicStrings.ThumbnailCacheSeed, entry.Hash, DefaultThumbnailSize,
+                    await _cacheManager.GetAsync(MagicStrings.ThumbnailCacheSeed, $"{orgSlug}/{dsSlug}", entry.Hash, DefaultThumbnailSize,
                         new Func<Task<byte[]>>(async () =>
                         {
                             _logger.LogDebug("Background thumbnail generation for new file: '{LocalFilePath}'", localFilePath);
-                            using var stream = new MemoryStream();
-                            await _thumbnailGenerator.GenerateThumbnailAsync(localFilePath, DefaultThumbnailSize, stream);
-                            var result = stream.ToArray();
+                            using var s = new MemoryStream();
+                            await _thumbnailGenerator.GenerateThumbnailAsync(localFilePath, DefaultThumbnailSize, s);
+                            var result = s.ToArray();
                             _logger.LogDebug("Background generated thumbnail of {Size} bytes for: '{LocalFilePath}'", result.Length, localFilePath);
                             return result;
                         }));
@@ -283,6 +295,290 @@ public class ObjectsManager : IObjectsManager
         return entry.ToDto();
     }
 
+    /// <summary>
+    /// Validates that the specified entry (file or directory) does not have any active builds.
+    /// Throws an exception if any active build is found.
+    /// </summary>
+    /// <param name="ddb">The DDB instance to check</param>
+    /// <param name="entry">The entry to validate</param>
+    /// <param name="path">The path of the entry</param>
+    /// <exception cref="InvalidOperationException">Thrown when an active build is detected</exception>
+    private static async Task ValidateNoBuildActive(IDDB ddb, Entry entry, string path)
+    {
+        if (entry.Type == EntryType.Directory)
+        {
+            // For directories, check all files inside
+            var allEntries = ddb.Search(path, true);
+            var filesWithActiveBuild = allEntries
+                .Where(item => item.Type != EntryType.Directory && ddb.IsBuildActive(item.Path))
+                .ToArray();
+
+            if (filesWithActiveBuild.Length != 0)
+            {
+                var filesList = string.Join(", ", filesWithActiveBuild.Select(f => f.Path));
+                throw new InvalidOperationException(
+                    $"Cannot transfer directory '{path}' because the following files have an active build in progress: {filesList}");
+            }
+        }
+        else
+        {
+            // For single files, check if build is active
+            if (ddb.IsBuildActive(path))
+                throw new InvalidOperationException(
+                    $"Cannot transfer file '{path}' because it has an active build in progress");
+        }
+    }
+
+    public async Task Transfer(string sourceOrgSlug, string sourceDsSlug, string sourcePath, string destOrgSlug,
+        string destDsSlug, string destPath = null, bool overwrite = false)
+    {
+
+        var sourceDs = _utils.GetDataset(sourceOrgSlug, sourceDsSlug);
+        var destDs = _utils.GetDataset(destOrgSlug, destDsSlug);
+
+        _logger.LogInformation(
+            "In Transfer('{SourceOrgSlug}/{SourceDsSlug}, {SourcePath}' -> '{DestOrgSlug}/{DestDsSlug}', {DestPath}; {Overwrite})",
+            sourceOrgSlug, sourceDsSlug, sourcePath, destOrgSlug, destDsSlug, destPath, overwrite);
+
+        if (sourceOrgSlug == destOrgSlug && sourceDsSlug == destDsSlug)
+            throw new InvalidOperationException("Source and destination cannot be the same");
+
+        if (!await _authManager.RequestAccess(sourceDs, AccessType.Read))
+            throw new UnauthorizedException("The current user is not allowed to read the source dataset");
+
+        if (!await _authManager.RequestAccess(destDs, AccessType.Write))
+            throw new UnauthorizedException("The current user is not allowed to write to the destination dataset");
+
+        var sourceDdb = _ddbManager.Get(sourceOrgSlug, sourceDs.InternalRef);
+        var destDdb = _ddbManager.Get(destOrgSlug, destDs.InternalRef);
+
+        var sourceEntry = sourceDdb.GetEntry(sourcePath);
+
+        // Checking if source exists
+        if (sourceEntry == null)
+            throw new InvalidOperationException("Cannot find source entry: '" + sourcePath + "'");
+
+        // Validate that source has no active build
+        await ValidateNoBuildActive(sourceDdb, sourceEntry, sourcePath);
+
+        // If destPath is not specified, use the source file/folder name in the root of the destination dataset
+        if (string.IsNullOrWhiteSpace(destPath))
+        {
+            destPath = Path.GetFileName(sourcePath);
+            _logger.LogInformation("Destination path not specified, using source name: '{DestPath}'", destPath);
+        }
+
+        // Validate destination path to prevent path traversal attacks
+
+        if (destPath.Contains("..") || Path.IsPathRooted(destPath))
+            throw new ArgumentException("Invalid destination path: path traversal or absolute paths are not allowed");
+
+        if (IsReservedPath(destPath))
+            throw new InvalidOperationException($"'{destPath}' is a reserved path");
+
+        // Calculate entry size for storage check
+        var entrySize = await GetEntrySizeAsync(sourceDdb, sourceEntry);
+        _logger.LogInformation("Source entry size: {Size} bytes", entrySize);
+
+        // Check if user has enough storage space in destination
+        await _utils.CheckCurrentUserStorage(entrySize);
+
+        var destEntry = destDdb.GetEntry(destPath);
+
+        if (destEntry != null)
+        {
+            if (!overwrite)
+                throw new InvalidOperationException("Destination entry already exists and overwrite is false");
+
+            if (sourceEntry.Type == EntryType.Directory && destEntry.Type != EntryType.Directory)
+                throw new ArgumentException("Cannot transfer a folder on a file");
+
+            if (sourceEntry.Type != EntryType.Directory && destEntry.Type == EntryType.Directory)
+                throw new ArgumentException("Cannot transfer a file on a folder");
+        }
+
+        // Track progress for rollback
+        var fileSystemCopied = false;
+        var addedToDdb = false;
+        var buildFolderCopied = false;
+        string destLocalFilePath = null;
+        string destBuildPath = null;
+
+        try
+        {
+            switch (sourceEntry.Type)
+            {
+                case EntryType.Directory:
+                {
+                    var sourceLocalFilePath = sourceDdb.GetLocalPath(sourcePath);
+                    destLocalFilePath = destDdb.GetLocalPath(destPath);
+
+                    _logger.LogInformation("Transferring directory '{Source}' to '{Dest}'", sourcePath, destPath);
+
+                    CommonUtils.EnsureSafePath(destLocalFilePath);
+
+                    _fs.FolderCopy(sourceLocalFilePath, destLocalFilePath, true);
+                    break;
+
+                }
+                case EntryType.DroneDB:
+                    throw new InvalidOperationException("Cannot transfer a DroneDB file");
+
+                case EntryType.Undefined:
+                case EntryType.Generic:
+                case EntryType.GeoImage:
+                case EntryType.GeoRaster:
+                case EntryType.PointCloud:
+                case EntryType.Image:
+                case EntryType.Markdown:
+                case EntryType.Video:
+                case EntryType.Geovideo:
+                case EntryType.Model:
+                case EntryType.Panorama:
+                case EntryType.GeoPanorama:
+                case EntryType.Vector:
+                default:
+                {
+                    var sourceLocalFilePath = sourceDdb.GetLocalPath(sourcePath);
+                    destLocalFilePath = destDdb.GetLocalPath(destPath);
+
+                    _logger.LogInformation("Transferring file '{Source}' to '{Dest}'", sourcePath, destPath);
+
+                    CommonUtils.EnsureSafePath(destLocalFilePath);
+
+                    _fs.Copy(sourceLocalFilePath, destLocalFilePath, true);
+                    break;
+                }
+
+            }
+
+            fileSystemCopied = true;
+
+            _logger.LogInformation("FS copy OK, performing ddb add");
+            destDdb.AddRaw(destDdb.GetLocalPath(destPath));
+            addedToDdb = true;
+
+            if (!destDdb.EntryExists(destPath))
+                throw new InvalidOperationException(
+                    $"Cannot find destination '{destPath}' after transfer, something wrong with ddb");
+
+            _logger.LogInformation("DDB add OK");
+
+            // If it's not a folder, we may need to transfer the build folder (if exists)
+            if (sourceEntry.Type != EntryType.Directory)
+            {
+
+                // We need to transfer the build folder (if exists), this is an optimization to avoid re-building everything
+                var sourceBuildPath = Path.Combine(sourceDdb.BuildFolderPath, sourceEntry.Hash);
+
+                if (_fs.FolderExists(sourceBuildPath))
+                {
+                    destBuildPath = Path.Combine(destDdb.BuildFolderPath, sourceEntry.Hash);
+                    _logger.LogInformation("Transferring build folder '{SourceBuildPath}' to '{DestBuildPath}'",
+                        sourceBuildPath, destBuildPath);
+                    CommonUtils.EnsureSafePath(destBuildPath);
+                    _fs.FolderMove(sourceBuildPath, destBuildPath);
+                    buildFolderCopied = true;
+                }
+                else
+                {
+                    _logger.LogInformation("No build folder found at '{SourceBuildPath}'", sourceBuildPath);
+                }
+            }
+            else
+            {
+                // If this is a folder we need to copy all build folders for each file in the folder
+                var allEntries = sourceDdb.Search(sourcePath, true);
+                var files = allEntries.Where(item => item.Type != EntryType.Directory).ToArray();
+                _logger.LogInformation("This is a folder transfer, checking build folders for {FilesCount} files",
+                    files.Length);
+
+                foreach (var entry in files)
+                {
+                    var sourceBuildPath = Path.Combine(sourceDdb.BuildFolderPath, entry.Hash);
+
+                    if (_fs.FolderExists(sourceBuildPath))
+                    {
+                        var destBuildPathForEntry = Path.Combine(destDdb.BuildFolderPath, entry.Hash);
+                        _logger.LogInformation("Transferring build folder '{SourceBuildPath}' to '{DestBuildPath}'",
+                            sourceBuildPath, destBuildPathForEntry);
+                        CommonUtils.EnsureSafePath(destBuildPathForEntry);
+                        _fs.FolderMove(sourceBuildPath, destBuildPathForEntry);
+                        buildFolderCopied = true;
+                    }
+                    else
+                    {
+                        _logger.LogInformation("No build folder found at '{SourceBuildPath}'", sourceBuildPath);
+                    }
+                }
+            }
+
+            _logger.LogInformation("Removing source file");
+
+            // Remove source file
+            sourceDdb.Remove(sourcePath);
+
+            _logger.LogInformation("Transfer OK");
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Transfer failed, attempting rollback");
+
+            // Rollback in reverse order
+            if (buildFolderCopied && destBuildPath != null)
+            {
+                try
+                {
+                    _logger.LogWarning("Rolling back build folder copy");
+                    if (_fs.FolderExists(destBuildPath))
+                        Directory.Delete(destBuildPath, true);
+                }
+                catch (Exception rbEx)
+                {
+                    _logger.LogError(rbEx, "Failed to rollback build folder copy");
+                }
+            }
+
+            if (addedToDdb)
+            {
+                try
+                {
+                    _logger.LogWarning("Rolling back DDB add operation");
+                    destDdb.Remove(destPath);
+                }
+                catch (Exception rbEx)
+                {
+                    _logger.LogError(rbEx, "Failed to rollback DDB add");
+                }
+            }
+
+            if (fileSystemCopied && destLocalFilePath != null)
+            {
+                try
+                {
+                    _logger.LogWarning("Rolling back file system copy");
+                    if (sourceEntry.Type == EntryType.Directory)
+                    {
+                        if (_fs.FolderExists(destLocalFilePath))
+                            Directory.Delete(destLocalFilePath, true);
+                    }
+                    else
+                    {
+                        if (_fs.Exists(destLocalFilePath))
+                            _fs.Delete(destLocalFilePath);
+                    }
+                }
+                catch (Exception rbEx)
+                {
+                    _logger.LogError(rbEx, "Failed to rollback file system copy");
+                }
+            }
+
+            throw;
+        }
+
+    }
+
     public async Task Move(string orgSlug, string dsSlug, string source, string dest)
     {
         var ds = _utils.GetDataset(orgSlug, dsSlug);
@@ -294,7 +590,7 @@ public class ObjectsManager : IObjectsManager
 
         var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
 
-        var sourceEntry = await ddb.GetEntryAsync(source);
+        var sourceEntry = ddb.GetEntry(source);
 
         // Checking if source exists
         if (sourceEntry == null)
@@ -307,7 +603,7 @@ public class ObjectsManager : IObjectsManager
         if ((dest + "/").StartsWith(source + "/"))
             throw new InvalidOperationException("Cannot move a path onto itself or one of its descendants");
 
-        var destEntry = await ddb.GetEntryAsync(dest);
+        var destEntry = ddb.GetEntry(dest);
 
         if (destEntry != null)
         {
@@ -329,8 +625,6 @@ public class ObjectsManager : IObjectsManager
 
                 CommonUtils.EnsureSafePath(destLocalFilePath);
                 _fs.FolderMove(sourceLocalFilePath, destLocalFilePath);
-
-                _logger.LogInformation("FS move OK");
 
                 break;
             }
@@ -359,16 +653,16 @@ public class ObjectsManager : IObjectsManager
                 CommonUtils.EnsureSafePath(destLocalFilePath);
                 _fs.Move(sourceLocalFilePath, destLocalFilePath);
 
-                _logger.LogInformation("FS move OK");
-
                 break;
             }
         }
 
-        _logger.LogInformation("Performing ddb move");
-        await ddb.MoveAsync(source, dest);
+        _logger.LogInformation("FS move OK");
 
-        if (!await ddb.EntryExistsAsync(dest))
+        _logger.LogInformation("Performing ddb move");
+        ddb.Move(source, dest);
+
+        if (!ddb.EntryExists(dest))
             throw new InvalidOperationException(
                 $"Cannot find destination '{dest}' after move, something wrong with ddb");
 
@@ -389,16 +683,16 @@ public class ObjectsManager : IObjectsManager
 
         var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
 
-        if (!await ddb.EntryExistsAsync(path))
+        if (!ddb.EntryExists(path))
             throw new BadRequestException($"Path '{path}' not found in dataset");
 
-        var objs = (await ddb.SearchAsync(path, true)).ToArray();
+        var objs = ddb.Search(path, true).ToArray();
 
         // Let's delete from DDB first
         try
         {
             _logger.LogInformation("Removing from DDB");
-            await ddb.RemoveAsync(path);
+            ddb.Remove(path);
         }
         catch (Exception ex)
         {
@@ -473,7 +767,6 @@ public class ObjectsManager : IObjectsManager
 
         var size = sizeRaw ?? DefaultThumbnailSize;
 
-        _logger.LogDebug("Generating thumbnail for file: '{LocalPath}', size: {Size}", localPath, size);
 
         if (recreate)
         {
@@ -525,9 +818,13 @@ public class ObjectsManager : IObjectsManager
 
         try
         {
+
+            // NOTE: We wrap GenerateTile in a Task to avoid blocking the main thread
+            // This is needed because GenerateTile is CPU intensive and may take some time
+            // We want to free up the main thread to handle other requests
             var tileData =
                 await _cacheManager.GetAsync(MagicStrings.TileCacheSeed, $"{orgSlug}/{dsSlug}", entry.Hash, tx, ty, tz, retina,
-                    new Func<Task<byte[]>>(() => ddb.GenerateTileAsync(localPath, tz, tx, ty, retina, entry.Hash)));
+                    new Func<Task<byte[]>>(() => Task.Run(() => ddb.GenerateTile(localPath, tz, tx, ty, retina, entry.Hash))));
 
             return new StorageDataDto
             {
@@ -541,7 +838,7 @@ public class ObjectsManager : IObjectsManager
             // NOTE: This is the definition of self-inflicted wound
             if (ex.InnerException != null &&
                 ex.InnerException.Message.Contains("Out of bounds", StringComparison.OrdinalIgnoreCase))
-                throw new NotFoundException("Tile out of bounds");
+                throw new NotFoundException("Tile out of bounds", ex);
 
             throw;
         }
@@ -581,14 +878,14 @@ public class ObjectsManager : IObjectsManager
 
             streamDescriptor = new FileStreamDescriptor(Path.GetFileName(filePath),
                 MimeUtility.GetMimeMapping(filePath),
-                orgSlug, internalRef, files, null, FileDescriptorType.Single, _logger, _ddbManager);
+                orgSlug, internalRef, files, null, FileDescriptorType.Single, _logger, _ddbManager, _settings.MaxZipMemoryThreshold);
         }
         // Otherwise we zip everything together and return the package
         else
         {
             streamDescriptor = new FileStreamDescriptor($"{orgSlug}-{dsSlug}-{CommonUtils.RandomString(8)}.zip",
                 "application/zip", orgSlug, internalRef, files, folders,
-                includeDdb ? FileDescriptorType.Dataset : FileDescriptorType.Multiple, _logger, _ddbManager);
+                includeDdb ? FileDescriptorType.Dataset : FileDescriptorType.Multiple, _logger, _ddbManager, _settings.MaxZipMemoryThreshold);
         }
 
         return streamDescriptor;
@@ -609,6 +906,9 @@ public class ObjectsManager : IObjectsManager
             foreach (var path in paths)
             {
                 var entry = ddb.GetEntry(path);
+
+                if (entry == null)
+                    throw new InvalidOperationException($"Path '{path}' not found in ddb, cannot continue");
 
                 if (entry.Type == EntryType.Directory)
                 {
@@ -638,7 +938,7 @@ public class ObjectsManager : IObjectsManager
         {
             var entries = ddb.Search(null, true)?.ToArray();
 
-            if (entries == null || !entries.Any())
+            if (entries == null || entries.Length == 0)
                 throw new InvalidOperationException("Ddb is empty, what should I get?");
 
             // Select everything and sort
@@ -674,15 +974,15 @@ public class ObjectsManager : IObjectsManager
 
         var res = ddb.Search(path)?.ToArray();
 
-        if (res == null || !res.Any())
+        if (res == null || res.Length == 0)
             throw new ArgumentException($"Invalid path: '{path}'");
 
         return res.First();
     }
 
-    private void EnsureNoWildcardOrEmptyPaths(string path)
+    private static void EnsureNoWildcardOrEmptyPaths(string path)
     {
-        if (path.Contains("*") || path.Contains("?") || string.IsNullOrWhiteSpace(path))
+        if (path.Contains('*') || path.Contains('?') || string.IsNullOrWhiteSpace(path))
             throw new ArgumentException("Wildcards or empty paths are not supported");
     }
 
@@ -695,11 +995,11 @@ public class ObjectsManager : IObjectsManager
     {
         ddb = null;
 
-        if (paths == null || !paths.Any())
+        if (paths == null || paths.Length == 0)
             // Everything
             return;
 
-        if (paths.Any(path => path.Contains("*") || path.Contains("?") || string.IsNullOrWhiteSpace(path)))
+        if (paths.Any(path => path.Contains('*') || path.Contains('?') || string.IsNullOrWhiteSpace(path)))
             throw new ArgumentException("Wildcards or empty paths are not supported");
 
         if (paths.Length != paths.Distinct().Count())
@@ -726,51 +1026,49 @@ public class ObjectsManager : IObjectsManager
 
         return new FileStreamDescriptor($"{orgSlug}-{dsSlug}-ddb.zip",
             "application/zip", orgSlug, ds.InternalRef, [], [],
-            FileDescriptorType.Dataset, _logger, _ddbManager);
+            FileDescriptorType.Dataset, _logger, _ddbManager, _settings.MaxZipMemoryThreshold);
     }
 
-    public async Task Build(string orgSlug, string dsSlug, string path, bool background = false, bool force = false)
+    #region Build
+
+    public async Task Build(string orgSlug, string dsSlug, string path, bool force = false)
     {
         var ds = _utils.GetDataset(orgSlug, dsSlug);
 
         _logger.LogInformation("In Build('{OrgSlug}/{DsSlug}')", orgSlug, dsSlug);
 
-        // TODO: Maybe request write?
-        if (!await _authManager.RequestAccess(ds, AccessType.Read))
+        // You need write access to build
+        if (!await _authManager.RequestAccess(ds, AccessType.Write))
             throw new UnauthorizedException("The current user is not allowed to build dataset");
 
         var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
 
-        var entry = await ddb.GetEntryAsync(path);
+        var entry = ddb.GetEntry(path);
 
         // Checking if path exists
         if (entry == null)
             throw new InvalidOperationException($"Cannot find source entry: '{path}'");
 
         // Nothing to do here
-        if (!await ddb.IsBuildableAsync(entry.Path))
+        if (!ddb.IsBuildable(entry.Path))
         {
             _logger.LogInformation("'{EntryPath}' is not buildable, nothing to do here", entry.Path);
             return;
         }
 
-        if (background)
-        {
-            _logger.LogInformation("Building '{Path}' asynchronously", path);
+        // Let's check if a build is already active
+        if (ddb.IsBuildActive(entry.Path))
+            throw new InvalidOperationException($"A build is already in progress for '{entry.Path}'");
 
-            var jobId = _backgroundJob.Enqueue(() => HangfireUtils.BuildWrapper(ddb, path, force, null));
+        // Always build asynchronously using background job
+        _logger.LogInformation("Building '{Path}' asynchronously", path);
 
-            _logger.LogInformation("Background job id is {JobId}", jobId);
-        }
-        else
-        {
-            _logger.LogInformation("Building '{Path}' synchronously", path);
+        var user = await _authManager.GetCurrentUser();
+        var meta = new IndexPayload(orgSlug, dsSlug, entry.Hash , user.Id, null, path);
+        var jobId = _backgroundJob.EnqueueIndexed(() => HangfireUtils.BuildWrapper(ddb, path, force, null), meta);
 
-            HangfireUtils.BuildWrapper(ddb, path, force, null);
-        }
+        _logger.LogInformation("Background job id is {JobId}", jobId);
     }
-
-    #region Build
 
     public async Task<string> GetBuildFile(string orgSlug, string dsSlug, string hash,
         string path)
@@ -801,7 +1099,7 @@ public class ObjectsManager : IObjectsManager
     }
 
     // Base build folder path (example: .ddb/build)
-    private string BuildBasePath =>
+    private static string BuildBasePath =>
         CommonUtils.SafeCombine(IDDB.DatabaseFolderName, IDDB.BuildFolderName);
 
     public async Task<bool> CheckBuildFile(string orgSlug, string dsSlug, string hash, string path)
@@ -838,21 +1136,153 @@ public class ObjectsManager : IObjectsManager
 
         var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
 
-        var entry = await ddb.GetEntryAsync(path);
+        var entry = ddb.GetEntry(path);
 
         return entry?.Type;
     }
 
-    public string GetBuildSource(Entry entry)
+    public static string GetBuildSource(Entry entry)
     {
         var path = entry.Type switch
         {
             EntryType.PointCloud => CommonUtils.SafeCombine(BuildBasePath, entry.Hash, "ept", "ept.json"),
             EntryType.GeoRaster => CommonUtils.SafeCombine(BuildBasePath, entry.Hash, "cog", "cog.tif"),
+            EntryType.Vector => CommonUtils.SafeCombine(BuildBasePath, entry.Hash, "vec", "vector.fgb"),
+            EntryType.Model => CommonUtils.SafeCombine(BuildBasePath, entry.Hash, "nxs", "model.nxz"),
             _ => entry.Path
         };
 
         return path;
+    }
+
+    public async Task<IEnumerable<BuildJobDto>> GetBuilds(string orgSlug, string dsSlug, int page = 1, int pageSize = 50)
+    {
+        var ds = _utils.GetDataset(orgSlug, dsSlug);
+
+        _logger.LogInformation("In GetBuilds('{OrgSlug}/{DsSlug}')", orgSlug, dsSlug);
+
+        if (!await _authManager.RequestAccess(ds, AccessType.Read))
+            throw new UnauthorizedException("The current user is not allowed to read dataset");
+
+        // Convert page/pageSize to skip/take
+        var skip = (page - 1) * pageSize;
+
+        var jobIndexes = await _jobIndexQuery.GetByOrgDsAsync(orgSlug, dsSlug, skip, pageSize);
+
+        return jobIndexes.Select(ji => new BuildJobDto
+        {
+            JobId = ji.JobId,
+            Hash = ji.Hash,
+            Path = ji.Path,
+            CurrentState = ji.CurrentState,
+            CreatedAt = DateTime.SpecifyKind(ji.CreatedAtUtc, DateTimeKind.Utc),
+            ProcessingAt = ji.ProcessingAtUtc.HasValue ? DateTime.SpecifyKind(ji.ProcessingAtUtc.Value, DateTimeKind.Utc) : null,
+            SucceededAt = ji.SucceededAtUtc.HasValue ? DateTime.SpecifyKind(ji.SucceededAtUtc.Value, DateTimeKind.Utc) : null,
+            FailedAt = ji.FailedAtUtc.HasValue ? DateTime.SpecifyKind(ji.FailedAtUtc.Value, DateTimeKind.Utc) : null,
+            DeletedAt = ji.DeletedAtUtc.HasValue ? DateTime.SpecifyKind(ji.DeletedAtUtc.Value, DateTimeKind.Utc) : null
+        });
+    }
+
+    /// <summary>
+    /// Calculates the total size of an entry (file or directory recursively)
+    /// </summary>
+    /// <param name="ddb">The DDB instance</param>
+    /// <param name="entry">The entry to calculate size for</param>
+    /// <returns>Total size in bytes</returns>
+    private async Task<long> GetEntrySizeAsync(IDDB ddb, Entry entry)
+    {
+        if (entry.Type == EntryType.Directory)
+        {
+            // For directories, we need to calculate the total size of all files recursively
+            var localPath = ddb.GetLocalPath(entry.Path);
+
+            if (!Directory.Exists(localPath))
+            {
+                _logger.LogWarning("Directory not found at '{LocalPath}', returning 0 size", localPath);
+                return 0;
+            }
+
+            try
+            {
+                return await Task.Run(() => CommonUtils.GetDirectorySize(localPath));
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to calculate directory size for '{Path}'", entry.Path);
+                throw new InvalidOperationException($"Cannot calculate directory size: {ex.Message}", ex);
+            }
+        }
+        else
+        {
+            // For files, use the size from the entry
+            return entry.Size;
+        }
+    }
+
+    public async Task<int> ClearCompletedBuilds(string orgSlug, string dsSlug)
+    {
+        var ds = _utils.GetDataset(orgSlug, dsSlug);
+
+        _logger.LogInformation("In ClearCompletedBuilds('{OrgSlug}/{DsSlug}')", orgSlug, dsSlug);
+
+        if (!await _authManager.RequestAccess(ds, AccessType.Write))
+            throw new UnauthorizedException("The current user is not allowed to clear builds for this dataset");
+
+        // Get all builds with Succeeded or Failed status
+        var allBuilds = await _jobIndexQuery.GetByOrgDsAsync(orgSlug, dsSlug, 0, int.MaxValue);
+        var completedBuilds = allBuilds.Where(b => b.CurrentState == "Succeeded" || b.CurrentState == "Failed").ToList();
+
+        _logger.LogInformation("Found {Count} completed/failed builds to delete", completedBuilds.Count);
+
+        if (completedBuilds.Count == 0)
+            return 0;
+
+        // Delete from database
+        foreach (var build in completedBuilds)
+        {
+            _context.JobIndices.Remove(build);
+        }
+
+        await _context.SaveChangesAsync();
+
+        _logger.LogInformation("Successfully deleted {Count} completed/failed builds", completedBuilds.Count);
+
+        return completedBuilds.Count;
+    }
+
+    /// <summary>
+    /// Updates the cache to indicate whether a dataset has pending builds.
+    /// Used to optimize the recurring build pending job.
+    /// </summary>
+    private async Task SetDatasetHasPendingBuilds(string orgSlug, string dsSlug, bool hasPending)
+    {
+        try
+        {
+            var cacheKey = $"{orgSlug}/{dsSlug}";
+
+            // Simple state: just HasPending flag and timestamp
+            var state = new
+            {
+                HasPending = hasPending,
+                LastCheckBinary = DateTime.UtcNow.ToBinary()
+            };
+
+            var json = System.Text.Json.JsonSerializer.Serialize(state);
+            var bytes = System.Text.Encoding.UTF8.GetBytes(json);
+
+            await _cacheManager.SetAsync(MagicStrings.BuildPendingTrackerCacheSeed, cacheKey, bytes);
+
+            _logger.LogDebug(
+                "Set pending flag for {Org}/{Ds}: HasPending={HasPending}",
+                orgSlug, dsSlug, hasPending);
+        }
+        catch (Exception ex)
+        {
+            // Non-critical - don't fail upload if cache update fails
+            _logger.LogWarning(ex,
+                "Failed to update pending cache for {Org}/{Ds}, continuing anyway",
+                orgSlug, dsSlug);
+        }
     }
 
     #endregion

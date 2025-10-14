@@ -214,7 +214,7 @@ public class ShareManager : IShareManager
         await _utils.CheckCurrentUserStorage();
 
         Dataset dataset;
-        TagDto tag = parameters.Tag.ToTag();
+        var tag = parameters.Tag.ToTag();
 
         // No organization requested
         if (tag.OrganizationSlug == null)
@@ -269,14 +269,14 @@ public class ShareManager : IShareManager
                 Visibility = Visibility.Public
             });
 
-            dataset = _utils.GetDataset(orgSlug, dsSlug);
+            dataset = _utils.GetDataset(orgSlug, dsSlug, false, true);
 
             _logger.LogInformation("Created new dataset '{DsSlug}', creating batch", dsSlug);
         }
         else
         {
             // Check if the requested organization exists
-            var organization = _utils.GetOrganization(tag.OrganizationSlug, true);
+            var organization = _utils.GetOrganization(tag.OrganizationSlug, true, true);
 
             if (organization == null)
                 throw new BadRequestException($"Cannot find organization '{tag.OrganizationSlug}'");
@@ -303,7 +303,7 @@ public class ShareManager : IShareManager
             }
             else
             {
-                dataset = _utils.GetDataset(tag.OrganizationSlug, tag.DatasetSlug, true);
+                dataset = _utils.GetDataset(tag.OrganizationSlug, tag.DatasetSlug, true, true);
 
                 // Create dataset if not exists
                 if (dataset == null)
@@ -328,7 +328,7 @@ public class ShareManager : IShareManager
 
                     var runningBatches = dataset.Batches.Where(item => item.End == null).ToArray();
 
-                    if (runningBatches.Any())
+                    if (runningBatches.Length != 0)
                     {
                         _logger.LogInformation(
                             "Found '{RunningBatchesCount}' running batch(es), stopping and rolling back before starting a new one",

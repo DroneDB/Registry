@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Net;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
@@ -368,15 +369,37 @@ public class ObjectsController : ControllerBaseEx
         }
     }
 
+    [HttpPost("transfer", Name = nameof(ObjectsController) + "." + nameof(Transfer))]
+    public async Task<IActionResult> Transfer([FromRoute] string orgSlug, [FromRoute] string dsSlug, [FromForm] string sourcePath,
+        [FromForm] string destOrgSlug, [FromForm] string destDsSlug, [FromForm] string destPath = null, [FromForm] bool overwrite = false)
+    {
+        try
+        {
+            _logger.LogDebug("Objects controller Transfer('{SourceOrgSlug}', '{SourceDsSlug}', '{SourcePath}', '{DestOrgSlug}', '{DestDsSlug}', '{DestPath}', '{Overwrite}')", orgSlug,
+                dsSlug, sourcePath, destOrgSlug, destDsSlug, destPath, overwrite);
+
+            await _objectsManager.Transfer(orgSlug, dsSlug, sourcePath, destOrgSlug, destDsSlug, destPath, overwrite);
+            return NoContent();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex,
+                "Exception in Objects controller Transfer('{SourceOrgSlug}', '{SourceDsSlug}', '{SourcePath}', '{DestOrgSlug}', '{DestDsSlug}', '{DestPath}', '{Overwrite}')", orgSlug,
+                dsSlug, sourcePath, destOrgSlug, destDsSlug, destPath, overwrite);
+
+            return ExceptionResult(ex);
+        }
+    }
+
     [HttpPost("build", Name = nameof(ObjectsController) + "." + nameof(Build))]
     public async Task<IActionResult> Build([FromRoute] string orgSlug, [FromRoute] string dsSlug,
-        [FromForm] string path, [FromForm] bool background = false, [FromForm] bool force = false)
+        [FromForm] string path, [FromForm] bool force = false)
     {
         try
         {
             _logger.LogDebug("Objects controller Build('{OrgSlug}', '{DsSlug}', '{Path}')", orgSlug, dsSlug, path);
 
-            await _objectsManager.Build(orgSlug, dsSlug, path, background, force);
+            await _objectsManager.Build(orgSlug, dsSlug, path, force);
             return Ok();
         }
         catch (Exception ex)
@@ -441,4 +464,49 @@ public class ObjectsController : ControllerBaseEx
             return ExceptionResult(ex);
         }
     }
+
+    [HttpGet("builds", Name = nameof(ObjectsController) + "." + nameof(GetBuilds))]
+    public async Task<IActionResult> GetBuilds([FromRoute] string orgSlug, [FromRoute] string dsSlug,
+        [FromQuery] int page = 1, [FromQuery] int pageSize = 50)
+    {
+        try
+        {
+            _logger.LogDebug("Objects controller GetBuilds('{OrgSlug}', '{DsSlug}', page: {Page}, pageSize: {PageSize})",
+                orgSlug, dsSlug, page, pageSize);
+
+            var builds = await _objectsManager.GetBuilds(orgSlug, dsSlug, page, pageSize);
+
+            return Ok(builds);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex,
+                "Exception in Objects controller GetBuilds('{OrgSlug}', '{DsSlug}', page: {Page}, pageSize: {PageSize})",
+                orgSlug, dsSlug, page, pageSize);
+
+            return ExceptionResult(ex);
+        }
+    }
+
+    [HttpPost("builds/clear", Name = nameof(ObjectsController) + "." + nameof(ClearCompletedBuilds))]
+    public async Task<IActionResult> ClearCompletedBuilds([FromRoute] string orgSlug, [FromRoute] string dsSlug)
+    {
+        try
+        {
+            _logger.LogDebug("Objects controller ClearCompletedBuilds('{OrgSlug}', '{DsSlug}')", orgSlug, dsSlug);
+
+            var deletedCount = await _objectsManager.ClearCompletedBuilds(orgSlug, dsSlug);
+
+            return Ok(new { deletedCount });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex,
+                "Exception in Objects controller ClearCompletedBuilds('{OrgSlug}', '{DsSlug}')", orgSlug, dsSlug);
+
+            return ExceptionResult(ex);
+        }
+    }
+
+
 }

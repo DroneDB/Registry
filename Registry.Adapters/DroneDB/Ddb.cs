@@ -61,24 +61,14 @@ public class DDB : IDDB
 
     public byte[] GenerateTile(string inputPath, int tz, int tx, int ty, bool retina, string inputPathHash)
     {
-        // Get a lock for the database folder to prevent concurrent access to SQLite
-        var semaphore = DbSyncManager.GetDatabaseLock(DatasetFolderPath);
         try
         {
-            semaphore.Wait();
-            try
-            {
-                return _ddbWrapper.GenerateMemoryTile(inputPath, tz, tx, ty, retina ? 512 : 256, true, false,
-                    inputPathHash);
-            }
-            catch (DdbException ex)
-            {
-                throw new InvalidOperationException($"Cannot generate tile of '{inputPath}'", ex);
-            }
+            return _ddbWrapper.GenerateMemoryTile(inputPath, tz, tx, ty, retina ? 512 : 256, true, false,
+                inputPathHash);
         }
-        finally
+        catch (DdbException ex)
         {
-            semaphore.Release();
+            throw new InvalidOperationException($"Cannot generate tile of '{inputPath}'", ex);
         }
     }
 
@@ -106,7 +96,7 @@ public class DDB : IDDB
         return CommonUtils.SafeCombine(DatasetFolderPath, path);
     }
 
-    public Entry GetEntry(string path)
+    public Entry? GetEntry(string path)
     {
         var objs = Search(path, true).ToArray();
 
@@ -242,6 +232,18 @@ public class DDB : IDDB
         }
     }
 
+    public bool IsBuildActive(string path)
+    {
+        try
+        {
+            return _ddbWrapper.IsBuildActive(DatasetFolderPath, path);
+        }
+        catch (DdbException ex)
+        {
+            throw new InvalidOperationException($"Cannot call IsBuildActive from ddb '{DatasetFolderPath}'", ex);
+        }
+    }
+
     public bool IsBuildPending()
     {
         try
@@ -316,11 +318,11 @@ public class DDB : IDDB
         }
     }
 
-    public void Add(string path, Stream stream = null)
+    public void Add(string path, Stream? stream = null)
     {
         if (stream == null)
         {
-            string folderPath = null;
+            string? folderPath = null;
 
             try
             {
@@ -343,7 +345,7 @@ public class DDB : IDDB
         }
         else
         {
-            string filePath = null;
+            string? filePath = null;
 
             try
             {
@@ -388,138 +390,4 @@ public class DDB : IDDB
     {
         return _ddbWrapper.Stac(DatasetFolderPath, path, stacCollectionRoot, id, stacCatalogRoot);
     }
-
-    #region Async
-
-    public async Task<JToken> GetStacAsync(string id, string stacCollectionRoot, string stacCatalogRoot,
-        string path = null,
-        CancellationToken cancellationToken = default)
-    {
-        return await Task.Run(() => GetStac(id, stacCollectionRoot, stacCatalogRoot, path), cancellationToken)
-            .ConfigureAwait(false);
-    }
-
-    public async Task<IEnumerable<Entry>> SearchAsync(string path, bool recursive = false,
-        CancellationToken cancellationToken = default)
-    {
-        return await Task.Run(() => Search(path, recursive), cancellationToken)
-            .ConfigureAwait(false);
-    }
-
-    public async Task AddAsync(string path, byte[] data, CancellationToken cancellationToken = default)
-    {
-        await Task.Run(() => Add(path, data), cancellationToken)
-            .ConfigureAwait(false);
-    }
-
-    public async Task AddAsync(string path, Stream data = null, CancellationToken cancellationToken = default)
-    {
-        await Task.Run(() => Add(path, data), cancellationToken)
-            .ConfigureAwait(false);
-    }
-
-    public async Task RemoveAsync(string path, CancellationToken cancellationToken = default)
-    {
-        await Task.Run(() => Remove(path), cancellationToken)
-            .ConfigureAwait(false);
-    }
-
-    public async Task MoveAsync(string source, string dest, CancellationToken cancellationToken = default)
-    {
-        await Task.Run(() => Move(source, dest), cancellationToken)
-            .ConfigureAwait(false);
-    }
-
-    public async Task<Dictionary<string, object>> ChangeAttributesRawAsync(Dictionary<string, object> attributes,
-        CancellationToken cancellationToken = default)
-    {
-        return await Task.Run(() => ChangeAttributesRaw(attributes), cancellationToken)
-            .ConfigureAwait(false);
-    }
-
-    public async Task<byte[]> GenerateThumbnailAsync(string imagePath, int size,
-        CancellationToken cancellationToken = default)
-    {
-        return await Task.Run(() => GenerateThumbnail(imagePath, size), cancellationToken)
-            .ConfigureAwait(false);
-    }
-
-    public async Task<byte[]> GenerateTileAsync(string inputPath, int tz, int tx, int ty, bool retina,
-        string inputPathHash,
-        CancellationToken cancellationToken = default)
-    {
-        return await Task.Run(() => GenerateTile(inputPath, tz, tx, ty, retina, inputPathHash), cancellationToken)
-            .ConfigureAwait(false);
-    }
-
-    public async Task InitAsync(CancellationToken cancellationToken = default)
-    {
-        await Task.Run(Init, cancellationToken)
-            .ConfigureAwait(false);
-    }
-
-    public async Task<Dictionary<string, object>> GetAttributesRawAsync(
-        CancellationToken cancellationToken = default)
-    {
-        return await Task.Run(GetAttributesRaw, cancellationToken)
-            .ConfigureAwait(false);
-    }
-
-    public virtual async Task<Entry> GetInfoAsync(CancellationToken cancellationToken = default)
-    {
-        return await Task.Run(GetInfo, cancellationToken)
-            .ConfigureAwait(false);
-    }
-
-    public async Task<Entry> GetInfoAsync(string path, CancellationToken cancellationToken = default)
-    {
-        return await Task.Run(() => GetInfo(path), cancellationToken)
-            .ConfigureAwait(false);
-    }
-
-    public async Task<Entry> GetEntryAsync(string path, CancellationToken cancellationToken = default)
-    {
-        return await Task.Run(() => GetEntry(path), cancellationToken)
-            .ConfigureAwait(false);
-    }
-
-    public async Task<bool> EntryExistsAsync(string path, CancellationToken cancellationToken = default)
-    {
-        return await Task.Run(() => EntryExists(path), cancellationToken)
-            .ConfigureAwait(false);
-    }
-
-    public async Task BuildAsync(string path, string dest = null, bool force = false,
-        CancellationToken cancellationToken = default)
-    {
-        await Task.Run(() => Build(path, dest, force), cancellationToken)
-            .ConfigureAwait(false);
-    }
-
-    public async Task BuildAllAsync(string dest = null, bool force = false,
-        CancellationToken cancellationToken = default)
-    {
-        await Task.Run(() => BuildAll(dest, force), cancellationToken)
-            .ConfigureAwait(false);
-    }
-
-    public async Task<bool> IsBuildableAsync(string path, CancellationToken cancellationToken = default)
-    {
-        return await Task.Run(() => IsBuildable(path), cancellationToken)
-            .ConfigureAwait(false);
-    }
-
-    public async Task<bool> IsBuildPendingAsync(CancellationToken cancellationToken = default)
-    {
-        return await Task.Run(() => IsBuildPending(), cancellationToken)
-            .ConfigureAwait(false);
-    }
-
-    public async Task<long> GetSizeAsync(CancellationToken cancellationToken = default)
-    {
-        return await Task.Run(GetSize, cancellationToken)
-            .ConfigureAwait(false);
-    }
-
-    #endregion
 }

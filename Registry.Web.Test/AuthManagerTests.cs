@@ -104,7 +104,7 @@ public class AuthManagerTests
         // Setup DDB mock for dataset metadata
         var ddbMock = new Mock<IDDB>();
 
-        ddbMock.Setup(x => x.GetInfoAsync(default)).Returns(Task.FromResult(new Entry
+        ddbMock.Setup(x => x.GetInfo(null)).Returns(new Entry
             {
                 Properties = new Dictionary<string, object>
                 {
@@ -114,7 +114,7 @@ public class AuthManagerTests
                 Size = 1000,
                 ModifiedTime = DateTime.Now
             }
-        ));
+        );
 
         var metaManagerMock = new Mock<IMetaManager>();
         metaManagerMock.Setup(x => x.Get<int>(SafeMetaManager.VisibilityField, null))
@@ -127,7 +127,7 @@ public class AuthManagerTests
 
         var privateDdbMock = new Mock<IDDB>();
 
-        privateDdbMock.Setup(x => x.GetInfoAsync(default)).Returns(Task.FromResult(new Entry
+        privateDdbMock.Setup(x => x.GetInfo(null)).Returns(new Entry
             {
                 Properties = new Dictionary<string, object>
                 {
@@ -137,7 +137,7 @@ public class AuthManagerTests
                 Size = 1000,
                 ModifiedTime = DateTime.Now
             }
-        ));
+        );
 
         var privateMetaManagerMock = new Mock<IMetaManager>();
         privateMetaManagerMock.Setup(x => x.Get<int>(SafeMetaManager.VisibilityField, null))

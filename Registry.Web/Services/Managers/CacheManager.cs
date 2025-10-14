@@ -15,8 +15,8 @@ public class CacheManager : ICacheManager
 {
     private class Carrier
     {
-        public required Func<object[], Task<byte[]>> GetDataAsync { get; set; }
-        public TimeSpan Expiration { get; set; }
+        public required Func<object[], Task<byte[]>> GetDataAsync { get; init; }
+        public TimeSpan Expiration { get; init; }
     }
 
     private readonly IDistributedCache _cache;

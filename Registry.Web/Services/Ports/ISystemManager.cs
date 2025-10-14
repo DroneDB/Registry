@@ -13,4 +13,6 @@ public interface ISystemManager
     string GetVersion();
 
     Task<IEnumerable<MigrateVisibilityEntryDTO>> MigrateVisibility();
+
+    Task<BuildPendingStatusDto> GetBuildPendingStatus();
 }
