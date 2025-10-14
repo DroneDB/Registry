@@ -51,9 +51,19 @@ public class JobIndexWriter(RegistryContext db, ILogger<JobIndexWriter> log) : I
             existing.UserId = meta.UserId;
             existing.Queue = meta.Queue ?? existing.Queue;
             existing.MethodDisplay = methodDisplay ?? existing.MethodDisplay;
-            existing.CreatedAtUtc = existing.CreatedAtUtc == default ? createdAtUtc : existing.CreatedAtUtc;
+
+            // Reset to new creation time when re-enqueueing
+            existing.CreatedAtUtc = createdAtUtc;
             existing.LastStateChangeUtc = createdAtUtc;
             existing.CurrentState = "Created";
+
+            // CRITICAL: Reset all state timestamps when re-enqueueing a job
+            // This ensures that old timestamps from previous runs don't persist
+            existing.ProcessingAtUtc = null;
+            existing.SucceededAtUtc = null;
+            existing.FailedAtUtc = null;
+            existing.DeletedAtUtc = null;
+            existing.ScheduledAtUtc = null;
         }
 
         await db.SaveChangesAsync(ct);

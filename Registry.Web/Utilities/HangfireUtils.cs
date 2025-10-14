@@ -170,13 +170,19 @@ public static class HangfireUtils
 
                     if (jobDetails?.History != null && jobDetails.History.Count > 0)
                     {
-                        var currentState = jobDetails.History[0].StateName;
+                        var latestHistoryEntry = jobDetails.History[0];
+                        var currentState = latestHistoryEntry.StateName;
 
                         // If the state in Hangfire is different from "Created", update it
                         if (currentState != "Created")
                         {
-                            logger.Debug("Updating job {JobId} from 'Created' to '{CurrentState}'", jobIndex.JobId, currentState);
-                            await jobIndexWriter.UpdateStateAsync(jobIndex.JobId, currentState, DateTime.UtcNow, ct);
+                            // FIXED: Use the actual timestamp from Hangfire's state history instead of UtcNow
+                            var stateTimestamp = latestHistoryEntry.CreatedAt;
+
+                            logger.Debug("Updating job {JobId} from 'Created' to '{CurrentState}' with timestamp {Timestamp}",
+                                jobIndex.JobId, currentState, stateTimestamp);
+
+                            await jobIndexWriter.UpdateStateAsync(jobIndex.JobId, currentState, stateTimestamp, ct);
                             updatedCount++;
                         }
                     }
@@ -184,6 +190,8 @@ public static class HangfireUtils
                     {
                         // Job not found in Hangfire, might be deleted or expired
                         logger.Debug("Job {JobId} not found in Hangfire, marking as deleted", jobIndex.JobId);
+
+                        // For deleted jobs, we use UtcNow since this is when we discovered they're missing
                         await jobIndexWriter.UpdateStateAsync(jobIndex.JobId, "Deleted", DateTime.UtcNow, ct);
                         notFoundCount++;
                     }

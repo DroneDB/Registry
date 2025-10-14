@@ -97,7 +97,11 @@ public class Startup
 
         services.AddMvcCore()
             .AddApiExplorer()
-            .AddNewtonsoftJson();
+            .AddNewtonsoftJson(options =>
+            {
+                options.SerializerSettings.DateTimeZoneHandling = Newtonsoft.Json.DateTimeZoneHandling.Utc;
+                options.SerializerSettings.DateFormatHandling = Newtonsoft.Json.DateFormatHandling.IsoDateFormat;
+            });
 
         services.AddResponseCaching(options =>
         {
