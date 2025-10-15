@@ -24,12 +24,18 @@ using Microsoft.Extensions.Options;
 using MimeMapping;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
+using Registry.Adapters;
 using Registry.Adapters.DroneDB;
+using Registry.Adapters.Thumbnail;
+using Registry.Ports;
+using Registry.Ports.DroneDB;
 using Registry.Web.Data;
 using Registry.Web.Identity;
 using Registry.Web.Models;
 using Registry.Web.Models.Configuration;
 using Registry.Web.Services.Adapters;
+using Registry.Web.Services.Managers;
+using Registry.Web.Services.Ports;
 using Registry.Web.Utilities;
 using Serilog;
 
@@ -258,6 +264,19 @@ public class Program
         host.Build().Run();
     }
 
+    /// <summary>
+    /// Runs the application as a processing node (Hangfire worker only).
+    /// This mode executes background jobs but does not host a web server.
+    ///
+    /// Recurring jobs executed:
+    /// - CleanupExpiredJobs: Daily cleanup of expired Hangfire jobs
+    /// - JobIndexSyncService.SyncJobIndexStates: Sync job index every 5 minutes
+    /// - BuildPendingService.ProcessPendingBuilds: Process pending DDB builds every minute
+    ///
+    /// NOTE: When adding new recurring jobs or services, ensure all dependencies are registered here.
+    /// Only minimal services required for job execution are registered to reduce memory footprint.
+    /// See docs/ProcessingNodeServices.md for detailed dependency analysis.
+    /// </summary>
     private static void RunAsProcessingNode(Options opts)
     {
         Console.WriteLine(" -> Starting processing node");
@@ -284,12 +303,27 @@ public class Program
 
                 Console.WriteLine(" ?> Using {0} worker threads", workers);
 
-                // Register database contexts required for job processing
+                // Register database context required for job processing
                 services.AddDbContextWithProvider<RegistryContext>(configuration, appSettings.RegistryProvider,
                     MagicStrings.RegistryConnectionName, "Data");
 
-                // Register job indexing services required by SyncJobIndexStatesAsync
+                // Register cache services (required by BuildPendingService)
+                services.AddMemoryCache();
+                services.AddCacheProvider(appSettings);
+
+                // Register job indexing services (required by JobIndexSyncService and BackgroundJobsProcessor)
                 services.AddJobIndexing();
+
+                // Register core singleton services
+                services.AddSingleton<ICacheManager, CacheManager>();
+                services.AddSingleton<IDdbWrapper, NativeDdbWrapper>();
+                services.AddSingleton<IFileSystem, FileSystem>();
+
+                // Register scoped services required by background jobs
+                services.AddScoped<IDdbManager, DdbManager>();
+                services.AddScoped<IBackgroundJobsProcessor, BackgroundJobsProcessor>();
+                services.AddScoped<BuildPendingService>();
+                services.AddScoped<JobIndexSyncService>();
 
                 services.AddHangfireProvider(appSettings, configuration);
                 services.AddHangfireServer(options => { options.WorkerCount = workers; });
