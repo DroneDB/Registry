@@ -21,7 +21,7 @@ namespace Registry.Web.Data.MySqlMigrations.Migrations
                         .Annotation("MySql:CharSet", "utf8mb4"),
                     DsSlug = table.Column<string>(type: "varchar(128)", maxLength: 128, nullable: false)
                         .Annotation("MySql:CharSet", "utf8mb4"),
-                    Path = table.Column<string>(type: "varchar(1024)", maxLength: 1024, nullable: true)
+                    Path = table.Column<string>(type: "varchar(512)", maxLength: 512, nullable: true)
                         .Annotation("MySql:CharSet", "utf8mb4"),
                     UserId = table.Column<string>(type: "varchar(128)", maxLength: 128, nullable: true)
                         .Annotation("MySql:CharSet", "utf8mb4"),
@@ -55,10 +55,9 @@ namespace Registry.Web.Data.MySqlMigrations.Migrations
                 table: "JobIndices",
                 columns: new[] { "OrgSlug", "DsSlug" });
 
-            migrationBuilder.CreateIndex(
-                name: "IX_JobIndices_OrgSlug_DsSlug_Path",
-                table: "JobIndices",
-                columns: new[] { "OrgSlug", "DsSlug", "Path" });
+            migrationBuilder.Sql(
+                "CREATE INDEX `IX_JobIndices_OrgSlug_DsSlug_Path` " +
+                "ON `JobIndices` (`OrgSlug`, `DsSlug`, `Path`(512))");
 
             migrationBuilder.CreateIndex(
                 name: "IX_JobIndices_UserId",
