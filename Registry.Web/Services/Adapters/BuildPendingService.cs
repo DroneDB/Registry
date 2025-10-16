@@ -62,11 +62,13 @@ public class BuildPendingService
 
     /// <summary>
     /// Determines if a dataset should be checked for pending builds based on cache state.
+    /// Uses DroneDB stamp checksum to detect if the database has actually changed.
     /// </summary>
     /// <param name="orgSlug">Organization slug</param>
     /// <param name="dsSlug">Dataset slug</param>
+    /// <param name="ddb">DDB instance to get current stamp</param>
     /// <returns>True if the dataset should be checked, false to skip</returns>
-    private async Task<bool> ShouldCheckDataset(string orgSlug, string dsSlug)
+    private async Task<bool> ShouldCheckDataset(string orgSlug, string dsSlug, IDDB ddb)
     {
         try
         {
@@ -81,6 +83,43 @@ public class BuildPendingService
 
             // Deserialize cache state
             var state = DeserializeCacheState(cached);
+
+            // Get current stamp checksum
+            string? currentChecksum = null;
+            try
+            {
+                var stamp = ddb.GetStamp();
+                currentChecksum = stamp.Checksum;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex,
+                    "Failed to get stamp for {Org}/{Ds}, forcing check",
+                    orgSlug, dsSlug);
+                // If we can't get stamp, force check for safety
+                return true;
+            }
+
+            // If checksum hasn't changed and there's no pending, skip check
+            if (!string.IsNullOrEmpty(state.StampChecksum) &&
+                state.StampChecksum == currentChecksum &&
+                !state.HasPending)
+            {
+                _logger.LogDebug(
+                    "Skipping {Org}/{Ds}: checksum unchanged ({Checksum})",
+                    orgSlug, dsSlug, currentChecksum);
+                return false;
+            }
+
+            // If checksum changed, we need to check
+            if (!string.IsNullOrEmpty(state.StampChecksum) &&
+                state.StampChecksum != currentChecksum)
+            {
+                _logger.LogDebug(
+                    "Checksum changed for {Org}/{Ds}: {OldChecksum} -> {NewChecksum}",
+                    orgSlug, dsSlug, state.StampChecksum, currentChecksum);
+                return true;
+            }
 
             // If it has pending builds, always check
             if (state.HasPending)
@@ -122,7 +161,8 @@ public class BuildPendingService
     /// <param name="orgSlug">Organization slug</param>
     /// <param name="dsSlug">Dataset slug</param>
     /// <param name="hasPending">Whether the dataset has pending builds</param>
-    private async Task UpdatePendingStatus(string orgSlug, string dsSlug, bool hasPending)
+    /// <param name="stampChecksum">Current DroneDB stamp checksum</param>
+    private async Task UpdatePendingStatus(string orgSlug, string dsSlug, bool hasPending, string? stampChecksum = null)
     {
         try
         {
@@ -130,7 +170,8 @@ public class BuildPendingService
             var state = new CacheState
             {
                 HasPending = hasPending,
-                LastCheckBinary = DateTime.UtcNow.ToBinary()
+                LastCheckBinary = DateTime.UtcNow.ToBinary(),
+                StampChecksum = stampChecksum
             };
 
             var serialized = SerializeCacheState(state);
@@ -142,8 +183,8 @@ public class BuildPendingService
             );
 
             _logger.LogDebug(
-                "Updated pending cache for {Org}/{Ds}: HasPending={HasPending}",
-                orgSlug, dsSlug, hasPending);
+                "Updated pending cache for {Org}/{Ds}: HasPending={HasPending}, Checksum={Checksum}",
+                orgSlug, dsSlug, hasPending, stampChecksum);
         }
         catch (Exception ex)
         {
@@ -218,15 +259,6 @@ public class BuildPendingService
                         continue;
                     }
 
-                    // Cache optimization: check if we should skip this dataset
-                    if (!await ShouldCheckDataset(ds.Organization.Slug, ds.Slug))
-                    {
-                        stats.Skipped++;
-                        continue;
-                    }
-
-                    stats.Checked++;
-
                     // Get DDB instance for this dataset
                     IDDB ddb;
                     try
@@ -240,6 +272,31 @@ public class BuildPendingService
                             ds.Organization.Slug, ds.Slug);
                         stats.Errors++;
                         continue;
+                    }
+
+                    // Cache optimization: check if we should skip this dataset
+                    // This now uses GetStamp internally to detect database changes
+                    if (!await ShouldCheckDataset(ds.Organization.Slug, ds.Slug, ddb))
+                    {
+                        stats.Skipped++;
+                        continue;
+                    }
+
+                    stats.Checked++;
+
+                    // Get current stamp for tracking
+                    string? stampChecksum = null;
+                    try
+                    {
+                        var stamp = ddb.GetStamp();
+                        stampChecksum = stamp.Checksum;
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogWarning(ex,
+                            "Failed to get stamp checksum for {Org}/{Ds}",
+                            ds.Organization.Slug, ds.Slug);
+                        // Continue anyway - we'll just cache without checksum
                     }
 
                     // Check if this dataset has pending builds
@@ -258,8 +315,8 @@ public class BuildPendingService
                         hasPending = true;
                     }
 
-                    // Update cache with current status
-                    await UpdatePendingStatus(ds.Organization.Slug, ds.Slug, hasPending);
+                    // Update cache with current status and checksum
+                    await UpdatePendingStatus(ds.Organization.Slug, ds.Slug, hasPending, stampChecksum);
 
                     if (!hasPending)
                     {
@@ -358,6 +415,7 @@ public class BuildPendingService
     {
         public bool HasPending { get; set; }
         public long LastCheckBinary { get; set; }
+        public string? StampChecksum { get; set; }
     }
 
     private class ProcessingStats
