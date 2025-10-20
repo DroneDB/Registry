@@ -34,6 +34,7 @@ using Registry.Web.Identity;
 using Registry.Web.Models;
 using Registry.Web.Models.Configuration;
 using Registry.Web.Services.Adapters;
+using Registry.Web.Services.Initialization;
 using Registry.Web.Services.Managers;
 using Registry.Web.Services.Ports;
 using Registry.Web.Utilities;
@@ -275,7 +276,6 @@ public class Program
     ///
     /// NOTE: When adding new recurring jobs or services, ensure all dependencies are registered here.
     /// Only minimal services required for job execution are registered to reduce memory footprint.
-    /// See docs/ProcessingNodeServices.md for detailed dependency analysis.
     /// </summary>
     private static void RunAsProcessingNode(Options opts)
     {
@@ -327,6 +327,9 @@ public class Program
 
                 services.AddHangfireProvider(appSettings, configuration);
                 services.AddHangfireServer(options => { options.WorkerCount = workers; });
+
+                // Register Hangfire jobs initializer as hosted service
+                services.AddHostedService<HangfireJobsHostedService>();
             })
             .Build();
 
@@ -878,9 +881,4 @@ public class Program
 #endif
 
     #endregion
-}
-
-public class StartupOptions
-{
-    public InstanceType InstanceType { get; set; }
 }

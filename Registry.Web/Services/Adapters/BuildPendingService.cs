@@ -331,7 +331,7 @@ public class BuildPendingService
                         ds.Organization.Slug,
                         ds.Slug,
                         null,
-                        "auto-build-service", // Special user ID for automated service
+                        MagicStrings.AutoBuildServiceUserId, // Special user ID for automated service
                         null,
                         null
                     );

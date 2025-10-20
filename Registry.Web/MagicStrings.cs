@@ -17,6 +17,8 @@ public static class MagicStrings
     public const string ThumbnailCacheSeed = "thumb";
     public const string BuildPendingTrackerCacheSeed = "build-pending-tracker";
 
+    public const string AutoBuildServiceUserId = "auto-build-service";
+
     public const string IdentityConnectionName = "IdentityConnection";
     public const string RegistryConnectionName = "RegistryConnection";
     public const string HangfireConnectionName = "HangfireConnection";

@@ -50,6 +50,7 @@ using Registry.Ports;
 using Registry.Ports.DroneDB;
 using Registry.Web.Identity;
 using Registry.Web.Identity.Models;
+using Registry.Web.Services.Initialization;
 using Registry.Web.Utilities.Auth;
 using Serilog;
 using Serilog.Events;
@@ -308,6 +309,9 @@ public class Startup
             ThreadPool.GetMinThreads(out _, out var ioCompletionThreads);
             ThreadPool.SetMinThreads(appSettings.WorkerThreads, ioCompletionThreads);
         }
+
+        // Register application initializer
+        services.AddHostedService<AppInitializer>();
     }
 
     public void Configure(IApplicationBuilder app, IWebHostEnvironment env)
@@ -412,35 +416,10 @@ public class Startup
             });
         });
 
-        SetupDatabase(app).Wait();
-        ValidateCache(app).Wait();
-        SetupCache(app);
-
-        SetupCleanupJobs(app);
+        // Application initialization is now handled by AppInitializer IHostedService
+        // Database setup, cache validation, cache registration, and Hangfire jobs are configured on startup
 
         PrintStartupInfo(app);
-    }
-
-    private static void SetupCleanupJobs(IApplicationBuilder app)
-    {
-        // Cleanup expired jobs
-        RecurringJob.AddOrUpdate("cleanup-expired-jobs",
-            () => HangfireUtils.CleanupExpiredJobs(null),
-            Cron.Daily);
-
-        // Sync JobIndex states every 5 minutes
-        // Hangfire will automatically resolve JobIndexSyncService from DI and inject its dependencies
-        RecurringJob.AddOrUpdate<JobIndexSyncService>(
-            "sync-jobindex-states",
-            service => service.SyncJobIndexStates(null),
-            "*/5 * * * *"); // Every 5 minutes
-
-        // Process pending builds every minute
-        // Hangfire will automatically resolve BuildPendingService from DI and inject its dependencies
-        RecurringJob.AddOrUpdate<BuildPendingService>(
-            "process-pending-builds",
-            service => service.ProcessPendingBuilds(null),
-            "* * * * *"); // Every minute
     }
 
     private static void PrintStartupInfo(IApplicationBuilder app)
@@ -517,244 +496,5 @@ public class Startup
         }
 
         Console.WriteLine(" ?> Press Ctrl+C to quit");
-    }
-
-    private async Task ValidateCache(IApplicationBuilder app)
-    {
-        var appSettingsSection = Configuration.GetSection("AppSettings");
-        var appSettings = appSettingsSection.Get<AppSettings>();
-
-        if (appSettings == null)
-            throw new InvalidOperationException("AppSettings not found");
-
-        try
-        {
-            await StartupExtenders.ValidateCacheConnection(appSettings);
-        }
-        catch (InvalidOperationException ex)
-        {
-            Console.WriteLine($" ?> ERROR: Cache validation failed - {ex.Message}");
-            throw new InvalidOperationException($"Cache validation failed: {ex.Message}", ex);
-        }
-    }
-
-    private void SetupCache(IApplicationBuilder app)
-    {
-        var appSettingsSection = Configuration.GetSection("AppSettings");
-        var appSettings = appSettingsSection.Get<AppSettings>();
-
-        var cacheManager = app.ApplicationServices.GetService<ICacheManager>();
-
-        Debug.Assert(cacheManager != null, nameof(cacheManager) + " != null");
-
-        cacheManager.Register(MagicStrings.TileCacheSeed, async parameters =>
-        {
-            // These parameters are used to make the cache key unique
-            var fileHash = (string)parameters[0];
-            var tx = (int)parameters[1];
-            var ty = (int)parameters[2];
-            var tz = (int)parameters[3];
-            var retina = (bool)parameters[4];
-            var generateFunc = (Func<Task<byte[]>>)parameters[5];
-
-            var data = await generateFunc();
-
-            return data.ToWebp(90);
-        }, appSettings.TilesCacheExpiration);
-
-        cacheManager.Register(MagicStrings.ThumbnailCacheSeed, async parameters =>
-        {
-            try
-            {
-                // These parameters are used to make the cache key unique
-                var fileHash = (string)parameters[0];
-                var size = (int)parameters[1];
-                var generateFunc = (Func<Task<byte[]>>)parameters[2];
-
-                return await generateFunc();
-            }
-            catch (Exception ex)
-            {
-                Log.Error(ex, "Error generating thumbnail");
-                throw;
-            }
-        }, appSettings.ThumbnailsCacheExpiration);
-    }
-
-    // NOTE: Maybe put all this as stated in https://stackoverflow.com/a/55707949
-    private async Task SetupDatabase(IApplicationBuilder app)
-    {
-        using var serviceScope = app.ApplicationServices
-            .GetRequiredService<IServiceScopeFactory>()
-            .CreateScope();
-        await using var applicationDbContext = serviceScope.ServiceProvider.GetService<ApplicationDbContext>();
-
-        if (applicationDbContext == null)
-            throw new InvalidOperationException("Cannot get application db context from service provider");
-
-        var identityIsSqlite = applicationDbContext.Database.IsSqlite();
-
-        if (identityIsSqlite)
-            CommonUtils.EnsureFolderCreated(Configuration.GetConnectionString(MagicStrings.IdentityConnectionName));
-
-        if (identityIsSqlite || applicationDbContext.Database.IsMySql())
-            await applicationDbContext.Database.SafeMigrateAsync();
-
-        await using var registryDbContext = serviceScope.ServiceProvider.GetService<RegistryContext>();
-
-        if (registryDbContext == null)
-            throw new InvalidOperationException("Cannot get registry db context from service provider");
-
-        var registryIsSqlite = registryDbContext.Database.IsSqlite();
-
-        if (registryIsSqlite)
-            CommonUtils.EnsureFolderCreated(Configuration.GetConnectionString(MagicStrings.RegistryConnectionName));
-
-        if (registryIsSqlite || registryDbContext.Database.IsMySql())
-            await registryDbContext.Database.SafeMigrateAsync();
-
-        await CreateInitialData(registryDbContext);
-        await CreateDefaultAdmin(registryDbContext, serviceScope.ServiceProvider);
-    }
-
-
-
-
-    private static async Task CreateInitialData(RegistryContext context)
-    {
-        // If no organizations in database, let's create the public one
-        if (context.Organizations.Any())
-            return;
-
-        var entity = new Organization
-        {
-            Slug = MagicStrings.PublicOrganizationSlug,
-            Name = MagicStrings.PublicOrganizationSlug.ToPascalCase(false, CultureInfo.InvariantCulture),
-            CreationDate = DateTime.Now,
-            Description = "Organization",
-            IsPublic = true,
-            // NOTE: Maybe this is a good idea to flag this org as "system"
-            OwnerId = null
-        };
-        var ds = new Dataset
-        {
-            Slug = MagicStrings.DefaultDatasetSlug,
-            CreationDate = DateTime.Now,
-            InternalRef = Guid.NewGuid()
-        };
-        entity.Datasets = new List<Dataset> { ds };
-
-        context.Organizations.Add(entity);
-        await context.SaveChangesAsync();
-    }
-
-    private static async Task CreateDefaultAdmin(RegistryContext context, IServiceProvider provider)
-    {
-        var usersManager = provider.GetService<UserManager<User>>();
-        var roleManager = provider.GetService<RoleManager<IdentityRole>>();
-        var appSettings = provider.GetService<IOptions<AppSettings>>();
-
-        if (usersManager == null)
-            throw new InvalidOperationException("Cannot get users manager from service provider");
-
-        if (roleManager == null)
-            throw new InvalidOperationException("Cannot get role manager from service provider");
-
-        if (appSettings == null)
-            throw new InvalidOperationException("Cannot get app settings from service provider");
-
-        var defaultAdmin = appSettings.Value.DefaultAdmin;
-
-        // Check if admin role exists
-        var adminRole = await roleManager.FindByNameAsync(ApplicationDbContext.AdminRoleName);
-
-        if (adminRole == null)
-        {
-            // Create admin role
-            adminRole = new IdentityRole(ApplicationDbContext.AdminRoleName);
-            var r = await roleManager.CreateAsync(adminRole);
-            if (!r.Succeeded)
-                throw new InvalidOperationException("Cannot create admin role: " + r.Errors.ToErrorString());
-        }
-
-        var deactivatedRole = await roleManager.FindByNameAsync(ApplicationDbContext.DeactivatedRoleName);
-
-        if (deactivatedRole == null)
-        {
-            // Create deactivated role
-            deactivatedRole = new IdentityRole(ApplicationDbContext.DeactivatedRoleName);
-            var r = await roleManager.CreateAsync(deactivatedRole);
-            if (!r.Succeeded)
-                throw new InvalidOperationException("Cannot create deactivated role: " + r.Errors.ToErrorString());
-        }
-
-        // Check if default admin exists
-        var adminUser = usersManager.Users.FirstOrDefault(usr => usr.UserName == defaultAdmin.UserName);
-
-        if (adminUser == null)
-        {
-            // Create admin user
-            adminUser = new User
-            {
-                Email = defaultAdmin.Email,
-                UserName = defaultAdmin.UserName
-            };
-
-            var usrRes = await usersManager.CreateAsync(adminUser, defaultAdmin.Password);
-            if (!usrRes.Succeeded)
-                throw new InvalidOperationException(
-                    "Cannot create default admin: " + usrRes.Errors?.ToErrorString());
-
-            var res = await usersManager.AddToRoleAsync(adminUser, ApplicationDbContext.AdminRoleName);
-            if (!res.Succeeded)
-                throw new InvalidOperationException(
-                    "Cannot add admin to admin role: " + res.Errors?.ToErrorString());
-        }
-        else
-        {
-            // Ensure that admin has the admin role
-            if (!await usersManager.IsInRoleAsync(adminUser, ApplicationDbContext.AdminRoleName))
-            {
-                var res = await usersManager.AddToRoleAsync(adminUser, ApplicationDbContext.AdminRoleName);
-                if (!res.Succeeded)
-                    throw new InvalidOperationException(
-                        "Cannot add admin to admin role: " + res.Errors?.ToErrorString());
-            }
-
-            // Set admin password
-            var passRes = await usersManager.RemovePasswordAsync(adminUser);
-            if (!passRes.Succeeded)
-                throw new InvalidOperationException(
-                    "Cannot remove password for admin: " + passRes.Errors?.ToErrorString());
-
-            passRes = await usersManager.AddPasswordAsync(adminUser, defaultAdmin.Password);
-            if (!passRes.Succeeded)
-                throw new InvalidOperationException(
-                    "Cannot set password for admin: " + passRes.Errors?.ToErrorString());
-
-            // Sets admin email
-            adminUser.Email = defaultAdmin.Email;
-            await context.SaveChangesAsync();
-        }
-
-        // Ensure that admin organization exists
-        var adminOrgSlug = defaultAdmin.UserName.ToSlug();
-
-        var org = await context.Organizations.FirstOrDefaultAsync(o => o.Slug == adminOrgSlug);
-        if (org == null)
-        {
-            org = new Organization
-            {
-                Slug = adminOrgSlug,
-                Name = $"{defaultAdmin.UserName} organization",
-                CreationDate = DateTime.Now,
-                Description = null,
-                IsPublic = false,
-                OwnerId = adminUser.Id
-            };
-
-            await context.Organizations.AddAsync(org);
-            await context.SaveChangesAsync();
-        }
     }
 }
