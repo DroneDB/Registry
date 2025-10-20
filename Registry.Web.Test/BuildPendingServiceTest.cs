@@ -110,7 +110,7 @@ public class BuildPendingServiceTest : TestBase
         ddbMock.Setup(x => x.GetStamp()).Returns(new Stamp
         {
             Checksum = "test-checksum-456",
-            Entries = new List<Dictionary<string, string>>(),
+            Entries = [],
             Meta = new List<string>()
         });
 
@@ -153,7 +153,7 @@ public class BuildPendingServiceTest : TestBase
         ddbMock.Setup(x => x.GetStamp()).Returns(new Stamp
         {
             Checksum = "test-checksum-789",
-            Entries = new List<Dictionary<string, string>>(),
+            Entries = [],
             Meta = new List<string>()
         });
 
@@ -206,8 +206,8 @@ public class BuildPendingServiceTest : TestBase
         ddbMock.Setup(x => x.GetStamp()).Returns(new Stamp
         {
             Checksum = "same-checksum",
-            Entries = new List<Dictionary<string, string>>(),
-            Meta = new List<string>()
+            Entries = [],
+            Meta = []
         });
 
         _ddbManagerMock.Setup(x => x.Get(It.IsAny<string>(), It.IsAny<Guid>()))
@@ -252,7 +252,7 @@ public class BuildPendingServiceTest : TestBase
         ddbMock.Setup(x => x.GetStamp()).Returns(new Stamp
         {
             Checksum = "new-stale-checksum",
-            Entries = new List<Dictionary<string, string>>(),
+            Entries = [],
             Meta = new List<string>()
         });
 
@@ -299,8 +299,8 @@ public class BuildPendingServiceTest : TestBase
         ddbMock.Setup(x => x.GetStamp()).Returns(new Stamp
         {
             Checksum = "new-clockskew-checksum",
-            Entries = new List<Dictionary<string, string>>(),
-            Meta = new List<string>()
+            Entries = [],
+            Meta = []
         });
 
         _ddbManagerMock.Setup(x => x.Get(It.IsAny<string>(), It.IsAny<Guid>()))
@@ -361,8 +361,8 @@ public class BuildPendingServiceTest : TestBase
         ddbMock2.Setup(x => x.GetStamp()).Returns(new Stamp
         {
             Checksum = "error-recovery-checksum",
-            Entries = new List<Dictionary<string, string>>(),
-            Meta = new List<string>()
+            Entries = [],
+            Meta = []
         });
 
         // First dataset throws error, second succeeds
@@ -406,8 +406,8 @@ public class BuildPendingServiceTest : TestBase
         ddbMock.Setup(x => x.GetStamp()).Returns(new Stamp
         {
             Checksum = "cache-update-checksum",
-            Entries = new List<Dictionary<string, string>>(),
-            Meta = new List<string>()
+            Entries = [],
+            Meta = []
         });
 
         _ddbManagerMock.Setup(x => x.Get(It.IsAny<string>(), It.IsAny<Guid>()))
@@ -450,8 +450,8 @@ public class BuildPendingServiceTest : TestBase
         ddbMock.Setup(x => x.GetStamp()).Returns(new Stamp
         {
             Checksum = "new-checksum-abc",
-            Entries = new List<Dictionary<string, string>>(),
-            Meta = new List<string>()
+            Entries = [],
+            Meta = []
         });
 
         _ddbManagerMock.Setup(x => x.Get(It.IsAny<string>(), It.IsAny<Guid>()))

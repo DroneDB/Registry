@@ -41,9 +41,9 @@ internal class HangfireJobsInitializer
     private void SetupRecurringJobs(AppSettings appSettings)
     {
         // Cleanup expired jobs
-        var cleanupCron = !string.IsNullOrWhiteSpace(appSettings.CleanupExpiredJobsCron)
-            ? appSettings.CleanupExpiredJobsCron
-            : Cron.Daily();
+        var cleanupCron = string.IsNullOrWhiteSpace(appSettings.CleanupExpiredJobsCron)
+            ? Cron.Daily()
+            : appSettings.CleanupExpiredJobsCron;
 
         RecurringJob.AddOrUpdate(
             "cleanup-expired-jobs",
