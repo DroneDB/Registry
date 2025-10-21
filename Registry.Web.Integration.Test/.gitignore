@@ -1,0 +1,23 @@
+# Build results
+bin/
+obj/
+
+# Test results
+TestResults/
+
+# Runtime generated files
+appsettings-integration-runtime.json
+
+# Logs
+logs/
+*.log
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE
+.vs/
+.vscode/
+*.user
+*.suo
