@@ -30,22 +30,23 @@ internal class HangfireJobsInitializer
         _logger.LogInformation("Hangfire jobs initialization starting");
 
         var appSettings = _services.GetRequiredService<IOptions<AppSettings>>().Value;
+        var recurringJobManager = _services.GetRequiredService<IRecurringJobManager>();
 
-        SetupRecurringJobs(appSettings);
+        SetupRecurringJobs(appSettings, recurringJobManager);
 
         _logger.LogInformation("Hangfire jobs initialization completed");
 
         return Task.CompletedTask;
     }
 
-    private void SetupRecurringJobs(AppSettings appSettings)
+    private void SetupRecurringJobs(AppSettings appSettings, IRecurringJobManager recurringJobManager)
     {
         // Cleanup expired jobs
         var cleanupCron = string.IsNullOrWhiteSpace(appSettings.CleanupExpiredJobsCron)
             ? Cron.Daily()
             : appSettings.CleanupExpiredJobsCron;
 
-        RecurringJob.AddOrUpdate(
+        recurringJobManager.AddOrUpdate(
             "cleanup-expired-jobs",
             () => HangfireUtils.CleanupExpiredJobs(null),
             cleanupCron);
@@ -55,7 +56,7 @@ internal class HangfireJobsInitializer
         // Sync JobIndex states every 5 minutes
         var syncCron = string.IsNullOrWhiteSpace(appSettings.SyncJobIndexStatesCron) ? "*/5 * * * *" : appSettings.SyncJobIndexStatesCron;
 
-        RecurringJob.AddOrUpdate<JobIndexSyncService>(
+        recurringJobManager.AddOrUpdate<JobIndexSyncService>(
             "sync-jobindex-states",
             service => service.SyncJobIndexStates(null),
             syncCron);
@@ -65,7 +66,7 @@ internal class HangfireJobsInitializer
         // Process pending builds every minute
         var processCron = string.IsNullOrWhiteSpace(appSettings.ProcessPendingBuildsCron) ? "* * * * *" : appSettings.ProcessPendingBuildsCron;
 
-        RecurringJob.AddOrUpdate<BuildPendingService>(
+        recurringJobManager.AddOrUpdate<BuildPendingService>(
             "process-pending-builds",
             service => service.ProcessPendingBuilds(null),
             processCron);
