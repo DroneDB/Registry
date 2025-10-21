@@ -326,6 +326,42 @@ public class BuildPendingService
 
                     stats.PendingFound++;
 
+                    // Check if we should enqueue a job based on stamp changes
+                    // If stamp hasn't changed, the same files are still pending - no need to reprocess
+                    var cacheKey = $"{ds.Organization.Slug}/{ds.Slug}";
+                    var cachedData = await _cacheManager.GetAsync(MagicStrings.BuildPendingTrackerCacheSeed, cacheKey);
+
+                    var shouldEnqueue = true;
+                    if (cachedData is { Length: > 0 } && !string.IsNullOrEmpty(stampChecksum))
+                    {
+                        try
+                        {
+                            var cachedState = DeserializeCacheState(cachedData);
+                            if (!string.IsNullOrEmpty(cachedState.StampChecksum) &&
+                                cachedState.StampChecksum == stampChecksum &&
+                                cachedState.HasPending)
+                            {
+                                // Stamp hasn't changed and it was already pending - same files waiting
+                                shouldEnqueue = false;
+                                _logger.LogDebug(
+                                    "Skipping job enqueue for {Org}/{Ds}: stamp unchanged ({Checksum}), same files still pending",
+                                    ds.Organization.Slug, ds.Slug, stampChecksum);
+                            }
+                        }
+                        catch (Exception ex)
+                        {
+                            _logger.LogWarning(ex,
+                                "Failed to check cached stamp for {Org}/{Ds}, will enqueue job for safety",
+                                ds.Organization.Slug, ds.Slug);
+                            // On error, enqueue for safety
+                        }
+                    }
+
+                    if (!shouldEnqueue)
+                    {
+                        continue;
+                    }
+
                     // Enqueue BuildPending job for this dataset
                     var meta = new IndexPayload(
                         ds.Organization.Slug,

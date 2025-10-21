@@ -485,6 +485,114 @@ public class BuildPendingServiceTest : TestBase
         ddbMock.Verify(x => x.IsBuildPending(), Times.AtLeastOnce);
     }
 
+    [Test]
+    public async Task ProcessPendingBuilds_PendingButStampUnchanged_SkipsEnqueue()
+    {
+        // Arrange
+        await using var context = GetTest1Context();
+
+        var ddbMock = new Mock<IDDB>();
+        ddbMock.Setup(x => x.IsBuildPending()).Returns(true);
+        ddbMock.Setup(x => x.GetStamp()).Returns(new Stamp
+        {
+            Checksum = "unchanged-checksum-123",
+            Entries = [],
+            Meta = []
+        });
+
+        _ddbManagerMock.Setup(x => x.Get(It.IsAny<string>(), It.IsAny<Guid>()))
+            .Returns(ddbMock.Object);
+
+        // Cache state with HasPending=true and SAME checksum
+        // This means the same files are still pending from before
+        var cacheState = System.Text.Json.JsonSerializer.Serialize(new
+        {
+            HasPending = true,
+            LastCheckBinary = DateTime.UtcNow.AddHours(-1).ToBinary(),
+            StampChecksum = "unchanged-checksum-123"
+        });
+        var cacheBytes = System.Text.Encoding.UTF8.GetBytes(cacheState);
+
+        _cacheManager.Setup(x => x.IsRegistered(It.IsAny<string>())).Returns(true);
+        _cacheManager.Setup(x => x.GetAsync(It.IsAny<string>(), It.IsAny<string>()))
+            .ReturnsAsync(cacheBytes);
+
+        var service = new BuildPendingService(
+            context,
+            _ddbManagerMock.Object,
+            _backgroundJobMock.Object,
+            _cacheManager.Object,
+            _logger
+        );
+
+        // Act
+        await service.ProcessPendingBuilds(null);
+
+        // Assert - Should check pending status but NOT enqueue job (stamp unchanged)
+        ddbMock.Verify(x => x.IsBuildPending(), Times.AtLeastOnce);
+        _backgroundJobMock.Verify(
+            x => x.EnqueueIndexed(
+                It.IsAny<System.Linq.Expressions.Expression<Action>>(),
+                It.IsAny<IndexPayload>()
+            ),
+            Times.Never
+        );
+    }
+
+    [Test]
+    public async Task ProcessPendingBuilds_PendingAndStampChanged_EnqueuesJob()
+    {
+        // Arrange
+        await using var context = GetTest1Context();
+
+        var ddbMock = new Mock<IDDB>();
+        ddbMock.Setup(x => x.IsBuildPending()).Returns(true);
+        ddbMock.Setup(x => x.GetStamp()).Returns(new Stamp
+        {
+            Checksum = "new-checksum-456",
+            Entries = [],
+            Meta = []
+        });
+
+        _ddbManagerMock.Setup(x => x.Get(It.IsAny<string>(), It.IsAny<Guid>()))
+            .Returns(ddbMock.Object);
+
+        // Cache state with HasPending=true but DIFFERENT checksum
+        // This means new files were added to pending
+        var cacheState = System.Text.Json.JsonSerializer.Serialize(new
+        {
+            HasPending = true,
+            LastCheckBinary = DateTime.UtcNow.AddHours(-1).ToBinary(),
+            StampChecksum = "old-checksum-123"
+        });
+        var cacheBytes = System.Text.Encoding.UTF8.GetBytes(cacheState);
+
+        _cacheManager.Setup(x => x.IsRegistered(It.IsAny<string>())).Returns(true);
+        _cacheManager.Setup(x => x.GetAsync(It.IsAny<string>(), It.IsAny<string>()))
+            .ReturnsAsync(cacheBytes);
+
+        var service = new BuildPendingService(
+            context,
+            _ddbManagerMock.Object,
+            _backgroundJobMock.Object,
+            _cacheManager.Object,
+            _logger
+        );
+
+        // Act
+        await service.ProcessPendingBuilds(null);
+
+        // Assert - Should check pending status AND enqueue job (stamp changed)
+        ddbMock.Verify(x => x.IsBuildPending(), Times.AtLeastOnce);
+        _backgroundJobMock.Verify(
+            x => x.EnqueueIndexed(
+                It.IsAny<System.Linq.Expressions.Expression<Action>>(),
+                It.IsAny<IndexPayload>()
+            ),
+            Times.AtLeastOnce
+        );
+    }
+
     private RegistryContext GetEmptyContext()
     {
         var options = new DbContextOptionsBuilder<RegistryContext>()
