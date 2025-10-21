@@ -147,4 +147,22 @@ public class AppSettings
     /// </summary>
     public long MaxZipMemoryThreshold { get; set; } = 1073741824; // 1GB
 
+    /// <summary>
+    /// Cron expression for cleanup expired jobs task
+    /// Default: Daily (Cron.Daily)
+    /// </summary>
+    public string CleanupExpiredJobsCron { get; set; }
+
+    /// <summary>
+    /// Cron expression for sync job index states task
+    /// Default: "*/5 * * * *" (every 5 minutes)
+    /// </summary>
+    public string SyncJobIndexStatesCron { get; set; }
+
+    /// <summary>
+    /// Cron expression for process pending builds task
+    /// Default: "* * * * *" (every minute)
+    /// </summary>
+    public string ProcessPendingBuildsCron { get; set; }
+
 }

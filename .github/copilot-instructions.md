@@ -6,7 +6,7 @@
 - Use **PascalCase** for class names, method names, and properties.
 - Use **camelCase** for local variables and parameters.
 - Keep methods **short and focused**.
-- Follow **SOLID principles**.
+- Follow **SOLID, DRY and YAGNI principles**.
 - Use **async/await** for asynchronous operations.
 - Ensure **null checks** and **argument validation** in public methods.
 - Structure the project using hexagonal architecture (e.g., Controllers, Services, Ports, Adapters, Models, etc...).

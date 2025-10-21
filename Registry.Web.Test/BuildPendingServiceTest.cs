@@ -64,6 +64,12 @@ public class BuildPendingServiceTest : TestBase
 
         var ddbMock = new Mock<IDDB>();
         ddbMock.Setup(x => x.IsBuildPending()).Returns(true);
+        ddbMock.Setup(x => x.GetStamp()).Returns(new Stamp
+        {
+            Checksum = "test-checksum-123",
+            Entries = [],
+            Meta = []
+        });
 
         _ddbManagerMock.Setup(x => x.Get(It.IsAny<string>(), It.IsAny<Guid>()))
             .Returns(ddbMock.Object);
@@ -101,6 +107,12 @@ public class BuildPendingServiceTest : TestBase
 
         var ddbMock = new Mock<IDDB>();
         ddbMock.Setup(x => x.IsBuildPending()).Returns(false);
+        ddbMock.Setup(x => x.GetStamp()).Returns(new Stamp
+        {
+            Checksum = "test-checksum-456",
+            Entries = [],
+            Meta = new List<string>()
+        });
 
         _ddbManagerMock.Setup(x => x.Get(It.IsAny<string>(), It.IsAny<Guid>()))
             .Returns(ddbMock.Object);
@@ -138,6 +150,12 @@ public class BuildPendingServiceTest : TestBase
 
         var ddbMock = new Mock<IDDB>();
         ddbMock.Setup(x => x.IsBuildPending()).Returns(true);
+        ddbMock.Setup(x => x.GetStamp()).Returns(new Stamp
+        {
+            Checksum = "test-checksum-789",
+            Entries = [],
+            Meta = new List<string>()
+        });
 
         _ddbManagerMock.Setup(x => x.Get(It.IsAny<string>(), It.IsAny<Guid>()))
             .Returns(ddbMock.Object);
@@ -146,7 +164,8 @@ public class BuildPendingServiceTest : TestBase
         var cacheState = System.Text.Json.JsonSerializer.Serialize(new
         {
             HasPending = true,
-            LastCheckBinary = DateTime.UtcNow.ToBinary()
+            LastCheckBinary = DateTime.UtcNow.ToBinary(),
+            StampChecksum = "old-checksum"
         });
         var cacheBytes = System.Text.Encoding.UTF8.GetBytes(cacheState);
 
@@ -184,15 +203,22 @@ public class BuildPendingServiceTest : TestBase
 
         var ddbMock = new Mock<IDDB>();
         ddbMock.Setup(x => x.IsBuildPending()).Returns(false);
+        ddbMock.Setup(x => x.GetStamp()).Returns(new Stamp
+        {
+            Checksum = "same-checksum",
+            Entries = [],
+            Meta = []
+        });
 
         _ddbManagerMock.Setup(x => x.Get(It.IsAny<string>(), It.IsAny<Guid>()))
             .Returns(ddbMock.Object);
 
-        // Cache state with HasPending=false and recent check (2 hours ago)
+        // Cache state with HasPending=false and recent check (2 hours ago) with SAME checksum
         var cacheState = System.Text.Json.JsonSerializer.Serialize(new
         {
             HasPending = false,
-            LastCheckBinary = DateTime.UtcNow.AddHours(-2).ToBinary()
+            LastCheckBinary = DateTime.UtcNow.AddHours(-2).ToBinary(),
+            StampChecksum = "same-checksum"
         });
         var cacheBytes = System.Text.Encoding.UTF8.GetBytes(cacheState);
 
@@ -223,15 +249,23 @@ public class BuildPendingServiceTest : TestBase
 
         var ddbMock = new Mock<IDDB>();
         ddbMock.Setup(x => x.IsBuildPending()).Returns(false);
+        ddbMock.Setup(x => x.GetStamp()).Returns(new Stamp
+        {
+            Checksum = "new-stale-checksum",
+            Entries = [],
+            Meta = new List<string>()
+        });
 
         _ddbManagerMock.Setup(x => x.Get(It.IsAny<string>(), It.IsAny<Guid>()))
             .Returns(ddbMock.Object);
 
         // Cache state with HasPending=false and stale check (7 hours ago - exceeds 6 hour threshold)
+        // with a DIFFERENT checksum to force the check
         var cacheState = System.Text.Json.JsonSerializer.Serialize(new
         {
             HasPending = false,
-            LastCheckBinary = DateTime.UtcNow.AddHours(-7).ToBinary()
+            LastCheckBinary = DateTime.UtcNow.AddHours(-7).ToBinary(),
+            StampChecksum = "old-stale-checksum"
         });
         var cacheBytes = System.Text.Encoding.UTF8.GetBytes(cacheState);
 
@@ -250,7 +284,7 @@ public class BuildPendingServiceTest : TestBase
         // Act
         await service.ProcessPendingBuilds(null);
 
-        // Assert - Should check DDB due to staleness (safety mechanism)
+        // Assert - Should check DDB due to checksum change
         ddbMock.Verify(x => x.IsBuildPending(), Times.AtLeastOnce);
     }
 
@@ -262,15 +296,23 @@ public class BuildPendingServiceTest : TestBase
 
         var ddbMock = new Mock<IDDB>();
         ddbMock.Setup(x => x.IsBuildPending()).Returns(false);
+        ddbMock.Setup(x => x.GetStamp()).Returns(new Stamp
+        {
+            Checksum = "new-clockskew-checksum",
+            Entries = [],
+            Meta = []
+        });
 
         _ddbManagerMock.Setup(x => x.Get(It.IsAny<string>(), It.IsAny<Guid>()))
             .Returns(ddbMock.Object);
 
         // Cache state with LastCheck in the FUTURE (clock skew scenario)
+        // with a DIFFERENT checksum to force the check
         var cacheState = System.Text.Json.JsonSerializer.Serialize(new
         {
             HasPending = false,
-            LastCheckBinary = DateTime.UtcNow.AddHours(1).ToBinary()
+            LastCheckBinary = DateTime.UtcNow.AddHours(1).ToBinary(),
+            StampChecksum = "old-clockskew-checksum"
         });
         var cacheBytes = System.Text.Encoding.UTF8.GetBytes(cacheState);
 
@@ -289,7 +331,7 @@ public class BuildPendingServiceTest : TestBase
         // Act
         await service.ProcessPendingBuilds(null);
 
-        // Assert - Should check DDB due to clock skew detection
+        // Assert - Should check DDB due to checksum change
         ddbMock.Verify(x => x.IsBuildPending(), Times.AtLeastOnce);
     }
 
@@ -316,6 +358,12 @@ public class BuildPendingServiceTest : TestBase
 
         var ddbMock2 = new Mock<IDDB>();
         ddbMock2.Setup(x => x.IsBuildPending()).Returns(true);
+        ddbMock2.Setup(x => x.GetStamp()).Returns(new Stamp
+        {
+            Checksum = "error-recovery-checksum",
+            Entries = [],
+            Meta = []
+        });
 
         // First dataset throws error, second succeeds
         _ddbManagerMock.SetupSequence(x => x.Get(It.IsAny<string>(), It.IsAny<Guid>()))
@@ -355,6 +403,12 @@ public class BuildPendingServiceTest : TestBase
 
         var ddbMock = new Mock<IDDB>();
         ddbMock.Setup(x => x.IsBuildPending()).Returns(false);
+        ddbMock.Setup(x => x.GetStamp()).Returns(new Stamp
+        {
+            Checksum = "cache-update-checksum",
+            Entries = [],
+            Meta = []
+        });
 
         _ddbManagerMock.Setup(x => x.Get(It.IsAny<string>(), It.IsAny<Guid>()))
             .Returns(ddbMock.Object);
@@ -383,6 +437,52 @@ public class BuildPendingServiceTest : TestBase
             ),
             Times.AtLeastOnce
         );
+    }
+
+    [Test]
+    public async Task ProcessPendingBuilds_ChecksumChanged_ForcesCheck()
+    {
+        // Arrange
+        await using var context = GetTest1Context();
+
+        var ddbMock = new Mock<IDDB>();
+        ddbMock.Setup(x => x.IsBuildPending()).Returns(false);
+        ddbMock.Setup(x => x.GetStamp()).Returns(new Stamp
+        {
+            Checksum = "new-checksum-abc",
+            Entries = [],
+            Meta = []
+        });
+
+        _ddbManagerMock.Setup(x => x.Get(It.IsAny<string>(), It.IsAny<Guid>()))
+            .Returns(ddbMock.Object);
+
+        // Cache state with HasPending=false and DIFFERENT checksum
+        var cacheState = System.Text.Json.JsonSerializer.Serialize(new
+        {
+            HasPending = false,
+            LastCheckBinary = DateTime.UtcNow.AddHours(-1).ToBinary(),
+            StampChecksum = "old-checksum-xyz"
+        });
+        var cacheBytes = System.Text.Encoding.UTF8.GetBytes(cacheState);
+
+        _cacheManager.Setup(x => x.IsRegistered(It.IsAny<string>())).Returns(true);
+        _cacheManager.Setup(x => x.GetAsync(It.IsAny<string>(), It.IsAny<string>()))
+            .ReturnsAsync(cacheBytes);
+
+        var service = new BuildPendingService(
+            context,
+            _ddbManagerMock.Object,
+            _backgroundJobMock.Object,
+            _cacheManager.Object,
+            _logger
+        );
+
+        // Act
+        await service.ProcessPendingBuilds(null);
+
+        // Assert - Should check DDB because checksum changed
+        ddbMock.Verify(x => x.IsBuildPending(), Times.AtLeastOnce);
     }
 
     private RegistryContext GetEmptyContext()

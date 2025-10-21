@@ -75,15 +75,9 @@ public class JobIndexWriter(RegistryContext db, ILogger<JobIndexWriter> log) : I
         var ji = await db.JobIndices.AsTracking().FirstOrDefaultAsync(x => x.JobId == jobId, ct);
         if (ji is null)
         {
-            // Doesn't exist? Create a shell record, better than losing the state
-            ji = new JobIndex
-            {
-                JobId = jobId,
-                OrgSlug = "~unknown~",
-                DsSlug = "~unknown~",
-                CreatedAtUtc = changedAtUtc,
-            };
-            db.JobIndices.Add(ji);
+            // We are not interested in creating a new entry here if it doesn't exist
+            log.LogInformation("JobIndexWriter.UpdateStateAsync: no existing JobIndex for job {JobId}", jobId);
+            return;
         }
 
         ji.CurrentState = newState;
