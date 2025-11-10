@@ -15,4 +15,7 @@ public interface ISystemManager
     Task<IEnumerable<MigrateVisibilityEntryDTO>> MigrateVisibility();
 
     Task<BuildPendingStatusDto> GetBuildPendingStatus();
+
+    Task<ImportResultDto> ImportDataset(ImportDatasetRequestDto request);
+    Task<ImportResultDto> ImportOrganization(ImportOrganizationRequestDto request);
 }

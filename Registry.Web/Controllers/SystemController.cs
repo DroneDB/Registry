@@ -115,4 +115,44 @@ public class SystemController : ControllerBaseEx
         }
     }
 
+    [HttpPost("import-dataset", Name = nameof(SystemController) + "." + nameof(ImportDataset))]
+    [ProducesResponseType(typeof(ImportResultDto), 200)]
+    public async Task<IActionResult> ImportDataset([FromBody] ImportDatasetRequestDto request)
+    {
+        try
+        {
+            _logger.LogDebug("System controller ImportDataset('{SourceOrg}/{SourceDs}' from '{SourceUrl}')",
+                request.SourceOrganization, request.SourceDataset, request.SourceRegistryUrl);
+
+            return Ok(await _systemManager.ImportDataset(request));
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Exception in System controller ImportDataset('{SourceOrg}/{SourceDs}' from '{SourceUrl}')",
+                request?.SourceOrganization, request?.SourceDataset, request?.SourceRegistryUrl);
+
+            return ExceptionResult(ex);
+        }
+    }
+
+    [HttpPost("import-organization", Name = nameof(SystemController) + "." + nameof(ImportOrganization))]
+    [ProducesResponseType(typeof(ImportResultDto), 200)]
+    public async Task<IActionResult> ImportOrganization([FromBody] ImportOrganizationRequestDto request)
+    {
+        try
+        {
+            _logger.LogDebug("System controller ImportOrganization('{SourceOrg}' from '{SourceUrl}')",
+                request.SourceOrganization, request.SourceRegistryUrl);
+
+            return Ok(await _systemManager.ImportOrganization(request));
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Exception in System controller ImportOrganization('{SourceOrg}' from '{SourceUrl}')",
+                request?.SourceOrganization, request?.SourceRegistryUrl);
+
+            return ExceptionResult(ex);
+        }
+    }
+
 }

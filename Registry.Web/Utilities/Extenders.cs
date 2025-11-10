@@ -151,7 +151,7 @@ public static class Extenders
     /// - allowed chars are [a-z0-9_-]
     /// - no consecutive dashes ("--") to match ToSlug collapsing behavior
     /// </summary>
-    public static bool IsValidSlug(this string? s)
+    public static bool IsValidSlug(this string s)
     {
         if (string.IsNullOrEmpty(s)) return false;
         if (s.Length > 128) return false;
