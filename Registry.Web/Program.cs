@@ -314,6 +314,9 @@ public class Program
                 // Register job indexing services (required by JobIndexSyncService and BackgroundJobsProcessor)
                 services.AddJobIndexing();
 
+                // Register HTTP client factory for services that need to make HTTP calls
+                services.AddHttpClient();
+
                 // Register core singleton services
                 services.AddSingleton<ICacheManager, CacheManager>();
                 services.AddSingleton<IDdbWrapper, NativeDdbWrapper>();

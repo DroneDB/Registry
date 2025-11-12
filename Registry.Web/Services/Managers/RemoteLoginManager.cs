@@ -21,18 +21,21 @@ public class RemoteLoginManager : ILoginManager
 {
     private readonly ILogger<ILoginManager> _logger;
     private readonly AppSettings _settings;
+    private readonly IHttpClientFactory _httpClientFactory;
 
     public RemoteLoginManager(ILogger<RemoteLoginManager> logger,
-        IOptions<AppSettings> settings)
+        IOptions<AppSettings> settings,
+        IHttpClientFactory httpClientFactory)
     {
         _logger = logger;
         _settings = settings.Value;
+        _httpClientFactory = httpClientFactory;
     }
 
     public async Task<LoginResultDto> CheckAccess(string token)
     {
 
-        using var client = new HttpClient();
+        var client = _httpClientFactory.CreateClient();
 
         try
         {
@@ -74,7 +77,7 @@ public class RemoteLoginManager : ILoginManager
     public async Task<LoginResultDto> CheckAccess(string userName, string password)
     {
 
-        using var client = new HttpClient();
+        var client = _httpClientFactory.CreateClient();
 
         try
         {

@@ -34,10 +34,12 @@ public class SystemManager : ISystemManager
     private readonly IObjectsManager _objectManager;
     private readonly AppSettings _settings;
     private readonly BuildPendingService _buildPendingService;
+    private readonly IHttpClientFactory _httpClientFactory;
 
     public SystemManager(IAuthManager authManager,
         RegistryContext context, IDdbManager ddbManager, ILogger<SystemManager> logger,
-        IObjectsManager objectManager, IOptions<AppSettings> settings, BuildPendingService buildPendingService)
+        IObjectsManager objectManager, IOptions<AppSettings> settings, BuildPendingService buildPendingService,
+        IHttpClientFactory httpClientFactory)
     {
         _authManager = authManager;
         _context = context;
@@ -46,6 +48,7 @@ public class SystemManager : ISystemManager
         _objectManager = objectManager;
         _settings = settings.Value;
         _buildPendingService = buildPendingService;
+        _httpClientFactory = httpClientFactory;
     }
 
     public async Task<CleanupDatasetResultDto> CleanupEmptyDatasets()
@@ -390,7 +393,7 @@ public class SystemManager : ISystemManager
 
     private async Task<string> AuthenticateRemoteRegistry(string registryUrl, string username, string password)
     {
-        using var client = new HttpClient();
+        var client = _httpClientFactory.CreateClient();
 
         var content = new FormUrlEncodedContent(new[]
         {
@@ -414,7 +417,7 @@ public class SystemManager : ISystemManager
 
     private async Task<DatasetDto[]> GetRemoteDatasets(string registryUrl, string authToken, string orgSlug)
     {
-        using var client = new HttpClient();
+        var client = _httpClientFactory.CreateClient();
         client.DefaultRequestHeaders.Add("Authorization", $"Bearer {authToken}");
 
         var response = await client.GetAsync($"{registryUrl.TrimEnd('/')}/orgs/{orgSlug}/ds");

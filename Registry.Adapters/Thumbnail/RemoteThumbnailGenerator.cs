@@ -14,6 +14,7 @@ public class RemoteThumbnailGenerator : IThumbnailGenerator
 {
     private readonly ILogger<RemoteThumbnailGenerator> _logger;
     private readonly RemoteThumbnailGeneratorSettings _settings;
+    private static readonly HttpClient _httpClient = new();
 
     public RemoteThumbnailGenerator(ILogger<RemoteThumbnailGenerator> logger,
         IOptions<RemoteThumbnailGeneratorSettings> options)
@@ -42,17 +43,16 @@ public class RemoteThumbnailGenerator : IThumbnailGenerator
 
         try
         {
-            using var client = new HttpClient();
             var content = new FormUrlEncodedContent([
                 new KeyValuePair<string, string>("path", filePath),
                 new KeyValuePair<string, string>("size", size.ToString())
             ]);
 
             // Keep the timeout short to avoid blocking the thread for too long
-            client.Timeout = TimeSpan.FromSeconds(30);
+            _httpClient.Timeout = TimeSpan.FromSeconds(30);
 
             _logger.LogDebug("Sending POST request to remote thumbnail generator: {Url}", _settings.Url);
-            var response = await client.PostAsync(_settings.Url, content);
+            var response = await _httpClient.PostAsync(_settings.Url, content);
 
             if (!response.IsSuccessStatusCode)
             {

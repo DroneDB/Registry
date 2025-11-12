@@ -300,6 +300,7 @@ public class Startup
         }
 
         services.AddHttpContextAccessor();
+        services.AddHttpClient();
 
         // TODO: Enable when needed. Should check return object structure
         // services.AddOData();
