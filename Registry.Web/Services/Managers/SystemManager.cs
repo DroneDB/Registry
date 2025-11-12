@@ -492,7 +492,7 @@ public class SystemManager : ISystemManager
             var totalSize = files.Sum(f => new FileInfo(f).Length);
 
             // Get or create destination organization
-            var org = _context.Organizations.FirstOrDefault(o => o.Slug == destOrg);
+            var org = await _context.Organizations.FirstOrDefaultAsync(o => o.Slug == destOrg);
             if (org == null)
             {
                 _logger.LogInformation("Creating organization {OrgSlug}", destOrg);
@@ -509,7 +509,7 @@ public class SystemManager : ISystemManager
             }
 
             // Get or create destination dataset
-            var dataset = _context.Datasets.FirstOrDefault(d => d.Slug == destDs && d.Organization.Slug == destOrg);
+            var dataset = await _context.Datasets.FirstOrDefaultAsync(d => d.Slug == destDs && d.Organization.Slug == destOrg);
             if (dataset == null)
             {
                 _logger.LogInformation("Creating dataset {DsSlug}", destDs);
