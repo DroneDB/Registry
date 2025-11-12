@@ -564,7 +564,15 @@ public class SystemManager : ISystemManager
             {
                 var fileName = Path.GetFileName(file);
                 var targetFile = Path.Combine(destPath, fileName);
-                File.Move(file, targetFile, true);
+                try
+                {
+                    File.Move(file, targetFile, true);
+                }
+                catch (IOException ioEx)
+                {
+                    _logger.LogError(ioEx, "Failed to move file {Source} to {Target}. The target file may be locked or in use.", file, targetFile);
+                    throw new Exception($"Failed to move file {fileName}: {ioEx.Message}. Dataset import aborted to prevent data corruption.", ioEx);
+                }
             }
 
             importedItems.Add(new ImportedItemDto
