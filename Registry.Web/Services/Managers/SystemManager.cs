@@ -19,9 +19,11 @@ using Registry.Web.Data.Models;
 using Registry.Web.Exceptions;
 using Registry.Web.Models.Configuration;
 using Registry.Web.Models.DTO;
+using Registry.Web.Models;
 using Registry.Web.Services.Adapters;
 using Registry.Web.Services.Ports;
 using Registry.Web.Utilities;
+using Hangfire;
 
 namespace Registry.Web.Services.Managers;
 
@@ -35,11 +37,12 @@ public class SystemManager : ISystemManager
     private readonly AppSettings _settings;
     private readonly BuildPendingService _buildPendingService;
     private readonly IHttpClientFactory _httpClientFactory;
+    private readonly IBackgroundJobsProcessor _backgroundJob;
 
     public SystemManager(IAuthManager authManager,
         RegistryContext context, IDdbManager ddbManager, ILogger<SystemManager> logger,
         IObjectsManager objectManager, IOptions<AppSettings> settings, BuildPendingService buildPendingService,
-        IHttpClientFactory httpClientFactory)
+        IHttpClientFactory httpClientFactory, IBackgroundJobsProcessor backgroundJob)
     {
         _authManager = authManager;
         _context = context;
@@ -49,6 +52,7 @@ public class SystemManager : ISystemManager
         _settings = settings.Value;
         _buildPendingService = buildPendingService;
         _httpClientFactory = httpClientFactory;
+        _backgroundJob = backgroundJob;
     }
 
     public async Task<CleanupDatasetResultDto> CleanupEmptyDatasets()
@@ -524,21 +528,22 @@ public class SystemManager : ISystemManager
                 await _context.SaveChangesAsync();
             }
 
-            // Get destination DDB path
-            var ddb = _ddbManager.Get(destOrg, dataset.InternalRef);
-            var destPath = ddb.DatasetFolderPath;
+            // Get destination path but ensure .ddb folder doesn't exist yet
+            // (we'll import the complete .ddb from the source dataset)
+            var destPath = Path.Combine(_settings.DatasetsPath, destOrg, dataset.InternalRef.ToString());
+            Directory.CreateDirectory(destPath);
 
             _logger.LogInformation("Moving data to {DestPath}", destPath);
 
-            // If destination has existing data, remove it (excluding database folder)
+            // Remove all existing content (including .ddb folder if it exists)
+            // This is necessary because we want to import the complete .ddb from the source
             var destDirs = Directory.GetDirectories(destPath);
             var destFiles = Directory.GetFiles(destPath);
 
             _logger.LogInformation("Removing existing dataset content");
             foreach (var dir in destDirs)
             {
-                if (!dir.Contains(IDDB.DatabaseFolderName))
-                    Directory.Delete(dir, true);
+                Directory.Delete(dir, true);
             }
 
             foreach (var file in destFiles)
@@ -574,6 +579,14 @@ public class SystemManager : ISystemManager
                     throw new Exception($"Failed to move file {fileName}: {ioEx.Message}. Dataset import aborted to prevent data corruption.", ioEx);
                 }
             }
+
+            // Schedule build of the imported dataset to ensure consistency
+            _logger.LogInformation("Scheduling build for imported dataset {Org}/{Ds}", destOrg, destDs);
+            var ddb = _ddbManager.Get(destOrg, dataset.InternalRef);
+            var user = await _authManager.GetCurrentUser();
+            var meta = new IndexPayload(destOrg, destDs, null, user.Id, null, null);
+            var jobId = _backgroundJob.EnqueueIndexed(() => HangfireUtils.BuildWrapper(ddb, null, true, null), meta);
+            _logger.LogInformation("Build scheduled with job id {JobId} for {Org}/{Ds}", jobId, destOrg, destDs);
 
             importedItems.Add(new ImportedItemDto
             {
