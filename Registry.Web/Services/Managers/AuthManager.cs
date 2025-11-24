@@ -13,6 +13,7 @@ using Registry.Web.Data.Models;
 using Registry.Web.Identity;
 using Registry.Web.Identity.Models;
 using Registry.Web.Models;
+using Registry.Web.Models.DTO;
 using Registry.Web.Services.Adapters;
 using Registry.Web.Services.Ports;
 using Registry.Web.Utilities.Auth;
@@ -120,6 +121,18 @@ public class AuthManager : IAuthManager
             var t when t == typeof(Dataset) =>
                 await _datasetAccess.CanAccessDataset(obj as Dataset, access, user),
             _ => throw new InvalidEnumArgumentException($"Not supported type {typeof(T)}")
+        };
+    }
+
+    public async Task<DatasetPermissionsDto> GetDatasetPermissions(Dataset dataset)
+    {
+        var user = await GetCurrentUser();
+        
+        return new DatasetPermissionsDto
+        {
+            CanRead = await _datasetAccess.CanAccessDataset(dataset, AccessType.Read, user),
+            CanWrite = await _datasetAccess.CanAccessDataset(dataset, AccessType.Write, user),
+            CanDelete = await _datasetAccess.CanAccessDataset(dataset, AccessType.Delete, user)
         };
     }
 }

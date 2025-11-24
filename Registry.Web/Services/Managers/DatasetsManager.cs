@@ -55,17 +55,26 @@ public class DatasetsManager : IDatasetsManager
 
         var datasets = org.Datasets.ToArray();
 
-        return (from ds in datasets
-                let ddb = _ddbManager.Get(orgSlug, ds.InternalRef)
-                let info = ddb.GetInfo()
-                select new DatasetDto
-                {
-                    Slug = ds.Slug,
-                    CreationDate = ds.CreationDate,
-                    Properties = info.Properties,
-                    Size = info.Size
-                })
-            .ToArray();
+        var result = new List<DatasetDto>();
+
+        foreach (var ds in datasets)
+        {
+            var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
+            var info = ddb.GetInfo();
+
+            var dto = new DatasetDto
+            {
+                Slug = ds.Slug,
+                CreationDate = ds.CreationDate,
+                Properties = info.Properties,
+                Size = info.Size,
+                Permissions = await _authManager.GetDatasetPermissions(ds)
+            };
+
+            result.Add(dto);
+        }
+
+        return result;
     }
 
     public async Task<DatasetDto> Get(string orgSlug, string dsSlug)
@@ -77,7 +86,10 @@ public class DatasetsManager : IDatasetsManager
 
         var ddb = _ddbManager.Get(orgSlug, dataset.InternalRef);
 
-        return dataset.ToDto(ddb.GetInfo());
+        var dto = dataset.ToDto(ddb.GetInfo());
+        dto.Permissions = await _authManager.GetDatasetPermissions(dataset);
+
+        return dto;
     }
 
     public async Task<EntryDto[]> GetEntry(string orgSlug, string dsSlug)
@@ -93,7 +105,21 @@ public class DatasetsManager : IDatasetsManager
         info.Depth = 0;
         info.Path = _utils.GenerateDatasetUrl(dataset, true);
 
-        return [info.ToDto()];
+        var dto = info.ToDto();
+
+        // Add permissions to properties
+        if (dto.Properties == null)
+            dto.Properties = new Dictionary<string, object>();
+
+        var permissions = await _authManager.GetDatasetPermissions(dataset);
+        dto.Properties["permissions"] = new
+        {
+            canRead = permissions.CanRead,
+            canWrite = permissions.CanWrite,
+            canDelete = permissions.CanDelete
+        };
+
+        return [dto];
     }
 
     public async Task<DatasetDto> AddNew(string orgSlug, DatasetNewDto dataset)

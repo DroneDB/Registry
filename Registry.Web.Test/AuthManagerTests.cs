@@ -1139,4 +1139,210 @@ public class AuthManagerTests : TestBase
     }
 
     #endregion
+
+    #region GetDatasetPermissions Tests
+
+    [Test]
+    public async Task GetDatasetPermissions_AnonymousUser_PublicDataset_ReturnsReadOnly()
+    {
+        // Arrange
+        SetupCurrentUser(null);
+
+        // Act
+        var permissions = await _authManager.GetDatasetPermissions(_publicDataset);
+
+        // Assert
+        permissions.Should().NotBeNull();
+        permissions.CanRead.Should().BeTrue();
+        permissions.CanWrite.Should().BeFalse();
+        permissions.CanDelete.Should().BeFalse();
+    }
+
+    [Test]
+    public async Task GetDatasetPermissions_AnonymousUser_PrivateDataset_ReturnsNoAccess()
+    {
+        // Arrange
+        SetupCurrentUser(null);
+
+        // Act
+        var permissions = await _authManager.GetDatasetPermissions(_privateDataset);
+
+        // Assert
+        permissions.Should().NotBeNull();
+        permissions.CanRead.Should().BeFalse();
+        permissions.CanWrite.Should().BeFalse();
+        permissions.CanDelete.Should().BeFalse();
+    }
+
+    [Test]
+    public async Task GetDatasetPermissions_Owner_PrivateDataset_ReturnsFullAccess()
+    {
+        // Arrange
+        SetupCurrentUser(_normalUser);
+
+        // Act
+        var permissions = await _authManager.GetDatasetPermissions(_privateDataset);
+
+        // Assert
+        permissions.Should().NotBeNull();
+        permissions.CanRead.Should().BeTrue();
+        permissions.CanWrite.Should().BeTrue();
+        permissions.CanDelete.Should().BeTrue();
+    }
+
+    [Test]
+    public async Task GetDatasetPermissions_Admin_PrivateDataset_ReturnsFullAccess()
+    {
+        // Arrange
+        SetupCurrentUser(_adminUser);
+
+        // Act
+        var permissions = await _authManager.GetDatasetPermissions(_privateDataset);
+
+        // Assert
+        permissions.Should().NotBeNull();
+        permissions.CanRead.Should().BeTrue();
+        permissions.CanWrite.Should().BeTrue();
+        permissions.CanDelete.Should().BeTrue();
+    }
+
+    [Test]
+    public async Task GetDatasetPermissions_OrganizationMember_PrivateDataset_ReturnsReadWrite()
+    {
+        // Arrange
+        var orgMember = new User { Id = "member1", UserName = "member" };
+        _privateOrg.Users.Add(new OrganizationUser { UserId = orgMember.Id });
+        SetupCurrentUser(orgMember);
+
+        _userManagerMock.Setup(x => x.FindByIdAsync(orgMember.Id))
+            .ReturnsAsync(orgMember);
+
+        // Act
+        var permissions = await _authManager.GetDatasetPermissions(_privateDataset);
+
+        // Assert
+        permissions.Should().NotBeNull();
+        permissions.CanRead.Should().BeTrue();
+        permissions.CanWrite.Should().BeTrue();
+        permissions.CanDelete.Should().BeFalse(); // Members cannot delete
+    }
+
+    [Test]
+    public async Task GetDatasetPermissions_DeactivatedUser_PrivateDataset_ReturnsNoAccess()
+    {
+        // Arrange
+        SetupCurrentUser(_deactivatedUser);
+
+        // Act
+        var permissions = await _authManager.GetDatasetPermissions(_privateDataset);
+
+        // Assert
+        permissions.Should().NotBeNull();
+        permissions.CanRead.Should().BeFalse();
+        permissions.CanWrite.Should().BeFalse();
+        permissions.CanDelete.Should().BeFalse();
+    }
+
+    [Test]
+    public async Task GetDatasetPermissions_RandomUser_PrivateDataset_ReturnsNoAccess()
+    {
+        // Arrange
+        SetupCurrentUser(_randomUser);
+
+        // Act
+        var permissions = await _authManager.GetDatasetPermissions(_privateDataset);
+
+        // Assert
+        permissions.Should().NotBeNull();
+        permissions.CanRead.Should().BeFalse();
+        permissions.CanWrite.Should().BeFalse();
+        permissions.CanDelete.Should().BeFalse();
+    }
+
+    [Test]
+    public async Task GetDatasetPermissions_RandomUser_PublicDataset_ReturnsReadOnly()
+    {
+        // Arrange
+        SetupCurrentUser(_randomUser);
+
+        // Act
+        var permissions = await _authManager.GetDatasetPermissions(_publicDataset);
+
+        // Assert
+        permissions.Should().NotBeNull();
+        permissions.CanRead.Should().BeTrue();
+        permissions.CanWrite.Should().BeFalse();
+        permissions.CanDelete.Should().BeFalse();
+    }
+
+    [Test]
+    public async Task GetDatasetPermissions_AnonymousUser_UnlistedDataset_ReturnsReadOnly()
+    {
+        // Arrange
+        var unlistedDataset = new Dataset
+        {
+            Id = 3,
+            Slug = "unlisted-dataset",
+            Organization = _publicOrg,
+            InternalRef = Guid.NewGuid()
+        };
+
+        _cacheManagerMock.Setup(x => x.GetAsync(
+                MagicStrings.DatasetVisibilityCacheSeed,
+                _publicOrg.Slug,
+                It.Is<object[]>(args =>
+                    args.Length == 3 &&
+                    args[0].Equals(_publicOrg.Slug) &&
+                    args[1].Equals(unlistedDataset.InternalRef))))
+            .ReturnsAsync(BitConverter.GetBytes((int)Visibility.Unlisted));
+
+        SetupCurrentUser(null);
+
+        // Act
+        var permissions = await _authManager.GetDatasetPermissions(unlistedDataset);
+
+        // Assert
+        permissions.Should().NotBeNull();
+        permissions.CanRead.Should().BeTrue();
+        permissions.CanWrite.Should().BeFalse();
+        permissions.CanDelete.Should().BeFalse();
+    }
+
+    [Test]
+    public async Task GetDatasetPermissions_Owner_PublicDataset_ReturnsFullAccess()
+    {
+        // Arrange
+        SetupCurrentUser(_normalUser);
+
+        // Act
+        var permissions = await _authManager.GetDatasetPermissions(_publicDataset);
+
+        // Assert
+        permissions.Should().NotBeNull();
+        permissions.CanRead.Should().BeTrue();
+        permissions.CanWrite.Should().BeTrue();
+        permissions.CanDelete.Should().BeTrue();
+    }
+
+    [Test]
+    public async Task GetDatasetPermissions_VerifiesAllAccessTypesCalled()
+    {
+        // Arrange
+        SetupCurrentUser(_normalUser);
+
+        // Act
+        var permissions = await _authManager.GetDatasetPermissions(_privateDataset);
+
+        // Assert
+        permissions.Should().NotBeNull();
+
+        // Verify cache was called three times (once for each access type)
+        _cacheManagerMock.Verify(x => x.GetAsync(
+            MagicStrings.DatasetVisibilityCacheSeed,
+            _privateOrg.Slug,
+            It.IsAny<object[]>()),
+            Times.Exactly(3));
+    }
+
+    #endregion
 }
