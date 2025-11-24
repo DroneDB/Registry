@@ -24,6 +24,7 @@ public class DatasetsManager : IDatasetsManager
     private readonly IStacManager _stacManager;
     private readonly IDdbManager _ddbManager;
     private readonly IAuthManager _authManager;
+    private readonly ICacheManager _cacheManager;
 
     public DatasetsManager(
         RegistryContext context,
@@ -32,7 +33,8 @@ public class DatasetsManager : IDatasetsManager
         IObjectsManager objectsManager,
         IStacManager stacManager,
         IDdbManager ddbManager,
-        IAuthManager authManager)
+        IAuthManager authManager,
+        ICacheManager cacheManager)
     {
         _context = context;
         _utils = utils;
@@ -41,6 +43,7 @@ public class DatasetsManager : IDatasetsManager
         _stacManager = stacManager;
         _ddbManager = ddbManager;
         _authManager = authManager;
+        _cacheManager = cacheManager;
     }
 
     public async Task<IEnumerable<DatasetDto>> List(string orgSlug)
@@ -153,6 +156,15 @@ public class DatasetsManager : IDatasetsManager
         {
             meta.Visibility = dataset.Visibility.Value;
 
+            // Invalidate visibility cache
+            await _cacheManager.RemoveAsync(
+                MagicStrings.DatasetVisibilityCacheSeed,
+                orgSlug,
+                orgSlug,
+                ds.InternalRef,
+                _ddbManager
+            );
+
             await _stacManager.ClearCache(ds);
         }
 
@@ -226,11 +238,21 @@ public class DatasetsManager : IDatasetsManager
             throw new UnauthorizedException("The current user is not allowed to change attributes");
 
         var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
-        var res = ddb.ChangeAttributesRaw(new Dictionary<string, object> { { "public", attributes.IsPublic } });
+        var meta = ddb.Meta.GetSafe();
+        meta.IsPublic = attributes.IsPublic;
+
+        // Invalidate visibility cache (changing IsPublic may indirectly modify visibility)
+        await _cacheManager.RemoveAsync(
+            MagicStrings.DatasetVisibilityCacheSeed,
+            orgSlug,
+            orgSlug,
+            ds.InternalRef,
+            _ddbManager
+        );
 
         await _stacManager.ClearCache(ds);
 
-        return res;
+        return new Dictionary<string, object> { { "public", attributes.IsPublic } };
     }
 
     public async Task<StampDto> GetStamp(string orgSlug, string dsSlug)

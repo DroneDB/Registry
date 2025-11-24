@@ -24,7 +24,7 @@ public class BuildPendingServiceTest : TestBase
     private Mock<IDdbManager> _ddbManagerMock;
     private Mock<IBackgroundJobsProcessor> _backgroundJobMock;
     private Mock<ICacheManager> _cacheManager;
-    private Logger<BuildPendingService> _logger;
+    private ILogger<BuildPendingService> _logger;
 
     [SetUp]
     public void Setup()
@@ -32,7 +32,7 @@ public class BuildPendingServiceTest : TestBase
         _ddbManagerMock = new Mock<IDdbManager>();
         _backgroundJobMock = new Mock<IBackgroundJobsProcessor>();
         _cacheManager = new Mock<ICacheManager>();
-        _logger = new Logger<BuildPendingService>(LoggerFactory.Create(builder => builder.AddConsole()));
+        _logger = CreateTestLogger<BuildPendingService>();
     }
 
     [Test]

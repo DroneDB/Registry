@@ -131,6 +131,11 @@ public class AppSettings
     public TimeSpan? TilesCacheExpiration { get; set; }
 
     /// <summary>
+    /// Dataset visibility cache expiration
+    /// </summary>
+    public TimeSpan? DatasetVisibilityCacheExpiration { get; set; }
+
+    /// <summary>
     /// Clear cache interval
     /// </summary>
     public TimeSpan? ClearCacheInterval { get; set; }

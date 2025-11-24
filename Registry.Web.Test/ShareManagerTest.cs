@@ -46,13 +46,13 @@ namespace Registry.Web.Test;
 [TestFixture]
 class ShareManagerTest : TestBase
 {
-    private Logger<ShareManager> _shareManagerLogger;
-    private Logger<ObjectsManager> _objectManagerLogger;
-    private Logger<DdbManager> _ddbFactoryLogger;
-    private Logger<DatasetsManager> _datasetsManagerLogger;
-    private Logger<OrganizationsManager> _organizationsManagerLogger;
-    private Logger<BatchTokenGenerator> _batchTokenGeneratorLogger;
-    private Logger<NameGenerator> _nameGeneratorLogger;
+    private ILogger<ShareManager> _shareManagerLogger;
+    private ILogger<ObjectsManager> _objectManagerLogger;
+    private ILogger<DdbManager> _ddbFactoryLogger;
+    private ILogger<DatasetsManager> _datasetsManagerLogger;
+    private ILogger<OrganizationsManager> _organizationsManagerLogger;
+    private ILogger<BatchTokenGenerator> _batchTokenGeneratorLogger;
+    private ILogger<NameGenerator> _nameGeneratorLogger;
 
     private Mock<IOptions<AppSettings>> _appSettingsMock;
     private Mock<IDdbManager> _ddbFactoryMock;
@@ -62,7 +62,7 @@ class ShareManagerTest : TestBase
     private Mock<IOrganizationsManager> _organizationsManagerMock;
     private Mock<IDatasetsManager> _datasetsManagerMock;
     private Mock<IHttpContextAccessor> _httpContextAccessorMock;
-    private Mock<ICacheManager> _cacheManagerMock;
+    private ICacheManager _cacheManager;
     private Mock<IStacManager> _stacManagerMock;
     private Mock<IThumbnailGenerator> _thumbnailGeneratorMock;
     private Mock<IJobIndexQuery> _jobIndexQueryMock;
@@ -95,20 +95,19 @@ class ShareManagerTest : TestBase
         _datasetsManagerMock = new Mock<IDatasetsManager>();
         _httpContextAccessorMock = new Mock<IHttpContextAccessor>();
         _backgroundJobsProcessor = new SimpleBackgroundJobsProcessor();
-        _cacheManagerMock = new Mock<ICacheManager>();
+        _cacheManager = CreateTestCacheManager();
+        RegisterDatasetVisibilityCacheProvider(_cacheManager);
         _stacManagerMock = new Mock<IStacManager>();
         _thumbnailGeneratorMock = new Mock<IThumbnailGenerator>();
         _jobIndexQueryMock = new Mock<IJobIndexQuery>();
 
-        _shareManagerLogger = new Logger<ShareManager>(LoggerFactory.Create(builder => builder.AddConsole()));
-        _objectManagerLogger = new Logger<ObjectsManager>(LoggerFactory.Create(builder => builder.AddConsole()));
-        _ddbFactoryLogger = new Logger<DdbManager>(LoggerFactory.Create(builder => builder.AddConsole()));
-        _organizationsManagerLogger =
-            new Logger<OrganizationsManager>(LoggerFactory.Create(builder => builder.AddConsole()));
-        _datasetsManagerLogger = new Logger<DatasetsManager>(LoggerFactory.Create(builder => builder.AddConsole()));
-        _batchTokenGeneratorLogger =
-            new Logger<BatchTokenGenerator>(LoggerFactory.Create(builder => builder.AddConsole()));
-        _nameGeneratorLogger = new Logger<NameGenerator>(LoggerFactory.Create(builder => builder.AddConsole()));
+        _shareManagerLogger = CreateTestLogger<ShareManager>();
+        _objectManagerLogger = CreateTestLogger<ObjectsManager>();
+        _ddbFactoryLogger = CreateTestLogger<DdbManager>();
+        _organizationsManagerLogger = CreateTestLogger<OrganizationsManager>();
+        _datasetsManagerLogger = CreateTestLogger<DatasetsManager>();
+        _batchTokenGeneratorLogger = CreateTestLogger<BatchTokenGenerator>();
+        _nameGeneratorLogger = CreateTestLogger<NameGenerator>();
 
     }
 
@@ -191,7 +190,6 @@ class ShareManagerTest : TestBase
         ddbMock.Setup(x => x.Meta).Returns(mockMeta);
 
         var ddbMock2 = new Mock<IDDB>();
-        ddbMock2.Setup(x => x.GetAttributesRaw()).Returns(attributes);
         // ddbMock.Setup(x => x.GetAttributesAsync(default))
         //     .Returns(Task.FromResult(new EntryAttributes(ddbMock2.Object)));
 
@@ -202,11 +200,11 @@ class ShareManagerTest : TestBase
             _httpContextAccessorMock.Object, _ddbFactoryMock.Object);
 
         var objectManager = new ObjectsManager(_objectManagerLogger, context,
-            _appSettingsMock.Object, ddbFactory, webUtils, _authManagerMock.Object, _cacheManagerMock.Object,
+            _appSettingsMock.Object, ddbFactory, webUtils, _authManagerMock.Object, _cacheManager,
             _fileSystem, _backgroundJobsProcessor, DdbWrapper, _thumbnailGeneratorMock.Object, _jobIndexQueryMock.Object);
 
         var datasetManager = new DatasetsManager(context, webUtils, _datasetsManagerLogger, objectManager,
-            _stacManagerMock.Object, _ddbFactoryMock.Object, _authManagerMock.Object);
+            _stacManagerMock.Object, _ddbFactoryMock.Object, _authManagerMock.Object, _cacheManager);
         var organizationsManager = new OrganizationsManager(_authManagerMock.Object, context, webUtils,
             datasetManager, appContext, _organizationsManagerLogger);
 
@@ -298,7 +296,6 @@ class ShareManagerTest : TestBase
         ddbMock.Setup(x => x.Meta).Returns(mockMeta);
 
         var ddbMock2 = new Mock<IDDB>();
-        ddbMock2.Setup(x => x.GetAttributesRaw()).Returns(attributes);
         // ddbMock.Setup(x => x.GetAttributesAsync(default))
         //     .Returns(Task.FromResult(new EntryAttributes(ddbMock2.Object)));
 
@@ -309,11 +306,11 @@ class ShareManagerTest : TestBase
             _httpContextAccessorMock.Object, _ddbFactoryMock.Object);
 
         var objectManager = new ObjectsManager(_objectManagerLogger, context,
-            _appSettingsMock.Object, ddbFactory, webUtils, _authManagerMock.Object, _cacheManagerMock.Object,
+            _appSettingsMock.Object, ddbFactory, webUtils, _authManagerMock.Object, _cacheManager,
             _fileSystem, _backgroundJobsProcessor, DdbWrapper, _thumbnailGeneratorMock.Object, _jobIndexQueryMock.Object);
 
         var datasetManager = new DatasetsManager(context, webUtils, _datasetsManagerLogger, objectManager,
-            _stacManagerMock.Object, _ddbFactoryMock.Object, _authManagerMock.Object);
+            _stacManagerMock.Object, _ddbFactoryMock.Object, _authManagerMock.Object, _cacheManager);
         var organizationsManager = new OrganizationsManager(_authManagerMock.Object, context, webUtils,
             datasetManager, appContext, _organizationsManagerLogger);
 
@@ -415,7 +412,6 @@ class ShareManagerTest : TestBase
         ddbMock.Setup(x => x.Meta).Returns(mockMeta);
 
         var ddbMock2 = new Mock<IDDB>();
-        ddbMock2.Setup(x => x.GetAttributesRaw()).Returns(attributes);
         // ddbMock.Setup(x => x.GetAttributesAsync(default))
         //     .Returns(Task.FromResult(new EntryAttributes(ddbMock2.Object)));
 
@@ -426,11 +422,11 @@ class ShareManagerTest : TestBase
             _httpContextAccessorMock.Object, _ddbFactoryMock.Object);
 
         var objectManager = new ObjectsManager(_objectManagerLogger, context,
-            _appSettingsMock.Object, ddbFactory, webUtils, _authManagerMock.Object, _cacheManagerMock.Object,
+            _appSettingsMock.Object, ddbFactory, webUtils, _authManagerMock.Object, _cacheManager,
             _fileSystem, _backgroundJobsProcessor, DdbWrapper, _thumbnailGeneratorMock.Object, _jobIndexQueryMock.Object);
 
         var datasetManager = new DatasetsManager(context, webUtils, _datasetsManagerLogger, objectManager,
-            _stacManagerMock.Object, _ddbFactoryMock.Object, _authManagerMock.Object);
+            _stacManagerMock.Object, _ddbFactoryMock.Object, _authManagerMock.Object, _cacheManager);
         var organizationsManager = new OrganizationsManager(_authManagerMock.Object, context, webUtils,
             datasetManager, appContext, _organizationsManagerLogger);
 
@@ -559,7 +555,6 @@ class ShareManagerTest : TestBase
         ddbMock.Setup(x => x.Meta).Returns(mockMeta);
 
         var ddbMock2 = new Mock<IDDB>();
-        ddbMock2.Setup(x => x.GetAttributesRaw()).Returns(attributes);
         // ddbMock.Setup(x => x.GetAttributesAsync(default))
         //     .Returns(Task.FromResult(new EntryAttributes(ddbMock2.Object)));
 
@@ -570,11 +565,11 @@ class ShareManagerTest : TestBase
             _httpContextAccessorMock.Object, _ddbFactoryMock.Object);
 
         var objectManager = new ObjectsManager(_objectManagerLogger, context,
-            _appSettingsMock.Object, ddbFactory, webUtils, _authManagerMock.Object, _cacheManagerMock.Object,
+            _appSettingsMock.Object, ddbFactory, webUtils, _authManagerMock.Object, _cacheManager,
             _fileSystem, _backgroundJobsProcessor, DdbWrapper, _thumbnailGeneratorMock.Object, _jobIndexQueryMock.Object);
 
         var datasetManager = new DatasetsManager(context, webUtils, _datasetsManagerLogger, objectManager,
-            _stacManagerMock.Object, _ddbFactoryMock.Object, _authManagerMock.Object);
+            _stacManagerMock.Object, _ddbFactoryMock.Object, _authManagerMock.Object, _cacheManager);
         var organizationsManager = new OrganizationsManager(_authManagerMock.Object, context, webUtils,
             datasetManager, appContext, _organizationsManagerLogger);
 
@@ -712,7 +707,6 @@ class ShareManagerTest : TestBase
         ddbMock.Setup(x => x.Meta).Returns(mockMeta);
 
         var ddbMock2 = new Mock<IDDB>();
-        ddbMock2.Setup(x => x.GetAttributesRaw()).Returns(attributes);
         // ddbMock.Setup(x => x.GetAttributesAsync(default))
         //     .Returns(Task.FromResult(new EntryAttributes(ddbMock2.Object)));
 
@@ -723,11 +717,11 @@ class ShareManagerTest : TestBase
             _httpContextAccessorMock.Object, _ddbFactoryMock.Object);
 
         var objectManager = new ObjectsManager(_objectManagerLogger, context,
-            _appSettingsMock.Object, ddbFactory, webUtils, _authManagerMock.Object, _cacheManagerMock.Object,
+            _appSettingsMock.Object, ddbFactory, webUtils, _authManagerMock.Object, _cacheManager,
             _fileSystem, _backgroundJobsProcessor, DdbWrapper, _thumbnailGeneratorMock.Object, _jobIndexQueryMock.Object);
 
         var datasetManager = new DatasetsManager(context, webUtils, _datasetsManagerLogger, objectManager,
-            _stacManagerMock.Object, _ddbFactoryMock.Object, _authManagerMock.Object);
+            _stacManagerMock.Object, _ddbFactoryMock.Object, _authManagerMock.Object, _cacheManager);
         var organizationsManager = new OrganizationsManager(_authManagerMock.Object, context, webUtils,
             datasetManager, appContext, _organizationsManagerLogger);
 

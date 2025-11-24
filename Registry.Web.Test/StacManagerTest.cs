@@ -30,7 +30,7 @@ public class StacManagerTest : TestBase
     private Mock<IAuthManager> _authManagerMock;
     private Mock<IOptions<AppSettings>> _appSettingsMock;
     private Mock<IDatasetsManager> _datasetManagerMock;
-    private Logger<StacManager> _stacManagerLogger;
+    private ILogger<StacManager> _stacManagerLogger;
     private Mock<IHttpContextAccessor> _httpContextAccessorMock;
     private Mock<IDdbManager> _ddbManagerMock;
 
@@ -43,8 +43,7 @@ public class StacManagerTest : TestBase
         _httpContextAccessorMock = new Mock<IHttpContextAccessor>();
         _ddbManagerMock = new Mock<IDdbManager>();
 
-        _stacManagerLogger =
-            new Logger<StacManager>(LoggerFactory.Create(builder => builder.AddConsole()));
+        _stacManagerLogger = CreateTestLogger<StacManager>();
     }
 
     [Test]

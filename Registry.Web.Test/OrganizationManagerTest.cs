@@ -49,7 +49,7 @@ public class OrganizationManagerTest : TestBase
         _datasetManagerMock = new Mock<IDatasetsManager>();
         _httpContextAccessorMock = new Mock<IHttpContextAccessor>();
         _ddbManagerMock = new Mock<IDdbManager>();
-        _logger = new Logger<OrganizationsManager>(LoggerFactory.Create(builder => builder.AddConsole()));
+        _logger = CreateTestLogger<OrganizationsManager>();
 
         // Set up contexts
         _context = await CreateTestRegistryContext();

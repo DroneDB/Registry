@@ -11,6 +11,7 @@ using Registry.Web.Data;
 using Registry.Web.Exceptions;
 using Registry.Web.Models.Configuration;
 using Registry.Web.Models.DTO;
+using Registry.Web.Services.Adapters;
 using Registry.Web.Services.Ports;
 using Registry.Web.Utilities;
 
@@ -22,14 +23,16 @@ public class MetaManager : IMetaManager
     private readonly IDdbManager _ddbManager;
     private readonly IAuthManager _authManager;
     private readonly IUtils _utils;
+    private readonly ICacheManager _cacheManager;
 
     public MetaManager(ILogger<MetaManager> logger,
-        IDdbManager ddbManager, IAuthManager authManager,IUtils utils)
+        IDdbManager ddbManager, IAuthManager authManager, IUtils utils, ICacheManager cacheManager)
     {
         _logger = logger;
         _ddbManager = ddbManager;
         _utils = utils;
         _authManager = authManager;
+        _cacheManager = cacheManager;
     }
 
     public async Task<MetaDto> Add(string orgSlug, string dsSlug, string key, string data, string path = null)
@@ -75,7 +78,23 @@ public class MetaManager : IMetaManager
         if (path != null && !ddb.EntryExists(path))
             throw new ArgumentException($"Path '{path}' does not exist");
 
-        return ddb.Meta.Set(key, data, path).ToDto();
+        var result = ddb.Meta.Set(key, data, path).ToDto();
+
+        // Invalidate visibility cache if changed
+        if (key == SafeMetaManager.VisibilityField)
+        {
+            await _cacheManager.RemoveAsync(
+                MagicStrings.DatasetVisibilityCacheSeed,
+                orgSlug,
+                orgSlug,
+                ds.InternalRef,
+                _ddbManager
+            );
+
+            _logger.LogDebug("Invalidated visibility cache for {OrgSlug}/{DsSlug}", orgSlug, dsSlug);
+        }
+
+        return result;
     }
 
     public async Task<int> Remove(string orgSlug, string dsSlug, string id)
@@ -133,7 +152,23 @@ public class MetaManager : IMetaManager
         if (path != null && !ddb.EntryExists(path))
             throw new ArgumentException($"Path '{path}' does not exist");
 
-        return ddb.Meta.Unset(key, path);
+        var result = ddb.Meta.Unset(key, path);
+
+        // Invalidate visibility cache if unset
+        if (key == SafeMetaManager.VisibilityField)
+        {
+            await _cacheManager.RemoveAsync(
+                MagicStrings.DatasetVisibilityCacheSeed,
+                orgSlug,
+                orgSlug,
+                ds.InternalRef,
+                _ddbManager
+            );
+
+            _logger.LogDebug("Invalidated visibility cache for {OrgSlug}/{DsSlug} (unset)", orgSlug, dsSlug);
+        }
+
+        return result;
 
     }
 

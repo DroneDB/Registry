@@ -11,6 +11,7 @@ using Moq;
 using NUnit.Framework;
 using Registry.Ports;
 using Registry.Ports.DroneDB;
+using Registry.Test.Common;
 using Registry.Web.Data;
 using Registry.Web.Data.Models;
 using Registry.Web.Identity;
@@ -22,13 +23,14 @@ using Entry = Registry.Ports.DroneDB.Entry;
 namespace Registry.Web.Test;
 
 [TestFixture]
-public class AuthManagerTests
+public class AuthManagerTests : TestBase
 {
     private Mock<IHttpContextAccessor> _httpContextAccessorMock;
     private Mock<IDdbManager> _ddbManagerMock;
     private Mock<UserManager<User>> _userManagerMock;
     private Mock<ILogger<AuthManager>> _loggerMock;
     private Mock<RegistryContext> _context;
+    private Mock<ICacheManager> _cacheManagerMock;
 
     private AuthManager _authManager;
     private User _normalUser;
@@ -39,6 +41,8 @@ public class AuthManagerTests
     private Organization _privateOrg;
     private Dataset _publicDataset;
     private Dataset _privateDataset;
+    private Mock<IDDB> _publicDdbMock;
+    private Mock<IDDB> _privateDdbMock;
 
     #region Setup
 
@@ -91,20 +95,11 @@ public class AuthManagerTests
         _userManagerMock = MockUserManager();
         _loggerMock = new Mock<ILogger<AuthManager>>();
         _context = new Mock<RegistryContext>();
+        _cacheManagerMock = new Mock<ICacheManager>();
 
-        // Setup AuthManager
-        _authManager = new AuthManager(
-            _userManagerMock.Object,
-            _httpContextAccessorMock.Object,
-            _ddbManagerMock.Object,
-            _context.Object,
-            _loggerMock.Object
-        );
-
-        // Setup DDB mock for dataset metadata
-        var ddbMock = new Mock<IDDB>();
-
-        ddbMock.Setup(x => x.GetInfo(null)).Returns(new Entry
+        // Setup DDB mocks for dataset metadata
+        _publicDdbMock = new Mock<IDDB>();
+        _publicDdbMock.Setup(x => x.GetInfo(null)).Returns(new Entry
             {
                 Properties = new Dictionary<string, object>
                 {
@@ -116,18 +111,13 @@ public class AuthManagerTests
             }
         );
 
-        var metaManagerMock = new Mock<IMetaManager>();
-        metaManagerMock.Setup(x => x.Get<int>(SafeMetaManager.VisibilityField, null))
+        var publicMetaManagerMock = new Mock<IMetaManager>();
+        publicMetaManagerMock.Setup(x => x.Get<int>(SafeMetaManager.VisibilityField, null))
             .Returns((int)Visibility.Public);
+        _publicDdbMock.Setup(x => x.Meta).Returns(publicMetaManagerMock.Object);
 
-        ddbMock.Setup(x => x.Meta).Returns(metaManagerMock.Object);
-
-        _ddbManagerMock.Setup(x => x.Get(_publicOrg.Slug, _publicDataset.InternalRef))
-            .Returns(ddbMock.Object);
-
-        var privateDdbMock = new Mock<IDDB>();
-
-        privateDdbMock.Setup(x => x.GetInfo(null)).Returns(new Entry
+        _privateDdbMock = new Mock<IDDB>();
+        _privateDdbMock.Setup(x => x.GetInfo(null)).Returns(new Entry
             {
                 Properties = new Dictionary<string, object>
                 {
@@ -142,11 +132,44 @@ public class AuthManagerTests
         var privateMetaManagerMock = new Mock<IMetaManager>();
         privateMetaManagerMock.Setup(x => x.Get<int>(SafeMetaManager.VisibilityField, null))
             .Returns((int)Visibility.Private);
+        _privateDdbMock.Setup(x => x.Meta).Returns(privateMetaManagerMock.Object);
 
-        privateDdbMock.Setup(x => x.Meta).Returns(privateMetaManagerMock.Object);
-
+        // Setup DdbManager to return appropriate IDDB instances
+        _ddbManagerMock.Setup(x => x.Get(_publicOrg.Slug, _publicDataset.InternalRef))
+            .Returns(_publicDdbMock.Object);
         _ddbManagerMock.Setup(x => x.Get(_privateOrg.Slug, _privateDataset.InternalRef))
-            .Returns(privateDdbMock.Object);
+            .Returns(_privateDdbMock.Object);
+
+        // Setup cache manager to return visibility from DDB
+        _cacheManagerMock.Setup(x => x.GetAsync(
+                MagicStrings.DatasetVisibilityCacheSeed,
+                _publicOrg.Slug,
+                It.Is<object[]>(args =>
+                    args.Length == 3 &&
+                    args[0].Equals(_publicOrg.Slug) &&
+                    args[1].Equals(_publicDataset.InternalRef) &&
+                    args[2] == _ddbManagerMock.Object)))
+            .ReturnsAsync(BitConverter.GetBytes((int)Visibility.Public));
+
+        _cacheManagerMock.Setup(x => x.GetAsync(
+                MagicStrings.DatasetVisibilityCacheSeed,
+                _privateOrg.Slug,
+                It.Is<object[]>(args =>
+                    args.Length == 3 &&
+                    args[0].Equals(_privateOrg.Slug) &&
+                    args[1].Equals(_privateDataset.InternalRef) &&
+                    args[2] == _ddbManagerMock.Object)))
+            .ReturnsAsync(BitConverter.GetBytes((int)Visibility.Private));
+
+        // Setup AuthManager
+        _authManager = new AuthManager(
+            _userManagerMock.Object,
+            _httpContextAccessorMock.Object,
+            _ddbManagerMock.Object,
+            _context.Object,
+            _loggerMock.Object,
+            _cacheManagerMock.Object
+        );
     }
 
     private Mock<UserManager<User>> MockUserManager()
@@ -185,6 +208,498 @@ public class AuthManagerTests
         {
             _httpContextAccessorMock.Setup(x => x.HttpContext).Returns((HttpContext)null);
         }
+    }
+
+    #endregion
+
+    #region Cache Interaction Tests
+
+    [Test]
+    public async Task RequestAccess_PublicDataset_VerifiesCacheInteraction()
+    {
+        // Arrange
+        SetupCurrentUser(null);
+
+        // Act
+        var result = await _authManager.RequestAccess(_publicDataset, AccessType.Read);
+
+        // Assert
+        result.Should().BeTrue();
+
+        // Verify cache was called with correct parameters
+        _cacheManagerMock.Verify(x => x.GetAsync(
+            MagicStrings.DatasetVisibilityCacheSeed,
+            _publicOrg.Slug,
+            It.Is<object[]>(args =>
+                args.Length == 3 &&
+                args[0].Equals(_publicOrg.Slug) &&
+                args[1].Equals(_publicDataset.InternalRef) &&
+                args[2] == _ddbManagerMock.Object)),
+            Times.Once);
+    }
+
+    [Test]
+    public async Task RequestAccess_PrivateDataset_VerifiesCacheInteraction()
+    {
+        // Arrange
+        SetupCurrentUser(null);
+
+        // Act
+        var result = await _authManager.RequestAccess(_privateDataset, AccessType.Read);
+
+        // Assert
+        result.Should().BeFalse();
+
+        // Verify cache was called with correct parameters
+        _cacheManagerMock.Verify(x => x.GetAsync(
+            MagicStrings.DatasetVisibilityCacheSeed,
+            _privateOrg.Slug,
+            It.Is<object[]>(args =>
+                args.Length == 3 &&
+                args[0].Equals(_privateOrg.Slug) &&
+                args[1].Equals(_privateDataset.InternalRef) &&
+                args[2] == _ddbManagerMock.Object)),
+            Times.Once);
+    }
+
+    [Test]
+    public async Task RequestAccess_Dataset_Owner_VerifiesUserManagerCalls()
+    {
+        // Arrange
+        SetupCurrentUser(_normalUser);
+
+        // Act
+        var result = await _authManager.RequestAccess(_privateDataset, AccessType.Write);
+
+        // Assert
+        result.Should().BeTrue();
+
+        // Verify UserManager interactions
+        _userManagerMock.Verify(x => x.FindByIdAsync(_normalUser.Id), Times.AtLeastOnce);
+        _userManagerMock.Verify(x => x.IsInRoleAsync(_normalUser, ApplicationDbContext.AdminRoleName), Times.Once);
+        _userManagerMock.Verify(x => x.IsInRoleAsync(_normalUser, ApplicationDbContext.DeactivatedRoleName), Times.Once);
+    }
+
+    [Test]
+    public async Task RequestAccess_Dataset_Admin_VerifiesAdminCheck()
+    {
+        // Arrange
+        SetupCurrentUser(_adminUser);
+
+        // Act
+        var result = await _authManager.RequestAccess(_privateDataset, AccessType.Delete);
+
+        // Assert
+        result.Should().BeTrue();
+
+        // Verify admin check was performed
+        _userManagerMock.Verify(x => x.IsInRoleAsync(_adminUser, ApplicationDbContext.AdminRoleName), Times.Once);
+        // Should not check deactivated since admin has full access
+        _userManagerMock.Verify(x => x.IsInRoleAsync(_adminUser, ApplicationDbContext.DeactivatedRoleName), Times.Once);
+    }
+
+    [Test]
+    public async Task RequestAccess_Dataset_DeactivatedUser_VerifiesDeactivatedCheck()
+    {
+        // Arrange
+        SetupCurrentUser(_deactivatedUser);
+
+        // Act
+        var result = await _authManager.RequestAccess(_privateDataset, AccessType.Read);
+
+        // Assert
+        result.Should().BeFalse();
+
+        // Verify deactivated check was performed early
+        _userManagerMock.Verify(x => x.IsInRoleAsync(_deactivatedUser, ApplicationDbContext.DeactivatedRoleName), Times.Once);
+    }
+
+    [Test]
+    public async Task RequestAccess_Dataset_VerifiesDdbManagerNotCalledDirectly()
+    {
+        // Arrange
+        SetupCurrentUser(_normalUser);
+
+        // Act
+        var result = await _authManager.RequestAccess(_publicDataset, AccessType.Read);
+
+        // Assert
+        result.Should().BeTrue();
+
+        // DdbManager.Get should not be called directly in the test flow
+        // It should only be called through cache provider
+        _ddbManagerMock.Verify(x => x.Get(_publicOrg.Slug, _publicDataset.InternalRef), Times.Never);
+    }
+
+    [Test]
+    public async Task RequestAccess_Dataset_InvalidCacheData_HandlesGracefully()
+    {
+        // Arrange
+        var invalidDataset = new Dataset
+        {
+            Id = 99,
+            Slug = "invalid-dataset",
+            Organization = _publicOrg,
+            InternalRef = Guid.NewGuid()
+        };
+
+        // Setup cache to return invalid data (less than 4 bytes)
+        _cacheManagerMock.Setup(x => x.GetAsync(
+                MagicStrings.DatasetVisibilityCacheSeed,
+                _publicOrg.Slug,
+                It.Is<object[]>(args =>
+                    args.Length == 3 &&
+                    args[0].Equals(_publicOrg.Slug) &&
+                    args[1].Equals(invalidDataset.InternalRef))))
+            .ReturnsAsync(new byte[2]); // Invalid: less than sizeof(int)
+
+        SetupCurrentUser(null);
+
+        // Act
+        var result = await _authManager.RequestAccess(invalidDataset, AccessType.Read);
+
+        // Assert
+        // Should default to Private visibility and deny access
+        result.Should().BeFalse();
+    }
+
+    [Test]
+    public async Task RequestAccess_UnlistedDataset_AnonymousUser_ReadAccess_Allowed()
+    {
+        // Arrange
+        var unlistedDataset = new Dataset
+        {
+            Id = 3,
+            Slug = "unlisted-dataset",
+            Organization = _publicOrg,
+            InternalRef = Guid.NewGuid()
+        };
+
+        // Setup cache to return Unlisted visibility
+        _cacheManagerMock.Setup(x => x.GetAsync(
+                MagicStrings.DatasetVisibilityCacheSeed,
+                _publicOrg.Slug,
+                It.Is<object[]>(args =>
+                    args.Length == 3 &&
+                    args[0].Equals(_publicOrg.Slug) &&
+                    args[1].Equals(unlistedDataset.InternalRef))))
+            .ReturnsAsync(BitConverter.GetBytes((int)Visibility.Unlisted));
+
+        SetupCurrentUser(null);
+
+        // Act
+        var result = await _authManager.RequestAccess(unlistedDataset, AccessType.Read);
+
+        // Assert
+        result.Should().BeTrue();
+    }
+
+    #endregion
+
+    #region Unlisted Dataset Tests
+
+    [Test]
+    public async Task RequestAccess_UnlistedDataset_AnonymousUser_WriteAccess_Denied()
+    {
+        // Arrange
+        var unlistedDataset = new Dataset
+        {
+            Id = 3,
+            Slug = "unlisted-dataset",
+            Organization = _publicOrg,
+            InternalRef = Guid.NewGuid()
+        };
+
+        _cacheManagerMock.Setup(x => x.GetAsync(
+                MagicStrings.DatasetVisibilityCacheSeed,
+                _publicOrg.Slug,
+                It.Is<object[]>(args =>
+                    args.Length == 3 &&
+                    args[0].Equals(_publicOrg.Slug) &&
+                    args[1].Equals(unlistedDataset.InternalRef))))
+            .ReturnsAsync(BitConverter.GetBytes((int)Visibility.Unlisted));
+
+        SetupCurrentUser(null);
+
+        // Act
+        var result = await _authManager.RequestAccess(unlistedDataset, AccessType.Write);
+
+        // Assert
+        result.Should().BeFalse();
+    }
+
+    [Test]
+    public async Task RequestAccess_UnlistedDataset_AnonymousUser_DeleteAccess_Denied()
+    {
+        // Arrange
+        var unlistedDataset = new Dataset
+        {
+            Id = 3,
+            Slug = "unlisted-dataset",
+            Organization = _publicOrg,
+            InternalRef = Guid.NewGuid()
+        };
+
+        _cacheManagerMock.Setup(x => x.GetAsync(
+                MagicStrings.DatasetVisibilityCacheSeed,
+                _publicOrg.Slug,
+                It.Is<object[]>(args =>
+                    args.Length == 3 &&
+                    args[0].Equals(_publicOrg.Slug) &&
+                    args[1].Equals(unlistedDataset.InternalRef))))
+            .ReturnsAsync(BitConverter.GetBytes((int)Visibility.Unlisted));
+
+        SetupCurrentUser(null);
+
+        // Act
+        var result = await _authManager.RequestAccess(unlistedDataset, AccessType.Delete);
+
+        // Assert
+        result.Should().BeFalse();
+    }
+
+    [Test]
+    public async Task RequestAccess_UnlistedDataset_Owner_AllAccess_Allowed()
+    {
+        // Arrange
+        var unlistedDataset = new Dataset
+        {
+            Id = 3,
+            Slug = "unlisted-dataset",
+            Organization = _publicOrg,
+            InternalRef = Guid.NewGuid()
+        };
+
+        _cacheManagerMock.Setup(x => x.GetAsync(
+                MagicStrings.DatasetVisibilityCacheSeed,
+                _publicOrg.Slug,
+                It.Is<object[]>(args =>
+                    args.Length == 3 &&
+                    args[0].Equals(_publicOrg.Slug) &&
+                    args[1].Equals(unlistedDataset.InternalRef))))
+            .ReturnsAsync(BitConverter.GetBytes((int)Visibility.Unlisted));
+
+        SetupCurrentUser(_normalUser);
+
+        // Act
+        var readResult = await _authManager.RequestAccess(unlistedDataset, AccessType.Read);
+        var writeResult = await _authManager.RequestAccess(unlistedDataset, AccessType.Write);
+        var deleteResult = await _authManager.RequestAccess(unlistedDataset, AccessType.Delete);
+
+        // Assert
+        readResult.Should().BeTrue();
+        writeResult.Should().BeTrue();
+        deleteResult.Should().BeTrue();
+    }
+
+    [Test]
+    public async Task RequestAccess_UnlistedDataset_Admin_AllAccess_Allowed()
+    {
+        // Arrange
+        var unlistedDataset = new Dataset
+        {
+            Id = 3,
+            Slug = "unlisted-dataset",
+            Organization = _publicOrg,
+            InternalRef = Guid.NewGuid()
+        };
+
+        _cacheManagerMock.Setup(x => x.GetAsync(
+                MagicStrings.DatasetVisibilityCacheSeed,
+                _publicOrg.Slug,
+                It.Is<object[]>(args =>
+                    args.Length == 3 &&
+                    args[0].Equals(_publicOrg.Slug) &&
+                    args[1].Equals(unlistedDataset.InternalRef))))
+            .ReturnsAsync(BitConverter.GetBytes((int)Visibility.Unlisted));
+
+        SetupCurrentUser(_adminUser);
+
+        // Act
+        var readResult = await _authManager.RequestAccess(unlistedDataset, AccessType.Read);
+        var writeResult = await _authManager.RequestAccess(unlistedDataset, AccessType.Write);
+        var deleteResult = await _authManager.RequestAccess(unlistedDataset, AccessType.Delete);
+
+        // Assert
+        readResult.Should().BeTrue();
+        writeResult.Should().BeTrue();
+        deleteResult.Should().BeTrue();
+    }
+
+    [Test]
+    public async Task RequestAccess_UnlistedDataset_RandomUser_ReadAccess_Allowed()
+    {
+        // Arrange
+        var unlistedDataset = new Dataset
+        {
+            Id = 3,
+            Slug = "unlisted-dataset",
+            Organization = _publicOrg,
+            InternalRef = Guid.NewGuid()
+        };
+
+        _cacheManagerMock.Setup(x => x.GetAsync(
+                MagicStrings.DatasetVisibilityCacheSeed,
+                _publicOrg.Slug,
+                It.Is<object[]>(args =>
+                    args.Length == 3 &&
+                    args[0].Equals(_publicOrg.Slug) &&
+                    args[1].Equals(unlistedDataset.InternalRef))))
+            .ReturnsAsync(BitConverter.GetBytes((int)Visibility.Unlisted));
+
+        SetupCurrentUser(_randomUser);
+
+        // Act
+        var result = await _authManager.RequestAccess(unlistedDataset, AccessType.Read);
+
+        // Assert - Random user can read unlisted datasets (like public)
+        result.Should().BeTrue();
+    }
+
+    [Test]
+    public async Task RequestAccess_UnlistedDataset_RandomUser_WriteAccess_Denied()
+    {
+        // Arrange
+        var unlistedDataset = new Dataset
+        {
+            Id = 3,
+            Slug = "unlisted-dataset",
+            Organization = _publicOrg,
+            InternalRef = Guid.NewGuid()
+        };
+
+        _cacheManagerMock.Setup(x => x.GetAsync(
+                MagicStrings.DatasetVisibilityCacheSeed,
+                _publicOrg.Slug,
+                It.Is<object[]>(args =>
+                    args.Length == 3 &&
+                    args[0].Equals(_publicOrg.Slug) &&
+                    args[1].Equals(unlistedDataset.InternalRef))))
+            .ReturnsAsync(BitConverter.GetBytes((int)Visibility.Unlisted));
+
+        SetupCurrentUser(_randomUser);
+
+        // Act
+        var result = await _authManager.RequestAccess(unlistedDataset, AccessType.Write);
+
+        // Assert - Random user cannot write to unlisted datasets
+        result.Should().BeFalse();
+    }
+
+    [Test]
+    public async Task RequestAccess_UnlistedDataset_DeactivatedUser_AllAccess_Denied()
+    {
+        // Arrange
+        var unlistedDataset = new Dataset
+        {
+            Id = 3,
+            Slug = "unlisted-dataset",
+            Organization = _publicOrg,
+            InternalRef = Guid.NewGuid()
+        };
+
+        _cacheManagerMock.Setup(x => x.GetAsync(
+                MagicStrings.DatasetVisibilityCacheSeed,
+                _publicOrg.Slug,
+                It.Is<object[]>(args =>
+                    args.Length == 3 &&
+                    args[0].Equals(_publicOrg.Slug) &&
+                    args[1].Equals(unlistedDataset.InternalRef))))
+            .ReturnsAsync(BitConverter.GetBytes((int)Visibility.Unlisted));
+
+        SetupCurrentUser(_deactivatedUser);
+
+        // Act
+        var readResult = await _authManager.RequestAccess(unlistedDataset, AccessType.Read);
+        var writeResult = await _authManager.RequestAccess(unlistedDataset, AccessType.Write);
+        var deleteResult = await _authManager.RequestAccess(unlistedDataset, AccessType.Delete);
+
+        // Assert
+        readResult.Should().BeFalse();
+        writeResult.Should().BeFalse();
+        deleteResult.Should().BeFalse();
+    }
+
+    [Test]
+    public async Task RequestAccess_UnlistedDataset_OrganizationMember_ReadWriteAllowed_DeleteDenied()
+    {
+        // Arrange
+        var unlistedDataset = new Dataset
+        {
+            Id = 3,
+            Slug = "unlisted-dataset",
+            Organization = _privateOrg, // Use private org to test member access
+            InternalRef = Guid.NewGuid()
+        };
+
+        var orgMember = new User { Id = "member1", UserName = "member" };
+        _privateOrg.Users.Add(new OrganizationUser { UserId = orgMember.Id });
+
+        _cacheManagerMock.Setup(x => x.GetAsync(
+                MagicStrings.DatasetVisibilityCacheSeed,
+                _privateOrg.Slug,
+                It.Is<object[]>(args =>
+                    args.Length == 3 &&
+                    args[0].Equals(_privateOrg.Slug) &&
+                    args[1].Equals(unlistedDataset.InternalRef))))
+            .ReturnsAsync(BitConverter.GetBytes((int)Visibility.Unlisted));
+
+        SetupCurrentUser(orgMember);
+
+        _userManagerMock.Setup(x => x.FindByIdAsync(orgMember.Id))
+            .ReturnsAsync(orgMember);
+
+        // Act
+        var readResult = await _authManager.RequestAccess(unlistedDataset, AccessType.Read);
+        var writeResult = await _authManager.RequestAccess(unlistedDataset, AccessType.Write);
+        var deleteResult = await _authManager.RequestAccess(unlistedDataset, AccessType.Delete);
+
+        // Assert
+        readResult.Should().BeTrue();
+        writeResult.Should().BeTrue();
+        deleteResult.Should().BeFalse();
+    }
+
+    [Test]
+    public async Task RequestAccess_UnlistedDataset_DeactivatedOwner_AnonymousUser_ReadAccess_Denied()
+    {
+        // Arrange
+        var unlistedOrg = new Organization
+        {
+            Slug = "unlisted-org",
+            IsPublic = true,
+            OwnerId = _deactivatedUser.Id,
+            Users = new List<OrganizationUser>()
+        };
+
+        var unlistedDataset = new Dataset
+        {
+            Id = 3,
+            Slug = "unlisted-dataset",
+            Organization = unlistedOrg,
+            InternalRef = Guid.NewGuid()
+        };
+
+        _cacheManagerMock.Setup(x => x.GetAsync(
+                MagicStrings.DatasetVisibilityCacheSeed,
+                unlistedOrg.Slug,
+                It.Is<object[]>(args =>
+                    args.Length == 3 &&
+                    args[0].Equals(unlistedOrg.Slug) &&
+                    args[1].Equals(unlistedDataset.InternalRef))))
+            .ReturnsAsync(BitConverter.GetBytes((int)Visibility.Unlisted));
+
+        SetupCurrentUser(null);
+
+        // Act
+        var result = await _authManager.RequestAccess(unlistedDataset, AccessType.Read);
+
+        // Assert - Should be denied because owner is deactivated
+        result.Should().BeFalse();
+
+        // Verify owner was checked
+        _userManagerMock.Verify(x => x.FindByIdAsync(_deactivatedUser.Id), Times.Once);
+        _userManagerMock.Verify(x => x.IsInRoleAsync(_deactivatedUser, ApplicationDbContext.DeactivatedRoleName), Times.Once);
     }
 
     #endregion
@@ -268,6 +783,7 @@ public class AuthManagerTests
         deleteResult.Should().BeFalse();
     }
 
+    [Test]
     public async Task CanListOrganizations_AnonymousUser_Denied()
     {
         // Arrange
@@ -280,6 +796,7 @@ public class AuthManagerTests
         result.Should().BeFalse();
     }
 
+    [Test]
     public async Task CanListOrganizations_DeactivatedUser_Denied()
     {
         // Arrange
@@ -292,6 +809,7 @@ public class AuthManagerTests
         result.Should().BeFalse();
     }
 
+    [Test]
     public async Task CanListOrganizations_NormalUser_Allowed()
     {
         // Arrange
@@ -485,6 +1003,8 @@ public class AuthManagerTests
 
     #endregion
 
+    #region Additional Dataset Access Tests
+
     [Test]
     public async Task RequestAccess_PublicDataset_DeactivatedOwner_AnonymousUser_ReadAccess_Denied()
     {
@@ -497,6 +1017,10 @@ public class AuthManagerTests
 
         // Assert
         result.Should().BeFalse();
+
+        // Verify owner was checked for deactivation
+        _userManagerMock.Verify(x => x.FindByIdAsync(_deactivatedUser.Id), Times.Once);
+        _userManagerMock.Verify(x => x.IsInRoleAsync(_deactivatedUser, ApplicationDbContext.DeactivatedRoleName), Times.Once);
     }
 
     [Test]
@@ -510,6 +1034,10 @@ public class AuthManagerTests
 
         // Assert
         result.Should().BeFalse();
+
+        // Verify user checks were performed
+        _userManagerMock.Verify(x => x.IsInRoleAsync(_randomUser, ApplicationDbContext.DeactivatedRoleName), Times.Once);
+        _userManagerMock.Verify(x => x.IsInRoleAsync(_randomUser, ApplicationDbContext.AdminRoleName), Times.Once);
     }
 
     [Test]
@@ -558,6 +1086,10 @@ public class AuthManagerTests
 
         // Assert
         readResult.Should().BeTrue();
+
+        // Verify member checks
+        _userManagerMock.Verify(x => x.FindByIdAsync(orgMember.Id), Times.AtLeastOnce);
+        _userManagerMock.Verify(x => x.IsInRoleAsync(orgMember, ApplicationDbContext.DeactivatedRoleName), Times.AtLeastOnce);
     }
 
     [Test]
@@ -576,5 +1108,35 @@ public class AuthManagerTests
 
         // Assert
         deleteResult.Should().BeFalse();
+
+        // Verify that checks were still performed
+        _userManagerMock.Verify(x => x.IsInRoleAsync(orgMember, ApplicationDbContext.AdminRoleName), Times.Once);
     }
+
+    [Test]
+    public async Task RequestAccess_Dataset_VerifiesCallHierarchy()
+    {
+        // Arrange
+        SetupCurrentUser(_normalUser);
+
+        // Act - Make multiple access checks to verify proper call flow
+        await _authManager.RequestAccess(_publicDataset, AccessType.Read);
+        await _authManager.RequestAccess(_privateDataset, AccessType.Write);
+
+        // Assert - Verify the entire call stack
+        // 1. GetCurrentUser should be called
+        _httpContextAccessorMock.Verify(x => x.HttpContext, Times.AtLeast(2));
+
+        // 2. Cache should be queried for dataset visibility
+        _cacheManagerMock.Verify(x => x.GetAsync(
+            MagicStrings.DatasetVisibilityCacheSeed,
+            It.IsAny<string>(),
+            It.IsAny<object[]>()),
+            Times.Exactly(2));
+
+        // 3. User roles should be checked
+        _userManagerMock.Verify(x => x.IsInRoleAsync(_normalUser, It.IsAny<string>()), Times.AtLeast(2));
+    }
+
+    #endregion
 }

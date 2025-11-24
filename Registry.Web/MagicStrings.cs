@@ -16,6 +16,7 @@ public static class MagicStrings
     public const string TileCacheSeed = "tile";
     public const string ThumbnailCacheSeed = "thumb";
     public const string BuildPendingTrackerCacheSeed = "build-pending-tracker";
+    public const string DatasetVisibilityCacheSeed = "dataset-visibility";
 
     public const string AutoBuildServiceUserId = "auto-build-service";
 

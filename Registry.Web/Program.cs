@@ -751,6 +751,13 @@ public class Program
                 return false;
             }
 
+            if (settings.DatasetVisibilityCacheExpiration.HasValue && 
+                settings.DatasetVisibilityCacheExpiration.Value.TotalMinutes < 1)
+            {
+                Console.WriteLine(" !> DatasetVisibilityCacheExpiration is not valid (must be at least 1 minute)");
+                return false;
+            }
+
             if (settings.ClearCacheInterval.HasValue && settings.ClearCacheInterval.Value.TotalMinutes < 1)
             {
                 Console.WriteLine(" !> ClearCacheInterval is not valid (must be at least 1 minute)");

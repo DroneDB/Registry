@@ -256,11 +256,6 @@ public class DDB : IDDB
         }
     }
 
-    public Dictionary<string, object> GetAttributesRaw()
-    {
-        return ChangeAttributesRaw(new Dictionary<string, object>());
-    }
-
     public Entry GetInfo()
     {
         return GetInfo(DatasetFolderPath);
@@ -279,18 +274,6 @@ public class DDB : IDDB
             throw new InvalidOperationException("Cannot get ddb info of dataset");
 
         return entry;
-    }
-
-    public Dictionary<string, object> ChangeAttributesRaw(Dictionary<string, object> attributes)
-    {
-        try
-        {
-            return _ddbWrapper.ChangeAttributes(DatasetFolderPath, attributes);
-        }
-        catch (DdbException ex)
-        {
-            throw new InvalidOperationException($"Cannot change attributes of ddb '{DatasetFolderPath}'", ex);
-        }
     }
 
     public byte[] GenerateThumbnail(string imagePath, int size)

@@ -13,6 +13,7 @@ using NUnit.Framework;
 using Registry.Adapters.DroneDB;
 using Registry.Ports;
 using Registry.Ports.DroneDB;
+using Registry.Test.Common;
 using Registry.Web.Data;
 using Registry.Web.Data.Models;
 using Registry.Web.Identity.Models;
@@ -25,17 +26,18 @@ using Entry = Registry.Ports.DroneDB.Entry;
 namespace Registry.Web.Test;
 
 [TestFixture]
-public class DatasetManagerTest
+public class DatasetManagerTest : TestBase
 {
 
     private Mock<IAuthManager> _authManagerMock;
     private Mock<IOptions<AppSettings>> _appSettingsMock;
     private Mock<IDatasetsManager> _datasetManagerMock;
-    private Logger<DatasetsManager> _datasetsManagerLogger;
+    private ILogger<DatasetsManager> _datasetsManagerLogger;
     private Mock<IDdbManager> _ddbFactoryMock;
     private Mock<IObjectsManager> _objectsManagerMock;
     private Mock<IHttpContextAccessor> _httpContextAccessorMock;
     private Mock<IStacManager> _stacManagerMock;
+    private ICacheManager _cacheManager;
 
     [SetUp]
     public void Setup()
@@ -47,7 +49,9 @@ public class DatasetManagerTest
         _objectsManagerMock = new Mock<IObjectsManager>();
         _stacManagerMock = new Mock<IStacManager>();
         _httpContextAccessorMock = new Mock<IHttpContextAccessor>();
-        _datasetsManagerLogger = new Logger<DatasetsManager>(LoggerFactory.Create(builder => builder.AddConsole()));
+        _cacheManager = CreateTestCacheManager();
+        RegisterDatasetVisibilityCacheProvider(_cacheManager);
+        _datasetsManagerLogger = CreateTestLogger<DatasetsManager>();
     }
 
     [Test]
@@ -82,7 +86,7 @@ public class DatasetManagerTest
         _ddbFactoryMock.Setup(x => x.Get(It.IsAny<string>(), It.IsAny<Guid>())).Returns(ddbMock.Object);
 
         var datasetsManager = new DatasetsManager(context, utils, _datasetsManagerLogger,
-            _objectsManagerMock.Object, _stacManagerMock.Object, _ddbFactoryMock.Object, _authManagerMock.Object);
+            _objectsManagerMock.Object, _stacManagerMock.Object, _ddbFactoryMock.Object, _authManagerMock.Object, _cacheManager);
 
         var list = (await datasetsManager.List(MagicStrings.PublicOrganizationSlug)).ToArray();
 

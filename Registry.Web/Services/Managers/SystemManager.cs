@@ -38,11 +38,12 @@ public class SystemManager : ISystemManager
     private readonly BuildPendingService _buildPendingService;
     private readonly IHttpClientFactory _httpClientFactory;
     private readonly IBackgroundJobsProcessor _backgroundJob;
+    private readonly ICacheManager _cacheManager;
 
     public SystemManager(IAuthManager authManager,
         RegistryContext context, IDdbManager ddbManager, ILogger<SystemManager> logger,
         IObjectsManager objectManager, IOptions<AppSettings> settings, BuildPendingService buildPendingService,
-        IHttpClientFactory httpClientFactory, IBackgroundJobsProcessor backgroundJob)
+        IHttpClientFactory httpClientFactory, IBackgroundJobsProcessor backgroundJob, ICacheManager cacheManager)
     {
         _authManager = authManager;
         _context = context;
@@ -53,6 +54,7 @@ public class SystemManager : ISystemManager
         _buildPendingService = buildPendingService;
         _httpClientFactory = httpClientFactory;
         _backgroundJob = backgroundJob;
+        _cacheManager = cacheManager;
     }
 
     public async Task<CleanupDatasetResultDto> CleanupEmptyDatasets()
@@ -132,17 +134,23 @@ public class SystemManager : ISystemManager
 
             if (meta.Visibility.HasValue) continue;
 
-            var attrs = ddb.GetAttributesRaw();
-
-            var isPublic = attrs.SafeGetValue("public");
+            var isPublic = meta.IsPublic;
 
             meta.Visibility = isPublic switch
             {
                 null => Visibility.Private,
-                int @public => @public == 1 ? Visibility.Unlisted : Visibility.Private,
-                bool @publicBool => @publicBool ? Visibility.Unlisted : Visibility.Private,
-                _ => Visibility.Private
+                true => Visibility.Unlisted,
+                false => Visibility.Private
             };
+
+            // Invalidate cache after migration
+            await _cacheManager.RemoveAsync(
+                MagicStrings.DatasetVisibilityCacheSeed,
+                pair.Org,
+                pair.Org,
+                pair.InternalRef,
+                _ddbManager
+            );
 
             res.Add(new MigrateVisibilityEntryDTO
             {
@@ -399,11 +407,10 @@ public class SystemManager : ISystemManager
     {
         var client = _httpClientFactory.CreateClient();
 
-        var content = new FormUrlEncodedContent(new[]
-        {
+        var content = new FormUrlEncodedContent([
             new KeyValuePair<string, string>("username", username),
             new KeyValuePair<string, string>("password", password)
-        });
+        ]);
 
         var response = await client.PostAsync($"{registryUrl.TrimEnd('/')}/users/authenticate", content);
 
@@ -429,11 +436,11 @@ public class SystemManager : ISystemManager
         if (!response.IsSuccessStatusCode)
         {
             _logger.LogWarning("Failed to get datasets with status {StatusCode}", response.StatusCode);
-            return Array.Empty<DatasetDto>();
+            return [];
         }
 
         var result = await response.Content.ReadAsStringAsync();
-        return JsonConvert.DeserializeObject<DatasetDto[]>(result) ?? Array.Empty<DatasetDto>();
+        return JsonConvert.DeserializeObject<DatasetDto[]>(result) ?? [];
     }
 
     private async Task ImportSingleDataset(

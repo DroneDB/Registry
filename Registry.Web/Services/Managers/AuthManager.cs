@@ -35,13 +35,14 @@ public class AuthManager : IAuthManager
         IHttpContextAccessor httpContextAccessor,
         IDdbManager ddbManager,
         RegistryContext context,
-        ILogger<AuthManager> logger)
+        ILogger<AuthManager> logger,
+        ICacheManager cacheManager)
     {
         _usersManager = usersManager;
         _httpContextAccessor = httpContextAccessor;
         _resourceAccess = new ResourceAccessControl(usersManager, context, logger);
         _organizationAccess = new OrganizationAccessControl(usersManager, context, logger);
-        _datasetAccess = new DatasetAccessControl(usersManager, context, logger, ddbManager);
+        _datasetAccess = new DatasetAccessControl(usersManager, context, logger, ddbManager, cacheManager);
     }
 
     public async Task<User> GetCurrentUser()

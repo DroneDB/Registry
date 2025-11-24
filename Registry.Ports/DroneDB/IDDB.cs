@@ -33,12 +33,6 @@ public interface IDDB
     void Remove(string path);
     void Move(string source, string dest);
 
-    [Obsolete("Use meta manager instead")]
-    Dictionary<string, object> ChangeAttributesRaw(Dictionary<string, object> attributes);
-
-    [Obsolete("Use meta manager instead")]
-    Dictionary<string, object> GetAttributesRaw();
-
     byte[] GenerateThumbnail(string imagePath, int size);
     byte[] GenerateTile(string inputPath, int tz, int tx, int ty, bool retina, string inputPathHash);
 
