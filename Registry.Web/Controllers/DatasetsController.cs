@@ -26,7 +26,7 @@ namespace Registry.Web.Controllers;
 /// Controller for managing datasets within organizations.
 /// </summary>
 [ApiController]
-[Route($"${RoutesHelper.OrganizationsRadix}/{RoutesHelper.OrganizationSlug}/{RoutesHelper.DatasetRadix}")]
+[Route(RoutesHelper.OrganizationsRadix + "/" + RoutesHelper.OrganizationSlug + "/" + RoutesHelper.DatasetRadix)]
 [Produces("application/json")]
 public class DatasetsController : ControllerBaseEx
 {
@@ -187,7 +187,7 @@ public class DatasetsController : ControllerBaseEx
     /// <param name="orgSlug">The organization slug.</param>
     /// <param name="dataset">The dataset creation data.</param>
     /// <returns>The newly created dataset.</returns>
-    [HttpPost(Name = nameof(Create))]
+    [HttpPost(Name = nameof(DatasetsController) + "." + nameof(Create))]
     [ProducesResponseType(typeof(DatasetDto), StatusCodes.Status201Created)]
     [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status401Unauthorized)]
@@ -290,7 +290,7 @@ public class DatasetsController : ControllerBaseEx
     /// <param name="dsSlug">The dataset slug.</param>
     /// <param name="dataset">The dataset update data.</param>
     /// <returns>No content on success.</returns>
-    [HttpPut(RoutesHelper.DatasetSlug, Name = nameof(Update))]
+    [HttpPut(RoutesHelper.DatasetSlug, Name = nameof(DatasetsController) + "." + nameof(Update))]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status401Unauthorized)]
@@ -320,7 +320,7 @@ public class DatasetsController : ControllerBaseEx
     /// <param name="orgSlug">The organization slug.</param>
     /// <param name="dsSlug">The dataset slug.</param>
     /// <returns>No content on success.</returns>
-    [HttpDelete(RoutesHelper.DatasetSlug, Name = nameof(Delete))]
+    [HttpDelete(RoutesHelper.DatasetSlug, Name = nameof(DatasetsController) + "." + nameof(Delete))]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status401Unauthorized)]
