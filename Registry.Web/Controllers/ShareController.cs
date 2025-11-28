@@ -6,6 +6,7 @@ using Registry.Web.Models;
 using Registry.Web.Models.DTO;
 using Registry.Web.Services.Ports;
 using System;
+using System.ComponentModel.DataAnnotations;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
@@ -22,9 +23,13 @@ using Registry.Web.Utilities;
 
 namespace Registry.Web.Controllers;
 
+/// <summary>
+/// Controller for managing file sharing and upload operations.
+/// </summary>
 [Authorize]
 [ApiController]
 [Route(RoutesHelper.ShareRadix)]
+[Produces("application/json")]
 public class ShareController : ControllerBaseEx
 {
     private readonly IShareManager _shareManager;
@@ -37,8 +42,17 @@ public class ShareController : ControllerBaseEx
         _logger = logger;
     }
 
-    [HttpPost("init")]
-    public async Task<IActionResult> Init([FromForm] ShareInitDto parameters)
+    /// <summary>
+    /// Initializes a new share session for uploading files.
+    /// </summary>
+    /// <param name="parameters">The share initialization parameters.</param>
+    /// <returns>The share initialization result containing the token.</returns>
+    [HttpPost("init", Name = nameof(ShareController) + "." + nameof(Init))]
+    [ProducesResponseType(typeof(ShareInitResultDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> Init([FromForm, Required] ShareInitDto parameters)
     {
         try
         {
@@ -56,8 +70,17 @@ public class ShareController : ControllerBaseEx
         }
     }
 
-    [HttpGet("info/{token}")]
-    public async Task<IActionResult> Info(string token)
+    /// <summary>
+    /// Gets information about a share batch.
+    /// </summary>
+    /// <param name="token">The share token.</param>
+    /// <returns>The batch information.</returns>
+    [HttpGet("info/{token}", Name = nameof(ShareController) + "." + nameof(Info))]
+    [ProducesResponseType(typeof(BatchDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> Info([FromRoute, Required] string token)
     {
         try
         {
@@ -75,10 +98,24 @@ public class ShareController : ControllerBaseEx
         }
     }
 
-    [HttpPost("upload/{token}")]
+    /// <summary>
+    /// Uploads a file to the share.
+    /// </summary>
+    /// <param name="token">The share token.</param>
+    /// <param name="path">The destination path for the file.</param>
+    /// <param name="file">The file to upload.</param>
+    /// <returns>The upload result.</returns>
+    [HttpPost("upload/{token}", Name = nameof(ShareController) + "." + nameof(Upload))]
     [DisableRequestSizeLimit]
     [RequestFormLimits(ValueLengthLimit = int.MaxValue, MultipartBodyLengthLimit = long.MaxValue)]
-    public async Task<IActionResult> Upload(string token, [FromForm] string path, IFormFile file)
+    [ProducesResponseType(typeof(UploadResultDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> Upload(
+        [FromRoute, Required] string token,
+        [FromForm, Required] string path,
+        [Required] IFormFile file)
     {
         try
         {
@@ -101,8 +138,17 @@ public class ShareController : ControllerBaseEx
         }
     }
 
-    [HttpPost("commit/{token}")]
-    public async Task<IActionResult> Commit(string token)
+    /// <summary>
+    /// Commits the share, finalizing all uploaded files.
+    /// </summary>
+    /// <param name="token">The share token.</param>
+    /// <returns>The commit result containing the URL and tag information.</returns>
+    [HttpPost("commit/{token}", Name = nameof(ShareController) + "." + nameof(Commit))]
+    [ProducesResponseType(typeof(CommitResultDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> Commit([FromRoute, Required] string token)
     {
         try
         {
@@ -120,8 +166,17 @@ public class ShareController : ControllerBaseEx
         }
     }
 
-    [HttpPost("rollback/{token}")]
-    public async Task<IActionResult> Rollback(string token)
+    /// <summary>
+    /// Rolls back the share, canceling all uploaded files.
+    /// </summary>
+    /// <param name="token">The share token.</param>
+    /// <returns>OK if the rollback was successful.</returns>
+    [HttpPost("rollback/{token}", Name = nameof(ShareController) + "." + nameof(Rollback))]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> Rollback([FromRoute, Required] string token)
     {
         try
         {
@@ -139,14 +194,29 @@ public class ShareController : ControllerBaseEx
         }
     }
 
-    [HttpPost("upload-chunk/{token}")]
+    /// <summary>
+    /// Uploads a chunk of a large file.
+    /// </summary>
+    /// <param name="token">The share token.</param>
+    /// <param name="chunkInfo">Information about the chunk being uploaded.</param>
+    /// <param name="chunk">The chunk data.</param>
+    /// <returns>The chunk upload result, or the final upload result if this was the last chunk.</returns>
+    [HttpPost("upload-chunk/{token}", Name = nameof(ShareController) + "." + nameof(UploadChunked))]
     [DisableRequestSizeLimit]
     [RequestFormLimits(ValueLengthLimit = int.MaxValue, MultipartBodyLengthLimit = long.MaxValue)]
-    public async Task<IActionResult> UploadChunked(string token, [FromForm] ChunkUploadDto chunkInfo, IFormFile chunk)
+    [ProducesResponseType(typeof(ChunkUploadResultDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(UploadResultDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> UploadChunked(
+        [FromRoute, Required] string token,
+        [FromForm, Required] ChunkUploadDto chunkInfo,
+        [Required] IFormFile chunk)
     {
         try
         {
-            _logger.LogDebug("Share controller UploadChunked('{Token}', ChunkIndex: {ChunkIndex}, TotalChunks: {TotalChunks}, FileId: {FileId})", 
+            _logger.LogDebug("Share controller UploadChunked('{Token}', ChunkIndex: {ChunkIndex}, TotalChunks: {TotalChunks}, FileId: {FileId})",
                 token, chunkInfo.ChunkIndex, chunkInfo.TotalChunks, chunkInfo.FileId);
 
             if (chunk == null)
@@ -156,10 +226,10 @@ public class ShareController : ControllerBaseEx
                 throw new ArgumentException("FileId is required");
 
             await using var stream = chunk.OpenReadStream();
-            
+
             // Use a memory-efficient stream processing approach
             var result = await _shareManager.UploadChunk(token, chunkInfo, stream);
-            
+
             // Checking if this was the last chunk and all chunks are received
             if (result.IsComplete)
             {
@@ -167,7 +237,7 @@ public class ShareController : ControllerBaseEx
                 var finalResult = await _shareManager.FinalizeChunkedUpload(token, chunkInfo.FileId, chunkInfo.Path);
                 return Ok(finalResult);
             }
-            
+
             return Ok(result);
         }
         catch (Exception ex)
