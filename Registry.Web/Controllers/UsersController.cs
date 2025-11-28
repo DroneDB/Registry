@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.ComponentModel.DataAnnotations;
 using System.Threading.Tasks;
 using Registry.Web.Models;
 using Registry.Web.Models.Configuration;
@@ -15,9 +16,13 @@ using Registry.Web.Utilities;
 
 namespace Registry.Web.Controllers;
 
+/// <summary>
+/// Controller for managing users, authentication and roles.
+/// </summary>
 [Authorize]
 [ApiController]
 [Route(RoutesHelper.UsersRadix)]
+[Produces("application/json")]
 public class UsersController : ControllerBaseEx
 {
     private readonly IUsersManager _usersManager;
@@ -29,9 +34,16 @@ public class UsersController : ControllerBaseEx
         _logger = logger;
     }
 
+    /// <summary>
+    /// Authenticates a user with username/password or token.
+    /// </summary>
+    /// <param name="model">The authentication request containing username/password or token.</param>
+    /// <returns>The authentication response with JWT token.</returns>
     [AllowAnonymous]
-    [HttpPost("authenticate")]
+    [HttpPost("authenticate", Name = nameof(Authenticate))]
     [ProducesResponseType(typeof(AuthenticateResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status401Unauthorized)]
     public async Task<IActionResult> Authenticate([FromForm] AuthenticateRequest model)
     {
         try
@@ -57,8 +69,13 @@ public class UsersController : ControllerBaseEx
         }
     }
 
-    [HttpPost("authenticate/refresh")]
+    /// <summary>
+    /// Refreshes the current user's JWT token.
+    /// </summary>
+    /// <returns>The new authentication response with refreshed JWT token.</returns>
+    [HttpPost("authenticate/refresh", Name = nameof(Refresh))]
     [ProducesResponseType(typeof(AuthenticateResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status401Unauthorized)]
     public async Task<IActionResult> Refresh()
     {
         try
@@ -79,8 +96,15 @@ public class UsersController : ControllerBaseEx
         }
     }
 
-    [HttpPost]
-    [ProducesResponseType(StatusCodes.Status200OK)]
+    /// <summary>
+    /// Creates a new user. Requires admin privileges.
+    /// </summary>
+    /// <param name="model">The user creation request containing username, email, password and roles.</param>
+    /// <returns>The created user information.</returns>
+    [HttpPost(Name = nameof(CreateUser))]
+    [ProducesResponseType(typeof(UserDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status401Unauthorized)]
     public async Task<IActionResult> CreateUser([FromBody] CreateUserRequest model)
     {
         try
@@ -103,10 +127,19 @@ public class UsersController : ControllerBaseEx
         }
     }
 
-    [HttpPost("changepwd")]
+    /// <summary>
+    /// Changes the current user's password using form data.
+    /// </summary>
+    /// <param name="oldPassword">The current password.</param>
+    /// <param name="newPassword">The new password.</param>
+    /// <returns>The authentication response with new JWT token.</returns>
+    [HttpPost("changepwd", Name = nameof(ChangePasswordPost))]
     [ProducesResponseType(typeof(AuthenticateResponse), StatusCodes.Status200OK)]
-    public async Task<IActionResult> ChangePasswordPost([FromForm] string oldPassword,
-        [FromForm] string newPassword)
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status401Unauthorized)]
+    public async Task<IActionResult> ChangePasswordPost(
+        [FromForm, Required] string oldPassword,
+        [FromForm, Required] string newPassword)
     {
         try
         {
@@ -125,8 +158,19 @@ public class UsersController : ControllerBaseEx
         }
     }
 
-    [HttpPut("{userName}/changepwd")]
-    public async Task<IActionResult> ChangePassword([FromRoute] string userName, [FromBody] ChangeUserPasswordRequestDto model)
+    /// <summary>
+    /// Changes a user's password. Admins can change any user's password without the current password.
+    /// </summary>
+    /// <param name="userName">The username of the user whose password to change.</param>
+    /// <param name="model">The password change request containing current and new password.</param>
+    /// <returns>No content on success.</returns>
+    [HttpPut("{userName}/changepwd", Name = nameof(ChangePassword))]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status401Unauthorized)]
+    public async Task<IActionResult> ChangePassword(
+        [FromRoute, Required] string userName,
+        [FromBody, Required] ChangeUserPasswordRequestDto model)
     {
         try
         {
@@ -147,9 +191,16 @@ public class UsersController : ControllerBaseEx
         }
     }
 
-    [HttpDelete("{userName}")]
+    /// <summary>
+    /// Deletes a user by username via route parameter. Requires admin privileges.
+    /// </summary>
+    /// <param name="userName">The username of the user to delete.</param>
+    /// <returns>No content on success.</returns>
+    [HttpDelete("{userName}", Name = nameof(DeleteUserRoute))]
     [ProducesResponseType(StatusCodes.Status200OK)]
-    public async Task<IActionResult> DeleteUserRoute([FromRoute] string userName)
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status401Unauthorized)]
+    public async Task<IActionResult> DeleteUserRoute([FromRoute, Required] string userName)
     {
         try
         {
@@ -166,8 +217,14 @@ public class UsersController : ControllerBaseEx
         }
     }
 
-    [HttpGet("roles")]
+    /// <summary>
+    /// Gets all available roles in the system.
+    /// </summary>
+    /// <returns>An array of role names.</returns>
+    [HttpGet("roles", Name = nameof(GetRoles))]
     [ProducesResponseType(typeof(string[]), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status401Unauthorized)]
     public async Task<IActionResult> GetRoles()
     {
         try
@@ -185,9 +242,16 @@ public class UsersController : ControllerBaseEx
         }
     }
 
-    [HttpDelete]
+    /// <summary>
+    /// Deletes a user by username via form data. Requires admin privileges.
+    /// </summary>
+    /// <param name="userName">The username of the user to delete.</param>
+    /// <returns>No content on success.</returns>
+    [HttpDelete(Name = nameof(DeleteUser))]
     [ProducesResponseType(StatusCodes.Status200OK)]
-    public async Task<IActionResult> DeleteUser([FromForm] string userName)
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status401Unauthorized)]
+    public async Task<IActionResult> DeleteUser([FromForm, Required] string userName)
     {
         try
         {
@@ -204,8 +268,14 @@ public class UsersController : ControllerBaseEx
         }
     }
 
-    [HttpGet]
-    [ProducesResponseType(typeof(IEnumerable<UserDto>), 200)]
+    /// <summary>
+    /// Gets all users in the system. Requires admin privileges.
+    /// </summary>
+    /// <returns>A list of all users.</returns>
+    [HttpGet(Name = nameof(UsersController) + "." + nameof(GetAll))]
+    [ProducesResponseType(typeof(IEnumerable<UserDto>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status401Unauthorized)]
     public async Task<IActionResult> GetAll()
     {
         try
@@ -223,8 +293,14 @@ public class UsersController : ControllerBaseEx
         }
     }
 
-    [HttpGet("detailed")]
-    [ProducesResponseType(typeof(IEnumerable<UserDetailDto>), 200)]
+    /// <summary>
+    /// Gets all users with detailed information. Requires admin privileges.
+    /// </summary>
+    /// <returns>A list of all users with detailed information including storage usage.</returns>
+    [HttpGet("detailed", Name = nameof(GetAllDetailed))]
+    [ProducesResponseType(typeof(IEnumerable<UserDetailDto>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status401Unauthorized)]
     public async Task<IActionResult> GetAllDetailed()
     {
         try
@@ -242,13 +318,19 @@ public class UsersController : ControllerBaseEx
         }
     }
 
-    [HttpGet("storage")]
-    [ProducesResponseType(typeof(UserStorageInfo), 200)]
-    public async Task<IActionResult> GetUserQuotaInfo()
+    /// <summary>
+    /// Gets the storage quota information for the current user.
+    /// </summary>
+    /// <returns>The user's storage information including total and used space.</returns>
+    [HttpGet("storage", Name = nameof(GetCurrentUserStorageInfo))]
+    [ProducesResponseType(typeof(UserStorageInfo), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status401Unauthorized)]
+    public async Task<IActionResult> GetCurrentUserStorageInfo()
     {
         try
         {
-            _logger.LogDebug("Users controller GetUserQuotaInfo()");
+            _logger.LogDebug("Users controller GetCurrentUserStorageInfo()");
 
             var res = await _usersManager.GetUserStorageInfo();
 
@@ -256,18 +338,25 @@ public class UsersController : ControllerBaseEx
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Exception in Users controller GetUserQuotaInfo()");
+            _logger.LogError(ex, "Exception in Users controller GetCurrentUserStorageInfo()");
             return ExceptionResult(ex);
         }
     }
 
-    [HttpGet("{userName}/storage")]
-    [ProducesResponseType(typeof(UserStorageInfo), 200)]
-    public async Task<IActionResult> GetUserQuotaInfo([FromRoute] string userName)
+    /// <summary>
+    /// Gets the storage quota information for a specific user. Requires admin privileges.
+    /// </summary>
+    /// <param name="userName">The username of the user.</param>
+    /// <returns>The user's storage information including total and used space.</returns>
+    [HttpGet("{userName}/storage", Name = nameof(GetUserStorageInfo))]
+    [ProducesResponseType(typeof(UserStorageInfo), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status401Unauthorized)]
+    public async Task<IActionResult> GetUserStorageInfo([FromRoute, Required] string userName)
     {
         try
         {
-            _logger.LogDebug("Users controller GetUserQuotaInfo('{UserName}')", userName);
+            _logger.LogDebug("Users controller GetUserStorageInfo('{UserName}')", userName);
 
             var res = await _usersManager.GetUserStorageInfo(userName);
 
@@ -275,18 +364,24 @@ public class UsersController : ControllerBaseEx
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Exception in Users controller GetUserQuotaInfo('{UserName}')", userName);
+            _logger.LogError(ex, "Exception in Users controller GetUserStorageInfo('{UserName}')", userName);
             return ExceptionResult(ex);
         }
     }
 
-    [HttpGet("meta")]
-    [ProducesResponseType(typeof(Dictionary<string, object>), 200)]
-    public async Task<IActionResult> GetUserMeta()
+    /// <summary>
+    /// Gets the metadata for the current user.
+    /// </summary>
+    /// <returns>A dictionary containing the user's metadata.</returns>
+    [HttpGet("meta", Name = nameof(GetCurrentUserMeta))]
+    [ProducesResponseType(typeof(Dictionary<string, object>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status401Unauthorized)]
+    public async Task<IActionResult> GetCurrentUserMeta()
     {
         try
         {
-            _logger.LogDebug("Users controller GetUserMeta()");
+            _logger.LogDebug("Users controller GetCurrentUserMeta()");
 
             var meta = await _usersManager.GetUserMeta();
 
@@ -294,14 +389,21 @@ public class UsersController : ControllerBaseEx
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Exception in Users controller GetUserMeta()");
+            _logger.LogError(ex, "Exception in Users controller GetCurrentUserMeta()");
             return ExceptionResult(ex);
         }
     }
 
-    [HttpGet("{userName}/meta")]
-    [ProducesResponseType(typeof(Dictionary<string, object>), 200)]
-    public async Task<IActionResult> GetUserMeta([FromRoute] string userName)
+    /// <summary>
+    /// Gets the metadata for a specific user. Requires admin privileges.
+    /// </summary>
+    /// <param name="userName">The username of the user.</param>
+    /// <returns>A dictionary containing the user's metadata.</returns>
+    [HttpGet("{userName}/meta", Name = nameof(GetUserMeta))]
+    [ProducesResponseType(typeof(Dictionary<string, object>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status401Unauthorized)]
+    public async Task<IActionResult> GetUserMeta([FromRoute, Required] string userName)
     {
         try
         {
@@ -318,9 +420,19 @@ public class UsersController : ControllerBaseEx
         }
     }
 
-    [HttpPost("{userName}/meta")]
-    public async Task<IActionResult> SetUserMeta([FromRoute] string userName,
-        [FromBody] Dictionary<string, object> meta)
+    /// <summary>
+    /// Sets the metadata for a specific user. Requires admin privileges.
+    /// </summary>
+    /// <param name="userName">The username of the user.</param>
+    /// <param name="meta">A dictionary containing the metadata to set.</param>
+    /// <returns>No content on success.</returns>
+    [HttpPost("{userName}/meta", Name = nameof(SetUserMeta))]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status401Unauthorized)]
+    public async Task<IActionResult> SetUserMeta(
+        [FromRoute, Required] string userName,
+        [FromBody, Required] Dictionary<string, object> meta)
     {
         try
         {
@@ -339,9 +451,16 @@ public class UsersController : ControllerBaseEx
 
     #region Organizations
 
-    [HttpGet("{userName}/orgs")]
-    [ProducesResponseType(typeof(OrganizationDto[]), 200)]
-    public async Task<IActionResult> GetOrganizations([FromRoute] string userName)
+    /// <summary>
+    /// Gets the organizations that a user belongs to. Requires admin privileges.
+    /// </summary>
+    /// <param name="userName">The username of the user.</param>
+    /// <returns>An array of organizations the user belongs to.</returns>
+    [HttpGet("{userName}/orgs", Name = nameof(GetOrganizations))]
+    [ProducesResponseType(typeof(OrganizationDto[]), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status401Unauthorized)]
+    public async Task<IActionResult> GetOrganizations([FromRoute, Required] string userName)
     {
         try
         {
@@ -358,9 +477,19 @@ public class UsersController : ControllerBaseEx
         }
     }
 
-    [HttpPut("{userName}/orgs")]
-    [ProducesResponseType(200)]
-    public async Task<IActionResult> SetUserOrganizations([FromRoute] string userName, [FromForm] string[] orgSlugs)
+    /// <summary>
+    /// Sets the organizations that a user belongs to. Requires admin privileges.
+    /// </summary>
+    /// <param name="userName">The username of the user.</param>
+    /// <param name="orgSlugs">An array of organization slugs to assign to the user.</param>
+    /// <returns>No content on success.</returns>
+    [HttpPut("{userName}/orgs", Name = nameof(SetUserOrganizations))]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status401Unauthorized)]
+    public async Task<IActionResult> SetUserOrganizations(
+        [FromRoute, Required] string userName,
+        [FromForm, Required] string[] orgSlugs)
     {
         try
         {
@@ -379,9 +508,14 @@ public class UsersController : ControllerBaseEx
 
     #endregion
 
+    /// <summary>
+    /// Checks if user management is enabled. User management is disabled when external authentication is configured.
+    /// </summary>
+    /// <returns>True if user management is enabled, false otherwise.</returns>
     [AllowAnonymous]
-    [HttpGet("management-enabled")]
+    [HttpGet("management-enabled", Name = nameof(IsUserManagementEnabled))]
     [ProducesResponseType(typeof(bool), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
     public IActionResult IsUserManagementEnabled()
     {
         try
@@ -401,10 +535,16 @@ public class UsersController : ControllerBaseEx
         }
     }
 
-    [HttpPost("roles")]
+    /// <summary>
+    /// Creates a new role. Requires admin privileges.
+    /// </summary>
+    /// <param name="request">The role creation request containing the role name.</param>
+    /// <returns>No content on success.</returns>
+    [HttpPost("roles", Name = nameof(CreateRole))]
     [ProducesResponseType(StatusCodes.Status200OK)]
-
-    public async Task<IActionResult> CreateRole([FromBody] CreateRoleRequestDto request)
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status401Unauthorized)]
+    public async Task<IActionResult> CreateRole([FromBody, Required] CreateRoleRequestDto request)
     {
         try
         {
@@ -424,9 +564,16 @@ public class UsersController : ControllerBaseEx
         }
     }
 
-    [HttpDelete("roles/{roleName}")]
+    /// <summary>
+    /// Deletes a role. Requires admin privileges. The admin role cannot be deleted.
+    /// </summary>
+    /// <param name="roleName">The name of the role to delete.</param>
+    /// <returns>No content on success.</returns>
+    [HttpDelete("roles/{roleName}", Name = nameof(DeleteRole))]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
-    public async Task<IActionResult> DeleteRole([FromRoute] string roleName)
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status401Unauthorized)]
+    public async Task<IActionResult> DeleteRole([FromRoute, Required] string roleName)
     {
         try
         {
@@ -443,9 +590,19 @@ public class UsersController : ControllerBaseEx
         }
     }
 
-    [HttpPut("{userName}")]
+    /// <summary>
+    /// Updates a user's email and roles. Requires admin privileges.
+    /// </summary>
+    /// <param name="userName">The username of the user to update.</param>
+    /// <param name="request">The update request containing email and roles.</param>
+    /// <returns>No content on success.</returns>
+    [HttpPut("{userName}", Name = nameof(UpdateUser))]
     [ProducesResponseType(StatusCodes.Status200OK)]
-    public async Task<IActionResult> UpdateUser([FromRoute] string userName, [FromBody] EditUserRequestDto request)
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status401Unauthorized)]
+    public async Task<IActionResult> UpdateUser(
+        [FromRoute, Required] string userName,
+        [FromBody, Required] EditUserRequestDto request)
     {
         try
         {
