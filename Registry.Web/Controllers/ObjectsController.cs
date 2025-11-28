@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.ComponentModel.DataAnnotations;
 using System.Net;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Http;
@@ -19,9 +20,13 @@ using Registry.Web.Utilities;
 
 namespace Registry.Web.Controllers;
 
+/// <summary>
+/// Controller for managing objects (files and folders) within datasets.
+/// </summary>
 [ApiController]
 [Route(RoutesHelper.OrganizationsRadix + "/" + RoutesHelper.OrganizationSlug + "/" + RoutesHelper.DatasetRadix +
        "/" + RoutesHelper.DatasetSlug)]
+[Produces("application/json")]
 public class ObjectsController : ControllerBaseEx
 {
     private readonly IObjectsManager _objectsManager;
@@ -33,8 +38,20 @@ public class ObjectsController : ControllerBaseEx
         _logger = logger;
     }
 
+    /// <summary>
+    /// Downloads the DroneDB database file for a dataset.
+    /// </summary>
+    /// <param name="orgSlug">The organization slug.</param>
+    /// <param name="dsSlug">The dataset slug.</param>
+    /// <returns>The DDB file as a downloadable attachment.</returns>
     [HttpGet("ddb", Name = nameof(ObjectsController) + "." + nameof(GetDdb))]
-    public async Task<IActionResult> GetDdb([FromRoute] string orgSlug, [FromRoute] string dsSlug)
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> GetDdb(
+        [FromRoute, Required] string orgSlug,
+        [FromRoute, Required] string dsSlug)
     {
         try
         {
@@ -59,9 +76,24 @@ public class ObjectsController : ControllerBaseEx
         }
     }
 
+    /// <summary>
+    /// Generates a thumbnail for a specific object.
+    /// </summary>
+    /// <param name="orgSlug">The organization slug.</param>
+    /// <param name="dsSlug">The dataset slug.</param>
+    /// <param name="path">The path to the object.</param>
+    /// <param name="size">Optional thumbnail size.</param>
+    /// <returns>The thumbnail image file.</returns>
     [HttpGet("thumb", Name = nameof(ObjectsController) + "." + nameof(GenerateThumbnail))]
-    public async Task<IActionResult> GenerateThumbnail([FromRoute] string orgSlug, [FromRoute] string dsSlug,
-        [FromQuery] string path, [FromQuery] int? size)
+    [ProducesResponseType(typeof(FileResult), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> GenerateThumbnail(
+        [FromRoute, Required] string orgSlug,
+        [FromRoute, Required] string dsSlug,
+        [FromQuery] string path,
+        [FromQuery] int? size)
     {
         try
         {
@@ -91,9 +123,30 @@ public class ObjectsController : ControllerBaseEx
         }
     }
 
+    /// <summary>
+    /// Generates a map tile for a specific object.
+    /// </summary>
+    /// <param name="orgSlug">The organization slug.</param>
+    /// <param name="dsSlug">The dataset slug.</param>
+    /// <param name="tz">The tile zoom level.</param>
+    /// <param name="tx">The tile X coordinate.</param>
+    /// <param name="tyRaw">The tile Y coordinate (supports @2x retina suffix).</param>
+    /// <param name="path">The path to the object.</param>
+    /// <param name="ext">The tile image extension (png or webp).</param>
+    /// <returns>The tile image file.</returns>
     [HttpGet("tiles/{tz:int}/{tx:int}/{tyRaw}.{ext:regex(^(png|webp)$)}", Name = nameof(ObjectsController) + "." + nameof(GenerateTile))]
-    public async Task<IActionResult> GenerateTile([FromRoute] string orgSlug, [FromRoute] string dsSlug,
-        [FromRoute] int tz, [FromRoute] int tx, [FromRoute] string tyRaw, [FromQuery] string path, [FromRoute] string ext)
+    [ProducesResponseType(typeof(FileResult), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> GenerateTile(
+        [FromRoute, Required] string orgSlug,
+        [FromRoute, Required] string dsSlug,
+        [FromRoute, Required] int tz,
+        [FromRoute, Required] int tx,
+        [FromRoute, Required] string tyRaw,
+        [FromQuery] string path,
+        [FromRoute, Required] string ext)
     {
         try
         {
@@ -155,9 +208,24 @@ public class ObjectsController : ControllerBaseEx
         }
     }
 
+    /// <summary>
+    /// Downloads one or more objects from a dataset.
+    /// </summary>
+    /// <param name="orgSlug">The organization slug.</param>
+    /// <param name="dsSlug">The dataset slug.</param>
+    /// <param name="pathsRaw">Comma-separated list of paths to download.</param>
+    /// <param name="isInlineRaw">If 1, display inline instead of as attachment.</param>
+    /// <returns>The file(s) as a downloadable stream.</returns>
     [HttpGet("download", Name = nameof(ObjectsController) + "." + nameof(Download))]
-    public Task<IActionResult> Download([FromRoute] string orgSlug, [FromRoute] string dsSlug,
-        [FromQuery(Name = "path")] string pathsRaw, [FromQuery(Name = "inline")] int? isInlineRaw)
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status404NotFound)]
+    public Task<IActionResult> Download(
+        [FromRoute, Required] string orgSlug,
+        [FromRoute, Required] string dsSlug,
+        [FromQuery(Name = "path")] string pathsRaw,
+        [FromQuery(Name = "inline")] int? isInlineRaw)
     {
         var paths = pathsRaw?.Split(",", StringSplitOptions.RemoveEmptyEntries);
         var isInline = isInlineRaw == 1;
@@ -168,9 +236,24 @@ public class ObjectsController : ControllerBaseEx
         return InternalDownload(orgSlug, dsSlug, paths, isInline);
     }
 
+    /// <summary>
+    /// Downloads one or more objects from a dataset (POST version).
+    /// </summary>
+    /// <param name="orgSlug">The organization slug.</param>
+    /// <param name="dsSlug">The dataset slug.</param>
+    /// <param name="pathsRaw">Comma-separated list of paths to download.</param>
+    /// <param name="isInlineRaw">If 1, display inline instead of as attachment.</param>
+    /// <returns>The file(s) as a downloadable stream.</returns>
     [HttpPost("download", Name = nameof(ObjectsController) + "." + nameof(DownloadPost))]
-    public Task<IActionResult> DownloadPost([FromRoute] string orgSlug, [FromRoute] string dsSlug,
-        [FromForm(Name = "path")] string pathsRaw, [FromForm(Name = "inline")] int? isInlineRaw)
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status404NotFound)]
+    public Task<IActionResult> DownloadPost(
+        [FromRoute, Required] string orgSlug,
+        [FromRoute, Required] string dsSlug,
+        [FromForm(Name = "path")] string pathsRaw,
+        [FromForm(Name = "inline")] int? isInlineRaw)
     {
         var paths = pathsRaw?.Split(",", StringSplitOptions.RemoveEmptyEntries);
         var isInline = isInlineRaw == 1;
@@ -182,9 +265,24 @@ public class ObjectsController : ControllerBaseEx
         return InternalDownload(orgSlug, dsSlug, paths, isInline);
     }
 
+    /// <summary>
+    /// Downloads a specific object by its exact path.
+    /// </summary>
+    /// <param name="orgSlug">The organization slug.</param>
+    /// <param name="dsSlug">The dataset slug.</param>
+    /// <param name="path">The exact path to the object.</param>
+    /// <param name="isInlineRaw">If 1, display inline instead of as attachment.</param>
+    /// <returns>The file as a downloadable stream.</returns>
     [HttpGet("download/{*path}", Name = nameof(ObjectsController) + "." + nameof(DownloadExact))]
-    public async Task<IActionResult> DownloadExact([FromRoute] string orgSlug, [FromRoute] string dsSlug,
-        string path, [FromQuery(Name = "inline")] int? isInlineRaw)
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> DownloadExact(
+        [FromRoute, Required] string orgSlug,
+        [FromRoute, Required] string dsSlug,
+        [FromRoute] string path,
+        [FromQuery(Name = "inline")] int? isInlineRaw)
     {
         var isInline = isInlineRaw == 1;
 
@@ -197,8 +295,21 @@ public class ObjectsController : ControllerBaseEx
 
     #endregion
 
+    /// <summary>
+    /// Gets an object from a dataset.
+    /// </summary>
+    /// <param name="orgSlug">The organization slug.</param>
+    /// <param name="dsSlug">The dataset slug.</param>
+    /// <param name="path">The path to the object.</param>
+    /// <returns>The object file.</returns>
     [HttpGet(RoutesHelper.ObjectsRadix, Name = nameof(ObjectsController) + "." + nameof(Get))]
-    public async Task<IActionResult> Get([FromRoute] string orgSlug, [FromRoute] string dsSlug,
+    [ProducesResponseType(typeof(FileResult), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> Get(
+        [FromRoute, Required] string orgSlug,
+        [FromRoute, Required] string dsSlug,
         [FromForm] string path)
     {
         try
@@ -217,10 +328,24 @@ public class ObjectsController : ControllerBaseEx
         }
     }
 
+    /// <summary>
+    /// Lists objects in a dataset at a specific path.
+    /// </summary>
+    /// <param name="orgSlug">The organization slug.</param>
+    /// <param name="dsSlug">The dataset slug.</param>
+    /// <param name="path">The path to list.</param>
+    /// <param name="type">Optional filter by entry type.</param>
+    /// <returns>A list of entries.</returns>
     [HttpGet("list", Name = nameof(ObjectsController) + "." + nameof(GetInfo))]
-    [ProducesResponseType(typeof(IEnumerable<Entry>), 200)]
-    public async Task<IActionResult> GetInfo([FromRoute] string orgSlug, [FromRoute] string dsSlug,
-        [FromQuery] string path, [FromQuery] EntryType? type = null)
+    [ProducesResponseType(typeof(IEnumerable<EntryDto>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> GetInfo(
+        [FromRoute, Required] string orgSlug,
+        [FromRoute, Required] string dsSlug,
+        [FromQuery] string path,
+        [FromQuery] EntryType? type = null)
     {
         try
         {
@@ -240,10 +365,24 @@ public class ObjectsController : ControllerBaseEx
         }
     }
 
+    /// <summary>
+    /// Lists objects in a dataset at a specific path (POST version).
+    /// </summary>
+    /// <param name="orgSlug">The organization slug.</param>
+    /// <param name="dsSlug">The dataset slug.</param>
+    /// <param name="path">The path to list.</param>
+    /// <param name="type">Optional filter by entry type.</param>
+    /// <returns>A list of entries.</returns>
     [HttpPost("list", Name = nameof(ObjectsController) + "." + nameof(GetInfoEx))]
-    [ProducesResponseType(typeof(IEnumerable<Entry>), 200)]
-    public async Task<IActionResult> GetInfoEx([FromRoute] string orgSlug, [FromRoute] string dsSlug,
-        [FromForm] string path, [FromForm] EntryType? type = null)
+    [ProducesResponseType(typeof(IEnumerable<EntryDto>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> GetInfoEx(
+        [FromRoute, Required] string orgSlug,
+        [FromRoute, Required] string dsSlug,
+        [FromForm] string path,
+        [FromForm] EntryType? type = null)
     {
         try
         {
@@ -263,10 +402,27 @@ public class ObjectsController : ControllerBaseEx
     }
 
 
+    /// <summary>
+    /// Searches for objects in a dataset.
+    /// </summary>
+    /// <param name="orgSlug">The organization slug.</param>
+    /// <param name="dsSlug">The dataset slug.</param>
+    /// <param name="query">The search query.</param>
+    /// <param name="path">The path to search in.</param>
+    /// <param name="recursive">Whether to search recursively.</param>
+    /// <param name="type">Optional filter by entry type.</param>
+    /// <returns>A list of matching entries.</returns>
     [HttpPost("search", Name = nameof(ObjectsController) + "." + nameof(Search))]
-    [ProducesResponseType(typeof(IEnumerable<Entry>), 200)]
-    public async Task<IActionResult> Search([FromRoute] string orgSlug, [FromRoute] string dsSlug,
-        [FromForm] string query, [FromForm] string path, [FromForm] bool recursive = true,
+    [ProducesResponseType(typeof(IEnumerable<EntryDto>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> Search(
+        [FromRoute, Required] string orgSlug,
+        [FromRoute, Required] string dsSlug,
+        [FromForm] string query,
+        [FromForm] string path,
+        [FromForm] bool recursive = true,
         [FromForm] EntryType? type = null)
     {
         try
@@ -286,11 +442,27 @@ public class ObjectsController : ControllerBaseEx
         }
     }
 
-    [HttpPost(RoutesHelper.ObjectsRadix)]
+    /// <summary>
+    /// Creates or uploads a new object to a dataset.
+    /// </summary>
+    /// <param name="orgSlug">The organization slug.</param>
+    /// <param name="dsSlug">The dataset slug.</param>
+    /// <param name="path">The path where to create the object.</param>
+    /// <param name="file">Optional file to upload.</param>
+    /// <returns>The created entry.</returns>
+    [HttpPost(RoutesHelper.ObjectsRadix, Name = nameof(ObjectsController) + "." + nameof(Post))]
     [RequestFormLimits(ValueLengthLimit = int.MaxValue, MultipartBodyLengthLimit = long.MaxValue)]
     [DisableRequestSizeLimit]
-    public async Task<IActionResult> Post([FromRoute] string orgSlug, [FromRoute] string dsSlug,
-        [FromForm] string path, IFormFile file = null)
+    [ProducesResponseType(typeof(EntryDto), StatusCodes.Status201Created)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status409Conflict)]
+    public async Task<IActionResult> Post(
+        [FromRoute, Required] string orgSlug,
+        [FromRoute, Required] string dsSlug,
+        [FromForm] string path,
+        IFormFile file = null)
     {
         try
         {
@@ -327,8 +499,21 @@ public class ObjectsController : ControllerBaseEx
     }
 
 
-    [HttpDelete(RoutesHelper.ObjectsRadix)]
-    public async Task<IActionResult> Delete([FromRoute] string orgSlug, [FromRoute] string dsSlug,
+    /// <summary>
+    /// Deletes an object from a dataset.
+    /// </summary>
+    /// <param name="orgSlug">The organization slug.</param>
+    /// <param name="dsSlug">The dataset slug.</param>
+    /// <param name="path">The path to the object to delete.</param>
+    /// <returns>No content on success.</returns>
+    [HttpDelete(RoutesHelper.ObjectsRadix, Name = nameof(ObjectsController) + "." + nameof(Delete))]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> Delete(
+        [FromRoute, Required] string orgSlug,
+        [FromRoute, Required] string dsSlug,
         [FromForm] string path)
     {
         try
@@ -347,9 +532,24 @@ public class ObjectsController : ControllerBaseEx
         }
     }
 
-    [HttpPut(RoutesHelper.ObjectsRadix)]
-    public async Task<IActionResult> Move([FromRoute] string orgSlug, [FromRoute] string dsSlug,
-        [FromForm] string source, [FromForm] string dest)
+    /// <summary>
+    /// Moves or renames an object within a dataset.
+    /// </summary>
+    /// <param name="orgSlug">The organization slug.</param>
+    /// <param name="dsSlug">The dataset slug.</param>
+    /// <param name="source">The source path.</param>
+    /// <param name="dest">The destination path.</param>
+    /// <returns>No content on success.</returns>
+    [HttpPut(RoutesHelper.ObjectsRadix, Name = nameof(ObjectsController) + "." + nameof(Move))]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> Move(
+        [FromRoute, Required] string orgSlug,
+        [FromRoute, Required] string dsSlug,
+        [FromForm] string source,
+        [FromForm] string dest)
     {
         try
         {
@@ -369,9 +569,31 @@ public class ObjectsController : ControllerBaseEx
         }
     }
 
+    /// <summary>
+    /// Transfers an object from one dataset to another.
+    /// </summary>
+    /// <param name="orgSlug">The source organization slug.</param>
+    /// <param name="dsSlug">The source dataset slug.</param>
+    /// <param name="sourcePath">The source path.</param>
+    /// <param name="destOrgSlug">The destination organization slug.</param>
+    /// <param name="destDsSlug">The destination dataset slug.</param>
+    /// <param name="destPath">The destination path (optional).</param>
+    /// <param name="overwrite">Whether to overwrite existing files.</param>
+    /// <returns>No content on success.</returns>
     [HttpPost("transfer", Name = nameof(ObjectsController) + "." + nameof(Transfer))]
-    public async Task<IActionResult> Transfer([FromRoute] string orgSlug, [FromRoute] string dsSlug, [FromForm] string sourcePath,
-        [FromForm] string destOrgSlug, [FromForm] string destDsSlug, [FromForm] string destPath = null, [FromForm] bool overwrite = false)
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status409Conflict)]
+    public async Task<IActionResult> Transfer(
+        [FromRoute, Required] string orgSlug,
+        [FromRoute, Required] string dsSlug,
+        [FromForm, Required] string sourcePath,
+        [FromForm, Required] string destOrgSlug,
+        [FromForm, Required] string destDsSlug,
+        [FromForm] string destPath = null,
+        [FromForm] bool overwrite = false)
     {
         try
         {
@@ -391,9 +613,24 @@ public class ObjectsController : ControllerBaseEx
         }
     }
 
+    /// <summary>
+    /// Triggers a build process for an object.
+    /// </summary>
+    /// <param name="orgSlug">The organization slug.</param>
+    /// <param name="dsSlug">The dataset slug.</param>
+    /// <param name="path">The path to the object to build.</param>
+    /// <param name="force">Whether to force rebuild.</param>
+    /// <returns>Ok on success.</returns>
     [HttpPost("build", Name = nameof(ObjectsController) + "." + nameof(Build))]
-    public async Task<IActionResult> Build([FromRoute] string orgSlug, [FromRoute] string dsSlug,
-        [FromForm] string path, [FromForm] bool force = false)
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> Build(
+        [FromRoute, Required] string orgSlug,
+        [FromRoute, Required] string dsSlug,
+        [FromForm] string path,
+        [FromForm] bool force = false)
     {
         try
         {
@@ -411,10 +648,25 @@ public class ObjectsController : ControllerBaseEx
         }
     }
 
+    /// <summary>
+    /// Gets a file from a build by hash and path.
+    /// </summary>
+    /// <param name="orgSlug">The organization slug.</param>
+    /// <param name="dsSlug">The dataset slug.</param>
+    /// <param name="hash">The build hash.</param>
+    /// <param name="path">The path to the file within the build.</param>
+    /// <returns>The build file.</returns>
     [ServiceFilter(typeof(BasicAuthFilter))]
-    [HttpGet("build/{hash}/{*path}", Name = nameof(ObjectsController) + "." + nameof(BuildFile))]
-    public async Task<IActionResult> BuildFile([FromRoute] string orgSlug, [FromRoute] string dsSlug,
-        [FromRoute] string hash, [FromRoute] string path)
+    [HttpGet("build/{hash}/{*path}", Name = nameof(ObjectsController) + "." + nameof(GetBuildFile))]
+    [ProducesResponseType(typeof(FileResult), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> GetBuildFile(
+        [FromRoute, Required] string orgSlug,
+        [FromRoute, Required] string dsSlug,
+        [FromRoute, Required] string hash,
+        [FromRoute] string path)
     {
         try
         {
@@ -436,10 +688,24 @@ public class ObjectsController : ControllerBaseEx
         }
     }
 
+    /// <summary>
+    /// Checks if a build file exists by hash and path.
+    /// </summary>
+    /// <param name="orgSlug">The organization slug.</param>
+    /// <param name="dsSlug">The dataset slug.</param>
+    /// <param name="hash">The build hash.</param>
+    /// <param name="path">The path to the file within the build.</param>
+    /// <returns>Ok if file exists, NotFound otherwise.</returns>
     [ServiceFilter(typeof(BasicAuthFilter))]
-    [HttpHead("build/{hash}/{*path}", Name = nameof(ObjectsController) + "." + nameof(BuildFile))]
-    public async Task<IActionResult> CheckBuildFile([FromRoute] string orgSlug, [FromRoute] string dsSlug,
-        [FromRoute] string hash, [FromRoute] string path)
+    [HttpHead("build/{hash}/{*path}", Name = nameof(ObjectsController) + "." + nameof(CheckBuildFile))]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> CheckBuildFile(
+        [FromRoute, Required] string orgSlug,
+        [FromRoute, Required] string dsSlug,
+        [FromRoute, Required] string hash,
+        [FromRoute] string path)
     {
         try
         {
@@ -465,9 +731,24 @@ public class ObjectsController : ControllerBaseEx
         }
     }
 
+    /// <summary>
+    /// Gets a paginated list of build jobs for a dataset.
+    /// </summary>
+    /// <param name="orgSlug">The organization slug.</param>
+    /// <param name="dsSlug">The dataset slug.</param>
+    /// <param name="page">The page number (1-based).</param>
+    /// <param name="pageSize">The number of items per page.</param>
+    /// <returns>A list of build jobs.</returns>
     [HttpGet("builds", Name = nameof(ObjectsController) + "." + nameof(GetBuilds))]
-    public async Task<IActionResult> GetBuilds([FromRoute] string orgSlug, [FromRoute] string dsSlug,
-        [FromQuery] int page = 1, [FromQuery] int pageSize = 50)
+    [ProducesResponseType(typeof(IEnumerable<BuildJobDto>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> GetBuilds(
+        [FromRoute, Required] string orgSlug,
+        [FromRoute, Required] string dsSlug,
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = 50)
     {
         try
         {
@@ -488,8 +769,20 @@ public class ObjectsController : ControllerBaseEx
         }
     }
 
+    /// <summary>
+    /// Clears all completed build jobs for a dataset.
+    /// </summary>
+    /// <param name="orgSlug">The organization slug.</param>
+    /// <param name="dsSlug">The dataset slug.</param>
+    /// <returns>The number of deleted build jobs.</returns>
     [HttpPost("builds/clear", Name = nameof(ObjectsController) + "." + nameof(ClearCompletedBuilds))]
-    public async Task<IActionResult> ClearCompletedBuilds([FromRoute] string orgSlug, [FromRoute] string dsSlug)
+    [ProducesResponseType(typeof(ClearCompletedBuildsResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> ClearCompletedBuilds(
+        [FromRoute, Required] string orgSlug,
+        [FromRoute, Required] string dsSlug)
     {
         try
         {
@@ -497,7 +790,7 @@ public class ObjectsController : ControllerBaseEx
 
             var deletedCount = await _objectsManager.ClearCompletedBuilds(orgSlug, dsSlug);
 
-            return Ok(new { deletedCount });
+            return Ok(new ClearCompletedBuildsResponse { DeletedCount = deletedCount });
         }
         catch (Exception ex)
         {
