@@ -44,9 +44,9 @@
         <PackageReference Include="AspNetCore.HealthChecks.UI.Client" Version="9.0.0" />
         <PackageReference Include="AspNetCore.HealthChecks.UI.Core" Version="9.0.0" />
         <PackageReference Include="CommandLineParser" Version="2.9.1" />
-        <PackageReference Include="Hangfire.AspNetCore" Version="1.8.21" />
+        <PackageReference Include="Hangfire.AspNetCore" Version="1.8.22" />
         <PackageReference Include="Hangfire.Console" Version="1.4.3" />
-        <PackageReference Include="Hangfire.Core" Version="1.8.21" />
+        <PackageReference Include="Hangfire.Core" Version="1.8.22" />
         <PackageReference Include="Hangfire.InMemory" Version="1.0.0" />
         <PackageReference Include="Hangfire.MySqlStorage" Version="2.0.3" />
         <PackageReference Include="Microsoft.AspNetCore.ApiAuthorization.IdentityServer" Version="7.0.20" />
@@ -73,7 +73,7 @@
             <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
         </PackageReference>
         <PackageReference Include="Newtonsoft.Json" Version="13.0.4" />
-        <PackageReference Include="Scrutor" Version="6.1.0" />
+        <PackageReference Include="Scrutor" Version="7.0.0" />
         <PackageReference Include="Scrutor.AspNetCore" Version="3.3.0" />
         <PackageReference Include="Serilog.AspNetCore" Version="9.0.0" />
         <PackageReference Include="Serilog.Aspnetcore.Middleware" Version="1.0.0" />
@@ -83,11 +83,11 @@
         <PackageReference Include="Serilog.Extensions.Hosting" Version="9.0.0" />
         <PackageReference Include="Serilog.Sinks.File" Version="7.0.0" />
         <PackageReference Include="Serilog.Sinks.Seq" Version="9.0.0" />
-        <PackageReference Include="SkiaSharp" Version="3.119.0" />
-        <PackageReference Include="SkiaSharp.NativeAssets.Linux" Version="3.119.0" />
-        <PackageReference Include="Scalar.AspNetCore" Version="2.0.36" />
+        <PackageReference Include="SkiaSharp" Version="3.119.1" />
+        <PackageReference Include="SkiaSharp.NativeAssets.Linux" Version="3.119.1" />
+        <PackageReference Include="Scalar.AspNetCore" Version="2.11.0" />
         <PackageReference Include="Swashbuckle.AspNetCore" Version="9.0.4" />
-        <PackageReference Include="System.IdentityModel.Tokens.Jwt" Version="8.14.0" />
+        <PackageReference Include="System.IdentityModel.Tokens.Jwt" Version="8.15.0" />
         <PackageReference Include="System.Text.Encoding.CodePages" Version="9.0.9" />
     </ItemGroup>
 
