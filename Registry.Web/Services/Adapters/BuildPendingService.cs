@@ -3,6 +3,7 @@ using System;
 using System.Linq;
 using System.Text;
 using System.Text.Json;
+using System.Threading;
 using System.Threading.Tasks;
 using Hangfire;
 using Hangfire.Console;
@@ -34,7 +35,7 @@ public class BuildPendingService
     private DateTime? _lastRun;
     private ProcessingStats _lastStats = new();
     private long _lastDurationMs;
-    private readonly object _statsLock = new();
+    private readonly Lock _statsLock = new();
 
     public BuildPendingService(
         RegistryContext context,
@@ -53,8 +54,7 @@ public class BuildPendingService
         if (!_cacheManager.IsRegistered(MagicStrings.BuildPendingTrackerCacheSeed))
         {
             _cacheManager.Register(
-                MagicStrings.BuildPendingTrackerCacheSeed,
-                async (object[] _) => Array.Empty<byte>(),
+                MagicStrings.BuildPendingTrackerCacheSeed, _ => Task.FromResult<byte[]>([]),
                 TimeSpan.FromHours(24)
             );
         }

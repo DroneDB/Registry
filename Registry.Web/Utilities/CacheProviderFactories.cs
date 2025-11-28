@@ -64,7 +64,7 @@ public static class CacheProviderFactories
     /// </returns>
     public static Func<object[], Task<byte[]>> CreateDatasetVisibilityProvider()
     {
-        return async parameters =>
+        return parameters =>
         {
             // Parameters: orgSlug, internalRef, ddbManager
             var orgSlug = (string)parameters[0];
@@ -75,7 +75,7 @@ public static class CacheProviderFactories
             var meta = ddb.Meta.GetSafe();
             var visibility = (int)(meta.Visibility ?? Visibility.Private);
 
-            return BitConverter.GetBytes(visibility);
+            return Task.FromResult(BitConverter.GetBytes(visibility));
         };
     }
 }
