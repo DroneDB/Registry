@@ -26,6 +26,7 @@ public static class MagicStrings
 
     public const string HangFireUrl = "/hangfire";
     public const string SwaggerUrl = "/swagger";
+    public const string ScalarUrl = "/scalar/v1";
     public const string QuickHealthUrl = "/quickhealth";
     public const string HealthUrl = "/health";
     public const string VersionUrl = "/version";
