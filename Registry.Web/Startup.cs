@@ -82,9 +82,9 @@ public class Startup
                 Description = "API to manage DroneDB Registry",
                 Contact = new OpenApiContact
                 {
-                    Name = "Luca Di Leo",
-                    Email = "ldileo@digipa.it",
-                    Url = new Uri("https://digipa.it/"),
+                    Name = "DroneDB Support",
+                    Email = "support@dronedb.app",
+                    Url = new Uri("https://dronedb.app/"),
                 },
                 License = new OpenApiLicense
                 {
