@@ -48,11 +48,11 @@ public class UsersController : ControllerBaseEx
     {
         try
         {
-            _logger.LogDebug("Users controller Authenticate('{Username}')", model?.Username);
-
             if (model == null)
                 return BadRequest(new ErrorResponse("No auth data provided"));
 
+            _logger.LogDebug("Users controller Authenticate('{Username}')", model.Username);
+            
             var res = string.IsNullOrWhiteSpace(model.Token)
                 ? await _usersManager.Authenticate(model.Username, model.Password)
                 : await _usersManager.Authenticate(model.Token);
