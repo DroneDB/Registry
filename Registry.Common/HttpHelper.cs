@@ -9,7 +9,10 @@ namespace Registry.Common;
 
 public static class HttpHelper
 {
-    private static readonly HttpClient _httpClient = new HttpClient();
+    private static readonly HttpClient _httpClient = new()
+    {
+        Timeout = TimeSpan.FromSeconds(5 * 60) // 5 minutes
+    };
 
     public static Task DownloadFileAsync(string uri, string outputPath)
     {
