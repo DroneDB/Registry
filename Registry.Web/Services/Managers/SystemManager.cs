@@ -287,7 +287,7 @@ public class SystemManager : ISystemManager
                     Organization = request.SourceOrganization,
                     Dataset = request.SourceDataset,
                     Message = "Authentication failed",
-                    Phase = "authentication"
+                    Phase = ImportPhase.Authentication
                 });
 
                 return CreateResult(importedItems, errors, stopwatch.Elapsed);
@@ -313,7 +313,7 @@ public class SystemManager : ISystemManager
                 Organization = request.SourceOrganization,
                 Dataset = request.SourceDataset,
                 Message = ex.Message,
-                Phase = "general"
+                Phase = ImportPhase.General
             });
         }
 
@@ -348,7 +348,7 @@ public class SystemManager : ISystemManager
                 {
                     Organization = request.SourceOrganization,
                     Message = "Authentication failed",
-                    Phase = "authentication"
+                    Phase = ImportPhase.Authentication
                 });
 
                 return CreateResult(importedItems, errors, stopwatch.Elapsed);
@@ -383,7 +383,7 @@ public class SystemManager : ISystemManager
                         Organization = request.SourceOrganization,
                         Dataset = dataset.Slug,
                         Message = ex.Message,
-                        Phase = "general"
+                        Phase = ImportPhase.General
                     });
                 }
             }
@@ -395,7 +395,7 @@ public class SystemManager : ISystemManager
             {
                 Organization = request.SourceOrganization,
                 Message = ex.Message,
-                Phase = "general"
+                Phase = ImportPhase.General
             });
         }
 
@@ -483,7 +483,7 @@ public class SystemManager : ISystemManager
                     Organization = sourceOrg,
                     Dataset = sourceDs,
                     Message = $"Download failed: {ex.Message}",
-                    Phase = "download"
+                    Phase = ImportPhase.Download
                 });
                 return;
             }
@@ -614,7 +614,7 @@ public class SystemManager : ISystemManager
                 Organization = sourceOrg,
                 Dataset = sourceDs,
                 Message = ex.Message,
-                Phase = "save"
+                Phase = ImportPhase.Save
             });
         }
         finally

@@ -40,10 +40,18 @@ public class ImportedItemDto
     public DateTime ImportedAt { get; set; }
 }
 
+public enum ImportPhase
+{
+    Authentication,
+    Download,
+    Save,
+    General
+}
+
 public class ImportErrorDto
 {
     public string Organization { get; set; }
     public string Dataset { get; set; }
     public string Message { get; set; }
-    public string Phase { get; set; } // "authentication", "download", "extraction", "save"
+    public ImportPhase Phase { get; set; }
 }
