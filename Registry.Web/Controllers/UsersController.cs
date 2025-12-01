@@ -7,7 +7,6 @@ using Registry.Web.Models.Configuration;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Registry.Web.Models.DTO;
@@ -27,11 +26,13 @@ public class UsersController : ControllerBaseEx
 {
     private readonly IUsersManager _usersManager;
     private readonly ILogger<UsersController> _logger;
+    private readonly AppSettings _appSettings;
 
-    public UsersController(IUsersManager usersManager, ILogger<UsersController> logger)
+    public UsersController(IUsersManager usersManager, ILogger<UsersController> logger, IOptions<AppSettings> appSettings)
     {
         _usersManager = usersManager;
         _logger = logger;
+        _appSettings = appSettings.Value;
     }
 
     /// <summary>
@@ -52,7 +53,7 @@ public class UsersController : ControllerBaseEx
                 return BadRequest(new ErrorResponse("No auth data provided"));
 
             _logger.LogDebug("Users controller Authenticate('{Username}')", model.Username);
-            
+
             var res = string.IsNullOrWhiteSpace(model.Token)
                 ? await _usersManager.Authenticate(model.Username, model.Password)
                 : await _usersManager.Authenticate(model.Token);
@@ -523,8 +524,7 @@ public class UsersController : ControllerBaseEx
             _logger.LogDebug("Users controller IsUserManagementEnabled()");
 
             // User management is disabled if an external authentication URL is configured
-            var appSettings = HttpContext.RequestServices.GetRequiredService<IOptions<AppSettings>>().Value;
-            var isEnabled = string.IsNullOrWhiteSpace(appSettings?.ExternalAuthUrl);
+            var isEnabled = string.IsNullOrWhiteSpace(_appSettings.ExternalAuthUrl);
 
             return Ok(isEnabled);
         }
