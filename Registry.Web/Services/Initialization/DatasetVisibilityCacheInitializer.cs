@@ -56,7 +56,8 @@ internal class DatasetVisibilityCacheInitializer
             await Parallel.ForEachAsync(datasets,
                 new ParallelOptions
                 {
-                    MaxDegreeOfParallelism = 20,
+                    // Use all available cores
+                    MaxDegreeOfParallelism = Environment.ProcessorCount,
                     CancellationToken = token
                 },
                 async (ds, ct) =>
