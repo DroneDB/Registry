@@ -670,8 +670,8 @@ public class ObjectsController : ControllerBaseEx
     {
         try
         {
-            _logger.LogDebug("Objects controller BuildFile('{OrgSlug}', '{DsSlug}', '{Path}')", orgSlug, dsSlug,
-                path);
+            _logger.LogDebug("Objects controller GetBuildFile('{OrgSlug}', '{DsSlug}', '{Hash}', '{Path}')", orgSlug, dsSlug,
+                hash, path);
 
             var res = await _objectsManager.GetBuildFile(orgSlug, dsSlug, hash, path);
 
