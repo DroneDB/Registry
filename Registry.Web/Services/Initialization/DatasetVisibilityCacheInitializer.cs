@@ -1,5 +1,6 @@
 using System;
 using System.Linq;
+using System.Runtime.InteropServices;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
@@ -19,6 +20,10 @@ internal class DatasetVisibilityCacheInitializer
 {
     private readonly IServiceProvider _services;
     private readonly ILogger _logger;
+
+    // Thread-safe counters for parallel operations
+    private int _successCount;
+    private int _failCount;
 
     public DatasetVisibilityCacheInitializer(IServiceProvider services, ILogger logger)
     {
@@ -49,10 +54,11 @@ internal class DatasetVisibilityCacheInitializer
 
             _logger.LogInformation("Preloading visibility for {Count} datasets", datasets.Count);
 
-            var successCount = 0;
-            var failCount = 0;
+            // Reset counters
+            _successCount = 0;
+            _failCount = 0;
 
-            // Throttled parallel loading (max 20 concurrent to avoid overwhelming disk)
+            // Throttled parallel loading (max cores concurrent to avoid overwhelming disk)
             await Parallel.ForEachAsync(datasets,
                 new ParallelOptions
                 {
@@ -62,42 +68,79 @@ internal class DatasetVisibilityCacheInitializer
                 },
                 async (ds, ct) =>
                 {
-                    try
-                    {
-                        // This will cache if miss (calls GetAsync which triggers provider)
-                        await cacheManager.GetAsync(
-                            MagicStrings.DatasetVisibilityCacheSeed,
-                            ds.OrgSlug,
-                            ds.OrgSlug,
-                            ds.InternalRef,
-                            ddbManager
-                        );
-
-                        Interlocked.Increment(ref successCount);
-
-                        if (successCount % 100 == 0)
-                        {
-                            _logger.LogDebug("Preloaded {Count}/{Total} dataset visibilities",
-                                successCount, datasets.Count);
-                        }
-                    }
-                    catch (Exception ex)
-                    {
-                        _logger.LogWarning(ex,
-                            "Failed to preload visibility for {Org}/{Ds} ({Ref})",
-                            ds.OrgSlug, ds.DsSlug, ds.InternalRef);
-                        Interlocked.Increment(ref failCount);
-                    }
+                    await PreloadDatasetVisibilityAsync(ds.OrgSlug, ds.DsSlug, ds.InternalRef,
+                        ddbManager, cacheManager, datasets.Count);
                 });
 
             _logger.LogInformation(
                 "Dataset visibility cache preload completed: {Success} success, {Fail} failed, {Total} total",
-                successCount, failCount, datasets.Count);
+                _successCount, _failCount, datasets.Count);
+        }
+        catch (OperationCanceledException)
+        {
+            _logger.LogWarning("Dataset visibility cache preload was canceled");
+            // Don't rethrow - allow server to continue starting
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Dataset visibility cache preload failed with exception");
-            throw;
+            // Log the error but don't crash the server - cache preload is non-critical
+            _logger.LogError(ex, "Dataset visibility cache preload failed with exception. Server will continue without preloaded cache.");
+        }
+    }
+
+    /// <summary>
+    /// Preloads visibility for a single dataset with comprehensive exception handling.
+    /// Native exceptions from DroneDB are caught and logged without crashing the server.
+    /// </summary>
+    private async Task PreloadDatasetVisibilityAsync(
+        string orgSlug,
+        string dsSlug,
+        Guid internalRef,
+        IDdbManager ddbManager,
+        ICacheManager cacheManager,
+        int totalCount)
+    {
+        try
+        {
+            // This will cache if miss (calls GetAsync which triggers provider)
+            await cacheManager.GetAsync(
+                MagicStrings.DatasetVisibilityCacheSeed,
+                orgSlug,
+                orgSlug,
+                internalRef,
+                ddbManager
+            );
+
+            var count = Interlocked.Increment(ref _successCount);
+
+            if (count % 100 == 0)
+            {
+                _logger.LogDebug("Preloaded {Count}/{Total} dataset visibilities",
+                    count, totalCount);
+            }
+        }
+        catch (SEHException sehEx)
+        {
+            // Native structured exception (e.g., access violation in native DroneDB code)
+            _logger.LogError(sehEx,
+                "Native exception (SEH) while preloading visibility for {Org}/{Ds} ({Ref}). Error code: 0x{ErrorCode:X8}",
+                orgSlug, dsSlug, internalRef, sehEx.ErrorCode);
+            Interlocked.Increment(ref _failCount);
+        }
+        catch (ExternalException extEx)
+        {
+            // Other native/COM exceptions
+            _logger.LogError(extEx,
+                "External exception while preloading visibility for {Org}/{Ds} ({Ref}). Error code: 0x{ErrorCode:X8}",
+                orgSlug, dsSlug, internalRef, extEx.ErrorCode);
+            Interlocked.Increment(ref _failCount);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex,
+                "Failed to preload visibility for {Org}/{Ds} ({Ref})",
+                orgSlug, dsSlug, internalRef);
+            Interlocked.Increment(ref _failCount);
         }
     }
 }
