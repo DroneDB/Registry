@@ -63,7 +63,7 @@ internal class DatasetVisibilityCacheInitializer
                 new ParallelOptions
                 {
                     // Use all available cores
-                    MaxDegreeOfParallelism = Environment.ProcessorCount,
+                    MaxDegreeOfParallelism = Math.Min(Environment.ProcessorCount, 2),
                     CancellationToken = token
                 },
                 async (ds, ct) =>
