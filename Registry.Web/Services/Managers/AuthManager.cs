@@ -13,6 +13,7 @@ using Registry.Web.Data.Models;
 using Registry.Web.Identity;
 using Registry.Web.Identity.Models;
 using Registry.Web.Models;
+using Registry.Web.Models.DTO;
 using Registry.Web.Services.Adapters;
 using Registry.Web.Services.Ports;
 using Registry.Web.Utilities.Auth;
@@ -35,13 +36,14 @@ public class AuthManager : IAuthManager
         IHttpContextAccessor httpContextAccessor,
         IDdbManager ddbManager,
         RegistryContext context,
-        ILogger<AuthManager> logger)
+        ILogger<AuthManager> logger,
+        ICacheManager cacheManager)
     {
         _usersManager = usersManager;
         _httpContextAccessor = httpContextAccessor;
         _resourceAccess = new ResourceAccessControl(usersManager, context, logger);
         _organizationAccess = new OrganizationAccessControl(usersManager, context, logger);
-        _datasetAccess = new DatasetAccessControl(usersManager, context, logger, ddbManager);
+        _datasetAccess = new DatasetAccessControl(usersManager, context, logger, ddbManager, cacheManager);
     }
 
     public async Task<User> GetCurrentUser()
@@ -119,6 +121,18 @@ public class AuthManager : IAuthManager
             var t when t == typeof(Dataset) =>
                 await _datasetAccess.CanAccessDataset(obj as Dataset, access, user),
             _ => throw new InvalidEnumArgumentException($"Not supported type {typeof(T)}")
+        };
+    }
+
+    public async Task<DatasetPermissionsDto> GetDatasetPermissions(Dataset dataset)
+    {
+        var user = await GetCurrentUser();
+        
+        return new DatasetPermissionsDto
+        {
+            CanRead = await _datasetAccess.CanAccessDataset(dataset, AccessType.Read, user),
+            CanWrite = await _datasetAccess.CanAccessDataset(dataset, AccessType.Write, user),
+            CanDelete = await _datasetAccess.CanAccessDataset(dataset, AccessType.Delete, user)
         };
     }
 }

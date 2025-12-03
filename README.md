@@ -38,10 +38,10 @@ docker run -it --rm -p 5000:5000 -v ${PWD}/registry-data:/data dronedb/registry
 The data will be stored in the local folder `registry-data`.
 Open http://localhost:5000 in your browser to start using the application.
 
-Default credentials are `admin` and `password`. 
+Default credentials are `admin` and `password`.
 
 Useful links:
- - Swagger: http://localhost:5000/swagger
+ - API Docs (Scalar): http://localhost:5000/scalar/v1
  - Version: http://localhost:5000/version
  - (req auth) Quick Health: http://localhost:5000/quickhealth
  - (req auth) Health: http://localhost:5000/health
@@ -51,7 +51,7 @@ The log file is located in `registry-data/logs/registry.txt`.
 
 ## Getting started natively
 
-You need to install the latest version of the [DroneDB library](https://github.com/DroneDB/DroneDB/releases/latest) and add it to PATH. 
+You need to install the latest version of the [DroneDB library](https://github.com/DroneDB/DroneDB/releases/latest) and add it to PATH.
 
 Download the [latest release](https://github.com/DroneDB/Registry/releases/latest) for your platform and run the following command:
 
@@ -195,7 +195,7 @@ then run
 docker-compose restart registry
 ````
 
-> **_Info:_** Any changes to the configuration file need to restart the registry container  
+> **_Info:_** Any changes to the configuration file need to restart the registry container
 
 ## Build Docker image
 
@@ -257,7 +257,7 @@ With docker or docker-compose, you update the application by pulling the latest 
 ```bash
 docker-compose pull
 docker-compose down
-docker-compose up -d 
+docker-compose up -d
 ```
 
 ## Project architecture

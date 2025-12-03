@@ -144,10 +144,10 @@ public class ObjectsManager : IObjectsManager
         if (!await _authManager.RequestAccess(ds, AccessType.Read))
             throw new UnauthorizedException("The current user is not allowed to read this dataset");
 
-        return await InternalGet(orgSlug, ds.InternalRef, path);
+        return InternalGet(orgSlug, ds.InternalRef, path);
     }
 
-    private async Task<StorageEntryDto> InternalGet(string orgSlug, Guid internalRef, string path)
+    private StorageEntryDto InternalGet(string orgSlug, Guid internalRef, string path)
     {
         var ddb = _ddbManager.Get(orgSlug, internalRef);
 
@@ -303,7 +303,7 @@ public class ObjectsManager : IObjectsManager
     /// <param name="entry">The entry to validate</param>
     /// <param name="path">The path of the entry</param>
     /// <exception cref="InvalidOperationException">Thrown when an active build is detected</exception>
-    private static async Task ValidateNoBuildActive(IDDB ddb, Entry entry, string path)
+    private static void ValidateNoBuildActive(IDDB ddb, Entry entry, string path)
     {
         if (entry.Type == EntryType.Directory)
         {
@@ -327,6 +327,7 @@ public class ObjectsManager : IObjectsManager
                 throw new InvalidOperationException(
                     $"Cannot transfer file '{path}' because it has an active build in progress");
         }
+        
     }
 
     public async Task Transfer(string sourceOrgSlug, string sourceDsSlug, string sourcePath, string destOrgSlug,
@@ -359,7 +360,7 @@ public class ObjectsManager : IObjectsManager
             throw new InvalidOperationException("Cannot find source entry: '" + sourcePath + "'");
 
         // Validate that source has no active build
-        await ValidateNoBuildActive(sourceDdb, sourceEntry, sourcePath);
+        ValidateNoBuildActive(sourceDdb, sourceEntry, sourcePath);
 
         // If destPath is not specified, use the source file/folder name in the root of the destination dataset
         if (string.IsNullOrWhiteSpace(destPath))

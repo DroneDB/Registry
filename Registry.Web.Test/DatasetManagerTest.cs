@@ -13,6 +13,7 @@ using NUnit.Framework;
 using Registry.Adapters.DroneDB;
 using Registry.Ports;
 using Registry.Ports.DroneDB;
+using Registry.Test.Common;
 using Registry.Web.Data;
 using Registry.Web.Data.Models;
 using Registry.Web.Identity.Models;
@@ -20,22 +21,24 @@ using Registry.Web.Models.Configuration;
 using Registry.Web.Services.Adapters;
 using Registry.Web.Services.Managers;
 using Registry.Web.Services.Ports;
+using Registry.Web.Models.DTO;
 using Entry = Registry.Ports.DroneDB.Entry;
 
 namespace Registry.Web.Test;
 
 [TestFixture]
-public class DatasetManagerTest
+public class DatasetManagerTest : TestBase
 {
 
     private Mock<IAuthManager> _authManagerMock;
     private Mock<IOptions<AppSettings>> _appSettingsMock;
     private Mock<IDatasetsManager> _datasetManagerMock;
-    private Logger<DatasetsManager> _datasetsManagerLogger;
+    private ILogger<DatasetsManager> _datasetsManagerLogger;
     private Mock<IDdbManager> _ddbFactoryMock;
     private Mock<IObjectsManager> _objectsManagerMock;
     private Mock<IHttpContextAccessor> _httpContextAccessorMock;
     private Mock<IStacManager> _stacManagerMock;
+    private ICacheManager _cacheManager;
 
     [SetUp]
     public void Setup()
@@ -47,7 +50,9 @@ public class DatasetManagerTest
         _objectsManagerMock = new Mock<IObjectsManager>();
         _stacManagerMock = new Mock<IStacManager>();
         _httpContextAccessorMock = new Mock<IHttpContextAccessor>();
-        _datasetsManagerLogger = new Logger<DatasetsManager>(LoggerFactory.Create(builder => builder.AddConsole()));
+        _cacheManager = CreateTestCacheManager();
+        RegisterDatasetVisibilityCacheProvider(_cacheManager);
+        _datasetsManagerLogger = CreateTestLogger<DatasetsManager>();
     }
 
     [Test]
@@ -82,7 +87,7 @@ public class DatasetManagerTest
         _ddbFactoryMock.Setup(x => x.Get(It.IsAny<string>(), It.IsAny<Guid>())).Returns(ddbMock.Object);
 
         var datasetsManager = new DatasetsManager(context, utils, _datasetsManagerLogger,
-            _objectsManagerMock.Object, _stacManagerMock.Object, _ddbFactoryMock.Object, _authManagerMock.Object);
+            _objectsManagerMock.Object, _stacManagerMock.Object, _ddbFactoryMock.Object, _authManagerMock.Object, _cacheManager);
 
         var list = (await datasetsManager.List(MagicStrings.PublicOrganizationSlug)).ToArray();
 
@@ -97,6 +102,369 @@ public class DatasetManagerTest
         pub.Properties["name"].Should().Be(expectedName);
 
 
+    }
+
+    [Test]
+    public async Task Get_WithPermissions_PopulatesPermissionsProperty()
+    {
+        // Arrange
+        const string orgSlug = MagicStrings.PublicOrganizationSlug;
+        const string dsSlug = MagicStrings.DefaultDatasetSlug;
+
+        await using var context = GetTest1Context();
+        _appSettingsMock.Setup(o => o.Value).Returns(_settings);
+
+        // Setup auth manager to return specific permissions
+        _authManagerMock.Setup(o => o.RequestAccess(It.IsAny<Dataset>(), AccessType.Read))
+            .Returns(Task.FromResult(true));
+        _authManagerMock.Setup(o => o.GetDatasetPermissions(It.IsAny<Dataset>()))
+            .Returns(Task.FromResult(new DatasetPermissionsDto
+            {
+                CanRead = true,
+                CanWrite = false,
+                CanDelete = false
+            }));
+
+        var utils = new WebUtils(_authManagerMock.Object, context, _appSettingsMock.Object,
+            _httpContextAccessorMock.Object, _ddbFactoryMock.Object);
+
+        var ddbMock = new Mock<IDDB>();
+        ddbMock.Setup(x => x.GetInfo()).Returns(new Entry
+        {
+            Properties = new Dictionary<string, object>
+            {
+                {"public", true},
+                {"name", "Default"}
+            },
+            Size = 1000,
+            ModifiedTime = DateTime.Now
+        });
+
+        _ddbFactoryMock.Setup(x => x.Get(It.IsAny<string>(), It.IsAny<Guid>()))
+            .Returns(ddbMock.Object);
+
+        var datasetsManager = new DatasetsManager(context, utils, _datasetsManagerLogger,
+            _objectsManagerMock.Object, _stacManagerMock.Object, _ddbFactoryMock.Object,
+            _authManagerMock.Object, _cacheManager);
+
+        // Act
+        var result = await datasetsManager.Get(orgSlug, dsSlug);
+
+        // Assert
+        result.Should().NotBeNull();
+        result.Permissions.Should().NotBeNull();
+        result.Permissions.CanRead.Should().BeTrue();
+        result.Permissions.CanWrite.Should().BeFalse();
+        result.Permissions.CanDelete.Should().BeFalse();
+
+        // Verify GetDatasetPermissions was called
+        _authManagerMock.Verify(x => x.GetDatasetPermissions(It.IsAny<Dataset>()), Times.Once);
+    }
+
+    [Test]
+    public async Task Get_WithFullAccess_PopulatesAllPermissions()
+    {
+        // Arrange
+        const string orgSlug = MagicStrings.PublicOrganizationSlug;
+        const string dsSlug = MagicStrings.DefaultDatasetSlug;
+
+        await using var context = GetTest1Context();
+        _appSettingsMock.Setup(o => o.Value).Returns(_settings);
+
+        // Setup auth manager to return full access
+        _authManagerMock.Setup(o => o.RequestAccess(It.IsAny<Dataset>(), AccessType.Read))
+            .Returns(Task.FromResult(true));
+        _authManagerMock.Setup(o => o.GetDatasetPermissions(It.IsAny<Dataset>()))
+            .Returns(Task.FromResult(new DatasetPermissionsDto
+            {
+                CanRead = true,
+                CanWrite = true,
+                CanDelete = true
+            }));
+
+        var utils = new WebUtils(_authManagerMock.Object, context, _appSettingsMock.Object,
+            _httpContextAccessorMock.Object, _ddbFactoryMock.Object);
+
+        var ddbMock = new Mock<IDDB>();
+        ddbMock.Setup(x => x.GetInfo()).Returns(new Entry
+        {
+            Properties = new Dictionary<string, object>
+            {
+                {"public", true},
+                {"name", "Default"}
+            },
+            Size = 1000,
+            ModifiedTime = DateTime.Now
+        });
+
+        _ddbFactoryMock.Setup(x => x.Get(It.IsAny<string>(), It.IsAny<Guid>()))
+            .Returns(ddbMock.Object);
+
+        var datasetsManager = new DatasetsManager(context, utils, _datasetsManagerLogger,
+            _objectsManagerMock.Object, _stacManagerMock.Object, _ddbFactoryMock.Object,
+            _authManagerMock.Object, _cacheManager);
+
+        // Act
+        var result = await datasetsManager.Get(orgSlug, dsSlug);
+
+        // Assert
+        result.Should().NotBeNull();
+        result.Permissions.Should().NotBeNull();
+        result.Permissions.CanRead.Should().BeTrue();
+        result.Permissions.CanWrite.Should().BeTrue();
+        result.Permissions.CanDelete.Should().BeTrue();
+    }
+
+    [Test]
+    public async Task GetEntry_IncludesPermissionsInProperties()
+    {
+        // Arrange
+        const string orgSlug = MagicStrings.PublicOrganizationSlug;
+        const string dsSlug = MagicStrings.DefaultDatasetSlug;
+
+        await using var context = GetTest1Context();
+        _appSettingsMock.Setup(o => o.Value).Returns(_settings);
+
+        // Setup auth manager to return specific permissions
+        _authManagerMock.Setup(o => o.RequestAccess(It.IsAny<Dataset>(), AccessType.Read))
+            .Returns(Task.FromResult(true));
+        _authManagerMock.Setup(o => o.GetDatasetPermissions(It.IsAny<Dataset>()))
+            .Returns(Task.FromResult(new DatasetPermissionsDto
+            {
+                CanRead = true,
+                CanWrite = true,
+                CanDelete = false
+            }));
+
+        var utils = new WebUtils(_authManagerMock.Object, context, _appSettingsMock.Object,
+            _httpContextAccessorMock.Object, _ddbFactoryMock.Object);
+
+        var ddbMock = new Mock<IDDB>();
+        ddbMock.Setup(x => x.GetInfo()).Returns(new Entry
+        {
+            Properties = new Dictionary<string, object>
+            {
+                {"public", true},
+                {"name", "Default"}
+            },
+            Size = 1000,
+            ModifiedTime = DateTime.Now,
+            Path = "."
+        });
+
+        _ddbFactoryMock.Setup(x => x.Get(It.IsAny<string>(), It.IsAny<Guid>()))
+            .Returns(ddbMock.Object);
+
+        var datasetsManager = new DatasetsManager(context, utils, _datasetsManagerLogger,
+            _objectsManagerMock.Object, _stacManagerMock.Object, _ddbFactoryMock.Object,
+            _authManagerMock.Object, _cacheManager);
+
+        // Act
+        var result = await datasetsManager.GetEntry(orgSlug, dsSlug);
+
+        // Assert
+        result.Should().NotBeNull();
+        result.Should().HaveCount(1);
+
+        var entry = result.First();
+        entry.Properties.Should().NotBeNull();
+        entry.Properties.Should().ContainKey("permissions");
+
+        var permissions = entry.Properties["permissions"];
+        permissions.Should().NotBeNull();
+
+        // Check permissions using reflection (since it's an anonymous object)
+        var permissionsDict = JsonConvert.DeserializeObject<Dictionary<string, bool>>(
+            JsonConvert.SerializeObject(permissions));
+
+        permissionsDict.Should().ContainKey("canRead");
+        permissionsDict.Should().ContainKey("canWrite");
+        permissionsDict.Should().ContainKey("canDelete");
+        permissionsDict["canRead"].Should().BeTrue();
+        permissionsDict["canWrite"].Should().BeTrue();
+        permissionsDict["canDelete"].Should().BeFalse();
+
+        // Verify GetDatasetPermissions was called
+        _authManagerMock.Verify(x => x.GetDatasetPermissions(It.IsAny<Dataset>()), Times.Once);
+    }
+
+    [Test]
+    public async Task GetEntry_WithNoAccess_IncludesPermissionsAsFalse()
+    {
+        // Arrange
+        const string orgSlug = MagicStrings.PublicOrganizationSlug;
+        const string dsSlug = MagicStrings.DefaultDatasetSlug;
+
+        await using var context = GetTest1Context();
+        _appSettingsMock.Setup(o => o.Value).Returns(_settings);
+
+        // Setup auth manager to return read-only access
+        _authManagerMock.Setup(o => o.RequestAccess(It.IsAny<Dataset>(), AccessType.Read))
+            .Returns(Task.FromResult(true));
+        _authManagerMock.Setup(o => o.GetDatasetPermissions(It.IsAny<Dataset>()))
+            .Returns(Task.FromResult(new DatasetPermissionsDto
+            {
+                CanRead = true,
+                CanWrite = false,
+                CanDelete = false
+            }));
+
+        var utils = new WebUtils(_authManagerMock.Object, context, _appSettingsMock.Object,
+            _httpContextAccessorMock.Object, _ddbFactoryMock.Object);
+
+        var ddbMock = new Mock<IDDB>();
+        ddbMock.Setup(x => x.GetInfo()).Returns(new Entry
+        {
+            Properties = new Dictionary<string, object>
+            {
+                {"public", true},
+                {"name", "Default"}
+            },
+            Size = 1000,
+            ModifiedTime = DateTime.Now,
+            Path = "."
+        });
+
+        _ddbFactoryMock.Setup(x => x.Get(It.IsAny<string>(), It.IsAny<Guid>()))
+            .Returns(ddbMock.Object);
+
+        var datasetsManager = new DatasetsManager(context, utils, _datasetsManagerLogger,
+            _objectsManagerMock.Object, _stacManagerMock.Object, _ddbFactoryMock.Object,
+            _authManagerMock.Object, _cacheManager);
+
+        // Act
+        var result = await datasetsManager.GetEntry(orgSlug, dsSlug);
+
+        // Assert
+        result.Should().NotBeNull();
+        result.Should().HaveCount(1);
+
+        var entry = result.First();
+        var permissionsDict = JsonConvert.DeserializeObject<Dictionary<string, bool>>(
+            JsonConvert.SerializeObject(entry.Properties["permissions"]));
+
+        permissionsDict["canRead"].Should().BeTrue();
+        permissionsDict["canWrite"].Should().BeFalse();
+        permissionsDict["canDelete"].Should().BeFalse();
+    }
+
+    [Test]
+    public async Task List_IncludesPermissionsInDatasets()
+    {
+        // Arrange
+        const string orgSlug = MagicStrings.PublicOrganizationSlug;
+
+        await using var context = GetTest1Context();
+        _appSettingsMock.Setup(o => o.Value).Returns(_settings);
+
+        // Setup auth manager to return specific permissions
+        _authManagerMock.Setup(o => o.RequestAccess(It.IsAny<Organization>(), AccessType.Read))
+            .Returns(Task.FromResult(true));
+        _authManagerMock.Setup(o => o.GetDatasetPermissions(It.IsAny<Dataset>()))
+            .Returns(Task.FromResult(new DatasetPermissionsDto
+            {
+                CanRead = true,
+                CanWrite = true,
+                CanDelete = false
+            }));
+
+        var utils = new WebUtils(_authManagerMock.Object, context, _appSettingsMock.Object,
+            _httpContextAccessorMock.Object, _ddbFactoryMock.Object);
+
+        var ddbMock = new Mock<IDDB>();
+        ddbMock.Setup(x => x.GetInfo()).Returns(new Entry
+        {
+            Properties = new Dictionary<string, object>
+            {
+                {"public", true},
+                {"name", "Default"}
+            },
+            Size = 1000,
+            ModifiedTime = DateTime.Now,
+            Path = "."
+        });
+
+        _ddbFactoryMock.Setup(x => x.Get(It.IsAny<string>(), It.IsAny<Guid>()))
+            .Returns(ddbMock.Object);
+
+        var datasetsManager = new DatasetsManager(context, utils, _datasetsManagerLogger,
+            _objectsManagerMock.Object, _stacManagerMock.Object, _ddbFactoryMock.Object,
+            _authManagerMock.Object, _cacheManager);
+
+        // Act
+        var result = await datasetsManager.List(orgSlug);
+
+        // Assert
+        result.Should().NotBeNull();
+        var datasets = result.ToList();
+        datasets.Should().HaveCount(1);
+
+        var dataset = datasets.First();
+        dataset.Permissions.Should().NotBeNull();
+        dataset.Permissions.CanRead.Should().BeTrue();
+        dataset.Permissions.CanWrite.Should().BeTrue();
+        dataset.Permissions.CanDelete.Should().BeFalse();
+
+        // Verify GetDatasetPermissions was called
+        _authManagerMock.Verify(x => x.GetDatasetPermissions(It.IsAny<Dataset>()), Times.Once);
+    }
+
+    [Test]
+    public async Task List_WithReadOnlyAccess_ReturnsCorrectPermissions()
+    {
+        // Arrange
+        const string orgSlug = MagicStrings.PublicOrganizationSlug;
+
+        await using var context = GetTest1Context();
+        _appSettingsMock.Setup(o => o.Value).Returns(_settings);
+
+        // Setup auth manager to return read-only permissions
+        _authManagerMock.Setup(o => o.RequestAccess(It.IsAny<Organization>(), AccessType.Read))
+            .Returns(Task.FromResult(true));
+        _authManagerMock.Setup(o => o.GetDatasetPermissions(It.IsAny<Dataset>()))
+            .Returns(Task.FromResult(new DatasetPermissionsDto
+            {
+                CanRead = true,
+                CanWrite = false,
+                CanDelete = false
+            }));
+
+        var utils = new WebUtils(_authManagerMock.Object, context, _appSettingsMock.Object,
+            _httpContextAccessorMock.Object, _ddbFactoryMock.Object);
+
+        var ddbMock = new Mock<IDDB>();
+        ddbMock.Setup(x => x.GetInfo()).Returns(new Entry
+        {
+            Properties = new Dictionary<string, object>
+            {
+                {"public", true},
+                {"name", "Default"}
+            },
+            Size = 1000,
+            ModifiedTime = DateTime.Now,
+            Path = "."
+        });
+
+        _ddbFactoryMock.Setup(x => x.Get(It.IsAny<string>(), It.IsAny<Guid>()))
+            .Returns(ddbMock.Object);
+
+        var datasetsManager = new DatasetsManager(context, utils, _datasetsManagerLogger,
+            _objectsManagerMock.Object, _stacManagerMock.Object, _ddbFactoryMock.Object,
+            _authManagerMock.Object, _cacheManager);
+
+        // Act
+        var result = await datasetsManager.List(orgSlug);
+
+        // Assert
+        result.Should().NotBeNull();
+        var datasets = result.ToList();
+        datasets.Should().HaveCount(1);
+
+        var dataset = datasets.First();
+        dataset.Permissions.Should().NotBeNull();
+        dataset.Permissions.CanRead.Should().BeTrue();
+        dataset.Permissions.CanWrite.Should().BeFalse();
+        dataset.Permissions.CanDelete.Should().BeFalse();
     }
 
 

@@ -13,9 +13,13 @@ using Registry.Web.Utilities;
 
 namespace Registry.Web.Controllers;
 
+/// <summary>
+/// Controller for system administration and maintenance operations.
+/// </summary>
 [Authorize]
 [ApiController]
 [Route(RoutesHelper.SystemRadix)]
+[Produces("application/json")]
 public class SystemController : ControllerBaseEx
 {
     private readonly ISystemManager _systemManager;
@@ -27,8 +31,14 @@ public class SystemController : ControllerBaseEx
         _logger = logger;
     }
 
+    /// <summary>
+    /// Gets the current version of the Registry system.
+    /// </summary>
+    /// <returns>The version string.</returns>
     [HttpGet("version", Name = nameof(SystemController) + "." + nameof(GetVersion))]
-    [ProducesResponseType(typeof(string), 200)]
+    [ProducesResponseType(typeof(string), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status401Unauthorized)]
     public IActionResult GetVersion()
     {
         try
@@ -45,7 +55,14 @@ public class SystemController : ControllerBaseEx
         }
     }
 
+    /// <summary>
+    /// Cleans up expired or orphaned batches from the system.
+    /// </summary>
+    /// <returns>The cleanup result with removed batches and any errors encountered.</returns>
     [HttpPost("cleanupbatches", Name = nameof(SystemController) + "." + nameof(CleanupBatches))]
+    [ProducesResponseType(typeof(CleanupBatchesResultDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status401Unauthorized)]
     public async Task<IActionResult> CleanupBatches()
     {
         try
@@ -63,7 +80,14 @@ public class SystemController : ControllerBaseEx
     }
 
 
+    /// <summary>
+    /// Cleans up empty datasets from the system.
+    /// </summary>
+    /// <returns>The cleanup result with removed datasets and any errors encountered.</returns>
     [HttpPost("cleanupdatasets", Name = nameof(SystemController) + "." + nameof(CleanupDatasets))]
+    [ProducesResponseType(typeof(CleanupDatasetResultDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status401Unauthorized)]
     public async Task<IActionResult> CleanupDatasets()
     {
         try
@@ -80,7 +104,14 @@ public class SystemController : ControllerBaseEx
         }
     }
 
+    /// <summary>
+    /// Migrates dataset visibility settings from the legacy format to the new format.
+    /// </summary>
+    /// <returns>A list of migrated visibility entries.</returns>
     [HttpPost("migratevisibility", Name = nameof(SystemController) + "." + nameof(MigrateVisibility))]
+    [ProducesResponseType(typeof(IEnumerable<MigrateVisibilityEntryDTO>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status401Unauthorized)]
     public async Task<IActionResult> MigrateVisibility()
     {
         try
@@ -97,8 +128,14 @@ public class SystemController : ControllerBaseEx
         }
     }
 
+    /// <summary>
+    /// Gets the status of the build pending background job.
+    /// </summary>
+    /// <returns>The current status of the build pending job including metrics and next scheduled run.</returns>
     [HttpGet("build-pending-status", Name = nameof(SystemController) + "." + nameof(GetBuildPendingStatus))]
-    [ProducesResponseType(typeof(BuildPendingStatusDto), 200)]
+    [ProducesResponseType(typeof(BuildPendingStatusDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status401Unauthorized)]
     public async Task<IActionResult> GetBuildPendingStatus()
     {
         try
@@ -110,6 +147,62 @@ public class SystemController : ControllerBaseEx
         catch (Exception ex)
         {
             _logger.LogError(ex, "Exception in System controller GetBuildPendingStatus()");
+
+            return ExceptionResult(ex);
+        }
+    }
+
+    /// <summary>
+    /// Imports a dataset from another Registry instance.
+    /// </summary>
+    /// <param name="request">The import request containing source and destination information.</param>
+    /// <returns>The import result with imported items, errors, and statistics.</returns>
+    [HttpPost("import-dataset", Name = nameof(SystemController) + "." + nameof(ImportDataset))]
+    [ProducesResponseType(typeof(ImportResultDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> ImportDataset([FromBody] ImportDatasetRequestDto request)
+    {
+        try
+        {
+            _logger.LogDebug("System controller ImportDataset('{SourceOrg}/{SourceDs}' from '{SourceUrl}')",
+                request.SourceOrganization, request.SourceDataset, request.SourceRegistryUrl);
+
+            return Ok(await _systemManager.ImportDataset(request));
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Exception in System controller ImportDataset('{SourceOrg}/{SourceDs}' from '{SourceUrl}')",
+                request?.SourceOrganization, request?.SourceDataset, request?.SourceRegistryUrl);
+
+            return ExceptionResult(ex);
+        }
+    }
+
+    /// <summary>
+    /// Imports an entire organization with all its datasets from another Registry instance.
+    /// </summary>
+    /// <param name="request">The import request containing source and destination organization information.</param>
+    /// <returns>The import result with imported items, errors, and statistics.</returns>
+    [HttpPost("import-organization", Name = nameof(SystemController) + "." + nameof(ImportOrganization))]
+    [ProducesResponseType(typeof(ImportResultDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> ImportOrganization([FromBody] ImportOrganizationRequestDto request)
+    {
+        try
+        {
+            _logger.LogDebug("System controller ImportOrganization('{SourceOrg}' from '{SourceUrl}')",
+                request.SourceOrganization, request.SourceRegistryUrl);
+
+            return Ok(await _systemManager.ImportOrganization(request));
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Exception in System controller ImportOrganization('{SourceOrg}' from '{SourceUrl}')",
+                request?.SourceOrganization, request?.SourceRegistryUrl);
 
             return ExceptionResult(ex);
         }

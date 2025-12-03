@@ -8,6 +8,13 @@ using Registry.Web.Data.Models;
 
 namespace Registry.Web.Models.DTO;
 
+public class DatasetPermissionsDto
+{
+    public bool CanRead { get; set; }
+    public bool CanWrite { get; set; }
+    public bool CanDelete { get; set; }
+}
+
 public class DatasetDto
 {
         
@@ -18,6 +25,8 @@ public class DatasetDto
     public Dictionary<string, object> Properties { get; set; }
 
     public long Size { get; set; }
+    
+    public DatasetPermissionsDto Permissions { get; set; }
 
 }
     

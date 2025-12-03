@@ -7,7 +7,6 @@ using Microsoft.Extensions.Options;
 using Registry.Ports;
 using Registry.Web.Models.Configuration;
 using Registry.Web.Utilities;
-using Serilog;
 using ILogger = Microsoft.Extensions.Logging.ILogger;
 
 namespace Registry.Web.Services.Initialization;
@@ -61,35 +60,31 @@ internal class CacheInitializer
         var cacheManager = _services.GetRequiredService<ICacheManager>();
 
         // Register tile cache provider
-        cacheManager.Register(MagicStrings.TileCacheSeed, async parameters =>
-        {
-            // Parameters: fileHash, tx, ty, tz, retina, generateFunc
-            var generateFunc = (Func<Task<byte[]>>)parameters[5];
-            var data = await generateFunc();
-            return data.ToWebp(90);
-        }, appSettings.TilesCacheExpiration);
+        cacheManager.Register(
+            MagicStrings.TileCacheSeed,
+            CacheProviderFactories.CreateTileProvider(),
+            appSettings.TilesCacheExpiration);
 
         _logger.LogDebug("Registered tile cache provider with expiration: {Expiration}",
             appSettings.TilesCacheExpiration?.ToString() ?? "default");
 
         // Register thumbnail cache provider
-        cacheManager.Register(MagicStrings.ThumbnailCacheSeed, async parameters =>
-        {
-            try
-            {
-                // Parameters: fileHash, size, generateFunc
-                var generateFunc = (Func<Task<byte[]>>)parameters[2];
-                return await generateFunc();
-            }
-            catch (Exception ex)
-            {
-                Log.Error(ex, "Error generating thumbnail");
-                throw;
-            }
-        }, appSettings.ThumbnailsCacheExpiration);
+        cacheManager.Register(
+            MagicStrings.ThumbnailCacheSeed,
+            CacheProviderFactories.CreateThumbnailProvider(),
+            appSettings.ThumbnailsCacheExpiration);
 
         _logger.LogDebug("Registered thumbnail cache provider with expiration: {Expiration}",
             appSettings.ThumbnailsCacheExpiration?.ToString() ?? "default");
+
+        // Register dataset visibility cache provider
+        cacheManager.Register(
+            MagicStrings.DatasetVisibilityCacheSeed,
+            CacheProviderFactories.CreateDatasetVisibilityProvider(),
+            appSettings.DatasetVisibilityCacheExpiration);
+
+        _logger.LogDebug("Registered dataset visibility cache provider with expiration: {Expiration}",
+            appSettings.DatasetVisibilityCacheExpiration?.ToString() ?? "default");
 
         _logger.LogInformation("Cache providers registered successfully");
     }

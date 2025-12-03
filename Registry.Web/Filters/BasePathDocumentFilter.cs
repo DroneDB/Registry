@@ -1,4 +1,4 @@
-﻿using System.Collections.Generic;
+using System.Collections.Generic;
 using Microsoft.Extensions.Options;
 using Microsoft.OpenApi.Models;
 using Registry.Web.Models.Configuration;

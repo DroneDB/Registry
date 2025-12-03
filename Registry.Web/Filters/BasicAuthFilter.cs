@@ -35,7 +35,7 @@ public class BasicAuthFilter : ActionFilterAttribute
 
     public static void SendBasicAuthRequest(HttpResponse response)
     {
-        response.Headers.Add("WWW-Authenticate", "Basic realm=\"DroneDB\"");
+        response.Headers.Append("WWW-Authenticate", "Basic realm=\"DroneDB\"");
         response.StatusCode = 401;
     }
 
@@ -43,7 +43,7 @@ public class BasicAuthFilter : ActionFilterAttribute
     {
         var httpContext = context.HttpContext;
 
-        string authHeader = httpContext.Request.Headers["Authorization"];
+        string authHeader = httpContext.Request.Headers.Authorization;
 
         try
         {
@@ -53,10 +53,10 @@ public class BasicAuthFilter : ActionFilterAttribute
                 var encoding = Encoding.GetEncoding("iso-8859-1");
                 var usernamePassword = encoding.GetString(Convert.FromBase64String(encodedUsernamePassword));
 
-                var seperatorIndex = usernamePassword.IndexOf(':');
+                var separatorIndex = usernamePassword.IndexOf(':');
 
-                var username = usernamePassword[..seperatorIndex];
-                var password = usernamePassword[(seperatorIndex + 1)..];
+                var username = usernamePassword[..separatorIndex];
+                var password = usernamePassword[(separatorIndex + 1)..];
                     
                 var res = await _usersManager.Authenticate(username, password);
                 if (res != null)

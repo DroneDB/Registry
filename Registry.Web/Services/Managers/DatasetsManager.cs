@@ -24,6 +24,7 @@ public class DatasetsManager : IDatasetsManager
     private readonly IStacManager _stacManager;
     private readonly IDdbManager _ddbManager;
     private readonly IAuthManager _authManager;
+    private readonly ICacheManager _cacheManager;
 
     public DatasetsManager(
         RegistryContext context,
@@ -32,7 +33,8 @@ public class DatasetsManager : IDatasetsManager
         IObjectsManager objectsManager,
         IStacManager stacManager,
         IDdbManager ddbManager,
-        IAuthManager authManager)
+        IAuthManager authManager,
+        ICacheManager cacheManager)
     {
         _context = context;
         _utils = utils;
@@ -41,6 +43,7 @@ public class DatasetsManager : IDatasetsManager
         _stacManager = stacManager;
         _ddbManager = ddbManager;
         _authManager = authManager;
+        _cacheManager = cacheManager;
     }
 
     public async Task<IEnumerable<DatasetDto>> List(string orgSlug)
@@ -52,17 +55,26 @@ public class DatasetsManager : IDatasetsManager
 
         var datasets = org.Datasets.ToArray();
 
-        return (from ds in datasets
-                let ddb = _ddbManager.Get(orgSlug, ds.InternalRef)
-                let info = ddb.GetInfo()
-                select new DatasetDto
-                {
-                    Slug = ds.Slug,
-                    CreationDate = ds.CreationDate,
-                    Properties = info.Properties,
-                    Size = info.Size
-                })
-            .ToArray();
+        var result = new List<DatasetDto>();
+
+        foreach (var ds in datasets)
+        {
+            var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
+            var info = ddb.GetInfo();
+
+            var dto = new DatasetDto
+            {
+                Slug = ds.Slug,
+                CreationDate = ds.CreationDate,
+                Properties = info.Properties,
+                Size = info.Size,
+                Permissions = await _authManager.GetDatasetPermissions(ds)
+            };
+
+            result.Add(dto);
+        }
+
+        return result;
     }
 
     public async Task<DatasetDto> Get(string orgSlug, string dsSlug)
@@ -74,7 +86,10 @@ public class DatasetsManager : IDatasetsManager
 
         var ddb = _ddbManager.Get(orgSlug, dataset.InternalRef);
 
-        return dataset.ToDto(ddb.GetInfo());
+        var dto = dataset.ToDto(ddb.GetInfo());
+        dto.Permissions = await _authManager.GetDatasetPermissions(dataset);
+
+        return dto;
     }
 
     public async Task<EntryDto[]> GetEntry(string orgSlug, string dsSlug)
@@ -90,7 +105,21 @@ public class DatasetsManager : IDatasetsManager
         info.Depth = 0;
         info.Path = _utils.GenerateDatasetUrl(dataset, true);
 
-        return [info.ToDto()];
+        var dto = info.ToDto();
+
+        // Add permissions to properties
+        if (dto.Properties == null)
+            dto.Properties = new Dictionary<string, object>();
+
+        var permissions = await _authManager.GetDatasetPermissions(dataset);
+        dto.Properties["permissions"] = new
+        {
+            canRead = permissions.CanRead,
+            canWrite = permissions.CanWrite,
+            canDelete = permissions.CanDelete
+        };
+
+        return [dto];
     }
 
     public async Task<DatasetDto> AddNew(string orgSlug, DatasetNewDto dataset)
@@ -152,6 +181,15 @@ public class DatasetsManager : IDatasetsManager
         if (dataset.Visibility.HasValue)
         {
             meta.Visibility = dataset.Visibility.Value;
+
+            // Invalidate visibility cache
+            await _cacheManager.RemoveAsync(
+                MagicStrings.DatasetVisibilityCacheSeed,
+                orgSlug,
+                orgSlug,
+                ds.InternalRef,
+                _ddbManager
+            );
 
             await _stacManager.ClearCache(ds);
         }
@@ -226,11 +264,21 @@ public class DatasetsManager : IDatasetsManager
             throw new UnauthorizedException("The current user is not allowed to change attributes");
 
         var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
-        var res = ddb.ChangeAttributesRaw(new Dictionary<string, object> { { "public", attributes.IsPublic } });
+        var meta = ddb.Meta.GetSafe();
+        meta.IsPublic = attributes.IsPublic;
+
+        // Invalidate visibility cache (changing IsPublic may indirectly modify visibility)
+        await _cacheManager.RemoveAsync(
+            MagicStrings.DatasetVisibilityCacheSeed,
+            orgSlug,
+            orgSlug,
+            ds.InternalRef,
+            _ddbManager
+        );
 
         await _stacManager.ClearCache(ds);
 
-        return res;
+        return new Dictionary<string, object> { { "public", attributes.IsPublic } };
     }
 
     public async Task<StampDto> GetStamp(string orgSlug, string dsSlug)

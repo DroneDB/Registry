@@ -52,6 +52,7 @@ using Registry.Web.Identity;
 using Registry.Web.Identity.Models;
 using Registry.Web.Services.Initialization;
 using Registry.Web.Utilities.Auth;
+using Scalar.AspNetCore;
 using Serilog;
 using Serilog.Events;
 using IMetaManager = Registry.Web.Services.Ports.IMetaManager;
@@ -82,9 +83,9 @@ public class Startup
                 Description = "API to manage DroneDB Registry",
                 Contact = new OpenApiContact
                 {
-                    Name = "Luca Di Leo",
-                    Email = "ldileo@digipa.it",
-                    Url = new Uri("https://digipa.it/"),
+                    Name = "DroneDB Support",
+                    Email = "support@dronedb.app",
+                    Url = new Uri("https://dronedb.app/"),
                 },
                 License = new OpenApiLicense
                 {
@@ -94,7 +95,6 @@ public class Startup
             });
             c.DocumentFilter<BasePathDocumentFilter>();
         });
-        services.AddSwaggerGenNewtonsoftSupport();
 
         services.AddMvcCore()
             .AddApiExplorer()
@@ -300,6 +300,7 @@ public class Startup
         }
 
         services.AddHttpContextAccessor();
+        services.AddHttpClient();
 
         // TODO: Enable when needed. Should check return object structure
         // services.AddOData();
@@ -343,8 +344,19 @@ public class Startup
 
         app.UseDefaultFiles();
 
+        // Generate OpenAPI document via Swashbuckle
         app.UseSwagger();
-        app.UseSwaggerUI(c => { c.SwaggerEndpoint("/swagger/v1/swagger.json", "Registry API"); });
+
+        // Redirect /swagger to /scalar/v1 for backwards compatibility
+        app.Use(async (context, next) =>
+        {
+            if (context.Request.Path.StartsWithSegments("/swagger"))
+            {
+                context.Response.Redirect("/scalar/v1");
+                return;
+            }
+            await next();
+        });
 
         app.UseRouting();
 
@@ -372,6 +384,10 @@ public class Startup
 
         app.UseEndpoints(endpoints =>
         {
+            endpoints.MapScalarApiReference(options =>
+            {
+                options.WithOpenApiRoutePattern("/swagger/v1/swagger.json");
+            });
             endpoints.MapControllers();
 
             endpoints.MapHealthChecks(MagicStrings.QuickHealthUrl, new HealthCheckOptions
@@ -477,8 +493,8 @@ public class Startup
             Console.WriteLine();
             Console.WriteLine(" ?> Useful links:");
 
-            var swaggerUri = new Uri(baseUri, MagicStrings.SwaggerUrl);
-            Console.WriteLine($" ?> Swagger: {swaggerUri}");
+            var scalarUri = new Uri(baseUri, MagicStrings.ScalarUrl);
+            Console.WriteLine($" ?> API Docs (Scalar): {scalarUri}");
 
             var versionUri = new Uri(baseUri, MagicStrings.VersionUrl);
             Console.WriteLine($" ?> Version: {versionUri}");

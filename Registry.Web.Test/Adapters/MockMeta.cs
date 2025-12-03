@@ -9,7 +9,7 @@ namespace Registry.Web.Test.Adapters;
 
 public class MockMeta : IMetaManager
 {
-    private readonly List<Tuple<string, Meta>> _metas = [];
+    private readonly Dictionary<string, string> _data = new();
 
     public Meta Add(string key, string data, string path = null)
     {
@@ -18,21 +18,26 @@ public class MockMeta : IMetaManager
 
     public Meta Set(string key, string data, string path = null)
     {
-        var meta = new Meta
-            { Data = JToken.FromObject(data), Id = Guid.NewGuid().ToString(), ModifiedTime = DateTime.Now };
-        _metas.Add(Tuple.Create(path, meta));
-        return meta;
+        var fullKey = path != null ? $"{path}:{key}" : key;
+        _data[fullKey] = data;
+
+        return new Meta
+        {
+            Data = JToken.FromObject(data),
+            Id = Guid.NewGuid().ToString(),
+            ModifiedTime = DateTime.Now
+        };
     }
 
     public int Remove(string id)
     {
-        return _metas.RemoveAll(item => item.Item2.Id == id);
+        throw new NotImplementedException();
     }
 
     public JToken Get(string key, string path = null)
     {
-        var item2 = _metas.FirstOrDefault(item => item.Item1 == path)?.Item2;
-        return item2 != null ? JToken.FromObject(item2) : null;
+        var fullKey = path != null ? $"{path}:{key}" : key;
+        return _data.TryGetValue(fullKey, out var value) ? JToken.FromObject(value) : null;
     }
 
     public int Unset(string key, string path = null)
@@ -52,7 +57,22 @@ public class MockMeta : IMetaManager
 
     public T Get<T>(string key, string path = null)
     {
-        var res = _metas.FirstOrDefault(m => m.Item1 == path);
-        return res == null ? default : res.Item2.Data.ToObject<T>();
+        var fullKey = path != null ? $"{path}:{key}" : key;
+
+        if (!_data.TryGetValue(fullKey, out var value))
+            return default;
+
+        // Handle type conversions
+        if (typeof(T) == typeof(bool))
+        {
+            return (T)(object)(value == "1" || value.Equals("true", StringComparison.OrdinalIgnoreCase));
+        }
+
+        if (typeof(T) == typeof(int))
+        {
+            return int.TryParse(value, out var intValue) ? (T)(object)intValue : default;
+        }
+
+        return JsonConvert.DeserializeObject<T>(value);
     }
 }

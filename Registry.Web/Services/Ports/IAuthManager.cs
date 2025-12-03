@@ -5,6 +5,7 @@ using Registry.Common;
 using Registry.Web.Data.Models;
 using Registry.Web.Identity.Models;
 using Registry.Web.Models;
+using Registry.Web.Models.DTO;
 using Registry.Web.Services.Managers;
 
 namespace Registry.Web.Services.Ports;
@@ -35,4 +36,6 @@ public interface IAuthManager
     public Task<bool> CanRefreshToken(User user);
 
     public Task<bool> CanRefreshToken();
+    
+    public Task<DatasetPermissionsDto> GetDatasetPermissions(Dataset dataset);
 }

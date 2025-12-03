@@ -25,7 +25,7 @@ namespace Registry.Web.Test;
 public class DdbFactoryTest : TestBase
 {
     private Mock<IOptions<AppSettings>> _appSettingsMock;
-    private Logger<DdbManager> _ddbFactoryLogger;
+    private ILogger<DdbManager> _ddbFactoryLogger;
 
     private const string TestDataFolder = @"Data/Ddb";
     private const string DdbTestDataFolder = @"Data/DdbTest";
@@ -40,7 +40,7 @@ public class DdbFactoryTest : TestBase
     public void Setup()
     {
         _appSettingsMock = new Mock<IOptions<AppSettings>>();
-        _ddbFactoryLogger = new Logger<DdbManager>(LoggerFactory.Create(builder => builder.AddConsole()));
+        _ddbFactoryLogger = CreateTestLogger<DdbManager>();
 
         _settings.DatasetsPath = TestDataFolder;
         _appSettingsMock.Setup(o => o.Value).Returns(_settings);
@@ -189,7 +189,7 @@ public class DdbFactoryTest : TestBase
 
         var coords = polygon["geometry"]["coordinates"][0];
         for (int i = 0; i < expectedCoordinates.Count; i++)
-        {   
+        {
             for (int j = 0; j < expectedCoordinates[i].Count; j++)
             {
                 coords[i][j].Value<double>().Should().BeApproximately(expectedCoordinates[i][j], 0.001);

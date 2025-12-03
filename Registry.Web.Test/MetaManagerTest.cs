@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -29,11 +29,12 @@ namespace Registry.Web.Test;
 [TestFixture]
 internal class MetaManagerTest : TestBase
 {
-    private Logger<DdbManager> _ddbFactoryLogger;
-    private Logger<MetaManager> _metaManagerLogger;
+    private ILogger<DdbManager> _ddbFactoryLogger;
+    private ILogger<MetaManager> _metaManagerLogger;
     private Mock<IOptions<AppSettings>> _appSettingsMock;
     private Mock<IAuthManager> _authManagerMock;
     private Mock<IHttpContextAccessor> _httpContextAccessorMock;
+    private ICacheManager _cacheManager;
 
     private const string TestStorageFolder = @"Data/Storage";
     private const string DdbTestDataFolder = @"Data/DdbTest";
@@ -55,9 +56,11 @@ internal class MetaManagerTest : TestBase
         _appSettingsMock = new Mock<IOptions<AppSettings>>();
         _authManagerMock = new Mock<IAuthManager>();
         _httpContextAccessorMock = new Mock<IHttpContextAccessor>();
+        _cacheManager = CreateTestCacheManager();
+        RegisterDatasetVisibilityCacheProvider(_cacheManager);
 
-        _ddbFactoryLogger = new Logger<DdbManager>(LoggerFactory.Create(builder => builder.AddConsole()));
-        _metaManagerLogger = new Logger<MetaManager>(LoggerFactory.Create(builder => builder.AddConsole()));
+        _ddbFactoryLogger = CreateTestLogger<DdbManager>();
+        _metaManagerLogger = CreateTestLogger<MetaManager>();
     }
 
     [Test]
@@ -82,7 +85,7 @@ internal class MetaManagerTest : TestBase
         var webUtils = new WebUtils(_authManagerMock.Object, context, _appSettingsMock.Object,
             _httpContextAccessorMock.Object, ddbManager);
 
-        var metaManager = new MetaManager(_metaManagerLogger, ddbManager, _authManagerMock.Object, webUtils);
+        var metaManager = new MetaManager(_metaManagerLogger, ddbManager, _authManagerMock.Object, webUtils, _cacheManager);
 
         var res = await metaManager.List(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug);
 
@@ -112,7 +115,7 @@ internal class MetaManagerTest : TestBase
         var webUtils = new WebUtils(_authManagerMock.Object, context, _appSettingsMock.Object,
             _httpContextAccessorMock.Object, ddbManager);
 
-        var metaManager = new MetaManager(_metaManagerLogger, ddbManager, _authManagerMock.Object, webUtils);
+        var metaManager = new MetaManager(_metaManagerLogger, ddbManager, _authManagerMock.Object, webUtils, _cacheManager);
 
         var a = await metaManager.Add(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug,
             "annotations", "{\"test\":123}");

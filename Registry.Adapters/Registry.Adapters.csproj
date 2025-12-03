@@ -15,9 +15,6 @@
 
     <ItemGroup>
       <PackageReference Include="Newtonsoft.Json" Version="13.0.4" />
-      <PackageReference Update="Packaging.Targets">
-        <Version>0.1.232</Version>
-      </PackageReference>
     </ItemGroup>
 
     <ItemGroup>

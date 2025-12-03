@@ -314,6 +314,9 @@ public class Program
                 // Register job indexing services (required by JobIndexSyncService and BackgroundJobsProcessor)
                 services.AddJobIndexing();
 
+                // Register HTTP client factory for services that need to make HTTP calls
+                services.AddHttpClient();
+
                 // Register core singleton services
                 services.AddSingleton<ICacheManager, CacheManager>();
                 services.AddSingleton<IDdbWrapper, NativeDdbWrapper>();
@@ -745,6 +748,13 @@ public class Program
             if (settings.TilesCacheExpiration.HasValue && settings.TilesCacheExpiration.Value.TotalMinutes < 1)
             {
                 Console.WriteLine(" !> TilesCacheExpiration is not valid (must be at least 1 minute)");
+                return false;
+            }
+
+            if (settings.DatasetVisibilityCacheExpiration.HasValue && 
+                settings.DatasetVisibilityCacheExpiration.Value.TotalMinutes < 1)
+            {
+                Console.WriteLine(" !> DatasetVisibilityCacheExpiration is not valid (must be at least 1 minute)");
                 return false;
             }
 

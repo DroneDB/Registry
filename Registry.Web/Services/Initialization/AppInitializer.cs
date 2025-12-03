@@ -56,6 +56,8 @@ public class AppInitializer : IHostedService, IDisposable
         // Execute initialization steps in order
         await new DatabaseInitializer(services, logger).InitializeAsync(token);
         await new CacheInitializer(services, logger).InitializeAsync(token);
+        await new DatasetVisibilityCacheInitializer(services, logger).PreloadAsync(token);
+
         await new HangfireJobsInitializer(services, logger).InitializeAsync(token);
     }
 

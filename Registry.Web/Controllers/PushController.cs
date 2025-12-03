@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.ComponentModel.DataAnnotations;
 using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Http;
@@ -13,12 +14,16 @@ using Registry.Web.Utilities;
 
 namespace Registry.Web.Controllers;
 
+/// <summary>
+/// Controller for managing push operations to datasets.
+/// </summary>
 [ApiController]
 [Route(RoutesHelper.OrganizationsRadix + "/" +
        RoutesHelper.OrganizationSlug + "/" +
        RoutesHelper.DatasetRadix + "/" +
        RoutesHelper.DatasetSlug + "/" +
        RoutesHelper.PushRadix)]
+[Produces("application/json")]
 public class PushController : ControllerBaseEx
 {
     private readonly IPushManager _pushManager;
@@ -30,8 +35,24 @@ public class PushController : ControllerBaseEx
         _logger = logger;
     }
 
+    /// <summary>
+    /// Initializes a push operation for a dataset.
+    /// </summary>
+    /// <param name="orgSlug">The organization slug.</param>
+    /// <param name="dsSlug">The dataset slug.</param>
+    /// <param name="checksum">The checksum of the files to push.</param>
+    /// <param name="stampJson">The stamp JSON containing file information.</param>
+    /// <returns>The push initialization result containing needed files and token.</returns>
     [HttpPost("init")]
-    public async Task<IActionResult> Init([FromRoute] string orgSlug, [FromRoute] string dsSlug, [FromForm] string checksum, [FromForm(Name="stamp")] string stampJson)
+    [ProducesResponseType(typeof(PushInitResultDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> Init(
+        [FromRoute, Required] string orgSlug,
+        [FromRoute, Required] string dsSlug,
+        [FromForm, Required] string checksum,
+        [FromForm(Name="stamp"), Required] string stampJson)
     {
         try
         {
@@ -53,10 +74,28 @@ public class PushController : ControllerBaseEx
 
     }
 
+    /// <summary>
+    /// Uploads a file as part of a push operation.
+    /// </summary>
+    /// <param name="orgSlug">The organization slug.</param>
+    /// <param name="dsSlug">The dataset slug.</param>
+    /// <param name="path">The destination path for the file.</param>
+    /// <param name="token">The push token obtained from init.</param>
+    /// <param name="file">The file to upload.</param>
+    /// <returns>OK if the upload was successful.</returns>
     [DisableRequestSizeLimit]
     [RequestFormLimits(ValueLengthLimit = int.MaxValue, MultipartBodyLengthLimit = long.MaxValue)]
     [HttpPost("upload")]
-    public async Task<IActionResult> Upload([FromRoute] string orgSlug, [FromRoute] string dsSlug, [FromForm] string path, [FromForm] string token, IFormFile file)
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> Upload(
+        [FromRoute, Required] string orgSlug,
+        [FromRoute, Required] string dsSlug,
+        [FromForm, Required] string path,
+        [FromForm, Required] string token,
+        [Required] IFormFile file)
     {
         try
         {
@@ -79,10 +118,26 @@ public class PushController : ControllerBaseEx
     }
 
 
+    /// <summary>
+    /// Uploads metadata as part of a push operation.
+    /// </summary>
+    /// <param name="orgSlug">The organization slug.</param>
+    /// <param name="dsSlug">The dataset slug.</param>
+    /// <param name="token">The push token obtained from init.</param>
+    /// <param name="meta">The metadata JSON to upload.</param>
+    /// <returns>OK if the metadata was saved successfully.</returns>
     [DisableRequestSizeLimit]
     [RequestFormLimits(ValueLengthLimit = int.MaxValue, MultipartBodyLengthLimit = long.MaxValue)]
     [HttpPost("meta")]
-    public async Task<IActionResult> Meta([FromRoute] string orgSlug, [FromRoute] string dsSlug, [FromForm] string token, [FromForm] string meta)
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> Meta(
+        [FromRoute, Required] string orgSlug,
+        [FromRoute, Required] string dsSlug,
+        [FromForm, Required] string token,
+        [FromForm, Required] string meta)
     {
         try
         {
@@ -103,8 +158,22 @@ public class PushController : ControllerBaseEx
         }
     }
 
+    /// <summary>
+    /// Commits a push operation, finalizing all uploaded files and metadata.
+    /// </summary>
+    /// <param name="orgSlug">The organization slug.</param>
+    /// <param name="dsSlug">The dataset slug.</param>
+    /// <param name="token">The push token obtained from init.</param>
+    /// <returns>OK if the commit was successful.</returns>
     [HttpPost("commit")]
-    public async Task<IActionResult> Commit([FromRoute] string orgSlug, [FromRoute] string dsSlug, [FromForm] string token)
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> Commit(
+        [FromRoute, Required] string orgSlug,
+        [FromRoute, Required] string dsSlug,
+        [FromForm, Required] string token)
     {
         try
         {

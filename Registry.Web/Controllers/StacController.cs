@@ -1,27 +1,23 @@
 ﻿using System;
-using System.Buffers.Text;
-using System.Collections.Generic;
-using System.Linq;
+using System.ComponentModel.DataAnnotations;
 using System.Text;
 using System.Threading.Tasks;
-using Microsoft.AspNetCore.Authentication;
-using Microsoft.AspNetCore.Authorization;
-using Microsoft.AspNetCore.Identity;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Options;
-using Registry.Web.Data;
-using Registry.Web.Data.Models;
 using Registry.Web.Models;
 using Registry.Web.Models.DTO;
-using Registry.Web.Services;
 using Registry.Web.Services.Ports;
-using Registry.Web.Utilities;
 
 namespace Registry.Web.Controllers;
 
+/// <summary>
+/// Controller for STAC (SpatioTemporal Asset Catalog) API endpoints.
+/// Provides access to datasets in STAC format for interoperability with geospatial tools.
+/// </summary>
 [ApiController]
+[Tags("STAC")]
+[Produces("application/json")]
 public class StacController : ControllerBaseEx
 {
     private readonly IStacManager _stacManager;
@@ -34,8 +30,13 @@ public class StacController : ControllerBaseEx
         _logger = logger;
     }
 
+    /// <summary>
+    /// Gets the root STAC catalog containing links to all public datasets.
+    /// </summary>
+    /// <returns>The root STAC catalog with links to child collections.</returns>
     [HttpGet("/stac", Name = nameof(StacController) + "." + nameof(GetCatalog))]
-    [ProducesResponseType(typeof(IEnumerable<StacCatalogDto>), 200)]
+    [ProducesResponseType(typeof(StacCatalogDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status500InternalServerError)]
     public async Task<IActionResult> GetCatalog()
     {
         try
@@ -52,9 +53,23 @@ public class StacController : ControllerBaseEx
         }
     }
 
+    /// <summary>
+    /// Gets a STAC child resource (Collection or Item) for a specific dataset.
+    /// </summary>
+    /// <param name="orgSlug">The organization slug.</param>
+    /// <param name="dsSlug">The dataset slug.</param>
+    /// <param name="pathBase64">Optional Base64-encoded path to a specific item within the dataset.</param>
+    /// <returns>A STAC Collection or Item depending on the path. Returns a Collection when no path is specified, or an Item when a specific asset path is provided.</returns>
     [HttpGet("/orgs/{orgSlug}/ds/{dsSlug}/stac/{pathBase64?}",
         Name = nameof(StacController) + "." + nameof(GetStacChild))]
-    public async Task<IActionResult> GetStacChild([FromRoute] string orgSlug, [FromRoute] string dsSlug,
+    [ProducesResponseType(typeof(object), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status500InternalServerError)]
+    public async Task<IActionResult> GetStacChild(
+        [FromRoute, Required] string orgSlug,
+        [FromRoute, Required] string dsSlug,
         [FromRoute] string pathBase64 = null)
     {
         try
