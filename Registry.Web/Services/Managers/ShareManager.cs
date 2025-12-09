@@ -217,9 +217,9 @@ public class ShareManager : IShareManager
         var tag = parameters.Tag.ToTag();
 
         // No organization requested
-        if (tag.OrganizationSlug == null)
+        if (tag?.OrganizationSlug == null)
         {
-            if (tag.DatasetSlug != null)
+            if (tag?.DatasetSlug != null)
                 throw new BadRequestException("Cannot specify a dataset without an organization");
 
             string orgSlug;

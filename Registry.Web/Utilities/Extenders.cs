@@ -280,7 +280,7 @@ public static class Extenders
     {
 
         if (string.IsNullOrWhiteSpace(tag))
-            return new TagDto(null, null);
+            return null;
 
         var sections = tag.Split('/');
 

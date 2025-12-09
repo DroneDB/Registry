@@ -153,7 +153,7 @@ public class DatasetsManager : IDatasetsManager
         var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
         var meta = ddb.Meta.GetSafe();
 
-        meta.Name = dataset.Name ?? dataset.Slug;
+        meta.Name = string.IsNullOrWhiteSpace(dataset.Name) ? dataset.Slug : dataset.Name;
 
         if (dataset.Visibility.HasValue)
             meta.Visibility = dataset.Visibility.Value;
