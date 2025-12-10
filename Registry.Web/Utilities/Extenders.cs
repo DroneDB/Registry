@@ -275,7 +275,7 @@ public static class Extenders
     /// Converts a string tag (organization/dataset) and checks if valid
     /// </summary>
     /// <param name="tag"></param>
-    /// <returns></returns>
+    /// <returns>A TagDto containing the organization and dataset slugs, or null if the tag string is null, empty, or whitespace.</returns>
     public static TagDto ToTag(this string tag)
     {
 
