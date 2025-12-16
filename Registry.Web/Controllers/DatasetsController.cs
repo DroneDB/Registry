@@ -32,12 +32,14 @@ public class DatasetsController : ControllerBaseEx
 {
     private readonly IDatasetsManager _datasetsManager;
     private readonly IShareManager _shareManager;
+    private readonly ISystemManager _systemManager;
     private readonly ILogger<DatasetsController> _logger;
 
-    public DatasetsController(IDatasetsManager datasetsManager, IShareManager shareManager, ILogger<DatasetsController> logger)
+    public DatasetsController(IDatasetsManager datasetsManager, IShareManager shareManager, ISystemManager systemManager, ILogger<DatasetsController> logger)
     {
         _datasetsManager = datasetsManager;
         _shareManager = shareManager;
+        _systemManager = systemManager;
         _logger = logger;
     }
 
@@ -339,6 +341,42 @@ public class DatasetsController : ControllerBaseEx
         catch (Exception ex)
         {
             _logger.LogError(ex, "Exception in Dataset controller Delete('{OrgSlug}', '{DsSlug}')", orgSlug, dsSlug);
+            return ExceptionResult(ex);
+        }
+    }
+
+    /// <summary>
+    /// Rescans the index of a dataset to update metadata.
+    /// Only administrators can perform this operation.
+    /// </summary>
+    /// <param name="orgSlug">The organization slug.</param>
+    /// <param name="dsSlug">The dataset slug.</param>
+    /// <param name="types">Optional comma-separated list of entry types to rescan (e.g., "image,geoimage,pointcloud"). If not specified, all types are rescanned.</param>
+    /// <param name="stopOnError">Whether to stop processing on first error. Default is true.</param>
+    /// <returns>The rescan result with processed entries and statistics.</returns>
+    [HttpPost(RoutesHelper.DatasetSlug + "/rescan", Name = nameof(DatasetsController) + "." + nameof(RescanIndex))]
+    [ProducesResponseType(typeof(RescanResultDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> RescanIndex(
+        [FromRoute, Required] string orgSlug,
+        [FromRoute, Required] string dsSlug,
+        [FromQuery] string? types = null,
+        [FromQuery] bool stopOnError = true)
+    {
+        try
+        {
+            _logger.LogDebug("Dataset controller RescanIndex('{OrgSlug}/{DsSlug}', types: {Types}, stopOnError: {StopOnError})",
+                orgSlug, dsSlug, types ?? "all", stopOnError);
+
+            return Ok(await _systemManager.RescanDatasetIndex(orgSlug, dsSlug, types, stopOnError));
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Exception in Dataset controller RescanIndex('{OrgSlug}/{DsSlug}')",
+                orgSlug, dsSlug);
+
             return ExceptionResult(ex);
         }
     }

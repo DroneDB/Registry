@@ -86,6 +86,15 @@ public interface IDdbWrapper
     public JToken Stac(string ddbPath, string? entry, string stacCollectionRoot, string id,
         string stacCatalogRoot);
 
+    /// <summary>
+    /// Rescans all files in the index to update metadata
+    /// </summary>
+    /// <param name="ddbPath">Path to the DroneDB database</param>
+    /// <param name="types">Comma-separated list of entry types to rescan (e.g., "image,geoimage,pointcloud"), or null/empty for all</param>
+    /// <param name="stopOnError">Whether to stop processing on first error</param>
+    /// <returns>List of rescan results for each processed entry</returns>
+    public List<RescanResult> RescanIndex(string ddbPath, string? types = null, bool stopOnError = true);
+
     void RegisterProcess(bool verbose = false);
 
     string TileMimeType { get; }

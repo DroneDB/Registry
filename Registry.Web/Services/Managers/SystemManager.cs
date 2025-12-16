@@ -733,4 +733,50 @@ public class SystemManager : ISystemManager
         if (!string.IsNullOrEmpty(uri.Fragment))
             throw new ArgumentException($"SourceRegistryUrl must not contain fragment: {url}");
     }
+
+    public async Task<RescanResultDto> RescanDatasetIndex(string orgSlug, string dsSlug, string? types = null, bool stopOnError = true)
+    {
+        if (!await _authManager.IsUserAdmin())
+            throw new UnauthorizedException("Only admins can perform system related tasks");
+
+        if (string.IsNullOrWhiteSpace(orgSlug))
+            throw new ArgumentException("Organization slug is required", nameof(orgSlug));
+
+        if (string.IsNullOrWhiteSpace(dsSlug))
+            throw new ArgumentException("Dataset slug is required", nameof(dsSlug));
+
+        var dataset = await _context.Datasets
+            .Include(d => d.Organization)
+            .FirstOrDefaultAsync(d => d.Organization.Slug == orgSlug && d.Slug == dsSlug);
+
+        if (dataset == null)
+            throw new ArgumentException($"Dataset '{orgSlug}/{dsSlug}' not found");
+
+        _logger.LogInformation("Rescanning index for dataset {OrgSlug}/{DsSlug} with types filter: {Types}",
+            orgSlug, dsSlug, types ?? "all");
+
+        var ddb = _ddbManager.Get(orgSlug, dataset.InternalRef);
+        var results = ddb.RescanIndex(types, stopOnError);
+
+        var entries = results.Select(r => new RescanEntryResultDto
+        {
+            Path = r.Path,
+            Hash = r.Hash,
+            Success = r.Success,
+            Error = r.Error
+        }).ToArray();
+
+        _logger.LogInformation("Rescan completed for {OrgSlug}/{DsSlug}: {Total} entries processed, {Success} successful, {Errors} errors",
+            orgSlug, dsSlug, entries.Length, entries.Count(e => e.Success), entries.Count(e => !e.Success));
+
+        return new RescanResultDto
+        {
+            OrganizationSlug = orgSlug,
+            DatasetSlug = dsSlug,
+            TotalProcessed = entries.Length,
+            SuccessCount = entries.Count(e => e.Success),
+            ErrorCount = entries.Count(e => !e.Success),
+            Entries = entries
+        };
+    }
 }

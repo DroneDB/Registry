@@ -37,10 +37,10 @@ public class NativeDdbWrapperTests : TestBase
 
     private const string TestPointCloudUrl =
         "https://github.com/DroneDB/test_data/raw/master/brighton/point_cloud.laz";
-    
+
     private const string TestPointCloud2Url =
         "https://github.com/DroneDB/test_data/raw/master/point-clouds/brighton-beach.laz";
-    
+
     private static readonly IDdbWrapper DdbWrapper = new NativeDdbWrapper(true);
 
     [OneTimeSetUp]
@@ -663,7 +663,7 @@ public class NativeDdbWrapperTests : TestBase
     public void IsBuildActive_PointCloudBuilding_True()
     {
         using var test = new TestFS(Test1ArchiveUrl, BaseTestFolder);
-        
+
         var ddbPath = Path.Combine(test.TestFolder, "public", "default");
 
         using var tempFile = new TempFile(TestPointCloud2Url, BaseTestFolder);
@@ -675,11 +675,11 @@ public class NativeDdbWrapperTests : TestBase
         var res = DdbWrapper.Add(ddbPath, destPath);
 
         res.Count.Should().Be(1);
-        
+
         DdbWrapper.IsBuildActive(ddbPath, Path.GetFileName(destPath)).Should().BeFalse();
 
         var isActive = false;
-        
+
         var task = Task.Run(() =>
         {
             isActive = true;
@@ -688,17 +688,17 @@ public class NativeDdbWrapperTests : TestBase
             TestContext.WriteLine($"Build finished");
             isActive = false;
         });
-        
+
         // Wait until the build starts
         while(!isActive) Thread.Sleep(10);
-        
+
         // While the build is in progress, IsBuildActive should return true
         DdbWrapper.IsBuildActive(ddbPath, Path.GetFileName(destPath)).Should().BeTrue();
-        
+
         task.Wait();
 
         isActive.Should().BeFalse();
-        
+
         DdbWrapper.IsBuildActive(ddbPath, Path.GetFileName(destPath)).Should().BeFalse();
 
     }
@@ -869,6 +869,64 @@ public class NativeDdbWrapperTests : TestBase
 
         TestContext.WriteLine(res);
 
+    }
+
+    [Test]
+    public void RescanIndex_ExistingDatabase_Ok()
+    {
+        using var test = new TestFS(Test1ArchiveUrl, BaseTestFolder);
+
+        var ddbPath = Path.Combine(test.TestFolder, "public", "default");
+
+        // Use stopOnError = false because test dataset may not have all physical files
+        var res = DdbWrapper.RescanIndex(ddbPath, null, false);
+
+        res.Should().NotBeNull();
+        res.Should().NotBeEmpty();
+
+        foreach (var entry in res)
+        {
+            TestContext.WriteLine($"Path: {entry.Path}, Success: {entry.Success}, Hash: {entry.Hash}, Error: {entry.Error}");
+            entry.Path.Should().NotBeNullOrWhiteSpace();
+        }
+    }
+
+    [Test]
+    public void RescanIndex_WithTypesFilter_Ok()
+    {
+        using var test = new TestFS(Test1ArchiveUrl, BaseTestFolder);
+
+        var ddbPath = Path.Combine(test.TestFolder, "public", "default");
+
+        // Rescan only images with stopOnError = false for test dataset
+        var res = DdbWrapper.RescanIndex(ddbPath, "image,geoimage", false);
+
+        res.Should().NotBeNull();
+
+        foreach (var entry in res)
+        {
+            TestContext.WriteLine($"Path: {entry.Path}, Success: {entry.Success}, Hash: {entry.Hash}");
+        }
+    }
+
+    [Test]
+    public void RescanIndex_NonexistentPath_Exception()
+    {
+        Action act = () => DdbWrapper.RescanIndex("nonexistent");
+        act.Should().Throw<DdbException>();
+    }
+
+    [Test]
+    public void RescanIndex_StopOnErrorFalse_ContinuesOnError()
+    {
+        using var test = new TestFS(Test1ArchiveUrl, BaseTestFolder);
+
+        var ddbPath = Path.Combine(test.TestFolder, "public", "default");
+
+        // Should not throw even if there are errors, when stopOnError is false
+        var res = DdbWrapper.RescanIndex(ddbPath, null, false);
+
+        res.Should().NotBeNull();
     }
 
 

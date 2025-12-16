@@ -72,6 +72,14 @@ public interface IDDB
 
     JToken GetStac(string id, string stacCollectionRoot, string stacCatalogRoot, string path = null);
 
+    /// <summary>
+    /// Rescans all files in the index to update metadata
+    /// </summary>
+    /// <param name="types">Comma-separated list of entry types to rescan (e.g., "image,geoimage,pointcloud"), or null/empty for all</param>
+    /// <param name="stopOnError">Whether to stop processing on first error</param>
+    /// <returns>List of rescan results for each processed entry</returns>
+    List<RescanResult> RescanIndex(string? types = null, bool stopOnError = true);
+
     // These consts are like magic strings: if anything changes this goes kaboom!
     public const string DatabaseFolderName = ".ddb";
     public const string BuildFolderName = "build";

@@ -373,4 +373,16 @@ public class DDB : IDDB
     {
         return _ddbWrapper.Stac(DatasetFolderPath, path, stacCollectionRoot, id, stacCatalogRoot);
     }
+
+    public List<RescanResult> RescanIndex(string? types = null, bool stopOnError = true)
+    {
+        try
+        {
+            return _ddbWrapper.RescanIndex(DatasetFolderPath, types, stopOnError);
+        }
+        catch (DdbException ex)
+        {
+            throw new InvalidOperationException($"Cannot rescan index in folder '{DatasetFolderPath}'", ex);
+        }
+    }
 }

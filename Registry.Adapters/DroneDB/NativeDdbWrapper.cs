@@ -1226,4 +1226,44 @@ public class NativeDdbWrapper : IDdbWrapper
 
         throw new DdbException(SafeGetLastError("stac"));
     }
+
+    [DllImport("ddb", EntryPoint = "DDBRescan")]
+    private static extern DdbResult _Rescan(
+        [MarshalAs(UnmanagedType.LPStr)] string ddbPath,
+        out IntPtr output,
+        [MarshalAs(UnmanagedType.LPStr)] string types,
+        bool stopOnError);
+
+    public List<RescanResult> RescanIndex(string ddbPath, string? types = null, bool stopOnError = true)
+    {
+        try
+        {
+            if (_Rescan(ddbPath, out var output, types ?? string.Empty, stopOnError) == DdbResult.Success)
+            {
+                var json = Marshal.PtrToStringAnsi(output);
+
+                if (string.IsNullOrWhiteSpace(json))
+                    throw new DdbException("Unable to get rescan results");
+
+                var res = JsonConvert.DeserializeObject<List<RescanResult>>(json);
+
+                if (res == null)
+                    throw new InvalidOperationException($"Unable to deserialize rescan result: {json}");
+
+                return res;
+            }
+        }
+        catch (EntryPointNotFoundException ex)
+        {
+            throw new DdbException($"Error in calling ddb lib: incompatible versions ({ex.Message})", ex);
+        }
+        catch (Exception ex)
+        {
+            throw new DdbException(
+                $"Error in calling ddb lib. Last error: \"{SafeGetLastError("rescan")}\", check inner exception for details",
+                ex);
+        }
+
+        throw new DdbException(SafeGetLastError("rescan"));
+    }
 }
