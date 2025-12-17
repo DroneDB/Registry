@@ -14,7 +14,15 @@ public class RemoteThumbnailGenerator : IThumbnailGenerator
 {
     private readonly ILogger<RemoteThumbnailGenerator> _logger;
     private readonly RemoteThumbnailGeneratorSettings _settings;
-    private static readonly HttpClient _httpClient = new();
+    private static readonly HttpClient _httpClient;
+
+    static RemoteThumbnailGenerator()
+    {
+        _httpClient = new HttpClient
+        {
+            Timeout = TimeSpan.FromSeconds(30)
+        };
+    }
 
     public RemoteThumbnailGenerator(ILogger<RemoteThumbnailGenerator> logger,
         IOptions<RemoteThumbnailGeneratorSettings> options)
@@ -47,9 +55,6 @@ public class RemoteThumbnailGenerator : IThumbnailGenerator
                 new KeyValuePair<string, string>("path", filePath),
                 new KeyValuePair<string, string>("size", size.ToString())
             ]);
-
-            // Keep the timeout short to avoid blocking the thread for too long
-            _httpClient.Timeout = TimeSpan.FromSeconds(30);
 
             _logger.LogDebug("Sending POST request to remote thumbnail generator: {Url}", _settings.Url);
             var response = await _httpClient.PostAsync(_settings.Url, content);
