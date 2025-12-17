@@ -157,33 +157,34 @@ public static class Extenders
         if (s.Length > 128) return false;
 
         // first must be [a-z0-9]
-        char first = s[0];
-        bool firstIsLower = first >= 'a' && first <= 'z';
-        bool firstIsDigit = first >= '0' && first <= '9';
+        var first = s[0];
+        var firstIsLower = first >= 'a' && first <= 'z';
+        var firstIsDigit = first >= '0' && first <= '9';
         if (!(firstIsLower || firstIsDigit)) return false;
 
-        bool prevDash = false;
+        var prevDash = false;
 
-        for (int i = 0; i < s.Length; i++)
+        foreach (var c in s)
         {
-            char c = s[i];
-
-            // [a-z]
-            if (c >= 'a' && c <= 'z') { prevDash = false; continue; }
-            // [0-9]
-            if (c >= '0' && c <= '9') { prevDash = false; continue; }
-            // underscore
-            if (c == '_') { prevDash = false; continue; }
-            // dash (reject if consecutive)
-            if (c == '-')
+            switch (c)
             {
-                if (prevDash) return false;
-                prevDash = true;
-                continue;
+                // [a-z]
+                case >= 'a' and <= 'z':
+                // [0-9]
+                case >= '0' and <= '9':
+                // underscore
+                case '_':
+                    prevDash = false; continue;
+                // dash (reject if consecutive)
+                case '-' when prevDash:
+                    return false;
+                case '-':
+                    prevDash = true;
+                    continue;
+                default:
+                    // anything else -> invalid
+                    return false;
             }
-
-            // anything else -> invalid
-            return false;
         }
 
         return true;
