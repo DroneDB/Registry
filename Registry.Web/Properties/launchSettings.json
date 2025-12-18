@@ -19,6 +19,16 @@
       "commandLineArgs": "./registry-data --reset-hub",
       "applicationUrl": "http://localhost:5000"
     },
+    "Default-Alt-Port": {
+      "commandName": "Project",
+      "launchBrowser": true,
+      "environmentVariables": {
+        "ASPNETCORE_ENVIRONMENT": "Development",
+        "DDB_DEBUG": "1"
+      },
+      "commandLineArgs": "./registry-data --reset-hub --address=localhost:7000",
+      "applicationUrl": "http://localhost:7000"
+    },
     "Default-All-Debug": {
       "commandName": "Project",
       "launchBrowser": true,
