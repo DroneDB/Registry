@@ -692,7 +692,7 @@ public class SystemManager : ISystemManager
                 return false;
 
             var buffer = new byte[4];
-            stream.Read(buffer, 0, 4);
+            stream.ReadExactly(buffer, 0, 4);
 
             // ZIP files start with PK (0x50, 0x4B) followed by 0x03, 0x04 or 0x05, 0x06 (empty) or 0x07, 0x08 (spanned)
             return buffer[0] == 0x50 && buffer[1] == 0x4B &&
