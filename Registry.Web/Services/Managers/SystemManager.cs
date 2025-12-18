@@ -475,7 +475,6 @@ public class SystemManager : ISystemManager
         List<ImportErrorDto> errors)
     {
         string tempZipPath = null;
-        string tempExtractPath = null;
 
         try
         {
@@ -495,7 +494,15 @@ public class SystemManager : ISystemManager
                 if (!string.IsNullOrWhiteSpace(authToken))
                     headers.Add("Authorization", $"Bearer {authToken}");
 
-                await HttpHelper.DownloadFileAsync(downloadUrl, tempZipPath, headers);
+                // Progress callback for large downloads
+                await HttpHelper.DownloadFileAsync(downloadUrl, tempZipPath, headers, (downloaded, total) =>
+                {
+                    if (total > 0)
+                        _logger.LogDebug("Download progress: {Downloaded:N0} / {Total:N0} bytes ({Percent:P1})",
+                            downloaded, total, (double)downloaded / total);
+                    else
+                        _logger.LogDebug("Download progress: {Downloaded:N0} bytes", downloaded);
+                });
             }
             catch (HttpRequestException ex)
             {
@@ -510,7 +517,7 @@ public class SystemManager : ISystemManager
             }
 
             var zipFileInfo = new FileInfo(tempZipPath);
-            _logger.LogInformation("Downloaded {Size} bytes", zipFileInfo.Length);
+            _logger.LogInformation("Downloaded {Size:N0} bytes ({SizeMB:N2} MB)", zipFileInfo.Length, zipFileInfo.Length / 1024.0 / 1024.0);
 
             // Verify the downloaded file is a valid ZIP (check magic bytes)
             if (!IsValidZipFile(tempZipPath))
@@ -530,18 +537,8 @@ public class SystemManager : ISystemManager
                 return;
             }
 
-            // Extract to temporary folder
-            tempExtractPath = Path.Combine(_settings.TempPath, $"import-extract-{CommonUtils.RandomString(16)}");
-            Directory.CreateDirectory(tempExtractPath);
-
-            _logger.LogInformation("Extracting to {ExtractPath}", tempExtractPath);
-            ZipFile.ExtractToDirectory(tempZipPath, tempExtractPath);
-
-            // Count files for statistics
-            var files = Directory.GetFiles(tempExtractPath, "*", SearchOption.AllDirectories);
-            var totalSize = files.Sum(f => new FileInfo(f).Length);
-
-            // Get or create destination organization
+            // Get or create destination organization BEFORE extraction
+            // This allows us to extract directly to the final destination
             var org = await _context.Organizations.FirstOrDefaultAsync(o => o.Slug == destOrg);
             if (org == null)
             {
@@ -558,7 +555,7 @@ public class SystemManager : ISystemManager
                 await _context.SaveChangesAsync();
             }
 
-            // Get or create destination dataset
+            // Get or create destination dataset BEFORE extraction
             var dataset = await _context.Datasets.FirstOrDefaultAsync(d => d.Slug == destDs && d.Organization.Slug == destOrg);
             if (dataset == null)
             {
@@ -574,57 +571,47 @@ public class SystemManager : ISystemManager
                 await _context.SaveChangesAsync();
             }
 
-            // Get destination path but ensure .ddb folder doesn't exist yet
-            // (we'll import the complete .ddb from the source dataset)
+            // Get destination path - we'll extract directly here to avoid double copy
             var destPath = Path.Combine(_settings.DatasetsPath, destOrg, dataset.InternalRef.ToString());
             Directory.CreateDirectory(destPath);
 
-            _logger.LogInformation("Moving data to {DestPath}", destPath);
+            _logger.LogInformation("Preparing destination {DestPath}", destPath);
 
             // Remove all existing content (including .ddb folder if it exists)
             // This is necessary because we want to import the complete .ddb from the source
             var destDirs = Directory.GetDirectories(destPath);
             var destFiles = Directory.GetFiles(destPath);
 
-            _logger.LogInformation("Removing existing dataset content");
-            foreach (var dir in destDirs)
+            if (destDirs.Length > 0 || destFiles.Length > 0)
             {
-                Directory.Delete(dir, true);
-            }
-
-            foreach (var file in destFiles)
-            {
-                File.Delete(file);
-            }
-
-            // Move all content from extracted folder to destination using native filesystem operations
-            var extractedDirs = Directory.GetDirectories(tempExtractPath);
-            var extractedFiles = Directory.GetFiles(tempExtractPath);
-
-            _logger.LogInformation("Moving {DirCount} directories and {FileCount} files",
-                extractedDirs.Length, extractedFiles.Length);
-
-            foreach (var dir in extractedDirs)
-            {
-                var dirName = Path.GetFileName(dir);
-                var targetDir = Path.Combine(destPath, dirName);
-                Directory.Move(dir, targetDir);
-            }
-
-            foreach (var file in extractedFiles)
-            {
-                var fileName = Path.GetFileName(file);
-                var targetFile = Path.Combine(destPath, fileName);
-                try
+                _logger.LogInformation("Removing existing dataset content ({DirCount} directories, {FileCount} files)",
+                    destDirs.Length, destFiles.Length);
+                foreach (var dir in destDirs)
                 {
-                    File.Move(file, targetFile, true);
+                    Directory.Delete(dir, true);
                 }
-                catch (IOException ioEx)
+
+                foreach (var file in destFiles)
                 {
-                    _logger.LogError(ioEx, "Failed to move file {Source} to {Target}. The target file may be locked or in use.", file, targetFile);
-                    throw new Exception($"Failed to move file {fileName}: {ioEx.Message}. Dataset import aborted to prevent data corruption.", ioEx);
+                    File.Delete(file);
                 }
             }
+
+            // Extract ZIP directly to the final destination (avoids temp folder + move overhead)
+            _logger.LogInformation("Extracting ZIP directly to {DestPath}", destPath);
+            var extractStartTime = DateTime.UtcNow;
+
+            await Task.Run(() => ExtractZipWithProgress(tempZipPath, destPath));
+
+            var extractDuration = DateTime.UtcNow - extractStartTime;
+            _logger.LogInformation("Extraction completed in {Duration:N1} seconds", extractDuration.TotalSeconds);
+
+            // Count files for statistics (after extraction)
+            var files = Directory.GetFiles(destPath, "*", SearchOption.AllDirectories);
+            var totalSize = files.Sum(f => new FileInfo(f).Length);
+
+            _logger.LogInformation("Extracted {FileCount} files, total size {Size:N0} bytes ({SizeMB:N2} MB)",
+                files.Length, totalSize, totalSize / 1024.0 / 1024.0);
 
             // Schedule build of the imported dataset to ensure consistency
             _logger.LogInformation("Scheduling build for imported dataset {Org}/{Ds}", destOrg, destDs);
@@ -658,7 +645,7 @@ public class SystemManager : ISystemManager
         }
         finally
         {
-            // Cleanup temporary files
+            // Cleanup temporary ZIP file
             try
             {
                 if (tempZipPath != null && File.Exists(tempZipPath))
@@ -666,18 +653,61 @@ public class SystemManager : ISystemManager
                     _logger.LogDebug("Cleaning up temp ZIP file");
                     File.Delete(tempZipPath);
                 }
-
-                if (tempExtractPath != null && Directory.Exists(tempExtractPath))
-                {
-                    _logger.LogDebug("Cleaning up temp extract folder");
-                    Directory.Delete(tempExtractPath, true);
-                }
             }
             catch (Exception ex)
             {
                 _logger.LogWarning(ex, "Error cleaning up temporary files");
             }
         }
+    }
+
+    /// <summary>
+    /// Extracts a ZIP file with progress logging for large archives.
+    /// Uses buffered extraction for memory efficiency.
+    /// </summary>
+    private void ExtractZipWithProgress(string zipPath, string destPath)
+    {
+        using var archive = ZipFile.OpenRead(zipPath);
+        var totalEntries = archive.Entries.Count;
+        var processedEntries = 0;
+        var lastProgressLog = DateTime.UtcNow;
+        const int progressIntervalSeconds = 10;
+
+        foreach (var entry in archive.Entries)
+        {
+            var destinationPath = Path.GetFullPath(Path.Combine(destPath, entry.FullName));
+
+            // Security check: ensure the entry doesn't escape the destination directory
+            if (!destinationPath.StartsWith(Path.GetFullPath(destPath) + Path.DirectorySeparatorChar))
+            {
+                _logger.LogWarning("Skipping potentially malicious ZIP entry: {EntryName}", entry.FullName);
+                continue;
+            }
+
+            if (string.IsNullOrEmpty(entry.Name))
+            {
+                // Directory entry
+                Directory.CreateDirectory(destinationPath);
+            }
+            else
+            {
+                // File entry - ensure parent directory exists
+                Directory.CreateDirectory(Path.GetDirectoryName(destinationPath)!);
+                entry.ExtractToFile(destinationPath, overwrite: true);
+            }
+
+            processedEntries++;
+
+            // Log progress periodically
+            if ((DateTime.UtcNow - lastProgressLog).TotalSeconds >= progressIntervalSeconds)
+            {
+                _logger.LogInformation("Extraction progress: {Processed}/{Total} entries ({Percent:P1})",
+                    processedEntries, totalEntries, (double)processedEntries / totalEntries);
+                lastProgressLog = DateTime.UtcNow;
+            }
+        }
+
+        _logger.LogInformation("Extraction complete: {Total} entries processed", totalEntries);
     }
 
     /// <summary>
@@ -778,5 +808,29 @@ public class SystemManager : ISystemManager
             ErrorCount = entries.Count(e => !e.Success),
             Entries = entries
         };
+    }
+
+    /// <summary>
+    /// Recursively copies a directory and all its contents.
+    /// </summary>
+    private static void CopyDirectoryRecursive(string sourcePath, string destPath)
+    {
+        Directory.CreateDirectory(destPath);
+
+        // Copy all files
+        foreach (var file in Directory.GetFiles(sourcePath))
+        {
+            var fileName = Path.GetFileName(file);
+            var destFile = Path.Combine(destPath, fileName);
+            File.Copy(file, destFile, true);
+        }
+
+        // Recursively copy subdirectories
+        foreach (var dir in Directory.GetDirectories(sourcePath))
+        {
+            var dirName = Path.GetFileName(dir);
+            var destDir = Path.Combine(destPath, dirName);
+            CopyDirectoryRecursive(dir, destDir);
+        }
     }
 }
