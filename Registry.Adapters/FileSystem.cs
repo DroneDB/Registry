@@ -68,15 +68,33 @@ public class FileSystem : IFileSystem
             }
         }
     }
-        
+
     public void Move(string sourceFileName, string destFileName)
     {
-        File.Move(sourceFileName, destFileName);
+        try
+        {
+            File.Move(sourceFileName, destFileName);
+        }
+        catch (IOException ex) when (ex.Message.Contains("cross-device") || ex.Message.Contains("Invalid cross-device link"))
+        {
+            // Cross-device move not supported on Linux, fall back to copy + delete
+            File.Copy(sourceFileName, destFileName, true);
+            File.Delete(sourceFileName);
+        }
     }
-        
+
     public void FolderMove(string sourceFileName, string destFileName)
     {
-        Directory.Move(sourceFileName, destFileName);
+        try
+        {
+            Directory.Move(sourceFileName, destFileName);
+        }
+        catch (IOException ex) when (ex.Message.Contains("cross-device") || ex.Message.Contains("Invalid cross-device link"))
+        {
+            // Cross-device move not supported on Linux, fall back to copy + delete
+            FolderCopy(sourceFileName, destFileName, true, true);
+            Directory.Delete(sourceFileName, true);
+        }
     }
 
     public void Replace(string sourceFileName, string destinationFileName, string destinationBackupFileName)
@@ -93,22 +111,22 @@ public class FileSystem : IFileSystem
     {
         File.Delete(path);
     }
-        
+
     public void FolderDelete(string path, bool recursive = true)
     {
         Directory.Delete(path, recursive);
     }
-        
+
     public bool Exists(string path)
     {
         return File.Exists(path);
     }
-        
+
     public bool FolderExists(string path)
     {
         return Directory.Exists(path);
     }
-        
+
     public void FolderCreate(string path)
     {
         Directory.CreateDirectory(path);
