@@ -125,6 +125,7 @@ public static class HangfireUtils
     }
 
     [AutomaticRetry(Attempts = 1, OnAttemptsExceeded = AttemptsExceededAction.Fail)]
+    [JobExpiration(ExpirationTimeoutInMinutes = 60)]
     public static async Task SyncJobIndexStatesWrapper(PerformContext context, IJobIndexQuery jobIndexQuery, IJobIndexWriter jobIndexWriter)
     {
         Action<string> writeLine = context != null ? context.WriteLine : Log.Information;
