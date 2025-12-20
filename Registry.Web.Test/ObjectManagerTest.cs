@@ -6,7 +6,7 @@ using System.IO.Compression;
 using System.Linq;
 using System.Security.Cryptography;
 using System.Threading.Tasks;
-using FluentAssertions;
+using Shouldly;
 using Microsoft.AspNetCore.Http;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
@@ -110,17 +110,13 @@ public class ObjectManagerTest : TestBase
             _ddbFactoryMock.Object, webUtils, _authManagerMock.Object, _cacheManager,
             _fileSystem, _backgroundJobsProcessor, DdbWrapper, _thumbnailGeneratorMock.Object, _jobIndexQueryMock.Object);
 
-        await objectManager.Invoking(item => item.List(null, MagicStrings.DefaultDatasetSlug, "test"))
-            .Should().ThrowAsync<BadRequestException>();
+        await Should.ThrowAsync<BadRequestException>(async () => await objectManager.List(null, MagicStrings.DefaultDatasetSlug, "test"));
 
-        await objectManager.Invoking(item => item.List(MagicStrings.PublicOrganizationSlug, null, "test"))
-            .Should().ThrowAsync<BadRequestException>();
+        await Should.ThrowAsync<BadRequestException>(async () => await objectManager.List(MagicStrings.PublicOrganizationSlug, null, "test"));
 
-        await objectManager.Invoking(item => item.List(string.Empty, MagicStrings.DefaultDatasetSlug, "test"))
-            .Should().ThrowAsync<BadRequestException>();
+        await Should.ThrowAsync<BadRequestException>(async () => await objectManager.List(string.Empty, MagicStrings.DefaultDatasetSlug, "test"));
 
-        await objectManager.Invoking(item => item.List(MagicStrings.PublicOrganizationSlug, string.Empty, "test"))
-            .Should().ThrowAsync<BadRequestException>();
+        await Should.ThrowAsync<BadRequestException>(async () => await objectManager.List(MagicStrings.PublicOrganizationSlug, string.Empty, "test"));
     }
 
     [Test]
@@ -150,12 +146,12 @@ public class ObjectManagerTest : TestBase
         var res = await objectManager.List(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug,
             null, true);
 
-        res.Should().HaveCount(24);
+        res.Count().ShouldBe(24);
 
         res = await objectManager.List(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug, "Pub");
 
         // We dont consider the naked folder 'Pub'
-        res.Should().HaveCount(4);
+        res.Count().ShouldBe(4);
     }
 
     [Test]
@@ -184,23 +180,23 @@ public class ObjectManagerTest : TestBase
         var res = await objectManager.Search(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug,
             "DJI*");
 
-        res.Should().HaveCount(18);
+        res.Count().ShouldBe(18);
 
         res = await objectManager.Search(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug,
             "*003*");
-        res.Should().HaveCount(6);
+        res.Count().ShouldBe(6);
 
         res = await objectManager.Search(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug,
             "*0033*");
-        res.Should().HaveCount(1);
+        res.Count().ShouldBe(1);
 
         res = await objectManager.Search(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug,
             "*217*", "Pub");
-        res.Should().HaveCount(1);
+        res.Count().ShouldBe(1);
 
         res = await objectManager.Search(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug,
             "*201*", "Pub", false);
-        res.Should().HaveCount(1);
+        res.Count().ShouldBe(1);
     }
 
     [Test]
@@ -226,9 +222,8 @@ public class ObjectManagerTest : TestBase
             new DdbManager(_appSettingsMock.Object, _ddbFactoryLogger, DdbWrapper), webUtils, _authManagerMock.Object,
             _cacheManager, _fileSystem, _backgroundJobsProcessor, DdbWrapper, _thumbnailGeneratorMock.Object, _jobIndexQueryMock.Object);
 
-        await objectManager.Invoking(async x => await x.Get(MagicStrings.PublicOrganizationSlug,
-                MagicStrings.DefaultDatasetSlug, "weriufbgeiughegr"))
-            .Should().ThrowAsync<NotFoundException>();
+        await Should.ThrowAsync<NotFoundException>(async () => await objectManager.Get(MagicStrings.PublicOrganizationSlug,
+                MagicStrings.DefaultDatasetSlug, "weriufbgeiughegr"));
     }
 
     [Test]
@@ -263,11 +258,11 @@ public class ObjectManagerTest : TestBase
         var obj = await objectManager.Get(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug,
             "DJI_0019.JPG");
 
-        obj.Name.Should().Be(expectedName);
-        obj.Type.Should().Be(expectedObjectType);
-        obj.ContentType.Should().Be(expectedContentType);
+        obj.Name.ShouldBe(expectedName);
+        obj.Type.ShouldBe(expectedObjectType);
+        obj.ContentType.ShouldBe(expectedContentType);
 
-        (await MD5.Create().ComputeHashAsync(obj.PhysicalPath)).Should().BeEquivalentTo(expectedHash);
+        (await MD5.Create().ComputeHashAsync(obj.PhysicalPath)).ShouldBe(expectedHash);
     }
 
     [Test]
@@ -298,10 +293,10 @@ public class ObjectManagerTest : TestBase
         var res = await objectManager.Get(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug,
             expectedName);
 
-        res.Name.Should().Be(expectedName);
-        res.Type.Should().Be(EntryType.GeoImage);
+        res.Name.ShouldBe(expectedName);
+        res.Type.ShouldBe(EntryType.GeoImage);
 
-        (await MD5.Create().ComputeHashAsync(res.PhysicalPath)).Should().BeEquivalentTo(expectedHash);
+        (await MD5.Create().ComputeHashAsync(res.PhysicalPath)).ShouldBe(expectedHash);
 
     }
 
@@ -332,7 +327,7 @@ public class ObjectManagerTest : TestBase
         var res = await objectManager.DownloadStream(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug,
             fileNames);
 
-        res.Name.Should().EndWith(".zip");
+        res.Name.ShouldEndWith(".zip");
 
         await using var memoryStream = new MemoryStream();
         await res.CopyToAsync(memoryStream);
@@ -353,7 +348,7 @@ public class ObjectManagerTest : TestBase
             var expectedHash = await md5.ComputeHashAsync(obj.PhysicalPath);
             var hash = await md5.ComputeHashAsync(stream);
 
-            hash.Should().BeEquivalentTo(expectedHash);
+            hash.ShouldBe(expectedHash);
         }
     }
 
@@ -388,7 +383,7 @@ public class ObjectManagerTest : TestBase
         var res = await objectManager.DownloadStream(organizationSlug, datasetSlug,
             fileNames);
 
-        res.Name.Should().EndWith(".zip");
+        res.Name.ShouldEndWith(".zip");
 
         var md5 = MD5.Create();
 
@@ -409,7 +404,7 @@ public class ObjectManagerTest : TestBase
             var expectedHash = await md5.ComputeHashAsync(obj.PhysicalPath);
             var hash = await md5.ComputeHashAsync(stream);
 
-            hash.Should().BeEquivalentTo(expectedHash);
+            hash.ShouldBe(expectedHash);
         }
     }
 
@@ -442,14 +437,14 @@ public class ObjectManagerTest : TestBase
         var res = await objectManager.List(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug,
             fileName);
 
-        res.Should().HaveCount(1);
+        res.Count().ShouldBe(1);
 
         await objectManager.Delete(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug, fileName);
 
         res = await objectManager.List(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug,
             fileName);
 
-        res.Should().HaveCount(0);
+        res.Count().ShouldBe(0);
 
         var newFileUrl =
             "https://github.com/DroneDB/test_data/raw/master/test-datasets/drone_dataset_brighton_beach/" +
@@ -461,7 +456,7 @@ public class ObjectManagerTest : TestBase
         res = await objectManager.List(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug,
             fileName);
 
-        res.Should().HaveCount(1);
+        res.Count().ShouldBe(1);
     }
 
     [Test]
@@ -501,14 +496,13 @@ public class ObjectManagerTest : TestBase
             new DdbManager(_appSettingsMock.Object, _ddbFactoryLogger, DdbWrapper), webUtils, _authManagerMock.Object,
             _cacheManager, _fileSystem, _backgroundJobsProcessor, DdbWrapper, _thumbnailGeneratorMock.Object, _jobIndexQueryMock.Object);
 
-        (await objectManager.List(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug)).Should()
-            .HaveCount(20);
+        (await objectManager.List(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug)).Count().ShouldBe(20);
 
         var newres = await objectManager.AddNew(MagicStrings.PublicOrganizationSlug,
             MagicStrings.DefaultDatasetSlug, "Test");
-        newres.Size.Should().Be(0);
-        //newres.ContentType.Should().BeNull();
-        newres.Path.Should().Be("Test");
+        newres.Size.ShouldBe(0);
+        //newres.ContentType.ShouldBeNull();
+        newres.Path.ShouldBe("Test");
 
         const string newFileUrl =
             "https://github.com/DroneDB/test_data/raw/master/test-datasets/drone_dataset_brighton_beach/" +
@@ -519,33 +513,33 @@ public class ObjectManagerTest : TestBase
 
         (await objectManager.List(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug,
                 "Test/" + fileName))
-            .Should().HaveCount(1);
+            .Count().ShouldBe(1);
 
         await objectManager.Move(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug, fileName2,
             "Test/" + fileName2);
 
         (await objectManager.List(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug,
                 "Test/" + fileName2))
-            .Should().HaveCount(1);
+            .Count().ShouldBe(1);
 
         await objectManager.Move(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug, "Test",
             "Test2");
 
         (await objectManager.List(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug, "Test2"))
-            .Should().HaveCount(2);
+            .Count().ShouldBe(2);
 
         //await objectManager.Delete(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug, fileName);
 
         //res = await objectManager.List(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug,
         //    fileName);
 
-        //res.Should().HaveCount(0);
+        //res.Count().ShouldBe(0);
 
 
         //res = await objectManager.List(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug,
         //    fileName);
 
-        //res.Should().HaveCount(1);
+        //res.Count().ShouldBe(1);
     }
 
 
@@ -663,12 +657,12 @@ public class ObjectManagerTest : TestBase
             _authManagerMock.Object, _cacheManager, _fileSystem, _backgroundJobsProcessor,
             DdbWrapper, _thumbnailGeneratorMock.Object, _jobIndexQueryMock.Object);
 
-        await objectManager.Invoking(om => om.Transfer(
+        var ex = await Should.ThrowAsync<InvalidOperationException>(async () => await objectManager.Transfer(
             MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug, "DJI_0027.JPG",
             MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug, "DJI_0027_copy.JPG",
             false
-        )).Should().ThrowAsync<InvalidOperationException>()
-            .WithMessage("Source and destination cannot be the same");
+        ));
+        ex.Message.ShouldContain("Source and destination cannot be the same");
     }
 
     [Test]
@@ -693,20 +687,20 @@ public class ObjectManagerTest : TestBase
             DdbWrapper, _thumbnailGeneratorMock.Object, _jobIndexQueryMock.Object);
 
         // Test path traversal
-        await objectManager.Invoking(om => om.Transfer(
+        var ex1 = await Should.ThrowAsync<ArgumentException>(async () => await objectManager.Transfer(
             MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug, "DJI_0027.JPG",
             "admin", "7kd0gxti9qoemsrk", "../../../etc/passwd",
             false
-        )).Should().ThrowAsync<ArgumentException>()
-            .WithMessage("*path traversal*");
+        ));
+        ex1.Message.ShouldContain("path traversal");
 
         // Test absolute path
-        await objectManager.Invoking(om => om.Transfer(
+        var ex2 = await Should.ThrowAsync<ArgumentException>(async () => await objectManager.Transfer(
             MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug, "DJI_0027.JPG",
             "admin", "7kd0gxti9qoemsrk", "/etc/passwd",
             false
-        )).Should().ThrowAsync<ArgumentException>()
-            .WithMessage("*path traversal*");
+        ));
+        ex2.Message.ShouldContain("path traversal");
     }
 
     [Test]
@@ -730,12 +724,12 @@ public class ObjectManagerTest : TestBase
             _authManagerMock.Object, _cacheManager, _fileSystem, _backgroundJobsProcessor,
             DdbWrapper, _thumbnailGeneratorMock.Object, _jobIndexQueryMock.Object);
 
-        await objectManager.Invoking(om => om.Transfer(
+        var ex = await Should.ThrowAsync<InvalidOperationException>(async () => await objectManager.Transfer(
             MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug, "DJI_0027.JPG",
             "admin", "7kd0gxti9qoemsrk", ".ddb/somefile.txt",
             false
-        )).Should().ThrowAsync<InvalidOperationException>()
-            .WithMessage("*reserved path*");
+        ));
+        ex.Message.ShouldContain("reserved path");
     }
 
     [Test]
@@ -759,12 +753,12 @@ public class ObjectManagerTest : TestBase
             _authManagerMock.Object, _cacheManager, _fileSystem, _backgroundJobsProcessor,
             DdbWrapper, _thumbnailGeneratorMock.Object, _jobIndexQueryMock.Object);
 
-        await objectManager.Invoking(om => om.Transfer(
+        var ex = await Should.ThrowAsync<InvalidOperationException>(async () => await objectManager.Transfer(
             MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug, "NonExistent.JPG",
             "admin", "7kd0gxti9qoemsrk", "test.JPG",
             false
-        )).Should().ThrowAsync<InvalidOperationException>()
-            .WithMessage("*Cannot find source entry*");
+        ));
+        ex.Message.ShouldContain("Cannot find source entry");
     }
 
     [Test]
@@ -802,7 +796,7 @@ public class ObjectManagerTest : TestBase
         // Get the file info before transfer
         var sourceFiles = await objectManager.List(MagicStrings.PublicOrganizationSlug,
             MagicStrings.DefaultDatasetSlug, null, true);
-        sourceFiles.Should().NotBeEmpty();
+        sourceFiles.ShouldNotBeEmpty();
 
         var fileToTransfer = "DJI_0027.JPG";
 
@@ -816,11 +810,11 @@ public class ObjectManagerTest : TestBase
         // Verify file was removed from source
         var sourceFilesAfter = await objectManager.List(MagicStrings.PublicOrganizationSlug,
             MagicStrings.DefaultDatasetSlug, null, true);
-        sourceFilesAfter.Should().NotContain(f => f.Path == fileToTransfer);
+        sourceFilesAfter.ShouldNotContain(f => f.Path == fileToTransfer);
 
         // Verify file exists in destination
         var destFiles = await objectManager.List("admin", "7kd0gxti9qoemsrk", null, true);
-        destFiles.Should().Contain(f => f.Path == fileToTransfer);
+        destFiles.ShouldContain(f => f.Path == fileToTransfer);
     }
 
     [Test]
@@ -868,12 +862,12 @@ public class ObjectManagerTest : TestBase
         destDdb.AddRaw(destPath);
 
         // Try to transfer with overwrite=false (should fail)
-        await objectManager.Invoking(om => om.Transfer(
+        var ex = await Should.ThrowAsync<InvalidOperationException>(async () => await objectManager.Transfer(
             MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug, "DJI_0027.JPG",
             "admin", "7kd0gxti9qoemsrk", "DJI_0027.JPG",
             false
-        )).Should().ThrowAsync<InvalidOperationException>()
-            .WithMessage("*already exists*");
+        ));
+        ex.Message.ShouldContain("already exists");
     }
 
     [Test]
@@ -918,11 +912,11 @@ public class ObjectManagerTest : TestBase
         // Verify file was removed from source
         var sourceFilesAfter = await objectManager.List(MagicStrings.PublicOrganizationSlug,
             MagicStrings.DefaultDatasetSlug, null, true);
-        sourceFilesAfter.Should().NotContain(f => f.Path == fileToTransfer);
+        sourceFilesAfter.ShouldNotContain(f => f.Path == fileToTransfer);
 
         // Verify file exists in destination with the same name
         var destFiles = await objectManager.List("admin", "7kd0gxti9qoemsrk", null, true);
-        destFiles.Should().Contain(f => f.Path == fileToTransfer, "file should be transferred with the same name when destPath is null");
+        destFiles.ShouldContain(f => f.Path == fileToTransfer, "file should be transferred with the same name when destPath is null");
     }
 
     #endregion
@@ -967,7 +961,7 @@ public class ObjectManagerTest : TestBase
 
         // Verify file doesn't exist in destination before transfer
         Directory.CreateDirectory(destDatasetPath);
-        File.Exists(destFilePath).Should().BeFalse("destination should be empty before transfer");
+        File.Exists(destFilePath).ShouldBeFalse("destination should be empty before transfer");
 
         // Create a read-only DDB folder to force AddRaw to fail
         var destDdbPath = Path.Combine(destDatasetPath, ".ddb");
@@ -980,20 +974,20 @@ public class ObjectManagerTest : TestBase
         try
         {
             // Attempt transfer - should fail during DDB add
-            await objectManager.Invoking(om => om.Transfer(
+            await Should.ThrowAsync<InvalidOperationException>(async () => await objectManager.Transfer(
                 MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug, fileToTransfer,
                 "admin", "7kd0gxti9qoemsrk", fileToTransfer,
                 false
-            )).Should().ThrowAsync<Exception>();
+            ));
 
             // Verify rollback: file should be cleaned up from destination filesystem
-            File.Exists(destFilePath).Should().BeFalse(
+            File.Exists(destFilePath).ShouldBeFalse(
                 "transferred file should be rolled back and removed from destination");
 
             // Verify source file still exists
             var sourceFiles = await objectManager.List(MagicStrings.PublicOrganizationSlug,
                 MagicStrings.DefaultDatasetSlug, null, true);
-            sourceFiles.Should().Contain(f => f.Path == fileToTransfer,
+            sourceFiles.ShouldContain(f => f.Path == fileToTransfer,
                 "source file should still exist after failed transfer");
         }
         finally
@@ -1042,7 +1036,7 @@ public class ObjectManagerTest : TestBase
         // Verify file exists in source before transfer
         var sourceFilesBefore = await objectManager.List(MagicStrings.PublicOrganizationSlug,
             MagicStrings.DefaultDatasetSlug, null, true);
-        sourceFilesBefore.Should().Contain(f => f.Path == fileToTransfer);
+        sourceFilesBefore.ShouldContain(f => f.Path == fileToTransfer);
 
         // Get source file path and make it read-only after DDB operations complete
         // This simulates a failure during the final source removal step
@@ -1065,12 +1059,12 @@ public class ObjectManagerTest : TestBase
         // Verify file was removed from source (successful case)
         var sourceFilesAfter = await objectManager.List(MagicStrings.PublicOrganizationSlug,
             MagicStrings.DefaultDatasetSlug, null, true);
-        sourceFilesAfter.Should().NotContain(f => f.Path == fileToTransfer,
+        sourceFilesAfter.ShouldNotContain(f => f.Path == fileToTransfer,
             "source file should be removed after successful transfer");
 
         // Verify file exists in destination
         var destFiles = await objectManager.List("admin", "7kd0gxti9qoemsrk", null, true);
-        destFiles.Should().Contain(f => f.Path == fileToTransfer,
+        destFiles.ShouldContain(f => f.Path == fileToTransfer,
             "file should exist in destination after transfer");
     }
 
@@ -1112,7 +1106,7 @@ public class ObjectManagerTest : TestBase
         var destFolderPath = Path.Combine(destDatasetPath, folderToTransfer);
 
         // Verify folder doesn't exist in destination
-        Directory.Exists(destFolderPath).Should().BeFalse("destination folder should not exist before transfer");
+        Directory.Exists(destFolderPath).ShouldBeFalse("destination folder should not exist before transfer");
 
         // Create a read-only DDB to force failure
         var destDdbPath = Path.Combine(destDatasetPath, ".ddb");
@@ -1124,14 +1118,14 @@ public class ObjectManagerTest : TestBase
             try
             {
                 // Attempt transfer - should fail during DDB add
-                await objectManager.Invoking(om => om.Transfer(
+                await Should.ThrowAsync<InvalidOperationException>(async () => await objectManager.Transfer(
                     "admin", "7kd0gxti9qoemsrk", folderToTransfer,
                     MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug, folderToTransfer,
                     false
-                )).Should().ThrowAsync<Exception>();
+                ));
 
                 // Verify rollback: entire directory tree should be removed
-                Directory.Exists(destFolderPath).Should().BeFalse(
+                Directory.Exists(destFolderPath).ShouldBeFalse(
                     "transferred directory should be completely rolled back");
 
                 // Verify no orphaned files remain
@@ -1140,12 +1134,12 @@ public class ObjectManagerTest : TestBase
                     var orphanedFiles = Directory.GetFiles(destDatasetPath, "*", SearchOption.AllDirectories)
                         .Where(f => f.Contains(folderToTransfer))
                         .ToArray();
-                    orphanedFiles.Should().BeEmpty("no orphaned files from failed transfer should remain");
+                    orphanedFiles.ShouldBeEmpty("no orphaned files from failed transfer should remain");
                 }
 
                 // Verify source folder still exists with all files
                 var sourceFiles = await objectManager.List("admin", "7kd0gxti9qoemsrk", folderToTransfer, true);
-                sourceFiles.Should().NotBeEmpty("source folder should still contain files after failed transfer");
+                sourceFiles.ShouldNotBeEmpty("source folder should still contain files after failed transfer");
             }
             finally
             {
@@ -1194,7 +1188,7 @@ public class ObjectManagerTest : TestBase
         var destFilePath = Path.Combine(destDatasetPath, fileToTransfer);
 
         // Verify clean state before test
-        File.Exists(destFilePath).Should().BeFalse("destination should be clean before test");
+        File.Exists(destFilePath).ShouldBeFalse("destination should be clean before test");
 
         // Create DDB folder with read-only attribute to force failure after file copy
         var destDdbPath = Path.Combine(destDatasetPath, ".ddb");
@@ -1205,14 +1199,14 @@ public class ObjectManagerTest : TestBase
         try
         {
             // Transfer should fail during DDB operations
-            await objectManager.Invoking(om => om.Transfer(
+            await Should.ThrowAsync<Exception>(async () => await objectManager.Transfer(
                 MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug, fileToTransfer,
                 "admin", "7kd0gxti9qoemsrk", fileToTransfer,
                 false
-            )).Should().ThrowAsync<Exception>("transfer should fail due to read-only DDB");
+            ));
 
             // CRITICAL: Verify the copied file was cleaned up
-            File.Exists(destFilePath).Should().BeFalse(
+            File.Exists(destFilePath).ShouldBeFalse(
                 "rollback must remove the copied file even though copy succeeded");
 
             // Verify destination dataset state is clean (no partial state)
@@ -1222,13 +1216,13 @@ public class ObjectManagerTest : TestBase
                     .ToArray()
                 : Array.Empty<string>();
 
-            allDestFiles.Should().BeEmpty(
+            allDestFiles.ShouldBeEmpty(
                 "no files from failed transfer should remain in destination");
 
             // Verify source is untouched
             var sourceFiles = await objectManager.List(MagicStrings.PublicOrganizationSlug,
                 MagicStrings.DefaultDatasetSlug, null, true);
-            sourceFiles.Should().Contain(f => f.Path == fileToTransfer,
+            sourceFiles.ShouldContain(f => f.Path == fileToTransfer,
                 "source file must remain intact after failed transfer");
         }
         finally
@@ -1286,13 +1280,13 @@ public class ObjectManagerTest : TestBase
 
         // Verify transfer succeeded even if build folder copy might have failed
         var destFiles = await objectManager.List("admin", "7kd0gxti9qoemsrk", null, true);
-        destFiles.Should().Contain(f => f.Path == fileToTransfer,
+        destFiles.ShouldContain(f => f.Path == fileToTransfer,
             "main file transfer should succeed regardless of build folder status");
 
         // Verify source was removed
         var sourceFiles = await objectManager.List(MagicStrings.PublicOrganizationSlug,
             MagicStrings.DefaultDatasetSlug, null, true);
-        sourceFiles.Should().NotContain(f => f.Path == fileToTransfer,
+        sourceFiles.ShouldNotContain(f => f.Path == fileToTransfer,
             "source should be removed after successful transfer");
     }
 

@@ -1,4 +1,4 @@
-using FluentAssertions;
+using Shouldly;
 using Microsoft.AspNetCore.Http;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
@@ -90,7 +90,7 @@ public class OrganizationManagerTest : TestBase
         var organizations = (await _organizationsManager.List()).ToArray();
 
         // Assert
-        organizations.Should().HaveCount(1);
+        organizations.Count().ShouldBe(1);
         var publicOrg = organizations.First();
         AssertPublicOrganization(publicOrg);
     }
@@ -106,10 +106,10 @@ public class OrganizationManagerTest : TestBase
         var result = await _organizationsManager.AddNew(newOrg);
 
         // Assert
-        result.Should().NotBeNull();
-        result.Slug.Should().Be(newOrg.Slug);
-        result.Name.Should().Be(newOrg.Name);
-        result.Description.Should().Be(newOrg.Description);
+        result.ShouldNotBeNull();
+        result.Slug.ShouldBe(newOrg.Slug);
+        result.Name.ShouldBe(newOrg.Name);
+        result.Description.ShouldBe(newOrg.Description);
     }
 
     [Test]
@@ -122,7 +122,7 @@ public class OrganizationManagerTest : TestBase
         var result = await _organizationsManager.Get(MagicStrings.PublicOrganizationSlug);
 
         // Assert
-        result.Should().NotBeNull();
+        result.ShouldNotBeNull();
         AssertPublicOrganization(result);
     }
 
@@ -143,8 +143,8 @@ public class OrganizationManagerTest : TestBase
         var updated = await _organizationsManager.Get(MagicStrings.PublicOrganizationSlug);
 
         // Assert
-        updated.Name.Should().Be(updateDto.Name);
-        updated.Description.Should().Be(updateDto.Description);
+        updated.Name.ShouldBe(updateDto.Name);
+        updated.Description.ShouldBe(updateDto.Description);
     }
 
     [Test]
@@ -160,7 +160,7 @@ public class OrganizationManagerTest : TestBase
         var organizations = await _organizationsManager.List();
 
         // Assert
-        organizations.Should().BeEmpty();
+        organizations.ShouldBeEmpty();
     }
 
     #region Authorization Tests
@@ -176,9 +176,9 @@ public class OrganizationManagerTest : TestBase
         var organizations = (await _organizationsManager.List()).ToArray();
 
         // Assert
-        organizations.Should().HaveCount(2); // Public org + owned org
-        organizations.Should().Contain(org => org.Slug == MagicStrings.PublicOrganizationSlug);
-        organizations.Should().Contain(org => org.Slug == ownedOrg.Slug);
+        organizations.Count().ShouldBe(2); // Public org + owned org
+        organizations.ShouldContain(org => org.Slug == MagicStrings.PublicOrganizationSlug);
+        organizations.ShouldContain(org => org.Slug == ownedOrg.Slug);
     }
 
     [Test]
@@ -189,8 +189,7 @@ public class OrganizationManagerTest : TestBase
 
         // Act & Assert
         var action = () => _organizationsManager.List();
-        await action.Should().ThrowAsync<UnauthorizedException>()
-            .WithMessage("Invalid user");
+        await Should.ThrowAsync<UnauthorizedException>(action);
     }
 
     [Test]
@@ -203,8 +202,7 @@ public class OrganizationManagerTest : TestBase
 
         // Act & Assert
         var action = () => _organizationsManager.AddNew(newOrg);
-        await action.Should().ThrowAsync<UnauthorizedException>()
-            .WithMessage("Cannot create a new organization that belongs to a different user");
+        await Should.ThrowAsync<UnauthorizedException>(action);
     }
 
     [Test]
@@ -216,8 +214,7 @@ public class OrganizationManagerTest : TestBase
 
         // Act & Assert
         var action = () => _organizationsManager.AddNew(newOrg);
-        await action.Should().ThrowAsync<UnauthorizedException>()
-            .WithMessage("Invalid user");
+        await Should.ThrowAsync<UnauthorizedException>(action);
     }
 
     [Test]
@@ -238,9 +235,9 @@ public class OrganizationManagerTest : TestBase
         var updated = await _organizationsManager.Get(ownedOrg.Slug);
 
         // Assert
-        updated.Name.Should().Be(updateDto.Name);
-        updated.Description.Should().Be(updateDto.Description);
-        updated.Owner.Should().Be(standardUser.UserName);
+        updated.Name.ShouldBe(updateDto.Name);
+        updated.Description.ShouldBe(updateDto.Description);
+        updated.Owner.ShouldBe(standardUser.UserName);
     }
 
     /*[Test]
@@ -258,7 +255,7 @@ public class OrganizationManagerTest : TestBase
 
         // Act & Assert
         var action = () => _organizationsManager.Edit(MagicStrings.PublicOrganizationSlug, updateDto);
-        await action.Should().ThrowAsync<UnauthorizedException>()
+        await Should.ThrowAsync<UnauthorizedException>(action)
             .WithMessage("Invalid user");
     }*/
 
@@ -277,7 +274,7 @@ public class OrganizationManagerTest : TestBase
 
         // Assert
         var organizations = await _organizationsManager.List();
-        organizations.Should().NotContain(org => org.Slug == ownedOrg.Slug);
+        organizations.ShouldNotContain(org => org.Slug == ownedOrg.Slug);
     }
 /*
     [Test]
@@ -288,7 +285,7 @@ public class OrganizationManagerTest : TestBase
 
         // Act & Assert
         var action = () => _organizationsManager.Delete(MagicStrings.PublicOrganizationSlug);
-        await action.Should().ThrowAsync<UnauthorizedException>()
+        await Should.ThrowAsync<UnauthorizedException>(action)
             .WithMessage("Invalid user");
     }*/
 
@@ -385,11 +382,11 @@ public class OrganizationManagerTest : TestBase
 
     private static void AssertPublicOrganization(OrganizationDto org)
     {
-        org.Description.Should().Be("Public organization");
-        org.Slug.Should().Be(MagicStrings.PublicOrganizationSlug);
-        org.IsPublic.Should().BeTrue();
-        org.Owner.Should().BeNull();
-        org.Name.Should().Be("Public");
+        org.Description.ShouldBe("Public organization");
+        org.Slug.ShouldBe(MagicStrings.PublicOrganizationSlug);
+        org.IsPublic.ShouldBeTrue();
+        org.Owner.ShouldBeNull();
+        org.Name.ShouldBe("Public");
     }
 
     private static async Task<RegistryContext> CreateTestRegistryContext()

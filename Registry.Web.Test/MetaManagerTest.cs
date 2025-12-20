@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
-using FluentAssertions;
+using Shouldly;
 using Microsoft.AspNetCore.Http;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
@@ -89,7 +89,7 @@ internal class MetaManagerTest : TestBase
 
         var res = await metaManager.List(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug);
 
-        res.Should().BeEmpty();
+        res.ShouldBeEmpty();
     }
 
     [Test]
@@ -120,38 +120,36 @@ internal class MetaManagerTest : TestBase
         var a = await metaManager.Add(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug,
             "annotations", "{\"test\":123}");
 
-        a.Data["test"].ToObject<int>().Should().Be(123);
+        a.Data["test"].ToObject<int>().ShouldBe(123);
 
         var res = await metaManager.List(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug);
 
-        res.Should().HaveCount(1);
-        res.First().Count.Should().Be(1);
-        res.First().Key.Should().Be("annotations");
+        res.Count().ShouldBe(1);
+        res.First().Count.ShouldBe(1);
+        res.First().Key.ShouldBe("annotations");
 
         var a2 = await metaManager.Add(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug,
             "annotations",
             "{\"test\":4124,\"pippo\":\"ciao\"}");
 
-        a2.Data["test"].ToObject<int>().Should().Be(4124);
-        a2.Data["pippo"].ToObject<string>().Should().Be("ciao");
+        a2.Data["test"].ToObject<int>().ShouldBe(4124);
+        a2.Data["pippo"].ToObject<string>().ShouldBe("ciao");
 
-        (await metaManager.List(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug)).Should()
-            .HaveCount(1);
-
-        (await metaManager.Get(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug, "annotations"))
-            .Should().HaveCount(2);
-
-        (await metaManager.Remove(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug, a.Id)).Should()
-            .Be(1);
+        (await metaManager.List(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug)).Count()
+            .ShouldBe(1);
 
         (await metaManager.Get(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug, "annotations"))
-            .Should().HaveCount(1);
+            .Count().ShouldBe(2);
+
+        (await metaManager.Remove(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug, a.Id)).ShouldBe(1);
+
+        (await metaManager.Get(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug, "annotations"))
+            .Count().ShouldBe(1);
 
         (await metaManager.Unset(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug, "annotations"))
-            .Should().Be(1);
+            .ShouldBe(1);
 
-        (await metaManager.List(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug)).Should()
-            .BeEmpty();
+        (await metaManager.List(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug)).ShouldBeEmpty();
     }
 
     #region Test Data

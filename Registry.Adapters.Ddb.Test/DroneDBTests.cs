@@ -5,7 +5,7 @@ using System.IO;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
-using FluentAssertions;
+using Shouldly;
 using Newtonsoft.Json;
 using NUnit.Framework;
 using Registry.Adapters.DroneDB;
@@ -65,17 +65,17 @@ public class NativeDdbWrapperTests : TestBase
     [Test]
     public void GetVersion_HasValue()
     {
-        DdbWrapper.GetVersion().Length.Should().BeGreaterThan(0, "Can call GetVersion()");
+        DdbWrapper.GetVersion().Length.ShouldBeGreaterThan(0, "Can call GetVersion()");
     }
 
     [Test]
     public void Init_NonExistant_Exception()
     {
         Action act = () => DdbWrapper.Init("nonexistant");
-        act.Should().Throw<DdbException>();
+        Should.Throw<DdbException>(act);
 
         act = () => DdbWrapper.Init(null);
-        act.Should().Throw<DdbException>();
+        Should.Throw<DdbException>(act);
 
     }
 
@@ -85,24 +85,24 @@ public class NativeDdbWrapperTests : TestBase
 
         using var area = new TestArea(nameof(Init_EmptyFolder_Ok));
 
-        DdbWrapper.Init(area.TestFolder).Should().Contain(area.TestFolder);
-        Directory.Exists(Path.Join(area.TestFolder, ".ddb")).Should().BeTrue();
+        DdbWrapper.Init(area.TestFolder).ShouldContain(area.TestFolder);
+        Directory.Exists(Path.Join(area.TestFolder, ".ddb")).ShouldBeTrue();
     }
 
     [Test]
     public void Add_NonExistant_Exception()
     {
         Action act = () => DdbWrapper.Add("nonexistant", "");
-        act.Should().Throw<DdbException>();
+        Should.Throw<DdbException>(act);
 
         act = () => DdbWrapper.Add("nonexistant", "test");
-        act.Should().Throw<DdbException>();
+        Should.Throw<DdbException>(act);
 
         act = () => DdbWrapper.Add(null, "test");
-        act.Should().Throw<DdbException>();
+        Should.Throw<DdbException>(act);
 
         act = () => DdbWrapper.Add("nonexistant", (string)null);
-        act.Should().Throw<DdbException>();
+        Should.Throw<DdbException>(act);
 
     }
 
@@ -121,12 +121,12 @@ public class NativeDdbWrapperTests : TestBase
         Assert.Throws<DdbException>(() => DdbWrapper.Add(area.TestFolder, "invalid"));
 
         var entry = DdbWrapper.Add(area.TestFolder, Path.Join(area.TestFolder, "file.txt"))[0];
-        entry.Path.Should().Be("file.txt");
-        entry.Hash.Should().NotBeNullOrWhiteSpace();
+        entry.Path.ShouldBe("file.txt");
+        entry.Hash.ShouldNotBeNullOrWhiteSpace();
 
         var entries = DdbWrapper.Add(area.TestFolder, [Path.Join(area.TestFolder, "file2.txt"), Path.Join(area.TestFolder, "file3.txt")
         ]);
-        entries.Should().HaveCount(2);
+        entries.Count.ShouldBe(2);
 
         DdbWrapper.Remove(area.TestFolder, Path.Combine(area.TestFolder, "file.txt"));
 
@@ -142,14 +142,14 @@ public class NativeDdbWrapperTests : TestBase
         File.WriteAllText(Path.Join(area.TestFolder, "file2.txt"), "test");
 
         var e = DdbWrapper.Info(Path.Join(area.TestFolder, "file.txt"), withHash: true)[0];
-        e.Hash.Should().Be("9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08");
+        e.Hash.ShouldBe("9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08");
 
         var es = DdbWrapper.Info(area.TestFolder, true);
-        es.Count.Should().Be(2);
+        es.Count.ShouldBe(2);
 
-        es[0].Type.Should().Be(EntryType.Generic);
-        es[0].Size.Should().BeGreaterThan(0);
-        es[0].ModifiedTime.Year.Should().Be(DateTime.Now.Year);
+        es[0].Type.ShouldBe(EntryType.Generic);
+        es[0].Size.ShouldBeGreaterThan(0);
+        es[0].ModifiedTime.Year.ShouldBe(DateTime.Now.Year);
     }
 
     [Test]
@@ -170,7 +170,7 @@ public class NativeDdbWrapperTests : TestBase
 
         var res = DdbWrapper.Add(ddbPath, destPath);
 
-        res.Count.Should().Be(1);
+        res.Count.ShouldBe(1);
 
     }
 
@@ -185,26 +185,26 @@ public class NativeDdbWrapperTests : TestBase
 
         var res = DdbWrapper.Info(tempFile.FilePath, withHash: true);
 
-        res.Should().NotBeNull();
-        res.Should().HaveCount(1);
+        res.ShouldNotBeNull();
+        res.Count.ShouldBe(1);
 
         var info = res.First();
 
         // Just check some fields
         //info.Meta.Should().BeEquivalentTo(expectedMeta);
 
-        info.Properties.Should().NotBeEmpty();
-        info.Properties.Should().HaveCount(14);
-        info.Properties["make"].Should().Be("DJI");
-        info.Properties["model"].Should().Be("FC300S");
-        info.Properties["sensor"].Should().Be("dji fc300s");
-        info.Hash.Should().Be("246fed68dec31b17dc6d885cee10a2c08f2f1c68901a8efa132c60bdb770e5ff");
-        info.Type.Should().Be(EntryType.GeoImage);
-        info.Size.Should().Be(3876862);
+        info.Properties.ShouldNotBeEmpty();
+        info.Properties.Count.ShouldBe(14);
+        info.Properties["make"].ShouldBe("DJI");
+        info.Properties["model"].ShouldBe("FC300S");
+        info.Properties["sensor"].ShouldBe("dji fc300s");
+        info.Hash.ShouldBe("246fed68dec31b17dc6d885cee10a2c08f2f1c68901a8efa132c60bdb770e5ff");
+        info.Type.ShouldBe(EntryType.GeoImage);
+        info.Size.ShouldBe(3876862);
         // We can ignore this
         // info.Depth.Should().Be(0);
-        info.PointGeometry.Should().NotBeNull();
-        info.PolygonGeometry.Should().NotBeNull();
+        info.PointGeometry.ShouldNotBeNull();
+        info.PolygonGeometry.ShouldNotBeNull();
 
     }
 
@@ -212,13 +212,13 @@ public class NativeDdbWrapperTests : TestBase
     public void List_Nonexistant_Exception()
     {
         Action act = () => DdbWrapper.List("invalid", "");
-        act.Should().Throw<DdbException>();
+        Should.Throw<DdbException>(act);
 
         act = () => DdbWrapper.List("invalid", "wefrfwef");
-        act.Should().Throw<DdbException>();
+        Should.Throw<DdbException>(act);
 
         act = () => DdbWrapper.List(null, "wefrfwef");
-        act.Should().Throw<DdbException>();
+        Should.Throw<DdbException>(act);
 
 /*        act = () => DdbWrapper.List("invalid", (string)null);
         act.Should().Throw<DdbException>();
@@ -247,19 +247,19 @@ public class NativeDdbWrapperTests : TestBase
 
         var res = DdbWrapper.List(ddbPath, Path.Combine(ddbPath, fileName));
 
-        res.Should().HaveCount(1);
+        res.Count.ShouldBe(1);
 
         var file = res.First();
 
-        file.Path.Should().Be(fileName);
+        file.Path.ShouldBe(fileName);
         // TODO: Handle different timezones
-        file.ModifiedTime.Should().BeCloseTo(expectedModifiedTime, new TimeSpan(6, 0, 0));
-        file.Hash.Should().Be(expectedHash);
-        file.Depth.Should().Be(expectedDepth);
-        file.Size.Should().Be(expectedSize);
-        file.Type.Should().Be(expectedType);
-        file.Properties.Should().BeEquivalentTo(expectedMeta);
-        file.PointGeometry.Should().NotBeNull();
+        file.ModifiedTime.ShouldBeInRange(expectedModifiedTime.AddHours(-6), expectedModifiedTime.AddHours(6));
+        file.Hash.ShouldBe(expectedHash);
+        file.Depth.ShouldBe(expectedDepth);
+        file.Size.ShouldBe(expectedSize);
+        file.Type.ShouldBe(expectedType);
+        file.Properties.ShouldBeEquivalentTo(expectedMeta);
+        file.PointGeometry.ShouldNotBeNull();
         //file.PointGeometry.Coordinates.Latitude.Should().BeApproximately(expectedLatitude, 0.00001);
         //file.PointGeometry.Coordinates.Longitude.Should().BeApproximately(expectedLongitude, 0.00001);
         //file.PointGeometry.Coordinates.Altitude.Should().Be(expectedAltitude);
@@ -275,13 +275,13 @@ public class NativeDdbWrapperTests : TestBase
 
         var res = DdbWrapper.List(ddbPath, Path.Combine(ddbPath, "DJI_0027.JPG"));
 
-        res.Should().HaveCount(1);
+        res.Count.ShouldBe(1);
         var entry = res.First();
 
         Entry expectedEntry = JsonConvert.DeserializeObject<Entry>(
             "{\"depth\":0,\"hash\":\"3157958dd4f2562c8681867dfd6ee5bf70b6e9595b3e3b4b76bbda28342569ed\",\"properties\":{\"cameraPitch\":-89.9000015258789,\"cameraRoll\":0.0,\"cameraYaw\":-131.3000030517578,\"captureTime\":1466699584000.0,\"focalLength\":3.4222222222222225,\"focalLength35\":20.0,\"height\":2250,\"make\":\"DJI\",\"model\":\"FC300S\",\"orientation\":1,\"sensor\":\"dji fc300s\",\"sensorHeight\":3.4650000000000003,\"sensorWidth\":6.16,\"width\":4000},\"mtime\":1491156087,\"path\":\"DJI_0027.JPG\",\"point_geom\":{\"crs\":{\"properties\":{\"name\":\"EPSG:4326\"},\"type\":\"name\"},\"geometry\":{\"coordinates\":[-91.99408299999999,46.84260499999999,198.5099999999999],\"type\":\"Point\"},\"properties\":{},\"type\":\"Feature\"},\"polygon_geom\":{\"crs\":{\"properties\":{\"name\":\"EPSG:4326\"},\"type\":\"name\"},\"geometry\":{\"coordinates\":[[[-91.99397836402999,46.8422402913,158.5099999999999],[-91.99357489543,46.84247729175999,158.5099999999999],[-91.99418894036,46.84296945989999,158.5099999999999],[-91.99459241001999,46.8427324573,158.5099999999999],[-91.99397836402999,46.8422402913,158.5099999999999]]],\"type\":\"Polygon\"},\"properties\":{},\"type\":\"Feature\"},\"size\":3185449,\"type\":3}");
 
-        entry.Should().BeEquivalentTo(expectedEntry);
+        entry.ShouldBeEquivalentTo(expectedEntry);
 
     }
 
@@ -294,11 +294,11 @@ public class NativeDdbWrapperTests : TestBase
 
         var res = DdbWrapper.List(ddbPath, Path.Combine(ddbPath, "."), true);
 
-        res.Should().HaveCount(26);
+        res.Count.ShouldBe(26);
 
         res = DdbWrapper.List(ddbPath, ddbPath, true);
 
-        res.Should().HaveCount(26);
+        res.Count.ShouldBe(26);
 
     }
 
@@ -307,13 +307,13 @@ public class NativeDdbWrapperTests : TestBase
     public void Remove_Nonexistant_Exception()
     {
         var act = () => DdbWrapper.Remove("invalid", "");
-        act.Should().Throw<DdbException>();
+        Should.Throw<DdbException>(act);
 
         act = () => DdbWrapper.Remove("invalid", "wefrfwef");
-        act.Should().Throw<DdbException>();
+        Should.Throw<DdbException>(act);
 
         act = () => DdbWrapper.Remove(null, "wefrfwef");
-        act.Should().Throw<DdbException>();
+        Should.Throw<DdbException>(act);
 
     }
 
@@ -328,12 +328,12 @@ public class NativeDdbWrapperTests : TestBase
         var ddbPath = Path.Combine(test.TestFolder, "public", "default");
 
         var res = DdbWrapper.List(ddbPath, Path.Combine(ddbPath, fileName));
-        res.Should().HaveCount(1);
+        res.Count.ShouldBe(1);
 
         DdbWrapper.Remove(ddbPath, Path.Combine(ddbPath, fileName));
 
         res = DdbWrapper.List(ddbPath, Path.Combine(ddbPath, fileName));
-        res.Should().HaveCount(0);
+        res.Count.ShouldBe(0);
 
     }
 
@@ -349,7 +349,7 @@ public class NativeDdbWrapperTests : TestBase
         DdbWrapper.Remove(ddbPath, Path.Combine(ddbPath, fileName));
 
         var res = DdbWrapper.List(ddbPath, ".", true);
-        res.Should().HaveCount(0);
+        res.Count.ShouldBe(0);
 
     }
 
@@ -364,7 +364,7 @@ public class NativeDdbWrapperTests : TestBase
 
         var act = () => DdbWrapper.Remove(ddbPath, Path.Combine(ddbPath, fileName));
 
-        act.Should().Throw<DdbException>();
+        Should.Throw<DdbException>(act);
     }
 
     [Test]
@@ -372,7 +372,7 @@ public class NativeDdbWrapperTests : TestBase
     {
         var json = "{'hash': 'abc', 'mtime': 5}";
         var e = JsonConvert.DeserializeObject<Entry>(json);
-        e.ModifiedTime.Year.Should().Be(1970);
+        e.ModifiedTime.Year.ShouldBe(1970);
     }
 
 
@@ -385,15 +385,15 @@ public class NativeDdbWrapperTests : TestBase
 
         var ddbPath = Path.Combine(test.TestFolder, "public", "default");
 
-        DdbWrapper.VerifyPassword(ddbPath, string.Empty).Should().BeTrue();
+        DdbWrapper.VerifyPassword(ddbPath, string.Empty).ShouldBeTrue();
 
         DdbWrapper.AppendPassword(ddbPath, "testpassword");
 
-        DdbWrapper.VerifyPassword(ddbPath, "testpassword").Should().BeTrue();
-        DdbWrapper.VerifyPassword(ddbPath, "wrongpassword").Should().BeFalse();
+        DdbWrapper.VerifyPassword(ddbPath, "testpassword").ShouldBeTrue();
+        DdbWrapper.VerifyPassword(ddbPath, "wrongpassword").ShouldBeFalse();
 
         DdbWrapper.ClearPasswords(ddbPath);
-        DdbWrapper.VerifyPassword(ddbPath, "testpassword").Should().BeFalse();
+        DdbWrapper.VerifyPassword(ddbPath, "testpassword").ShouldBeFalse();
 
 
     }
@@ -408,7 +408,7 @@ public class NativeDdbWrapperTests : TestBase
 
         Action act = () => DdbWrapper.ChangeAttributes(ddbPath, null);
 
-        act.Should().Throw<ArgumentException>();
+        Should.Throw<ArgumentException>(act);
 
     }
 
@@ -425,8 +425,8 @@ public class NativeDdbWrapperTests : TestBase
             DdbWrapper.GenerateThumbnail(tempFile.FilePath, 300, destPath);
 
             var info = new FileInfo(destPath);
-            info.Exists.Should().BeTrue();
-            info.Length.Should().BeGreaterThan(0);
+            info.Exists.ShouldBeTrue();
+            info.Length.ShouldBeGreaterThan(0);
 
         }
         finally
@@ -440,7 +440,7 @@ public class NativeDdbWrapperTests : TestBase
     {
         using var tempFile = new TempFile(TestFileUrl, BaseTestFolder);
         var buffer = DdbWrapper.GenerateThumbnail(tempFile.FilePath, 300);
-        buffer.Length.Should().BeGreaterThan(0);
+        buffer.Length.ShouldBeGreaterThan(0);
     }
 
     [Test]
@@ -468,7 +468,7 @@ public class NativeDdbWrapperTests : TestBase
         using var tempFile = new TempFile(TestGeoTiffUrl, BaseTestFolder);
 
         var buffer = DdbWrapper.GenerateMemoryTile(tempFile.FilePath, 18, 64083, 92370, 256, true);
-        buffer.Length.Should().BeGreaterThan(0);
+        buffer.Length.ShouldBeGreaterThan(0);
     }
 
     [Test]
@@ -484,19 +484,19 @@ public class NativeDdbWrapperTests : TestBase
 
         var tag = DdbWrapper.GetTag(ddbPath);
 
-        tag.Should().BeNull();
+        tag.ShouldBeNull();
 
         DdbWrapper.SetTag(ddbPath, goodTag);
 
         tag = DdbWrapper.GetTag(ddbPath);
 
-        tag.Should().Be(goodTag);
+        tag.ShouldBe(goodTag);
 
         DdbWrapper.SetTag(ddbPath, goodTagWithRegistry);
 
         tag = DdbWrapper.GetTag(ddbPath);
 
-        tag.Should().Be(goodTagWithRegistry);
+        tag.ShouldBe(goodTagWithRegistry);
 
     }
 
@@ -513,19 +513,19 @@ public class NativeDdbWrapperTests : TestBase
 
         var act = () => DdbWrapper.SetTag(ddbPath, badTag);
 
-        act.Should().Throw<DdbException>();
+        Should.Throw<DdbException>(act);
 
         act = () => DdbWrapper.SetTag(ddbPath, badTag2);
 
-        act.Should().Throw<DdbException>();
+        Should.Throw<DdbException>(act);
 
         act = () => DdbWrapper.SetTag(ddbPath, string.Empty);
 
-        act.Should().Throw<DdbException>();
+        Should.Throw<DdbException>(act);
 
         act = () => DdbWrapper.SetTag(ddbPath, null);
 
-        act.Should().Throw<ArgumentException>();
+        Should.Throw<ArgumentException>(act);
 
     }
 
@@ -537,8 +537,8 @@ public class NativeDdbWrapperTests : TestBase
         var ddbPath = Path.Combine(test.TestFolder, DdbFolder);
 
         var stamp = DdbWrapper.GetStamp(ddbPath);
-        stamp.Checksum.Should().NotBeNull();
-        stamp.Entries.Count.Should().BeGreaterThan(0);
+        stamp.Checksum.ShouldNotBeNull();
+        stamp.Entries.Count.ShouldBeGreaterThan(0);
     }
 
     [Test]
@@ -549,8 +549,8 @@ public class NativeDdbWrapperTests : TestBase
 
         var delta = DdbWrapper.Delta(source.TestFolder, destination.TestFolder);
 
-        delta.Adds.Length.Should().BeGreaterThan(0);
-        delta.Removes.Length.Should().BeGreaterThan(0);
+        delta.Adds.Length.ShouldBeGreaterThan(0);
+        delta.Removes.Length.ShouldBeGreaterThan(0);
 
     }
 
@@ -563,8 +563,8 @@ public class NativeDdbWrapperTests : TestBase
 
         var res = DdbWrapper.List(test.TestFolder, test.TestFolder, true);
 
-        res.Should().HaveCount(11);
-        res[8].Path.Should().Be("test.txt");
+        res.Count.ShouldBe(11);
+        res[8].Path.ShouldBe("test.txt");
     }
 
     [Test]
@@ -583,7 +583,7 @@ public class NativeDdbWrapperTests : TestBase
 
         var res = DdbWrapper.Add(ddbPath, destPath);
 
-        res.Count.Should().Be(1);
+        res.Count.ShouldBe(1);
 
         DdbWrapper.Build(ddbPath);
 
@@ -605,9 +605,9 @@ public class NativeDdbWrapperTests : TestBase
 
         var res = DdbWrapper.Add(ddbPath, destPath);
 
-        res.Count.Should().Be(1);
+        res.Count.ShouldBe(1);
 
-        DdbWrapper.IsBuildable(ddbPath, Path.GetFileName(destPath)).Should().BeTrue();
+        DdbWrapper.IsBuildable(ddbPath, Path.GetFileName(destPath)).ShouldBeTrue();
 
     }
 
@@ -617,7 +617,7 @@ public class NativeDdbWrapperTests : TestBase
 
         using var test = new TestFS(TestDelta2ArchiveUrl, BaseTestFolder);
 
-        DdbWrapper.IsBuildable(test.TestFolder, "lol.txt").Should().BeFalse();
+        DdbWrapper.IsBuildable(test.TestFolder, "lol.txt").ShouldBeFalse();
 
     }
 
@@ -636,7 +636,7 @@ public class NativeDdbWrapperTests : TestBase
 
         var res = DdbWrapper.Add(ddbPath, destPath);
 
-        res.Count.Should().Be(1);
+        res.Count.ShouldBe(1);
 
         // Test that IsBuildActive is consistent for buildable files
         var isActive = DdbWrapper.IsBuildActive(ddbPath, Path.GetFileName(destPath));
@@ -646,8 +646,8 @@ public class NativeDdbWrapperTests : TestBase
         TestContext.WriteLine($"IsBuildActive for point cloud file returns: {isActive}");
 
         // Call it multiple times to ensure consistency
-        DdbWrapper.IsBuildActive(ddbPath, Path.GetFileName(destPath)).Should().Be(isActive);
-        DdbWrapper.IsBuildActive(ddbPath, Path.GetFileName(destPath)).Should().Be(isActive);
+        DdbWrapper.IsBuildActive(ddbPath, Path.GetFileName(destPath)).ShouldBe(isActive);
+        DdbWrapper.IsBuildActive(ddbPath, Path.GetFileName(destPath)).ShouldBe(isActive);
     }
 
     [Test]
@@ -656,7 +656,7 @@ public class NativeDdbWrapperTests : TestBase
         using var test = new TestFS(TestDelta2ArchiveUrl, BaseTestFolder);
 
         // Text files are not buildable, so build should never be active
-        DdbWrapper.IsBuildActive(test.TestFolder, "lol.txt").Should().BeFalse();
+        DdbWrapper.IsBuildActive(test.TestFolder, "lol.txt").ShouldBeFalse();
     }
 
     [Test]
@@ -674,9 +674,9 @@ public class NativeDdbWrapperTests : TestBase
 
         var res = DdbWrapper.Add(ddbPath, destPath);
 
-        res.Count.Should().Be(1);
+        res.Count.ShouldBe(1);
 
-        DdbWrapper.IsBuildActive(ddbPath, Path.GetFileName(destPath)).Should().BeFalse();
+        DdbWrapper.IsBuildActive(ddbPath, Path.GetFileName(destPath)).ShouldBeFalse();
 
         var isActive = false;
 
@@ -693,13 +693,13 @@ public class NativeDdbWrapperTests : TestBase
         while(!isActive) Thread.Sleep(10);
 
         // While the build is in progress, IsBuildActive should return true
-        DdbWrapper.IsBuildActive(ddbPath, Path.GetFileName(destPath)).Should().BeTrue();
+        DdbWrapper.IsBuildActive(ddbPath, Path.GetFileName(destPath)).ShouldBeTrue();
 
         task.Wait();
 
-        isActive.Should().BeFalse();
+        isActive.ShouldBeFalse();
 
-        DdbWrapper.IsBuildActive(ddbPath, Path.GetFileName(destPath)).Should().BeFalse();
+        DdbWrapper.IsBuildActive(ddbPath, Path.GetFileName(destPath)).ShouldBeFalse();
 
     }
 
@@ -712,13 +712,13 @@ public class NativeDdbWrapperTests : TestBase
         var textFile = "lol.txt";
 
         // Verify it's not buildable
-        DdbWrapper.IsBuildable(test.TestFolder, textFile).Should().BeFalse();
+        DdbWrapper.IsBuildable(test.TestFolder, textFile).ShouldBeFalse();
 
         // Test IsBuildActive on non-buildable file
         var isActive = DdbWrapper.IsBuildActive(test.TestFolder, textFile);
 
         // For non-buildable files, build should never be active
-        isActive.Should().BeFalse();
+        isActive.ShouldBeFalse();
 
         TestContext.WriteLine($"IsBuildActive for non-buildable file returns: {isActive}");
     }
@@ -729,8 +729,8 @@ public class NativeDdbWrapperTests : TestBase
         using var area = new TestArea(nameof(MetaAdd_Ok));
         DdbWrapper.Init(area.TestFolder);
 
-        FluentActions.Invoking(() => DdbWrapper.MetaAdd(area.TestFolder, "test", "123")).Should()
-            .Throw<DdbException>(); // Needs plural key
+        var act = () => DdbWrapper.MetaAdd(area.TestFolder, "test", "123");
+        Should.Throw<DdbException>(act); // Needs plural key
         // DdbWrapper.MetaAdd("metaAddTest", "", "tests", "123").Data.ToObject<int>().Should().Be(123);
     }
 
@@ -741,9 +741,9 @@ public class NativeDdbWrapperTests : TestBase
         DdbWrapper.Init(area.TestFolder);
 
         var res = DdbWrapper.MetaAdd(area.TestFolder, "tests", "{\"test\": true}");
-        JsonConvert.SerializeObject(res.Data).Should().Be("{\"test\":true}");
-        res.Id.Should().NotBeNull();
-        res.ModifiedTime.Should().BeCloseTo(DateTime.UtcNow, new TimeSpan(0,0,3));
+        JsonConvert.SerializeObject(res.Data).ShouldBe("{\"test\":true}");
+        res.Id.ShouldNotBeNull();
+        res.ModifiedTime.ShouldBeInRange(DateTime.UtcNow.AddSeconds(-3), DateTime.UtcNow.AddSeconds(3));
     }
 
     [Test]
@@ -757,11 +757,11 @@ public class NativeDdbWrapperTests : TestBase
 
         DdbWrapper.Add(area.TestFolder, f);
 
-        FluentActions.Invoking(() => DdbWrapper.MetaSet(area.TestFolder, "tests", "123", f)).Should()
-            .Throw<DdbException>(); // Needs singular key
+        var act = () => DdbWrapper.MetaSet(area.TestFolder, "tests", "123", f);
+        Should.Throw<DdbException>(act); // Needs singular key
 
-        DdbWrapper.MetaSet(area.TestFolder, "test", "abc", f).Data.ToObject<string>().Should().Be("abc");
-        DdbWrapper.MetaSet(area.TestFolder, "test", "efg", f).Data.ToObject<string>().Should().Be("efg");
+        DdbWrapper.MetaSet(area.TestFolder, "test", "abc", f).Data.ToObject<string>().ShouldBe("abc");
+        DdbWrapper.MetaSet(area.TestFolder, "test", "efg", f).Data.ToObject<string>().ShouldBe("efg");
     }
 
     [Test]
@@ -771,9 +771,9 @@ public class NativeDdbWrapperTests : TestBase
         DdbWrapper.Init(area.TestFolder);
 
         var id = DdbWrapper.MetaSet(area.TestFolder, "test", "123").Id;
-        DdbWrapper.MetaRemove(area.TestFolder, "invalid").Should().Be(0);
-        DdbWrapper.MetaRemove(area.TestFolder, id).Should().Be(1);
-        DdbWrapper.MetaRemove(area.TestFolder, id).Should().Be(0);
+        DdbWrapper.MetaRemove(area.TestFolder, "invalid").ShouldBe(0);
+        DdbWrapper.MetaRemove(area.TestFolder, id).ShouldBe(1);
+        DdbWrapper.MetaRemove(area.TestFolder, id).ShouldBe(0);
     }
 
     [Test]
@@ -784,14 +784,14 @@ public class NativeDdbWrapperTests : TestBase
 
         DdbWrapper.MetaSet(area.TestFolder, "abc", "true");
 
-        FluentActions.Invoking(() => DdbWrapper.MetaGet(area.TestFolder, "nonexistant")).Should()
-            .Throw<DdbException>();
+        var act1 = () => DdbWrapper.MetaGet(area.TestFolder, "nonexistant");
+        Should.Throw<DdbException>(act1);
 
-        FluentActions.Invoking(() => DdbWrapper.MetaGet(area.TestFolder, "abc", "123")).Should()
-            .Throw<DdbException>();
+        var act2 = () => DdbWrapper.MetaGet(area.TestFolder, "abc", "123");
+        Should.Throw<DdbException>(act2);
 
         JsonConvert.DeserializeObject<Meta>(DdbWrapper.MetaGet(area.TestFolder, "abc")).Data.ToObject<bool>()
-            .Should().Be(true);
+            .ShouldBeTrue();
     }
 
     [Test]
@@ -806,7 +806,7 @@ public class NativeDdbWrapperTests : TestBase
 
         var res = JsonConvert.DeserializeObject<Meta[]>(DdbWrapper.MetaGet(area.TestFolder, "tests"));
 
-        res.Should().HaveCount(3);
+        res.Length.ShouldBe(3);
 
     }
 
@@ -822,9 +822,9 @@ public class NativeDdbWrapperTests : TestBase
         DdbWrapper.Add(area.TestFolder, f);
 
         DdbWrapper.MetaSet(area.TestFolder, "abc", "[1,2,3]");
-        DdbWrapper.MetaUnset(area.TestFolder, "abc", f).Should().Be(0);
-        DdbWrapper.MetaUnset(area.TestFolder, "abc").Should().Be(1);
-        DdbWrapper.MetaUnset(area.TestFolder, "abc").Should().Be(0);
+        DdbWrapper.MetaUnset(area.TestFolder, "abc", f).ShouldBe(0);
+        DdbWrapper.MetaUnset(area.TestFolder, "abc").ShouldBe(1);
+        DdbWrapper.MetaUnset(area.TestFolder, "abc").ShouldBe(0);
     }
 
     [Test]
@@ -835,7 +835,7 @@ public class NativeDdbWrapperTests : TestBase
 
         DdbWrapper.MetaAdd(area.TestFolder, "annotations", "123");
         DdbWrapper.MetaAdd(area.TestFolder, "examples", "abc");
-        DdbWrapper.MetaList(area.TestFolder).Should().HaveCount(2);
+        DdbWrapper.MetaList(area.TestFolder).Count.ShouldBe(2);
     }
 
     [Test]
@@ -849,7 +849,7 @@ public class NativeDdbWrapperTests : TestBase
         var res = DdbWrapper.Stac(ddbPath, "DJI_0025.JPG",
             "http://localhost:5000/orgs/public/ds/default", "public/default", "http://localhost:5000");
 
-        res.Should().NotBeNull();
+        res.ShouldNotBeNull();
 
         TestContext.WriteLine(res);
     }
@@ -865,7 +865,7 @@ public class NativeDdbWrapperTests : TestBase
         var res = DdbWrapper.Stac(ddbPath, null,
             "http://localhost:5000/orgs/public/ds/default", "public/default", "http://localhost:5000");
 
-        res.Should().NotBeNull();
+        res.ShouldNotBeNull();
 
         TestContext.WriteLine(res);
 
@@ -881,13 +881,13 @@ public class NativeDdbWrapperTests : TestBase
         // Use stopOnError = false because test dataset may not have all physical files
         var res = DdbWrapper.RescanIndex(ddbPath, null, false);
 
-        res.Should().NotBeNull();
-        res.Should().NotBeEmpty();
+        res.ShouldNotBeNull();
+        res.ShouldNotBeEmpty();
 
         foreach (var entry in res)
         {
             TestContext.WriteLine($"Path: {entry.Path}, Success: {entry.Success}, Hash: {entry.Hash}, Error: {entry.Error}");
-            entry.Path.Should().NotBeNullOrWhiteSpace();
+            entry.Path.ShouldNotBeNullOrWhiteSpace();
         }
     }
 
@@ -901,7 +901,7 @@ public class NativeDdbWrapperTests : TestBase
         // Rescan only images with stopOnError = false for test dataset
         var res = DdbWrapper.RescanIndex(ddbPath, "image,geoimage", false);
 
-        res.Should().NotBeNull();
+        res.ShouldNotBeNull();
 
         foreach (var entry in res)
         {
@@ -913,7 +913,7 @@ public class NativeDdbWrapperTests : TestBase
     public void RescanIndex_NonexistentPath_Exception()
     {
         Action act = () => DdbWrapper.RescanIndex("nonexistent");
-        act.Should().Throw<DdbException>();
+        Should.Throw<DdbException>(act);
     }
 
     [Test]
@@ -926,7 +926,7 @@ public class NativeDdbWrapperTests : TestBase
         // Should not throw even if there are errors, when stopOnError is false
         var res = DdbWrapper.RescanIndex(ddbPath, null, false);
 
-        res.Should().NotBeNull();
+        res.ShouldNotBeNull();
     }
 
 

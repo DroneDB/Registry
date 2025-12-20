@@ -1,9 +1,9 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Security.Claims;
 using System.Threading.Tasks;
-using FluentAssertions;
+using Shouldly;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.Extensions.Logging;
@@ -224,7 +224,7 @@ public class AuthManagerTests : TestBase
         var result = await _authManager.RequestAccess(_publicDataset, AccessType.Read);
 
         // Assert
-        result.Should().BeTrue();
+        result.ShouldBeTrue();
 
         // Verify cache was called with correct parameters
         _cacheManagerMock.Verify(x => x.GetAsync(
@@ -248,7 +248,7 @@ public class AuthManagerTests : TestBase
         var result = await _authManager.RequestAccess(_privateDataset, AccessType.Read);
 
         // Assert
-        result.Should().BeFalse();
+        result.ShouldBeFalse();
 
         // Verify cache was called with correct parameters
         _cacheManagerMock.Verify(x => x.GetAsync(
@@ -272,7 +272,7 @@ public class AuthManagerTests : TestBase
         var result = await _authManager.RequestAccess(_privateDataset, AccessType.Write);
 
         // Assert
-        result.Should().BeTrue();
+        result.ShouldBeTrue();
 
         // Verify UserManager interactions
         _userManagerMock.Verify(x => x.FindByIdAsync(_normalUser.Id), Times.AtLeastOnce);
@@ -290,7 +290,7 @@ public class AuthManagerTests : TestBase
         var result = await _authManager.RequestAccess(_privateDataset, AccessType.Delete);
 
         // Assert
-        result.Should().BeTrue();
+        result.ShouldBeTrue();
 
         // Verify admin check was performed
         _userManagerMock.Verify(x => x.IsInRoleAsync(_adminUser, ApplicationDbContext.AdminRoleName), Times.Once);
@@ -308,7 +308,7 @@ public class AuthManagerTests : TestBase
         var result = await _authManager.RequestAccess(_privateDataset, AccessType.Read);
 
         // Assert
-        result.Should().BeFalse();
+        result.ShouldBeFalse();
 
         // Verify deactivated check was performed early
         _userManagerMock.Verify(x => x.IsInRoleAsync(_deactivatedUser, ApplicationDbContext.DeactivatedRoleName), Times.Once);
@@ -324,7 +324,7 @@ public class AuthManagerTests : TestBase
         var result = await _authManager.RequestAccess(_publicDataset, AccessType.Read);
 
         // Assert
-        result.Should().BeTrue();
+        result.ShouldBeTrue();
 
         // DdbManager.Get should not be called directly in the test flow
         // It should only be called through cache provider
@@ -360,7 +360,7 @@ public class AuthManagerTests : TestBase
 
         // Assert
         // Should default to Private visibility and deny access
-        result.Should().BeFalse();
+        result.ShouldBeFalse();
     }
 
     [Test]
@@ -391,7 +391,7 @@ public class AuthManagerTests : TestBase
         var result = await _authManager.RequestAccess(unlistedDataset, AccessType.Read);
 
         // Assert
-        result.Should().BeTrue();
+        result.ShouldBeTrue();
     }
 
     #endregion
@@ -425,7 +425,7 @@ public class AuthManagerTests : TestBase
         var result = await _authManager.RequestAccess(unlistedDataset, AccessType.Write);
 
         // Assert
-        result.Should().BeFalse();
+        result.ShouldBeFalse();
     }
 
     [Test]
@@ -455,7 +455,7 @@ public class AuthManagerTests : TestBase
         var result = await _authManager.RequestAccess(unlistedDataset, AccessType.Delete);
 
         // Assert
-        result.Should().BeFalse();
+        result.ShouldBeFalse();
     }
 
     [Test]
@@ -487,9 +487,9 @@ public class AuthManagerTests : TestBase
         var deleteResult = await _authManager.RequestAccess(unlistedDataset, AccessType.Delete);
 
         // Assert
-        readResult.Should().BeTrue();
-        writeResult.Should().BeTrue();
-        deleteResult.Should().BeTrue();
+        readResult.ShouldBeTrue();
+        writeResult.ShouldBeTrue();
+        deleteResult.ShouldBeTrue();
     }
 
     [Test]
@@ -521,9 +521,9 @@ public class AuthManagerTests : TestBase
         var deleteResult = await _authManager.RequestAccess(unlistedDataset, AccessType.Delete);
 
         // Assert
-        readResult.Should().BeTrue();
-        writeResult.Should().BeTrue();
-        deleteResult.Should().BeTrue();
+        readResult.ShouldBeTrue();
+        writeResult.ShouldBeTrue();
+        deleteResult.ShouldBeTrue();
     }
 
     [Test]
@@ -553,7 +553,7 @@ public class AuthManagerTests : TestBase
         var result = await _authManager.RequestAccess(unlistedDataset, AccessType.Read);
 
         // Assert - Random user can read unlisted datasets (like public)
-        result.Should().BeTrue();
+        result.ShouldBeTrue();
     }
 
     [Test]
@@ -583,7 +583,7 @@ public class AuthManagerTests : TestBase
         var result = await _authManager.RequestAccess(unlistedDataset, AccessType.Write);
 
         // Assert - Random user cannot write to unlisted datasets
-        result.Should().BeFalse();
+        result.ShouldBeFalse();
     }
 
     [Test]
@@ -615,9 +615,9 @@ public class AuthManagerTests : TestBase
         var deleteResult = await _authManager.RequestAccess(unlistedDataset, AccessType.Delete);
 
         // Assert
-        readResult.Should().BeFalse();
-        writeResult.Should().BeFalse();
-        deleteResult.Should().BeFalse();
+        readResult.ShouldBeFalse();
+        writeResult.ShouldBeFalse();
+        deleteResult.ShouldBeFalse();
     }
 
     [Test]
@@ -655,9 +655,9 @@ public class AuthManagerTests : TestBase
         var deleteResult = await _authManager.RequestAccess(unlistedDataset, AccessType.Delete);
 
         // Assert
-        readResult.Should().BeTrue();
-        writeResult.Should().BeTrue();
-        deleteResult.Should().BeFalse();
+        readResult.ShouldBeTrue();
+        writeResult.ShouldBeTrue();
+        deleteResult.ShouldBeFalse();
     }
 
     [Test]
@@ -695,7 +695,7 @@ public class AuthManagerTests : TestBase
         var result = await _authManager.RequestAccess(unlistedDataset, AccessType.Read);
 
         // Assert - Should be denied because owner is deactivated
-        result.Should().BeFalse();
+        result.ShouldBeFalse();
 
         // Verify owner was checked
         _userManagerMock.Verify(x => x.FindByIdAsync(_deactivatedUser.Id), Times.Once);
@@ -716,7 +716,7 @@ public class AuthManagerTests : TestBase
         var result = await _authManager.RequestAccess(_publicOrg, AccessType.Read);
 
         // Assert
-        result.Should().BeTrue();
+        result.ShouldBeTrue();
     }
 
     [Test]
@@ -729,7 +729,7 @@ public class AuthManagerTests : TestBase
         var result = await _authManager.RequestAccess(_privateOrg, AccessType.Read);
 
         // Assert
-        result.Should().BeFalse();
+        result.ShouldBeFalse();
     }
 
     [Test]
@@ -744,9 +744,9 @@ public class AuthManagerTests : TestBase
         var deleteResult = await _authManager.RequestAccess(_privateOrg, AccessType.Delete);
 
         // Assert
-        readResult.Should().BeTrue();
-        writeResult.Should().BeTrue();
-        deleteResult.Should().BeTrue();
+        readResult.ShouldBeTrue();
+        writeResult.ShouldBeTrue();
+        deleteResult.ShouldBeTrue();
     }
 
     [Test]
@@ -761,9 +761,9 @@ public class AuthManagerTests : TestBase
         var deleteResult = await _authManager.RequestAccess(_privateOrg, AccessType.Delete);
 
         // Assert
-        readResult.Should().BeTrue();
-        writeResult.Should().BeTrue();
-        deleteResult.Should().BeTrue();
+        readResult.ShouldBeTrue();
+        writeResult.ShouldBeTrue();
+        deleteResult.ShouldBeTrue();
     }
 
     [Test]
@@ -778,9 +778,9 @@ public class AuthManagerTests : TestBase
         var deleteResult = await _authManager.RequestAccess(_publicOrg, AccessType.Delete);
 
         // Assert
-        readResult.Should().BeFalse();
-        writeResult.Should().BeFalse();
-        deleteResult.Should().BeFalse();
+        readResult.ShouldBeFalse();
+        writeResult.ShouldBeFalse();
+        deleteResult.ShouldBeFalse();
     }
 
     [Test]
@@ -793,7 +793,7 @@ public class AuthManagerTests : TestBase
         var result = await _authManager.CanListOrganizations();
 
         // Assert
-        result.Should().BeFalse();
+        result.ShouldBeFalse();
     }
 
     [Test]
@@ -806,7 +806,7 @@ public class AuthManagerTests : TestBase
         var result = await _authManager.CanListOrganizations();
 
         // Assert
-        result.Should().BeFalse();
+        result.ShouldBeFalse();
     }
 
     [Test]
@@ -819,7 +819,7 @@ public class AuthManagerTests : TestBase
         var result = await _authManager.CanListOrganizations();
 
         // Assert
-        result.Should().BeTrue();
+        result.ShouldBeTrue();
     }
 
 
@@ -834,7 +834,7 @@ public class AuthManagerTests : TestBase
         var result = await _authManager.RequestAccess(_publicOrg, AccessType.Read);
 
         // Assert
-        result.Should().BeFalse();
+        result.ShouldBeFalse();
     }
 
     [Test]
@@ -847,7 +847,7 @@ public class AuthManagerTests : TestBase
         var result = await _authManager.RequestAccess(_privateOrg, AccessType.Read);
 
         // Assert
-        result.Should().BeFalse();
+        result.ShouldBeFalse();
     }
 
     [Test]
@@ -862,9 +862,9 @@ public class AuthManagerTests : TestBase
         var deleteResult = await _authManager.RequestAccess(_privateOrg, AccessType.Delete);
 
         // Assert
-        readResult.Should().BeFalse();
-        writeResult.Should().BeFalse();
-        deleteResult.Should().BeFalse();
+        readResult.ShouldBeFalse();
+        writeResult.ShouldBeFalse();
+        deleteResult.ShouldBeFalse();
     }
 
     [Test]
@@ -877,7 +877,7 @@ public class AuthManagerTests : TestBase
         var result = await _authManager.RequestAccess(_publicOrg, AccessType.Read);
 
         // Assert
-        result.Should().BeTrue();
+        result.ShouldBeTrue();
     }
 
     #endregion
@@ -894,7 +894,7 @@ public class AuthManagerTests : TestBase
         var result = await _authManager.RequestAccess(_publicDataset, AccessType.Read);
 
         // Assert
-        result.Should().BeTrue();
+        result.ShouldBeTrue();
     }
 
     [Test]
@@ -907,7 +907,7 @@ public class AuthManagerTests : TestBase
         var result = await _authManager.RequestAccess(_privateDataset, AccessType.Read);
 
         // Assert
-        result.Should().BeFalse();
+        result.ShouldBeFalse();
     }
 
     [Test]
@@ -922,9 +922,9 @@ public class AuthManagerTests : TestBase
         var deleteResult = await _authManager.RequestAccess(_privateDataset, AccessType.Delete);
 
         // Assert
-        readResult.Should().BeTrue();
-        writeResult.Should().BeTrue();
-        deleteResult.Should().BeTrue();
+        readResult.ShouldBeTrue();
+        writeResult.ShouldBeTrue();
+        deleteResult.ShouldBeTrue();
     }
 
     [Test]
@@ -939,9 +939,9 @@ public class AuthManagerTests : TestBase
         var deleteResult = await _authManager.RequestAccess(_privateDataset, AccessType.Delete);
 
         // Assert
-        readResult.Should().BeTrue();
-        writeResult.Should().BeTrue();
-        deleteResult.Should().BeTrue();
+        readResult.ShouldBeTrue();
+        writeResult.ShouldBeTrue();
+        deleteResult.ShouldBeTrue();
     }
 
     [Test]
@@ -956,9 +956,9 @@ public class AuthManagerTests : TestBase
         var deleteResult = await _authManager.RequestAccess(_privateDataset, AccessType.Delete);
 
         // Assert
-        readResult.Should().BeTrue();
-        writeResult.Should().BeTrue();
-        deleteResult.Should().BeTrue();
+        readResult.ShouldBeTrue();
+        writeResult.ShouldBeTrue();
+        deleteResult.ShouldBeTrue();
     }
 
 
@@ -974,9 +974,9 @@ public class AuthManagerTests : TestBase
         var deleteResult = await _authManager.RequestAccess(_privateDataset, AccessType.Delete);
 
         // Assert
-        readResult.Should().BeFalse();
-        writeResult.Should().BeFalse();
-        deleteResult.Should().BeFalse();
+        readResult.ShouldBeFalse();
+        writeResult.ShouldBeFalse();
+        deleteResult.ShouldBeFalse();
     }
 
     [Test]
@@ -996,9 +996,9 @@ public class AuthManagerTests : TestBase
         var deleteResult = await _authManager.RequestAccess(_privateDataset, AccessType.Delete);
 
         // Assert
-        readResult.Should().BeTrue();
-        writeResult.Should().BeTrue();
-        deleteResult.Should().BeFalse();
+        readResult.ShouldBeTrue();
+        writeResult.ShouldBeTrue();
+        deleteResult.ShouldBeFalse();
     }
 
     #endregion
@@ -1016,7 +1016,7 @@ public class AuthManagerTests : TestBase
         var result = await _authManager.RequestAccess(_publicDataset, AccessType.Read);
 
         // Assert
-        result.Should().BeFalse();
+        result.ShouldBeFalse();
 
         // Verify owner was checked for deactivation
         _userManagerMock.Verify(x => x.FindByIdAsync(_deactivatedUser.Id), Times.Once);
@@ -1033,7 +1033,7 @@ public class AuthManagerTests : TestBase
         var result = await _authManager.RequestAccess(_privateDataset, AccessType.Read);
 
         // Assert
-        result.Should().BeFalse();
+        result.ShouldBeFalse();
 
         // Verify user checks were performed
         _userManagerMock.Verify(x => x.IsInRoleAsync(_randomUser, ApplicationDbContext.DeactivatedRoleName), Times.Once);
@@ -1052,9 +1052,9 @@ public class AuthManagerTests : TestBase
         var deleteResult = await _authManager.RequestAccess(_privateDataset, AccessType.Delete);
 
         // Assert
-        readResult.Should().BeFalse();
-        writeResult.Should().BeFalse();
-        deleteResult.Should().BeFalse();
+        readResult.ShouldBeFalse();
+        writeResult.ShouldBeFalse();
+        deleteResult.ShouldBeFalse();
     }
 
     [Test]
@@ -1067,7 +1067,7 @@ public class AuthManagerTests : TestBase
         var result = await _authManager.RequestAccess(_publicDataset, AccessType.Read);
 
         // Assert
-        result.Should().BeTrue();
+        result.ShouldBeTrue();
     }
 
     [Test]
@@ -1085,7 +1085,7 @@ public class AuthManagerTests : TestBase
         var readResult = await _authManager.RequestAccess(_privateDataset, AccessType.Read);
 
         // Assert
-        readResult.Should().BeTrue();
+        readResult.ShouldBeTrue();
 
         // Verify member checks
         _userManagerMock.Verify(x => x.FindByIdAsync(orgMember.Id), Times.AtLeastOnce);
@@ -1107,7 +1107,7 @@ public class AuthManagerTests : TestBase
         var deleteResult = await _authManager.RequestAccess(_privateDataset, AccessType.Delete);
 
         // Assert
-        deleteResult.Should().BeFalse();
+        deleteResult.ShouldBeFalse();
 
         // Verify that checks were still performed
         _userManagerMock.Verify(x => x.IsInRoleAsync(orgMember, ApplicationDbContext.AdminRoleName), Times.Once);
@@ -1152,10 +1152,10 @@ public class AuthManagerTests : TestBase
         var permissions = await _authManager.GetDatasetPermissions(_publicDataset);
 
         // Assert
-        permissions.Should().NotBeNull();
-        permissions.CanRead.Should().BeTrue();
-        permissions.CanWrite.Should().BeFalse();
-        permissions.CanDelete.Should().BeFalse();
+        permissions.ShouldNotBeNull();
+        permissions.CanRead.ShouldBeTrue();
+        permissions.CanWrite.ShouldBeFalse();
+        permissions.CanDelete.ShouldBeFalse();
     }
 
     [Test]
@@ -1168,10 +1168,10 @@ public class AuthManagerTests : TestBase
         var permissions = await _authManager.GetDatasetPermissions(_privateDataset);
 
         // Assert
-        permissions.Should().NotBeNull();
-        permissions.CanRead.Should().BeFalse();
-        permissions.CanWrite.Should().BeFalse();
-        permissions.CanDelete.Should().BeFalse();
+        permissions.ShouldNotBeNull();
+        permissions.CanRead.ShouldBeFalse();
+        permissions.CanWrite.ShouldBeFalse();
+        permissions.CanDelete.ShouldBeFalse();
     }
 
     [Test]
@@ -1184,10 +1184,10 @@ public class AuthManagerTests : TestBase
         var permissions = await _authManager.GetDatasetPermissions(_privateDataset);
 
         // Assert
-        permissions.Should().NotBeNull();
-        permissions.CanRead.Should().BeTrue();
-        permissions.CanWrite.Should().BeTrue();
-        permissions.CanDelete.Should().BeTrue();
+        permissions.ShouldNotBeNull();
+        permissions.CanRead.ShouldBeTrue();
+        permissions.CanWrite.ShouldBeTrue();
+        permissions.CanDelete.ShouldBeTrue();
     }
 
     [Test]
@@ -1200,10 +1200,10 @@ public class AuthManagerTests : TestBase
         var permissions = await _authManager.GetDatasetPermissions(_privateDataset);
 
         // Assert
-        permissions.Should().NotBeNull();
-        permissions.CanRead.Should().BeTrue();
-        permissions.CanWrite.Should().BeTrue();
-        permissions.CanDelete.Should().BeTrue();
+        permissions.ShouldNotBeNull();
+        permissions.CanRead.ShouldBeTrue();
+        permissions.CanWrite.ShouldBeTrue();
+        permissions.CanDelete.ShouldBeTrue();
     }
 
     [Test]
@@ -1221,10 +1221,10 @@ public class AuthManagerTests : TestBase
         var permissions = await _authManager.GetDatasetPermissions(_privateDataset);
 
         // Assert
-        permissions.Should().NotBeNull();
-        permissions.CanRead.Should().BeTrue();
-        permissions.CanWrite.Should().BeTrue();
-        permissions.CanDelete.Should().BeFalse(); // Members cannot delete
+        permissions.ShouldNotBeNull();
+        permissions.CanRead.ShouldBeTrue();
+        permissions.CanWrite.ShouldBeTrue();
+        permissions.CanDelete.ShouldBeFalse(); // Members cannot delete
     }
 
     [Test]
@@ -1237,10 +1237,10 @@ public class AuthManagerTests : TestBase
         var permissions = await _authManager.GetDatasetPermissions(_privateDataset);
 
         // Assert
-        permissions.Should().NotBeNull();
-        permissions.CanRead.Should().BeFalse();
-        permissions.CanWrite.Should().BeFalse();
-        permissions.CanDelete.Should().BeFalse();
+        permissions.ShouldNotBeNull();
+        permissions.CanRead.ShouldBeFalse();
+        permissions.CanWrite.ShouldBeFalse();
+        permissions.CanDelete.ShouldBeFalse();
     }
 
     [Test]
@@ -1253,10 +1253,10 @@ public class AuthManagerTests : TestBase
         var permissions = await _authManager.GetDatasetPermissions(_privateDataset);
 
         // Assert
-        permissions.Should().NotBeNull();
-        permissions.CanRead.Should().BeFalse();
-        permissions.CanWrite.Should().BeFalse();
-        permissions.CanDelete.Should().BeFalse();
+        permissions.ShouldNotBeNull();
+        permissions.CanRead.ShouldBeFalse();
+        permissions.CanWrite.ShouldBeFalse();
+        permissions.CanDelete.ShouldBeFalse();
     }
 
     [Test]
@@ -1269,10 +1269,10 @@ public class AuthManagerTests : TestBase
         var permissions = await _authManager.GetDatasetPermissions(_publicDataset);
 
         // Assert
-        permissions.Should().NotBeNull();
-        permissions.CanRead.Should().BeTrue();
-        permissions.CanWrite.Should().BeFalse();
-        permissions.CanDelete.Should().BeFalse();
+        permissions.ShouldNotBeNull();
+        permissions.CanRead.ShouldBeTrue();
+        permissions.CanWrite.ShouldBeFalse();
+        permissions.CanDelete.ShouldBeFalse();
     }
 
     [Test]
@@ -1302,10 +1302,10 @@ public class AuthManagerTests : TestBase
         var permissions = await _authManager.GetDatasetPermissions(unlistedDataset);
 
         // Assert
-        permissions.Should().NotBeNull();
-        permissions.CanRead.Should().BeTrue();
-        permissions.CanWrite.Should().BeFalse();
-        permissions.CanDelete.Should().BeFalse();
+        permissions.ShouldNotBeNull();
+        permissions.CanRead.ShouldBeTrue();
+        permissions.CanWrite.ShouldBeFalse();
+        permissions.CanDelete.ShouldBeFalse();
     }
 
     [Test]
@@ -1318,10 +1318,10 @@ public class AuthManagerTests : TestBase
         var permissions = await _authManager.GetDatasetPermissions(_publicDataset);
 
         // Assert
-        permissions.Should().NotBeNull();
-        permissions.CanRead.Should().BeTrue();
-        permissions.CanWrite.Should().BeTrue();
-        permissions.CanDelete.Should().BeTrue();
+        permissions.ShouldNotBeNull();
+        permissions.CanRead.ShouldBeTrue();
+        permissions.CanWrite.ShouldBeTrue();
+        permissions.CanDelete.ShouldBeTrue();
     }
 
     [Test]
@@ -1334,7 +1334,7 @@ public class AuthManagerTests : TestBase
         var permissions = await _authManager.GetDatasetPermissions(_privateDataset);
 
         // Assert
-        permissions.Should().NotBeNull();
+        permissions.ShouldNotBeNull();
 
         // Verify cache was called three times (once for each access type)
         _cacheManagerMock.Verify(x => x.GetAsync(

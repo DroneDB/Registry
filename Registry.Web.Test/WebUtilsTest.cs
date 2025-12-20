@@ -1,8 +1,8 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
-using FluentAssertions;
+using Shouldly;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Routing;
@@ -58,7 +58,7 @@ public class WebUtilsTest : TestBase
 
         var slug = webUtils.GetFreeOrganizationSlug(organizationName);
 
-        slug.Should().Be(expectedOrganizationSlug);
+        slug.ShouldBe(expectedOrganizationSlug);
 
     }
 
@@ -78,7 +78,7 @@ public class WebUtilsTest : TestBase
 
         var slug = webUtils.GetFreeOrganizationSlug(organizationName);
 
-        slug.Should().Be(expectedOrganizationSlug);
+        slug.ShouldBe(expectedOrganizationSlug);
 
     }
 
@@ -108,7 +108,7 @@ public class WebUtilsTest : TestBase
 
         var slug = webUtils.GetFreeOrganizationSlug(organizationName);
 
-        slug.Should().Be(expectedOrganizationSlug);
+        slug.ShouldBe(expectedOrganizationSlug);
 
     }
 
@@ -150,7 +150,7 @@ public class WebUtilsTest : TestBase
 
         var slug = webUtils.GetFreeOrganizationSlug(organizationName);
 
-        slug.Should().Be(expectedOrganizationSlug);
+        slug.ShouldBe(expectedOrganizationSlug);
 
     }
 
@@ -159,7 +159,7 @@ public class WebUtilsTest : TestBase
     {
         var str = string.Empty;
 
-        str.Invoking(s => s.ToSlug()).Should().Throw<ArgumentException>();
+        Should.Throw<ArgumentException>(() => str.ToSlug());
     }
 
     [Test]
@@ -169,9 +169,9 @@ public class WebUtilsTest : TestBase
 
         var slug = str.ToSlug();
 
-        slug.Should().Be("oaue");
+        slug.ShouldBe("oaue");
 
-        slug.IsValidSlug().Should().BeTrue();
+        slug.IsValidSlug().ShouldBeTrue();
     }
 
     [Test]
@@ -181,9 +181,9 @@ public class WebUtilsTest : TestBase
 
         var slug = str.ToSlug();
 
-        slug.Should().Be("0-c-c-e-1-_-a");
+        slug.ShouldBe("0-c-c-e-1-_-a");
 
-        slug.IsValidSlug().Should().BeTrue();
+        slug.IsValidSlug().ShouldBeTrue();
 
     }
 
@@ -194,11 +194,10 @@ public class WebUtilsTest : TestBase
 
         var slug = str.ToSlug();
 
-        slug.Should()
-            .Be(
+        slug.ShouldBe(
                 "abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyz0123456789eeau-c-_-");
 
-        slug.IsValidSlug().Should().BeTrue();
+        slug.IsValidSlug().ShouldBeTrue();
 
     }
 

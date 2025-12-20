@@ -2,7 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
-using FluentAssertions;
+using Shouldly;
 using Microsoft.AspNetCore.Http;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
@@ -91,15 +91,15 @@ public class DatasetManagerTest : TestBase
 
         var list = (await datasetsManager.List(MagicStrings.PublicOrganizationSlug)).ToArray();
 
-        list.Should().HaveCount(1);
+        list.Count().ShouldBe(1);
 
         var pub = list.First();
 
-        pub.Slug.Should().Be(expectedSlug);
+        pub.Slug.ShouldBe(expectedSlug);
 
         // TODO: Check test data: this should be true
-        pub.Properties["public"].Should().Be(true);
-        pub.Properties["name"].Should().Be(expectedName);
+        pub.Properties["public"].ShouldBe(true);
+        pub.Properties["name"].ShouldBe(expectedName);
 
 
     }
@@ -151,11 +151,11 @@ public class DatasetManagerTest : TestBase
         var result = await datasetsManager.Get(orgSlug, dsSlug);
 
         // Assert
-        result.Should().NotBeNull();
-        result.Permissions.Should().NotBeNull();
-        result.Permissions.CanRead.Should().BeTrue();
-        result.Permissions.CanWrite.Should().BeFalse();
-        result.Permissions.CanDelete.Should().BeFalse();
+        result.ShouldNotBeNull();
+        result.Permissions.ShouldNotBeNull();
+        result.Permissions.CanRead.ShouldBeTrue();
+        result.Permissions.CanWrite.ShouldBeFalse();
+        result.Permissions.CanDelete.ShouldBeFalse();
 
         // Verify GetDatasetPermissions was called
         _authManagerMock.Verify(x => x.GetDatasetPermissions(It.IsAny<Dataset>()), Times.Once);
@@ -208,11 +208,11 @@ public class DatasetManagerTest : TestBase
         var result = await datasetsManager.Get(orgSlug, dsSlug);
 
         // Assert
-        result.Should().NotBeNull();
-        result.Permissions.Should().NotBeNull();
-        result.Permissions.CanRead.Should().BeTrue();
-        result.Permissions.CanWrite.Should().BeTrue();
-        result.Permissions.CanDelete.Should().BeTrue();
+        result.ShouldNotBeNull();
+        result.Permissions.ShouldNotBeNull();
+        result.Permissions.CanRead.ShouldBeTrue();
+        result.Permissions.CanWrite.ShouldBeTrue();
+        result.Permissions.CanDelete.ShouldBeTrue();
     }
 
     [Test]
@@ -263,26 +263,26 @@ public class DatasetManagerTest : TestBase
         var result = await datasetsManager.GetEntry(orgSlug, dsSlug);
 
         // Assert
-        result.Should().NotBeNull();
-        result.Should().HaveCount(1);
+        result.ShouldNotBeNull();
+        result.Count().ShouldBe(1);
 
         var entry = result.First();
-        entry.Properties.Should().NotBeNull();
-        entry.Properties.Should().ContainKey("permissions");
+        entry.Properties.ShouldNotBeNull();
+        entry.Properties.ShouldContainKey("permissions");
 
         var permissions = entry.Properties["permissions"];
-        permissions.Should().NotBeNull();
+        permissions.ShouldNotBeNull();
 
         // Check permissions using reflection (since it's an anonymous object)
         var permissionsDict = JsonConvert.DeserializeObject<Dictionary<string, bool>>(
             JsonConvert.SerializeObject(permissions));
 
-        permissionsDict.Should().ContainKey("canRead");
-        permissionsDict.Should().ContainKey("canWrite");
-        permissionsDict.Should().ContainKey("canDelete");
-        permissionsDict["canRead"].Should().BeTrue();
-        permissionsDict["canWrite"].Should().BeTrue();
-        permissionsDict["canDelete"].Should().BeFalse();
+        permissionsDict.ShouldContainKey("canRead");
+        permissionsDict.ShouldContainKey("canWrite");
+        permissionsDict.ShouldContainKey("canDelete");
+        permissionsDict["canRead"].ShouldBeTrue();
+        permissionsDict["canWrite"].ShouldBeTrue();
+        permissionsDict["canDelete"].ShouldBeFalse();
 
         // Verify GetDatasetPermissions was called
         _authManagerMock.Verify(x => x.GetDatasetPermissions(It.IsAny<Dataset>()), Times.Once);
@@ -336,16 +336,16 @@ public class DatasetManagerTest : TestBase
         var result = await datasetsManager.GetEntry(orgSlug, dsSlug);
 
         // Assert
-        result.Should().NotBeNull();
-        result.Should().HaveCount(1);
+        result.ShouldNotBeNull();
+        result.Count().ShouldBe(1);
 
         var entry = result.First();
         var permissionsDict = JsonConvert.DeserializeObject<Dictionary<string, bool>>(
             JsonConvert.SerializeObject(entry.Properties["permissions"]));
 
-        permissionsDict["canRead"].Should().BeTrue();
-        permissionsDict["canWrite"].Should().BeFalse();
-        permissionsDict["canDelete"].Should().BeFalse();
+        permissionsDict["canRead"].ShouldBeTrue();
+        permissionsDict["canWrite"].ShouldBeFalse();
+        permissionsDict["canDelete"].ShouldBeFalse();
     }
 
     [Test]
@@ -395,15 +395,15 @@ public class DatasetManagerTest : TestBase
         var result = await datasetsManager.List(orgSlug);
 
         // Assert
-        result.Should().NotBeNull();
+        result.ShouldNotBeNull();
         var datasets = result.ToList();
-        datasets.Should().HaveCount(1);
+        datasets.Count().ShouldBe(1);
 
         var dataset = datasets.First();
-        dataset.Permissions.Should().NotBeNull();
-        dataset.Permissions.CanRead.Should().BeTrue();
-        dataset.Permissions.CanWrite.Should().BeTrue();
-        dataset.Permissions.CanDelete.Should().BeFalse();
+        dataset.Permissions.ShouldNotBeNull();
+        dataset.Permissions.CanRead.ShouldBeTrue();
+        dataset.Permissions.CanWrite.ShouldBeTrue();
+        dataset.Permissions.CanDelete.ShouldBeFalse();
 
         // Verify GetDatasetPermissions was called
         _authManagerMock.Verify(x => x.GetDatasetPermissions(It.IsAny<Dataset>()), Times.Once);
@@ -456,15 +456,15 @@ public class DatasetManagerTest : TestBase
         var result = await datasetsManager.List(orgSlug);
 
         // Assert
-        result.Should().NotBeNull();
+        result.ShouldNotBeNull();
         var datasets = result.ToList();
-        datasets.Should().HaveCount(1);
+        datasets.Count().ShouldBe(1);
 
         var dataset = datasets.First();
-        dataset.Permissions.Should().NotBeNull();
-        dataset.Permissions.CanRead.Should().BeTrue();
-        dataset.Permissions.CanWrite.Should().BeFalse();
-        dataset.Permissions.CanDelete.Should().BeFalse();
+        dataset.Permissions.ShouldNotBeNull();
+        dataset.Permissions.CanRead.ShouldBeTrue();
+        dataset.Permissions.CanWrite.ShouldBeFalse();
+        dataset.Permissions.CanDelete.ShouldBeFalse();
     }
 
 

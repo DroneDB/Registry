@@ -2,7 +2,7 @@
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using FluentAssertions;
+using Shouldly;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Moq;
@@ -54,7 +54,7 @@ public class DdbFactoryTest : TestBase
 
         var ddb = factory.Get(MagicStrings.PublicOrganizationSlug, _datasetGuid);
 
-        ddb.Should().NotBeNull();
+        ddb.ShouldNotBeNull();
     }
 
     [Test]
@@ -62,8 +62,7 @@ public class DdbFactoryTest : TestBase
     {
         var factory = new DdbManager(_appSettingsMock.Object, _ddbFactoryLogger, DdbWrapper);
 
-        factory.Invoking(x => x.Get("vlwefwef", _datasetGuid))
-            .Should().NotThrow<IOException>();
+        Should.NotThrow(() => factory.Get("vlwefwef", _datasetGuid));
 
     }
 
@@ -82,7 +81,7 @@ public class DdbFactoryTest : TestBase
 
         var res = ddb.Search("asasdadas.jpg");
 
-        res.Should().BeEmpty();
+        res.ShouldBeEmpty();
 
     }
 
@@ -114,22 +113,22 @@ public class DdbFactoryTest : TestBase
 
         var list = ddb.Search(fileName).ToArray();
 
-        list.Should().HaveCount(1);
+        list.Count().ShouldBe(1);
 
         var res = list.First();
 
-        res.Path.Should().Be(fileName);
+        res.Path.ShouldBe(fileName);
         // TODO: Handle different timezones
-        res.ModifiedTime.Should().BeCloseTo(expectedModifiedTime, new TimeSpan(6, 0, 0));
-        res.Hash.Should().Be(expectedHash);
-        res.Depth.Should().Be(expectedDepth);
-        res.Size.Should().Be(expectedSize);
-        res.Type.Should().Be(expectedType);
-        res.Properties.Should().BeEquivalentTo(expectedMeta);
+        res.ModifiedTime.ShouldBe(expectedModifiedTime, TimeSpan.FromHours(6));
+        res.Hash.ShouldBe(expectedHash);
+        res.Depth.ShouldBe(expectedDepth);
+        res.Size.ShouldBe(expectedSize);
+        res.Type.ShouldBe(expectedType);
+        res.Properties.ShouldBeEquivalentTo(expectedMeta);
 
-        res.PointGeometry["geometry"]["coordinates"][0].Value<double>().Should().BeApproximately(expectedLongitude, 0.00001);
-        res.PointGeometry["geometry"]["coordinates"][1].Value<double>().Should().BeApproximately(expectedLatitude, 0.00001);
-        res.PointGeometry["geometry"]["coordinates"][2].Value<double>().Should().BeApproximately(expectedAltitude, 0.1);
+        res.PointGeometry["geometry"]["coordinates"][0].Value<double>().ShouldBe(expectedLongitude, 0.00001);
+        res.PointGeometry["geometry"]["coordinates"][1].Value<double>().ShouldBe(expectedLatitude, 0.00001);
+        res.PointGeometry["geometry"]["coordinates"][2].Value<double>().ShouldBe(expectedAltitude, 0.1);
 
     }
 
@@ -169,21 +168,21 @@ public class DdbFactoryTest : TestBase
 
         var list = ddb.Search(fileName).ToArray();
 
-        list.Should().HaveCount(1);
+        list.Count().ShouldBe(1);
 
         var res = list.First();
 
-        res.Path.Should().Be(fileName);
+        res.Path.ShouldBe(fileName);
         // TODO: Handle different timezones
-        res.ModifiedTime.Should().BeCloseTo(expectedModifiedTime, new TimeSpan(6, 0, 0));
-        res.Hash.Should().Be(expectedHash);
-        res.Depth.Should().Be(expectedDepth);
-        res.Size.Should().Be(expectedSize);
-        res.Type.Should().Be(expectedType);
-        res.Properties.Should().BeEquivalentTo(expectedMeta);
-        res.PointGeometry["geometry"]["coordinates"][0].Value<double>().Should().BeApproximately(expectedLongitude, 0.00001);
-        res.PointGeometry["geometry"]["coordinates"][1].Value<double>().Should().BeApproximately(expectedLatitude, 0.00001);
-        res.PointGeometry["geometry"]["coordinates"][2].Value<double>().Should().BeApproximately(expectedAltitude, 0.1);
+        res.ModifiedTime.ShouldBe(expectedModifiedTime, TimeSpan.FromHours(6));
+        res.Hash.ShouldBe(expectedHash);
+        res.Depth.ShouldBe(expectedDepth);
+        res.Size.ShouldBe(expectedSize);
+        res.Type.ShouldBe(expectedType);
+        res.Properties.ShouldBeEquivalentTo(expectedMeta);
+        res.PointGeometry["geometry"]["coordinates"][0].Value<double>().ShouldBe(expectedLongitude, 0.00001);
+        res.PointGeometry["geometry"]["coordinates"][1].Value<double>().ShouldBe(expectedLatitude, 0.00001);
+        res.PointGeometry["geometry"]["coordinates"][2].Value<double>().ShouldBe(expectedAltitude, 0.1);
 
         var polygon = res.PolygonGeometry;
 
@@ -192,7 +191,7 @@ public class DdbFactoryTest : TestBase
         {
             for (int j = 0; j < expectedCoordinates[i].Count; j++)
             {
-                coords[i][j].Value<double>().Should().BeApproximately(expectedCoordinates[i][j], 0.001);
+                coords[i][j].Value<double>().ShouldBe(expectedCoordinates[i][j], 0.001);
             }
         }
     }
@@ -222,7 +221,7 @@ public class DdbFactoryTest : TestBase
 
         ddb.Add(fileName, File.ReadAllBytes(path));
 
-        ddb.Search(fileName).Should().HaveCount(1);
+        ddb.Search(fileName).Count().ShouldBe(1);
 
     }
 

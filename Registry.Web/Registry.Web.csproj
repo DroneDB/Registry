@@ -89,6 +89,7 @@
         <PackageReference Include="Swashbuckle.AspNetCore" Version="9.0.4" />
         <PackageReference Include="System.IdentityModel.Tokens.Jwt" Version="8.15.0" />
         <PackageReference Include="System.Text.Encoding.CodePages" Version="9.0.9" />
+        <PackageReference Include="System.Threading.Tasks.Dataflow" Version="10.0.1" />
     </ItemGroup>
 
     <ItemGroup>
