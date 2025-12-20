@@ -701,7 +701,7 @@ public class SystemManager : ISystemManager
             // Log progress periodically
             if ((DateTime.UtcNow - lastProgressLog).TotalSeconds >= progressIntervalSeconds)
             {
-                _logger.LogInformation("Extraction progress: {Processed}/{Total} entries ({Percent:P1})",
+                _logger.LogDebug("Extraction progress: {Processed}/{Total} entries ({Percent:P1})",
                     processedEntries, totalEntries, (double)processedEntries / totalEntries);
                 lastProgressLog = DateTime.UtcNow;
             }
