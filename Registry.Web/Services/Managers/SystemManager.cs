@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
@@ -6,7 +7,10 @@ using System.IO.Compression;
 using System.Linq;
 using System.Net.Http;
 using System.Reflection;
+using System.Threading;
+using System.Threading.Channels;
 using System.Threading.Tasks;
+using System.Threading.Tasks.Dataflow;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -275,6 +279,7 @@ public class SystemManager : ISystemManager
         var stopwatch = Stopwatch.StartNew();
         var importedItems = new List<ImportedItemDto>();
         var errors = new List<ImportErrorDto>();
+        var fileErrors = new List<FileImportErrorDto>();
 
         try
         {
@@ -295,7 +300,7 @@ public class SystemManager : ISystemManager
                         Phase = ImportPhase.Authentication
                     });
 
-                    return CreateResult(importedItems, errors, stopwatch.Elapsed);
+                    return CreateResult(importedItems, errors, fileErrors, stopwatch.Elapsed);
                 }
             }
             else
@@ -303,17 +308,36 @@ public class SystemManager : ISystemManager
                 _logger.LogInformation("No credentials provided, attempting anonymous access to {RegistryUrl}", request.SourceRegistryUrl);
             }
 
-            // Import single dataset
-            await ImportSingleDataset(
-                request.SourceRegistryUrl,
-                authToken,
-                request.SourceOrganization,
-                request.SourceDataset,
-                request.DestinationOrganization ?? request.SourceOrganization,
-                request.DestinationDataset ?? request.SourceDataset,
-                importedItems,
-                errors
-            );
+            // Import single dataset using the selected mode
+            if (request.Mode == ImportMode.ParallelFiles)
+            {
+                _logger.LogInformation("Using ParallelFiles import mode");
+                await ImportSingleDatasetParallel(
+                    request.SourceRegistryUrl,
+                    authToken,
+                    request.SourceOrganization,
+                    request.SourceDataset,
+                    request.DestinationOrganization ?? request.SourceOrganization,
+                    request.DestinationDataset ?? request.SourceDataset,
+                    importedItems,
+                    errors,
+                    fileErrors
+                );
+            }
+            else
+            {
+                _logger.LogInformation("Using Archive import mode");
+                await ImportSingleDataset(
+                    request.SourceRegistryUrl,
+                    authToken,
+                    request.SourceOrganization,
+                    request.SourceDataset,
+                    request.DestinationOrganization ?? request.SourceOrganization,
+                    request.DestinationDataset ?? request.SourceDataset,
+                    importedItems,
+                    errors
+                );
+            }
         }
         catch (Exception ex)
         {
@@ -328,7 +352,7 @@ public class SystemManager : ISystemManager
         }
 
         stopwatch.Stop();
-        return CreateResult(importedItems, errors, stopwatch.Elapsed);
+        return CreateResult(importedItems, errors, fileErrors, stopwatch.Elapsed);
     }
 
     public async Task<ImportResultDto> ImportOrganization(ImportOrganizationRequestDto request)
@@ -347,6 +371,7 @@ public class SystemManager : ISystemManager
         var stopwatch = Stopwatch.StartNew();
         var importedItems = new List<ImportedItemDto>();
         var errors = new List<ImportErrorDto>();
+        var fileErrors = new List<FileImportErrorDto>();
 
         try
         {
@@ -366,7 +391,7 @@ public class SystemManager : ISystemManager
                         Phase = ImportPhase.Authentication
                     });
 
-                    return CreateResult(importedItems, errors, stopwatch.Elapsed);
+                    return CreateResult(importedItems, errors, fileErrors, stopwatch.Elapsed);
                 }
             }
             else
@@ -379,21 +404,40 @@ public class SystemManager : ISystemManager
 
             _logger.LogInformation("Found {Count} datasets in organization {Org}", datasets.Length, request.SourceOrganization);
 
-            // Import each dataset
+            // Import each dataset using the selected mode
+            _logger.LogInformation("Using {Mode} import mode for organization import", request.Mode);
+
             foreach (var dataset in datasets)
             {
                 try
                 {
-                    await ImportSingleDataset(
-                        request.SourceRegistryUrl,
-                        authToken,
-                        request.SourceOrganization,
-                        dataset.Slug,
-                        request.DestinationOrganization ?? request.SourceOrganization,
-                        dataset.Slug,
-                        importedItems,
-                        errors
-                    );
+                    if (request.Mode == ImportMode.ParallelFiles)
+                    {
+                        await ImportSingleDatasetParallel(
+                            request.SourceRegistryUrl,
+                            authToken,
+                            request.SourceOrganization,
+                            dataset.Slug,
+                            request.DestinationOrganization ?? request.SourceOrganization,
+                            dataset.Slug,
+                            importedItems,
+                            errors,
+                            fileErrors
+                        );
+                    }
+                    else
+                    {
+                        await ImportSingleDataset(
+                            request.SourceRegistryUrl,
+                            authToken,
+                            request.SourceOrganization,
+                            dataset.Slug,
+                            request.DestinationOrganization ?? request.SourceOrganization,
+                            dataset.Slug,
+                            importedItems,
+                            errors
+                        );
+                    }
                 }
                 catch (Exception ex)
                 {
@@ -420,7 +464,7 @@ public class SystemManager : ISystemManager
         }
 
         stopwatch.Stop();
-        return CreateResult(importedItems, errors, stopwatch.Elapsed);
+        return CreateResult(importedItems, errors, fileErrors, stopwatch.Elapsed);
     }
 
     private async Task<string> AuthenticateRemoteRegistry(string registryUrl, string username, string password)
@@ -462,6 +506,38 @@ public class SystemManager : ISystemManager
 
         var result = await response.Content.ReadAsStringAsync();
         return JsonConvert.DeserializeObject<DatasetDto[]>(result) ?? [];
+    }
+
+    /// <summary>
+    /// Gets the complete list of files from a remote registry dataset using the search API
+    /// </summary>
+    private async Task<EntryDto[]> GetRemoteFileListAsync(string registryUrl, string authToken, string orgSlug, string dsSlug)
+    {
+        var client = _httpClientFactory.CreateClient();
+        if (!string.IsNullOrWhiteSpace(authToken))
+            client.DefaultRequestHeaders.Add("Authorization", $"Bearer {authToken}");
+
+        // Use the search endpoint with recursive flag to get all files
+        var searchUrl = $"{registryUrl.TrimEnd('/')}/orgs/{orgSlug}/ds/{dsSlug}/search";
+
+        var content = new FormUrlEncodedContent([
+            new KeyValuePair<string, string>("query", "*"),
+            new KeyValuePair<string, string>("recursive", "true")
+        ]);
+
+        var response = await client.PostAsync(searchUrl, content);
+
+        if (!response.IsSuccessStatusCode)
+        {
+            _logger.LogWarning("Failed to get file list with status {StatusCode}", response.StatusCode);
+            return [];
+        }
+
+        var result = await response.Content.ReadAsStringAsync();
+        var entries = JsonConvert.DeserializeObject<EntryDto[]>(result) ?? [];
+
+        // Filter out directories (we only want files)
+        return entries.Where(e => e.Type != EntryType.Directory).ToArray();
     }
 
     private async Task ImportSingleDataset(
@@ -662,6 +738,400 @@ public class SystemManager : ISystemManager
     }
 
     /// <summary>
+    /// File download task for parallel processing
+    /// </summary>
+    private class FileDownloadTask
+    {
+        public EntryDto Entry { get; set; }
+        public string DestinationPath { get; set; }
+        public string DownloadUrl { get; set; }
+    }
+
+    /// <summary>
+    /// Result of a file download operation
+    /// </summary>
+    private class FileDownloadResult
+    {
+        public EntryDto Entry { get; set; }
+        public string LocalPath { get; set; }
+        public bool Success { get; set; }
+        public bool Skipped { get; set; }
+        public string ErrorMessage { get; set; }
+        public int RetryCount { get; set; }
+        public long BytesDownloaded { get; set; }
+    }
+
+    /// <summary>
+    /// Threshold for using file-based streaming instead of memory buffering.
+    /// Files larger than this (300MB) are downloaded directly to disk to avoid memory pressure.
+    /// </summary>
+    private const long LargeFileSizeThreshold = 300 * 1024 * 1024;
+
+    /// <summary>
+    /// Imports a single dataset using parallel file downloads.
+    /// Files are downloaded in parallel but added to DDB serially (DDB is not thread-safe).
+    /// </summary>
+    private async Task ImportSingleDatasetParallel(
+        string registryUrl,
+        string authToken,
+        string sourceOrg,
+        string sourceDs,
+        string destOrg,
+        string destDs,
+        List<ImportedItemDto> importedItems,
+        List<ImportErrorDto> errors,
+        List<FileImportErrorDto> fileErrors,
+        CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            _logger.LogInformation("Importing dataset {SourceOrg}/{SourceDs} to {DestOrg}/{DestDs} using parallel file downloads",
+                sourceOrg, sourceDs, destOrg, destDs);
+
+            // Get list of files from remote registry
+            var remoteFiles = await GetRemoteFileListAsync(registryUrl, authToken, sourceOrg, sourceDs);
+
+            if (remoteFiles.Length == 0)
+            {
+                _logger.LogWarning("No files found in remote dataset {Org}/{Ds}", sourceOrg, sourceDs);
+                errors.Add(new ImportErrorDto
+                {
+                    Organization = sourceOrg,
+                    Dataset = sourceDs,
+                    Message = "No files found in remote dataset",
+                    Phase = ImportPhase.Download
+                });
+                return;
+            }
+
+            _logger.LogInformation("Found {FileCount} files in remote dataset, total size: {Size:N0} bytes",
+                remoteFiles.Length, remoteFiles.Sum(f => f.Size));
+
+            // Get or create destination organization
+            var org = await _context.Organizations.FirstOrDefaultAsync(o => o.Slug == destOrg, cancellationToken);
+            if (org == null)
+            {
+                _logger.LogInformation("Creating organization {OrgSlug}", destOrg);
+                org = new Organization
+                {
+                    Slug = destOrg,
+                    Name = destOrg,
+                    Description = $"Imported from {sourceOrg}",
+                    CreationDate = DateTime.UtcNow,
+                    IsPublic = false
+                };
+                _context.Organizations.Add(org);
+                await _context.SaveChangesAsync(cancellationToken);
+            }
+
+            // Get or create destination dataset
+            var dataset = await _context.Datasets.FirstOrDefaultAsync(
+                d => d.Slug == destDs && d.Organization.Slug == destOrg, cancellationToken);
+            if (dataset == null)
+            {
+                _logger.LogInformation("Creating dataset {DsSlug}", destDs);
+                dataset = new Dataset
+                {
+                    Slug = destDs,
+                    InternalRef = Guid.NewGuid(),
+                    CreationDate = DateTime.UtcNow,
+                    Organization = org
+                };
+                _context.Datasets.Add(dataset);
+                await _context.SaveChangesAsync(cancellationToken);
+            }
+
+            // Get destination path
+            var destPath = Path.Combine(_settings.DatasetsPath, destOrg, dataset.InternalRef.ToString());
+            Directory.CreateDirectory(destPath);
+
+            // Get DDB instance for hash comparison and adding files
+            var ddb = _ddbManager.Get(destOrg, dataset.InternalRef);
+
+            // OPTIMIZATION 1: Pre-fetch all existing hashes upfront instead of calling GetEntry for each file
+            // This reduces DDB queries from O(n) to O(1) where n is the number of files to import
+            _logger.LogInformation("Pre-fetching existing file hashes from DDB...");
+            var existingHashes = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            try
+            {
+                var existingEntries = ddb.Search("*", recursive: true);
+                foreach (var entry in existingEntries)
+                {
+                    if (!string.IsNullOrEmpty(entry.Hash))
+                    {
+                        existingHashes[entry.Path] = entry.Hash;
+                    }
+                }
+                _logger.LogInformation("Found {Count} existing files with hashes", existingHashes.Count);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Could not pre-fetch existing hashes, will check each file individually");
+            }
+
+            // Calculate number of parallel workers: half of CPU cores, minimum 2
+            var maxParallelDownloads = Math.Max(2, Environment.ProcessorCount / 2);
+            _logger.LogInformation("Using {Workers} parallel download workers", maxParallelDownloads);
+
+            // Build headers for download requests
+            var headers = new Dictionary<string, string>();
+            if (!string.IsNullOrWhiteSpace(authToken))
+                headers.Add("Authorization", $"Bearer {authToken}");
+
+            // Statistics (using simple variables since DDB writer is single-threaded)
+            var downloadedCount = 0;
+            var skippedCount = 0;
+            var errorCount = 0;
+            long totalBytesDownloaded = 0;
+            long totalSkippedBytes = 0;
+            var localFileErrors = new List<FileImportErrorDto>();
+            var lastProgressLog = DateTime.UtcNow;
+            const int progressIntervalSeconds = 10;
+
+            // Create channel for completed downloads that need to be added to DDB
+            var completedChannel = Channel.CreateBounded<FileDownloadResult>(new BoundedChannelOptions(maxParallelDownloads * 2)
+            {
+                FullMode = BoundedChannelFullMode.Wait,
+                SingleReader = true,
+                SingleWriter = false
+            });
+
+            // OPTIMIZATION 2 & 3: Use ActionBlock for bounded parallelism without accumulating Task objects
+            // This pattern automatically limits concurrent tasks and doesn't hold references to completed tasks
+            var downloadBlock = new ActionBlock<FileDownloadTask>(
+                async task =>
+                {
+                    try
+                    {
+                        // OPTIMIZATION 1 (continued): Use pre-fetched hash dictionary for skip check
+                        if (File.Exists(task.DestinationPath) &&
+                            existingHashes.TryGetValue(task.Entry.Path, out var existingHash) &&
+                            existingHash == task.Entry.Hash)
+                        {
+                            // File exists with same hash, skip download
+                            await completedChannel.Writer.WriteAsync(new FileDownloadResult
+                            {
+                                Entry = task.Entry,
+                                LocalPath = task.DestinationPath,
+                                Success = true,
+                                Skipped = true,
+                                BytesDownloaded = 0
+                            }, cancellationToken);
+                            return;
+                        }
+
+                        // OPTIMIZATION 4: For large files, use streaming download to avoid memory pressure
+                        // Files larger than LargeFileSizeThreshold (300MB) are downloaded with progress tracking
+                        HttpHelper.DownloadResult result;
+                        if (task.Entry.Size > LargeFileSizeThreshold)
+                        {
+                            _logger.LogDebug("Large file detected ({Size:N0} bytes), using streaming download: {Path}",
+                                task.Entry.Size, task.Entry.Path);
+                        }
+
+                        // Download file with retry (HttpHelper already streams to disk)
+                        result = await HttpHelper.DownloadFileWithRetryAsync(
+                            task.DownloadUrl,
+                            task.DestinationPath,
+                            headers,
+                            maxRetries: 3,
+                            cancellationToken);
+
+                        await completedChannel.Writer.WriteAsync(new FileDownloadResult
+                        {
+                            Entry = task.Entry,
+                            LocalPath = task.DestinationPath,
+                            Success = result.Success,
+                            Skipped = false,
+                            ErrorMessage = result.Success ? null : result.ErrorMessage,
+                            RetryCount = result.RetryCount,
+                            BytesDownloaded = result.BytesDownloaded
+                        }, cancellationToken);
+                    }
+                    catch (Exception ex)
+                    {
+                        await completedChannel.Writer.WriteAsync(new FileDownloadResult
+                        {
+                            Entry = task.Entry,
+                            LocalPath = task.DestinationPath,
+                            Success = false,
+                            ErrorMessage = ex.Message,
+                            BytesDownloaded = 0
+                        }, cancellationToken);
+                    }
+                },
+                new ExecutionDataflowBlockOptions
+                {
+                    MaxDegreeOfParallelism = maxParallelDownloads,
+                    BoundedCapacity = maxParallelDownloads * 2,
+                    CancellationToken = cancellationToken
+                });
+
+            // Producer: post files to download block
+            var producerTask = Task.Run(async () =>
+            {
+                try
+                {
+                    foreach (var entry in remoteFiles)
+                    {
+                        // Skip .ddb folder files - we'll handle metadata separately
+                        if (entry.Path.StartsWith(".ddb/") || entry.Path.StartsWith(".ddb\\"))
+                            continue;
+
+                        var localPath = Path.Combine(destPath, entry.Path.Replace('/', Path.DirectorySeparatorChar));
+                        var downloadUrl = $"{registryUrl.TrimEnd('/')}/orgs/{sourceOrg}/ds/{sourceDs}/download?path={Uri.EscapeDataString(entry.Path)}&inline=1";
+
+                        await downloadBlock.SendAsync(new FileDownloadTask
+                        {
+                            Entry = entry,
+                            DestinationPath = localPath,
+                            DownloadUrl = downloadUrl
+                        }, cancellationToken);
+                    }
+                }
+                finally
+                {
+                    downloadBlock.Complete();
+                }
+            }, cancellationToken);
+
+            // Wait for downloads to complete, then close the completed channel
+            var downloadCompletionTask = Task.Run(async () =>
+            {
+                await downloadBlock.Completion;
+                completedChannel.Writer.Complete();
+            }, cancellationToken);
+
+            // DDB writer task: serially add completed downloads to DDB
+            var ddbWriterTask = Task.Run(async () =>
+            {
+                await foreach (var result in completedChannel.Reader.ReadAllAsync(cancellationToken))
+                {
+                    if (result.Success)
+                    {
+                        if (result.Skipped)
+                        {
+                            skippedCount++;
+                            totalSkippedBytes += result.Entry.Size;
+                            _logger.LogDebug("Skipped existing file: {Path}", result.Entry.Path);
+                        }
+                        else
+                        {
+                            try
+                            {
+                                // Add file to DDB (this must be serial)
+                                ddb.AddRaw(result.LocalPath);
+                                downloadedCount++;
+                                totalBytesDownloaded += result.BytesDownloaded;
+
+                                if (result.RetryCount > 0)
+                                {
+                                    _logger.LogDebug("Downloaded file after {Retries} retries: {Path}",
+                                        result.RetryCount, result.Entry.Path);
+                                }
+                            }
+                            catch (Exception ex)
+                            {
+                                _logger.LogError(ex, "Error adding file to DDB: {Path}", result.Entry.Path);
+                                errorCount++;
+                                localFileErrors.Add(new FileImportErrorDto
+                                {
+                                    Organization = destOrg,
+                                    Dataset = destDs,
+                                    FilePath = result.Entry.Path,
+                                    Message = $"DDB add failed: {ex.Message}",
+                                    RetryCount = result.RetryCount
+                                });
+                            }
+                        }
+                    }
+                    else
+                    {
+                        errorCount++;
+                        _logger.LogWarning("Failed to download file {Path}: {Error}",
+                            result.Entry.Path, result.ErrorMessage);
+                        localFileErrors.Add(new FileImportErrorDto
+                        {
+                            Organization = destOrg,
+                            Dataset = destDs,
+                            FilePath = result.Entry.Path,
+                            Message = result.ErrorMessage,
+                            RetryCount = result.RetryCount
+                        });
+                    }
+
+                    // Log progress periodically based on time, not count
+                    if ((DateTime.UtcNow - lastProgressLog).TotalSeconds >= progressIntervalSeconds)
+                    {
+                        var totalProcessed = downloadedCount + skippedCount + errorCount;
+                        _logger.LogInformation("Progress: {Processed}/{Total} files ({Downloaded} downloaded, {Skipped} skipped, {Errors} errors, {Size:N0} bytes)",
+                            totalProcessed, remoteFiles.Length, downloadedCount, skippedCount, errorCount, totalBytesDownloaded);
+                        lastProgressLog = DateTime.UtcNow;
+                    }
+                }
+            }, cancellationToken);
+
+            // Wait for all tasks to complete
+            await Task.WhenAll(producerTask, downloadCompletionTask, ddbWriterTask);
+
+            // Add file errors to the main list
+            fileErrors.AddRange(localFileErrors);
+
+            _logger.LogInformation("Import completed: {Downloaded} downloaded, {Skipped} skipped, {Errors} errors, {Size:N0} bytes downloaded, {SkippedSize:N0} bytes skipped",
+                downloadedCount, skippedCount, errorCount, totalBytesDownloaded, totalSkippedBytes);
+
+            // Schedule build if we have any files
+            if (downloadedCount > 0)
+            {
+                _logger.LogInformation("Scheduling build for imported dataset {Org}/{Ds}", destOrg, destDs);
+                var user = await _authManager.GetCurrentUser();
+                var meta = new IndexPayload(destOrg, destDs, null, user.Id, null, null);
+                var jobId = _backgroundJob.EnqueueIndexed(() => HangfireUtils.BuildWrapper(ddb, null, true, null), meta);
+                _logger.LogInformation("Build scheduled with job id {JobId} for {Org}/{Ds}", jobId, destOrg, destDs);
+            }
+
+            // OPTIMIZATION 4: Use already tracked statistics instead of rescanning filesystem
+            // This avoids O(n) filesystem operations after import
+            var totalSize = totalBytesDownloaded + totalSkippedBytes;
+            var totalFileCount = downloadedCount + skippedCount;
+
+            importedItems.Add(new ImportedItemDto
+            {
+                Organization = destOrg,
+                Dataset = destDs,
+                Size = totalSize,
+                FileCount = totalFileCount,
+                SkippedFileCount = skippedCount,
+                ImportedAt = DateTime.UtcNow
+            });
+
+            _logger.LogInformation("Successfully imported {Org}/{Ds} using parallel downloads", destOrg, destDs);
+        }
+        catch (OperationCanceledException)
+        {
+            _logger.LogWarning("Import cancelled for {Org}/{Ds}", sourceOrg, sourceDs);
+            errors.Add(new ImportErrorDto
+            {
+                Organization = sourceOrg,
+                Dataset = sourceDs,
+                Message = "Import was cancelled",
+                Phase = ImportPhase.Download
+            });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error importing dataset {Org}/{Ds} using parallel downloads", sourceOrg, sourceDs);
+            errors.Add(new ImportErrorDto
+            {
+                Organization = sourceOrg,
+                Dataset = sourceDs,
+                Message = ex.Message,
+                Phase = ImportPhase.General
+            });
+        }
+    }
+
+    /// <summary>
     /// Extracts a ZIP file with progress logging for large archives.
     /// Uses buffered extraction for memory efficiency.
     /// </summary>
@@ -734,14 +1204,16 @@ public class SystemManager : ISystemManager
         }
     }
 
-    private ImportResultDto CreateResult(List<ImportedItemDto> importedItems, List<ImportErrorDto> errors, TimeSpan duration)
+    private ImportResultDto CreateResult(List<ImportedItemDto> importedItems, List<ImportErrorDto> errors, List<FileImportErrorDto> fileErrors, TimeSpan duration)
     {
         return new ImportResultDto
         {
             ImportedItems = importedItems.ToArray(),
             Errors = errors.ToArray(),
+            FileErrors = fileErrors?.ToArray() ?? [],
             TotalSize = importedItems.Sum(i => i.Size),
             TotalFiles = importedItems.Sum(i => i.FileCount),
+            SkippedFiles = importedItems.Sum(i => i.SkippedFileCount),
             Duration = duration
         };
     }
