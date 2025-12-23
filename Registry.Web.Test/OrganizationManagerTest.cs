@@ -291,6 +291,405 @@ public class OrganizationManagerTest : TestBase
 
     #endregion
 
+    #region Merge Tests
+
+    [Test]
+    public async Task Merge_NonAdminUser_ThrowsUnauthorizedException()
+    {
+        // Arrange
+        SetupStandardUser("standard-user");
+        await CreateOrganizationWithDatasets("source-org", "admin-id", 1);
+        await CreateOrganizationWithDatasets("dest-org", "admin-id", 0);
+
+        // Act & Assert
+        var action = () => _organizationsManager.Merge("source-org", "dest-org");
+        await Should.ThrowAsync<UnauthorizedException>(action);
+    }
+
+    [Test]
+    public async Task Merge_SourceSlugEmpty_ThrowsBadRequestException()
+    {
+        // Arrange
+        SetupAdminUser();
+
+        // Act & Assert
+        var action = () => _organizationsManager.Merge("", "dest-org");
+        await Should.ThrowAsync<BadRequestException>(action);
+    }
+
+    [Test]
+    public async Task Merge_SourceSlugNull_ThrowsBadRequestException()
+    {
+        // Arrange
+        SetupAdminUser();
+
+        // Act & Assert
+        var action = () => _organizationsManager.Merge(null, "dest-org");
+        await Should.ThrowAsync<BadRequestException>(action);
+    }
+
+    [Test]
+    public async Task Merge_DestSlugEmpty_ThrowsBadRequestException()
+    {
+        // Arrange
+        SetupAdminUser();
+
+        // Act & Assert
+        var action = () => _organizationsManager.Merge("source-org", "");
+        await Should.ThrowAsync<BadRequestException>(action);
+    }
+
+    [Test]
+    public async Task Merge_DestSlugNull_ThrowsBadRequestException()
+    {
+        // Arrange
+        SetupAdminUser();
+
+        // Act & Assert
+        var action = () => _organizationsManager.Merge("source-org", null);
+        await Should.ThrowAsync<BadRequestException>(action);
+    }
+
+    [Test]
+    public async Task Merge_SourceEqualsDestination_ThrowsBadRequestException()
+    {
+        // Arrange
+        SetupAdminUser();
+
+        // Act & Assert
+        var action = () => _organizationsManager.Merge("same-org", "same-org");
+        await Should.ThrowAsync<BadRequestException>(action);
+    }
+
+    [Test]
+    public async Task Merge_PublicOrganizationAsSource_ThrowsBadRequestException()
+    {
+        // Arrange
+        SetupAdminUser();
+        await CreateOrganizationWithDatasets("dest-org", "admin-id", 0);
+
+        // Act & Assert
+        var action = () => _organizationsManager.Merge(MagicStrings.PublicOrganizationSlug, "dest-org");
+        await Should.ThrowAsync<BadRequestException>(action);
+    }
+
+    [Test]
+    public async Task Merge_WithDatasetsNoConflicts_MovesAllDatasets()
+    {
+        // Arrange
+        SetupAdminUser();
+        await CreateOrganizationWithDatasets("source-org", "admin-id", 3);
+        await CreateOrganizationWithDatasets("dest-org", "admin-id", 0);
+
+        _datasetManagerMock.Setup(x => x.MoveToOrganization(
+            "source-org",
+            It.Is<string[]>(slugs => slugs.Length == 3),
+            "dest-org",
+            ConflictResolutionStrategy.HaltOnConflict))
+            .ReturnsAsync(new[]
+            {
+                new MoveDatasetResultDto { OriginalSlug = "dataset-0", NewSlug = "dataset-0", Success = true },
+                new MoveDatasetResultDto { OriginalSlug = "dataset-1", NewSlug = "dataset-1", Success = true },
+                new MoveDatasetResultDto { OriginalSlug = "dataset-2", NewSlug = "dataset-2", Success = true }
+            });
+
+        // Act
+        var result = await _organizationsManager.Merge("source-org", "dest-org");
+
+        // Assert
+        result.ShouldNotBeNull();
+        result.SourceOrgSlug.ShouldBe("source-org");
+        result.DestinationOrgSlug.ShouldBe("dest-org");
+        result.DatasetsMovedCount.ShouldBe(3);
+        result.DatasetsFailedCount.ShouldBe(0);
+        result.DatasetResults.Length.ShouldBe(3);
+        result.SourceOrganizationDeleted.ShouldBeTrue();
+
+        // Verify MoveToOrganization was called
+        _datasetManagerMock.Verify(x => x.MoveToOrganization(
+            "source-org",
+            It.IsAny<string[]>(),
+            "dest-org",
+            ConflictResolutionStrategy.HaltOnConflict), Times.Once);
+    }
+
+    [Test]
+    public async Task Merge_WithConflictsHaltOnConflict_ReportsFailedDatasets()
+    {
+        // Arrange
+        SetupAdminUser();
+        await CreateOrganizationWithDatasets("source-org", "admin-id", 2);
+        await CreateOrganizationWithDatasets("dest-org", "admin-id", 0);
+
+        _datasetManagerMock.Setup(x => x.MoveToOrganization(
+            "source-org",
+            It.IsAny<string[]>(),
+            "dest-org",
+            ConflictResolutionStrategy.HaltOnConflict))
+            .ReturnsAsync(new[]
+            {
+                new MoveDatasetResultDto { OriginalSlug = "dataset-0", Success = true },
+                new MoveDatasetResultDto { OriginalSlug = "dataset-1", Success = false, Error = "Conflict detected" }
+            });
+
+        // Act
+        var result = await _organizationsManager.Merge("source-org", "dest-org");
+
+        // Assert
+        result.DatasetsMovedCount.ShouldBe(1);
+        result.DatasetsFailedCount.ShouldBe(1);
+        result.SourceOrganizationDeleted.ShouldBeFalse(); // Should not delete when there are failures
+    }
+
+    [Test]
+    public async Task Merge_WithConflictsRenameStrategy_MovesWithRenamedSlugs()
+    {
+        // Arrange
+        SetupAdminUser();
+        await CreateOrganizationWithDatasets("source-org", "admin-id", 2);
+        await CreateOrganizationWithDatasets("dest-org", "admin-id", 0);
+
+        _datasetManagerMock.Setup(x => x.MoveToOrganization(
+            "source-org",
+            It.IsAny<string[]>(),
+            "dest-org",
+            ConflictResolutionStrategy.Rename))
+            .ReturnsAsync(new[]
+            {
+                new MoveDatasetResultDto { OriginalSlug = "dataset-0", NewSlug = "dataset-0_1", Success = true },
+                new MoveDatasetResultDto { OriginalSlug = "dataset-1", NewSlug = "dataset-1", Success = true }
+            });
+
+        // Act
+        var result = await _organizationsManager.Merge("source-org", "dest-org", ConflictResolutionStrategy.Rename);
+
+        // Assert
+        result.DatasetsMovedCount.ShouldBe(2);
+        result.DatasetsFailedCount.ShouldBe(0);
+        result.SourceOrganizationDeleted.ShouldBeTrue();
+        result.DatasetResults.ShouldContain(r => r.NewSlug == "dataset-0_1");
+    }
+
+    [Test]
+    public async Task Merge_WithConflictsOverwriteStrategy_OverwritesExistingDatasets()
+    {
+        // Arrange
+        SetupAdminUser();
+        await CreateOrganizationWithDatasets("source-org", "admin-id", 2);
+        await CreateOrganizationWithDatasets("dest-org", "admin-id", 0);
+
+        _datasetManagerMock.Setup(x => x.MoveToOrganization(
+            "source-org",
+            It.IsAny<string[]>(),
+            "dest-org",
+            ConflictResolutionStrategy.Overwrite))
+            .ReturnsAsync(new[]
+            {
+                new MoveDatasetResultDto { OriginalSlug = "dataset-0", NewSlug = "dataset-0", Success = true },
+                new MoveDatasetResultDto { OriginalSlug = "dataset-1", NewSlug = "dataset-1", Success = true }
+            });
+
+        // Act
+        var result = await _organizationsManager.Merge("source-org", "dest-org", ConflictResolutionStrategy.Overwrite);
+
+        // Assert
+        result.DatasetsMovedCount.ShouldBe(2);
+        result.DatasetsFailedCount.ShouldBe(0);
+        result.SourceOrganizationDeleted.ShouldBeTrue();
+
+        // Verify MoveToOrganization was called with Overwrite strategy
+        _datasetManagerMock.Verify(x => x.MoveToOrganization(
+            "source-org",
+            It.IsAny<string[]>(),
+            "dest-org",
+            ConflictResolutionStrategy.Overwrite), Times.Once);
+    }
+
+    [Test]
+    public async Task Merge_WithDeleteSourceOrganizationFalse_PreservesSourceOrganization()
+    {
+        // Arrange
+        SetupAdminUser();
+        await CreateOrganizationWithDatasets("source-org", "admin-id", 1);
+        await CreateOrganizationWithDatasets("dest-org", "admin-id", 0);
+
+        _datasetManagerMock.Setup(x => x.MoveToOrganization(
+            "source-org",
+            It.IsAny<string[]>(),
+            "dest-org",
+            It.IsAny<ConflictResolutionStrategy>()))
+            .ReturnsAsync(new[]
+            {
+                new MoveDatasetResultDto { OriginalSlug = "dataset-0", NewSlug = "dataset-0", Success = true }
+            });
+
+        // Act
+        var result = await _organizationsManager.Merge("source-org", "dest-org", deleteSourceOrganization: false);
+
+        // Assert
+        result.SourceOrganizationDeleted.ShouldBeFalse();
+
+        // Verify the organization still exists
+        var orgs = await _context.Organizations.ToListAsync();
+        orgs.ShouldContain(o => o.Slug == "source-org");
+    }
+
+    [Test]
+    public async Task Merge_EmptySourceOrganization_SucceedsWithNoDatasetsMoved()
+    {
+        // Arrange
+        SetupAdminUser();
+        await CreateOrganizationWithDatasets("source-org", "admin-id", 0);
+        await CreateOrganizationWithDatasets("dest-org", "admin-id", 0);
+
+        // Act
+        var result = await _organizationsManager.Merge("source-org", "dest-org");
+
+        // Assert
+        result.DatasetsMovedCount.ShouldBe(0);
+        result.DatasetsFailedCount.ShouldBe(0);
+        result.DatasetResults.ShouldBeEmpty();
+        result.SourceOrganizationDeleted.ShouldBeTrue();
+
+        // MoveToOrganization should not be called for empty organization
+        _datasetManagerMock.Verify(x => x.MoveToOrganization(
+            It.IsAny<string>(),
+            It.IsAny<string[]>(),
+            It.IsAny<string>(),
+            It.IsAny<ConflictResolutionStrategy>()), Times.Never);
+    }
+
+    [Test]
+    public async Task Merge_TransfersUsersToDestinationOrganization()
+    {
+        // Arrange
+        SetupAdminUser();
+        var sourceOrg = await CreateOrganizationWithDatasets("source-org", "admin-id", 0);
+        await CreateOrganizationWithDatasets("dest-org", "admin-id", 0);
+
+        // Add users to source organization
+        var sourceOrgEntity = await _context.Organizations
+            .Include(o => o.Users)
+            .FirstAsync(o => o.Slug == "source-org");
+
+        sourceOrgEntity.Users = new List<OrganizationUser>
+        {
+            new OrganizationUser { UserId = "user-1", OrganizationSlug = "source-org" },
+            new OrganizationUser { UserId = "user-2", OrganizationSlug = "source-org" }
+        };
+        await _context.SaveChangesAsync();
+
+        // Act
+        var result = await _organizationsManager.Merge("source-org", "dest-org");
+
+        // Assert
+        result.SourceOrganizationDeleted.ShouldBeTrue();
+
+        // Verify users were transferred to destination organization
+        var destOrgEntity = await _context.Organizations
+            .Include(o => o.Users)
+            .FirstAsync(o => o.Slug == "dest-org");
+
+        destOrgEntity.Users.ShouldContain(u => u.UserId == "user-1");
+        destOrgEntity.Users.ShouldContain(u => u.UserId == "user-2");
+    }
+
+    [Test]
+    public async Task Merge_DoesNotDuplicateUsersInDestination()
+    {
+        // Arrange
+        SetupAdminUser();
+        await CreateOrganizationWithDatasets("source-org", "admin-id", 0);
+        await CreateOrganizationWithDatasets("dest-org", "admin-id", 0);
+
+        // Add user to both organizations
+        var sourceOrgEntity = await _context.Organizations
+            .Include(o => o.Users)
+            .FirstAsync(o => o.Slug == "source-org");
+        var destOrgEntity = await _context.Organizations
+            .Include(o => o.Users)
+            .FirstAsync(o => o.Slug == "dest-org");
+
+        sourceOrgEntity.Users = new List<OrganizationUser>
+        {
+            new OrganizationUser { UserId = "shared-user", OrganizationSlug = "source-org" }
+        };
+        destOrgEntity.Users = new List<OrganizationUser>
+        {
+            new OrganizationUser { UserId = "shared-user", OrganizationSlug = "dest-org" }
+        };
+        await _context.SaveChangesAsync();
+
+        // Act
+        var result = await _organizationsManager.Merge("source-org", "dest-org");
+
+        // Assert
+        // Reload and verify no duplicates
+        destOrgEntity = await _context.Organizations
+            .Include(o => o.Users)
+            .FirstAsync(o => o.Slug == "dest-org");
+
+        destOrgEntity.Users.Count(u => u.UserId == "shared-user").ShouldBe(1);
+    }
+
+    [Test]
+    public async Task Merge_SourceOrganizationNotFound_ThrowsNotFoundException()
+    {
+        // Arrange
+        SetupAdminUser();
+        await CreateOrganizationWithDatasets("dest-org", "admin-id", 0);
+
+        // Act & Assert
+        var action = () => _organizationsManager.Merge("non-existent-org", "dest-org");
+        await Should.ThrowAsync<NotFoundException>(action);
+    }
+
+    [Test]
+    public async Task Merge_DestinationOrganizationNotFound_ThrowsNotFoundException()
+    {
+        // Arrange
+        SetupAdminUser();
+        await CreateOrganizationWithDatasets("source-org", "admin-id", 0);
+
+        // Act & Assert
+        var action = () => _organizationsManager.Merge("source-org", "non-existent-org");
+        await Should.ThrowAsync<NotFoundException>(action);
+    }
+
+    [Test]
+    public async Task Merge_AllDatasetsFail_DoesNotDeleteSourceOrganization()
+    {
+        // Arrange
+        SetupAdminUser();
+        await CreateOrganizationWithDatasets("source-org", "admin-id", 2);
+        await CreateOrganizationWithDatasets("dest-org", "admin-id", 0);
+
+        _datasetManagerMock.Setup(x => x.MoveToOrganization(
+            "source-org",
+            It.IsAny<string[]>(),
+            "dest-org",
+            It.IsAny<ConflictResolutionStrategy>()))
+            .ReturnsAsync(new[]
+            {
+                new MoveDatasetResultDto { OriginalSlug = "dataset-0", Success = false, Error = "Error 1" },
+                new MoveDatasetResultDto { OriginalSlug = "dataset-1", Success = false, Error = "Error 2" }
+            });
+
+        // Act
+        var result = await _organizationsManager.Merge("source-org", "dest-org");
+
+        // Assert
+        result.DatasetsMovedCount.ShouldBe(0);
+        result.DatasetsFailedCount.ShouldBe(2);
+        result.SourceOrganizationDeleted.ShouldBeFalse();
+
+        // Verify source organization still exists
+        var orgs = await _context.Organizations.ToListAsync();
+        orgs.ShouldContain(o => o.Slug == "source-org");
+    }
+
+    #endregion
+
     #region Additional Helper Methods
 
     private User SetupStandardUser(string userId)
@@ -333,6 +732,36 @@ public class OrganizationManagerTest : TestBase
             IsPublic = false,
             OwnerId = userId,
             CreationDate = DateTime.Now
+        };
+
+        await _context.Organizations.AddAsync(org);
+        await _context.SaveChangesAsync();
+
+        return org.ToDto();
+    }
+
+    private async Task<OrganizationDto> CreateOrganizationWithDatasets(string slug, string ownerId, int datasetCount)
+    {
+        var datasets = new List<Dataset>();
+        for (var i = 0; i < datasetCount; i++)
+        {
+            datasets.Add(new Dataset
+            {
+                Slug = $"dataset-{i}",
+                CreationDate = DateTime.Now,
+                InternalRef = Guid.NewGuid()
+            });
+        }
+
+        var org = new Organization
+        {
+            Slug = slug,
+            Name = $"Organization {slug}",
+            Description = $"Description for {slug}",
+            IsPublic = false,
+            OwnerId = ownerId,
+            CreationDate = DateTime.Now,
+            Datasets = datasets
         };
 
         await _context.Organizations.AddAsync(org);

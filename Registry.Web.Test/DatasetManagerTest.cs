@@ -10,12 +10,14 @@ using Microsoft.Extensions.Options;
 using Moq;
 using Newtonsoft.Json;
 using NUnit.Framework;
+using Registry.Adapters;
 using Registry.Adapters.DroneDB;
 using Registry.Ports;
 using Registry.Ports.DroneDB;
 using Registry.Test.Common;
 using Registry.Web.Data;
 using Registry.Web.Data.Models;
+using Registry.Web.Exceptions;
 using Registry.Web.Identity.Models;
 using Registry.Web.Models.Configuration;
 using Registry.Web.Services.Adapters;
@@ -39,6 +41,7 @@ public class DatasetManagerTest : TestBase
     private Mock<IHttpContextAccessor> _httpContextAccessorMock;
     private Mock<IStacManager> _stacManagerMock;
     private ICacheManager _cacheManager;
+    private IFileSystem _fileSystem;
 
     [SetUp]
     public void Setup()
@@ -53,6 +56,7 @@ public class DatasetManagerTest : TestBase
         _cacheManager = CreateTestCacheManager();
         RegisterDatasetVisibilityCacheProvider(_cacheManager);
         _datasetsManagerLogger = CreateTestLogger<DatasetsManager>();
+        _fileSystem = new FileSystem();
     }
 
     [Test]
@@ -87,7 +91,7 @@ public class DatasetManagerTest : TestBase
         _ddbFactoryMock.Setup(x => x.Get(It.IsAny<string>(), It.IsAny<Guid>())).Returns(ddbMock.Object);
 
         var datasetsManager = new DatasetsManager(context, utils, _datasetsManagerLogger,
-            _objectsManagerMock.Object, _stacManagerMock.Object, _ddbFactoryMock.Object, _authManagerMock.Object, _cacheManager);
+            _objectsManagerMock.Object, _stacManagerMock.Object, _ddbFactoryMock.Object, _authManagerMock.Object, _cacheManager, _fileSystem, _appSettingsMock.Object);
 
         var list = (await datasetsManager.List(MagicStrings.PublicOrganizationSlug)).ToArray();
 
@@ -145,7 +149,7 @@ public class DatasetManagerTest : TestBase
 
         var datasetsManager = new DatasetsManager(context, utils, _datasetsManagerLogger,
             _objectsManagerMock.Object, _stacManagerMock.Object, _ddbFactoryMock.Object,
-            _authManagerMock.Object, _cacheManager);
+            _authManagerMock.Object, _cacheManager, _fileSystem, _appSettingsMock.Object);
 
         // Act
         var result = await datasetsManager.Get(orgSlug, dsSlug);
@@ -202,7 +206,7 @@ public class DatasetManagerTest : TestBase
 
         var datasetsManager = new DatasetsManager(context, utils, _datasetsManagerLogger,
             _objectsManagerMock.Object, _stacManagerMock.Object, _ddbFactoryMock.Object,
-            _authManagerMock.Object, _cacheManager);
+            _authManagerMock.Object, _cacheManager, _fileSystem, _appSettingsMock.Object);
 
         // Act
         var result = await datasetsManager.Get(orgSlug, dsSlug);
@@ -257,7 +261,7 @@ public class DatasetManagerTest : TestBase
 
         var datasetsManager = new DatasetsManager(context, utils, _datasetsManagerLogger,
             _objectsManagerMock.Object, _stacManagerMock.Object, _ddbFactoryMock.Object,
-            _authManagerMock.Object, _cacheManager);
+            _authManagerMock.Object, _cacheManager, _fileSystem, _appSettingsMock.Object);
 
         // Act
         var result = await datasetsManager.GetEntry(orgSlug, dsSlug);
@@ -330,7 +334,7 @@ public class DatasetManagerTest : TestBase
 
         var datasetsManager = new DatasetsManager(context, utils, _datasetsManagerLogger,
             _objectsManagerMock.Object, _stacManagerMock.Object, _ddbFactoryMock.Object,
-            _authManagerMock.Object, _cacheManager);
+            _authManagerMock.Object, _cacheManager, _fileSystem, _appSettingsMock.Object);
 
         // Act
         var result = await datasetsManager.GetEntry(orgSlug, dsSlug);
@@ -389,7 +393,7 @@ public class DatasetManagerTest : TestBase
 
         var datasetsManager = new DatasetsManager(context, utils, _datasetsManagerLogger,
             _objectsManagerMock.Object, _stacManagerMock.Object, _ddbFactoryMock.Object,
-            _authManagerMock.Object, _cacheManager);
+            _authManagerMock.Object, _cacheManager, _fileSystem, _appSettingsMock.Object);
 
         // Act
         var result = await datasetsManager.List(orgSlug);
@@ -397,7 +401,7 @@ public class DatasetManagerTest : TestBase
         // Assert
         result.ShouldNotBeNull();
         var datasets = result.ToList();
-        datasets.Count().ShouldBe(1);
+        datasets.Count.ShouldBe(1);
 
         var dataset = datasets.First();
         dataset.Permissions.ShouldNotBeNull();
@@ -450,7 +454,7 @@ public class DatasetManagerTest : TestBase
 
         var datasetsManager = new DatasetsManager(context, utils, _datasetsManagerLogger,
             _objectsManagerMock.Object, _stacManagerMock.Object, _ddbFactoryMock.Object,
-            _authManagerMock.Object, _cacheManager);
+            _authManagerMock.Object, _cacheManager, _fileSystem, _appSettingsMock.Object);
 
         // Act
         var result = await datasetsManager.List(orgSlug);
@@ -458,7 +462,7 @@ public class DatasetManagerTest : TestBase
         // Assert
         result.ShouldNotBeNull();
         var datasets = result.ToList();
-        datasets.Count().ShouldBe(1);
+        datasets.Count.ShouldBe(1);
 
         var dataset = datasets.First();
         dataset.Permissions.ShouldNotBeNull();
@@ -466,6 +470,704 @@ public class DatasetManagerTest : TestBase
         dataset.Permissions.CanWrite.ShouldBeFalse();
         dataset.Permissions.CanDelete.ShouldBeFalse();
     }
+
+    #region MoveToOrganization Tests
+
+    [Test]
+    public async Task MoveToOrganization_NonAdminUser_ThrowsUnauthorizedException()
+    {
+        // Arrange
+        await using var context = GetMoveTestContext();
+        var (utils, fileSystemMock) = SetupMoveTestDependencies(context);
+        SetupStandardUser();
+
+        var datasetsManager = new DatasetsManager(context, utils, _datasetsManagerLogger,
+            _objectsManagerMock.Object, _stacManagerMock.Object, _ddbFactoryMock.Object,
+            _authManagerMock.Object, _cacheManager, fileSystemMock.Object, _appSettingsMock.Object);
+
+        // Act & Assert
+        var action = () => datasetsManager.MoveToOrganization("source-org", new[] { "dataset-1" }, "dest-org");
+        await Should.ThrowAsync<UnauthorizedException>(action);
+    }
+
+    [Test]
+    public async Task MoveToOrganization_SourceSlugEmpty_ThrowsBadRequestException()
+    {
+        // Arrange
+        await using var context = GetMoveTestContext();
+        var (utils, fileSystemMock) = SetupMoveTestDependencies(context);
+        SetupAdminUser();
+
+        var datasetsManager = new DatasetsManager(context, utils, _datasetsManagerLogger,
+            _objectsManagerMock.Object, _stacManagerMock.Object, _ddbFactoryMock.Object,
+            _authManagerMock.Object, _cacheManager, fileSystemMock.Object, _appSettingsMock.Object);
+
+        // Act & Assert
+        var action = () => datasetsManager.MoveToOrganization("", new[] { "dataset-1" }, "dest-org");
+        await Should.ThrowAsync<BadRequestException>(action);
+    }
+
+    [Test]
+    public async Task MoveToOrganization_SourceSlugNull_ThrowsBadRequestException()
+    {
+        // Arrange
+        await using var context = GetMoveTestContext();
+        var (utils, fileSystemMock) = SetupMoveTestDependencies(context);
+        SetupAdminUser();
+
+        var datasetsManager = new DatasetsManager(context, utils, _datasetsManagerLogger,
+            _objectsManagerMock.Object, _stacManagerMock.Object, _ddbFactoryMock.Object,
+            _authManagerMock.Object, _cacheManager, fileSystemMock.Object, _appSettingsMock.Object);
+
+        // Act & Assert
+        var action = () => datasetsManager.MoveToOrganization(null, new[] { "dataset-1" }, "dest-org");
+        await Should.ThrowAsync<BadRequestException>(action);
+    }
+
+    [Test]
+    public async Task MoveToOrganization_DestSlugEmpty_ThrowsBadRequestException()
+    {
+        // Arrange
+        await using var context = GetMoveTestContext();
+        var (utils, fileSystemMock) = SetupMoveTestDependencies(context);
+        SetupAdminUser();
+
+        var datasetsManager = new DatasetsManager(context, utils, _datasetsManagerLogger,
+            _objectsManagerMock.Object, _stacManagerMock.Object, _ddbFactoryMock.Object,
+            _authManagerMock.Object, _cacheManager, fileSystemMock.Object, _appSettingsMock.Object);
+
+        // Act & Assert
+        var action = () => datasetsManager.MoveToOrganization("source-org", new[] { "dataset-1" }, "");
+        await Should.ThrowAsync<BadRequestException>(action);
+    }
+
+    [Test]
+    public async Task MoveToOrganization_DatasetSlugsNull_ThrowsBadRequestException()
+    {
+        // Arrange
+        await using var context = GetMoveTestContext();
+        var (utils, fileSystemMock) = SetupMoveTestDependencies(context);
+        SetupAdminUser();
+
+        var datasetsManager = new DatasetsManager(context, utils, _datasetsManagerLogger,
+            _objectsManagerMock.Object, _stacManagerMock.Object, _ddbFactoryMock.Object,
+            _authManagerMock.Object, _cacheManager, fileSystemMock.Object, _appSettingsMock.Object);
+
+        // Act & Assert
+        var action = () => datasetsManager.MoveToOrganization("source-org", null, "dest-org");
+        await Should.ThrowAsync<BadRequestException>(action);
+    }
+
+    [Test]
+    public async Task MoveToOrganization_DatasetSlugsEmpty_ThrowsBadRequestException()
+    {
+        // Arrange
+        await using var context = GetMoveTestContext();
+        var (utils, fileSystemMock) = SetupMoveTestDependencies(context);
+        SetupAdminUser();
+
+        var datasetsManager = new DatasetsManager(context, utils, _datasetsManagerLogger,
+            _objectsManagerMock.Object, _stacManagerMock.Object, _ddbFactoryMock.Object,
+            _authManagerMock.Object, _cacheManager, fileSystemMock.Object, _appSettingsMock.Object);
+
+        // Act & Assert
+        var action = () => datasetsManager.MoveToOrganization("source-org", Array.Empty<string>(), "dest-org");
+        await Should.ThrowAsync<BadRequestException>(action);
+    }
+
+    [Test]
+    public async Task MoveToOrganization_SourceEqualsDestination_ThrowsBadRequestException()
+    {
+        // Arrange
+        await using var context = GetMoveTestContext();
+        var (utils, fileSystemMock) = SetupMoveTestDependencies(context);
+        SetupAdminUser();
+
+        var datasetsManager = new DatasetsManager(context, utils, _datasetsManagerLogger,
+            _objectsManagerMock.Object, _stacManagerMock.Object, _ddbFactoryMock.Object,
+            _authManagerMock.Object, _cacheManager, fileSystemMock.Object, _appSettingsMock.Object);
+
+        // Act & Assert
+        var action = () => datasetsManager.MoveToOrganization("source-org", new[] { "dataset-1" }, "source-org");
+        await Should.ThrowAsync<BadRequestException>(action);
+    }
+
+    [Test]
+    public async Task MoveToOrganization_SingleDatasetNoConflict_MovesSuccessfully()
+    {
+        // Arrange
+        await using var context = GetMoveTestContext();
+        var (utils, fileSystemMock) = SetupMoveTestDependencies(context);
+        SetupAdminUser();
+
+        fileSystemMock.Setup(x => x.FolderExists(It.IsAny<string>())).Returns(true);
+        fileSystemMock.Setup(x => x.FolderCopy(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<bool>(), It.IsAny<bool>()));
+        fileSystemMock.Setup(x => x.FolderDelete(It.IsAny<string>(), It.IsAny<bool>()));
+        _stacManagerMock.Setup(x => x.ClearCache(It.IsAny<Dataset>())).Returns(Task.CompletedTask);
+
+        var datasetsManager = new DatasetsManager(context, utils, _datasetsManagerLogger,
+            _objectsManagerMock.Object, _stacManagerMock.Object, _ddbFactoryMock.Object,
+            _authManagerMock.Object, _cacheManager, fileSystemMock.Object, _appSettingsMock.Object);
+
+        // Act
+        var results = (await datasetsManager.MoveToOrganization("source-org", new[] { "dataset-1" }, "dest-org")).ToArray();
+
+        // Assert
+        results.Length.ShouldBe(1);
+        results[0].Success.ShouldBeTrue();
+        results[0].OriginalSlug.ShouldBe("dataset-1");
+        results[0].NewSlug.ShouldBe("dataset-1");
+
+        // Verify dataset was moved in database
+        var movedDataset = await context.Datasets
+            .Include(d => d.Organization)
+            .FirstOrDefaultAsync(d => d.Slug == "dataset-1");
+        movedDataset.ShouldNotBeNull();
+        movedDataset.Organization.Slug.ShouldBe("dest-org");
+
+        // Verify file system operations
+        fileSystemMock.Verify(x => x.FolderCopy(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<bool>(), It.IsAny<bool>()), Times.Once);
+        fileSystemMock.Verify(x => x.FolderDelete(It.IsAny<string>(), It.IsAny<bool>()), Times.Once);
+    }
+
+    [Test]
+    public async Task MoveToOrganization_MultipleDatasets_MovesAllSuccessfully()
+    {
+        // Arrange
+        await using var context = GetMoveTestContext();
+        var (utils, fileSystemMock) = SetupMoveTestDependencies(context);
+        SetupAdminUser();
+
+        fileSystemMock.Setup(x => x.FolderExists(It.IsAny<string>())).Returns(true);
+        fileSystemMock.Setup(x => x.FolderCopy(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<bool>(), It.IsAny<bool>()));
+        fileSystemMock.Setup(x => x.FolderDelete(It.IsAny<string>(), It.IsAny<bool>()));
+        _stacManagerMock.Setup(x => x.ClearCache(It.IsAny<Dataset>())).Returns(Task.CompletedTask);
+
+        var datasetsManager = new DatasetsManager(context, utils, _datasetsManagerLogger,
+            _objectsManagerMock.Object, _stacManagerMock.Object, _ddbFactoryMock.Object,
+            _authManagerMock.Object, _cacheManager, fileSystemMock.Object, _appSettingsMock.Object);
+
+        // Act
+        var results = (await datasetsManager.MoveToOrganization("source-org", new[] { "dataset-1", "dataset-2" }, "dest-org")).ToArray();
+
+        // Assert
+        results.Length.ShouldBe(2);
+        results.ShouldAllBe(r => r.Success);
+
+        // Verify both datasets were moved in database
+        var movedDatasets = await context.Datasets
+            .Include(d => d.Organization)
+            .Where(d => d.Slug == "dataset-1" || d.Slug == "dataset-2")
+            .ToListAsync();
+
+        movedDatasets.ShouldAllBe(d => d.Organization.Slug == "dest-org");
+    }
+
+    [Test]
+    public async Task MoveToOrganization_DatasetNotFound_ReturnsErrorInResult()
+    {
+        // Arrange
+        await using var context = GetMoveTestContext();
+        var (utils, fileSystemMock) = SetupMoveTestDependencies(context);
+        SetupAdminUser();
+
+        var datasetsManager = new DatasetsManager(context, utils, _datasetsManagerLogger,
+            _objectsManagerMock.Object, _stacManagerMock.Object, _ddbFactoryMock.Object,
+            _authManagerMock.Object, _cacheManager, fileSystemMock.Object, _appSettingsMock.Object);
+
+        // Act
+        var results = (await datasetsManager.MoveToOrganization("source-org", new[] { "non-existent-dataset" }, "dest-org")).ToArray();
+
+        // Assert
+        results.Length.ShouldBe(1);
+        results[0].Success.ShouldBeFalse();
+        results[0].OriginalSlug.ShouldBe("non-existent-dataset");
+        results[0].Error.ShouldContain("not found");
+    }
+
+    [Test]
+    public async Task MoveToOrganization_PartialSuccess_ReturnsCorrectResults()
+    {
+        // Arrange
+        await using var context = GetMoveTestContext();
+        var (utils, fileSystemMock) = SetupMoveTestDependencies(context);
+        SetupAdminUser();
+
+        fileSystemMock.Setup(x => x.FolderExists(It.IsAny<string>())).Returns(true);
+        fileSystemMock.Setup(x => x.FolderCopy(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<bool>(), It.IsAny<bool>()));
+        fileSystemMock.Setup(x => x.FolderDelete(It.IsAny<string>(), It.IsAny<bool>()));
+        _stacManagerMock.Setup(x => x.ClearCache(It.IsAny<Dataset>())).Returns(Task.CompletedTask);
+
+        var datasetsManager = new DatasetsManager(context, utils, _datasetsManagerLogger,
+            _objectsManagerMock.Object, _stacManagerMock.Object, _ddbFactoryMock.Object,
+            _authManagerMock.Object, _cacheManager, fileSystemMock.Object, _appSettingsMock.Object);
+
+        // Act - Mix of existing and non-existing datasets
+        var results = (await datasetsManager.MoveToOrganization("source-org",
+            new[] { "dataset-1", "non-existent", "dataset-2" }, "dest-org")).ToArray();
+
+        // Assert
+        results.Length.ShouldBe(3);
+        results.Count(r => r.Success).ShouldBe(2);
+        results.Count(r => !r.Success).ShouldBe(1);
+        results.First(r => !r.Success).OriginalSlug.ShouldBe("non-existent");
+    }
+
+    [Test]
+    public async Task MoveToOrganization_ConflictWithHaltOnConflict_ReturnsError()
+    {
+        // Arrange
+        await using var context = GetMoveTestContextWithConflict();
+        var (utils, fileSystemMock) = SetupMoveTestDependencies(context);
+        SetupAdminUser();
+
+        var datasetsManager = new DatasetsManager(context, utils, _datasetsManagerLogger,
+            _objectsManagerMock.Object, _stacManagerMock.Object, _ddbFactoryMock.Object,
+            _authManagerMock.Object, _cacheManager, fileSystemMock.Object, _appSettingsMock.Object);
+
+        // Act
+        var results = (await datasetsManager.MoveToOrganization("source-org",
+            new[] { "conflicting-dataset" }, "dest-org", ConflictResolutionStrategy.HaltOnConflict)).ToArray();
+
+        // Assert
+        results.Length.ShouldBe(1);
+        results[0].Success.ShouldBeFalse();
+        results[0].Error.ShouldContain("already exists");
+    }
+
+    [Test]
+    public async Task MoveToOrganization_ConflictWithRename_RenamesDataset()
+    {
+        // Arrange
+        await using var context = GetMoveTestContextWithConflict();
+        var (utils, fileSystemMock) = SetupMoveTestDependencies(context);
+        SetupAdminUser();
+
+        fileSystemMock.Setup(x => x.FolderExists(It.IsAny<string>())).Returns(true);
+        fileSystemMock.Setup(x => x.FolderCopy(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<bool>(), It.IsAny<bool>()));
+        fileSystemMock.Setup(x => x.FolderDelete(It.IsAny<string>(), It.IsAny<bool>()));
+        _stacManagerMock.Setup(x => x.ClearCache(It.IsAny<Dataset>())).Returns(Task.CompletedTask);
+
+        var datasetsManager = new DatasetsManager(context, utils, _datasetsManagerLogger,
+            _objectsManagerMock.Object, _stacManagerMock.Object, _ddbFactoryMock.Object,
+            _authManagerMock.Object, _cacheManager, fileSystemMock.Object, _appSettingsMock.Object);
+
+        // Act
+        var results = (await datasetsManager.MoveToOrganization("source-org",
+            new[] { "conflicting-dataset" }, "dest-org", ConflictResolutionStrategy.Rename)).ToArray();
+
+        // Assert
+        results.Length.ShouldBe(1);
+        results[0].Success.ShouldBeTrue();
+        results[0].OriginalSlug.ShouldBe("conflicting-dataset");
+        results[0].NewSlug.ShouldBe("conflicting-dataset_1");
+
+        // Verify dataset was renamed in database
+        var renamedDataset = await context.Datasets
+            .Include(d => d.Organization)
+            .FirstOrDefaultAsync(d => d.Slug == "conflicting-dataset_1");
+        renamedDataset.ShouldNotBeNull();
+        renamedDataset.Organization.Slug.ShouldBe("dest-org");
+    }
+
+    [Test]
+    public async Task MoveToOrganization_ConflictWithRename_IncrementsSuffixUntilUnique()
+    {
+        // Arrange
+        await using var context = GetMoveTestContextWithMultipleConflicts();
+        var (utils, fileSystemMock) = SetupMoveTestDependencies(context);
+        SetupAdminUser();
+
+        fileSystemMock.Setup(x => x.FolderExists(It.IsAny<string>())).Returns(true);
+        fileSystemMock.Setup(x => x.FolderCopy(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<bool>(), It.IsAny<bool>()));
+        fileSystemMock.Setup(x => x.FolderDelete(It.IsAny<string>(), It.IsAny<bool>()));
+        _stacManagerMock.Setup(x => x.ClearCache(It.IsAny<Dataset>())).Returns(Task.CompletedTask);
+
+        var datasetsManager = new DatasetsManager(context, utils, _datasetsManagerLogger,
+            _objectsManagerMock.Object, _stacManagerMock.Object, _ddbFactoryMock.Object,
+            _authManagerMock.Object, _cacheManager, fileSystemMock.Object, _appSettingsMock.Object);
+
+        // Act
+        var results = (await datasetsManager.MoveToOrganization("source-org",
+            new[] { "conflicting-dataset" }, "dest-org", ConflictResolutionStrategy.Rename)).ToArray();
+
+        // Assert
+        results.Length.ShouldBe(1);
+        results[0].Success.ShouldBeTrue();
+        // Should be _3 since _1 and _2 already exist
+        results[0].NewSlug.ShouldBe("conflicting-dataset_3");
+    }
+
+    [Test]
+    public async Task MoveToOrganization_ConflictWithOverwrite_DeletesExistingAndMoves()
+    {
+        // Arrange
+        await using var context = GetMoveTestContextWithConflict();
+        var (utils, fileSystemMock) = SetupMoveTestDependencies(context);
+        SetupAdminUser();
+
+        fileSystemMock.Setup(x => x.FolderExists(It.IsAny<string>())).Returns(true);
+        fileSystemMock.Setup(x => x.FolderCopy(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<bool>(), It.IsAny<bool>()));
+        fileSystemMock.Setup(x => x.FolderDelete(It.IsAny<string>(), It.IsAny<bool>()));
+        _stacManagerMock.Setup(x => x.ClearCache(It.IsAny<Dataset>())).Returns(Task.CompletedTask);
+        _objectsManagerMock.Setup(x => x.DeleteAll(It.IsAny<string>(), It.IsAny<string>())).Returns(Task.CompletedTask);
+
+        var datasetsManager = new DatasetsManager(context, utils, _datasetsManagerLogger,
+            _objectsManagerMock.Object, _stacManagerMock.Object, _ddbFactoryMock.Object,
+            _authManagerMock.Object, _cacheManager, fileSystemMock.Object, _appSettingsMock.Object);
+
+        // Act
+        var results = (await datasetsManager.MoveToOrganization("source-org",
+            new[] { "conflicting-dataset" }, "dest-org", ConflictResolutionStrategy.Overwrite)).ToArray();
+
+        // Assert
+        results.Length.ShouldBe(1);
+        results[0].Success.ShouldBeTrue();
+        results[0].OriginalSlug.ShouldBe("conflicting-dataset");
+        results[0].NewSlug.ShouldBe("conflicting-dataset");
+
+        // Verify the dataset in destination is now the one from source
+        var datasets = await context.Datasets
+            .Include(d => d.Organization)
+            .Where(d => d.Slug == "conflicting-dataset")
+            .ToListAsync();
+
+        datasets.Count.ShouldBe(1);
+        datasets[0].Organization.Slug.ShouldBe("dest-org");
+    }
+
+    [Test]
+    public async Task MoveToOrganization_FilesNotExist_StillMovesDatabase()
+    {
+        // Arrange
+        await using var context = GetMoveTestContext();
+        var (utils, fileSystemMock) = SetupMoveTestDependencies(context);
+        SetupAdminUser();
+
+        fileSystemMock.Setup(x => x.FolderExists(It.IsAny<string>())).Returns(false);
+        _stacManagerMock.Setup(x => x.ClearCache(It.IsAny<Dataset>())).Returns(Task.CompletedTask);
+
+        var datasetsManager = new DatasetsManager(context, utils, _datasetsManagerLogger,
+            _objectsManagerMock.Object, _stacManagerMock.Object, _ddbFactoryMock.Object,
+            _authManagerMock.Object, _cacheManager, fileSystemMock.Object, _appSettingsMock.Object);
+
+        // Act
+        var results = (await datasetsManager.MoveToOrganization("source-org", new[] { "dataset-1" }, "dest-org")).ToArray();
+
+        // Assert
+        results.Length.ShouldBe(1);
+        results[0].Success.ShouldBeTrue();
+
+        // Verify file operations were not called
+        fileSystemMock.Verify(x => x.FolderCopy(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<bool>(), It.IsAny<bool>()), Times.Never);
+        fileSystemMock.Verify(x => x.FolderDelete(It.IsAny<string>(), It.IsAny<bool>()), Times.Never);
+    }
+
+    [Test]
+    public async Task MoveToOrganization_SourceOrganizationNotFound_ThrowsNotFoundException()
+    {
+        // Arrange
+        await using var context = GetMoveTestContext();
+        var (utils, fileSystemMock) = SetupMoveTestDependencies(context);
+        SetupAdminUser();
+
+        var datasetsManager = new DatasetsManager(context, utils, _datasetsManagerLogger,
+            _objectsManagerMock.Object, _stacManagerMock.Object, _ddbFactoryMock.Object,
+            _authManagerMock.Object, _cacheManager, fileSystemMock.Object, _appSettingsMock.Object);
+
+        // Act & Assert
+        var action = () => datasetsManager.MoveToOrganization("non-existent-org", new[] { "dataset-1" }, "dest-org");
+        await Should.ThrowAsync<NotFoundException>(action);
+    }
+
+    [Test]
+    public async Task MoveToOrganization_DestinationOrganizationNotFound_ThrowsNotFoundException()
+    {
+        // Arrange
+        await using var context = GetMoveTestContext();
+        var (utils, fileSystemMock) = SetupMoveTestDependencies(context);
+        SetupAdminUser();
+
+        var datasetsManager = new DatasetsManager(context, utils, _datasetsManagerLogger,
+            _objectsManagerMock.Object, _stacManagerMock.Object, _ddbFactoryMock.Object,
+            _authManagerMock.Object, _cacheManager, fileSystemMock.Object, _appSettingsMock.Object);
+
+        // Act & Assert
+        var action = () => datasetsManager.MoveToOrganization("source-org", new[] { "dataset-1" }, "non-existent-org");
+        await Should.ThrowAsync<NotFoundException>(action);
+    }
+
+    [Test]
+    public async Task MoveToOrganization_ClearsStacCache_AfterSuccessfulMove()
+    {
+        // Arrange
+        await using var context = GetMoveTestContext();
+        var (utils, fileSystemMock) = SetupMoveTestDependencies(context);
+        SetupAdminUser();
+
+        fileSystemMock.Setup(x => x.FolderExists(It.IsAny<string>())).Returns(true);
+        fileSystemMock.Setup(x => x.FolderCopy(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<bool>(), It.IsAny<bool>()));
+        fileSystemMock.Setup(x => x.FolderDelete(It.IsAny<string>(), It.IsAny<bool>()));
+        _stacManagerMock.Setup(x => x.ClearCache(It.IsAny<Dataset>())).Returns(Task.CompletedTask);
+
+        var datasetsManager = new DatasetsManager(context, utils, _datasetsManagerLogger,
+            _objectsManagerMock.Object, _stacManagerMock.Object, _ddbFactoryMock.Object,
+            _authManagerMock.Object, _cacheManager, fileSystemMock.Object, _appSettingsMock.Object);
+
+        // Act
+        await datasetsManager.MoveToOrganization("source-org", new[] { "dataset-1", "dataset-2" }, "dest-org");
+
+        // Assert - Verify ClearCache was called for each moved dataset
+        _stacManagerMock.Verify(x => x.ClearCache(It.IsAny<Dataset>()), Times.Exactly(2));
+    }
+
+    [Test]
+    public async Task MoveToOrganization_BatchConflictHandling_HandlesMultipleConflictsCorrectly()
+    {
+        // Arrange
+        await using var context = GetMoveTestContextWithMixedConflicts();
+        var (utils, fileSystemMock) = SetupMoveTestDependencies(context);
+        SetupAdminUser();
+
+        fileSystemMock.Setup(x => x.FolderExists(It.IsAny<string>())).Returns(true);
+        fileSystemMock.Setup(x => x.FolderCopy(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<bool>(), It.IsAny<bool>()));
+        fileSystemMock.Setup(x => x.FolderDelete(It.IsAny<string>(), It.IsAny<bool>()));
+        _stacManagerMock.Setup(x => x.ClearCache(It.IsAny<Dataset>())).Returns(Task.CompletedTask);
+
+        var datasetsManager = new DatasetsManager(context, utils, _datasetsManagerLogger,
+            _objectsManagerMock.Object, _stacManagerMock.Object, _ddbFactoryMock.Object,
+            _authManagerMock.Object, _cacheManager, fileSystemMock.Object, _appSettingsMock.Object);
+
+        // Act - Move datasets, some will conflict, some won't
+        var results = (await datasetsManager.MoveToOrganization("source-org",
+            new[] { "unique-dataset", "conflicting-dataset" }, "dest-org", ConflictResolutionStrategy.Rename)).ToArray();
+
+        // Assert
+        results.Length.ShouldBe(2);
+
+        var uniqueResult = results.First(r => r.OriginalSlug == "unique-dataset");
+        uniqueResult.Success.ShouldBeTrue();
+        uniqueResult.NewSlug.ShouldBe("unique-dataset"); // No rename needed
+
+        var conflictResult = results.First(r => r.OriginalSlug == "conflicting-dataset");
+        conflictResult.Success.ShouldBeTrue();
+        conflictResult.NewSlug.ShouldBe("conflicting-dataset_1"); // Renamed due to conflict
+    }
+
+    #region MoveToOrganization Helper Methods
+
+    private void SetupAdminUser()
+    {
+        var adminUser = new User
+        {
+            UserName = "admin",
+            Email = "admin@example.com",
+            Id = "admin-id"
+        };
+
+        _authManagerMock.Setup(x => x.GetCurrentUser()).ReturnsAsync(adminUser);
+        _authManagerMock.Setup(x => x.IsUserAdmin()).ReturnsAsync(true);
+        _authManagerMock.Setup(x => x.RequestAccess(It.IsAny<Dataset>(), It.IsAny<AccessType>())).ReturnsAsync(true);
+    }
+
+    private void SetupStandardUser()
+    {
+        var standardUser = new User
+        {
+            UserName = "standard",
+            Email = "standard@example.com",
+            Id = "standard-id"
+        };
+
+        _authManagerMock.Setup(x => x.GetCurrentUser()).ReturnsAsync(standardUser);
+        _authManagerMock.Setup(x => x.IsUserAdmin()).ReturnsAsync(false);
+    }
+
+    private (IUtils utils, Mock<IFileSystem> fileSystemMock) SetupMoveTestDependencies(RegistryContext context)
+    {
+        _appSettingsMock.Setup(o => o.Value).Returns(_settings);
+        var fileSystemMock = new Mock<IFileSystem>();
+        var utils = new WebUtils(_authManagerMock.Object, context, _appSettingsMock.Object,
+            _httpContextAccessorMock.Object, _ddbFactoryMock.Object);
+        return (utils, fileSystemMock);
+    }
+
+    private static RegistryContext GetMoveTestContext()
+    {
+        var options = new DbContextOptionsBuilder<RegistryContext>()
+            .UseInMemoryDatabase(databaseName: $"RegistryDatabase-{Guid.NewGuid()}")
+            .Options;
+
+        using (var context = new RegistryContext(options))
+        {
+            var sourceOrg = new Organization
+            {
+                Slug = "source-org",
+                Name = "Source Organization",
+                CreationDate = DateTime.Now,
+                Description = "Source organization for testing",
+                IsPublic = false,
+                OwnerId = "admin-id",
+                Datasets = new List<Dataset>
+                {
+                    new Dataset { Slug = "dataset-1", CreationDate = DateTime.Now, InternalRef = Guid.NewGuid() },
+                    new Dataset { Slug = "dataset-2", CreationDate = DateTime.Now, InternalRef = Guid.NewGuid() }
+                }
+            };
+
+            var destOrg = new Organization
+            {
+                Slug = "dest-org",
+                Name = "Destination Organization",
+                CreationDate = DateTime.Now,
+                Description = "Destination organization for testing",
+                IsPublic = false,
+                OwnerId = "admin-id",
+                Datasets = new List<Dataset>()
+            };
+
+            context.Organizations.AddRange(sourceOrg, destOrg);
+            context.SaveChanges();
+        }
+
+        return new RegistryContext(options);
+    }
+
+    private static RegistryContext GetMoveTestContextWithConflict()
+    {
+        var options = new DbContextOptionsBuilder<RegistryContext>()
+            .UseInMemoryDatabase(databaseName: $"RegistryDatabase-{Guid.NewGuid()}")
+            .Options;
+
+        using (var context = new RegistryContext(options))
+        {
+            var sourceOrg = new Organization
+            {
+                Slug = "source-org",
+                Name = "Source Organization",
+                CreationDate = DateTime.Now,
+                Description = "Source organization for testing",
+                IsPublic = false,
+                OwnerId = "admin-id",
+                Datasets = new List<Dataset>
+                {
+                    new Dataset { Slug = "conflicting-dataset", CreationDate = DateTime.Now, InternalRef = Guid.NewGuid() }
+                }
+            };
+
+            var destOrg = new Organization
+            {
+                Slug = "dest-org",
+                Name = "Destination Organization",
+                CreationDate = DateTime.Now,
+                Description = "Destination organization for testing",
+                IsPublic = false,
+                OwnerId = "admin-id",
+                Datasets = new List<Dataset>
+                {
+                    new Dataset { Slug = "conflicting-dataset", CreationDate = DateTime.Now, InternalRef = Guid.NewGuid() }
+                }
+            };
+
+            context.Organizations.AddRange(sourceOrg, destOrg);
+            context.SaveChanges();
+        }
+
+        return new RegistryContext(options);
+    }
+
+    private static RegistryContext GetMoveTestContextWithMultipleConflicts()
+    {
+        var options = new DbContextOptionsBuilder<RegistryContext>()
+            .UseInMemoryDatabase(databaseName: $"RegistryDatabase-{Guid.NewGuid()}")
+            .Options;
+
+        using (var context = new RegistryContext(options))
+        {
+            var sourceOrg = new Organization
+            {
+                Slug = "source-org",
+                Name = "Source Organization",
+                CreationDate = DateTime.Now,
+                Description = "Source organization for testing",
+                IsPublic = false,
+                OwnerId = "admin-id",
+                Datasets = new List<Dataset>
+                {
+                    new Dataset { Slug = "conflicting-dataset", CreationDate = DateTime.Now, InternalRef = Guid.NewGuid() }
+                }
+            };
+
+            var destOrg = new Organization
+            {
+                Slug = "dest-org",
+                Name = "Destination Organization",
+                CreationDate = DateTime.Now,
+                Description = "Destination organization for testing",
+                IsPublic = false,
+                OwnerId = "admin-id",
+                Datasets = new List<Dataset>
+                {
+                    new Dataset { Slug = "conflicting-dataset", CreationDate = DateTime.Now, InternalRef = Guid.NewGuid() },
+                    new Dataset { Slug = "conflicting-dataset_1", CreationDate = DateTime.Now, InternalRef = Guid.NewGuid() },
+                    new Dataset { Slug = "conflicting-dataset_2", CreationDate = DateTime.Now, InternalRef = Guid.NewGuid() }
+                }
+            };
+
+            context.Organizations.AddRange(sourceOrg, destOrg);
+            context.SaveChanges();
+        }
+
+        return new RegistryContext(options);
+    }
+
+    private static RegistryContext GetMoveTestContextWithMixedConflicts()
+    {
+        var options = new DbContextOptionsBuilder<RegistryContext>()
+            .UseInMemoryDatabase(databaseName: $"RegistryDatabase-{Guid.NewGuid()}")
+            .Options;
+
+        using (var context = new RegistryContext(options))
+        {
+            var sourceOrg = new Organization
+            {
+                Slug = "source-org",
+                Name = "Source Organization",
+                CreationDate = DateTime.Now,
+                Description = "Source organization for testing",
+                IsPublic = false,
+                OwnerId = "admin-id",
+                Datasets = new List<Dataset>
+                {
+                    new Dataset { Slug = "unique-dataset", CreationDate = DateTime.Now, InternalRef = Guid.NewGuid() },
+                    new Dataset { Slug = "conflicting-dataset", CreationDate = DateTime.Now, InternalRef = Guid.NewGuid() }
+                }
+            };
+
+            var destOrg = new Organization
+            {
+                Slug = "dest-org",
+                Name = "Destination Organization",
+                CreationDate = DateTime.Now,
+                Description = "Destination organization for testing",
+                IsPublic = false,
+                OwnerId = "admin-id",
+                Datasets = new List<Dataset>
+                {
+                    new Dataset { Slug = "conflicting-dataset", CreationDate = DateTime.Now, InternalRef = Guid.NewGuid() }
+                }
+            };
+
+            context.Organizations.AddRange(sourceOrg, destOrg);
+            context.SaveChanges();
+        }
+
+        return new RegistryContext(options);
+    }
+
+    #endregion
+
+    #endregion
 
 
     #region Test Data
@@ -490,6 +1192,7 @@ public class DatasetManagerTest : TestBase
       ""Password"": ""password""
     },
     ""DdbStoragePath"": ""./Data/Ddb"",
+    ""DatasetsPath"": ""./test-datasets"",
     ""TempPath"": ""./temp"",
     ""DdbPath"": ""./ddb""
 }

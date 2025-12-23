@@ -11,6 +11,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Moq;
 using NUnit.Framework;
+using Registry.Adapters;
 using Registry.Ports;
 using Registry.Ports.DroneDB;
 using Registry.Test.Common;
@@ -42,6 +43,7 @@ public class SystemManagerTest : TestBase
     private Mock<ICacheManager> _cacheManagerMock = null!;
     private ILogger<SystemManager> _logger = null!;
     private AppSettings _settings = null!;
+    private IFileSystem _fileSystem = null!;
 
     [SetUp]
     public void Setup()
@@ -54,6 +56,7 @@ public class SystemManagerTest : TestBase
         _backgroundJobMock = new Mock<IBackgroundJobsProcessor>();
         _cacheManagerMock = new Mock<ICacheManager>();
         _logger = CreateTestLogger<SystemManager>();
+        _fileSystem = new FileSystem();
 
         _settings = new AppSettings
         {
@@ -241,7 +244,8 @@ public class SystemManagerTest : TestBase
             buildPendingService,
             _httpClientFactoryMock.Object,
             _backgroundJobMock.Object,
-            _cacheManagerMock.Object
+            _cacheManagerMock.Object,
+            _fileSystem
         );
     }
 }
@@ -260,6 +264,7 @@ public class SystemManagerImportIntegrationTest : TestBase
     private const string TestDataset = "brighton-beach";
 
     private ILogger<SystemManager> _logger = null!;
+    private IFileSystem _fileSystem = null!;
     private string _tempDatasetsPath = null!;
     private string _tempPath = null!;
 
@@ -267,6 +272,7 @@ public class SystemManagerImportIntegrationTest : TestBase
     public void Setup()
     {
         _logger = CreateTestLogger<SystemManager>();
+        _fileSystem = new FileSystem();
 
         // Create temp directories for test
         _tempDatasetsPath = Path.Combine(Path.GetTempPath(), $"registry-test-{Guid.NewGuid()}");
@@ -341,7 +347,8 @@ public class SystemManagerImportIntegrationTest : TestBase
             buildPendingService,
             httpClientFactory,
             backgroundJobMock.Object,
-            cacheManagerMock.Object
+            cacheManagerMock.Object,
+            _fileSystem
         );
     }
 

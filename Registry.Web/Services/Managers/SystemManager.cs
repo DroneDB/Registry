@@ -43,11 +43,13 @@ public class SystemManager : ISystemManager
     private readonly IHttpClientFactory _httpClientFactory;
     private readonly IBackgroundJobsProcessor _backgroundJob;
     private readonly ICacheManager _cacheManager;
+    private readonly IFileSystem _fileSystem;
 
     public SystemManager(IAuthManager authManager,
         RegistryContext context, IDdbManager ddbManager, ILogger<SystemManager> logger,
         IObjectsManager objectManager, IOptions<AppSettings> settings, BuildPendingService buildPendingService,
-        IHttpClientFactory httpClientFactory, IBackgroundJobsProcessor backgroundJob, ICacheManager cacheManager)
+        IHttpClientFactory httpClientFactory, IBackgroundJobsProcessor backgroundJob, ICacheManager cacheManager,
+        IFileSystem fileSystem)
     {
         _authManager = authManager;
         _context = context;
@@ -59,6 +61,7 @@ public class SystemManager : ISystemManager
         _httpClientFactory = httpClientFactory;
         _backgroundJob = backgroundJob;
         _cacheManager = cacheManager;
+        _fileSystem = fileSystem;
     }
 
     public async Task<CleanupDatasetResultDto> CleanupEmptyDatasets()
@@ -599,7 +602,7 @@ public class SystemManager : ISystemManager
             if (!IsValidZipFile(tempZipPath))
             {
                 // Try to read content to provide better error message
-                var content = await File.ReadAllTextAsync(tempZipPath);
+                var content = await _fileSystem.ReadAllTextAsync(tempZipPath);
                 var truncatedContent = content.Length > 500 ? content[..500] + "..." : content;
                 _logger.LogWarning("Downloaded file is not a valid ZIP. Content: {Content}", truncatedContent);
 
@@ -649,14 +652,14 @@ public class SystemManager : ISystemManager
 
             // Get destination path - we'll extract directly here to avoid double copy
             var destPath = Path.Combine(_settings.DatasetsPath, destOrg, dataset.InternalRef.ToString());
-            Directory.CreateDirectory(destPath);
+            _fileSystem.FolderCreate(destPath);
 
             _logger.LogInformation("Preparing destination {DestPath}", destPath);
 
             // Remove all existing content (including .ddb folder if it exists)
             // This is necessary because we want to import the complete .ddb from the source
-            var destDirs = Directory.GetDirectories(destPath);
-            var destFiles = Directory.GetFiles(destPath);
+            var destDirs = _fileSystem.GetDirectories(destPath);
+            var destFiles = _fileSystem.GetFiles(destPath);
 
             if (destDirs.Length > 0 || destFiles.Length > 0)
             {
@@ -664,12 +667,12 @@ public class SystemManager : ISystemManager
                     destDirs.Length, destFiles.Length);
                 foreach (var dir in destDirs)
                 {
-                    Directory.Delete(dir, true);
+                    _fileSystem.FolderDelete(dir, true);
                 }
 
                 foreach (var file in destFiles)
                 {
-                    File.Delete(file);
+                    _fileSystem.Delete(file);
                 }
             }
 
@@ -683,8 +686,8 @@ public class SystemManager : ISystemManager
             _logger.LogInformation("Extraction completed in {Duration:N1} seconds", extractDuration.TotalSeconds);
 
             // Count files for statistics (after extraction)
-            var files = Directory.GetFiles(destPath, "*", SearchOption.AllDirectories);
-            var totalSize = files.Sum(f => new FileInfo(f).Length);
+            var files = _fileSystem.GetFiles(destPath, "*", SearchOption.AllDirectories);
+            var totalSize = files.Sum(f => _fileSystem.GetFileSize(f));
 
             _logger.LogInformation("Extracted {FileCount} files, total size {Size:N0} bytes ({SizeMB:N2} MB)",
                 files.Length, totalSize, totalSize / 1024.0 / 1024.0);
@@ -724,10 +727,10 @@ public class SystemManager : ISystemManager
             // Cleanup temporary ZIP file
             try
             {
-                if (tempZipPath != null && File.Exists(tempZipPath))
+                if (tempZipPath != null && _fileSystem.Exists(tempZipPath))
                 {
                     _logger.LogDebug("Cleaning up temp ZIP file");
-                    File.Delete(tempZipPath);
+                    _fileSystem.Delete(tempZipPath);
                 }
             }
             catch (Exception ex)
@@ -843,7 +846,7 @@ public class SystemManager : ISystemManager
 
             // Get destination path
             var destPath = Path.Combine(_settings.DatasetsPath, destOrg, dataset.InternalRef.ToString());
-            Directory.CreateDirectory(destPath);
+            _fileSystem.FolderCreate(destPath);
 
             // Get DDB instance for hash comparison and adding files
             var ddb = _ddbManager.Get(destOrg, dataset.InternalRef);
@@ -904,7 +907,7 @@ public class SystemManager : ISystemManager
                     try
                     {
                         // OPTIMIZATION 1 (continued): Use pre-fetched hash dictionary for skip check
-                        if (File.Exists(task.DestinationPath) &&
+                        if (_fileSystem.Exists(task.DestinationPath) &&
                             existingHashes.TryGetValue(task.Entry.Path, out var existingHash) &&
                             existingHash == task.Entry.Hash)
                         {
@@ -1157,12 +1160,12 @@ public class SystemManager : ISystemManager
             if (string.IsNullOrEmpty(entry.Name))
             {
                 // Directory entry
-                Directory.CreateDirectory(destinationPath);
+                _fileSystem.FolderCreate(destinationPath);
             }
             else
             {
                 // File entry - ensure parent directory exists
-                Directory.CreateDirectory(Path.GetDirectoryName(destinationPath)!);
+                _fileSystem.EnsureParentFolderExists(destinationPath);
                 entry.ExtractToFile(destinationPath, overwrite: true);
             }
 
@@ -1183,11 +1186,11 @@ public class SystemManager : ISystemManager
     /// <summary>
     /// Checks if a file is a valid ZIP by verifying the magic bytes (PK header)
     /// </summary>
-    private static bool IsValidZipFile(string filePath)
+    private bool IsValidZipFile(string filePath)
     {
         try
         {
-            using var stream = File.OpenRead(filePath);
+            using var stream = _fileSystem.OpenRead(filePath);
             if (stream.Length < 4)
                 return false;
 
@@ -1280,29 +1283,5 @@ public class SystemManager : ISystemManager
             ErrorCount = entries.Count(e => !e.Success),
             Entries = entries
         };
-    }
-
-    /// <summary>
-    /// Recursively copies a directory and all its contents.
-    /// </summary>
-    private static void CopyDirectoryRecursive(string sourcePath, string destPath)
-    {
-        Directory.CreateDirectory(destPath);
-
-        // Copy all files
-        foreach (var file in Directory.GetFiles(sourcePath))
-        {
-            var fileName = Path.GetFileName(file);
-            var destFile = Path.Combine(destPath, fileName);
-            File.Copy(file, destFile, true);
-        }
-
-        // Recursively copy subdirectories
-        foreach (var dir in Directory.GetDirectories(sourcePath))
-        {
-            var dirName = Path.GetFileName(dir);
-            var destDir = Path.Combine(destPath, dirName);
-            CopyDirectoryRecursive(dir, destDir);
-        }
     }
 }

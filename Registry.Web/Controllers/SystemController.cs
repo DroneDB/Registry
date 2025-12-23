@@ -2,6 +2,7 @@
 using Microsoft.AspNetCore.Mvc;
 using System;
 using System.Collections.Generic;
+using System.ComponentModel.DataAnnotations;
 using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
@@ -23,11 +24,19 @@ namespace Registry.Web.Controllers;
 public class SystemController : ControllerBaseEx
 {
     private readonly ISystemManager _systemManager;
+    private readonly IDatasetsManager _datasetsManager;
+    private readonly IOrganizationsManager _organizationsManager;
     private readonly ILogger<SystemController> _logger;
 
-    public SystemController(ISystemManager systemManager, ILogger<SystemController> logger)
+    public SystemController(
+        ISystemManager systemManager,
+        IDatasetsManager datasetsManager,
+        IOrganizationsManager organizationsManager,
+        ILogger<SystemController> logger)
     {
         _systemManager = systemManager;
+        _datasetsManager = datasetsManager;
+        _organizationsManager = organizationsManager;
         _logger = logger;
     }
 
@@ -204,6 +213,85 @@ public class SystemController : ControllerBaseEx
             _logger.LogError(ex, "Exception in System controller ImportOrganization('{SourceOrg}' from '{SourceUrl}')",
                 request?.SourceOrganization, request?.SourceRegistryUrl);
 
+            return ExceptionResult(ex);
+        }
+    }
+
+    /// <summary>
+    /// Moves one or more datasets from one organization to another.
+    /// Only administrators can perform this operation.
+    /// </summary>
+    /// <param name="sourceOrgSlug">The source organization slug.</param>
+    /// <param name="request">The move request containing dataset slugs and destination organization.</param>
+    /// <returns>Results of the move operation for each dataset.</returns>
+    [HttpPost("move-datasets", Name = nameof(SystemController) + "." + nameof(MoveDatasets))]
+    [ProducesResponseType(typeof(IEnumerable<MoveDatasetResultDto>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status409Conflict)]
+    public async Task<IActionResult> MoveDatasets(
+        [FromBody, Required] MoveDatasetDto request)
+    {
+        try
+        {
+            _logger.LogDebug("System controller MoveDatasets('{SourceOrgSlug}', datasets: [{DatasetSlugs}], destination: '{DestOrgSlug}', conflictResolution: {ConflictResolution})",
+                request?.SourceOrgSlug,
+                string.Join(", ", request?.DatasetSlugs ?? []),
+                request?.DestinationOrgSlug,
+                request?.ConflictResolution);
+
+            var results = await _datasetsManager.MoveToOrganization(
+                request?.SourceOrgSlug,
+                request?.DatasetSlugs,
+                request?.DestinationOrgSlug,
+                request!.ConflictResolution);
+
+            return Ok(results);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Exception in System controller MoveDatasets");
+            return ExceptionResult(ex);
+        }
+    }
+
+    /// <summary>
+    /// Merges a source organization into a destination organization.
+    /// All datasets from the source will be moved to the destination.
+    /// Only administrators can perform this operation.
+    /// </summary>
+    /// <param name="sourceOrgSlug">The source organization slug (will be merged into the destination).</param>
+    /// <param name="request">The merge request containing destination organization and options.</param>
+    /// <returns>Result of the merge operation.</returns>
+    [HttpPost("merge-organizations", Name = nameof(SystemController) + "." + nameof(MergeOrganizations))]
+    [ProducesResponseType(typeof(MergeOrganizationResultDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status409Conflict)]
+    public async Task<IActionResult> MergeOrganizations(
+        [FromBody, Required] MergeOrganizationDto request)
+    {
+        try
+        {
+            _logger.LogDebug("System controller MergeOrganizations('{SourceOrgSlug}' -> '{DestOrgSlug}', conflictResolution: {ConflictResolution}, deleteSource: {DeleteSource})",
+                request?.SourceOrgSlug,
+                request?.DestinationOrgSlug,
+                request?.ConflictResolution,
+                request?.DeleteSourceOrganization);
+
+            var result = await _organizationsManager.Merge(
+                request?.SourceOrgSlug,
+                request?.DestinationOrgSlug,
+                request!.ConflictResolution,
+                request!.DeleteSourceOrganization);
+
+            return Ok(result);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Exception in System controller MergeOrganizations");
             return ExceptionResult(ex);
         }
     }

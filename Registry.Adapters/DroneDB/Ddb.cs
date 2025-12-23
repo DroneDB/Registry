@@ -18,6 +18,7 @@ namespace Registry.Adapters.DroneDB;
 
 public class DDB : IDDB
 {
+    private static readonly IFileSystem FileSystem = new FileSystem();
     private IDdbWrapper _ddbWrapper;
 
     [JsonIgnore] public string Version => _ddbWrapper.GetVersion();
@@ -215,7 +216,7 @@ public class DDB : IDDB
 
     public string GetTmpFolder(string path)
     {
-        string fullPath = Path.Combine(DatasetFolderPath, IDDB.DatabaseFolderName, IDDB.TmpFolderName, path);
+        var fullPath = Path.Combine(DatasetFolderPath, IDDB.DatabaseFolderName, IDDB.TmpFolderName, path);
         if (!Directory.Exists(fullPath)) Directory.CreateDirectory(fullPath);
         return fullPath;
     }
@@ -270,10 +271,7 @@ public class DDB : IDDB
 
         var entry = info.FirstOrDefault();
 
-        if (entry == null)
-            throw new InvalidOperationException("Cannot get ddb info of dataset");
-
-        return entry;
+        return entry ?? throw new InvalidOperationException("Cannot get ddb info of dataset");
     }
 
     public byte[] GenerateThumbnail(string imagePath, int size)
@@ -322,8 +320,10 @@ public class DDB : IDDB
             finally
             {
                 if (folderPath != null && Directory.Exists(folderPath))
-                    if (!CommonUtils.SafeDeleteFolder(folderPath))
+                {
+                    if (!FileSystem.SafeFolderDelete(folderPath))
                         Debug.WriteLine($"Cannot delete folder '{folderPath}'");
+                }
             }
         }
         else
@@ -336,7 +336,7 @@ public class DDB : IDDB
 
                 stream.SafeReset();
 
-                CommonUtils.EnsureSafePath(filePath);
+                FileSystem.EnsureParentFolderExists(filePath);
 
                 using (var writer = File.OpenWrite(filePath))
                 {
@@ -352,8 +352,10 @@ public class DDB : IDDB
             finally
             {
                 if (filePath != null && File.Exists(filePath))
-                    if (!CommonUtils.SafeDelete(filePath))
+                {
+                    if (!FileSystem.SafeDelete(filePath))
                         Debug.WriteLine($"Cannot delete file '{filePath}'");
+                }
             }
         }
     }

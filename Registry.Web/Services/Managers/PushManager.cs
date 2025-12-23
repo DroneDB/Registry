@@ -38,11 +38,13 @@ public class PushManager : IPushManager
     private readonly AppSettings _settings;
     private readonly IBackgroundJobsProcessor _backgroundJob;
     private readonly ICacheManager _cacheManager;
+    private readonly IFileSystem _fileSystem;
 
     public PushManager(IUtils utils, IDdbManager ddbManager,
         IObjectsManager objectsManager, ILogger<PushManager> logger, IDatasetsManager datasetsManager,
         IAuthManager authManager, IDdbWrapper ddbWrapper,
-        IBackgroundJobsProcessor backgroundJob, IOptions<AppSettings> settings, ICacheManager cacheManager)
+        IBackgroundJobsProcessor backgroundJob, IOptions<AppSettings> settings, ICacheManager cacheManager,
+        IFileSystem fileSystem)
     {
         _utils = utils;
         _ddbManager = ddbManager;
@@ -54,6 +56,7 @@ public class PushManager : IPushManager
         _backgroundJob = backgroundJob;
         _settings = settings.Value;
         _cacheManager = cacheManager;
+        _fileSystem = fileSystem;
     }
 
     public async Task<PushInitResultDto> Init(string orgSlug, string dsSlug, string checksum, StampDto stamp)
@@ -123,9 +126,9 @@ public class PushManager : IPushManager
         var baseTempFolder = ddb.GetTmpFolder("push-" + uuid);
 
         // Save incoming stamp as well as our stamp in temp folder
-        await File.WriteAllTextAsync(Path.Combine(baseTempFolder, StampFileName),
+        await _fileSystem.WriteAllTextAsync(Path.Combine(baseTempFolder, StampFileName),
             JsonConvert.SerializeObject(stamp));
-        await File.WriteAllTextAsync(Path.Combine(baseTempFolder, OurStampFileName),
+        await _fileSystem.WriteAllTextAsync(Path.Combine(baseTempFolder, OurStampFileName),
             JsonConvert.SerializeObject(ourStamp));
 
         // Return missing files list (excluding folders)
@@ -164,21 +167,21 @@ public class PushManager : IPushManager
 
         var baseTempFolder = ddb.GetTmpFolder("push-" + token);
 
-        if (!Directory.Exists(baseTempFolder))
+        if (!_fileSystem.FolderExists(baseTempFolder))
             throw new InvalidOperationException("Cannot upload file before initializing push");
 
         var addTempFolder = Path.Combine(baseTempFolder, AddsTempFolder);
-        Directory.CreateDirectory(addTempFolder);
+        _fileSystem.FolderCreate(addTempFolder);
 
         // Calculate new file path
         var filePath = Path.Combine(addTempFolder, path);
 
         // Ensure subfolder exists
         var parentPath = Path.GetDirectoryName(filePath);
-        if (parentPath != null) Directory.CreateDirectory(parentPath);
+        if (parentPath != null) _fileSystem.FolderCreate(parentPath);
 
         // Save file in temp folder
-        await using var file = File.OpenWrite(filePath);
+        await using var file = _fileSystem.OpenWrite(filePath);
         await stream.CopyToAsync(file);
     }
 
@@ -196,7 +199,7 @@ public class PushManager : IPushManager
 
         var baseTempFolder = ddb.GetTmpFolder("push-" + token);
 
-        if (!Directory.Exists(baseTempFolder))
+        if (!_fileSystem.FolderExists(baseTempFolder))
             throw new InvalidOperationException("Cannot save meta before initializing push");
 
         var metaFile = Path.Combine(baseTempFolder, MetaFile);
@@ -205,7 +208,7 @@ public class PushManager : IPushManager
         JsonConvert.DeserializeObject<List<MetaDump>>(meta);
 
         // Save file
-        await File.WriteAllTextAsync(metaFile, meta);
+        await _fileSystem.WriteAllTextAsync(metaFile, meta);
     }
 
     public async Task Commit(string orgSlug, string dsSlug, string token)
@@ -224,14 +227,14 @@ public class PushManager : IPushManager
         var metaFile = Path.Combine(baseTempFolder, MetaFile);
 
         // Check push folder integrity
-        if (!File.Exists(stampFilePath))
+        if (!_fileSystem.Exists(stampFilePath))
             throw new InvalidOperationException("Stamp not found");
 
-        if (!File.Exists(ourStampFilePath))
+        if (!_fileSystem.Exists(ourStampFilePath))
             throw new InvalidOperationException("Our stamp not found");
 
-        var stamp = JsonConvert.DeserializeObject<Stamp>(await File.ReadAllTextAsync(stampFilePath));
-        var ourStamp = JsonConvert.DeserializeObject<Stamp>(await File.ReadAllTextAsync(ourStampFilePath));
+        var stamp = JsonConvert.DeserializeObject<Stamp>(await _fileSystem.ReadAllTextAsync(stampFilePath));
+        var ourStamp = JsonConvert.DeserializeObject<Stamp>(await _fileSystem.ReadAllTextAsync(ourStampFilePath));
 
         if (ourStamp == null)
             throw new InvalidOperationException("Our stamp is invalid (cannot deserialize)");
@@ -254,14 +257,14 @@ public class PushManager : IPushManager
         var _ = _ddbWrapper.ComputeDeltaLocals(delta, ddb.DatasetFolderPath, addTempFolder);
 
         foreach (var add in delta.Adds.Where(item => item.Hash.Length > 0))
-            if (!File.Exists(Path.Combine(addTempFolder, add.Path)))
+            if (!_fileSystem.Exists(Path.Combine(addTempFolder, add.Path)))
                 throw new InvalidOperationException($"Cannot commit: missing '{add.Path}'");
 
         // Read meta dump
         string metaDump = null;
-        if (File.Exists(metaFile))
+        if (_fileSystem.Exists(metaFile))
         {
-            metaDump = await File.ReadAllTextAsync(metaFile);
+            metaDump = await _fileSystem.ReadAllTextAsync(metaFile);
         }
 
         // Applies delta
@@ -274,7 +277,7 @@ public class PushManager : IPushManager
         }
 
         // Delete temp folder
-        Directory.Delete(baseTempFolder, true);
+        _fileSystem.FolderDelete(baseTempFolder, true);
 
         // Build items
         var user = await _authManager.GetCurrentUser();
@@ -293,7 +296,7 @@ public class PushManager : IPushManager
         // If we enqueued any builds, mark dataset as having pending
         if (hasBuildableFiles)
             await SetDatasetHasPendingBuilds(orgSlug, dsSlug, true);
-        
+
         if (ddb.IsBuildPending())
         {
             _logger.LogInformation("Items are pending build, retriggering build");
