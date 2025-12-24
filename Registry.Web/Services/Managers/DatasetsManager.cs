@@ -1,14 +1,17 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 using Registry.Adapters.DroneDB;
 using Registry.Ports;
 using Registry.Web.Data;
 using Registry.Web.Data.Models;
 using Registry.Web.Exceptions;
+using Registry.Web.Models.Configuration;
 using Registry.Web.Models.DTO;
 using Registry.Web.Services.Ports;
 using Registry.Web.Utilities;
@@ -25,6 +28,8 @@ public class DatasetsManager : IDatasetsManager
     private readonly IDdbManager _ddbManager;
     private readonly IAuthManager _authManager;
     private readonly ICacheManager _cacheManager;
+    private readonly IFileSystem _fileSystem;
+    private readonly AppSettings _settings;
 
     public DatasetsManager(
         RegistryContext context,
@@ -34,7 +39,9 @@ public class DatasetsManager : IDatasetsManager
         IStacManager stacManager,
         IDdbManager ddbManager,
         IAuthManager authManager,
-        ICacheManager cacheManager)
+        ICacheManager cacheManager,
+        IFileSystem fileSystem,
+        IOptions<AppSettings> settings)
     {
         _context = context;
         _utils = utils;
@@ -44,6 +51,8 @@ public class DatasetsManager : IDatasetsManager
         _ddbManager = ddbManager;
         _authManager = authManager;
         _cacheManager = cacheManager;
+        _fileSystem = fileSystem;
+        _settings = settings.Value;
     }
 
     public async Task<IEnumerable<DatasetDto>> List(string orgSlug)
@@ -153,7 +162,7 @@ public class DatasetsManager : IDatasetsManager
         var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
         var meta = ddb.Meta.GetSafe();
 
-        meta.Name = dataset.Name ?? dataset.Slug;
+        meta.Name = string.IsNullOrWhiteSpace(dataset.Name) ? dataset.Slug : dataset.Name;
 
         if (dataset.Visibility.HasValue)
             meta.Visibility = dataset.Visibility.Value;
@@ -289,5 +298,146 @@ public class DatasetsManager : IDatasetsManager
             throw new UnauthorizedException("The current user cannot access this dataset");
 
         return _ddbManager.Get(orgSlug, ds.InternalRef).GetStamp().ToDto();
+    }
+
+    public async Task<IEnumerable<MoveDatasetResultDto>> MoveToOrganization(
+        string sourceOrgSlug,
+        string[] datasetSlugs,
+        string destOrgSlug,
+        ConflictResolutionStrategy conflictResolution = ConflictResolutionStrategy.HaltOnConflict)
+    {
+        // Only admins can perform this operation
+        if (!await _authManager.IsUserAdmin())
+            throw new UnauthorizedException("Only administrators can move datasets between organizations");
+
+        if (string.IsNullOrWhiteSpace(sourceOrgSlug))
+            throw new BadRequestException("Source organization slug is required");
+
+        if (string.IsNullOrWhiteSpace(destOrgSlug))
+            throw new BadRequestException("Destination organization slug is required");
+
+        if (datasetSlugs == null || datasetSlugs.Length == 0)
+            throw new BadRequestException("At least one dataset slug is required");
+
+        if (sourceOrgSlug == destOrgSlug)
+            throw new BadRequestException("Source and destination organizations cannot be the same");
+
+        var sourceOrg = _utils.GetOrganization(sourceOrgSlug, withTracking: true);
+        var destOrg = _utils.GetOrganization(destOrgSlug, withTracking: true);
+
+        var results = new List<MoveDatasetResultDto>();
+
+        // Get existing datasets in destination for conflict detection
+        var existingDestDatasets = await _context.Datasets
+            .AsNoTracking()
+            .Where(d => d.Organization.Slug == destOrgSlug)
+            .Select(d => d.Slug)
+            .ToListAsync();
+
+        foreach (var dsSlug in datasetSlugs)
+        {
+            var result = new MoveDatasetResultDto
+            {
+                OriginalSlug = dsSlug,
+                NewSlug = dsSlug
+            };
+
+            try
+            {
+                var dataset = _utils.GetDataset(sourceOrgSlug, dsSlug, safe: true, withTracking: true);
+
+                if (dataset == null)
+                {
+                    result.Success = false;
+                    result.Error = $"Dataset '{dsSlug}' not found in organization '{sourceOrgSlug}'";
+                    results.Add(result);
+                    continue;
+                }
+
+                // Check for slug conflict in destination
+                var targetSlug = dsSlug;
+                var conflictExists = existingDestDatasets.Contains(dsSlug, StringComparer.OrdinalIgnoreCase);
+
+                if (conflictExists)
+                {
+                    switch (conflictResolution)
+                    {
+                        case ConflictResolutionStrategy.HaltOnConflict:
+                            result.Success = false;
+                            result.Error = $"Dataset '{dsSlug}' already exists in destination organization '{destOrgSlug}'";
+                            results.Add(result);
+                            continue;
+
+                        case ConflictResolutionStrategy.Overwrite:
+                            // Delete existing dataset in destination
+                            _logger.LogInformation("Overwriting existing dataset '{DsSlug}' in organization '{DestOrgSlug}'", dsSlug, destOrgSlug);
+                            await Delete(destOrgSlug, dsSlug);
+                            existingDestDatasets.Remove(dsSlug);
+                            break;
+
+                        case ConflictResolutionStrategy.Rename:
+                            // Generate a unique name
+                            var counter = 1;
+                            targetSlug = $"{dsSlug}_{counter}";
+                            while (existingDestDatasets.Contains(targetSlug, StringComparer.OrdinalIgnoreCase))
+                            {
+                                counter++;
+                                targetSlug = $"{dsSlug}_{counter}";
+                            }
+                            result.NewSlug = targetSlug;
+                            _logger.LogInformation("Renaming dataset '{DsSlug}' to '{TargetSlug}' to avoid conflict", dsSlug, targetSlug);
+                            break;
+                        default:
+                            throw new ArgumentOutOfRangeException(nameof(conflictResolution), conflictResolution, null);
+                    }
+                }
+
+                // Move the physical files using copy + delete strategy
+                var sourcePath = Path.Combine(_settings.DatasetsPath, sourceOrgSlug, dataset.InternalRef.ToString());
+                var destPath = Path.Combine(_settings.DatasetsPath, destOrgSlug, dataset.InternalRef.ToString());
+
+                if (_fileSystem.FolderExists(sourcePath))
+                {
+                    _logger.LogInformation("Copying dataset files from '{SourcePath}' to '{DestPath}'", sourcePath, destPath);
+
+                    // Copy all files and subdirectories
+                    _fileSystem.FolderCopy(sourcePath, destPath);
+                }
+
+                // Update the database record
+                dataset.Organization = destOrg;
+                dataset.Slug = targetSlug;
+
+                await _context.SaveChangesAsync();
+
+                // Add to existing list to avoid future conflicts in this batch
+                existingDestDatasets.Add(targetSlug);
+
+                // Delete source files after successful database update
+                if (_fileSystem.FolderExists(sourcePath))
+                {
+                    _logger.LogInformation("Deleting source files at '{SourcePath}'", sourcePath);
+                    _fileSystem.FolderDelete(sourcePath, true);
+                }
+
+                // Invalidate caches
+                await _stacManager.ClearCache(dataset);
+
+                result.Success = true;
+                _logger.LogInformation("Successfully moved dataset '{DsSlug}' from '{SourceOrgSlug}' to '{DestOrgSlug}'",
+                    dsSlug, sourceOrgSlug, destOrgSlug);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error moving dataset '{DsSlug}' from '{SourceOrgSlug}' to '{DestOrgSlug}'",
+                    dsSlug, sourceOrgSlug, destOrgSlug);
+                result.Success = false;
+                result.Error = ex.Message;
+            }
+
+            results.Add(result);
+        }
+
+        return results;
     }
 }

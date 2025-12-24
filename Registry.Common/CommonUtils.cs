@@ -126,18 +126,6 @@ public static class CommonUtils
         }
     }
 
-    /// <summary>
-    /// Creates the parent folder if it does not exist
-    /// </summary>
-    /// <param name="path"></param>
-    public static void EnsureSafePath(string path)
-    {
-        var folder = Path.GetDirectoryName(path);
-
-        if (folder != null)
-            Directory.CreateDirectory(folder);
-    }
-
     public static void SmartExtractFolder(string archive, string dest, bool overwrite = true)
     {
         var ext = Path.GetExtension(archive).ToLowerInvariant();
@@ -235,13 +223,6 @@ public static class CommonUtils
         return data;
     }
 
-    // Credit: https://stackoverflow.com/questions/12166404/how-do-i-get-folder-size-in-c
-    public static long GetDirectorySize(string folderPath)
-    {
-        DirectoryInfo di = new DirectoryInfo(folderPath);
-        return di.EnumerateFiles("*", SearchOption.AllDirectories).Sum(fi => fi.Length);
-    }
-
     public static StorageInfo GetStorageInfo(string path)
     {
         var f = new FileInfo(path);
@@ -253,82 +234,6 @@ public static class CommonUtils
                 string.Equals(drv.Name, drive, StringComparison.OrdinalIgnoreCase));
 
         return info == null ? null : new StorageInfo(info.TotalSize, info.AvailableFreeSpace);
-    }
-
-    public static bool SafeDelete(string path)
-    {
-        try
-        {
-            File.Delete(path);
-            return true;
-        }
-        catch
-        {
-            return false;
-        }
-    }
-
-    public static bool SafeCopy(string source, string dest, bool overwrite = true)
-    {
-        try
-        {
-            File.Copy(source, dest, overwrite);
-            return true;
-        }
-        catch
-        {
-            return false;
-        }
-    }
-
-    public static bool SafeDeleteFolder(string path)
-    {
-        try
-        {
-            Directory.Delete(path, true);
-            return true;
-        }
-        catch
-        {
-            return false;
-        }
-    }
-
-    public static void RemoveEmptyFolders(string folder, bool removeSelf = false)
-    {
-        try
-        {
-            if (!Directory.Exists(folder)) return;
-
-            // Recursive call
-            Directory.EnumerateDirectories(folder).ToList().ForEach(f => RemoveEmptyFolders(f, true));
-
-            // If not empty we don't have to delete it
-            if (Directory.EnumerateFileSystemEntries(folder).Any()) return;
-
-            if (!removeSelf) return;
-
-            try
-            {
-                Directory.Delete(folder);
-            }
-            catch (UnauthorizedAccessException)
-            {
-                //
-            }
-            catch (DirectoryNotFoundException)
-            {
-                //
-            }
-        }
-        catch (UnauthorizedAccessException)
-        {
-            //
-        }
-        catch (DirectoryNotFoundException)
-        {
-            //
-        }
     }
 
     /// <summary>
@@ -346,48 +251,6 @@ public static class CommonUtils
         var file = Path.Combine(Path.GetTempPath(), "temp-files", RandomString(16));
 
         return (file, new BufferedStream(File.Open(file, FileMode.CreateNew, FileAccess.ReadWrite), bufferSize));
-    }
-
-    public static string[] SafeTreeDelete(string baseTempFolder, int rounds = 3, int delay = 500)
-    {
-        var entries = new List<string>(
-            Directory.EnumerateFileSystemEntries(baseTempFolder, "*", SearchOption.AllDirectories));
-
-        for (var n = 0; n < rounds; n++)
-        {
-            foreach (var entry in entries.ToArray())
-            {
-                try
-                {
-                    if (Directory.Exists(entry))
-                    {
-                        Directory.Delete(entry, true);
-                        entries.Remove(entry);
-                        continue;
-                    }
-
-                    if (File.Exists(entry))
-                    {
-                        File.Delete(entry);
-                        entries.Remove(entry);
-                        continue;
-                    }
-
-                    entries.Remove(entry);
-                }
-                catch (Exception ex)
-                {
-                    Debug.WriteLine("Exception: " + ex.Message);
-                }
-            }
-
-            if (entries.Count == 0)
-                return [];
-
-            Thread.Sleep(delay);
-        }
-
-        return entries.ToArray();
     }
 
     private static readonly HashSet<string> AddCompressibleMimeTypes =
@@ -545,47 +408,6 @@ public static class CommonUtils
 
         return null;
     }*/
-
-    public static async Task<FileStream> WaitForFile(string fullPath, FileMode mode, FileAccess access,
-        FileShare share,
-        int delay = 50, int retries = 1200)
-    {
-        for (var numTries = 0; numTries < retries; numTries++)
-        {
-            FileStream fs = null;
-            try
-            {
-                fs = new FileStream(fullPath, mode, access, share);
-                return fs;
-            }
-            catch (IOException)
-            {
-                if (fs != null)
-                {
-                    await fs.DisposeAsync();
-                }
-
-                await Task.Delay(delay); // Thread.Sleep (50);
-            }
-        }
-
-        return null;
-    }
-
-    public static bool IsFileAccessable(string path)
-    {
-        try
-        {
-            if (!File.Exists(path)) return false;
-            using var fs = File.Open(path, FileMode.Open, FileAccess.Read, FileShare.None);
-            return true;
-        }
-        catch
-        {
-            return false;
-        }
-    }
-
 
     public static void WriteLineColor(string text, ConsoleColor color)
     {

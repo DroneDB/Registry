@@ -1,8 +1,8 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
-using FluentAssertions;
+using Shouldly;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
@@ -74,7 +74,7 @@ public class StacManagerTest : TestBase
 
         var list = (await organizationsManager.List()).ToArray();
 
-        list.Should().HaveCount(1);
+        list.Count().ShouldBe(1);
 
         var pub = list.First();
 
@@ -82,11 +82,11 @@ public class StacManagerTest : TestBase
         const string expectedSlug = MagicStrings.PublicOrganizationSlug;
         const string expectedName = "Public";
 
-        pub.Description.Should().Be(expectedDescription);
-        pub.Slug.Should().Be(expectedSlug);
-        pub.IsPublic.Should().BeTrue();
-        pub.Owner.Should().BeNull();
-        pub.Name.Should().Be(expectedName);
+        pub.Description.ShouldBe(expectedDescription);
+        pub.Slug.ShouldBe(expectedSlug);
+        pub.IsPublic.ShouldBeTrue();
+        pub.Owner.ShouldBeNull();
+        pub.Name.ShouldBe(expectedName);
         */
     }
 

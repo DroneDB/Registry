@@ -7,8 +7,9 @@ using Hangfire;
 using Hangfire.Console;
 using Hangfire.Server;
 using Hangfire.Storage;
+using Registry.Adapters;
 using Registry.Adapters.DroneDB;
-using Registry.Common;
+using Registry.Ports;
 using Registry.Ports.DroneDB;
 using Registry.Web.Attributes;
 using Registry.Web.Services.Ports;
@@ -18,6 +19,8 @@ namespace Registry.Web.Utilities;
 
 public static class HangfireUtils
 {
+    private static readonly IFileSystem FileSystem = new FileSystem();
+
     [AutomaticRetry(Attempts = 1, OnAttemptsExceeded = AttemptsExceededAction.Fail)]
     public static void BuildWrapper(IDDB ddb, string path, bool force,
         PerformContext context)
@@ -78,19 +81,17 @@ public static class HangfireUtils
 
         if (File.Exists(path))
         {
-            var res = CommonUtils.SafeDelete(path);
-            writeLine(res ? "File deleted successfully" : "Cannot delete file");
+            var result = FileSystem.SafeDelete(path);
+            writeLine(result ? "File deleted successfully" : "Cannot delete file");
+        }
+        else if (Directory.Exists(path))
+        {
+            var result = FileSystem.SafeFolderDelete(path);
+            writeLine(result ? "Folder deleted successfully" : "Cannot delete folder");
         }
         else
         {
-            if (Directory.Exists(path))
-            {
-                writeLine(!CommonUtils.SafeDeleteFolder(path)
-                    ? "Cannot delete folder"
-                    : "Folder deleted successfully");
-            }
-            else
-                writeLine("No file or folder found");
+            writeLine("No file or folder found");
         }
     }
 
@@ -125,6 +126,7 @@ public static class HangfireUtils
     }
 
     [AutomaticRetry(Attempts = 1, OnAttemptsExceeded = AttemptsExceededAction.Fail)]
+    [JobExpiration(ExpirationTimeoutInMinutes = 60)]
     public static async Task SyncJobIndexStatesWrapper(PerformContext context, IJobIndexQuery jobIndexQuery, IJobIndexWriter jobIndexWriter)
     {
         Action<string> writeLine = context != null ? context.WriteLine : Log.Information;

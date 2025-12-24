@@ -4,7 +4,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text;
-using FluentAssertions;
+using Shouldly;
 using NUnit.Framework;
 using Registry.Common;
 
@@ -27,7 +27,7 @@ public class UtilsTest
             lst.Add(CommonUtils.RandomString(16));
         }
 
-        lst.Count.Should().Be(lst.Distinct().Count());
+        lst.Count.ShouldBe(lst.Distinct().Count());
     }
 
 }

@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
@@ -217,12 +217,12 @@ public class ObjectsManager : IObjectsManager
         await _utils.CheckCurrentUserStorage(stream.Length);
 
         var localFilePath = ddb.GetLocalPath(path);
-        CommonUtils.EnsureSafePath(localFilePath);
+        _fs.EnsureParentFolderExists(localFilePath);
 
         _logger.LogInformation("Local file path is '{LocalFilePath}'", localFilePath);
 
         // Write down the file
-        await using (var localFileStream = File.OpenWrite(localFilePath))
+        await using (var localFileStream = _fs.OpenWrite(localFilePath))
             await stream.CopyToAsync(localFileStream);
 
         _logger.LogInformation("File saved, adding to DDB");
@@ -327,7 +327,7 @@ public class ObjectsManager : IObjectsManager
                 throw new InvalidOperationException(
                     $"Cannot transfer file '{path}' because it has an active build in progress");
         }
-        
+
     }
 
     public async Task Transfer(string sourceOrgSlug, string sourceDsSlug, string sourcePath, string destOrgSlug,
@@ -416,7 +416,7 @@ public class ObjectsManager : IObjectsManager
 
                     _logger.LogInformation("Transferring directory '{Source}' to '{Dest}'", sourcePath, destPath);
 
-                    CommonUtils.EnsureSafePath(destLocalFilePath);
+                    _fs.EnsureParentFolderExists(destLocalFilePath);
 
                     _fs.FolderCopy(sourceLocalFilePath, destLocalFilePath, true);
                     break;
@@ -445,7 +445,7 @@ public class ObjectsManager : IObjectsManager
 
                     _logger.LogInformation("Transferring file '{Source}' to '{Dest}'", sourcePath, destPath);
 
-                    CommonUtils.EnsureSafePath(destLocalFilePath);
+                    _fs.EnsureParentFolderExists(destLocalFilePath);
 
                     _fs.Copy(sourceLocalFilePath, destLocalFilePath, true);
                     break;
@@ -477,7 +477,7 @@ public class ObjectsManager : IObjectsManager
                     destBuildPath = Path.Combine(destDdb.BuildFolderPath, sourceEntry.Hash);
                     _logger.LogInformation("Transferring build folder '{SourceBuildPath}' to '{DestBuildPath}'",
                         sourceBuildPath, destBuildPath);
-                    CommonUtils.EnsureSafePath(destBuildPath);
+                    _fs.EnsureParentFolderExists(destBuildPath);
                     _fs.FolderMove(sourceBuildPath, destBuildPath);
                     buildFolderCopied = true;
                 }
@@ -503,7 +503,7 @@ public class ObjectsManager : IObjectsManager
                         var destBuildPathForEntry = Path.Combine(destDdb.BuildFolderPath, entry.Hash);
                         _logger.LogInformation("Transferring build folder '{SourceBuildPath}' to '{DestBuildPath}'",
                             sourceBuildPath, destBuildPathForEntry);
-                        CommonUtils.EnsureSafePath(destBuildPathForEntry);
+                        _fs.EnsureParentFolderExists(destBuildPathForEntry);
                         _fs.FolderMove(sourceBuildPath, destBuildPathForEntry);
                         buildFolderCopied = true;
                     }
@@ -532,7 +532,7 @@ public class ObjectsManager : IObjectsManager
                 {
                     _logger.LogWarning("Rolling back build folder copy");
                     if (_fs.FolderExists(destBuildPath))
-                        Directory.Delete(destBuildPath, true);
+                        _fs.FolderDelete(destBuildPath, true);
                 }
                 catch (Exception rbEx)
                 {
@@ -561,7 +561,7 @@ public class ObjectsManager : IObjectsManager
                     if (sourceEntry.Type == EntryType.Directory)
                     {
                         if (_fs.FolderExists(destLocalFilePath))
-                            Directory.Delete(destLocalFilePath, true);
+                            _fs.FolderDelete(destLocalFilePath, true);
                     }
                     else
                     {
@@ -624,7 +624,7 @@ public class ObjectsManager : IObjectsManager
 
                 _logger.LogInformation("Moving directory '{Source}' to '{Dest}'", source, dest);
 
-                CommonUtils.EnsureSafePath(destLocalFilePath);
+                _fs.EnsureParentFolderExists(destLocalFilePath);
                 _fs.FolderMove(sourceLocalFilePath, destLocalFilePath);
 
                 break;
@@ -651,7 +651,7 @@ public class ObjectsManager : IObjectsManager
 
                 _logger.LogInformation("Moving file '{Source}' to '{Dest}'", source, dest);
 
-                CommonUtils.EnsureSafePath(destLocalFilePath);
+                _fs.EnsureParentFolderExists(destLocalFilePath);
                 _fs.Move(sourceLocalFilePath, destLocalFilePath);
 
                 break;
@@ -1197,7 +1197,7 @@ public class ObjectsManager : IObjectsManager
             // For directories, we need to calculate the total size of all files recursively
             var localPath = ddb.GetLocalPath(entry.Path);
 
-            if (!Directory.Exists(localPath))
+            if (!_fs.FolderExists(localPath))
             {
                 _logger.LogWarning("Directory not found at '{LocalPath}', returning 0 size", localPath);
                 return 0;
@@ -1205,7 +1205,7 @@ public class ObjectsManager : IObjectsManager
 
             try
             {
-                return await Task.Run(() => CommonUtils.GetDirectorySize(localPath));
+                return await Task.Run(() => _fs.GetDirectorySize(localPath));
             }
             catch (Exception ex)
             {

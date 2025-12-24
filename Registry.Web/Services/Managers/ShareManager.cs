@@ -30,6 +30,7 @@ public class ShareManager : IShareManager
     private readonly IBatchTokenGenerator _batchTokenGenerator;
     private readonly INameGenerator _nameGenerator;
     private readonly RegistryContext _context;
+    private readonly IFileSystem _fileSystem;
     private readonly ChunkedUploadManager _chunkedUploadManager;
     private string TempDirectory => Path.Combine(_settings.Value.CachePath, "ChunkedUploads");
 
@@ -43,7 +44,8 @@ public class ShareManager : IShareManager
         IAuthManager authManager,
         IBatchTokenGenerator batchTokenGenerator,
         INameGenerator nameGenerator,
-        RegistryContext context)
+        RegistryContext context,
+        IFileSystem fileSystem)
     {
         _settings = settings;
         _logger = logger;
@@ -55,10 +57,11 @@ public class ShareManager : IShareManager
         _batchTokenGenerator = batchTokenGenerator;
         _nameGenerator = nameGenerator;
         _context = context;
+        _fileSystem = fileSystem;
 
         // Ensure the temporary directory for chunked uploads exists
-        Directory.CreateDirectory(TempDirectory);
-        _chunkedUploadManager = new ChunkedUploadManager(_logger, TempDirectory);
+        _fileSystem.FolderCreate(TempDirectory);
+        _chunkedUploadManager = new ChunkedUploadManager(_logger, TempDirectory, _fileSystem);
     }
 
     public async Task<BatchDto> GetBatchInfo(string token)
@@ -217,9 +220,9 @@ public class ShareManager : IShareManager
         var tag = parameters.Tag.ToTag();
 
         // No organization requested
-        if (tag.OrganizationSlug == null)
+        if (tag?.OrganizationSlug == null)
         {
-            if (tag.DatasetSlug != null)
+            if (tag?.DatasetSlug != null)
                 throw new BadRequestException("Cannot specify a dataset without an organization");
 
             string orgSlug;
@@ -569,14 +572,14 @@ public class ShareManager : IShareManager
             var tempFilePath = await _chunkedUploadManager.FinalizeChunkedUpload(fileId);
 
             // Check that the temporary file exists
-            if (!File.Exists(tempFilePath))
+            if (!_fileSystem.Exists(tempFilePath))
                 throw new BadRequestException("Failed to assemble chunked file");
 
             _logger.LogInformation("Assembled chunked file at {TempPath}, uploading to dataset", tempFilePath);
 
             // Use the temporary file to upload to the dataset
             UploadResultDto result;
-            using (var fileStream = new FileStream(tempFilePath, FileMode.Open, FileAccess.Read, FileShare.Read))
+            await using (var fileStream = _fileSystem.OpenRead(tempFilePath))
             {
                 var orgSlug = batch.Dataset.Organization.Slug;
                 var dsSlug = batch.Dataset.Slug;

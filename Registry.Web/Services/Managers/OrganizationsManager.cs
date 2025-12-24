@@ -6,6 +6,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Registry.Common;
 using Registry.Web.Data;
+using Registry.Web.Data.Models;
 using Registry.Web.Exceptions;
 using Registry.Web.Identity;
 using Registry.Web.Models.DTO;
@@ -207,5 +208,118 @@ public class OrganizationsManager : IOrganizationsManager
 
         _context.Organizations.Remove(org);
         await _context.SaveChangesAsync();
+    }
+
+    public async Task<MergeOrganizationResultDto> Merge(
+        string sourceOrgSlug,
+        string destOrgSlug,
+        ConflictResolutionStrategy conflictResolution = ConflictResolutionStrategy.HaltOnConflict,
+        bool deleteSourceOrganization = true)
+    {
+        // Only admins can perform this operation
+        if (!await _authManager.IsUserAdmin())
+            throw new UnauthorizedException("Only administrators can merge organizations");
+
+        if (string.IsNullOrWhiteSpace(sourceOrgSlug))
+            throw new BadRequestException("Source organization slug is required");
+
+        if (string.IsNullOrWhiteSpace(destOrgSlug))
+            throw new BadRequestException("Destination organization slug is required");
+
+        if (sourceOrgSlug == destOrgSlug)
+            throw new BadRequestException("Source and destination organizations cannot be the same");
+
+        // Validate public organization cannot be merged
+        if (sourceOrgSlug == MagicStrings.PublicOrganizationSlug)
+            throw new BadRequestException("Cannot merge the public organization");
+
+        var sourceOrg = _utils.GetOrganization(sourceOrgSlug, withTracking: true);
+        var destOrg = _utils.GetOrganization(destOrgSlug, withTracking: true);
+
+        _logger.LogInformation("Starting merge of organization '{SourceOrgSlug}' into '{DestOrgSlug}'",
+            sourceOrgSlug, destOrgSlug);
+
+        var result = new MergeOrganizationResultDto
+        {
+            SourceOrgSlug = sourceOrgSlug,
+            DestinationOrgSlug = destOrgSlug,
+            SourceOrganizationDeleted = false
+        };
+
+        // Get all datasets from source organization
+        var datasetSlugs = sourceOrg.Datasets.Select(d => d.Slug).ToArray();
+
+        if (datasetSlugs.Length > 0)
+        {
+            // Move all datasets to destination organization
+            var moveResults = await _datasetManager.MoveToOrganization(
+                sourceOrgSlug,
+                datasetSlugs,
+                destOrgSlug,
+                conflictResolution);
+
+            result.DatasetResults = moveResults.ToArray();
+            result.DatasetsMovedCount = result.DatasetResults.Count(r => r.Success);
+            result.DatasetsFailedCount = result.DatasetResults.Count(r => !r.Success);
+        }
+        else
+        {
+            result.DatasetResults = [];
+            result.DatasetsMovedCount = 0;
+            result.DatasetsFailedCount = 0;
+        }
+
+        // Transfer OrganizationUsers to destination (avoiding duplicates)
+        var sourceUsers = sourceOrg.Users?.ToList() ?? [];
+        var destUserIds = destOrg.Users?.Select(u => u.UserId).ToHashSet() ?? [];
+
+        foreach (var sourceUser in sourceUsers)
+        {
+            if (destUserIds.Contains(sourceUser.UserId)) continue;
+            
+            // Add user to destination organization
+            var newOrgUser = new OrganizationUser
+            {
+                Organization = destOrg,
+                OrganizationSlug = destOrgSlug,
+                UserId = sourceUser.UserId
+            };
+            destOrg.Users ??= new List<OrganizationUser>();
+            destOrg.Users.Add(newOrgUser);
+            _logger.LogInformation("Transferred user '{UserId}' from '{SourceOrgSlug}' to '{DestOrgSlug}'",
+                sourceUser.UserId, sourceOrgSlug, destOrgSlug);
+        }
+
+        await _context.SaveChangesAsync();
+
+        // Delete source organization if requested and all datasets were moved successfully
+        if (deleteSourceOrganization)
+        {
+            if (result.DatasetsFailedCount == 0)
+            {
+                _logger.LogInformation("Deleting source organization '{SourceOrgSlug}' after successful merge", sourceOrgSlug);
+
+                // Reload the organization to ensure we have the latest state
+                sourceOrg = _utils.GetOrganization(sourceOrgSlug, withTracking: true);
+
+                // Clear remaining users
+                sourceOrg.Users?.Clear();
+
+                _context.Organizations.Remove(sourceOrg);
+                await _context.SaveChangesAsync();
+
+                result.SourceOrganizationDeleted = true;
+            }
+            else
+            {
+                _logger.LogWarning("Not deleting source organization '{SourceOrgSlug}' because some datasets failed to move",
+                    sourceOrgSlug);
+            }
+        }
+
+        _logger.LogInformation("Merge completed: {DatasetsMovedCount} datasets moved, {DatasetsFailedCount} failed, source deleted: {SourceDeleted}",
+            result.DatasetsMovedCount, result.DatasetsFailedCount, result.SourceOrganizationDeleted);
+
+        return result;
     }
 }

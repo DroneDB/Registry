@@ -58,12 +58,12 @@ internal class DatasetVisibilityCacheInitializer
             _successCount = 0;
             _failCount = 0;
 
-            // Throttled parallel loading (max cores concurrent to avoid overwhelming disk)
+            // Sequential loading - DroneDB native library is not thread-safe
+            // when opening multiple databases concurrently (causes access violations)
             await Parallel.ForEachAsync(datasets,
                 new ParallelOptions
                 {
-                    // Use all available cores
-                    MaxDegreeOfParallelism = Math.Min(Environment.ProcessorCount, 2),
+                    MaxDegreeOfParallelism = Environment.ProcessorCount > 1 ? 1 : Environment.ProcessorCount,
                     CancellationToken = token
                 },
                 async (ds, ct) =>

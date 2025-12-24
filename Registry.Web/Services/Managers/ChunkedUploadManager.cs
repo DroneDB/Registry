@@ -7,6 +7,7 @@ using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
+using Registry.Ports;
 using Registry.Web.Data.Models;
 using Registry.Web.Models.DTO;
 
@@ -20,6 +21,7 @@ public class ChunkedUploadManager
 {
     private readonly ILogger _logger;
     private readonly string _tempDirectory;
+    private readonly IFileSystem _fileSystem;
 
     // In-memory cache of ongoing chunks for each file
     // Key: fileId, Value: dictionary with ChunkIndex and status (true = uploaded)
@@ -31,13 +33,14 @@ public class ChunkedUploadManager
     // Semaphore to ensure thread-safe access to the cache
     private readonly SemaphoreSlim _cacheLock = new SemaphoreSlim(1, 1);
 
-    public ChunkedUploadManager(ILogger logger, string tempDirectory)
+    public ChunkedUploadManager(ILogger logger, string tempDirectory, IFileSystem fileSystem)
     {
         _logger = logger;
         _tempDirectory = tempDirectory;
+        _fileSystem = fileSystem;
 
         // Ensure the temporary directory exists
-        Directory.CreateDirectory(_tempDirectory);
+        _fileSystem.FolderCreate(_tempDirectory);
     }
 
     /// <summary>
@@ -57,7 +60,7 @@ public class ChunkedUploadManager
 
         // Create the specific directory for this file if it doesn't exist
         var fileChunkDir = Path.Combine(_tempDirectory, chunkInfo.FileId);
-        Directory.CreateDirectory(fileChunkDir);
+        _fileSystem.FolderCreate(fileChunkDir);
 
         // Path of the file for this chunk
         var chunkPath = Path.Combine(fileChunkDir, $"chunk_{chunkInfo.ChunkIndex}.bin");
@@ -76,8 +79,7 @@ public class ChunkedUploadManager
         }
 
         // Save the chunk to disk
-        using (var fileStream = new FileStream(chunkPath, FileMode.Create, FileAccess.Write, FileShare.None,
-                                               bufferSize: 4096, useAsync: true))
+        await using (var fileStream = _fileSystem.OpenWrite(chunkPath))
         {
             await chunkStream.CopyToAsync(fileStream);
         }
@@ -151,15 +153,13 @@ public class ChunkedUploadManager
         var outputFilePath = Path.Combine(_tempDirectory, $"{fileId}_complete");
 
         // Reassemble the file from chunks
-        using (var outputStream = new FileStream(outputFilePath, FileMode.Create, FileAccess.Write, FileShare.None,
-                                               bufferSize: 81920, useAsync: true))
+        await using (var outputStream = _fileSystem.OpenWrite(outputFilePath))
         {
             for (int i = 0; i < fileInfo.TotalChunks; i++)
             {
                 var chunkPath = Path.Combine(fileChunkDir, $"chunk_{i}.bin");
 
-                using (var chunkStream = new FileStream(chunkPath, FileMode.Open, FileAccess.Read, FileShare.Read,
-                                                     bufferSize: 81920, useAsync: true))
+                await using (var chunkStream = _fileSystem.OpenRead(chunkPath))
                 {
                     await chunkStream.CopyToAsync(outputStream);
                 }
@@ -194,11 +194,11 @@ public class ChunkedUploadManager
 
         try
         {
-            if (Directory.Exists(fileChunkDir))
-                Directory.Delete(fileChunkDir, true);
+            if (_fileSystem.FolderExists(fileChunkDir))
+                _fileSystem.FolderDelete(fileChunkDir, true);
 
-            if (File.Exists(outputFilePath))
-                File.Delete(outputFilePath);
+            if (_fileSystem.Exists(outputFilePath))
+                _fileSystem.Delete(outputFilePath);
         }
         catch (Exception ex)
         {
@@ -223,8 +223,7 @@ public class ChunkedUploadManager
     /// </summary>
     private async Task<string> CalculateFileMd5Async(string filePath)
     {
-        using (var stream = new FileStream(filePath, FileMode.Open, FileAccess.Read, FileShare.Read,
-                                         bufferSize: 81920, useAsync: true))
+        await using (var stream = _fileSystem.OpenRead(filePath))
         {
             using (var md5 = MD5.Create())
             {
