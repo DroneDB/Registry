@@ -11,6 +11,7 @@ namespace Registry.Web.Services.Ports;
 public interface IOrganizationsManager
 {
     public Task<IEnumerable<OrganizationDto>> List();
+    public Task<IEnumerable<OrganizationDto>> ListPublic();
     public Task<OrganizationDto> Get(string orgSlug);
     public Task<OrganizationDto> AddNew(OrganizationDto organization, bool skipAuthCheck = false);
     public Task Edit(string orgSlug, OrganizationDto organization);

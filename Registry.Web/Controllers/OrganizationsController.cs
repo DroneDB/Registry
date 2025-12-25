@@ -62,6 +62,30 @@ public class OrganizationsController : ControllerBaseEx
     }
 
     /// <summary>
+    /// Gets all public organizations for data discovery.
+    /// </summary>
+    /// <returns>A list of public organizations.</returns>
+    [HttpGet("public", Name = nameof(GetAllPublic))]
+    [AllowAnonymous]
+    [ProducesResponseType(typeof(IEnumerable<OrganizationDto>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
+    public async Task<IActionResult> GetAllPublic()
+    {
+        try
+        {
+            _logger.LogDebug("Organizations controller GetAllPublic()");
+
+            return Ok(await _organizationsManager.ListPublic());
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Exception in Organizations controller GetAllPublic()");
+
+            return ExceptionResult(ex);
+        }
+    }
+
+    /// <summary>
     /// Gets a specific organization by slug.
     /// </summary>
     /// <param name="orgSlug">The organization slug.</param>
