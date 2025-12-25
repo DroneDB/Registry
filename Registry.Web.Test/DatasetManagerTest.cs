@@ -73,6 +73,13 @@ public class DatasetManagerTest : TestBase
             It.IsAny<AccessType>())).Returns(Task.FromResult(true));
         _authManagerMock.Setup(o => o.RequestAccess(It.IsAny<Organization>(),
             It.IsAny<AccessType>())).Returns(Task.FromResult(true));
+        _authManagerMock.Setup(o => o.GetDatasetPermissions(It.IsAny<Dataset>()))
+            .Returns(Task.FromResult(new DatasetPermissionsDto
+            {
+                CanRead = true,
+                CanWrite = true,
+                CanDelete = true
+            }));
 
         var utils = new WebUtils(_authManagerMock.Object, context, _appSettingsMock.Object, _httpContextAccessorMock.Object, _ddbFactoryMock.Object);
 
@@ -469,6 +476,103 @@ public class DatasetManagerTest : TestBase
         dataset.Permissions.CanRead.ShouldBeTrue();
         dataset.Permissions.CanWrite.ShouldBeFalse();
         dataset.Permissions.CanDelete.ShouldBeFalse();
+    }
+
+    [Test]
+    public async Task List_ExcludesPrivateDatasetsUserCannotRead()
+    {
+        // Arrange
+        const string orgSlug = MagicStrings.PublicOrganizationSlug;
+
+        await using var context = GetContextWithMultipleDatasets();
+        _appSettingsMock.Setup(o => o.Value).Returns(_settings);
+
+        // Setup auth manager to allow org access
+        _authManagerMock.Setup(o => o.RequestAccess(It.IsAny<Organization>(), AccessType.Read))
+            .Returns(Task.FromResult(true));
+
+        // Setup permissions - first dataset readable, second not
+        var callCount = 0;
+        _authManagerMock.Setup(o => o.GetDatasetPermissions(It.IsAny<Dataset>()))
+            .ReturnsAsync(() =>
+            {
+                callCount++;
+                // First call: can read, second call: cannot read
+                return callCount == 1
+                    ? new DatasetPermissionsDto { CanRead = true, CanWrite = false, CanDelete = false }
+                    : new DatasetPermissionsDto { CanRead = false, CanWrite = false, CanDelete = false };
+            });
+
+        var utils = new WebUtils(_authManagerMock.Object, context, _appSettingsMock.Object,
+            _httpContextAccessorMock.Object, _ddbFactoryMock.Object);
+
+        var ddbMock = new Mock<IDDB>();
+        ddbMock.Setup(x => x.GetInfo()).Returns(new Entry
+        {
+            Properties = new Dictionary<string, object>
+            {
+                {"public", true},
+                {"name", "Test"}
+            },
+            Size = 1000,
+            ModifiedTime = DateTime.Now,
+            Path = "."
+        });
+
+        _ddbFactoryMock.Setup(x => x.Get(It.IsAny<string>(), It.IsAny<Guid>()))
+            .Returns(ddbMock.Object);
+
+        var datasetsManager = new DatasetsManager(context, utils, _datasetsManagerLogger,
+            _objectsManagerMock.Object, _stacManagerMock.Object, _ddbFactoryMock.Object,
+            _authManagerMock.Object, _cacheManager, _fileSystem, _appSettingsMock.Object);
+
+        // Act
+        var result = await datasetsManager.List(orgSlug);
+
+        // Assert
+        result.ShouldNotBeNull();
+        var datasets = result.ToList();
+        // Should only include the dataset the user can read
+        datasets.Count.ShouldBe(1);
+        datasets.First().Slug.ShouldBe("public-dataset");
+    }
+
+    [Test]
+    public async Task List_ReturnsEmptyWhenNoReadableDatasets()
+    {
+        // Arrange
+        const string orgSlug = MagicStrings.PublicOrganizationSlug;
+
+        await using var context = GetTest1Context();
+        _appSettingsMock.Setup(o => o.Value).Returns(_settings);
+
+        // Setup auth manager to allow org access but deny dataset read
+        _authManagerMock.Setup(o => o.RequestAccess(It.IsAny<Organization>(), AccessType.Read))
+            .Returns(Task.FromResult(true));
+        _authManagerMock.Setup(o => o.GetDatasetPermissions(It.IsAny<Dataset>()))
+            .Returns(Task.FromResult(new DatasetPermissionsDto
+            {
+                CanRead = false,
+                CanWrite = false,
+                CanDelete = false
+            }));
+
+        var utils = new WebUtils(_authManagerMock.Object, context, _appSettingsMock.Object,
+            _httpContextAccessorMock.Object, _ddbFactoryMock.Object);
+
+        var datasetsManager = new DatasetsManager(context, utils, _datasetsManagerLogger,
+            _objectsManagerMock.Object, _stacManagerMock.Object, _ddbFactoryMock.Object,
+            _authManagerMock.Object, _cacheManager, _fileSystem, _appSettingsMock.Object);
+
+        // Act
+        var result = await datasetsManager.List(orgSlug);
+
+        // Assert
+        result.ShouldNotBeNull();
+        result.ShouldBeEmpty();
+
+        // DDB should never be called for non-readable datasets
+        _ddbFactoryMock.Verify(x => x.Get(It.IsAny<string>(), It.IsAny<Guid>()), Times.Never);
     }
 
     #region MoveToOrganization Tests
@@ -1235,6 +1339,48 @@ public class DatasetManagerTest : TestBase
 
             context.Organizations.Add(entity);
 
+            context.SaveChanges();
+        }
+
+        return new RegistryContext(options);
+    }
+
+    private static RegistryContext GetContextWithMultipleDatasets()
+    {
+        var options = new DbContextOptionsBuilder<RegistryContext>()
+            .UseInMemoryDatabase(databaseName: "RegistryDatabase-" + Guid.NewGuid())
+            .Options;
+
+        using (var context = new RegistryContext(options))
+        {
+            var entity = new Organization
+            {
+                Slug = MagicStrings.PublicOrganizationSlug,
+                Name = "Public",
+                CreationDate = DateTime.Now,
+                Description = "Public organization",
+                IsPublic = true,
+                OwnerId = null
+            };
+
+            // One public dataset and one private dataset
+            var publicDs = new Dataset
+            {
+                Slug = "public-dataset",
+                CreationDate = DateTime.Now,
+                InternalRef = Guid.NewGuid()
+            };
+
+            var privateDs = new Dataset
+            {
+                Slug = "private-dataset",
+                CreationDate = DateTime.Now,
+                InternalRef = Guid.NewGuid()
+            };
+
+            entity.Datasets = new List<Dataset> { publicDs, privateDs };
+
+            context.Organizations.Add(entity);
             context.SaveChanges();
         }
 

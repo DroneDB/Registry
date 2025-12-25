@@ -68,6 +68,11 @@ public class DatasetsManager : IDatasetsManager
 
         foreach (var ds in datasets)
         {
+            // Check if user can read this dataset before including it
+            var permissions = await _authManager.GetDatasetPermissions(ds);
+            if (!permissions.CanRead)
+                continue;
+
             var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
             var info = ddb.GetInfo();
 
@@ -77,7 +82,7 @@ public class DatasetsManager : IDatasetsManager
                 CreationDate = ds.CreationDate,
                 Properties = info.Properties,
                 Size = info.Size,
-                Permissions = await _authManager.GetDatasetPermissions(ds)
+                Permissions = permissions
             };
 
             result.Add(dto);
