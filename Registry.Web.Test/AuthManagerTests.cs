@@ -1124,8 +1124,8 @@ public class AuthManagerTests : TestBase
         await _authManager.RequestAccess(_privateDataset, AccessType.Write);
 
         // Assert - Verify the entire call stack
-        // 1. GetCurrentUser should be called
-        _httpContextAccessorMock.Verify(x => x.HttpContext, Times.AtLeast(2));
+        // 1. GetCurrentUser should be called (cached with Lazy, so only 1 HttpContext access per request)
+        _httpContextAccessorMock.Verify(x => x.HttpContext, Times.AtLeastOnce);
 
         // 2. Cache should be queried for dataset visibility
         _cacheManagerMock.Verify(x => x.GetAsync(
