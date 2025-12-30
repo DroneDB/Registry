@@ -261,7 +261,6 @@ public class SystemController : ControllerBaseEx
     /// All datasets from the source will be moved to the destination.
     /// Only administrators can perform this operation.
     /// </summary>
-    /// <param name="sourceOrgSlug">The source organization slug (will be merged into the destination).</param>
     /// <param name="request">The merge request containing destination organization and options.</param>
     /// <returns>Result of the merge operation.</returns>
     [HttpPost("merge-organizations", Name = nameof(SystemController) + "." + nameof(MergeOrganizations))]
