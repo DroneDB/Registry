@@ -89,6 +89,48 @@ public class OrganizationsManager : IOrganizationsManager
         return organizations;
     }
 
+    public async Task<IEnumerable<OrganizationDto>> ListPublic()
+    {
+        // List all public organizations for data discovery
+        // This endpoint is available to all users (including anonymous)
+        var organizationsQuery = _context.Organizations
+            .AsNoTracking()
+            .Where(org => org.IsPublic)
+            .Select(org => new OrganizationDto
+            {
+                CreationDate = org.CreationDate,
+                Description = org.Description,
+                Slug = org.Slug,
+                Name = org.Name,
+                IsPublic = org.IsPublic,
+                Owner = org.OwnerId
+            });
+
+        var organizations = await organizationsQuery.ToListAsync();
+
+        // Resolve owner names
+        var ownerIds = organizations.Where(o => o.Owner != null)
+                                   .Select(o => o.Owner)
+                                   .Distinct()
+                                   .ToArray();
+
+        if (ownerIds.Length != 0)
+        {
+            var usersMapper = await _appContext.Users
+                .AsNoTracking()
+                .Where(u => ownerIds.Contains(u.Id))
+                .Select(u => new { u.Id, u.UserName })
+                .ToDictionaryAsync(u => u.Id, u => u.UserName);
+
+            foreach (var org in organizations.Where(org => org.Owner != null))
+            {
+                org.Owner = usersMapper.SafeGetValue(org.Owner);
+            }
+        }
+
+        return organizations;
+    }
+
     public async Task<OrganizationDto> Get(string orgSlug)
     {
         var org = _utils.GetOrganization(orgSlug);
@@ -276,7 +318,7 @@ public class OrganizationsManager : IOrganizationsManager
         foreach (var sourceUser in sourceUsers)
         {
             if (destUserIds.Contains(sourceUser.UserId)) continue;
-            
+
             // Add user to destination organization
             var newOrgUser = new OrganizationUser
             {

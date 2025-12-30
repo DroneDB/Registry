@@ -690,6 +690,126 @@ public class OrganizationManagerTest : TestBase
 
     #endregion
 
+    #region ListPublic Tests
+
+    [Test]
+    public async Task ListPublic_ReturnsAllPublicOrganizations()
+    {
+        // Arrange
+        SetupAdminUser();
+
+        // Create a public organization
+        var publicOrg = new Organization
+        {
+            Slug = "public-test-org",
+            Name = "Public Test Organization",
+            Description = "A public organization for testing",
+            IsPublic = true,
+            OwnerId = "admin-id",
+            CreationDate = DateTime.Now
+        };
+
+        // Create a private organization
+        var privateOrg = new Organization
+        {
+            Slug = "private-test-org",
+            Name = "Private Test Organization",
+            Description = "A private organization for testing",
+            IsPublic = false,
+            OwnerId = "admin-id",
+            CreationDate = DateTime.Now
+        };
+
+        await _context.Organizations.AddRangeAsync(publicOrg, privateOrg);
+        await _context.SaveChangesAsync();
+
+        // Act
+        var organizations = (await _organizationsManager.ListPublic()).ToArray();
+
+        // Assert
+        // Should include the default public org + our new public org
+        organizations.Length.ShouldBe(2);
+        organizations.ShouldContain(org => org.Slug == MagicStrings.PublicOrganizationSlug);
+        organizations.ShouldContain(org => org.Slug == "public-test-org");
+        organizations.ShouldNotContain(org => org.Slug == "private-test-org");
+    }
+
+    [Test]
+    public async Task ListPublic_CanBeCalledWithoutAuthentication()
+    {
+        // Arrange - Setup anonymous user (simulating unauthenticated request)
+        SetupAnonymousUser();
+
+        // Act - Should not throw even without authentication
+        var organizations = (await _organizationsManager.ListPublic()).ToArray();
+
+        // Assert
+        organizations.ShouldNotBeNull();
+        organizations.Length.ShouldBe(1); // Only the default public organization
+        organizations.First().Slug.ShouldBe(MagicStrings.PublicOrganizationSlug);
+    }
+
+    [Test]
+    public async Task ListPublic_ResolvesOwnerNames()
+    {
+        // Arrange
+        SetupAdminUser();
+
+        // Create a public organization with an owner
+        var publicOrg = new Organization
+        {
+            Slug = "public-test-org",
+            Name = "Public Test Organization",
+            Description = "A public organization for testing",
+            IsPublic = true,
+            OwnerId = "admin-user-id", // This exists in the test app context
+            CreationDate = DateTime.Now
+        };
+
+        await _context.Organizations.AddAsync(publicOrg);
+        await _context.SaveChangesAsync();
+
+        // Act
+        var organizations = (await _organizationsManager.ListPublic()).ToArray();
+
+        // Assert
+        var org = organizations.FirstOrDefault(o => o.Slug == "public-test-org");
+        org.ShouldNotBeNull();
+        org.Owner.ShouldBe("admin"); // The username from the app context
+    }
+
+    [Test]
+    public async Task List_DoesNotIncludePublicOrganizationsOfOtherUsers()
+    {
+        // Arrange
+        var standardUser = SetupStandardUser("standard-user");
+
+        // Create a public organization owned by another user
+        var otherUserPublicOrg = new Organization
+        {
+            Slug = "other-user-public-org",
+            Name = "Other User Public Org",
+            Description = "A public organization owned by another user",
+            IsPublic = true,
+            OwnerId = "different-user",
+            CreationDate = DateTime.Now
+        };
+
+        await _context.Organizations.AddAsync(otherUserPublicOrg);
+        await _context.SaveChangesAsync();
+
+        // Act
+        var organizations = (await _organizationsManager.List()).ToArray();
+
+        // Assert
+        // Should NOT include the other user's public organization
+        // Should only include: the special 'public' org and user's own orgs
+        organizations.ShouldContain(org => org.Slug == MagicStrings.PublicOrganizationSlug);
+        organizations.ShouldNotContain(org => org.Slug == "other-user-public-org");
+    }
+
+    #endregion
+
     #region Additional Helper Methods
 
     private User SetupStandardUser(string userId)

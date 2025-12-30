@@ -16,7 +16,18 @@ public interface IUsersManager
     Task<IEnumerable<UserDto>> GetAll();
     Task<IEnumerable<UserDetailDto>> GetAllDetailed();
     Task<UserDto> CreateUser(string userName, string email, string password, string[] roles);
-    Task DeleteUser(string userName);
+
+    /// <summary>
+    /// Deletes a user and optionally transfers their data to a successor.
+    /// </summary>
+    /// <param name="userName">The username of the user to delete.</param>
+    /// <param name="successor">The username of the successor to transfer data to. If null, all data is deleted.</param>
+    /// <param name="conflictResolution">How to handle conflicts when transferring datasets.</param>
+    /// <returns>Result of the deletion operation.</returns>
+    Task<DeleteUserResultDto> DeleteUser(
+        string userName,
+        string successor = null,
+        ConflictResolutionStrategy conflictResolution = ConflictResolutionStrategy.Rename);
     Task<ChangePasswordResult> ChangePassword(string userName, string currentPassword, string newPassword);
     Task<ChangePasswordResult> ChangePassword(string currentPassword, string newPassword);
     Task<AuthenticateResponse> Refresh();

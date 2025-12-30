@@ -194,22 +194,28 @@ public class UsersController : ControllerBaseEx
 
     /// <summary>
     /// Deletes a user by username via route parameter. Requires admin privileges.
+    /// Optionally transfers all user data to a successor user.
     /// </summary>
     /// <param name="userName">The username of the user to delete.</param>
-    /// <returns>No content on success.</returns>
+    /// <param name="successor">Optional username of the successor to transfer data to.</param>
+    /// <param name="conflictResolution">How to handle dataset naming conflicts when transferring.</param>
+    /// <returns>The result of the deletion operation.</returns>
     [HttpDelete("{userName}", Name = nameof(DeleteUserRoute))]
-    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(DeleteUserResultDto), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status401Unauthorized)]
-    public async Task<IActionResult> DeleteUserRoute([FromRoute, Required] string userName)
+    public async Task<IActionResult> DeleteUserRoute(
+        [FromRoute, Required] string userName,
+        [FromQuery] string successor = null,
+        [FromQuery] ConflictResolutionStrategy conflictResolution = ConflictResolutionStrategy.Rename)
     {
         try
         {
-            _logger.LogDebug("Users controller DeleteUserRoute('{UserName}')", userName);
+            _logger.LogDebug("Users controller DeleteUserRoute('{UserName}', successor: '{Successor}')", userName, successor);
 
-            await _usersManager.DeleteUser(userName);
+            var result = await _usersManager.DeleteUser(userName, successor, conflictResolution);
 
-            return Ok();
+            return Ok(result);
         }
         catch (Exception ex)
         {
@@ -245,26 +251,31 @@ public class UsersController : ControllerBaseEx
 
     /// <summary>
     /// Deletes a user by username via form data. Requires admin privileges.
+    /// Optionally transfers all user data to a successor user.
     /// </summary>
-    /// <param name="userName">The username of the user to delete.</param>
-    /// <returns>No content on success.</returns>
+    /// <param name="model">The delete user request containing username and optional successor.</param>
+    /// <returns>The result of the deletion operation.</returns>
     [HttpDelete(Name = nameof(DeleteUser))]
-    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(DeleteUserResultDto), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status401Unauthorized)]
-    public async Task<IActionResult> DeleteUser([FromForm, Required] string userName)
+    public async Task<IActionResult> DeleteUser([FromForm, Required] DeleteUserDto model)
     {
         try
         {
-            _logger.LogDebug("Users controller DeleteUser('{UserName}')", userName);
+            _logger.LogDebug("Users controller DeleteUser('{UserName}', successor: '{Successor}')",
+                model?.UserName, model?.Successor);
 
-            await _usersManager.DeleteUser(userName);
+            if (model == null)
+                return BadRequest(new ErrorResponse("No user data provided"));
 
-            return Ok();
+            var result = await _usersManager.DeleteUser(model.UserName, model.Successor, model.ConflictResolution);
+
+            return Ok(result);
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Exception in Users controller DeleteUser('{UserName}')", userName);
+            _logger.LogError(ex, "Exception in Users controller DeleteUser('{UserName}')", model?.UserName);
             return ExceptionResult(ex);
         }
     }

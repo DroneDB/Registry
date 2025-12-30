@@ -566,13 +566,16 @@ public class UsersManager : IUsersManager
         await _registryContext.SaveChangesAsync();
     }
 
-    public async Task DeleteUser(string userName)
+    public async Task<DeleteUserResultDto> DeleteUser(
+        string userName,
+        string successor = null,
+        ConflictResolutionStrategy conflictResolution = ConflictResolutionStrategy.Rename)
     {
         if (!await _authManager.IsUserAdmin())
             throw new UnauthorizedException("Only admins can delete users");
 
         if (string.IsNullOrWhiteSpace(userName))
-            throw new UnauthorizedException("userName should not be empty");
+            throw new BadRequestException("userName should not be empty");
 
         if (userName == MagicStrings.AnonymousUserName)
             throw new UnauthorizedException("Cannot delete the anonymous user");
@@ -585,15 +588,132 @@ public class UsersManager : IUsersManager
         if (user == null)
             throw new BadRequestException("User does not exist");
 
-        var res = await _userManager.DeleteAsync(user);
-
-        if (!res.Succeeded)
+        // Validate successor if specified
+        User successorUser = null;
+        if (!string.IsNullOrWhiteSpace(successor))
         {
-            var errors = string.Join(";", res.Errors.Select(item => $"{item.Code} - {item.Description}"));
-            _logger.LogWarning("Errors in deleting user: {Errors}", errors);
+            if (successor == userName)
+                throw new BadRequestException("Successor cannot be the same as the user being deleted");
 
+            successorUser = await _userManager.FindByNameAsync(successor);
+            if (successorUser == null)
+                throw new BadRequestException($"Successor user '{successor}' does not exist");
+        }
+
+        var result = new DeleteUserResultDto
+        {
+            UserName = userName,
+            Successor = successor,
+            DatasetResults = []
+        };
+
+        // 1. Delete all batches for this user
+        var userBatches = await _registryContext.Batches
+            .Where(b => b.UserName == userName)
+            .ToListAsync();
+
+        result.BatchesDeleted = userBatches.Count;
+        _registryContext.Batches.RemoveRange(userBatches);
+        await _registryContext.SaveChangesAsync();
+
+        _logger.LogInformation("Deleted {Count} batches for user {UserName}", userBatches.Count, userName);
+
+        // 2. Get all organizations owned by this user
+        var userOrgs = await _registryContext.Organizations
+            .Include(o => o.Datasets)
+            .Include(o => o.Users)
+            .Where(o => o.OwnerId == user.Id)
+            .ToListAsync();
+
+        if (successorUser != null)
+        {
+            // Transfer data to successor
+            var allDatasetResults = new List<MoveDatasetResultDto>();
+
+            // Get successor's organizations to check for conflicts
+            var successorOrgs = await _registryContext.Organizations
+                .Include(o => o.Datasets)
+                .Where(o => o.OwnerId == successorUser.Id)
+                .ToDictionaryAsync(o => o.Slug, o => o);
+
+            foreach (var org in userOrgs)
+            {
+                // Check if successor has an organization with the same slug
+                if (successorOrgs.TryGetValue(org.Slug, out var existingOrg))
+                {
+                    // Merge datasets into successor's existing organization
+                    if (org.Datasets.Count != 0)
+                    {
+                        var mergeResult = await _organizationsManager.Merge(
+                            org.Slug,
+                            existingOrg.Slug,
+                            conflictResolution,
+                            deleteSourceOrganization: true);
+
+                        allDatasetResults.AddRange(mergeResult.DatasetResults);
+                        result.DatasetsTransferred += mergeResult.DatasetsMovedCount;
+                    }
+                    else
+                    {
+                        // No datasets, just delete the empty organization
+                        await _organizationsManager.Delete(org.Slug);
+                    }
+                    result.OrganizationsDeleted++;
+                }
+                else
+                {
+                    // Transfer ownership of the organization to successor
+                    org.OwnerId = successorUser.Id;
+                    result.OrganizationsTransferred++;
+                    result.DatasetsTransferred += org.Datasets.Count;
+
+                    _logger.LogInformation("Transferred organization {OrgSlug} to successor {Successor}",
+                        org.Slug, successor);
+                }
+            }
+
+            result.DatasetResults = allDatasetResults.ToArray();
+            await _registryContext.SaveChangesAsync();
+        }
+        else
+        {
+            // Delete all organizations (cascades to datasets)
+            foreach (var org in userOrgs)
+            {
+                result.DatasetsDeleted += org.Datasets.Count;
+                await _organizationsManager.Delete(org.Slug);
+                result.OrganizationsDeleted++;
+
+                _logger.LogInformation("Deleted organization {OrgSlug} for user {UserName}", org.Slug, userName);
+            }
+        }
+
+        // 3. Remove user from all organizations (membership)
+        var memberships = await _registryContext.OrganizationsUsers
+            .Where(ou => ou.UserId == user.Id)
+            .ToListAsync();
+
+        _registryContext.OrganizationsUsers.RemoveRange(memberships);
+        await _registryContext.SaveChangesAsync();
+
+        _logger.LogInformation("Removed {Count} organization memberships for user {UserName}",
+            memberships.Count, userName);
+
+        // 4. Delete the user from Identity
+        var identityResult = await _userManager.DeleteAsync(user);
+
+        if (!identityResult.Succeeded)
+        {
+            var errors = string.Join(";", identityResult.Errors.Select(item => $"{item.Code} - {item.Description}"));
+            _logger.LogWarning("Errors in deleting user: {Errors}", errors);
             throw new InvalidOperationException("Cannot delete user: " + errors);
         }
+
+        _logger.LogInformation("Successfully deleted user {UserName}{Successor}",
+            userName,
+            successorUser != null ? $" with data transferred to {successor}" : "");
+
+        return result;
     }
 
     public async Task<IEnumerable<UserDto>> GetAll()

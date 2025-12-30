@@ -64,10 +64,37 @@ public class DatasetsManager : IDatasetsManager
 
         var datasets = org.Datasets.ToArray();
 
+        // Optimization C: Short-circuit for owner/admin - they can read all datasets
+        var isOwnerOrAdmin = await _authManager.IsOwnerOrAdmin(org);
+
+        // Optimization D: Prefetch Organization.Users once to avoid N lazy loads
+        if (!isOwnerOrAdmin && org.Users == null)
+            await _context.Entry(org).Collection(o => o.Users).LoadAsync();
+
         var result = new List<DatasetDto>();
 
         foreach (var ds in datasets)
         {
+            DatasetPermissionsDto permissions;
+
+            if (isOwnerOrAdmin)
+            {
+                // Owner/admin has full access - skip permission check
+                permissions = new DatasetPermissionsDto
+                {
+                    CanRead = true,
+                    CanWrite = true,
+                    CanDelete = true
+                };
+            }
+            else
+            {
+                // Check if user can read this dataset before including it
+                permissions = await _authManager.GetDatasetPermissions(ds);
+                if (!permissions.CanRead)
+                    continue;
+            }
+
             var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
             var info = ddb.GetInfo();
 
@@ -77,7 +104,7 @@ public class DatasetsManager : IDatasetsManager
                 CreationDate = ds.CreationDate,
                 Properties = info.Properties,
                 Size = info.Size,
-                Permissions = await _authManager.GetDatasetPermissions(ds)
+                Permissions = permissions
             };
 
             result.Add(dto);

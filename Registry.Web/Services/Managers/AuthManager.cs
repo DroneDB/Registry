@@ -31,6 +31,9 @@ public class AuthManager : IAuthManager
     private readonly OrganizationAccessControl _organizationAccess;
     private readonly DatasetAccessControl _datasetAccess;
 
+    // Request-scoped lazy cache for current user (AuthManager is Scoped)
+    private readonly Lazy<Task<User>> _currentUserLazy;
+
     public AuthManager(
         UserManager<User> usersManager,
         IHttpContextAccessor httpContextAccessor,
@@ -44,15 +47,20 @@ public class AuthManager : IAuthManager
         _resourceAccess = new ResourceAccessControl(usersManager, context, logger);
         _organizationAccess = new OrganizationAccessControl(usersManager, context, logger);
         _datasetAccess = new DatasetAccessControl(usersManager, context, logger, ddbManager, cacheManager);
+
+        // Initialize lazy - evaluated once per request (AuthManager is Scoped)
+        _currentUserLazy = new Lazy<Task<User>>(LoadCurrentUserAsync);
     }
 
-    public async Task<User> GetCurrentUser()
+    private async Task<User> LoadCurrentUserAsync()
     {
         var userId = _httpContextAccessor.HttpContext?.User.Claims
             .FirstOrDefault(c => c.Type == ClaimTypes.Name)?.Value;
 
         return userId == null ? null : await _usersManager.FindByIdAsync(userId);
     }
+
+    public Task<User> GetCurrentUser() => _currentUserLazy.Value;
 
     public async Task<string> SafeGetCurrentUserName()
     {
@@ -127,7 +135,7 @@ public class AuthManager : IAuthManager
     public async Task<DatasetPermissionsDto> GetDatasetPermissions(Dataset dataset)
     {
         var user = await GetCurrentUser();
-        
+
         return new DatasetPermissionsDto
         {
             CanRead = await _datasetAccess.CanAccessDataset(dataset, AccessType.Read, user),
