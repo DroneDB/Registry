@@ -1,10 +1,10 @@
 ﻿using System;
+using System.Collections.Concurrent;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Caching.Distributed;
 using Microsoft.Extensions.Logging;
-using Registry.Common;
 using Registry.Ports;
 
 #nullable enable
@@ -24,7 +24,7 @@ public class CacheManager : ICacheManager
 
     private readonly TimeSpan _defaultCacheExpiration = new(0, 30, 0);
 
-    private readonly DictionaryEx<string, Carrier> _providers = new();
+    private readonly ConcurrentDictionary<string, Carrier> _providers = new();
 
     public CacheManager(IDistributedCache cache, ILogger<CacheManager> logger)
     {
@@ -37,11 +37,14 @@ public class CacheManager : ICacheManager
         ArgumentNullException.ThrowIfNull(seed);
         ArgumentNullException.ThrowIfNull(getData);
 
-        _providers.Add(seed, new Carrier
+        var carrier = new Carrier
         {
             Expiration = expiration ?? _defaultCacheExpiration,
             GetDataAsync = getData
-        });
+        };
+
+        if (!_providers.TryAdd(seed, carrier))
+            throw new ArgumentException($"Cannot add duplicate key '{seed}' in cache provider dictionary");
 
         _logger.LogDebug("Registered cache provider for seed: {Seed} with expiration: {Expiration}",
             seed, expiration ?? _defaultCacheExpiration);
@@ -50,7 +53,7 @@ public class CacheManager : ICacheManager
     public void Unregister(string seed)
     {
         ArgumentNullException.ThrowIfNull(seed);
-        _providers.Remove(seed);
+        _providers.TryRemove(seed, out _);
         _logger.LogDebug("Unregistered cache provider for seed: {Seed}", seed);
     }
 

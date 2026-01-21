@@ -86,6 +86,14 @@ internal class CacheInitializer
         _logger.LogDebug("Registered dataset visibility cache provider with expiration: {Expiration}",
             appSettings.DatasetVisibilityCacheExpiration?.ToString() ?? "default");
 
+        // Register build pending tracker cache provider (used by BuildPendingService)
+        cacheManager.Register(
+            MagicStrings.BuildPendingTrackerCacheSeed,
+            _ => Task.FromResult<byte[]>([]),
+            TimeSpan.FromHours(24));
+
+        _logger.LogDebug("Registered build pending tracker cache provider with 24-hour expiration");
+
         _logger.LogInformation("Cache providers registered successfully");
     }
 }

@@ -49,15 +49,6 @@ public class BuildPendingService
         _backgroundJob = backgroundJob ?? throw new ArgumentNullException(nameof(backgroundJob));
         _cacheManager = cacheManager ?? throw new ArgumentNullException(nameof(cacheManager));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
-
-        // Register cache provider with 24-hour expiration for auto-cleanup
-        if (!_cacheManager.IsRegistered(MagicStrings.BuildPendingTrackerCacheSeed))
-        {
-            _cacheManager.Register(
-                MagicStrings.BuildPendingTrackerCacheSeed, _ => Task.FromResult<byte[]>([]),
-                TimeSpan.FromHours(24)
-            );
-        }
     }
 
     /// <summary>
