@@ -7,6 +7,7 @@ using System.Linq;
 using System.Net;
 using System.Reflection;
 using System.Text.RegularExpressions;
+using System.Threading;
 using System.Threading.Tasks;
 using CommandLine;
 using Hangfire;
@@ -335,6 +336,13 @@ public class Program
                 services.AddHostedService<HangfireJobsHostedService>();
             })
             .Build();
+
+        // Initialize cache providers (required by BuildPendingService and other services)
+        using (var scope = host.Services.CreateScope())
+        {
+            var logger = scope.ServiceProvider.GetRequiredService<ILogger<Program>>();
+            new CacheInitializer(scope.ServiceProvider, logger).InitializeAsync(CancellationToken.None).Wait();
+        }
 
         Console.WriteLine(" ?> Processing node started");
         Console.WriteLine(" ?> Press Ctrl+C to quit");
