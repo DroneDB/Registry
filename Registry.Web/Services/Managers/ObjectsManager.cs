@@ -738,9 +738,9 @@ public class ObjectsManager : IObjectsManager
         _logger.LogInformation("Deletion complete");
     }
 
-    public async Task Delete(string orgSlug, string dsSlug, string path)
+    public Task Delete(string orgSlug, string dsSlug, string path)
     {
-        await Delete(orgSlug, dsSlug, [path]);
+        return Delete(orgSlug, dsSlug, [path]);
     }
 
     public async Task<DeleteBatchResponse> DeleteBatch(string orgSlug, string dsSlug, string[] paths)
