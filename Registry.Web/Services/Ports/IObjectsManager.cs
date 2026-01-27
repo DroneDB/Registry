@@ -35,4 +35,6 @@ public interface IObjectsManager
 
     Task<IEnumerable<BuildJobDto>> GetBuilds(string orgSlug, string dsSlug, int page = 1, int pageSize = 50);
     Task<int> ClearCompletedBuilds(string orgSlug, string dsSlug);
+    Task Delete(string orgSlug, string dsSlug, string[] paths);
+    Task<DeleteBatchResponse> DeleteBatch(string orgSlug, string dsSlug, string[] paths);
 }

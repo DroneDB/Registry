@@ -119,12 +119,12 @@
     </PropertyGroup>
 
     <Target Name="HandleNPMErrors">
-        <Error Text="Cannot build SPA: Check ClientApp submodule, NodeJS version (14) and install webpack@4 and webpack-cli in global" />
+        <Error Text="Cannot build SPA: Check ClientApp submodule and NodeJS version (22)" />
     </Target>
 
     <Target Name="BuildSPA">
         <Exec WorkingDirectory="ClientApp" Command="npm install" />
-        <Exec WorkingDirectory="ClientApp" Command="webpack" />
+        <Exec WorkingDirectory="ClientApp" Command="npm run build" />
         <Message Text="SPA built" />
         <OnError ExecuteTargets="HandleNPMErrors" />
     </Target>

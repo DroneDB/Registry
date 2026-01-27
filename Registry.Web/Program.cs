@@ -274,6 +274,10 @@ public class Program
     /// - CleanupExpiredJobs: Daily cleanup of expired Hangfire jobs
     /// - JobIndexSyncService.SyncJobIndexStates: Sync job index every 5 minutes
     /// - BuildPendingService.ProcessPendingBuilds: Process pending DDB builds every minute
+    /// - OrphanedDatasetCleanupService.CleanupOrphanedFoldersAsync: Daily cleanup of orphaned dataset folders
+    ///
+    /// On-demand jobs:
+    /// - DatasetCleanupService.CleanupDeletedDatasetAsync: Cleanup after dataset deletion
     ///
     /// NOTE: When adding new recurring jobs or services, ensure all dependencies are registered here.
     /// Only minimal services required for job execution are registered to reduce memory footprint.
@@ -328,6 +332,8 @@ public class Program
                 services.AddScoped<IBackgroundJobsProcessor, BackgroundJobsProcessor>();
                 services.AddScoped<BuildPendingService>();
                 services.AddScoped<JobIndexSyncService>();
+                services.AddScoped<DatasetCleanupService>();
+                services.AddScoped<OrphanedDatasetCleanupService>();
 
                 services.AddHangfireProvider(appSettings, configuration);
                 services.AddHangfireServer(options => { options.WorkerCount = workers; });
@@ -759,7 +765,7 @@ public class Program
                 return false;
             }
 
-            if (settings.DatasetVisibilityCacheExpiration.HasValue && 
+            if (settings.DatasetVisibilityCacheExpiration.HasValue &&
                 settings.DatasetVisibilityCacheExpiration.Value.TotalMinutes < 1)
             {
                 Console.WriteLine(" !> DatasetVisibilityCacheExpiration is not valid (must be at least 1 minute)");

@@ -25,7 +25,7 @@ jobs:
     - name: Setup Node
       uses: actions/setup-node@v4
       with:
-        node-version: 16
+        node-version: 22
     - name: Download and install latest DroneDB release
       run: |
         LATEST_RELEASE_URL=$(curl -s https://api.github.com/repos/DroneDB/DroneDB/releases/latest | grep "browser_download_url.*deb" | head -n 1 | cut -d '"' -f 4)

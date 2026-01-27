@@ -10,7 +10,7 @@ RUN apt-get update && apt-get install -y --fix-missing --no-install-recommends g
 
 # Install dotnet and nodejs
 RUN curl -sSL https://dot.net/v1/dotnet-install.sh | bash /dev/stdin --channel 9.0 \
-    && curl -sL https://deb.nodesource.com/setup_16.x | bash - \
+    && curl -sL https://deb.nodesource.com/setup_22.x | bash - \
     && apt-get install -y nodejs \
     && apt-get clean && rm -rf /var/lib/apt/lists/*
 
@@ -22,8 +22,7 @@ ENV DOTNET_ROOT="/root/.dotnet"
 COPY . /Registry
 
 # Compile client app
-RUN npm install -g webpack@4 webpack-cli
-RUN cd /Registry/Registry.Web/ClientApp && npm install && webpack --mode=production
+RUN cd /Registry/Registry.Web/ClientApp && npm install && npm run build
 
 # Publish Registry
 COPY docker/FolderProfile.xml /Registry/Registry.Web/Properties/PublishProfiles/FolderProfile.pubxml
