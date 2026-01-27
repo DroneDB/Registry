@@ -184,6 +184,16 @@ public class ObjectsManager : IObjectsManager
 
         _logger.LogInformation("In AddNew('{OrgSlug}/{DsSlug}')", orgSlug, dsSlug);
 
+        // Validate path to prevent path traversal attacks
+        if (string.IsNullOrWhiteSpace(path))
+            throw new ArgumentException("Path cannot be empty");
+
+        if (path.Contains("..") || Path.IsPathRooted(path))
+            throw new ArgumentException("Invalid path: path traversal or absolute paths are not allowed");
+
+        if (IsReservedPath(path))
+            throw new InvalidOperationException($"'{path}' is a reserved path");
+
         if (!await _authManager.RequestAccess(ds, AccessType.Write))
             throw new UnauthorizedException("The current user is not allowed to write to this dataset");
 
