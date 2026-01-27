@@ -533,6 +533,42 @@ public class ObjectsController : ControllerBaseEx
     }
 
     /// <summary>
+    /// Deletes multiple objects from a dataset in a single batch operation.
+    /// </summary>
+    /// <param name="orgSlug">The organization slug.</param>
+    /// <param name="dsSlug">The dataset slug.</param>
+    /// <param name="paths">Array of paths to delete.</param>
+    /// <returns>A response containing the list of successfully deleted paths and any failures.</returns>
+    [HttpDelete(RoutesHelper.ObjectsRadix + "/batch", Name = nameof(ObjectsController) + "." + nameof(DeleteBatch))]
+    [ProducesResponseType(typeof(DeleteBatchResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status401Unauthorized)]
+    public async Task<IActionResult> DeleteBatch(
+        [FromRoute, Required] string orgSlug,
+        [FromRoute, Required] string dsSlug,
+        [FromForm] string[] paths)
+    {
+        try
+        {
+            _logger.LogDebug("Objects controller DeleteBatch('{OrgSlug}', '{DsSlug}', {Count} paths)",
+                orgSlug, dsSlug, paths?.Length ?? 0);
+
+            if (paths == null || paths.Length == 0)
+                return BadRequest(new ErrorResponse("No paths provided"));
+
+            var response = await _objectsManager.DeleteBatch(orgSlug, dsSlug, paths);
+            return Ok(response);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Exception in Objects controller DeleteBatch('{OrgSlug}', '{DsSlug}')",
+                orgSlug, dsSlug);
+
+            return ExceptionResult(ex);
+        }
+    }
+
+    /// <summary>
     /// Moves or renames an object within a dataset.
     /// </summary>
     /// <param name="orgSlug">The organization slug.</param>
