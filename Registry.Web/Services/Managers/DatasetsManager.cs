@@ -259,10 +259,32 @@ public class DatasetsManager : IDatasetsManager
         await _stacManager.ClearCache(ds);
 
         // Schedule background cleanup job for: cancelling active jobs, removing JobIndex entries, deleting filesystem
-        _backgroundJob.Enqueue<DatasetCleanupService>(
-            service => service.CleanupDeletedDatasetAsync(orgSlug, dsSlug, internalRef, null));
+        string? jobId = null;
+        try
+        {
+            jobId = _backgroundJob.Enqueue<DatasetCleanupService>(
+                service => service.CleanupDeletedDatasetAsync(orgSlug, dsSlug, internalRef, null));
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex,
+                "Failed to enqueue cleanup job for dataset {OrgSlug}/{DsSlug} with internalRef {InternalRef}",
+                orgSlug, dsSlug, internalRef);
+        }
 
-        _logger.LogInformation("Dataset {OrgSlug}/{DsSlug} removed from DB, cleanup job scheduled", orgSlug, dsSlug);
+        if (string.IsNullOrEmpty(jobId))
+        {
+            _logger.LogError(
+                "Cleanup job could not be scheduled for dataset {OrgSlug}/{DsSlug} with internalRef {InternalRef}. " +
+                "Orphaned folder cleanup will handle this later.",
+                orgSlug, dsSlug, internalRef);
+        }
+        else
+        {
+            _logger.LogInformation(
+                "Dataset {OrgSlug}/{DsSlug} removed from DB, cleanup job scheduled with JobId {JobId}",
+                orgSlug, dsSlug, jobId);
+        }
     }
 
     public async Task Rename(string orgSlug, string dsSlug, string newSlug)
