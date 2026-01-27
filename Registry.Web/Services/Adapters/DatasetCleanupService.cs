@@ -26,7 +26,12 @@ public class DatasetCleanupService
     private readonly IJobIndexQuery _jobIndexQuery;
     private readonly ILogger<DatasetCleanupService> _logger;
 
-    // Active job states that should be cancelled
+    // Active Hangfire job states that should be cancelled. These string values map directly to
+    // Hangfire's built-in job state names (e.g., Created, Enqueued, Processing, Scheduled, Awaiting).
+    // Only "active"/non-terminal states are included here; terminal states such as Succeeded/Failed/Deleted
+    // are intentionally excluded because they should not be cancelled. If Hangfire adds or changes
+    // job states, update this list accordingly based on Hangfire's job state documentation.
+    // See: https://docs.hangfire.io/en/latest/background-methods/using-job-states.html
     private static readonly string[] ActiveJobStates = ["Created", "Enqueued", "Processing", "Scheduled", "Awaiting"];
 
     public DatasetCleanupService(
