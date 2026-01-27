@@ -40,6 +40,7 @@ public class DatasetManagerTest : TestBase
     private Mock<IObjectsManager> _objectsManagerMock;
     private Mock<IHttpContextAccessor> _httpContextAccessorMock;
     private Mock<IStacManager> _stacManagerMock;
+    private Mock<IBackgroundJobsProcessor> _backgroundJobMock;
     private ICacheManager _cacheManager;
     private IFileSystem _fileSystem;
 
@@ -53,6 +54,7 @@ public class DatasetManagerTest : TestBase
         _objectsManagerMock = new Mock<IObjectsManager>();
         _stacManagerMock = new Mock<IStacManager>();
         _httpContextAccessorMock = new Mock<IHttpContextAccessor>();
+        _backgroundJobMock = new Mock<IBackgroundJobsProcessor>();
         _cacheManager = CreateTestCacheManager();
         RegisterDatasetVisibilityCacheProvider(_cacheManager);
         _datasetsManagerLogger = CreateTestLogger<DatasetsManager>();
@@ -98,7 +100,7 @@ public class DatasetManagerTest : TestBase
         _ddbFactoryMock.Setup(x => x.Get(It.IsAny<string>(), It.IsAny<Guid>())).Returns(ddbMock.Object);
 
         var datasetsManager = new DatasetsManager(context, utils, _datasetsManagerLogger,
-            _objectsManagerMock.Object, _stacManagerMock.Object, _ddbFactoryMock.Object, _authManagerMock.Object, _cacheManager, _fileSystem, _appSettingsMock.Object);
+            _objectsManagerMock.Object, _stacManagerMock.Object, _ddbFactoryMock.Object, _authManagerMock.Object, _cacheManager, _fileSystem, _backgroundJobMock.Object, _appSettingsMock.Object);
 
         var list = (await datasetsManager.List(MagicStrings.PublicOrganizationSlug)).ToArray();
 
@@ -156,7 +158,7 @@ public class DatasetManagerTest : TestBase
 
         var datasetsManager = new DatasetsManager(context, utils, _datasetsManagerLogger,
             _objectsManagerMock.Object, _stacManagerMock.Object, _ddbFactoryMock.Object,
-            _authManagerMock.Object, _cacheManager, _fileSystem, _appSettingsMock.Object);
+            _authManagerMock.Object, _cacheManager, _fileSystem, _backgroundJobMock.Object, _appSettingsMock.Object);
 
         // Act
         var result = await datasetsManager.Get(orgSlug, dsSlug);
@@ -213,7 +215,7 @@ public class DatasetManagerTest : TestBase
 
         var datasetsManager = new DatasetsManager(context, utils, _datasetsManagerLogger,
             _objectsManagerMock.Object, _stacManagerMock.Object, _ddbFactoryMock.Object,
-            _authManagerMock.Object, _cacheManager, _fileSystem, _appSettingsMock.Object);
+            _authManagerMock.Object, _cacheManager, _fileSystem, _backgroundJobMock.Object, _appSettingsMock.Object);
 
         // Act
         var result = await datasetsManager.Get(orgSlug, dsSlug);
@@ -268,7 +270,7 @@ public class DatasetManagerTest : TestBase
 
         var datasetsManager = new DatasetsManager(context, utils, _datasetsManagerLogger,
             _objectsManagerMock.Object, _stacManagerMock.Object, _ddbFactoryMock.Object,
-            _authManagerMock.Object, _cacheManager, _fileSystem, _appSettingsMock.Object);
+            _authManagerMock.Object, _cacheManager, _fileSystem, _backgroundJobMock.Object, _appSettingsMock.Object);
 
         // Act
         var result = await datasetsManager.GetEntry(orgSlug, dsSlug);
@@ -341,7 +343,7 @@ public class DatasetManagerTest : TestBase
 
         var datasetsManager = new DatasetsManager(context, utils, _datasetsManagerLogger,
             _objectsManagerMock.Object, _stacManagerMock.Object, _ddbFactoryMock.Object,
-            _authManagerMock.Object, _cacheManager, _fileSystem, _appSettingsMock.Object);
+            _authManagerMock.Object, _cacheManager, _fileSystem, _backgroundJobMock.Object, _appSettingsMock.Object);
 
         // Act
         var result = await datasetsManager.GetEntry(orgSlug, dsSlug);
@@ -400,7 +402,7 @@ public class DatasetManagerTest : TestBase
 
         var datasetsManager = new DatasetsManager(context, utils, _datasetsManagerLogger,
             _objectsManagerMock.Object, _stacManagerMock.Object, _ddbFactoryMock.Object,
-            _authManagerMock.Object, _cacheManager, _fileSystem, _appSettingsMock.Object);
+            _authManagerMock.Object, _cacheManager, _fileSystem, _backgroundJobMock.Object, _appSettingsMock.Object);
 
         // Act
         var result = await datasetsManager.List(orgSlug);
@@ -461,7 +463,7 @@ public class DatasetManagerTest : TestBase
 
         var datasetsManager = new DatasetsManager(context, utils, _datasetsManagerLogger,
             _objectsManagerMock.Object, _stacManagerMock.Object, _ddbFactoryMock.Object,
-            _authManagerMock.Object, _cacheManager, _fileSystem, _appSettingsMock.Object);
+            _authManagerMock.Object, _cacheManager, _fileSystem, _backgroundJobMock.Object, _appSettingsMock.Object);
 
         // Act
         var result = await datasetsManager.List(orgSlug);
@@ -524,7 +526,7 @@ public class DatasetManagerTest : TestBase
 
         var datasetsManager = new DatasetsManager(context, utils, _datasetsManagerLogger,
             _objectsManagerMock.Object, _stacManagerMock.Object, _ddbFactoryMock.Object,
-            _authManagerMock.Object, _cacheManager, _fileSystem, _appSettingsMock.Object);
+            _authManagerMock.Object, _cacheManager, _fileSystem, _backgroundJobMock.Object, _appSettingsMock.Object);
 
         // Act
         var result = await datasetsManager.List(orgSlug);
@@ -562,7 +564,7 @@ public class DatasetManagerTest : TestBase
 
         var datasetsManager = new DatasetsManager(context, utils, _datasetsManagerLogger,
             _objectsManagerMock.Object, _stacManagerMock.Object, _ddbFactoryMock.Object,
-            _authManagerMock.Object, _cacheManager, _fileSystem, _appSettingsMock.Object);
+            _authManagerMock.Object, _cacheManager, _fileSystem, _backgroundJobMock.Object, _appSettingsMock.Object);
 
         // Act
         var result = await datasetsManager.List(orgSlug);
@@ -587,7 +589,7 @@ public class DatasetManagerTest : TestBase
 
         var datasetsManager = new DatasetsManager(context, utils, _datasetsManagerLogger,
             _objectsManagerMock.Object, _stacManagerMock.Object, _ddbFactoryMock.Object,
-            _authManagerMock.Object, _cacheManager, fileSystemMock.Object, _appSettingsMock.Object);
+            _authManagerMock.Object, _cacheManager, fileSystemMock.Object, _backgroundJobMock.Object, _appSettingsMock.Object);
 
         // Act & Assert
         var action = () => datasetsManager.MoveToOrganization("source-org", new[] { "dataset-1" }, "dest-org");
@@ -604,7 +606,7 @@ public class DatasetManagerTest : TestBase
 
         var datasetsManager = new DatasetsManager(context, utils, _datasetsManagerLogger,
             _objectsManagerMock.Object, _stacManagerMock.Object, _ddbFactoryMock.Object,
-            _authManagerMock.Object, _cacheManager, fileSystemMock.Object, _appSettingsMock.Object);
+            _authManagerMock.Object, _cacheManager, fileSystemMock.Object, _backgroundJobMock.Object, _appSettingsMock.Object);
 
         // Act & Assert
         var action = () => datasetsManager.MoveToOrganization("", new[] { "dataset-1" }, "dest-org");
@@ -621,7 +623,7 @@ public class DatasetManagerTest : TestBase
 
         var datasetsManager = new DatasetsManager(context, utils, _datasetsManagerLogger,
             _objectsManagerMock.Object, _stacManagerMock.Object, _ddbFactoryMock.Object,
-            _authManagerMock.Object, _cacheManager, fileSystemMock.Object, _appSettingsMock.Object);
+            _authManagerMock.Object, _cacheManager, fileSystemMock.Object, _backgroundJobMock.Object, _appSettingsMock.Object);
 
         // Act & Assert
         var action = () => datasetsManager.MoveToOrganization(null, new[] { "dataset-1" }, "dest-org");
@@ -638,7 +640,7 @@ public class DatasetManagerTest : TestBase
 
         var datasetsManager = new DatasetsManager(context, utils, _datasetsManagerLogger,
             _objectsManagerMock.Object, _stacManagerMock.Object, _ddbFactoryMock.Object,
-            _authManagerMock.Object, _cacheManager, fileSystemMock.Object, _appSettingsMock.Object);
+            _authManagerMock.Object, _cacheManager, fileSystemMock.Object, _backgroundJobMock.Object, _appSettingsMock.Object);
 
         // Act & Assert
         var action = () => datasetsManager.MoveToOrganization("source-org", new[] { "dataset-1" }, "");
@@ -655,7 +657,7 @@ public class DatasetManagerTest : TestBase
 
         var datasetsManager = new DatasetsManager(context, utils, _datasetsManagerLogger,
             _objectsManagerMock.Object, _stacManagerMock.Object, _ddbFactoryMock.Object,
-            _authManagerMock.Object, _cacheManager, fileSystemMock.Object, _appSettingsMock.Object);
+            _authManagerMock.Object, _cacheManager, fileSystemMock.Object, _backgroundJobMock.Object, _appSettingsMock.Object);
 
         // Act & Assert
         var action = () => datasetsManager.MoveToOrganization("source-org", null, "dest-org");
@@ -672,7 +674,7 @@ public class DatasetManagerTest : TestBase
 
         var datasetsManager = new DatasetsManager(context, utils, _datasetsManagerLogger,
             _objectsManagerMock.Object, _stacManagerMock.Object, _ddbFactoryMock.Object,
-            _authManagerMock.Object, _cacheManager, fileSystemMock.Object, _appSettingsMock.Object);
+            _authManagerMock.Object, _cacheManager, fileSystemMock.Object, _backgroundJobMock.Object, _appSettingsMock.Object);
 
         // Act & Assert
         var action = () => datasetsManager.MoveToOrganization("source-org", Array.Empty<string>(), "dest-org");
@@ -689,7 +691,7 @@ public class DatasetManagerTest : TestBase
 
         var datasetsManager = new DatasetsManager(context, utils, _datasetsManagerLogger,
             _objectsManagerMock.Object, _stacManagerMock.Object, _ddbFactoryMock.Object,
-            _authManagerMock.Object, _cacheManager, fileSystemMock.Object, _appSettingsMock.Object);
+            _authManagerMock.Object, _cacheManager, fileSystemMock.Object, _backgroundJobMock.Object, _appSettingsMock.Object);
 
         // Act & Assert
         var action = () => datasetsManager.MoveToOrganization("source-org", new[] { "dataset-1" }, "source-org");
@@ -711,7 +713,7 @@ public class DatasetManagerTest : TestBase
 
         var datasetsManager = new DatasetsManager(context, utils, _datasetsManagerLogger,
             _objectsManagerMock.Object, _stacManagerMock.Object, _ddbFactoryMock.Object,
-            _authManagerMock.Object, _cacheManager, fileSystemMock.Object, _appSettingsMock.Object);
+            _authManagerMock.Object, _cacheManager, fileSystemMock.Object, _backgroundJobMock.Object, _appSettingsMock.Object);
 
         // Act
         var results = (await datasetsManager.MoveToOrganization("source-org", new[] { "dataset-1" }, "dest-org")).ToArray();
@@ -749,7 +751,7 @@ public class DatasetManagerTest : TestBase
 
         var datasetsManager = new DatasetsManager(context, utils, _datasetsManagerLogger,
             _objectsManagerMock.Object, _stacManagerMock.Object, _ddbFactoryMock.Object,
-            _authManagerMock.Object, _cacheManager, fileSystemMock.Object, _appSettingsMock.Object);
+            _authManagerMock.Object, _cacheManager, fileSystemMock.Object, _backgroundJobMock.Object, _appSettingsMock.Object);
 
         // Act
         var results = (await datasetsManager.MoveToOrganization("source-org", new[] { "dataset-1", "dataset-2" }, "dest-org")).ToArray();
@@ -777,7 +779,7 @@ public class DatasetManagerTest : TestBase
 
         var datasetsManager = new DatasetsManager(context, utils, _datasetsManagerLogger,
             _objectsManagerMock.Object, _stacManagerMock.Object, _ddbFactoryMock.Object,
-            _authManagerMock.Object, _cacheManager, fileSystemMock.Object, _appSettingsMock.Object);
+            _authManagerMock.Object, _cacheManager, fileSystemMock.Object, _backgroundJobMock.Object, _appSettingsMock.Object);
 
         // Act
         var results = (await datasetsManager.MoveToOrganization("source-org", new[] { "non-existent-dataset" }, "dest-org")).ToArray();
@@ -804,7 +806,7 @@ public class DatasetManagerTest : TestBase
 
         var datasetsManager = new DatasetsManager(context, utils, _datasetsManagerLogger,
             _objectsManagerMock.Object, _stacManagerMock.Object, _ddbFactoryMock.Object,
-            _authManagerMock.Object, _cacheManager, fileSystemMock.Object, _appSettingsMock.Object);
+            _authManagerMock.Object, _cacheManager, fileSystemMock.Object, _backgroundJobMock.Object, _appSettingsMock.Object);
 
         // Act - Mix of existing and non-existing datasets
         var results = (await datasetsManager.MoveToOrganization("source-org",
@@ -827,7 +829,7 @@ public class DatasetManagerTest : TestBase
 
         var datasetsManager = new DatasetsManager(context, utils, _datasetsManagerLogger,
             _objectsManagerMock.Object, _stacManagerMock.Object, _ddbFactoryMock.Object,
-            _authManagerMock.Object, _cacheManager, fileSystemMock.Object, _appSettingsMock.Object);
+            _authManagerMock.Object, _cacheManager, fileSystemMock.Object, _backgroundJobMock.Object, _appSettingsMock.Object);
 
         // Act
         var results = (await datasetsManager.MoveToOrganization("source-org",
@@ -854,7 +856,7 @@ public class DatasetManagerTest : TestBase
 
         var datasetsManager = new DatasetsManager(context, utils, _datasetsManagerLogger,
             _objectsManagerMock.Object, _stacManagerMock.Object, _ddbFactoryMock.Object,
-            _authManagerMock.Object, _cacheManager, fileSystemMock.Object, _appSettingsMock.Object);
+            _authManagerMock.Object, _cacheManager, fileSystemMock.Object, _backgroundJobMock.Object, _appSettingsMock.Object);
 
         // Act
         var results = (await datasetsManager.MoveToOrganization("source-org",
@@ -889,7 +891,7 @@ public class DatasetManagerTest : TestBase
 
         var datasetsManager = new DatasetsManager(context, utils, _datasetsManagerLogger,
             _objectsManagerMock.Object, _stacManagerMock.Object, _ddbFactoryMock.Object,
-            _authManagerMock.Object, _cacheManager, fileSystemMock.Object, _appSettingsMock.Object);
+            _authManagerMock.Object, _cacheManager, fileSystemMock.Object, _backgroundJobMock.Object, _appSettingsMock.Object);
 
         // Act
         var results = (await datasetsManager.MoveToOrganization("source-org",
@@ -918,7 +920,7 @@ public class DatasetManagerTest : TestBase
 
         var datasetsManager = new DatasetsManager(context, utils, _datasetsManagerLogger,
             _objectsManagerMock.Object, _stacManagerMock.Object, _ddbFactoryMock.Object,
-            _authManagerMock.Object, _cacheManager, fileSystemMock.Object, _appSettingsMock.Object);
+            _authManagerMock.Object, _cacheManager, fileSystemMock.Object, _backgroundJobMock.Object, _appSettingsMock.Object);
 
         // Act
         var results = (await datasetsManager.MoveToOrganization("source-org",
@@ -953,7 +955,7 @@ public class DatasetManagerTest : TestBase
 
         var datasetsManager = new DatasetsManager(context, utils, _datasetsManagerLogger,
             _objectsManagerMock.Object, _stacManagerMock.Object, _ddbFactoryMock.Object,
-            _authManagerMock.Object, _cacheManager, fileSystemMock.Object, _appSettingsMock.Object);
+            _authManagerMock.Object, _cacheManager, fileSystemMock.Object, _backgroundJobMock.Object, _appSettingsMock.Object);
 
         // Act
         var results = (await datasetsManager.MoveToOrganization("source-org", new[] { "dataset-1" }, "dest-org")).ToArray();
@@ -977,7 +979,7 @@ public class DatasetManagerTest : TestBase
 
         var datasetsManager = new DatasetsManager(context, utils, _datasetsManagerLogger,
             _objectsManagerMock.Object, _stacManagerMock.Object, _ddbFactoryMock.Object,
-            _authManagerMock.Object, _cacheManager, fileSystemMock.Object, _appSettingsMock.Object);
+            _authManagerMock.Object, _cacheManager, fileSystemMock.Object, _backgroundJobMock.Object, _appSettingsMock.Object);
 
         // Act & Assert
         var action = () => datasetsManager.MoveToOrganization("non-existent-org", new[] { "dataset-1" }, "dest-org");
@@ -994,7 +996,7 @@ public class DatasetManagerTest : TestBase
 
         var datasetsManager = new DatasetsManager(context, utils, _datasetsManagerLogger,
             _objectsManagerMock.Object, _stacManagerMock.Object, _ddbFactoryMock.Object,
-            _authManagerMock.Object, _cacheManager, fileSystemMock.Object, _appSettingsMock.Object);
+            _authManagerMock.Object, _cacheManager, fileSystemMock.Object, _backgroundJobMock.Object, _appSettingsMock.Object);
 
         // Act & Assert
         var action = () => datasetsManager.MoveToOrganization("source-org", new[] { "dataset-1" }, "non-existent-org");
@@ -1016,7 +1018,7 @@ public class DatasetManagerTest : TestBase
 
         var datasetsManager = new DatasetsManager(context, utils, _datasetsManagerLogger,
             _objectsManagerMock.Object, _stacManagerMock.Object, _ddbFactoryMock.Object,
-            _authManagerMock.Object, _cacheManager, fileSystemMock.Object, _appSettingsMock.Object);
+            _authManagerMock.Object, _cacheManager, fileSystemMock.Object, _backgroundJobMock.Object, _appSettingsMock.Object);
 
         // Act
         await datasetsManager.MoveToOrganization("source-org", new[] { "dataset-1", "dataset-2" }, "dest-org");
@@ -1040,7 +1042,7 @@ public class DatasetManagerTest : TestBase
 
         var datasetsManager = new DatasetsManager(context, utils, _datasetsManagerLogger,
             _objectsManagerMock.Object, _stacManagerMock.Object, _ddbFactoryMock.Object,
-            _authManagerMock.Object, _cacheManager, fileSystemMock.Object, _appSettingsMock.Object);
+            _authManagerMock.Object, _cacheManager, fileSystemMock.Object, _backgroundJobMock.Object, _appSettingsMock.Object);
 
         // Act - Move datasets, some will conflict, some won't
         var results = (await datasetsManager.MoveToOrganization("source-org",

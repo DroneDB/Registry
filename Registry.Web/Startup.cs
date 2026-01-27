@@ -260,6 +260,8 @@ public class Startup
         services.AddScoped<IBackgroundJobsProcessor, BackgroundJobsProcessor>();
         services.AddScoped<IMetaManager, Services.Managers.MetaManager>();
         services.AddScoped<BuildPendingService>();
+        services.AddScoped<DatasetCleanupService>();
+        services.AddScoped<OrphanedDatasetCleanupService>();
 
         services.AddScoped<IConfigurationHelper<AppSettings>, ConfigurationHelper>(_ =>
             new ConfigurationHelper(MagicStrings.AppSettingsFileName));
