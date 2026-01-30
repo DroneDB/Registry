@@ -72,5 +72,17 @@ internal class HangfireJobsInitializer
             processCron);
 
         _logger.LogInformation("Scheduled 'process-pending-builds' with cron: {Cron}", processCron);
+
+        // Cleanup orphaned dataset folders daily at 3:00 AM
+        var orphanedCleanupCron = string.IsNullOrWhiteSpace(appSettings.OrphanedDatasetCleanupCron)
+            ? "0 3 * * *"
+            : appSettings.OrphanedDatasetCleanupCron;
+
+        recurringJobManager.AddOrUpdate<OrphanedDatasetCleanupService>(
+            "cleanup-orphaned-datasets",
+            service => service.CleanupOrphanedFoldersAsync(null),
+            orphanedCleanupCron);
+
+        _logger.LogInformation("Scheduled 'cleanup-orphaned-datasets' with cron: {Cron}", orphanedCleanupCron);
     }
 }

@@ -184,6 +184,22 @@ public class ObjectsManager : IObjectsManager
 
         _logger.LogInformation("In AddNew('{OrgSlug}/{DsSlug}')", orgSlug, dsSlug);
 
+        // Validate path to prevent path traversal attacks
+        if (string.IsNullOrWhiteSpace(path))
+            throw new ArgumentException("Path cannot be empty");
+
+        if (Path.IsPathRooted(path))
+            throw new ArgumentException("Invalid path: absolute paths are not allowed");
+
+        // Normalize the path and verify it doesn't escape the base directory
+        // This catches encoded sequences like %2e%2e, backslash tricks, and other bypass attempts
+        var normalizedPath = Path.GetFullPath(path, "/");
+        if (!normalizedPath.StartsWith("/") || normalizedPath.Contains(".."))
+            throw new ArgumentException("Invalid path: path traversal is not allowed");
+
+        if (IsReservedPath(path))
+            throw new InvalidOperationException($"'{path}' is a reserved path");
+
         if (!await _authManager.RequestAccess(ds, AccessType.Write))
             throw new UnauthorizedException("The current user is not allowed to write to this dataset");
 
@@ -250,15 +266,6 @@ public class ObjectsManager : IObjectsManager
 
             var meta = new IndexPayload(orgSlug, dsSlug, entry.Hash, user.Id, null, entry.Path);
             var jobId = _backgroundJob.EnqueueIndexed(() => HangfireUtils.BuildWrapper(ddb, path, false, null), meta);
-
-            _logger.LogInformation("Background job id is {JobId}", jobId);
-        }
-        else if (ddb.IsBuildPending())
-        {
-            _logger.LogInformation("Items are pending build, retriggering build");
-
-            var meta = new IndexPayload(orgSlug, dsSlug, entry.Hash, user.Id, null, entry.Path);
-            var jobId = _backgroundJob.EnqueueIndexed(() => HangfireUtils.BuildPendingWrapper(ddb, null), meta);
 
             _logger.LogInformation("Background job id is {JobId}", jobId);
         }
@@ -670,65 +677,152 @@ public class ObjectsManager : IObjectsManager
         _logger.LogInformation("Move OK");
     }
 
-    public async Task Delete(string orgSlug, string dsSlug, string path)
+    public async Task Delete(string orgSlug, string dsSlug, string[] paths)
     {
         var ds = _utils.GetDataset(orgSlug, dsSlug);
 
-        _logger.LogInformation("In Delete('{OrgSlug}/{DsSlug}')", orgSlug, dsSlug);
+        _logger.LogInformation("In Delete('{OrgSlug}/{DsSlug}', {PathCount} paths)", orgSlug, dsSlug, paths.Length);
 
         if (!await _authManager.RequestAccess(ds, AccessType.Write))
             throw new UnauthorizedException("The current user is not allowed to edit this dataset");
 
-        if (IsReservedPath(path))
-            throw new InvalidOperationException($"'{path}' is a reserved path");
+        if (paths.Any(IsReservedPath))
+            throw new InvalidOperationException("One or more specified paths are reserved paths");
 
         var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
 
-        if (!ddb.EntryExists(path))
-            throw new BadRequestException($"Path '{path}' not found in dataset");
-
-        var objs = ddb.Search(path, true).ToArray();
-
-        // Let's delete from DDB first
-        try
+        foreach (var path in paths)
         {
-            _logger.LogInformation("Removing from DDB");
-            ddb.Remove(path);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogWarning("Cannot delete {ObjPath} from DDB: {Reason}", path, ex.Message);
-            throw new InvalidOperationException("Cannot delete object from database", ex);
+            if (!ddb.EntryExists(path))
+                throw new BadRequestException($"Path '{path}' not found in dataset");
         }
 
-        var filesToDelete = objs.Where(item => item.Type != EntryType.Directory).ToArray();
-
-        _logger.LogInformation("Deleting {FilesCount} files", filesToDelete.Length);
-
-        // Then we delete from the file system
-        foreach (var obj in filesToDelete)
+        foreach (var path in paths)
         {
-            var objLocalPath = ddb.GetLocalPath(obj.Path);
+            var objs = ddb.Search(path, true).ToArray();
 
-            _logger.LogInformation("Deleting {ObjPath} in physical path {PhysicalPath}", obj.Path, objLocalPath);
-
+            // Let's delete from DDB first
             try
             {
-                if (!_fs.Exists(objLocalPath))
-                    throw new InvalidOperationException(
-                        $"Cannot find local file '{objLocalPath}' for object '{obj.Path}'");
-
-                _fs.Delete(objLocalPath);
-
+                _logger.LogInformation("Removing from DDB: {ObjPath}", path);
+                ddb.Remove(path);
             }
             catch (Exception ex)
             {
-                // We basically ignore this error, it's not critical. We should perform a cleanup later
-                _logger.LogWarning("Cannot delete local file {ObjPath}: {Reason}", objLocalPath, ex.Message);
+                _logger.LogWarning("Cannot delete {ObjPath} from DDB: {Reason}", path, ex.Message);
+                throw new InvalidOperationException("Cannot delete object from database", ex);
+            }
+
+            var filesToDelete = objs.Where(item => item.Type != EntryType.Directory).ToArray();
+
+            _logger.LogInformation("Deleting {FilesCount} files for path {ObjPath}", filesToDelete.Length, path);
+
+            // Then we delete from the file system
+            foreach (var obj in filesToDelete)
+            {
+                var objLocalPath = ddb.GetLocalPath(obj.Path);
+
+                _logger.LogInformation("Deleting {ObjPath} in physical path {PhysicalPath}", obj.Path, objLocalPath);
+
+                try
+                {
+                    if (!_fs.Exists(objLocalPath))
+                        throw new InvalidOperationException(
+                            $"Cannot find local file '{objLocalPath}' for object '{obj.Path}'");
+
+                    _fs.Delete(objLocalPath);
+
+                }
+                catch (Exception ex)
+                {
+                    // We basically ignore this error, it's not critical. We should perform a cleanup later
+                    _logger.LogWarning("Cannot delete local file {ObjPath}: {Reason}", objLocalPath, ex.Message);
+                }
             }
         }
 
         _logger.LogInformation("Deletion complete");
+    }
+
+    public Task Delete(string orgSlug, string dsSlug, string path)
+    {
+        return Delete(orgSlug, dsSlug, [path]);
+    }
+
+    public async Task<DeleteBatchResponse> DeleteBatch(string orgSlug, string dsSlug, string[] paths)
+    {
+        var ds = _utils.GetDataset(orgSlug, dsSlug);
+
+        _logger.LogInformation("In DeleteBatch('{OrgSlug}/{DsSlug}', {Count} paths)", orgSlug, dsSlug, paths.Length);
+
+        if (!await _authManager.RequestAccess(ds, AccessType.Write))
+            throw new UnauthorizedException("The current user is not allowed to edit this dataset");
+
+        var response = new DeleteBatchResponse();
+        var deleted = new List<string>();
+        var failed = new Dictionary<string, string>();
+
+        var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
+
+        foreach (var path in paths)
+        {
+            try
+            {
+                if (IsReservedPath(path))
+                {
+                    failed[path] = "Path is reserved and cannot be deleted";
+                    continue;
+                }
+
+                if (!ddb.EntryExists(path))
+                {
+                    failed[path] = "Path not found in dataset";
+                    continue;
+                }
+
+                var objs = ddb.Search(path, true).ToArray();
+
+                // Delete from DDB first
+                _logger.LogInformation("Removing from DDB: {ObjPath}", path);
+                ddb.Remove(path);
+
+                var filesToDelete = objs.Where(item => item.Type != EntryType.Directory).ToArray();
+                _logger.LogInformation("Deleting {FilesCount} files for path {ObjPath}", filesToDelete.Length, path);
+
+                // Then delete from file system
+                foreach (var obj in filesToDelete)
+                {
+                    var objLocalPath = ddb.GetLocalPath(obj.Path);
+                    try
+                    {
+                        if (_fs.Exists(objLocalPath))
+                        {
+                            _fs.Delete(objLocalPath);
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        // Log but don't fail - file system cleanup is not critical
+                        _logger.LogWarning("Cannot delete local file {ObjPath}: {Reason}", objLocalPath, ex.Message);
+                    }
+                }
+
+                deleted.Add(path);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning("Failed to delete {ObjPath}: {Reason}", path, ex.Message);
+                failed[path] = ex.Message;
+            }
+        }
+
+        response.Deleted = deleted.ToArray();
+        response.Failed = failed;
+
+        _logger.LogInformation("DeleteBatch complete: {DeletedCount} deleted, {FailedCount} failed",
+            deleted.Count, failed.Count);
+
+        return response;
     }
 
     public async Task DeleteAll(string orgSlug, string dsSlug)

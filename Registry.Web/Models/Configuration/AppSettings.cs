@@ -170,4 +170,10 @@ public class AppSettings
     /// </summary>
     public string ProcessPendingBuildsCron { get; set; }
 
+    /// <summary>
+    /// Cron expression for orphaned dataset folder cleanup task
+    /// Default: "0 3 * * *" (daily at 3:00 AM)
+    /// </summary>
+    public string OrphanedDatasetCleanupCron { get; set; }
+
 }

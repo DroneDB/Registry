@@ -13,6 +13,7 @@ using Registry.Web.Data.Models;
 using Registry.Web.Exceptions;
 using Registry.Web.Models.Configuration;
 using Registry.Web.Models.DTO;
+using Registry.Web.Services.Adapters;
 using Registry.Web.Services.Ports;
 using Registry.Web.Utilities;
 
@@ -29,6 +30,7 @@ public class DatasetsManager : IDatasetsManager
     private readonly IAuthManager _authManager;
     private readonly ICacheManager _cacheManager;
     private readonly IFileSystem _fileSystem;
+    private readonly IBackgroundJobsProcessor _backgroundJob;
     private readonly AppSettings _settings;
 
     public DatasetsManager(
@@ -41,6 +43,7 @@ public class DatasetsManager : IDatasetsManager
         IAuthManager authManager,
         ICacheManager cacheManager,
         IFileSystem fileSystem,
+        IBackgroundJobsProcessor backgroundJob,
         IOptions<AppSettings> settings)
     {
         _context = context;
@@ -52,6 +55,7 @@ public class DatasetsManager : IDatasetsManager
         _authManager = authManager;
         _cacheManager = cacheManager;
         _fileSystem = fileSystem;
+        _backgroundJob = backgroundJob;
         _settings = settings.Value;
     }
 
@@ -244,20 +248,42 @@ public class DatasetsManager : IDatasetsManager
         if (!await _authManager.RequestAccess(ds, AccessType.Delete))
             throw new UnauthorizedException("The current user cannot delete this dataset");
 
+        // Save references before removing from DB
+        var internalRef = ds.InternalRef;
+
+        // Remove from database immediately (fast operation)
+        _context.Datasets.Remove(ds);
+        await _context.SaveChangesAsync();
+
+        // Clear STAC cache
+        await _stacManager.ClearCache(ds);
+
+        // Schedule background cleanup job for: cancelling active jobs, removing JobIndex entries, deleting filesystem
+        string? jobId = null;
         try
         {
-            await _objectsManager.DeleteAll(orgSlug, dsSlug);
-
-            _context.Datasets.Remove(ds);
-
-            await _context.SaveChangesAsync();
-
-            await _stacManager.ClearCache(ds);
+            jobId = _backgroundJob.Enqueue<DatasetCleanupService>(
+                service => service.CleanupDeletedDatasetAsync(orgSlug, dsSlug, internalRef, null));
         }
         catch (Exception ex)
         {
-            _logger.LogWarning(ex, "Error deleting dataset");
-            throw new InvalidOperationException("Error deleting dataset", ex);
+            _logger.LogError(ex,
+                "Failed to enqueue cleanup job for dataset {OrgSlug}/{DsSlug} with internalRef {InternalRef}",
+                orgSlug, dsSlug, internalRef);
+        }
+
+        if (string.IsNullOrEmpty(jobId))
+        {
+            _logger.LogError(
+                "Cleanup job could not be scheduled for dataset {OrgSlug}/{DsSlug} with internalRef {InternalRef}. " +
+                "Orphaned folder cleanup will handle this later.",
+                orgSlug, dsSlug, internalRef);
+        }
+        else
+        {
+            _logger.LogInformation(
+                "Dataset {OrgSlug}/{DsSlug} removed from DB, cleanup job scheduled with JobId {JobId}",
+                orgSlug, dsSlug, jobId);
         }
     }
 
