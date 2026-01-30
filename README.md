@@ -1,269 +1,109 @@
 # DroneDB Registry
 
-![commits](https://img.shields.io/github/commit-activity/m/DroneDB/registry) ![languages](https://img.shields.io/github/languages/top/DroneDB/registry) ![.NET Core](https://github.com/DroneDB/Registry/workflows/.NET%20Core/badge.svg?branch=master)
+![GitHub Release](https://img.shields.io/github/v/release/DroneDB/Registry) ![commits](https://img.shields.io/github/commit-activity/m/DroneDB/registry) ![languages](https://img.shields.io/github/languages/top/DroneDB/registry) ![.NET Core](https://github.com/DroneDB/Registry/workflows/.NET%20Core/badge.svg?branch=master)
 
-DroneDB Registry is a simple, user-friendly aerial data management and storage application. It is STAC-compliant and features JWT authentication.
+DroneDB Registry is a comprehensive geospatial data management and storage platform. It provides JWT authentication, a full REST API, and STAC compliance for interoperability.
 
-Combined with [Hub](https://github.com/DroneDB/Hub), it provides a simple, fast and reliable platform for hosting and sharing geospatial images and data.
-It also allows you to view orthophotos, point clouds and 3d models (obj) easily and effortlessly directly in the browser.
+View orthophotos, point clouds, 3D models (OBJ, GLTF, GLB), panoramas and more directly in the browser with interactive measurement tools.
 
-### Orthophoto and flight path
+## 📚 Documentation
 
-![orthophoto](https://user-images.githubusercontent.com/7868983/152324827-d16949b8-dd96-4d3a-b5c5-a732e999f070.png)
+**Full documentation is available at [docs.dronedb.app](https://docs.dronedb.app)**
 
-### Files with previews
+| Guide | Description |
+|-------|-------------|
+| [Registry Guide](https://docs.dronedb.app/docs/registry) | Installation, configuration, deployment |
+| [User Management](https://docs.dronedb.app/docs/user-management) | Users, roles, organizations, quotas |
+| [API Reference](https://docs.dronedb.app/docs/api-reference) | REST API documentation |
 
-![files](https://user-images.githubusercontent.com/7868983/152324902-abfe0910-6115-46c5-b561-59bc5a417dda.png)
+## ✨ Features
 
-### Point cloud interactive view
+- **Dataset Management** - Create, organize and share datasets with fine-grained permissions
+- **Interactive Visualization** - View orthophotos, point clouds, 3D models and panoramas in browser
+- **Measurements** - 2D and 3D measurement tools on maps and point clouds
+- **STAC Compliance** - Standard SpatioTemporal Asset Catalog API
+- **On-Demand Processing** - Automatic thumbnails, tiles, COG and streaming format generation
+- **User Management** - Role-based access control with organizations and storage quotas
 
-![point-cloud](https://user-images.githubusercontent.com/7868983/152324757-4ee73f71-bf8e-4c72-9910-7073a68daee3.png)
+### Supported Formats
 
-### Example repositories
+| Category | Formats |
+|----------|---------|
+| Images | JPG, JPEG, DNG, TIF, TIFF, PNG, GIF, WEBP |
+| Point Clouds | LAS, LAZ, PLY |
+| 3D Models | OBJ, GLTF, GLB, PLY |
+| Rasters | GeoTIFF (orthophotos, DEMs) |
+| Vector | GeoJSON, SHP, KML, KMZ, DXF, DWG, GPKG |
+| Other | Panoramas (360°), Videos (MP4, MOV), Markdown, PDF |
 
-- [Brighton Beach](https://hub.dronedb.app/r/hedo88/brighton-beach)
-- [ODM Seneca](https://hub.dronedb.app/r/hedo88/odm-seneca)
-- [ODM Sance](https://hub.dronedb.app/r/hedo88/odm-sance)
-- [Panorama Example](https://hub.dronedb.app/r/pierotofy/panoexample/)
+### Live Examples
 
-## Getting started with Docker
+- [Brighton Beach](https://hub.dronedb.app/r/hedo88/brighton-beach) - Point cloud
+- [ODM Seneca](https://hub.dronedb.app/r/hedo88/odm-seneca) - Orthophoto with measurements
+- [Panorama Example](https://hub.dronedb.app/r/pierotofy/panoexample/) - 360° panorama viewer
 
-To get started, download [Docker](https://www.docker.com/community-edition) and install it. Then run this command:
+## 🚀 Quick Start with Docker
 
-
-```
+```bash
 docker run -it --rm -p 5000:5000 -v ${PWD}/registry-data:/data dronedb/registry
 ```
 
-The data will be stored in the local folder `registry-data`.
-Open http://localhost:5000 in your browser to start using the application.
+Open http://localhost:5000 • Default credentials: `admin` / `password`
 
-Default credentials are `admin` and `password`.
+> ⚠️ Change the default password immediately at http://localhost:5000/account
 
-Useful links:
- - API Docs (Scalar): http://localhost:5000/scalar/v1
- - Version: http://localhost:5000/version
- - (req auth) Quick Health: http://localhost:5000/quickhealth
- - (req auth) Health: http://localhost:5000/health
- - (req auth) Hangfire: http://localhost:5000/hangfire
+### Useful Endpoints
 
-The log file is located in `registry-data/logs/registry.txt`.
+| Endpoint | Description |
+|----------|-------------|
+| `/scalar/v1` | API Documentation |
+| `/stac` | STAC Catalog |
+| `/hangfire` | Background jobs dashboard (requires auth) |
 
-## Getting started natively
+For production deployment with MySQL/MariaDB, see the [full documentation](https://docs.dronedb.app/docs/registry#running-in-production).
 
-You need to install the latest version of the [DroneDB library](https://github.com/DroneDB/DroneDB/releases/latest) and add it to PATH.
+## 🛠️ Development
 
-Download the [latest release](https://github.com/DroneDB/Registry/releases/latest) for your platform and run the following command:
+### Requirements
 
-```bash
-./Registry.Web ./registry-data
-```
+- [.NET 9.0 SDK](https://dotnet.microsoft.com/en-us/download/dotnet/9.0)
+- [Node.js 22+](https://nodejs.org/) (LTS recommended)
+- [DroneDB Library](https://github.com/DroneDB/DroneDB/releases/latest) (add to PATH)
 
-There are several other command line options:
-
-```
--a, --address              (Default: localhost:5000) Address to listen on
--c, --check                Check configuration and exit.
--r, --reset-hub            Reset the Hub folder by re-creating it.
--t, --instance-type        Instance type to run as. (0: Default, 1: ProcessingNode, 2: WebServer)
---help                     Display this help screen.
---version                  Display version information.
-Storage folder (pos. 0)    Required. Points to a directory on a filesystem where to store Registry data.
-```
-
-> **_NOTE:_**  This configuration uses sqlite as database. It is for local testing only. If you want to use the application in a heavy load environment, check the following section.
-
-### Change admin password
-
-Go to http://localhost:5000/account to change password.
-Otherwise, you can change the admin password by changing the value of the field `DefaultAdmin.Password` in the `appsettings.json` file. After changing the password you need to restart the application.
-
-### Use MySQL / MariaDB instead of Sqlite
-
-After the first run close the program and edit the file `appsettings.json` in `registry-data` folder:
-
-```json
-"AuthProvider": "Mysql",
-"RegistryProvider": "Mysql",
-"HangfireProvider": "Mysql",
-"ConnectionStrings": {
-  "IdentityConnection": "Server=db;Database=RegistryAuth;Uid=registry;Pwd=password",
-  "RegistryConnection": "Server=db;Database=RegistryData;Uid=registry;Pwd=password",
-  "HangfireConnection": "Server=db;Database=RegistryHangfire;Uid=registry;Pwd=password;Allow User Variables=true;Connect Timeout=300"
-  },
-```
-
-Make sure the user `registry` has the following permissions:
-
-```sql
-GRANT ALL PRIVILEGES ON *.* TO 'registry'@'%' IDENTIFIED BY 'password' WITH GRANT OPTION;
-```
-
-Then restart the application, the databases will be automatically created.
-
-## Running with docker-compose
-
-```bash
-cd docker/testing
-docker-compose up -d
-```
-
-The stack is composed of:
- - MariaDB database
- - PHPMyAdmin, exposed on port [8080](http://localhost:8080)
- - Registry, exposed on port [5000](http://localhost:5000)
-
-## Running in production
-
-You will need [Git](https://git-scm.com/downloads). Clone the repo and initialize submodules:
+### Build from Source
 
 ```bash
 git clone https://github.com/DroneDB/Registry
 cd Registry
 git submodule update --init --recursive
-```
 
-And then run the following commands:
-
-### Linux
-
-```bash
-cd docker/production
-chmod +x run.sh
-./run.sh
-```
-
-### Windows
-
-```bash
-cd docker/production
-run.bat
-```
-
-Check that everything is running smoothly:
-
-```bash
-docker-compose ps
-docker-compose logs -f
-```
-
-When all the containers are running, you can then open http://localhost:5000 in your browser, use `admin:password` as default credentials.
-
-You can stop the application by issuing:
-
-```bash
-docker-compose down
-```
-
-The `run.sh` / `run.bat` script will create the default `appsettings.json` file, the database initialization script and start the Docker containers.
-
-It is possible to customize the startup settings by creating a `.env` file in the same folder. Here's an example:
-
-### Linux (quotes are important)
-```bash
-MYSQL_ROOT_PASSWORD="default-root-password"
-MYSQL_PASSWORD="default-mysql-password"
-REGISTRY_ADMIN_MAIL="test@test.it"
-REGISTRY_ADMIN_PASSWORD="password"
-REGISTRY_SECRET="longandrandomsecrettobegeneratedusingcryptographicallystrongrandomnumbergenerator"
-EXTERNAL_URL=""
-CONTROL_SWITCH='$controlSwitch'
-```
-
-### Windows (values without quotes)
-```batch
-MYSQL_ROOT_PASSWORD=default-root-password
-MYSQL_PASSWORD=default-mysql-password
-REGISTRY_ADMIN_MAIL=test@test.it
-REGISTRY_ADMIN_PASSWORD=password
-REGISTRY_SECRET=longandrandomsecrettobegeneratedusingcryptographicallystrongrandomnumbergenerator
-EXTERNAL_URL=
-CONTROL_SWITCH=$controlSwitch
-```
-
-If you want to reduce the log verbosity, you can change `"Information"` to `"Warning"` in `appsettings.json`:
-
-```json
-    "LevelSwitches": {
-        "$CONTROL_SWITCH": "Warning"
-    }
-```
-
-then run
-
-```
-docker-compose restart registry
-````
-
-> **_Info:_** Any changes to the configuration file need to restart the registry container
-
-## Build Docker image
-
-If you want to build the image from scratch, you can use the following commands:
-
-```bash
-git clone https://github.com/DroneDB/Registry
-cd Registry
-git submodule update --init --recursive
-docker build . -t dronedb/registry
-```
-
-## Running from source
-
-`Registry` is written in C# on .NET Core 6 platform and runs natively on both Linux and Windows.
-To install the latest .NET SDK see the [official download page](https://dotnet.microsoft.com/en-us/download/dotnet/6.0). Before building registry ensure you have `ddblib` in your path, if not, download the [latest release](https://github.com/DroneDB/DroneDB/releases) and add it to `PATH`.
-
-Clone the repository:
-
-```bash
-git clone https://github.com/DroneDB/Registry
-cd Registry
-git submodule update --init --recursive
-```
-
-Build the Hub interface (need [NodeJS 14+](https://nodejs.org/download/release/v14.18.3/)):
-
-```bash
+# Build Vue.js frontend
 cd Registry.Web/ClientApp
-npm install -g webpack@4
 npm install
-webpack
-```
+npm run build
+cd ../..
 
-Build the solution from the command line:
-
-```bash
+# Build and run
 dotnet build
+dotnet run --project Registry.Web ./registry-data
 ```
 
-Run the tests to make sure the project is working correctly:
+### Run Tests
 
 ```bash
 dotnet test
 ```
 
-Then you can run the application:
+## 🐳 Docker Build
 
 ```bash
-dotnet run --project Registry.Web ./registry-data
+docker build . -t dronedb/registry
 ```
 
-## Updating
+## 📄 License
 
-In order to update the application, you need to replace the executable with the latest version. It will perform the required migrations and update the database at the next startup.
+This project is dual-licensed. See [LICENSE.md](LICENSE.md) for details.
 
-With docker or docker-compose, you update the application by pulling the latest image and restarting the container:
+## 🤝 Contributing
 
-```bash
-docker-compose pull
-docker-compose down
-docker-compose up -d
-```
-
-## Project architecture
-
-![dronedb-registry-architecture](https://user-images.githubusercontent.com/7868983/151846022-891685f7-ef47-4b93-8199-d4ac4e788c5d.png)
-
-## Note
-
-DroneDB Registry is under development and is targeted at GIS developers and tech enthusiasts. To contribute to the project, please see the [contributing guidelines](CONTRIBUTING.md).
+Contributions are welcome! Please see the [contributing guidelines](CONTRIBUTING.md).
