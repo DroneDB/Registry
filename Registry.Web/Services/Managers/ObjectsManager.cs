@@ -184,26 +184,16 @@ public class ObjectsManager : IObjectsManager
 
         _logger.LogInformation("In AddNew('{OrgSlug}/{DsSlug}')", orgSlug, dsSlug);
 
+        var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
+
         // Validate path to prevent path traversal attacks
-        if (string.IsNullOrWhiteSpace(path))
-            throw new ArgumentException("Path cannot be empty");
-
-        if (Path.IsPathRooted(path))
-            throw new ArgumentException("Invalid path: absolute paths are not allowed");
-
-        // Normalize the path and verify it doesn't escape the base directory
-        // This catches encoded sequences like %2e%2e, backslash tricks, and other bypass attempts
-        var normalizedPath = Path.GetFullPath(path, "/");
-        if (!normalizedPath.StartsWith("/") || normalizedPath.Contains(".."))
-            throw new ArgumentException("Invalid path: path traversal is not allowed");
+        CommonUtils.ValidateRelativePath(path, ddb.DatasetFolderPath);
 
         if (IsReservedPath(path))
             throw new InvalidOperationException($"'{path}' is a reserved path");
 
         if (!await _authManager.RequestAccess(ds, AccessType.Write))
             throw new UnauthorizedException("The current user is not allowed to write to this dataset");
-
-        var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
 
         // If it's a folder
         if (stream == null)
