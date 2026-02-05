@@ -543,7 +543,7 @@ public class OrganizationsManager : IOrganizationsManager
         var orgUser = org.Users?.FirstOrDefault(u => u.UserId == user.Id);
         if (orgUser == null) return false;
 
-        return orgUser.Permissions >= OrganizationPermissions.Admin;
+        return orgUser.Permissions.CanManageMembers();
     }
 
     #endregion
