@@ -234,7 +234,7 @@ public class OrganizationMemberPermissionsTest : TestBase
         SetupAsUser(_ownerUser);
         var manager = CreateManager();
 
-        await manager.AddMember(_testOrg.Slug, newUser.Id, OrganizationPermissions.ReadWrite);
+        await manager.AddMember(_testOrg.Slug, newUser.UserName, OrganizationPermissions.ReadWrite);
 
         var orgUser = await _context.Set<OrganizationUser>()
             .FirstOrDefaultAsync(u => u.UserId == newUser.Id && u.OrganizationSlug == _testOrg.Slug);
@@ -276,7 +276,7 @@ public class OrganizationMemberPermissionsTest : TestBase
         var manager = CreateManager();
 
         await Should.ThrowAsync<InvalidOperationException>(
-            manager.AddMember(_testOrg.Slug, _ownerUser.Id, OrganizationPermissions.ReadWrite)
+            manager.AddMember(_testOrg.Slug, _ownerUser.UserName, OrganizationPermissions.ReadWrite)
         );
     }
 
@@ -287,7 +287,7 @@ public class OrganizationMemberPermissionsTest : TestBase
         var manager = CreateManager();
 
         await Should.ThrowAsync<ConflictException>(
-            manager.AddMember(_testOrg.Slug, _memberUser.Id, OrganizationPermissions.ReadWrite)
+            manager.AddMember(_testOrg.Slug, _memberUser.UserName, OrganizationPermissions.ReadWrite)
         );
     }
 
@@ -301,7 +301,7 @@ public class OrganizationMemberPermissionsTest : TestBase
         SetupAsUser(_ownerUser);
         var manager = CreateManager();
 
-        await manager.UpdateMemberPermission(_testOrg.Slug, _memberUser.Id, OrganizationPermissions.Admin);
+        await manager.UpdateMemberPermission(_testOrg.Slug, _memberUser.UserName, OrganizationPermissions.Admin);
 
         var orgUser = await _context.Set<OrganizationUser>()
             .FirstOrDefaultAsync(u => u.UserId == _memberUser.Id);
@@ -315,7 +315,7 @@ public class OrganizationMemberPermissionsTest : TestBase
         SetupAsAdmin(_adminUser);
         var manager = CreateManager();
 
-        await manager.UpdateMemberPermission(_testOrg.Slug, _memberUser.Id, OrganizationPermissions.ReadWriteDelete);
+        await manager.UpdateMemberPermission(_testOrg.Slug, _memberUser.UserName, OrganizationPermissions.ReadWriteDelete);
 
         var orgUser = await _context.Set<OrganizationUser>()
             .FirstOrDefaultAsync(u => u.UserId == _memberUser.Id);
@@ -344,7 +344,7 @@ public class OrganizationMemberPermissionsTest : TestBase
         SetupAsUser(_ownerUser);
         var manager = CreateManager();
 
-        await manager.RemoveMember(_testOrg.Slug, _memberUser.Id);
+        await manager.RemoveMember(_testOrg.Slug, _memberUser.UserName);
 
         var orgUser = await _context.Set<OrganizationUser>()
             .FirstOrDefaultAsync(u => u.UserId == _memberUser.Id);
@@ -371,7 +371,7 @@ public class OrganizationMemberPermissionsTest : TestBase
         var manager = CreateManager();
 
         await Should.ThrowAsync<InvalidOperationException>(
-            manager.RemoveMember(_testOrg.Slug, _memberUser.Id)
+            manager.RemoveMember(_testOrg.Slug, _memberUser.UserName)
         );
     }
 
