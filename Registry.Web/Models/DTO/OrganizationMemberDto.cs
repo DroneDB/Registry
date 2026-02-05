@@ -10,12 +10,7 @@ namespace Registry.Web.Models.DTO;
 public class OrganizationMemberDto
 {
     /// <summary>
-    /// User's unique identifier
-    /// </summary>
-    public string UserId { get; set; }
-
-    /// <summary>
-    /// User's display name
+    /// User's display name (unique identifier)
     /// </summary>
     public string UserName { get; set; }
 
@@ -46,9 +41,9 @@ public class OrganizationMemberDto
 public class AddOrganizationMemberDto
 {
     /// <summary>
-    /// User ID to add as member
+    /// Username to add as member
     /// </summary>
-    public string UserId { get; set; }
+    public string UserName { get; set; }
 
     /// <summary>
     /// Permission level. Default is ReadWrite

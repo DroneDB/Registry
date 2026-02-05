@@ -47,24 +47,24 @@ public interface IOrganizationsManager
     /// Adds a new member to an organization
     /// </summary>
     /// <param name="orgSlug">Organization slug</param>
-    /// <param name="userId">User ID to add</param>
+    /// <param name="userName">Username to add</param>
     /// <param name="permissions">Permission level</param>
-    Task AddMember(string orgSlug, string userId, OrganizationPermissions permissions = OrganizationPermissions.ReadWrite);
+    Task AddMember(string orgSlug, string userName, OrganizationPermissions permissions = OrganizationPermissions.ReadWrite);
 
     /// <summary>
     /// Updates a member's permission level
     /// </summary>
     /// <param name="orgSlug">Organization slug</param>
-    /// <param name="userId">User ID to update</param>
+    /// <param name="userName">Username to update</param>
     /// <param name="permissions">New permission level</param>
-    Task UpdateMemberPermission(string orgSlug, string userId, OrganizationPermissions permissions);
+    Task UpdateMemberPermission(string orgSlug, string userName, OrganizationPermissions permissions);
 
     /// <summary>
     /// Removes a member from an organization
     /// </summary>
     /// <param name="orgSlug">Organization slug</param>
-    /// <param name="userId">User ID to remove</param>
-    Task RemoveMember(string orgSlug, string userId);
+    /// <param name="userName">Username to remove</param>
+    Task RemoveMember(string orgSlug, string userName);
 
     /// <summary>
     /// Checks if organization member management feature is enabled

@@ -247,13 +247,13 @@ public class OrganizationsController : ControllerBaseEx
     {
         try
         {
-            _logger.LogDebug("Organizations controller AddMember('{OrgSlug}', '{UserId}')", orgSlug, request.UserId);
-            await _organizationsManager.AddMember(orgSlug, request.UserId, request.Permissions);
+            _logger.LogDebug("Organizations controller AddMember('{OrgSlug}', '{UserName}')", orgSlug, request.UserName);
+            await _organizationsManager.AddMember(orgSlug, request.UserName, request.Permissions);
             return NoContent();
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Exception in Organizations controller AddMember('{OrgSlug}', '{UserId}')", orgSlug, request.UserId);
+            _logger.LogError(ex, "Exception in Organizations controller AddMember('{OrgSlug}', '{UserName}')", orgSlug, request.UserName);
             return ExceptionResult(ex);
         }
     }
@@ -263,30 +263,30 @@ public class OrganizationsController : ControllerBaseEx
     /// Requires organization owner, admin permission, or system admin.
     /// </summary>
     /// <param name="orgSlug">The organization slug.</param>
-    /// <param name="userId">The user ID to update.</param>
+    /// <param name="userName">The username to update.</param>
     /// <param name="request">The new permission level.</param>
     /// <returns>No content on success.</returns>
-    [HttpPut("{orgSlug}/members/{userId}", Name = nameof(UpdateMemberPermission))]
+    [HttpPut("{orgSlug}/members/{userName}", Name = nameof(UpdateMemberPermission))]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> UpdateMemberPermission(
         [FromRoute, Required] string orgSlug,
-        [FromRoute, Required] string userId,
+        [FromRoute, Required] string userName,
         [FromBody, Required] UpdateMemberPermissionsDto request)
     {
         try
         {
-            _logger.LogDebug("Organizations controller UpdateMemberPermission('{OrgSlug}', '{UserId}', {Permissions})",
-                orgSlug, userId, request.Permissions);
-            await _organizationsManager.UpdateMemberPermission(orgSlug, userId, request.Permissions);
+            _logger.LogDebug("Organizations controller UpdateMemberPermission('{OrgSlug}', '{UserName}', {Permissions})",
+                orgSlug, userName, request.Permissions);
+            await _organizationsManager.UpdateMemberPermission(orgSlug, userName, request.Permissions);
             return NoContent();
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Exception in Organizations controller UpdateMemberPermission('{OrgSlug}', '{UserId}')",
-                orgSlug, userId);
+            _logger.LogError(ex, "Exception in Organizations controller UpdateMemberPermission('{OrgSlug}', '{UserName}')",
+                orgSlug, userName);
             return ExceptionResult(ex);
         }
     }
@@ -296,25 +296,25 @@ public class OrganizationsController : ControllerBaseEx
     /// Requires organization owner, admin permission, or system admin.
     /// </summary>
     /// <param name="orgSlug">The organization slug.</param>
-    /// <param name="userId">The user ID to remove.</param>
+    /// <param name="userName">The username to remove.</param>
     /// <returns>No content on success.</returns>
-    [HttpDelete("{orgSlug}/members/{userId}", Name = nameof(RemoveMember))]
+    [HttpDelete("{orgSlug}/members/{userName}", Name = nameof(RemoveMember))]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> RemoveMember(
         [FromRoute, Required] string orgSlug,
-        [FromRoute, Required] string userId)
+        [FromRoute, Required] string userName)
     {
         try
         {
-            _logger.LogDebug("Organizations controller RemoveMember('{OrgSlug}', '{UserId}')", orgSlug, userId);
-            await _organizationsManager.RemoveMember(orgSlug, userId);
+            _logger.LogDebug("Organizations controller RemoveMember('{OrgSlug}', '{UserName}')", orgSlug, userName);
+            await _organizationsManager.RemoveMember(orgSlug, userName);
             return NoContent();
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Exception in Organizations controller RemoveMember('{OrgSlug}', '{UserId}')", orgSlug, userId);
+            _logger.LogError(ex, "Exception in Organizations controller RemoveMember('{OrgSlug}', '{UserName}')", orgSlug, userName);
             return ExceptionResult(ex);
         }
     }
