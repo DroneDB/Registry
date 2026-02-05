@@ -61,3 +61,65 @@ public class UpdateMemberPermissionsDto
     /// </summary>
     public OrganizationPermissions Permissions { get; set; }
 }
+
+/// <summary>
+/// DTO representing a user's membership in an organization, including org info and membership details
+/// </summary>
+public class UserOrganizationMembershipDto
+{
+    /// <summary>
+    /// Organization slug (unique identifier)
+    /// </summary>
+    public string Slug { get; set; }
+
+    /// <summary>
+    /// Organization display name
+    /// </summary>
+    public string Name { get; set; }
+
+    /// <summary>
+    /// Organization description
+    /// </summary>
+    public string Description { get; set; }
+
+    /// <summary>
+    /// Whether the organization is public
+    /// </summary>
+    public bool IsPublic { get; set; }
+
+    /// <summary>
+    /// Whether the user is the owner of this organization (cannot be removed)
+    /// </summary>
+    public bool IsOwner { get; set; }
+
+    /// <summary>
+    /// Permission level (0=ReadOnly, 1=ReadWrite, 2=ReadWriteDelete, 3=Admin). Null if owner.
+    /// </summary>
+    public OrganizationPermissions? Permissions { get; set; }
+
+    /// <summary>
+    /// When the membership was granted (null for owners)
+    /// </summary>
+    public DateTime? GrantedAt { get; set; }
+
+    /// <summary>
+    /// Username of who granted the membership (null for owners)
+    /// </summary>
+    public string GrantedBy { get; set; }
+}
+
+/// <summary>
+/// Request DTO for adding a user to an organization (from user management perspective)
+/// </summary>
+public class AddUserToOrganizationDto
+{
+    /// <summary>
+    /// Organization slug to add the user to
+    /// </summary>
+    public string OrgSlug { get; set; }
+
+    /// <summary>
+    /// Permission level. Default is ReadWrite
+    /// </summary>
+    public OrganizationPermissions Permissions { get; set; } = OrganizationPermissions.ReadWrite;
+}

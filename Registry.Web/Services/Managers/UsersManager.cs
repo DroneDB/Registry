@@ -463,7 +463,7 @@ public class UsersManager : IUsersManager
 
     }
 
-    public async Task<OrganizationDto[]> GetUserOrganizations(string userName)
+    public async Task<UserOrganizationMembershipDto[]> GetUserOrganizations(string userName)
     {
         var currentUser = await _authManager.GetCurrentUser();
 
@@ -478,92 +478,160 @@ public class UsersManager : IUsersManager
         if (user == null)
             throw new BadRequestException("Cannot find user " + userName);
 
-        // Use projection to load only necessary data for DTOs
-        var orgDtos = await _registryContext.Organizations
+        // Get all organizations where user is owner OR member
+        var orgs = await _registryContext.Organizations
+            .Include(o => o.Users)
             .AsNoTracking()
             .Where(org => org.OwnerId == user.Id || org.Users.Any(item => item.UserId == user.Id))
-            .Select(org => new OrganizationDto
+            .ToListAsync();
+
+        var results = new List<UserOrganizationMembershipDto>();
+
+        foreach (var org in orgs)
+        {
+            var isOwner = org.OwnerId == user.Id;
+            var membership = org.Users?.FirstOrDefault(u => u.UserId == user.Id);
+
+            string grantedByUserName = null;
+            if (membership?.GrantedBy != null)
             {
-                CreationDate = org.CreationDate,
-                Description = org.Description,
+                var grantedByUser = await _applicationDbContext.Users.FindAsync(membership.GrantedBy);
+                grantedByUserName = grantedByUser?.UserName;
+            }
+
+            results.Add(new UserOrganizationMembershipDto
+            {
                 Slug = org.Slug,
                 Name = org.Name,
+                Description = org.Description,
                 IsPublic = org.IsPublic,
-                Owner = org.OwnerId
-            })
-            .ToArrayAsync();
-
-        return orgDtos;
-    }
-
-    public async Task SetUserOrganizations(string userName, string[] orgSlugs)
-    {
-        var currentUser = await _authManager.GetCurrentUser();
-
-        if (currentUser == null)
-            throw new BadRequestException("User does not exist");
-
-        if (!await _authManager.IsUserAdmin())
-            throw new UnauthorizedException("Cannot get other user's meta");
-
-        var user = await _userManager.FindByNameAsync(userName);
-
-        if (user == null)
-            throw new BadRequestException("Cannot find user " + userName);
-
-        var orgs = (from org in _registryContext.Organizations.Include(o => o.Users).AsNoTracking()
-            where org.OwnerId == user.Id || org.Users.Any(item => item.UserId == user.Id)
-            select org).ToArray();
-
-        _logger.LogInformation("User {UserName} is in {Count} organizations: {Orgs}", userName, orgs.Length,
-            orgs.Select(o => o.Slug).ToArray());
-
-        var orgsDict = orgs.ToDictionary(item => item.Slug, item => item);
-
-        // Remove duplicates
-        orgSlugs = orgSlugs.Distinct().ToArray();
-
-        // Find out what orgs to add
-        var toAdd = orgSlugs.Where(slug => !orgsDict.ContainsKey(slug)).ToArray();
-
-        _logger.LogInformation("User {UserName} will be added to {Count} organizations: {Orgs}", userName, toAdd.Length,
-            toAdd);
-
-        // Add user to orgs
-        foreach (var slug in toAdd)
-        {
-            var org = await _registryContext.Organizations.Include(o => o.Users)
-                .FirstOrDefaultAsync(item => item.Slug == slug);
-
-            if (org == null)
-                throw new BadRequestException("Organization does not exist: " + slug);
-
-            org.Users.Add(new OrganizationUser
-            {
-                UserId = user.Id,
-                OrganizationSlug = org.Slug
+                IsOwner = isOwner,
+                Permissions = isOwner ? null : membership?.Permissions,
+                GrantedAt = isOwner ? null : membership?.GrantedAt,
+                GrantedBy = isOwner ? null : grantedByUserName
             });
         }
 
-        // Find out what orgs to remove (except the owner)
-        var toRemove = orgs.Where(org => !orgSlugs.Contains(org.Slug) && org.OwnerId != user.Id).ToArray();
+        return results.ToArray();
+    }
 
-        _logger.LogInformation("User {UserName} will be removed from {Count} organizations: {Orgs}", userName,
-            toRemove.Length, toRemove.Select(o => o.Slug).ToArray());
+    public async Task AddUserToOrganization(string userName, string orgSlug, OrganizationPermissions permissions)
+    {
+        var currentUser = await _authManager.GetCurrentUser();
 
-        // Remove user from orgs
-        foreach (var org in toRemove)
+        if (currentUser == null)
+            throw new BadRequestException("User does not exist");
+
+        if (!await _authManager.IsUserAdmin())
+            throw new UnauthorizedException("Only admins can manage user organizations");
+
+        var user = await _userManager.FindByNameAsync(userName);
+        if (user == null)
+            throw new BadRequestException("Cannot find user " + userName);
+
+        var org = await _registryContext.Organizations
+            .Include(o => o.Users)
+            .FirstOrDefaultAsync(o => o.Slug == orgSlug);
+
+        if (org == null)
+            throw new BadRequestException("Organization does not exist: " + orgSlug);
+
+        // Cannot add if already owner
+        if (org.OwnerId == user.Id)
+            throw new BadRequestException("User is already the owner of this organization");
+
+        // Check if already a member
+        if (org.Users?.Any(u => u.UserId == user.Id) == true)
+            throw new BadRequestException("User is already a member of this organization");
+
+        var orgUser = new OrganizationUser
         {
-            var orgUser = await _registryContext.OrganizationsUsers.FirstOrDefaultAsync(item =>
-                item.OrganizationSlug == org.Slug && item.UserId == user.Id);
+            OrganizationSlug = orgSlug,
+            UserId = user.Id,
+            Permissions = permissions,
+            GrantedAt = DateTime.UtcNow,
+            GrantedBy = currentUser.Id
+        };
 
-            if (orgUser == null)
-                throw new BadRequestException("User is not in organization: " + org.Slug);
-
-            _registryContext.OrganizationsUsers.Remove(orgUser);
-        }
-
+        _registryContext.OrganizationsUsers.Add(orgUser);
         await _registryContext.SaveChangesAsync();
+
+        _logger.LogInformation("User {UserName} added to organization {OrgSlug} with permission {Permission} by {GrantedBy}",
+            userName, orgSlug, permissions, currentUser.UserName);
+    }
+
+    public async Task RemoveUserFromOrganization(string userName, string orgSlug)
+    {
+        var currentUser = await _authManager.GetCurrentUser();
+
+        if (currentUser == null)
+            throw new BadRequestException("User does not exist");
+
+        if (!await _authManager.IsUserAdmin())
+            throw new UnauthorizedException("Only admins can manage user organizations");
+
+        var user = await _userManager.FindByNameAsync(userName);
+        if (user == null)
+            throw new BadRequestException("Cannot find user " + userName);
+
+        var org = await _registryContext.Organizations
+            .FirstOrDefaultAsync(o => o.Slug == orgSlug);
+
+        if (org == null)
+            throw new BadRequestException("Organization does not exist: " + orgSlug);
+
+        // Cannot remove owner
+        if (org.OwnerId == user.Id)
+            throw new BadRequestException("Cannot remove the owner from their organization");
+
+        var orgUser = await _registryContext.OrganizationsUsers
+            .FirstOrDefaultAsync(item => item.OrganizationSlug == orgSlug && item.UserId == user.Id);
+
+        if (orgUser == null)
+            throw new BadRequestException("User is not a member of this organization");
+
+        _registryContext.OrganizationsUsers.Remove(orgUser);
+        await _registryContext.SaveChangesAsync();
+
+        _logger.LogInformation("User {UserName} removed from organization {OrgSlug} by {RemovedBy}",
+            userName, orgSlug, currentUser.UserName);
+    }
+
+    public async Task UpdateUserOrganizationPermissions(string userName, string orgSlug, OrganizationPermissions permissions)
+    {
+        var currentUser = await _authManager.GetCurrentUser();
+
+        if (currentUser == null)
+            throw new BadRequestException("User does not exist");
+
+        if (!await _authManager.IsUserAdmin())
+            throw new UnauthorizedException("Only admins can manage user organizations");
+
+        var user = await _userManager.FindByNameAsync(userName);
+        if (user == null)
+            throw new BadRequestException("Cannot find user " + userName);
+
+        var org = await _registryContext.Organizations
+            .FirstOrDefaultAsync(o => o.Slug == orgSlug);
+
+        if (org == null)
+            throw new BadRequestException("Organization does not exist: " + orgSlug);
+
+        // Cannot update owner permissions
+        if (org.OwnerId == user.Id)
+            throw new BadRequestException("Cannot change permissions for the organization owner");
+
+        var orgUser = await _registryContext.OrganizationsUsers
+            .FirstOrDefaultAsync(item => item.OrganizationSlug == orgSlug && item.UserId == user.Id);
+
+        if (orgUser == null)
+            throw new BadRequestException("User is not a member of this organization");
+
+        orgUser.Permissions = permissions;
+        await _registryContext.SaveChangesAsync();
+
+        _logger.LogInformation("User {UserName} permissions in organization {OrgSlug} updated to {Permission} by {UpdatedBy}",
+            userName, orgSlug, permissions, currentUser.UserName);
     }
 
     public async Task<DeleteUserResultDto> DeleteUser(

@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc;
+using Registry.Common;
 using Registry.Web.Identity.Models;
 using Registry.Web.Models;
 using Registry.Web.Models.DTO;
@@ -39,6 +40,8 @@ public interface IUsersManager
     Task DeleteRole(string roleName);
     Task UpdateUserRoles(string userName, string[] roles);
     Task UpdateUser(string userName, string email);
-    Task<OrganizationDto[]> GetUserOrganizations(string userName);
-    Task SetUserOrganizations(string userName, string[] orgSlugs);
+    Task<UserOrganizationMembershipDto[]> GetUserOrganizations(string userName);
+    Task AddUserToOrganization(string userName, string orgSlug, OrganizationPermissions permissions);
+    Task RemoveUserFromOrganization(string userName, string orgSlug);
+    Task UpdateUserOrganizationPermissions(string userName, string orgSlug, OrganizationPermissions permissions);
 }

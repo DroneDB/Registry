@@ -121,7 +121,7 @@ public class OrganizationMemberPermissionsTest : TestBase
     [Test]
     public void OrganizationPermission_ReadOnly_AllowsOnlyRead()
     {
-        var permission = OrganizationPermissions.ReadOnly;
+        const OrganizationPermissions permission = OrganizationPermissions.ReadOnly;
 
         permission.HasAccess(AccessType.Read).ShouldBeTrue();
         permission.HasAccess(AccessType.Write).ShouldBeFalse();
@@ -132,7 +132,7 @@ public class OrganizationMemberPermissionsTest : TestBase
     [Test]
     public void OrganizationPermission_ReadWrite_AllowsReadAndWrite()
     {
-        var permission = OrganizationPermissions.ReadWrite;
+        const OrganizationPermissions permission = OrganizationPermissions.ReadWrite;
 
         permission.HasAccess(AccessType.Read).ShouldBeTrue();
         permission.HasAccess(AccessType.Write).ShouldBeTrue();
@@ -143,7 +143,7 @@ public class OrganizationMemberPermissionsTest : TestBase
     [Test]
     public void OrganizationPermission_ReadWriteDelete_AllowsReadWriteDelete()
     {
-        var permission = OrganizationPermissions.ReadWriteDelete;
+        const OrganizationPermissions permission = OrganizationPermissions.ReadWriteDelete;
 
         permission.HasAccess(AccessType.Read).ShouldBeTrue();
         permission.HasAccess(AccessType.Write).ShouldBeTrue();
