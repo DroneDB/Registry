@@ -93,7 +93,7 @@ public class OrganizationMemberPermissionsTest : TestBase
             {
                 OrganizationSlug = _testOrg.Slug,
                 UserId = _memberUser.Id,
-                Permissions = OrganizationPermission.ReadWrite,
+                Permissions = OrganizationPermissions.ReadWrite,
                 GrantedAt = DateTime.UtcNow,
                 GrantedBy = _ownerUser.Id
             },
@@ -101,7 +101,7 @@ public class OrganizationMemberPermissionsTest : TestBase
             {
                 OrganizationSlug = _testOrg.Slug,
                 UserId = _readOnlyUser.Id,
-                Permissions = OrganizationPermission.ReadOnly,
+                Permissions = OrganizationPermissions.ReadOnly,
                 GrantedAt = DateTime.UtcNow,
                 GrantedBy = _ownerUser.Id
             }
@@ -121,7 +121,7 @@ public class OrganizationMemberPermissionsTest : TestBase
     [Test]
     public void OrganizationPermission_ReadOnly_AllowsOnlyRead()
     {
-        var permission = OrganizationPermission.ReadOnly;
+        var permission = OrganizationPermissions.ReadOnly;
 
         permission.HasAccess(AccessType.Read).ShouldBeTrue();
         permission.HasAccess(AccessType.Write).ShouldBeFalse();
@@ -132,7 +132,7 @@ public class OrganizationMemberPermissionsTest : TestBase
     [Test]
     public void OrganizationPermission_ReadWrite_AllowsReadAndWrite()
     {
-        var permission = OrganizationPermission.ReadWrite;
+        var permission = OrganizationPermissions.ReadWrite;
 
         permission.HasAccess(AccessType.Read).ShouldBeTrue();
         permission.HasAccess(AccessType.Write).ShouldBeTrue();
@@ -143,7 +143,7 @@ public class OrganizationMemberPermissionsTest : TestBase
     [Test]
     public void OrganizationPermission_ReadWriteDelete_AllowsReadWriteDelete()
     {
-        var permission = OrganizationPermission.ReadWriteDelete;
+        var permission = OrganizationPermissions.ReadWriteDelete;
 
         permission.HasAccess(AccessType.Read).ShouldBeTrue();
         permission.HasAccess(AccessType.Write).ShouldBeTrue();
@@ -154,7 +154,7 @@ public class OrganizationMemberPermissionsTest : TestBase
     [Test]
     public void OrganizationPermission_Admin_AllowsEverything()
     {
-        var permission = OrganizationPermission.Admin;
+        var permission = OrganizationPermissions.Admin;
 
         permission.HasAccess(AccessType.Read).ShouldBeTrue();
         permission.HasAccess(AccessType.Write).ShouldBeTrue();
@@ -165,10 +165,10 @@ public class OrganizationMemberPermissionsTest : TestBase
     [Test]
     public void OrganizationPermission_GetDisplayName_ReturnsCorrectNames()
     {
-        OrganizationPermission.ReadOnly.GetDisplayName().ShouldBe("Read Only");
-        OrganizationPermission.ReadWrite.GetDisplayName().ShouldBe("Read/Write");
-        OrganizationPermission.ReadWriteDelete.GetDisplayName().ShouldBe("Read/Write/Delete");
-        OrganizationPermission.Admin.GetDisplayName().ShouldBe("Admin");
+        OrganizationPermissions.ReadOnly.GetDisplayName().ShouldBe("Read Only");
+        OrganizationPermissions.ReadWrite.GetDisplayName().ShouldBe("Read/Write");
+        OrganizationPermissions.ReadWriteDelete.GetDisplayName().ShouldBe("Read/Write/Delete");
+        OrganizationPermissions.Admin.GetDisplayName().ShouldBe("Admin");
     }
 
     #endregion
@@ -184,8 +184,8 @@ public class OrganizationMemberPermissionsTest : TestBase
         var members = (await manager.GetMembers(_testOrg.Slug)).ToList();
 
         members.Count.ShouldBe(2);
-        members.ShouldContain(m => m.UserName == "member" && m.Permission == OrganizationPermission.ReadWrite);
-        members.ShouldContain(m => m.UserName == "readonly" && m.Permission == OrganizationPermission.ReadOnly);
+        members.ShouldContain(m => m.UserName == "member" && m.Permissions == OrganizationPermissions.ReadWrite);
+        members.ShouldContain(m => m.UserName == "readonly" && m.Permissions == OrganizationPermissions.ReadOnly);
     }
 
     [Test]
@@ -234,13 +234,13 @@ public class OrganizationMemberPermissionsTest : TestBase
         SetupAsUser(_ownerUser);
         var manager = CreateManager();
 
-        await manager.AddMember(_testOrg.Slug, newUser.Id, OrganizationPermission.ReadWrite);
+        await manager.AddMember(_testOrg.Slug, newUser.Id, OrganizationPermissions.ReadWrite);
 
         var orgUser = await _context.Set<OrganizationUser>()
             .FirstOrDefaultAsync(u => u.UserId == newUser.Id && u.OrganizationSlug == _testOrg.Slug);
 
         orgUser.ShouldNotBeNull();
-        orgUser.Permissions.ShouldBe(OrganizationPermission.ReadWrite);
+        orgUser.Permissions.ShouldBe(OrganizationPermissions.ReadWrite);
         orgUser.GrantedBy.ShouldBe(_ownerUser.Id);
     }
 
@@ -252,7 +252,7 @@ public class OrganizationMemberPermissionsTest : TestBase
         var manager = CreateManager();
 
         var ex = await Should.ThrowAsync<InvalidOperationException>(
-            manager.AddMember(_testOrg.Slug, "some-user-id", OrganizationPermission.ReadWrite)
+            manager.AddMember(_testOrg.Slug, "some-user-id", OrganizationPermissions.ReadWrite)
         );
 
         ex.Message.ShouldContain("disabled");
@@ -265,7 +265,7 @@ public class OrganizationMemberPermissionsTest : TestBase
         var manager = CreateManager();
 
         await Should.ThrowAsync<UnauthorizedException>(
-            manager.AddMember(_testOrg.Slug, "some-user-id", OrganizationPermission.ReadWrite)
+            manager.AddMember(_testOrg.Slug, "some-user-id", OrganizationPermissions.ReadWrite)
         );
     }
 
@@ -276,7 +276,7 @@ public class OrganizationMemberPermissionsTest : TestBase
         var manager = CreateManager();
 
         await Should.ThrowAsync<InvalidOperationException>(
-            manager.AddMember(_testOrg.Slug, _ownerUser.Id, OrganizationPermission.ReadWrite)
+            manager.AddMember(_testOrg.Slug, _ownerUser.Id, OrganizationPermissions.ReadWrite)
         );
     }
 
@@ -287,7 +287,7 @@ public class OrganizationMemberPermissionsTest : TestBase
         var manager = CreateManager();
 
         await Should.ThrowAsync<ConflictException>(
-            manager.AddMember(_testOrg.Slug, _memberUser.Id, OrganizationPermission.ReadWrite)
+            manager.AddMember(_testOrg.Slug, _memberUser.Id, OrganizationPermissions.ReadWrite)
         );
     }
 
@@ -301,12 +301,12 @@ public class OrganizationMemberPermissionsTest : TestBase
         SetupAsUser(_ownerUser);
         var manager = CreateManager();
 
-        await manager.UpdateMemberPermission(_testOrg.Slug, _memberUser.Id, OrganizationPermission.Admin);
+        await manager.UpdateMemberPermission(_testOrg.Slug, _memberUser.Id, OrganizationPermissions.Admin);
 
         var orgUser = await _context.Set<OrganizationUser>()
             .FirstOrDefaultAsync(u => u.UserId == _memberUser.Id);
 
-        orgUser.Permissions.ShouldBe(OrganizationPermission.Admin);
+        orgUser.Permissions.ShouldBe(OrganizationPermissions.Admin);
     }
 
     [Test]
@@ -315,12 +315,12 @@ public class OrganizationMemberPermissionsTest : TestBase
         SetupAsAdmin(_adminUser);
         var manager = CreateManager();
 
-        await manager.UpdateMemberPermission(_testOrg.Slug, _memberUser.Id, OrganizationPermission.ReadWriteDelete);
+        await manager.UpdateMemberPermission(_testOrg.Slug, _memberUser.Id, OrganizationPermissions.ReadWriteDelete);
 
         var orgUser = await _context.Set<OrganizationUser>()
             .FirstOrDefaultAsync(u => u.UserId == _memberUser.Id);
 
-        orgUser.Permissions.ShouldBe(OrganizationPermission.ReadWriteDelete);
+        orgUser.Permissions.ShouldBe(OrganizationPermissions.ReadWriteDelete);
     }
 
     [Test]
@@ -330,7 +330,7 @@ public class OrganizationMemberPermissionsTest : TestBase
         var manager = CreateManager();
 
         await Should.ThrowAsync<NotFoundException>(
-            manager.UpdateMemberPermission(_testOrg.Slug, "non-existent-user", OrganizationPermission.ReadWrite)
+            manager.UpdateMemberPermission(_testOrg.Slug, "non-existent-user", OrganizationPermissions.ReadWrite)
         );
     }
 

@@ -48,16 +48,16 @@ public interface IOrganizationsManager
     /// </summary>
     /// <param name="orgSlug">Organization slug</param>
     /// <param name="userId">User ID to add</param>
-    /// <param name="permission">Permission level</param>
-    Task AddMember(string orgSlug, string userId, OrganizationPermission permission = OrganizationPermission.ReadWrite);
+    /// <param name="permissions">Permission level</param>
+    Task AddMember(string orgSlug, string userId, OrganizationPermissions permissions = OrganizationPermissions.ReadWrite);
 
     /// <summary>
     /// Updates a member's permission level
     /// </summary>
     /// <param name="orgSlug">Organization slug</param>
     /// <param name="userId">User ID to update</param>
-    /// <param name="permission">New permission level</param>
-    Task UpdateMemberPermission(string orgSlug, string userId, OrganizationPermission permission);
+    /// <param name="permissions">New permission level</param>
+    Task UpdateMemberPermission(string orgSlug, string userId, OrganizationPermissions permissions);
 
     /// <summary>
     /// Removes a member from an organization

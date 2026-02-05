@@ -4,7 +4,7 @@ namespace Registry.Common;
 /// Permission levels for organization members.
 /// Higher values include all permissions of lower values.
 /// </summary>
-public enum OrganizationPermission
+public enum OrganizationPermissions
 {
     /// <summary>
     /// Can only read/view datasets and organization info

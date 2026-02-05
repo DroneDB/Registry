@@ -27,7 +27,7 @@ public class OrganizationMemberDto
     /// <summary>
     /// Permission level (0=ReadOnly, 1=ReadWrite, 2=ReadWriteDelete, 3=Admin)
     /// </summary>
-    public OrganizationPermission Permission { get; set; }
+    public OrganizationPermissions Permissions { get; set; }
 
     /// <summary>
     /// When the membership was granted
@@ -53,16 +53,16 @@ public class AddOrganizationMemberDto
     /// <summary>
     /// Permission level. Default is ReadWrite
     /// </summary>
-    public OrganizationPermission Permission { get; set; } = OrganizationPermission.ReadWrite;
+    public OrganizationPermissions Permissions { get; set; } = OrganizationPermissions.ReadWrite;
 }
 
 /// <summary>
-/// Request DTO for updating a member's permission
+/// Request DTO for updating a member's permissions
 /// </summary>
-public class UpdateMemberPermissionDto
+public class UpdateMemberPermissionsDto
 {
     /// <summary>
     /// New permission level
     /// </summary>
-    public OrganizationPermission Permission { get; set; }
+    public OrganizationPermissions Permissions { get; set; }
 }

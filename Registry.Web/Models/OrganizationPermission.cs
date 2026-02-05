@@ -4,20 +4,20 @@ using Registry.Web.Services.Managers;
 namespace Registry.Web.Models;
 
 /// <summary>
-/// Extension methods for OrganizationPermission
+/// Extension methods for OrganizationPermissions
 /// </summary>
-public static class OrganizationPermissionExtensions
+public static class OrganizationPermissionsExtensions
 {
     /// <summary>
     /// Checks if the permission level allows the specified access type
     /// </summary>
-    public static bool HasAccess(this OrganizationPermission permission, AccessType accessType)
+    public static bool HasAccess(this OrganizationPermissions permission, AccessType accessType)
     {
         return accessType switch
         {
-            AccessType.Read => permission >= OrganizationPermission.ReadOnly,
-            AccessType.Write => permission >= OrganizationPermission.ReadWrite,
-            AccessType.Delete => permission >= OrganizationPermission.ReadWriteDelete,
+            AccessType.Read => permission >= OrganizationPermissions.ReadOnly,
+            AccessType.Write => permission >= OrganizationPermissions.ReadWrite,
+            AccessType.Delete => permission >= OrganizationPermissions.ReadWriteDelete,
             _ => false
         };
     }
@@ -25,22 +25,22 @@ public static class OrganizationPermissionExtensions
     /// <summary>
     /// Checks if the permission level allows member management
     /// </summary>
-    public static bool CanManageMembers(this OrganizationPermission permission)
+    public static bool CanManageMembers(this OrganizationPermissions permission)
     {
-        return permission >= OrganizationPermission.Admin;
+        return permission >= OrganizationPermissions.Admin;
     }
 
     /// <summary>
     /// Gets the display name for the permission level
     /// </summary>
-    public static string GetDisplayName(this OrganizationPermission permission)
+    public static string GetDisplayName(this OrganizationPermissions permission)
     {
         return permission switch
         {
-            OrganizationPermission.ReadOnly => "Read Only",
-            OrganizationPermission.ReadWrite => "Read/Write",
-            OrganizationPermission.ReadWriteDelete => "Read/Write/Delete",
-            OrganizationPermission.Admin => "Admin",
+            OrganizationPermissions.ReadOnly => "Read Only",
+            OrganizationPermissions.ReadWrite => "Read/Write",
+            OrganizationPermissions.ReadWriteDelete => "Read/Write/Delete",
+            OrganizationPermissions.Admin => "Admin",
             _ => "Unknown"
         };
     }

@@ -68,7 +68,7 @@ public class OrganizationAccessControl : AccessControlBase
             return false;
 
         // Check permission level against requested access
-        var permission = (OrganizationPermission)orgUser.Permissions;
+        var permission = (OrganizationPermissions)orgUser.Permissions;
         return permission.HasAccess(access);
     }
 
@@ -102,7 +102,7 @@ public class OrganizationAccessControl : AccessControlBase
         if (orgUser == null)
             return false;
 
-        var permission = (OrganizationPermission)orgUser.Permissions;
+        var permission = (OrganizationPermissions)orgUser.Permissions;
         return permission.CanManageMembers();
     }
 
@@ -110,7 +110,7 @@ public class OrganizationAccessControl : AccessControlBase
     /// Gets the permission level for a user in an organization
     /// Returns null if user is not a member
     /// </summary>
-    public async Task<OrganizationPermission?> GetUserPermission(Organization org, User user)
+    public async Task<OrganizationPermissions?> GetUserPermission(Organization org, User user)
     {
         if (org == null || user == null)
             return null;
@@ -123,6 +123,6 @@ public class OrganizationAccessControl : AccessControlBase
         if (orgUser == null)
             return null;
 
-        return (OrganizationPermission)orgUser.Permissions;
+        return (OrganizationPermissions)orgUser.Permissions;
     }
 }

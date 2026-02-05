@@ -248,7 +248,7 @@ public class OrganizationsController : ControllerBaseEx
         try
         {
             _logger.LogDebug("Organizations controller AddMember('{OrgSlug}', '{UserId}')", orgSlug, request.UserId);
-            await _organizationsManager.AddMember(orgSlug, request.UserId, request.Permission);
+            await _organizationsManager.AddMember(orgSlug, request.UserId, request.Permissions);
             return NoContent();
         }
         catch (Exception ex)
@@ -274,13 +274,13 @@ public class OrganizationsController : ControllerBaseEx
     public async Task<IActionResult> UpdateMemberPermission(
         [FromRoute, Required] string orgSlug,
         [FromRoute, Required] string userId,
-        [FromBody, Required] UpdateMemberPermissionDto request)
+        [FromBody, Required] UpdateMemberPermissionsDto request)
     {
         try
         {
-            _logger.LogDebug("Organizations controller UpdateMemberPermission('{OrgSlug}', '{UserId}', {Permission})",
-                orgSlug, userId, request.Permission);
-            await _organizationsManager.UpdateMemberPermission(orgSlug, userId, request.Permission);
+            _logger.LogDebug("Organizations controller UpdateMemberPermission('{OrgSlug}', '{UserId}', {Permissions})",
+                orgSlug, userId, request.Permissions);
+            await _organizationsManager.UpdateMemberPermission(orgSlug, userId, request.Permissions);
             return NoContent();
         }
         catch (Exception ex)

@@ -411,7 +411,7 @@ public class OrganizationsManager : IOrganizationsManager
                 UserId = orgUser.UserId,
                 UserName = user.UserName,
                 Email = user.Email,
-                Permission = (OrganizationPermission)orgUser.Permissions,
+                Permissions = (OrganizationPermissions)orgUser.Permissions,
                 GrantedAt = orgUser.GrantedAt,
                 GrantedBy = grantedByUser?.UserName
             });
@@ -420,7 +420,7 @@ public class OrganizationsManager : IOrganizationsManager
         return members;
     }
 
-    public async Task AddMember(string orgSlug, string userId, OrganizationPermission permission = OrganizationPermission.ReadWrite)
+    public async Task AddMember(string orgSlug, string userId, OrganizationPermissions permissions = OrganizationPermissions.ReadWrite)
     {
         // Validate feature is enabled
         if (!IsMemberManagementEnabled)
@@ -455,7 +455,7 @@ public class OrganizationsManager : IOrganizationsManager
         {
             OrganizationSlug = orgSlug,
             UserId = userId,
-            Permissions = permission,
+            Permissions = permissions,
             GrantedAt = DateTime.UtcNow,
             GrantedBy = currentUser?.Id
         };
@@ -464,10 +464,10 @@ public class OrganizationsManager : IOrganizationsManager
         await _context.SaveChangesAsync();
 
         _logger.LogInformation("User {UserId} added to organization {OrgSlug} with permission {Permission} by {GrantedBy}",
-            userId, orgSlug, permission, currentUser?.UserName);
+            userId, orgSlug, permissions, currentUser?.UserName);
     }
 
-    public async Task UpdateMemberPermission(string orgSlug, string userId, OrganizationPermission permission)
+    public async Task UpdateMemberPermission(string orgSlug, string userId, OrganizationPermissions permission)
     {
         // Validate feature is enabled
         if (!IsMemberManagementEnabled)
@@ -543,7 +543,7 @@ public class OrganizationsManager : IOrganizationsManager
         var orgUser = org.Users?.FirstOrDefault(u => u.UserId == user.Id);
         if (orgUser == null) return false;
 
-        return orgUser.Permissions >= OrganizationPermission.Admin;
+        return orgUser.Permissions >= OrganizationPermissions.Admin;
     }
 
     #endregion

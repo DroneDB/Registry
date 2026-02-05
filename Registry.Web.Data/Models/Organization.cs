@@ -40,7 +40,7 @@ public class OrganizationUser
     /// Permission level for this member (0=ReadOnly, 1=ReadWrite, 2=ReadWriteDelete, 3=Admin)
     /// Default is ReadWrite (1) to maintain backward compatibility
     /// </summary>
-    public OrganizationPermission Permissions { get; set; } = OrganizationPermission.ReadWrite;
+    public OrganizationPermissions Permissions { get; set; } = OrganizationPermissions.ReadWrite;
 
     /// <summary>
     /// When the membership was granted
