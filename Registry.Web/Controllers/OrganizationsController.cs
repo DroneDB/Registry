@@ -203,4 +203,134 @@ public class OrganizationsController : ControllerBaseEx
 
     }
 
+    #region Member Management
+
+    /// <summary>
+    /// Gets all members of an organization.
+    /// </summary>
+    /// <param name="orgSlug">The organization slug.</param>
+    /// <returns>List of organization members with their permissions.</returns>
+    [HttpGet("{orgSlug}/members", Name = nameof(GetMembers))]
+    [ProducesResponseType(typeof(IEnumerable<OrganizationMemberDto>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> GetMembers([FromRoute, Required] string orgSlug)
+    {
+        try
+        {
+            _logger.LogDebug("Organizations controller GetMembers('{OrgSlug}')", orgSlug);
+            return Ok(await _organizationsManager.GetMembers(orgSlug));
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Exception in Organizations controller GetMembers('{OrgSlug}')", orgSlug);
+            return ExceptionResult(ex);
+        }
+    }
+
+    /// <summary>
+    /// Adds a new member to an organization.
+    /// Requires organization owner, admin permission, or system admin.
+    /// </summary>
+    /// <param name="orgSlug">The organization slug.</param>
+    /// <param name="request">The member to add with permission level.</param>
+    /// <returns>No content on success.</returns>
+    [HttpPost("{orgSlug}/members", Name = nameof(AddMember))]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status409Conflict)]
+    public async Task<IActionResult> AddMember(
+        [FromRoute, Required] string orgSlug,
+        [FromBody, Required] AddOrganizationMemberDto request)
+    {
+        try
+        {
+            _logger.LogDebug("Organizations controller AddMember('{OrgSlug}', '{UserId}')", orgSlug, request.UserId);
+            await _organizationsManager.AddMember(orgSlug, request.UserId, request.Permission);
+            return NoContent();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Exception in Organizations controller AddMember('{OrgSlug}', '{UserId}')", orgSlug, request.UserId);
+            return ExceptionResult(ex);
+        }
+    }
+
+    /// <summary>
+    /// Updates a member's permission level.
+    /// Requires organization owner, admin permission, or system admin.
+    /// </summary>
+    /// <param name="orgSlug">The organization slug.</param>
+    /// <param name="userId">The user ID to update.</param>
+    /// <param name="request">The new permission level.</param>
+    /// <returns>No content on success.</returns>
+    [HttpPut("{orgSlug}/members/{userId}", Name = nameof(UpdateMemberPermission))]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> UpdateMemberPermission(
+        [FromRoute, Required] string orgSlug,
+        [FromRoute, Required] string userId,
+        [FromBody, Required] UpdateMemberPermissionDto request)
+    {
+        try
+        {
+            _logger.LogDebug("Organizations controller UpdateMemberPermission('{OrgSlug}', '{UserId}', {Permission})",
+                orgSlug, userId, request.Permission);
+            await _organizationsManager.UpdateMemberPermission(orgSlug, userId, request.Permission);
+            return NoContent();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Exception in Organizations controller UpdateMemberPermission('{OrgSlug}', '{UserId}')",
+                orgSlug, userId);
+            return ExceptionResult(ex);
+        }
+    }
+
+    /// <summary>
+    /// Removes a member from an organization.
+    /// Requires organization owner, admin permission, or system admin.
+    /// </summary>
+    /// <param name="orgSlug">The organization slug.</param>
+    /// <param name="userId">The user ID to remove.</param>
+    /// <returns>No content on success.</returns>
+    [HttpDelete("{orgSlug}/members/{userId}", Name = nameof(RemoveMember))]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> RemoveMember(
+        [FromRoute, Required] string orgSlug,
+        [FromRoute, Required] string userId)
+    {
+        try
+        {
+            _logger.LogDebug("Organizations controller RemoveMember('{OrgSlug}', '{UserId}')", orgSlug, userId);
+            await _organizationsManager.RemoveMember(orgSlug, userId);
+            return NoContent();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Exception in Organizations controller RemoveMember('{OrgSlug}', '{UserId}')", orgSlug, userId);
+            return ExceptionResult(ex);
+        }
+    }
+
+    /// <summary>
+    /// Gets the organization member management feature status.
+    /// </summary>
+    /// <returns>Whether member management is enabled.</returns>
+    [HttpGet("features/member-management", Name = nameof(GetMemberManagementStatus))]
+    [AllowAnonymous]
+    [ProducesResponseType(typeof(object), StatusCodes.Status200OK)]
+    public IActionResult GetMemberManagementStatus()
+    {
+        return Ok(new { enabled = _organizationsManager.IsMemberManagementEnabled });
+    }
+
+    #endregion
+
 }

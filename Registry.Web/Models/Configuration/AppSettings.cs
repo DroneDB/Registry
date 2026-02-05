@@ -106,6 +106,12 @@ public class AppSettings
     public bool EnableStorageLimiter { get; set; }
 
     /// <summary>
+    /// Enables organization-level member management.
+    /// When disabled, only system admins can manage organization members.
+    /// </summary>
+    public bool EnableOrganizationMemberManagement { get; set; } = false;
+
+    /// <summary>
     /// Number of worker threads (0 to use ASP.NET default)
     /// </summary>
     public int WorkerThreads { get; set; }
