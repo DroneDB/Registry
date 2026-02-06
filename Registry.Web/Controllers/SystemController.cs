@@ -7,7 +7,9 @@ using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 using Registry.Web.Models;
+using Registry.Web.Models.Configuration;
 using Registry.Web.Models.DTO;
 using Registry.Web.Services.Ports;
 using Registry.Web.Utilities;
@@ -27,17 +29,20 @@ public class SystemController : ControllerBaseEx
     private readonly IDatasetsManager _datasetsManager;
     private readonly IOrganizationsManager _organizationsManager;
     private readonly ILogger<SystemController> _logger;
+    private readonly AppSettings _appSettings;
 
     public SystemController(
         ISystemManager systemManager,
         IDatasetsManager datasetsManager,
         IOrganizationsManager organizationsManager,
-        ILogger<SystemController> logger)
+        ILogger<SystemController> logger,
+        IOptions<AppSettings> appSettings)
     {
         _systemManager = systemManager;
         _datasetsManager = datasetsManager;
         _organizationsManager = organizationsManager;
         _logger = logger;
+        _appSettings = appSettings.Value;
     }
 
     /// <summary>
@@ -293,6 +298,24 @@ public class SystemController : ControllerBaseEx
             _logger.LogError(ex, "Exception in System controller MergeOrganizations");
             return ExceptionResult(ex);
         }
+    }
+
+    /// <summary>
+    /// Gets the status of all platform feature flags.
+    /// </summary>
+    /// <returns>An object with the status of each feature.</returns>
+    [HttpGet("features", Name = nameof(SystemController) + "." + nameof(GetFeatures))]
+    [ProducesResponseType(typeof(FeaturesDto), StatusCodes.Status200OK)]
+    public IActionResult GetFeatures()
+    {
+        var features = new FeaturesDto
+        {
+            OrganizationMemberManagement = _appSettings.EnableOrganizationMemberManagement,
+            UserManagement = string.IsNullOrWhiteSpace(_appSettings.ExternalAuthUrl),
+            StorageLimiter = _appSettings.EnableStorageLimiter
+        };
+
+        return Ok(features);
     }
 
 }

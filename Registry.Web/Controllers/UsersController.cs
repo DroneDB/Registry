@@ -580,31 +580,7 @@ public class UsersController : ControllerBaseEx
 
     #endregion
 
-    /// <summary>
-    /// Checks if user management is enabled. User management is disabled when external authentication is configured.
-    /// </summary>
-    /// <returns>True if user management is enabled, false otherwise.</returns>
-    [AllowAnonymous]
-    [HttpGet("management-enabled", Name = nameof(IsUserManagementEnabled))]
-    [ProducesResponseType(typeof(bool), StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
-    public IActionResult IsUserManagementEnabled()
-    {
-        try
-        {
-            _logger.LogDebug("Users controller IsUserManagementEnabled()");
 
-            // User management is disabled if an external authentication URL is configured
-            var isEnabled = string.IsNullOrWhiteSpace(_appSettings.ExternalAuthUrl);
-
-            return Ok(isEnabled);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Exception in Users controller IsUserManagementEnabled()");
-            return ExceptionResult(ex);
-        }
-    }
 
     /// <summary>
     /// Creates a new role. Requires admin privileges.

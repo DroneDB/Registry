@@ -319,18 +319,6 @@ public class OrganizationsController : ControllerBaseEx
         }
     }
 
-    /// <summary>
-    /// Gets the organization member management feature status.
-    /// </summary>
-    /// <returns>Whether member management is enabled.</returns>
-    [HttpGet("features/member-management", Name = nameof(GetMemberManagementStatus))]
-    [AllowAnonymous]
-    [ProducesResponseType(typeof(object), StatusCodes.Status200OK)]
-    public IActionResult GetMemberManagementStatus()
-    {
-        return Ok(new { enabled = _organizationsManager.IsMemberManagementEnabled });
-    }
-
     #endregion
 
 }
