@@ -173,7 +173,8 @@ namespace Registry.Web.Data.Mysql.Migrations
                         .HasColumnType("varchar(128)");
 
                     b.Property<string>("Path")
-                        .HasColumnType("longtext");
+                        .HasMaxLength(2048)
+                        .HasColumnType("varchar(2048)");
 
                     b.Property<DateTime?>("ProcessingAtUtc")
                         .HasColumnType("datetime(6)");
@@ -243,6 +244,15 @@ namespace Registry.Web.Data.Mysql.Migrations
 
                     b.Property<string>("UserId")
                         .HasColumnType("varchar(255)");
+
+                    b.Property<DateTime?>("GrantedAt")
+                        .HasColumnType("datetime(6)");
+
+                    b.Property<string>("GrantedBy")
+                        .HasColumnType("longtext");
+
+                    b.Property<int>("Permissions")
+                        .HasColumnType("int");
 
                     b.HasKey("OrganizationSlug", "UserId");
 

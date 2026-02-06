@@ -68,6 +68,7 @@ public class OrganizationManagerTest : TestBase
             _webUtils,
             _datasetManagerMock.Object,
             _appContext,
+            _appSettingsMock.Object,
             _logger);
     }
 

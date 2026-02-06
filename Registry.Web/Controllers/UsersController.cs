@@ -464,12 +464,12 @@ public class UsersController : ControllerBaseEx
     #region Organizations
 
     /// <summary>
-    /// Gets the organizations that a user belongs to. Requires admin privileges.
+    /// Gets the organizations that a user belongs to, including membership details. Requires admin privileges.
     /// </summary>
     /// <param name="userName">The username of the user.</param>
-    /// <returns>An array of organizations the user belongs to.</returns>
+    /// <returns>An array of organizations the user belongs to with membership info.</returns>
     [HttpGet("{userName}/orgs", Name = nameof(GetOrganizations))]
-    [ProducesResponseType(typeof(OrganizationDto[]), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(UserOrganizationMembershipDto[]), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status401Unauthorized)]
     public async Task<IActionResult> GetOrganizations([FromRoute, Required] string userName)
@@ -490,30 +490,90 @@ public class UsersController : ControllerBaseEx
     }
 
     /// <summary>
-    /// Sets the organizations that a user belongs to. Requires admin privileges.
+    /// Adds a user to an organization with specified permissions. Requires admin privileges.
     /// </summary>
     /// <param name="userName">The username of the user.</param>
-    /// <param name="orgSlugs">An array of organization slugs to assign to the user.</param>
+    /// <param name="request">The organization and permissions to assign.</param>
     /// <returns>No content on success.</returns>
-    [HttpPut("{userName}/orgs", Name = nameof(SetUserOrganizations))]
+    [HttpPost("{userName}/orgs", Name = nameof(AddUserToOrganization))]
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status401Unauthorized)]
-    public async Task<IActionResult> SetUserOrganizations(
+    public async Task<IActionResult> AddUserToOrganization(
         [FromRoute, Required] string userName,
-        [FromForm, Required] string[] orgSlugs)
+        [FromBody, Required] AddUserToOrganizationDto request)
     {
         try
         {
-            _logger.LogDebug("Users controller SetUserOrganizations('{UserName}')", userName);
+            _logger.LogDebug("Users controller AddUserToOrganization('{UserName}', '{OrgSlug}')", userName, request.OrgSlug);
 
-            await _usersManager.SetUserOrganizations(userName, orgSlugs);
+            await _usersManager.AddUserToOrganization(userName, request.OrgSlug, request.Permissions);
 
             return Ok();
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Exception in Users controller SetUserOrganizations('{UserName}')", userName);
+            _logger.LogError(ex, "Exception in Users controller AddUserToOrganization('{UserName}', '{OrgSlug}')", userName, request.OrgSlug);
+            return ExceptionResult(ex);
+        }
+    }
+
+    /// <summary>
+    /// Updates a user's permissions in an organization. Requires admin privileges.
+    /// </summary>
+    /// <param name="userName">The username of the user.</param>
+    /// <param name="orgSlug">The organization slug.</param>
+    /// <param name="request">The new permissions.</param>
+    /// <returns>No content on success.</returns>
+    [HttpPut("{userName}/orgs/{orgSlug}", Name = nameof(UpdateUserOrganizationPermissions))]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status401Unauthorized)]
+    public async Task<IActionResult> UpdateUserOrganizationPermissions(
+        [FromRoute, Required] string userName,
+        [FromRoute, Required] string orgSlug,
+        [FromBody, Required] UpdateMemberPermissionsDto request)
+    {
+        try
+        {
+            _logger.LogDebug("Users controller UpdateUserOrganizationPermissions('{UserName}', '{OrgSlug}')", userName, orgSlug);
+
+            await _usersManager.UpdateUserOrganizationPermissions(userName, orgSlug, request.Permissions);
+
+            return Ok();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Exception in Users controller UpdateUserOrganizationPermissions('{UserName}', '{OrgSlug}')", userName, orgSlug);
+            return ExceptionResult(ex);
+        }
+    }
+
+    /// <summary>
+    /// Removes a user from an organization. Requires admin privileges. Cannot remove owner.
+    /// </summary>
+    /// <param name="userName">The username of the user.</param>
+    /// <param name="orgSlug">The organization slug.</param>
+    /// <returns>No content on success.</returns>
+    [HttpDelete("{userName}/orgs/{orgSlug}", Name = nameof(RemoveUserFromOrganization))]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status401Unauthorized)]
+    public async Task<IActionResult> RemoveUserFromOrganization(
+        [FromRoute, Required] string userName,
+        [FromRoute, Required] string orgSlug)
+    {
+        try
+        {
+            _logger.LogDebug("Users controller RemoveUserFromOrganization('{UserName}', '{OrgSlug}')", userName, orgSlug);
+
+            await _usersManager.RemoveUserFromOrganization(userName, orgSlug);
+
+            return Ok();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Exception in Users controller RemoveUserFromOrganization('{UserName}', '{OrgSlug}')", userName, orgSlug);
             return ExceptionResult(ex);
         }
     }

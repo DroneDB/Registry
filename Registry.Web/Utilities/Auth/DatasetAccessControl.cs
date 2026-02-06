@@ -3,11 +3,13 @@ using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.Extensions.Logging;
+using Registry.Common;
 using Registry.Ports;
 using Registry.Ports.DroneDB;
 using Registry.Web.Data;
 using Registry.Web.Data.Models;
 using Registry.Web.Identity.Models;
+using Registry.Web.Models;
 using Registry.Web.Services.Managers;
 
 namespace Registry.Web.Utilities.Auth;
@@ -116,10 +118,11 @@ public class DatasetAccessControl : AccessControlBase
             return false;
         }
 
-        // Only the owner can delete datasets
-        if (access == AccessType.Delete)
+        // Check if user is deactivated
+        if (await IsUserDeactivated(orgUserDetails))
             return false;
 
-        return !await IsUserDeactivated(orgUserDetails);
+        // Check permission level against requested access
+        return orgUser.Permissions.HasAccess(access);
     }
 }

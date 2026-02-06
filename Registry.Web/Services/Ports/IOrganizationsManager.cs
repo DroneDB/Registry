@@ -3,6 +3,7 @@ using System.Threading.Tasks;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.Extensions.Options;
+using Registry.Common;
 using Registry.Web.Models;
 using Registry.Web.Models.DTO;
 
@@ -32,4 +33,43 @@ public interface IOrganizationsManager
         string destOrgSlug,
         ConflictResolutionStrategy conflictResolution = ConflictResolutionStrategy.HaltOnConflict,
         bool deleteSourceOrganization = true);
+
+    #region Member Management
+
+    /// <summary>
+    /// Gets all members of an organization
+    /// </summary>
+    /// <param name="orgSlug">Organization slug</param>
+    /// <returns>List of organization members with their permissions</returns>
+    Task<IEnumerable<OrganizationMemberDto>> GetMembers(string orgSlug);
+
+    /// <summary>
+    /// Adds a new member to an organization
+    /// </summary>
+    /// <param name="orgSlug">Organization slug</param>
+    /// <param name="userName">Username to add</param>
+    /// <param name="permissions">Permission level</param>
+    Task AddMember(string orgSlug, string userName, OrganizationPermissions permissions = OrganizationPermissions.ReadWrite);
+
+    /// <summary>
+    /// Updates a member's permission level
+    /// </summary>
+    /// <param name="orgSlug">Organization slug</param>
+    /// <param name="userName">Username to update</param>
+    /// <param name="permissions">New permission level</param>
+    Task UpdateMemberPermission(string orgSlug, string userName, OrganizationPermissions permissions);
+
+    /// <summary>
+    /// Removes a member from an organization
+    /// </summary>
+    /// <param name="orgSlug">Organization slug</param>
+    /// <param name="userName">Username to remove</param>
+    Task RemoveMember(string orgSlug, string userName);
+
+    /// <summary>
+    /// Checks if organization member management feature is enabled
+    /// </summary>
+    bool IsMemberManagementEnabled { get; }
+
+    #endregion
 }
