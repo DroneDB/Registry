@@ -112,6 +112,12 @@ public class AppSettings
     public bool EnableOrganizationMemberManagement { get; set; } = false;
 
     /// <summary>
+    /// Disables the automatic creation of a default personal organization when a new user is created.
+    /// When true, new users will not get a default org; organizations must be assigned manually.
+    /// </summary>
+    public bool DisableDefaultUserOrganization { get; set; } = false;
+
+    /// <summary>
     /// Number of worker threads (0 to use ASP.NET default)
     /// </summary>
     public int WorkerThreads { get; set; }
