@@ -113,7 +113,7 @@ public class AppSettings
 
     /// <summary>
     /// Disables the automatic creation of a default personal organization when a new user is created.
-    /// When true, new users will not get a default org; organizations must be assigned manually.
+    /// When true, new users will not get a default organization; organizations must be assigned manually.
     /// </summary>
     public bool DisableDefaultUserOrganization { get; set; } = false;
 
