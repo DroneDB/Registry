@@ -204,7 +204,7 @@ public class UsersManager : IUsersManager
             throw new InvalidOperationException("Error in creating user");
         }
 
-        if (!_appSettings.DisableDefaultUserOrganization)
+        if (_appSettings.EnableDefaultUserOrganization)
         {
             await CreateUserDefaultOrganization(user);
         }
