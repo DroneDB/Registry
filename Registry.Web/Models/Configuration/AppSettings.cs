@@ -188,4 +188,9 @@ public class AppSettings
     /// </summary>
     public string OrphanedDatasetCleanupCron { get; set; }
 
+    /// <summary>
+    /// Password complexity policy. When null, no password requirements are enforced.
+    /// </summary>
+    public PasswordPolicy PasswordPolicy { get; set; }
+
 }

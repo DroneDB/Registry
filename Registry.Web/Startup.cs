@@ -288,6 +288,7 @@ public class Startup
         services.AddSingleton<IBatchTokenGenerator, BatchTokenGenerator>();
         services.AddSingleton<INameGenerator, NameGenerator>();
         services.AddSingleton<ICacheManager, CacheManager>();
+        services.AddSingleton<IPasswordPolicyValidator, PasswordPolicyValidator>();
 
         services.AddResponseCompression();
 

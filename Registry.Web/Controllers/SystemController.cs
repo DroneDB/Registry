@@ -312,7 +312,17 @@ public class SystemController : ControllerBaseEx
         {
             OrganizationMemberManagement = _appSettings.EnableOrganizationMemberManagement,
             UserManagement = string.IsNullOrWhiteSpace(_appSettings.ExternalAuthUrl),
-            StorageLimiter = _appSettings.EnableStorageLimiter
+            StorageLimiter = _appSettings.EnableStorageLimiter,
+            PasswordPolicy = _appSettings.PasswordPolicy != null
+                ? new PasswordPolicyDto
+                {
+                    MinLength = _appSettings.PasswordPolicy.MinLength,
+                    RequireDigit = _appSettings.PasswordPolicy.RequireDigit,
+                    RequireUppercase = _appSettings.PasswordPolicy.RequireUppercase,
+                    RequireLowercase = _appSettings.PasswordPolicy.RequireLowercase,
+                    RequireNonAlphanumeric = _appSettings.PasswordPolicy.RequireNonAlphanumeric
+                }
+                : null
         };
 
         return Ok(features);
