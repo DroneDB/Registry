@@ -1,3 +1,4 @@
+#nullable enable
 namespace Registry.Web.Services.Ports;
 
 /// <summary>
@@ -9,9 +10,12 @@ public interface IPasswordPolicyValidator
     /// Validates a password against the configured policy.
     /// If no policy is configured, the password is always considered valid.
     /// </summary>
-    /// <param name="password">The password to validate.</param>
+    /// <param name="password">
+    /// The password to validate. May be <c>null</c>; implementations should treat <c>null</c> as invalid
+    /// when a password policy is configured, and valid only when no policy is configured.
+    /// </param>
     /// <returns>A result indicating whether the password is valid, with error messages if not.</returns>
-    PasswordValidationResult Validate(string password);
+    PasswordValidationResult Validate(string? password);
 }
 
 /// <summary>

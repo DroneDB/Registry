@@ -294,26 +294,36 @@ public class UsersManager : IUsersManager
         string newPassword)
     {
         IdentityResult res;
-        
-        if (await _authManager.IsUserAdmin())
+
+        if (currentPassword == null)
         {
-            _logger.LogInformation("Admin user {UserName} is changing password",
-                user.UserName);
-            
+            // Admin override: reset password without requiring the current one
+            if (!await _authManager.IsUserAdmin())
+                throw new UnauthorizedException("Current password is required for non-admin users");
+
+            if (newPassword == null)
+                throw new BadRequestException("New password cannot be null");
+
+            var adminUser = await _authManager.GetCurrentUser();
+            _logger.LogInformation(
+                "Admin user {AdminUserName} is resetting password for {TargetUserName}",
+                adminUser?.UserName, user.UserName);
+
             var resetToken = await _userManager.GeneratePasswordResetTokenAsync(user);
             res = await _userManager.ResetPasswordAsync(user, resetToken, newPassword);
         }
         else
         {
+            // Self-service password change: validate against policy
             _logger.LogInformation("User {UserName} is changing their own password", user.UserName);
-            // Self-service password change: validate against policy before attempting change
+
             var policyResult = _passwordPolicyValidator.Validate(newPassword);
             if (!policyResult.IsValid)
                 throw new BadRequestException("Password does not meet the requirements: " + string.Join("; ", policyResult.Errors));
-            
+
             res = await _userManager.ChangePasswordAsync(user, currentPassword, newPassword);
         }
-        
+
         if (!res.Succeeded)
         {
             var errors = string.Join(";", res.Errors.Select(item => $"{item.Code} - {item.Description}"));
@@ -321,14 +331,14 @@ public class UsersManager : IUsersManager
 
             throw new InvalidOperationException("Cannot change user password: " + errors);
         }
-        
+
         // If this is the default admin password, we should persist it in the config
         if (user.UserName == _appSettings.DefaultAdmin.UserName)
         {
             _appSettings.DefaultAdmin.Password = newPassword;
             _configurationHelper.SaveConfiguration(_appSettings);
         }
-        
+
         _logger.LogInformation("User {UserName} changed password", user.UserName);
 
         return new ChangePasswordResult
@@ -336,7 +346,7 @@ public class UsersManager : IUsersManager
             UserName = user.UserName,
             Password = newPassword
         };
-        
+
     }
 
     public async Task<AuthenticateResponse> Refresh()

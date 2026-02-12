@@ -191,6 +191,8 @@ public class AppSettings
     /// <summary>
     /// Password complexity policy. When null, no password requirements are enforced.
     /// </summary>
-    public PasswordPolicy PasswordPolicy { get; set; }
+#nullable enable
+    public PasswordPolicy? PasswordPolicy { get; set; }
+#nullable restore
 
 }

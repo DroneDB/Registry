@@ -1,3 +1,4 @@
+#nullable enable
 namespace Registry.Web.Models.DTO;
 
 /// <summary>
@@ -23,5 +24,5 @@ public class FeaturesDto
     /// <summary>
     /// Password complexity policy. Null when no policy is enforced.
     /// </summary>
-    public PasswordPolicyDto PasswordPolicy { get; set; }
+    public PasswordPolicyDto? PasswordPolicy { get; set; }
 }
