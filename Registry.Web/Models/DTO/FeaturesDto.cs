@@ -1,3 +1,4 @@
+#nullable enable
 namespace Registry.Web.Models.DTO;
 
 /// <summary>
@@ -19,4 +20,9 @@ public class FeaturesDto
     /// Whether the per-user storage limiter is enabled.
     /// </summary>
     public bool StorageLimiter { get; set; }
+
+    /// <summary>
+    /// Password complexity policy. Null when no policy is enforced.
+    /// </summary>
+    public PasswordPolicyDto? PasswordPolicy { get; set; }
 }

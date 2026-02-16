@@ -37,6 +37,7 @@ public class UsersManagerTest : TestBase
     private Mock<ILoginManager> _loginManagerMock;
     private Mock<RoleManager<IdentityRole>> _roleManagerMock;
     private Mock<IConfigurationHelper<AppSettings>> _configurationHelperMock;
+    private Mock<IPasswordPolicyValidator> _passwordPolicyValidatorMock;
     private ILogger<UsersManager> _logger;
     private UsersManager _usersManager;
     private RegistryContext _context;
@@ -55,6 +56,7 @@ public class UsersManagerTest : TestBase
         _ddbManagerMock = new Mock<IDdbManager>();
         _loginManagerMock = new Mock<ILoginManager>();
         _configurationHelperMock = new Mock<IConfigurationHelper<AppSettings>>();
+        _passwordPolicyValidatorMock = new Mock<IPasswordPolicyValidator>();
         _logger = CreateTestLogger<UsersManager>();
 
         // Setup UserManager mock
@@ -81,6 +83,10 @@ public class UsersManagerTest : TestBase
         // Set up default auth manager behavior
         SetupDefaultAuthManagerBehavior();
 
+        // Set up default password policy validator (no policy = always valid)
+        _passwordPolicyValidatorMock.Setup(x => x.Validate(It.IsAny<string>()))
+            .Returns(PasswordValidationResult.Success());
+
         // Initialize utils
         _webUtils = new WebUtils(_authManagerMock.Object, _context, _appSettingsMock.Object,
             _httpContextAccessorMock.Object, _ddbManagerMock.Object);
@@ -96,7 +102,8 @@ public class UsersManagerTest : TestBase
             _webUtils,
             _logger,
             _context,
-            _configurationHelperMock.Object);
+            _configurationHelperMock.Object,
+            _passwordPolicyValidatorMock.Object);
     }
 
     [TearDown]
@@ -330,6 +337,132 @@ public class UsersManagerTest : TestBase
             .Where(ou => ou.UserId == testUser.Id)
             .ToListAsync();
         memberships.ShouldBeEmpty();
+    }
+
+    #endregion
+
+    #region CreateUser Password Policy Tests
+
+    [Test]
+    public async Task CreateUser_WithPolicyViolation_ThrowsBadRequestException()
+    {
+        // Arrange
+        SetupAdminUser();
+        _passwordPolicyValidatorMock.Setup(x => x.Validate("weak"))
+            .Returns(PasswordValidationResult.Failure("Password must be at least 8 characters long"));
+
+        // Act & Assert
+        var action = () => _usersManager.CreateUser("newuser", "new@example.com", "weak", null);
+        var ex = await Should.ThrowAsync<BadRequestException>(action);
+        ex.Message.ShouldContain("Password does not meet the requirements");
+    }
+
+    [Test]
+    public async Task CreateUser_WithValidPassword_Succeeds()
+    {
+        // Arrange
+        SetupAdminUser();
+        var newUser = new User { Id = "newuser-id", UserName = "newuser", Email = "new@example.com" };
+
+        _passwordPolicyValidatorMock.Setup(x => x.Validate("Str0ngP@ss"))
+            .Returns(PasswordValidationResult.Success());
+
+        _userManagerMock.Setup(x => x.FindByNameAsync("newuser"))
+            .ReturnsAsync((User)null);
+        _userManagerMock.Setup(x => x.CreateAsync(It.IsAny<User>(), "Str0ngP@ss"))
+            .ReturnsAsync(IdentityResult.Success)
+            .Callback<User, string>((u, _) =>
+            {
+                u.Id = "newuser-id";
+                u.UserName = "newuser";
+            });
+
+        // Act
+        var result = await _usersManager.CreateUser("newuser", "new@example.com", "Str0ngP@ss", null);
+
+        // Assert
+        result.ShouldNotBeNull();
+        result.UserName.ShouldBe("newuser");
+    }
+
+    [Test]
+    public async Task CreateUser_NoPolicyConfigured_AcceptsAnyPassword()
+    {
+        // Arrange
+        SetupAdminUser();
+
+        // Validator returns success (no policy configured)
+        _passwordPolicyValidatorMock.Setup(x => x.Validate(It.IsAny<string>()))
+            .Returns(PasswordValidationResult.Success());
+
+        _userManagerMock.Setup(x => x.FindByNameAsync("newuser"))
+            .ReturnsAsync((User)null);
+        _userManagerMock.Setup(x => x.CreateAsync(It.IsAny<User>(), "a"))
+            .ReturnsAsync(IdentityResult.Success)
+            .Callback<User, string>((u, _) =>
+            {
+                u.Id = "newuser-id";
+                u.UserName = "newuser";
+            });
+
+        // Act
+        var result = await _usersManager.CreateUser("newuser", "new@example.com", "a", null);
+
+        // Assert
+        result.ShouldNotBeNull();
+        result.UserName.ShouldBe("newuser");
+    }
+
+    #endregion
+
+    #region ChangePassword Password Policy Tests
+
+    [Test]
+    public async Task ChangePassword_SelfService_WithPolicyViolation_ThrowsBadRequestException()
+    {
+        // Arrange
+        var currentUser = new User { Id = "user-id", UserName = "testuser" };
+        _authManagerMock.Setup(x => x.GetCurrentUser()).ReturnsAsync(currentUser);
+        _authManagerMock.Setup(x => x.IsUserAdmin()).ReturnsAsync(false);
+
+        _passwordPolicyValidatorMock.Setup(x => x.Validate("weak"))
+            .Returns(PasswordValidationResult.Failure("Password must be at least 8 characters long"));
+
+        // Act & Assert
+        var action = () => _usersManager.ChangePassword("oldpass", "weak");
+        var ex = await Should.ThrowAsync<BadRequestException>(action);
+        ex.Message.ShouldContain("Password does not meet the requirements");
+    }
+
+    [Test]
+    public async Task ChangePassword_AdminOverride_BypassesPolicy()
+    {
+        // Arrange
+        SetupAdminUser();
+        var targetUser = new User { Id = "target-id", UserName = "targetuser" };
+
+        _userManagerMock.Setup(x => x.FindByNameAsync("targetuser"))
+            .ReturnsAsync(targetUser);
+
+        // Policy validator returns failure, but admin override should bypass it
+        _passwordPolicyValidatorMock.Setup(x => x.Validate("weak"))
+            .Returns(PasswordValidationResult.Failure("Password must be at least 8 characters long"));
+
+        _userManagerMock.Setup(x => x.GeneratePasswordResetTokenAsync(targetUser))
+            .ReturnsAsync("reset-token");
+        _userManagerMock.Setup(x => x.ResetPasswordAsync(targetUser, "reset-token", "weak"))
+            .ReturnsAsync(IdentityResult.Success);
+
+        // Act — currentPassword is null = admin override
+        var result = await _usersManager.ChangePassword("targetuser", null, "weak");
+
+        // Assert
+        result.ShouldNotBeNull();
+        result.UserName.ShouldBe("targetuser");
+        result.Password.ShouldBe("weak");
+
+        // Verify policy validator was NOT called (admin override path)
+        _passwordPolicyValidatorMock.Verify(x => x.Validate("weak"), Times.Never);
     }
 
     #endregion

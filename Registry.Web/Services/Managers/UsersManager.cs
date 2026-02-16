@@ -39,6 +39,7 @@ public class UsersManager : IUsersManager
     private readonly ApplicationDbContext _applicationDbContext;
     private readonly RegistryContext _registryContext;
     private readonly IConfigurationHelper<AppSettings> _configurationHelper;
+    private readonly IPasswordPolicyValidator _passwordPolicyValidator;
 
     public UsersManager(
         IOptions<AppSettings> appSettings,
@@ -51,7 +52,8 @@ public class UsersManager : IUsersManager
         IUtils utils,
         ILogger<UsersManager> logger,
         RegistryContext registryContext,
-        IConfigurationHelper<AppSettings> configurationHelper)
+        IConfigurationHelper<AppSettings> configurationHelper,
+        IPasswordPolicyValidator passwordPolicyValidator)
     {
         _roleManager = roleManager;
         _authManager = authManager;
@@ -60,6 +62,7 @@ public class UsersManager : IUsersManager
         _logger = logger;
         _registryContext = registryContext;
         _configurationHelper = configurationHelper;
+        _passwordPolicyValidator = passwordPolicyValidator;
         _applicationDbContext = applicationDbContext;
         _loginManager = loginManager;
         _userManager = userManager;
@@ -194,6 +197,12 @@ public class UsersManager : IUsersManager
     {
         await ValidateRoles(roles);
 
+        // Validate password against policy (applies to all user creation)
+        var policyResult = _passwordPolicyValidator.Validate(password);
+        if (!policyResult.IsValid)
+            throw new BadRequestException("Password does not meet the requirements: " +
+                                          string.Join("; ", policyResult.Errors));
+
         var res = await _userManager.CreateAsync(user, password);
 
         if (!res.Succeeded)
@@ -204,7 +213,11 @@ public class UsersManager : IUsersManager
             throw new InvalidOperationException("Error in creating user");
         }
 
-        await CreateUserDefaultOrganization(user);
+        if (_appSettings.EnableDefaultUserOrganization)
+        {
+            await CreateUserDefaultOrganization(user);
+        }
+
         await AddUserToRoles(user, roles);
 
         return user;
@@ -281,47 +294,35 @@ public class UsersManager : IUsersManager
         string newPassword)
     {
         IdentityResult res;
+
         if (currentPassword == null)
         {
-            // We need to check if the user is an admin, in this case we proceed with the reset
+            // Admin override: reset password without requiring the current one
             if (!await _authManager.IsUserAdmin())
                 throw new UnauthorizedException("Current password is required for non-admin users");
 
-            // If the user is an admin, we allow changing password without current password
-            _logger.LogInformation("Admin user {UserName} is changing password without current password",
-                user.UserName);
-
-            // If the user is an admin, we allow changing password without current password
             if (newPassword == null)
                 throw new BadRequestException("New password cannot be null");
 
+            var adminUser = await _authManager.GetCurrentUser();
+            _logger.LogInformation(
+                "Admin user {AdminUserName} is resetting password for {TargetUserName}",
+                adminUser?.UserName, user.UserName);
+
             var resetToken = await _userManager.GeneratePasswordResetTokenAsync(user);
             res = await _userManager.ResetPasswordAsync(user, resetToken, newPassword);
-
-            if (!res.Succeeded)
-            {
-                var errors = string.Join(";", res.Errors.Select(item => $"{item.Code} - {item.Description}"));
-                _logger.LogWarning("Errors in resetting user password: {Errors}", errors);
-                throw new InvalidOperationException("Cannot reset password: " + errors);
-            }
-
-            _logger.LogInformation("Admin user {UserName} changed password without current password", user.UserName);
-
-            // If this is the default admin password, we should persist it in the config
-            if (user.UserName == _appSettings.DefaultAdmin.UserName)
-            {
-                _appSettings.DefaultAdmin.Password = newPassword;
-                _configurationHelper.SaveConfiguration(_appSettings);
-            }
-
-            return new ChangePasswordResult
-            {
-                UserName = user.UserName,
-                Password = newPassword
-            };
         }
+        else
+        {
+            // Self-service password change: validate against policy
+            _logger.LogInformation("User {UserName} is changing their own password", user.UserName);
 
-        res = await _userManager.ChangePasswordAsync(user, currentPassword, newPassword);
+            var policyResult = _passwordPolicyValidator.Validate(newPassword);
+            if (!policyResult.IsValid)
+                throw new BadRequestException("Password does not meet the requirements: " + string.Join("; ", policyResult.Errors));
+
+            res = await _userManager.ChangePasswordAsync(user, currentPassword, newPassword);
+        }
 
         if (!res.Succeeded)
         {
@@ -345,6 +346,7 @@ public class UsersManager : IUsersManager
             UserName = user.UserName,
             Password = newPassword
         };
+
     }
 
     public async Task<AuthenticateResponse> Refresh()
@@ -460,7 +462,6 @@ public class UsersManager : IUsersManager
 
         _applicationDbContext.Entry(user).State = EntityState.Modified;
         await _applicationDbContext.SaveChangesAsync();
-
     }
 
     public async Task<UserOrganizationMembershipDto[]> GetUserOrganizations(string userName)
@@ -556,7 +557,8 @@ public class UsersManager : IUsersManager
         _registryContext.OrganizationsUsers.Add(orgUser);
         await _registryContext.SaveChangesAsync();
 
-        _logger.LogInformation("User {UserName} added to organization {OrgSlug} with permission {Permission} by {GrantedBy}",
+        _logger.LogInformation(
+            "User {UserName} added to organization {OrgSlug} with permission {Permission} by {GrantedBy}",
             userName, orgSlug, permissions, currentUser.UserName);
     }
 
@@ -597,7 +599,8 @@ public class UsersManager : IUsersManager
             userName, orgSlug, currentUser.UserName);
     }
 
-    public async Task UpdateUserOrganizationPermissions(string userName, string orgSlug, OrganizationPermissions permissions)
+    public async Task UpdateUserOrganizationPermissions(string userName, string orgSlug,
+        OrganizationPermissions permissions)
     {
         var currentUser = await _authManager.GetCurrentUser();
 
@@ -630,7 +633,8 @@ public class UsersManager : IUsersManager
         orgUser.Permissions = permissions;
         await _registryContext.SaveChangesAsync();
 
-        _logger.LogInformation("User {UserName} permissions in organization {OrgSlug} updated to {Permission} by {UpdatedBy}",
+        _logger.LogInformation(
+            "User {UserName} permissions in organization {OrgSlug} updated to {Permission} by {UpdatedBy}",
             userName, orgSlug, permissions, currentUser.UserName);
     }
 
@@ -726,6 +730,7 @@ public class UsersManager : IUsersManager
                         // No datasets, just delete the empty organization
                         await _organizationsManager.Delete(org.Slug);
                     }
+
                     result.OrganizationsDeleted++;
                 }
                 else

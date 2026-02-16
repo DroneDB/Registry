@@ -112,6 +112,12 @@ public class AppSettings
     public bool EnableOrganizationMemberManagement { get; set; } = false;
 
     /// <summary>
+    /// Enables the automatic creation of a default personal organization when a new user is created.
+    /// When false, new users will not get a default organization; organizations must be assigned manually.
+    /// </summary>
+    public bool EnableDefaultUserOrganization { get; set; } = true;
+
+    /// <summary>
     /// Number of worker threads (0 to use ASP.NET default)
     /// </summary>
     public int WorkerThreads { get; set; }
@@ -181,5 +187,12 @@ public class AppSettings
     /// Default: "0 3 * * *" (daily at 3:00 AM)
     /// </summary>
     public string OrphanedDatasetCleanupCron { get; set; }
+
+    /// <summary>
+    /// Password complexity policy. When null, no password requirements are enforced.
+    /// </summary>
+#nullable enable
+    public PasswordPolicy? PasswordPolicy { get; set; }
+#nullable restore
 
 }
