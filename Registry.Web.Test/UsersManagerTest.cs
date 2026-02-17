@@ -530,7 +530,7 @@ public class UsersManagerTest : TestBase
             .FirstAsync(o => o.Slug == orgSlug);
 
         // Create a dataset if none exists
-        if (!org.Datasets.Any())
+        if (org.Datasets.Count == 0)
         {
             var dataset = new Dataset
             {
