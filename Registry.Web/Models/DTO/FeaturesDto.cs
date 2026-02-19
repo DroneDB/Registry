@@ -22,6 +22,11 @@ public class FeaturesDto
     public bool StorageLimiter { get; set; }
 
     /// <summary>
+    /// Maximum number of concurrent downloads per user. Null = unlimited (feature disabled).
+    /// </summary>
+    public int? MaxConcurrentDownloadsPerUser { get; set; }
+
+    /// <summary>
     /// Password complexity policy. Null when no policy is enforced.
     /// </summary>
     public PasswordPolicyDto? PasswordPolicy { get; set; }
