@@ -106,6 +106,12 @@ public class AppSettings
     public bool EnableStorageLimiter { get; set; }
 
     /// <summary>
+    /// Maximum number of concurrent downloads per user (or per IP for anonymous users).
+    /// Null = unlimited (feature disabled). Minimum value: 1.
+    /// </summary>
+    public int? MaxConcurrentDownloadsPerUser { get; set; }
+
+    /// <summary>
     /// Enables organization-level member management.
     /// When disabled, only system admins can manage organization members.
     /// </summary>

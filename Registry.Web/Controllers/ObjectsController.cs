@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 using System.Net;
+using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
@@ -51,7 +52,8 @@ public class ObjectsController : ControllerBaseEx
     [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetDdb(
         [FromRoute, Required] string orgSlug,
-        [FromRoute, Required] string dsSlug)
+        [FromRoute, Required] string dsSlug,
+        CancellationToken cancellationToken)
     {
         try
         {
@@ -66,6 +68,12 @@ public class ObjectsController : ControllerBaseEx
 
             await res.CopyToAsync(Response.Body);
 
+            return new EmptyResult();
+        }
+        catch (OperationCanceledException)
+        {
+            // Client disconnected — not an error
+            _logger.LogDebug("Download cancelled by client: GetDdb('{OrgSlug}', '{DsSlug}')", orgSlug, dsSlug);
             return new EmptyResult();
         }
         catch (Exception ex)
@@ -174,7 +182,8 @@ public class ObjectsController : ControllerBaseEx
 
     #region Downloads
 
-    private async Task<IActionResult> InternalDownload(string orgSlug, string dsSlug, string[] paths, bool isInline)
+    private async Task<IActionResult> InternalDownload(string orgSlug, string dsSlug, string[] paths, bool isInline,
+        CancellationToken cancellationToken = default)
     {
         try
         {
@@ -196,6 +205,14 @@ public class ObjectsController : ControllerBaseEx
 
             await res.CopyToAsync(Response.Body);
 
+            return new EmptyResult();
+        }
+        catch (OperationCanceledException)
+        {
+            // Client disconnected — not an error
+            _logger.LogDebug(
+                "Download cancelled by client: Download('{OrgSlug}', '{DsSlug}', '{Paths}')",
+                orgSlug, dsSlug, paths != null ? string.Join("; ", paths) : string.Empty);
             return new EmptyResult();
         }
         catch (Exception ex)
@@ -225,7 +242,8 @@ public class ObjectsController : ControllerBaseEx
         [FromRoute, Required] string orgSlug,
         [FromRoute, Required] string dsSlug,
         [FromQuery(Name = "path")] string pathsRaw,
-        [FromQuery(Name = "inline")] int? isInlineRaw)
+        [FromQuery(Name = "inline")] int? isInlineRaw,
+        CancellationToken cancellationToken)
     {
         var paths = pathsRaw?.Split(",", StringSplitOptions.RemoveEmptyEntries);
         var isInline = isInlineRaw == 1;
@@ -233,7 +251,7 @@ public class ObjectsController : ControllerBaseEx
         _logger.LogDebug("Objects controller Download('{OrgSlug}', '{DsSlug}', '{PathsRaw}', '{IsInlineRaw}')",
             orgSlug, dsSlug, pathsRaw, isInlineRaw);
 
-        return InternalDownload(orgSlug, dsSlug, paths, isInline);
+        return InternalDownload(orgSlug, dsSlug, paths, isInline, cancellationToken);
     }
 
     /// <summary>
@@ -253,7 +271,8 @@ public class ObjectsController : ControllerBaseEx
         [FromRoute, Required] string orgSlug,
         [FromRoute, Required] string dsSlug,
         [FromForm(Name = "path")] string pathsRaw,
-        [FromForm(Name = "inline")] int? isInlineRaw)
+        [FromForm(Name = "inline")] int? isInlineRaw,
+        CancellationToken cancellationToken)
     {
         var paths = pathsRaw?.Split(",", StringSplitOptions.RemoveEmptyEntries);
         var isInline = isInlineRaw == 1;
@@ -262,7 +281,7 @@ public class ObjectsController : ControllerBaseEx
             "Objects controller DownloadPost('{OrgSlug}', '{DsSlug}', '{PathsRaw}', '{IsInlineRaw}')", orgSlug,
             dsSlug, pathsRaw, isInlineRaw);
 
-        return InternalDownload(orgSlug, dsSlug, paths, isInline);
+        return InternalDownload(orgSlug, dsSlug, paths, isInline, cancellationToken);
     }
 
     /// <summary>
@@ -282,14 +301,15 @@ public class ObjectsController : ControllerBaseEx
         [FromRoute, Required] string orgSlug,
         [FromRoute, Required] string dsSlug,
         [FromRoute] string path,
-        [FromQuery(Name = "inline")] int? isInlineRaw)
+        [FromQuery(Name = "inline")] int? isInlineRaw,
+        CancellationToken cancellationToken)
     {
         var isInline = isInlineRaw == 1;
 
         _logger.LogDebug("Objects controller DownloadExact('{OrgSlug}', '{DsSlug}', '{Path}', '{IsInlineRaw}')",
             orgSlug, dsSlug, path, isInlineRaw);
 
-        return await InternalDownload(orgSlug, dsSlug, [path], isInline);
+        return await InternalDownload(orgSlug, dsSlug, [path], isInline, cancellationToken);
     }
 
 

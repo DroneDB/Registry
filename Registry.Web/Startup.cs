@@ -242,6 +242,8 @@ public class Startup
         services.AddTransient<TokenManagerMiddleware>();
         services.AddTransient<JwtInCookieMiddleware>();
         services.AddTransient<UserEnrichmentMiddleware>();
+        services.AddTransient<DownloadLimitMiddleware>();
+        services.AddSingleton<IDownloadLimiter, DownloadLimiter>();
         services.AddTransient<ITokenManager, TokenManager>();
         services.AddSingleton<IHttpContextAccessor, HttpContextAccessor>();
 
@@ -379,6 +381,7 @@ public class Startup
 
         app.UseMiddleware<TokenManagerMiddleware>();
         app.UseMiddleware<UserEnrichmentMiddleware>();
+        app.UseMiddleware<DownloadLimitMiddleware>();
 
         app.UseHangfireDashboard(MagicStrings.HangFireUrl, new DashboardOptions
         {
