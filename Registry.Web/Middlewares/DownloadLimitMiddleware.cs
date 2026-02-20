@@ -34,7 +34,7 @@ public partial class DownloadLimitMiddleware : IMiddleware
 
     public DownloadLimitMiddleware(
         IDownloadLimiter downloadLimiter,
-            IAuthManager authManager,
+        IAuthManager authManager,
         ILogger<DownloadLimitMiddleware> logger)
     {
         _downloadLimiter = downloadLimiter;
