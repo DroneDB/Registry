@@ -129,4 +129,35 @@ public class SafeMetaManager
             _manager.Set(LastUpdateField, val);
         }
     }
+
+    public const string TaglineField = "tagline";
+    public const int TaglineMaxLength = 256;
+
+    public string Tagline
+    {
+        get
+        {
+            try
+            {
+                return _manager.Get<string>(TaglineField);
+            }
+            catch (DdbException)
+            {
+                return null;
+            }
+        }
+        set
+        {
+            if (value == null)
+            {
+                _manager.Unset(TaglineField);
+            }
+            else
+            {
+                if (value.Length > TaglineMaxLength)
+                    throw new ArgumentException($"Tagline cannot exceed {TaglineMaxLength} characters");
+                _manager.Set(TaglineField, value);
+            }
+        }
+    }
 }

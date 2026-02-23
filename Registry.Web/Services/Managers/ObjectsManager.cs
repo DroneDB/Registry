@@ -45,6 +45,12 @@ public class ObjectsManager : IObjectsManager
     // TODO: Could be moved to config
     private const int DefaultThumbnailSize = 512;
 
+    private static readonly string[] DatasetThumbnailCandidates =
+    {
+        "thumbnail.webp", "thumbnail.jpg", "thumbnail.png",
+        "cover.webp", "cover.jpg", "cover.png"
+    };
+
     private static bool IsReservedPath(string path)
     {
         return path.StartsWith(IDDB.DatabaseFolderName);
@@ -289,6 +295,9 @@ public class ObjectsManager : IObjectsManager
             _logger.LogInformation("Thumbnail generation task started");
         }
 
+        // Invalidate dataset thumbnail cache if this file is a thumbnail candidate
+        await InvalidateDatasetThumbnailCacheIfNeeded(orgSlug, dsSlug, path);
+
         return entry.ToDto();
     }
 
@@ -516,6 +525,10 @@ public class ObjectsManager : IObjectsManager
             // Remove source file
             sourceDdb.Remove(sourcePath);
 
+            // Invalidate dataset thumbnail cache for both source and destination datasets
+            await InvalidateDatasetThumbnailCacheIfNeeded(sourceOrgSlug, sourceDsSlug, sourcePath);
+            await InvalidateDatasetThumbnailCacheIfNeeded(destOrgSlug, destDsSlug, destPath);
+
             _logger.LogInformation("Transfer OK");
         }
         catch (Exception ex)
@@ -664,6 +677,10 @@ public class ObjectsManager : IObjectsManager
             throw new InvalidOperationException(
                 $"Cannot find destination '{dest}' after move, something wrong with ddb");
 
+        // Invalidate dataset thumbnail cache if source or dest is a thumbnail candidate
+        await InvalidateDatasetThumbnailCacheIfNeeded(orgSlug, dsSlug, source);
+        await InvalidateDatasetThumbnailCacheIfNeeded(orgSlug, dsSlug, dest);
+
         _logger.LogInformation("Move OK");
     }
 
@@ -730,6 +747,10 @@ public class ObjectsManager : IObjectsManager
                 }
             }
         }
+
+        // Invalidate dataset thumbnail cache if any deleted path is a thumbnail candidate
+        foreach (var path in paths)
+            await InvalidateDatasetThumbnailCacheIfNeeded(orgSlug, dsSlug, path);
 
         _logger.LogInformation("Deletion complete");
     }
@@ -798,6 +819,9 @@ public class ObjectsManager : IObjectsManager
                 }
 
                 deleted.Add(path);
+
+                // Invalidate dataset thumbnail cache if this path is a thumbnail candidate
+                await InvalidateDatasetThumbnailCacheIfNeeded(orgSlug, dsSlug, path);
             }
             catch (Exception ex)
             {
@@ -824,10 +848,14 @@ public class ObjectsManager : IObjectsManager
         if (!await _authManager.RequestAccess(ds, AccessType.Write))
             throw new UnauthorizedException("The current user is not allowed to edit this dataset");
 
+        // Invalidate dataset thumbnail cache before deleting everything
+        var cacheCategory = $"{orgSlug}/{dsSlug}/ds-thumb";
+        await _cacheManager.RemoveByCategoryAsync(MagicStrings.ThumbnailCacheSeed, cacheCategory);
+
         _ddbManager.Delete(orgSlug, ds.InternalRef);
     }
 
-    public async Task<StorageDataDto> GenerateThumbnailData(string orgSlug, string dsSlug, string path, int? sizeRaw,
+    public async Task<StorageDataDto> GenerateThumbnailData(string orgSlug, string dsSlug, string? path, int? sizeRaw,
         bool recreate = false)
     {
         var ds = _utils.GetDataset(orgSlug, dsSlug);
@@ -838,17 +866,24 @@ public class ObjectsManager : IObjectsManager
         if (!await _authManager.RequestAccess(ds, AccessType.Read))
             throw new UnauthorizedException("The current user is not allowed to read dataset");
 
+        // Dataset thumbnail mode: path is null or empty
+        if (string.IsNullOrWhiteSpace(path))
+        {
+            var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
+            return await GenerateDatasetThumbnailData(orgSlug, dsSlug, ddb, sizeRaw, recreate);
+        }
+
         // Fix fox '/img.png' -> 'img.png'
         if (path.StartsWith('/')) path = path[1..];
 
-        var entry = EnsurePathValidity(orgSlug, ds.InternalRef, path, out var ddb);
+        var entry = EnsurePathValidity(orgSlug, ds.InternalRef, path, out var ddbSingle);
 
         var fileName = Path.GetFileName(path);
         if (fileName == null)
             throw new ArgumentException("Path is not valid");
 
         var sourcePath = GetBuildSource(entry);
-        var localPath = ddb.GetLocalPath(sourcePath);
+        var localPath = ddbSingle.GetLocalPath(sourcePath);
 
         var size = sizeRaw ?? DefaultThumbnailSize;
 
@@ -880,6 +915,72 @@ public class ObjectsManager : IObjectsManager
             Data = thumbData,
             ContentType = _ddbWrapper.ThumbnailMimeType
         };
+    }
+
+    private async Task<StorageDataDto> GenerateDatasetThumbnailData(
+        string orgSlug, string dsSlug, IDDB ddb, int? sizeRaw, bool recreate)
+    {
+        // Find first existing thumbnail candidate
+        string thumbnailPath = null;
+        foreach (var candidate in DatasetThumbnailCandidates)
+        {
+            if (ddb.EntryExists(candidate))
+            {
+                thumbnailPath = candidate;
+                break;
+            }
+        }
+
+        if (thumbnailPath == null)
+            return null;
+
+        var size = sizeRaw ?? DefaultThumbnailSize;
+        var cacheCategory = $"{orgSlug}/{dsSlug}/ds-thumb";
+
+        if (recreate)
+        {
+            _logger.LogDebug("Removing cached dataset thumbnail for {OrgSlug}/{DsSlug}", orgSlug, dsSlug);
+            await _cacheManager.RemoveByCategoryAsync(MagicStrings.ThumbnailCacheSeed, cacheCategory);
+        }
+
+        var localPath = ddb.GetLocalPath(thumbnailPath);
+
+        var thumbData = await _cacheManager.GetAsync(
+            MagicStrings.ThumbnailCacheSeed,
+            cacheCategory,
+            size,
+            new Func<Task<byte[]>>(async () =>
+            {
+                _logger.LogDebug("Cache miss - generating dataset thumbnail from: '{LocalPath}'", localPath);
+                using var stream = new MemoryStream();
+                await _thumbnailGenerator.GenerateThumbnailAsync(localPath, size, stream);
+                var result = stream.ToArray();
+                _logger.LogDebug("Generated dataset thumbnail of {Size} bytes from: '{LocalPath}'", result.Length, localPath);
+                return result;
+            }));
+
+        return new StorageDataDto
+        {
+            Name = "thumbnail.webp",
+            Data = thumbData,
+            ContentType = _ddbWrapper.ThumbnailMimeType
+        };
+    }
+
+    private static bool IsDatasetThumbnailFile(string path)
+    {
+        var fileName = Path.GetFileName(path);
+        return DatasetThumbnailCandidates.Contains(fileName, StringComparer.OrdinalIgnoreCase);
+    }
+
+    private async Task InvalidateDatasetThumbnailCacheIfNeeded(string orgSlug, string dsSlug, string path)
+    {
+        if (IsDatasetThumbnailFile(path))
+        {
+            var cacheCategory = $"{orgSlug}/{dsSlug}/ds-thumb";
+            _logger.LogDebug("Invalidating dataset thumbnail cache for {OrgSlug}/{DsSlug} (file: {Path})", orgSlug, dsSlug, path);
+            await _cacheManager.RemoveByCategoryAsync(MagicStrings.ThumbnailCacheSeed, cacheCategory);
+        }
     }
 
     public async Task<StorageDataDto> GenerateTileData(string orgSlug, string dsSlug, string path, int tz, int tx,

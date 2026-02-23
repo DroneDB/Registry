@@ -26,8 +26,8 @@
         "ASPNETCORE_ENVIRONMENT": "Development",
         "DDB_DEBUG": "1"
       },
-      "commandLineArgs": "./registry-data --reset-hub --address=localhost:7000",
-      "applicationUrl": "http://localhost:7000"
+      "commandLineArgs": "./registry-data --reset-hub --address=192.168.1.1:7000",
+      "applicationUrl": "http://192.168.1.1:7000"
     },
     "Default-All-Debug": {
       "commandName": "Project",

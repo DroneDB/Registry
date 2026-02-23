@@ -39,6 +39,8 @@ public class DatasetNewDto
         
     public Visibility? Visibility { get; set; }
 
+    [MaxLength(256)]
+    public string Tagline { get; set; }
 }
     
 public class DatasetEditDto
