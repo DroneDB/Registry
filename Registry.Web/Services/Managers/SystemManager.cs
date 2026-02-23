@@ -1241,9 +1241,6 @@ public class SystemManager : ISystemManager
 
     public async Task<RescanResultDto> RescanDatasetIndex(string orgSlug, string dsSlug, string? types = null, bool stopOnError = true)
     {
-        if (!await _authManager.IsUserAdmin())
-            throw new UnauthorizedException("Only admins can perform system related tasks");
-
         if (string.IsNullOrWhiteSpace(orgSlug))
             throw new ArgumentException("Organization slug is required", nameof(orgSlug));
 
@@ -1257,11 +1254,37 @@ public class SystemManager : ISystemManager
         if (dataset == null)
             throw new ArgumentException($"Dataset '{orgSlug}/{dsSlug}' not found");
 
+        // Allow admins or users with write access to the dataset
+        if (!await _authManager.IsUserAdmin() &&
+            !await _authManager.RequestAccess(dataset, AccessType.Write))
+            throw new UnauthorizedException("Only admins or users with write access can rescan dataset index");
+
         _logger.LogInformation("Rescanning index for dataset {OrgSlug}/{DsSlug} with types filter: {Types}",
             orgSlug, dsSlug, types ?? "all");
 
         var ddb = _ddbManager.Get(orgSlug, dataset.InternalRef);
         var results = ddb.RescanIndex(types, stopOnError);
+
+        // Clear build cache (thumbnails, tiles, COGs) since metadata has changed
+        _logger.LogInformation("Clearing build cache for dataset {OrgSlug}/{DsSlug}", orgSlug, dsSlug);
+        ddb.ClearBuildCache();
+
+        // Clear Redis cache for tiles and thumbnails
+        _logger.LogInformation("Clearing cache for dataset {OrgSlug}/{DsSlug}", orgSlug, dsSlug);
+        var datasetCacheCategory = $"{orgSlug}/{dsSlug}";
+        await _cacheManager.RemoveByCategoryAsync(MagicStrings.TileCacheSeed, datasetCacheCategory);
+        await _cacheManager.RemoveByCategoryAsync(MagicStrings.ThumbnailCacheSeed, datasetCacheCategory);
+        await _cacheManager.RemoveByCategoryAsync(MagicStrings.BuildPendingTrackerCacheSeed, datasetCacheCategory);
+
+        // Enqueue background build jobs to rebuild the entire dataset
+        _logger.LogInformation("Enqueueing build jobs for dataset {OrgSlug}/{DsSlug}", orgSlug, dsSlug);
+        var user = await _authManager.GetCurrentUser();
+        var userId = user?.Id ?? MagicStrings.AutoBuildServiceUserId;
+        var meta = new IndexPayload(orgSlug, dsSlug, null, userId, null, null);
+        _backgroundJob.EnqueueIndexed(
+            () => HangfireUtils.BuildWrapper(ddb, null, true, null), meta);
+        _backgroundJob.EnqueueIndexed(
+            () => HangfireUtils.BuildPendingWrapper(ddb, null), meta);
 
         var entries = results.Select(r => new RescanEntryResultDto
         {

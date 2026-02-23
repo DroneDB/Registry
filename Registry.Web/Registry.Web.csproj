@@ -12,7 +12,7 @@
         <Platforms>AnyCPU;x64</Platforms>
         <PackageVersion>1.8.1</PackageVersion>
         <Configurations>Debug;Release;DebugEf</Configurations>
-        <DdbVersion>1.4.0</DdbVersion>
+        <DdbVersion>1.4.1</DdbVersion>
         <LangVersion>13</LangVersion>
     </PropertyGroup>
 
@@ -131,13 +131,14 @@
 
 
     <Target Name="EmbedDdbRelease">
-        <Message Text="Embedding ddb version $(DdbVersion), downloading from $(DdbReleaseUrl)" Importance="high" />
+        <PropertyGroup>
+            <DdbReleasePath>$(OutputPath)ddb.zip</DdbReleasePath>
+        </PropertyGroup>
 
-        <DownloadFile SourceUrl="$(DdbReleaseUrl)" DestinationFolder="$(OutputPath)" DestinationFileName="ddb.zip">
-            <Output TaskParameter="DownloadedFile" PropertyName="DdbReleasePath" />
-        </DownloadFile>
+        <Message Condition="Exists('$(DdbReleasePath)')" Text="Ddb release already exists at $(DdbReleasePath), skipping download" Importance="high" />
+        <Message Condition="!Exists('$(DdbReleasePath)')" Text="Embedding ddb version $(DdbVersion), downloading from $(DdbReleaseUrl)" Importance="high" />
 
-        <Message Text="Ddb release downloaded to $(DdbReleasePath)" Importance="high" />
+        <DownloadFile Condition="!Exists('$(DdbReleasePath)')" SourceUrl="$(DdbReleaseUrl)" DestinationFolder="$(OutputPath)" DestinationFileName="ddb.zip" />
 
         <ItemGroup>
             <EmbeddedResource Include="$(DdbReleasePath)">

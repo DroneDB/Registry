@@ -194,7 +194,7 @@ public class NativeDdbWrapperTests : TestBase
         //info.Meta.Should().BeEquivalentTo(expectedMeta);
 
         info.Properties.ShouldNotBeEmpty();
-        info.Properties.Count.ShouldBe(14);
+        info.Properties.Count.ShouldBe(15);
         info.Properties["make"].ShouldBe("DJI");
         info.Properties["model"].ShouldBe("FC300S");
         info.Properties["sensor"].ShouldBe("dji fc300s");

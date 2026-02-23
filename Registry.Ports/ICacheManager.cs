@@ -13,5 +13,12 @@ public interface ICacheManager
 
     Task RemoveAsync(string seed, string category, params object[] parameters);
 
+    /// <summary>
+    /// Removes all cache entries matching the given seed and category prefix.
+    /// For Redis: uses SCAN + DELETE for pattern-based removal.
+    /// For InMemory: no-op (cache entries will expire naturally).
+    /// </summary>
+    Task RemoveByCategoryAsync(string seed, string category);
+
     bool IsRegistered(string seed);
 }

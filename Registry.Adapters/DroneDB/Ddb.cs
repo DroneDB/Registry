@@ -387,4 +387,14 @@ public class DDB : IDDB
             throw new InvalidOperationException($"Cannot rescan index in folder '{DatasetFolderPath}'", ex);
         }
     }
+
+    public void ClearBuildCache()
+    {
+        if (Directory.Exists(BuildFolderPath))
+        {
+            Directory.Delete(BuildFolderPath, true);
+        }
+
+        Directory.CreateDirectory(BuildFolderPath);
+    }
 }

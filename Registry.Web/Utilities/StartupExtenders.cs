@@ -10,6 +10,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using Registry.Ports;
 using Registry.Web.Data;
 using Registry.Web.Identity;
 using Registry.Web.Models.Configuration;
@@ -120,6 +121,7 @@ public static class StartupExtenders
         {
             // Use memory caching
             services.AddDistributedMemoryCache();
+            services.AddSingleton<ICacheKeyScanner, NullCacheKeyScanner>();
             return;
         }
 
@@ -128,6 +130,7 @@ public static class StartupExtenders
             case CacheType.InMemory:
 
                 services.AddDistributedMemoryCache();
+                services.AddSingleton<ICacheKeyScanner, NullCacheKeyScanner>();
 
                 break;
 
@@ -138,11 +141,27 @@ public static class StartupExtenders
                 if (settings == null)
                     throw new ArgumentException("Invalid redis cache provider settings");
 
+                // Register a shared IConnectionMultiplexer for both caching and pattern-based key scanning
+                services.AddSingleton<IConnectionMultiplexer>(sp =>
+                    ConnectionMultiplexer.Connect(settings.InstanceAddress));
+
                 services.AddStackExchangeRedisCache(options =>
                 {
-                    options.Configuration = settings.InstanceAddress;
                     options.InstanceName = settings.InstanceName;
                 });
+
+                // Wire the shared multiplexer into Redis cache options to avoid a second connection
+                services.AddOptions<Microsoft.Extensions.Caching.StackExchangeRedis.RedisCacheOptions>()
+                    .Configure<IConnectionMultiplexer>((options, multiplexer) =>
+                    {
+                        options.ConnectionMultiplexerFactory = () => Task.FromResult(multiplexer);
+                    });
+
+                services.AddSingleton<ICacheKeyScanner>(sp =>
+                    new RedisCacheKeyScanner(
+                        sp.GetRequiredService<IConnectionMultiplexer>(),
+                        settings.InstanceName,
+                        sp.GetRequiredService<ILogger<RedisCacheKeyScanner>>()));
 
                 break;
 

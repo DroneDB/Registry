@@ -1,6 +1,5 @@
 ﻿using System;
 using System.Collections.Concurrent;
-using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Caching.Distributed;
@@ -21,15 +20,18 @@ public class CacheManager : ICacheManager
 
     private readonly IDistributedCache _cache;
     private readonly ILogger<CacheManager> _logger;
+    private readonly ICacheKeyScanner _keyScanner;
 
     private readonly TimeSpan _defaultCacheExpiration = new(0, 30, 0);
 
     private readonly ConcurrentDictionary<string, Carrier> _providers = new();
 
-    public CacheManager(IDistributedCache cache, ILogger<CacheManager> logger)
+    public CacheManager(IDistributedCache cache, ILogger<CacheManager> logger,
+        ICacheKeyScanner keyScanner)
     {
         _cache = cache ?? throw new ArgumentNullException(nameof(cache));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        _keyScanner = keyScanner ?? throw new ArgumentNullException(nameof(keyScanner));
     }
 
     public void Register(string seed, Func<object[], Task<byte[]>> getData, TimeSpan? expiration = null)
@@ -81,6 +83,20 @@ public class CacheManager : ICacheManager
             _logger.LogWarning(ex, "Failed to remove cache entry with key: {Key}", key);
             throw;
         }
+    }
+
+    public async Task RemoveByCategoryAsync(string seed, string category)
+    {
+        ArgumentNullException.ThrowIfNull(seed);
+        ArgumentNullException.ThrowIfNull(category);
+
+        // Build pattern using the same key format: ":seed:category:*"
+        var pattern = MakeKey(seed, category, null) + ":*";
+        var deletedCount = await _keyScanner.RemoveByPatternAsync(pattern);
+
+        _logger.LogInformation(
+            "Removed {Count} cache entries for {Seed}:{Category}",
+            deletedCount, seed, category);
     }
 
     public bool IsRegistered(string seed)

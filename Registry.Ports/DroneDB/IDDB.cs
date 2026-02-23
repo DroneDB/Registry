@@ -80,6 +80,11 @@ public interface IDDB
     /// <returns>List of rescan results for each processed entry</returns>
     List<RescanResult> RescanIndex(string? types = null, bool stopOnError = true);
 
+    /// <summary>
+    /// Clears the build cache (thumbnails, tiles, COGs, etc.) for the dataset
+    /// </summary>
+    void ClearBuildCache();
+
     // These consts are like magic strings: if anything changes this goes kaboom!
     public const string DatabaseFolderName = ".ddb";
     public const string BuildFolderName = "build";

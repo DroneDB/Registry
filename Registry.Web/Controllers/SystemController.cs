@@ -313,6 +313,7 @@ public class SystemController : ControllerBaseEx
             OrganizationMemberManagement = _appSettings.EnableOrganizationMemberManagement,
             UserManagement = string.IsNullOrWhiteSpace(_appSettings.ExternalAuthUrl),
             StorageLimiter = _appSettings.EnableStorageLimiter,
+            MaxConcurrentDownloadsPerUser = _appSettings.MaxConcurrentDownloadsPerUser,
             PasswordPolicy = _appSettings.PasswordPolicy != null
                 ? new PasswordPolicyDto
                 {
