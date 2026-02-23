@@ -141,15 +141,21 @@ public static class StartupExtenders
                 if (settings == null)
                     throw new ArgumentException("Invalid redis cache provider settings");
 
+                // Register a shared IConnectionMultiplexer for both caching and pattern-based key scanning
+                services.AddSingleton<IConnectionMultiplexer>(sp =>
+                    ConnectionMultiplexer.Connect(settings.InstanceAddress));
+
                 services.AddStackExchangeRedisCache(options =>
                 {
-                    options.Configuration = settings.InstanceAddress;
                     options.InstanceName = settings.InstanceName;
                 });
 
-                // Register IConnectionMultiplexer for pattern-based cache key scanning
-                services.AddSingleton<IConnectionMultiplexer>(sp =>
-                    ConnectionMultiplexer.Connect(settings.InstanceAddress));
+                // Wire the shared multiplexer into Redis cache options to avoid a second connection
+                services.AddOptions<Microsoft.Extensions.Caching.StackExchangeRedis.RedisCacheOptions>()
+                    .Configure<IConnectionMultiplexer>((options, multiplexer) =>
+                    {
+                        options.ConnectionMultiplexerFactory = () => Task.FromResult(multiplexer);
+                    });
 
                 services.AddSingleton<ICacheKeyScanner>(sp =>
                     new RedisCacheKeyScanner(

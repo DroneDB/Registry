@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Concurrent;
-using System.Threading;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Registry.Web.Models.Configuration;
@@ -49,10 +48,10 @@ public class DownloadLimiter : IDownloadLimiter
         }
 
         // Over limit — roll back the increment
-        DecrementSafe(key);
+        var activeCount = DecrementSafe(key);
 
         _logger.LogWarning("Download limit reached for '{Key}': {Active}/{Max}",
-            key, _maxConcurrentDownloads, _maxConcurrentDownloads);
+            key, activeCount, _maxConcurrentDownloads);
         return false;
     }
 

@@ -393,7 +393,8 @@ public class DDB : IDDB
         if (Directory.Exists(BuildFolderPath))
         {
             Directory.Delete(BuildFolderPath, true);
-            Directory.CreateDirectory(BuildFolderPath);
         }
+
+        Directory.CreateDirectory(BuildFolderPath);
     }
 }

@@ -1,4 +1,6 @@
 using System;
+using System.Collections.Generic;
+using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using Registry.Ports;
@@ -42,11 +44,23 @@ public class RedisCacheKeyScanner : ICacheKeyScanner
             var server = _redis.GetServer(endpoints[0]);
             var db = _redis.GetDatabase();
             var deletedCount = 0;
+            const int batchSize = 100;
+            var batch = new List<RedisKey>(batchSize);
 
             await foreach (var key in server.KeysAsync(pattern: fullPattern))
             {
-                await db.KeyDeleteAsync(key);
-                deletedCount++;
+                batch.Add(key);
+
+                if (batch.Count < batchSize) continue;
+                
+                deletedCount += (int)await db.KeyDeleteAsync(batch.ToArray());
+                batch.Clear();
+            }
+
+            // Delete remaining keys
+            if (batch.Count > 0)
+            {
+                deletedCount += (int)await db.KeyDeleteAsync(batch.ToArray());
             }
 
             _logger.LogDebug("Removed {Count} cache entries matching pattern '{Pattern}'",
