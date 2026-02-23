@@ -65,7 +65,8 @@ public class TestBase
         // var memoryCache = new MemoryCache(new MemoryCacheOptions());
         var distributedCache = new MemoryDistributedCache(Microsoft.Extensions.Options.Options.Create(new MemoryDistributedCacheOptions()));
         var logger = CreateTestLogger<CacheManager>(minimumLevel);
-        return new CacheManager(distributedCache, logger);
+        var nullScanner = new NullCacheKeyScanner(CreateTestLogger<NullCacheKeyScanner>(minimumLevel));
+        return new CacheManager(distributedCache, logger, nullScanner);
     }
 
     /// <summary>
