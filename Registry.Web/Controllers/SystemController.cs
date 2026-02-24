@@ -226,7 +226,7 @@ public class SystemController : ControllerBaseEx
     /// Moves one or more datasets from one organization to another.
     /// Only administrators can perform this operation.
     /// </summary>
-    /// <param name="request">The move request containing dataset slugs and destination organization.</param>
+    /// <param name="request">The move request containing the source organization slug, dataset slugs, destination organization, and conflict resolution strategy.</param>
     /// <returns>Results of the move operation for each dataset.</returns>
     [HttpPost("move-datasets", Name = nameof(SystemController) + "." + nameof(MoveDatasets))]
     [ProducesResponseType(typeof(IEnumerable<MoveDatasetResultDto>), StatusCodes.Status200OK)]
