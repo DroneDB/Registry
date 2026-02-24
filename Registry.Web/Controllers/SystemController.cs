@@ -348,7 +348,8 @@ public class SystemController : ControllerBaseEx
                     RequireLowercase = _appSettings.PasswordPolicy.RequireLowercase,
                     RequireNonAlphanumeric = _appSettings.PasswordPolicy.RequireNonAlphanumeric
                 }
-                : null
+                : null,
+            DatasetThumbnailCandidates = _appSettings.DatasetThumbnailCandidates
         };
 
         return Ok(features);
