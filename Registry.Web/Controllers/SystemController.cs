@@ -301,6 +301,32 @@ public class SystemController : ControllerBaseEx
     }
 
     /// <summary>
+    /// Removes old terminal (Succeeded/Failed/Deleted) records from the JobIndices table.
+    /// Useful for manual cleanup when the table has grown too large.
+    /// </summary>
+    /// <param name="retentionDays">Optional override for retention period in days. Uses the configured default when omitted.</param>
+    /// <returns>Cleanup result with the number of records deleted.</returns>
+    [HttpPost("cleanup-jobindices", Name = nameof(SystemController) + "." + nameof(CleanupJobIndices))]
+    [ProducesResponseType(typeof(CleanupJobIndicesResultDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status401Unauthorized)]
+    public async Task<IActionResult> CleanupJobIndices([FromQuery] int? retentionDays = null)
+    {
+        try
+        {
+            _logger.LogDebug("System controller CleanupJobIndices(retentionDays: {RetentionDays})", retentionDays);
+
+            return Ok(await _systemManager.CleanupJobIndices(retentionDays));
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Exception in System controller CleanupJobIndices()");
+
+            return ExceptionResult(ex);
+        }
+    }
+
+    /// <summary>
     /// Gets the status of all platform feature flags.
     /// </summary>
     /// <returns>An object with the status of each feature.</returns>
