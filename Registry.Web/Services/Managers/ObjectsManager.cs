@@ -24,6 +24,7 @@ using Registry.Common.Model;
 using Registry.Ports;
 using Registry.Ports.DroneDB;
 using Registry.Web.Services.Adapters;
+using static Registry.Web.Services.CacheCategories;
 
 namespace Registry.Web.Services.Managers;
 
@@ -41,15 +42,7 @@ public class ObjectsManager : IObjectsManager
     private readonly IDdbWrapper _ddbWrapper;
     private readonly IThumbnailGenerator _thumbnailGenerator;
     private readonly IJobIndexQuery _jobIndexQuery;
-
-    // TODO: Could be moved to config
-    private const int DefaultThumbnailSize = 512;
-
-    private static readonly string[] DatasetThumbnailCandidates =
-    {
-        "thumbnail.webp", "thumbnail.jpg", "thumbnail.png",
-        "cover.webp", "cover.jpg", "cover.png"
-    };
+    private readonly BuildPendingService _buildPendingService;
 
     private static bool IsReservedPath(string path)
     {
@@ -67,7 +60,8 @@ public class ObjectsManager : IObjectsManager
         IBackgroundJobsProcessor backgroundJob,
         IDdbWrapper ddbWrapper,
         IThumbnailGenerator thumbnailGenerator,
-        IJobIndexQuery jobIndexQuery)
+        IJobIndexQuery jobIndexQuery,
+        BuildPendingService buildPendingService)
     {
         _logger = logger;
         _context = context;
@@ -81,6 +75,7 @@ public class ObjectsManager : IObjectsManager
         _settings = settings.Value;
         _thumbnailGenerator = thumbnailGenerator;
         _jobIndexQuery = jobIndexQuery;
+        _buildPendingService = buildPendingService;
     }
 
     public async Task<IEnumerable<EntryDto>> List(string orgSlug, string dsSlug, string path = null,
@@ -258,7 +253,7 @@ public class ObjectsManager : IObjectsManager
             // CRITICAL: Set pending flag BEFORE build starts
             // This prevents race condition where build fails quickly and creates .pending
             // but recurring job hasn't updated cache yet
-            await SetDatasetHasPendingBuilds(orgSlug, dsSlug, true);
+            await _buildPendingService.SetDatasetHasPendingBuilds(orgSlug, dsSlug, true);
 
             var meta = new IndexPayload(orgSlug, dsSlug, entry.Hash, user.Id, null, entry.Path);
             var jobId = _backgroundJob.EnqueueIndexed(() => HangfireUtils.BuildWrapper(ddb, path, false, null), meta);
@@ -274,12 +269,12 @@ public class ObjectsManager : IObjectsManager
             {
                 try
                 {
-                    await _cacheManager.GetAsync(MagicStrings.ThumbnailCacheSeed, $"{orgSlug}/{dsSlug}", entry.Hash, DefaultThumbnailSize,
+                    await _cacheManager.GetAsync(MagicStrings.ThumbnailCacheSeed, ForDataset(orgSlug, dsSlug), entry.Hash, _settings.DefaultThumbnailSize,
                         new Func<Task<byte[]>>(async () =>
                         {
                             _logger.LogDebug("Background thumbnail generation for new file: '{LocalFilePath}'", localFilePath);
                             using var s = new MemoryStream();
-                            await _thumbnailGenerator.GenerateThumbnailAsync(localFilePath, DefaultThumbnailSize, s);
+                            await _thumbnailGenerator.GenerateThumbnailAsync(localFilePath, _settings.DefaultThumbnailSize, s);
                             var result = s.ToArray();
                             _logger.LogDebug("Background generated thumbnail of {Size} bytes for: '{LocalFilePath}'", result.Length, localFilePath);
                             return result;
@@ -849,8 +844,7 @@ public class ObjectsManager : IObjectsManager
             throw new UnauthorizedException("The current user is not allowed to edit this dataset");
 
         // Invalidate dataset thumbnail cache before deleting everything
-        var cacheCategory = $"{orgSlug}/{dsSlug}/ds-thumb";
-        await _cacheManager.RemoveByCategoryAsync(MagicStrings.ThumbnailCacheSeed, cacheCategory);
+        await InvalidateDatasetThumbnailCache(orgSlug, dsSlug);
 
         _ddbManager.Delete(orgSlug, ds.InternalRef);
     }
@@ -885,16 +879,16 @@ public class ObjectsManager : IObjectsManager
         var sourcePath = GetBuildSource(entry);
         var localPath = ddbSingle.GetLocalPath(sourcePath);
 
-        var size = sizeRaw ?? DefaultThumbnailSize;
+        var size = sizeRaw ?? _settings.DefaultThumbnailSize;
 
 
         if (recreate)
         {
             _logger.LogDebug("Removing cached thumbnail for {OrgSlug}/{DsSlug}, hash: {Hash}", orgSlug, dsSlug, entry.Hash);
-            await _cacheManager.RemoveAsync(MagicStrings.ThumbnailCacheSeed, $"{orgSlug}/{dsSlug}", entry.Hash);
+            await _cacheManager.RemoveAsync(MagicStrings.ThumbnailCacheSeed, ForDataset(orgSlug, dsSlug), entry.Hash);
         }
 
-        var thumbData = await _cacheManager.GetAsync(MagicStrings.ThumbnailCacheSeed, $"{orgSlug}/{dsSlug}", entry.Hash, size,
+        var thumbData = await _cacheManager.GetAsync(MagicStrings.ThumbnailCacheSeed, ForDataset(orgSlug, dsSlug), entry.Hash, size,
             new Func<Task<byte[]>>(async () =>
             {
                 _logger.LogDebug("Cache miss - generating new thumbnail for: '{LocalPath}'", localPath);
@@ -922,7 +916,7 @@ public class ObjectsManager : IObjectsManager
     {
         // Find first existing thumbnail candidate
         string thumbnailPath = null;
-        foreach (var candidate in DatasetThumbnailCandidates)
+        foreach (var candidate in _settings.DatasetThumbnailCandidates)
         {
             if (ddb.EntryExists(candidate))
             {
@@ -934,20 +928,21 @@ public class ObjectsManager : IObjectsManager
         if (thumbnailPath == null)
             return null;
 
-        var size = sizeRaw ?? DefaultThumbnailSize;
-        var cacheCategory = $"{orgSlug}/{dsSlug}/ds-thumb";
+        var size = sizeRaw ?? _settings.DefaultThumbnailSize;
+        var dsThumbCategory = ForDatasetThumbnail(orgSlug, dsSlug);
 
         if (recreate)
         {
             _logger.LogDebug("Removing cached dataset thumbnail for {OrgSlug}/{DsSlug}", orgSlug, dsSlug);
-            await _cacheManager.RemoveByCategoryAsync(MagicStrings.ThumbnailCacheSeed, cacheCategory);
+            await _cacheManager.RemoveByCategoryAsync(MagicStrings.ThumbnailCacheSeed, dsThumbCategory);
         }
 
         var localPath = ddb.GetLocalPath(thumbnailPath);
 
         var thumbData = await _cacheManager.GetAsync(
             MagicStrings.ThumbnailCacheSeed,
-            cacheCategory,
+            dsThumbCategory,
+            thumbnailPath,
             size,
             new Func<Task<byte[]>>(async () =>
             {
@@ -967,20 +962,41 @@ public class ObjectsManager : IObjectsManager
         };
     }
 
-    private static bool IsDatasetThumbnailFile(string path)
+    private bool IsDatasetThumbnailFile(string path)
     {
         var fileName = Path.GetFileName(path);
-        return DatasetThumbnailCandidates.Contains(fileName, StringComparer.OrdinalIgnoreCase);
+        return _settings.DatasetThumbnailCandidates.Contains(fileName, StringComparer.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    /// Invalidates the dataset-level thumbnail cache unconditionally.
+    /// </summary>
+    private async Task InvalidateDatasetThumbnailCache(string orgSlug, string dsSlug)
+    {
+        _logger.LogDebug("Invalidating dataset thumbnail cache for {OrgSlug}/{DsSlug}", orgSlug, dsSlug);
+        await _cacheManager.RemoveByCategoryAsync(MagicStrings.ThumbnailCacheSeed,
+            ForDatasetThumbnail(orgSlug, dsSlug));
     }
 
     private async Task InvalidateDatasetThumbnailCacheIfNeeded(string orgSlug, string dsSlug, string path)
     {
         if (IsDatasetThumbnailFile(path))
-        {
-            var cacheCategory = $"{orgSlug}/{dsSlug}/ds-thumb";
-            _logger.LogDebug("Invalidating dataset thumbnail cache for {OrgSlug}/{DsSlug} (file: {Path})", orgSlug, dsSlug, path);
-            await _cacheManager.RemoveByCategoryAsync(MagicStrings.ThumbnailCacheSeed, cacheCategory);
-        }
+            await InvalidateDatasetThumbnailCache(orgSlug, dsSlug);
+    }
+
+    /// <inheritdoc />
+    public async Task InvalidateAllDatasetCaches(string orgSlug, string dsSlug)
+    {
+        _logger.LogInformation("Invalidating all caches for dataset {OrgSlug}/{DsSlug}", orgSlug, dsSlug);
+
+        var category = ForDataset(orgSlug, dsSlug);
+
+        await _cacheManager.RemoveByCategoryAsync(MagicStrings.TileCacheSeed, category);
+        await _cacheManager.RemoveByCategoryAsync(MagicStrings.ThumbnailCacheSeed, category);
+        await _cacheManager.RemoveByCategoryAsync(MagicStrings.BuildPendingTrackerCacheSeed, category);
+
+        // Also invalidate dataset-level thumbnail cache (uses a different category)
+        await InvalidateDatasetThumbnailCache(orgSlug, dsSlug);
     }
 
     public async Task<StorageDataDto> GenerateTileData(string orgSlug, string dsSlug, string path, int tz, int tx,
@@ -1009,7 +1025,7 @@ public class ObjectsManager : IObjectsManager
             // This is needed because GenerateTile is CPU intensive and may take some time
             // We want to free up the main thread to handle other requests
             var tileData =
-                await _cacheManager.GetAsync(MagicStrings.TileCacheSeed, $"{orgSlug}/{dsSlug}", entry.Hash, tx, ty, tz, retina,
+                await _cacheManager.GetAsync(MagicStrings.TileCacheSeed, ForDataset(orgSlug, dsSlug), entry.Hash, tx, ty, tz, retina,
                     new Func<Task<byte[]>>(() => Task.Run(() => ddb.GenerateTile(localPath, tz, tx, ty, retina, entry.Hash))));
 
             return new StorageDataDto
@@ -1434,41 +1450,6 @@ public class ObjectsManager : IObjectsManager
         _logger.LogInformation("Successfully deleted {Count} completed/failed builds", completedBuilds.Count);
 
         return completedBuilds.Count;
-    }
-
-    /// <summary>
-    /// Updates the cache to indicate whether a dataset has pending builds.
-    /// Used to optimize the recurring build pending job.
-    /// </summary>
-    private async Task SetDatasetHasPendingBuilds(string orgSlug, string dsSlug, bool hasPending)
-    {
-        try
-        {
-            var cacheKey = $"{orgSlug}/{dsSlug}";
-
-            // Simple state: just HasPending flag and timestamp
-            var state = new
-            {
-                HasPending = hasPending,
-                LastCheckBinary = DateTime.UtcNow.ToBinary()
-            };
-
-            var json = System.Text.Json.JsonSerializer.Serialize(state);
-            var bytes = System.Text.Encoding.UTF8.GetBytes(json);
-
-            await _cacheManager.SetAsync(MagicStrings.BuildPendingTrackerCacheSeed, cacheKey, bytes);
-
-            _logger.LogDebug(
-                "Set pending flag for {Org}/{Ds}: HasPending={HasPending}",
-                orgSlug, dsSlug, hasPending);
-        }
-        catch (Exception ex)
-        {
-            // Non-critical - don't fail upload if cache update fails
-            _logger.LogWarning(ex,
-                "Failed to update pending cache for {Org}/{Ds}, continuing anyway",
-                orgSlug, dsSlug);
-        }
     }
 
     #endregion

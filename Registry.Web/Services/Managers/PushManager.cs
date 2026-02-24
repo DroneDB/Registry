@@ -15,6 +15,7 @@ using Registry.Web.Exceptions;
 using Registry.Web.Models;
 using Registry.Web.Models.Configuration;
 using Registry.Web.Models.DTO;
+using Registry.Web.Services.Adapters;
 using Registry.Web.Services.Ports;
 using Registry.Web.Utilities;
 using Stamp = Registry.Ports.DroneDB.Stamp;
@@ -39,12 +40,13 @@ public class PushManager : IPushManager
     private readonly IBackgroundJobsProcessor _backgroundJob;
     private readonly ICacheManager _cacheManager;
     private readonly IFileSystem _fileSystem;
+    private readonly BuildPendingService _buildPendingService;
 
     public PushManager(IUtils utils, IDdbManager ddbManager,
         IObjectsManager objectsManager, ILogger<PushManager> logger, IDatasetsManager datasetsManager,
         IAuthManager authManager, IDdbWrapper ddbWrapper,
         IBackgroundJobsProcessor backgroundJob, IOptions<AppSettings> settings, ICacheManager cacheManager,
-        IFileSystem fileSystem)
+        IFileSystem fileSystem, BuildPendingService buildPendingService)
     {
         _utils = utils;
         _ddbManager = ddbManager;
@@ -57,6 +59,7 @@ public class PushManager : IPushManager
         _settings = settings.Value;
         _cacheManager = cacheManager;
         _fileSystem = fileSystem;
+        _buildPendingService = buildPendingService;
     }
 
     public async Task<PushInitResultDto> Init(string orgSlug, string dsSlug, string checksum, StampDto stamp)
@@ -295,7 +298,7 @@ public class PushManager : IPushManager
 
         // If we enqueued any builds, mark dataset as having pending
         if (hasBuildableFiles)
-            await SetDatasetHasPendingBuilds(orgSlug, dsSlug, true);
+            await _buildPendingService.SetDatasetHasPendingBuilds(orgSlug, dsSlug, true);
 
         if (ddb.IsBuildPending())
         {
@@ -308,35 +311,4 @@ public class PushManager : IPushManager
         }
     }
 
-    /// <summary>
-    /// Updates the cache to indicate whether a dataset has pending builds.
-    /// </summary>
-    private async Task SetDatasetHasPendingBuilds(string orgSlug, string dsSlug, bool hasPending)
-    {
-        try
-        {
-            var cacheKey = $"{orgSlug}/{dsSlug}";
-
-            var state = new
-            {
-                HasPending = hasPending,
-                LastCheckBinary = DateTime.UtcNow.ToBinary()
-            };
-
-            var json = System.Text.Json.JsonSerializer.Serialize(state);
-            var bytes = System.Text.Encoding.UTF8.GetBytes(json);
-
-            await _cacheManager.SetAsync(MagicStrings.BuildPendingTrackerCacheSeed, cacheKey, bytes);
-
-            _logger.LogDebug(
-                "Set pending flag for {Org}/{Ds}: HasPending={HasPending}",
-                orgSlug, dsSlug, hasPending);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogWarning(ex,
-                "Failed to update pending cache for {Org}/{Ds}, continuing anyway",
-                orgSlug, dsSlug);
-        }
-    }
 }

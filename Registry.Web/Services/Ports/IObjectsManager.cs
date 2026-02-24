@@ -37,4 +37,9 @@ public interface IObjectsManager
     Task<int> ClearCompletedBuilds(string orgSlug, string dsSlug);
     Task Delete(string orgSlug, string dsSlug, string[] paths);
     Task<DeleteBatchResponse> DeleteBatch(string orgSlug, string dsSlug, string[] paths);
+
+    /// <summary>
+    /// Invalidates all cached data for a dataset (tiles, thumbnails, dataset thumbnail, build-pending).
+    /// </summary>
+    Task InvalidateAllDatasetCaches(string orgSlug, string dsSlug);
 }

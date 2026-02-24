@@ -17,7 +17,7 @@ public class DatasetPermissionsDto
 
 public class DatasetDto
 {
-        
+
     [Required]
     public string Slug { get; set; }
     [Required]
@@ -25,29 +25,29 @@ public class DatasetDto
     public Dictionary<string, object> Properties { get; set; }
 
     public long Size { get; set; }
-    
+
     public DatasetPermissionsDto Permissions { get; set; }
 
 }
-    
+
 public class DatasetNewDto
 {
     [Required]
     public string Slug { get; set; }
 
     public string Name { get; set; }
-        
+
     public Visibility? Visibility { get; set; }
 
     [MaxLength(256)]
     public string Tagline { get; set; }
 }
-    
+
 public class DatasetEditDto
 {
 
     public string Name { get; set; }
-        
+
     public Visibility? Visibility { get; set; }
 
 }

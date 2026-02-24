@@ -139,6 +139,21 @@ public class AppSettings
     public string RemoteThumbnailGeneratorUrl { get; set; }
 
     /// <summary>
+    /// Default thumbnail size in pixels when no size is specified
+    /// </summary>
+    public int DefaultThumbnailSize { get; set; } = 512;
+
+    /// <summary>
+    /// File names (in dataset root) considered as dataset thumbnail candidates.
+    /// The first matching file found is used as the dataset thumbnail.
+    /// </summary>
+    public string[] DatasetThumbnailCandidates { get; set; } =
+    [
+        "thumbnail.webp", "thumbnail.jpg", "thumbnail.png",
+        "cover.webp", "cover.jpg", "cover.png"
+    ];
+
+    /// <summary>
     /// Thumbnails cache expiration
     /// </summary>
     public TimeSpan? ThumbnailsCacheExpiration { get; set; }
@@ -193,6 +208,19 @@ public class AppSettings
     /// Default: "0 3 * * *" (daily at 3:00 AM)
     /// </summary>
     public string OrphanedDatasetCleanupCron { get; set; }
+
+    /// <summary>
+    /// Cron expression for job index cleanup task (removes old terminal records).
+    /// Default: "0 4 * * *" (daily at 4:00 AM)
+    /// </summary>
+    public string JobIndexCleanupCron { get; set; }
+
+    /// <summary>
+    /// Number of days to retain terminal (Succeeded/Failed/Deleted) JobIndex records.
+    /// Records older than this are purged by the cleanup job.
+    /// Default: 60
+    /// </summary>
+    public int JobIndexRetentionDays { get; set; } = 60;
 
     /// <summary>
     /// Password complexity policy. When null, no password requirements are enforced.
