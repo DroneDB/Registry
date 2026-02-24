@@ -743,9 +743,9 @@ public class ObjectsManager : IObjectsManager
             }
         }
 
-        // Invalidate dataset thumbnail cache if any deleted path is a thumbnail candidate
-        foreach (var path in paths)
-            await InvalidateDatasetThumbnailCacheIfNeeded(orgSlug, dsSlug, path);
+        // Invalidate dataset thumbnail cache once if any deleted path is a thumbnail candidate
+        if (paths.Any(p => IsDatasetThumbnailFile(p)))
+            await InvalidateDatasetThumbnailCache(orgSlug, dsSlug);
 
         _logger.LogInformation("Deletion complete");
     }
@@ -814,9 +814,6 @@ public class ObjectsManager : IObjectsManager
                 }
 
                 deleted.Add(path);
-
-                // Invalidate dataset thumbnail cache if this path is a thumbnail candidate
-                await InvalidateDatasetThumbnailCacheIfNeeded(orgSlug, dsSlug, path);
             }
             catch (Exception ex)
             {
@@ -824,6 +821,10 @@ public class ObjectsManager : IObjectsManager
                 failed[path] = ex.Message;
             }
         }
+
+        // Invalidate dataset thumbnail cache once if any deleted path is a thumbnail candidate
+        if (deleted.Any(p => IsDatasetThumbnailFile(p)))
+            await InvalidateDatasetThumbnailCache(orgSlug, dsSlug);
 
         response.Deleted = deleted.ToArray();
         response.Failed = failed;
@@ -964,6 +965,13 @@ public class ObjectsManager : IObjectsManager
 
     private bool IsDatasetThumbnailFile(string path)
     {
+        if (string.IsNullOrEmpty(path))
+            return false;
+
+        // Only treat files in the dataset root (no directory component) as thumbnail candidates
+        if (path.Contains('/') || path.Contains('\\'))
+            return false;
+
         var fileName = Path.GetFileName(path);
         return _settings.DatasetThumbnailCandidates.Contains(fileName, StringComparer.OrdinalIgnoreCase);
     }

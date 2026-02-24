@@ -110,8 +110,10 @@ public class JobIndexWriter(RegistryContext db, ILogger<JobIndexWriter> log) : I
 
             return deleted;
         }
-        catch (InvalidOperationException)
+        catch (Exception ex)
         {
+
+            log.LogWarning(ex, "Bulk delete failed in JobIndexWriter.DeleteTerminalBeforeAsync, falling back to client-side deletion");
             // Fallback for providers that don't support ExecuteDeleteAsync (e.g., InMemory in tests)
             var toDelete = await db.JobIndices
                 .Where(j => TerminalStates.Contains(j.CurrentState) && j.LastStateChangeUtc < cutoffUtc)
