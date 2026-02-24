@@ -240,7 +240,8 @@ public class SystemManagerTest : TestBase
             _httpClientFactoryMock.Object,
             _backgroundJobMock.Object,
             _cacheManagerMock.Object,
-            _fileSystem
+            _fileSystem,
+            Mock.Of<IJobIndexWriter>()
         );
     }
 }

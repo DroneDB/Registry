@@ -22,7 +22,7 @@ public interface IObjectsManager
     Task Delete(string orgSlug, string dsSlug, string path);
     Task DeleteAll(string orgSlug, string dsSlug);
     Task<FileStreamDescriptor> DownloadStream(string orgSlug, string dsSlug, string[] paths);
-    Task<StorageDataDto> GenerateThumbnailData(string orgSlug, string dsSlug, string path, int? size, bool recreate = false);
+    Task<StorageDataDto> GenerateThumbnailData(string orgSlug, string dsSlug, string? path, int? size, bool recreate = false);
     Task<StorageDataDto> GenerateTileData(string orgSlug, string dsSlug, string path, int tz, int tx, int ty, bool retina);
     Task<FileStreamDescriptor> GetDdb(string orgSlug, string dsSlug);
     Task Build(string orgSlug, string dsSlug, string path, bool force = false);
@@ -37,4 +37,9 @@ public interface IObjectsManager
     Task<int> ClearCompletedBuilds(string orgSlug, string dsSlug);
     Task Delete(string orgSlug, string dsSlug, string[] paths);
     Task<DeleteBatchResponse> DeleteBatch(string orgSlug, string dsSlug, string[] paths);
+
+    /// <summary>
+    /// Invalidates all cached data for a dataset (tiles, thumbnails, dataset thumbnail, build-pending).
+    /// </summary>
+    Task InvalidateAllDatasetCaches(string orgSlug, string dsSlug);
 }

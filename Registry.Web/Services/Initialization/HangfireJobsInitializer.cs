@@ -84,5 +84,17 @@ internal class HangfireJobsInitializer
             orphanedCleanupCron);
 
         _logger.LogInformation("Scheduled 'cleanup-orphaned-datasets' with cron: {Cron}", orphanedCleanupCron);
+
+        // Cleanup old terminal JobIndex records daily at 4:00 AM
+        var jobIndexCleanupCron = string.IsNullOrWhiteSpace(appSettings.JobIndexCleanupCron)
+            ? "0 4 * * *"
+            : appSettings.JobIndexCleanupCron;
+
+        recurringJobManager.AddOrUpdate<JobIndexCleanupService>(
+            "cleanup-old-jobindices",
+            service => service.CleanupOldJobIndicesAsync(null),
+            jobIndexCleanupCron);
+
+        _logger.LogInformation("Scheduled 'cleanup-old-jobindices' with cron: {Cron}", jobIndexCleanupCron);
     }
 }

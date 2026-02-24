@@ -122,7 +122,8 @@ public class SystemManagerImportIntegrationTest : TestBase
             httpClientFactory,
             backgroundJobMock.Object,
             cacheManagerMock.Object,
-            _fileSystem
+            _fileSystem,
+            Mock.Of<IJobIndexWriter>()
         );
     }
 

@@ -16,6 +16,7 @@ using Registry.Web.Data;
 using Registry.Web.Models;
 using Registry.Web.Services.Ports;
 using Registry.Web.Utilities;
+using static Registry.Web.Services.CacheCategories;
 
 namespace Registry.Web.Services.Adapters;
 
@@ -63,7 +64,7 @@ public class BuildPendingService
     {
         try
         {
-            var cacheKey = $"{orgSlug}/{dsSlug}";
+            var cacheKey = ForDataset(orgSlug, dsSlug);
             var cached = await _cacheManager.GetAsync(MagicStrings.BuildPendingTrackerCacheSeed, cacheKey);
 
             if (cached == null || cached.Length == 0)
@@ -147,6 +148,39 @@ public class BuildPendingService
     }
 
     /// <summary>
+    /// Sets the pending builds flag for a dataset in cache.
+    /// Called by ObjectsManager and PushManager when builds are enqueued.
+    /// Non-critical: failures are logged as warnings and do not propagate.
+    /// </summary>
+    public async Task SetDatasetHasPendingBuilds(string orgSlug, string dsSlug, bool hasPending)
+    {
+        try
+        {
+            var cacheKey = ForDataset(orgSlug, dsSlug);
+
+            var state = new CacheState
+            {
+                HasPending = hasPending,
+                LastCheckBinary = DateTime.UtcNow.ToBinary()
+            };
+
+            var serialized = SerializeCacheState(state);
+            await _cacheManager.SetAsync(MagicStrings.BuildPendingTrackerCacheSeed, cacheKey, serialized);
+
+            _logger.LogDebug(
+                "Set pending flag for {Org}/{Ds}: HasPending={HasPending}",
+                orgSlug, dsSlug, hasPending);
+        }
+        catch (Exception ex)
+        {
+            // Non-critical - don't fail upload if cache update fails
+            _logger.LogWarning(ex,
+                "Failed to update pending cache for {Org}/{Ds}, continuing anyway",
+                orgSlug, dsSlug);
+        }
+    }
+
+    /// <summary>
     /// Updates the cache with the current pending status for a dataset.
     /// </summary>
     /// <param name="orgSlug">Organization slug</param>
@@ -157,7 +191,7 @@ public class BuildPendingService
     {
         try
         {
-            var cacheKey = $"{orgSlug}/{dsSlug}";
+            var cacheKey = ForDataset(orgSlug, dsSlug);
             var state = new CacheState
             {
                 HasPending = hasPending,
@@ -319,7 +353,7 @@ public class BuildPendingService
 
                     // Check if we should enqueue a job based on stamp changes
                     // If stamp hasn't changed, the same files are still pending - no need to reprocess
-                    var cacheKey = $"{ds.Organization.Slug}/{ds.Slug}";
+                    var cacheKey = ForDataset(ds.Organization.Slug, ds.Slug);
                     var cachedData = await _cacheManager.GetAsync(MagicStrings.BuildPendingTrackerCacheSeed, cacheKey);
 
                     var shouldEnqueue = true;

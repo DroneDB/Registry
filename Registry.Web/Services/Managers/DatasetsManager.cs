@@ -198,6 +198,9 @@ public class DatasetsManager : IDatasetsManager
         if (dataset.Visibility.HasValue)
             meta.Visibility = dataset.Visibility.Value;
 
+        if (!string.IsNullOrWhiteSpace(dataset.Tagline))
+            meta.Tagline = dataset.Tagline;
+
         org.Datasets.Add(ds);
 
         await _context.SaveChangesAsync();

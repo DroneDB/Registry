@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Hangfire;
@@ -94,5 +95,34 @@ public class JobIndexWriter(RegistryContext db, ILogger<JobIndexWriter> log) : I
             ji.ScheduledAtUtc = changedAtUtc;
 
         await db.SaveChangesAsync(ct);
+    }
+
+    private static readonly string[] TerminalStates = ["Succeeded", "Failed", "Deleted"];
+
+    public async Task<int> DeleteTerminalBeforeAsync(DateTime cutoffUtc, CancellationToken ct = default)
+    {
+        try
+        {
+            // Prefer bulk delete (EF Core 7+) — works with relational providers (MySQL, SQLite, etc.)
+            var deleted = await db.JobIndices
+                .Where(j => TerminalStates.Contains(j.CurrentState) && j.LastStateChangeUtc < cutoffUtc)
+                .ExecuteDeleteAsync(ct);
+
+            return deleted;
+        }
+        catch (Exception ex)
+        {
+
+            log.LogWarning(ex, "Bulk delete failed in JobIndexWriter.DeleteTerminalBeforeAsync, falling back to client-side deletion");
+            // Fallback for providers that don't support ExecuteDeleteAsync (e.g., InMemory in tests)
+            var toDelete = await db.JobIndices
+                .Where(j => TerminalStates.Contains(j.CurrentState) && j.LastStateChangeUtc < cutoffUtc)
+                .ToListAsync(ct);
+
+            db.JobIndices.RemoveRange(toDelete);
+            await db.SaveChangesAsync(ct);
+
+            return toDelete.Count;
+        }
     }
 }

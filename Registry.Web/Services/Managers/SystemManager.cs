@@ -44,12 +44,13 @@ public class SystemManager : ISystemManager
     private readonly IBackgroundJobsProcessor _backgroundJob;
     private readonly ICacheManager _cacheManager;
     private readonly IFileSystem _fileSystem;
+    private readonly IJobIndexWriter _jobIndexWriter;
 
     public SystemManager(IAuthManager authManager,
         RegistryContext context, IDdbManager ddbManager, ILogger<SystemManager> logger,
         IObjectsManager objectManager, IOptions<AppSettings> settings, BuildPendingService buildPendingService,
         IHttpClientFactory httpClientFactory, IBackgroundJobsProcessor backgroundJob, ICacheManager cacheManager,
-        IFileSystem fileSystem)
+        IFileSystem fileSystem, IJobIndexWriter jobIndexWriter)
     {
         _authManager = authManager;
         _context = context;
@@ -62,6 +63,7 @@ public class SystemManager : ISystemManager
         _backgroundJob = backgroundJob;
         _cacheManager = cacheManager;
         _fileSystem = fileSystem;
+        _jobIndexWriter = jobIndexWriter;
     }
 
     public async Task<CleanupDatasetResultDto> CleanupEmptyDatasets()
@@ -1271,10 +1273,7 @@ public class SystemManager : ISystemManager
 
         // Clear Redis cache for tiles and thumbnails
         _logger.LogInformation("Clearing cache for dataset {OrgSlug}/{DsSlug}", orgSlug, dsSlug);
-        var datasetCacheCategory = $"{orgSlug}/{dsSlug}";
-        await _cacheManager.RemoveByCategoryAsync(MagicStrings.TileCacheSeed, datasetCacheCategory);
-        await _cacheManager.RemoveByCategoryAsync(MagicStrings.ThumbnailCacheSeed, datasetCacheCategory);
-        await _cacheManager.RemoveByCategoryAsync(MagicStrings.BuildPendingTrackerCacheSeed, datasetCacheCategory);
+        await _objectManager.InvalidateAllDatasetCaches(orgSlug, dsSlug);
 
         // Enqueue background build jobs to rebuild the entire dataset
         _logger.LogInformation("Enqueueing build jobs for dataset {OrgSlug}/{DsSlug}", orgSlug, dsSlug);
@@ -1305,6 +1304,31 @@ public class SystemManager : ISystemManager
             SuccessCount = entries.Count(e => e.Success),
             ErrorCount = entries.Count(e => !e.Success),
             Entries = entries
+        };
+    }
+
+    public async Task<CleanupJobIndicesResultDto> CleanupJobIndices(int? retentionDays = null)
+    {
+        if (!await _authManager.IsUserAdmin())
+            throw new UnauthorizedException("Only admins can perform system related tasks");
+
+        var days = retentionDays ?? _settings.JobIndexRetentionDays;
+        if (days <= 0)
+            days = 60;
+
+        var cutoff = DateTime.UtcNow.AddDays(-days);
+
+        _logger.LogInformation("Manual JobIndex cleanup: removing terminal records older than {Days} days (before {Cutoff:u})",
+            days, cutoff);
+
+        var deleted = await _jobIndexWriter.DeleteTerminalBeforeAsync(cutoff);
+
+        _logger.LogInformation("Manual JobIndex cleanup completed: {Deleted} records removed", deleted);
+
+        return new CleanupJobIndicesResultDto
+        {
+            DeletedCount = deleted,
+            RetentionDays = days
         };
     }
 }

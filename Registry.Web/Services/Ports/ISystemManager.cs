@@ -28,4 +28,11 @@ public interface ISystemManager
     /// <param name="stopOnError">Whether to stop processing on first error</param>
     /// <returns>Rescan results</returns>
     Task<RescanResultDto> RescanDatasetIndex(string orgSlug, string dsSlug, string? types = null, bool stopOnError = true);
+
+    /// <summary>
+    /// Removes terminal (Succeeded/Failed/Deleted) JobIndex records older than the configured retention period.
+    /// </summary>
+    /// <param name="retentionDays">Optional override for retention days. Uses AppSettings.JobIndexRetentionDays when null.</param>
+    /// <returns>Cleanup result with number of records deleted.</returns>
+    Task<CleanupJobIndicesResultDto> CleanupJobIndices(int? retentionDays = null);
 }

@@ -30,4 +30,9 @@ public class FeaturesDto
     /// Password complexity policy. Null when no policy is enforced.
     /// </summary>
     public PasswordPolicyDto? PasswordPolicy { get; set; }
+
+    /// <summary>
+    /// File names (in dataset root) considered as dataset thumbnail candidates.
+    /// </summary>
+    public string[]? DatasetThumbnailCandidates { get; set; }
 }
