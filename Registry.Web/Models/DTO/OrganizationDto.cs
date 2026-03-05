@@ -4,9 +4,18 @@ using System.ComponentModel.DataAnnotations;
 using System.Linq;
 using System.Security.Cryptography;
 using System.Threading.Tasks;
+using Registry.Common;
 using Registry.Web.Data.Models;
 
 namespace Registry.Web.Models.DTO;
+
+public class OrganizationPermissionsDto
+{
+    public bool CanRead { get; set; }
+    public bool CanWrite { get; set; }
+    public bool CanDelete { get; set; }
+    public bool CanManageMembers { get; set; }
+}
 
 public class OrganizationDto
 {
@@ -21,5 +30,8 @@ public class OrganizationDto
 
     public bool IsPublic { get; set; }
 
-
+    /// <summary>
+    /// The permissions of the current user in this organization.
+    /// </summary>
+    public OrganizationPermissionsDto Permissions { get; set; }
 }
