@@ -57,7 +57,7 @@ public class OrganizationsManager : IOrganizationsManager
 
         // Use projection to load only necessary data
         // We compute the raw permission level in the query, then derive boolean permissions in memory
-        var organizationsQuery = _context.Organizations.Include(org => org.Users)
+        var organizationsQuery = _context.Organizations
             .AsNoTracking()
             .Where(org => org.OwnerId == currentUser.Id ||
                          org.Slug == MagicStrings.PublicOrganizationSlug ||
@@ -93,14 +93,10 @@ public class OrganizationsManager : IOrganizationsManager
                 IsPublic = org.IsPublic,
                 Owner = org.Owner,
                 Permissions = effectivePermission != null
-                    ? new OrganizationPermissionsDto
-                    {
-                        CanRead = effectivePermission.Value.HasAccess(AccessType.Read),
-                        CanWrite = effectivePermission.Value.HasAccess(AccessType.Write),
-                        CanDelete = effectivePermission.Value.HasAccess(AccessType.Delete),
-                        CanManageMembers = effectivePermission.Value.CanManageMembers()
-                    }
-                    : null
+                    ? OrganizationPermissionsDto.FromPermissions(effectivePermission.Value)
+                    : org.IsPublic
+                        ? OrganizationPermissionsDto.ReadOnly
+                        : null
             };
         }).ToList();
 
@@ -207,7 +203,7 @@ public class OrganizationsManager : IOrganizationsManager
             else
             {
                 // Load organization users if not already loaded
-                if (org.Users == null)
+                if (!_context.Entry(org).Collection(o => o.Users).IsLoaded)
                     await _context.Entry(org).Collection(o => o.Users).LoadAsync();
 
                 var orgUser = org.Users?.FirstOrDefault(u => u.UserId == currentUser.Id);
@@ -216,13 +212,11 @@ public class OrganizationsManager : IOrganizationsManager
 
             if (effectivePermission != null)
             {
-                dto.Permissions = new OrganizationPermissionsDto
-                {
-                    CanRead = effectivePermission.Value.HasAccess(AccessType.Read),
-                    CanWrite = effectivePermission.Value.HasAccess(AccessType.Write),
-                    CanDelete = effectivePermission.Value.HasAccess(AccessType.Delete),
-                    CanManageMembers = effectivePermission.Value.CanManageMembers()
-                };
+                dto.Permissions = OrganizationPermissionsDto.FromPermissions(effectivePermission.Value);
+            }
+            else if (org.IsPublic)
+            {
+                dto.Permissions = OrganizationPermissionsDto.ReadOnly;
             }
         }
 
