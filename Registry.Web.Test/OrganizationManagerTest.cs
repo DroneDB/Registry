@@ -822,6 +822,13 @@ public class OrganizationManagerTest : TestBase
             Email = "standard@example.com"
         };
 
+        // Add user to ApplicationDbContext so owner resolution works
+        if (!_appContext.Users.Any(u => u.Id == userId))
+        {
+            _appContext.Users.Add(standardUser);
+            _appContext.SaveChanges();
+        }
+
         _authManagerMock.Setup(x => x.GetCurrentUser()).ReturnsAsync(standardUser);
         _authManagerMock.Setup(x => x.IsUserAdmin()).ReturnsAsync(false);
         _authManagerMock.Setup(x => x.UserExists(It.IsAny<string>())).ReturnsAsync(true);

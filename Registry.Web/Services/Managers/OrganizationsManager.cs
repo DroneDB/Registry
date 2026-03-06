@@ -53,23 +53,52 @@ public class OrganizationsManager : IOrganizationsManager
         if (!await _authManager.CanListOrganizations(currentUser))
             throw new UnauthorizedException("Invalid user");
 
+        var isAdmin = await _authManager.IsUserAdmin();
+
         // Use projection to load only necessary data
+        // We compute the raw permission level in the query, then derive boolean permissions in memory
         var organizationsQuery = _context.Organizations
             .AsNoTracking()
             .Where(org => org.OwnerId == currentUser.Id ||
                          org.Slug == MagicStrings.PublicOrganizationSlug ||
                          org.Users.Any(u => u.UserId == currentUser.Id))
-            .Select(org => new OrganizationDto
+            .Select(org => new
+            {
+                org.CreationDate,
+                org.Description,
+                org.Slug,
+                org.Name,
+                org.IsPublic,
+                Owner = org.OwnerId,
+                IsOwnerOrAdmin = isAdmin || org.OwnerId == currentUser.Id,
+                MemberPermission = org.Users.Where(u => u.UserId == currentUser.Id)
+                    .Select(u => (OrganizationPermissions?)u.Permissions)
+                    .FirstOrDefault()
+            });
+
+        var rawOrganizations = await organizationsQuery.ToListAsync();
+
+        var organizations = rawOrganizations.Select(org =>
+        {
+            var effectivePermission = org.IsOwnerOrAdmin
+                ? OrganizationPermissions.Admin
+                : org.MemberPermission;
+
+            return new OrganizationDto
             {
                 CreationDate = org.CreationDate,
                 Description = org.Description,
                 Slug = org.Slug,
                 Name = org.Name,
                 IsPublic = org.IsPublic,
-                Owner = org.OwnerId // Will be resolved to username later
-            });
-
-        var organizations = await organizationsQuery.ToListAsync();
+                Owner = org.Owner,
+                Permissions = effectivePermission != null
+                    ? OrganizationPermissionsDto.FromPermissions(effectivePermission.Value)
+                    : org.IsPublic
+                        ? OrganizationPermissionsDto.ReadOnly
+                        : null
+            };
+        }).ToList();
 
         // Resolve owner names in a separate, more efficient query
         var ownerIds = organizations.Where(o => o.Owner != null)
@@ -144,7 +173,54 @@ public class OrganizationsManager : IOrganizationsManager
         if (!await _authManager.RequestAccess(org, AccessType.Read))
             throw new UnauthorizedException("Invalid user");
 
-        return org.ToDto();
+        var dto = org.ToDto();
+
+        // Resolve owner ID to username
+        if (dto.Owner != null)
+        {
+            var owner = await _appContext.Users
+                .AsNoTracking()
+                .Where(u => u.Id == dto.Owner)
+                .Select(u => u.UserName)
+                .FirstOrDefaultAsync();
+            dto.Owner = owner;
+        }
+
+        // Populate current user's permissions in this organization
+        var currentUser = await _authManager.GetCurrentUser();
+        if (currentUser != null)
+        {
+            OrganizationPermissions? effectivePermission = null;
+
+            if (await _authManager.IsUserAdmin())
+            {
+                effectivePermission = OrganizationPermissions.Admin;
+            }
+            else if (org.OwnerId == currentUser.Id)
+            {
+                effectivePermission = OrganizationPermissions.Admin;
+            }
+            else
+            {
+                // Load organization users if not already loaded
+                if (!_context.Entry(org).Collection(o => o.Users).IsLoaded)
+                    await _context.Entry(org).Collection(o => o.Users).LoadAsync();
+
+                var orgUser = org.Users?.FirstOrDefault(u => u.UserId == currentUser.Id);
+                effectivePermission = orgUser?.Permissions;
+            }
+
+            if (effectivePermission != null)
+            {
+                dto.Permissions = OrganizationPermissionsDto.FromPermissions(effectivePermission.Value);
+            }
+            else if (org.IsPublic)
+            {
+                dto.Permissions = OrganizationPermissionsDto.ReadOnly;
+            }
+        }
+
+        return dto;
     }
 
     public async Task<OrganizationDto> AddNew(OrganizationDto organization, bool skipAuthCheck = false)
