@@ -18,7 +18,7 @@ public interface IObjectsManager
     Task<StorageEntryDto> Get(string orgSlug, string dsSlug, string path);
     Task<EntryDto> AddNew(string orgSlug, string dsSlug, string path, byte[] data);
     Task<EntryDto> AddNew(string orgSlug, string dsSlug, string path, Stream stream = null);
-    Task Move(string orgSlug, string dsSlug, string source, string dest);
+    Task<Entry> Move(string orgSlug, string dsSlug, string source, string dest);
     Task Delete(string orgSlug, string dsSlug, string path);
     Task DeleteAll(string orgSlug, string dsSlug);
     Task<FileStreamDescriptor> DownloadStream(string orgSlug, string dsSlug, string[] paths);

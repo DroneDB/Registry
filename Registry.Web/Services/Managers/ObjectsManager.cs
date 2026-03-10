@@ -585,7 +585,7 @@ public class ObjectsManager : IObjectsManager
 
     }
 
-    public async Task Move(string orgSlug, string dsSlug, string source, string dest)
+    public async Task<Entry> Move(string orgSlug, string dsSlug, string source, string dest)
     {
         var ds = _utils.GetDataset(orgSlug, dsSlug);
 
@@ -668,15 +668,30 @@ public class ObjectsManager : IObjectsManager
         _logger.LogInformation("Performing ddb move");
         ddb.Move(source, dest);
 
-        if (!ddb.EntryExists(dest))
-            throw new InvalidOperationException(
-                $"Cannot find destination '{dest}' after move, something wrong with ddb");
+        var updatedEntry = ddb.GetEntry(dest);
+        if (updatedEntry == null)
+            throw new InvalidOperationException($"Cannot find destination '{dest}' after move");
+
+        // If the file extension changed and the new entry is buildable, trigger a build
+        var sourceExt = Path.GetExtension(source);
+        var destExt = Path.GetExtension(dest);
+        if (!string.Equals(sourceExt, destExt, StringComparison.OrdinalIgnoreCase) &&
+            ddb.IsBuildable(updatedEntry.Path) && !ddb.IsBuildActive(updatedEntry.Path))
+        {
+            _logger.LogInformation("Extension changed and file is buildable, triggering build for '{Path}'", dest);
+            await _buildPendingService.SetDatasetHasPendingBuilds(orgSlug, dsSlug, true);
+            var user = await _authManager.GetCurrentUser();
+            var meta = new IndexPayload(orgSlug, dsSlug, updatedEntry.Hash, user.Id, null, updatedEntry.Path);
+            _backgroundJob.EnqueueIndexed(() => HangfireUtils.BuildWrapper(ddb, dest, false, null), meta);
+        }
 
         // Invalidate dataset thumbnail cache if source or dest is a thumbnail candidate
         await InvalidateDatasetThumbnailCacheIfNeeded(orgSlug, dsSlug, source);
         await InvalidateDatasetThumbnailCacheIfNeeded(orgSlug, dsSlug, dest);
 
         _logger.LogInformation("Move OK");
+
+        return updatedEntry;
     }
 
     public async Task Delete(string orgSlug, string dsSlug, string[] paths)
