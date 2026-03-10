@@ -166,11 +166,11 @@ public class Startup
         services.Configure<IdentityOptions>(options =>
         {
             // Password settings.
-            options.Password.RequireDigit = false;
+            options.Password.RequireDigit = true;
             options.Password.RequireLowercase = false;
             options.Password.RequireNonAlphanumeric = false;
             options.Password.RequireUppercase = false;
-            options.Password.RequiredLength = 1;
+            options.Password.RequiredLength = 8;
             options.Password.RequiredUniqueChars = 0;
 
             // Lockout settings.
@@ -243,6 +243,7 @@ public class Startup
         services.AddTransient<JwtInCookieMiddleware>();
         services.AddTransient<UserEnrichmentMiddleware>();
         services.AddTransient<DownloadLimitMiddleware>();
+        services.AddTransient<SecurityHeadersMiddleware>();
         services.AddSingleton<IDownloadLimiter, DownloadLimiter>();
         services.AddTransient<ITokenManager, TokenManager>();
         services.AddSingleton<IHttpContextAccessor, HttpContextAccessor>();
@@ -365,12 +366,23 @@ public class Startup
 
         app.UseRouting();
 
-        // We are permissive now
-        app.UseCors(cors => cors
-            .AllowAnyOrigin()
-            .AllowAnyMethod()
-            .AllowAnyHeader());
+        var corsSettings = app.ApplicationServices.GetRequiredService<IOptions<AppSettings>>().Value;
+        if (corsSettings.AllowedOrigins is { Length: > 0 })
+        {
+            app.UseCors(cors => cors
+                .WithOrigins(corsSettings.AllowedOrigins)
+                .AllowAnyMethod()
+                .AllowAnyHeader());
+        }
+        else
+        {
+            app.UseCors(cors => cors
+                .AllowAnyOrigin()
+                .AllowAnyMethod()
+                .AllowAnyHeader());
+        }
 
+        app.UseMiddleware<SecurityHeadersMiddleware>();
         app.UseMiddleware<JwtInCookieMiddleware>();
 
         app.UseAuthentication();
