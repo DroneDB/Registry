@@ -46,7 +46,7 @@ public class OrganizationsManager : IOrganizationsManager
         _logger = logger;
     }
 
-    public async Task<IEnumerable<OrganizationDto>> List()
+    public async Task<IEnumerable<OrganizationDto>> List(bool ownedOnly = false)
     {
         var currentUser = await _authManager.GetCurrentUser();
 
@@ -59,9 +59,12 @@ public class OrganizationsManager : IOrganizationsManager
         // We compute the raw permission level in the query, then derive boolean permissions in memory
         var organizationsQuery = _context.Organizations
             .AsNoTracking()
-            .Where(org => org.OwnerId == currentUser.Id ||
-                         org.Slug == MagicStrings.PublicOrganizationSlug ||
-                         org.Users.Any(u => u.UserId == currentUser.Id))
+            .Where(org => ownedOnly
+                ? org.OwnerId == currentUser.Id
+                : isAdmin ||
+                  org.OwnerId == currentUser.Id ||
+                  org.Slug == MagicStrings.PublicOrganizationSlug ||
+                  org.Users.Any(u => u.UserId == currentUser.Id))
             .Select(org => new
             {
                 org.CreationDate,

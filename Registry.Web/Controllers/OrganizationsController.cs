@@ -45,13 +45,13 @@ public class OrganizationsController : ControllerBaseEx
     [ProducesResponseType(typeof(IEnumerable<OrganizationDto>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status401Unauthorized)]
-    public async Task<IActionResult> GetAll()
+    public async Task<IActionResult> GetAll([FromQuery] bool ownedOnly = false)
     {
         try
         {
-            _logger.LogDebug("Organizations controller GetAll()");
+            _logger.LogDebug("Organizations controller GetAll(ownedOnly: {OwnedOnly})", ownedOnly);
 
-            return Ok(await _organizationsManager.List());
+            return Ok(await _organizationsManager.List(ownedOnly));
         }
         catch (Exception ex)
         {
