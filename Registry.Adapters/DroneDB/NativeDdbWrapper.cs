@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Runtime.InteropServices;
+using System.Text;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using Registry.Ports;
@@ -93,10 +94,34 @@ public class NativeDdbWrapper : IDdbWrapper
         throw new DdbException(SafeGetLastError("init"));
     }
 
+    /// <summary>
+    /// Allocates an array of IntPtr, each pointing to a null-terminated UTF-8 encoded copy of the corresponding string.
+    /// The caller must free each pointer with Marshal.FreeHGlobal after use.
+    /// </summary>
+    private static IntPtr[] MarshalStringArrayToUtf8(string[] strings)
+    {
+        var ptrs = new IntPtr[strings.Length];
+        for (var i = 0; i < strings.Length; i++)
+        {
+            var bytes = Encoding.UTF8.GetBytes(strings[i] + '\0');
+            ptrs[i] = Marshal.AllocHGlobal(bytes.Length);
+            Marshal.Copy(bytes, 0, ptrs[i], bytes.Length);
+        }
+        return ptrs;
+    }
+
+    private static void FreeUtf8StringArray(IntPtr[] ptrs)
+    {
+        foreach (var ptr in ptrs)
+        {
+            if (ptr != IntPtr.Zero)
+                Marshal.FreeHGlobal(ptr);
+        }
+    }
+
     [DllImport("ddb", EntryPoint = "DDBAdd")]
     private static extern DdbResult _Add([MarshalAs(UnmanagedType.LPUTF8Str)] string ddbPath,
-        [MarshalAs(UnmanagedType.LPArray, ArraySubType = UnmanagedType.LPStr)]
-        string[] paths,
+        IntPtr[] paths,
         int numPaths, out IntPtr output, bool recursive);
 
     public List<Entry> Add(string ddbPath, string path, bool recursive = false)
@@ -106,9 +131,10 @@ public class NativeDdbWrapper : IDdbWrapper
 
     public List<Entry> Add(string ddbPath, string[] paths, bool recursive = false)
     {
+        var utf8Ptrs = MarshalStringArrayToUtf8(paths);
         try
         {
-            if (_Add(ddbPath, paths, paths.Length, out var output, recursive) == DdbResult.Success)
+            if (_Add(ddbPath, utf8Ptrs, paths.Length, out var output, recursive) == DdbResult.Success)
             {
                 var json = Marshal.PtrToStringUTF8(output);
 
@@ -127,11 +153,19 @@ public class NativeDdbWrapper : IDdbWrapper
         {
             throw new DdbException($"Error in calling ddb lib: incompatible versions ({ex.Message})", ex);
         }
+        catch (DdbException)
+        {
+            throw;
+        }
         catch (Exception ex)
         {
             throw new DdbException(
                 $"Error in calling ddb lib. Last error: \"{SafeGetLastError("add")}\", check inner exception for details",
                 ex);
+        }
+        finally
+        {
+            FreeUtf8StringArray(utf8Ptrs);
         }
 
         throw new DdbException(SafeGetLastError("add"));
@@ -139,8 +173,7 @@ public class NativeDdbWrapper : IDdbWrapper
 
     [DllImport("ddb", EntryPoint = "DDBRemove")]
     private static extern DdbResult _Remove([MarshalAs(UnmanagedType.LPUTF8Str)] string ddbPath,
-        [MarshalAs(UnmanagedType.LPArray, ArraySubType = UnmanagedType.LPStr)]
-        string[] paths,
+        IntPtr[] paths,
         int numPaths);
 
     public void Remove(string ddbPath, string path)
@@ -150,9 +183,10 @@ public class NativeDdbWrapper : IDdbWrapper
 
     public void Remove(string ddbPath, string[] paths)
     {
+        var utf8Ptrs = MarshalStringArrayToUtf8(paths);
         try
         {
-            if (_Remove(ddbPath, paths, paths?.Length ?? 0) == DdbResult.Success) return;
+            if (_Remove(ddbPath, utf8Ptrs, paths?.Length ?? 0) == DdbResult.Success) return;
         }
         catch (EntryPointNotFoundException ex)
         {
@@ -164,14 +198,17 @@ public class NativeDdbWrapper : IDdbWrapper
                 $"Error in calling ddb lib. Last error: \"{SafeGetLastError()}\", check inner exception for details",
                 ex);
         }
+        finally
+        {
+            FreeUtf8StringArray(utf8Ptrs);
+        }
 
         throw new DdbException(SafeGetLastError("remove"));
     }
 
     [DllImport("ddb", EntryPoint = "DDBInfo")]
     private static extern DdbResult _Info(
-        [MarshalAs(UnmanagedType.LPArray, ArraySubType = UnmanagedType.LPStr)]
-        string[] paths,
+        IntPtr[] paths,
         int numPaths,
         out IntPtr output,
         [MarshalAs(UnmanagedType.LPUTF8Str)] string format, bool recursive = false,
@@ -187,9 +224,10 @@ public class NativeDdbWrapper : IDdbWrapper
     public List<Entry> Info(string[] paths, bool recursive = false, int maxRecursionDepth = 0,
         bool withHash = false)
     {
+        var utf8Ptrs = MarshalStringArrayToUtf8(paths);
         try
         {
-            if (_Info(paths, paths?.Length ?? 0, out var output, "json", recursive, maxRecursionDepth, "auto",
+            if (_Info(utf8Ptrs, paths?.Length ?? 0, out var output, "json", recursive, maxRecursionDepth, "auto",
                     withHash) ==
                 DdbResult.Success)
             {
@@ -211,11 +249,19 @@ public class NativeDdbWrapper : IDdbWrapper
             throw new DdbException($"Error in calling ddb lib: incompatible versions ({ex.Message})", ex);
         }
 
+        catch (DdbException)
+        {
+            throw;
+        }
         catch (Exception ex)
         {
             throw new DdbException(
                 $"Error in calling ddb lib. Last error: \"{SafeGetLastError("info")}\", check inner exception for details",
                 ex);
+        }
+        finally
+        {
+            FreeUtf8StringArray(utf8Ptrs);
         }
 
         throw new DdbException(SafeGetLastError("info"));
@@ -223,8 +269,7 @@ public class NativeDdbWrapper : IDdbWrapper
 
     [DllImport("ddb", EntryPoint = "DDBList")]
     private static extern DdbResult _List([MarshalAs(UnmanagedType.LPUTF8Str)] string ddbPath,
-        [MarshalAs(UnmanagedType.LPArray, ArraySubType = UnmanagedType.LPStr)]
-        string[] paths,
+        IntPtr[] paths,
         int numPaths,
         out IntPtr output,
         [MarshalAs(UnmanagedType.LPUTF8Str)] string format,
@@ -241,10 +286,11 @@ public class NativeDdbWrapper : IDdbWrapper
         if (paths.Length == 0)
             throw new ArgumentException("Paths is empty");
 
+        paths = paths.Select(item => item.Replace('\\', '/')).ToArray();
+        var utf8Ptrs = MarshalStringArrayToUtf8(paths);
         try
         {
-            paths = paths.Select(item => item.Replace('\\', '/')).ToArray();
-            var lst = _List(ddbPath, paths, paths.Length, out var output, "json", recursive, maxRecursionDepth);
+            var lst = _List(ddbPath, utf8Ptrs, paths.Length, out var output, "json", recursive, maxRecursionDepth);
 
             if (lst == DdbResult.Success)
             {
@@ -265,11 +311,19 @@ public class NativeDdbWrapper : IDdbWrapper
         {
             throw new DdbException($"Error in calling ddb lib: incompatible versions ({ex.Message})", ex);
         }
+        catch (DdbException)
+        {
+            throw;
+        }
         catch (Exception ex)
         {
             throw new DdbException(
                 $"Error in calling ddb lib. Last error: \"{SafeGetLastError()}\", check inner exception for details",
                 ex);
+        }
+        finally
+        {
+            FreeUtf8StringArray(utf8Ptrs);
         }
 
         throw new DdbException(SafeGetLastError("list"));

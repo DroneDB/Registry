@@ -929,6 +929,260 @@ public class NativeDdbWrapperTests : TestBase
         res.ShouldNotBeNull();
     }
 
+    #region UTF-8 Path Tests
+
+    [Test]
+    public void Init_Utf8EuropeanAccents_Ok()
+    {
+        using var area = new TestArea("UTF8_àèìòù_ñüöß");
+        DdbWrapper.Init(area.TestFolder).ShouldContain(area.TestFolder);
+        Directory.Exists(Path.Join(area.TestFolder, DdbFolder)).ShouldBeTrue();
+    }
+
+    [Test]
+    public void Init_Utf8CJK_Ok()
+    {
+        using var area = new TestArea("UTF8_测试数据_テスト");
+        DdbWrapper.Init(area.TestFolder).ShouldContain(area.TestFolder);
+        Directory.Exists(Path.Join(area.TestFolder, DdbFolder)).ShouldBeTrue();
+    }
+
+    [Test]
+    public void Init_Utf8Arabic_Ok()
+    {
+        using var area = new TestArea("UTF8_بيانات_طائرة");
+        DdbWrapper.Init(area.TestFolder).ShouldContain(area.TestFolder);
+        Directory.Exists(Path.Join(area.TestFolder, DdbFolder)).ShouldBeTrue();
+    }
+
+    [Test]
+    public void Init_Utf8Emoji_Ok()
+    {
+        using var area = new TestArea("UTF8_📸drone_🌍geo");
+        DdbWrapper.Init(area.TestFolder).ShouldContain(area.TestFolder);
+        Directory.Exists(Path.Join(area.TestFolder, DdbFolder)).ShouldBeTrue();
+    }
+
+    [Test]
+    public void EndToEnd_Utf8EuropeanAccents_AddListRemove()
+    {
+        using var area = new TestArea("UTF8_città_données");
+        DdbWrapper.Init(area.TestFolder);
+
+        var fileName = "foto_città.txt";
+        var filePath = Path.Join(area.TestFolder, fileName);
+        File.WriteAllText(filePath, "contenuto test àèìòù");
+
+        // Add
+        var addResult = DdbWrapper.Add(area.TestFolder, filePath);
+        addResult.Count.ShouldBe(1);
+        addResult[0].Path.ShouldBe(fileName);
+
+        // List
+        var listResult = DdbWrapper.List(area.TestFolder, Path.Combine(area.TestFolder, "."), true);
+        listResult.Count.ShouldBe(1);
+        listResult[0].Path.ShouldBe(fileName);
+
+        // Info
+        var infoResult = DdbWrapper.Info(filePath);
+        infoResult.Count.ShouldBe(1);
+
+        // Remove
+        DdbWrapper.Remove(area.TestFolder, filePath);
+        var afterRemove = DdbWrapper.List(area.TestFolder, Path.Combine(area.TestFolder, "."), true);
+        afterRemove.Count.ShouldBe(0);
+    }
+
+    [Test]
+    public void EndToEnd_Utf8CJK_AddListRemove()
+    {
+        using var area = new TestArea("UTF8_飞行数据_CJK");
+        DdbWrapper.Init(area.TestFolder);
+
+        var fileName = "测试文件.txt";
+        var filePath = Path.Join(area.TestFolder, fileName);
+        File.WriteAllText(filePath, "中文内容测试");
+
+        // Add
+        var addResult = DdbWrapper.Add(area.TestFolder, filePath);
+        addResult.Count.ShouldBe(1);
+        addResult[0].Path.ShouldBe(fileName);
+
+        // List
+        var listResult = DdbWrapper.List(area.TestFolder, Path.Combine(area.TestFolder, "."), true);
+        listResult.Count.ShouldBe(1);
+        listResult[0].Path.ShouldBe(fileName);
+
+        // Info
+        var infoResult = DdbWrapper.Info(filePath);
+        infoResult.Count.ShouldBe(1);
+
+        // Remove
+        DdbWrapper.Remove(area.TestFolder, filePath);
+        var afterRemove = DdbWrapper.List(area.TestFolder, Path.Combine(area.TestFolder, "."), true);
+        afterRemove.Count.ShouldBe(0);
+    }
+
+    [Test]
+    public void EndToEnd_Utf8Arabic_AddListRemove()
+    {
+        using var area = new TestArea("UTF8_بيانات_Arabic");
+        DdbWrapper.Init(area.TestFolder);
+
+        var fileName = "ملف_بيانات.txt";
+        var filePath = Path.Join(area.TestFolder, fileName);
+        File.WriteAllText(filePath, "محتوى الاختبار");
+
+        // Add
+        var addResult = DdbWrapper.Add(area.TestFolder, filePath);
+        addResult.Count.ShouldBe(1);
+        addResult[0].Path.ShouldBe(fileName);
+
+        // List
+        var listResult = DdbWrapper.List(area.TestFolder, Path.Combine(area.TestFolder, "."), true);
+        listResult.Count.ShouldBe(1);
+        listResult[0].Path.ShouldBe(fileName);
+
+        // Info
+        var infoResult = DdbWrapper.Info(filePath);
+        infoResult.Count.ShouldBe(1);
+
+        // Remove
+        DdbWrapper.Remove(area.TestFolder, filePath);
+        var afterRemove = DdbWrapper.List(area.TestFolder, Path.Combine(area.TestFolder, "."), true);
+        afterRemove.Count.ShouldBe(0);
+    }
+
+    [Test]
+    public void EndToEnd_Utf8Emoji_AddListRemove()
+    {
+        using var area = new TestArea("UTF8_📸_Emoji");
+        DdbWrapper.Init(area.TestFolder);
+
+        var fileName = "📸drone_photo.txt";
+        var filePath = Path.Join(area.TestFolder, fileName);
+        File.WriteAllText(filePath, "emoji test content 🌍");
+
+        // Add
+        var addResult = DdbWrapper.Add(area.TestFolder, filePath);
+        addResult.Count.ShouldBe(1);
+        addResult[0].Path.ShouldBe(fileName);
+
+        // List
+        var listResult = DdbWrapper.List(area.TestFolder, Path.Combine(area.TestFolder, "."), true);
+        listResult.Count.ShouldBe(1);
+        listResult[0].Path.ShouldBe(fileName);
+
+        // Info
+        var infoResult = DdbWrapper.Info(filePath);
+        infoResult.Count.ShouldBe(1);
+
+        // Remove
+        DdbWrapper.Remove(area.TestFolder, filePath);
+        var afterRemove = DdbWrapper.List(area.TestFolder, Path.Combine(area.TestFolder, "."), true);
+        afterRemove.Count.ShouldBe(0);
+    }
+
+    [Test]
+    public void EndToEnd_Utf8MixedPath_AddListRemove()
+    {
+        using var area = new TestArea("UTF8_Mixed_αβγ_日本語");
+        DdbWrapper.Init(area.TestFolder);
+
+        // Create a subdirectory with mixed Unicode characters
+        var subDir = Path.Join(area.TestFolder, "données_飞行");
+        Directory.CreateDirectory(subDir);
+
+        var fileName = "données_飞行/image_città_テスト.txt";
+        var filePath = Path.Join(area.TestFolder, fileName);
+        File.WriteAllText(filePath, "mixed unicode content");
+
+        // Add - DDB indexes both the directory and the file
+        var addResult = DdbWrapper.Add(area.TestFolder, filePath);
+        addResult.Count.ShouldBeGreaterThanOrEqualTo(1);
+        addResult.ShouldContain(e => e.Path == fileName.Replace('\\', '/'));
+
+        // List
+        var listResult = DdbWrapper.List(area.TestFolder, Path.Combine(area.TestFolder, "."), true);
+        listResult.Count.ShouldBeGreaterThanOrEqualTo(1);
+        listResult.ShouldContain(e => e.Path == fileName.Replace('\\', '/'));
+
+        // Info
+        var infoResult = DdbWrapper.Info(filePath);
+        infoResult.Count.ShouldBe(1);
+
+        // Remove
+        DdbWrapper.Remove(area.TestFolder, filePath);
+        var afterRemove = DdbWrapper.List(area.TestFolder, Path.Combine(area.TestFolder, "."), true);
+        afterRemove.Count.ShouldBe(0);
+    }
+
+    [Test]
+    public void Add_Utf8MultipleFiles_Ok()
+    {
+        using var area = new TestArea("UTF8_Batch_données");
+        DdbWrapper.Init(area.TestFolder);
+
+        var file1 = Path.Join(area.TestFolder, "café.txt");
+        var file2 = Path.Join(area.TestFolder, "naïve.txt");
+        var file3 = Path.Join(area.TestFolder, "résumé.txt");
+        File.WriteAllText(file1, "test1");
+        File.WriteAllText(file2, "test2");
+        File.WriteAllText(file3, "test3");
+
+        // Add multiple files at once
+        var addResult = DdbWrapper.Add(area.TestFolder, [file1, file2, file3]);
+        addResult.Count.ShouldBe(3);
+
+        var paths = addResult.Select(e => e.Path).ToArray();
+        paths.ShouldContain("café.txt");
+        paths.ShouldContain("naïve.txt");
+        paths.ShouldContain("résumé.txt");
+
+        // Verify list returns same paths
+        var listResult = DdbWrapper.List(area.TestFolder, Path.Combine(area.TestFolder, "."), true);
+        listResult.Count.ShouldBe(3);
+
+        var listPaths = listResult.Select(e => e.Path).ToArray();
+        listPaths.ShouldContain("café.txt");
+        listPaths.ShouldContain("naïve.txt");
+        listPaths.ShouldContain("résumé.txt");
+    }
+
+    [Test]
+    public void Remove_Utf8MultipleFiles_Ok()
+    {
+        using var area = new TestArea("UTF8_BatchRemove");
+        DdbWrapper.Init(area.TestFolder);
+
+        var file1 = Path.Join(area.TestFolder, "données_1.txt");
+        var file2 = Path.Join(area.TestFolder, "données_2.txt");
+        File.WriteAllText(file1, "test1");
+        File.WriteAllText(file2, "test2");
+
+        DdbWrapper.Add(area.TestFolder, [file1, file2]);
+
+        // Remove multiple UTF-8 files at once
+        DdbWrapper.Remove(area.TestFolder, [file1, file2]);
+
+        var listResult = DdbWrapper.List(area.TestFolder, Path.Combine(area.TestFolder, "."), true);
+        listResult.Count.ShouldBe(0);
+    }
+
+    [Test]
+    public void Info_Utf8WithHash_Ok()
+    {
+        using var area = new TestArea("UTF8_Info_Hash");
+        var filePath = Path.Join(area.TestFolder, "données_ñ_ü.txt");
+        File.WriteAllText(filePath, "hash test content");
+
+        var infoResult = DdbWrapper.Info(filePath, withHash: true);
+        infoResult.Count.ShouldBe(1);
+        infoResult[0].Hash.ShouldNotBeNullOrWhiteSpace();
+        infoResult[0].Size.ShouldBeGreaterThan(0);
+    }
+
+    #endregion
 
     [Test]
     [Explicit("Clean test directory")]
