@@ -28,6 +28,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
@@ -165,12 +166,24 @@ public class Startup
 
         services.Configure<IdentityOptions>(options =>
         {
-            // Password settings.
-            options.Password.RequireDigit = true;
-            options.Password.RequireLowercase = false;
-            options.Password.RequireNonAlphanumeric = false;
-            options.Password.RequireUppercase = false;
-            options.Password.RequiredLength = 8;
+            // Password settings — driven by PasswordPolicy configuration
+            var passwordPolicy = appSettings.PasswordPolicy;
+            if (passwordPolicy != null)
+            {
+                options.Password.RequireDigit = passwordPolicy.RequireDigit;
+                options.Password.RequireLowercase = passwordPolicy.RequireLowercase;
+                options.Password.RequireNonAlphanumeric = passwordPolicy.RequireNonAlphanumeric;
+                options.Password.RequireUppercase = passwordPolicy.RequireUppercase;
+                options.Password.RequiredLength = passwordPolicy.MinLength;
+            }
+            else
+            {
+                options.Password.RequireDigit = false;
+                options.Password.RequireLowercase = false;
+                options.Password.RequireNonAlphanumeric = false;
+                options.Password.RequireUppercase = false;
+                options.Password.RequiredLength = 1;
+            }
             options.Password.RequiredUniqueChars = 0;
 
             // Lockout settings.
@@ -376,6 +389,9 @@ public class Startup
         }
         else
         {
+            var logger = app.ApplicationServices.GetRequiredService<ILoggerFactory>().CreateLogger<Startup>();
+            logger.LogWarning("CORS is configured to allow any origin. Consider setting AllowedOrigins in appsettings for production environments");
+
             app.UseCors(cors => cors
                 .AllowAnyOrigin()
                 .AllowAnyMethod()
