@@ -54,5 +54,7 @@ public class OrganizationDto
     /// <summary>
     /// The permissions of the current user in this organization.
     /// </summary>
-    public OrganizationPermissionsDto Permissions { get; set; }
+#nullable enable
+    public OrganizationPermissionsDto? Permissions { get; set; }
+#nullable restore
 }
