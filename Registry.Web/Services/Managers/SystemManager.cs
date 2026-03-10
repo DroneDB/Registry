@@ -129,7 +129,7 @@ public class SystemManager : ISystemManager
         if (!await _authManager.IsUserAdmin())
             throw new UnauthorizedException("Only admins can perform system related tasks");
 
-        var query = (from ds in _context.Datasets.Include("Organization")
+        var query = (from ds in _context.Datasets.Include(ds => ds.Organization)
             select new { ds = ds.Slug, ds.InternalRef, Org = ds.Organization.Slug }).ToArray();
 
         _logger.LogInformation("Migrating to visibility {DatasetsCount} datasets", query.Length);
