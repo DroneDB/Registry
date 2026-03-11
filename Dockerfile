@@ -22,7 +22,7 @@ ENV DOTNET_ROOT="/root/.dotnet"
 COPY . /Registry
 
 # Compile client app
-RUN cd /Registry/Registry.Web/ClientApp && npm install && npm run build
+RUN cd /Registry/Registry.Web/ClientApp && npm install && npm run build:prod
 
 # Publish Registry
 COPY docker/FolderProfile.xml /Registry/Registry.Web/Properties/PublishProfiles/FolderProfile.pubxml
