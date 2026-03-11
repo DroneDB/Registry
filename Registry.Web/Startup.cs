@@ -28,6 +28,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
@@ -165,12 +166,24 @@ public class Startup
 
         services.Configure<IdentityOptions>(options =>
         {
-            // Password settings.
-            options.Password.RequireDigit = false;
-            options.Password.RequireLowercase = false;
-            options.Password.RequireNonAlphanumeric = false;
-            options.Password.RequireUppercase = false;
-            options.Password.RequiredLength = 1;
+            // Password settings — driven by PasswordPolicy configuration
+            var passwordPolicy = appSettings.PasswordPolicy;
+            if (passwordPolicy != null)
+            {
+                options.Password.RequireDigit = passwordPolicy.RequireDigit;
+                options.Password.RequireLowercase = passwordPolicy.RequireLowercase;
+                options.Password.RequireNonAlphanumeric = passwordPolicy.RequireNonAlphanumeric;
+                options.Password.RequireUppercase = passwordPolicy.RequireUppercase;
+                options.Password.RequiredLength = passwordPolicy.MinLength;
+            }
+            else
+            {
+                options.Password.RequireDigit = false;
+                options.Password.RequireLowercase = false;
+                options.Password.RequireNonAlphanumeric = false;
+                options.Password.RequireUppercase = false;
+                options.Password.RequiredLength = 1;
+            }
             options.Password.RequiredUniqueChars = 0;
 
             // Lockout settings.
@@ -243,6 +256,7 @@ public class Startup
         services.AddTransient<JwtInCookieMiddleware>();
         services.AddTransient<UserEnrichmentMiddleware>();
         services.AddTransient<DownloadLimitMiddleware>();
+        services.AddTransient<SecurityHeadersMiddleware>();
         services.AddSingleton<IDownloadLimiter, DownloadLimiter>();
         services.AddTransient<ITokenManager, TokenManager>();
         services.AddSingleton<IHttpContextAccessor, HttpContextAccessor>();
@@ -365,12 +379,26 @@ public class Startup
 
         app.UseRouting();
 
-        // We are permissive now
-        app.UseCors(cors => cors
-            .AllowAnyOrigin()
-            .AllowAnyMethod()
-            .AllowAnyHeader());
+        var corsSettings = app.ApplicationServices.GetRequiredService<IOptions<AppSettings>>().Value;
+        if (corsSettings.AllowedOrigins is { Length: > 0 })
+        {
+            app.UseCors(cors => cors
+                .WithOrigins(corsSettings.AllowedOrigins)
+                .AllowAnyMethod()
+                .AllowAnyHeader());
+        }
+        else
+        {
+            var logger = app.ApplicationServices.GetRequiredService<ILoggerFactory>().CreateLogger<Startup>();
+            logger.LogWarning("CORS is configured to allow any origin. Consider setting AllowedOrigins in appsettings for production environments");
 
+            app.UseCors(cors => cors
+                .AllowAnyOrigin()
+                .AllowAnyMethod()
+                .AllowAnyHeader());
+        }
+
+        app.UseMiddleware<SecurityHeadersMiddleware>();
         app.UseMiddleware<JwtInCookieMiddleware>();
 
         app.UseAuthentication();

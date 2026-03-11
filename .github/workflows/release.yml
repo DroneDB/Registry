@@ -9,7 +9,7 @@ jobs:
   build:
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v4
         with:
           path: registry
       - name: Submodules
@@ -17,14 +17,14 @@ jobs:
           cd registry
           git submodule update --force --recursive --init --remote
       - name: Setup .NET Core
-        uses: actions/setup-dotnet@v1
+        uses: actions/setup-dotnet@v4
         with:
           dotnet-version: |
             9.0.x
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: 16
+          node-version: 22
       - name: Build
         run: echo ${{ github.sha }} > Release.txt
       - name: Test
@@ -32,8 +32,7 @@ jobs:
       - name: Build ClientApp
         run: |
           cd registry/Registry.Web/ClientApp
-          npm install -g webpack@4 webpack-cli
-          npm install && webpack --mode=production
+          npm install && npm run build:prod
       - name: Publish
         run: |
           cd registry

@@ -595,9 +595,9 @@ public class ObjectsController : ControllerBaseEx
     /// <param name="dsSlug">The dataset slug.</param>
     /// <param name="source">The source path.</param>
     /// <param name="dest">The destination path.</param>
-    /// <returns>No content on success.</returns>
+    /// <returns>The updated entry on success.</returns>
     [HttpPut(RoutesHelper.ObjectsRadix, Name = nameof(ObjectsController) + "." + nameof(Move))]
-    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(typeof(Entry), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status404NotFound)]
@@ -612,8 +612,8 @@ public class ObjectsController : ControllerBaseEx
             _logger.LogDebug("Objects controller Move('{OrgSlug}', '{DsSlug}', '{Source}', '{Dest}')", orgSlug,
                 dsSlug, source, dest);
 
-            await _objectsManager.Move(orgSlug, dsSlug, source, dest);
-            return NoContent();
+            var entry = await _objectsManager.Move(orgSlug, dsSlug, source, dest);
+            return Ok(entry);
         }
         catch (Exception ex)
         {

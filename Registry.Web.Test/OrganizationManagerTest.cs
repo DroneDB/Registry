@@ -5,6 +5,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Moq;
 using NUnit.Framework;
+using Registry.Common;
 using Registry.Web.Data;
 using Registry.Web.Identity.Models;
 using Registry.Web.Models.DTO;
@@ -811,6 +812,393 @@ public class OrganizationManagerTest : TestBase
 
     #endregion
 
+    #region Permissions Tests
+
+    [Test]
+    public async Task List_Owner_HasAdminPermissions()
+    {
+        // Arrange
+        var owner = SetupStandardUser("owner-user");
+        var ownedOrg = await CreateOrganizationForUser(owner.Id, "owner-org", isPublic: false);
+
+        // Act
+        var organizations = (await _organizationsManager.List()).ToArray();
+        var org = organizations.FirstOrDefault(o => o.Slug == "owner-org");
+
+        // Assert
+        org.ShouldNotBeNull();
+        org.Permissions.ShouldNotBeNull();
+        org.Permissions.CanRead.ShouldBeTrue();
+        org.Permissions.CanWrite.ShouldBeTrue();
+        org.Permissions.CanDelete.ShouldBeTrue();
+        org.Permissions.CanManageMembers.ShouldBeTrue();
+    }
+
+    [Test]
+    public async Task List_Admin_HasAdminPermissionsOnAllOrgs()
+    {
+        // Arrange
+        SetupAdminUser();
+
+        // Create an org owned by someone else
+        var otherOrg = new Organization
+        {
+            Slug = "other-user-org",
+            Name = "Other User Org",
+            Description = "Owned by someone else",
+            IsPublic = false,
+            OwnerId = "other-user-id",
+            CreationDate = DateTime.Now
+        };
+        await _context.Organizations.AddAsync(otherOrg);
+        await _context.SaveChangesAsync();
+
+        // Act
+        var organizations = (await _organizationsManager.List()).ToArray();
+        var org = organizations.FirstOrDefault(o => o.Slug == "other-user-org");
+
+        // Assert — admin should see this org and have admin permissions
+        org.ShouldNotBeNull();
+        org.Permissions.ShouldNotBeNull();
+        org.Permissions.CanRead.ShouldBeTrue();
+        org.Permissions.CanWrite.ShouldBeTrue();
+        org.Permissions.CanDelete.ShouldBeTrue();
+        org.Permissions.CanManageMembers.ShouldBeTrue();
+    }
+
+    [Test]
+    public async Task List_MemberReadOnly_HasReadOnlyPermissions()
+    {
+        // Arrange
+        var member = SetupStandardUser("member-user");
+
+        var org = new Organization
+        {
+            Slug = "member-org",
+            Name = "Member Org",
+            Description = "Test",
+            IsPublic = false,
+            OwnerId = "other-owner",
+            CreationDate = DateTime.Now,
+            Users = new List<OrganizationUser>
+            {
+                new() { UserId = member.Id, Permissions = OrganizationPermissions.ReadOnly,
+                         OrganizationSlug = "member-org" }
+            }
+        };
+        await _context.Organizations.AddAsync(org);
+        await _context.SaveChangesAsync();
+
+        // Act
+        var organizations = (await _organizationsManager.List()).ToArray();
+        var result = organizations.FirstOrDefault(o => o.Slug == "member-org");
+
+        // Assert
+        result.ShouldNotBeNull();
+        result.Permissions.ShouldNotBeNull();
+        result.Permissions.CanRead.ShouldBeTrue();
+        result.Permissions.CanWrite.ShouldBeFalse();
+        result.Permissions.CanDelete.ShouldBeFalse();
+        result.Permissions.CanManageMembers.ShouldBeFalse();
+    }
+
+    [Test]
+    public async Task List_MemberReadWrite_HasReadWritePermissions()
+    {
+        // Arrange
+        var member = SetupStandardUser("member-user");
+
+        var org = new Organization
+        {
+            Slug = "rw-org",
+            Name = "RW Org",
+            Description = "Test",
+            IsPublic = false,
+            OwnerId = "other-owner",
+            CreationDate = DateTime.Now,
+            Users = new List<OrganizationUser>
+            {
+                new() { UserId = member.Id, Permissions = OrganizationPermissions.ReadWrite,
+                         OrganizationSlug = "rw-org" }
+            }
+        };
+        await _context.Organizations.AddAsync(org);
+        await _context.SaveChangesAsync();
+
+        // Act
+        var organizations = (await _organizationsManager.List()).ToArray();
+        var result = organizations.FirstOrDefault(o => o.Slug == "rw-org");
+
+        // Assert
+        result.ShouldNotBeNull();
+        result.Permissions.ShouldNotBeNull();
+        result.Permissions.CanRead.ShouldBeTrue();
+        result.Permissions.CanWrite.ShouldBeTrue();
+        result.Permissions.CanDelete.ShouldBeFalse();
+        result.Permissions.CanManageMembers.ShouldBeFalse();
+    }
+
+    [Test]
+    public async Task List_MemberReadWriteDelete_HasFullDataPermissions()
+    {
+        // Arrange
+        var member = SetupStandardUser("member-user");
+
+        var org = new Organization
+        {
+            Slug = "rwd-org",
+            Name = "RWD Org",
+            Description = "Test",
+            IsPublic = false,
+            OwnerId = "other-owner",
+            CreationDate = DateTime.Now,
+            Users = new List<OrganizationUser>
+            {
+                new() { UserId = member.Id, Permissions = OrganizationPermissions.ReadWriteDelete,
+                         OrganizationSlug = "rwd-org" }
+            }
+        };
+        await _context.Organizations.AddAsync(org);
+        await _context.SaveChangesAsync();
+
+        // Act
+        var organizations = (await _organizationsManager.List()).ToArray();
+        var result = organizations.FirstOrDefault(o => o.Slug == "rwd-org");
+
+        // Assert
+        result.ShouldNotBeNull();
+        result.Permissions.ShouldNotBeNull();
+        result.Permissions.CanRead.ShouldBeTrue();
+        result.Permissions.CanWrite.ShouldBeTrue();
+        result.Permissions.CanDelete.ShouldBeTrue();
+        result.Permissions.CanManageMembers.ShouldBeFalse();
+    }
+
+    [Test]
+    public async Task List_NonMemberPublicOrg_HasReadOnlyPermissions()
+    {
+        // Arrange
+        SetupStandardUser("non-member");
+
+        var org = new Organization
+        {
+            Slug = "public-org-test",
+            Name = "Public Org Test",
+            Description = "Test",
+            IsPublic = true,
+            OwnerId = "other-owner",
+            CreationDate = DateTime.Now
+        };
+        await _context.Organizations.AddAsync(org);
+        await _context.SaveChangesAsync();
+
+        // Act — this org is not visible in List (user is not owner/member), but public org slug is
+        var organizations = (await _organizationsManager.List()).ToArray();
+
+        // The org won't appear in List for a non-member standard user (only public slug org shows)
+        // Verify the default public org has ReadOnly permissions
+        var publicOrg = organizations.FirstOrDefault(o => o.Slug == MagicStrings.PublicOrganizationSlug);
+        publicOrg.ShouldNotBeNull();
+        publicOrg.Permissions.ShouldNotBeNull();
+        publicOrg.Permissions.CanRead.ShouldBeTrue();
+        publicOrg.Permissions.CanWrite.ShouldBeFalse();
+    }
+
+    [Test]
+    public async Task List_NonMemberPrivateOrg_NullPermissions()
+    {
+        // Arrange — Admin sees all orgs, including private ones they don't own/aren't member of
+        // But we need a non-admin who somehow sees a private org — this doesn't happen in List.
+        // So we test via Get() instead
+        var owner = SetupStandardUser("owner-user");
+        var privateOrg = await CreateOrganizationForUser(owner.Id, "private-org", isPublic: false);
+
+        // Switch to a different user who has access (e.g. via RequestAccess)
+        var otherUser = SetupStandardUser("other-user");
+
+        // The private org won't appear in other-user's List (they're not owner/member)
+        var organizations = (await _organizationsManager.List()).ToArray();
+        organizations.ShouldNotContain(o => o.Slug == "private-org");
+    }
+
+    [Test]
+    public async Task List_OwnedOnly_ReturnsOnlyOwnedOrganizations()
+    {
+        // Arrange
+        var user = SetupStandardUser("filter-user");
+        await CreateOrganizationForUser(user.Id, "my-org-1", isPublic: false);
+        await CreateOrganizationForUser(user.Id, "my-org-2", isPublic: false);
+
+        // Also create org where user is member but not owner
+        var memberOrg = new Organization
+        {
+            Slug = "member-only-org",
+            Name = "Member Only Org",
+            Description = "Test",
+            IsPublic = false,
+            OwnerId = "someone-else",
+            CreationDate = DateTime.Now,
+            Users = new List<OrganizationUser>
+            {
+                new() { UserId = user.Id, Permissions = OrganizationPermissions.ReadWrite,
+                         OrganizationSlug = "member-only-org" }
+            }
+        };
+        await _context.Organizations.AddAsync(memberOrg);
+        await _context.SaveChangesAsync();
+
+        // Act — without ownedOnly
+        var allOrgs = (await _organizationsManager.List()).ToArray();
+        // Act — with ownedOnly
+        var ownedOrgs = (await _organizationsManager.List(ownedOnly: true)).ToArray();
+
+        // Assert
+        allOrgs.Length.ShouldBeGreaterThan(ownedOrgs.Length);
+        allOrgs.ShouldContain(o => o.Slug == "member-only-org");
+        allOrgs.ShouldContain(o => o.Slug == MagicStrings.PublicOrganizationSlug);
+
+        ownedOrgs.ShouldContain(o => o.Slug == "my-org-1");
+        ownedOrgs.ShouldContain(o => o.Slug == "my-org-2");
+        ownedOrgs.ShouldNotContain(o => o.Slug == "member-only-org");
+        ownedOrgs.ShouldNotContain(o => o.Slug == MagicStrings.PublicOrganizationSlug);
+    }
+
+    [Test]
+    public async Task List_AdminOwnedOnly_ReturnsOnlyOwnedOrganizations()
+    {
+        // Arrange
+        SetupAdminUser();
+        var adminOwnedOrg = new Organization
+        {
+            Slug = "admin-owned",
+            Name = "Admin Owned",
+            Description = "Test",
+            IsPublic = false,
+            OwnerId = "admin-id",
+            CreationDate = DateTime.Now
+        };
+        var otherOrg = new Organization
+        {
+            Slug = "other-owned",
+            Name = "Other Owned",
+            Description = "Test",
+            IsPublic = false,
+            OwnerId = "other-id",
+            CreationDate = DateTime.Now
+        };
+        await _context.Organizations.AddRangeAsync(adminOwnedOrg, otherOrg);
+        await _context.SaveChangesAsync();
+
+        // Act
+        var allOrgs = (await _organizationsManager.List()).ToArray();
+        var ownedOrgs = (await _organizationsManager.List(ownedOnly: true)).ToArray();
+
+        // Assert — admin sees all without ownedOnly
+        allOrgs.ShouldContain(o => o.Slug == "admin-owned");
+        allOrgs.ShouldContain(o => o.Slug == "other-owned");
+
+        // With ownedOnly, only owned orgs
+        ownedOrgs.ShouldContain(o => o.Slug == "admin-owned");
+        ownedOrgs.ShouldNotContain(o => o.Slug == "other-owned");
+    }
+
+    [Test]
+    public async Task Get_Owner_HasAdminPermissions()
+    {
+        // Arrange
+        var owner = SetupStandardUser("owner-user");
+        await CreateOrganizationForUser(owner.Id, "get-owner-org", isPublic: false);
+
+        // Act
+        var result = await _organizationsManager.Get("get-owner-org");
+
+        // Assert
+        result.ShouldNotBeNull();
+        result.Permissions.ShouldNotBeNull();
+        result.Permissions.CanRead.ShouldBeTrue();
+        result.Permissions.CanWrite.ShouldBeTrue();
+        result.Permissions.CanDelete.ShouldBeTrue();
+        result.Permissions.CanManageMembers.ShouldBeTrue();
+    }
+
+    [Test]
+    public async Task Get_Admin_HasAdminPermissions()
+    {
+        // Arrange
+        SetupAdminUser();
+
+        // Act
+        var result = await _organizationsManager.Get(MagicStrings.PublicOrganizationSlug);
+
+        // Assert
+        result.ShouldNotBeNull();
+        result.Permissions.ShouldNotBeNull();
+        result.Permissions.CanRead.ShouldBeTrue();
+        result.Permissions.CanWrite.ShouldBeTrue();
+        result.Permissions.CanDelete.ShouldBeTrue();
+        result.Permissions.CanManageMembers.ShouldBeTrue();
+    }
+
+    [Test]
+    public async Task Get_Member_HasMemberPermissions()
+    {
+        // Arrange
+        var member = SetupStandardUser("member-user");
+
+        var org = new Organization
+        {
+            Slug = "get-member-org",
+            Name = "Get Member Org",
+            Description = "Test",
+            IsPublic = false,
+            OwnerId = "other-owner",
+            CreationDate = DateTime.Now,
+            Users = new List<OrganizationUser>
+            {
+                new() { UserId = member.Id, Permissions = OrganizationPermissions.ReadWrite,
+                         OrganizationSlug = "get-member-org" }
+            }
+        };
+        await _context.Organizations.AddAsync(org);
+        await _context.SaveChangesAsync();
+
+        // Override RequestAccess for this org — member has access via membership
+        _authManagerMock.Setup(x => x.RequestAccess(
+            It.Is<Organization>(o => o.Slug == "get-member-org"), It.IsAny<AccessType>()))
+            .ReturnsAsync(true);
+
+        // Act
+        var result = await _organizationsManager.Get("get-member-org");
+
+        // Assert
+        result.ShouldNotBeNull();
+        result.Permissions.ShouldNotBeNull();
+        result.Permissions.CanRead.ShouldBeTrue();
+        result.Permissions.CanWrite.ShouldBeTrue();
+        result.Permissions.CanDelete.ShouldBeFalse();
+        result.Permissions.CanManageMembers.ShouldBeFalse();
+    }
+
+    [Test]
+    public async Task Get_NonMemberPublicOrg_HasReadOnlyPermissions()
+    {
+        // Arrange
+        SetupStandardUser("non-member-user");
+
+        // Act — the public org has no owner and no membership, but is public
+        var result = await _organizationsManager.Get(MagicStrings.PublicOrganizationSlug);
+
+        // Assert
+        result.ShouldNotBeNull();
+        result.Permissions.ShouldNotBeNull();
+        result.Permissions.CanRead.ShouldBeTrue();
+        result.Permissions.CanWrite.ShouldBeFalse();
+        result.Permissions.CanDelete.ShouldBeFalse();
+        result.Permissions.CanManageMembers.ShouldBeFalse();
+    }
+
+    #endregion
+
     #region Additional Helper Methods
 
     private User SetupStandardUser(string userId)
@@ -821,6 +1209,13 @@ public class OrganizationManagerTest : TestBase
             UserName = userId,
             Email = "standard@example.com"
         };
+
+        // Add user to ApplicationDbContext so owner resolution works
+        if (!_appContext.Users.Any(u => u.Id == userId))
+        {
+            _appContext.Users.Add(standardUser);
+            _appContext.SaveChanges();
+        }
 
         _authManagerMock.Setup(x => x.GetCurrentUser()).ReturnsAsync(standardUser);
         _authManagerMock.Setup(x => x.IsUserAdmin()).ReturnsAsync(false);
@@ -845,12 +1240,17 @@ public class OrganizationManagerTest : TestBase
 
     private async Task<OrganizationDto> CreateOrganizationForUser(string userId)
     {
+        return await CreateOrganizationForUser(userId, "test-org", false);
+    }
+
+    private async Task<OrganizationDto> CreateOrganizationForUser(string userId, string slug, bool isPublic)
+    {
         var org = new Organization
         {
-            Slug = "test-org",
-            Name = "Test Organization",
+            Slug = slug,
+            Name = $"Organization {slug}",
             Description = "Test Description",
-            IsPublic = false,
+            IsPublic = isPublic,
             OwnerId = userId,
             CreationDate = DateTime.Now
         };

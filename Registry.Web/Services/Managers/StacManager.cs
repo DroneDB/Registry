@@ -74,7 +74,7 @@ public class StacManager : IStacManager
             }
         };
 
-        var datasets = _context.Datasets.Include("Organization").ToArray();
+        var datasets = _context.Datasets.Include(ds => ds.Organization).ToArray();
 
         foreach (var ds in datasets)
         {

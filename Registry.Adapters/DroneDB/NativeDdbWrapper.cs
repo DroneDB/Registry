@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Runtime.InteropServices;
+using System.Text;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using Registry.Ports;
@@ -40,7 +41,7 @@ public class NativeDdbWrapper : IDdbWrapper
     {
         var ptr = _GetVersion();
 
-        var res = Marshal.PtrToStringAnsi(ptr);
+        var res = Marshal.PtrToStringUTF8(ptr);
 
         if (string.IsNullOrWhiteSpace(res))
             throw new DdbException("Unable to get version");
@@ -51,19 +52,19 @@ public class NativeDdbWrapper : IDdbWrapper
     [DllImport("ddb", EntryPoint = "DDBGetLastError")]
     private static extern IntPtr _GetLastError();
 
-    static string? GetLastError()
+    private static string? GetLastError()
     {
         var ptr = _GetLastError();
-        return Marshal.PtrToStringAnsi(ptr);
+        return Marshal.PtrToStringUTF8(ptr);
     }
 
-    static string SafeGetLastError(string? operation = null)
+    private static string SafeGetLastError(string? operation = null)
     {
         return GetLastError() ?? (operation != null ? "Unknown error in " + operation : "Unknown error");
     }
 
     [DllImport("ddb", EntryPoint = "DDBInit")]
-    private static extern DdbResult _Init([MarshalAs(UnmanagedType.LPStr)] string directory, out IntPtr outPath);
+    private static extern DdbResult _Init([MarshalAs(UnmanagedType.LPUTF8Str)] string directory, out IntPtr outPath);
 
     public string Init(string directory)
     {
@@ -71,7 +72,7 @@ public class NativeDdbWrapper : IDdbWrapper
         {
             if (_Init(directory, out var outPath) == DdbResult.Success)
             {
-                var res = Marshal.PtrToStringAnsi(outPath);
+                var res = Marshal.PtrToStringUTF8(outPath);
 
                 if (string.IsNullOrWhiteSpace(res))
                     throw new DdbException("Unable to init");
@@ -93,10 +94,34 @@ public class NativeDdbWrapper : IDdbWrapper
         throw new DdbException(SafeGetLastError("init"));
     }
 
+    /// <summary>
+    /// Allocates an array of IntPtr, each pointing to a null-terminated UTF-8 encoded copy of the corresponding string.
+    /// The caller must free each pointer with Marshal.FreeHGlobal after use.
+    /// </summary>
+    private static IntPtr[] MarshalStringArrayToUtf8(string[] strings)
+    {
+        var ptrs = new IntPtr[strings.Length];
+        for (var i = 0; i < strings.Length; i++)
+        {
+            var bytes = Encoding.UTF8.GetBytes(strings[i] + '\0');
+            ptrs[i] = Marshal.AllocHGlobal(bytes.Length);
+            Marshal.Copy(bytes, 0, ptrs[i], bytes.Length);
+        }
+        return ptrs;
+    }
+
+    private static void FreeUtf8StringArray(IntPtr[] ptrs)
+    {
+        foreach (var ptr in ptrs)
+        {
+            if (ptr != IntPtr.Zero)
+                Marshal.FreeHGlobal(ptr);
+        }
+    }
+
     [DllImport("ddb", EntryPoint = "DDBAdd")]
-    private static extern DdbResult _Add([MarshalAs(UnmanagedType.LPStr)] string ddbPath,
-        [MarshalAs(UnmanagedType.LPArray, ArraySubType = UnmanagedType.LPStr)]
-        string[] paths,
+    private static extern DdbResult _Add([MarshalAs(UnmanagedType.LPUTF8Str)] string ddbPath,
+        IntPtr[] paths,
         int numPaths, out IntPtr output, bool recursive);
 
     public List<Entry> Add(string ddbPath, string path, bool recursive = false)
@@ -106,11 +131,12 @@ public class NativeDdbWrapper : IDdbWrapper
 
     public List<Entry> Add(string ddbPath, string[] paths, bool recursive = false)
     {
+        var utf8Ptrs = MarshalStringArrayToUtf8(paths);
         try
         {
-            if (_Add(ddbPath, paths, paths.Length, out var output, recursive) == DdbResult.Success)
+            if (_Add(ddbPath, utf8Ptrs, paths.Length, out var output, recursive) == DdbResult.Success)
             {
-                var json = Marshal.PtrToStringAnsi(output);
+                var json = Marshal.PtrToStringUTF8(output);
 
                 if (string.IsNullOrWhiteSpace(json))
                     throw new DdbException("Unable to add");
@@ -127,20 +153,27 @@ public class NativeDdbWrapper : IDdbWrapper
         {
             throw new DdbException($"Error in calling ddb lib: incompatible versions ({ex.Message})", ex);
         }
+        catch (DdbException)
+        {
+            throw;
+        }
         catch (Exception ex)
         {
             throw new DdbException(
                 $"Error in calling ddb lib. Last error: \"{SafeGetLastError("add")}\", check inner exception for details",
                 ex);
         }
+        finally
+        {
+            FreeUtf8StringArray(utf8Ptrs);
+        }
 
         throw new DdbException(SafeGetLastError("add"));
     }
 
     [DllImport("ddb", EntryPoint = "DDBRemove")]
-    private static extern DdbResult _Remove([MarshalAs(UnmanagedType.LPStr)] string ddbPath,
-        [MarshalAs(UnmanagedType.LPArray, ArraySubType = UnmanagedType.LPStr)]
-        string[] paths,
+    private static extern DdbResult _Remove([MarshalAs(UnmanagedType.LPUTF8Str)] string ddbPath,
+        IntPtr[] paths,
         int numPaths);
 
     public void Remove(string ddbPath, string path)
@@ -150,9 +183,10 @@ public class NativeDdbWrapper : IDdbWrapper
 
     public void Remove(string ddbPath, string[] paths)
     {
+        var utf8Ptrs = MarshalStringArrayToUtf8(paths);
         try
         {
-            if (_Remove(ddbPath, paths, paths?.Length ?? 0) == DdbResult.Success) return;
+            if (_Remove(ddbPath, utf8Ptrs, paths?.Length ?? 0) == DdbResult.Success) return;
         }
         catch (EntryPointNotFoundException ex)
         {
@@ -164,18 +198,21 @@ public class NativeDdbWrapper : IDdbWrapper
                 $"Error in calling ddb lib. Last error: \"{SafeGetLastError()}\", check inner exception for details",
                 ex);
         }
+        finally
+        {
+            FreeUtf8StringArray(utf8Ptrs);
+        }
 
         throw new DdbException(SafeGetLastError("remove"));
     }
 
     [DllImport("ddb", EntryPoint = "DDBInfo")]
     private static extern DdbResult _Info(
-        [MarshalAs(UnmanagedType.LPArray, ArraySubType = UnmanagedType.LPStr)]
-        string[] paths,
+        IntPtr[] paths,
         int numPaths,
         out IntPtr output,
-        [MarshalAs(UnmanagedType.LPStr)] string format, bool recursive = false,
-        int maxRecursionDepth = 0, [MarshalAs(UnmanagedType.LPStr)] string geometry = "auto",
+        [MarshalAs(UnmanagedType.LPUTF8Str)] string format, bool recursive = false,
+        int maxRecursionDepth = 0, [MarshalAs(UnmanagedType.LPUTF8Str)] string geometry = "auto",
         bool withHash = false, bool stopOnError = true);
 
     public List<Entry> Info(string path, bool recursive = false, int maxRecursionDepth = 0,
@@ -187,13 +224,14 @@ public class NativeDdbWrapper : IDdbWrapper
     public List<Entry> Info(string[] paths, bool recursive = false, int maxRecursionDepth = 0,
         bool withHash = false)
     {
+        var utf8Ptrs = MarshalStringArrayToUtf8(paths);
         try
         {
-            if (_Info(paths, paths?.Length ?? 0, out var output, "json", recursive, maxRecursionDepth, "auto",
+            if (_Info(utf8Ptrs, paths?.Length ?? 0, out var output, "json", recursive, maxRecursionDepth, "auto",
                     withHash) ==
                 DdbResult.Success)
             {
-                var json = Marshal.PtrToStringAnsi(output);
+                var json = Marshal.PtrToStringUTF8(output);
 
                 if (string.IsNullOrWhiteSpace(json))
                     throw new DdbException("Unable get info");
@@ -211,23 +249,30 @@ public class NativeDdbWrapper : IDdbWrapper
             throw new DdbException($"Error in calling ddb lib: incompatible versions ({ex.Message})", ex);
         }
 
+        catch (DdbException)
+        {
+            throw;
+        }
         catch (Exception ex)
         {
             throw new DdbException(
                 $"Error in calling ddb lib. Last error: \"{SafeGetLastError("info")}\", check inner exception for details",
                 ex);
         }
+        finally
+        {
+            FreeUtf8StringArray(utf8Ptrs);
+        }
 
         throw new DdbException(SafeGetLastError("info"));
     }
 
     [DllImport("ddb", EntryPoint = "DDBList")]
-    private static extern DdbResult _List([MarshalAs(UnmanagedType.LPStr)] string ddbPath,
-        [MarshalAs(UnmanagedType.LPArray, ArraySubType = UnmanagedType.LPStr)]
-        string[] paths,
+    private static extern DdbResult _List([MarshalAs(UnmanagedType.LPUTF8Str)] string ddbPath,
+        IntPtr[] paths,
         int numPaths,
         out IntPtr output,
-        [MarshalAs(UnmanagedType.LPStr)] string format,
+        [MarshalAs(UnmanagedType.LPUTF8Str)] string format,
         bool recursive,
         int maxRecursionDepth = 0);
 
@@ -241,14 +286,15 @@ public class NativeDdbWrapper : IDdbWrapper
         if (paths.Length == 0)
             throw new ArgumentException("Paths is empty");
 
+        paths = paths.Select(item => item.Replace('\\', '/')).ToArray();
+        var utf8Ptrs = MarshalStringArrayToUtf8(paths);
         try
         {
-            paths = paths.Select(item => item.Replace('\\', '/')).ToArray();
-            var lst = _List(ddbPath, paths, paths.Length, out var output, "json", recursive, maxRecursionDepth);
+            var lst = _List(ddbPath, utf8Ptrs, paths.Length, out var output, "json", recursive, maxRecursionDepth);
 
             if (lst == DdbResult.Success)
             {
-                var json = Marshal.PtrToStringAnsi(output);
+                var json = Marshal.PtrToStringUTF8(output);
 
                 if (string.IsNullOrWhiteSpace(json))
                     throw new InvalidOperationException("Unable get list");
@@ -265,11 +311,19 @@ public class NativeDdbWrapper : IDdbWrapper
         {
             throw new DdbException($"Error in calling ddb lib: incompatible versions ({ex.Message})", ex);
         }
+        catch (DdbException)
+        {
+            throw;
+        }
         catch (Exception ex)
         {
             throw new DdbException(
                 $"Error in calling ddb lib. Last error: \"{SafeGetLastError()}\", check inner exception for details",
                 ex);
+        }
+        finally
+        {
+            FreeUtf8StringArray(utf8Ptrs);
         }
 
         throw new DdbException(SafeGetLastError("list"));
@@ -277,8 +331,8 @@ public class NativeDdbWrapper : IDdbWrapper
 
     [DllImport("ddb", EntryPoint = "DDBAppendPassword")]
     private static extern DdbResult _AppendPassword(
-        [MarshalAs(UnmanagedType.LPStr)] string ddbPath,
-        [MarshalAs(UnmanagedType.LPStr)] string password);
+        [MarshalAs(UnmanagedType.LPUTF8Str)] string ddbPath,
+        [MarshalAs(UnmanagedType.LPUTF8Str)] string password);
 
     public void AppendPassword(string ddbPath, string password)
     {
@@ -301,9 +355,9 @@ public class NativeDdbWrapper : IDdbWrapper
     }
 
     [DllImport("ddb", EntryPoint = "DDBVerifyPassword")]
-    static extern DdbResult _VerifyPassword(
-        [MarshalAs(UnmanagedType.LPStr)] string ddbPath,
-        [MarshalAs(UnmanagedType.LPStr)] string password,
+    private static extern DdbResult _VerifyPassword(
+        [MarshalAs(UnmanagedType.LPUTF8Str)] string ddbPath,
+        [MarshalAs(UnmanagedType.LPUTF8Str)] string password,
         out bool verified);
 
     public bool VerifyPassword(string ddbPath, string password)
@@ -328,8 +382,8 @@ public class NativeDdbWrapper : IDdbWrapper
     }
 
     [DllImport("ddb", EntryPoint = "DDBClearPasswords")]
-    static extern DdbResult _ClearPasswords(
-        [MarshalAs(UnmanagedType.LPStr)] string ddbPath);
+    private static extern DdbResult _ClearPasswords(
+        [MarshalAs(UnmanagedType.LPUTF8Str)] string ddbPath);
 
     public void ClearPasswords(string ddbPath)
     {
@@ -352,8 +406,8 @@ public class NativeDdbWrapper : IDdbWrapper
     }
 
     [DllImport("ddb", EntryPoint = "DDBChattr")]
-    static extern DdbResult _ChangeAttributes(
-        [MarshalAs(UnmanagedType.LPStr)] string ddbPath, [MarshalAs(UnmanagedType.LPStr)] string attributesJson,
+    private static extern DdbResult _ChangeAttributes(
+        [MarshalAs(UnmanagedType.LPUTF8Str)] string ddbPath, [MarshalAs(UnmanagedType.LPUTF8Str)] string attributesJson,
         out IntPtr jsonOutput);
 
     public Dictionary<string, object> ChangeAttributes(string ddbPath, Dictionary<string, object> attributes)
@@ -368,7 +422,7 @@ public class NativeDdbWrapper : IDdbWrapper
             if (_ChangeAttributes(ddbPath, attrs, out var output) ==
                 DdbResult.Success)
             {
-                var res = Marshal.PtrToStringAnsi(output);
+                var res = Marshal.PtrToStringUTF8(output);
 
                 if (string.IsNullOrWhiteSpace(res))
                     throw new InvalidOperationException("Unable get attributes");
@@ -401,8 +455,8 @@ public class NativeDdbWrapper : IDdbWrapper
     }
 
     [DllImport("ddb", EntryPoint = "DDBGenerateThumbnail")]
-    static extern DdbResult _GenerateThumbnail(
-        [MarshalAs(UnmanagedType.LPStr)] string filePath, int size, [MarshalAs(UnmanagedType.LPStr)] string destPath);
+    private static extern DdbResult _GenerateThumbnail(
+        [MarshalAs(UnmanagedType.LPUTF8Str)] string filePath, int size, [MarshalAs(UnmanagedType.LPUTF8Str)] string destPath);
 
     public void GenerateThumbnail(string filePath, int size, string destPath)
     {
@@ -439,12 +493,12 @@ public class NativeDdbWrapper : IDdbWrapper
     }
 
     [DllImport("ddb", EntryPoint = "DDBVSIFree")]
-    static extern DdbResult _DDBVSIFree(
+    private static extern DdbResult _DDBVSIFree(
         IntPtr buffer);
 
     [DllImport("ddb", EntryPoint = "DDBGenerateMemoryThumbnail")]
-    static extern DdbResult _GenerateMemoryThumbnail(
-        [MarshalAs(UnmanagedType.LPStr)] string filePath, int size, out IntPtr outBuffer, out int outBufferSize);
+    private static extern DdbResult _GenerateMemoryThumbnail(
+        [MarshalAs(UnmanagedType.LPUTF8Str)] string filePath, int size, out IntPtr outBuffer, out int outBufferSize);
 
     public byte[] GenerateThumbnail(string filePath, int size)
     {
@@ -486,8 +540,8 @@ public class NativeDdbWrapper : IDdbWrapper
     }
 
     [DllImport("ddb", EntryPoint = "DDBTile")]
-    static extern DdbResult _GenerateTile(
-        [MarshalAs(UnmanagedType.LPStr)] string inputPath, int tz, int tx, int ty, out IntPtr outputTilePath,
+    private static extern DdbResult _GenerateTile(
+        [MarshalAs(UnmanagedType.LPUTF8Str)] string inputPath, int tz, int tx, int ty, out IntPtr outputTilePath,
         int tileSize, bool tms, bool forceRecreate);
 
     public string GenerateTile(string inputPath, int tz, int tx, int ty, int tileSize, bool tms,
@@ -501,7 +555,7 @@ public class NativeDdbWrapper : IDdbWrapper
             if (_GenerateTile(inputPath, tz, tx, ty, out var output, tileSize, tms, forceRecreate) ==
                 DdbResult.Success)
             {
-                var res = Marshal.PtrToStringAnsi(output);
+                var res = Marshal.PtrToStringUTF8(output);
 
                 if (string.IsNullOrWhiteSpace(res))
                     throw new DdbException("Unable get tile path");
@@ -524,10 +578,10 @@ public class NativeDdbWrapper : IDdbWrapper
     }
 
     [DllImport("ddb", EntryPoint = "DDBMemoryTile")]
-    static extern DdbResult _GenerateMemoryTile(
-        [MarshalAs(UnmanagedType.LPStr)] string inputPath, int tz, int tx, int ty, out IntPtr outBuffer,
+    private static extern DdbResult _GenerateMemoryTile(
+        [MarshalAs(UnmanagedType.LPUTF8Str)] string inputPath, int tz, int tx, int ty, out IntPtr outBuffer,
         out int outBufferSize, int tileSize, bool tms, bool forceRecreate,
-        [MarshalAs(UnmanagedType.LPStr)] string inputPathHash);
+        [MarshalAs(UnmanagedType.LPUTF8Str)] string inputPathHash);
 
     public byte[] GenerateMemoryTile(string inputPath, int tz, int tx, int ty, int tileSize, bool tms,
         bool forceRecreate = false, string inputPathHash = "")
@@ -564,8 +618,8 @@ public class NativeDdbWrapper : IDdbWrapper
     }
 
     [DllImport("ddb", EntryPoint = "DDBSetTag")]
-    static extern DdbResult _SetTag([MarshalAs(UnmanagedType.LPStr)] string ddbPath,
-        [MarshalAs(UnmanagedType.LPStr)] string newTag);
+    private static extern DdbResult _SetTag([MarshalAs(UnmanagedType.LPUTF8Str)] string ddbPath,
+        [MarshalAs(UnmanagedType.LPUTF8Str)] string newTag);
 
     public void SetTag(string ddbPath, string newTag)
     {
@@ -594,7 +648,7 @@ public class NativeDdbWrapper : IDdbWrapper
     }
 
     [DllImport("ddb", EntryPoint = "DDBGetTag")]
-    static extern DdbResult _GetTag([MarshalAs(UnmanagedType.LPStr)] string ddbPath, out IntPtr outTag);
+    private static extern DdbResult _GetTag([MarshalAs(UnmanagedType.LPUTF8Str)] string ddbPath, out IntPtr outTag);
 
     public string? GetTag(string ddbPath)
     {
@@ -606,7 +660,7 @@ public class NativeDdbWrapper : IDdbWrapper
             if (_GetTag(ddbPath, out var outTag) !=
                 DdbResult.Success) throw new DdbException(SafeGetLastError());
 
-            var res = Marshal.PtrToStringAnsi(outTag);
+            var res = Marshal.PtrToStringUTF8(outTag);
 
             return res == null || string.IsNullOrWhiteSpace(res) ? null : res;
         }
@@ -623,7 +677,7 @@ public class NativeDdbWrapper : IDdbWrapper
     }
 
     [DllImport("ddb", EntryPoint = "DDBGetStamp")]
-    static extern DdbResult _DDBGetStamp([MarshalAs(UnmanagedType.LPStr)] string ddbPath, out IntPtr output);
+    private static extern DdbResult _DDBGetStamp([MarshalAs(UnmanagedType.LPUTF8Str)] string ddbPath, out IntPtr output);
 
     public Stamp GetStamp(string ddbPath)
     {
@@ -635,7 +689,7 @@ public class NativeDdbWrapper : IDdbWrapper
             if (_DDBGetStamp(ddbPath, out var output) ==
                 DdbResult.Success)
             {
-                var json = Marshal.PtrToStringAnsi(output);
+                var json = Marshal.PtrToStringUTF8(output);
 
                 if (json == null)
                     throw new InvalidOperationException("No result from DDBGetStamp call");
@@ -663,9 +717,9 @@ public class NativeDdbWrapper : IDdbWrapper
     }
 
     [DllImport("ddb", EntryPoint = "DDBDelta")]
-    private static extern DdbResult _Delta([MarshalAs(UnmanagedType.LPStr)] string ddbSourceStamp,
-        [MarshalAs(UnmanagedType.LPStr)] string ddbTargetStamp, out IntPtr output,
-        [MarshalAs(UnmanagedType.LPStr)] string format);
+    private static extern DdbResult _Delta([MarshalAs(UnmanagedType.LPUTF8Str)] string ddbSourceStamp,
+        [MarshalAs(UnmanagedType.LPUTF8Str)] string ddbTargetStamp, out IntPtr output,
+        [MarshalAs(UnmanagedType.LPUTF8Str)] string format);
 
     public Delta Delta(string ddbPath, string ddbTarget)
     {
@@ -673,10 +727,10 @@ public class NativeDdbWrapper : IDdbWrapper
     }
 
     [DllImport("ddb", EntryPoint = "DDBApplyDelta")]
-    private static extern DdbResult _ApplyDelta([MarshalAs(UnmanagedType.LPStr)] string delta,
-        [MarshalAs(UnmanagedType.LPStr)] string sourcePath,
-        [MarshalAs(UnmanagedType.LPStr)] string ddbPath, int mergeStrategy,
-        [MarshalAs(UnmanagedType.LPStr)] string sourceMetaDump, out IntPtr conflicts);
+    private static extern DdbResult _ApplyDelta([MarshalAs(UnmanagedType.LPUTF8Str)] string delta,
+        [MarshalAs(UnmanagedType.LPUTF8Str)] string sourcePath,
+        [MarshalAs(UnmanagedType.LPUTF8Str)] string ddbPath, int mergeStrategy,
+        [MarshalAs(UnmanagedType.LPUTF8Str)] string sourceMetaDump, out IntPtr conflicts);
 
     public List<string> ApplyDelta(Delta delta, string sourcePath, string ddbPath, MergeStrategy mergeStrategy,
         string? sourceMetaDump = null)
@@ -689,7 +743,7 @@ public class NativeDdbWrapper : IDdbWrapper
                     out var conflictsPtr) ==
                 DdbResult.Success)
             {
-                var conflicts = Marshal.PtrToStringAnsi(conflictsPtr);
+                var conflicts = Marshal.PtrToStringUTF8(conflictsPtr);
 
                 if (string.IsNullOrWhiteSpace(conflicts))
                     throw new DdbException("Unable get applydelta result");
@@ -727,7 +781,7 @@ public class NativeDdbWrapper : IDdbWrapper
             if (_Delta(sourceJson, targetJson, out var output, "json") ==
                 DdbResult.Success)
             {
-                var json = Marshal.PtrToStringAnsi(output);
+                var json = Marshal.PtrToStringUTF8(output);
 
                 if (string.IsNullOrWhiteSpace(json))
                     throw new InvalidOperationException("Unable get delta");
@@ -756,8 +810,8 @@ public class NativeDdbWrapper : IDdbWrapper
 
 
     [DllImport("ddb", EntryPoint = "DDBComputeDeltaLocals")]
-    private static extern DdbResult _ComputeDeltaLocals([MarshalAs(UnmanagedType.LPStr)] string delta,
-        [MarshalAs(UnmanagedType.LPStr)] string ddbPath, [MarshalAs(UnmanagedType.LPStr)] string hlDestFolder,
+    private static extern DdbResult _ComputeDeltaLocals([MarshalAs(UnmanagedType.LPUTF8Str)] string delta,
+        [MarshalAs(UnmanagedType.LPUTF8Str)] string ddbPath, [MarshalAs(UnmanagedType.LPUTF8Str)] string hlDestFolder,
         out IntPtr output);
 
     public Dictionary<string, bool> ComputeDeltaLocals(Delta delta, string ddbPath, string hlDestFolder = "")
@@ -769,7 +823,7 @@ public class NativeDdbWrapper : IDdbWrapper
             if (_ComputeDeltaLocals(deltaJson, ddbPath, hlDestFolder, out var outputPtr) ==
                 DdbResult.Success)
             {
-                var output = Marshal.PtrToStringAnsi(outputPtr);
+                var output = Marshal.PtrToStringUTF8(outputPtr);
 
                 if (string.IsNullOrWhiteSpace(output))
                     throw new DdbException("Unable get ComputeDeltaLocals result");
@@ -798,8 +852,8 @@ public class NativeDdbWrapper : IDdbWrapper
 
 
     [DllImport("ddb", EntryPoint = "DDBMoveEntry")]
-    private static extern DdbResult _MoveEntry([MarshalAs(UnmanagedType.LPStr)] string ddbSource,
-        [MarshalAs(UnmanagedType.LPStr)] string source, [MarshalAs(UnmanagedType.LPStr)] string dest);
+    private static extern DdbResult _MoveEntry([MarshalAs(UnmanagedType.LPUTF8Str)] string ddbSource,
+        [MarshalAs(UnmanagedType.LPUTF8Str)] string source, [MarshalAs(UnmanagedType.LPUTF8Str)] string dest);
 
     public void MoveEntry(string ddbPath, string source, string dest)
     {
@@ -822,8 +876,8 @@ public class NativeDdbWrapper : IDdbWrapper
     }
 
     [DllImport("ddb", EntryPoint = "DDBBuild")]
-    private static extern DdbResult _Build([MarshalAs(UnmanagedType.LPStr)] string ddbSource,
-        [MarshalAs(UnmanagedType.LPStr)] string? source, [MarshalAs(UnmanagedType.LPStr)] string? dest, bool force,
+    private static extern DdbResult _Build([MarshalAs(UnmanagedType.LPUTF8Str)] string ddbSource,
+        [MarshalAs(UnmanagedType.LPUTF8Str)] string? source, [MarshalAs(UnmanagedType.LPUTF8Str)] string? dest, bool force,
         bool pendingOnly);
 
     public void Build(string ddbPath, string? source = null, string? dest = null, bool force = false,
@@ -848,8 +902,8 @@ public class NativeDdbWrapper : IDdbWrapper
     }
 
     [DllImport("ddb", EntryPoint = "DDBIsBuildable")]
-    private static extern DdbResult _IsBuildable([MarshalAs(UnmanagedType.LPStr)] string ddbSource,
-        [MarshalAs(UnmanagedType.LPStr)] string path, out bool isBuildable);
+    private static extern DdbResult _IsBuildable([MarshalAs(UnmanagedType.LPUTF8Str)] string ddbSource,
+        [MarshalAs(UnmanagedType.LPUTF8Str)] string path, out bool isBuildable);
 
     public bool IsBuildable(string ddbPath, string path)
     {
@@ -873,8 +927,8 @@ public class NativeDdbWrapper : IDdbWrapper
     }
 
     [DllImport("ddb", EntryPoint = "DDBIsBuildActive")]
-    private static extern DdbResult _IsBuildActive([MarshalAs(UnmanagedType.LPStr)] string ddbPath,
-        [MarshalAs(UnmanagedType.LPStr)] string path, out bool isBuildActive);
+    private static extern DdbResult _IsBuildActive([MarshalAs(UnmanagedType.LPUTF8Str)] string ddbPath,
+        [MarshalAs(UnmanagedType.LPUTF8Str)] string path, out bool isBuildActive);
 
     public bool IsBuildActive(string ddbPath, string path)
     {
@@ -898,7 +952,7 @@ public class NativeDdbWrapper : IDdbWrapper
     }
 
     [DllImport("ddb", EntryPoint = "DDBIsBuildPending")]
-    private static extern DdbResult _IsBuildPending([MarshalAs(UnmanagedType.LPStr)] string ddbPath,
+    private static extern DdbResult _IsBuildPending([MarshalAs(UnmanagedType.LPUTF8Str)] string ddbPath,
         out bool isBuildPending);
 
     public bool IsBuildPending(string ddbPath)
@@ -923,9 +977,9 @@ public class NativeDdbWrapper : IDdbWrapper
     }
 
     [DllImport("ddb", EntryPoint = "DDBMetaAdd")]
-    static extern DdbResult _MetaAdd([MarshalAs(UnmanagedType.LPStr)] string ddbPath,
-        [MarshalAs(UnmanagedType.LPStr)] string path,
-        [MarshalAs(UnmanagedType.LPStr)] string key, [MarshalAs(UnmanagedType.LPStr)] string data, out IntPtr output);
+    private static extern DdbResult _MetaAdd([MarshalAs(UnmanagedType.LPUTF8Str)] string ddbPath,
+        [MarshalAs(UnmanagedType.LPUTF8Str)] string path,
+        [MarshalAs(UnmanagedType.LPUTF8Str)] string key, [MarshalAs(UnmanagedType.LPUTF8Str)] string data, out IntPtr output);
 
     public Meta MetaAdd(string ddbPath, string key, string data, string? path = null)
     {
@@ -934,7 +988,7 @@ public class NativeDdbWrapper : IDdbWrapper
             if (_MetaAdd(ddbPath, path ?? string.Empty, key, data, out var output) ==
                 DdbResult.Success)
             {
-                var json = Marshal.PtrToStringAnsi(output);
+                var json = Marshal.PtrToStringUTF8(output);
 
                 if (json == null)
                     throw new InvalidOperationException("No result from DDBMetaUnset call");
@@ -962,9 +1016,9 @@ public class NativeDdbWrapper : IDdbWrapper
     }
 
     [DllImport("ddb", EntryPoint = "DDBMetaSet")]
-    static extern DdbResult _MetaSet([MarshalAs(UnmanagedType.LPStr)] string ddbPath,
-        [MarshalAs(UnmanagedType.LPStr)] string path,
-        [MarshalAs(UnmanagedType.LPStr)] string key, [MarshalAs(UnmanagedType.LPStr)] string data, out IntPtr output);
+    private static extern DdbResult _MetaSet([MarshalAs(UnmanagedType.LPUTF8Str)] string ddbPath,
+        [MarshalAs(UnmanagedType.LPUTF8Str)] string path,
+        [MarshalAs(UnmanagedType.LPUTF8Str)] string key, [MarshalAs(UnmanagedType.LPUTF8Str)] string data, out IntPtr output);
 
     public Meta MetaSet(string ddbPath, string key, string data, string? path = null)
     {
@@ -973,7 +1027,7 @@ public class NativeDdbWrapper : IDdbWrapper
             if (_MetaSet(ddbPath, path ?? string.Empty, key, data, out var output) ==
                 DdbResult.Success)
             {
-                var json = Marshal.PtrToStringAnsi(output);
+                var json = Marshal.PtrToStringUTF8(output);
                 if (json == null)
                     throw new InvalidOperationException("No result from DDBMetaUnset call");
 
@@ -1000,8 +1054,8 @@ public class NativeDdbWrapper : IDdbWrapper
     }
 
     [DllImport("ddb", EntryPoint = "DDBMetaRemove")]
-    static extern DdbResult _MetaRemove([MarshalAs(UnmanagedType.LPStr)] string ddbPath,
-        [MarshalAs(UnmanagedType.LPStr)] string id, out IntPtr output);
+    private static extern DdbResult _MetaRemove([MarshalAs(UnmanagedType.LPUTF8Str)] string ddbPath,
+        [MarshalAs(UnmanagedType.LPUTF8Str)] string id, out IntPtr output);
 
     public int MetaRemove(string ddbPath, string id)
     {
@@ -1010,7 +1064,7 @@ public class NativeDdbWrapper : IDdbWrapper
             if (_MetaRemove(ddbPath, id, out var output) ==
                 DdbResult.Success)
             {
-                var json = Marshal.PtrToStringAnsi(output);
+                var json = Marshal.PtrToStringUTF8(output);
 
                 if (json == null)
                     throw new InvalidOperationException("No result from DDBMetaRemove call");
@@ -1039,9 +1093,9 @@ public class NativeDdbWrapper : IDdbWrapper
     }
 
     [DllImport("ddb", EntryPoint = "DDBMetaGet")]
-    static extern DdbResult _MetaGet([MarshalAs(UnmanagedType.LPStr)] string ddbPath,
-        [MarshalAs(UnmanagedType.LPStr)] string path,
-        [MarshalAs(UnmanagedType.LPStr)] string key, out IntPtr output);
+    private static extern DdbResult _MetaGet([MarshalAs(UnmanagedType.LPUTF8Str)] string ddbPath,
+        [MarshalAs(UnmanagedType.LPUTF8Str)] string path,
+        [MarshalAs(UnmanagedType.LPUTF8Str)] string key, out IntPtr output);
 
     public string? MetaGet(string ddbPath, string key, string? path = null)
     {
@@ -1050,7 +1104,7 @@ public class NativeDdbWrapper : IDdbWrapper
             if (_MetaGet(ddbPath, path ?? string.Empty, key, out var output) ==
                 DdbResult.Success)
             {
-                var json = Marshal.PtrToStringAnsi(output);
+                var json = Marshal.PtrToStringUTF8(output);
 
                 return json;
             }
@@ -1070,9 +1124,9 @@ public class NativeDdbWrapper : IDdbWrapper
     }
 
     [DllImport("ddb", EntryPoint = "DDBMetaUnset")]
-    static extern DdbResult _MetaUnset([MarshalAs(UnmanagedType.LPStr)] string ddbPath,
-        [MarshalAs(UnmanagedType.LPStr)] string path,
-        [MarshalAs(UnmanagedType.LPStr)] string key, out IntPtr output);
+    private static extern DdbResult _MetaUnset([MarshalAs(UnmanagedType.LPUTF8Str)] string ddbPath,
+        [MarshalAs(UnmanagedType.LPUTF8Str)] string path,
+        [MarshalAs(UnmanagedType.LPUTF8Str)] string key, out IntPtr output);
 
     public int MetaUnset(string ddbPath, string key, string? path = null)
     {
@@ -1081,7 +1135,7 @@ public class NativeDdbWrapper : IDdbWrapper
             if (_MetaUnset(ddbPath, path ?? string.Empty, key, out var output) ==
                 DdbResult.Success)
             {
-                var json = Marshal.PtrToStringAnsi(output);
+                var json = Marshal.PtrToStringUTF8(output);
 
                 if (json == null)
                     throw new InvalidOperationException("No result from DDBMetaUnset call");
@@ -1111,8 +1165,8 @@ public class NativeDdbWrapper : IDdbWrapper
 
 
     [DllImport("ddb", EntryPoint = "DDBMetaList")]
-    static extern DdbResult _MetaList([MarshalAs(UnmanagedType.LPStr)] string ddbPath,
-        [MarshalAs(UnmanagedType.LPStr)] string path, out IntPtr output);
+    private static extern DdbResult _MetaList([MarshalAs(UnmanagedType.LPUTF8Str)] string ddbPath,
+        [MarshalAs(UnmanagedType.LPUTF8Str)] string path, out IntPtr output);
 
     public List<MetaListItem> MetaList(string ddbPath, string? path = null)
     {
@@ -1121,7 +1175,7 @@ public class NativeDdbWrapper : IDdbWrapper
             if (_MetaList(ddbPath, path ?? string.Empty, out var output) ==
                 DdbResult.Success)
             {
-                var json = Marshal.PtrToStringAnsi(output);
+                var json = Marshal.PtrToStringUTF8(output);
 
                 if (json == null)
                     throw new InvalidOperationException("No result from DDBMetaList call");
@@ -1149,8 +1203,8 @@ public class NativeDdbWrapper : IDdbWrapper
     }
 
     [DllImport("ddb", EntryPoint = "DDBMetaDump")]
-    static extern DdbResult _MetaDump([MarshalAs(UnmanagedType.LPStr)] string ddbPath,
-        [MarshalAs(UnmanagedType.LPStr)] string ids, out IntPtr output);
+    private static extern DdbResult _MetaDump([MarshalAs(UnmanagedType.LPUTF8Str)] string ddbPath,
+        [MarshalAs(UnmanagedType.LPUTF8Str)] string ids, out IntPtr output);
 
     public List<MetaDump> MetaDump(string ddbPath, string? ids = null)
     {
@@ -1159,7 +1213,7 @@ public class NativeDdbWrapper : IDdbWrapper
             if (_MetaDump(ddbPath, ids ?? "[]", out var output) ==
                 DdbResult.Success)
             {
-                var json = Marshal.PtrToStringAnsi(output);
+                var json = Marshal.PtrToStringUTF8(output);
 
                 if (json == null)
                     throw new InvalidOperationException("No result from DDBMetaDump call");
@@ -1187,10 +1241,10 @@ public class NativeDdbWrapper : IDdbWrapper
     }
 
     [DllImport("ddb", EntryPoint = "DDBStac")]
-    static extern DdbResult _Stac([MarshalAs(UnmanagedType.LPStr)] string ddbPath,
-        [MarshalAs(UnmanagedType.LPStr)] string? entry,
-        [MarshalAs(UnmanagedType.LPStr)] string stacCollectionRoot, [MarshalAs(UnmanagedType.LPStr)] string id,
-        [MarshalAs(UnmanagedType.LPStr)] string stacCatalogRoot, out IntPtr output);
+    private static extern DdbResult _Stac([MarshalAs(UnmanagedType.LPUTF8Str)] string ddbPath,
+        [MarshalAs(UnmanagedType.LPUTF8Str)] string? entry,
+        [MarshalAs(UnmanagedType.LPUTF8Str)] string stacCollectionRoot, [MarshalAs(UnmanagedType.LPUTF8Str)] string id,
+        [MarshalAs(UnmanagedType.LPUTF8Str)] string stacCatalogRoot, out IntPtr output);
 
     public JToken Stac(string ddbPath, string? entry, string stacCollectionRoot, string id,
         string stacCatalogRoot)
@@ -1200,7 +1254,7 @@ public class NativeDdbWrapper : IDdbWrapper
             if (_Stac(ddbPath, entry ?? string.Empty, stacCollectionRoot, id, stacCatalogRoot, out var output) ==
                 DdbResult.Success)
             {
-                var json = Marshal.PtrToStringAnsi(output);
+                var json = Marshal.PtrToStringUTF8(output);
 
                 if (json == null)
                     throw new InvalidOperationException("No result from DDBMetaDump call");
@@ -1229,9 +1283,9 @@ public class NativeDdbWrapper : IDdbWrapper
 
     [DllImport("ddb", EntryPoint = "DDBRescan")]
     private static extern DdbResult _Rescan(
-        [MarshalAs(UnmanagedType.LPStr)] string ddbPath,
+        [MarshalAs(UnmanagedType.LPUTF8Str)] string ddbPath,
         out IntPtr output,
-        [MarshalAs(UnmanagedType.LPStr)] string types,
+        [MarshalAs(UnmanagedType.LPUTF8Str)] string types,
         bool stopOnError);
 
     public List<RescanResult> RescanIndex(string ddbPath, string? types = null, bool stopOnError = true)
@@ -1240,7 +1294,7 @@ public class NativeDdbWrapper : IDdbWrapper
         {
             if (_Rescan(ddbPath, out var output, types ?? string.Empty, stopOnError) == DdbResult.Success)
             {
-                var json = Marshal.PtrToStringAnsi(output);
+                var json = Marshal.PtrToStringUTF8(output);
 
                 if (string.IsNullOrWhiteSpace(json))
                     throw new DdbException("Unable to get rescan results");

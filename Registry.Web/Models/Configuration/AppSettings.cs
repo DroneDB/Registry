@@ -229,4 +229,10 @@ public class AppSettings
     public PasswordPolicy? PasswordPolicy { get; set; }
 #nullable restore
 
+    /// <summary>
+    /// Allowed CORS origins. When null or empty, all origins are allowed.
+    /// </summary>
+#nullable enable
+    public string[]? AllowedOrigins { get; set; }
+#nullable restore
 }
