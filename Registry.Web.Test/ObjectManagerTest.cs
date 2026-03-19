@@ -1300,4 +1300,88 @@ public class ObjectManagerTest : TestBase
     }
 
     #endregion
+
+    #region Build Force Tests
+
+    /// <summary>
+    /// Verifies that Build() without force=true throws when IsBuildActive returns true.
+    /// This is the expected guard behavior.
+    /// </summary>
+    [Test]
+    public async Task Build_ActiveBuild_NoForce_ThrowsException()
+    {
+        await using var context = GetTest1Context();
+        var settings = JsonConvert.DeserializeObject<AppSettings>(_settingsJson);
+        _appSettingsMock.Setup(o => o.Value).Returns(settings);
+        _authManagerMock.Setup(o => o.IsUserAdmin()).Returns(Task.FromResult(true));
+        _authManagerMock.Setup(o => o.RequestAccess(It.IsAny<Dataset>(), It.IsAny<AccessType>()))
+            .Returns(Task.FromResult(true));
+
+        var ddbMock = new Mock<IDDB>();
+        ddbMock.Setup(x => x.GetEntry(It.IsAny<string>()))
+            .Returns(new Registry.Ports.DroneDB.Entry { Path = "test.las", Type = EntryType.PointCloud });
+        ddbMock.Setup(x => x.IsBuildable(It.IsAny<string>())).Returns(true);
+        ddbMock.Setup(x => x.IsBuildActive(It.IsAny<string>())).Returns(true);
+        ddbMock.Setup(x => x.Meta).Returns(new MockMeta());
+
+        _ddbFactoryMock.Setup(x => x.Get(It.IsAny<string>(), It.IsAny<Guid>())).Returns(ddbMock.Object);
+
+        var webUtils = new WebUtils(_authManagerMock.Object, context, _appSettingsMock.Object,
+            _httpContextAccessorMock.Object, _ddbFactoryMock.Object);
+
+        var objectManager = new ObjectsManager(_objectManagerLogger, context, _appSettingsMock.Object,
+            _ddbFactoryMock.Object, webUtils, _authManagerMock.Object, _cacheManager,
+            _fileSystem, _backgroundJobsProcessor, DdbWrapper, _thumbnailGeneratorMock.Object,
+            _jobIndexQueryMock.Object, _buildPendingService);
+
+        var ex = await Should.ThrowAsync<InvalidOperationException>(
+            async () => await objectManager.Build(
+                MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug, "test.las", force: false));
+        ex.Message.ShouldContain("already in progress");
+    }
+
+    /// <summary>
+    /// Verifies that Build() with force=true bypasses the IsBuildActive guard.
+    /// This pins the fix: previously force builds were blocked by stale locks.
+    /// </summary>
+    [Test]
+    public async Task Build_ActiveBuild_WithForce_BypassesGuard()
+    {
+        await using var context = GetTest1Context();
+        var settings = JsonConvert.DeserializeObject<AppSettings>(_settingsJson);
+        _appSettingsMock.Setup(o => o.Value).Returns(settings);
+        _authManagerMock.Setup(o => o.IsUserAdmin()).Returns(Task.FromResult(true));
+        _authManagerMock.Setup(o => o.RequestAccess(It.IsAny<Dataset>(), It.IsAny<AccessType>()))
+            .Returns(Task.FromResult(true));
+        _authManagerMock.Setup(o => o.GetCurrentUser()).Returns(Task.FromResult(new User
+        {
+            Id = Guid.NewGuid().ToString(),
+            UserName = "admin",
+            Email = "admin@test.com"
+        }));
+
+        var ddbMock = new Mock<IDDB>();
+        ddbMock.Setup(x => x.GetEntry(It.IsAny<string>()))
+            .Returns(new Registry.Ports.DroneDB.Entry { Path = "test.las", Type = EntryType.PointCloud, Hash = "abc123" });
+        ddbMock.Setup(x => x.IsBuildable(It.IsAny<string>())).Returns(true);
+        ddbMock.Setup(x => x.IsBuildActive(It.IsAny<string>())).Returns(true);
+        ddbMock.Setup(x => x.Meta).Returns(new MockMeta());
+
+        _ddbFactoryMock.Setup(x => x.Get(It.IsAny<string>(), It.IsAny<Guid>())).Returns(ddbMock.Object);
+
+        var webUtils = new WebUtils(_authManagerMock.Object, context, _appSettingsMock.Object,
+            _httpContextAccessorMock.Object, _ddbFactoryMock.Object);
+
+        var objectManager = new ObjectsManager(_objectManagerLogger, context, _appSettingsMock.Object,
+            _ddbFactoryMock.Object, webUtils, _authManagerMock.Object, _cacheManager,
+            _fileSystem, _backgroundJobsProcessor, DdbWrapper, _thumbnailGeneratorMock.Object,
+            _jobIndexQueryMock.Object, _buildPendingService);
+
+        // force=true should NOT throw even though IsBuildActive returns true
+        await Should.NotThrowAsync(
+            async () => await objectManager.Build(
+                MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug, "test.las", force: true));
+    }
+
+    #endregion
 }
