@@ -23,7 +23,7 @@ public class UserManagerHealthCheck : IHealthCheck
     {
 
         var testUserName = "test-" + Guid.NewGuid();
-        var testPassword = Guid.NewGuid().ToString();
+        var testPassword = Guid.NewGuid().ToString() + Guid.NewGuid().ToString().ToUpperInvariant() + "_&%$";
 
         var user = new User
         {
