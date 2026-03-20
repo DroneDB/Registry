@@ -28,6 +28,8 @@ public class DatasetDto
 
     public DatasetPermissionsDto Permissions { get; set; }
 
+    public bool? HasThumbnail { get; set; }
+
 }
 
 public class DatasetNewDto

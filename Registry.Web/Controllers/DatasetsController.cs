@@ -85,12 +85,12 @@ public class DatasetsController : ControllerBaseEx
     [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> GetAll([FromRoute, Required] string orgSlug)
+    public async Task<IActionResult> GetAll([FromRoute, Required] string orgSlug, [FromQuery] bool includeThumbnailCheck = false)
     {
         try
         {
             _logger.LogDebug("Dataset controller GetAll('{OrgSlug}')", orgSlug);
-            return Ok(await _datasetsManager.List(orgSlug));
+            return Ok(await _datasetsManager.List(orgSlug, includeThumbnailCheck));
         }
         catch (Exception ex)
         {

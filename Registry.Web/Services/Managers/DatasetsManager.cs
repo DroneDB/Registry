@@ -8,6 +8,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Registry.Adapters.DroneDB;
 using Registry.Ports;
+using Registry.Ports.DroneDB;
 using Registry.Web.Data;
 using Registry.Web.Data.Models;
 using Registry.Web.Exceptions;
@@ -59,7 +60,7 @@ public class DatasetsManager : IDatasetsManager
         _settings = settings.Value;
     }
 
-    public async Task<IEnumerable<DatasetDto>> List(string orgSlug)
+    public async Task<IEnumerable<DatasetDto>> List(string orgSlug, bool includeThumbnailCheck = false)
     {
         var org = _utils.GetOrganization(orgSlug);
 
@@ -108,7 +109,8 @@ public class DatasetsManager : IDatasetsManager
                 CreationDate = ds.CreationDate,
                 Properties = info.Properties,
                 Size = info.Size,
-                Permissions = permissions
+                Permissions = permissions,
+                HasThumbnail = includeThumbnailCheck ? CheckHasThumbnail(ddb) : null
             };
 
             result.Add(dto);
@@ -128,8 +130,18 @@ public class DatasetsManager : IDatasetsManager
 
         var dto = dataset.ToDto(ddb.GetInfo());
         dto.Permissions = await _authManager.GetDatasetPermissions(dataset);
+        dto.HasThumbnail = CheckHasThumbnail(ddb);
 
         return dto;
+    }
+
+    private bool CheckHasThumbnail(IDDB ddb)
+    {
+        var rootEntries = ddb.Search("", recursive: false);
+        var rootNames = new HashSet<string>(
+            rootEntries.Select(e => Path.GetFileName(e.Path)),
+            StringComparer.OrdinalIgnoreCase);
+        return _settings.DatasetThumbnailCandidates.Any(c => rootNames.Contains(c));
     }
 
     public async Task<EntryDto[]> GetEntry(string orgSlug, string dsSlug)

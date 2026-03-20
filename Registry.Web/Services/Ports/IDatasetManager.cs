@@ -7,7 +7,7 @@ namespace Registry.Web.Services.Ports;
 
 public interface IDatasetsManager
 {
-    public Task<IEnumerable<DatasetDto>> List(string orgSlug);
+    public Task<IEnumerable<DatasetDto>> List(string orgSlug, bool includeThumbnailCheck = false);
     public Task<DatasetDto> Get(string orgSlug, string dsSlug);
     public Task<EntryDto[]> GetEntry(string orgSlug, string dsSlug);
     public Task<DatasetDto> AddNew(string orgSlug, DatasetNewDto dataset);
