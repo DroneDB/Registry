@@ -72,7 +72,7 @@ public class NativeDdbWrapper : IDdbWrapper
         {
             if (_Init(directory, out var outPath) == DdbResult.Success)
             {
-                var res = Marshal.PtrToStringUTF8(outPath);
+                var res = MarshalAndFreeUtf8(outPath);
 
                 if (string.IsNullOrWhiteSpace(res))
                     throw new DdbException("Unable to init");
@@ -119,6 +119,13 @@ public class NativeDdbWrapper : IDdbWrapper
         }
     }
 
+    private static string? MarshalAndFreeUtf8(IntPtr ptr)
+    {
+        var str = Marshal.PtrToStringUTF8(ptr);
+        _DDBFree(ptr);
+        return str;
+    }
+
     [DllImport("ddb", EntryPoint = "DDBAdd")]
     private static extern DdbResult _Add([MarshalAs(UnmanagedType.LPUTF8Str)] string ddbPath,
         IntPtr[] paths,
@@ -136,7 +143,7 @@ public class NativeDdbWrapper : IDdbWrapper
         {
             if (_Add(ddbPath, utf8Ptrs, paths.Length, out var output, recursive) == DdbResult.Success)
             {
-                var json = Marshal.PtrToStringUTF8(output);
+                var json = MarshalAndFreeUtf8(output);
 
                 if (string.IsNullOrWhiteSpace(json))
                     throw new DdbException("Unable to add");
@@ -231,7 +238,7 @@ public class NativeDdbWrapper : IDdbWrapper
                     withHash) ==
                 DdbResult.Success)
             {
-                var json = Marshal.PtrToStringUTF8(output);
+                var json = MarshalAndFreeUtf8(output);
 
                 if (string.IsNullOrWhiteSpace(json))
                     throw new DdbException("Unable get info");
@@ -294,7 +301,7 @@ public class NativeDdbWrapper : IDdbWrapper
 
             if (lst == DdbResult.Success)
             {
-                var json = Marshal.PtrToStringUTF8(output);
+                var json = MarshalAndFreeUtf8(output);
 
                 if (string.IsNullOrWhiteSpace(json))
                     throw new InvalidOperationException("Unable get list");
@@ -422,7 +429,7 @@ public class NativeDdbWrapper : IDdbWrapper
             if (_ChangeAttributes(ddbPath, attrs, out var output) ==
                 DdbResult.Success)
             {
-                var res = Marshal.PtrToStringUTF8(output);
+                var res = MarshalAndFreeUtf8(output);
 
                 if (string.IsNullOrWhiteSpace(res))
                     throw new InvalidOperationException("Unable get attributes");
@@ -496,6 +503,9 @@ public class NativeDdbWrapper : IDdbWrapper
     private static extern DdbResult _DDBVSIFree(
         IntPtr buffer);
 
+    [DllImport("ddb", EntryPoint = "DDBFree")]
+    private static extern DdbResult _DDBFree(IntPtr ptr);
+
     [DllImport("ddb", EntryPoint = "DDBGenerateMemoryThumbnail")]
     private static extern DdbResult _GenerateMemoryThumbnail(
         [MarshalAs(UnmanagedType.LPUTF8Str)] string filePath, int size, out IntPtr outBuffer, out int outBufferSize);
@@ -555,7 +565,7 @@ public class NativeDdbWrapper : IDdbWrapper
             if (_GenerateTile(inputPath, tz, tx, ty, out var output, tileSize, tms, forceRecreate) ==
                 DdbResult.Success)
             {
-                var res = Marshal.PtrToStringUTF8(output);
+                var res = MarshalAndFreeUtf8(output);
 
                 if (string.IsNullOrWhiteSpace(res))
                     throw new DdbException("Unable get tile path");
@@ -660,7 +670,7 @@ public class NativeDdbWrapper : IDdbWrapper
             if (_GetTag(ddbPath, out var outTag) !=
                 DdbResult.Success) throw new DdbException(SafeGetLastError());
 
-            var res = Marshal.PtrToStringUTF8(outTag);
+            var res = MarshalAndFreeUtf8(outTag);
 
             return res == null || string.IsNullOrWhiteSpace(res) ? null : res;
         }
@@ -689,7 +699,7 @@ public class NativeDdbWrapper : IDdbWrapper
             if (_DDBGetStamp(ddbPath, out var output) ==
                 DdbResult.Success)
             {
-                var json = Marshal.PtrToStringUTF8(output);
+                var json = MarshalAndFreeUtf8(output);
 
                 if (json == null)
                     throw new InvalidOperationException("No result from DDBGetStamp call");
@@ -743,7 +753,7 @@ public class NativeDdbWrapper : IDdbWrapper
                     out var conflictsPtr) ==
                 DdbResult.Success)
             {
-                var conflicts = Marshal.PtrToStringUTF8(conflictsPtr);
+                var conflicts = MarshalAndFreeUtf8(conflictsPtr);
 
                 if (string.IsNullOrWhiteSpace(conflicts))
                     throw new DdbException("Unable get applydelta result");
@@ -781,7 +791,7 @@ public class NativeDdbWrapper : IDdbWrapper
             if (_Delta(sourceJson, targetJson, out var output, "json") ==
                 DdbResult.Success)
             {
-                var json = Marshal.PtrToStringUTF8(output);
+                var json = MarshalAndFreeUtf8(output);
 
                 if (string.IsNullOrWhiteSpace(json))
                     throw new InvalidOperationException("Unable get delta");
@@ -823,7 +833,7 @@ public class NativeDdbWrapper : IDdbWrapper
             if (_ComputeDeltaLocals(deltaJson, ddbPath, hlDestFolder, out var outputPtr) ==
                 DdbResult.Success)
             {
-                var output = Marshal.PtrToStringUTF8(outputPtr);
+                var output = MarshalAndFreeUtf8(outputPtr);
 
                 if (string.IsNullOrWhiteSpace(output))
                     throw new DdbException("Unable get ComputeDeltaLocals result");
@@ -988,10 +998,10 @@ public class NativeDdbWrapper : IDdbWrapper
             if (_MetaAdd(ddbPath, path ?? string.Empty, key, data, out var output) ==
                 DdbResult.Success)
             {
-                var json = Marshal.PtrToStringUTF8(output);
+                var json = MarshalAndFreeUtf8(output);
 
                 if (json == null)
-                    throw new InvalidOperationException("No result from DDBMetaUnset call");
+                    throw new InvalidOperationException("No result from DDBMetaAdd call");
 
                 var res = JsonConvert.DeserializeObject<Meta>(json);
 
@@ -1027,9 +1037,10 @@ public class NativeDdbWrapper : IDdbWrapper
             if (_MetaSet(ddbPath, path ?? string.Empty, key, data, out var output) ==
                 DdbResult.Success)
             {
-                var json = Marshal.PtrToStringUTF8(output);
+                var json = MarshalAndFreeUtf8(output);
+
                 if (json == null)
-                    throw new InvalidOperationException("No result from DDBMetaUnset call");
+                    throw new InvalidOperationException("No result from DDBMetaSet call");
 
                 var res = JsonConvert.DeserializeObject<Meta>(json);
 
@@ -1064,7 +1075,7 @@ public class NativeDdbWrapper : IDdbWrapper
             if (_MetaRemove(ddbPath, id, out var output) ==
                 DdbResult.Success)
             {
-                var json = Marshal.PtrToStringUTF8(output);
+                var json = MarshalAndFreeUtf8(output);
 
                 if (json == null)
                     throw new InvalidOperationException("No result from DDBMetaRemove call");
@@ -1104,7 +1115,7 @@ public class NativeDdbWrapper : IDdbWrapper
             if (_MetaGet(ddbPath, path ?? string.Empty, key, out var output) ==
                 DdbResult.Success)
             {
-                var json = Marshal.PtrToStringUTF8(output);
+                var json = MarshalAndFreeUtf8(output);
 
                 return json;
             }
@@ -1135,7 +1146,7 @@ public class NativeDdbWrapper : IDdbWrapper
             if (_MetaUnset(ddbPath, path ?? string.Empty, key, out var output) ==
                 DdbResult.Success)
             {
-                var json = Marshal.PtrToStringUTF8(output);
+                var json = MarshalAndFreeUtf8(output);
 
                 if (json == null)
                     throw new InvalidOperationException("No result from DDBMetaUnset call");
@@ -1175,7 +1186,7 @@ public class NativeDdbWrapper : IDdbWrapper
             if (_MetaList(ddbPath, path ?? string.Empty, out var output) ==
                 DdbResult.Success)
             {
-                var json = Marshal.PtrToStringUTF8(output);
+                var json = MarshalAndFreeUtf8(output);
 
                 if (json == null)
                     throw new InvalidOperationException("No result from DDBMetaList call");
@@ -1213,7 +1224,7 @@ public class NativeDdbWrapper : IDdbWrapper
             if (_MetaDump(ddbPath, ids ?? "[]", out var output) ==
                 DdbResult.Success)
             {
-                var json = Marshal.PtrToStringUTF8(output);
+                var json = MarshalAndFreeUtf8(output);
 
                 if (json == null)
                     throw new InvalidOperationException("No result from DDBMetaDump call");
@@ -1254,10 +1265,10 @@ public class NativeDdbWrapper : IDdbWrapper
             if (_Stac(ddbPath, entry ?? string.Empty, stacCollectionRoot, id, stacCatalogRoot, out var output) ==
                 DdbResult.Success)
             {
-                var json = Marshal.PtrToStringUTF8(output);
+                var json = MarshalAndFreeUtf8(output);
 
                 if (json == null)
-                    throw new InvalidOperationException("No result from DDBMetaDump call");
+                    throw new InvalidOperationException("No result from DDBStac call");
 
                 var res = JsonConvert.DeserializeObject<JToken>(json);
 
@@ -1294,7 +1305,7 @@ public class NativeDdbWrapper : IDdbWrapper
         {
             if (_Rescan(ddbPath, out var output, types ?? string.Empty, stopOnError) == DdbResult.Success)
             {
-                var json = Marshal.PtrToStringUTF8(output);
+                var json = MarshalAndFreeUtf8(output);
 
                 if (string.IsNullOrWhiteSpace(json))
                     throw new DdbException("Unable to get rescan results");
