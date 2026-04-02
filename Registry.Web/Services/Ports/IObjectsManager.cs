@@ -42,4 +42,30 @@ public interface IObjectsManager
     /// Invalidates all cached data for a dataset (tiles, thumbnails, dataset thumbnail, build-pending).
     /// </summary>
     Task InvalidateAllDatasetCaches(string orgSlug, string dsSlug);
+
+    /// <summary>Get raster info including bands, sensor profile, and presets</summary>
+    Task<string> GetRasterInfo(string orgSlug, string dsSlug, string path);
+
+    /// <summary>Get raster statistics and histogram for a band or formula</summary>
+    Task<string> GetRasterMetadata(string orgSlug, string dsSlug, string path, string? formula = null, string? bandFilter = null);
+
+    /// <summary>Generate thumbnail with extended visualization params</summary>
+    Task<StorageDataDto> GenerateThumbnailDataEx(string orgSlug, string dsSlug, string path, int? size,
+        string? preset = null, string? bands = null, string? formula = null,
+        string? bandFilter = null, string? colormap = null, string? rescale = null);
+
+    /// <summary>Generate tile with extended visualization params</summary>
+    Task<StorageDataDto> GenerateTileDataEx(string orgSlug, string dsSlug, string path,
+        int tz, int tx, int ty, bool retina,
+        string? preset = null, string? bands = null, string? formula = null,
+        string? bandFilter = null, string? colormap = null, string? rescale = null);
+
+    /// <summary>Validate merge-multispectral inputs</summary>
+    Task<string> ValidateMergeMultispectral(string orgSlug, string dsSlug, string[] paths);
+
+    /// <summary>Preview merge-multispectral result</summary>
+    Task<byte[]> PreviewMergeMultispectral(string orgSlug, string dsSlug, string[] paths, string? previewBands = null, int thumbSize = 512);
+
+    /// <summary>Merge single-band rasters into multi-band COG</summary>
+    Task MergeMultispectral(string orgSlug, string dsSlug, string[] paths, string outputPath);
 }

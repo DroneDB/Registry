@@ -857,5 +857,192 @@ public class ObjectsController : ControllerBaseEx
         }
     }
 
+    #region Multispectral
+
+    /// <summary>Get raster info (bands, sensor profile, presets) for a file.</summary>
+    [HttpGet("raster-info", Name = nameof(ObjectsController) + "." + nameof(GetRasterInfo))]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status401Unauthorized)]
+    public async Task<IActionResult> GetRasterInfo(
+        [FromRoute, Required] string orgSlug,
+        [FromRoute, Required] string dsSlug,
+        [FromQuery, Required] string path)
+    {
+        try
+        {
+            var json = await _objectsManager.GetRasterInfo(orgSlug, dsSlug, path);
+            return Content(json, "application/json");
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Exception in GetRasterInfo('{OrgSlug}', '{DsSlug}', '{Path}')", orgSlug, dsSlug, path);
+            return ExceptionResult(ex);
+        }
+    }
+
+    /// <summary>Get raster statistics/histogram for a band or formula.</summary>
+    [HttpGet("raster-metadata", Name = nameof(ObjectsController) + "." + nameof(GetRasterMetadata))]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status401Unauthorized)]
+    public async Task<IActionResult> GetRasterMetadata(
+        [FromRoute, Required] string orgSlug,
+        [FromRoute, Required] string dsSlug,
+        [FromQuery, Required] string path,
+        [FromQuery] string? formula,
+        [FromQuery] string? bandFilter)
+    {
+        try
+        {
+            var json = await _objectsManager.GetRasterMetadata(orgSlug, dsSlug, path, formula, bandFilter);
+            return Content(json, "application/json");
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Exception in GetRasterMetadata('{OrgSlug}', '{DsSlug}', '{Path}')", orgSlug, dsSlug, path);
+            return ExceptionResult(ex);
+        }
+    }
+
+    /// <summary>Generate thumbnail with extended visualization params.</summary>
+    [HttpGet("thumb-ex", Name = nameof(ObjectsController) + "." + nameof(GenerateThumbnailEx))]
+    [ProducesResponseType(typeof(FileResult), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status401Unauthorized)]
+    public async Task<IActionResult> GenerateThumbnailEx(
+        [FromRoute, Required] string orgSlug,
+        [FromRoute, Required] string dsSlug,
+        [FromQuery, Required] string path,
+        [FromQuery] int? size,
+        [FromQuery] string? preset,
+        [FromQuery] string? bands,
+        [FromQuery] string? formula,
+        [FromQuery] string? bandFilter,
+        [FromQuery] string? colormap,
+        [FromQuery] string? rescale)
+    {
+        try
+        {
+            var res = await _objectsManager.GenerateThumbnailDataEx(orgSlug, dsSlug, path, size,
+                preset, bands, formula, bandFilter, colormap, rescale);
+
+            if (res == null) return NotFound();
+            return File(res.Data, res.ContentType, res.Name);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Exception in GenerateThumbnailEx('{OrgSlug}', '{DsSlug}', '{Path}')", orgSlug, dsSlug, path);
+            return ExceptionResult(new Exception("Cannot generate thumbnail"));
+        }
+    }
+
+    /// <summary>Generate tile with extended visualization params.</summary>
+    [HttpGet("tiles-ex/{tz:int}/{tx:int}/{tyRaw}.{ext:regex(^(png|webp)$)}", Name = nameof(ObjectsController) + "." + nameof(GenerateTileEx))]
+    [ProducesResponseType(typeof(FileResult), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status401Unauthorized)]
+    public async Task<IActionResult> GenerateTileEx(
+        [FromRoute, Required] string orgSlug,
+        [FromRoute, Required] string dsSlug,
+        [FromRoute, Required] int tz,
+        [FromRoute, Required] int tx,
+        [FromRoute, Required] string tyRaw,
+        [FromQuery, Required] string path,
+        [FromRoute, Required] string ext,
+        [FromQuery] string? preset,
+        [FromQuery] string? bands,
+        [FromQuery] string? formula,
+        [FromQuery] string? bandFilter,
+        [FromQuery] string? colormap,
+        [FromQuery] string? rescale)
+    {
+        try
+        {
+            var retina = tyRaw.EndsWith("@2x");
+            if (!int.TryParse(retina ? tyRaw.Replace("@2x", string.Empty) : tyRaw, out var ty))
+                throw new ArgumentException("Invalid input parameters (retina indicator should be '@2x')");
+
+            var res = await _objectsManager.GenerateTileDataEx(orgSlug, dsSlug, path, tz, tx, ty, retina,
+                preset, bands, formula, bandFilter, colormap, rescale);
+
+            return File(res.Data, res.ContentType, res.Name);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Exception in GenerateTileEx('{OrgSlug}', '{DsSlug}', '{Path}')", orgSlug, dsSlug, path);
+            return ExceptionResult(ex);
+        }
+    }
+
+    /// <summary>Validate merge-multispectral inputs.</summary>
+    [HttpPost("merge-multispectral/validate", Name = nameof(ObjectsController) + "." + nameof(ValidateMergeMultispectral))]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
+    public async Task<IActionResult> ValidateMergeMultispectral(
+        [FromRoute, Required] string orgSlug,
+        [FromRoute, Required] string dsSlug,
+        [FromBody, Required] MergeMultispectralRequestDto request)
+    {
+        try
+        {
+            var json = await _objectsManager.ValidateMergeMultispectral(orgSlug, dsSlug, request.Paths);
+            return Content(json, "application/json");
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Exception in ValidateMergeMultispectral('{OrgSlug}', '{DsSlug}')", orgSlug, dsSlug);
+            return ExceptionResult(ex);
+        }
+    }
+
+    /// <summary>Preview merge-multispectral result.</summary>
+    [HttpPost("merge-multispectral/preview", Name = nameof(ObjectsController) + "." + nameof(PreviewMergeMultispectral))]
+    [ProducesResponseType(typeof(FileResult), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
+    public async Task<IActionResult> PreviewMergeMultispectral(
+        [FromRoute, Required] string orgSlug,
+        [FromRoute, Required] string dsSlug,
+        [FromBody, Required] MergeMultispectralRequestDto request)
+    {
+        try
+        {
+            var data = await _objectsManager.PreviewMergeMultispectral(orgSlug, dsSlug, request.Paths,
+                request.PreviewBands, request.ThumbSize ?? 512);
+            return File(data, "image/webp", "preview.webp");
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Exception in PreviewMergeMultispectral('{OrgSlug}', '{DsSlug}')", orgSlug, dsSlug);
+            return ExceptionResult(ex);
+        }
+    }
+
+    /// <summary>Merge single-band rasters into a multi-band COG.</summary>
+    [HttpPost("merge-multispectral", Name = nameof(ObjectsController) + "." + nameof(MergeMultispectral))]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
+    public async Task<IActionResult> MergeMultispectral(
+        [FromRoute, Required] string orgSlug,
+        [FromRoute, Required] string dsSlug,
+        [FromBody, Required] MergeMultispectralRequestDto request)
+    {
+        try
+        {
+            if (string.IsNullOrWhiteSpace(request.OutputPath))
+                return BadRequest(new ErrorResponse("outputPath is required"));
+
+            await _objectsManager.MergeMultispectral(orgSlug, dsSlug, request.Paths, request.OutputPath);
+            return Ok(new { message = "Merge completed successfully" });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Exception in MergeMultispectral('{OrgSlug}', '{DsSlug}')", orgSlug, dsSlug);
+            return ExceptionResult(ex);
+        }
+    }
+
+    #endregion
+
 
 }

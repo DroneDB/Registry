@@ -1476,4 +1476,158 @@ public class ObjectsManager : IObjectsManager
     }
 
     #endregion
+
+    #region Multispectral
+
+    public async Task<string> GetRasterInfo(string orgSlug, string dsSlug, string path)
+    {
+        var ds = _utils.GetDataset(orgSlug, dsSlug);
+
+        if (!await _authManager.RequestAccess(ds, AccessType.Read))
+            throw new UnauthorizedException("The current user is not allowed to read dataset");
+
+        if (path.StartsWith('/')) path = path[1..];
+
+        var entry = EnsurePathValidity(orgSlug, ds.InternalRef, path, out var ddb);
+        var sourcePath = GetBuildSource(entry);
+        var localPath = ddb.GetLocalPath(sourcePath);
+
+        return ddb.GetRasterInfo(sourcePath);
+    }
+
+    public async Task<string> GetRasterMetadata(string orgSlug, string dsSlug, string path, string? formula = null, string? bandFilter = null)
+    {
+        var ds = _utils.GetDataset(orgSlug, dsSlug);
+
+        if (!await _authManager.RequestAccess(ds, AccessType.Read))
+            throw new UnauthorizedException("The current user is not allowed to read dataset");
+
+        if (path.StartsWith('/')) path = path[1..];
+
+        var entry = EnsurePathValidity(orgSlug, ds.InternalRef, path, out var ddb);
+        var sourcePath = GetBuildSource(entry);
+
+        return ddb.GetRasterMetadata(sourcePath, formula, bandFilter);
+    }
+
+    public async Task<StorageDataDto> GenerateThumbnailDataEx(string orgSlug, string dsSlug, string path, int? sizeRaw,
+        string? preset = null, string? bands = null, string? formula = null,
+        string? bandFilter = null, string? colormap = null, string? rescale = null)
+    {
+        var ds = _utils.GetDataset(orgSlug, dsSlug);
+
+        if (!await _authManager.RequestAccess(ds, AccessType.Read))
+            throw new UnauthorizedException("The current user is not allowed to read dataset");
+
+        if (path.StartsWith('/')) path = path[1..];
+
+        var entry = EnsurePathValidity(orgSlug, ds.InternalRef, path, out var ddb);
+        var sourcePath = GetBuildSource(entry);
+        var localPath = ddb.GetLocalPath(sourcePath);
+
+        var size = sizeRaw ?? _settings.DefaultThumbnailSize;
+        var fileName = Path.GetFileName(path);
+
+        // Build a viz-specific cache key
+        var vizKey = $"{preset}|{bands}|{formula}|{bandFilter}|{colormap}|{rescale}";
+
+        var thumbData = await _cacheManager.GetAsync(MagicStrings.ThumbnailCacheSeed, ForDataset(orgSlug, dsSlug),
+            entry.Hash, size, vizKey,
+            new Func<Task<byte[]>>(() => Task.Run(() =>
+                ddb.GenerateThumbnailEx(localPath, size, preset, bands, formula, bandFilter, colormap, rescale))));
+
+        return new StorageDataDto
+        {
+            Name = Path.ChangeExtension(fileName, "webp"),
+            Data = thumbData,
+            ContentType = _ddbWrapper.ThumbnailMimeType
+        };
+    }
+
+    public async Task<StorageDataDto> GenerateTileDataEx(string orgSlug, string dsSlug, string path,
+        int tz, int tx, int ty, bool retina,
+        string? preset = null, string? bands = null, string? formula = null,
+        string? bandFilter = null, string? colormap = null, string? rescale = null)
+    {
+        var ds = _utils.GetDataset(orgSlug, dsSlug);
+
+        if (!await _authManager.RequestAccess(ds, AccessType.Read))
+            throw new UnauthorizedException("The current user is not allowed to read dataset");
+
+        if (path.StartsWith('/')) path = path[1..];
+
+        var entry = EnsurePathValidity(orgSlug, ds.InternalRef, path, out var ddb);
+        var sourcePath = GetBuildSource(entry);
+        var localPath = ddb.GetLocalPath(sourcePath);
+
+        try
+        {
+            var vizKey = $"{preset}|{bands}|{formula}|{bandFilter}|{colormap}|{rescale}";
+
+            var tileData = await _cacheManager.GetAsync(MagicStrings.TileCacheSeed, ForDataset(orgSlug, dsSlug),
+                entry.Hash, tx, ty, tz, retina, vizKey,
+                new Func<Task<byte[]>>(() => Task.Run(() =>
+                    ddb.GenerateTileEx(localPath, tz, tx, ty, retina, entry.Hash,
+                        preset, bands, formula, bandFilter, colormap, rescale))));
+
+            return new StorageDataDto
+            {
+                Data = tileData,
+                ContentType = "image/webp",
+                Name = $"{ty}.webp"
+            };
+        }
+        catch (InvalidOperationException ex)
+        {
+            if (ex.InnerException != null &&
+                ex.InnerException.Message.Contains("Out of bounds", StringComparison.OrdinalIgnoreCase))
+                throw new NotFoundException("Tile out of bounds", ex);
+            throw;
+        }
+    }
+
+    public async Task<string> ValidateMergeMultispectral(string orgSlug, string dsSlug, string[] paths)
+    {
+        var ds = _utils.GetDataset(orgSlug, dsSlug);
+
+        if (!await _authManager.RequestAccess(ds, AccessType.Read))
+            throw new UnauthorizedException("The current user is not allowed to read dataset");
+
+        var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
+        var fullPaths = paths.Select(p => ddb.GetLocalPath(p)).ToArray();
+
+        return await Task.Run(() => ddb.ValidateMergeMultispectral(paths));
+    }
+
+    public async Task<byte[]> PreviewMergeMultispectral(string orgSlug, string dsSlug, string[] paths, string? previewBands = null, int thumbSize = 512)
+    {
+        var ds = _utils.GetDataset(orgSlug, dsSlug);
+
+        if (!await _authManager.RequestAccess(ds, AccessType.Read))
+            throw new UnauthorizedException("The current user is not allowed to read dataset");
+
+        return await Task.Run(() =>
+        {
+            var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
+            return ddb.PreviewMergeMultispectral(paths, previewBands, thumbSize);
+        });
+    }
+
+    public async Task MergeMultispectral(string orgSlug, string dsSlug, string[] paths, string outputPath)
+    {
+        var ds = _utils.GetDataset(orgSlug, dsSlug);
+
+        if (!await _authManager.RequestAccess(ds, AccessType.Write))
+            throw new UnauthorizedException("The current user is not allowed to write to dataset");
+
+        var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
+        var outputFullPath = ddb.GetLocalPath(outputPath);
+
+        await Task.Run(() => ddb.MergeMultispectral(paths, outputFullPath));
+
+        // Re-add the merged output to the index
+        _ddbWrapper.Add(ddb.DatasetFolderPath, outputFullPath);
+    }
+
+    #endregion
 }

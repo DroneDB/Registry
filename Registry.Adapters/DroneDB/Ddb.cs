@@ -397,4 +397,100 @@ public class DDB : IDDB
 
         Directory.CreateDirectory(BuildFolderPath);
     }
+
+    public string GetRasterInfo(string path)
+    {
+        try
+        {
+            var fullPath = GetLocalPath(path);
+            return _ddbWrapper.GetRasterInfo(fullPath);
+        }
+        catch (DdbException ex)
+        {
+            throw new InvalidOperationException($"Cannot get raster info of '{path}'", ex);
+        }
+    }
+
+    public string GetRasterMetadata(string path, string? formula = null, string? bandFilter = null)
+    {
+        try
+        {
+            var fullPath = GetLocalPath(path);
+            return _ddbWrapper.GetRasterMetadata(fullPath, formula, bandFilter);
+        }
+        catch (DdbException ex)
+        {
+            throw new InvalidOperationException($"Cannot get raster metadata of '{path}'", ex);
+        }
+    }
+
+    public byte[] GenerateThumbnailEx(string imagePath, int size, string? preset = null,
+        string? bands = null, string? formula = null, string? bandFilter = null,
+        string? colormap = null, string? rescale = null)
+    {
+        try
+        {
+            return _ddbWrapper.GenerateThumbnailEx(imagePath, size, preset, bands, formula, bandFilter,
+                colormap, rescale);
+        }
+        catch (DdbException ex)
+        {
+            throw new InvalidOperationException(
+                $"Cannot generate thumbnail ex of '{imagePath}' with size '{size}'", ex);
+        }
+    }
+
+    public byte[] GenerateTileEx(string inputPath, int tz, int tx, int ty, bool retina, string inputPathHash,
+        string? preset = null, string? bands = null, string? formula = null,
+        string? bandFilter = null, string? colormap = null, string? rescale = null)
+    {
+        try
+        {
+            return _ddbWrapper.GenerateMemoryTileEx(inputPath, tz, tx, ty, retina ? 512 : 256, true, false,
+                inputPathHash, preset, bands, formula, bandFilter, colormap, rescale);
+        }
+        catch (DdbException ex)
+        {
+            throw new InvalidOperationException($"Cannot generate tile ex of '{inputPath}'", ex);
+        }
+    }
+
+    public string ValidateMergeMultispectral(string[] paths)
+    {
+        try
+        {
+            var fullPaths = paths.Select(p => GetLocalPath(p)).ToArray();
+            return _ddbWrapper.ValidateMergeMultispectral(fullPaths);
+        }
+        catch (DdbException ex)
+        {
+            throw new InvalidOperationException("Cannot validate merge multispectral", ex);
+        }
+    }
+
+    public byte[] PreviewMergeMultispectral(string[] paths, string? previewBands = null, int thumbSize = 512)
+    {
+        try
+        {
+            var fullPaths = paths.Select(p => GetLocalPath(p)).ToArray();
+            return _ddbWrapper.PreviewMergeMultispectral(fullPaths, previewBands, thumbSize);
+        }
+        catch (DdbException ex)
+        {
+            throw new InvalidOperationException("Cannot preview merge multispectral", ex);
+        }
+    }
+
+    public void MergeMultispectral(string[] paths, string outputCog)
+    {
+        try
+        {
+            var fullPaths = paths.Select(p => GetLocalPath(p)).ToArray();
+            _ddbWrapper.MergeMultispectral(fullPaths, outputCog);
+        }
+        catch (DdbException ex)
+        {
+            throw new InvalidOperationException("Cannot merge multispectral", ex);
+        }
+    }
 }
