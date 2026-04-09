@@ -493,4 +493,18 @@ public class DDB : IDDB
             throw new InvalidOperationException("Cannot merge multispectral", ex);
         }
     }
+
+    public void ExportRaster(string inputPath, string outputPath,
+        string? preset = null, string? bands = null, string? formula = null,
+        string? bandFilter = null, string? colormap = null, string? rescale = null)
+    {
+        try
+        {
+            _ddbWrapper.ExportRaster(inputPath, outputPath, preset, bands, formula, bandFilter, colormap, rescale);
+        }
+        catch (DdbException ex)
+        {
+            throw new InvalidOperationException($"Cannot export raster '{inputPath}'", ex);
+        }
+    }
 }

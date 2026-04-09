@@ -124,6 +124,13 @@ public interface IDDB
     /// </summary>
     void MergeMultispectral(string[] paths, string outputCog);
 
+    /// <summary>
+    /// Export raster with visualization params applied as GeoTIFF
+    /// </summary>
+    void ExportRaster(string inputPath, string outputPath,
+        string? preset = null, string? bands = null, string? formula = null,
+        string? bandFilter = null, string? colormap = null, string? rescale = null);
+
     // These consts are like magic strings: if anything changes this goes kaboom!
     public const string DatabaseFolderName = ".ddb";
     public const string BuildFolderName = "build";

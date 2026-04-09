@@ -975,6 +975,37 @@ public class ObjectsController : ControllerBaseEx
         }
     }
 
+    /// <summary>Export raster with visualization params applied as GeoTIFF.</summary>
+    [HttpGet("export", Name = nameof(ObjectsController) + "." + nameof(ExportRaster))]
+    [ProducesResponseType(typeof(FileResult), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status401Unauthorized)]
+    public async Task<IActionResult> ExportRaster(
+        [FromRoute, Required] string orgSlug,
+        [FromRoute, Required] string dsSlug,
+        [FromQuery, Required] string path,
+        [FromQuery] string? format = "geotiff",
+        [FromQuery] string? preset = null,
+        [FromQuery] string? bands = null,
+        [FromQuery] string? formula = null,
+        [FromQuery] string? bandFilter = null,
+        [FromQuery] string? colormap = null,
+        [FromQuery] string? rescale = null)
+    {
+        try
+        {
+            var res = await _objectsManager.ExportRaster(orgSlug, dsSlug, path,
+                preset, bands, formula, bandFilter, colormap, rescale);
+
+            return File(res.Data, res.ContentType, res.Name);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Exception in ExportRaster('{OrgSlug}', '{DsSlug}', '{Path}')", orgSlug, dsSlug, path);
+            return ExceptionResult(ex);
+        }
+    }
+
     /// <summary>Validate merge-multispectral inputs.</summary>
     [HttpPost("merge-multispectral/validate", Name = nameof(ObjectsController) + "." + nameof(ValidateMergeMultispectral))]
     [ProducesResponseType(StatusCodes.Status200OK)]

@@ -1609,5 +1609,45 @@ public class NativeDdbWrapper : IDdbWrapper
         throw new DdbException(SafeGetLastError("merge multispectral"));
     }
 
+    [DllImport("ddb", EntryPoint = "DDBExportRaster")]
+    private static extern DdbResult _ExportRaster(
+        [MarshalAs(UnmanagedType.LPUTF8Str)] string inputPath,
+        [MarshalAs(UnmanagedType.LPUTF8Str)] string outputPath,
+        [MarshalAs(UnmanagedType.LPUTF8Str)] string? preset,
+        [MarshalAs(UnmanagedType.LPUTF8Str)] string? bands,
+        [MarshalAs(UnmanagedType.LPUTF8Str)] string? formula,
+        [MarshalAs(UnmanagedType.LPUTF8Str)] string? bandFilter,
+        [MarshalAs(UnmanagedType.LPUTF8Str)] string? colormap,
+        [MarshalAs(UnmanagedType.LPUTF8Str)] string? rescale);
+
+    public void ExportRaster(string inputPath, string outputPath,
+        string? preset = null, string? bands = null, string? formula = null,
+        string? bandFilter = null, string? colormap = null, string? rescale = null)
+    {
+        if (string.IsNullOrWhiteSpace(inputPath))
+            throw new ArgumentException("inputPath is null or empty");
+        if (string.IsNullOrWhiteSpace(outputPath))
+            throw new ArgumentException("outputPath is null or empty");
+
+        try
+        {
+            if (_ExportRaster(inputPath, outputPath, preset, bands, formula, bandFilter,
+                    colormap, rescale) == DdbResult.Success)
+                return;
+        }
+        catch (EntryPointNotFoundException ex)
+        {
+            throw new DdbException($"Error in calling ddb lib: incompatible versions ({ex.Message})", ex);
+        }
+        catch (DdbException) { throw; }
+        catch (Exception ex)
+        {
+            throw new DdbException(
+                $"Error in calling ddb lib. Last error: \"{SafeGetLastError("export raster")}\", check inner exception for details", ex);
+        }
+
+        throw new DdbException(SafeGetLastError("export raster"));
+    }
+
     #endregion
 }

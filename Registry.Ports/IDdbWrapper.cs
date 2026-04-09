@@ -139,4 +139,11 @@ public interface IDdbWrapper
     /// Merge single-band rasters into multi-band COG
     /// </summary>
     public void MergeMultispectral(string[] paths, string outputCog);
+
+    /// <summary>
+    /// Export raster with visualization params applied as GeoTIFF
+    /// </summary>
+    public void ExportRaster(string inputPath, string outputPath,
+        string? preset = null, string? bands = null, string? formula = null,
+        string? bandFilter = null, string? colormap = null, string? rescale = null);
 }

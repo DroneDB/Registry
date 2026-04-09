@@ -1629,5 +1629,40 @@ public class ObjectsManager : IObjectsManager
         _ddbWrapper.Add(ddb.DatasetFolderPath, outputFullPath);
     }
 
+    public async Task<StorageDataDto> ExportRaster(string orgSlug, string dsSlug, string path,
+        string? preset = null, string? bands = null, string? formula = null,
+        string? bandFilter = null, string? colormap = null, string? rescale = null)
+    {
+        var ds = _utils.GetDataset(orgSlug, dsSlug);
+
+        if (!await _authManager.RequestAccess(ds, AccessType.Read))
+            throw new UnauthorizedException("The current user is not allowed to read dataset");
+
+        if (path.StartsWith('/')) path = path[1..];
+
+        var entry = EnsurePathValidity(orgSlug, ds.InternalRef, path, out var ddb);
+        var sourcePath = GetBuildSource(entry);
+        var localPath = ddb.GetLocalPath(sourcePath);
+
+        var tempDir = Path.GetTempPath();
+        var outputFileName = Path.GetFileNameWithoutExtension(path) + "_export.tif";
+        var outputPath = Path.Combine(tempDir, outputFileName);
+
+        await Task.Run(() => ddb.ExportRaster(localPath, outputPath, preset, bands, formula,
+            bandFilter, colormap, rescale));
+
+        var data = await File.ReadAllBytesAsync(outputPath);
+
+        // Clean up temp file
+        try { File.Delete(outputPath); } catch { /* ignore */ }
+
+        return new StorageDataDto
+        {
+            Name = outputFileName,
+            Data = data,
+            ContentType = "image/tiff"
+        };
+    }
+
     #endregion
 }

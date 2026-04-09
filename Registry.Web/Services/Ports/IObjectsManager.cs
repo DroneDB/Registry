@@ -68,4 +68,9 @@ public interface IObjectsManager
 
     /// <summary>Merge single-band rasters into multi-band COG</summary>
     Task MergeMultispectral(string orgSlug, string dsSlug, string[] paths, string outputPath);
+
+    /// <summary>Export raster with visualization params applied as GeoTIFF</summary>
+    Task<StorageDataDto> ExportRaster(string orgSlug, string dsSlug, string path,
+        string? preset = null, string? bands = null, string? formula = null,
+        string? bandFilter = null, string? colormap = null, string? rescale = null);
 }
