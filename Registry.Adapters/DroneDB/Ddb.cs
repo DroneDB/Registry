@@ -485,12 +485,12 @@ public class DDB : IDDB
     {
         try
         {
-            var fullPaths = paths.Select(p => GetLocalPath(p)).ToArray();
+            var fullPaths = paths.Select(GetLocalPath).ToArray();
             _ddbWrapper.MergeMultispectral(fullPaths, outputCog);
         }
         catch (DdbException ex)
         {
-            throw new InvalidOperationException("Cannot merge multispectral", ex);
+            throw new InvalidOperationException($"Cannot merge multispectral: {ex.Message}", ex);
         }
     }
 
