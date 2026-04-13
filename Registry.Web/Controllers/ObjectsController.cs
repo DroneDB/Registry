@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
+using System.IO;
 using System.Net;
 using System.Threading;
 using System.Threading.Tasks;
@@ -1063,8 +1064,14 @@ public class ObjectsController : ControllerBaseEx
             if (string.IsNullOrWhiteSpace(request.OutputPath))
                 return BadRequest(new ErrorResponse("outputPath is required"));
 
+            // Early path traversal check at controller level
+            if (Path.IsPathRooted(request.OutputPath) ||
+                request.OutputPath.Contains("..") ||
+                request.OutputPath.Contains('\\'))
+                return BadRequest(new ErrorResponse("Invalid output path"));
+
             await _objectsManager.MergeMultispectral(orgSlug, dsSlug, request.Paths, request.OutputPath);
-            return Ok(new { message = "Merge completed successfully" });
+            return Ok(new { ok = true });
         }
         catch (Exception ex)
         {
