@@ -1621,12 +1621,27 @@ public class ObjectsManager : IObjectsManager
             throw new UnauthorizedException("The current user is not allowed to write to dataset");
 
         var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
+
+        // Validate outputPath to prevent path traversal
+        CommonUtils.ValidateRelativePath(outputPath, ddb.DatasetFolderPath, nameof(outputPath));
+
         var outputFullPath = ddb.GetLocalPath(outputPath);
+
+        // Delete existing output file if present (overwrite)
+        if (_fs.Exists(outputFullPath))
+        {
+            _logger.LogInformation("Output file already exists, deleting: '{OutputPath}'", outputFullPath);
+            _fs.Delete(outputFullPath);
+        }
+
+        _logger.LogInformation("Merging multispectral for '{OutputPath}'", outputFullPath);
 
         await Task.Run(() => ddb.MergeMultispectral(paths, outputFullPath));
 
         // Re-add the merged output to the index
         _ddbWrapper.Add(ddb.DatasetFolderPath, outputFullPath);
+
+        _logger.LogInformation("Merge complete and file added to the dataset");
     }
 
     public async Task<StorageDataDto> ExportRaster(string orgSlug, string dsSlug, string path,
