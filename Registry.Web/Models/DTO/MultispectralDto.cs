@@ -61,6 +61,14 @@ public class MergeValidationResultDto
     public List<string> Errors { get; set; } = new();
     public List<string> Warnings { get; set; } = new();
     public MergeSummaryDto? Summary { get; set; }
+    public AlignmentStatusDto? Alignment { get; set; }
+}
+
+public class AlignmentStatusDto
+{
+    public bool Detected { get; set; }
+    public double MaxShiftPixels { get; set; }
+    public bool CorrectionApplied { get; set; }
 }
 
 public class MergeSummaryDto
