@@ -472,7 +472,7 @@ public class DDB : IDDB
     {
         try
         {
-            var fullPaths = paths.Select(p => GetLocalPath(p)).ToArray();
+            var fullPaths = paths.Select(GetLocalPath).ToArray();
             return _ddbWrapper.PreviewMergeMultispectral(fullPaths, previewBands, thumbSize);
         }
         catch (DdbException ex)
