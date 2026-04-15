@@ -146,4 +146,19 @@ public interface IDdbWrapper
     public void ExportRaster(string inputPath, string outputPath,
         string? preset = null, string? bands = null, string? formula = null,
         string? bandFilter = null, string? colormap = null, string? rescale = null);
+
+    /// <summary>
+    /// Get thermal info including calibration, temperature range, and dimensions
+    /// </summary>
+    public string GetThermalInfo(string path);
+
+    /// <summary>
+    /// Get temperature at a specific pixel location
+    /// </summary>
+    public string GetThermalPoint(string path, int x, int y);
+
+    /// <summary>
+    /// Get temperature statistics for a rectangular area
+    /// </summary>
+    public string GetThermalAreaStats(string path, int x0, int y0, int x1, int y1);
 }

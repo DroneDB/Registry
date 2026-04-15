@@ -1082,5 +1082,81 @@ public class ObjectsController : ControllerBaseEx
 
     #endregion
 
+    #region Thermal
+
+    /// <summary>Get thermal info including calibration, temperature range, and dimensions.</summary>
+    [HttpGet("thermal-info", Name = nameof(ObjectsController) + "." + nameof(GetThermalInfo))]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status401Unauthorized)]
+    public async Task<IActionResult> GetThermalInfo(
+        [FromRoute, Required] string orgSlug,
+        [FromRoute, Required] string dsSlug,
+        [FromQuery, Required] string path)
+    {
+        try
+        {
+            var json = await _objectsManager.GetThermalInfo(orgSlug, dsSlug, path);
+            return Content(json, "application/json");
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Exception in GetThermalInfo('{OrgSlug}', '{DsSlug}', '{Path}')", orgSlug, dsSlug, path);
+            return ExceptionResult(ex);
+        }
+    }
+
+    /// <summary>Get temperature at a specific pixel location.</summary>
+    [HttpGet("thermal-point", Name = nameof(ObjectsController) + "." + nameof(GetThermalPoint))]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status401Unauthorized)]
+    public async Task<IActionResult> GetThermalPoint(
+        [FromRoute, Required] string orgSlug,
+        [FromRoute, Required] string dsSlug,
+        [FromQuery, Required] string path,
+        [FromQuery, Required] int x,
+        [FromQuery, Required] int y)
+    {
+        try
+        {
+            var json = await _objectsManager.GetThermalPoint(orgSlug, dsSlug, path, x, y);
+            return Content(json, "application/json");
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Exception in GetThermalPoint('{OrgSlug}', '{DsSlug}', '{Path}')", orgSlug, dsSlug, path);
+            return ExceptionResult(ex);
+        }
+    }
+
+    /// <summary>Get temperature statistics for a rectangular area.</summary>
+    [HttpGet("thermal-area-stats", Name = nameof(ObjectsController) + "." + nameof(GetThermalAreaStats))]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status401Unauthorized)]
+    public async Task<IActionResult> GetThermalAreaStats(
+        [FromRoute, Required] string orgSlug,
+        [FromRoute, Required] string dsSlug,
+        [FromQuery, Required] string path,
+        [FromQuery, Required] int x0,
+        [FromQuery, Required] int y0,
+        [FromQuery, Required] int x1,
+        [FromQuery, Required] int y1)
+    {
+        try
+        {
+            var json = await _objectsManager.GetThermalAreaStats(orgSlug, dsSlug, path, x0, y0, x1, y1);
+            return Content(json, "application/json");
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Exception in GetThermalAreaStats('{OrgSlug}', '{DsSlug}', '{Path}')", orgSlug, dsSlug, path);
+            return ExceptionResult(ex);
+        }
+    }
+
+    #endregion
+
 
 }

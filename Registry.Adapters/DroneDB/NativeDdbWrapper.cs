@@ -1650,4 +1650,104 @@ public class NativeDdbWrapper : IDdbWrapper
     }
 
     #endregion
+
+    #region Thermal P/Invoke
+
+    [DllImport("ddb", EntryPoint = "DDBGetThermalInfo")]
+    private static extern DdbResult _GetThermalInfo(
+        [MarshalAs(UnmanagedType.LPUTF8Str)] string path, out IntPtr output);
+
+    public string GetThermalInfo(string path)
+    {
+        if (path == null) throw new ArgumentException("path is null");
+
+        try
+        {
+            if (_GetThermalInfo(path, out var output) == DdbResult.Success)
+            {
+                var json = MarshalAndFreeUtf8(output);
+                if (string.IsNullOrWhiteSpace(json))
+                    throw new DdbException("Unable to get thermal info");
+                return json;
+            }
+        }
+        catch (EntryPointNotFoundException ex)
+        {
+            throw new DdbException($"Error in calling ddb lib: incompatible versions ({ex.Message})", ex);
+        }
+        catch (DdbException) { throw; }
+        catch (Exception ex)
+        {
+            throw new DdbException(
+                $"Error in calling ddb lib. Last error: \"{SafeGetLastError("get thermal info")}\", check inner exception for details", ex);
+        }
+
+        throw new DdbException(SafeGetLastError("get thermal info"));
+    }
+
+    [DllImport("ddb", EntryPoint = "DDBGetThermalPoint")]
+    private static extern DdbResult _GetThermalPoint(
+        [MarshalAs(UnmanagedType.LPUTF8Str)] string path, int x, int y, out IntPtr output);
+
+    public string GetThermalPoint(string path, int x, int y)
+    {
+        if (path == null) throw new ArgumentException("path is null");
+
+        try
+        {
+            if (_GetThermalPoint(path, x, y, out var output) == DdbResult.Success)
+            {
+                var json = MarshalAndFreeUtf8(output);
+                if (string.IsNullOrWhiteSpace(json))
+                    throw new DdbException("Unable to get thermal point");
+                return json;
+            }
+        }
+        catch (EntryPointNotFoundException ex)
+        {
+            throw new DdbException($"Error in calling ddb lib: incompatible versions ({ex.Message})", ex);
+        }
+        catch (DdbException) { throw; }
+        catch (Exception ex)
+        {
+            throw new DdbException(
+                $"Error in calling ddb lib. Last error: \"{SafeGetLastError("get thermal point")}\", check inner exception for details", ex);
+        }
+
+        throw new DdbException(SafeGetLastError("get thermal point"));
+    }
+
+    [DllImport("ddb", EntryPoint = "DDBGetThermalAreaStats")]
+    private static extern DdbResult _GetThermalAreaStats(
+        [MarshalAs(UnmanagedType.LPUTF8Str)] string path, int x0, int y0, int x1, int y1, out IntPtr output);
+
+    public string GetThermalAreaStats(string path, int x0, int y0, int x1, int y1)
+    {
+        if (path == null) throw new ArgumentException("path is null");
+
+        try
+        {
+            if (_GetThermalAreaStats(path, x0, y0, x1, y1, out var output) == DdbResult.Success)
+            {
+                var json = MarshalAndFreeUtf8(output);
+                if (string.IsNullOrWhiteSpace(json))
+                    throw new DdbException("Unable to get thermal area stats");
+                return json;
+            }
+        }
+        catch (EntryPointNotFoundException ex)
+        {
+            throw new DdbException($"Error in calling ddb lib: incompatible versions ({ex.Message})", ex);
+        }
+        catch (DdbException) { throw; }
+        catch (Exception ex)
+        {
+            throw new DdbException(
+                $"Error in calling ddb lib. Last error: \"{SafeGetLastError("get thermal area stats")}\", check inner exception for details", ex);
+        }
+
+        throw new DdbException(SafeGetLastError("get thermal area stats"));
+    }
+
+    #endregion
 }

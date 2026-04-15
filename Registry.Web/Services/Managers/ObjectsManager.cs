@@ -1680,4 +1680,53 @@ public class ObjectsManager : IObjectsManager
     }
 
     #endregion
+
+    #region Thermal
+
+    public async Task<string> GetThermalInfo(string orgSlug, string dsSlug, string path)
+    {
+        var ds = _utils.GetDataset(orgSlug, dsSlug);
+
+        if (!await _authManager.RequestAccess(ds, AccessType.Read))
+            throw new UnauthorizedException("The current user is not allowed to read dataset");
+
+        if (path.StartsWith('/')) path = path[1..];
+
+        var entry = EnsurePathValidity(orgSlug, ds.InternalRef, path, out var ddb);
+        var sourcePath = GetBuildSource(entry);
+
+        return ddb.GetThermalInfo(sourcePath);
+    }
+
+    public async Task<string> GetThermalPoint(string orgSlug, string dsSlug, string path, int x, int y)
+    {
+        var ds = _utils.GetDataset(orgSlug, dsSlug);
+
+        if (!await _authManager.RequestAccess(ds, AccessType.Read))
+            throw new UnauthorizedException("The current user is not allowed to read dataset");
+
+        if (path.StartsWith('/')) path = path[1..];
+
+        var entry = EnsurePathValidity(orgSlug, ds.InternalRef, path, out var ddb);
+        var sourcePath = GetBuildSource(entry);
+
+        return ddb.GetThermalPoint(sourcePath, x, y);
+    }
+
+    public async Task<string> GetThermalAreaStats(string orgSlug, string dsSlug, string path, int x0, int y0, int x1, int y1)
+    {
+        var ds = _utils.GetDataset(orgSlug, dsSlug);
+
+        if (!await _authManager.RequestAccess(ds, AccessType.Read))
+            throw new UnauthorizedException("The current user is not allowed to read dataset");
+
+        if (path.StartsWith('/')) path = path[1..];
+
+        var entry = EnsurePathValidity(orgSlug, ds.InternalRef, path, out var ddb);
+        var sourcePath = GetBuildSource(entry);
+
+        return ddb.GetThermalAreaStats(sourcePath, x0, y0, x1, y1);
+    }
+
+    #endregion
 }

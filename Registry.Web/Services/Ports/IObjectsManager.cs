@@ -73,4 +73,13 @@ public interface IObjectsManager
     Task<StorageDataDto> ExportRaster(string orgSlug, string dsSlug, string path,
         string? preset = null, string? bands = null, string? formula = null,
         string? bandFilter = null, string? colormap = null, string? rescale = null);
+
+    /// <summary>Get thermal info including calibration, temperature range, and dimensions</summary>
+    Task<string> GetThermalInfo(string orgSlug, string dsSlug, string path);
+
+    /// <summary>Get temperature at a specific pixel location</summary>
+    Task<string> GetThermalPoint(string orgSlug, string dsSlug, string path, int x, int y);
+
+    /// <summary>Get temperature statistics for a rectangular area</summary>
+    Task<string> GetThermalAreaStats(string orgSlug, string dsSlug, string path, int x0, int y0, int x1, int y1);
 }

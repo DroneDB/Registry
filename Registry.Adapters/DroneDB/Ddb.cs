@@ -18,7 +18,7 @@ namespace Registry.Adapters.DroneDB;
 
 public class DDB : IDDB
 {
-    private static readonly IFileSystem FileSystem = new FileSystem();
+    private static readonly FileSystem FileSystem = new();
     private IDdbWrapper _ddbWrapper;
 
     [JsonIgnore] public string Version => _ddbWrapper.GetVersion();
@@ -459,7 +459,7 @@ public class DDB : IDDB
     {
         try
         {
-            var fullPaths = paths.Select(p => GetLocalPath(p)).ToArray();
+            var fullPaths = paths.Select(GetLocalPath).ToArray();
             return _ddbWrapper.ValidateMergeMultispectral(fullPaths);
         }
         catch (DdbException ex)
@@ -505,6 +505,45 @@ public class DDB : IDDB
         catch (DdbException ex)
         {
             throw new InvalidOperationException($"Cannot export raster '{inputPath}'", ex);
+        }
+    }
+
+    public string GetThermalInfo(string path)
+    {
+        try
+        {
+            var fullPath = GetLocalPath(path);
+            return _ddbWrapper.GetThermalInfo(fullPath);
+        }
+        catch (DdbException ex)
+        {
+            throw new InvalidOperationException($"Cannot get thermal info of '{path}'", ex);
+        }
+    }
+
+    public string GetThermalPoint(string path, int x, int y)
+    {
+        try
+        {
+            var fullPath = GetLocalPath(path);
+            return _ddbWrapper.GetThermalPoint(fullPath, x, y);
+        }
+        catch (DdbException ex)
+        {
+            throw new InvalidOperationException($"Cannot get thermal point of '{path}'", ex);
+        }
+    }
+
+    public string GetThermalAreaStats(string path, int x0, int y0, int x1, int y1)
+    {
+        try
+        {
+            var fullPath = GetLocalPath(path);
+            return _ddbWrapper.GetThermalAreaStats(fullPath, x0, y0, x1, y1);
+        }
+        catch (DdbException ex)
+        {
+            throw new InvalidOperationException($"Cannot get thermal area stats of '{path}'", ex);
         }
     }
 }

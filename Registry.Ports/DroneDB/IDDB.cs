@@ -131,6 +131,21 @@ public interface IDDB
         string? preset = null, string? bands = null, string? formula = null,
         string? bandFilter = null, string? colormap = null, string? rescale = null);
 
+    /// <summary>
+    /// Get thermal info including calibration, temperature range, and dimensions
+    /// </summary>
+    string GetThermalInfo(string path);
+
+    /// <summary>
+    /// Get temperature at a specific pixel location
+    /// </summary>
+    string GetThermalPoint(string path, int x, int y);
+
+    /// <summary>
+    /// Get temperature statistics for a rectangular area
+    /// </summary>
+    string GetThermalAreaStats(string path, int x0, int y0, int x1, int y1);
+
     // These consts are like magic strings: if anything changes this goes kaboom!
     public const string DatabaseFolderName = ".ddb";
     public const string BuildFolderName = "build";
