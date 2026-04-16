@@ -1,20 +1,10 @@
 # DroneDB Registry
 
-![GitHub Release](https://img.shields.io/github/v/release/DroneDB/Registry) ![commits](https://img.shields.io/github/commit-activity/m/DroneDB/registry) ![languages](https://img.shields.io/github/languages/top/DroneDB/registry) ![.NET Core](https://github.com/DroneDB/Registry/actions/workflows/dotnet-core.yml/badge.svg)
+![GitHub Release](https://img.shields.io/github/v/release/DroneDB/Registry) ![commits](https://img.shields.io/github/commit-activity/m/DroneDB/registry) ![languages](https://img.shields.io/github/languages/top/DroneDB/registry) ![.NET Core](https://github.com/DroneDB/Registry/actions/workflows/dotnet-core.yml/badge.svg) [![Discord](https://img.shields.io/discord/1491016144310767670?label=Discord&logo=discord&color=5865F2)](https://discord.gg/e9M3vBvzge)
 
 DroneDB Registry is a comprehensive geospatial data management and storage platform. It provides JWT authentication, a full REST API, and STAC compliance for interoperability.
 
 View orthophotos, point clouds, 3D models (OBJ, GLTF, GLB), panoramas and more directly in the browser with interactive measurement tools.
-
-## 📚 Documentation
-
-**Full documentation is available at [docs.dronedb.app](https://docs.dronedb.app)**
-
-| Guide | Description |
-|-------|-------------|
-| [Registry Guide](https://docs.dronedb.app/docs/registry) | Installation, configuration, deployment |
-| [User Management](https://docs.dronedb.app/docs/user-management) | Users, roles, organizations, quotas |
-| [API Reference](https://docs.dronedb.app/docs/api-reference) | REST API documentation |
 
 ## ✨ Features
 
@@ -24,6 +14,8 @@ View orthophotos, point clouds, 3D models (OBJ, GLTF, GLB), panoramas and more d
 - **STAC Compliance** - Standard SpatioTemporal Asset Catalog API
 - **On-Demand Processing** - Automatic thumbnails, tiles, COG and streaming format generation
 - **User Management** - Role-based access control with organizations and storage quotas
+
+## 📚 Documentation
 
 ### Supported Formats
 
@@ -38,9 +30,23 @@ View orthophotos, point clouds, 3D models (OBJ, GLTF, GLB), panoramas and more d
 
 ### Live Examples
 
-- [Brighton Beach](https://hub.dronedb.app/r/hedo88/brighton-beach) - Point cloud
+- [Zoo](https://hub.dronedb.app/r/odm/zoo) - Point cloud
 - [ODM Seneca](https://hub.dronedb.app/r/hedo88/odm-seneca) - Orthophoto with measurements
 - [Panorama Example](https://hub.dronedb.app/r/pierotofy/panoexample/) - 360° panorama viewer
+
+**Full documentation is available at [docs.dronedb.app](https://docs.dronedb.app)**
+
+| Guide | Description |
+|-------|-------------|
+| [Registry Guide](https://docs.dronedb.app/docs/registry) | Installation, configuration, deployment |
+| [User Management](https://docs.dronedb.app/docs/user-management) | Users, roles, organizations, quotas |
+| [API Reference](https://docs.dronedb.app/docs/api-reference) | REST API documentation |
+
+## 💬 Community
+
+Join our Discord server to get help, share feedback, discuss features, and connect with other DroneDB users:
+
+**[Join the DroneDB Discord](https://discord.gg/e9M3vBvzge)**
 
 ## 🚀 Quick Start with Docker
 
@@ -48,17 +54,17 @@ View orthophotos, point clouds, 3D models (OBJ, GLTF, GLB), panoramas and more d
 docker run -it --rm -p 5000:5000 -v ${PWD}/registry-data:/data dronedb/registry
 ```
 
-Open http://localhost:5000 • Default credentials: `admin` / `password`
+Open [http://localhost:5000](http://localhost:5000) • Default credentials: `admin` / `password`
 
-> ⚠️ Change the default password immediately at http://localhost:5000/account
+> ⚠️ Change the default password immediately at [http://localhost:5000/account](http://localhost:5000/account)
 
 ### Useful Endpoints
 
-| Endpoint | Description |
-|----------|-------------|
-| `/scalar/v1` | API Documentation |
-| `/stac` | STAC Catalog |
-| `/hangfire` | Background jobs dashboard (requires auth) |
+| Endpoint     | Description                               |
+| ------------ | ----------------------------------------- |
+| `/scalar/v1` | API Documentation                         |
+| `/stac`      | STAC Catalog                              |
+| `/hangfire`  | Background jobs dashboard (requires auth) |
 
 For production deployment with MySQL/MariaDB, see the [full documentation](https://docs.dronedb.app/docs/registry#running-in-production).
 
@@ -66,9 +72,9 @@ For production deployment with MySQL/MariaDB, see the [full documentation](https
 
 ### Requirements
 
-- [.NET 9.0 SDK](https://dotnet.microsoft.com/en-us/download/dotnet/9.0)
-- [Node.js 22+](https://nodejs.org/) (LTS recommended)
-- [DroneDB Library](https://github.com/DroneDB/DroneDB/releases/latest) (add to PATH)
+* [.NET 9.0 SDK](https://dotnet.microsoft.com/en-us/download/dotnet/9.0)
+* [Node.js 22+](https://nodejs.org/) (LTS recommended)
+* [DroneDB Library](https://github.com/DroneDB/DroneDB/releases/latest) (add to PATH)
 
 ### Build from Source
 
@@ -107,3 +113,4 @@ This project is dual-licensed. See [LICENSE.md](LICENSE.md) for details.
 ## 🤝 Contributing
 
 Contributions are welcome! Please see the [contributing guidelines](CONTRIBUTING.md).
+
