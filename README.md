@@ -15,8 +15,6 @@ View orthophotos, point clouds, 3D models (OBJ, GLTF, GLB), panoramas and more d
 - **On-Demand Processing** - Automatic thumbnails, tiles, COG and streaming format generation
 - **User Management** - Role-based access control with organizations and storage quotas
 
-## 📚 Documentation
-
 ### Supported Formats
 
 | Category | Formats |
@@ -33,6 +31,8 @@ View orthophotos, point clouds, 3D models (OBJ, GLTF, GLB), panoramas and more d
 - [Zoo](https://hub.dronedb.app/r/odm/zoo) - Point cloud
 - [ODM Seneca](https://hub.dronedb.app/r/hedo88/odm-seneca) - Orthophoto with measurements
 - [Panorama Example](https://hub.dronedb.app/r/pierotofy/panoexample/) - 360° panorama viewer
+
+## 📚 Documentation
 
 **Full documentation is available at [docs.dronedb.app](https://docs.dronedb.app)**
 
