@@ -213,4 +213,24 @@ public static class HangfireUtils
         }
     }
 
+    [AutomaticRetry(Attempts = 1, OnAttemptsExceeded = AttemptsExceededAction.Fail)]
+    public static void MaskBordersWrapper(IDDB ddb, string inputPath, string outputPath,
+        int nearDist, bool white, PerformContext context)
+    {
+        Action<string> writeLine = context != null ? context.WriteLine : Log.Information;
+
+        writeLine($"In MaskBordersWrapper('{ddb.DatasetFolderPath}', '{inputPath}')");
+
+        writeLine("Running mask borders");
+        ddb.MaskBorders(inputPath, outputPath, nearDist, white);
+
+        writeLine("Adding masked file to index");
+        ddb.Add(outputPath);
+
+        writeLine("Building COG for masked file");
+        ddb.Build(outputPath);
+
+        writeLine("Done mask borders");
+    }
+
 }

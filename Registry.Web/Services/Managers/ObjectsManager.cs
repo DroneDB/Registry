@@ -233,7 +233,7 @@ public class ObjectsManager : IObjectsManager
             await stream.CopyToAsync(localFileStream);
 
         _logger.LogInformation("File saved, adding to DDB");
-        ddb.AddRaw(localFilePath);
+        ddb.AddRaw(path);
 
         _logger.LogInformation("Added to DDB, checking entry now...");
 
@@ -457,7 +457,7 @@ public class ObjectsManager : IObjectsManager
             fileSystemCopied = true;
 
             _logger.LogInformation("FS copy OK, performing ddb add");
-            destDdb.AddRaw(destDdb.GetLocalPath(destPath));
+            destDdb.AddRaw(destPath);
             addedToDdb = true;
 
             if (!destDdb.EntryExists(destPath))
@@ -1039,7 +1039,6 @@ public class ObjectsManager : IObjectsManager
         var entry = EnsurePathValidity(orgSlug, ds.InternalRef, path, out var ddb);
 
         var sourcePath = GetBuildSource(entry);
-        var localPath = ddb.GetLocalPath(sourcePath);
 
         try
         {
@@ -1049,7 +1048,7 @@ public class ObjectsManager : IObjectsManager
             // We want to free up the main thread to handle other requests
             var tileData =
                 await _cacheManager.GetAsync(MagicStrings.TileCacheSeed, ForDataset(orgSlug, dsSlug), entry.Hash, tx, ty, tz, retina,
-                    new Func<Task<byte[]>>(() => Task.Run(() => ddb.GenerateTile(localPath, tz, tx, ty, retina, entry.Hash))));
+                    new Func<Task<byte[]>>(() => Task.Run(() => ddb.GenerateTile(sourcePath, tz, tx, ty, retina, entry.Hash))));
 
             return new StorageDataDto
             {
@@ -1523,7 +1522,6 @@ public class ObjectsManager : IObjectsManager
 
         var entry = EnsurePathValidity(orgSlug, ds.InternalRef, path, out var ddb);
         var sourcePath = GetBuildSource(entry);
-        var localPath = ddb.GetLocalPath(sourcePath);
 
         var size = sizeRaw ?? _settings.DefaultThumbnailSize;
         var fileName = Path.GetFileName(path);
@@ -1534,7 +1532,7 @@ public class ObjectsManager : IObjectsManager
         var thumbData = await _cacheManager.GetAsync(MagicStrings.ThumbnailCacheSeed, ForDataset(orgSlug, dsSlug),
             entry.Hash, size, vizKey,
             new Func<Task<byte[]>>(() => Task.Run(() =>
-                ddb.GenerateThumbnailEx(localPath, size, preset, bands, formula, bandFilter, colormap, rescale))));
+                ddb.GenerateThumbnailEx(sourcePath, size, preset, bands, formula, bandFilter, colormap, rescale))));
 
         return new StorageDataDto
         {
@@ -1558,7 +1556,6 @@ public class ObjectsManager : IObjectsManager
 
         var entry = EnsurePathValidity(orgSlug, ds.InternalRef, path, out var ddb);
         var sourcePath = GetBuildSource(entry);
-        var localPath = ddb.GetLocalPath(sourcePath);
 
         try
         {
@@ -1567,7 +1564,7 @@ public class ObjectsManager : IObjectsManager
             var tileData = await _cacheManager.GetAsync(MagicStrings.TileCacheSeed, ForDataset(orgSlug, dsSlug),
                 entry.Hash, tx, ty, tz, retina, vizKey,
                 new Func<Task<byte[]>>(() => Task.Run(() =>
-                    ddb.GenerateTileEx(localPath, tz, tx, ty, retina, entry.Hash,
+                    ddb.GenerateTileEx(sourcePath, tz, tx, ty, retina, entry.Hash,
                         preset, bands, formula, bandFilter, colormap, rescale))));
 
             return new StorageDataDto
@@ -1594,7 +1591,6 @@ public class ObjectsManager : IObjectsManager
             throw new UnauthorizedException("The current user is not allowed to read dataset");
 
         var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
-        var fullPaths = paths.Select(p => ddb.GetLocalPath(p)).ToArray();
 
         return await Task.Run(() => ddb.ValidateMergeMultispectral(paths));
     }
@@ -1636,7 +1632,7 @@ public class ObjectsManager : IObjectsManager
 
         _logger.LogInformation("Merging multispectral for '{OutputPath}'", outputFullPath);
 
-        await Task.Run(() => ddb.MergeMultispectral(paths, outputFullPath));
+        await Task.Run(() => ddb.MergeMultispectral(paths, outputPath));
 
         // Re-add the merged output to the index
         _ddbWrapper.Add(ddb.DatasetFolderPath, outputFullPath);
@@ -1657,13 +1653,12 @@ public class ObjectsManager : IObjectsManager
 
         var entry = EnsurePathValidity(orgSlug, ds.InternalRef, path, out var ddb);
         var sourcePath = GetBuildSource(entry);
-        var localPath = ddb.GetLocalPath(sourcePath);
 
         var tempDir = Path.GetTempPath();
         var outputFileName = Path.GetFileNameWithoutExtension(path) + "_export.tif";
         var outputPath = Path.Combine(tempDir, outputFileName);
 
-        await Task.Run(() => ddb.ExportRaster(localPath, outputPath, preset, bands, formula,
+        await Task.Run(() => ddb.ExportRaster(sourcePath, outputPath, preset, bands, formula,
             bandFilter, colormap, rescale));
 
         var data = await File.ReadAllBytesAsync(outputPath);
@@ -1726,6 +1721,92 @@ public class ObjectsManager : IObjectsManager
         var sourcePath = GetBuildSource(entry);
 
         return ddb.GetThermalAreaStats(sourcePath, x0, y0, x1, y1);
+    }
+
+    #endregion
+
+    #region MaskBorders
+
+    public async Task<MaskBordersCheckResponseDto> CheckMaskedFileExists(string orgSlug, string dsSlug, string path)
+    {
+        var ds = _utils.GetDataset(orgSlug, dsSlug);
+
+        if (!await _authManager.RequestAccess(ds, AccessType.Read))
+            throw new UnauthorizedException("The current user is not allowed to read dataset");
+
+        var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
+
+        var outputPath = GetMaskedOutputPath(path);
+        var entry = ddb.GetEntry(outputPath);
+
+        return new MaskBordersCheckResponseDto
+        {
+            Exists = entry != null,
+            OutputPath = outputPath
+        };
+    }
+
+    public async Task MaskBorders(string orgSlug, string dsSlug, string path, int nearDist, bool white)
+    {
+        var ds = _utils.GetDataset(orgSlug, dsSlug);
+
+        if (!await _authManager.RequestAccess(ds, AccessType.Write))
+            throw new UnauthorizedException("The current user is not allowed to write to dataset");
+
+        await EnsureNoActiveJob(orgSlug, dsSlug, path, "MaskBorders");
+
+        var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
+
+        // Validate path
+        CommonUtils.ValidateRelativePath(path, ddb.DatasetFolderPath, nameof(path));
+
+        var entry = ddb.GetEntry(path);
+        if (entry == null)
+            throw new InvalidOperationException($"Cannot find entry: '{path}'");
+
+        if (entry.Type != EntryType.GeoRaster)
+            throw new InvalidOperationException($"Entry '{path}' is not a georaster");
+
+        var outputPath = GetMaskedOutputPath(path);
+        var outputFullPath = ddb.GetLocalPath(outputPath);
+
+        // Delete existing output file if present
+        if (_fs.Exists(outputFullPath))
+        {
+            _logger.LogInformation("Output file already exists, deleting: '{OutputPath}'", outputFullPath);
+            _fs.Delete(outputFullPath);
+        }
+
+        _logger.LogInformation("Masking borders for '{Path}' asynchronously", path);
+
+        var user = await _authManager.GetCurrentUser();
+        var meta = new IndexPayload(orgSlug, dsSlug, entry.Hash, user.Id, null, path);
+        var jobId = _backgroundJob.EnqueueIndexed(
+            () => HangfireUtils.MaskBordersWrapper(ddb, path, outputPath, nearDist, white, null), meta);
+
+        _logger.LogInformation("Background job id is {JobId}", jobId);
+    }
+
+    private static string GetMaskedOutputPath(string path)
+    {
+        var outputPath = Path.GetFileNameWithoutExtension(path) + "_masked.tif";
+        var dir = Path.GetDirectoryName(path);
+        if (!string.IsNullOrEmpty(dir))
+            outputPath = Path.Combine(dir, outputPath).Replace('\\', '/');
+        return outputPath;
+    }
+
+    private async Task EnsureNoActiveJob(string orgSlug, string dsSlug, string path, string methodName)
+    {
+        var jobs = await _jobIndexQuery.GetByOrgDsAsync(orgSlug, dsSlug, 0, 1000);
+        var activeJob = jobs.FirstOrDefault(j =>
+            j.Path == path &&
+            j.CurrentState is "Enqueued" or "Processing" or "Scheduled" or "Created" &&
+            j.MethodDisplay != null && j.MethodDisplay.Contains(methodName));
+
+        if (activeJob != null)
+            throw new InvalidOperationException(
+                $"A {methodName} operation is already in progress for '{path}'");
     }
 
     #endregion

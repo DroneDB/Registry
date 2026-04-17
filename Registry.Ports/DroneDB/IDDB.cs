@@ -146,6 +146,11 @@ public interface IDDB
     /// </summary>
     string GetThermalAreaStats(string path, int x0, int y0, int x1, int y1);
 
+    /// <summary>
+    /// Mask orthophoto borders making them transparent
+    /// </summary>
+    void MaskBorders(string input, string output, int nearDist = 15, bool white = false);
+
     // These consts are like magic strings: if anything changes this goes kaboom!
     public const string DatabaseFolderName = ".ddb";
     public const string BuildFolderName = "build";

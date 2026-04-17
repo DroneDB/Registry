@@ -138,6 +138,7 @@ public class NativeDdbWrapper : IDdbWrapper
 
     public List<Entry> Add(string ddbPath, string[] paths, bool recursive = false)
     {
+        paths = paths.Select(p => p?.Replace('\\', '/')).ToArray();
         var utf8Ptrs = MarshalStringArrayToUtf8(paths);
         try
         {
@@ -190,6 +191,7 @@ public class NativeDdbWrapper : IDdbWrapper
 
     public void Remove(string ddbPath, string[] paths)
     {
+        paths = paths.Select(p => p?.Replace('\\', '/')).ToArray();
         var utf8Ptrs = MarshalStringArrayToUtf8(paths);
         try
         {
@@ -867,6 +869,8 @@ public class NativeDdbWrapper : IDdbWrapper
 
     public void MoveEntry(string ddbPath, string source, string dest)
     {
+        source = source.Replace('\\', '/');
+        dest = dest.Replace('\\', '/');
         try
         {
             if (_MoveEntry(ddbPath, source, dest) == DdbResult.Success) return;
@@ -893,6 +897,8 @@ public class NativeDdbWrapper : IDdbWrapper
     public void Build(string ddbPath, string? source = null, string? dest = null, bool force = false,
         bool pendingOnly = false)
     {
+        source = source?.Replace('\\', '/');
+        dest = dest?.Replace('\\', '/');
         try
         {
             if (_Build(ddbPath, source, dest, force, pendingOnly) != DdbResult.Exception) return;
@@ -917,6 +923,7 @@ public class NativeDdbWrapper : IDdbWrapper
 
     public bool IsBuildable(string ddbPath, string path)
     {
+        path = path.Replace('\\', '/');
         try
         {
             if (_IsBuildable(ddbPath, path, out var isBuildable) ==
@@ -942,6 +949,7 @@ public class NativeDdbWrapper : IDdbWrapper
 
     public bool IsBuildActive(string ddbPath, string path)
     {
+        path = path.Replace('\\', '/');
         try
         {
             if (_IsBuildActive(ddbPath, path, out var isBuildActive) ==
@@ -1747,6 +1755,38 @@ public class NativeDdbWrapper : IDdbWrapper
         }
 
         throw new DdbException(SafeGetLastError("get thermal area stats"));
+    }
+
+    [DllImport("ddb", EntryPoint = "DDBMaskBorders")]
+    private static extern DdbResult _MaskBorders(
+        [MarshalAs(UnmanagedType.LPUTF8Str)] string input,
+        [MarshalAs(UnmanagedType.LPUTF8Str)] string output,
+        int nearDist,
+        [MarshalAs(UnmanagedType.Bool)] bool white);
+
+    public void MaskBorders(string input, string output, int nearDist = 15, bool white = false)
+    {
+        if (string.IsNullOrWhiteSpace(input))
+            throw new ArgumentException("input is null or empty");
+        if (string.IsNullOrWhiteSpace(output))
+            throw new ArgumentException("output is null or empty");
+
+        try
+        {
+            if (_MaskBorders(input, output, nearDist, white) == DdbResult.Success) return;
+        }
+        catch (EntryPointNotFoundException ex)
+        {
+            throw new DdbException($"Error in calling ddb lib: incompatible versions ({ex.Message})", ex);
+        }
+        catch (DdbException) { throw; }
+        catch (Exception ex)
+        {
+            throw new DdbException(
+                $"Error in calling ddb lib. Last error: \"{SafeGetLastError("mask borders")}\", check inner exception for details", ex);
+        }
+
+        throw new DdbException(SafeGetLastError("mask borders"));
     }
 
     #endregion

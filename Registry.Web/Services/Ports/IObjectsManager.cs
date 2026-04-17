@@ -82,4 +82,10 @@ public interface IObjectsManager
 
     /// <summary>Get temperature statistics for a rectangular area</summary>
     Task<string> GetThermalAreaStats(string orgSlug, string dsSlug, string path, int x0, int y0, int x1, int y1);
+
+    /// <summary>Check if a masked version of the orthophoto already exists</summary>
+    Task<MaskBordersCheckResponseDto> CheckMaskedFileExists(string orgSlug, string dsSlug, string path);
+
+    /// <summary>Mask orthophoto borders making them transparent</summary>
+    Task MaskBorders(string orgSlug, string dsSlug, string path, int nearDist, bool white);
 }

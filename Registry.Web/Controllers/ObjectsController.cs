@@ -1158,5 +1158,65 @@ public class ObjectsController : ControllerBaseEx
 
     #endregion
 
+    #region MaskBorders
+
+    /// <summary>Check if a masked version of the file already exists.</summary>
+    [HttpPost("mask-borders/check", Name = nameof(ObjectsController) + "." + nameof(CheckMaskBorders))]
+    [ProducesResponseType(typeof(MaskBordersCheckResponseDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
+    public async Task<IActionResult> CheckMaskBorders(
+        [FromRoute, Required] string orgSlug,
+        [FromRoute, Required] string dsSlug,
+        [FromBody, Required] MaskBordersRequestDto request)
+    {
+        try
+        {
+            _logger.LogDebug("Objects controller CheckMaskBorders('{OrgSlug}', '{DsSlug}', '{Path}')",
+                orgSlug, dsSlug, request.Path);
+
+            var result = await _objectsManager.CheckMaskedFileExists(orgSlug, dsSlug, request.Path);
+            return Ok(result);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Exception in CheckMaskBorders('{OrgSlug}', '{DsSlug}', '{Path}')",
+                orgSlug, dsSlug, request.Path);
+            return ExceptionResult(ex);
+        }
+    }
+
+    /// <summary>Start masking orthophoto borders to make them transparent.</summary>
+    [HttpPost("mask-borders", Name = nameof(ObjectsController) + "." + nameof(MaskBorders))]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
+    public async Task<IActionResult> MaskBorders(
+        [FromRoute, Required] string orgSlug,
+        [FromRoute, Required] string dsSlug,
+        [FromBody, Required] MaskBordersRequestDto request)
+    {
+        try
+        {
+            _logger.LogDebug("Objects controller MaskBorders('{OrgSlug}', '{DsSlug}', '{Path}')",
+                orgSlug, dsSlug, request.Path);
+
+            // Early path traversal check
+            if (Path.IsPathRooted(request.Path) ||
+                request.Path.Contains("..") ||
+                request.Path.Contains('\\'))
+                return BadRequest(new ErrorResponse("Invalid path"));
+
+            await _objectsManager.MaskBorders(orgSlug, dsSlug, request.Path, request.Near, request.White);
+            return Ok(new { ok = true });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Exception in MaskBorders('{OrgSlug}', '{DsSlug}', '{Path}')",
+                orgSlug, dsSlug, request.Path);
+            return ExceptionResult(ex);
+        }
+    }
+
+    #endregion
+
 
 }

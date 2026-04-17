@@ -161,4 +161,9 @@ public interface IDdbWrapper
     /// Get temperature statistics for a rectangular area
     /// </summary>
     public string GetThermalAreaStats(string path, int x0, int y0, int x1, int y1);
+
+    /// <summary>
+    /// Mask orthophoto borders making them transparent
+    /// </summary>
+    public void MaskBorders(string input, string output, int nearDist = 15, bool white = false);
 }

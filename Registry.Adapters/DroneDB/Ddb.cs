@@ -64,7 +64,8 @@ public class DDB : IDDB
     {
         try
         {
-            return _ddbWrapper.GenerateMemoryTile(inputPath, tz, tx, ty, retina ? 512 : 256, true, false,
+            var fullPath = GetLocalPath(inputPath);
+            return _ddbWrapper.GenerateMemoryTile(fullPath, tz, tx, ty, retina ? 512 : 256, true, false,
                 inputPathHash);
         }
         catch (DdbException ex)
@@ -97,6 +98,8 @@ public class DDB : IDDB
         return CommonUtils.SafeCombine(DatasetFolderPath, path);
     }
 
+    private static string NormalizePath(string path) => path.Replace('\\', '/');
+
     public Entry? GetEntry(string path)
     {
         var objs = Search(path, true).ToArray();
@@ -121,14 +124,9 @@ public class DDB : IDDB
     {
         try
         {
-            // If the path is not absolute let's rebase it on ddbPath
-            if (path != null && !Path.IsPathRooted(path))
-                path = Path.Combine(DatasetFolderPath, path);
+            var fullPath = path != null ? GetLocalPath(path) : DatasetFolderPath;
 
-            // If path is null we use the base ddb path
-            path ??= DatasetFolderPath;
-
-            var entries = _ddbWrapper.List(DatasetFolderPath, path, recursive);
+            var entries = _ddbWrapper.List(DatasetFolderPath, fullPath, recursive);
 
             if (entries == null)
             {
@@ -154,10 +152,9 @@ public class DDB : IDDB
     {
         try
         {
-            // If the path is not absolute let's rebase it on ddbPath
-            if (!Path.IsPathRooted(path)) path = Path.Combine(DatasetFolderPath, path);
+            var fullPath = GetLocalPath(path);
 
-            _ddbWrapper.Remove(DatasetFolderPath, path);
+            _ddbWrapper.Remove(DatasetFolderPath, fullPath);
         }
         catch (DdbException ex)
         {
@@ -169,7 +166,7 @@ public class DDB : IDDB
     {
         try
         {
-            _ddbWrapper.MoveEntry(DatasetFolderPath, source, dest);
+            _ddbWrapper.MoveEntry(DatasetFolderPath, NormalizePath(source), NormalizePath(dest));
         }
         catch (DdbException ex)
         {
@@ -182,7 +179,7 @@ public class DDB : IDDB
     {
         try
         {
-            _ddbWrapper.Build(DatasetFolderPath, path, dest, force);
+            _ddbWrapper.Build(DatasetFolderPath, path != null ? NormalizePath(path) : null, dest, force);
         }
         catch (DdbException ex)
         {
@@ -225,7 +222,7 @@ public class DDB : IDDB
     {
         try
         {
-            return _ddbWrapper.IsBuildable(DatasetFolderPath, path);
+            return _ddbWrapper.IsBuildable(DatasetFolderPath, NormalizePath(path));
         }
         catch (DdbException ex)
         {
@@ -237,7 +234,7 @@ public class DDB : IDDB
     {
         try
         {
-            return _ddbWrapper.IsBuildActive(DatasetFolderPath, path);
+            return _ddbWrapper.IsBuildActive(DatasetFolderPath, NormalizePath(path));
         }
         catch (DdbException ex)
         {
@@ -278,7 +275,8 @@ public class DDB : IDDB
     {
         try
         {
-            return _ddbWrapper.GenerateThumbnail(imagePath, size);
+            var fullPath = GetLocalPath(imagePath);
+            return _ddbWrapper.GenerateThumbnail(fullPath, size);
         }
         catch (DdbException ex)
         {
@@ -291,7 +289,8 @@ public class DDB : IDDB
     {
         try
         {
-            _ddbWrapper.Add(DatasetFolderPath, path);
+            var fullPath = GetLocalPath(path);
+            _ddbWrapper.Add(DatasetFolderPath, fullPath);
         }
         catch (DdbException ex)
         {
@@ -307,7 +306,7 @@ public class DDB : IDDB
 
             try
             {
-                folderPath = Path.Combine(DatasetFolderPath, path);
+                folderPath = GetLocalPath(path);
 
                 Directory.CreateDirectory(folderPath);
 
@@ -332,7 +331,7 @@ public class DDB : IDDB
 
             try
             {
-                filePath = Path.Combine(DatasetFolderPath, path);
+                filePath = GetLocalPath(path);
 
                 stream.SafeReset();
 
@@ -430,7 +429,8 @@ public class DDB : IDDB
     {
         try
         {
-            return _ddbWrapper.GenerateThumbnailEx(imagePath, size, preset, bands, formula, bandFilter,
+            var fullPath = GetLocalPath(imagePath);
+            return _ddbWrapper.GenerateThumbnailEx(fullPath, size, preset, bands, formula, bandFilter,
                 colormap, rescale);
         }
         catch (DdbException ex)
@@ -446,7 +446,8 @@ public class DDB : IDDB
     {
         try
         {
-            return _ddbWrapper.GenerateMemoryTileEx(inputPath, tz, tx, ty, retina ? 512 : 256, true, false,
+            var fullPath = GetLocalPath(inputPath);
+            return _ddbWrapper.GenerateMemoryTileEx(fullPath, tz, tx, ty, retina ? 512 : 256, true, false,
                 inputPathHash, preset, bands, formula, bandFilter, colormap, rescale);
         }
         catch (DdbException ex)
@@ -486,7 +487,8 @@ public class DDB : IDDB
         try
         {
             var fullPaths = paths.Select(GetLocalPath).ToArray();
-            _ddbWrapper.MergeMultispectral(fullPaths, outputCog);
+            var fullOutputCog = GetLocalPath(outputCog);
+            _ddbWrapper.MergeMultispectral(fullPaths, fullOutputCog);
         }
         catch (DdbException ex)
         {
@@ -500,7 +502,8 @@ public class DDB : IDDB
     {
         try
         {
-            _ddbWrapper.ExportRaster(inputPath, outputPath, preset, bands, formula, bandFilter, colormap, rescale);
+            var fullInputPath = GetLocalPath(inputPath);
+            _ddbWrapper.ExportRaster(fullInputPath, outputPath, preset, bands, formula, bandFilter, colormap, rescale);
         }
         catch (DdbException ex)
         {
@@ -544,6 +547,20 @@ public class DDB : IDDB
         catch (DdbException ex)
         {
             throw new InvalidOperationException($"Cannot get thermal area stats of '{path}'", ex);
+        }
+    }
+
+    public void MaskBorders(string input, string output, int nearDist = 15, bool white = false)
+    {
+        try
+        {
+            var fullInput = GetLocalPath(input);
+            var fullOutput = GetLocalPath(output);
+            _ddbWrapper.MaskBorders(fullInput, fullOutput, nearDist, white);
+        }
+        catch (DdbException ex)
+        {
+            throw new InvalidOperationException($"Cannot mask borders of '{input}'", ex);
         }
     }
 }
