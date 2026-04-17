@@ -225,7 +225,7 @@ public static class HangfireUtils
         ddb.MaskBorders(inputPath, outputPath, nearDist, white);
 
         writeLine("Adding masked file to index");
-        ddb.Add(outputPath);
+        ddb.AddRaw(outputPath);
 
         writeLine("Building COG for masked file");
         ddb.Build(outputPath);
