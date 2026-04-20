@@ -254,24 +254,24 @@ public static class CommonUtils
     /// <param name="baseDirectory">The base directory that the path must stay within.</param>
     /// <param name="paramName">The parameter name for the exception.</param>
     /// <exception cref="ArgumentException">Thrown when the path is empty, absolute, or contains traversal attempts.</exception>
-    public static void ValidateRelativePath(string path, string baseDirectory, string paramName = "path")
+    public static void ValidateRelativePath(string path, string baseDirectory)
     {
         if (string.IsNullOrWhiteSpace(path))
-            throw new ArgumentException("Path cannot be empty.", paramName);
+            throw new ArgumentException("Path cannot be empty.", nameof(path));
 
         if (string.IsNullOrWhiteSpace(baseDirectory))
             throw new ArgumentException("Base directory cannot be empty.", nameof(baseDirectory));
 
         // Reject absolute/rooted paths (including UNC on Windows)
         if (Path.IsPathRooted(path))
-            throw new ArgumentException("Invalid path: absolute paths are not allowed.", paramName);
+            throw new ArgumentException("Invalid path: absolute paths are not allowed.", nameof(path));
 
         // Forbid '.' and '..' segments (semantic check, avoids false positives on 'file..txt')
         var segments = path.Split(['/', '\\'], StringSplitOptions.RemoveEmptyEntries);
         foreach (var s in segments)
         {
             if (s is "." or "..")
-                throw new ArgumentException("Invalid path: path traversal is not allowed.", paramName);
+                throw new ArgumentException("Invalid path: path traversal is not allowed.", nameof(path));
         }
 
         string baseFull;
@@ -289,7 +289,7 @@ public static class CommonUtils
         }
         catch (Exception ex) when (ex is ArgumentException or NotSupportedException or PathTooLongException)
         {
-            throw new ArgumentException("Invalid path.", paramName, ex);
+            throw new ArgumentException("Invalid path.", nameof(path), ex);
         }
 
         var comparison = OperatingSystem.IsWindows()
@@ -297,7 +297,7 @@ public static class CommonUtils
             : StringComparison.Ordinal;
 
         if (!combinedFull.StartsWith(baseFull, comparison))
-            throw new ArgumentException("Invalid path: path traversal is not allowed.", paramName);
+            throw new ArgumentException("Invalid path: path traversal is not allowed.", nameof(path));
     }
 
     public static (string, Stream) GetTempStream(int bufferSize = 104857600)

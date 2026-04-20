@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 using System.IO;
+using System.Linq;
 using System.Net;
 using System.Threading;
 using System.Threading.Tasks;
@@ -38,6 +39,26 @@ public class ObjectsController : ControllerBaseEx
     {
         _objectsManager = datasetsManager;
         _logger = logger;
+    }
+
+    private static bool IsTraversalPath(string path) =>
+        string.IsNullOrWhiteSpace(path) ||
+        Path.IsPathRooted(path) ||
+        path.Split('/', '\\').Any(s => s is "." or "..");
+
+    private IActionResult? ValidatePath(string path) =>
+        IsTraversalPath(path) ? BadRequest(new ErrorResponse("Invalid path")) : null;
+
+    private IActionResult? ValidatePaths(IReadOnlyCollection<string>? paths, string? outputPath = null)
+    {
+        if (paths == null || paths.Count == 0)
+            return BadRequest(new ErrorResponse("paths is required"));
+        foreach (var p in paths)
+            if (IsTraversalPath(p))
+                return BadRequest(new ErrorResponse("Invalid input path"));
+        if (outputPath != null && IsTraversalPath(outputPath))
+            return BadRequest(new ErrorResponse("Invalid output path"));
+        return null;
     }
 
     /// <summary>
@@ -985,7 +1006,6 @@ public class ObjectsController : ControllerBaseEx
         [FromRoute, Required] string orgSlug,
         [FromRoute, Required] string dsSlug,
         [FromQuery, Required] string path,
-        [FromQuery] string? format = "geotiff",
         [FromQuery] string? preset = null,
         [FromQuery] string? bands = null,
         [FromQuery] string? formula = null,
@@ -1018,6 +1038,9 @@ public class ObjectsController : ControllerBaseEx
     {
         try
         {
+            var validationError = ValidatePaths(request.Paths);
+            if (validationError != null) return validationError;
+
             var json = await _objectsManager.ValidateMergeMultispectral(orgSlug, dsSlug, request.Paths);
             return Content(json, "application/json");
         }
@@ -1039,6 +1062,9 @@ public class ObjectsController : ControllerBaseEx
     {
         try
         {
+            var validationError = ValidatePaths(request.Paths);
+            if (validationError != null) return validationError;
+
             var data = await _objectsManager.PreviewMergeMultispectral(orgSlug, dsSlug, request.Paths,
                 request.PreviewBands, request.ThumbSize ?? 512);
             return File(data, "image/webp", "preview.webp");
@@ -1064,11 +1090,8 @@ public class ObjectsController : ControllerBaseEx
             if (string.IsNullOrWhiteSpace(request.OutputPath))
                 return BadRequest(new ErrorResponse("outputPath is required"));
 
-            // Early path traversal check at controller level
-            if (Path.IsPathRooted(request.OutputPath) ||
-                request.OutputPath.Contains("..") ||
-                request.OutputPath.Contains('\\'))
-                return BadRequest(new ErrorResponse("Invalid output path"));
+            var validationError = ValidatePaths(request.Paths, request.OutputPath);
+            if (validationError != null) return validationError;
 
             await _objectsManager.MergeMultispectral(orgSlug, dsSlug, request.Paths, request.OutputPath);
             return Ok(new { ok = true });
@@ -1174,6 +1197,9 @@ public class ObjectsController : ControllerBaseEx
             _logger.LogDebug("Objects controller CheckMaskBorders('{OrgSlug}', '{DsSlug}', '{Path}')",
                 orgSlug, dsSlug, request.Path);
 
+            var pathError = ValidatePath(request.Path);
+            if (pathError != null) return pathError;
+
             var result = await _objectsManager.CheckMaskedFileExists(orgSlug, dsSlug, request.Path);
             return Ok(result);
         }
@@ -1200,10 +1226,8 @@ public class ObjectsController : ControllerBaseEx
                 orgSlug, dsSlug, request.Path);
 
             // Early path traversal check
-            if (Path.IsPathRooted(request.Path) ||
-                request.Path.Contains("..") ||
-                request.Path.Contains('\\'))
-                return BadRequest(new ErrorResponse("Invalid path"));
+            var pathError = ValidatePath(request.Path);
+            if (pathError != null) return pathError;
 
             await _objectsManager.MaskBorders(orgSlug, dsSlug, request.Path, request.Near, request.White);
             return Ok(new { ok = true });

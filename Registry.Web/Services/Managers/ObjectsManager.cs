@@ -1489,7 +1489,6 @@ public class ObjectsManager : IObjectsManager
 
         var entry = EnsurePathValidity(orgSlug, ds.InternalRef, path, out var ddb);
         var sourcePath = GetBuildSource(entry);
-        var localPath = ddb.GetLocalPath(sourcePath);
 
         return ddb.GetRasterInfo(sourcePath);
     }
@@ -1592,6 +1591,10 @@ public class ObjectsManager : IObjectsManager
 
         var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
 
+        // Validate each input path to prevent path traversal
+        foreach (var p in paths)
+            CommonUtils.ValidateRelativePath(p, ddb.DatasetFolderPath);
+
         return await Task.Run(() => ddb.ValidateMergeMultispectral(paths));
     }
 
@@ -1605,6 +1608,11 @@ public class ObjectsManager : IObjectsManager
         return await Task.Run(() =>
         {
             var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
+
+            // Validate each input path to prevent path traversal
+            foreach (var p in paths)
+                CommonUtils.ValidateRelativePath(p, ddb.DatasetFolderPath);
+
             return ddb.PreviewMergeMultispectral(paths, previewBands, thumbSize);
         });
     }
@@ -1619,7 +1627,11 @@ public class ObjectsManager : IObjectsManager
         var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
 
         // Validate outputPath to prevent path traversal
-        CommonUtils.ValidateRelativePath(outputPath, ddb.DatasetFolderPath, nameof(outputPath));
+        CommonUtils.ValidateRelativePath(outputPath, ddb.DatasetFolderPath);
+
+        // Validate each input path to prevent path traversal
+        foreach (var p in paths)
+            CommonUtils.ValidateRelativePath(p, ddb.DatasetFolderPath);
 
         var outputFullPath = ddb.GetLocalPath(outputPath);
 
@@ -1634,8 +1646,8 @@ public class ObjectsManager : IObjectsManager
 
         await Task.Run(() => ddb.MergeMultispectral(paths, outputPath));
 
-        // Re-add the merged output to the index
-        _ddbWrapper.Add(ddb.DatasetFolderPath, outputFullPath);
+        // Re-add the merged output to the index through the IDDB abstraction
+        ddb.AddRaw(outputPath);
 
         _logger.LogInformation("Merge complete and file added to the dataset");
     }
@@ -1655,23 +1667,28 @@ public class ObjectsManager : IObjectsManager
         var sourcePath = GetBuildSource(entry);
 
         var tempDir = Path.GetTempPath();
+        var tempOutputFileName = Path.GetFileNameWithoutExtension(path) + "_export_" + Guid.NewGuid().ToString("N") + ".tif";
         var outputFileName = Path.GetFileNameWithoutExtension(path) + "_export.tif";
-        var outputPath = Path.Combine(tempDir, outputFileName);
+        var outputPath = Path.Combine(tempDir, tempOutputFileName);
 
-        await Task.Run(() => ddb.ExportRaster(sourcePath, outputPath, preset, bands, formula,
-            bandFilter, colormap, rescale));
-
-        var data = await File.ReadAllBytesAsync(outputPath);
-
-        // Clean up temp file
-        try { File.Delete(outputPath); } catch { /* ignore */ }
-
-        return new StorageDataDto
+        try
         {
-            Name = outputFileName,
-            Data = data,
-            ContentType = "image/tiff"
-        };
+            await Task.Run(() => ddb.ExportRaster(sourcePath, outputPath, preset, bands, formula,
+                bandFilter, colormap, rescale));
+
+            var data = await File.ReadAllBytesAsync(outputPath);
+
+            return new StorageDataDto
+            {
+                Name = outputFileName,
+                Data = data,
+                ContentType = "image/tiff"
+            };
+        }
+        finally
+        {
+            try { if (File.Exists(outputPath)) File.Delete(outputPath); } catch { /* ignore cleanup failures */ }
+        }
     }
 
     #endregion
@@ -1736,6 +1753,9 @@ public class ObjectsManager : IObjectsManager
 
         var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
 
+        // Validate path to prevent path traversal
+        CommonUtils.ValidateRelativePath(path, ddb.DatasetFolderPath);
+
         var outputPath = GetMaskedOutputPath(path);
         var entry = ddb.GetEntry(outputPath);
 
@@ -1758,7 +1778,7 @@ public class ObjectsManager : IObjectsManager
         var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
 
         // Validate path
-        CommonUtils.ValidateRelativePath(path, ddb.DatasetFolderPath, nameof(path));
+        CommonUtils.ValidateRelativePath(path, ddb.DatasetFolderPath);
 
         var entry = ddb.GetEntry(path);
         if (entry == null)
