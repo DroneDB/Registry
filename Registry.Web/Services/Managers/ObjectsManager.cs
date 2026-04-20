@@ -1283,8 +1283,9 @@ public class ObjectsManager : IObjectsManager
             return;
         }
 
-        // Let's check if a build is already active
-        if (ddb.IsBuildActive(entry.Path))
+        // Let's check if a build is already active (skip check when force=true to allow
+        // recovery from stale locks left behind by crashed/failed builds)
+        if (!force && ddb.IsBuildActive(entry.Path))
             throw new InvalidOperationException($"A build is already in progress for '{entry.Path}'");
 
         // Always build asynchronously using background job
