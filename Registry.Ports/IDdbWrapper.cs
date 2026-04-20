@@ -99,4 +99,71 @@ public interface IDdbWrapper
 
     string TileMimeType { get; }
     string ThumbnailMimeType { get; }
+
+    /// <summary>
+    /// Get raster info including bands, detected sensor, and presets
+    /// </summary>
+    public string GetRasterInfo(string path);
+
+    /// <summary>
+    /// Get raster statistics and histogram for a band or formula
+    /// </summary>
+    public string GetRasterMetadata(string path, string? formula = null, string? bandFilter = null);
+
+    /// <summary>
+    /// Generate thumbnail with extended visualization params
+    /// </summary>
+    public byte[] GenerateThumbnailEx(string filePath, int size, string? preset = null,
+        string? bands = null, string? formula = null, string? bandFilter = null,
+        string? colormap = null, string? rescale = null);
+
+    /// <summary>
+    /// Generate tile with extended visualization params
+    /// </summary>
+    public byte[] GenerateMemoryTileEx(string inputPath, int tz, int tx, int ty,
+        int tileSize, bool tms, bool forceRecreate, string inputPathHash,
+        string? preset = null, string? bands = null, string? formula = null,
+        string? bandFilter = null, string? colormap = null, string? rescale = null);
+
+    /// <summary>
+    /// Validate merge-multispectral inputs
+    /// </summary>
+    public string ValidateMergeMultispectral(string[] paths);
+
+    /// <summary>
+    /// Preview merge-multispectral result
+    /// </summary>
+    public byte[] PreviewMergeMultispectral(string[] paths, string? previewBands = null, int thumbSize = 512);
+
+    /// <summary>
+    /// Merge single-band rasters into multi-band COG
+    /// </summary>
+    public void MergeMultispectral(string[] paths, string outputCog);
+
+    /// <summary>
+    /// Export raster with visualization params applied as GeoTIFF
+    /// </summary>
+    public void ExportRaster(string inputPath, string outputPath,
+        string? preset = null, string? bands = null, string? formula = null,
+        string? bandFilter = null, string? colormap = null, string? rescale = null);
+
+    /// <summary>
+    /// Get thermal info including calibration, temperature range, and dimensions
+    /// </summary>
+    public string GetThermalInfo(string path);
+
+    /// <summary>
+    /// Get temperature at a specific pixel location
+    /// </summary>
+    public string GetThermalPoint(string path, int x, int y);
+
+    /// <summary>
+    /// Get temperature statistics for a rectangular area
+    /// </summary>
+    public string GetThermalAreaStats(string path, int x0, int y0, int x1, int y1);
+
+    /// <summary>
+    /// Mask orthophoto borders making them transparent
+    /// </summary>
+    public void MaskBorders(string input, string output, int nearDist = 15, bool white = false);
 }

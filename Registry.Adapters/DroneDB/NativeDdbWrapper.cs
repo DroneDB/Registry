@@ -138,6 +138,7 @@ public class NativeDdbWrapper : IDdbWrapper
 
     public List<Entry> Add(string ddbPath, string[] paths, bool recursive = false)
     {
+        paths = paths.Select(p => p?.Replace('\\', '/')).ToArray();
         var utf8Ptrs = MarshalStringArrayToUtf8(paths);
         try
         {
@@ -190,6 +191,7 @@ public class NativeDdbWrapper : IDdbWrapper
 
     public void Remove(string ddbPath, string[] paths)
     {
+        paths = paths.Select(p => p?.Replace('\\', '/')).ToArray();
         var utf8Ptrs = MarshalStringArrayToUtf8(paths);
         try
         {
@@ -867,6 +869,8 @@ public class NativeDdbWrapper : IDdbWrapper
 
     public void MoveEntry(string ddbPath, string source, string dest)
     {
+        source = source.Replace('\\', '/');
+        dest = dest.Replace('\\', '/');
         try
         {
             if (_MoveEntry(ddbPath, source, dest) == DdbResult.Success) return;
@@ -893,6 +897,8 @@ public class NativeDdbWrapper : IDdbWrapper
     public void Build(string ddbPath, string? source = null, string? dest = null, bool force = false,
         bool pendingOnly = false)
     {
+        source = source?.Replace('\\', '/');
+        dest = dest?.Replace('\\', '/');
         try
         {
             if (_Build(ddbPath, source, dest, force, pendingOnly) != DdbResult.Exception) return;
@@ -917,6 +923,7 @@ public class NativeDdbWrapper : IDdbWrapper
 
     public bool IsBuildable(string ddbPath, string path)
     {
+        path = path.Replace('\\', '/');
         try
         {
             if (_IsBuildable(ddbPath, path, out var isBuildable) ==
@@ -942,6 +949,7 @@ public class NativeDdbWrapper : IDdbWrapper
 
     public bool IsBuildActive(string ddbPath, string path)
     {
+        path = path.Replace('\\', '/');
         try
         {
             if (_IsBuildActive(ddbPath, path, out var isBuildActive) ==
@@ -1331,4 +1339,455 @@ public class NativeDdbWrapper : IDdbWrapper
 
         throw new DdbException(SafeGetLastError("rescan"));
     }
+
+    #region Multispectral P/Invoke
+
+    [DllImport("ddb", EntryPoint = "DDBGetRasterInfo")]
+    private static extern DdbResult _GetRasterInfo(
+        [MarshalAs(UnmanagedType.LPUTF8Str)] string path, out IntPtr output);
+
+    public string GetRasterInfo(string path)
+    {
+        if (path == null) throw new ArgumentException("path is null");
+
+        try
+        {
+            if (_GetRasterInfo(path, out var output) == DdbResult.Success)
+            {
+                var json = MarshalAndFreeUtf8(output);
+                if (string.IsNullOrWhiteSpace(json))
+                    throw new DdbException("Unable to get raster info");
+                return json;
+            }
+        }
+        catch (EntryPointNotFoundException ex)
+        {
+            throw new DdbException($"Error in calling ddb lib: incompatible versions ({ex.Message})", ex);
+        }
+        catch (DdbException) { throw; }
+        catch (Exception ex)
+        {
+            throw new DdbException(
+                $"Error in calling ddb lib. Last error: \"{SafeGetLastError("get raster info")}\", check inner exception for details", ex);
+        }
+
+        throw new DdbException(SafeGetLastError("get raster info"));
+    }
+
+    [DllImport("ddb", EntryPoint = "DDBGetRasterMetadata")]
+    private static extern DdbResult _GetRasterMetadata(
+        [MarshalAs(UnmanagedType.LPUTF8Str)] string path,
+        [MarshalAs(UnmanagedType.LPUTF8Str)] string? formula,
+        [MarshalAs(UnmanagedType.LPUTF8Str)] string? bandFilter,
+        out IntPtr output);
+
+    public string GetRasterMetadata(string path, string? formula = null, string? bandFilter = null)
+    {
+        if (path == null) throw new ArgumentException("path is null");
+
+        try
+        {
+            if (_GetRasterMetadata(path, formula, bandFilter, out var output) == DdbResult.Success)
+            {
+                var json = MarshalAndFreeUtf8(output);
+                if (string.IsNullOrWhiteSpace(json))
+                    throw new DdbException("Unable to get raster metadata");
+                return json;
+            }
+        }
+        catch (EntryPointNotFoundException ex)
+        {
+            throw new DdbException($"Error in calling ddb lib: incompatible versions ({ex.Message})", ex);
+        }
+        catch (DdbException) { throw; }
+        catch (Exception ex)
+        {
+            throw new DdbException(
+                $"Error in calling ddb lib. Last error: \"{SafeGetLastError("get raster metadata")}\", check inner exception for details", ex);
+        }
+
+        throw new DdbException(SafeGetLastError("get raster metadata"));
+    }
+
+    [DllImport("ddb", EntryPoint = "DDBGenerateMemoryThumbnailEx")]
+    private static extern DdbResult _GenerateMemoryThumbnailEx(
+        [MarshalAs(UnmanagedType.LPUTF8Str)] string filePath, int size,
+        [MarshalAs(UnmanagedType.LPUTF8Str)] string? preset,
+        [MarshalAs(UnmanagedType.LPUTF8Str)] string? bands,
+        [MarshalAs(UnmanagedType.LPUTF8Str)] string? formula,
+        [MarshalAs(UnmanagedType.LPUTF8Str)] string? bandFilter,
+        [MarshalAs(UnmanagedType.LPUTF8Str)] string? colormap,
+        [MarshalAs(UnmanagedType.LPUTF8Str)] string? rescale,
+        out IntPtr outBuffer, out int outBufferSize);
+
+    public byte[] GenerateThumbnailEx(string filePath, int size, string? preset = null,
+        string? bands = null, string? formula = null, string? bandFilter = null,
+        string? colormap = null, string? rescale = null)
+    {
+        if (filePath == null) throw new ArgumentException("filePath is null");
+        if (size <= 0) throw new ArgumentException("size must be positive");
+
+        if (!File.Exists(filePath))
+            throw new DdbException($"File not found: '{filePath}'. Cannot generate thumbnail for non-existent file.");
+
+        try
+        {
+            if (_GenerateMemoryThumbnailEx(filePath, size, preset, bands, formula, bandFilter,
+                    colormap, rescale, out var outBuffer, out var outBufferSize) == DdbResult.Success)
+            {
+                var destBuf = new byte[outBufferSize];
+                Marshal.Copy(outBuffer, destBuf, 0, outBufferSize);
+                _DDBVSIFree(outBuffer);
+                return destBuf;
+            }
+        }
+        catch (EntryPointNotFoundException ex)
+        {
+            throw new DdbException($"Error in calling ddb lib: incompatible versions ({ex.Message})", ex);
+        }
+        catch (DdbException) { throw; }
+        catch (Exception ex)
+        {
+            throw new DdbException(
+                $"Error in calling ddb lib. Last error: \"{SafeGetLastError("generate memory thumbnail ex")}\", check inner exception for details", ex);
+        }
+
+        throw new DdbException($"{SafeGetLastError("generate memory thumbnail ex")} (file: '{filePath}', size: {size})");
+    }
+
+    [DllImport("ddb", EntryPoint = "DDBMemoryTileEx")]
+    private static extern DdbResult _GenerateMemoryTileEx(
+        [MarshalAs(UnmanagedType.LPUTF8Str)] string inputPath,
+        int tz, int tx, int ty,
+        int tileSize, bool tms, bool forceRecreate,
+        [MarshalAs(UnmanagedType.LPUTF8Str)] string inputPathHash,
+        [MarshalAs(UnmanagedType.LPUTF8Str)] string? preset,
+        [MarshalAs(UnmanagedType.LPUTF8Str)] string? bands,
+        [MarshalAs(UnmanagedType.LPUTF8Str)] string? formula,
+        [MarshalAs(UnmanagedType.LPUTF8Str)] string? bandFilter,
+        [MarshalAs(UnmanagedType.LPUTF8Str)] string? colormap,
+        [MarshalAs(UnmanagedType.LPUTF8Str)] string? rescale,
+        out IntPtr outBuffer, out int outBufferSize);
+
+    public byte[] GenerateMemoryTileEx(string inputPath, int tz, int tx, int ty,
+        int tileSize, bool tms, bool forceRecreate, string inputPathHash,
+        string? preset = null, string? bands = null, string? formula = null,
+        string? bandFilter = null, string? colormap = null, string? rescale = null)
+    {
+        if (inputPath == null) throw new ArgumentException("inputPath is null");
+
+        try
+        {
+            if (_GenerateMemoryTileEx(inputPath, tz, tx, ty, tileSize, tms, forceRecreate,
+                    inputPathHash, preset, bands, formula, bandFilter, colormap, rescale,
+                    out var outBuffer, out var outBufferSize) == DdbResult.Success)
+            {
+                var destBuf = new byte[outBufferSize];
+                Marshal.Copy(outBuffer, destBuf, 0, outBufferSize);
+                _DDBVSIFree(outBuffer);
+                return destBuf;
+            }
+        }
+        catch (EntryPointNotFoundException ex)
+        {
+            throw new DdbException($"Error in calling ddb lib: incompatible versions ({ex.Message})", ex);
+        }
+        catch (DdbException) { throw; }
+        catch (Exception ex)
+        {
+            throw new DdbException(
+                $"Error in calling ddb lib. Last error: \"{SafeGetLastError("generate memory tile ex")}\", check inner exception for details", ex);
+        }
+
+        throw new DdbException(SafeGetLastError("generate memory tile ex"));
+    }
+
+    [DllImport("ddb", EntryPoint = "DDBValidateMergeMultispectral")]
+    private static extern DdbResult _ValidateMergeMultispectral(
+        IntPtr[] paths, int numPaths, out IntPtr output);
+
+    public string ValidateMergeMultispectral(string[] paths)
+    {
+        if (paths == null || paths.Length == 0)
+            throw new ArgumentException("paths is null or empty");
+
+        var utf8Ptrs = MarshalStringArrayToUtf8(paths);
+        try
+        {
+            if (_ValidateMergeMultispectral(utf8Ptrs, paths.Length, out var output) == DdbResult.Success)
+            {
+                var json = MarshalAndFreeUtf8(output);
+                if (string.IsNullOrWhiteSpace(json))
+                    throw new DdbException("Unable to validate merge multispectral");
+                return json;
+            }
+        }
+        catch (EntryPointNotFoundException ex)
+        {
+            throw new DdbException($"Error in calling ddb lib: incompatible versions ({ex.Message})", ex);
+        }
+        catch (DdbException) { throw; }
+        catch (Exception ex)
+        {
+            throw new DdbException(
+                $"Error in calling ddb lib. Last error: \"{SafeGetLastError("validate merge multispectral")}\", check inner exception for details", ex);
+        }
+        finally
+        {
+            FreeUtf8StringArray(utf8Ptrs);
+        }
+
+        throw new DdbException(SafeGetLastError("validate merge multispectral"));
+    }
+
+    [DllImport("ddb", EntryPoint = "DDBPreviewMergeMultispectral")]
+    private static extern DdbResult _PreviewMergeMultispectral(
+        IntPtr[] paths, int numPaths,
+        [MarshalAs(UnmanagedType.LPUTF8Str)] string? previewBands,
+        int thumbSize,
+        out IntPtr outBuffer, out int outBufferSize);
+
+    public byte[] PreviewMergeMultispectral(string[] paths, string? previewBands = null, int thumbSize = 512)
+    {
+        if (paths == null || paths.Length == 0)
+            throw new ArgumentException("paths is null or empty");
+
+        var utf8Ptrs = MarshalStringArrayToUtf8(paths);
+        try
+        {
+            if (_PreviewMergeMultispectral(utf8Ptrs, paths.Length, previewBands, thumbSize,
+                    out var outBuffer, out var outBufferSize) == DdbResult.Success)
+            {
+                var destBuf = new byte[outBufferSize];
+                Marshal.Copy(outBuffer, destBuf, 0, outBufferSize);
+                _DDBVSIFree(outBuffer);
+                return destBuf;
+            }
+        }
+        catch (EntryPointNotFoundException ex)
+        {
+            throw new DdbException($"Error in calling ddb lib: incompatible versions ({ex.Message})", ex);
+        }
+        catch (DdbException) { throw; }
+        catch (Exception ex)
+        {
+            throw new DdbException(
+                $"Error in calling ddb lib. Last error: \"{SafeGetLastError("preview merge multispectral")}\", check inner exception for details", ex);
+        }
+        finally
+        {
+            FreeUtf8StringArray(utf8Ptrs);
+        }
+
+        throw new DdbException(SafeGetLastError("preview merge multispectral"));
+    }
+
+    [DllImport("ddb", EntryPoint = "DDBMergeMultispectral")]
+    private static extern DdbResult _MergeMultispectral(
+        IntPtr[] paths, int numPaths,
+        [MarshalAs(UnmanagedType.LPUTF8Str)] string outputCog);
+
+    public void MergeMultispectral(string[] paths, string outputCog)
+    {
+        if (paths == null || paths.Length == 0)
+            throw new ArgumentException("paths is null or empty");
+        if (string.IsNullOrWhiteSpace(outputCog))
+            throw new ArgumentException("outputCog is null or empty");
+
+        var utf8Ptrs = MarshalStringArrayToUtf8(paths);
+        try
+        {
+            if (_MergeMultispectral(utf8Ptrs, paths.Length, outputCog) == DdbResult.Success) return;
+        }
+        catch (EntryPointNotFoundException ex)
+        {
+            throw new DdbException($"Error in calling ddb lib: incompatible versions ({ex.Message})", ex);
+        }
+        catch (DdbException) { throw; }
+        catch (Exception ex)
+        {
+            throw new DdbException(
+                $"Error in calling ddb lib. Last error: \"{SafeGetLastError("merge multispectral")}\", check inner exception for details", ex);
+        }
+        finally
+        {
+            FreeUtf8StringArray(utf8Ptrs);
+        }
+
+        throw new DdbException(SafeGetLastError("merge multispectral"));
+    }
+
+    [DllImport("ddb", EntryPoint = "DDBExportRaster")]
+    private static extern DdbResult _ExportRaster(
+        [MarshalAs(UnmanagedType.LPUTF8Str)] string inputPath,
+        [MarshalAs(UnmanagedType.LPUTF8Str)] string outputPath,
+        [MarshalAs(UnmanagedType.LPUTF8Str)] string? preset,
+        [MarshalAs(UnmanagedType.LPUTF8Str)] string? bands,
+        [MarshalAs(UnmanagedType.LPUTF8Str)] string? formula,
+        [MarshalAs(UnmanagedType.LPUTF8Str)] string? bandFilter,
+        [MarshalAs(UnmanagedType.LPUTF8Str)] string? colormap,
+        [MarshalAs(UnmanagedType.LPUTF8Str)] string? rescale);
+
+    public void ExportRaster(string inputPath, string outputPath,
+        string? preset = null, string? bands = null, string? formula = null,
+        string? bandFilter = null, string? colormap = null, string? rescale = null)
+    {
+        if (string.IsNullOrWhiteSpace(inputPath))
+            throw new ArgumentException("inputPath is null or empty");
+        if (string.IsNullOrWhiteSpace(outputPath))
+            throw new ArgumentException("outputPath is null or empty");
+
+        try
+        {
+            if (_ExportRaster(inputPath, outputPath, preset, bands, formula, bandFilter,
+                    colormap, rescale) == DdbResult.Success)
+                return;
+        }
+        catch (EntryPointNotFoundException ex)
+        {
+            throw new DdbException($"Error in calling ddb lib: incompatible versions ({ex.Message})", ex);
+        }
+        catch (DdbException) { throw; }
+        catch (Exception ex)
+        {
+            throw new DdbException(
+                $"Error in calling ddb lib. Last error: \"{SafeGetLastError("export raster")}\", check inner exception for details", ex);
+        }
+
+        throw new DdbException(SafeGetLastError("export raster"));
+    }
+
+    #endregion
+
+    #region Thermal P/Invoke
+
+    [DllImport("ddb", EntryPoint = "DDBGetThermalInfo")]
+    private static extern DdbResult _GetThermalInfo(
+        [MarshalAs(UnmanagedType.LPUTF8Str)] string path, out IntPtr output);
+
+    public string GetThermalInfo(string path)
+    {
+        if (path == null) throw new ArgumentException("path is null");
+
+        try
+        {
+            if (_GetThermalInfo(path, out var output) == DdbResult.Success)
+            {
+                var json = MarshalAndFreeUtf8(output);
+                if (string.IsNullOrWhiteSpace(json))
+                    throw new DdbException("Unable to get thermal info");
+                return json;
+            }
+        }
+        catch (EntryPointNotFoundException ex)
+        {
+            throw new DdbException($"Error in calling ddb lib: incompatible versions ({ex.Message})", ex);
+        }
+        catch (DdbException) { throw; }
+        catch (Exception ex)
+        {
+            throw new DdbException(
+                $"Error in calling ddb lib. Last error: \"{SafeGetLastError("get thermal info")}\", check inner exception for details", ex);
+        }
+
+        throw new DdbException(SafeGetLastError("get thermal info"));
+    }
+
+    [DllImport("ddb", EntryPoint = "DDBGetThermalPoint")]
+    private static extern DdbResult _GetThermalPoint(
+        [MarshalAs(UnmanagedType.LPUTF8Str)] string path, int x, int y, out IntPtr output);
+
+    public string GetThermalPoint(string path, int x, int y)
+    {
+        if (path == null) throw new ArgumentException("path is null");
+
+        try
+        {
+            if (_GetThermalPoint(path, x, y, out var output) == DdbResult.Success)
+            {
+                var json = MarshalAndFreeUtf8(output);
+                if (string.IsNullOrWhiteSpace(json))
+                    throw new DdbException("Unable to get thermal point");
+                return json;
+            }
+        }
+        catch (EntryPointNotFoundException ex)
+        {
+            throw new DdbException($"Error in calling ddb lib: incompatible versions ({ex.Message})", ex);
+        }
+        catch (DdbException) { throw; }
+        catch (Exception ex)
+        {
+            throw new DdbException(
+                $"Error in calling ddb lib. Last error: \"{SafeGetLastError("get thermal point")}\", check inner exception for details", ex);
+        }
+
+        throw new DdbException(SafeGetLastError("get thermal point"));
+    }
+
+    [DllImport("ddb", EntryPoint = "DDBGetThermalAreaStats")]
+    private static extern DdbResult _GetThermalAreaStats(
+        [MarshalAs(UnmanagedType.LPUTF8Str)] string path, int x0, int y0, int x1, int y1, out IntPtr output);
+
+    public string GetThermalAreaStats(string path, int x0, int y0, int x1, int y1)
+    {
+        if (path == null) throw new ArgumentException("path is null");
+
+        try
+        {
+            if (_GetThermalAreaStats(path, x0, y0, x1, y1, out var output) == DdbResult.Success)
+            {
+                var json = MarshalAndFreeUtf8(output);
+                if (string.IsNullOrWhiteSpace(json))
+                    throw new DdbException("Unable to get thermal area stats");
+                return json;
+            }
+        }
+        catch (EntryPointNotFoundException ex)
+        {
+            throw new DdbException($"Error in calling ddb lib: incompatible versions ({ex.Message})", ex);
+        }
+        catch (DdbException) { throw; }
+        catch (Exception ex)
+        {
+            throw new DdbException(
+                $"Error in calling ddb lib. Last error: \"{SafeGetLastError("get thermal area stats")}\", check inner exception for details", ex);
+        }
+
+        throw new DdbException(SafeGetLastError("get thermal area stats"));
+    }
+
+    [DllImport("ddb", EntryPoint = "DDBMaskBorders")]
+    private static extern DdbResult _MaskBorders(
+        [MarshalAs(UnmanagedType.LPUTF8Str)] string input,
+        [MarshalAs(UnmanagedType.LPUTF8Str)] string output,
+        int nearDist,
+        [MarshalAs(UnmanagedType.Bool)] bool white);
+
+    public void MaskBorders(string input, string output, int nearDist = 15, bool white = false)
+    {
+        if (string.IsNullOrWhiteSpace(input))
+            throw new ArgumentException("input is null or empty");
+        if (string.IsNullOrWhiteSpace(output))
+            throw new ArgumentException("output is null or empty");
+
+        try
+        {
+            if (_MaskBorders(input, output, nearDist, white) == DdbResult.Success) return;
+        }
+        catch (EntryPointNotFoundException ex)
+        {
+            throw new DdbException($"Error in calling ddb lib: incompatible versions ({ex.Message})", ex);
+        }
+        catch (DdbException) { throw; }
+        catch (Exception ex)
+        {
+            throw new DdbException(
+                $"Error in calling ddb lib. Last error: \"{SafeGetLastError("mask borders")}\", check inner exception for details", ex);
+        }
+
+        throw new DdbException(SafeGetLastError("mask borders"));
+    }
+
+    #endregion
 }

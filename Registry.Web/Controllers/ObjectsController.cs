@@ -1,6 +1,8 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
+using System.IO;
+using System.Linq;
 using System.Net;
 using System.Threading;
 using System.Threading.Tasks;
@@ -37,6 +39,26 @@ public class ObjectsController : ControllerBaseEx
     {
         _objectsManager = datasetsManager;
         _logger = logger;
+    }
+
+    private static bool IsTraversalPath(string path) =>
+        string.IsNullOrWhiteSpace(path) ||
+        Path.IsPathRooted(path) ||
+        path.Split('/', '\\').Any(s => s is "." or "..");
+
+    private IActionResult? ValidatePath(string path) =>
+        IsTraversalPath(path) ? BadRequest(new ErrorResponse("Invalid path")) : null;
+
+    private IActionResult? ValidatePaths(IReadOnlyCollection<string>? paths, string? outputPath = null)
+    {
+        if (paths == null || paths.Count == 0)
+            return BadRequest(new ErrorResponse("paths is required"));
+        foreach (var p in paths)
+            if (IsTraversalPath(p))
+                return BadRequest(new ErrorResponse("Invalid input path"));
+        if (outputPath != null && IsTraversalPath(outputPath))
+            return BadRequest(new ErrorResponse("Invalid output path"));
+        return null;
     }
 
     /// <summary>
@@ -856,6 +878,393 @@ public class ObjectsController : ControllerBaseEx
             return ExceptionResult(ex);
         }
     }
+
+    #region Multispectral
+
+    /// <summary>Get raster info (bands, sensor profile, presets) for a file.</summary>
+    [HttpGet("raster-info", Name = nameof(ObjectsController) + "." + nameof(GetRasterInfo))]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status401Unauthorized)]
+    public async Task<IActionResult> GetRasterInfo(
+        [FromRoute, Required] string orgSlug,
+        [FromRoute, Required] string dsSlug,
+        [FromQuery, Required] string path)
+    {
+        try
+        {
+            var pathError = ValidatePath(path);
+            if (pathError != null) return pathError;
+
+            var json = await _objectsManager.GetRasterInfo(orgSlug, dsSlug, path);
+            return Content(json, "application/json");
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Exception in GetRasterInfo('{OrgSlug}', '{DsSlug}', '{Path}')", orgSlug, dsSlug, path);
+            return ExceptionResult(ex);
+        }
+    }
+
+    /// <summary>Get raster statistics/histogram for a band or formula.</summary>
+    [HttpGet("raster-metadata", Name = nameof(ObjectsController) + "." + nameof(GetRasterMetadata))]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status401Unauthorized)]
+    public async Task<IActionResult> GetRasterMetadata(
+        [FromRoute, Required] string orgSlug,
+        [FromRoute, Required] string dsSlug,
+        [FromQuery, Required] string path,
+        [FromQuery] string? formula,
+        [FromQuery] string? bandFilter)
+    {
+        try
+        {
+            var pathError = ValidatePath(path);
+            if (pathError != null) return pathError;
+
+            var json = await _objectsManager.GetRasterMetadata(orgSlug, dsSlug, path, formula, bandFilter);
+            return Content(json, "application/json");
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Exception in GetRasterMetadata('{OrgSlug}', '{DsSlug}', '{Path}')", orgSlug, dsSlug, path);
+            return ExceptionResult(ex);
+        }
+    }
+
+    /// <summary>Generate thumbnail with extended visualization params.</summary>
+    [HttpGet("thumb-ex", Name = nameof(ObjectsController) + "." + nameof(GenerateThumbnailEx))]
+    [ProducesResponseType(typeof(FileResult), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status401Unauthorized)]
+    public async Task<IActionResult> GenerateThumbnailEx(
+        [FromRoute, Required] string orgSlug,
+        [FromRoute, Required] string dsSlug,
+        [FromQuery, Required] string path,
+        [FromQuery] int? size,
+        [FromQuery] string? preset,
+        [FromQuery] string? bands,
+        [FromQuery] string? formula,
+        [FromQuery] string? bandFilter,
+        [FromQuery] string? colormap,
+        [FromQuery] string? rescale)
+    {
+        try
+        {
+            var pathError = ValidatePath(path);
+            if (pathError != null) return pathError;
+
+            var res = await _objectsManager.GenerateThumbnailDataEx(orgSlug, dsSlug, path, size,
+                preset, bands, formula, bandFilter, colormap, rescale);
+
+            if (res == null) return NotFound();
+            return File(res.Data, res.ContentType, res.Name);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Exception in GenerateThumbnailEx('{OrgSlug}', '{DsSlug}', '{Path}')", orgSlug, dsSlug, path);
+            return ExceptionResult(new Exception("Cannot generate thumbnail"));
+        }
+    }
+
+    /// <summary>Generate tile with extended visualization params.</summary>
+    [HttpGet("tiles-ex/{tz:int}/{tx:int}/{tyRaw}.{ext:regex(^(png|webp)$)}", Name = nameof(ObjectsController) + "." + nameof(GenerateTileEx))]
+    [ProducesResponseType(typeof(FileResult), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status401Unauthorized)]
+    public async Task<IActionResult> GenerateTileEx(
+        [FromRoute, Required] string orgSlug,
+        [FromRoute, Required] string dsSlug,
+        [FromRoute, Required] int tz,
+        [FromRoute, Required] int tx,
+        [FromRoute, Required] string tyRaw,
+        [FromQuery, Required] string path,
+        [FromRoute, Required] string ext,
+        [FromQuery] string? preset,
+        [FromQuery] string? bands,
+        [FromQuery] string? formula,
+        [FromQuery] string? bandFilter,
+        [FromQuery] string? colormap,
+        [FromQuery] string? rescale)
+    {
+        try
+        {
+            var pathError = ValidatePath(path);
+            if (pathError != null) return pathError;
+
+            var retina = tyRaw.EndsWith("@2x");
+            if (!int.TryParse(retina ? tyRaw.Replace("@2x", string.Empty) : tyRaw, out var ty))
+                throw new ArgumentException("Invalid input parameters (retina indicator should be '@2x')");
+
+            var res = await _objectsManager.GenerateTileDataEx(orgSlug, dsSlug, path, tz, tx, ty, retina,
+                preset, bands, formula, bandFilter, colormap, rescale);
+
+            return File(res.Data, res.ContentType, res.Name);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Exception in GenerateTileEx('{OrgSlug}', '{DsSlug}', '{Path}')", orgSlug, dsSlug, path);
+            return ExceptionResult(ex);
+        }
+    }
+
+    /// <summary>Export raster with visualization params applied as GeoTIFF.</summary>
+    [HttpGet("export", Name = nameof(ObjectsController) + "." + nameof(ExportRaster))]
+    [ProducesResponseType(typeof(FileResult), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status401Unauthorized)]
+    public async Task<IActionResult> ExportRaster(
+        [FromRoute, Required] string orgSlug,
+        [FromRoute, Required] string dsSlug,
+        [FromQuery, Required] string path,
+        [FromQuery] string? preset = null,
+        [FromQuery] string? bands = null,
+        [FromQuery] string? formula = null,
+        [FromQuery] string? bandFilter = null,
+        [FromQuery] string? colormap = null,
+        [FromQuery] string? rescale = null)
+    {
+        try
+        {
+            var pathError = ValidatePath(path);
+            if (pathError != null) return pathError;
+
+            var res = await _objectsManager.ExportRaster(orgSlug, dsSlug, path,
+                preset, bands, formula, bandFilter, colormap, rescale);
+
+            return File(res.Data, res.ContentType, res.Name);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Exception in ExportRaster('{OrgSlug}', '{DsSlug}', '{Path}')", orgSlug, dsSlug, path);
+            return ExceptionResult(ex);
+        }
+    }
+
+    /// <summary>Validate merge-multispectral inputs.</summary>
+    [HttpPost("merge-multispectral/validate", Name = nameof(ObjectsController) + "." + nameof(ValidateMergeMultispectral))]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
+    public async Task<IActionResult> ValidateMergeMultispectral(
+        [FromRoute, Required] string orgSlug,
+        [FromRoute, Required] string dsSlug,
+        [FromBody, Required] MergeMultispectralRequestDto request)
+    {
+        try
+        {
+            var validationError = ValidatePaths(request.Paths);
+            if (validationError != null) return validationError;
+
+            var json = await _objectsManager.ValidateMergeMultispectral(orgSlug, dsSlug, request.Paths);
+            return Content(json, "application/json");
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Exception in ValidateMergeMultispectral('{OrgSlug}', '{DsSlug}')", orgSlug, dsSlug);
+            return ExceptionResult(ex);
+        }
+    }
+
+    /// <summary>Preview merge-multispectral result.</summary>
+    [HttpPost("merge-multispectral/preview", Name = nameof(ObjectsController) + "." + nameof(PreviewMergeMultispectral))]
+    [ProducesResponseType(typeof(FileResult), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
+    public async Task<IActionResult> PreviewMergeMultispectral(
+        [FromRoute, Required] string orgSlug,
+        [FromRoute, Required] string dsSlug,
+        [FromBody, Required] MergeMultispectralRequestDto request)
+    {
+        try
+        {
+            var validationError = ValidatePaths(request.Paths);
+            if (validationError != null) return validationError;
+
+            var data = await _objectsManager.PreviewMergeMultispectral(orgSlug, dsSlug, request.Paths,
+                request.PreviewBands, request.ThumbSize ?? 512);
+            return File(data, "image/webp", "preview.webp");
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Exception in PreviewMergeMultispectral('{OrgSlug}', '{DsSlug}')", orgSlug, dsSlug);
+            return ExceptionResult(ex);
+        }
+    }
+
+    /// <summary>Merge single-band rasters into a multi-band COG.</summary>
+    [HttpPost("merge-multispectral", Name = nameof(ObjectsController) + "." + nameof(MergeMultispectral))]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
+    public async Task<IActionResult> MergeMultispectral(
+        [FromRoute, Required] string orgSlug,
+        [FromRoute, Required] string dsSlug,
+        [FromBody, Required] MergeMultispectralRequestDto request)
+    {
+        try
+        {
+            if (string.IsNullOrWhiteSpace(request.OutputPath))
+                return BadRequest(new ErrorResponse("outputPath is required"));
+
+            var validationError = ValidatePaths(request.Paths, request.OutputPath);
+            if (validationError != null) return validationError;
+
+            await _objectsManager.MergeMultispectral(orgSlug, dsSlug, request.Paths, request.OutputPath);
+            return Ok(new { ok = true });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Exception in MergeMultispectral('{OrgSlug}', '{DsSlug}')", orgSlug, dsSlug);
+            return ExceptionResult(ex);
+        }
+    }
+
+    #endregion
+
+    #region Thermal
+
+    /// <summary>Get thermal info including calibration, temperature range, and dimensions.</summary>
+    [HttpGet("thermal-info", Name = nameof(ObjectsController) + "." + nameof(GetThermalInfo))]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status401Unauthorized)]
+    public async Task<IActionResult> GetThermalInfo(
+        [FromRoute, Required] string orgSlug,
+        [FromRoute, Required] string dsSlug,
+        [FromQuery, Required] string path)
+    {
+        try
+        {
+            var pathError = ValidatePath(path);
+            if (pathError != null) return pathError;
+
+            var json = await _objectsManager.GetThermalInfo(orgSlug, dsSlug, path);
+            return Content(json, "application/json");
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Exception in GetThermalInfo('{OrgSlug}', '{DsSlug}', '{Path}')", orgSlug, dsSlug, path);
+            return ExceptionResult(ex);
+        }
+    }
+
+    /// <summary>Get temperature at a specific pixel location.</summary>
+    [HttpGet("thermal-point", Name = nameof(ObjectsController) + "." + nameof(GetThermalPoint))]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status401Unauthorized)]
+    public async Task<IActionResult> GetThermalPoint(
+        [FromRoute, Required] string orgSlug,
+        [FromRoute, Required] string dsSlug,
+        [FromQuery, Required] string path,
+        [FromQuery, Required] int x,
+        [FromQuery, Required] int y)
+    {
+        try
+        {
+            var pathError = ValidatePath(path);
+            if (pathError != null) return pathError;
+
+            var json = await _objectsManager.GetThermalPoint(orgSlug, dsSlug, path, x, y);
+            return Content(json, "application/json");
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Exception in GetThermalPoint('{OrgSlug}', '{DsSlug}', '{Path}')", orgSlug, dsSlug, path);
+            return ExceptionResult(ex);
+        }
+    }
+
+    /// <summary>Get temperature statistics for a rectangular area.</summary>
+    [HttpGet("thermal-area-stats", Name = nameof(ObjectsController) + "." + nameof(GetThermalAreaStats))]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status401Unauthorized)]
+    public async Task<IActionResult> GetThermalAreaStats(
+        [FromRoute, Required] string orgSlug,
+        [FromRoute, Required] string dsSlug,
+        [FromQuery, Required] string path,
+        [FromQuery, Required] int x0,
+        [FromQuery, Required] int y0,
+        [FromQuery, Required] int x1,
+        [FromQuery, Required] int y1)
+    {
+        try
+        {
+            var pathError = ValidatePath(path);
+            if (pathError != null) return pathError;
+
+            var json = await _objectsManager.GetThermalAreaStats(orgSlug, dsSlug, path, x0, y0, x1, y1);
+            return Content(json, "application/json");
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Exception in GetThermalAreaStats('{OrgSlug}', '{DsSlug}', '{Path}')", orgSlug, dsSlug, path);
+            return ExceptionResult(ex);
+        }
+    }
+
+    #endregion
+
+    #region MaskBorders
+
+    /// <summary>Check if a masked version of the file already exists.</summary>
+    [HttpPost("mask-borders/check", Name = nameof(ObjectsController) + "." + nameof(CheckMaskBorders))]
+    [ProducesResponseType(typeof(MaskBordersCheckResponseDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
+    public async Task<IActionResult> CheckMaskBorders(
+        [FromRoute, Required] string orgSlug,
+        [FromRoute, Required] string dsSlug,
+        [FromBody, Required] MaskBordersRequestDto request)
+    {
+        try
+        {
+            _logger.LogDebug("Objects controller CheckMaskBorders('{OrgSlug}', '{DsSlug}', '{Path}')",
+                orgSlug, dsSlug, request.Path);
+
+            var pathError = ValidatePath(request.Path);
+            if (pathError != null) return pathError;
+
+            var result = await _objectsManager.CheckMaskedFileExists(orgSlug, dsSlug, request.Path);
+            return Ok(result);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Exception in CheckMaskBorders('{OrgSlug}', '{DsSlug}', '{Path}')",
+                orgSlug, dsSlug, request.Path);
+            return ExceptionResult(ex);
+        }
+    }
+
+    /// <summary>Start masking orthophoto borders to make them transparent.</summary>
+    [HttpPost("mask-borders", Name = nameof(ObjectsController) + "." + nameof(MaskBorders))]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
+    public async Task<IActionResult> MaskBorders(
+        [FromRoute, Required] string orgSlug,
+        [FromRoute, Required] string dsSlug,
+        [FromBody, Required] MaskBordersRequestDto request)
+    {
+        try
+        {
+            _logger.LogDebug("Objects controller MaskBorders('{OrgSlug}', '{DsSlug}', '{Path}')",
+                orgSlug, dsSlug, request.Path);
+
+            // Early path traversal check
+            var pathError = ValidatePath(request.Path);
+            if (pathError != null) return pathError;
+
+            await _objectsManager.MaskBorders(orgSlug, dsSlug, request.Path, request.Near, request.White);
+            return Ok(new { ok = true });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Exception in MaskBorders('{OrgSlug}', '{DsSlug}', '{Path}')",
+                orgSlug, dsSlug, request.Path);
+            return ExceptionResult(ex);
+        }
+    }
+
+    #endregion
 
 
 }

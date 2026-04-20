@@ -233,7 +233,7 @@ public class ObjectsManager : IObjectsManager
             await stream.CopyToAsync(localFileStream);
 
         _logger.LogInformation("File saved, adding to DDB");
-        ddb.AddRaw(localFilePath);
+        ddb.AddRaw(path);
 
         _logger.LogInformation("Added to DDB, checking entry now...");
 
@@ -457,7 +457,7 @@ public class ObjectsManager : IObjectsManager
             fileSystemCopied = true;
 
             _logger.LogInformation("FS copy OK, performing ddb add");
-            destDdb.AddRaw(destDdb.GetLocalPath(destPath));
+            destDdb.AddRaw(destPath);
             addedToDdb = true;
 
             if (!destDdb.EntryExists(destPath))
@@ -1039,7 +1039,6 @@ public class ObjectsManager : IObjectsManager
         var entry = EnsurePathValidity(orgSlug, ds.InternalRef, path, out var ddb);
 
         var sourcePath = GetBuildSource(entry);
-        var localPath = ddb.GetLocalPath(sourcePath);
 
         try
         {
@@ -1049,7 +1048,7 @@ public class ObjectsManager : IObjectsManager
             // We want to free up the main thread to handle other requests
             var tileData =
                 await _cacheManager.GetAsync(MagicStrings.TileCacheSeed, ForDataset(orgSlug, dsSlug), entry.Hash, tx, ty, tz, retina,
-                    new Func<Task<byte[]>>(() => Task.Run(() => ddb.GenerateTile(localPath, tz, tx, ty, retina, entry.Hash))));
+                    new Func<Task<byte[]>>(() => Task.Run(() => ddb.GenerateTile(sourcePath, tz, tx, ty, retina, entry.Hash))));
 
             return new StorageDataDto
             {
@@ -1196,6 +1195,9 @@ public class ObjectsManager : IObjectsManager
         EnsureNoWildcardOrEmptyPaths(path);
 
         ddb = _ddbManager.Get(orgSlug, internalRef);
+
+        // Validate path to prevent path traversal
+        CommonUtils.ValidateRelativePath(path, ddb.DatasetFolderPath);
 
         var res = ddb.Search(path)?.ToArray();
 
@@ -1474,6 +1476,358 @@ public class ObjectsManager : IObjectsManager
         _logger.LogInformation("Successfully deleted {Count} completed/failed builds", completedBuilds.Count);
 
         return completedBuilds.Count;
+    }
+
+    #endregion
+
+    #region Multispectral
+
+    public async Task<string> GetRasterInfo(string orgSlug, string dsSlug, string path)
+    {
+        var ds = _utils.GetDataset(orgSlug, dsSlug);
+
+        if (!await _authManager.RequestAccess(ds, AccessType.Read))
+            throw new UnauthorizedException("The current user is not allowed to read dataset");
+
+        if (path.StartsWith('/')) path = path[1..];
+
+        var entry = EnsurePathValidity(orgSlug, ds.InternalRef, path, out var ddb);
+        var sourcePath = GetBuildSource(entry);
+
+        return ddb.GetRasterInfo(sourcePath);
+    }
+
+    public async Task<string> GetRasterMetadata(string orgSlug, string dsSlug, string path, string? formula = null, string? bandFilter = null)
+    {
+        var ds = _utils.GetDataset(orgSlug, dsSlug);
+
+        if (!await _authManager.RequestAccess(ds, AccessType.Read))
+            throw new UnauthorizedException("The current user is not allowed to read dataset");
+
+        if (path.StartsWith('/')) path = path[1..];
+
+        var entry = EnsurePathValidity(orgSlug, ds.InternalRef, path, out var ddb);
+        var sourcePath = GetBuildSource(entry);
+
+        return ddb.GetRasterMetadata(sourcePath, formula, bandFilter);
+    }
+
+    public async Task<StorageDataDto> GenerateThumbnailDataEx(string orgSlug, string dsSlug, string path, int? sizeRaw,
+        string? preset = null, string? bands = null, string? formula = null,
+        string? bandFilter = null, string? colormap = null, string? rescale = null)
+    {
+        var ds = _utils.GetDataset(orgSlug, dsSlug);
+
+        if (!await _authManager.RequestAccess(ds, AccessType.Read))
+            throw new UnauthorizedException("The current user is not allowed to read dataset");
+
+        if (path.StartsWith('/')) path = path[1..];
+
+        var entry = EnsurePathValidity(orgSlug, ds.InternalRef, path, out var ddb);
+        var sourcePath = GetBuildSource(entry);
+
+        var size = sizeRaw ?? _settings.DefaultThumbnailSize;
+        var fileName = Path.GetFileName(path);
+
+        // Build a viz-specific cache key
+        var vizKey = $"{preset}|{bands}|{formula}|{bandFilter}|{colormap}|{rescale}";
+
+        var thumbData = await _cacheManager.GetAsync(MagicStrings.ThumbnailCacheSeed, ForDataset(orgSlug, dsSlug),
+            entry.Hash, size, vizKey,
+            new Func<Task<byte[]>>(() => Task.Run(() =>
+                ddb.GenerateThumbnailEx(sourcePath, size, preset, bands, formula, bandFilter, colormap, rescale))));
+
+        return new StorageDataDto
+        {
+            Name = Path.ChangeExtension(fileName, "webp"),
+            Data = thumbData,
+            ContentType = _ddbWrapper.ThumbnailMimeType
+        };
+    }
+
+    public async Task<StorageDataDto> GenerateTileDataEx(string orgSlug, string dsSlug, string path,
+        int tz, int tx, int ty, bool retina,
+        string? preset = null, string? bands = null, string? formula = null,
+        string? bandFilter = null, string? colormap = null, string? rescale = null)
+    {
+        var ds = _utils.GetDataset(orgSlug, dsSlug);
+
+        if (!await _authManager.RequestAccess(ds, AccessType.Read))
+            throw new UnauthorizedException("The current user is not allowed to read dataset");
+
+        if (path.StartsWith('/')) path = path[1..];
+
+        var entry = EnsurePathValidity(orgSlug, ds.InternalRef, path, out var ddb);
+        var sourcePath = GetBuildSource(entry);
+
+        try
+        {
+            var vizKey = $"{preset}|{bands}|{formula}|{bandFilter}|{colormap}|{rescale}";
+
+            var tileData = await _cacheManager.GetAsync(MagicStrings.TileCacheSeed, ForDataset(orgSlug, dsSlug),
+                entry.Hash, tx, ty, tz, retina, vizKey,
+                new Func<Task<byte[]>>(() => Task.Run(() =>
+                    ddb.GenerateTileEx(sourcePath, tz, tx, ty, retina, entry.Hash,
+                        preset, bands, formula, bandFilter, colormap, rescale))));
+
+            return new StorageDataDto
+            {
+                Data = tileData,
+                ContentType = "image/webp",
+                Name = $"{ty}.webp"
+            };
+        }
+        catch (InvalidOperationException ex)
+        {
+            if (ex.InnerException != null &&
+                ex.InnerException.Message.Contains("Out of bounds", StringComparison.OrdinalIgnoreCase))
+                throw new NotFoundException("Tile out of bounds", ex);
+            throw;
+        }
+    }
+
+    public async Task<string> ValidateMergeMultispectral(string orgSlug, string dsSlug, string[] paths)
+    {
+        var ds = _utils.GetDataset(orgSlug, dsSlug);
+
+        if (!await _authManager.RequestAccess(ds, AccessType.Read))
+            throw new UnauthorizedException("The current user is not allowed to read dataset");
+
+        var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
+
+        // Validate each input path to prevent path traversal
+        CommonUtils.ValidateRelativePaths(paths, ddb.DatasetFolderPath);
+
+        return await Task.Run(() => ddb.ValidateMergeMultispectral(paths));
+    }
+
+    public async Task<byte[]> PreviewMergeMultispectral(string orgSlug, string dsSlug, string[] paths, string? previewBands = null, int thumbSize = 512)
+    {
+        var ds = _utils.GetDataset(orgSlug, dsSlug);
+
+        if (!await _authManager.RequestAccess(ds, AccessType.Read))
+            throw new UnauthorizedException("The current user is not allowed to read dataset");
+
+        return await Task.Run(() =>
+        {
+            var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
+
+            // Validate each input path to prevent path traversal
+            CommonUtils.ValidateRelativePaths(paths, ddb.DatasetFolderPath);
+
+            return ddb.PreviewMergeMultispectral(paths, previewBands, thumbSize);
+        });
+    }
+
+    public async Task MergeMultispectral(string orgSlug, string dsSlug, string[] paths, string outputPath)
+    {
+        var ds = _utils.GetDataset(orgSlug, dsSlug);
+
+        if (!await _authManager.RequestAccess(ds, AccessType.Write))
+            throw new UnauthorizedException("The current user is not allowed to write to dataset");
+
+        var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
+
+        // Validate outputPath to prevent path traversal
+        CommonUtils.ValidateRelativePath(outputPath, ddb.DatasetFolderPath);
+
+        // Validate each input path to prevent path traversal
+        CommonUtils.ValidateRelativePaths(paths, ddb.DatasetFolderPath);
+
+        var outputFullPath = ddb.GetLocalPath(outputPath);
+
+        // Delete existing output file if present (overwrite)
+        if (_fs.Exists(outputFullPath))
+        {
+            _logger.LogInformation("Output file already exists, deleting: '{OutputPath}'", outputFullPath);
+            _fs.Delete(outputFullPath);
+        }
+
+        _logger.LogInformation("Merging multispectral for '{OutputPath}'", outputFullPath);
+
+        await Task.Run(() => ddb.MergeMultispectral(paths, outputPath));
+
+        // Re-add the merged output to the index through the IDDB abstraction
+        ddb.AddRaw(outputPath);
+
+        _logger.LogInformation("Merge complete and file added to the dataset");
+    }
+
+    public async Task<StorageDataDto> ExportRaster(string orgSlug, string dsSlug, string path,
+        string? preset = null, string? bands = null, string? formula = null,
+        string? bandFilter = null, string? colormap = null, string? rescale = null)
+    {
+        var ds = _utils.GetDataset(orgSlug, dsSlug);
+
+        if (!await _authManager.RequestAccess(ds, AccessType.Read))
+            throw new UnauthorizedException("The current user is not allowed to read dataset");
+
+        if (path.StartsWith('/')) path = path[1..];
+
+        var entry = EnsurePathValidity(orgSlug, ds.InternalRef, path, out var ddb);
+        var sourcePath = GetBuildSource(entry);
+
+        var tempDir = Path.GetTempPath();
+        var tempOutputFileName = Path.GetFileNameWithoutExtension(path) + "_export_" + Guid.NewGuid().ToString("N") + ".tif";
+        var outputFileName = Path.GetFileNameWithoutExtension(path) + "_export.tif";
+        var outputPath = Path.Combine(tempDir, tempOutputFileName);
+
+        try
+        {
+            await Task.Run(() => ddb.ExportRaster(sourcePath, outputPath, preset, bands, formula,
+                bandFilter, colormap, rescale));
+
+            var data = await File.ReadAllBytesAsync(outputPath);
+
+            return new StorageDataDto
+            {
+                Name = outputFileName,
+                Data = data,
+                ContentType = "image/tiff"
+            };
+        }
+        finally
+        {
+            try { if (File.Exists(outputPath)) File.Delete(outputPath); } catch { /* ignore cleanup failures */ }
+        }
+    }
+
+    #endregion
+
+    #region Thermal
+
+    public async Task<string> GetThermalInfo(string orgSlug, string dsSlug, string path)
+    {
+        var ds = _utils.GetDataset(orgSlug, dsSlug);
+
+        if (!await _authManager.RequestAccess(ds, AccessType.Read))
+            throw new UnauthorizedException("The current user is not allowed to read dataset");
+
+        if (path.StartsWith('/')) path = path[1..];
+
+        var entry = EnsurePathValidity(orgSlug, ds.InternalRef, path, out var ddb);
+        var sourcePath = GetBuildSource(entry);
+
+        return ddb.GetThermalInfo(sourcePath);
+    }
+
+    public async Task<string> GetThermalPoint(string orgSlug, string dsSlug, string path, int x, int y)
+    {
+        var ds = _utils.GetDataset(orgSlug, dsSlug);
+
+        if (!await _authManager.RequestAccess(ds, AccessType.Read))
+            throw new UnauthorizedException("The current user is not allowed to read dataset");
+
+        if (path.StartsWith('/')) path = path[1..];
+
+        var entry = EnsurePathValidity(orgSlug, ds.InternalRef, path, out var ddb);
+        var sourcePath = GetBuildSource(entry);
+
+        return ddb.GetThermalPoint(sourcePath, x, y);
+    }
+
+    public async Task<string> GetThermalAreaStats(string orgSlug, string dsSlug, string path, int x0, int y0, int x1, int y1)
+    {
+        var ds = _utils.GetDataset(orgSlug, dsSlug);
+
+        if (!await _authManager.RequestAccess(ds, AccessType.Read))
+            throw new UnauthorizedException("The current user is not allowed to read dataset");
+
+        if (path.StartsWith('/')) path = path[1..];
+
+        var entry = EnsurePathValidity(orgSlug, ds.InternalRef, path, out var ddb);
+        var sourcePath = GetBuildSource(entry);
+
+        return ddb.GetThermalAreaStats(sourcePath, x0, y0, x1, y1);
+    }
+
+    #endregion
+
+    #region MaskBorders
+
+    public async Task<MaskBordersCheckResponseDto> CheckMaskedFileExists(string orgSlug, string dsSlug, string path)
+    {
+        var ds = _utils.GetDataset(orgSlug, dsSlug);
+
+        if (!await _authManager.RequestAccess(ds, AccessType.Read))
+            throw new UnauthorizedException("The current user is not allowed to read dataset");
+
+        var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
+
+        // Validate path to prevent path traversal
+        CommonUtils.ValidateRelativePath(path, ddb.DatasetFolderPath);
+
+        var outputPath = GetMaskedOutputPath(path);
+        var entry = ddb.GetEntry(outputPath);
+
+        return new MaskBordersCheckResponseDto
+        {
+            Exists = entry != null,
+            OutputPath = outputPath
+        };
+    }
+
+    public async Task MaskBorders(string orgSlug, string dsSlug, string path, int nearDist, bool white)
+    {
+        var ds = _utils.GetDataset(orgSlug, dsSlug);
+
+        if (!await _authManager.RequestAccess(ds, AccessType.Write))
+            throw new UnauthorizedException("The current user is not allowed to write to dataset");
+
+        await EnsureNoActiveJob(orgSlug, dsSlug, path, "MaskBorders");
+
+        var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
+
+        // Validate path
+        CommonUtils.ValidateRelativePath(path, ddb.DatasetFolderPath);
+
+        var entry = ddb.GetEntry(path);
+        if (entry == null)
+            throw new InvalidOperationException($"Cannot find entry: '{path}'");
+
+        if (entry.Type != EntryType.GeoRaster)
+            throw new InvalidOperationException($"Entry '{path}' is not a georaster");
+
+        var outputPath = GetMaskedOutputPath(path);
+        var outputFullPath = ddb.GetLocalPath(outputPath);
+
+        // Delete existing output file if present
+        if (_fs.Exists(outputFullPath))
+        {
+            _logger.LogInformation("Output file already exists, deleting: '{OutputPath}'", outputFullPath);
+            _fs.Delete(outputFullPath);
+        }
+
+        _logger.LogInformation("Masking borders for '{Path}' asynchronously", path);
+
+        var user = await _authManager.GetCurrentUser();
+        var meta = new IndexPayload(orgSlug, dsSlug, entry.Hash, user.Id, null, path);
+        var jobId = _backgroundJob.EnqueueIndexed(
+            () => HangfireUtils.MaskBordersWrapper(ddb, path, outputPath, nearDist, white, null), meta);
+
+        _logger.LogInformation("Background job id is {JobId}", jobId);
+    }
+
+    private static string GetMaskedOutputPath(string path)
+    {
+        var outputPath = Path.GetFileNameWithoutExtension(path) + "_masked.tif";
+        var dir = Path.GetDirectoryName(path);
+        if (!string.IsNullOrEmpty(dir))
+            outputPath = Path.Combine(dir, outputPath).Replace('\\', '/');
+        return outputPath;
+    }
+
+    private async Task EnsureNoActiveJob(string orgSlug, string dsSlug, string path, string methodName)
+    {
+        var jobs = await _jobIndexQuery.GetByOrgDsAsync(orgSlug, dsSlug, 0, 1000);
+        var activeJob = jobs.FirstOrDefault(j =>
+            j.Path == path &&
+            j.CurrentState is "Enqueued" or "Processing" or "Scheduled" or "Created" &&
+            j.MethodDisplay != null && j.MethodDisplay.Contains(methodName));
+
+        if (activeJob != null)
+            throw new InvalidOperationException(
+                $"A {methodName} operation is already in progress for '{path}'");
     }
 
     #endregion

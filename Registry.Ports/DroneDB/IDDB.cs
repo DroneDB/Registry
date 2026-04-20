@@ -85,6 +85,72 @@ public interface IDDB
     /// </summary>
     void ClearBuildCache();
 
+    /// <summary>
+    /// Get raster info including bands, detected sensor, and presets
+    /// </summary>
+    string GetRasterInfo(string path);
+
+    /// <summary>
+    /// Get raster statistics and histogram for a band or formula
+    /// </summary>
+    string GetRasterMetadata(string path, string? formula = null, string? bandFilter = null);
+
+    /// <summary>
+    /// Generate thumbnail with extended visualization params
+    /// </summary>
+    byte[] GenerateThumbnailEx(string imagePath, int size, string? preset = null,
+        string? bands = null, string? formula = null, string? bandFilter = null,
+        string? colormap = null, string? rescale = null);
+
+    /// <summary>
+    /// Generate tile with extended visualization params
+    /// </summary>
+    byte[] GenerateTileEx(string inputPath, int tz, int tx, int ty, bool retina, string inputPathHash,
+        string? preset = null, string? bands = null, string? formula = null,
+        string? bandFilter = null, string? colormap = null, string? rescale = null);
+
+    /// <summary>
+    /// Validate merge-multispectral inputs
+    /// </summary>
+    string ValidateMergeMultispectral(string[] paths);
+
+    /// <summary>
+    /// Preview merge-multispectral result
+    /// </summary>
+    byte[] PreviewMergeMultispectral(string[] paths, string? previewBands = null, int thumbSize = 512);
+
+    /// <summary>
+    /// Merge single-band rasters into multi-band COG
+    /// </summary>
+    void MergeMultispectral(string[] paths, string outputCog);
+
+    /// <summary>
+    /// Export raster with visualization params applied as GeoTIFF
+    /// </summary>
+    void ExportRaster(string inputPath, string outputPath,
+        string? preset = null, string? bands = null, string? formula = null,
+        string? bandFilter = null, string? colormap = null, string? rescale = null);
+
+    /// <summary>
+    /// Get thermal info including calibration, temperature range, and dimensions
+    /// </summary>
+    string GetThermalInfo(string path);
+
+    /// <summary>
+    /// Get temperature at a specific pixel location
+    /// </summary>
+    string GetThermalPoint(string path, int x, int y);
+
+    /// <summary>
+    /// Get temperature statistics for a rectangular area
+    /// </summary>
+    string GetThermalAreaStats(string path, int x0, int y0, int x1, int y1);
+
+    /// <summary>
+    /// Mask orthophoto borders making them transparent
+    /// </summary>
+    void MaskBorders(string input, string output, int nearDist = 15, bool white = false);
+
     // These consts are like magic strings: if anything changes this goes kaboom!
     public const string DatabaseFolderName = ".ddb";
     public const string BuildFolderName = "build";

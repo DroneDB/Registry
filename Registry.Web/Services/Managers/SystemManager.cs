@@ -1025,7 +1025,7 @@ public class SystemManager : ISystemManager
                             try
                             {
                                 // Add file to DDB (this must be serial)
-                                ddb.AddRaw(result.LocalPath);
+                                ddb.AddRaw(result.Entry.Path);
                                 downloadedCount++;
                                 totalBytesDownloaded += result.BytesDownloaded;
 

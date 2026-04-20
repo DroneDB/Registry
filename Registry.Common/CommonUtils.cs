@@ -247,31 +247,46 @@ public static class CommonUtils
     }
 
     /// <summary>
+    /// Validates that an array of relative paths doesn't contain path traversal attacks.
+    /// Throws ArgumentException if any path is invalid or escapes the base directory.
+    /// </summary>
+    /// <param name="paths">The array of relative paths to validate.</param>
+    /// <param name="baseDirectory">The base directory that all paths must stay within.</param>
+    /// <exception cref="ArgumentNullException">Thrown when paths is null.</exception>
+    /// <exception cref="ArgumentException">Thrown when any path is empty, absolute, or contains traversal attempts.</exception>
+    public static void ValidateRelativePaths(string[] paths, string baseDirectory)
+    {
+        ArgumentNullException.ThrowIfNull(paths);
+
+        foreach (var path in paths)
+            ValidateRelativePath(path, baseDirectory);
+    }
+    
+    /// <summary>
     /// Validates that a relative path doesn't contain path traversal attacks.
     /// Throws ArgumentException if the path is invalid or escapes the base directory.
     /// </summary>
     /// <param name="path">The relative path to validate.</param>
     /// <param name="baseDirectory">The base directory that the path must stay within.</param>
-    /// <param name="paramName">The parameter name for the exception.</param>
     /// <exception cref="ArgumentException">Thrown when the path is empty, absolute, or contains traversal attempts.</exception>
-    public static void ValidateRelativePath(string path, string baseDirectory, string paramName = "path")
+    public static void ValidateRelativePath(string path, string baseDirectory)
     {
         if (string.IsNullOrWhiteSpace(path))
-            throw new ArgumentException("Path cannot be empty.", paramName);
+            throw new ArgumentException("Path cannot be empty.", nameof(path));
 
         if (string.IsNullOrWhiteSpace(baseDirectory))
             throw new ArgumentException("Base directory cannot be empty.", nameof(baseDirectory));
 
         // Reject absolute/rooted paths (including UNC on Windows)
         if (Path.IsPathRooted(path))
-            throw new ArgumentException("Invalid path: absolute paths are not allowed.", paramName);
+            throw new ArgumentException("Invalid path: absolute paths are not allowed.", nameof(path));
 
         // Forbid '.' and '..' segments (semantic check, avoids false positives on 'file..txt')
         var segments = path.Split(['/', '\\'], StringSplitOptions.RemoveEmptyEntries);
         foreach (var s in segments)
         {
             if (s is "." or "..")
-                throw new ArgumentException("Invalid path: path traversal is not allowed.", paramName);
+                throw new ArgumentException("Invalid path: path traversal is not allowed.", nameof(path));
         }
 
         string baseFull;
@@ -289,7 +304,7 @@ public static class CommonUtils
         }
         catch (Exception ex) when (ex is ArgumentException or NotSupportedException or PathTooLongException)
         {
-            throw new ArgumentException("Invalid path.", paramName, ex);
+            throw new ArgumentException("Invalid path.", nameof(path), ex);
         }
 
         var comparison = OperatingSystem.IsWindows()
@@ -297,7 +312,7 @@ public static class CommonUtils
             : StringComparison.Ordinal;
 
         if (!combinedFull.StartsWith(baseFull, comparison))
-            throw new ArgumentException("Invalid path: path traversal is not allowed.", paramName);
+            throw new ArgumentException("Invalid path: path traversal is not allowed.", nameof(path));
     }
 
     public static (string, Stream) GetTempStream(int bufferSize = 104857600)

@@ -868,7 +868,7 @@ public class ObjectManagerTest : TestBase
 
         // Initialize destination DDB and add the file
         var destDdb = ddbManager.Get("admin", Guid.Parse("6c1f5555-d001-4411-9308-42aa6ccd7fd6"));
-        destDdb.AddRaw(destPath);
+        destDdb.AddRaw("DJI_0027.JPG");
 
         // Try to transfer with overwrite=false (should fail)
         var ex = await Should.ThrowAsync<InvalidOperationException>(async () => await objectManager.Transfer(

@@ -16,15 +16,15 @@ public static class CacheProviderFactories
     /// Creates a cache provider function for tiles.
     /// </summary>
     /// <returns>
-    /// A function that takes parameters (fileHash, tx, ty, tz, retina, generateFunc)
+    /// A function that takes parameters (fileHash, tx, ty, tz, retina, [vizKey], generateFunc)
     /// and returns the tile data converted to WebP format.
     /// </returns>
     public static Func<object[], Task<byte[]>> CreateTileProvider()
     {
         return async parameters =>
         {
-            // Parameters: fileHash, tx, ty, tz, retina, generateFunc
-            var generateFunc = (Func<Task<byte[]>>)parameters[5];
+            // The generateFunc is always the last parameter
+            var generateFunc = (Func<Task<byte[]>>)parameters[^1];
             var data = await generateFunc();
             return data.ToWebp(90);
         };
@@ -34,7 +34,7 @@ public static class CacheProviderFactories
     /// Creates a cache provider function for thumbnails.
     /// </summary>
     /// <returns>
-    /// A function that takes parameters (fileHash, size, generateFunc)
+    /// A function that takes parameters (fileHash, size, [vizKey], generateFunc)
     /// and returns the thumbnail data.
     /// </returns>
     public static Func<object[], Task<byte[]>> CreateThumbnailProvider()
@@ -43,8 +43,8 @@ public static class CacheProviderFactories
         {
             try
             {
-                // Parameters: fileHash, size, generateFunc
-                var generateFunc = (Func<Task<byte[]>>)parameters[2];
+                // The generateFunc is always the last parameter
+                var generateFunc = (Func<Task<byte[]>>)parameters[^1];
                 return await generateFunc();
             }
             catch (Exception ex)
