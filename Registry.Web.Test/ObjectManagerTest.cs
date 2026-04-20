@@ -1426,4 +1426,160 @@ public class ObjectManagerTest : TestBase
     }
 
     #endregion
+
+    #region Raster/Thermal/Export Path Validation Tests
+
+    [Test]
+    public async Task GetRasterInfo_TraversalPath_ThrowsArgumentException()
+    {
+        await using var context = GetTest1Context();
+
+        var ddbMock = new Mock<IDDB>();
+        ddbMock.Setup(x => x.DatasetFolderPath).Returns(Path.Combine(Path.GetTempPath(), "test-dataset"));
+
+        var objectManager = CreateObjectsManagerWithMockedDdb(context, ddbMock);
+
+        await Should.ThrowAsync<ArgumentException>(async () =>
+            await objectManager.GetRasterInfo(MagicStrings.PublicOrganizationSlug,
+                MagicStrings.DefaultDatasetSlug, "../escape.tif"));
+
+        await Should.ThrowAsync<ArgumentException>(async () =>
+            await objectManager.GetRasterInfo(MagicStrings.PublicOrganizationSlug,
+                MagicStrings.DefaultDatasetSlug, "/etc/passwd"));
+    }
+
+    [Test]
+    public async Task GetRasterMetadata_TraversalPath_ThrowsArgumentException()
+    {
+        await using var context = GetTest1Context();
+
+        var ddbMock = new Mock<IDDB>();
+        ddbMock.Setup(x => x.DatasetFolderPath).Returns(Path.Combine(Path.GetTempPath(), "test-dataset"));
+
+        var objectManager = CreateObjectsManagerWithMockedDdb(context, ddbMock);
+
+        await Should.ThrowAsync<ArgumentException>(async () =>
+            await objectManager.GetRasterMetadata(MagicStrings.PublicOrganizationSlug,
+                MagicStrings.DefaultDatasetSlug, "../escape.tif"));
+
+        await Should.ThrowAsync<ArgumentException>(async () =>
+            await objectManager.GetRasterMetadata(MagicStrings.PublicOrganizationSlug,
+                MagicStrings.DefaultDatasetSlug, "/etc/passwd"));
+    }
+
+    [Test]
+    public async Task GenerateThumbnailDataEx_TraversalPath_ThrowsArgumentException()
+    {
+        await using var context = GetTest1Context();
+
+        var ddbMock = new Mock<IDDB>();
+        ddbMock.Setup(x => x.DatasetFolderPath).Returns(Path.Combine(Path.GetTempPath(), "test-dataset"));
+
+        var objectManager = CreateObjectsManagerWithMockedDdb(context, ddbMock);
+
+        await Should.ThrowAsync<ArgumentException>(async () =>
+            await objectManager.GenerateThumbnailDataEx(MagicStrings.PublicOrganizationSlug,
+                MagicStrings.DefaultDatasetSlug, "../escape.tif", 256));
+
+        await Should.ThrowAsync<ArgumentException>(async () =>
+            await objectManager.GenerateThumbnailDataEx(MagicStrings.PublicOrganizationSlug,
+                MagicStrings.DefaultDatasetSlug, "/etc/passwd", 256));
+    }
+
+    [Test]
+    public async Task GenerateTileDataEx_TraversalPath_ThrowsArgumentException()
+    {
+        await using var context = GetTest1Context();
+
+        var ddbMock = new Mock<IDDB>();
+        ddbMock.Setup(x => x.DatasetFolderPath).Returns(Path.Combine(Path.GetTempPath(), "test-dataset"));
+
+        var objectManager = CreateObjectsManagerWithMockedDdb(context, ddbMock);
+
+        await Should.ThrowAsync<ArgumentException>(async () =>
+            await objectManager.GenerateTileDataEx(MagicStrings.PublicOrganizationSlug,
+                MagicStrings.DefaultDatasetSlug, "../escape.tif", 1, 0, 0, false));
+
+        await Should.ThrowAsync<ArgumentException>(async () =>
+            await objectManager.GenerateTileDataEx(MagicStrings.PublicOrganizationSlug,
+                MagicStrings.DefaultDatasetSlug, "/etc/passwd", 1, 0, 0, false));
+    }
+
+    [Test]
+    public async Task ExportRaster_TraversalPath_ThrowsArgumentException()
+    {
+        await using var context = GetTest1Context();
+
+        var ddbMock = new Mock<IDDB>();
+        ddbMock.Setup(x => x.DatasetFolderPath).Returns(Path.Combine(Path.GetTempPath(), "test-dataset"));
+
+        var objectManager = CreateObjectsManagerWithMockedDdb(context, ddbMock);
+
+        await Should.ThrowAsync<ArgumentException>(async () =>
+            await objectManager.ExportRaster(MagicStrings.PublicOrganizationSlug,
+                MagicStrings.DefaultDatasetSlug, "../escape.tif"));
+
+        await Should.ThrowAsync<ArgumentException>(async () =>
+            await objectManager.ExportRaster(MagicStrings.PublicOrganizationSlug,
+                MagicStrings.DefaultDatasetSlug, "/etc/passwd"));
+    }
+
+    [Test]
+    public async Task GetThermalInfo_TraversalPath_ThrowsArgumentException()
+    {
+        await using var context = GetTest1Context();
+
+        var ddbMock = new Mock<IDDB>();
+        ddbMock.Setup(x => x.DatasetFolderPath).Returns(Path.Combine(Path.GetTempPath(), "test-dataset"));
+
+        var objectManager = CreateObjectsManagerWithMockedDdb(context, ddbMock);
+
+        await Should.ThrowAsync<ArgumentException>(async () =>
+            await objectManager.GetThermalInfo(MagicStrings.PublicOrganizationSlug,
+                MagicStrings.DefaultDatasetSlug, "../escape.tif"));
+
+        await Should.ThrowAsync<ArgumentException>(async () =>
+            await objectManager.GetThermalInfo(MagicStrings.PublicOrganizationSlug,
+                MagicStrings.DefaultDatasetSlug, "/etc/passwd"));
+    }
+
+    [Test]
+    public async Task GetThermalPoint_TraversalPath_ThrowsArgumentException()
+    {
+        await using var context = GetTest1Context();
+
+        var ddbMock = new Mock<IDDB>();
+        ddbMock.Setup(x => x.DatasetFolderPath).Returns(Path.Combine(Path.GetTempPath(), "test-dataset"));
+
+        var objectManager = CreateObjectsManagerWithMockedDdb(context, ddbMock);
+
+        await Should.ThrowAsync<ArgumentException>(async () =>
+            await objectManager.GetThermalPoint(MagicStrings.PublicOrganizationSlug,
+                MagicStrings.DefaultDatasetSlug, "../escape.tif", 0, 0));
+
+        await Should.ThrowAsync<ArgumentException>(async () =>
+            await objectManager.GetThermalPoint(MagicStrings.PublicOrganizationSlug,
+                MagicStrings.DefaultDatasetSlug, "/etc/passwd", 0, 0));
+    }
+
+    [Test]
+    public async Task GetThermalAreaStats_TraversalPath_ThrowsArgumentException()
+    {
+        await using var context = GetTest1Context();
+
+        var ddbMock = new Mock<IDDB>();
+        ddbMock.Setup(x => x.DatasetFolderPath).Returns(Path.Combine(Path.GetTempPath(), "test-dataset"));
+
+        var objectManager = CreateObjectsManagerWithMockedDdb(context, ddbMock);
+
+        await Should.ThrowAsync<ArgumentException>(async () =>
+            await objectManager.GetThermalAreaStats(MagicStrings.PublicOrganizationSlug,
+                MagicStrings.DefaultDatasetSlug, "../escape.tif", 0, 0, 10, 10));
+
+        await Should.ThrowAsync<ArgumentException>(async () =>
+            await objectManager.GetThermalAreaStats(MagicStrings.PublicOrganizationSlug,
+                MagicStrings.DefaultDatasetSlug, "/etc/passwd", 0, 0, 10, 10));
+    }
+
+    #endregion
 }

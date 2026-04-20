@@ -893,6 +893,9 @@ public class ObjectsController : ControllerBaseEx
     {
         try
         {
+            var pathError = ValidatePath(path);
+            if (pathError != null) return pathError;
+
             var json = await _objectsManager.GetRasterInfo(orgSlug, dsSlug, path);
             return Content(json, "application/json");
         }
@@ -917,6 +920,9 @@ public class ObjectsController : ControllerBaseEx
     {
         try
         {
+            var pathError = ValidatePath(path);
+            if (pathError != null) return pathError;
+
             var json = await _objectsManager.GetRasterMetadata(orgSlug, dsSlug, path, formula, bandFilter);
             return Content(json, "application/json");
         }
@@ -946,6 +952,9 @@ public class ObjectsController : ControllerBaseEx
     {
         try
         {
+            var pathError = ValidatePath(path);
+            if (pathError != null) return pathError;
+
             var res = await _objectsManager.GenerateThumbnailDataEx(orgSlug, dsSlug, path, size,
                 preset, bands, formula, bandFilter, colormap, rescale);
 
@@ -981,6 +990,9 @@ public class ObjectsController : ControllerBaseEx
     {
         try
         {
+            var pathError = ValidatePath(path);
+            if (pathError != null) return pathError;
+
             var retina = tyRaw.EndsWith("@2x");
             if (!int.TryParse(retina ? tyRaw.Replace("@2x", string.Empty) : tyRaw, out var ty))
                 throw new ArgumentException("Invalid input parameters (retina indicator should be '@2x')");
@@ -1015,6 +1027,9 @@ public class ObjectsController : ControllerBaseEx
     {
         try
         {
+            var pathError = ValidatePath(path);
+            if (pathError != null) return pathError;
+
             var res = await _objectsManager.ExportRaster(orgSlug, dsSlug, path,
                 preset, bands, formula, bandFilter, colormap, rescale);
 
@@ -1119,6 +1134,9 @@ public class ObjectsController : ControllerBaseEx
     {
         try
         {
+            var pathError = ValidatePath(path);
+            if (pathError != null) return pathError;
+
             var json = await _objectsManager.GetThermalInfo(orgSlug, dsSlug, path);
             return Content(json, "application/json");
         }
@@ -1143,6 +1161,9 @@ public class ObjectsController : ControllerBaseEx
     {
         try
         {
+            var pathError = ValidatePath(path);
+            if (pathError != null) return pathError;
+
             var json = await _objectsManager.GetThermalPoint(orgSlug, dsSlug, path, x, y);
             return Content(json, "application/json");
         }
@@ -1169,6 +1190,9 @@ public class ObjectsController : ControllerBaseEx
     {
         try
         {
+            var pathError = ValidatePath(path);
+            if (pathError != null) return pathError;
+
             var json = await _objectsManager.GetThermalAreaStats(orgSlug, dsSlug, path, x0, y0, x1, y1);
             return Content(json, "application/json");
         }

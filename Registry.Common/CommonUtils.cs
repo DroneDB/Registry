@@ -247,12 +247,27 @@ public static class CommonUtils
     }
 
     /// <summary>
+    /// Validates that an array of relative paths doesn't contain path traversal attacks.
+    /// Throws ArgumentException if any path is invalid or escapes the base directory.
+    /// </summary>
+    /// <param name="paths">The array of relative paths to validate.</param>
+    /// <param name="baseDirectory">The base directory that all paths must stay within.</param>
+    /// <exception cref="ArgumentNullException">Thrown when paths is null.</exception>
+    /// <exception cref="ArgumentException">Thrown when any path is empty, absolute, or contains traversal attempts.</exception>
+    public static void ValidateRelativePaths(string[] paths, string baseDirectory)
+    {
+        ArgumentNullException.ThrowIfNull(paths);
+
+        foreach (var path in paths)
+            ValidateRelativePath(path, baseDirectory);
+    }
+    
+    /// <summary>
     /// Validates that a relative path doesn't contain path traversal attacks.
     /// Throws ArgumentException if the path is invalid or escapes the base directory.
     /// </summary>
     /// <param name="path">The relative path to validate.</param>
     /// <param name="baseDirectory">The base directory that the path must stay within.</param>
-    /// <param name="paramName">The parameter name for the exception.</param>
     /// <exception cref="ArgumentException">Thrown when the path is empty, absolute, or contains traversal attempts.</exception>
     public static void ValidateRelativePath(string path, string baseDirectory)
     {

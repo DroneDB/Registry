@@ -1196,6 +1196,9 @@ public class ObjectsManager : IObjectsManager
 
         ddb = _ddbManager.Get(orgSlug, internalRef);
 
+        // Validate path to prevent path traversal
+        CommonUtils.ValidateRelativePath(path, ddb.DatasetFolderPath);
+
         var res = ddb.Search(path)?.ToArray();
 
         if (res == null || res.Length == 0)
@@ -1592,8 +1595,7 @@ public class ObjectsManager : IObjectsManager
         var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
 
         // Validate each input path to prevent path traversal
-        foreach (var p in paths)
-            CommonUtils.ValidateRelativePath(p, ddb.DatasetFolderPath);
+        CommonUtils.ValidateRelativePaths(paths, ddb.DatasetFolderPath);
 
         return await Task.Run(() => ddb.ValidateMergeMultispectral(paths));
     }
@@ -1610,8 +1612,7 @@ public class ObjectsManager : IObjectsManager
             var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
 
             // Validate each input path to prevent path traversal
-            foreach (var p in paths)
-                CommonUtils.ValidateRelativePath(p, ddb.DatasetFolderPath);
+            CommonUtils.ValidateRelativePaths(paths, ddb.DatasetFolderPath);
 
             return ddb.PreviewMergeMultispectral(paths, previewBands, thumbSize);
         });
@@ -1630,8 +1631,7 @@ public class ObjectsManager : IObjectsManager
         CommonUtils.ValidateRelativePath(outputPath, ddb.DatasetFolderPath);
 
         // Validate each input path to prevent path traversal
-        foreach (var p in paths)
-            CommonUtils.ValidateRelativePath(p, ddb.DatasetFolderPath);
+        CommonUtils.ValidateRelativePaths(paths, ddb.DatasetFolderPath);
 
         var outputFullPath = ddb.GetLocalPath(outputPath);
 
