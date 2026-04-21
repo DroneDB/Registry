@@ -68,7 +68,7 @@ ENV DOTNET_ROOT="/root/.dotnet"
 ENV LD_LIBRARY_PATH="/usr/lib/x86_64-linux-gnu:/usr/lib:/lib"
 
 # Copy compiled Registry
-COPY --from=dotnet-builder /Registry/Registry.Web/bin/Release/net9.0/publish/ /Registry
+COPY --from=dotnet-builder /Registry/Registry.Web/bin/Release/net10.0/publish/ /Registry
 
 RUN chmod +x /Registry/Registry.Web && mkdir /data && chmod 777 /data
 
