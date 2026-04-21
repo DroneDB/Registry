@@ -219,6 +219,87 @@ public class SystemManagerTest : TestBase
         ex.Message.ShouldContain("Dataset slug");
     }
 
+    [Test]
+    public async Task GetGlobalReport_NonAdmin_ThrowsUnauthorizedException()
+    {
+        // Arrange
+        await using var context = CreateInMemoryContext();
+        _authManagerMock.Setup(x => x.IsUserAdmin()).ReturnsAsync(false);
+
+        var systemManager = CreateSystemManager(context);
+
+        // Act
+        Func<Task> act = async () => await systemManager.GetGlobalReport();
+
+        // Assert
+        var ex = await Should.ThrowAsync<UnauthorizedException>(act);
+        ex.Message.ShouldContain("Only admins");
+    }
+
+    [Test]
+    public async Task GetGlobalReport_Admin_ReturnsReportWithOrgsAndDatasets()
+    {
+        // Arrange
+        await using var context = CreateInMemoryContext();
+        _authManagerMock.Setup(x => x.IsUserAdmin()).ReturnsAsync(true);
+        _authManagerMock.Setup(x => x.SafeGetCurrentUserName()).ReturnsAsync("admin@test.com");
+
+        var ddbMock = new Mock<IDDB>();
+        ddbMock.Setup(x => x.GetInfo()).Returns(new Registry.Ports.DroneDB.Entry { Size = 1024L });
+        ddbMock.Setup(x => x.Search("*", true)).Returns(new List<Registry.Ports.DroneDB.Entry>
+        {
+            new Registry.Ports.DroneDB.Entry { Path = "image1.jpg", Size = 100 },
+            new Registry.Ports.DroneDB.Entry { Path = "image2.jpg", Size = 200 },
+            new Registry.Ports.DroneDB.Entry { Path = "model.obj", Size = 50 }
+        });
+
+        _ddbManagerMock.Setup(x => x.Get(It.IsAny<string>(), It.IsAny<Guid>()))
+            .Returns(ddbMock.Object);
+
+        var systemManager = CreateSystemManager(context);
+
+        // Act
+        var result = await systemManager.GetGlobalReport();
+
+        // Assert
+        result.ShouldNotBeNull();
+        result.UserName.ShouldBe("admin@test.com");
+        result.Organizations.Count.ShouldBe(1);
+        result.Organizations[0].Name.ShouldBe("Test Organization");
+        result.Organizations[0].Slug.ShouldBe("test-org");
+        result.Organizations[0].Datasets.Count.ShouldBe(1);
+        result.Organizations[0].Datasets[0].Name.ShouldBe("test-dataset");
+        result.Organizations[0].Datasets[0].Slug.ShouldBe("test-dataset");
+        result.Organizations[0].Datasets[0].Size.ShouldBe(1024L);
+        result.Organizations[0].Datasets[0].Contents.Count.ShouldBe(2); // .jpg and .obj
+        result.Organizations[0].Datasets[0].Contents[0].Files.ShouldBe(2); // 2 jpg files
+        result.Organizations[0].Datasets[0].Contents[0].Size.ShouldBe(300); // 100 + 200
+    }
+
+    [Test]
+    public async Task GetGlobalReport_DatasetError_IncludesErrorWithoutBreakingRest()
+    {
+        // Arrange
+        await using var context = CreateInMemoryContext();
+        _authManagerMock.Setup(x => x.IsUserAdmin()).ReturnsAsync(true);
+        _authManagerMock.Setup(x => x.SafeGetCurrentUserName()).ReturnsAsync("admin@test.com");
+
+        _ddbManagerMock.Setup(x => x.Get(It.IsAny<string>(), It.IsAny<Guid>()))
+            .Throws(new InvalidOperationException("Simulated failure"));
+
+        var systemManager = CreateSystemManager(context);
+
+        // Act
+        var result = await systemManager.GetGlobalReport();
+
+        // Assert
+        result.ShouldNotBeNull();
+        result.Organizations.Count.ShouldBe(1);
+        result.Organizations[0].Datasets.Count.ShouldBe(1);
+        result.Organizations[0].Datasets[0].Error.ShouldNotBeNullOrEmpty();
+        result.Organizations[0].Datasets[0].Size.ShouldBe(0);
+    }
+
     private SystemManager CreateSystemManager(RegistryContext context)
     {
         // Create a real BuildPendingService instance with mocked dependencies
