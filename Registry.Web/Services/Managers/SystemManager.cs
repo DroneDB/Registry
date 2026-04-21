@@ -1352,6 +1352,7 @@ public class SystemManager : ISystemManager
             var orgDto = new GlobalReportOrganizationDto
             {
                 Name = org.Name,
+                Slug = org.Slug,
                 Datasets = new List<GlobalReportDatasetDto>()
             };
 
@@ -1363,10 +1364,10 @@ public class SystemManager : ISystemManager
                     var info = ddb.GetInfo();
 
                     // Group entries by extension
-                    var entries = ddb.Search("*", true)?.ToList();
+                    var entries = ddb.Search("*", true)?.ToArray();
                     var contents = new List<GlobalReportContentDto>();
 
-                    if (entries != null && entries.Count != 0)
+                    if (entries != null && entries.Length != 0)
                     {
                         var grouped = entries
                             .GroupBy(e => string.IsNullOrEmpty(e.Path) ? "" : Path.GetExtension(e.Path).TrimStart('.'))
@@ -1385,6 +1386,7 @@ public class SystemManager : ISystemManager
                     var dsDto = new GlobalReportDatasetDto
                     {
                         Name = ds.Slug,
+                        Slug = ds.Slug,
                         CreationDate = ds.CreationDate,
                         Description = org.Description,
                         IsPublic = org.IsPublic,
@@ -1402,6 +1404,7 @@ public class SystemManager : ISystemManager
                     orgDto.Datasets.Add(new GlobalReportDatasetDto
                     {
                         Name = ds.Slug,
+                        Slug = ds.Slug,
                         CreationDate = ds.CreationDate,
                         Description = org.Description,
                         IsPublic = org.IsPublic,

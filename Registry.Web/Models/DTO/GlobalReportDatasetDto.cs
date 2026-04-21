@@ -6,6 +6,7 @@ namespace Registry.Web.Models.DTO;
 public class GlobalReportDatasetDto
 {
     public string Name { get; set; }
+    public string Slug { get; set; }
     public DateTime CreationDate { get; set; }
     public string Description { get; set; }
     public bool IsPublic { get; set; }
