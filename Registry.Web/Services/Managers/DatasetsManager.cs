@@ -6,7 +6,6 @@ using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
-using Registry.Adapters.DroneDB;
 using Registry.Ports;
 using Registry.Ports.DroneDB;
 using Registry.Web.Data;
@@ -485,7 +484,7 @@ public class DatasetsManager : IDatasetsManager
                 if (_fileSystem.FolderExists(sourcePath))
                 {
                     _logger.LogInformation("Deleting source files at '{SourcePath}'", sourcePath);
-                    _fileSystem.FolderDelete(sourcePath, true);
+                    _fileSystem.FolderDelete(sourcePath);
                 }
 
                 // Invalidate caches

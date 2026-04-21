@@ -1,4 +1,5 @@
-﻿using System.Linq;
+﻿using System;
+using System.Linq;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Options;
 using Microsoft.Extensions.Primitives;
@@ -41,7 +42,7 @@ public class TokenManager : ITokenManager
         return 
             authorizationHeader == StringValues.Empty ? 
                 request.Cookies[_appSettings.AuthCookieName] : 
-                authorizationHeader.SingleOrDefault(h => h.StartsWith("Bearer", System.StringComparison.OrdinalIgnoreCase), "").Split(" ").Last();
+                authorizationHeader.SingleOrDefault(h => h.StartsWith("Bearer", StringComparison.OrdinalIgnoreCase), "").Split(" ").Last();
     }
 
 }

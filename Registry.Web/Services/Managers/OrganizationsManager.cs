@@ -10,6 +10,7 @@ using Registry.Web.Data;
 using Registry.Web.Data.Models;
 using Registry.Web.Exceptions;
 using Registry.Web.Identity;
+using Registry.Web.Identity.Models;
 using Registry.Web.Models;
 using Registry.Web.Models.Configuration;
 using Registry.Web.Models.DTO;
@@ -489,7 +490,7 @@ public class OrganizationsManager : IOrganizationsManager
             {
                 UserName = user.UserName,
                 Email = user.Email,
-                Permissions = (OrganizationPermissions)orgUser.Permissions,
+                Permissions = orgUser.Permissions,
                 GrantedAt = orgUser.GrantedAt,
                 GrantedBy = grantedByUser?.UserName
             });
@@ -523,7 +524,7 @@ public class OrganizationsManager : IOrganizationsManager
 
         // Check if already a member
         if (org.Users?.Any(u => u.UserId == userToAdd.Id) == true)
-            throw new ConflictException($"User is already a member of this organization");
+            throw new ConflictException("User is already a member of this organization");
 
         // Cannot add owner as member
         if (org.OwnerId == userToAdd.Id)
@@ -570,7 +571,7 @@ public class OrganizationsManager : IOrganizationsManager
 
         var orgUser = org.Users?.FirstOrDefault(u => u.UserId == user.Id);
         if (orgUser == null)
-            throw new NotFoundException($"User is not a member of this organization");
+            throw new NotFoundException("User is not a member of this organization");
 
         var oldPermission = orgUser.Permissions;
         orgUser.Permissions = permission;
@@ -608,7 +609,7 @@ public class OrganizationsManager : IOrganizationsManager
 
         var orgUser = org.Users?.FirstOrDefault(u => u.UserId == user.Id);
         if (orgUser == null)
-            throw new NotFoundException($"User is not a member of this organization");
+            throw new NotFoundException("User is not a member of this organization");
 
         _context.Set<OrganizationUser>().Remove(orgUser);
         await _context.SaveChangesAsync();
@@ -617,7 +618,7 @@ public class OrganizationsManager : IOrganizationsManager
             userName, orgSlug, currentUser?.UserName);
     }
 
-    private async Task<bool> CanManageMembers(Organization org, Identity.Models.User user)
+    private async Task<bool> CanManageMembers(Organization org, User user)
     {
         if (user == null) return false;
 

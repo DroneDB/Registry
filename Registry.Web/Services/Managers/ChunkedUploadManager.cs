@@ -3,12 +3,10 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Security.Cryptography;
-using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using Registry.Ports;
-using Registry.Web.Data.Models;
 using Registry.Web.Models.DTO;
 
 namespace Registry.Web.Services.Managers;
@@ -195,7 +193,7 @@ public class ChunkedUploadManager
         try
         {
             if (_fileSystem.FolderExists(fileChunkDir))
-                _fileSystem.FolderDelete(fileChunkDir, true);
+                _fileSystem.FolderDelete(fileChunkDir);
 
             if (_fileSystem.Exists(outputFilePath))
                 _fileSystem.Delete(outputFilePath);

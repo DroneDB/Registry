@@ -6,7 +6,6 @@ using Registry.Adapters.DroneDB;
 using Registry.Ports;
 using Registry.Ports.DroneDB;
 using Registry.Web.Models.Configuration;
-using Registry.Web.Services.Ports;
 
 namespace Registry.Web.Services.Managers;
 
