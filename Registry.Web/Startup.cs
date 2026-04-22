@@ -31,7 +31,7 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
-using Microsoft.OpenApi.Models;
+using Microsoft.OpenApi;
 using Newtonsoft.Json.Serialization;
 using Registry.Adapters;
 using Registry.Common;
@@ -374,7 +374,7 @@ public class Startup
                 context.Response.Redirect("/scalar/v1");
                 return;
             }
-            await next();
+            await next(context);
         });
 
         app.UseRouting();

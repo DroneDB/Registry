@@ -4,26 +4,21 @@ using System.Diagnostics;
 using System.IO;
 using System.IO.Enumeration;
 using System.Linq;
-using System.Threading;
 using System.Threading.Tasks;
-using Hangfire;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using MimeMapping;
-using Registry.Adapters;
 using Registry.Common;
+using Registry.Ports;
+using Registry.Ports.DroneDB;
 using Registry.Web.Data;
 using Registry.Web.Exceptions;
 using Registry.Web.Models;
 using Registry.Web.Models.Configuration;
 using Registry.Web.Models.DTO;
+using Registry.Web.Services.Adapters;
 using Registry.Web.Services.Ports;
 using Registry.Web.Utilities;
-using Registry.Adapters.DroneDB;
-using Registry.Common.Model;
-using Registry.Ports;
-using Registry.Ports.DroneDB;
-using Registry.Web.Services.Adapters;
 using static Registry.Web.Services.CacheCategories;
 
 namespace Registry.Web.Services.Managers;
@@ -160,7 +155,7 @@ public class ObjectsManager : IObjectsManager
         if (entry.Type == EntryType.Directory)
             throw new InvalidOperationException("Cannot get a folder, we are supposed to deal with a file!");
 
-        Debug.Assert(entry.Path != null, "entry.Path != null");
+        Debug.Assert(entry.Path != null);
         return new StorageEntryDto
         {
             Hash = entry.Hash,
@@ -419,7 +414,7 @@ public class ObjectsManager : IObjectsManager
 
                     _fs.EnsureParentFolderExists(destLocalFilePath);
 
-                    _fs.FolderCopy(sourceLocalFilePath, destLocalFilePath, true);
+                    _fs.FolderCopy(sourceLocalFilePath, destLocalFilePath);
                     break;
 
                 }
@@ -448,7 +443,7 @@ public class ObjectsManager : IObjectsManager
 
                     _fs.EnsureParentFolderExists(destLocalFilePath);
 
-                    _fs.Copy(sourceLocalFilePath, destLocalFilePath, true);
+                    _fs.Copy(sourceLocalFilePath, destLocalFilePath);
                     break;
                 }
 
@@ -537,7 +532,7 @@ public class ObjectsManager : IObjectsManager
                 {
                     _logger.LogWarning("Rolling back build folder copy");
                     if (_fs.FolderExists(destBuildPath))
-                        _fs.FolderDelete(destBuildPath, true);
+                        _fs.FolderDelete(destBuildPath);
                 }
                 catch (Exception rbEx)
                 {
@@ -566,7 +561,7 @@ public class ObjectsManager : IObjectsManager
                     if (sourceEntry.Type == EntryType.Directory)
                     {
                         if (_fs.FolderExists(destLocalFilePath))
-                            _fs.FolderDelete(destLocalFilePath, true);
+                            _fs.FolderDelete(destLocalFilePath);
                     }
                     else
                     {
@@ -1440,11 +1435,9 @@ public class ObjectsManager : IObjectsManager
                 throw new InvalidOperationException($"Cannot calculate directory size: {ex.Message}", ex);
             }
         }
-        else
-        {
-            // For files, use the size from the entry
-            return entry.Size;
-        }
+
+        // For files, use the size from the entry
+        return entry.Size;
     }
 
     public async Task<int> ClearCompletedBuilds(string orgSlug, string dsSlug)

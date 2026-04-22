@@ -1,5 +1,4 @@
 ﻿using System;
-using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
@@ -21,13 +20,12 @@ using Registry.Ports.DroneDB;
 using Registry.Web.Data;
 using Registry.Web.Data.Models;
 using Registry.Web.Exceptions;
+using Registry.Web.Models;
 using Registry.Web.Models.Configuration;
 using Registry.Web.Models.DTO;
-using Registry.Web.Models;
 using Registry.Web.Services.Adapters;
 using Registry.Web.Services.Ports;
 using Registry.Web.Utilities;
-using Hangfire;
 
 namespace Registry.Web.Services.Managers;
 
@@ -669,7 +667,7 @@ public class SystemManager : ISystemManager
                     destDirs.Length, destFiles.Length);
                 foreach (var dir in destDirs)
                 {
-                    _fileSystem.FolderDelete(dir, true);
+                    _fileSystem.FolderDelete(dir);
                 }
 
                 foreach (var file in destFiles)
@@ -698,7 +696,7 @@ public class SystemManager : ISystemManager
             _logger.LogInformation("Scheduling build for imported dataset {Org}/{Ds}", destOrg, destDs);
             var ddb = _ddbManager.Get(destOrg, dataset.InternalRef);
             var user = await _authManager.GetCurrentUser();
-            var meta = new IndexPayload(destOrg, destDs, null, user.Id, null, null);
+            var meta = new IndexPayload(destOrg, destDs, null, user.Id);
             var jobId = _backgroundJob.EnqueueIndexed(() => HangfireUtils.BuildWrapper(ddb, null, true, null), meta);
             _logger.LogInformation("Build scheduled with job id {JobId} for {Org}/{Ds}", jobId, destOrg, destDs);
 
@@ -1090,7 +1088,7 @@ public class SystemManager : ISystemManager
             {
                 _logger.LogInformation("Scheduling build for imported dataset {Org}/{Ds}", destOrg, destDs);
                 var user = await _authManager.GetCurrentUser();
-                var meta = new IndexPayload(destOrg, destDs, null, user.Id, null, null);
+                var meta = new IndexPayload(destOrg, destDs, null, user.Id);
                 var jobId = _backgroundJob.EnqueueIndexed(() => HangfireUtils.BuildWrapper(ddb, null, true, null), meta);
                 _logger.LogInformation("Build scheduled with job id {JobId} for {Org}/{Ds}", jobId, destOrg, destDs);
             }
@@ -1279,7 +1277,7 @@ public class SystemManager : ISystemManager
         _logger.LogInformation("Enqueueing build jobs for dataset {OrgSlug}/{DsSlug}", orgSlug, dsSlug);
         var user = await _authManager.GetCurrentUser();
         var userId = user?.Id ?? MagicStrings.AutoBuildServiceUserId;
-        var meta = new IndexPayload(orgSlug, dsSlug, null, userId, null, null);
+        var meta = new IndexPayload(orgSlug, dsSlug, null, userId);
         _backgroundJob.EnqueueIndexed(
             () => HangfireUtils.BuildWrapper(ddb, null, true, null), meta);
         _backgroundJob.EnqueueIndexed(
@@ -1330,5 +1328,96 @@ public class SystemManager : ISystemManager
             DeletedCount = deleted,
             RetentionDays = days
         };
+    }
+
+    public async Task<GlobalReportDto> GetGlobalReport()
+    {
+        if (!await _authManager.IsUserAdmin())
+            throw new UnauthorizedException("Only admins can perform system related tasks");
+
+        var userName = await _authManager.SafeGetCurrentUserName();
+
+        var organizations = await _context.Organizations
+            .Include(o => o.Datasets)
+            .ToListAsync();
+
+        var report = new GlobalReportDto
+        {
+            UserName = userName,
+            Organizations = []
+        };
+
+        foreach (var org in organizations)
+        {
+            var orgDto = new GlobalReportOrganizationDto
+            {
+                Name = org.Name,
+                Slug = org.Slug,
+                Datasets = new List<GlobalReportDatasetDto>()
+            };
+
+            foreach (var ds in org.Datasets)
+            {
+                try
+                {
+                    var ddb = _ddbManager.Get(org.Slug, ds.InternalRef);
+                    var info = ddb.GetInfo();
+
+                    // Group entries by extension
+                    var entries = ddb.Search("*", true)?.ToArray();
+                    var contents = new List<GlobalReportContentDto>();
+
+                    if (entries != null && entries.Length != 0)
+                    {
+                        var grouped = entries
+                            .GroupBy(e => string.IsNullOrEmpty(e.Path) ? "" : Path.GetExtension(e.Path).TrimStart('.'))
+                            .Select(g => new GlobalReportContentDto
+                            {
+                                Extension = g.Key,
+                                Files = g.Count(),
+                                Size = g.Sum(e => e.Size)
+                            })
+                            .OrderByDescending(c => c.Files)
+                            .ToList();
+
+                        contents.AddRange(grouped);
+                    }
+
+                    var dsDto = new GlobalReportDatasetDto
+                    {
+                        Name = ds.Slug,
+                        Slug = ds.Slug,
+                        CreationDate = ds.CreationDate,
+                        Description = org.Description,
+                        IsPublic = org.IsPublic,
+                        Owner = org.OwnerId,
+                        Size = info.Size,
+                        Contents = contents
+                    };
+
+                    orgDto.Datasets.Add(dsDto);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Error processing dataset {OrgSlug}/{DsSlug}", org.Slug, ds.Slug);
+                    // Add dataset with error instead of skipping
+                    orgDto.Datasets.Add(new GlobalReportDatasetDto
+                    {
+                        Name = ds.Slug,
+                        Slug = ds.Slug,
+                        CreationDate = ds.CreationDate,
+                        Description = org.Description,
+                        IsPublic = org.IsPublic,
+                        Owner = org.OwnerId,
+                        Size = 0,
+                        Error = ex.Message
+                    });
+                }
+            }
+
+            report.Organizations.Add(orgDto);
+        }
+
+        return report;
     }
 }

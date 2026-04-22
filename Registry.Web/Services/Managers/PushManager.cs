@@ -6,9 +6,6 @@ using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Newtonsoft.Json;
-using Registry.Adapters.DroneDB;
-using Registry.Common;
-using Registry.Common.Model;
 using Registry.Ports;
 using Registry.Ports.DroneDB;
 using Registry.Web.Exceptions;
@@ -280,7 +277,7 @@ public class PushManager : IPushManager
         }
 
         // Delete temp folder
-        _fileSystem.FolderDelete(baseTempFolder, true);
+        _fileSystem.FolderDelete(baseTempFolder);
 
         // Build items
         var user = await _authManager.GetCurrentUser();
@@ -304,7 +301,7 @@ public class PushManager : IPushManager
         {
             _logger.LogInformation("Items are pending build, retriggering build");
 
-            var meta = new IndexPayload(orgSlug, dsSlug, null, user.Id, null, null);
+            var meta = new IndexPayload(orgSlug, dsSlug, null, user.Id);
             var jobId = _backgroundJob.EnqueueIndexed(() => HangfireUtils.BuildPendingWrapper(ddb, null), meta);
 
             _logger.LogInformation("Background job id is {JobId}", jobId);

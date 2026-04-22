@@ -355,4 +355,28 @@ public class SystemController : ControllerBaseEx
         return Ok(features);
     }
 
+    /// <summary>
+    /// Generates a global report of all organizations and datasets. Admin only.
+    /// </summary>
+    /// <returns>Global report containing user, organizations, datasets, and file statistics.</returns>
+    [HttpGet("report", Name = nameof(SystemController) + "." + nameof(GetGlobalReport))]
+    [ProducesResponseType(typeof(GlobalReportDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status401Unauthorized)]
+    public async Task<IActionResult> GetGlobalReport()
+    {
+        try
+        {
+            _logger.LogDebug("System controller GetGlobalReport()");
+
+            return Ok(await _systemManager.GetGlobalReport());
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Exception in System controller GetGlobalReport()");
+
+            return ExceptionResult(ex);
+        }
+    }
+
 }

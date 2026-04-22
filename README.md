@@ -20,7 +20,7 @@ View orthophotos, point clouds, 3D models (OBJ, GLTF, GLB), panoramas and more d
 | Category | Formats |
 |----------|---------|
 | Images | JPG, JPEG, DNG, TIF, TIFF, PNG, GIF, WEBP |
-| Point Clouds | LAS, LAZ, PLY |
+| Point Clouds | LAS, LAZ, E57, PTS, XYZ, PLY |
 | 3D Models | OBJ, GLTF, GLB, PLY |
 | Rasters | GeoTIFF (orthophotos, DEMs) |
 | Vector | GeoJSON, SHP, KML, KMZ, DXF, DWG, GPKG |

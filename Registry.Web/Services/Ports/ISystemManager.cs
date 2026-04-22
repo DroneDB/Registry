@@ -35,4 +35,10 @@ public interface ISystemManager
     /// <param name="retentionDays">Optional override for retention days. Uses AppSettings.JobIndexRetentionDays when null.</param>
     /// <returns>Cleanup result with number of records deleted.</returns>
     Task<CleanupJobIndicesResultDto> CleanupJobIndices(int? retentionDays = null);
+
+    /// <summary>
+    /// Generates a global report of all organizations and datasets. Admin only.
+    /// </summary>
+    /// <returns>Global report containing user, organizations, datasets, and file statistics.</returns>
+    Task<GlobalReportDto> GetGlobalReport();
 }

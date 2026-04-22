@@ -22,7 +22,6 @@ using Registry.Web.Models;
 using Registry.Web.Models.Configuration;
 using Registry.Web.Models.DTO;
 using Registry.Web.Services.Ports;
-using Registry.Web.Utilities;
 
 namespace Registry.Web.Services.Managers;
 
@@ -894,7 +893,7 @@ public class UsersManager : IUsersManager
             };
 
         var userOrg = merge.ToDictionary(item => item.UserId,
-            item => new { OrgIds = item.OrgIds, OrgCount = item.OrgCount });
+            item => new { item.OrgIds, item.OrgCount });
 
         // Dataset count per organization
         var datasetQuery = from ds in _registryContext.Datasets

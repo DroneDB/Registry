@@ -1,6 +1,6 @@
 using System.Collections.Generic;
 using Microsoft.Extensions.Options;
-using Microsoft.OpenApi.Models;
+using Microsoft.OpenApi;
 using Registry.Web.Models.Configuration;
 using Swashbuckle.AspNetCore.SwaggerGen;
 
@@ -26,4 +26,5 @@ public class BasePathDocumentFilter : IDocumentFilter
                 }
             };
     }
+
 }

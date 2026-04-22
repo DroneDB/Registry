@@ -9,7 +9,7 @@ RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone
 RUN apt-get update && apt-get install -y --fix-missing --no-install-recommends git curl software-properties-common gpg-agent wget
 
 # Install dotnet and nodejs
-RUN curl -sSL https://dot.net/v1/dotnet-install.sh | bash /dev/stdin --channel 9.0 \
+RUN curl -sSL https://dot.net/v1/dotnet-install.sh | bash /dev/stdin --channel 10.0 \
     && curl -sL https://deb.nodesource.com/setup_22.x | bash - \
     && apt-get install -y nodejs \
     && apt-get clean && rm -rf /var/lib/apt/lists/*
@@ -68,7 +68,7 @@ ENV DOTNET_ROOT="/root/.dotnet"
 ENV LD_LIBRARY_PATH="/usr/lib/x86_64-linux-gnu:/usr/lib:/lib"
 
 # Copy compiled Registry
-COPY --from=dotnet-builder /Registry/Registry.Web/bin/Release/net9.0/publish/ /Registry
+COPY --from=dotnet-builder /Registry/Registry.Web/bin/Release/net10.0/publish/ /Registry
 
 RUN chmod +x /Registry/Registry.Web && mkdir /data && chmod 777 /data
 
