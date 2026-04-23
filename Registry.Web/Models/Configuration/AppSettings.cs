@@ -186,6 +186,14 @@ public class AppSettings
     public long MaxZipMemoryThreshold { get; set; } = 1073741824; // 1GB
 
     /// <summary>
+    /// Maximum size in bytes for GeoTIFF raster export operations (multispectral and thermal).
+    /// Estimated as width × height × bytesPerPixel × bandCount of the source raster.
+    /// Null means unlimited (no enforcement, backwards compatible).
+    /// Default: 1GB (1073741824 bytes).
+    /// </summary>
+    public long? MaxExportSizeBytes { get; set; } = 1073741824; // 1GB
+
+    /// <summary>
     /// Cron expression for cleanup expired jobs task
     /// Default: Daily (Cron.Daily)
     /// </summary>

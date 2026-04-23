@@ -1660,6 +1660,9 @@ public class ObjectsManager : IObjectsManager
         var entry = EnsurePathValidity(orgSlug, ds.InternalRef, path, out var ddb);
         var sourcePath = GetBuildSource(entry);
 
+        // Enforce export size limit (conservative upper bound based on raw input size)
+        EnsureExportSizeWithinLimit(ddb, sourcePath);
+
         var tempDir = Path.GetTempPath();
         var tempOutputFileName = Path.GetFileNameWithoutExtension(path) + "_export_" + Guid.NewGuid().ToString("N") + ".tif";
         var outputFileName = Path.GetFileNameWithoutExtension(path) + "_export.tif";
@@ -1683,6 +1686,91 @@ public class ObjectsManager : IObjectsManager
         {
             try { if (File.Exists(outputPath)) File.Delete(outputPath); } catch { /* ignore cleanup failures */ }
         }
+    }
+
+    public async Task<long> EstimateExportSize(string orgSlug, string dsSlug, string path)
+    {
+        var ds = _utils.GetDataset(orgSlug, dsSlug);
+
+        if (!await _authManager.RequestAccess(ds, AccessType.Read))
+            throw new UnauthorizedException("The current user is not allowed to read dataset");
+
+        if (path.StartsWith('/')) path = path[1..];
+
+        var entry = EnsurePathValidity(orgSlug, ds.InternalRef, path, out var ddb);
+        var sourcePath = GetBuildSource(entry);
+
+        return EstimateRasterOutputBytes(ddb, sourcePath);
+    }
+
+    /// <summary>
+    /// Throws <see cref="BadRequestException"/> if the estimated export output exceeds
+    /// <see cref="AppSettings.MaxExportSizeBytes"/>. No-op when the limit is null.
+    /// </summary>
+    private void EnsureExportSizeWithinLimit(IDDB ddb, string sourcePath)
+    {
+        var limit = _settings.MaxExportSizeBytes;
+        if (!limit.HasValue) return;
+
+        long estimated;
+        try
+        {
+            estimated = EstimateRasterOutputBytes(ddb, sourcePath);
+        }
+        catch (Exception ex)
+        {
+            // If estimation fails, do not block the export — just log and proceed.
+            _logger.LogWarning(ex, "Failed to estimate export size for '{Path}', skipping limit check", sourcePath);
+            return;
+        }
+
+        if (estimated > limit.Value)
+        {
+            throw new BadRequestException(
+                $"Export output exceeds maximum allowed size ({FormatBytes(estimated)} > {FormatBytes(limit.Value)}).");
+        }
+    }
+
+    /// <summary>
+    /// Estimates the raw uncompressed size (in bytes) of a raster as a conservative upper bound
+    /// for the GeoTIFF export output: width × height × bytesPerPixel × bandCount.
+    /// </summary>
+    private static long EstimateRasterOutputBytes(IDDB ddb, string sourcePath)
+    {
+        var infoJson = ddb.GetRasterInfo(sourcePath);
+        using var doc = System.Text.Json.JsonDocument.Parse(infoJson);
+        var root = doc.RootElement;
+
+        long width = root.TryGetProperty("width", out var wEl) ? wEl.GetInt64() : 0;
+        long height = root.TryGetProperty("height", out var hEl) ? hEl.GetInt64() : 0;
+        long bandCount = root.TryGetProperty("bandCount", out var bEl) ? bEl.GetInt64() : 1;
+        var dataType = root.TryGetProperty("dataType", out var dtEl) ? dtEl.GetString() : null;
+
+        if (width <= 0 || height <= 0 || bandCount <= 0) return 0;
+
+        return width * height * bandCount * BytesPerPixel(dataType);
+    }
+
+    private static int BytesPerPixel(string? dataType) => dataType switch
+    {
+        "Byte" or "UInt8" or "Int8" => 1,
+        "UInt16" or "Int16" => 2,
+        "UInt32" or "Int32" or "Float32" => 4,
+        "Float64" or "UInt64" or "Int64" => 8,
+        _ => 4 // Conservative default for unknown types
+    };
+
+    private static string FormatBytes(long bytes)
+    {
+        string[] units = ["B", "KB", "MB", "GB", "TB"];
+        double value = bytes;
+        int unit = 0;
+        while (value >= 1024 && unit < units.Length - 1)
+        {
+            value /= 1024;
+            unit++;
+        }
+        return $"{value:0.##} {units[unit]}";
     }
 
     #endregion

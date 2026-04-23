@@ -35,4 +35,10 @@ public class FeaturesDto
     /// File names (in dataset root) considered as dataset thumbnail candidates.
     /// </summary>
     public string[]? DatasetThumbnailCandidates { get; set; }
+
+    /// <summary>
+    /// Maximum allowed output size in bytes for GeoTIFF raster export. Null = unlimited.
+    /// Clients use this to disable the export button when the estimated output exceeds the limit.
+    /// </summary>
+    public long? MaxExportSizeBytes { get; set; }
 }

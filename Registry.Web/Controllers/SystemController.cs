@@ -349,7 +349,8 @@ public class SystemController : ControllerBaseEx
                     RequireNonAlphanumeric = _appSettings.PasswordPolicy.RequireNonAlphanumeric
                 }
                 : null,
-            DatasetThumbnailCandidates = _appSettings.DatasetThumbnailCandidates
+            DatasetThumbnailCandidates = _appSettings.DatasetThumbnailCandidates,
+            MaxExportSizeBytes = _appSettings.MaxExportSizeBytes
         };
 
         return Ok(features);

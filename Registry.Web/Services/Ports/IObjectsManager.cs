@@ -74,6 +74,12 @@ public interface IObjectsManager
         string? preset = null, string? bands = null, string? formula = null,
         string? bandFilter = null, string? colormap = null, string? rescale = null);
 
+    /// <summary>
+    /// Estimates the output size (in bytes) of a GeoTIFF export for the given raster path.
+    /// Uses raw input data size (width × height × bytesPerPixel × bandCount) as a conservative upper bound.
+    /// </summary>
+    Task<long> EstimateExportSize(string orgSlug, string dsSlug, string path);
+
     /// <summary>Get thermal info including calibration, temperature range, and dimensions</summary>
     Task<string> GetThermalInfo(string orgSlug, string dsSlug, string path);
 
