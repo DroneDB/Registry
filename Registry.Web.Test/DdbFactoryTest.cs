@@ -126,9 +126,9 @@ public class DdbFactoryTest : TestBase
         res.Type.ShouldBe(expectedType);
         res.Properties.ShouldBeEquivalentTo(expectedMeta);
 
-        res.PointGeometry["geometry"]["coordinates"][0].Value<double>().ShouldBe(expectedLongitude, 0.00001);
-        res.PointGeometry["geometry"]["coordinates"][1].Value<double>().ShouldBe(expectedLatitude, 0.00001);
-        res.PointGeometry["geometry"]["coordinates"][2].Value<double>().ShouldBe(expectedAltitude, 0.1);
+        ((JObject)res.PointGeometry)["geometry"]["coordinates"][0].Value<double>().ShouldBe(expectedLongitude, 0.00001);
+        ((JObject)res.PointGeometry)["geometry"]["coordinates"][1].Value<double>().ShouldBe(expectedLatitude, 0.00001);
+        ((JObject)res.PointGeometry)["geometry"]["coordinates"][2].Value<double>().ShouldBe(expectedAltitude, 0.1);
 
     }
 
@@ -180,11 +180,11 @@ public class DdbFactoryTest : TestBase
         res.Size.ShouldBe(expectedSize);
         res.Type.ShouldBe(expectedType);
         res.Properties.ShouldBeEquivalentTo(expectedMeta);
-        res.PointGeometry["geometry"]["coordinates"][0].Value<double>().ShouldBe(expectedLongitude, 0.00001);
-        res.PointGeometry["geometry"]["coordinates"][1].Value<double>().ShouldBe(expectedLatitude, 0.00001);
-        res.PointGeometry["geometry"]["coordinates"][2].Value<double>().ShouldBe(expectedAltitude, 0.1);
+        ((JObject)res.PointGeometry)["geometry"]["coordinates"][0].Value<double>().ShouldBe(expectedLongitude, 0.00001);
+        ((JObject)res.PointGeometry)["geometry"]["coordinates"][1].Value<double>().ShouldBe(expectedLatitude, 0.00001);
+        ((JObject)res.PointGeometry)["geometry"]["coordinates"][2].Value<double>().ShouldBe(expectedAltitude, 0.1);
 
-        var polygon = res.PolygonGeometry;
+        var polygon = (JObject)res.PolygonGeometry;
 
         var coords = polygon["geometry"]["coordinates"][0];
         for (int i = 0; i < expectedCoordinates.Count; i++)

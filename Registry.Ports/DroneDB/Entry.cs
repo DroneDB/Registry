@@ -1,7 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
 using Newtonsoft.Json;
-using Newtonsoft.Json.Linq;
 using Registry.Common;
 
 namespace Registry.Ports.DroneDB;
@@ -31,8 +30,8 @@ public class Entry
     public int Depth { get; set; }
 
     [JsonProperty("point_geom")]
-    public JObject PointGeometry { get; set; }
+    public object PointGeometry { get; set; }
 
     [JsonProperty("polygon_geom")]
-    public JObject PolygonGeometry { get; set; }
+    public object PolygonGeometry { get; set; }
 }

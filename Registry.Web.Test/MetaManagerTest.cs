@@ -10,6 +10,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Moq;
 using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
 using NUnit.Framework;
 using Registry.Adapters.DroneDB;
 using Registry.Common;
@@ -120,7 +121,7 @@ internal class MetaManagerTest : TestBase
         var a = await metaManager.Add(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug,
             "annotations", "{\"test\":123}");
 
-        a.Data["test"].ToObject<int>().ShouldBe(123);
+        ((JToken)a.Data)["test"].ToObject<int>().ShouldBe(123);
 
         var res = await metaManager.List(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug);
 
@@ -132,8 +133,8 @@ internal class MetaManagerTest : TestBase
             "annotations",
             "{\"test\":4124,\"pippo\":\"ciao\"}");
 
-        a2.Data["test"].ToObject<int>().ShouldBe(4124);
-        a2.Data["pippo"].ToObject<string>().ShouldBe("ciao");
+        ((JToken)a2.Data)["test"].ToObject<int>().ShouldBe(4124);
+        ((JToken)a2.Data)["pippo"].ToObject<string>().ShouldBe("ciao");
 
         (await metaManager.List(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug)).Count()
             .ShouldBe(1);

@@ -53,9 +53,11 @@ public class ObjectsController : ControllerBaseEx
     {
         if (paths == null || paths.Count == 0)
             return BadRequest(new ErrorResponse("paths is required"));
-        foreach (var p in paths)
-            if (IsTraversalPath(p))
-                return BadRequest(new ErrorResponse("Invalid input path"));
+        if (paths.Any(IsTraversalPath))
+        {
+            return BadRequest(new ErrorResponse("Invalid input path"));
+        }
+
         if (outputPath != null && IsTraversalPath(outputPath))
             return BadRequest(new ErrorResponse("Invalid output path"));
         return null;
@@ -139,7 +141,8 @@ public class ObjectsController : ControllerBaseEx
                 return NotFound();
             }
 
-            _logger.LogInformation("Successfully generated thumbnail for '{OrgSlug}/{DsSlug}' path: '{Path}', size: {DataSize} bytes",
+            _logger.LogInformation(
+                "Successfully generated thumbnail for '{OrgSlug}/{DsSlug}' path: '{Path}', size: {DataSize} bytes",
                 orgSlug, dsSlug, path, res.Data.Length);
 
             return File(res.Data, res.ContentType, res.Name);
@@ -164,7 +167,8 @@ public class ObjectsController : ControllerBaseEx
     /// <param name="path">The path to the object.</param>
     /// <param name="ext">The tile image extension (png or webp).</param>
     /// <returns>The tile image file.</returns>
-    [HttpGet("tiles/{tz:int}/{tx:int}/{tyRaw}.{ext:regex(^(png|webp)$)}", Name = nameof(ObjectsController) + "." + nameof(GenerateTile))]
+    [HttpGet("tiles/{tz:int}/{tx:int}/{tyRaw}.{ext:regex(^(png|webp)$)}",
+        Name = nameof(ObjectsController) + "." + nameof(GenerateTile))]
     [ProducesResponseType(typeof(FileResult), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status401Unauthorized)]
@@ -333,7 +337,6 @@ public class ObjectsController : ControllerBaseEx
 
         return await InternalDownload(orgSlug, dsSlug, [path], isInline, cancellationToken);
     }
-
 
     #endregion
 
@@ -675,7 +678,9 @@ public class ObjectsController : ControllerBaseEx
     {
         try
         {
-            _logger.LogDebug("Objects controller Transfer('{SourceOrgSlug}', '{SourceDsSlug}', '{SourcePath}', '{DestOrgSlug}', '{DestDsSlug}', '{DestPath}', '{Overwrite}')", orgSlug,
+            _logger.LogDebug(
+                "Objects controller Transfer('{SourceOrgSlug}', '{SourceDsSlug}', '{SourcePath}', '{DestOrgSlug}', '{DestDsSlug}', '{DestPath}', '{Overwrite}')",
+                orgSlug,
                 dsSlug, sourcePath, destOrgSlug, destDsSlug, destPath, overwrite);
 
             await _objectsManager.Transfer(orgSlug, dsSlug, sourcePath, destOrgSlug, destDsSlug, destPath, overwrite);
@@ -684,7 +689,8 @@ public class ObjectsController : ControllerBaseEx
         catch (Exception ex)
         {
             _logger.LogError(ex,
-                "Exception in Objects controller Transfer('{SourceOrgSlug}', '{SourceDsSlug}', '{SourcePath}', '{DestOrgSlug}', '{DestDsSlug}', '{DestPath}', '{Overwrite}')", orgSlug,
+                "Exception in Objects controller Transfer('{SourceOrgSlug}', '{SourceDsSlug}', '{SourcePath}', '{DestOrgSlug}', '{DestDsSlug}', '{DestPath}', '{Overwrite}')",
+                orgSlug,
                 dsSlug, sourcePath, destOrgSlug, destDsSlug, destPath, overwrite);
 
             return ExceptionResult(ex);
@@ -748,7 +754,8 @@ public class ObjectsController : ControllerBaseEx
     {
         try
         {
-            _logger.LogDebug("Objects controller GetBuildFile('{OrgSlug}', '{DsSlug}', '{Hash}', '{Path}')", orgSlug, dsSlug,
+            _logger.LogDebug("Objects controller GetBuildFile('{OrgSlug}', '{DsSlug}', '{Hash}', '{Path}')", orgSlug,
+                dsSlug,
                 hash, path);
 
             var res = await _objectsManager.GetBuildFile(orgSlug, dsSlug, hash, path);
@@ -830,7 +837,8 @@ public class ObjectsController : ControllerBaseEx
     {
         try
         {
-            _logger.LogDebug("Objects controller GetBuilds('{OrgSlug}', '{DsSlug}', page: {Page}, pageSize: {PageSize})",
+            _logger.LogDebug(
+                "Objects controller GetBuilds('{OrgSlug}', '{DsSlug}', page: {Page}, pageSize: {PageSize})",
                 orgSlug, dsSlug, page, pageSize);
 
             var builds = await _objectsManager.GetBuilds(orgSlug, dsSlug, page, pageSize);
@@ -901,7 +909,8 @@ public class ObjectsController : ControllerBaseEx
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Exception in GetRasterInfo('{OrgSlug}', '{DsSlug}', '{Path}')", orgSlug, dsSlug, path);
+            _logger.LogError(ex, "Exception in GetRasterInfo('{OrgSlug}', '{DsSlug}', '{Path}')", orgSlug, dsSlug,
+                path);
             return ExceptionResult(ex);
         }
     }
@@ -928,7 +937,8 @@ public class ObjectsController : ControllerBaseEx
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Exception in GetRasterMetadata('{OrgSlug}', '{DsSlug}', '{Path}')", orgSlug, dsSlug, path);
+            _logger.LogError(ex, "Exception in GetRasterMetadata('{OrgSlug}', '{DsSlug}', '{Path}')", orgSlug, dsSlug,
+                path);
             return ExceptionResult(ex);
         }
     }
@@ -963,13 +973,15 @@ public class ObjectsController : ControllerBaseEx
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Exception in GenerateThumbnailEx('{OrgSlug}', '{DsSlug}', '{Path}')", orgSlug, dsSlug, path);
+            _logger.LogError(ex, "Exception in GenerateThumbnailEx('{OrgSlug}', '{DsSlug}', '{Path}')", orgSlug, dsSlug,
+                path);
             return ExceptionResult(new Exception("Cannot generate thumbnail"));
         }
     }
 
     /// <summary>Generate tile with extended visualization params.</summary>
-    [HttpGet("tiles-ex/{tz:int}/{tx:int}/{tyRaw}.{ext:regex(^(png|webp)$)}", Name = nameof(ObjectsController) + "." + nameof(GenerateTileEx))]
+    [HttpGet("tiles-ex/{tz:int}/{tx:int}/{tyRaw}.{ext:regex(^(png|webp)$)}",
+        Name = nameof(ObjectsController) + "." + nameof(GenerateTileEx))]
     [ProducesResponseType(typeof(FileResult), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status401Unauthorized)]
@@ -1004,7 +1016,8 @@ public class ObjectsController : ControllerBaseEx
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Exception in GenerateTileEx('{OrgSlug}', '{DsSlug}', '{Path}')", orgSlug, dsSlug, path);
+            _logger.LogError(ex, "Exception in GenerateTileEx('{OrgSlug}', '{DsSlug}', '{Path}')", orgSlug, dsSlug,
+                path);
             return ExceptionResult(ex);
         }
     }
@@ -1043,7 +1056,8 @@ public class ObjectsController : ControllerBaseEx
     }
 
     /// <summary>Validate merge-multispectral inputs.</summary>
-    [HttpPost("merge-multispectral/validate", Name = nameof(ObjectsController) + "." + nameof(ValidateMergeMultispectral))]
+    [HttpPost("merge-multispectral/validate",
+        Name = nameof(ObjectsController) + "." + nameof(ValidateMergeMultispectral))]
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
     public async Task<IActionResult> ValidateMergeMultispectral(
@@ -1067,7 +1081,8 @@ public class ObjectsController : ControllerBaseEx
     }
 
     /// <summary>Preview merge-multispectral result.</summary>
-    [HttpPost("merge-multispectral/preview", Name = nameof(ObjectsController) + "." + nameof(PreviewMergeMultispectral))]
+    [HttpPost("merge-multispectral/preview",
+        Name = nameof(ObjectsController) + "." + nameof(PreviewMergeMultispectral))]
     [ProducesResponseType(typeof(FileResult), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
     public async Task<IActionResult> PreviewMergeMultispectral(
@@ -1142,7 +1157,8 @@ public class ObjectsController : ControllerBaseEx
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Exception in GetThermalInfo('{OrgSlug}', '{DsSlug}', '{Path}')", orgSlug, dsSlug, path);
+            _logger.LogError(ex, "Exception in GetThermalInfo('{OrgSlug}', '{DsSlug}', '{Path}')", orgSlug, dsSlug,
+                path);
             return ExceptionResult(ex);
         }
     }
@@ -1169,7 +1185,8 @@ public class ObjectsController : ControllerBaseEx
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Exception in GetThermalPoint('{OrgSlug}', '{DsSlug}', '{Path}')", orgSlug, dsSlug, path);
+            _logger.LogError(ex, "Exception in GetThermalPoint('{OrgSlug}', '{DsSlug}', '{Path}')", orgSlug, dsSlug,
+                path);
             return ExceptionResult(ex);
         }
     }
@@ -1198,7 +1215,8 @@ public class ObjectsController : ControllerBaseEx
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Exception in GetThermalAreaStats('{OrgSlug}', '{DsSlug}', '{Path}')", orgSlug, dsSlug, path);
+            _logger.LogError(ex, "Exception in GetThermalAreaStats('{OrgSlug}', '{DsSlug}', '{Path}')", orgSlug, dsSlug,
+                path);
             return ExceptionResult(ex);
         }
     }
@@ -1265,6 +1283,4 @@ public class ObjectsController : ControllerBaseEx
     }
 
     #endregion
-
-
 }

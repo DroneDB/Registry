@@ -5,7 +5,6 @@ using System.Threading.Tasks;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
-using Newtonsoft.Json.Linq;
 using Registry.Ports.DroneDB;
 using Registry.Web.Models;
 using Registry.Web.Models.DTO;
@@ -382,7 +381,7 @@ public class MetaController : ControllerBaseEx
     /// <param name="path">Optional path within the dataset.</param>
     /// <returns>The metadata values as JSON.</returns>
     [HttpGet("get/{key}", Name = nameof(MetaController) + "." + nameof(Get))]
-    [ProducesResponseType(typeof(JToken), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(object), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status404NotFound)]
