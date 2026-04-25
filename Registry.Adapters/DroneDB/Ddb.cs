@@ -511,42 +511,81 @@ public class DDB : IDDB
         }
     }
 
-    public string GetThermalInfo(string path)
+    public string GetRasterValueInfo(string path)
     {
         try
         {
             var fullPath = GetLocalPath(path);
-            return _ddbWrapper.GetThermalInfo(fullPath);
+            return _ddbWrapper.GetRasterValueInfo(fullPath);
         }
         catch (DdbException ex)
         {
-            throw new InvalidOperationException($"Cannot get thermal info of '{path}'", ex);
+            throw new InvalidOperationException($"Cannot get raster value info of '{path}'", ex);
         }
     }
 
-    public string GetThermalPoint(string path, int x, int y)
+    public string GetRasterPointValue(string path, int x, int y)
     {
         try
         {
             var fullPath = GetLocalPath(path);
-            return _ddbWrapper.GetThermalPoint(fullPath, x, y);
+            return _ddbWrapper.GetRasterPointValue(fullPath, x, y);
         }
         catch (DdbException ex)
         {
-            throw new InvalidOperationException($"Cannot get thermal point of '{path}'", ex);
+            throw new InvalidOperationException($"Cannot get raster point value of '{path}'", ex);
         }
     }
 
-    public string GetThermalAreaStats(string path, int x0, int y0, int x1, int y1)
+    public string GetRasterAreaStats(string path, int x0, int y0, int x1, int y1)
     {
         try
         {
             var fullPath = GetLocalPath(path);
-            return _ddbWrapper.GetThermalAreaStats(fullPath, x0, y0, x1, y1);
+            return _ddbWrapper.GetRasterAreaStats(fullPath, x0, y0, x1, y1);
         }
         catch (DdbException ex)
         {
-            throw new InvalidOperationException($"Cannot get thermal area stats of '{path}'", ex);
+            throw new InvalidOperationException($"Cannot get raster area stats of '{path}'", ex);
+        }
+    }
+
+    public string GetRasterProfile(string path, string geoJsonLineString, int samples)
+    {
+        try
+        {
+            var fullPath = GetLocalPath(path);
+            return _ddbWrapper.GetRasterProfile(fullPath, geoJsonLineString, samples);
+        }
+        catch (DdbException ex)
+        {
+            throw new InvalidOperationException($"Cannot get raster profile of '{path}'", ex);
+        }
+    }
+
+    public string CalculateVolume(string path, string polygonGeoJson, string baseMethod, double flatElevation)
+    {
+        try
+        {
+            var fullPath = GetLocalPath(path);
+            return _ddbWrapper.CalculateVolume(fullPath, polygonGeoJson, baseMethod, flatElevation);
+        }
+        catch (DdbException ex)
+        {
+            throw new InvalidOperationException($"Cannot calculate volume of '{path}'", ex);
+        }
+    }
+
+    public string DetectStockpile(string path, double lat, double lon, double radiusMeters, float sensitivity)
+    {
+        try
+        {
+            var fullPath = GetLocalPath(path);
+            return _ddbWrapper.DetectStockpile(fullPath, lat, lon, radiusMeters, sensitivity);
+        }
+        catch (DdbException ex)
+        {
+            throw new InvalidOperationException($"Cannot detect stockpile on '{path}'", ex);
         }
     }
 

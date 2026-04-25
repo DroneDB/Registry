@@ -7,6 +7,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Shouldly;
 using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
 using NUnit.Framework;
 using Registry.Adapters.DroneDB;
 using Registry.Common;
@@ -1180,6 +1181,296 @@ public class NativeDdbWrapperTests : TestBase
         infoResult.Count.ShouldBe(1);
         infoResult[0].Hash.ShouldNotBeNullOrWhiteSpace();
         infoResult[0].Size.ShouldBeGreaterThan(0);
+    }
+
+    #endregion
+
+    #region Raster Analysis
+
+    // Helper: parses a JSON response and returns the parsed JObject, ensuring
+    // the required top-level fields that are shared by GetRasterValueInfo and
+    // GetRasterPointValue responses are present.
+    private static JObject ParseAndValidateRasterJson(string json, params string[] requiredFields)
+    {
+        json.ShouldNotBeNullOrWhiteSpace();
+        var obj = JObject.Parse(json);
+        foreach (var field in requiredFields)
+            obj[field].ShouldNotBeNull($"Field '{field}' missing in raster JSON response");
+        return obj;
+    }
+
+    [Test]
+    public void GetRasterValueInfo_HappyPath_Ok()
+    {
+        using var tempFile = new TempFile(TestGeoTiffUrl, BaseTestFolder);
+
+        var json = DdbWrapper.GetRasterValueInfo(tempFile.FilePath);
+
+        var obj = ParseAndValidateRasterJson(
+            json,
+            "width", "height", "bandCount", "dataType",
+            "valueMin", "valueMax", "unit", "isThermal",
+            "isDirectValue", "sensorId");
+
+        ((int)obj["width"]!).ShouldBeGreaterThan(0);
+        ((int)obj["height"]!).ShouldBeGreaterThan(0);
+        ((int)obj["bandCount"]!).ShouldBeGreaterThanOrEqualTo(1);
+        ((bool)obj["isThermal"]!).ShouldBeFalse("RGB orthophoto should not be detected as thermal");
+        ((float)obj["valueMax"]!).ShouldBeGreaterThanOrEqualTo((float)obj["valueMin"]!);
+    }
+
+    [Test]
+    public void GetRasterValueInfo_NullPath_Throws()
+    {
+        Should.Throw<ArgumentException>(() => DdbWrapper.GetRasterValueInfo(null!));
+    }
+
+    [Test]
+    public void GetRasterValueInfo_NonExistentPath_Throws()
+    {
+        Should.Throw<DdbException>(() => DdbWrapper.GetRasterValueInfo(
+            Path.Combine(Path.GetTempPath(), "does-not-exist-" + Guid.NewGuid() + ".tif")));
+    }
+
+    [Test]
+    public void GetRasterPointValue_HappyPath_Ok()
+    {
+        using var tempFile = new TempFile(TestGeoTiffUrl, BaseTestFolder);
+
+        // Read dimensions first so we can pick a valid interior pixel.
+        var info = JObject.Parse(DdbWrapper.GetRasterValueInfo(tempFile.FilePath));
+        var w = (int)info["width"]!;
+        var h = (int)info["height"]!;
+        var px = w / 2;
+        var py = h / 2;
+
+        var json = DdbWrapper.GetRasterPointValue(tempFile.FilePath, px, py);
+
+        var obj = ParseAndValidateRasterJson(
+            json, "x", "y", "value", "rawValue", "isThermal", "hasGeo");
+
+        ((int)obj["x"]!).ShouldBe(px);
+        ((int)obj["y"]!).ShouldBe(py);
+    }
+
+    [Test]
+    public void GetRasterPointValue_OutOfBounds_Throws()
+    {
+        using var tempFile = new TempFile(TestGeoTiffUrl, BaseTestFolder);
+        Should.Throw<DdbException>(() => DdbWrapper.GetRasterPointValue(tempFile.FilePath, -1, -1));
+        Should.Throw<DdbException>(() => DdbWrapper.GetRasterPointValue(tempFile.FilePath, 10_000_000, 10_000_000));
+    }
+
+    [Test]
+    public void GetRasterPointValue_NullPath_Throws()
+    {
+        Should.Throw<ArgumentException>(() => DdbWrapper.GetRasterPointValue(null!, 0, 0));
+    }
+
+    [Test]
+    public void GetRasterAreaStats_HappyPath_Ok()
+    {
+        using var tempFile = new TempFile(TestGeoTiffUrl, BaseTestFolder);
+
+        var info = JObject.Parse(DdbWrapper.GetRasterValueInfo(tempFile.FilePath));
+        var w = (int)info["width"]!;
+        var h = (int)info["height"]!;
+        // Sample a modest interior rectangle to keep the test fast.
+        var x0 = w / 4;
+        var y0 = h / 4;
+        var x1 = x0 + Math.Min(32, w / 2);
+        var y1 = y0 + Math.Min(32, h / 2);
+
+        var json = DdbWrapper.GetRasterAreaStats(tempFile.FilePath, x0, y0, x1, y1);
+
+        var obj = ParseAndValidateRasterJson(
+            json, "min", "max", "mean", "stddev", "median", "pixelCount", "bounds", "unit", "isThermal");
+
+        ((int)obj["pixelCount"]!).ShouldBeGreaterThan(0);
+        ((float)obj["max"]!).ShouldBeGreaterThanOrEqualTo((float)obj["min"]!);
+    }
+
+    [Test]
+    public void GetRasterAreaStats_SwappedCorners_Ok()
+    {
+        using var tempFile = new TempFile(TestGeoTiffUrl, BaseTestFolder);
+
+        var info = JObject.Parse(DdbWrapper.GetRasterValueInfo(tempFile.FilePath));
+        var w = (int)info["width"]!;
+        var h = (int)info["height"]!;
+
+        // Upper-right / lower-left corner order should be normalized by the native code.
+        var json = DdbWrapper.GetRasterAreaStats(tempFile.FilePath, w / 2 + 16, h / 2 + 16, w / 2, h / 2);
+        var obj = ParseAndValidateRasterJson(json, "min", "max", "mean", "pixelCount");
+        ((int)obj["pixelCount"]!).ShouldBeGreaterThan(0);
+    }
+
+    [Test]
+    public void GetRasterAreaStats_CoordsClampedToRaster_Ok()
+    {
+        // Native code clamps out-of-range coordinates to the raster extent rather
+        // than throwing. Verify this well-defined behavior: fully out-of-range
+        // corners get clamped down to a single valid pixel area.
+        using var tempFile = new TempFile(TestGeoTiffUrl, BaseTestFolder);
+
+        var json = DdbWrapper.GetRasterAreaStats(tempFile.FilePath, -1000, -1000, -1, -1);
+        var obj = ParseAndValidateRasterJson(json, "min", "max", "pixelCount", "bounds");
+        ((int)obj["pixelCount"]!).ShouldBeGreaterThan(0);
+    }
+
+    [Test]
+    public void GetRasterAreaStats_NullPath_Throws()
+    {
+        Should.Throw<ArgumentException>(() => DdbWrapper.GetRasterAreaStats(null!, 0, 0, 1, 1));
+    }
+
+    [Test]
+    public void GetRasterProfile_HappyPath_Ok()
+    {
+        using var tempFile = new TempFile(TestGeoTiffUrl, BaseTestFolder);
+
+        // Build a short horizontal LineString around the dataset's center (Brighton ortho
+        // covers ~40.78 N / -74.17 W). Using a tiny delta keeps the test fast while still
+        // exercising bilinear sampling along multiple pixels.
+        // Values are read from the ortho's first band (red channel).
+        var lonStart = -74.1720;
+        var lonEnd = -74.1715;
+        var lat = 40.7801;
+        var lineString = JsonConvert.SerializeObject(new
+        {
+            type = "LineString",
+            coordinates = new[]
+            {
+                new[] { lonStart, lat },
+                new[] { lonEnd, lat }
+            }
+        });
+
+        var json = DdbWrapper.GetRasterProfile(tempFile.FilePath, lineString, 32);
+
+        var obj = ParseAndValidateRasterJson(json,
+            "samples", "totalLength", "sampleCount", "validCount", "unit", "isThermal");
+
+        ((int)obj["sampleCount"]!).ShouldBe(32);
+        ((JArray)obj["samples"]!).Count.ShouldBe(32);
+        ((double)obj["totalLength"]!).ShouldBeGreaterThan(0.0);
+    }
+
+    [Test]
+    public void GetRasterProfile_NullPath_Throws()
+    {
+        Should.Throw<ArgumentException>(() => DdbWrapper.GetRasterProfile(null!,
+            "{\"type\":\"LineString\",\"coordinates\":[[0,0],[1,1]]}", 16));
+    }
+
+    [Test]
+    public void GetRasterProfile_NullGeometry_Throws()
+    {
+        using var tempFile = new TempFile(TestGeoTiffUrl, BaseTestFolder);
+        Should.Throw<ArgumentException>(() => DdbWrapper.GetRasterProfile(tempFile.FilePath, null!, 16));
+    }
+
+    [Test]
+    public void GetRasterProfile_InvalidGeoJson_Throws()
+    {
+        using var tempFile = new TempFile(TestGeoTiffUrl, BaseTestFolder);
+        Should.Throw<DdbException>(() => DdbWrapper.GetRasterProfile(tempFile.FilePath, "{not-json}", 16));
+    }
+
+    [Test]
+    public void GetRasterProfile_WrongGeometryType_Throws()
+    {
+        using var tempFile = new TempFile(TestGeoTiffUrl, BaseTestFolder);
+        var point = "{\"type\":\"Point\",\"coordinates\":[-74.17,40.78]}";
+        Should.Throw<DdbException>(() => DdbWrapper.GetRasterProfile(tempFile.FilePath, point, 16));
+    }
+
+    [Test]
+    public void GetRasterProfile_SamplesClamped_Ok()
+    {
+        using var tempFile = new TempFile(TestGeoTiffUrl, BaseTestFolder);
+        var lineString =
+            "{\"type\":\"LineString\",\"coordinates\":[[-74.1720,40.7801],[-74.1715,40.7801]]}";
+
+        // Very large sample count is clamped to 4096.
+        var big = JObject.Parse(DdbWrapper.GetRasterProfile(tempFile.FilePath, lineString, 100_000));
+        ((int)big["sampleCount"]!).ShouldBeLessThanOrEqualTo(4096);
+
+        // Sub-minimum sample counts fall back to a sane default >= 2.
+        var small = JObject.Parse(DdbWrapper.GetRasterProfile(tempFile.FilePath, lineString, 0));
+        ((int)small["sampleCount"]!).ShouldBeGreaterThanOrEqualTo(2);
+    }
+
+    #endregion
+
+    #region CalculateVolume / DetectStockpile
+
+    [Test]
+    public void CalculateVolume_HappyPath_Ok()
+    {
+        using var tempFile = new TempFile(TestGeoTiffUrl, BaseTestFolder);
+
+        // Tiny polygon well inside the Brighton ortho (UTM 15N, WGS84 bounds
+        // lon [-91.99442, -91.99323], lat [46.84218, 46.84298]).
+        var polygon = "{\"type\":\"Polygon\",\"coordinates\":[[" +
+            "[-91.99400,46.84240]," +
+            "[-91.99360,46.84240]," +
+            "[-91.99360,46.84270]," +
+            "[-91.99400,46.84270]," +
+            "[-91.99400,46.84240]]]}";
+
+        var json = DdbWrapper.CalculateVolume(tempFile.FilePath, polygon, "lowest_perimeter", 0.0);
+        var obj = JObject.Parse(json);
+        obj.ShouldNotBeNull();
+        obj["cutVolume"].ShouldNotBeNull();
+        obj["fillVolume"].ShouldNotBeNull();
+        obj["netVolume"].ShouldNotBeNull();
+        obj["area2d"].ShouldNotBeNull();
+        ((double)obj["area2d"]!).ShouldBeGreaterThan(0.0);
+        ((string)obj["basePlaneMethod"]!).ShouldBe("lowest_perimeter");
+    }
+
+    [Test]
+    public void CalculateVolume_NullPath_Throws()
+    {
+        Should.Throw<ArgumentException>(() => DdbWrapper.CalculateVolume(null!,
+            "{\"type\":\"Polygon\",\"coordinates\":[[[0,0],[1,0],[1,1],[0,0]]]}", "lowest_perimeter", 0.0));
+    }
+
+    [Test]
+    public void CalculateVolume_InvalidMethod_Throws()
+    {
+        using var tempFile = new TempFile(TestGeoTiffUrl, BaseTestFolder);
+        var polygon = "{\"type\":\"Polygon\",\"coordinates\":[[" +
+            "[-91.99400,46.84240],[-91.99360,46.84240],[-91.99360,46.84270]," +
+            "[-91.99400,46.84270],[-91.99400,46.84240]]]}";
+        Should.Throw<DdbException>(() => DdbWrapper.CalculateVolume(tempFile.FilePath, polygon, "not_a_method", 0.0));
+    }
+
+    [Test]
+    public void DetectStockpile_HappyPath_Ok()
+    {
+        using var tempFile = new TempFile(TestGeoTiffUrl, BaseTestFolder);
+        // Click at the Brighton ortho center.
+        var json = DdbWrapper.DetectStockpile(tempFile.FilePath, 46.84258, -91.99383, 15.0, 0.5f);
+        var obj = JObject.Parse(json);
+        obj["polygon"].ShouldNotBeNull();
+        obj["estimatedVolume"].ShouldNotBeNull();
+        obj["confidence"].ShouldNotBeNull();
+        ((string)obj["polygon"]!["type"]!).ShouldBe("Polygon");
+    }
+
+    [Test]
+    public void DetectStockpile_NullPath_Throws()
+    {
+        Should.Throw<ArgumentException>(() => DdbWrapper.DetectStockpile(null!, 0.0, 0.0, 10.0, 0.5f));
+    }
+
+    [Test]
+    public void DetectStockpile_NonPositiveRadius_Throws()
+    {
+        using var tempFile = new TempFile(TestGeoTiffUrl, BaseTestFolder);
+        Should.Throw<ArgumentException>(() => DdbWrapper.DetectStockpile(tempFile.FilePath, 46.84258, -91.99383, 0.0, 0.5f));
     }
 
     #endregion

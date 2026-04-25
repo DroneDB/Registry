@@ -1775,9 +1775,9 @@ public class ObjectsManager : IObjectsManager
 
     #endregion
 
-    #region Thermal
+    #region Raster Analysis
 
-    public async Task<string> GetThermalInfo(string orgSlug, string dsSlug, string path)
+    public async Task<string> GetRasterValueInfo(string orgSlug, string dsSlug, string path)
     {
         var ds = _utils.GetDataset(orgSlug, dsSlug);
 
@@ -1789,10 +1789,10 @@ public class ObjectsManager : IObjectsManager
         var entry = EnsurePathValidity(orgSlug, ds.InternalRef, path, out var ddb);
         var sourcePath = GetBuildSource(entry);
 
-        return ddb.GetThermalInfo(sourcePath);
+        return ddb.GetRasterValueInfo(sourcePath);
     }
 
-    public async Task<string> GetThermalPoint(string orgSlug, string dsSlug, string path, int x, int y)
+    public async Task<string> GetRasterPointValue(string orgSlug, string dsSlug, string path, int x, int y)
     {
         var ds = _utils.GetDataset(orgSlug, dsSlug);
 
@@ -1804,10 +1804,10 @@ public class ObjectsManager : IObjectsManager
         var entry = EnsurePathValidity(orgSlug, ds.InternalRef, path, out var ddb);
         var sourcePath = GetBuildSource(entry);
 
-        return ddb.GetThermalPoint(sourcePath, x, y);
+        return ddb.GetRasterPointValue(sourcePath, x, y);
     }
 
-    public async Task<string> GetThermalAreaStats(string orgSlug, string dsSlug, string path, int x0, int y0, int x1, int y1)
+    public async Task<string> GetRasterAreaStats(string orgSlug, string dsSlug, string path, int x0, int y0, int x1, int y1)
     {
         var ds = _utils.GetDataset(orgSlug, dsSlug);
 
@@ -1819,7 +1819,61 @@ public class ObjectsManager : IObjectsManager
         var entry = EnsurePathValidity(orgSlug, ds.InternalRef, path, out var ddb);
         var sourcePath = GetBuildSource(entry);
 
-        return ddb.GetThermalAreaStats(sourcePath, x0, y0, x1, y1);
+        return ddb.GetRasterAreaStats(sourcePath, x0, y0, x1, y1);
+    }
+
+    public async Task<string> GetRasterProfile(string orgSlug, string dsSlug, string path, string geoJsonLineString, int samples)
+    {
+        if (string.IsNullOrWhiteSpace(geoJsonLineString))
+            throw new ArgumentException("GeoJSON LineString is required", nameof(geoJsonLineString));
+
+        var ds = _utils.GetDataset(orgSlug, dsSlug);
+
+        if (!await _authManager.RequestAccess(ds, AccessType.Read))
+            throw new UnauthorizedException("The current user is not allowed to read dataset");
+
+        if (path.StartsWith('/')) path = path[1..];
+
+        var entry = EnsurePathValidity(orgSlug, ds.InternalRef, path, out var ddb);
+        var sourcePath = GetBuildSource(entry);
+
+        return ddb.GetRasterProfile(sourcePath, geoJsonLineString, samples);
+    }
+
+    public async Task<string> CalculateVolume(string orgSlug, string dsSlug, string path, string polygonGeoJson, string baseMethod, double flatElevation)
+    {
+        if (string.IsNullOrWhiteSpace(polygonGeoJson))
+            throw new ArgumentException("Polygon GeoJSON is required", nameof(polygonGeoJson));
+
+        var ds = _utils.GetDataset(orgSlug, dsSlug);
+
+        if (!await _authManager.RequestAccess(ds, AccessType.Read))
+            throw new UnauthorizedException("The current user is not allowed to read dataset");
+
+        if (path.StartsWith('/')) path = path[1..];
+
+        var entry = EnsurePathValidity(orgSlug, ds.InternalRef, path, out var ddb);
+        var sourcePath = GetBuildSource(entry);
+
+        return ddb.CalculateVolume(sourcePath, polygonGeoJson, baseMethod ?? string.Empty, flatElevation);
+    }
+
+    public async Task<string> DetectStockpile(string orgSlug, string dsSlug, string path, double lat, double lon, double radiusMeters, float sensitivity)
+    {
+        if (!(radiusMeters > 0))
+            throw new ArgumentException("radius must be positive", nameof(radiusMeters));
+
+        var ds = _utils.GetDataset(orgSlug, dsSlug);
+
+        if (!await _authManager.RequestAccess(ds, AccessType.Read))
+            throw new UnauthorizedException("The current user is not allowed to read dataset");
+
+        if (path.StartsWith('/')) path = path[1..];
+
+        var entry = EnsurePathValidity(orgSlug, ds.InternalRef, path, out var ddb);
+        var sourcePath = GetBuildSource(entry);
+
+        return ddb.DetectStockpile(sourcePath, lat, lon, radiusMeters, sensitivity);
     }
 
     #endregion
