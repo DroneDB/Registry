@@ -453,7 +453,7 @@ public class UsersManagerTest : TestBase
         _userManagerMock.Setup(x => x.ResetPasswordAsync(targetUser, "reset-token", "weak"))
             .ReturnsAsync(IdentityResult.Success);
 
-        // Act — currentPassword is null = admin override
+        // Act - currentPassword is null = admin override
         var result = await _usersManager.ChangePassword("targetuser", null, "weak");
 
         // Assert

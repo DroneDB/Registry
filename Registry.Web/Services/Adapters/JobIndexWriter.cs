@@ -103,7 +103,7 @@ public class JobIndexWriter(RegistryContext db, ILogger<JobIndexWriter> log) : I
     {
         try
         {
-            // Prefer bulk delete (EF Core 7+) — works with relational providers (MySQL, SQLite, etc.)
+            // Prefer bulk delete (EF Core 7+) - works with relational providers (MySQL, SQLite, etc.)
             var deleted = await db.JobIndices
                 .Where(j => TerminalStates.Contains(j.CurrentState) && j.LastStateChangeUtc < cutoffUtc)
                 .ExecuteDeleteAsync(ct);

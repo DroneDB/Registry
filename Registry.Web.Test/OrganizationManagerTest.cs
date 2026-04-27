@@ -857,7 +857,7 @@ public class OrganizationManagerTest : TestBase
         var organizations = (await _organizationsManager.List()).ToArray();
         var org = organizations.FirstOrDefault(o => o.Slug == "other-user-org");
 
-        // Assert — admin should see this org and have admin permissions
+        // Assert - admin should see this org and have admin permissions
         org.ShouldNotBeNull();
         org.Permissions.ShouldNotBeNull();
         org.Permissions.CanRead.ShouldBeTrue();
@@ -992,7 +992,7 @@ public class OrganizationManagerTest : TestBase
         await _context.Organizations.AddAsync(org);
         await _context.SaveChangesAsync();
 
-        // Act — this org is not visible in List (user is not owner/member), but public org slug is
+        // Act - this org is not visible in List (user is not owner/member), but public org slug is
         var organizations = (await _organizationsManager.List()).ToArray();
 
         // The org won't appear in List for a non-member standard user (only public slug org shows)
@@ -1007,8 +1007,8 @@ public class OrganizationManagerTest : TestBase
     [Test]
     public async Task List_NonMemberPrivateOrg_NullPermissions()
     {
-        // Arrange — Admin sees all orgs, including private ones they don't own/aren't member of
-        // But we need a non-admin who somehow sees a private org — this doesn't happen in List.
+        // Arrange - Admin sees all orgs, including private ones they don't own/aren't member of
+        // But we need a non-admin who somehow sees a private org - this doesn't happen in List.
         // So we test via Get() instead
         var owner = SetupStandardUser("owner-user");
         var privateOrg = await CreateOrganizationForUser(owner.Id, "private-org", isPublic: false);
@@ -1047,9 +1047,9 @@ public class OrganizationManagerTest : TestBase
         await _context.Organizations.AddAsync(memberOrg);
         await _context.SaveChangesAsync();
 
-        // Act — without ownedOnly
+        // Act - without ownedOnly
         var allOrgs = (await _organizationsManager.List()).ToArray();
-        // Act — with ownedOnly
+        // Act - with ownedOnly
         var ownedOrgs = (await _organizationsManager.List(ownedOnly: true)).ToArray();
 
         // Assert
@@ -1093,7 +1093,7 @@ public class OrganizationManagerTest : TestBase
         var allOrgs = (await _organizationsManager.List()).ToArray();
         var ownedOrgs = (await _organizationsManager.List(ownedOnly: true)).ToArray();
 
-        // Assert — admin sees all without ownedOnly
+        // Assert - admin sees all without ownedOnly
         allOrgs.ShouldContain(o => o.Slug == "admin-owned");
         allOrgs.ShouldContain(o => o.Slug == "other-owned");
 
@@ -1162,7 +1162,7 @@ public class OrganizationManagerTest : TestBase
         await _context.Organizations.AddAsync(org);
         await _context.SaveChangesAsync();
 
-        // Override RequestAccess for this org — member has access via membership
+        // Override RequestAccess for this org - member has access via membership
         _authManagerMock.Setup(x => x.RequestAccess(
             It.Is<Organization>(o => o.Slug == "get-member-org"), It.IsAny<AccessType>()))
             .ReturnsAsync(true);
@@ -1185,7 +1185,7 @@ public class OrganizationManagerTest : TestBase
         // Arrange
         SetupStandardUser("non-member-user");
 
-        // Act — the public org has no owner and no membership, but is public
+        // Act - the public org has no owner and no membership, but is public
         var result = await _organizationsManager.Get(MagicStrings.PublicOrganizationSlug);
 
         // Assert

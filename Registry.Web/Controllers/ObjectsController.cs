@@ -98,7 +98,7 @@ public class ObjectsController : ControllerBaseEx
         }
         catch (OperationCanceledException)
         {
-            // Client disconnected — not an error
+            // Client disconnected - not an error
             _logger.LogDebug("Download cancelled by client: GetDdb('{OrgSlug}', '{DsSlug}')", orgSlug, dsSlug);
             return new EmptyResult();
         }
@@ -237,7 +237,7 @@ public class ObjectsController : ControllerBaseEx
         }
         catch (OperationCanceledException)
         {
-            // Client disconnected — not an error
+            // Client disconnected - not an error
             _logger.LogDebug(
                 "Download cancelled by client: Download('{OrgSlug}', '{DsSlug}', '{Paths}')",
                 orgSlug, dsSlug, paths != null ? string.Join("; ", paths) : string.Empty);

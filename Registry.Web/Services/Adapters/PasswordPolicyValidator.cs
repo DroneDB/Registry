@@ -22,7 +22,7 @@ public class PasswordPolicyValidator : IPasswordPolicyValidator
 
     public PasswordValidationResult Validate(string? password)
     {
-        // No policy configured — accept any password
+        // No policy configured - accept any password
         if (_policy == null)
             return PasswordValidationResult.Success();
 

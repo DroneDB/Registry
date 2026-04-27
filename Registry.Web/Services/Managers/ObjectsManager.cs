@@ -1719,7 +1719,7 @@ public class ObjectsManager : IObjectsManager
         }
         catch (Exception ex)
         {
-            // If estimation fails, do not block the export — just log and proceed.
+            // If estimation fails, do not block the export - just log and proceed.
             _logger.LogWarning(ex, "Failed to estimate export size for '{Path}', skipping limit check", sourcePath);
             return;
         }

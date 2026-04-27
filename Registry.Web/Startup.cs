@@ -166,7 +166,7 @@ public class Startup
 
         services.Configure<IdentityOptions>(options =>
         {
-            // Password settings — driven by PasswordPolicy configuration
+            // Password settings - driven by PasswordPolicy configuration
             var passwordPolicy = appSettings.PasswordPolicy;
             if (passwordPolicy != null)
             {
