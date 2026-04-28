@@ -98,6 +98,9 @@ public interface IObjectsManager
     /// <summary>Auto-detect a stockpile footprint starting from a click on the raster</summary>
     Task<string> DetectStockpile(string orgSlug, string dsSlug, string path, double lat, double lon, double radiusMeters, float sensitivity);
 
+    /// <summary>Auto-detect ALL stockpile footprints by full-DEM scan</summary>
+    Task<string> DetectAllStockpiles(string orgSlug, string dsSlug, string path, float sensitivity, double minAreaM2, int maxResults);
+
     /// <summary>Check if a masked version of the orthophoto already exists</summary>
     Task<MaskBordersCheckResponseDto> CheckMaskedFileExists(string orgSlug, string dsSlug, string path);
 

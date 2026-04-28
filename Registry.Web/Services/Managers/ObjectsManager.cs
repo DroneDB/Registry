@@ -1876,6 +1876,27 @@ public class ObjectsManager : IObjectsManager
         return ddb.DetectStockpile(sourcePath, lat, lon, radiusMeters, sensitivity);
     }
 
+    public async Task<string> DetectAllStockpiles(string orgSlug, string dsSlug, string path, float sensitivity, double minAreaM2, int maxResults)
+    {
+        if (sensitivity < 0f) sensitivity = 0f;
+        if (sensitivity > 1f) sensitivity = 1f;
+        if (minAreaM2 < 0) throw new ArgumentException("minAreaM2 must be >= 0", nameof(minAreaM2));
+        if (maxResults <= 0) throw new ArgumentException("maxResults must be > 0", nameof(maxResults));
+        if (maxResults > 500) maxResults = 500;
+
+        var ds = _utils.GetDataset(orgSlug, dsSlug);
+
+        if (!await _authManager.RequestAccess(ds, AccessType.Read))
+            throw new UnauthorizedException("The current user is not allowed to read dataset");
+
+        if (path.StartsWith('/')) path = path[1..];
+
+        var entry = EnsurePathValidity(orgSlug, ds.InternalRef, path, out var ddb);
+        var sourcePath = GetBuildSource(entry);
+
+        return ddb.DetectAllStockpiles(sourcePath, sensitivity, minAreaM2, maxResults);
+    }
+
     #endregion
 
     #region MaskBorders

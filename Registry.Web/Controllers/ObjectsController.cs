@@ -1392,6 +1392,49 @@ public class ObjectsController : ControllerBaseEx
         }
     }
 
+    /// <summary>
+    /// Auto-detect all stockpile footprints in a DEM (full-raster scan).
+    /// </summary>
+    [HttpPost("stockpile/detect-all", Name = nameof(ObjectsController) + "." + nameof(DetectAllStockpiles))]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status401Unauthorized)]
+    public async Task<IActionResult> DetectAllStockpiles(
+        [FromRoute, Required] string orgSlug,
+        [FromRoute, Required] string dsSlug,
+        [FromBody, Required] StockpileBatchDetectionRequestDto request)
+    {
+        try
+        {
+            if (request == null)
+                return BadRequest(new ErrorResponse("Request body is required"));
+
+            var pathError = ValidatePath(request.Path);
+            if (pathError != null) return pathError;
+
+            var sensitivity = request.Sensitivity ?? 0.5f;
+            if (sensitivity < 0f) sensitivity = 0f;
+            if (sensitivity > 1f) sensitivity = 1f;
+
+            var minAreaM2 = request.MinAreaM2 ?? 5.0;
+            if (minAreaM2 < 0) return BadRequest(new ErrorResponse("minAreaM2 must be >= 0"));
+
+            var maxResults = request.MaxResults ?? 50;
+            if (maxResults <= 0) return BadRequest(new ErrorResponse("maxResults must be > 0"));
+            if (maxResults > 500) maxResults = 500;
+
+            var json = await _objectsManager.DetectAllStockpiles(orgSlug, dsSlug, request.Path,
+                sensitivity, minAreaM2, maxResults);
+            return Content(json, "application/json");
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Exception in DetectAllStockpiles('{OrgSlug}', '{DsSlug}', '{Path}')",
+                orgSlug, dsSlug, request?.Path);
+            return ExceptionResult(ex);
+        }
+    }
+
     #endregion
 
     #region MaskBorders

@@ -1869,6 +1869,45 @@ public class NativeDdbWrapper : IDdbWrapper
         throw new DdbException(SafeGetLastError("detect stockpile"));
     }
 
+    [DllImport("ddb", EntryPoint = "DDBDetectAllStockpiles")]
+    private static extern DdbResult _DetectAllStockpiles(
+        [MarshalAs(UnmanagedType.LPUTF8Str)] string rasterPath,
+        float sensitivity,
+        double minAreaM2,
+        int maxResults,
+        out IntPtr output);
+
+    public string DetectAllStockpiles(string path, float sensitivity, double minAreaM2, int maxResults)
+    {
+        if (path == null) throw new ArgumentException("path is null");
+        if (sensitivity < 0f || sensitivity > 1f) throw new ArgumentException("sensitivity must be in [0,1]", nameof(sensitivity));
+        if (minAreaM2 < 0.0) throw new ArgumentException("minAreaM2 must be >= 0", nameof(minAreaM2));
+        if (maxResults <= 0) throw new ArgumentException("maxResults must be > 0", nameof(maxResults));
+
+        try
+        {
+            if (_DetectAllStockpiles(path, sensitivity, minAreaM2, maxResults, out var output) == DdbResult.Success)
+            {
+                var json = MarshalAndFreeUtf8(output);
+                if (string.IsNullOrWhiteSpace(json))
+                    throw new DdbException("Unable to detect stockpiles");
+                return json;
+            }
+        }
+        catch (EntryPointNotFoundException ex)
+        {
+            throw new DdbException($"Error in calling ddb lib: incompatible versions ({ex.Message})", ex);
+        }
+        catch (DdbException) { throw; }
+        catch (Exception ex)
+        {
+            throw new DdbException(
+                $"Error in calling ddb lib. Last error: \"{SafeGetLastError("detect all stockpiles")}\", check inner exception for details", ex);
+        }
+
+        throw new DdbException(SafeGetLastError("detect all stockpiles"));
+    }
+
     #endregion
 
     [DllImport("ddb", EntryPoint = "DDBMaskBorders")]

@@ -589,6 +589,19 @@ public class DDB : IDDB
         }
     }
 
+    public string DetectAllStockpiles(string path, float sensitivity, double minAreaM2, int maxResults)
+    {
+        try
+        {
+            var fullPath = GetLocalPath(path);
+            return _ddbWrapper.DetectAllStockpiles(fullPath, sensitivity, minAreaM2, maxResults);
+        }
+        catch (DdbException ex)
+        {
+            throw new InvalidOperationException($"Cannot detect stockpiles on '{path}'", ex);
+        }
+    }
+
     public void MaskBorders(string input, string output, int nearDist = 15, bool white = false)
     {
         try

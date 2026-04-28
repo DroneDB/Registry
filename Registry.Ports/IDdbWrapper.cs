@@ -198,6 +198,15 @@ public interface IDdbWrapper
     public string DetectStockpile(string path, double lat, double lon, double radiusMeters, float sensitivity);
 
     /// <summary>
+    /// Auto-detect ALL stockpile footprints by full-DEM scan.
+    /// </summary>
+    /// <param name="path">Path to the elevation raster</param>
+    /// <param name="sensitivity">Detail level in [0,1]</param>
+    /// <param name="minAreaM2">Minimum component area in square meters (>=0)</param>
+    /// <param name="maxResults">Maximum number of stockpiles to return (capped at 500)</param>
+    public string DetectAllStockpiles(string path, float sensitivity, double minAreaM2, int maxResults);
+
+    /// <summary>
     /// Mask orthophoto borders making them transparent
     /// </summary>
     public void MaskBorders(string input, string output, int nearDist = 15, bool white = false);

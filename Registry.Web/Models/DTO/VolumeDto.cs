@@ -52,6 +52,23 @@ public class StockpileDetectionRequestDto
     public float? Sensitivity { get; set; }
 }
 
+/// <summary>Request body for <c>POST stockpile/detect-all</c>.</summary>
+public class StockpileBatchDetectionRequestDto
+{
+    /// <summary>Dataset-relative path of the elevation raster.</summary>
+    [Required]
+    public string Path { get; set; } = null!;
+
+    /// <summary>Sensitivity in [0, 1]. Higher = more detail. Defaults to 0.5.</summary>
+    public float? Sensitivity { get; set; }
+
+    /// <summary>Minimum stockpile area in square meters. Defaults to 5.</summary>
+    public double? MinAreaM2 { get; set; }
+
+    /// <summary>Maximum number of stockpiles to return. Defaults to 50, server-capped at 500.</summary>
+    public int? MaxResults { get; set; }
+}
+
 /// <summary>Static material info used for weight/cost estimation.</summary>
 public class MaterialInfoDto
 {

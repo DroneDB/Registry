@@ -1473,6 +1473,45 @@ public class NativeDdbWrapperTests : TestBase
         Should.Throw<ArgumentException>(() => DdbWrapper.DetectStockpile(tempFile.FilePath, 46.84258, -91.99383, 0.0, 0.5f));
     }
 
+    [Test]
+    public void DetectAllStockpiles_HappyPath_Ok()
+    {
+        using var tempFile = new TempFile(TestGeoTiffUrl, BaseTestFolder);
+        var json = DdbWrapper.DetectAllStockpiles(tempFile.FilePath, 0.5f, 0.0, 50);
+        var obj = JObject.Parse(json);
+        obj["stockpiles"].ShouldNotBeNull();
+        obj["totalFound"].ShouldNotBeNull();
+        obj["sensitivityUsed"].ShouldNotBeNull();
+    }
+
+    [Test]
+    public void DetectAllStockpiles_NullPath_Throws()
+    {
+        Should.Throw<ArgumentException>(() => DdbWrapper.DetectAllStockpiles(null!, 0.5f, 0.0, 50));
+    }
+
+    [Test]
+    public void DetectAllStockpiles_InvalidSensitivity_Throws()
+    {
+        using var tempFile = new TempFile(TestGeoTiffUrl, BaseTestFolder);
+        Should.Throw<ArgumentException>(() => DdbWrapper.DetectAllStockpiles(tempFile.FilePath, -0.5f, 0.0, 50));
+        Should.Throw<ArgumentException>(() => DdbWrapper.DetectAllStockpiles(tempFile.FilePath, 1.5f, 0.0, 50));
+    }
+
+    [Test]
+    public void DetectAllStockpiles_NegativeMinArea_Throws()
+    {
+        using var tempFile = new TempFile(TestGeoTiffUrl, BaseTestFolder);
+        Should.Throw<ArgumentException>(() => DdbWrapper.DetectAllStockpiles(tempFile.FilePath, 0.5f, -1.0, 50));
+    }
+
+    [Test]
+    public void DetectAllStockpiles_NonPositiveMaxResults_Throws()
+    {
+        using var tempFile = new TempFile(TestGeoTiffUrl, BaseTestFolder);
+        Should.Throw<ArgumentException>(() => DdbWrapper.DetectAllStockpiles(tempFile.FilePath, 0.5f, 0.0, 0));
+    }
+
     #endregion
 
     [Test]

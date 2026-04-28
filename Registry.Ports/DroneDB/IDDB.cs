@@ -162,6 +162,11 @@ public interface IDDB
     string DetectStockpile(string path, double lat, double lon, double radiusMeters, float sensitivity);
 
     /// <summary>
+    /// Auto-detect ALL stockpile footprints by full-DEM scan.
+    /// </summary>
+    string DetectAllStockpiles(string path, float sensitivity, double minAreaM2, int maxResults);
+
+    /// <summary>
     /// Mask orthophoto borders making them transparent
     /// </summary>
     void MaskBorders(string input, string output, int nearDist = 15, bool white = false);
