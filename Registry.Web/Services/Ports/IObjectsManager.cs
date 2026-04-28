@@ -101,6 +101,14 @@ public interface IObjectsManager
     /// <summary>Auto-detect ALL stockpile footprints by full-DEM scan</summary>
     Task<string> DetectAllStockpiles(string orgSlug, string dsSlug, string path, float sensitivity, double minAreaM2, int maxResults);
 
+    /// <summary>Generate contour lines from a single-band elevation raster (DEM/DSM/DTM).</summary>
+    Task<string> GenerateContours(string orgSlug, string dsSlug, string path,
+                                  double? interval, int? count,
+                                  double baseOffset,
+                                  double? minElev, double? maxElev,
+                                  double simplifyTolerance,
+                                  int bandIndex);
+
     /// <summary>Check if a masked version of the orthophoto already exists</summary>
     Task<MaskBordersCheckResponseDto> CheckMaskedFileExists(string orgSlug, string dsSlug, string path);
 

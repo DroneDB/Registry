@@ -1897,6 +1897,39 @@ public class ObjectsManager : IObjectsManager
         return ddb.DetectAllStockpiles(sourcePath, sensitivity, minAreaM2, maxResults);
     }
 
+    public async Task<string> GenerateContours(string orgSlug, string dsSlug, string path,
+                                               double? interval, int? count,
+                                               double baseOffset,
+                                               double? minElev, double? maxElev,
+                                               double simplifyTolerance,
+                                               int bandIndex)
+    {
+        if (!interval.HasValue && !count.HasValue)
+            throw new ArgumentException("Either 'interval' or 'count' must be specified");
+        if (interval.HasValue && interval.Value <= 0)
+            throw new ArgumentException("'interval' must be > 0", nameof(interval));
+        if (count.HasValue && count.Value <= 0)
+            throw new ArgumentException("'count' must be > 0", nameof(count));
+        if (minElev.HasValue && maxElev.HasValue && minElev.Value >= maxElev.Value)
+            throw new ArgumentException("'minElev' must be less than 'maxElev'");
+        if (simplifyTolerance < 0)
+            throw new ArgumentException("'simplifyTolerance' must be >= 0", nameof(simplifyTolerance));
+        if (bandIndex <= 0) bandIndex = 1;
+
+        var ds = _utils.GetDataset(orgSlug, dsSlug);
+
+        if (!await _authManager.RequestAccess(ds, AccessType.Read))
+            throw new UnauthorizedException("The current user is not allowed to read dataset");
+
+        if (path.StartsWith('/')) path = path[1..];
+
+        var entry = EnsurePathValidity(orgSlug, ds.InternalRef, path, out var ddb);
+        var sourcePath = GetBuildSource(entry);
+
+        return ddb.GenerateContours(sourcePath, interval, count, baseOffset,
+                                    minElev, maxElev, simplifyTolerance, bandIndex);
+    }
+
     #endregion
 
     #region MaskBorders

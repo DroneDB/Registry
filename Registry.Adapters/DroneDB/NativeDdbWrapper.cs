@@ -1908,6 +1908,82 @@ public class NativeDdbWrapper : IDdbWrapper
         throw new DdbException(SafeGetLastError("detect all stockpiles"));
     }
 
+    [DllImport("ddb", EntryPoint = "DDBGenerateContours")]
+    private static extern DdbResult _GenerateContours(
+        [MarshalAs(UnmanagedType.LPUTF8Str)] string rasterPath,
+        double interval,
+        int count,
+        double baseOffset,
+        double minElev,
+        double maxElev,
+        double simplifyTolerance,
+        int bandIndex,
+        out IntPtr output);
+
+    /// <summary>
+    /// Generate contour lines (GeoJSON FeatureCollection of LineStrings with
+    /// an `elev` property) from a single-band elevation raster.
+    /// </summary>
+    /// <param name="path">Path to the raster (DEM/DSM/DTM).</param>
+    /// <param name="interval">Contour interval (raster units). When null, <paramref name="count"/> drives the spacing.</param>
+    /// <param name="count">Target number of contour levels. Used when <paramref name="interval"/> is null.</param>
+    /// <param name="baseOffset">Reference base elevation for level alignment.</param>
+    /// <param name="minElev">Drop contours below this elevation. Null disables the bound.</param>
+    /// <param name="maxElev">Drop contours above this elevation. Null disables the bound.</param>
+    /// <param name="simplifyTolerance">Geometry simplification tolerance in raster CRS units (0 = none).</param>
+    /// <param name="bandIndex">1-based raster band index (defaults to 1).</param>
+    public string GenerateContours(string path,
+                                   double? interval,
+                                   int? count,
+                                   double baseOffset = 0.0,
+                                   double? minElev = null,
+                                   double? maxElev = null,
+                                   double simplifyTolerance = 0.0,
+                                   int bandIndex = 1)
+    {
+        if (string.IsNullOrWhiteSpace(path))
+            throw new ArgumentException("path is null or empty", nameof(path));
+        if (!interval.HasValue && !count.HasValue)
+            throw new ArgumentException("Either interval or count must be specified");
+        if (interval.HasValue && interval.Value <= 0.0)
+            throw new ArgumentException("interval must be > 0", nameof(interval));
+        if (count.HasValue && count.Value <= 0)
+            throw new ArgumentException("count must be > 0", nameof(count));
+        if (simplifyTolerance < 0.0)
+            throw new ArgumentException("simplifyTolerance must be >= 0", nameof(simplifyTolerance));
+        if (bandIndex <= 0)
+            throw new ArgumentException("bandIndex must be > 0", nameof(bandIndex));
+
+        var iv = interval ?? 0.0;        // <= 0 => unset on native side
+        var cnt = count ?? 0;            // <= 0 => unset on native side
+        var lo = minElev ?? double.NaN;  // NaN => unset on native side
+        var hi = maxElev ?? double.NaN;  // NaN => unset on native side
+
+        try
+        {
+            if (_GenerateContours(path, iv, cnt, baseOffset, lo, hi,
+                                  simplifyTolerance, bandIndex, out var output) == DdbResult.Success)
+            {
+                var json = MarshalAndFreeUtf8(output);
+                if (string.IsNullOrWhiteSpace(json))
+                    throw new DdbException("Unable to generate contours");
+                return json;
+            }
+        }
+        catch (EntryPointNotFoundException ex)
+        {
+            throw new DdbException($"Error in calling ddb lib: incompatible versions ({ex.Message})", ex);
+        }
+        catch (DdbException) { throw; }
+        catch (Exception ex)
+        {
+            throw new DdbException(
+                $"Error in calling ddb lib. Last error: \"{SafeGetLastError("generate contours")}\", check inner exception for details", ex);
+        }
+
+        throw new DdbException(SafeGetLastError("generate contours"));
+    }
+
     #endregion
 
     [DllImport("ddb", EntryPoint = "DDBMaskBorders")]

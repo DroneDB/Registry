@@ -207,6 +207,28 @@ public interface IDdbWrapper
     public string DetectAllStockpiles(string path, float sensitivity, double minAreaM2, int maxResults);
 
     /// <summary>
+    /// Generate contour lines from a single-band elevation raster (DEM/DSM/DTM).
+    /// Returns a GeoJSON FeatureCollection of LineString features with an `elev` property (WGS84).
+    /// Either <paramref name="interval"/> or <paramref name="count"/> must be provided.
+    /// </summary>
+    /// <param name="path">Path to the raster</param>
+    /// <param name="interval">Vertical interval between contour levels (raster units). Null to derive from <paramref name="count"/>.</param>
+    /// <param name="count">Target number of contour levels. Null when <paramref name="interval"/> is set.</param>
+    /// <param name="baseOffset">Reference base elevation for level alignment</param>
+    /// <param name="minElev">Drop contours below this elevation; null disables the bound</param>
+    /// <param name="maxElev">Drop contours above this elevation; null disables the bound</param>
+    /// <param name="simplifyTolerance">Geometry simplification tolerance in raster CRS units (0 = none)</param>
+    /// <param name="bandIndex">1-based raster band index</param>
+    public string GenerateContours(string path,
+                                   double? interval,
+                                   int? count,
+                                   double baseOffset = 0.0,
+                                   double? minElev = null,
+                                   double? maxElev = null,
+                                   double simplifyTolerance = 0.0,
+                                   int bandIndex = 1);
+
+    /// <summary>
     /// Mask orthophoto borders making them transparent
     /// </summary>
     public void MaskBorders(string input, string output, int nearDist = 15, bool white = false);

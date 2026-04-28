@@ -1437,6 +1437,67 @@ public class ObjectsController : ControllerBaseEx
 
     #endregion
 
+    #region Contour Lines
+
+    /// <summary>
+    /// Generate contour lines (GeoJSON LineStrings with an `elev` property) from a DEM/DSM/DTM raster.
+    /// </summary>
+    /// <remarks>
+    /// Either <c>interval</c> or <c>count</c> must be supplied. When both are set, <c>interval</c> wins.
+    /// </remarks>
+    [HttpPost("contours", Name = nameof(ObjectsController) + "." + nameof(GenerateContours))]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status401Unauthorized)]
+    public async Task<IActionResult> GenerateContours(
+        [FromRoute, Required] string orgSlug,
+        [FromRoute, Required] string dsSlug,
+        [FromBody, Required] ContourRequestDto request)
+    {
+        try
+        {
+            if (request == null)
+                return BadRequest(new ErrorResponse("Request body is required"));
+
+            var pathError = ValidatePath(request.Path);
+            if (pathError != null) return pathError;
+
+            if (!request.Interval.HasValue && !request.Count.HasValue)
+                return BadRequest(new ErrorResponse("Either 'interval' or 'count' must be specified"));
+
+            if (request.Interval.HasValue && request.Interval.Value <= 0)
+                return BadRequest(new ErrorResponse("'interval' must be > 0"));
+
+            if (request.Count.HasValue && request.Count.Value <= 0)
+                return BadRequest(new ErrorResponse("'count' must be > 0"));
+
+            if (request.MinElev.HasValue && request.MaxElev.HasValue &&
+                request.MinElev.Value >= request.MaxElev.Value)
+                return BadRequest(new ErrorResponse("'minElev' must be less than 'maxElev'"));
+
+            if (request.SimplifyTolerance < 0)
+                return BadRequest(new ErrorResponse("'simplifyTolerance' must be >= 0"));
+
+            var bandIndex = request.BandIndex > 0 ? request.BandIndex : 1;
+
+            var json = await _objectsManager.GenerateContours(orgSlug, dsSlug, request.Path,
+                request.Interval, request.Count,
+                request.BaseOffset,
+                request.MinElev, request.MaxElev,
+                request.SimplifyTolerance,
+                bandIndex);
+            return Content(json, "application/json");
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Exception in GenerateContours('{OrgSlug}', '{DsSlug}', '{Path}')",
+                orgSlug, dsSlug, request?.Path);
+            return ExceptionResult(ex);
+        }
+    }
+
+    #endregion
+
     #region MaskBorders
 
     /// <summary>Check if a masked version of the file already exists.</summary>

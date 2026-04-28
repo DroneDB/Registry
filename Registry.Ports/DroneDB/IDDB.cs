@@ -167,6 +167,19 @@ public interface IDDB
     string DetectAllStockpiles(string path, float sensitivity, double minAreaM2, int maxResults);
 
     /// <summary>
+    /// Generate contour lines from a single-band elevation raster (DEM/DSM/DTM).
+    /// Returns a GeoJSON FeatureCollection of LineString features.
+    /// </summary>
+    string GenerateContours(string path,
+                            double? interval,
+                            int? count,
+                            double baseOffset = 0.0,
+                            double? minElev = null,
+                            double? maxElev = null,
+                            double simplifyTolerance = 0.0,
+                            int bandIndex = 1);
+
+    /// <summary>
     /// Mask orthophoto borders making them transparent
     /// </summary>
     void MaskBorders(string input, string output, int nearDist = 15, bool white = false);

@@ -602,6 +602,27 @@ public class DDB : IDDB
         }
     }
 
+    public string GenerateContours(string path,
+                                   double? interval,
+                                   int? count,
+                                   double baseOffset = 0.0,
+                                   double? minElev = null,
+                                   double? maxElev = null,
+                                   double simplifyTolerance = 0.0,
+                                   int bandIndex = 1)
+    {
+        try
+        {
+            var fullPath = GetLocalPath(path);
+            return _ddbWrapper.GenerateContours(fullPath, interval, count, baseOffset,
+                                                minElev, maxElev, simplifyTolerance, bandIndex);
+        }
+        catch (DdbException ex)
+        {
+            throw new InvalidOperationException($"Cannot generate contours for '{path}'", ex);
+        }
+    }
+
     public void MaskBorders(string input, string output, int nearDist = 15, bool white = false)
     {
         try
