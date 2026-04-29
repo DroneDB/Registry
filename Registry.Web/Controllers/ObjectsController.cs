@@ -1266,17 +1266,6 @@ public class ObjectsController : ControllerBaseEx
     #region Stockpile Volume
 
     /// <summary>
-    /// List built-in materials with density and reference cost per ton.
-    /// </summary>
-    [HttpGet("stockpile/materials", Name = nameof(ObjectsController) + "." + nameof(GetStockpileMaterials))]
-    [AllowAnonymous]
-    [ProducesResponseType(typeof(IEnumerable<MaterialInfoDto>), StatusCodes.Status200OK)]
-    public IActionResult GetStockpileMaterials()
-    {
-        return Ok(StockpileMaterials.All);
-    }
-
-    /// <summary>
     /// Calculate cut/fill/net stockpile volume over a polygon on a DEM raster.
     /// </summary>
     [HttpPost("stockpile/calculate", Name = nameof(ObjectsController) + "." + nameof(CalculateStockpileVolume))]
@@ -1301,53 +1290,6 @@ public class ObjectsController : ControllerBaseEx
 
             var json = await _objectsManager.CalculateVolume(orgSlug, dsSlug, request.Path,
                 request.Polygon, request.BaseMethod, request.FlatElevation);
-
-            // Optionally augment with weight/cost based on the requested material.
-            var material = StockpileMaterials.FindBySlug(request.Material);
-            if (material != null)
-            {
-                try
-                {
-                    using var doc = System.Text.Json.JsonDocument.Parse(json);
-                    var root = doc.RootElement;
-                    double netVolume = root.TryGetProperty("netVolume", out var nv) ? nv.GetDouble() : 0.0;
-                    double cutVolume = root.TryGetProperty("cutVolume", out var cv) ? cv.GetDouble() : 0.0;
-                    var absNet = Math.Abs(netVolume);
-                    var basedOn = cutVolume >= absNet ? "cutVolume" : "netVolume";
-                    var volumeForEstimate = System.Math.Max(cutVolume, absNet);
-                    var tons = volumeForEstimate * material.DensityTonPerM3;
-                    var cost = tons * material.CostPerTon;
-
-                    using var ms = new System.IO.MemoryStream();
-                    using (var writer = new System.Text.Json.Utf8JsonWriter(ms))
-                    {
-                        writer.WriteStartObject();
-                        foreach (var prop in root.EnumerateObject())
-                            prop.WriteTo(writer);
-                        writer.WritePropertyName("material");
-                        System.Text.Json.JsonSerializer.Serialize(writer, material);
-                        writer.WritePropertyName("weightEstimate");
-                        writer.WriteStartObject();
-                        writer.WriteNumber("tons", tons);
-                        writer.WriteString("basedOn", basedOn);
-                        writer.WriteEndObject();
-                        writer.WritePropertyName("costEstimate");
-                        writer.WriteStartObject();
-                        writer.WriteNumber("amount", cost);
-                        writer.WriteString("currency", material.Currency);
-                        writer.WriteEndObject();
-                        writer.WriteEndObject();
-                    }
-                    return Content(System.Text.Encoding.UTF8.GetString(ms.ToArray()), "application/json");
-                }
-                catch (Exception augmentEx)
-                {
-                    // fall back to raw JSON when we cannot augment it
-                    _logger.LogWarning(augmentEx,
-                        "Failed to augment stockpile volume response with material '{Material}' for '{OrgSlug}/{DsSlug}/{Path}'; returning raw JSON",
-                        request.Material, orgSlug, dsSlug, request.Path);
-                }
-            }
 
             return Content(json, "application/json");
         }

@@ -25,9 +25,6 @@ public class VolumeCalculationRequestDto
 
     /// <summary>Elevation used when <see cref="BaseMethod"/> == <c>flat</c>.</summary>
     public double FlatElevation { get; set; }
-
-    /// <summary>Optional material slug to include weight/cost estimates in the response.</summary>
-    public string? Material { get; set; }
 }
 
 /// <summary>Request body for <c>POST stockpile/detect</c>.</summary>
@@ -69,17 +66,4 @@ public class StockpileBatchDetectionRequestDto
 
     /// <summary>Maximum number of stockpiles to return. Defaults to 50, server-capped at 500.</summary>
     public int? MaxResults { get; set; }
-}
-
-/// <summary>Static material info used for weight/cost estimation.</summary>
-public class MaterialInfoDto
-{
-    public string Slug { get; set; } = null!;
-    public string Name { get; set; } = null!;
-    public string Category { get; set; } = null!;
-    /// <summary>Bulk density in t/m³.</summary>
-    public double DensityTonPerM3 { get; set; }
-    /// <summary>Reference cost per ton (same currency across the list).</summary>
-    public double CostPerTon { get; set; }
-    public string Currency { get; set; } = "USD";
 }
