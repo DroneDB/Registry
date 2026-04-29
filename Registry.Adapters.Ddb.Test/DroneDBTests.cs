@@ -1329,13 +1329,13 @@ public class NativeDdbWrapperTests : TestBase
     {
         using var tempFile = new TempFile(TestGeoTiffUrl, BaseTestFolder);
 
-        // Build a short horizontal LineString around the dataset's center (Brighton ortho
-        // covers ~40.78 N / -74.17 W). Using a tiny delta keeps the test fast while still
-        // exercising bilinear sampling along multiple pixels.
+        // Build a short horizontal LineString around the dataset's center (Brighton Beach
+        // ortho covers ~46.842 N / -91.994 W near Duluth, MN). Using a tiny delta keeps the
+        // test fast while still exercising bilinear sampling along multiple pixels.
         // Values are read from the ortho's first band (red channel).
-        var lonStart = -74.1720;
-        var lonEnd = -74.1715;
-        var lat = 40.7801;
+        var lonStart = -91.9942;
+        var lonEnd = -91.9938;
+        var lat = 46.8425;
         var lineString = JsonConvert.SerializeObject(new
         {
             type = "LineString",
@@ -1381,7 +1381,7 @@ public class NativeDdbWrapperTests : TestBase
     public void GetRasterProfile_WrongGeometryType_Throws()
     {
         using var tempFile = new TempFile(TestGeoTiffUrl, BaseTestFolder);
-        var point = "{\"type\":\"Point\",\"coordinates\":[-74.17,40.78]}";
+        var point = "{\"type\":\"Point\",\"coordinates\":[-91.994,46.842]}";
         Should.Throw<DdbException>(() => DdbWrapper.GetRasterProfile(tempFile.FilePath, point, 16));
     }
 
@@ -1390,7 +1390,7 @@ public class NativeDdbWrapperTests : TestBase
     {
         using var tempFile = new TempFile(TestGeoTiffUrl, BaseTestFolder);
         var lineString =
-            "{\"type\":\"LineString\",\"coordinates\":[[-74.1720,40.7801],[-74.1715,40.7801]]}";
+            "{\"type\":\"LineString\",\"coordinates\":[[-91.9942,46.8425],[-91.9938,46.8425]]}";
 
         // Very large sample count is clamped to 4096.
         var big = JObject.Parse(DdbWrapper.GetRasterProfile(tempFile.FilePath, lineString, 100_000));
