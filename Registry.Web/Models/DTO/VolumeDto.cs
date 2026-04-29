@@ -39,11 +39,13 @@ public class StockpileDetectionRequestDto
 
     /// <summary>Click latitude (WGS84).</summary>
     [Required]
-    public double Lat { get; set; }
+    [Range(-90.0, 90.0)]
+    public double? Lat { get; set; }
 
     /// <summary>Click longitude (WGS84).</summary>
     [Required]
-    public double Lon { get; set; }
+    [Range(-180.0, 180.0)]
+    public double? Lon { get; set; }
 
     /// <summary>Search radius in meters (defaults to 50 m).</summary>
     public double? Radius { get; set; }

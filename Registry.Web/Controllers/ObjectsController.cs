@@ -1312,7 +1312,9 @@ public class ObjectsController : ControllerBaseEx
                     var root = doc.RootElement;
                     double netVolume = root.TryGetProperty("netVolume", out var nv) ? nv.GetDouble() : 0.0;
                     double cutVolume = root.TryGetProperty("cutVolume", out var cv) ? cv.GetDouble() : 0.0;
-                    var volumeForEstimate = System.Math.Max(cutVolume, System.Math.Abs(netVolume));
+                    var absNet = Math.Abs(netVolume);
+                    var basedOn = cutVolume >= absNet ? "cutVolume" : "netVolume";
+                    var volumeForEstimate = System.Math.Max(cutVolume, absNet);
                     var tons = volumeForEstimate * material.DensityTonPerM3;
                     var cost = tons * material.CostPerTon;
 
@@ -1327,7 +1329,7 @@ public class ObjectsController : ControllerBaseEx
                         writer.WritePropertyName("weightEstimate");
                         writer.WriteStartObject();
                         writer.WriteNumber("tons", tons);
-                        writer.WriteString("basedOn", "cutVolume");
+                        writer.WriteString("basedOn", basedOn);
                         writer.WriteEndObject();
                         writer.WritePropertyName("costEstimate");
                         writer.WriteStartObject();
@@ -1338,9 +1340,12 @@ public class ObjectsController : ControllerBaseEx
                     }
                     return Content(System.Text.Encoding.UTF8.GetString(ms.ToArray()), "application/json");
                 }
-                catch
+                catch (Exception augmentEx)
                 {
                     // fall back to raw JSON when we cannot augment it
+                    _logger.LogWarning(augmentEx,
+                        "Failed to augment stockpile volume response with material '{Material}' for '{OrgSlug}/{DsSlug}/{Path}'; returning raw JSON",
+                        request.Material, orgSlug, dsSlug, request.Path);
                 }
             }
 
@@ -1379,9 +1384,11 @@ public class ObjectsController : ControllerBaseEx
             if (sensitivity < 0f) sensitivity = 0f;
             if (sensitivity > 1f) sensitivity = 1f;
             if (!(radius > 0)) return BadRequest(new ErrorResponse("radius must be positive"));
+            if (!request.Lat.HasValue || !request.Lon.HasValue)
+                return BadRequest(new ErrorResponse("lat and lon are required"));
 
             var json = await _objectsManager.DetectStockpile(orgSlug, dsSlug, request.Path,
-                request.Lat, request.Lon, radius, sensitivity);
+                request.Lat.Value, request.Lon.Value, radius, sensitivity);
             return Content(json, "application/json");
         }
         catch (Exception ex)

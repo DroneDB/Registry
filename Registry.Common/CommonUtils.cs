@@ -421,6 +421,15 @@ public static class CommonUtils
         // Return formatted number with suffix
         return readable.ToString("0.### ") + suffix;
     }
+    
+    public static int BytesPerPixel(string? dataType) => dataType switch
+    {
+        "Byte" or "UInt8" or "Int8" => 1,
+        "UInt16" or "Int16" => 2,
+        "UInt32" or "Int32" or "Float32" => 4,
+        "Float64" or "UInt64" or "Int64" => 8,
+        _ => 4 // Conservative default for unknown types
+    };
 
     public static bool Validate<T>(T obj, out ICollection<ValidationResult> results)
     {
