@@ -520,7 +520,7 @@ public class DDB : IDDB
         }
         catch (DdbException ex)
         {
-            throw new InvalidOperationException($"Cannot get raster value info of '{path}'", ex);
+            throw new InvalidOperationException("Could not read raster value info.", ex);
         }
     }
 
@@ -533,7 +533,7 @@ public class DDB : IDDB
         }
         catch (DdbException ex)
         {
-            throw new InvalidOperationException($"Cannot get raster point value of '{path}'", ex);
+            throw new InvalidOperationException("Could not read raster value at the requested pixel.", ex);
         }
     }
 
@@ -546,7 +546,7 @@ public class DDB : IDDB
         }
         catch (DdbException ex)
         {
-            throw new InvalidOperationException($"Cannot get raster area stats of '{path}'", ex);
+            throw new InvalidOperationException("Could not compute raster area statistics.", ex);
         }
     }
 
@@ -559,7 +559,7 @@ public class DDB : IDDB
         }
         catch (DdbException ex)
         {
-            throw new InvalidOperationException($"Cannot get raster profile of '{path}'", ex);
+            throw new InvalidOperationException("Could not compute raster profile for the requested line.", ex);
         }
     }
 
@@ -572,7 +572,9 @@ public class DDB : IDDB
         }
         catch (DdbException ex)
         {
-            throw new InvalidOperationException($"Cannot calculate volume of '{path}'", ex);
+            throw new InvalidOperationException(
+                "Cannot calculate volume for this area. Make sure the polygon falls inside the raster and contains valid elevation data.",
+                ex);
         }
     }
 
@@ -585,7 +587,9 @@ public class DDB : IDDB
         }
         catch (DdbException ex)
         {
-            throw new InvalidOperationException($"Cannot detect stockpile on '{path}'", ex);
+            throw new InvalidOperationException(
+                "No stockpile detected at the selected location. Try clicking closer to a clearly elevated area, increase the search radius, or lower the sensitivity.",
+                ex);
         }
     }
 
@@ -598,7 +602,9 @@ public class DDB : IDDB
         }
         catch (DdbException ex)
         {
-            throw new InvalidOperationException($"Cannot detect stockpiles on '{path}'", ex);
+            throw new InvalidOperationException(
+                "No stockpiles could be detected on this raster. Try lowering the sensitivity or reducing the minimum area.",
+                ex);
         }
     }
 
@@ -619,7 +625,7 @@ public class DDB : IDDB
         }
         catch (DdbException ex)
         {
-            throw new InvalidOperationException($"Cannot generate contours for '{path}'", ex);
+            throw new InvalidOperationException("Could not generate contour lines for this raster.", ex);
         }
     }
 
