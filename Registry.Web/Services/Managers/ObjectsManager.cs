@@ -4,6 +4,7 @@ using System.Diagnostics;
 using System.IO;
 using System.IO.Enumeration;
 using System.Linq;
+using System.Text.Json;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -264,21 +265,26 @@ public class ObjectsManager : IObjectsManager
             {
                 try
                 {
-                    await _cacheManager.GetAsync(MagicStrings.ThumbnailCacheSeed, ForDataset(orgSlug, dsSlug), entry.Hash, _settings.DefaultThumbnailSize,
+                    await _cacheManager.GetAsync(MagicStrings.ThumbnailCacheSeed, ForDataset(orgSlug, dsSlug),
+                        entry.Hash, _settings.DefaultThumbnailSize,
                         new Func<Task<byte[]>>(async () =>
                         {
-                            _logger.LogDebug("Background thumbnail generation for new file: '{LocalFilePath}'", localFilePath);
+                            _logger.LogDebug("Background thumbnail generation for new file: '{LocalFilePath}'",
+                                localFilePath);
                             using var s = new MemoryStream();
-                            await _thumbnailGenerator.GenerateThumbnailAsync(localFilePath, _settings.DefaultThumbnailSize, s);
+                            await _thumbnailGenerator.GenerateThumbnailAsync(localFilePath,
+                                _settings.DefaultThumbnailSize, s);
                             var result = s.ToArray();
-                            _logger.LogDebug("Background generated thumbnail of {Size} bytes for: '{LocalFilePath}'", result.Length, localFilePath);
+                            _logger.LogDebug("Background generated thumbnail of {Size} bytes for: '{LocalFilePath}'",
+                                result.Length, localFilePath);
                             return result;
                         }));
                     _logger.LogInformation("Thumbnail generation completed for hash {Hash}", entry.Hash);
                 }
                 catch (Exception ex)
                 {
-                    _logger.LogError(ex, "Failed to generate thumbnail for hash {Hash}, file: '{LocalFilePath}'", entry.Hash, localFilePath);
+                    _logger.LogError(ex, "Failed to generate thumbnail for hash {Hash}, file: '{LocalFilePath}'",
+                        entry.Hash, localFilePath);
                 }
             });
 
@@ -323,13 +329,11 @@ public class ObjectsManager : IObjectsManager
                 throw new InvalidOperationException(
                     $"Cannot transfer file '{path}' because it has an active build in progress");
         }
-
     }
 
     public async Task Transfer(string sourceOrgSlug, string sourceDsSlug, string sourcePath, string destOrgSlug,
         string destDsSlug, string destPath = null, bool overwrite = false)
     {
-
         var sourceDs = _utils.GetDataset(sourceOrgSlug, sourceDsSlug);
         var destDs = _utils.GetDataset(destOrgSlug, destDsSlug);
 
@@ -416,7 +420,6 @@ public class ObjectsManager : IObjectsManager
 
                     _fs.FolderCopy(sourceLocalFilePath, destLocalFilePath);
                     break;
-
                 }
                 case EntryType.DroneDB:
                     throw new InvalidOperationException("Cannot transfer a DroneDB file");
@@ -446,7 +449,6 @@ public class ObjectsManager : IObjectsManager
                     _fs.Copy(sourceLocalFilePath, destLocalFilePath);
                     break;
                 }
-
             }
 
             fileSystemCopied = true;
@@ -464,7 +466,6 @@ public class ObjectsManager : IObjectsManager
             // If it's not a folder, we may need to transfer the build folder (if exists)
             if (sourceEntry.Type != EntryType.Directory)
             {
-
                 // We need to transfer the build folder (if exists), this is an optimization to avoid re-building everything
                 var sourceBuildPath = Path.Combine(sourceDdb.BuildFolderPath, sourceEntry.Hash);
 
@@ -577,7 +578,6 @@ public class ObjectsManager : IObjectsManager
 
             throw;
         }
-
     }
 
     public async Task<Entry> Move(string orgSlug, string dsSlug, string source, string dest)
@@ -743,7 +743,6 @@ public class ObjectsManager : IObjectsManager
                             $"Cannot find local file '{objLocalPath}' for object '{obj.Path}'");
 
                     _fs.Delete(objLocalPath);
-
                 }
                 catch (Exception ex)
                 {
@@ -833,7 +832,7 @@ public class ObjectsManager : IObjectsManager
         }
 
         // Invalidate dataset thumbnail cache once if any deleted path is a thumbnail candidate
-        if (deleted.Any(p => IsDatasetThumbnailFile(p)))
+        if (deleted.Any(IsDatasetThumbnailFile))
             await InvalidateDatasetThumbnailCache(orgSlug, dsSlug);
 
         response.Deleted = deleted.ToArray();
@@ -865,7 +864,8 @@ public class ObjectsManager : IObjectsManager
     {
         var ds = _utils.GetDataset(orgSlug, dsSlug);
 
-        _logger.LogInformation("In GenerateThumbnailData('{OrgSlug}/{DsSlug}', path: '{Path}', size: {Size}, recreate: {Recreate})",
+        _logger.LogInformation(
+            "In GenerateThumbnailData('{OrgSlug}/{DsSlug}', path: '{Path}', size: {Size}, recreate: {Recreate})",
             orgSlug, dsSlug, path, sizeRaw, recreate);
 
         if (!await _authManager.RequestAccess(ds, AccessType.Read))
@@ -895,11 +895,13 @@ public class ObjectsManager : IObjectsManager
 
         if (recreate)
         {
-            _logger.LogDebug("Removing cached thumbnail for {OrgSlug}/{DsSlug}, hash: {Hash}", orgSlug, dsSlug, entry.Hash);
+            _logger.LogDebug("Removing cached thumbnail for {OrgSlug}/{DsSlug}, hash: {Hash}", orgSlug, dsSlug,
+                entry.Hash);
             await _cacheManager.RemoveAsync(MagicStrings.ThumbnailCacheSeed, ForDataset(orgSlug, dsSlug), entry.Hash);
         }
 
-        var thumbData = await _cacheManager.GetAsync(MagicStrings.ThumbnailCacheSeed, ForDataset(orgSlug, dsSlug), entry.Hash, size,
+        var thumbData = await _cacheManager.GetAsync(MagicStrings.ThumbnailCacheSeed, ForDataset(orgSlug, dsSlug),
+            entry.Hash, size,
             new Func<Task<byte[]>>(async () =>
             {
                 _logger.LogDebug("Cache miss - generating new thumbnail for: '{LocalPath}'", localPath);
@@ -912,7 +914,8 @@ public class ObjectsManager : IObjectsManager
 
         var extension = MimeUtility.GetExtensions(_ddbWrapper.ThumbnailMimeType)?.FirstOrDefault() ?? "webp";
 
-        _logger.LogDebug("Returning thumbnail data: {Size} bytes, type: {ContentType}", thumbData.Length, _ddbWrapper.ThumbnailMimeType);
+        _logger.LogDebug("Returning thumbnail data: {Size} bytes, type: {ContentType}", thumbData.Length,
+            _ddbWrapper.ThumbnailMimeType);
 
         return new StorageDataDto
         {
@@ -961,7 +964,8 @@ public class ObjectsManager : IObjectsManager
                 using var stream = new MemoryStream();
                 await _thumbnailGenerator.GenerateThumbnailAsync(localPath, size, stream);
                 var result = stream.ToArray();
-                _logger.LogDebug("Generated dataset thumbnail of {Size} bytes from: '{LocalPath}'", result.Length, localPath);
+                _logger.LogDebug("Generated dataset thumbnail of {Size} bytes from: '{LocalPath}'", result.Length,
+                    localPath);
                 return result;
             }));
 
@@ -1037,13 +1041,14 @@ public class ObjectsManager : IObjectsManager
 
         try
         {
-
             // NOTE: We wrap GenerateTile in a Task to avoid blocking the main thread
             // This is needed because GenerateTile is CPU intensive and may take some time
             // We want to free up the main thread to handle other requests
             var tileData =
-                await _cacheManager.GetAsync(MagicStrings.TileCacheSeed, ForDataset(orgSlug, dsSlug), entry.Hash, tx, ty, tz, retina,
-                    new Func<Task<byte[]>>(() => Task.Run(() => ddb.GenerateTile(sourcePath, tz, tx, ty, retina, entry.Hash))));
+                await _cacheManager.GetAsync(MagicStrings.TileCacheSeed, ForDataset(orgSlug, dsSlug), entry.Hash, tx,
+                    ty, tz, retina,
+                    new Func<Task<byte[]>>(() =>
+                        Task.Run(() => ddb.GenerateTile(sourcePath, tz, tx, ty, retina, entry.Hash))));
 
             return new StorageDataDto
             {
@@ -1097,14 +1102,16 @@ public class ObjectsManager : IObjectsManager
 
             streamDescriptor = new FileStreamDescriptor(Path.GetFileName(filePath),
                 MimeUtility.GetMimeMapping(filePath),
-                orgSlug, internalRef, files, null, FileDescriptorType.Single, _logger, _ddbManager, _settings.MaxZipMemoryThreshold);
+                orgSlug, internalRef, files, null, FileDescriptorType.Single, _logger, _ddbManager,
+                _settings.MaxZipMemoryThreshold);
         }
         // Otherwise we zip everything together and return the package
         else
         {
             streamDescriptor = new FileStreamDescriptor($"{orgSlug}-{dsSlug}-{CommonUtils.RandomString(8)}.zip",
                 "application/zip", orgSlug, internalRef, files, folders,
-                includeDdb ? FileDescriptorType.Dataset : FileDescriptorType.Multiple, _logger, _ddbManager, _settings.MaxZipMemoryThreshold);
+                includeDdb ? FileDescriptorType.Dataset : FileDescriptorType.Multiple, _logger, _ddbManager,
+                _settings.MaxZipMemoryThreshold);
         }
 
         return streamDescriptor;
@@ -1287,7 +1294,7 @@ public class ObjectsManager : IObjectsManager
         _logger.LogInformation("Building '{Path}' asynchronously", path);
 
         var user = await _authManager.GetCurrentUser();
-        var meta = new IndexPayload(orgSlug, dsSlug, entry.Hash , user.Id, null, path);
+        var meta = new IndexPayload(orgSlug, dsSlug, entry.Hash, user.Id, null, path);
         var jobId = _backgroundJob.EnqueueIndexed(() => HangfireUtils.BuildWrapper(ddb, path, force, null), meta);
 
         _logger.LogInformation("Background job id is {JobId}", jobId);
@@ -1378,7 +1385,8 @@ public class ObjectsManager : IObjectsManager
         return path;
     }
 
-    public async Task<IEnumerable<BuildJobDto>> GetBuilds(string orgSlug, string dsSlug, int page = 1, int pageSize = 50)
+    public async Task<IEnumerable<BuildJobDto>> GetBuilds(string orgSlug, string dsSlug, int page = 1,
+        int pageSize = 50)
     {
         var ds = _utils.GetDataset(orgSlug, dsSlug);
 
@@ -1399,8 +1407,12 @@ public class ObjectsManager : IObjectsManager
             Path = ji.Path,
             CurrentState = ji.CurrentState,
             CreatedAt = DateTime.SpecifyKind(ji.CreatedAtUtc, DateTimeKind.Utc),
-            ProcessingAt = ji.ProcessingAtUtc.HasValue ? DateTime.SpecifyKind(ji.ProcessingAtUtc.Value, DateTimeKind.Utc) : null,
-            SucceededAt = ji.SucceededAtUtc.HasValue ? DateTime.SpecifyKind(ji.SucceededAtUtc.Value, DateTimeKind.Utc) : null,
+            ProcessingAt = ji.ProcessingAtUtc.HasValue
+                ? DateTime.SpecifyKind(ji.ProcessingAtUtc.Value, DateTimeKind.Utc)
+                : null,
+            SucceededAt = ji.SucceededAtUtc.HasValue
+                ? DateTime.SpecifyKind(ji.SucceededAtUtc.Value, DateTimeKind.Utc)
+                : null,
             FailedAt = ji.FailedAtUtc.HasValue ? DateTime.SpecifyKind(ji.FailedAtUtc.Value, DateTimeKind.Utc) : null,
             DeletedAt = ji.DeletedAtUtc.HasValue ? DateTime.SpecifyKind(ji.DeletedAtUtc.Value, DateTimeKind.Utc) : null
         });
@@ -1451,7 +1463,8 @@ public class ObjectsManager : IObjectsManager
 
         // Get all builds with Succeeded or Failed status
         var allBuilds = await _jobIndexQuery.GetByOrgDsAsync(orgSlug, dsSlug, 0, int.MaxValue);
-        var completedBuilds = allBuilds.Where(b => b.CurrentState == "Succeeded" || b.CurrentState == "Failed").ToList();
+        var completedBuilds =
+            allBuilds.Where(b => b.CurrentState == "Succeeded" || b.CurrentState == "Failed").ToList();
 
         _logger.LogInformation("Found {Count} completed/failed builds to delete", completedBuilds.Count);
 
@@ -1490,7 +1503,8 @@ public class ObjectsManager : IObjectsManager
         return ddb.GetRasterInfo(sourcePath);
     }
 
-    public async Task<string> GetRasterMetadata(string orgSlug, string dsSlug, string path, string? formula = null, string? bandFilter = null)
+    public async Task<string> GetRasterMetadata(string orgSlug, string dsSlug, string path, string? formula = null,
+        string? bandFilter = null)
     {
         var ds = _utils.GetDataset(orgSlug, dsSlug);
 
@@ -1594,7 +1608,8 @@ public class ObjectsManager : IObjectsManager
         return await Task.Run(() => ddb.ValidateMergeMultispectral(paths));
     }
 
-    public async Task<byte[]> PreviewMergeMultispectral(string orgSlug, string dsSlug, string[] paths, string? previewBands = null, int thumbSize = 512)
+    public async Task<byte[]> PreviewMergeMultispectral(string orgSlug, string dsSlug, string[] paths,
+        string? previewBands = null, int thumbSize = 512)
     {
         var ds = _utils.GetDataset(orgSlug, dsSlug);
 
@@ -1664,7 +1679,8 @@ public class ObjectsManager : IObjectsManager
         EnsureExportSizeWithinLimit(ddb, sourcePath);
 
         var tempDir = Path.GetTempPath();
-        var tempOutputFileName = Path.GetFileNameWithoutExtension(path) + "_export_" + Guid.NewGuid().ToString("N") + ".tif";
+        var tempOutputFileName =
+            Path.GetFileNameWithoutExtension(path) + "_export_" + Guid.NewGuid().ToString("N") + ".tif";
         var outputFileName = Path.GetFileNameWithoutExtension(path) + "_export.tif";
         var outputPath = Path.Combine(tempDir, tempOutputFileName);
 
@@ -1684,7 +1700,14 @@ public class ObjectsManager : IObjectsManager
         }
         finally
         {
-            try { if (File.Exists(outputPath)) File.Delete(outputPath); } catch { /* ignore cleanup failures */ }
+            try
+            {
+                if (File.Exists(outputPath)) File.Delete(outputPath);
+            }
+            catch
+            {
+                /* ignore cleanup failures */
+            }
         }
     }
 
@@ -1727,7 +1750,7 @@ public class ObjectsManager : IObjectsManager
         if (estimated > limit.Value)
         {
             throw new BadRequestException(
-                $"Export output exceeds maximum allowed size ({FormatBytes(estimated)} > {FormatBytes(limit.Value)}).");
+                $"Export output exceeds maximum allowed size ({CommonUtils.GetBytesReadable(estimated)} > {CommonUtils.GetBytesReadable(limit.Value)}).");
         }
     }
 
@@ -1738,40 +1761,19 @@ public class ObjectsManager : IObjectsManager
     private static long EstimateRasterOutputBytes(IDDB ddb, string sourcePath)
     {
         var infoJson = ddb.GetRasterInfo(sourcePath);
-        using var doc = System.Text.Json.JsonDocument.Parse(infoJson);
+        using var doc = JsonDocument.Parse(infoJson);
         var root = doc.RootElement;
 
-        long width = root.TryGetProperty("width", out var wEl) ? wEl.GetInt64() : 0;
-        long height = root.TryGetProperty("height", out var hEl) ? hEl.GetInt64() : 0;
-        long bandCount = root.TryGetProperty("bandCount", out var bEl) ? bEl.GetInt64() : 1;
+        var width = root.TryGetProperty("width", out var wEl) ? wEl.GetInt64() : 0;
+        var height = root.TryGetProperty("height", out var hEl) ? hEl.GetInt64() : 0;
+        var bandCount = root.TryGetProperty("bandCount", out var bEl) ? bEl.GetInt64() : 1;
         var dataType = root.TryGetProperty("dataType", out var dtEl) ? dtEl.GetString() : null;
 
         if (width <= 0 || height <= 0 || bandCount <= 0) return 0;
 
-        return width * height * bandCount * BytesPerPixel(dataType);
+        return width * height * bandCount * CommonUtils.BytesPerPixel(dataType);
     }
-
-    private static int BytesPerPixel(string? dataType) => dataType switch
-    {
-        "Byte" or "UInt8" or "Int8" => 1,
-        "UInt16" or "Int16" => 2,
-        "UInt32" or "Int32" or "Float32" => 4,
-        "Float64" or "UInt64" or "Int64" => 8,
-        _ => 4 // Conservative default for unknown types
-    };
-
-    private static string FormatBytes(long bytes)
-    {
-        string[] units = ["B", "KB", "MB", "GB", "TB"];
-        double value = bytes;
-        int unit = 0;
-        while (value >= 1024 && unit < units.Length - 1)
-        {
-            value /= 1024;
-            unit++;
-        }
-        return $"{value:0.##} {units[unit]}";
-    }
+   
 
     #endregion
 
@@ -1807,7 +1809,8 @@ public class ObjectsManager : IObjectsManager
         return ddb.GetRasterPointValue(sourcePath, x, y);
     }
 
-    public async Task<string> GetRasterAreaStats(string orgSlug, string dsSlug, string path, int x0, int y0, int x1, int y1)
+    public async Task<string> GetRasterAreaStats(string orgSlug, string dsSlug, string path, int x0, int y0, int x1,
+        int y1)
     {
         var ds = _utils.GetDataset(orgSlug, dsSlug);
 
@@ -1822,7 +1825,8 @@ public class ObjectsManager : IObjectsManager
         return ddb.GetRasterAreaStats(sourcePath, x0, y0, x1, y1);
     }
 
-    public async Task<string> GetRasterProfile(string orgSlug, string dsSlug, string path, string geoJsonLineString, int samples)
+    public async Task<string> GetRasterProfile(string orgSlug, string dsSlug, string path, string geoJsonLineString,
+        int samples)
     {
         if (string.IsNullOrWhiteSpace(geoJsonLineString))
             throw new ArgumentException("GeoJSON LineString is required", nameof(geoJsonLineString));
@@ -1840,7 +1844,8 @@ public class ObjectsManager : IObjectsManager
         return ddb.GetRasterProfile(sourcePath, geoJsonLineString, samples);
     }
 
-    public async Task<string> CalculateVolume(string orgSlug, string dsSlug, string path, string polygonGeoJson, string baseMethod, double flatElevation)
+    public async Task<string> CalculateVolume(string orgSlug, string dsSlug, string path, string polygonGeoJson,
+        string baseMethod, double flatElevation)
     {
         if (string.IsNullOrWhiteSpace(polygonGeoJson))
             throw new ArgumentException("Polygon GeoJSON is required", nameof(polygonGeoJson));
@@ -1858,10 +1863,13 @@ public class ObjectsManager : IObjectsManager
         return ddb.CalculateVolume(sourcePath, polygonGeoJson, baseMethod ?? string.Empty, flatElevation);
     }
 
-    public async Task<string> DetectStockpile(string orgSlug, string dsSlug, string path, double lat, double lon, double radiusMeters, float sensitivity)
+    public async Task<string> DetectStockpile(string orgSlug, string dsSlug, string path, double lat, double lon,
+        double radiusMeters, float sensitivity)
     {
         if (!(radiusMeters > 0))
             throw new ArgumentException("radius must be positive", nameof(radiusMeters));
+        if (sensitivity < 0f) sensitivity = 0f;
+        if (sensitivity > 1f) sensitivity = 1f;
 
         var ds = _utils.GetDataset(orgSlug, dsSlug);
 
@@ -1876,7 +1884,8 @@ public class ObjectsManager : IObjectsManager
         return ddb.DetectStockpile(sourcePath, lat, lon, radiusMeters, sensitivity);
     }
 
-    public async Task<string> DetectAllStockpiles(string orgSlug, string dsSlug, string path, float sensitivity, double minAreaM2, int maxResults)
+    public async Task<string> DetectAllStockpiles(string orgSlug, string dsSlug, string path, float sensitivity,
+        double minAreaM2, int maxResults)
     {
         if (sensitivity < 0f) sensitivity = 0f;
         if (sensitivity > 1f) sensitivity = 1f;
@@ -1898,11 +1907,11 @@ public class ObjectsManager : IObjectsManager
     }
 
     public async Task<string> GenerateContours(string orgSlug, string dsSlug, string path,
-                                               double? interval, int? count,
-                                               double baseOffset,
-                                               double? minElev, double? maxElev,
-                                               double simplifyTolerance,
-                                               int bandIndex)
+        double? interval, int? count,
+        double baseOffset,
+        double? minElev, double? maxElev,
+        double simplifyTolerance,
+        int bandIndex)
     {
         if (!interval.HasValue && !count.HasValue)
             throw new ArgumentException("Either 'interval' or 'count' must be specified");
@@ -1927,7 +1936,7 @@ public class ObjectsManager : IObjectsManager
         var sourcePath = GetBuildSource(entry);
 
         return ddb.GenerateContours(sourcePath, interval, count, baseOffset,
-                                    minElev, maxElev, simplifyTolerance, bandIndex);
+            minElev, maxElev, simplifyTolerance, bandIndex);
     }
 
     #endregion
