@@ -169,13 +169,6 @@ public interface IDdbWrapper
     /// <param name="path">Path to the raster</param>
     /// <param name="geoJsonLineString">GeoJSON LineString geometry (WGS84)</param>
     /// <param name="samples">Requested number of equispaced samples (clamped 2..4096)</param>
-    /// <summary>
-    /// Sample raster values along a GeoJSON LineString (WGS84). Returns a JSON
-    /// profile with equispaced samples suitable for elevation/temperature charts.
-    /// </summary>
-    /// <param name="path">Path to the raster</param>
-    /// <param name="geoJsonLineString">GeoJSON LineString geometry (WGS84)</param>
-    /// <param name="samples">Requested number of equispaced samples (clamped 2..4096)</param>
     public string GetRasterProfile(string path, string geoJsonLineString, int samples);
 
     /// <summary>
