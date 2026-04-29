@@ -6,6 +6,7 @@ using System.Linq;
 using System.Net;
 using System.Threading;
 using System.Threading.Tasks;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
@@ -19,6 +20,7 @@ using Registry.Web.Models;
 using Registry.Web.Filters;
 using Registry.Web.Models.DTO;
 using Registry.Web.Services.Ports;
+using Registry.Web.Services.Adapters;
 using Registry.Web.Utilities;
 
 namespace Registry.Web.Controllers;
@@ -96,7 +98,7 @@ public class ObjectsController : ControllerBaseEx
         }
         catch (OperationCanceledException)
         {
-            // Client disconnected — not an error
+            // Client disconnected - not an error
             _logger.LogDebug("Download cancelled by client: GetDdb('{OrgSlug}', '{DsSlug}')", orgSlug, dsSlug);
             return new EmptyResult();
         }
@@ -235,7 +237,7 @@ public class ObjectsController : ControllerBaseEx
         }
         catch (OperationCanceledException)
         {
-            // Client disconnected — not an error
+            // Client disconnected - not an error
             _logger.LogDebug(
                 "Download cancelled by client: Download('{OrgSlug}', '{DsSlug}', '{Paths}')",
                 orgSlug, dsSlug, paths != null ? string.Join("; ", paths) : string.Empty);
@@ -1135,14 +1137,14 @@ public class ObjectsController : ControllerBaseEx
 
     #endregion
 
-    #region Thermal
+    #region Raster Analysis
 
-    /// <summary>Get thermal info including calibration, temperature range, and dimensions.</summary>
-    [HttpGet("thermal-info", Name = nameof(ObjectsController) + "." + nameof(GetThermalInfo))]
+    /// <summary>Get raster value info (min/max/unit/dimensions), including thermal calibration if applicable.</summary>
+    [HttpGet("raster-value-info", Name = nameof(ObjectsController) + "." + nameof(GetRasterValueInfo))]
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status401Unauthorized)]
-    public async Task<IActionResult> GetThermalInfo(
+    public async Task<IActionResult> GetRasterValueInfo(
         [FromRoute, Required] string orgSlug,
         [FromRoute, Required] string dsSlug,
         [FromQuery, Required] string path)
@@ -1152,23 +1154,23 @@ public class ObjectsController : ControllerBaseEx
             var pathError = ValidatePath(path);
             if (pathError != null) return pathError;
 
-            var json = await _objectsManager.GetThermalInfo(orgSlug, dsSlug, path);
+            var json = await _objectsManager.GetRasterValueInfo(orgSlug, dsSlug, path);
             return Content(json, "application/json");
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Exception in GetThermalInfo('{OrgSlug}', '{DsSlug}', '{Path}')", orgSlug, dsSlug,
+            _logger.LogError(ex, "Exception in GetRasterValueInfo('{OrgSlug}', '{DsSlug}', '{Path}')", orgSlug, dsSlug,
                 path);
             return ExceptionResult(ex);
         }
     }
 
-    /// <summary>Get temperature at a specific pixel location.</summary>
-    [HttpGet("thermal-point", Name = nameof(ObjectsController) + "." + nameof(GetThermalPoint))]
+    /// <summary>Get raster value (temperature/elevation/etc.) at a specific pixel location.</summary>
+    [HttpGet("raster-point-value", Name = nameof(ObjectsController) + "." + nameof(GetRasterPointValue))]
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status401Unauthorized)]
-    public async Task<IActionResult> GetThermalPoint(
+    public async Task<IActionResult> GetRasterPointValue(
         [FromRoute, Required] string orgSlug,
         [FromRoute, Required] string dsSlug,
         [FromQuery, Required] string path,
@@ -1180,23 +1182,23 @@ public class ObjectsController : ControllerBaseEx
             var pathError = ValidatePath(path);
             if (pathError != null) return pathError;
 
-            var json = await _objectsManager.GetThermalPoint(orgSlug, dsSlug, path, x, y);
+            var json = await _objectsManager.GetRasterPointValue(orgSlug, dsSlug, path, x, y);
             return Content(json, "application/json");
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Exception in GetThermalPoint('{OrgSlug}', '{DsSlug}', '{Path}')", orgSlug, dsSlug,
+            _logger.LogError(ex, "Exception in GetRasterPointValue('{OrgSlug}', '{DsSlug}', '{Path}')", orgSlug, dsSlug,
                 path);
             return ExceptionResult(ex);
         }
     }
 
-    /// <summary>Get temperature statistics for a rectangular area.</summary>
-    [HttpGet("thermal-area-stats", Name = nameof(ObjectsController) + "." + nameof(GetThermalAreaStats))]
+    /// <summary>Get raster value statistics for a rectangular area.</summary>
+    [HttpGet("raster-area-stats", Name = nameof(ObjectsController) + "." + nameof(GetRasterAreaStats))]
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status401Unauthorized)]
-    public async Task<IActionResult> GetThermalAreaStats(
+    public async Task<IActionResult> GetRasterAreaStats(
         [FromRoute, Required] string orgSlug,
         [FromRoute, Required] string dsSlug,
         [FromQuery, Required] string path,
@@ -1210,13 +1212,235 @@ public class ObjectsController : ControllerBaseEx
             var pathError = ValidatePath(path);
             if (pathError != null) return pathError;
 
-            var json = await _objectsManager.GetThermalAreaStats(orgSlug, dsSlug, path, x0, y0, x1, y1);
+            var json = await _objectsManager.GetRasterAreaStats(orgSlug, dsSlug, path, x0, y0, x1, y1);
             return Content(json, "application/json");
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Exception in GetThermalAreaStats('{OrgSlug}', '{DsSlug}', '{Path}')", orgSlug, dsSlug,
+            _logger.LogError(ex, "Exception in GetRasterAreaStats('{OrgSlug}', '{DsSlug}', '{Path}')", orgSlug, dsSlug,
                 path);
+            return ExceptionResult(ex);
+        }
+    }
+
+    /// <summary>Sample raster values along a GeoJSON LineString (WGS84) and return a profile.</summary>
+    /// <remarks>
+    /// Accepts the geometry via POST body to support arbitrarily long polylines.
+    /// Returns JSON with equispaced samples containing distance (meters), value, lon, lat.
+    /// </remarks>
+    [HttpPost("raster-profile", Name = nameof(ObjectsController) + "." + nameof(GetRasterProfile))]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status401Unauthorized)]
+    public async Task<IActionResult> GetRasterProfile(
+        [FromRoute, Required] string orgSlug,
+        [FromRoute, Required] string dsSlug,
+        [FromBody, Required] RasterProfileRequestDto request)
+    {
+        try
+        {
+            if (request == null)
+                return BadRequest(new ErrorResponse("Request body is required"));
+
+            var pathError = ValidatePath(request.Path);
+            if (pathError != null) return pathError;
+
+            if (string.IsNullOrWhiteSpace(request.LineString))
+                return BadRequest(new ErrorResponse("lineString (GeoJSON LineString) is required"));
+
+            var samples = request.Samples ?? 256;
+            var json = await _objectsManager.GetRasterProfile(orgSlug, dsSlug, request.Path,
+                request.LineString, samples);
+            return Content(json, "application/json");
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Exception in GetRasterProfile('{OrgSlug}', '{DsSlug}', '{Path}')", orgSlug, dsSlug,
+                request?.Path);
+            return ExceptionResult(ex);
+        }
+    }
+
+    #endregion
+
+    #region Stockpile Volume
+
+    /// <summary>
+    /// Calculate cut/fill/net stockpile volume over a polygon on a DEM raster.
+    /// </summary>
+    [HttpPost("stockpile/calculate", Name = nameof(ObjectsController) + "." + nameof(CalculateStockpileVolume))]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status401Unauthorized)]
+    public async Task<IActionResult> CalculateStockpileVolume(
+        [FromRoute, Required] string orgSlug,
+        [FromRoute, Required] string dsSlug,
+        [FromBody, Required] VolumeCalculationRequestDto request)
+    {
+        try
+        {
+            if (request == null)
+                return BadRequest(new ErrorResponse("Request body is required"));
+
+            var pathError = ValidatePath(request.Path);
+            if (pathError != null) return pathError;
+
+            if (string.IsNullOrWhiteSpace(request.Polygon))
+                return BadRequest(new ErrorResponse("polygon (GeoJSON Polygon) is required"));
+
+            var json = await _objectsManager.CalculateVolume(orgSlug, dsSlug, request.Path,
+                request.Polygon, request.BaseMethod, request.FlatElevation);
+
+            return Content(json, "application/json");
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Exception in CalculateStockpileVolume('{OrgSlug}', '{DsSlug}', '{Path}')",
+                orgSlug, dsSlug, request?.Path);
+            return ExceptionResult(ex);
+        }
+    }
+
+    /// <summary>
+    /// Auto-detect a stockpile footprint starting from a click on the raster.
+    /// </summary>
+    [HttpPost("stockpile/detect", Name = nameof(ObjectsController) + "." + nameof(DetectStockpile))]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status401Unauthorized)]
+    public async Task<IActionResult> DetectStockpile(
+        [FromRoute, Required] string orgSlug,
+        [FromRoute, Required] string dsSlug,
+        [FromBody, Required] StockpileDetectionRequestDto request)
+    {
+        try
+        {
+            if (request == null)
+                return BadRequest(new ErrorResponse("Request body is required"));
+
+            var pathError = ValidatePath(request.Path);
+            if (pathError != null) return pathError;
+
+            var radius = request.Radius ?? 50.0;
+            var sensitivity = request.Sensitivity ?? 0.5f;
+            if (sensitivity < 0f) sensitivity = 0f;
+            if (sensitivity > 1f) sensitivity = 1f;
+            if (!(radius > 0)) return BadRequest(new ErrorResponse("radius must be positive"));
+            if (!request.Lat.HasValue || !request.Lon.HasValue)
+                return BadRequest(new ErrorResponse("lat and lon are required"));
+
+            var json = await _objectsManager.DetectStockpile(orgSlug, dsSlug, request.Path,
+                request.Lat.Value, request.Lon.Value, radius, sensitivity);
+            return Content(json, "application/json");
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Exception in DetectStockpile('{OrgSlug}', '{DsSlug}', '{Path}')",
+                orgSlug, dsSlug, request?.Path);
+            return ExceptionResult(ex);
+        }
+    }
+
+    /// <summary>
+    /// Auto-detect all stockpile footprints in a DEM (full-raster scan).
+    /// </summary>
+    [HttpPost("stockpile/detect-all", Name = nameof(ObjectsController) + "." + nameof(DetectAllStockpiles))]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status401Unauthorized)]
+    public async Task<IActionResult> DetectAllStockpiles(
+        [FromRoute, Required] string orgSlug,
+        [FromRoute, Required] string dsSlug,
+        [FromBody, Required] StockpileBatchDetectionRequestDto request)
+    {
+        try
+        {
+            if (request == null)
+                return BadRequest(new ErrorResponse("Request body is required"));
+
+            var pathError = ValidatePath(request.Path);
+            if (pathError != null) return pathError;
+
+            var sensitivity = request.Sensitivity ?? 0.5f;
+            if (sensitivity < 0f) sensitivity = 0f;
+            if (sensitivity > 1f) sensitivity = 1f;
+
+            var minAreaM2 = request.MinAreaM2 ?? 5.0;
+            if (minAreaM2 < 0) return BadRequest(new ErrorResponse("minAreaM2 must be >= 0"));
+
+            var maxResults = request.MaxResults ?? 50;
+            if (maxResults <= 0) return BadRequest(new ErrorResponse("maxResults must be > 0"));
+            if (maxResults > 500) maxResults = 500;
+
+            var json = await _objectsManager.DetectAllStockpiles(orgSlug, dsSlug, request.Path,
+                sensitivity, minAreaM2, maxResults);
+            return Content(json, "application/json");
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Exception in DetectAllStockpiles('{OrgSlug}', '{DsSlug}', '{Path}')",
+                orgSlug, dsSlug, request?.Path);
+            return ExceptionResult(ex);
+        }
+    }
+
+    #endregion
+
+    #region Contour Lines
+
+    /// <summary>
+    /// Generate contour lines (GeoJSON LineStrings with an `elev` property) from a DEM/DSM/DTM raster.
+    /// </summary>
+    /// <remarks>
+    /// Either <c>interval</c> or <c>count</c> must be supplied. When both are set, <c>interval</c> wins.
+    /// </remarks>
+    [HttpPost("contours", Name = nameof(ObjectsController) + "." + nameof(GenerateContours))]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status401Unauthorized)]
+    public async Task<IActionResult> GenerateContours(
+        [FromRoute, Required] string orgSlug,
+        [FromRoute, Required] string dsSlug,
+        [FromBody, Required] ContourRequestDto request)
+    {
+        try
+        {
+            if (request == null)
+                return BadRequest(new ErrorResponse("Request body is required"));
+
+            var pathError = ValidatePath(request.Path);
+            if (pathError != null) return pathError;
+
+            if (!request.Interval.HasValue && !request.Count.HasValue)
+                return BadRequest(new ErrorResponse("Either 'interval' or 'count' must be specified"));
+
+            if (request.Interval.HasValue && request.Interval.Value <= 0)
+                return BadRequest(new ErrorResponse("'interval' must be > 0"));
+
+            if (request.Count.HasValue && request.Count.Value <= 0)
+                return BadRequest(new ErrorResponse("'count' must be > 0"));
+
+            if (request.MinElev.HasValue && request.MaxElev.HasValue &&
+                request.MinElev.Value >= request.MaxElev.Value)
+                return BadRequest(new ErrorResponse("'minElev' must be less than 'maxElev'"));
+
+            if (request.SimplifyTolerance < 0)
+                return BadRequest(new ErrorResponse("'simplifyTolerance' must be >= 0"));
+
+            var bandIndex = request.BandIndex > 0 ? request.BandIndex : 1;
+
+            var json = await _objectsManager.GenerateContours(orgSlug, dsSlug, request.Path,
+                request.Interval, request.Count,
+                request.BaseOffset,
+                request.MinElev, request.MaxElev,
+                request.SimplifyTolerance,
+                bandIndex);
+            return Content(json, "application/json");
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Exception in GenerateContours('{OrgSlug}', '{DsSlug}', '{Path}')",
+                orgSlug, dsSlug, request?.Path);
             return ExceptionResult(ex);
         }
     }

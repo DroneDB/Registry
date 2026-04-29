@@ -148,19 +148,78 @@ public interface IDdbWrapper
         string? bandFilter = null, string? colormap = null, string? rescale = null);
 
     /// <summary>
-    /// Get thermal info including calibration, temperature range, and dimensions
+    /// Get raster value info (min/max/unit/dimensions), including thermal calibration if applicable
     /// </summary>
-    public string GetThermalInfo(string path);
+    public string GetRasterValueInfo(string path);
 
     /// <summary>
-    /// Get temperature at a specific pixel location
+    /// Get raster value (temperature/elevation/etc.) at a specific pixel location
     /// </summary>
-    public string GetThermalPoint(string path, int x, int y);
+    public string GetRasterPointValue(string path, int x, int y);
 
     /// <summary>
-    /// Get temperature statistics for a rectangular area
+    /// Get raster value statistics for a rectangular area
     /// </summary>
-    public string GetThermalAreaStats(string path, int x0, int y0, int x1, int y1);
+    public string GetRasterAreaStats(string path, int x0, int y0, int x1, int y1);
+
+    /// <summary>
+    /// Sample raster values along a GeoJSON LineString (WGS84). Returns a JSON
+    /// profile with equispaced samples suitable for elevation/temperature charts.
+    /// </summary>
+    /// <param name="path">Path to the raster</param>
+    /// <param name="geoJsonLineString">GeoJSON LineString geometry (WGS84)</param>
+    /// <param name="samples">Requested number of equispaced samples (clamped 2..4096)</param>
+    public string GetRasterProfile(string path, string geoJsonLineString, int samples);
+
+    /// <summary>
+    /// Calculate stockpile volume (cut/fill/net) over a polygon on a DEM raster.
+    /// </summary>
+    /// <param name="path">Path to the elevation raster</param>
+    /// <param name="polygonGeoJson">GeoJSON Polygon or MultiPolygon (WGS84)</param>
+    /// <param name="baseMethod">One of lowest_perimeter, average_perimeter, best_fit, flat</param>
+    /// <param name="flatElevation">Elevation used when baseMethod = flat</param>
+    public string CalculateVolume(string path, string polygonGeoJson, string baseMethod, double flatElevation);
+
+    /// <summary>
+    /// Auto-detect a stockpile footprint starting from a click on the raster.
+    /// </summary>
+    /// <param name="path">Path to the elevation raster</param>
+    /// <param name="lat">Click latitude (WGS84)</param>
+    /// <param name="lon">Click longitude (WGS84)</param>
+    /// <param name="radiusMeters">Search radius (meters)</param>
+    /// <param name="sensitivity">Detail level in [0,1]</param>
+    public string DetectStockpile(string path, double lat, double lon, double radiusMeters, float sensitivity);
+
+    /// <summary>
+    /// Auto-detect ALL stockpile footprints by full-DEM scan.
+    /// </summary>
+    /// <param name="path">Path to the elevation raster</param>
+    /// <param name="sensitivity">Detail level in [0,1]</param>
+    /// <param name="minAreaM2">Minimum component area in square meters (>=0)</param>
+    /// <param name="maxResults">Maximum number of stockpiles to return (capped at 500)</param>
+    public string DetectAllStockpiles(string path, float sensitivity, double minAreaM2, int maxResults);
+
+    /// <summary>
+    /// Generate contour lines from a single-band elevation raster (DEM/DSM/DTM).
+    /// Returns a GeoJSON FeatureCollection of LineString features with an `elev` property (WGS84).
+    /// Either <paramref name="interval"/> or <paramref name="count"/> must be provided.
+    /// </summary>
+    /// <param name="path">Path to the raster</param>
+    /// <param name="interval">Vertical interval between contour levels (raster units). Null to derive from <paramref name="count"/>.</param>
+    /// <param name="count">Target number of contour levels. Null when <paramref name="interval"/> is set.</param>
+    /// <param name="baseOffset">Reference base elevation for level alignment</param>
+    /// <param name="minElev">Drop contours below this elevation; null disables the bound</param>
+    /// <param name="maxElev">Drop contours above this elevation; null disables the bound</param>
+    /// <param name="simplifyTolerance">Geometry simplification tolerance in raster CRS units (0 = none)</param>
+    /// <param name="bandIndex">1-based raster band index</param>
+    public string GenerateContours(string path,
+                                   double? interval,
+                                   int? count,
+                                   double baseOffset = 0.0,
+                                   double? minElev = null,
+                                   double? maxElev = null,
+                                   double simplifyTolerance = 0.0,
+                                   int bandIndex = 1);
 
     /// <summary>
     /// Mask orthophoto borders making them transparent

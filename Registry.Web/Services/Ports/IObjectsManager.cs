@@ -80,14 +80,34 @@ public interface IObjectsManager
     /// </summary>
     Task<long> EstimateExportSize(string orgSlug, string dsSlug, string path);
 
-    /// <summary>Get thermal info including calibration, temperature range, and dimensions</summary>
-    Task<string> GetThermalInfo(string orgSlug, string dsSlug, string path);
+    /// <summary>Get raster value info (min/max/unit/dimensions), including thermal calibration if applicable</summary>
+    Task<string> GetRasterValueInfo(string orgSlug, string dsSlug, string path);
 
-    /// <summary>Get temperature at a specific pixel location</summary>
-    Task<string> GetThermalPoint(string orgSlug, string dsSlug, string path, int x, int y);
+    /// <summary>Get raster value (temperature/elevation/etc.) at a specific pixel location</summary>
+    Task<string> GetRasterPointValue(string orgSlug, string dsSlug, string path, int x, int y);
 
-    /// <summary>Get temperature statistics for a rectangular area</summary>
-    Task<string> GetThermalAreaStats(string orgSlug, string dsSlug, string path, int x0, int y0, int x1, int y1);
+    /// <summary>Get raster value statistics for a rectangular area</summary>
+    Task<string> GetRasterAreaStats(string orgSlug, string dsSlug, string path, int x0, int y0, int x1, int y1);
+
+    /// <summary>Sample raster values along a GeoJSON LineString (WGS84)</summary>
+    Task<string> GetRasterProfile(string orgSlug, string dsSlug, string path, string geoJsonLineString, int samples);
+
+    /// <summary>Calculate stockpile volume (cut/fill/net) over a polygon on a DEM raster</summary>
+    Task<string> CalculateVolume(string orgSlug, string dsSlug, string path, string polygonGeoJson, string baseMethod, double flatElevation);
+
+    /// <summary>Auto-detect a stockpile footprint starting from a click on the raster</summary>
+    Task<string> DetectStockpile(string orgSlug, string dsSlug, string path, double lat, double lon, double radiusMeters, float sensitivity);
+
+    /// <summary>Auto-detect ALL stockpile footprints by full-DEM scan</summary>
+    Task<string> DetectAllStockpiles(string orgSlug, string dsSlug, string path, float sensitivity, double minAreaM2, int maxResults);
+
+    /// <summary>Generate contour lines from a single-band elevation raster (DEM/DSM/DTM).</summary>
+    Task<string> GenerateContours(string orgSlug, string dsSlug, string path,
+                                  double? interval, int? count,
+                                  double baseOffset,
+                                  double? minElev, double? maxElev,
+                                  double simplifyTolerance,
+                                  int bandIndex);
 
     /// <summary>Check if a masked version of the orthophoto already exists</summary>
     Task<MaskBordersCheckResponseDto> CheckMaskedFileExists(string orgSlug, string dsSlug, string path);

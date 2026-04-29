@@ -47,7 +47,7 @@ public class DownloadLimiter : IDownloadLimiter
             return true;
         }
 
-        // Over limit — roll back the increment
+        // Over limit - roll back the increment
         var activeCount = DecrementSafe(key);
 
         _logger.LogWarning("Download limit reached for '{Key}': {Active}/{Max}",

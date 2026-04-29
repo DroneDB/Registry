@@ -1659,23 +1659,23 @@ public class NativeDdbWrapper : IDdbWrapper
 
     #endregion
 
-    #region Thermal P/Invoke
+    #region Raster Analysis P/Invoke
 
-    [DllImport("ddb", EntryPoint = "DDBGetThermalInfo")]
-    private static extern DdbResult _GetThermalInfo(
+    [DllImport("ddb", EntryPoint = "DDBGetRasterValueInfo")]
+    private static extern DdbResult _GetRasterValueInfo(
         [MarshalAs(UnmanagedType.LPUTF8Str)] string path, out IntPtr output);
 
-    public string GetThermalInfo(string path)
+    public string GetRasterValueInfo(string path)
     {
         if (path == null) throw new ArgumentException("path is null");
 
         try
         {
-            if (_GetThermalInfo(path, out var output) == DdbResult.Success)
+            if (_GetRasterValueInfo(path, out var output) == DdbResult.Success)
             {
                 var json = MarshalAndFreeUtf8(output);
                 if (string.IsNullOrWhiteSpace(json))
-                    throw new DdbException("Unable to get thermal info");
+                    throw new DdbException("Unable to get raster value info");
                 return json;
             }
         }
@@ -1687,27 +1687,27 @@ public class NativeDdbWrapper : IDdbWrapper
         catch (Exception ex)
         {
             throw new DdbException(
-                $"Error in calling ddb lib. Last error: \"{SafeGetLastError("get thermal info")}\", check inner exception for details", ex);
+                $"Error in calling ddb lib. Last error: \"{SafeGetLastError("get raster value info")}\", check inner exception for details", ex);
         }
 
-        throw new DdbException(SafeGetLastError("get thermal info"));
+        throw new DdbException(SafeGetLastError("get raster value info"));
     }
 
-    [DllImport("ddb", EntryPoint = "DDBGetThermalPoint")]
-    private static extern DdbResult _GetThermalPoint(
+    [DllImport("ddb", EntryPoint = "DDBGetRasterPointValue")]
+    private static extern DdbResult _GetRasterPointValue(
         [MarshalAs(UnmanagedType.LPUTF8Str)] string path, int x, int y, out IntPtr output);
 
-    public string GetThermalPoint(string path, int x, int y)
+    public string GetRasterPointValue(string path, int x, int y)
     {
         if (path == null) throw new ArgumentException("path is null");
 
         try
         {
-            if (_GetThermalPoint(path, x, y, out var output) == DdbResult.Success)
+            if (_GetRasterPointValue(path, x, y, out var output) == DdbResult.Success)
             {
                 var json = MarshalAndFreeUtf8(output);
                 if (string.IsNullOrWhiteSpace(json))
-                    throw new DdbException("Unable to get thermal point");
+                    throw new DdbException("Unable to get raster point value");
                 return json;
             }
         }
@@ -1719,27 +1719,27 @@ public class NativeDdbWrapper : IDdbWrapper
         catch (Exception ex)
         {
             throw new DdbException(
-                $"Error in calling ddb lib. Last error: \"{SafeGetLastError("get thermal point")}\", check inner exception for details", ex);
+                $"Error in calling ddb lib. Last error: \"{SafeGetLastError("get raster point value")}\", check inner exception for details", ex);
         }
 
-        throw new DdbException(SafeGetLastError("get thermal point"));
+        throw new DdbException(SafeGetLastError("get raster point value"));
     }
 
-    [DllImport("ddb", EntryPoint = "DDBGetThermalAreaStats")]
-    private static extern DdbResult _GetThermalAreaStats(
+    [DllImport("ddb", EntryPoint = "DDBGetRasterAreaStats")]
+    private static extern DdbResult _GetRasterAreaStats(
         [MarshalAs(UnmanagedType.LPUTF8Str)] string path, int x0, int y0, int x1, int y1, out IntPtr output);
 
-    public string GetThermalAreaStats(string path, int x0, int y0, int x1, int y1)
+    public string GetRasterAreaStats(string path, int x0, int y0, int x1, int y1)
     {
         if (path == null) throw new ArgumentException("path is null");
 
         try
         {
-            if (_GetThermalAreaStats(path, x0, y0, x1, y1, out var output) == DdbResult.Success)
+            if (_GetRasterAreaStats(path, x0, y0, x1, y1, out var output) == DdbResult.Success)
             {
                 var json = MarshalAndFreeUtf8(output);
                 if (string.IsNullOrWhiteSpace(json))
-                    throw new DdbException("Unable to get thermal area stats");
+                    throw new DdbException("Unable to get raster area stats");
                 return json;
             }
         }
@@ -1751,11 +1751,240 @@ public class NativeDdbWrapper : IDdbWrapper
         catch (Exception ex)
         {
             throw new DdbException(
-                $"Error in calling ddb lib. Last error: \"{SafeGetLastError("get thermal area stats")}\", check inner exception for details", ex);
+                $"Error in calling ddb lib. Last error: \"{SafeGetLastError("get raster area stats")}\", check inner exception for details", ex);
         }
 
-        throw new DdbException(SafeGetLastError("get thermal area stats"));
+        throw new DdbException(SafeGetLastError("get raster area stats"));
     }
+
+    [DllImport("ddb", EntryPoint = "DDBGetRasterProfile")]
+    private static extern DdbResult _GetRasterProfile(
+        [MarshalAs(UnmanagedType.LPUTF8Str)] string path,
+        [MarshalAs(UnmanagedType.LPUTF8Str)] string geoJsonLineString,
+        int samples,
+        out IntPtr output);
+
+    public string GetRasterProfile(string path, string geoJsonLineString, int samples)
+    {
+        if (path == null) throw new ArgumentException("path is null");
+        if (geoJsonLineString == null) throw new ArgumentException("geoJsonLineString is null");
+
+        try
+        {
+            if (_GetRasterProfile(path, geoJsonLineString, samples, out var output) == DdbResult.Success)
+            {
+                var json = MarshalAndFreeUtf8(output);
+                if (string.IsNullOrWhiteSpace(json))
+                    throw new DdbException("Unable to get raster profile");
+                return json;
+            }
+        }
+        catch (EntryPointNotFoundException ex)
+        {
+            throw new DdbException($"Error in calling ddb lib: incompatible versions ({ex.Message})", ex);
+        }
+        catch (DdbException) { throw; }
+        catch (Exception ex)
+        {
+            throw new DdbException(
+                $"Error in calling ddb lib. Last error: \"{SafeGetLastError("get raster profile")}\", check inner exception for details", ex);
+        }
+
+        throw new DdbException(SafeGetLastError("get raster profile"));
+    }
+
+    [DllImport("ddb", EntryPoint = "DDBCalculateVolume")]
+    private static extern DdbResult _CalculateVolume(
+        [MarshalAs(UnmanagedType.LPUTF8Str)] string rasterPath,
+        [MarshalAs(UnmanagedType.LPUTF8Str)] string polygonGeoJson,
+        [MarshalAs(UnmanagedType.LPUTF8Str)] string baseMethod,
+        double flatElevation,
+        out IntPtr output);
+
+    public string CalculateVolume(string path, string polygonGeoJson, string baseMethod, double flatElevation)
+    {
+        if (path == null) throw new ArgumentException("path is null");
+        if (polygonGeoJson == null) throw new ArgumentException("polygonGeoJson is null");
+        baseMethod ??= string.Empty;
+
+        try
+        {
+            if (_CalculateVolume(path, polygonGeoJson, baseMethod, flatElevation, out var output) == DdbResult.Success)
+            {
+                var json = MarshalAndFreeUtf8(output);
+                if (string.IsNullOrWhiteSpace(json))
+                    throw new DdbException("Unable to calculate volume");
+                return json;
+            }
+        }
+        catch (EntryPointNotFoundException ex)
+        {
+            throw new DdbException($"Error in calling ddb lib: incompatible versions ({ex.Message})", ex);
+        }
+        catch (DdbException) { throw; }
+        catch (Exception ex)
+        {
+            throw new DdbException(
+                $"Error in calling ddb lib. Last error: \"{SafeGetLastError("calculate volume")}\", check inner exception for details", ex);
+        }
+
+        throw new DdbException(SafeGetLastError("calculate volume"));
+    }
+
+    [DllImport("ddb", EntryPoint = "DDBDetectStockpile")]
+    private static extern DdbResult _DetectStockpile(
+        [MarshalAs(UnmanagedType.LPUTF8Str)] string rasterPath,
+        double lat,
+        double lon,
+        double radius,
+        float sensitivity,
+        out IntPtr output);
+
+    public string DetectStockpile(string path, double lat, double lon, double radiusMeters, float sensitivity)
+    {
+        if (path == null) throw new ArgumentException("path is null");
+        if (!(radiusMeters > 0)) throw new ArgumentException("radius must be positive", nameof(radiusMeters));
+
+        try
+        {
+            if (_DetectStockpile(path, lat, lon, radiusMeters, sensitivity, out var output) == DdbResult.Success)
+            {
+                var json = MarshalAndFreeUtf8(output);
+                if (string.IsNullOrWhiteSpace(json))
+                    throw new DdbException("Unable to detect stockpile");
+                return json;
+            }
+        }
+        catch (EntryPointNotFoundException ex)
+        {
+            throw new DdbException($"Error in calling ddb lib: incompatible versions ({ex.Message})", ex);
+        }
+        catch (DdbException) { throw; }
+        catch (Exception ex)
+        {
+            throw new DdbException(
+                $"Error in calling ddb lib. Last error: \"{SafeGetLastError("detect stockpile")}\", check inner exception for details", ex);
+        }
+
+        throw new DdbException(SafeGetLastError("detect stockpile"));
+    }
+
+    [DllImport("ddb", EntryPoint = "DDBDetectAllStockpiles")]
+    private static extern DdbResult _DetectAllStockpiles(
+        [MarshalAs(UnmanagedType.LPUTF8Str)] string rasterPath,
+        float sensitivity,
+        double minAreaM2,
+        int maxResults,
+        out IntPtr output);
+
+    public string DetectAllStockpiles(string path, float sensitivity, double minAreaM2, int maxResults)
+    {
+        if (path == null) throw new ArgumentException("path is null");
+        if (sensitivity < 0f || sensitivity > 1f) throw new ArgumentException("sensitivity must be in [0,1]", nameof(sensitivity));
+        if (minAreaM2 < 0.0) throw new ArgumentException("minAreaM2 must be >= 0", nameof(minAreaM2));
+        if (maxResults <= 0) throw new ArgumentException("maxResults must be > 0", nameof(maxResults));
+
+        try
+        {
+            if (_DetectAllStockpiles(path, sensitivity, minAreaM2, maxResults, out var output) == DdbResult.Success)
+            {
+                var json = MarshalAndFreeUtf8(output);
+                if (string.IsNullOrWhiteSpace(json))
+                    throw new DdbException("Unable to detect stockpiles");
+                return json;
+            }
+        }
+        catch (EntryPointNotFoundException ex)
+        {
+            throw new DdbException($"Error in calling ddb lib: incompatible versions ({ex.Message})", ex);
+        }
+        catch (DdbException) { throw; }
+        catch (Exception ex)
+        {
+            throw new DdbException(
+                $"Error in calling ddb lib. Last error: \"{SafeGetLastError("detect all stockpiles")}\", check inner exception for details", ex);
+        }
+
+        throw new DdbException(SafeGetLastError("detect all stockpiles"));
+    }
+
+    [DllImport("ddb", EntryPoint = "DDBGenerateContours")]
+    private static extern DdbResult _GenerateContours(
+        [MarshalAs(UnmanagedType.LPUTF8Str)] string rasterPath,
+        double interval,
+        int count,
+        double baseOffset,
+        double minElev,
+        double maxElev,
+        double simplifyTolerance,
+        int bandIndex,
+        out IntPtr output);
+
+    /// <summary>
+    /// Generate contour lines (GeoJSON FeatureCollection of LineStrings with
+    /// an `elev` property) from a single-band elevation raster.
+    /// </summary>
+    /// <param name="path">Path to the raster (DEM/DSM/DTM).</param>
+    /// <param name="interval">Contour interval (raster units). When null, <paramref name="count"/> drives the spacing.</param>
+    /// <param name="count">Target number of contour levels. Used when <paramref name="interval"/> is null.</param>
+    /// <param name="baseOffset">Reference base elevation for level alignment.</param>
+    /// <param name="minElev">Drop contours below this elevation. Null disables the bound.</param>
+    /// <param name="maxElev">Drop contours above this elevation. Null disables the bound.</param>
+    /// <param name="simplifyTolerance">Geometry simplification tolerance in raster CRS units (0 = none).</param>
+    /// <param name="bandIndex">1-based raster band index (defaults to 1).</param>
+    public string GenerateContours(string path,
+                                   double? interval,
+                                   int? count,
+                                   double baseOffset = 0.0,
+                                   double? minElev = null,
+                                   double? maxElev = null,
+                                   double simplifyTolerance = 0.0,
+                                   int bandIndex = 1)
+    {
+        if (string.IsNullOrWhiteSpace(path))
+            throw new ArgumentException("path is null or empty", nameof(path));
+        if (!interval.HasValue && !count.HasValue)
+            throw new ArgumentException("Either interval or count must be specified");
+        if (interval.HasValue && interval.Value <= 0.0)
+            throw new ArgumentException("interval must be > 0", nameof(interval));
+        if (count.HasValue && count.Value <= 0)
+            throw new ArgumentException("count must be > 0", nameof(count));
+        if (simplifyTolerance < 0.0)
+            throw new ArgumentException("simplifyTolerance must be >= 0", nameof(simplifyTolerance));
+        if (bandIndex <= 0)
+            throw new ArgumentException("bandIndex must be > 0", nameof(bandIndex));
+
+        var iv = interval ?? 0.0;        // <= 0 => unset on native side
+        var cnt = count ?? 0;            // <= 0 => unset on native side
+        var lo = minElev ?? double.NaN;  // NaN => unset on native side
+        var hi = maxElev ?? double.NaN;  // NaN => unset on native side
+
+        try
+        {
+            if (_GenerateContours(path, iv, cnt, baseOffset, lo, hi,
+                                  simplifyTolerance, bandIndex, out var output) == DdbResult.Success)
+            {
+                var json = MarshalAndFreeUtf8(output);
+                if (string.IsNullOrWhiteSpace(json))
+                    throw new DdbException("Unable to generate contours");
+                return json;
+            }
+        }
+        catch (EntryPointNotFoundException ex)
+        {
+            throw new DdbException($"Error in calling ddb lib: incompatible versions ({ex.Message})", ex);
+        }
+        catch (DdbException) { throw; }
+        catch (Exception ex)
+        {
+            throw new DdbException(
+                $"Error in calling ddb lib. Last error: \"{SafeGetLastError("generate contours")}\", check inner exception for details", ex);
+        }
+
+        throw new DdbException(SafeGetLastError("generate contours"));
+    }
+
+    #endregion
 
     [DllImport("ddb", EntryPoint = "DDBMaskBorders")]
     private static extern DdbResult _MaskBorders(
@@ -1788,6 +2017,4 @@ public class NativeDdbWrapper : IDdbWrapper
 
         throw new DdbException(SafeGetLastError("mask borders"));
     }
-
-    #endregion
 }

@@ -132,19 +132,52 @@ public interface IDDB
         string? bandFilter = null, string? colormap = null, string? rescale = null);
 
     /// <summary>
-    /// Get thermal info including calibration, temperature range, and dimensions
+    /// Get raster value info (min/max/unit/dimensions), including thermal calibration if applicable
     /// </summary>
-    string GetThermalInfo(string path);
+    string GetRasterValueInfo(string path);
 
     /// <summary>
-    /// Get temperature at a specific pixel location
+    /// Get raster value (temperature/elevation/etc.) at a specific pixel location
     /// </summary>
-    string GetThermalPoint(string path, int x, int y);
+    string GetRasterPointValue(string path, int x, int y);
 
     /// <summary>
-    /// Get temperature statistics for a rectangular area
+    /// Get raster value statistics for a rectangular area
     /// </summary>
-    string GetThermalAreaStats(string path, int x0, int y0, int x1, int y1);
+    string GetRasterAreaStats(string path, int x0, int y0, int x1, int y1);
+
+    /// <summary>
+    /// Sample raster values along a GeoJSON LineString (WGS84)
+    /// </summary>
+    string GetRasterProfile(string path, string geoJsonLineString, int samples);
+
+    /// <summary>
+    /// Calculate stockpile volume (cut/fill/net) over a polygon on a DEM raster
+    /// </summary>
+    string CalculateVolume(string path, string polygonGeoJson, string baseMethod, double flatElevation);
+
+    /// <summary>
+    /// Auto-detect a stockpile footprint starting from a click on the raster
+    /// </summary>
+    string DetectStockpile(string path, double lat, double lon, double radiusMeters, float sensitivity);
+
+    /// <summary>
+    /// Auto-detect ALL stockpile footprints by full-DEM scan.
+    /// </summary>
+    string DetectAllStockpiles(string path, float sensitivity, double minAreaM2, int maxResults);
+
+    /// <summary>
+    /// Generate contour lines from a single-band elevation raster (DEM/DSM/DTM).
+    /// Returns a GeoJSON FeatureCollection of LineString features.
+    /// </summary>
+    string GenerateContours(string path,
+                            double? interval,
+                            int? count,
+                            double baseOffset = 0.0,
+                            double? minElev = null,
+                            double? maxElev = null,
+                            double simplifyTolerance = 0.0,
+                            int bandIndex = 1);
 
     /// <summary>
     /// Mask orthophoto borders making them transparent
