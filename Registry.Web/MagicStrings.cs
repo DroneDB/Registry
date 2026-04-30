@@ -39,6 +39,24 @@ public static class MagicStrings
     public const string AppSettingsFileName = "appsettings.json";
     public const string AppSettingsDefaultFileName = "appsettings-default.json";
 
+    /// <summary>
+    /// Marker file dropped inside the embedded Hub archive (and therefore in the
+    /// extracted folder) carrying the Hub semantic version. Used by Registry to
+    /// decide whether the on-disk Hub needs to be re-extracted after an upgrade.
+    /// </summary>
+    public const string HubVersionFile = "version.txt";
+
+    /// <summary>
+    /// Folder under <c>StoragePath</c> hosting user-supplied branding assets
+    /// (logos, favicons, manifest). Preserved across Hub upgrades.
+    /// </summary>
+    public const string BrandingFolder = "branding";
+
+    /// <summary>
+    /// URL prefix at which the branding folder is served.
+    /// </summary>
+    public const string BrandingUrlPrefix = "/branding";
+
     public const string DdbReleasesPageUrl = "https://github.com/DroneDB/DroneDB/releases";
     public const string DdbInstallPageUrl = "https://docs.dronedb.app/download.html";
 }

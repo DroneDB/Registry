@@ -8,9 +8,11 @@ using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using Registry.Ports;
 using Registry.Web.Models;
 using Registry.Web.Models.Configuration;
 using Registry.Web.Models.DTO;
+using Registry.Web.Services.Hub;
 using Registry.Web.Services.Ports;
 using Registry.Web.Utilities;
 
@@ -28,6 +30,7 @@ public class SystemController : ControllerBaseEx
     private readonly ISystemManager _systemManager;
     private readonly IDatasetsManager _datasetsManager;
     private readonly IOrganizationsManager _organizationsManager;
+    private readonly IDdbWrapper _ddbWrapper;
     private readonly ILogger<SystemController> _logger;
     private readonly AppSettings _appSettings;
 
@@ -35,12 +38,14 @@ public class SystemController : ControllerBaseEx
         ISystemManager systemManager,
         IDatasetsManager datasetsManager,
         IOrganizationsManager organizationsManager,
+        IDdbWrapper ddbWrapper,
         ILogger<SystemController> logger,
         IOptions<AppSettings> appSettings)
     {
         _systemManager = systemManager;
         _datasetsManager = datasetsManager;
         _organizationsManager = organizationsManager;
+        _ddbWrapper = ddbWrapper;
         _logger = logger;
         _appSettings = appSettings.Value;
     }
@@ -329,6 +334,7 @@ public class SystemController : ControllerBaseEx
     /// Gets the status of all platform feature flags.
     /// </summary>
     /// <returns>An object with the status of each feature.</returns>
+    [AllowAnonymous]
     [HttpGet("features", Name = nameof(SystemController) + "." + nameof(GetFeatures))]
     [ProducesResponseType(typeof(FeaturesDto), StatusCodes.Status200OK)]
     public IActionResult GetFeatures()
@@ -350,10 +356,29 @@ public class SystemController : ControllerBaseEx
                 }
                 : null,
             DatasetThumbnailCandidates = _appSettings.DatasetThumbnailCandidates,
-            MaxExportSizeBytes = _appSettings.MaxExportSizeBytes
+            MaxExportSizeBytes = _appSettings.MaxExportSizeBytes,
+            HubOptions = _appSettings.HubOptions,
+            HubVersion = HubInfo.CurrentVersion,
+            RegistryVersion = _systemManager.GetVersion(),
+            DdbVersion = GetCleanDdbVersion()
         };
 
         return Ok(features);
+    }
+
+    private string GetCleanDdbVersion()
+    {
+        try
+        {
+            var raw = _ddbWrapper.GetVersion();
+            if (string.IsNullOrWhiteSpace(raw)) return null;
+            // The native lib returns "<semver> <commit>" — keep only the semver.
+            return raw.Contains(' ') ? raw[..raw.IndexOf(' ')] : raw;
+        }
+        catch
+        {
+            return null;
+        }
     }
 
     /// <summary>

@@ -517,6 +517,11 @@ public class Program
 
         Directory.CreateDirectory(folder);
 
+        // The branding folder hosts user-supplied logos / favicons / manifest.
+        // It is created (empty) on first run and is NEVER touched by SetupHub(),
+        // so customizations survive Hub upgrades.
+        Directory.CreateDirectory(Path.Combine(folder, MagicStrings.BrandingFolder));
+
         if (deployDdb && !SetupDdb(folder, resetDdb))
         {
             CommonUtils.WriteLineColor(" !> Failed to deploy DDB to storage folder", ConsoleColor.Red);
@@ -576,21 +581,76 @@ public class Program
     private static bool SetupHub(string folder, bool resetSpa)
     {
         var hubRoot = Path.Combine(folder, MagicStrings.SpaRoot);
+        var embeddedVersion = ReadEmbeddedHubVersion();
+        var onDiskVersion = ReadOnDiskHubVersion(hubRoot);
 
+        bool ok;
         if (resetSpa)
         {
-            Console.WriteLine(" -> Resetting Hub");
+            Console.WriteLine(" -> Resetting Hub (--reset-spa)");
             if (Directory.Exists(hubRoot)) Directory.Delete(hubRoot, true);
+            ok = ExtractHub(hubRoot, embeddedVersion);
         }
-        else if (
-            Directory.Exists(hubRoot) &&
-            Directory.GetFiles(hubRoot).Length != 0)
+        else if (!Directory.Exists(hubRoot) || Directory.GetFiles(hubRoot).Length == 0)
         {
-            Console.WriteLine(" ?> Hub folder is ok");
-            return true;
+            Console.WriteLine($" -> Installing Hub v{embeddedVersion ?? "unknown"}");
+            ok = ExtractHub(hubRoot, embeddedVersion);
+        }
+        else if (Services.Hub.HubVersionComparer.ShouldUpgrade(onDiskVersion, embeddedVersion))
+        {
+            Console.WriteLine($" -> Upgrading Hub: {onDiskVersion ?? "unknown"} -> {embeddedVersion}");
+            Directory.Delete(hubRoot, true);
+            ok = ExtractHub(hubRoot, embeddedVersion);
+        }
+        else
+        {
+            Console.WriteLine($" ?> Hub folder is ok (v{onDiskVersion ?? "unknown"})");
+            ok = true;
         }
 
-        return ExtractHub(hubRoot);
+        // Record the version that is actually on disk so /sys/features can
+        // expose it to the SPA for client-side update detection.
+        Services.Hub.HubInfo.Initialize(ReadOnDiskHubVersion(hubRoot) ?? embeddedVersion);
+
+        return ok;
+    }
+
+    /// <summary>
+    /// Reads the Hub version stamped inside the embedded ClientApp.zip.
+    /// Returns <c>null</c> if the marker file is missing (older ZIPs).
+    /// </summary>
+    private static string ReadEmbeddedHubVersion()
+    {
+        try
+        {
+            var efp = new EmbeddedResourceQuery();
+            using var stream = efp.Read(Assembly.GetExecutingAssembly(), MagicStrings.SpaRoot + ".zip");
+            if (stream == null) return null;
+            using var zip = new ZipArchive(stream, ZipArchiveMode.Read);
+            var entry = zip.GetEntry(MagicStrings.HubVersionFile);
+            if (entry == null) return null;
+            using var reader = new StreamReader(entry.Open());
+            return reader.ReadToEnd().Trim();
+        }
+        catch (Exception e)
+        {
+            Console.WriteLine($" !> Failed to read embedded Hub version: {e.Message}");
+            return null;
+        }
+    }
+
+    private static string ReadOnDiskHubVersion(string hubRoot)
+    {
+        var path = Path.Combine(hubRoot, MagicStrings.HubVersionFile);
+        if (!File.Exists(path)) return null;
+        try
+        {
+            return File.ReadAllText(path).Trim();
+        }
+        catch
+        {
+            return null;
+        }
     }
 
     private static bool SetupDdb(string folder, bool resetDdb)
@@ -662,9 +722,23 @@ public class Program
         return ExtractEmbeddedArchive(MagicStrings.DdbArchive, folder);
     }
 
-    private static bool ExtractHub(string folder)
+    private static bool ExtractHub(string folder, string embeddedVersion = null)
     {
-        return ExtractEmbeddedArchive(MagicStrings.SpaRoot, folder);
+        if (!ExtractEmbeddedArchive(MagicStrings.SpaRoot, folder)) return false;
+
+        // Defensive: ensure the version marker is written even if the embedded
+        // ZIP did not carry one (e.g. legacy build outputs).
+        if (!string.IsNullOrWhiteSpace(embeddedVersion))
+        {
+            var versionPath = Path.Combine(folder, MagicStrings.HubVersionFile);
+            if (!File.Exists(versionPath))
+            {
+                try { File.WriteAllText(versionPath, embeddedVersion); }
+                catch (Exception e) { Console.WriteLine($" !> Failed to write Hub version marker: {e.Message}"); }
+            }
+        }
+
+        return true;
     }
 
     private static JObject GetDefaultSettings()

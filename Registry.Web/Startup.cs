@@ -27,6 +27,7 @@ using Microsoft.AspNetCore.Server.Kestrel.Core;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.FileProviders;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -449,9 +450,37 @@ public class Startup
 
         app.UseWhen(context => !context.Request.Path.StartsWithSegments("/static"), builder =>
         {
+            // Serve user-supplied branding assets (logos, favicons, manifest)
+            // from {StoragePath}/branding/ at /branding/*. This folder is
+            // preserved across Hub upgrades.
+            var brandingRoot = Path.GetFullPath(
+                Path.Combine(corsSettings.StoragePath ?? ".", MagicStrings.BrandingFolder));
+            Directory.CreateDirectory(brandingRoot);
+            builder.UseStaticFiles(new StaticFileOptions
+            {
+                FileProvider = new PhysicalFileProvider(brandingRoot),
+                RequestPath = MagicStrings.BrandingUrlPrefix,
+                ServeUnknownFileTypes = true
+            });
+
             builder.UseSpaStaticFiles(new StaticFileOptions
             {
                 ServeUnknownFileTypes = true,
+                OnPrepareResponse = ctx =>
+                {
+                    // Force browsers/proxies to revalidate index.html so a Hub
+                    // upgrade on the server is picked up by clients with a
+                    // stale cached document. Hashed JS/CSS chunks remain
+                    // cacheable.
+                    var path = ctx.File?.Name;
+                    if (string.Equals(path, "index.html", StringComparison.OrdinalIgnoreCase))
+                    {
+                        var headers = ctx.Context.Response.Headers;
+                        headers["Cache-Control"] = "no-cache, no-store, must-revalidate";
+                        headers["Pragma"] = "no-cache";
+                        headers["Expires"] = "0";
+                    }
+                }
             });
 
             builder.UseSpa(spa =>

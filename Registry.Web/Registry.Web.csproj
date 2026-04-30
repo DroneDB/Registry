@@ -160,6 +160,30 @@
 
         <Delete Files="$(ProjectDir)/ClientApp.zip" />
 
+        <!--
+          Stamp the Hub semantic version (read from ClientApp/package.json) into the build
+          output so it ends up inside ClientApp.zip. Registry uses this marker to decide
+          whether the on-disk Hub needs to be re-extracted after an upgrade.
+        -->
+        <PropertyGroup>
+            <HubPackageJsonPath>$(ProjectDir)/ClientApp/package.json</HubPackageJsonPath>
+            <HubVersion Condition="Exists('$(HubPackageJsonPath)')">$([System.Text.RegularExpressions.Regex]::Match($([System.IO.File]::ReadAllText('$(HubPackageJsonPath)')), '"version"\s*:\s*"([^"]+)"').Groups[1].Value)</HubVersion>
+        </PropertyGroup>
+
+        <Error
+            Condition="!Exists('$(HubPackageJsonPath)')"
+            Text="Hub package.json not found at '$(HubPackageJsonPath)'. Cannot stamp Hub version into ClientApp.zip." />
+        <Error
+            Condition="'$(HubVersion)' == ''"
+            Text="Failed to extract a 'version' field from '$(HubPackageJsonPath)'. Cannot stamp Hub version into ClientApp.zip." />
+
+        <Message Text="Stamping Hub version $(HubVersion) into ClientApp.zip" Importance="high" />
+
+        <WriteLinesToFile
+            File="$(ProjectDir)/ClientApp/build/version.txt"
+            Lines="$(HubVersion)"
+            Overwrite="true" />
+
         <ZipDirectory SourceDirectory="$(ProjectDir)/ClientApp/build" DestinationFile="$(ProjectDir)/ClientApp.zip" Overwrite="true" />
 
         <ItemGroup>
