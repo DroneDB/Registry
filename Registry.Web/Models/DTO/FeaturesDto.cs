@@ -46,7 +46,9 @@ public class FeaturesDto
 
     /// <summary>
     /// Hub UI branding and customization options. Materializes <c>window.HubOptions</c>
-    /// on the client. Null when no branding is configured (frontend uses defaults).
+    /// on the client. Always populated from <c>AppSettings:HubOptions</c> in production
+    /// (defaults shipped via <c>appsettings-default.json</c>); only null if an admin has
+    /// explicitly removed the section from <c>appsettings.json</c>.
     /// </summary>
     public HubOptions? HubOptions { get; set; }
 }

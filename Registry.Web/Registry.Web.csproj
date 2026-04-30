@@ -168,8 +168,14 @@
         <PropertyGroup>
             <HubPackageJsonPath>$(ProjectDir)/ClientApp/package.json</HubPackageJsonPath>
             <HubVersion Condition="Exists('$(HubPackageJsonPath)')">$([System.Text.RegularExpressions.Regex]::Match($([System.IO.File]::ReadAllText('$(HubPackageJsonPath)')), '"version"\s*:\s*"([^"]+)"').Groups[1].Value)</HubVersion>
-            <HubVersion Condition="'$(HubVersion)' == ''">0.0.0</HubVersion>
         </PropertyGroup>
+
+        <Error
+            Condition="!Exists('$(HubPackageJsonPath)')"
+            Text="Hub package.json not found at '$(HubPackageJsonPath)'. Cannot stamp Hub version into ClientApp.zip." />
+        <Error
+            Condition="'$(HubVersion)' == ''"
+            Text="Failed to extract a 'version' field from '$(HubPackageJsonPath)'. Cannot stamp Hub version into ClientApp.zip." />
 
         <Message Text="Stamping Hub version $(HubVersion) into ClientApp.zip" Importance="high" />
 
