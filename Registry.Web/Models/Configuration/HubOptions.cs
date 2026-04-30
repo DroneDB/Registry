@@ -65,8 +65,7 @@ public class HubOptions
     /// <summary>
     /// Hides organization-creation/edit entry-points when <c>true</c>.
     /// </summary>
-    [JsonProperty(NullValueHandling = NullValueHandling.Ignore)]
-    public bool? ReadOnlyOrgs { get; set; }
+    public bool ReadOnlyOrgs { get; set; }
 
     /// <summary>
     /// Optional favicon / web-manifest configuration. When null, the Hub falls
