@@ -51,4 +51,21 @@ public class FeaturesDto
     /// explicitly removed the section from <c>appsettings.json</c>.
     /// </summary>
     public HubOptions? HubOptions { get; set; }
+
+    /// <summary>
+    /// Semver of the Hub (Vue ClientApp) currently extracted in <c>{StoragePath}/ClientApp/</c>.
+    /// The SPA compares this with its own build-time <c>__HUB_VERSION__</c> on boot
+    /// to detect a server-side upgrade/downgrade and force a hard reload.
+    /// </summary>
+    public string? HubVersion { get; set; }
+
+    /// <summary>
+    /// Registry assembly version. Surfaced for the post-update notice dialog.
+    /// </summary>
+    public string? RegistryVersion { get; set; }
+
+    /// <summary>
+    /// Native DroneDB library version. Surfaced for the post-update notice dialog.
+    /// </summary>
+    public string? DdbVersion { get; set; }
 }

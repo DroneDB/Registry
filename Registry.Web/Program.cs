@@ -584,29 +584,35 @@ public class Program
         var embeddedVersion = ReadEmbeddedHubVersion();
         var onDiskVersion = ReadOnDiskHubVersion(hubRoot);
 
+        bool ok;
         if (resetSpa)
         {
             Console.WriteLine(" -> Resetting Hub (--reset-spa)");
             if (Directory.Exists(hubRoot)) Directory.Delete(hubRoot, true);
-            return ExtractHub(hubRoot, embeddedVersion);
+            ok = ExtractHub(hubRoot, embeddedVersion);
         }
-
-        var folderEmpty = !Directory.Exists(hubRoot) || Directory.GetFiles(hubRoot).Length == 0;
-        if (folderEmpty)
+        else if (!Directory.Exists(hubRoot) || Directory.GetFiles(hubRoot).Length == 0)
         {
             Console.WriteLine($" -> Installing Hub v{embeddedVersion ?? "unknown"}");
-            return ExtractHub(hubRoot, embeddedVersion);
+            ok = ExtractHub(hubRoot, embeddedVersion);
         }
-
-        if (Services.Hub.HubVersionComparer.ShouldUpgrade(onDiskVersion, embeddedVersion))
+        else if (Services.Hub.HubVersionComparer.ShouldUpgrade(onDiskVersion, embeddedVersion))
         {
             Console.WriteLine($" -> Upgrading Hub: {onDiskVersion ?? "unknown"} -> {embeddedVersion}");
             Directory.Delete(hubRoot, true);
-            return ExtractHub(hubRoot, embeddedVersion);
+            ok = ExtractHub(hubRoot, embeddedVersion);
+        }
+        else
+        {
+            Console.WriteLine($" ?> Hub folder is ok (v{onDiskVersion ?? "unknown"})");
+            ok = true;
         }
 
-        Console.WriteLine($" ?> Hub folder is ok (v{onDiskVersion ?? "unknown"})");
-        return true;
+        // Record the version that is actually on disk so /sys/features can
+        // expose it to the SPA for client-side update detection.
+        Services.Hub.HubInfo.Initialize(ReadOnDiskHubVersion(hubRoot) ?? embeddedVersion);
+
+        return ok;
     }
 
     /// <summary>

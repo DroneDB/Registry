@@ -466,6 +466,21 @@ public class Startup
             builder.UseSpaStaticFiles(new StaticFileOptions
             {
                 ServeUnknownFileTypes = true,
+                OnPrepareResponse = ctx =>
+                {
+                    // Force browsers/proxies to revalidate index.html so a Hub
+                    // upgrade on the server is picked up by clients with a
+                    // stale cached document. Hashed JS/CSS chunks remain
+                    // cacheable.
+                    var path = ctx.File?.Name;
+                    if (string.Equals(path, "index.html", StringComparison.OrdinalIgnoreCase))
+                    {
+                        var headers = ctx.Context.Response.Headers;
+                        headers["Cache-Control"] = "no-cache, no-store, must-revalidate";
+                        headers["Pragma"] = "no-cache";
+                        headers["Expires"] = "0";
+                    }
+                }
             });
 
             builder.UseSpa(spa =>
