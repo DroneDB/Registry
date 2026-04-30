@@ -329,6 +329,7 @@ public class SystemController : ControllerBaseEx
     /// Gets the status of all platform feature flags.
     /// </summary>
     /// <returns>An object with the status of each feature.</returns>
+    [AllowAnonymous]
     [HttpGet("features", Name = nameof(SystemController) + "." + nameof(GetFeatures))]
     [ProducesResponseType(typeof(FeaturesDto), StatusCodes.Status200OK)]
     public IActionResult GetFeatures()
@@ -350,7 +351,8 @@ public class SystemController : ControllerBaseEx
                 }
                 : null,
             DatasetThumbnailCandidates = _appSettings.DatasetThumbnailCandidates,
-            MaxExportSizeBytes = _appSettings.MaxExportSizeBytes
+            MaxExportSizeBytes = _appSettings.MaxExportSizeBytes,
+            HubOptions = _appSettings.HubOptions
         };
 
         return Ok(features);

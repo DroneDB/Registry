@@ -1,4 +1,6 @@
 #nullable enable
+using Registry.Web.Models.Configuration;
+
 namespace Registry.Web.Models.DTO;
 
 /// <summary>
@@ -41,4 +43,10 @@ public class FeaturesDto
     /// Clients use this to disable the export button when the estimated output exceeds the limit.
     /// </summary>
     public long? MaxExportSizeBytes { get; set; }
+
+    /// <summary>
+    /// Hub UI branding and customization options. Materializes <c>window.HubOptions</c>
+    /// on the client. Null when no branding is configured (frontend uses defaults).
+    /// </summary>
+    public HubOptions? HubOptions { get; set; }
 }

@@ -27,6 +27,7 @@ using Microsoft.AspNetCore.Server.Kestrel.Core;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.FileProviders;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -449,6 +450,19 @@ public class Startup
 
         app.UseWhen(context => !context.Request.Path.StartsWithSegments("/static"), builder =>
         {
+            // Serve user-supplied branding assets (logos, favicons, manifest)
+            // from {StoragePath}/branding/ at /branding/*. This folder is
+            // preserved across Hub upgrades.
+            var brandingRoot = Path.GetFullPath(
+                Path.Combine(corsSettings.StoragePath ?? ".", MagicStrings.BrandingFolder));
+            Directory.CreateDirectory(brandingRoot);
+            builder.UseStaticFiles(new StaticFileOptions
+            {
+                FileProvider = new PhysicalFileProvider(brandingRoot),
+                RequestPath = MagicStrings.BrandingUrlPrefix,
+                ServeUnknownFileTypes = true
+            });
+
             builder.UseSpaStaticFiles(new StaticFileOptions
             {
                 ServeUnknownFileTypes = true,

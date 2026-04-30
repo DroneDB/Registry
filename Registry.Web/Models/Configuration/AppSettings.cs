@@ -238,6 +238,13 @@ public class AppSettings
 #nullable restore
 
     /// <summary>
+    /// Hub UI branding and customization options exposed to the frontend at runtime.
+    /// </summary>
+#nullable enable
+    public HubOptions? HubOptions { get; set; }
+#nullable restore
+
+    /// <summary>
     /// Allowed CORS origins. When null or empty, all origins are allowed.
     /// </summary>
 #nullable enable
