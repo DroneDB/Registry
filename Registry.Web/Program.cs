@@ -120,9 +120,15 @@ public class Program
 
         Console.WriteLine(" ?> Using storage folder '{0}'", opts.StorageFolder);
 
+        // Only the webserver owns the Hub (ClientApp) folder. Processing nodes and
+        // thumbnail generators share the same StorageFolder in production deployments,
+        // so letting them extract/upgrade ClientApp.zip would race against the webserver
+        // (Directory.Delete + ZipArchive.ExtractToDirectory concurrently on the same path).
+        var deployHub = opts.InstanceType is InstanceType.Default or InstanceType.WebServer;
+
         if (lateDdbInit)
         {
-            if (!SetupStorageFolder(opts.StorageFolder, opts.ResetHub, opts.ResetDdb, true))
+            if (!SetupStorageFolder(opts.StorageFolder, opts.ResetHub, opts.ResetDdb, true, deployHub))
             {
                 CommonUtils.WriteLineColor(" !> Failed to setup storage folder", ConsoleColor.Red);
                 return;
@@ -142,7 +148,7 @@ public class Program
                 return;
             }
 
-            if (!SetupStorageFolder(opts.StorageFolder, opts.ResetHub))
+            if (!SetupStorageFolder(opts.StorageFolder, opts.ResetHub, deployHub: deployHub))
             {
                 CommonUtils.WriteLineColor(" !> Failed to setup storage folder", ConsoleColor.Red);
                 return;
@@ -511,16 +517,19 @@ public class Program
     }
 
     private static bool SetupStorageFolder(string folder, bool resetSpa = false, bool resetDdb = false,
-        bool deployDdb = false)
+        bool deployDdb = false, bool deployHub = true)
     {
         Console.WriteLine(" -> Setting up storage folder");
 
         Directory.CreateDirectory(folder);
 
-        // The branding folder hosts user-supplied logos / favicons / manifest.
-        // It is created (empty) on first run and is NEVER touched by SetupHub(),
-        // so customizations survive Hub upgrades.
-        Directory.CreateDirectory(Path.Combine(folder, MagicStrings.BrandingFolder));
+        if (deployHub)
+        {
+            // The branding folder hosts user-supplied logos / favicons / manifest.
+            // It is created (empty) on first run and is NEVER touched by SetupHub(),
+            // so customizations survive Hub upgrades.
+            Directory.CreateDirectory(Path.Combine(folder, MagicStrings.BrandingFolder));
+        }
 
         if (deployDdb && !SetupDdb(folder, resetDdb))
         {
@@ -528,7 +537,10 @@ public class Program
             return false;
         }
 
-        if (!SetupHub(folder, resetSpa))
+        // Only the webserver extracts/upgrades the ClientApp (Hub) folder. Worker nodes
+        // (ProcessingNode, ThumbnailGenerator) skip this to avoid racing with the webserver
+        // on a shared storage folder during a Hub upgrade.
+        if (deployHub && !SetupHub(folder, resetSpa))
         {
             Console.WriteLine(" !> Error while setting up Hub");
             return false;
