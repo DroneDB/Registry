@@ -1375,7 +1375,7 @@ public class ObjectsManager : IObjectsManager
     {
         var path = entry.Type switch
         {
-            EntryType.PointCloud => CommonUtils.SafeCombine(BuildBasePath, entry.Hash, "ept", "ept.json"),
+            EntryType.PointCloud => CommonUtils.SafeCombine(BuildBasePath, entry.Hash, "copc", "cloud.copc.laz"),
             EntryType.GeoRaster => CommonUtils.SafeCombine(BuildBasePath, entry.Hash, "cog", "cog.tif"),
             EntryType.Vector => CommonUtils.SafeCombine(BuildBasePath, entry.Hash, "vec", "vector.fgb"),
             EntryType.Model => CommonUtils.SafeCombine(BuildBasePath, entry.Hash, "nxs", "model.nxz"),
