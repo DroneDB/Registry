@@ -19,6 +19,13 @@ public interface IObjectsManager
     Task<EntryDto> AddNew(string orgSlug, string dsSlug, string path, byte[] data);
     Task<EntryDto> AddNew(string orgSlug, string dsSlug, string path, Stream stream = null);
     Task<Entry> Move(string orgSlug, string dsSlug, string source, string dest);
+
+    /// <summary>
+    /// Copies a file or folder within the same dataset. Reuses the existing
+    /// build folder (content-addressed by hash, so no duplication on disk).
+    /// </summary>
+    Task<Entry> Copy(string orgSlug, string dsSlug, string source, string dest, bool overwrite = false);
+
     Task Delete(string orgSlug, string dsSlug, string path);
     Task DeleteAll(string orgSlug, string dsSlug);
     Task<FileStreamDescriptor> DownloadStream(string orgSlug, string dsSlug, string[] paths);
@@ -31,7 +38,7 @@ public interface IObjectsManager
     Task<EntryType?> GetEntryType(string orgSlug, string dsSlug, string path);
 
     Task Transfer(string sourceOrgSlug, string sourceDsSlug, string sourcePath, string destOrgSlug,
-        string destDsSlug, string destPath = null, bool overwrite = false);
+        string destDsSlug, string destPath = null, bool overwrite = false, bool keepSource = false);
 
     Task<IEnumerable<BuildJobDto>> GetBuilds(string orgSlug, string dsSlug, int page = 1, int pageSize = 50);
     Task<int> ClearCompletedBuilds(string orgSlug, string dsSlug);

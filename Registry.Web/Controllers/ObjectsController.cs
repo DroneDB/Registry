@@ -676,24 +676,66 @@ public class ObjectsController : ControllerBaseEx
         [FromForm, Required] string destOrgSlug,
         [FromForm, Required] string destDsSlug,
         [FromForm] string destPath = null,
-        [FromForm] bool overwrite = false)
+        [FromForm] bool overwrite = false,
+        [FromForm] bool keepSource = false)
     {
         try
         {
             _logger.LogDebug(
-                "Objects controller Transfer('{SourceOrgSlug}', '{SourceDsSlug}', '{SourcePath}', '{DestOrgSlug}', '{DestDsSlug}', '{DestPath}', '{Overwrite}')",
+                "Objects controller Transfer('{SourceOrgSlug}', '{SourceDsSlug}', '{SourcePath}', '{DestOrgSlug}', '{DestDsSlug}', '{DestPath}', overwrite={Overwrite}, keepSource={KeepSource})",
                 orgSlug,
-                dsSlug, sourcePath, destOrgSlug, destDsSlug, destPath, overwrite);
+                dsSlug, sourcePath, destOrgSlug, destDsSlug, destPath, overwrite, keepSource);
 
-            await _objectsManager.Transfer(orgSlug, dsSlug, sourcePath, destOrgSlug, destDsSlug, destPath, overwrite);
+            await _objectsManager.Transfer(orgSlug, dsSlug, sourcePath, destOrgSlug, destDsSlug, destPath, overwrite, keepSource);
             return NoContent();
         }
         catch (Exception ex)
         {
             _logger.LogError(ex,
-                "Exception in Objects controller Transfer('{SourceOrgSlug}', '{SourceDsSlug}', '{SourcePath}', '{DestOrgSlug}', '{DestDsSlug}', '{DestPath}', '{Overwrite}')",
+                "Exception in Objects controller Transfer('{SourceOrgSlug}', '{SourceDsSlug}', '{SourcePath}', '{DestOrgSlug}', '{DestDsSlug}', '{DestPath}', overwrite={Overwrite}, keepSource={KeepSource})",
                 orgSlug,
-                dsSlug, sourcePath, destOrgSlug, destDsSlug, destPath, overwrite);
+                dsSlug, sourcePath, destOrgSlug, destDsSlug, destPath, overwrite, keepSource);
+
+            return ExceptionResult(ex);
+        }
+    }
+
+    /// <summary>
+    /// Copies a file or folder within the same dataset.
+    /// </summary>
+    /// <param name="orgSlug">The organization slug.</param>
+    /// <param name="dsSlug">The dataset slug.</param>
+    /// <param name="source">The source path (existing entry).</param>
+    /// <param name="dest">The destination path.</param>
+    /// <param name="overwrite">Whether to overwrite an existing destination.</param>
+    /// <returns>The created destination entry.</returns>
+    [HttpPost(RoutesHelper.ObjectsRadix + "/copy", Name = nameof(ObjectsController) + "." + nameof(Copy))]
+    [ProducesResponseType(typeof(Entry), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status409Conflict)]
+    public async Task<IActionResult> Copy(
+        [FromRoute, Required] string orgSlug,
+        [FromRoute, Required] string dsSlug,
+        [FromForm, Required] string source,
+        [FromForm, Required] string dest,
+        [FromForm] bool overwrite = false)
+    {
+        try
+        {
+            _logger.LogDebug(
+                "Objects controller Copy('{OrgSlug}', '{DsSlug}', '{Source}' -> '{Dest}', overwrite={Overwrite})",
+                orgSlug, dsSlug, source, dest, overwrite);
+
+            var entry = await _objectsManager.Copy(orgSlug, dsSlug, source, dest, overwrite);
+            return Ok(entry);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex,
+                "Exception in Objects controller Copy('{OrgSlug}', '{DsSlug}', '{Source}' -> '{Dest}', overwrite={Overwrite})",
+                orgSlug, dsSlug, source, dest, overwrite);
 
             return ExceptionResult(ex);
         }

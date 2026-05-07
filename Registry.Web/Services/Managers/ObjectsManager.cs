@@ -332,14 +332,14 @@ public class ObjectsManager : IObjectsManager
     }
 
     public async Task Transfer(string sourceOrgSlug, string sourceDsSlug, string sourcePath, string destOrgSlug,
-        string destDsSlug, string destPath = null, bool overwrite = false)
+        string destDsSlug, string destPath = null, bool overwrite = false, bool keepSource = false)
     {
         var sourceDs = _utils.GetDataset(sourceOrgSlug, sourceDsSlug);
         var destDs = _utils.GetDataset(destOrgSlug, destDsSlug);
 
         _logger.LogInformation(
-            "In Transfer('{SourceOrgSlug}/{SourceDsSlug}, {SourcePath}' -> '{DestOrgSlug}/{DestDsSlug}', {DestPath}; {Overwrite})",
-            sourceOrgSlug, sourceDsSlug, sourcePath, destOrgSlug, destDsSlug, destPath, overwrite);
+            "In Transfer('{SourceOrgSlug}/{SourceDsSlug}, {SourcePath}' -> '{DestOrgSlug}/{DestDsSlug}', {DestPath}; overwrite={Overwrite}; keepSource={KeepSource})",
+            sourceOrgSlug, sourceDsSlug, sourcePath, destOrgSlug, destDsSlug, destPath, overwrite, keepSource);
 
         if (sourceOrgSlug == destOrgSlug && sourceDsSlug == destDsSlug)
             throw new InvalidOperationException("Source and destination cannot be the same");
@@ -472,10 +472,13 @@ public class ObjectsManager : IObjectsManager
                 if (_fs.FolderExists(sourceBuildPath))
                 {
                     destBuildPath = Path.Combine(destDdb.BuildFolderPath, sourceEntry.Hash);
-                    _logger.LogInformation("Transferring build folder '{SourceBuildPath}' to '{DestBuildPath}'",
-                        sourceBuildPath, destBuildPath);
+                    _logger.LogInformation("Transferring build folder '{SourceBuildPath}' to '{DestBuildPath}' (keepSource={KeepSource})",
+                        sourceBuildPath, destBuildPath, keepSource);
                     _fs.EnsureParentFolderExists(destBuildPath);
-                    _fs.FolderMove(sourceBuildPath, destBuildPath);
+                    if (keepSource)
+                        _fs.FolderCopy(sourceBuildPath, destBuildPath);
+                    else
+                        _fs.FolderMove(sourceBuildPath, destBuildPath);
                     buildFolderCopied = true;
                 }
                 else
@@ -498,10 +501,13 @@ public class ObjectsManager : IObjectsManager
                     if (_fs.FolderExists(sourceBuildPath))
                     {
                         var destBuildPathForEntry = Path.Combine(destDdb.BuildFolderPath, entry.Hash);
-                        _logger.LogInformation("Transferring build folder '{SourceBuildPath}' to '{DestBuildPath}'",
-                            sourceBuildPath, destBuildPathForEntry);
+                        _logger.LogInformation("Transferring build folder '{SourceBuildPath}' to '{DestBuildPath}' (keepSource={KeepSource})",
+                            sourceBuildPath, destBuildPathForEntry, keepSource);
                         _fs.EnsureParentFolderExists(destBuildPathForEntry);
-                        _fs.FolderMove(sourceBuildPath, destBuildPathForEntry);
+                        if (keepSource)
+                            _fs.FolderCopy(sourceBuildPath, destBuildPathForEntry);
+                        else
+                            _fs.FolderMove(sourceBuildPath, destBuildPathForEntry);
                         buildFolderCopied = true;
                     }
                     else
@@ -513,11 +519,13 @@ public class ObjectsManager : IObjectsManager
 
             _logger.LogInformation("Removing source file");
 
-            // Remove source file
-            sourceDdb.Remove(sourcePath);
+            // Remove source file (skip when keepSource is true => copy semantics)
+            if (!keepSource)
+                sourceDdb.Remove(sourcePath);
 
             // Invalidate dataset thumbnail cache for both source and destination datasets
-            await InvalidateDatasetThumbnailCacheIfNeeded(sourceOrgSlug, sourceDsSlug, sourcePath);
+            if (!keepSource)
+                await InvalidateDatasetThumbnailCacheIfNeeded(sourceOrgSlug, sourceDsSlug, sourcePath);
             await InvalidateDatasetThumbnailCacheIfNeeded(destOrgSlug, destDsSlug, destPath);
 
             _logger.LogInformation("Transfer OK");
@@ -687,6 +695,157 @@ public class ObjectsManager : IObjectsManager
         _logger.LogInformation("Move OK");
 
         return updatedEntry;
+    }
+
+    public async Task<Entry> Copy(string orgSlug, string dsSlug, string source, string dest, bool overwrite = false)
+    {
+        var ds = _utils.GetDataset(orgSlug, dsSlug);
+
+        _logger.LogInformation("In Copy('{OrgSlug}/{DsSlug}', '{Source}' -> '{Dest}', overwrite={Overwrite})",
+            orgSlug, dsSlug, source, dest, overwrite);
+
+        if (!await _authManager.RequestAccess(ds, AccessType.Write))
+            throw new UnauthorizedException("The current user is not allowed to write to this dataset");
+
+        if (string.IsNullOrWhiteSpace(source))
+            throw new ArgumentException("Source path is required");
+        if (string.IsNullOrWhiteSpace(dest))
+            throw new ArgumentException("Destination path is required");
+
+        // Validate destination path to prevent path traversal attacks
+        if (dest.Contains("..") || Path.IsPathRooted(dest))
+            throw new ArgumentException("Invalid destination path: path traversal or absolute paths are not allowed");
+
+        if (IsReservedPath(dest))
+            throw new InvalidOperationException($"'{dest}' is a reserved path");
+
+        if (source == dest)
+            throw new InvalidOperationException("Source and destination cannot be the same");
+
+        // Cannot copy a folder into itself or one of its descendants
+        if ((dest + "/").StartsWith(source + "/"))
+            throw new InvalidOperationException("Cannot copy a path onto itself or one of its descendants");
+
+        var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
+
+        var sourceEntry = ddb.GetEntry(source);
+        if (sourceEntry == null)
+            throw new InvalidOperationException("Cannot find source entry: '" + source + "'");
+
+        if (sourceEntry.Type == EntryType.DroneDB)
+            throw new InvalidOperationException("Cannot copy a DroneDB file");
+
+        // Validate that source has no active build
+        ValidateNoBuildActive(ddb, sourceEntry, source);
+
+        // Calculate entry size for storage check
+        var entrySize = await GetEntrySizeAsync(ddb, sourceEntry);
+        await _utils.CheckCurrentUserStorage(entrySize);
+
+        var destEntry = ddb.GetEntry(dest);
+        if (destEntry != null)
+        {
+            if (!overwrite)
+                throw new InvalidOperationException("Destination entry already exists and overwrite is false");
+
+            if (sourceEntry.Type == EntryType.Directory && destEntry.Type != EntryType.Directory)
+                throw new ArgumentException("Cannot copy a folder on a file");
+            if (sourceEntry.Type != EntryType.Directory && destEntry.Type == EntryType.Directory)
+                throw new ArgumentException("Cannot copy a file on a folder");
+        }
+
+        var fileSystemCopied = false;
+        var destDdbAdded = false;
+        var existingDestRemoved = false;
+        string destLocalFilePath = null;
+
+        try
+        {
+            var sourceLocalFilePath = ddb.GetLocalPath(source);
+            destLocalFilePath = ddb.GetLocalPath(dest);
+
+            _fs.EnsureParentFolderExists(destLocalFilePath);
+
+            // If overwriting, remove existing destination first (DDB + FS) so AddRaw is clean.
+            if (destEntry != null && overwrite)
+            {
+                _logger.LogInformation("Overwriting existing destination '{Dest}'", dest);
+                ddb.Remove(dest);
+                existingDestRemoved = true;
+
+                if (destEntry.Type == EntryType.Directory)
+                {
+                    if (_fs.FolderExists(destLocalFilePath)) _fs.FolderDelete(destLocalFilePath);
+                }
+                else
+                {
+                    if (_fs.Exists(destLocalFilePath)) _fs.Delete(destLocalFilePath);
+                }
+            }
+
+            if (sourceEntry.Type == EntryType.Directory)
+            {
+                _logger.LogInformation("Copying directory '{Source}' to '{Dest}'", source, dest);
+                _fs.FolderCopy(sourceLocalFilePath, destLocalFilePath);
+            }
+            else
+            {
+                _logger.LogInformation("Copying file '{Source}' to '{Dest}'", source, dest);
+                _fs.Copy(sourceLocalFilePath, destLocalFilePath);
+            }
+
+            fileSystemCopied = true;
+
+            ddb.AddRaw(dest);
+            destDdbAdded = true;
+
+            if (!ddb.EntryExists(dest))
+                throw new InvalidOperationException(
+                    $"Cannot find destination '{dest}' after copy, something wrong with ddb");
+
+            // Build folder is content-addressed by hash; since file content is identical
+            // to the source, the existing build folder transparently serves the new entry.
+            // No additional disk operation is needed.
+
+            await InvalidateDatasetThumbnailCacheIfNeeded(orgSlug, dsSlug, dest);
+
+            _logger.LogInformation("Copy OK");
+
+            return ddb.GetEntry(dest);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Copy failed, attempting rollback");
+
+            if (destDdbAdded)
+            {
+                try { ddb.Remove(dest); }
+                catch (Exception rbEx) { _logger.LogError(rbEx, "Failed to rollback DDB add"); }
+            }
+
+            if (fileSystemCopied && destLocalFilePath != null)
+            {
+                try
+                {
+                    if (sourceEntry.Type == EntryType.Directory)
+                    {
+                        if (_fs.FolderExists(destLocalFilePath)) _fs.FolderDelete(destLocalFilePath);
+                    }
+                    else
+                    {
+                        if (_fs.Exists(destLocalFilePath)) _fs.Delete(destLocalFilePath);
+                    }
+                }
+                catch (Exception rbEx) { _logger.LogError(rbEx, "Failed to rollback file system copy"); }
+            }
+
+            // Note: we do NOT attempt to restore the original destination if it was
+            // removed by overwrite=true; logging this case for diagnostics only.
+            if (existingDestRemoved)
+                _logger.LogWarning("Existing destination '{Dest}' was removed before failure; cannot restore.", dest);
+
+            throw;
+        }
     }
 
     public async Task Delete(string orgSlug, string dsSlug, string[] paths)
@@ -1773,7 +1932,7 @@ public class ObjectsManager : IObjectsManager
 
         return width * height * bandCount * CommonUtils.BytesPerPixel(dataType);
     }
-   
+
 
     #endregion
 
