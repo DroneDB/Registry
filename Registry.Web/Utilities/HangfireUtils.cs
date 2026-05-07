@@ -49,6 +49,17 @@ public static class HangfireUtils
     }
 
     [AutomaticRetry(Attempts = 1, OnAttemptsExceeded = AttemptsExceededAction.Fail)]
+    public static void CleanupWrapper(IDDB ddb, PerformContext context)
+    {
+        Action<string> writeLine = context != null ? context.WriteLine : Log.Information;
+
+        writeLine($"In CleanupWrapper('{ddb.DatasetFolderPath}')");
+
+        var result = ddb.Cleanup();
+        writeLine($"Removed {result.Entries?.Length ?? 0} entries and {result.Builds?.Length ?? 0} build artifacts");
+    }
+
+    [AutomaticRetry(Attempts = 1, OnAttemptsExceeded = AttemptsExceededAction.Fail)]
     public static void GenerateThumbnailWrapper(IDDB ddb, string path, int size, string dest,
         PerformContext context)
     {

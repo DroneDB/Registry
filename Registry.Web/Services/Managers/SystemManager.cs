@@ -1420,4 +1420,105 @@ public class SystemManager : ISystemManager
 
         return report;
     }
+
+    public async Task<CleanupBuildResultDto> CleanupBuild(CleanupBuildRequestDto request)
+    {
+        if (!await _authManager.IsUserAdmin())
+            throw new UnauthorizedException("Only admins can perform system related tasks");
+
+        request ??= new CleanupBuildRequestDto();
+        var orgSlug = string.IsNullOrWhiteSpace(request.OrganizationSlug) ? null : request.OrganizationSlug.Trim();
+        var dsSlug = string.IsNullOrWhiteSpace(request.DatasetSlug) ? null : request.DatasetSlug.Trim();
+
+        if (dsSlug != null && orgSlug == null)
+            throw new ArgumentException("DatasetSlug requires OrganizationSlug");
+
+        // Resolve target datasets
+        Dataset[] targets;
+        if (orgSlug == null)
+        {
+            // Cleanup across every dataset in every organization
+            targets = await _context.Datasets
+                .AsNoTracking()
+                .Include(d => d.Organization)
+                .ToArrayAsync();
+        }
+        else if (dsSlug == null)
+        {
+            // Cleanup all datasets in one organization
+            targets = await _context.Datasets
+                .AsNoTracking()
+                .Include(d => d.Organization)
+                .Where(d => d.Organization.Slug == orgSlug)
+                .ToArrayAsync();
+
+            if (targets.Length == 0)
+                throw new ArgumentException($"Organization '{orgSlug}' has no datasets or does not exist");
+        }
+        else
+        {
+            // Single dataset
+            var dataset = await _context.Datasets
+                .AsNoTracking()
+                .Include(d => d.Organization)
+                .FirstOrDefaultAsync(d => d.Organization.Slug == orgSlug && d.Slug == dsSlug);
+
+            if (dataset == null)
+                throw new ArgumentException($"Dataset '{orgSlug}/{dsSlug}' not found");
+
+            targets = [dataset];
+        }
+
+        // Use background jobs when more than a single dataset is being cleaned up.
+        var async = targets.Length > 1;
+        var result = new CleanupBuildResultDto { Async = async };
+
+        if (async)
+        {
+            var user = await _authManager.GetCurrentUser();
+            var userId = user?.Id ?? MagicStrings.AutoBuildServiceUserId;
+
+            string? lastJobId = null;
+            foreach (var ds in targets)
+            {
+                var ddb = _ddbManager.Get(ds.Organization.Slug, ds.InternalRef);
+                var meta = new IndexPayload(ds.Organization.Slug, ds.Slug, null, userId);
+                lastJobId = _backgroundJob.EnqueueIndexed(
+                    () => HangfireUtils.CleanupWrapper(ddb, null), meta);
+            }
+
+            result.JobId = lastJobId;
+            _logger.LogInformation("Enqueued cleanup for {Count} datasets (last job {JobId})",
+                targets.Length, lastJobId);
+            return result;
+        }
+
+        // Synchronous: single dataset only
+        foreach (var ds in targets)
+        {
+            var key = $"{ds.Organization.Slug}/{ds.Slug}";
+            try
+            {
+                var ddb = _ddbManager.Get(ds.Organization.Slug, ds.InternalRef);
+                var cleanup = ddb.Cleanup();
+
+                result.Datasets[key] = new DatasetCleanupBuildDto
+                {
+                    RemovedEntries = cleanup.Entries ?? [],
+                    RemovedBuilds = cleanup.Builds ?? []
+                };
+
+                _logger.LogInformation(
+                    "Cleanup of {Key}: removed {EntryCount} entries, {BuildCount} build artifacts",
+                    key, cleanup.Entries?.Length ?? 0, cleanup.Builds?.Length ?? 0);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Cleanup failed for {Key}", key);
+                result.Errors[key] = ex.Message;
+            }
+        }
+
+        return result;
+    }
 }

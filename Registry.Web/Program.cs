@@ -340,6 +340,7 @@ public class Program
                 services.AddScoped<JobIndexSyncService>();
                 services.AddScoped<DatasetCleanupService>();
                 services.AddScoped<OrphanedDatasetCleanupService>();
+                services.AddScoped<RecurringDatasetCleanupService>();
 
                 services.AddHangfireProvider(appSettings, configuration);
                 services.AddHangfireServer(options => { options.WorkerCount = workers; });

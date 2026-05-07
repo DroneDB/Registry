@@ -124,6 +124,41 @@ public class SystemController : ControllerBaseEx
     }
 
     /// <summary>
+    /// Cleans up build artifacts and stale entries on a single dataset, all datasets in
+    /// an organization, or every dataset in the system. Admin only.
+    /// When more than one dataset is targeted, the cleanup is enqueued as background jobs.
+    /// </summary>
+    /// <param name="request">
+    /// Selects the cleanup scope. When both slugs are null the cleanup runs across all
+    /// organizations. When only OrganizationSlug is set the cleanup runs across all
+    /// datasets in that organization. When both are set the cleanup targets a single
+    /// dataset and runs synchronously.
+    /// </param>
+    /// <returns>The cleanup result with removed entries/builds (sync) or job id (async).</returns>
+    [HttpPost("cleanup", Name = nameof(SystemController) + "." + nameof(Cleanup))]
+    [ProducesResponseType(typeof(CleanupBuildResultDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(CleanupBuildResultDto), StatusCodes.Status202Accepted)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status401Unauthorized)]
+    public async Task<IActionResult> Cleanup([FromBody] CleanupBuildRequestDto? request)
+    {
+        try
+        {
+            _logger.LogDebug("System controller Cleanup({OrgSlug}/{DsSlug})",
+                request?.OrganizationSlug, request?.DatasetSlug);
+
+            var result = await _systemManager.CleanupBuild(request ?? new CleanupBuildRequestDto());
+            return result.Async ? Accepted(result) : Ok(result);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Exception in System controller Cleanup()");
+
+            return ExceptionResult(ex);
+        }
+    }
+
+    /// <summary>
     /// Migrates dataset visibility settings from the legacy format to the new format.
     /// </summary>
     /// <returns>A list of migrated visibility entries.</returns>

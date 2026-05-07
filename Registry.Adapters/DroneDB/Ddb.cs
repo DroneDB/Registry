@@ -254,6 +254,18 @@ public class DDB : IDDB
         }
     }
 
+    public DdbCleanupResult Cleanup()
+    {
+        try
+        {
+            return _ddbWrapper.Cleanup(DatasetFolderPath);
+        }
+        catch (DdbException ex)
+        {
+            throw new InvalidOperationException($"Cannot call Cleanup from ddb '{DatasetFolderPath}'", ex);
+        }
+    }
+
     public Entry GetInfo()
     {
         return GetInfo(DatasetFolderPath);

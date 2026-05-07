@@ -218,6 +218,14 @@ public class AppSettings
     public string OrphanedDatasetCleanupCron { get; set; }
 
     /// <summary>
+    /// Cron expression for the recurring full-cleanup task that runs DDB
+    /// `cleanup` (entries + build artifacts) on every dataset in every
+    /// organization.
+    /// Default: "0 0 * * *" (daily at midnight). Set to null/empty to disable.
+    /// </summary>
+    public string DatasetCleanupCron { get; set; }
+
+    /// <summary>
     /// Cron expression for job index cleanup task (removes old terminal records).
     /// Default: "0 4 * * *" (daily at 4:00 AM)
     /// </summary>

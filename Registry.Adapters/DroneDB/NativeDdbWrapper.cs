@@ -994,6 +994,43 @@ public class NativeDdbWrapper : IDdbWrapper
         }
     }
 
+    [DllImport("ddb", EntryPoint = "DDBCleanup")]
+    private static extern DdbResult _Cleanup([MarshalAs(UnmanagedType.LPUTF8Str)] string ddbPath, out IntPtr output);
+
+    public DdbCleanupResult Cleanup(string ddbPath)
+    {
+        try
+        {
+            if (_Cleanup(ddbPath, out var output) == DdbResult.Success)
+            {
+                var json = MarshalAndFreeUtf8(output);
+
+                if (json == null)
+                    throw new InvalidOperationException("No result from DDBCleanup call");
+
+                var res = JsonConvert.DeserializeObject<DdbCleanupResult>(json);
+
+                if (res == null)
+                    throw new InvalidOperationException($"Unable to deserialize cleanup result: {json}");
+
+                return res;
+            }
+        }
+        catch (EntryPointNotFoundException ex)
+        {
+            throw new DdbException($"Error in calling ddb lib: incompatible versions ({ex.Message})", ex);
+        }
+        catch (Exception ex)
+        {
+            throw new DdbException(
+                $"Error in calling ddb lib. Last error: \"{SafeGetLastError("cleanup")}\", check inner exception for details",
+                ex);
+        }
+
+        throw new DdbException(SafeGetLastError("cleanup"));
+    }
+
+
     [DllImport("ddb", EntryPoint = "DDBMetaAdd")]
     private static extern DdbResult _MetaAdd([MarshalAs(UnmanagedType.LPUTF8Str)] string ddbPath,
         [MarshalAs(UnmanagedType.LPUTF8Str)] string path,
