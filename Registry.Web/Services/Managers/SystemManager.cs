@@ -1469,8 +1469,11 @@ public class SystemManager : ISystemManager
             targets = [dataset];
         }
 
-        // Use background jobs when more than a single dataset is being cleaned up.
-        var async = targets.Length > 1;
+        // Async (background jobs) when the request scope targets more than one dataset
+        // (i.e. all orgs, or all datasets in one org). A single targeted dataset always
+        // runs synchronously. This matches the documented API contract regardless of
+        // how many datasets actually exist for the resolved scope.
+        var async = dsSlug == null;
         var result = new CleanupBuildResultDto { Async = async };
 
         if (async)

@@ -98,7 +98,7 @@ internal class HangfireJobsInitializer
         _logger.LogInformation("Scheduled 'cleanup-old-jobindices' with cron: {Cron}", jobIndexCleanupCron);
 
         // Recurring full DDB cleanup over every dataset.
-        // Default: daily at midnight. Empty/null disables the job.
+        // null (not configured) -> use default; empty/whitespace -> disabled.
         var datasetCleanupCronRaw = appSettings.DatasetCleanupCron;
         var datasetCleanupCron = datasetCleanupCronRaw is null
             ? "0 0 * * *"

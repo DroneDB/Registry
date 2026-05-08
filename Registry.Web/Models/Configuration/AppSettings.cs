@@ -221,7 +221,8 @@ public class AppSettings
     /// Cron expression for the recurring full-cleanup task that runs DDB
     /// `cleanup` (entries + build artifacts) on every dataset in every
     /// organization.
-    /// Default: "0 0 * * *" (daily at midnight). Set to null/empty to disable.
+    /// Default (when null or not configured): "0 0 * * *" (daily at midnight).
+    /// Set to an empty/whitespace string to disable the recurring job.
     /// </summary>
     public string DatasetCleanupCron { get; set; }
 

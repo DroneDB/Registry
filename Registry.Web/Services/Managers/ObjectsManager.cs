@@ -712,9 +712,11 @@ public class ObjectsManager : IObjectsManager
         if (string.IsNullOrWhiteSpace(dest))
             throw new ArgumentException("Destination path is required");
 
-        // Validate destination path to prevent path traversal attacks
-        if (dest.Contains("..") || Path.IsPathRooted(dest))
-            throw new ArgumentException("Invalid destination path: path traversal or absolute paths are not allowed");
+        var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
+
+        // Validate paths to prevent path traversal attacks
+        CommonUtils.ValidateRelativePath(source, ddb.DatasetFolderPath);
+        CommonUtils.ValidateRelativePath(dest, ddb.DatasetFolderPath);
 
         if (IsReservedPath(dest))
             throw new InvalidOperationException($"'{dest}' is a reserved path");
@@ -725,8 +727,6 @@ public class ObjectsManager : IObjectsManager
         // Cannot copy a folder into itself or one of its descendants
         if ((dest + "/").StartsWith(source + "/"))
             throw new InvalidOperationException("Cannot copy a path onto itself or one of its descendants");
-
-        var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
 
         var sourceEntry = ddb.GetEntry(source);
         if (sourceEntry == null)
