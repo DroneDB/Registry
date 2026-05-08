@@ -521,7 +521,23 @@ public class ObjectsManager : IObjectsManager
 
             // Remove source file (skip when keepSource is true => copy semantics)
             if (!keepSource)
+            {
                 sourceDdb.Remove(sourcePath);
+
+                // sourceDdb.Remove only removes the entry from the index; ensure the
+                // physical file/folder is also removed on the filesystem to honor
+                // move semantics (keepSource=false).
+                var sourceLocalFilePath = sourceDdb.GetLocalPath(sourcePath);
+                if (sourceEntry.Type == EntryType.Directory)
+                {
+                    if (_fs.FolderExists(sourceLocalFilePath))
+                        _fs.FolderDelete(sourceLocalFilePath);
+                }
+                else if (_fs.Exists(sourceLocalFilePath))
+                {
+                    _fs.Delete(sourceLocalFilePath);
+                }
+            }
 
             // Invalidate dataset thumbnail cache for both source and destination datasets
             if (!keepSource)
