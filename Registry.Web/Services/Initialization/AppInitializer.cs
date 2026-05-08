@@ -53,12 +53,40 @@ public class AppInitializer : IHostedService, IDisposable
         var services = scope.ServiceProvider;
         var logger = services.GetRequiredService<ILogger<AppInitializer>>();
 
-        // Execute initialization steps in order
+        // Execute critical initialization steps in order
         await new DatabaseInitializer(services, logger).InitializeAsync(token);
         await new CacheInitializer(services, logger).InitializeAsync(token);
-        await new DatasetVisibilityCacheInitializer(services, logger).PreloadAsync(token);
 
         await new HangfireJobsInitializer(services, logger).InitializeAsync(token);
+
+        // Dataset visibility cache preload runs in background after startup completes.
+        // It opens every .ddb and is non-critical: the cache repopulates lazily on access.
+        // Blocking startup on tens of thousands of dataset opens is unacceptable.
+        _ = Task.Run(() => RunVisibilityPreloadInBackgroundAsync(_cts.Token), CancellationToken.None);
+    }
+
+    private async Task RunVisibilityPreloadInBackgroundAsync(CancellationToken token)
+    {
+        try
+        {
+            // Give the host a moment to finish starting before we begin heavy work.
+            await Task.Delay(TimeSpan.FromSeconds(5), token).ConfigureAwait(false);
+
+            using var scope = _scopeFactory.CreateScope();
+            var services = scope.ServiceProvider;
+            var logger = services.GetRequiredService<ILogger<AppInitializer>>();
+
+            await new DatasetVisibilityCacheInitializer(services, logger).PreloadAsync(token);
+        }
+        catch (OperationCanceledException)
+        {
+            _logger.LogInformation("Dataset visibility cache preload canceled (shutdown)");
+        }
+        catch (Exception ex)
+        {
+            // Never let a background failure crash the host
+            _logger.LogError(ex, "Dataset visibility cache background preload failed");
+        }
     }
 
     public Task StopAsync(CancellationToken cancellationToken)

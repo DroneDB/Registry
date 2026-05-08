@@ -8,7 +8,7 @@ namespace Registry.Web.Services.Ports;
 
 public interface IUtils
 {
-    Organization GetOrganization(string orgSlug, bool safe = false, bool withTracking = false);
+    Organization GetOrganization(string orgSlug, bool safe = false, bool withTracking = false, bool withDatasets = false);
     Dataset GetDataset(string orgSlug, string dsSlug, bool safe = false, bool withTracking = false);
 
     string GetFreeOrganizationSlug(string orgName);
