@@ -84,6 +84,7 @@ def convert_one(
     converted_log: Path,
     failed_log: Path,
     log_lock: threading.Lock,
+    max_points: Optional[int] = None,
 ) -> str:
     """Convert one EPT dataset to COPC. Returns 'converted', 'skipped', or 'failed'."""
     prefix = f"[{index}/{total}]"
@@ -93,6 +94,10 @@ def convert_one(
     sentinel_file = copc_dir / "cloud.copc.laz.ok"
 
     ept_points = get_ept_num_points(ept_json)
+
+    if max_points is not None and ept_points is not None and ept_points > max_points:
+        print(f"{prefix} Skipping (too many points: {ept_points} > {max_points}): {ept_json}")
+        return "skipped"
 
     if out_file.exists():
         # Fast path: sentinel was written by a previous successful run — skip entirely
@@ -231,6 +236,10 @@ def main() -> None:
         "--min-free-ram", type=float, default=20.0, metavar="PCT",
         help="Minimum free RAM %% before starting a new job (default: 20)"
     )
+    parser.add_argument(
+        "--max-points", type=int, default=None, metavar="N",
+        help="Skip point clouds with more than N points (default: no limit)"
+    )
     args = parser.parse_args()
 
     root_dir: Path = args.root_folder
@@ -271,6 +280,7 @@ def main() -> None:
         converted_log=converted_log,
         failed_log=failed_log,
         log_lock=log_lock,
+        max_points=args.max_points,
     )
 
     POLL_INTERVAL = 5  # seconds between RAM re-checks when under pressure
