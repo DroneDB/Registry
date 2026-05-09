@@ -404,6 +404,9 @@ public class ObjectsManager : IObjectsManager
         var buildFolderCopied = false;
         string destLocalFilePath = null;
         string destBuildPath = null;
+        // Tracks every per-entry destination build folder created during a directory transfer
+        // so rollback can clean all of them up (not just a single path).
+        var createdDestBuildPaths = new List<string>();
 
         try
         {
@@ -472,7 +475,8 @@ public class ObjectsManager : IObjectsManager
                 if (_fs.FolderExists(sourceBuildPath))
                 {
                     destBuildPath = Path.Combine(destDdb.BuildFolderPath, sourceEntry.Hash);
-                    _logger.LogInformation("Transferring build folder '{SourceBuildPath}' to '{DestBuildPath}' (keepSource={KeepSource})",
+                    _logger.LogInformation(
+                        "Transferring build folder '{SourceBuildPath}' to '{DestBuildPath}' (keepSource={KeepSource})",
                         sourceBuildPath, destBuildPath, keepSource);
                     _fs.EnsureParentFolderExists(destBuildPath);
                     if (keepSource)
@@ -501,13 +505,15 @@ public class ObjectsManager : IObjectsManager
                     if (_fs.FolderExists(sourceBuildPath))
                     {
                         var destBuildPathForEntry = Path.Combine(destDdb.BuildFolderPath, entry.Hash);
-                        _logger.LogInformation("Transferring build folder '{SourceBuildPath}' to '{DestBuildPath}' (keepSource={KeepSource})",
+                        _logger.LogInformation(
+                            "Transferring build folder '{SourceBuildPath}' to '{DestBuildPath}' (keepSource={KeepSource})",
                             sourceBuildPath, destBuildPathForEntry, keepSource);
                         _fs.EnsureParentFolderExists(destBuildPathForEntry);
                         if (keepSource)
                             _fs.FolderCopy(sourceBuildPath, destBuildPathForEntry);
                         else
                             _fs.FolderMove(sourceBuildPath, destBuildPathForEntry);
+                        createdDestBuildPaths.Add(destBuildPathForEntry);
                         buildFolderCopied = true;
                     }
                     else
@@ -551,17 +557,25 @@ public class ObjectsManager : IObjectsManager
             _logger.LogError(ex, "Transfer failed, attempting rollback");
 
             // Rollback in reverse order
-            if (buildFolderCopied && destBuildPath != null)
+            if (buildFolderCopied)
             {
-                try
+                // Single-file transfer recorded its destination only in destBuildPath; directory
+                // transfers populate createdDestBuildPaths. Roll back every path that was created.
+                if (destBuildPath != null && !createdDestBuildPaths.Contains(destBuildPath))
+                    createdDestBuildPaths.Add(destBuildPath);
+
+                foreach (var path in createdDestBuildPaths)
                 {
-                    _logger.LogWarning("Rolling back build folder copy");
-                    if (_fs.FolderExists(destBuildPath))
-                        _fs.FolderDelete(destBuildPath);
-                }
-                catch (Exception rbEx)
-                {
-                    _logger.LogError(rbEx, "Failed to rollback build folder copy");
+                    try
+                    {
+                        _logger.LogWarning("Rolling back build folder copy at '{Path}'", path);
+                        if (_fs.FolderExists(path))
+                            _fs.FolderDelete(path);
+                    }
+                    catch (Exception rbEx)
+                    {
+                        _logger.LogError(rbEx, "Failed to rollback build folder copy at '{Path}'", path);
+                    }
                 }
             }
 
@@ -754,10 +768,6 @@ public class ObjectsManager : IObjectsManager
         // Validate that source has no active build
         ValidateNoBuildActive(ddb, sourceEntry, source);
 
-        // Calculate entry size for storage check
-        var entrySize = await GetEntrySizeAsync(ddb, sourceEntry);
-        await _utils.CheckCurrentUserStorage(entrySize);
-
         var destEntry = ddb.GetEntry(dest);
         if (destEntry != null)
         {
@@ -770,10 +780,27 @@ public class ObjectsManager : IObjectsManager
                 throw new ArgumentException("Cannot copy a file on a folder");
         }
 
+        // Calculate entry size for storage check. When overwriting, the existing destination
+        // will be removed as part of the operation, so charge only the net delta against the
+        // user's quota (clamped to 0). This avoids false-positive rejections when the new
+        // content is the same size as or smaller than what it replaces.
+        var entrySize = await GetEntrySizeAsync(ddb, sourceEntry);
+        long storageDelta = entrySize;
+        if (destEntry != null && overwrite)
+        {
+            var existingDestSize = await GetEntrySizeAsync(ddb, destEntry);
+            storageDelta = Math.Max(0L, entrySize - existingDestSize);
+        }
+
+        await _utils.CheckCurrentUserStorage(storageDelta);
+
         var fileSystemCopied = false;
         var destDdbAdded = false;
-        var existingDestRemoved = false;
+        var trashCreated = false;
         string destLocalFilePath = null;
+        string trashLocalPath = null;
+        string tempCopyLocalPath = null;
+        var copiedToTemp = false;
 
         try
         {
@@ -782,35 +809,69 @@ public class ObjectsManager : IObjectsManager
 
             _fs.EnsureParentFolderExists(destLocalFilePath);
 
-            // If overwriting, remove existing destination first (DDB + FS) so AddRaw is clean.
+            // Atomic overwrite strategy:
+            //  1. Copy source -> temp sibling path.            (original dest still intact)
+            //  2. Move existing dest -> trash sibling path.    (original preserved for rollback)
+            //  3. Move temp -> dest, then ddb.AddRaw(dest).    (commit)
+            //  4. On success: delete trash. On failure: restore from trash.
+            // Non-overwrite path keeps the simpler direct-copy flow (no original to lose).
+
             if (destEntry != null && overwrite)
             {
-                _logger.LogInformation("Overwriting existing destination '{Dest}'", dest);
-                ddb.Remove(dest);
-                existingDestRemoved = true;
+                var token = Guid.NewGuid().ToString("N");
+                tempCopyLocalPath = destLocalFilePath + ".copying-" + token;
+                trashLocalPath = destLocalFilePath + ".trash-" + token;
 
+                _logger.LogInformation("Atomic overwrite: copying '{Source}' -> '{Temp}'",
+                    source, tempCopyLocalPath);
+
+                if (sourceEntry.Type == EntryType.Directory)
+                    _fs.FolderCopy(sourceLocalFilePath, tempCopyLocalPath);
+                else
+                    _fs.Copy(sourceLocalFilePath, tempCopyLocalPath);
+                copiedToTemp = true;
+
+                _logger.LogInformation("Atomic overwrite: moving existing dest '{Dest}' -> trash '{Trash}'",
+                    dest, trashLocalPath);
+
+                ddb.Remove(dest);
                 if (destEntry.Type == EntryType.Directory)
                 {
-                    if (_fs.FolderExists(destLocalFilePath)) _fs.FolderDelete(destLocalFilePath);
+                    if (_fs.FolderExists(destLocalFilePath))
+                        _fs.FolderMove(destLocalFilePath, trashLocalPath);
                 }
                 else
                 {
-                    if (_fs.Exists(destLocalFilePath)) _fs.Delete(destLocalFilePath);
+                    if (_fs.Exists(destLocalFilePath))
+                        _fs.Move(destLocalFilePath, trashLocalPath);
                 }
-            }
 
-            if (sourceEntry.Type == EntryType.Directory)
-            {
-                _logger.LogInformation("Copying directory '{Source}' to '{Dest}'", source, dest);
-                _fs.FolderCopy(sourceLocalFilePath, destLocalFilePath);
+                trashCreated = true;
+
+                _logger.LogInformation("Atomic overwrite: promoting temp '{Temp}' -> dest '{Dest}'",
+                    tempCopyLocalPath, dest);
+                if (sourceEntry.Type == EntryType.Directory)
+                    _fs.FolderMove(tempCopyLocalPath, destLocalFilePath);
+                else
+                    _fs.Move(tempCopyLocalPath, destLocalFilePath);
+                copiedToTemp = false;
+                fileSystemCopied = true;
             }
             else
             {
-                _logger.LogInformation("Copying file '{Source}' to '{Dest}'", source, dest);
-                _fs.Copy(sourceLocalFilePath, destLocalFilePath);
-            }
+                if (sourceEntry.Type == EntryType.Directory)
+                {
+                    _logger.LogInformation("Copying directory '{Source}' to '{Dest}'", source, dest);
+                    _fs.FolderCopy(sourceLocalFilePath, destLocalFilePath);
+                }
+                else
+                {
+                    _logger.LogInformation("Copying file '{Source}' to '{Dest}'", source, dest);
+                    _fs.Copy(sourceLocalFilePath, destLocalFilePath);
+                }
 
-            fileSystemCopied = true;
+                fileSystemCopied = true;
+            }
 
             ddb.AddRaw(dest);
             destDdbAdded = true;
@@ -818,6 +879,27 @@ public class ObjectsManager : IObjectsManager
             if (!ddb.EntryExists(dest))
                 throw new InvalidOperationException(
                     $"Cannot find destination '{dest}' after copy, something wrong with ddb");
+
+            // Commit: discard the trash copy of the previous destination.
+            if (trashCreated && trashLocalPath != null)
+            {
+                try
+                {
+                    if (destEntry != null && destEntry.Type == EntryType.Directory)
+                    {
+                        if (_fs.FolderExists(trashLocalPath)) _fs.FolderDelete(trashLocalPath);
+                    }
+                    else if (_fs.Exists(trashLocalPath))
+                    {
+                        _fs.Delete(trashLocalPath);
+                    }
+                }
+                catch (Exception trashEx)
+                {
+                    // Non-fatal: the new destination is already in place.
+                    _logger.LogWarning(trashEx, "Failed to delete trash copy '{Trash}'", trashLocalPath);
+                }
+            }
 
             // Build folder is content-addressed by hash; since file content is identical
             // to the source, the existing build folder transparently serves the new entry.
@@ -835,10 +917,17 @@ public class ObjectsManager : IObjectsManager
 
             if (destDdbAdded)
             {
-                try { ddb.Remove(dest); }
-                catch (Exception rbEx) { _logger.LogError(rbEx, "Failed to rollback DDB add"); }
+                try
+                {
+                    ddb.Remove(dest);
+                }
+                catch (Exception rbEx)
+                {
+                    _logger.LogError(rbEx, "Failed to rollback DDB add");
+                }
             }
 
+            // Remove a partially-promoted destination before restoring from trash.
             if (fileSystemCopied && destLocalFilePath != null)
             {
                 try
@@ -852,13 +941,67 @@ public class ObjectsManager : IObjectsManager
                         if (_fs.Exists(destLocalFilePath)) _fs.Delete(destLocalFilePath);
                     }
                 }
-                catch (Exception rbEx) { _logger.LogError(rbEx, "Failed to rollback file system copy"); }
+                catch (Exception rbEx)
+                {
+                    _logger.LogError(rbEx, "Failed to rollback file system copy");
+                }
             }
 
-            // Note: we do NOT attempt to restore the original destination if it was
-            // removed by overwrite=true; logging this case for diagnostics only.
-            if (existingDestRemoved)
-                _logger.LogWarning("Existing destination '{Dest}' was removed before failure; cannot restore.", dest);
+            // Discard the temp copy if we never promoted it.
+            if (copiedToTemp && tempCopyLocalPath != null)
+            {
+                try
+                {
+                    if (sourceEntry.Type == EntryType.Directory)
+                    {
+                        if (_fs.FolderExists(tempCopyLocalPath)) _fs.FolderDelete(tempCopyLocalPath);
+                    }
+                    else if (_fs.Exists(tempCopyLocalPath))
+                    {
+                        _fs.Delete(tempCopyLocalPath);
+                    }
+                }
+                catch (Exception rbEx)
+                {
+                    _logger.LogError(rbEx, "Failed to clean temp copy '{Temp}'", tempCopyLocalPath);
+                }
+            }
+
+            // Restore the original destination from trash, if we moved it aside.
+            if (trashCreated && trashLocalPath != null && destEntry != null)
+            {
+                try
+                {
+                    _logger.LogWarning("Restoring original destination '{Dest}' from trash '{Trash}'",
+                        dest, trashLocalPath);
+                    if (destEntry.Type == EntryType.Directory)
+                    {
+                        if (_fs.FolderExists(trashLocalPath))
+                            _fs.FolderMove(trashLocalPath, destLocalFilePath);
+                    }
+                    else if (_fs.Exists(trashLocalPath))
+                    {
+                        _fs.Move(trashLocalPath, destLocalFilePath);
+                    }
+
+                    // Re-index the restored entry so the DDB stays consistent.
+                    try
+                    {
+                        ddb.AddRaw(dest);
+                    }
+                    catch (Exception reindexEx)
+                    {
+                        _logger.LogError(reindexEx,
+                            "Restored '{Dest}' on disk but failed to re-add to DDB index", dest);
+                    }
+                }
+                catch (Exception rbEx)
+                {
+                    _logger.LogError(rbEx,
+                        "Failed to restore original destination '{Dest}' from trash '{Trash}'",
+                        dest, trashLocalPath);
+                }
+            }
 
             throw;
         }
@@ -1948,7 +2091,6 @@ public class ObjectsManager : IObjectsManager
 
         return width * height * bandCount * CommonUtils.BytesPerPixel(dataType);
     }
-
 
     #endregion
 

@@ -1474,6 +1474,15 @@ public class SystemManager : ISystemManager
         // runs synchronously. This matches the documented API contract regardless of
         // how many datasets actually exist for the resolved scope.
         var async = dsSlug == null;
+
+        // Empty target set: nothing to enqueue. Return a synchronous, empty result so the
+        // controller does not respond with 202 Accepted carrying a null JobId.
+        if (targets.Length == 0)
+        {
+            _logger.LogInformation("CleanupBuild: no target datasets resolved; returning empty result");
+            return new CleanupBuildResultDto { Async = false };
+        }
+
         var result = new CleanupBuildResultDto { Async = async };
 
         if (async)
