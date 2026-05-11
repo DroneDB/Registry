@@ -181,6 +181,12 @@ public class DDB : IDDB
         {
             _ddbWrapper.Build(DatasetFolderPath, path != null ? NormalizePath(path) : null, dest, force);
         }
+        catch (DdbBuildInProgressException)
+        {
+            // Recoverable: propagate untouched so callers (e.g. HangfireUtils.BuildWrapper)
+            // can apply their backoff + force-retry strategy.
+            throw;
+        }
         catch (DdbException ex)
         {
             throw new InvalidOperationException($"Cannot build '{path}' from ddb '{DatasetFolderPath}'", ex);
@@ -193,6 +199,10 @@ public class DDB : IDDB
         {
             _ddbWrapper.Build(DatasetFolderPath, null, dest, force);
         }
+        catch (DdbBuildInProgressException)
+        {
+            throw;
+        }
         catch (DdbException ex)
         {
             throw new InvalidOperationException($"Cannot build all from ddb '{DatasetFolderPath}'", ex);
@@ -204,6 +214,10 @@ public class DDB : IDDB
         try
         {
             _ddbWrapper.Build(DatasetFolderPath, null, dest, force, true);
+        }
+        catch (DdbBuildInProgressException)
+        {
+            throw;
         }
         catch (DdbException ex)
         {

@@ -12,6 +12,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Registry.Ports;
 using Registry.Web.Data;
+using Registry.Web.Filters;
 using Registry.Web.Identity;
 using Registry.Web.Models.Configuration;
 using Registry.Web.Services.Adapters;
@@ -67,6 +68,9 @@ public static class StartupExtenders
 
                     var logger = sp.GetRequiredService<ILogger<JobIndexStateFilter>>();
                     configuration.UseFilter(new JobIndexStateFilter(sp, logger));
+
+                    var buildFailureLogger = sp.GetRequiredService<ILogger<BuildJobFailureFilter>>();
+                    configuration.UseFilter(new BuildJobFailureFilter(sp, buildFailureLogger));
                 });
 
                 break;
@@ -76,6 +80,7 @@ public static class StartupExtenders
                 services.AddHangfire((sp, configuration) =>
                 {
                     var logger = sp.GetRequiredService<ILogger<JobIndexStateFilter>>();
+                    var buildFailureLogger = sp.GetRequiredService<ILogger<BuildJobFailureFilter>>();
 
                     configuration
                         .SetDataCompatibilityLevel(CompatibilityLevel.Version_180)
@@ -100,7 +105,8 @@ public static class StartupExtenders
                                 TablesPrefix = "hangfire"
                             }))
                         .WithJobExpirationTimeout(TimeSpan.FromDays(30))
-                        .UseFilter(new JobIndexStateFilter(sp, logger));
+                        .UseFilter(new JobIndexStateFilter(sp, logger))
+                        .UseFilter(new BuildJobFailureFilter(sp, buildFailureLogger));
 
                 });
 
