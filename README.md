@@ -20,11 +20,14 @@ View orthophotos, point clouds, 3D models (OBJ, GLTF, GLB), panoramas and more d
 | Category | Formats |
 |----------|---------|
 | Images | JPG, JPEG, DNG, TIF, TIFF, PNG, GIF, WEBP |
-| Point Clouds | LAS, LAZ, E57, PTS, XYZ, PLY |
-| 3D Models | OBJ, GLTF, GLB, PLY |
+| Point Clouds | LAS, LAZ, E57, PTS, XYZ, PLY* |
+| 3D Models | OBJ, GLTF, GLB, PLY* |
 | Rasters | GeoTIFF (orthophotos, DEMs) |
-| Vector | GeoJSON, SHP, KML, KMZ, DXF, DWG, GPKG |
-| Other | Panoramas (360°), Videos (MP4, MOV), Markdown, PDF |
+| Vector | GeoJSON, DXF, DWG, SHP, SHZ, FGB, TopoJSON, KML, KMZ, GPKG |
+| Videos | MP4, MOV, WEBM, M4V, AVI, MKV |
+| Other | Panoramas (360°), Markdown, PDF |
+
+*PLY files are automatically classified as point clouds or 3D models based on their content.
 
 ### Live Examples
 
