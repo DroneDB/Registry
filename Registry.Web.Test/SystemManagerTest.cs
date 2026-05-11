@@ -477,6 +477,78 @@ public class SystemManagerTest : TestBase
         result.Datasets.Count.ShouldBe(0);
     }
 
+    [Test]
+    public async Task CleanupBuild_AllOrgs_NoDatasets_ReturnsSyncEmptyResult()
+    {
+        // Empty context (no orgs/datasets seeded)
+        var options = new DbContextOptionsBuilder<RegistryContext>()
+            .UseInMemoryDatabase(databaseName: Guid.NewGuid().ToString())
+            .Options;
+        await using var context = new RegistryContext(options);
+
+        _authManagerMock.Setup(x => x.IsUserAdmin()).ReturnsAsync(true);
+        _authManagerMock.Setup(x => x.GetCurrentUser())
+            .ReturnsAsync(new Registry.Web.Identity.Models.User { Id = "user-1" });
+
+        var systemManager = CreateSystemManager(context);
+
+        var result = await systemManager.CleanupBuild(new Registry.Web.Models.DTO.CleanupBuildRequestDto());
+
+        result.ShouldNotBeNull();
+        result.Async.ShouldBeFalse();
+        result.JobId.ShouldBeNull();
+        result.JobIds.ShouldBeEmpty();
+        result.Datasets.ShouldBeEmpty();
+        result.Errors.ShouldBeEmpty();
+        _backgroundJobMock.Verify(
+            x => x.EnqueueIndexed(It.IsAny<System.Linq.Expressions.Expression<Action>>(), It.IsAny<Registry.Web.Models.IndexPayload>()),
+            Times.Never);
+    }
+
+    [Test]
+    public async Task CleanupBuild_AllOrgs_PopulatesJobIdsPerDataset()
+    {
+        // Seed two datasets across two orgs
+        var options = new DbContextOptionsBuilder<RegistryContext>()
+            .UseInMemoryDatabase(databaseName: Guid.NewGuid().ToString())
+            .Options;
+        await using var context = new RegistryContext(options);
+
+        var orgA = new Organization { Slug = "org-a", Name = "A", CreationDate = DateTime.UtcNow, OwnerId = "u" };
+        var orgB = new Organization { Slug = "org-b", Name = "B", CreationDate = DateTime.UtcNow, OwnerId = "u" };
+        context.Organizations.AddRange(orgA, orgB);
+        context.Datasets.AddRange(
+            new Dataset { Slug = "d1", InternalRef = Guid.NewGuid(), CreationDate = DateTime.UtcNow, Organization = orgA },
+            new Dataset { Slug = "d2", InternalRef = Guid.NewGuid(), CreationDate = DateTime.UtcNow, Organization = orgB });
+        await context.SaveChangesAsync();
+
+        _authManagerMock.Setup(x => x.IsUserAdmin()).ReturnsAsync(true);
+        _authManagerMock.Setup(x => x.GetCurrentUser())
+            .ReturnsAsync(new Registry.Web.Identity.Models.User { Id = "user-1" });
+
+        var ddbMock = new Mock<IDDB>();
+        _ddbManagerMock.Setup(x => x.Get(It.IsAny<string>(), It.IsAny<Guid>())).Returns(ddbMock.Object);
+
+        var seq = 0;
+        _backgroundJobMock
+            .Setup(x => x.EnqueueIndexed(It.IsAny<System.Linq.Expressions.Expression<Action>>(), It.IsAny<Registry.Web.Models.IndexPayload>()))
+            .Returns(() => $"job-{++seq}");
+
+        var systemManager = CreateSystemManager(context);
+
+        var result = await systemManager.CleanupBuild(new Registry.Web.Models.DTO.CleanupBuildRequestDto());
+
+        result.Async.ShouldBeTrue();
+        result.JobIds.Count.ShouldBe(2);
+        result.JobIds.ShouldContain("job-1");
+        result.JobIds.ShouldContain("job-2");
+        // JobId is preserved for back-compat as the last enqueued id
+        result.JobId.ShouldBe(result.JobIds[^1]);
+        _backgroundJobMock.Verify(
+            x => x.EnqueueIndexed(It.IsAny<System.Linq.Expressions.Expression<Action>>(), It.IsAny<Registry.Web.Models.IndexPayload>()),
+            Times.Exactly(2));
+    }
+
     private SystemManager CreateSystemManager(RegistryContext context)
     {
         // Create a real BuildPendingService instance with mocked dependencies

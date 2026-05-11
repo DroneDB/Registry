@@ -1497,11 +1497,12 @@ public class SystemManager : ISystemManager
                 var meta = new IndexPayload(ds.Organization.Slug, ds.Slug, null, userId);
                 lastJobId = _backgroundJob.EnqueueIndexed(
                     () => HangfireUtils.CleanupWrapper(ddb, null), meta);
+                result.JobIds.Add(lastJobId);
             }
 
             result.JobId = lastJobId;
-            _logger.LogInformation("Enqueued cleanup for {Count} datasets (last job {JobId})",
-                targets.Length, lastJobId);
+            _logger.LogInformation("Enqueued cleanup for {Count} datasets ({JobCount} jobs, last {JobId})",
+                targets.Length, result.JobIds.Count, lastJobId);
             return result;
         }
 
