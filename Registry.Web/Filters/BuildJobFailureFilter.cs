@@ -39,7 +39,7 @@ public sealed class BuildJobFailureFilter(
             if (Array.IndexOf(BuildMethodNames, methodName) < 0) return;
 
             var jobId = context.BackgroundJob!.Id;
-            var conn = Hangfire.JobStorage.Current.GetConnection();
+            using var conn = Hangfire.JobStorage.Current.GetConnection();
             var orgSlug = conn.GetJobParameter(jobId, JobParamKeys.OrgSlug);
             var dsSlug = conn.GetJobParameter(jobId, JobParamKeys.DsSlug);
 

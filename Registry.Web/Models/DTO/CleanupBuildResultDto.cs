@@ -24,8 +24,16 @@ public class CleanupBuildResultDto
 
     /// <summary>
     /// Identifier of the background job, when the operation was enqueued.
+    /// For multi-dataset async cleanups, this is the last enqueued job id;
+    /// see <see cref="JobIds"/> for the full list.
     /// </summary>
     public string? JobId { get; set; }
+
+    /// <summary>
+    /// Identifiers of all background jobs enqueued for this cleanup operation,
+    /// one per target dataset. Populated only when <see cref="Async"/> is true.
+    /// </summary>
+    public List<string> JobIds { get; set; } = new();
 
     /// <summary>
     /// True when the operation has been enqueued as a background job.

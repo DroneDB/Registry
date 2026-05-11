@@ -479,10 +479,11 @@ public class ObjectsManager : IObjectsManager
                         "Transferring build folder '{SourceBuildPath}' to '{DestBuildPath}' (keepSource={KeepSource})",
                         sourceBuildPath, destBuildPath, keepSource);
                     _fs.EnsureParentFolderExists(destBuildPath);
-                    if (keepSource)
-                        _fs.FolderCopy(sourceBuildPath, destBuildPath);
-                    else
-                        _fs.FolderMove(sourceBuildPath, destBuildPath);
+                    // Always copy (never move): build folders are hash-addressed and may be
+                    // referenced by multiple entries. Moving would orphan other entries that
+                    // share the same hash. Orphaned build artifacts in the source dataset are
+                    // reclaimed by the recurring dataset cleanup job.
+                    _fs.FolderCopy(sourceBuildPath, destBuildPath);
                     buildFolderCopied = true;
                 }
                 else
@@ -509,10 +510,8 @@ public class ObjectsManager : IObjectsManager
                             "Transferring build folder '{SourceBuildPath}' to '{DestBuildPath}' (keepSource={KeepSource})",
                             sourceBuildPath, destBuildPathForEntry, keepSource);
                         _fs.EnsureParentFolderExists(destBuildPathForEntry);
-                        if (keepSource)
-                            _fs.FolderCopy(sourceBuildPath, destBuildPathForEntry);
-                        else
-                            _fs.FolderMove(sourceBuildPath, destBuildPathForEntry);
+                        // Always copy (never move): see comment above for the single-entry case.
+                        _fs.FolderCopy(sourceBuildPath, destBuildPathForEntry);
                         createdDestBuildPaths.Add(destBuildPathForEntry);
                         buildFolderCopied = true;
                     }
@@ -834,7 +833,10 @@ public class ObjectsManager : IObjectsManager
                 _logger.LogInformation("Atomic overwrite: moving existing dest '{Dest}' -> trash '{Trash}'",
                     dest, trashLocalPath);
 
-                ddb.Remove(dest);
+                // IMPORTANT: move the existing destination to the trash sibling BEFORE
+                // removing the DDB index entry. If the filesystem move fails, the DDB
+                // index is still consistent with the on-disk state and the rollback
+                // path has nothing extra to undo.
                 if (destEntry.Type == EntryType.Directory)
                 {
                     if (_fs.FolderExists(destLocalFilePath))
@@ -847,6 +849,8 @@ public class ObjectsManager : IObjectsManager
                 }
 
                 trashCreated = true;
+
+                ddb.Remove(dest);
 
                 _logger.LogInformation("Atomic overwrite: promoting temp '{Temp}' -> dest '{Dest}'",
                     tempCopyLocalPath, dest);
@@ -1205,7 +1209,7 @@ public class ObjectsManager : IObjectsManager
         if (fileName == null)
             throw new ArgumentException("Path is not valid");
 
-        var sourcePath = GetBuildSource(entry);
+        var sourcePath = GetBuildSource(entry, ddbSingle);
         var localPath = ddbSingle.GetLocalPath(sourcePath);
 
         var size = sizeRaw ?? _settings.DefaultThumbnailSize;
@@ -1355,7 +1359,7 @@ public class ObjectsManager : IObjectsManager
 
         var entry = EnsurePathValidity(orgSlug, ds.InternalRef, path, out var ddb);
 
-        var sourcePath = GetBuildSource(entry);
+        var sourcePath = GetBuildSource(entry, ddb);
 
         try
         {
@@ -1689,7 +1693,7 @@ public class ObjectsManager : IObjectsManager
         return entry?.Type;
     }
 
-    public static string GetBuildSource(Entry entry)
+    public string GetBuildSource(Entry entry, IDDB ddb)
     {
         var path = entry.Type switch
         {
@@ -1699,6 +1703,27 @@ public class ObjectsManager : IObjectsManager
             EntryType.Model => CommonUtils.SafeCombine(BuildBasePath, entry.Hash, "nxs", "model.nxz"),
             _ => entry.Path
         };
+
+        // Backwards-compat fallback: legacy datasets store point cloud builds as EPT.
+        // Prefer COPC; if not present but EPT exists, fall back to EPT (with a warning).
+        // New point cloud builds always produce COPC.
+        if (entry.Type == EntryType.PointCloud && ddb != null)
+        {
+            var copcLocal = ddb.GetLocalPath(path);
+            if (!_fs.Exists(copcLocal))
+            {
+                var eptRelative = CommonUtils.SafeCombine(BuildBasePath, entry.Hash, "ept", "ept.json");
+                var eptLocal = ddb.GetLocalPath(eptRelative);
+                if (_fs.Exists(eptLocal))
+                {
+                    _logger.LogWarning(
+                        "Point cloud build for entry '{Path}' (hash {Hash}) uses legacy EPT format at '{Ept}'. " +
+                        "Rebuild the dataset to produce COPC.",
+                        entry.Path, entry.Hash, eptRelative);
+                    return eptRelative;
+                }
+            }
+        }
 
         return path;
     }
@@ -1816,7 +1841,7 @@ public class ObjectsManager : IObjectsManager
         if (path.StartsWith('/')) path = path[1..];
 
         var entry = EnsurePathValidity(orgSlug, ds.InternalRef, path, out var ddb);
-        var sourcePath = GetBuildSource(entry);
+        var sourcePath = GetBuildSource(entry, ddb);
 
         return ddb.GetRasterInfo(sourcePath);
     }
@@ -1832,7 +1857,7 @@ public class ObjectsManager : IObjectsManager
         if (path.StartsWith('/')) path = path[1..];
 
         var entry = EnsurePathValidity(orgSlug, ds.InternalRef, path, out var ddb);
-        var sourcePath = GetBuildSource(entry);
+        var sourcePath = GetBuildSource(entry, ddb);
 
         return ddb.GetRasterMetadata(sourcePath, formula, bandFilter);
     }
@@ -1849,7 +1874,7 @@ public class ObjectsManager : IObjectsManager
         if (path.StartsWith('/')) path = path[1..];
 
         var entry = EnsurePathValidity(orgSlug, ds.InternalRef, path, out var ddb);
-        var sourcePath = GetBuildSource(entry);
+        var sourcePath = GetBuildSource(entry, ddb);
 
         var size = sizeRaw ?? _settings.DefaultThumbnailSize;
         var fileName = Path.GetFileName(path);
@@ -1883,7 +1908,7 @@ public class ObjectsManager : IObjectsManager
         if (path.StartsWith('/')) path = path[1..];
 
         var entry = EnsurePathValidity(orgSlug, ds.InternalRef, path, out var ddb);
-        var sourcePath = GetBuildSource(entry);
+        var sourcePath = GetBuildSource(entry, ddb);
 
         try
         {
@@ -1991,7 +2016,7 @@ public class ObjectsManager : IObjectsManager
         if (path.StartsWith('/')) path = path[1..];
 
         var entry = EnsurePathValidity(orgSlug, ds.InternalRef, path, out var ddb);
-        var sourcePath = GetBuildSource(entry);
+        var sourcePath = GetBuildSource(entry, ddb);
 
         // Enforce export size limit (conservative upper bound based on raw input size)
         EnsureExportSizeWithinLimit(ddb, sourcePath);
@@ -2039,7 +2064,7 @@ public class ObjectsManager : IObjectsManager
         if (path.StartsWith('/')) path = path[1..];
 
         var entry = EnsurePathValidity(orgSlug, ds.InternalRef, path, out var ddb);
-        var sourcePath = GetBuildSource(entry);
+        var sourcePath = GetBuildSource(entry, ddb);
 
         return EstimateRasterOutputBytes(ddb, sourcePath);
     }
@@ -2106,7 +2131,7 @@ public class ObjectsManager : IObjectsManager
         if (path.StartsWith('/')) path = path[1..];
 
         var entry = EnsurePathValidity(orgSlug, ds.InternalRef, path, out var ddb);
-        var sourcePath = GetBuildSource(entry);
+        var sourcePath = GetBuildSource(entry, ddb);
 
         return ddb.GetRasterValueInfo(sourcePath);
     }
@@ -2121,7 +2146,7 @@ public class ObjectsManager : IObjectsManager
         if (path.StartsWith('/')) path = path[1..];
 
         var entry = EnsurePathValidity(orgSlug, ds.InternalRef, path, out var ddb);
-        var sourcePath = GetBuildSource(entry);
+        var sourcePath = GetBuildSource(entry, ddb);
 
         return ddb.GetRasterPointValue(sourcePath, x, y);
     }
@@ -2137,7 +2162,7 @@ public class ObjectsManager : IObjectsManager
         if (path.StartsWith('/')) path = path[1..];
 
         var entry = EnsurePathValidity(orgSlug, ds.InternalRef, path, out var ddb);
-        var sourcePath = GetBuildSource(entry);
+        var sourcePath = GetBuildSource(entry, ddb);
 
         return ddb.GetRasterAreaStats(sourcePath, x0, y0, x1, y1);
     }
@@ -2156,7 +2181,7 @@ public class ObjectsManager : IObjectsManager
         if (path.StartsWith('/')) path = path[1..];
 
         var entry = EnsurePathValidity(orgSlug, ds.InternalRef, path, out var ddb);
-        var sourcePath = GetBuildSource(entry);
+        var sourcePath = GetBuildSource(entry, ddb);
 
         return ddb.GetRasterProfile(sourcePath, geoJsonLineString, samples);
     }
@@ -2175,7 +2200,7 @@ public class ObjectsManager : IObjectsManager
         if (path.StartsWith('/')) path = path[1..];
 
         var entry = EnsurePathValidity(orgSlug, ds.InternalRef, path, out var ddb);
-        var sourcePath = GetBuildSource(entry);
+        var sourcePath = GetBuildSource(entry, ddb);
 
         return ddb.CalculateVolume(sourcePath, polygonGeoJson, baseMethod ?? string.Empty, flatElevation);
     }
@@ -2196,7 +2221,7 @@ public class ObjectsManager : IObjectsManager
         if (path.StartsWith('/')) path = path[1..];
 
         var entry = EnsurePathValidity(orgSlug, ds.InternalRef, path, out var ddb);
-        var sourcePath = GetBuildSource(entry);
+        var sourcePath = GetBuildSource(entry, ddb);
 
         return ddb.DetectStockpile(sourcePath, lat, lon, radiusMeters, sensitivity);
     }
@@ -2218,7 +2243,7 @@ public class ObjectsManager : IObjectsManager
         if (path.StartsWith('/')) path = path[1..];
 
         var entry = EnsurePathValidity(orgSlug, ds.InternalRef, path, out var ddb);
-        var sourcePath = GetBuildSource(entry);
+        var sourcePath = GetBuildSource(entry, ddb);
 
         return ddb.DetectAllStockpiles(sourcePath, sensitivity, minAreaM2, maxResults);
     }
@@ -2250,7 +2275,7 @@ public class ObjectsManager : IObjectsManager
         if (path.StartsWith('/')) path = path[1..];
 
         var entry = EnsurePathValidity(orgSlug, ds.InternalRef, path, out var ddb);
-        var sourcePath = GetBuildSource(entry);
+        var sourcePath = GetBuildSource(entry, ddb);
 
         return ddb.GenerateContours(sourcePath, interval, count, baseOffset,
             minElev, maxElev, simplifyTolerance, bandIndex);
