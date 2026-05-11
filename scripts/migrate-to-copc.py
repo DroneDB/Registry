@@ -83,6 +83,7 @@ def convert_one(
     root_dir: Path,
     converted_log: Path,
     failed_log: Path,
+    skipped_log: Path,
     log_lock: threading.Lock,
     max_points: Optional[int] = None,
 ) -> str:
@@ -97,6 +98,9 @@ def convert_one(
 
     if max_points is not None and ept_points is not None and ept_points > max_points:
         print(f"{prefix} Skipping (too many points: {ept_points} > {max_points}): {ept_json}")
+        with log_lock:
+            with skipped_log.open("a") as f:
+                f.write(f"{ept_json} | too many points: {ept_points} > {max_points}\n")
         return "skipped"
 
     if out_file.exists():
@@ -106,6 +110,8 @@ def convert_one(
             with log_lock:
                 with converted_log.open("a") as f:
                     f.write(f"{ept_json}\n")
+                with skipped_log.open("a") as f:
+                    f.write(f"{ept_json} | already validated\n")
             return "skipped"
 
         # Sentinel missing: file exists but was never confirmed valid — validate now
@@ -119,6 +125,8 @@ def convert_one(
             with log_lock:
                 with converted_log.open("a") as f:
                     f.write(f"{ept_json}\n")
+                with skipped_log.open("a") as f:
+                    f.write(f"{ept_json} | COPC already valid ({copc_points} points)\n")
             return "skipped"
         print(
             f"{prefix} COPC is incomplete or corrupt "
@@ -266,8 +274,10 @@ def main() -> None:
 
     converted_log = root_dir / "converted.txt"
     failed_log = root_dir / "failed.txt"
+    skipped_log = root_dir / "skipped.txt"
     converted_log.write_text("")
     failed_log.write_text("")
+    skipped_log.write_text("")
 
     print(f"Found {total} EPT dataset(s) to migrate (parallel: {args.parallel}).")
 
@@ -279,6 +289,7 @@ def main() -> None:
         root_dir=root_dir,
         converted_log=converted_log,
         failed_log=failed_log,
+        skipped_log=skipped_log,
         log_lock=log_lock,
         max_points=args.max_points,
     )
@@ -377,6 +388,8 @@ def main() -> None:
         print(f"\nMigration complete: {converted} converted, {skipped} already valid (skipped), {failed} failed.")
     if converted or skipped:
         print(f"  Converted list : {converted_log}")
+    if skipped:
+        print(f"  Skipped list   : {skipped_log}")
     if failed:
         print(f"  Failed list    : {failed_log}")
     if interrupted:
