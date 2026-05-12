@@ -541,7 +541,7 @@ public static class CommonUtils
 
         var newPath = path.Split(Path.PathSeparator);
 
-        string libraryName = RuntimeInformation.IsOSPlatform(OSPlatform.Windows)
+        var libraryName = RuntimeInformation.IsOSPlatform(OSPlatform.Windows)
             ? DroneDBDllNameWindows
             : DroneDBDllNameLinux;
 
@@ -549,6 +549,37 @@ public static class CommonUtils
             p => File.Exists(Path.Combine(p, libraryName)));
 
         return ddbFolder;
+    }
+    
+    /// <summary>
+    /// Removes all files and subdirectories inside <paramref name="path"/> without
+    /// deleting the directory itself. This is required when the directory is a Linux
+    /// bind-mount (e.g. Docker volume): rmdir(2) on a mountpoint returns EBUSY,
+    /// which surfaces in .NET as <c>IOException "Device or resource busy"</c>.
+    /// </summary>
+    public static void EmptyDirectoryContents(string path)
+    {
+        if (!Directory.Exists(path)) return;
+
+        foreach (var entry in Directory.EnumerateFileSystemEntries(path))
+        {
+            var attr = File.GetAttributes(entry);
+            if (attr.HasFlag(FileAttributes.ReparsePoint))
+            {
+                // Symlinks: remove the link, not the target.
+                File.Delete(entry);
+            }
+            else if (attr.HasFlag(FileAttributes.Directory))
+            {
+                // Subdirectories cannot be mountpoints themselves in our deployment
+                // topology, so recursive delete is safe here.
+                Directory.Delete(entry, recursive: true);
+            }
+            else
+            {
+                File.Delete(entry);
+            }
+        }
     }
 
 

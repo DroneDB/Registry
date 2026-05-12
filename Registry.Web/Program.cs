@@ -601,7 +601,11 @@ public class Program
         if (resetSpa)
         {
             Console.WriteLine(" -> Resetting Hub (--reset-spa)");
-            if (Directory.Exists(hubRoot)) Directory.Delete(hubRoot, true);
+            if (Directory.Exists(hubRoot))
+            {
+                Console.WriteLine(" -> Cleaning hub folder contents (mountpoint-safe)");
+                CommonUtils.EmptyDirectoryContents(hubRoot);
+            }
             ok = ExtractHub(hubRoot, embeddedVersion);
         }
         else if (!Directory.Exists(hubRoot) || Directory.GetFiles(hubRoot).Length == 0)
@@ -612,7 +616,8 @@ public class Program
         else if (Services.Hub.HubVersionComparer.ShouldUpgrade(onDiskVersion, embeddedVersion))
         {
             Console.WriteLine($" -> Upgrading Hub: {onDiskVersion ?? "unknown"} -> {embeddedVersion}");
-            Directory.Delete(hubRoot, true);
+            Console.WriteLine(" -> Cleaning hub folder contents (mountpoint-safe)");
+            CommonUtils.EmptyDirectoryContents(hubRoot);
             ok = ExtractHub(hubRoot, embeddedVersion);
         }
         else
@@ -673,7 +678,7 @@ public class Program
         if (resetDdb)
         {
             Console.WriteLine(" -> Resetting ddb installation");
-            if (Directory.Exists(ddbRoot)) Directory.Delete(ddbRoot, true);
+            if (Directory.Exists(ddbRoot)) CommonUtils.EmptyDirectoryContents(ddbRoot);
         }
         else if (
             Directory.Exists(ddbRoot) &&
@@ -725,7 +730,10 @@ public class Program
 
         Console.WriteLine(" ?> Found {0} entries", zip.Entries.Count);
 
-        zip.ExtractToDirectory(folder);
+        // overwriteFiles: true is a defensive guard in case a previous cleanup left
+        // residual files (e.g. on bind-mounted folders where the mount root cannot
+        // be removed via rmdir and is emptied in place).
+        zip.ExtractToDirectory(folder, overwriteFiles: true);
 
         return true;
     }
