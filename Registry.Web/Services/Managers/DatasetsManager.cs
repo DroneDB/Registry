@@ -61,7 +61,7 @@ public class DatasetsManager : IDatasetsManager
 
     public async Task<IEnumerable<DatasetDto>> List(string orgSlug, bool includeThumbnailCheck = false)
     {
-        var org = _utils.GetOrganization(orgSlug);
+        var org = _utils.GetOrganization(orgSlug, withDatasets: true);
 
         if (!await _authManager.RequestAccess(org, AccessType.Read))
             throw new UnauthorizedException("The current user cannot access this organization");
@@ -175,7 +175,7 @@ public class DatasetsManager : IDatasetsManager
 
     public async Task<DatasetDto> AddNew(string orgSlug, DatasetNewDto dataset)
     {
-        var org = _utils.GetOrganization(orgSlug, withTracking: true);
+        var org = _utils.GetOrganization(orgSlug, withTracking: true, withDatasets: true);
 
         if (!await _authManager.RequestAccess(org, AccessType.Write))
             throw new UnauthorizedException("The current user cannot add datasets to this organization");

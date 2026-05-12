@@ -827,6 +827,118 @@ public class ObjectManagerTest : TestBase
     }
 
     [Test]
+    public async Task Transfer_KeepSourceTrue_PreservesSourceEntryAndFile()
+    {
+        using var test = new TestFS(Test4ArchiveUrl, BaseTestFolder);
+        using var test2 = new TestFS(Test5ArchiveUrl, nameof(Transfer_KeepSourceTrue_PreservesSourceEntryAndFile));
+
+        await using var context = GetTest1Context();
+
+        var settings = JsonConvert.DeserializeObject<AppSettings>(_settingsJson);
+        settings.DatasetsPath = test.TestFolder;
+        settings.EnableStorageLimiter = false;
+
+        _appSettingsMock.Setup(o => o.Value).Returns(settings);
+        _authManagerMock.Setup(o => o.IsUserAdmin()).Returns(Task.FromResult(true));
+        _authManagerMock.Setup(o => o.RequestAccess(It.IsAny<Dataset>(), It.IsAny<AccessType>()))
+            .Returns(Task.FromResult(true));
+        _authManagerMock.Setup(o => o.GetCurrentUser()).Returns(Task.FromResult(new User
+        {
+            Id = Guid.NewGuid().ToString(),
+            UserName = "admin",
+            Email = "admin@test.com"
+        }));
+
+        var webUtils = new WebUtils(_authManagerMock.Object, context, _appSettingsMock.Object,
+            _httpContextAccessorMock.Object, _ddbFactoryMock.Object);
+
+        var ddbManager = new DdbManager(_appSettingsMock.Object, _ddbFactoryLogger, DdbWrapper);
+
+        var objectManager = new ObjectsManager(_objectManagerLogger, context, _appSettingsMock.Object,
+            ddbManager, webUtils, _authManagerMock.Object, _cacheManager, _fileSystem,
+            _backgroundJobsProcessor, DdbWrapper, _thumbnailGeneratorMock.Object, _jobIndexQueryMock.Object, _buildPendingService);
+
+        var fileToTransfer = "DJI_0027.JPG";
+
+        // Snapshot source FS path before
+        var sourceDdb = ddbManager.Get(MagicStrings.PublicOrganizationSlug, _defaultDatasetGuid);
+        var sourceFsPath = Path.Combine(sourceDdb.DatasetFolderPath, fileToTransfer);
+        File.Exists(sourceFsPath).ShouldBeTrue();
+
+        // Perform the copy-style transfer (keepSource=true)
+        await objectManager.Transfer(
+            MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug, fileToTransfer,
+            "admin", "7kd0gxti9qoemsrk", fileToTransfer,
+            overwrite: false,
+            keepSource: true
+        );
+
+        // Source entry MUST still be present (copy semantics)
+        var sourceFilesAfter = await objectManager.List(MagicStrings.PublicOrganizationSlug,
+            MagicStrings.DefaultDatasetSlug, null, true);
+        sourceFilesAfter.ShouldContain(f => f.Path == fileToTransfer);
+        File.Exists(sourceFsPath).ShouldBeTrue();
+
+        // Destination entry must exist
+        var destFiles = await objectManager.List("admin", "7kd0gxti9qoemsrk", null, true);
+        destFiles.ShouldContain(f => f.Path == fileToTransfer);
+    }
+
+    [Test]
+    public async Task Transfer_KeepSourceFalse_RemovesSource()
+    {
+        using var test = new TestFS(Test4ArchiveUrl, BaseTestFolder);
+        using var test2 = new TestFS(Test5ArchiveUrl, nameof(Transfer_KeepSourceFalse_RemovesSource));
+
+        await using var context = GetTest1Context();
+
+        var settings = JsonConvert.DeserializeObject<AppSettings>(_settingsJson);
+        settings.DatasetsPath = test.TestFolder;
+        settings.EnableStorageLimiter = false;
+
+        _appSettingsMock.Setup(o => o.Value).Returns(settings);
+        _authManagerMock.Setup(o => o.IsUserAdmin()).Returns(Task.FromResult(true));
+        _authManagerMock.Setup(o => o.RequestAccess(It.IsAny<Dataset>(), It.IsAny<AccessType>()))
+            .Returns(Task.FromResult(true));
+        _authManagerMock.Setup(o => o.GetCurrentUser()).Returns(Task.FromResult(new User
+        {
+            Id = Guid.NewGuid().ToString(),
+            UserName = "admin",
+            Email = "admin@test.com"
+        }));
+
+        var webUtils = new WebUtils(_authManagerMock.Object, context, _appSettingsMock.Object,
+            _httpContextAccessorMock.Object, _ddbFactoryMock.Object);
+
+        var ddbManager = new DdbManager(_appSettingsMock.Object, _ddbFactoryLogger, DdbWrapper);
+
+        var objectManager = new ObjectsManager(_objectManagerLogger, context, _appSettingsMock.Object,
+            ddbManager, webUtils, _authManagerMock.Object, _cacheManager, _fileSystem,
+            _backgroundJobsProcessor, DdbWrapper, _thumbnailGeneratorMock.Object, _jobIndexQueryMock.Object, _buildPendingService);
+
+        var fileToTransfer = "DJI_0028.JPG";
+        var sourceDdb = ddbManager.Get(MagicStrings.PublicOrganizationSlug, _defaultDatasetGuid);
+        var sourceFsPath = Path.Combine(sourceDdb.DatasetFolderPath, fileToTransfer);
+        File.Exists(sourceFsPath).ShouldBeTrue();
+
+        // Default behavior: keepSource=false (move)
+        await objectManager.Transfer(
+            MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug, fileToTransfer,
+            "admin", "7kd0gxti9qoemsrk", fileToTransfer,
+            overwrite: false,
+            keepSource: false
+        );
+
+        var sourceFilesAfter = await objectManager.List(MagicStrings.PublicOrganizationSlug,
+            MagicStrings.DefaultDatasetSlug, null, true);
+        sourceFilesAfter.ShouldNotContain(f => f.Path == fileToTransfer);
+        File.Exists(sourceFsPath).ShouldBeFalse();
+
+        var destFiles = await objectManager.List("admin", "7kd0gxti9qoemsrk", null, true);
+        destFiles.ShouldContain(f => f.Path == fileToTransfer);
+    }
+
+    [Test]
     public async Task Transfer_DestinationExists_NoOverwrite_ThrowsException()
     {
         using var test = new TestFS(Test4ArchiveUrl, BaseTestFolder);

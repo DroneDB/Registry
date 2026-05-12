@@ -30,7 +30,21 @@ public static class HangfireUtils
         writeLine($"In BuildWrapper('{ddb.DatasetFolderPath}', '{path}', '{force}')");
 
         writeLine("Running build");
-        ddb.Build(path, force: force);
+        try
+        {
+            ddb.Build(path, force: force);
+        }
+        catch (DdbBuildInProgressException ex)
+        {
+            // Another DDB process holds the kernel-managed build lock. With the
+            // refactored cross-platform locking the lock is auto-released when
+            // the holder dies, so a short backoff + force retry is the safest
+            // recovery path. Inline retry avoids re-queueing through Hangfire,
+            // which would otherwise restart the whole job from scratch.
+            writeLine($"Build lock currently held by another process ({ex.Message}); waiting 10s and retrying with force=true");
+            Thread.Sleep(TimeSpan.FromSeconds(10));
+            ddb.Build(path, force: true);
+        }
 
         writeLine("Done build");
     }
@@ -43,9 +57,29 @@ public static class HangfireUtils
         writeLine($"In BuildPendingWrapper('{ddb.DatasetFolderPath}')");
 
         writeLine("Running build pending");
-        ddb.BuildPending();
+        try
+        {
+            ddb.BuildPending();
+        }
+        catch (DdbBuildInProgressException ex)
+        {
+            writeLine($"Build lock currently held by another process ({ex.Message}); waiting 10s and retrying");
+            Thread.Sleep(TimeSpan.FromSeconds(10));
+            ddb.BuildPending();
+        }
 
         writeLine("Done build pending");
+    }
+
+    [AutomaticRetry(Attempts = 1, OnAttemptsExceeded = AttemptsExceededAction.Fail)]
+    public static void CleanupWrapper(IDDB ddb, PerformContext context)
+    {
+        Action<string> writeLine = context != null ? context.WriteLine : Log.Information;
+
+        writeLine($"In CleanupWrapper('{ddb.DatasetFolderPath}')");
+
+        var result = ddb.Cleanup();
+        writeLine($"Removed {result.Entries?.Length ?? 0} entries and {result.Builds?.Length ?? 0} build artifacts");
     }
 
     [AutomaticRetry(Attempts = 1, OnAttemptsExceeded = AttemptsExceededAction.Fail)]

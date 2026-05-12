@@ -901,7 +901,21 @@ public class NativeDdbWrapper : IDdbWrapper
         dest = dest?.Replace('\\', '/');
         try
         {
-            if (_Build(ddbPath, source, dest, force, pendingOnly) != DdbResult.Exception) return;
+            var result = _Build(ddbPath, source, dest, force, pendingOnly);
+
+            // BuildInProgress is a specific, recoverable condition: another process
+            // (or a previous attempt within this process) currently holds the
+            // kernel-managed build lock. Surface it as a typed exception so callers
+            // (e.g. Hangfire job wrappers) can retry with force=true after a backoff
+            // without resorting to string matching on the generic DdbException.
+            if (result == DdbResult.BuildInProgress)
+                throw new DdbBuildInProgressException(SafeGetLastError("build"));
+
+            if (result != DdbResult.Exception) return;
+        }
+        catch (DdbBuildInProgressException)
+        {
+            throw;
         }
         catch (EntryPointNotFoundException ex)
         {
@@ -993,6 +1007,43 @@ public class NativeDdbWrapper : IDdbWrapper
                 ex);
         }
     }
+
+    [DllImport("ddb", EntryPoint = "DDBCleanup")]
+    private static extern DdbResult _Cleanup([MarshalAs(UnmanagedType.LPUTF8Str)] string ddbPath, out IntPtr output);
+
+    public DdbCleanupResult Cleanup(string ddbPath)
+    {
+        try
+        {
+            if (_Cleanup(ddbPath, out var output) == DdbResult.Success)
+            {
+                var json = MarshalAndFreeUtf8(output);
+
+                if (json == null)
+                    throw new InvalidOperationException("No result from DDBCleanup call");
+
+                var res = JsonConvert.DeserializeObject<DdbCleanupResult>(json);
+
+                if (res == null)
+                    throw new InvalidOperationException($"Unable to deserialize cleanup result: {json}");
+
+                return res;
+            }
+        }
+        catch (EntryPointNotFoundException ex)
+        {
+            throw new DdbException($"Error in calling ddb lib: incompatible versions ({ex.Message})", ex);
+        }
+        catch (Exception ex)
+        {
+            throw new DdbException(
+                $"Error in calling ddb lib. Last error: \"{SafeGetLastError("cleanup")}\", check inner exception for details",
+                ex);
+        }
+
+        throw new DdbException(SafeGetLastError("cleanup"));
+    }
+
 
     [DllImport("ddb", EntryPoint = "DDBMetaAdd")]
     private static extern DdbResult _MetaAdd([MarshalAs(UnmanagedType.LPUTF8Str)] string ddbPath,

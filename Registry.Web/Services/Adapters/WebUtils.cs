@@ -39,7 +39,7 @@ public class WebUtils : IUtils
     }
 
 
-    public Organization GetOrganization(string orgSlug, bool safe = false, bool withTracking = false)
+    public Organization GetOrganization(string orgSlug, bool safe = false, bool withTracking = false, bool withDatasets = false)
     {
         if (string.IsNullOrWhiteSpace(orgSlug))
             throw new BadRequestException("Missing organization id");
@@ -47,7 +47,11 @@ public class WebUtils : IUtils
         if (!orgSlug.IsValidSlug())
             throw new BadRequestException("Invalid organization id");
 
-        IQueryable<Organization> query = _context.Organizations.Include(item => item.Datasets);
+        // Eagerly loading Datasets joins (potentially) thousands of rows on every lookup;
+        // most callers only need the Organization row itself. Opt in via withDatasets.
+        IQueryable<Organization> query = _context.Organizations;
+        if (withDatasets)
+            query = query.Include(item => item.Datasets);
 
         // Apply AsNoTracking only if withTracking is false (default behavior for read-only operations)
         if (!withTracking)

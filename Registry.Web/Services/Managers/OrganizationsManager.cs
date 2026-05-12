@@ -110,19 +110,12 @@ public class OrganizationsManager : IOrganizationsManager
                                    .Distinct()
                                    .ToArray();
 
-        if (ownerIds.Length != 0)
-        {
-            var usersMapper = await _appContext.Users
-                .AsNoTracking()
-                .Where(u => ownerIds.Contains(u.Id))
-                .Select(u => new { u.Id, u.UserName })
-                .ToDictionaryAsync(u => u.Id, u => u.UserName);
+        var usersMapper = await ResolveUserNamesAsync(ownerIds);
 
-            // Update owner names
-            foreach (var org in organizations.Where(org => org.Owner != null))
-            {
-                org.Owner = usersMapper.SafeGetValue(org.Owner);
-            }
+        // Update owner names
+        foreach (var org in organizations.Where(org => org.Owner != null))
+        {
+            org.Owner = usersMapper.SafeGetValue(org.Owner);
         }
 
         return organizations;
@@ -153,21 +146,62 @@ public class OrganizationsManager : IOrganizationsManager
                                    .Distinct()
                                    .ToArray();
 
-        if (ownerIds.Length != 0)
-        {
-            var usersMapper = await _appContext.Users
-                .AsNoTracking()
-                .Where(u => ownerIds.Contains(u.Id))
-                .Select(u => new { u.Id, u.UserName })
-                .ToDictionaryAsync(u => u.Id, u => u.UserName);
+        var usersMapper = await ResolveUserNamesAsync(ownerIds);
 
-            foreach (var org in organizations.Where(org => org.Owner != null))
-            {
-                org.Owner = usersMapper.SafeGetValue(org.Owner);
-            }
+        foreach (var org in organizations.Where(org => org.Owner != null))
+        {
+            org.Owner = usersMapper.SafeGetValue(org.Owner);
         }
 
         return organizations;
+    }
+
+    /// <summary>
+    /// Resolves a set of user IDs to a {Id -> UserName} dictionary.
+    /// Avoids the EF Core "WHERE Id IN (@p1..@pN)" parameter explosion by:
+    ///   - using a single full-table projection when the requested set is large enough
+    ///     that the IN clause would dominate (and the user table is bounded);
+    ///   - falling back to a single small IN query for tiny inputs.
+    /// Returns an empty dictionary when there are no IDs to resolve.
+    /// </summary>
+    private async Task<Dictionary<string, string>> ResolveUserNamesAsync(IReadOnlyCollection<string> userIds)
+    {
+        if (userIds == null || userIds.Count == 0)
+            return new Dictionary<string, string>(StringComparer.Ordinal);
+
+        // Threshold tuned so that, beyond it, the parameterized IN-clause cost (network +
+        // query plan cache pollution + provider per-parameter overhead) exceeds the cost of
+        // a single full projection of the Users table. Hub-scale: users << datasets/orgs.
+        const int InClauseThreshold = 64;
+
+        if (userIds.Count <= InClauseThreshold)
+        {
+            return await _appContext.Users
+                .AsNoTracking()
+                .Where(u => userIds.Contains(u.Id))
+                .Select(u => new { u.Id, u.UserName })
+                .ToDictionaryAsync(u => u.Id, u => u.UserName, StringComparer.Ordinal);
+        }
+
+        // Single parameter-less query, then filter in memory.
+        // The Users table is small relative to datasets/organizations.
+        var wanted = userIds is HashSet<string> hs
+            ? hs
+            : new HashSet<string>(userIds, StringComparer.Ordinal);
+
+        var allUsers = await _appContext.Users
+            .AsNoTracking()
+            .Select(u => new { u.Id, u.UserName })
+            .ToListAsync();
+
+        var result = new Dictionary<string, string>(wanted.Count, StringComparer.Ordinal);
+        foreach (var u in allUsers)
+        {
+            if (wanted.Contains(u.Id))
+                result[u.Id] = u.UserName;
+        }
+
+        return result;
     }
 
     public async Task<OrganizationDto> Get(string orgSlug)
@@ -323,7 +357,7 @@ public class OrganizationsManager : IOrganizationsManager
 
     public async Task Delete(string orgSlug)
     {
-        var org = _utils.GetOrganization(orgSlug, withTracking: true);
+        var org = _utils.GetOrganization(orgSlug, withTracking: true, withDatasets: true);
 
         if (!await _authManager.RequestAccess(org, AccessType.Delete))
             throw new UnauthorizedException("Invalid user");
@@ -361,7 +395,7 @@ public class OrganizationsManager : IOrganizationsManager
         if (sourceOrgSlug == MagicStrings.PublicOrganizationSlug)
             throw new BadRequestException("Cannot merge the public organization");
 
-        var sourceOrg = _utils.GetOrganization(sourceOrgSlug, withTracking: true);
+        var sourceOrg = _utils.GetOrganization(sourceOrgSlug, withTracking: true, withDatasets: true);
         var destOrg = _utils.GetOrganization(destOrgSlug, withTracking: true);
 
         _logger.LogInformation("Starting merge of organization '{SourceOrgSlug}' into '{DestOrgSlug}'",

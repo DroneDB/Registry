@@ -96,5 +96,27 @@ internal class HangfireJobsInitializer
             jobIndexCleanupCron);
 
         _logger.LogInformation("Scheduled 'cleanup-old-jobindices' with cron: {Cron}", jobIndexCleanupCron);
+
+        // Recurring full DDB cleanup over every dataset.
+        // null (not configured) -> use default; empty/whitespace -> disabled.
+        var datasetCleanupCronRaw = appSettings.DatasetCleanupCron;
+        var datasetCleanupCron = datasetCleanupCronRaw is null
+            ? "0 0 * * *"
+            : datasetCleanupCronRaw;
+
+        if (string.IsNullOrWhiteSpace(datasetCleanupCron))
+        {
+            recurringJobManager.RemoveIfExists("recurring-dataset-cleanup");
+            _logger.LogInformation("Recurring 'recurring-dataset-cleanup' is disabled (empty cron)");
+        }
+        else
+        {
+            recurringJobManager.AddOrUpdate<RecurringDatasetCleanupService>(
+                "recurring-dataset-cleanup",
+                service => service.CleanupAllDatasetsAsync(null),
+                datasetCleanupCron);
+
+            _logger.LogInformation("Scheduled 'recurring-dataset-cleanup' with cron: {Cron}", datasetCleanupCron);
+        }
     }
 }

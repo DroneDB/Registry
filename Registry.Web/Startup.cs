@@ -279,6 +279,7 @@ public class Startup
         services.AddScoped<BuildPendingService>();
         services.AddScoped<DatasetCleanupService>();
         services.AddScoped<OrphanedDatasetCleanupService>();
+        services.AddScoped<RecurringDatasetCleanupService>();
 
         services.AddScoped<IConfigurationHelper<AppSettings>, ConfigurationHelper>(_ =>
             new ConfigurationHelper(MagicStrings.AppSettingsFileName));

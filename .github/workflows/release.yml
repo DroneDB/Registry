@@ -44,18 +44,21 @@ jobs:
           dotnet publish -p:PublishProfile=linux-arm64.pubxml Registry.Web
           dotnet publish -p:PublishProfile=osx-x64.pubxml Registry.Web
 
+      - name: Set version env
+        run: echo "VERSION=${GITHUB_REF_NAME}" >> $GITHUB_ENV
+
       - name: Zip win-x64
-        run: cd registry/Registry.Web/bin/Release/net10.0/publish/win-x64/ && zip -r ../../../../../../../Registry-Win64.zip *
+        run: cd registry/Registry.Web/bin/Release/net10.0/publish/win-x64/ && zip -r ../../../../../../../Registry-${{ env.VERSION }}-Win64.zip *
       - name: Zip win-arm64
-        run: cd registry/Registry.Web/bin/Release/net10.0/publish/win-arm64/ && zip -r ../../../../../../../Registry-WinArm64.zip *
+        run: cd registry/Registry.Web/bin/Release/net10.0/publish/win-arm64/ && zip -r ../../../../../../../Registry-${{ env.VERSION }}-WinArm64.zip *
       - name: Zip linux-x64
-        run: cd registry/Registry.Web/bin/Release/net10.0/publish/linux-x64/ && zip -r ../../../../../../../Registry-Linux64.zip *
+        run: cd registry/Registry.Web/bin/Release/net10.0/publish/linux-x64/ && zip -r ../../../../../../../Registry-${{ env.VERSION }}-Linux64.zip *
       - name: Zip linux-arm
-        run: cd registry/Registry.Web/bin/Release/net10.0/publish/linux-arm/ && zip -r ../../../../../../../Registry-LinuxArm.zip *
+        run: cd registry/Registry.Web/bin/Release/net10.0/publish/linux-arm/ && zip -r ../../../../../../../Registry-${{ env.VERSION }}-LinuxArm.zip *
       - name: Zip linux-arm64
-        run: cd registry/Registry.Web/bin/Release/net10.0/publish/linux-arm64/ && zip -r ../../../../../../../Registry-LinuxArm64.zip *
+        run: cd registry/Registry.Web/bin/Release/net10.0/publish/linux-arm64/ && zip -r ../../../../../../../Registry-${{ env.VERSION }}-LinuxArm64.zip *
       - name: Zip osx-x64
-        run: cd registry/Registry.Web/bin/Release/net10.0/publish/osx-x64/ && zip -r ../../../../../../../Registry-Osx64.zip *
+        run: cd registry/Registry.Web/bin/Release/net10.0/publish/osx-x64/ && zip -r ../../../../../../../Registry-${{ env.VERSION }}-Osx64.zip *
 
       - name: Release
         uses: softprops/action-gh-release@v1
@@ -64,9 +67,9 @@ jobs:
           files: |
             Release.txt
             LICENSE.md
-            Registry-Win64.zip
-            Registry-WinArm64.zip
-            Registry-Linux64.zip
-            Registry-LinuxArm.zip
-            Registry-LinuxArm64.zip
-            Registry-Osx64.zip
+            Registry-${{ env.VERSION }}-Win64.zip
+            Registry-${{ env.VERSION }}-WinArm64.zip
+            Registry-${{ env.VERSION }}-Linux64.zip
+            Registry-${{ env.VERSION }}-LinuxArm.zip
+            Registry-${{ env.VERSION }}-LinuxArm64.zip
+            Registry-${{ env.VERSION }}-Osx64.zip

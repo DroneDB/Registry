@@ -41,4 +41,11 @@ public interface ISystemManager
     /// </summary>
     /// <returns>Global report containing user, organizations, datasets, and file statistics.</returns>
     Task<GlobalReportDto> GetGlobalReport();
+
+    /// <summary>
+    /// Cleans up build artifacts and stale entries on one dataset, all datasets in an
+    /// organization, or every dataset in the system. Admin only.
+    /// When both slugs are null the operation is enqueued as a background job.
+    /// </summary>
+    Task<CleanupBuildResultDto> CleanupBuild(CleanupBuildRequestDto request);
 }

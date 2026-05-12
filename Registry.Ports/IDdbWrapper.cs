@@ -69,6 +69,14 @@ public interface IDdbWrapper
 
     public bool IsBuildPending(string ddbPath);
 
+    /// <summary>
+    /// Cleans up a dataset by removing index entries whose underlying files no
+    /// longer exist on disk and orphaned build artifacts.
+    /// </summary>
+    /// <param name="ddbPath">Path to the DroneDB database (parent of ".ddb")</param>
+    /// <returns>Lists of removed entry paths and build artifact hashes</returns>
+    public DdbCleanupResult Cleanup(string ddbPath);
+
     public Meta MetaAdd(string ddbPath, string key, string data, string? path = null);
 
     public Meta MetaSet(string ddbPath, string key, string data, string? path = null);

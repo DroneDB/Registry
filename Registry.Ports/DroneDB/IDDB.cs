@@ -66,6 +66,12 @@ public interface IDDB
     bool IsBuildActive(string path);
     bool IsBuildPending();
 
+    /// <summary>
+    /// Cleans up the dataset by removing index entries whose underlying files no
+    /// longer exist on disk and orphaned build artifacts.
+    /// </summary>
+    DdbCleanupResult Cleanup();
+
     IMetaManager Meta { get; }
     long GetSize();
     Stamp GetStamp();
