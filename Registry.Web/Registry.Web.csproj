@@ -20,6 +20,10 @@
         <AssemblyMetadata Include="DdbVersion" Value="$(DdbVersion)" />
     </ItemGroup>
 
+    <ItemGroup>
+        <InternalsVisibleTo Include="Registry.Web.Test" />
+    </ItemGroup>
+
     <PropertyGroup Condition=" '$(Configuration)' == 'DebugEf' ">
       <DefineConstants>TRACE;DEBUG_EF</DefineConstants>
     </PropertyGroup>
@@ -50,21 +54,21 @@
         <PackageReference Include="Hangfire.InMemory" Version="1.0.0" />
         <PackageReference Include="Hangfire.MySqlStorage" Version="2.0.3" />
         <PackageReference Include="Microsoft.AspNetCore.Authentication.Core" Version="2.3.9" />
-        <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="10.0.6" />
-        <PackageReference Include="Microsoft.AspNetCore.Mvc.NewtonsoftJson" Version="10.0.6" />
+        <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="10.0.7" />
+        <PackageReference Include="Microsoft.AspNetCore.Mvc.NewtonsoftJson" Version="10.0.7" />
         <PackageReference Include="Microsoft.AspNetCore.ResponseCompression" Version="2.3.9" />
         <PackageReference Include="Microsoft.AspNetCore.SpaServices" Version="3.1.32" />
-        <PackageReference Include="Microsoft.AspNetCore.SpaServices.Extensions" Version="10.0.6" />
-        <PackageReference Include="Microsoft.EntityFrameworkCore" Version="10.0.6" />
-        <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="10.0.6" />
-        <PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" Version="10.0.6" />
-        <PackageReference Include="Microsoft.EntityFrameworkCore.Tools" Version="10.0.6">
+        <PackageReference Include="Microsoft.AspNetCore.SpaServices.Extensions" Version="10.0.7" />
+        <PackageReference Include="Microsoft.EntityFrameworkCore" Version="10.0.7" />
+        <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="10.0.7" />
+        <PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" Version="10.0.7" />
+        <PackageReference Include="Microsoft.EntityFrameworkCore.Tools" Version="10.0.7">
             <PrivateAssets>all</PrivateAssets>
             <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
         </PackageReference>
-        <PackageReference Include="Microsoft.Extensions.Caching.StackExchangeRedis" Version="10.0.6" />
-        <PackageReference Include="Microsoft.Extensions.Diagnostics.HealthChecks.EntityFrameworkCore" Version="10.0.6" />
-        <PackageReference Include="Microsoft.Extensions.Hosting" Version="10.0.6" />
+        <PackageReference Include="Microsoft.Extensions.Caching.StackExchangeRedis" Version="10.0.7" />
+        <PackageReference Include="Microsoft.Extensions.Diagnostics.HealthChecks.EntityFrameworkCore" Version="10.0.7" />
+        <PackageReference Include="Microsoft.Extensions.Hosting" Version="10.0.7" />
         <PackageReference Include="Microsoft.VisualStudio.Web.CodeGeneration.Design" Version="10.0.2" />
         <PackageReference Include="MimeMapping" Version="4.0.0" />
         <PackageReference Include="MimeTypes" Version="2.5.2">
@@ -84,11 +88,11 @@
         <PackageReference Include="Serilog.Sinks.Seq" Version="9.0.0" />
         <PackageReference Include="SkiaSharp" Version="3.119.2" />
         <PackageReference Include="SkiaSharp.NativeAssets.Linux" Version="3.119.2" />
-        <PackageReference Include="Scalar.AspNetCore" Version="2.14.1" />
+        <PackageReference Include="Scalar.AspNetCore" Version="2.14.11" />
         <PackageReference Include="Swashbuckle.AspNetCore" Version="10.1.7" />
-        <PackageReference Include="System.IdentityModel.Tokens.Jwt" Version="8.17.0" />
-        <PackageReference Include="System.Text.Encoding.CodePages" Version="10.0.6" />
-        <PackageReference Include="System.Threading.Tasks.Dataflow" Version="10.0.6" />
+        <PackageReference Include="System.IdentityModel.Tokens.Jwt" Version="8.18.0" />
+        <PackageReference Include="System.Text.Encoding.CodePages" Version="10.0.7" />
+        <PackageReference Include="System.Threading.Tasks.Dataflow" Version="10.0.7" />
     </ItemGroup>
 
     <ItemGroup>
