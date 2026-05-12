@@ -24,7 +24,8 @@ services:
 
     registry_webserver:
         depends_on:
-            - db
+            db:
+                condition: service_healthy
         image: dronedb/registry:latest
         healthcheck:
             test: [ "CMD", "curl", "-f", "http://localhost:5000/quickhealth" ]
@@ -44,7 +45,8 @@ services:
 
     registry_node_1:
         depends_on:
-            - registry_webserver
+            registry_webserver:
+                condition: service_healthy
         image: dronedb/registry:latest
         environment:
             - INSTANCE_TYPE=1
@@ -57,7 +59,8 @@ services:
 
     registry_node_2:
         depends_on:
-            - registry_webserver
+            registry_webserver:
+                condition: service_healthy
         image: dronedb/registry:latest
         environment:
             - INSTANCE_TYPE=1
