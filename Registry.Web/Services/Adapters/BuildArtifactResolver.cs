@@ -1,3 +1,4 @@
+using System.IO;
 using Registry.Common;
 using Registry.Ports;
 using Registry.Ports.DroneDB;
@@ -31,20 +32,25 @@ public class BuildArtifactResolver : IBuildArtifactResolver
         return CommonUtils.SafeCombine(combined);
     }
 
+    // ddb.GetLocalPath() may return a path relative to the current working directory
+    // (e.g. "./datasets/..."). Callers such as MVC PhysicalFileResult require an
+    // absolute (rooted) path, so we normalize here as the single source of truth.
+    private static string Absolute(string path) => Path.GetFullPath(path);
+
     public string GetMvtDir(IDDB ddb, string entryHash) =>
-        ddb.GetLocalPath(Relative(entryHash, "mvt"));
+        Absolute(ddb.GetLocalPath(Relative(entryHash, "mvt")));
 
     public string GetMvtMetadataPath(IDDB ddb, string entryHash) =>
-        ddb.GetLocalPath(Relative(entryHash, "mvt", "metadata.json"));
+        Absolute(ddb.GetLocalPath(Relative(entryHash, "mvt", "metadata.json")));
 
     public string GetMvtTilePath(IDDB ddb, string entryHash, int z, int x, int y) =>
-        ddb.GetLocalPath(Relative(entryHash, "mvt", z.ToString(), x.ToString(), $"{y}.pbf"));
+        Absolute(ddb.GetLocalPath(Relative(entryHash, "mvt", z.ToString(), x.ToString(), $"{y}.pbf")));
 
     public string GetCogPath(IDDB ddb, string entryHash) =>
-        ddb.GetLocalPath(Relative(entryHash, "cog", "cog.tif"));
+        Absolute(ddb.GetLocalPath(Relative(entryHash, "cog", "cog.tif")));
 
     public string GetVectorQueryPath(IDDB ddb, string entryHash) =>
-        ddb.GetLocalPath(Relative(entryHash, "vec", "source.gpkg"));
+        Absolute(ddb.GetLocalPath(Relative(entryHash, "vec", "source.gpkg")));
 
     public bool ArtifactExists(string fullPath) =>
         !string.IsNullOrEmpty(fullPath) && _fs.Exists(fullPath);
