@@ -1699,7 +1699,7 @@ public class ObjectsManager : IObjectsManager
         {
             EntryType.PointCloud => CommonUtils.SafeCombine(BuildBasePath, entry.Hash, "copc", "cloud.copc.laz"),
             EntryType.GeoRaster => CommonUtils.SafeCombine(BuildBasePath, entry.Hash, "cog", "cog.tif"),
-            EntryType.Vector => CommonUtils.SafeCombine(BuildBasePath, entry.Hash, "vec", "vector.fgb"),
+            EntryType.Vector => CommonUtils.SafeCombine(BuildBasePath, entry.Hash, "vec", "source.gpkg"),
             EntryType.Model => CommonUtils.SafeCombine(BuildBasePath, entry.Hash, "nxs", "model.nxz"),
             _ => entry.Path
         };

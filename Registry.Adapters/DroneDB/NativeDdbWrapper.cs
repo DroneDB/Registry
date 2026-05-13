@@ -2068,4 +2068,223 @@ public class NativeDdbWrapper : IDdbWrapper
 
         throw new DdbException(SafeGetLastError("mask borders"));
     }
+
+    #region OGC services (raster region + vector query/describe) P/Invoke
+
+    [DllImport("ddb", EntryPoint = "DDBRenderRasterRegion")]
+    private static extern DdbResult _RenderRasterRegion(
+        [MarshalAs(UnmanagedType.LPUTF8Str)] string inputPath,
+        [In] double[] bbox,
+        [MarshalAs(UnmanagedType.LPUTF8Str)] string bboxSrs,
+        int width, int height,
+        [MarshalAs(UnmanagedType.LPUTF8Str)] string format,
+        out IntPtr outBuffer, out int outBufferSize);
+
+    public byte[] RenderRasterRegion(string inputPath, double[] bbox, string bboxSrs,
+                                     int width, int height, string format)
+    {
+        if (string.IsNullOrWhiteSpace(inputPath))
+            throw new ArgumentException("inputPath is null or empty");
+        if (bbox == null || bbox.Length != 4)
+            throw new ArgumentException("bbox must contain exactly 4 elements: [minX,minY,maxX,maxY]");
+        if (width <= 0 || height <= 0)
+            throw new ArgumentException("width and height must be positive");
+        if (string.IsNullOrWhiteSpace(format))
+            throw new ArgumentException("format is null or empty");
+
+        try
+        {
+            if (_RenderRasterRegion(inputPath, bbox, bboxSrs ?? string.Empty,
+                                    width, height, format,
+                                    out var outBuffer, out var outSize) == DdbResult.Success)
+            {
+                var dest = new byte[outSize];
+                Marshal.Copy(outBuffer, dest, 0, outSize);
+                _DDBVSIFree(outBuffer);
+                return dest;
+            }
+        }
+        catch (EntryPointNotFoundException ex)
+        {
+            throw new DdbException($"Error in calling ddb lib: incompatible versions ({ex.Message})", ex);
+        }
+        catch (DdbException) { throw; }
+        catch (Exception ex)
+        {
+            throw new DdbException(
+                $"Error in calling ddb lib. Last error: \"{SafeGetLastError("render raster region")}\", check inner exception for details", ex);
+        }
+
+        throw new DdbException(SafeGetLastError("render raster region"));
+    }
+
+    [DllImport("ddb", EntryPoint = "DDBRenderRasterIndex")]
+    private static extern DdbResult _RenderRasterIndex(
+        [MarshalAs(UnmanagedType.LPUTF8Str)] string inputPath,
+        [MarshalAs(UnmanagedType.LPUTF8Str)] string indexName,
+        [In] double[] bbox,
+        [MarshalAs(UnmanagedType.LPUTF8Str)] string bboxSrs,
+        int width, int height,
+        [MarshalAs(UnmanagedType.LPUTF8Str)] string format,
+        out IntPtr outBuffer, out int outBufferSize);
+
+    public byte[] RenderRasterIndex(string inputPath, string indexName, double[] bbox,
+                                    string bboxSrs, int width, int height, string format)
+    {
+        if (string.IsNullOrWhiteSpace(inputPath))
+            throw new ArgumentException("inputPath is null or empty");
+        if (string.IsNullOrWhiteSpace(indexName))
+            throw new ArgumentException("indexName is null or empty");
+        if (bbox == null || bbox.Length != 4)
+            throw new ArgumentException("bbox must contain exactly 4 elements: [minX,minY,maxX,maxY]");
+        if (width <= 0 || height <= 0)
+            throw new ArgumentException("width and height must be positive");
+        if (string.IsNullOrWhiteSpace(format))
+            throw new ArgumentException("format is null or empty");
+
+        try
+        {
+            if (_RenderRasterIndex(inputPath, indexName, bbox, bboxSrs ?? string.Empty,
+                                   width, height, format,
+                                   out var outBuffer, out var outSize) == DdbResult.Success)
+            {
+                var dest = new byte[outSize];
+                Marshal.Copy(outBuffer, dest, 0, outSize);
+                _DDBVSIFree(outBuffer);
+                return dest;
+            }
+        }
+        catch (EntryPointNotFoundException ex)
+        {
+            throw new DdbException($"Error in calling ddb lib: incompatible versions ({ex.Message})", ex);
+        }
+        catch (DdbException) { throw; }
+        catch (Exception ex)
+        {
+            throw new DdbException(
+                $"Error in calling ddb lib. Last error: \"{SafeGetLastError("render raster index")}\", check inner exception for details", ex);
+        }
+
+        throw new DdbException(SafeGetLastError("render raster index"));
+    }
+
+    [DllImport("ddb", EntryPoint = "DDBQueryRasterPoint")]
+    private static extern DdbResult _QueryRasterPoint(
+        [MarshalAs(UnmanagedType.LPUTF8Str)] string inputPath,
+        double x, double y,
+        [MarshalAs(UnmanagedType.LPUTF8Str)] string srs,
+        out IntPtr output);
+
+    public string QueryRasterPoint(string inputPath, double x, double y, string? srs = null)
+    {
+        if (string.IsNullOrWhiteSpace(inputPath))
+            throw new ArgumentException("inputPath is null or empty");
+
+        try
+        {
+            if (_QueryRasterPoint(inputPath, x, y, srs ?? string.Empty, out var output) == DdbResult.Success)
+            {
+                var json = MarshalAndFreeUtf8(output);
+                if (string.IsNullOrWhiteSpace(json))
+                    throw new DdbException("Unable to query raster point");
+                return json;
+            }
+        }
+        catch (EntryPointNotFoundException ex)
+        {
+            throw new DdbException($"Error in calling ddb lib: incompatible versions ({ex.Message})", ex);
+        }
+        catch (DdbException) { throw; }
+        catch (Exception ex)
+        {
+            throw new DdbException(
+                $"Error in calling ddb lib. Last error: \"{SafeGetLastError("query raster point")}\", check inner exception for details", ex);
+        }
+
+        throw new DdbException(SafeGetLastError("query raster point"));
+    }
+
+    [DllImport("ddb", EntryPoint = "DDBQueryVector")]
+    private static extern DdbResult _QueryVector(
+        [MarshalAs(UnmanagedType.LPUTF8Str)] string vectorPath,
+        [MarshalAs(UnmanagedType.LPUTF8Str)] string? layerName,
+        [In] double[]? bbox,
+        [MarshalAs(UnmanagedType.LPUTF8Str)] string? bboxSrs,
+        int maxFeatures, int startIndex,
+        [MarshalAs(UnmanagedType.LPUTF8Str)] string outputFormat,
+        out IntPtr output);
+
+    public string QueryVector(string vectorPath, string? layerName = null,
+                              double[]? bbox = null, string? bboxSrs = null,
+                              int maxFeatures = 1000, int startIndex = 0,
+                              string outputFormat = "application/json")
+    {
+        if (string.IsNullOrWhiteSpace(vectorPath))
+            throw new ArgumentException("vectorPath is null or empty");
+        if (bbox != null && bbox.Length != 4)
+            throw new ArgumentException("bbox must contain exactly 4 elements when provided");
+
+        try
+        {
+            if (_QueryVector(vectorPath, layerName, bbox, bboxSrs,
+                             maxFeatures, startIndex,
+                             outputFormat ?? "application/json",
+                             out var output) == DdbResult.Success)
+            {
+                var data = MarshalAndFreeUtf8(output);
+                if (string.IsNullOrWhiteSpace(data))
+                    throw new DdbException("Unable to query vector");
+                return data;
+            }
+        }
+        catch (EntryPointNotFoundException ex)
+        {
+            throw new DdbException($"Error in calling ddb lib: incompatible versions ({ex.Message})", ex);
+        }
+        catch (DdbException) { throw; }
+        catch (Exception ex)
+        {
+            throw new DdbException(
+                $"Error in calling ddb lib. Last error: \"{SafeGetLastError("query vector")}\", check inner exception for details", ex);
+        }
+
+        throw new DdbException(SafeGetLastError("query vector"));
+    }
+
+    [DllImport("ddb", EntryPoint = "DDBDescribeVector")]
+    private static extern DdbResult _DescribeVector(
+        [MarshalAs(UnmanagedType.LPUTF8Str)] string vectorPath,
+        [MarshalAs(UnmanagedType.LPUTF8Str)] string? layerName,
+        out IntPtr output);
+
+    public string DescribeVector(string vectorPath, string? layerName = null)
+    {
+        if (string.IsNullOrWhiteSpace(vectorPath))
+            throw new ArgumentException("vectorPath is null or empty");
+
+        try
+        {
+            if (_DescribeVector(vectorPath, layerName, out var output) == DdbResult.Success)
+            {
+                var json = MarshalAndFreeUtf8(output);
+                if (string.IsNullOrWhiteSpace(json))
+                    throw new DdbException("Unable to describe vector");
+                return json;
+            }
+        }
+        catch (EntryPointNotFoundException ex)
+        {
+            throw new DdbException($"Error in calling ddb lib: incompatible versions ({ex.Message})", ex);
+        }
+        catch (DdbException) { throw; }
+        catch (Exception ex)
+        {
+            throw new DdbException(
+                $"Error in calling ddb lib. Last error: \"{SafeGetLastError("describe vector")}\", check inner exception for details", ex);
+        }
+
+        throw new DdbException(SafeGetLastError("describe vector"));
+    }
+
+    #endregion
 }

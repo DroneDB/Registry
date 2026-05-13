@@ -233,4 +233,72 @@ public interface IDdbWrapper
     /// Mask orthophoto borders making them transparent
     /// </summary>
     public void MaskBorders(string input, string output, int nearDist = 15, bool white = false);
+
+    // =====================================================================
+    // OGC services support (raster region rendering + vector query/describe).
+    // =====================================================================
+
+    /// <summary>
+    /// Render a geographic region of a georeferenced raster to a compressed
+    /// image buffer (PNG / JPEG / WebP). Used by WMS GetMap and WMTS.
+    /// </summary>
+    /// <param name="inputPath">Path to the source raster.</param>
+    /// <param name="bbox">[minX, minY, maxX, maxY] in <paramref name="bboxSrs"/>.</param>
+    /// <param name="bboxSrs">CRS authority code (e.g. "EPSG:4326"). Empty/null defaults to EPSG:4326.</param>
+    /// <param name="width">Output width in pixels (1..4096).</param>
+    /// <param name="height">Output height in pixels (1..4096).</param>
+    /// <param name="format">MIME type ("image/png", "image/jpeg", "image/webp")
+    /// or shortcut ("png"/"jpeg"/"webp").</param>
+    /// <returns>Encoded image bytes.</returns>
+    public byte[] RenderRasterRegion(string inputPath, double[] bbox, string bboxSrs,
+                                     int width, int height, string format);
+
+    /// <summary>
+    /// Render a spectral index (NDVI / NDRE / NDWI / EVI / SAVI) over a raster
+    /// region and apply a red-yellow-green color ramp. Used by WMS STYLES.
+    /// </summary>
+    /// <param name="inputPath">Path to the multi-band source raster.</param>
+    /// <param name="indexName">One of NDVI / NDRE / NDWI / EVI / SAVI (case-insensitive).</param>
+    /// <param name="bbox">[minX, minY, maxX, maxY] in <paramref name="bboxSrs"/>.</param>
+    /// <param name="bboxSrs">CRS authority code; null/empty defaults to "EPSG:4326".</param>
+    /// <param name="width">Output width (1..4096).</param>
+    /// <param name="height">Output height (1..4096).</param>
+    /// <param name="format">MIME type or shortcut ("image/png" / "png" / etc.).</param>
+    public byte[] RenderRasterIndex(string inputPath, string indexName, double[] bbox,
+                                    string bboxSrs, int width, int height, string format);
+
+    /// <summary>
+    /// Sample a georeferenced raster at a geographic point (WMS GetFeatureInfo /
+    /// OGC API Coverages point access).
+    /// </summary>
+    /// <param name="inputPath">Path to the source raster.</param>
+    /// <param name="x">X coordinate in <paramref name="srs"/>.</param>
+    /// <param name="y">Y coordinate in <paramref name="srs"/>.</param>
+    /// <param name="srs">CRS authority code (defaults to "EPSG:4326").</param>
+    /// <returns>JSON string with bands, pixel, lon and lat fields.</returns>
+    public string QueryRasterPoint(string inputPath, double x, double y, string? srs = null);
+
+    /// <summary>
+    /// Query features from a vector dataset (WFS GetFeature / OGC API Items).
+    /// </summary>
+    /// <param name="vectorPath">Path to the vector source (typically vec/source.gpkg).</param>
+    /// <param name="layerName">Layer to query; null uses the first layer.</param>
+    /// <param name="bbox">[minX,minY,maxX,maxY] spatial filter in <paramref name="bboxSrs"/>, or null.</param>
+    /// <param name="bboxSrs">CRS of <paramref name="bbox"/> (e.g. "EPSG:4326"); null when bbox is null.</param>
+    /// <param name="maxFeatures">Maximum features to return (clamped to [1,10000]; 0 → default 1000).</param>
+    /// <param name="startIndex">0-based feature offset for pagination.</param>
+    /// <param name="outputFormat">"application/json" (RFC7946 GeoJSON, default) or "application/gml+xml".</param>
+    /// <returns>Encoded features as a string.</returns>
+    public string QueryVector(string vectorPath, string? layerName = null,
+                              double[]? bbox = null, string? bboxSrs = null,
+                              int maxFeatures = 1000, int startIndex = 0,
+                              string outputFormat = "application/json");
+
+    /// <summary>
+    /// Describe a vector dataset (WFS DescribeFeatureType / OGC API collection).
+    /// </summary>
+    /// <param name="vectorPath">Path to the vector source.</param>
+    /// <param name="layerName">Layer to describe; null = all layers.</param>
+    /// <returns>JSON describing driver, layers, fields, geometryType, srs, extent and feature count.</returns>
+    public string DescribeVector(string vectorPath, string? layerName = null);
 }

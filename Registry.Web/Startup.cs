@@ -286,6 +286,18 @@ public class Startup
 
         services.AddScoped<BasicAuthFilter>();
 
+        // OGC services (WMS/WMTS/WFS/WCS/OGC API + MVT endpoint)
+        services.AddScoped<IBuildArtifactResolver, BuildArtifactResolver>();
+        services.AddScoped<IOgcLayerCatalog, OgcLayerCatalog>();
+        services.AddScoped<IWmtsManager, WmtsManager>();
+        services.AddScoped<IWmsManager, WmsManager>();
+        services.AddScoped<IWfsManager, WfsManager>();
+        services.AddScoped<IWcsManager, WcsManager>();
+        services.AddScoped<IOgcApiFeaturesManager, OgcApiFeaturesManager>();
+        services.AddScoped<IOgcApiTilesManager, OgcApiTilesManager>();
+        services.AddScoped<Registry.Web.Utilities.Ogc.OgcAuthorizationFilter>();
+        services.AddScoped<Registry.Web.Utilities.Ogc.OgcExceptionFilter>();
+
         if (!string.IsNullOrWhiteSpace(appSettings.RemoteThumbnailGeneratorUrl))
         {
             services.Configure<RemoteThumbnailGeneratorSettings>(options =>
