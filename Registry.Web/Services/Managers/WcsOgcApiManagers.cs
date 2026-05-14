@@ -7,6 +7,7 @@ using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using System.Xml;
+using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Caching.Distributed;
 using Microsoft.Extensions.Logging;
 using Newtonsoft.Json;
@@ -27,27 +28,56 @@ public class WcsManager : OgcManagerBase, IWcsManager
     private readonly ILogger<WcsManager> _logger;
 
     public WcsManager(IUtils u, IAuthManager a, IDdbManager d, IBuildArtifactResolver ar,
-        IDdbWrapper w, IOgcLayerCatalog c, IDistributedCache cache, ILogger<WcsManager> logger)
-        : base(u, a, d, ar, w, c, cache)
+        IDdbWrapper w, IOgcLayerCatalog c, IDistributedCache cache, IHttpContextAccessor ctx, ILogger<WcsManager> logger)
+        : base(u, a, d, ar, w, c, cache, ctx)
     {
         _logger = logger;
     }
 
     public async Task<string> GetCapabilitiesAsync(string orgSlug, string dsSlug, string? folderPath = null)
     {
-        var key = $"ogc-caps-wcs-2.0.0-{orgSlug}-{dsSlug}-{folderPath ?? ""}";
+        var key = $"ogc-caps-wcs-v2-2.0.0-{orgSlug}-{dsSlug}-{folderPath ?? ""}";
         var cached = await Cache.GetRecordAsync<string>(key);
         if (cached != null) return cached;
 
         await ResolveAsync(orgSlug, dsSlug);
         var layers = (await LayerCatalog.GetLayersAsync(orgSlug, dsSlug, folderPath))
             .Where(l => l.EntryType == EntryType.GeoRaster && l.BboxWgs84 != null).ToList();
+        var baseUrl = GetServiceUrl(orgSlug, dsSlug, "wcs", folderPath);
 
         var sb = new StringBuilder();
         await using var w = XmlWriter.Create(sb, new XmlWriterSettings { Indent = true, Async = true, OmitXmlDeclaration = true });
         await w.WriteStartElementAsync("wcs", "Capabilities", "http://www.opengis.net/wcs/2.0");
         await w.WriteAttributeStringAsync("xmlns", "ows", null, "http://www.opengis.net/ows/2.0");
+        await w.WriteAttributeStringAsync("xmlns", "xlink", null, NsXlink);
         w.WriteAttributeString("version", "2.0.1");
+
+        await w.WriteStartElementAsync("ows", "ServiceIdentification", "http://www.opengis.net/ows/2.0");
+        await w.WriteElementStringAsync("ows", "Title", "http://www.opengis.net/ows/2.0", $"DroneDB WCS — {orgSlug}/{dsSlug}");
+        await w.WriteElementStringAsync("ows", "ServiceType", "http://www.opengis.net/ows/2.0", "OGC WCS");
+        await w.WriteElementStringAsync("ows", "ServiceTypeVersion", "http://www.opengis.net/ows/2.0", "2.0.1");
+        await w.WriteEndElementAsync();
+
+        await w.WriteStartElementAsync("ows", "OperationsMetadata", "http://www.opengis.net/ows/2.0");
+        foreach (var op in new[] { "GetCapabilities", "DescribeCoverage", "GetCoverage" })
+        {
+            await w.WriteStartElementAsync("ows", "Operation", "http://www.opengis.net/ows/2.0");
+            w.WriteAttributeString("name", op);
+            await w.WriteStartElementAsync("ows", "DCP", "http://www.opengis.net/ows/2.0");
+            await w.WriteStartElementAsync("ows", "HTTP", "http://www.opengis.net/ows/2.0");
+            await w.WriteStartElementAsync("ows", "Get", "http://www.opengis.net/ows/2.0");
+            w.WriteAttributeString("xlink", "href", NsXlink, baseUrl + "?");
+            await w.WriteEndElementAsync();
+            await w.WriteEndElementAsync();
+            await w.WriteEndElementAsync();
+            await w.WriteEndElementAsync();
+        }
+        await w.WriteEndElementAsync(); // OperationsMetadata
+
+        await w.WriteStartElementAsync("wcs", "ServiceMetadata", "http://www.opengis.net/wcs/2.0");
+        await w.WriteElementStringAsync("wcs", "formatSupported", "http://www.opengis.net/wcs/2.0", "image/tiff");
+        await w.WriteEndElementAsync();
+
         await w.WriteStartElementAsync("wcs", "Contents", null);
         foreach (var l in layers)
         {
@@ -128,8 +158,8 @@ public class OgcApiFeaturesManager : OgcManagerBase, IOgcApiFeaturesManager
     private readonly ILogger<OgcApiFeaturesManager> _logger;
 
     public OgcApiFeaturesManager(IUtils u, IAuthManager a, IDdbManager d, IBuildArtifactResolver ar,
-        IDdbWrapper w, IOgcLayerCatalog c, IDistributedCache cache, ILogger<OgcApiFeaturesManager> logger)
-        : base(u, a, d, ar, w, c, cache)
+        IDdbWrapper w, IOgcLayerCatalog c, IDistributedCache cache, IHttpContextAccessor ctx, ILogger<OgcApiFeaturesManager> logger)
+        : base(u, a, d, ar, w, c, cache, ctx)
     {
         _logger = logger;
     }
@@ -246,8 +276,8 @@ public class OgcApiFeaturesManager : OgcManagerBase, IOgcApiFeaturesManager
 public class OgcApiTilesManager : OgcManagerBase, IOgcApiTilesManager
 {
     public OgcApiTilesManager(IUtils u, IAuthManager a, IDdbManager d, IBuildArtifactResolver ar,
-        IDdbWrapper w, IOgcLayerCatalog c, IDistributedCache cache)
-        : base(u, a, d, ar, w, c, cache) { }
+        IDdbWrapper w, IOgcLayerCatalog c, IDistributedCache cache, IHttpContextAccessor ctx)
+        : base(u, a, d, ar, w, c, cache, ctx) { }
 
     public async Task<object> GetTileSetsAsync(string orgSlug, string dsSlug, string collectionId, string baseUrl)
     {

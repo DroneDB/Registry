@@ -7,6 +7,7 @@ using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using System.Xml;
+using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Caching.Distributed;
 using Microsoft.Extensions.Logging;
 using Registry.Ports;
@@ -29,20 +30,21 @@ public class WmtsManager : OgcManagerBase, IWmtsManager
     private readonly ILogger<WmtsManager> _logger;
 
     public WmtsManager(IUtils u, IAuthManager a, IDdbManager d, IBuildArtifactResolver ar,
-        IDdbWrapper w, IOgcLayerCatalog c, IDistributedCache cache, ILogger<WmtsManager> logger)
-        : base(u, a, d, ar, w, c, cache)
+        IDdbWrapper w, IOgcLayerCatalog c, IDistributedCache cache, IHttpContextAccessor ctx, ILogger<WmtsManager> logger)
+        : base(u, a, d, ar, w, c, cache, ctx)
     {
         _logger = logger;
     }
 
     public async Task<string> GetCapabilitiesAsync(string orgSlug, string dsSlug, string? folderPath = null)
     {
-        var key = $"ogc-caps-wmts-1.0.0-{orgSlug}-{dsSlug}-{folderPath ?? ""}";
+        var key = $"ogc-caps-wmts-v2-1.0.0-{orgSlug}-{dsSlug}-{folderPath ?? ""}";
         var cached = await Cache.GetRecordAsync<string>(key);
         if (cached != null) return cached;
 
         await ResolveAsync(orgSlug, dsSlug);
         var layers = await LayerCatalog.GetLayersAsync(orgSlug, dsSlug, folderPath);
+        var baseUrl = GetServiceUrl(orgSlug, dsSlug, "wmts", folderPath);
 
         var sb = new StringBuilder();
         await using (var w = CreateXmlWriter(sb))
@@ -57,6 +59,12 @@ public class WmtsManager : OgcManagerBase, IWmtsManager
             await w.WriteElementStringAsync("ows", "Title", null, $"DroneDB WMTS — {orgSlug}/{dsSlug}");
             await w.WriteElementStringAsync("ows", "ServiceType", null, "OGC WMTS");
             await w.WriteElementStringAsync("ows", "ServiceTypeVersion", null, "1.0.0");
+            await w.WriteEndElementAsync();
+
+            // OperationsMetadata
+            await w.WriteStartElementAsync("ows", "OperationsMetadata", null);
+            foreach (var op in new[] { "GetCapabilities", "GetTile", "GetFeatureInfo" })
+                await WriteOwsOperationAsync(w, op, baseUrl);
             await w.WriteEndElementAsync();
 
             // Contents

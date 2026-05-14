@@ -74,10 +74,35 @@ public class OgcLayerCatalog : IOgcLayerCatalog
         string? folderPath = null)
     {
         var layers = await GetLayersAsync(orgSlug, dsSlug, folderPath);
-        var matches = layers.Where(l => string.Equals(l.Name, layerName, StringComparison.Ordinal)).ToList();
+        // Strip optional namespace prefix (e.g. "ddb:foo" -> "foo")
+        var localName = layerName;
+        var colon = layerName.IndexOf(':');
+        if (colon >= 0 && colon < layerName.Length - 1) localName = layerName.Substring(colon + 1);
+
+        var matches = layers.Where(l => string.Equals(l.Name, layerName, StringComparison.Ordinal)
+                                        || string.Equals(l.Name, localName, StringComparison.Ordinal)).ToList();
+        if (matches.Count == 0)
+        {
+            // Fallback: match by sanitized name (NCName-safe).
+            matches = layers.Where(l => string.Equals(SanitizeName(l.Name), localName, StringComparison.Ordinal)).ToList();
+        }
         if (matches.Count == 0) return null;
         // When multiple entries share a name (e.g. raw vs. built artifact), prefer the one with a bbox.
         return matches.FirstOrDefault(l => l.BboxWgs84 != null) ?? matches[0];
+    }
+
+    private static string SanitizeName(string name)
+    {
+        if (string.IsNullOrEmpty(name)) return "_unnamed";
+        var sb = new System.Text.StringBuilder(name.Length);
+        foreach (var c in name)
+        {
+            if (char.IsLetterOrDigit(c) || c == '_' || c == '-' || c == '.') sb.Append(c);
+            else sb.Append('_');
+        }
+        var s = sb.ToString();
+        if (!(char.IsLetter(s[0]) || s[0] == '_')) s = "_" + s;
+        return s;
     }
 
     private static double[]? ExtractBboxFromPolygon(object? polygonGeom)

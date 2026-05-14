@@ -5,6 +5,7 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using System.Xml;
+using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Caching.Distributed;
 using Microsoft.Extensions.Logging;
 using Registry.Common.Model;
@@ -31,6 +32,25 @@ public abstract class OgcManagerBase
     protected const string NsGml   = "http://www.opengis.net/gml/3.2";
     protected const string NsXlink = "http://www.w3.org/1999/xlink";
     protected const string NsXsd   = "http://www.w3.org/2001/XMLSchema";
+    protected const string NsDdb   = "http://www.dronedb.app/wfs";
+
+    /// <summary>
+    /// Sanitizes a layer name into a valid XML NCName.
+    /// Replaces invalid characters with '_' and ensures the first character is a letter or underscore.
+    /// </summary>
+    protected static string SanitizeFeatureName(string name)
+    {
+        if (string.IsNullOrEmpty(name)) return "_unnamed";
+        var sb = new System.Text.StringBuilder(name.Length);
+        foreach (var c in name)
+        {
+            if (char.IsLetterOrDigit(c) || c == '_' || c == '-' || c == '.') sb.Append(c);
+            else sb.Append('_');
+        }
+        var s = sb.ToString();
+        if (!(char.IsLetter(s[0]) || s[0] == '_')) s = "_" + s;
+        return s;
+    }
 
     protected readonly IUtils Utils;
     protected readonly IAuthManager AuthManager;
@@ -39,6 +59,7 @@ public abstract class OgcManagerBase
     protected readonly IDdbWrapper DdbWrapper;
     protected readonly IOgcLayerCatalog LayerCatalog;
     protected readonly IDistributedCache Cache;
+    protected readonly IHttpContextAccessor HttpContext;
     protected static readonly TimeSpan CacheTtl = TimeSpan.FromMinutes(5);
 
     /// <summary>XML declaration with explicit UTF-8 (matches the actual wire encoding produced by .NET strings).</summary>
@@ -52,10 +73,37 @@ public abstract class OgcManagerBase
 
     protected OgcManagerBase(IUtils utils, IAuthManager authManager, IDdbManager ddbManager,
         IBuildArtifactResolver artifacts, IDdbWrapper ddbWrapper, IOgcLayerCatalog catalog,
-        IDistributedCache cache)
+        IDistributedCache cache, IHttpContextAccessor httpContext)
     {
         Utils = utils; AuthManager = authManager; DdbManager = ddbManager;
         Artifacts = artifacts; DdbWrapper = ddbWrapper; LayerCatalog = catalog; Cache = cache;
+        HttpContext = httpContext;
+    }
+
+    /// <summary>
+    /// Builds the absolute base URL for the current OGC service endpoint, e.g.
+    /// "http://host:port/orgs/admin/ds/test-ort/wms". Falls back to a fabricated
+    /// localhost URL if there is no ambient HTTP context (e.g. unit tests).
+    /// The returned string never ends with '?' — callers append their own query string.
+    /// </summary>
+    protected string GetServiceUrl(string orgSlug, string dsSlug, string service, string? folderPath = null)
+    {
+        var ctx = HttpContext?.HttpContext;
+        string baseUrl;
+        if (ctx != null)
+        {
+            var req = ctx.Request;
+            var pathBase = req.PathBase.HasValue ? req.PathBase.Value : string.Empty;
+            baseUrl = $"{req.Scheme}://{req.Host}{pathBase}";
+        }
+        else
+        {
+            baseUrl = "http://localhost";
+        }
+        var path = $"/orgs/{orgSlug}/ds/{dsSlug}/{service}";
+        if (!string.IsNullOrEmpty(folderPath))
+            path += "/p/" + folderPath.TrimStart('/');
+        return baseUrl + path;
     }
 
     protected async Task<(Registry.Web.Data.Models.Dataset ds, IDDB ddb)> ResolveAsync(string orgSlug, string dsSlug)
@@ -99,5 +147,41 @@ public abstract class OgcManagerBase
                 $"Vector layer '{layer.Name}' has no built GPKG sidecar. Run dataset build first.",
                 404, "LAYERS");
         return gpkg;
+    }
+
+    /// <summary>
+    /// Emits a WMS <c>&lt;DCPType&gt;&lt;HTTP&gt;&lt;Get&gt;&lt;OnlineResource ... /&gt;&lt;/Get&gt;&lt;/HTTP&gt;&lt;/DCPType&gt;</c> block.
+    /// The base URL must end without a query string; ETS clients append params.
+    /// </summary>
+    protected static void WriteWmsDcp(XmlWriter w, string baseUrl)
+    {
+        w.WriteStartElement("DCPType");
+        w.WriteStartElement("HTTP");
+        w.WriteStartElement("Get");
+        w.WriteStartElement("OnlineResource");
+        w.WriteAttributeString("xmlns", "xlink", null, NsXlink);
+        w.WriteAttributeString("xlink", "type", NsXlink, "simple");
+        w.WriteAttributeString("xlink", "href", NsXlink, baseUrl + "?");
+        w.WriteEndElement(); // OnlineResource
+        w.WriteEndElement(); // Get
+        w.WriteEndElement(); // HTTP
+        w.WriteEndElement(); // DCPType
+    }
+
+    /// <summary>
+    /// Emits an OWS <c>&lt;ows:Operation name="..."&gt;</c> entry with HTTP Get binding pointing at <paramref name="baseUrl"/>.
+    /// </summary>
+    protected static async Task WriteOwsOperationAsync(XmlWriter w, string opName, string baseUrl)
+    {
+        await w.WriteStartElementAsync("ows", "Operation", null);
+        w.WriteAttributeString("name", opName);
+        await w.WriteStartElementAsync("ows", "DCP", null);
+        await w.WriteStartElementAsync("ows", "HTTP", null);
+        await w.WriteStartElementAsync("ows", "Get", null);
+        w.WriteAttributeString("xlink", "href", NsXlink, baseUrl + "?");
+        await w.WriteEndElementAsync(); // Get
+        await w.WriteEndElementAsync(); // HTTP
+        await w.WriteEndElementAsync(); // DCP
+        await w.WriteEndElementAsync(); // Operation
     }
 }

@@ -21,9 +21,19 @@ public class OgcExceptionFilter : IExceptionFilter
     public void OnException(ExceptionContext context)
     {
         // Best-effort version recovery from the originating query string.
+        // Choose a service-appropriate default when VERSION/ACCEPTVERSIONS is missing,
+        // so OWS ExceptionReport version matches the schematron of the failing service.
+        var path = context.HttpContext.Request.Path.Value ?? string.Empty;
+        string defaultVersion = "1.3.0";
+        if (path.Contains("/wfs", System.StringComparison.OrdinalIgnoreCase))
+            defaultVersion = "2.0.0";
+        else if (path.Contains("/wmts", System.StringComparison.OrdinalIgnoreCase))
+            defaultVersion = "1.0.0";
+        else if (path.Contains("/wcs", System.StringComparison.OrdinalIgnoreCase))
+            defaultVersion = "2.0.1";
         var version = OgcRequestParser.Get(context.HttpContext.Request.Query, "VERSION")
                       ?? OgcRequestParser.Get(context.HttpContext.Request.Query, "ACCEPTVERSIONS")
-                      ?? "1.3.0";
+                      ?? defaultVersion;
 
         string code;
         string message;
@@ -61,9 +71,16 @@ public class OgcExceptionFilter : IExceptionFilter
                 break;
         }
 
-        var xml = version == "1.1.1"
-            ? OgcExceptionFormatter.FormatWms111(code, message)
-            : OgcExceptionFormatter.FormatOws(code, message, version, locator);
+        // Use WMS-specific ServiceExceptionReport for /wms endpoints.
+        var isWms = path.Contains("/wms", System.StringComparison.OrdinalIgnoreCase)
+                    && !path.Contains("/wmts", System.StringComparison.OrdinalIgnoreCase);
+        string xml;
+        if (isWms && version == "1.1.1")
+            xml = OgcExceptionFormatter.FormatWms111(code, message);
+        else if (isWms)
+            xml = OgcExceptionFormatter.FormatWms130(code, message);
+        else
+            xml = OgcExceptionFormatter.FormatOws(code, message, version, locator);
 
         context.Result = new ContentResult
         {

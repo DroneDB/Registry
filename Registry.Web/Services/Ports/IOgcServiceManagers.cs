@@ -23,7 +23,14 @@ public interface IWfsManager
     Task<string> GetCapabilitiesAsync(string orgSlug, string dsSlug, string? folderPath = null);
     Task<string> DescribeFeatureTypeAsync(string orgSlug, string dsSlug, string[] typeNames);
     Task<string> GetFeatureAsync(string orgSlug, string dsSlug, string typeName,
-        double[]? bbox, string? bboxCrs, int count, int startIndex, string outputFormat);
+        double[]? bbox, string? bboxCrs, int count, int startIndex, string outputFormat,
+        string? resourceId = null, string? filterXml = null);
+    Task<string> ListStoredQueriesAsync(string orgSlug, string dsSlug);
+    Task<string> DescribeStoredQueriesAsync(string orgSlug, string dsSlug, string[] storedQueryIds);
+    Task<string> GetFeatureByIdAsync(string orgSlug, string dsSlug, string id, string outputFormat);
+    Task<string> GetPropertyValueAsync(string orgSlug, string dsSlug, string typeName,
+        string valueReference, int count, int startIndex, string outputFormat,
+        string? resourceId = null, string? filterXml = null);
 }
 
 public interface IWcsManager

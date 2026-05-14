@@ -103,8 +103,9 @@ public static class OgcRequestParser
             ? new[] { raw[1], raw[0], raw[3], raw[2] }
             : raw;
 
-        if (bbox[0] > bbox[2] || bbox[1] > bbox[3])
-            throw new OgcException("InvalidParameterValue", "BBOX min must be ≤ max", 400, "BBOX");
+        // WMS 1.3.0 Annex B.6: bbox is invalid when minx>=maxx or miny>=maxy.
+        if (bbox[0] >= bbox[2] || bbox[1] >= bbox[3])
+            throw new OgcException("InvalidParameterValue", "BBOX min must be < max", 400, "BBOX");
 
         return (bbox, crs);
     }

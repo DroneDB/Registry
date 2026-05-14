@@ -39,6 +39,30 @@ public static class OgcExceptionFormatter
         return sw.ToString();
     }
 
+    /// <summary>WMS 1.3.0 ServiceExceptionReport (namespace http://www.opengis.net/ogc).</summary>
+    public static string FormatWms130(string code, string message)
+    {
+        using var sw = new Utf8StringWriter();
+        using var w = XmlWriter.Create(sw, new XmlWriterSettings
+        {
+            Indent = true, Encoding = Encoding.UTF8, OmitXmlDeclaration = false
+        });
+        w.WriteStartDocument();
+        w.WriteStartElement("ServiceExceptionReport", "http://www.opengis.net/ogc");
+        w.WriteAttributeString("xmlns", "xsi", null, "http://www.w3.org/2001/XMLSchema-instance");
+        w.WriteAttributeString("xsi", "schemaLocation", "http://www.w3.org/2001/XMLSchema-instance",
+            "http://www.opengis.net/ogc http://schemas.opengis.net/wms/1.3.0/exceptions_1_3_0.xsd");
+        w.WriteAttributeString("version", "1.3.0");
+        w.WriteStartElement("ServiceException", "http://www.opengis.net/ogc");
+        if (!string.IsNullOrEmpty(code)) w.WriteAttributeString("code", code);
+        w.WriteString(message ?? string.Empty);
+        w.WriteEndElement();
+        w.WriteEndElement();
+        w.WriteEndDocument();
+        w.Flush();
+        return sw.ToString();
+    }
+
     public static string FormatOws(string code, string message, string version = "2.0.0", string? locator = null)
     {
         using var sw = new Utf8StringWriter();
@@ -70,6 +94,7 @@ public static class OgcExceptionFormatter
         return serviceVersion switch
         {
             "1.1.1" => FormatWms111(ex.Code, ex.Message),
+            "1.3.0" => FormatWms130(ex.Code, ex.Message),
             _ => FormatOws(ex.Code, ex.Message, serviceVersion, ex.Locator)
         };
     }
