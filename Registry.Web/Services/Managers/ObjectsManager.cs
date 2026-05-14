@@ -39,6 +39,7 @@ public class ObjectsManager : IObjectsManager
     private readonly IThumbnailGenerator _thumbnailGenerator;
     private readonly IJobIndexQuery _jobIndexQuery;
     private readonly BuildPendingService _buildPendingService;
+    private readonly IOgcLayerCatalog? _ogcLayerCatalog;
 
     private static bool IsReservedPath(string path)
     {
@@ -57,7 +58,8 @@ public class ObjectsManager : IObjectsManager
         IDdbWrapper ddbWrapper,
         IThumbnailGenerator thumbnailGenerator,
         IJobIndexQuery jobIndexQuery,
-        BuildPendingService buildPendingService)
+        BuildPendingService buildPendingService,
+        IOgcLayerCatalog? ogcLayerCatalog = null)
     {
         _logger = logger;
         _context = context;
@@ -72,7 +74,15 @@ public class ObjectsManager : IObjectsManager
         _thumbnailGenerator = thumbnailGenerator;
         _jobIndexQuery = jobIndexQuery;
         _buildPendingService = buildPendingService;
+        _ogcLayerCatalog = ogcLayerCatalog;
     }
+
+    /// <summary>
+    /// Invalidate OGC capability + layer caches for the given dataset.
+    /// Safe no-op when the OGC catalog is not wired up (e.g. unit tests).
+    /// </summary>
+    private Task InvalidateOgcAsync(string orgSlug, string dsSlug)
+        => _ogcLayerCatalog?.InvalidateAsync(orgSlug, dsSlug) ?? Task.CompletedTask;
 
     public async Task<IEnumerable<EntryDto>> List(string orgSlug, string dsSlug, string path = null,
         bool recursive = false, EntryType? type = null)
@@ -293,6 +303,9 @@ public class ObjectsManager : IObjectsManager
 
         // Invalidate dataset thumbnail cache if this file is a thumbnail candidate
         await InvalidateDatasetThumbnailCacheIfNeeded(orgSlug, dsSlug, path);
+
+        // OGC layer catalog + capabilities depend on the entry set
+        await InvalidateOgcAsync(orgSlug, dsSlug);
 
         return entry.ToDto();
     }
@@ -549,6 +562,10 @@ public class ObjectsManager : IObjectsManager
                 await InvalidateDatasetThumbnailCacheIfNeeded(sourceOrgSlug, sourceDsSlug, sourcePath);
             await InvalidateDatasetThumbnailCacheIfNeeded(destOrgSlug, destDsSlug, destPath);
 
+            if (!keepSource)
+                await InvalidateOgcAsync(sourceOrgSlug, sourceDsSlug);
+            await InvalidateOgcAsync(destOrgSlug, destDsSlug);
+
             _logger.LogInformation("Transfer OK");
         }
         catch (Exception ex)
@@ -720,6 +737,8 @@ public class ObjectsManager : IObjectsManager
         // Invalidate dataset thumbnail cache if source or dest is a thumbnail candidate
         await InvalidateDatasetThumbnailCacheIfNeeded(orgSlug, dsSlug, source);
         await InvalidateDatasetThumbnailCacheIfNeeded(orgSlug, dsSlug, dest);
+
+        await InvalidateOgcAsync(orgSlug, dsSlug);
 
         _logger.LogInformation("Move OK");
 
@@ -911,6 +930,8 @@ public class ObjectsManager : IObjectsManager
 
             await InvalidateDatasetThumbnailCacheIfNeeded(orgSlug, dsSlug, dest);
 
+            await InvalidateOgcAsync(orgSlug, dsSlug);
+
             _logger.LogInformation("Copy OK");
 
             return ddb.GetEntry(dest);
@@ -1078,6 +1099,8 @@ public class ObjectsManager : IObjectsManager
         if (paths.Any(p => IsDatasetThumbnailFile(p)))
             await InvalidateDatasetThumbnailCache(orgSlug, dsSlug);
 
+        await InvalidateOgcAsync(orgSlug, dsSlug);
+
         _logger.LogInformation("Deletion complete");
     }
 
@@ -1157,6 +1180,9 @@ public class ObjectsManager : IObjectsManager
         if (deleted.Any(IsDatasetThumbnailFile))
             await InvalidateDatasetThumbnailCache(orgSlug, dsSlug);
 
+        if (deleted.Count > 0)
+            await InvalidateOgcAsync(orgSlug, dsSlug);
+
         response.Deleted = deleted.ToArray();
         response.Failed = failed;
 
@@ -1177,6 +1203,8 @@ public class ObjectsManager : IObjectsManager
 
         // Invalidate dataset thumbnail cache before deleting everything
         await InvalidateDatasetThumbnailCache(orgSlug, dsSlug);
+
+        await InvalidateOgcAsync(orgSlug, dsSlug);
 
         _ddbManager.Delete(orgSlug, ds.InternalRef);
     }
@@ -1341,6 +1369,9 @@ public class ObjectsManager : IObjectsManager
 
         // Also invalidate dataset-level thumbnail cache (uses a different category)
         await InvalidateDatasetThumbnailCache(orgSlug, dsSlug);
+
+        // OGC layer catalog + capabilities (WMS/WMTS/WFS/WCS/OGC API)
+        await InvalidateOgcAsync(orgSlug, dsSlug);
     }
 
     public async Task<StorageDataDto> GenerateTileData(string orgSlug, string dsSlug, string path, int tz, int tx,

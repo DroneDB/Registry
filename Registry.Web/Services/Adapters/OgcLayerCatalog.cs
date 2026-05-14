@@ -24,16 +24,40 @@ public class OgcLayerCatalog : IOgcLayerCatalog
     private readonly IDdbManager _ddbManager;
     private readonly IUtils _utils;
     private readonly IDistributedCache _cache;
+    private readonly IBuildArtifactResolver _artifacts;
+    private readonly IDdbWrapper _ddbWrapper;
+    private readonly ICacheKeyScanner _keyScanner;
     private readonly ILogger<OgcLayerCatalog> _logger;
     private static readonly TimeSpan Ttl = TimeSpan.FromMinutes(5);
 
     public OgcLayerCatalog(IDdbManager ddbManager, IUtils utils, IDistributedCache cache,
+        IBuildArtifactResolver artifacts, IDdbWrapper ddbWrapper,
+        ICacheKeyScanner keyScanner,
         ILogger<OgcLayerCatalog> logger)
     {
         _ddbManager = ddbManager;
         _utils = utils;
         _cache = cache;
+        _artifacts = artifacts;
+        _ddbWrapper = ddbWrapper;
+        _keyScanner = keyScanner;
         _logger = logger;
+    }
+
+    public async Task InvalidateAsync(string orgSlug, string dsSlug)
+    {
+        if (string.IsNullOrWhiteSpace(orgSlug) || string.IsNullOrWhiteSpace(dsSlug)) return;
+        try
+        {
+            // Capabilities keys: ogc-caps-{service}-v2-{version}-{org}-{ds}-{folder}
+            await _keyScanner.RemoveByPatternAsync($"ogc-caps-*-{orgSlug}-{dsSlug}-*");
+            // Layer enumeration keys: ogc-layers-{org}-{ds}-{folder}
+            await _keyScanner.RemoveByPatternAsync($"ogc-layers-{orgSlug}-{dsSlug}-*");
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to invalidate OGC caches for {Org}/{Ds}", orgSlug, dsSlug);
+        }
     }
 
     public async Task<IReadOnlyList<OgcLayerDto>> GetLayersAsync(string orgSlug, string dsSlug, string? folderPath = null)
@@ -53,21 +77,120 @@ public class OgcLayerCatalog : IOgcLayerCatalog
             if (e == null) continue;
             if (e.Type != EntryType.GeoRaster && e.Type != EntryType.Vector) continue;
 
-            var bbox = ExtractBboxFromPolygon(e.PolygonGeometry);
-            result.Add(new OgcLayerDto
+            var entryBbox = ExtractBboxFromPolygon(e.PolygonGeometry);
+
+            if (e.Type == EntryType.Vector)
             {
-                Name = e.Path,
-                Title = e.Path,
-                EntryType = e.Type,
-                EntryPath = e.Path,
-                EntryHash = e.Hash ?? string.Empty,
-                BboxWgs84 = bbox,
-                GeometryType = e.Type == EntryType.Vector ? ExtractVectorGeometryType(e) : null
-            });
+                var expanded = TryExpandVectorLayers(ddb, e, entryBbox);
+                if (expanded != null && expanded.Count > 0)
+                {
+                    result.AddRange(expanded);
+                    continue;
+                }
+                // Fallback: single layer using entry-level metadata.
+                result.Add(new OgcLayerDto
+                {
+                    Name = e.Path,
+                    Title = e.Path,
+                    EntryType = e.Type,
+                    EntryPath = e.Path,
+                    EntryHash = e.Hash ?? string.Empty,
+                    BboxWgs84 = entryBbox,
+                    GeometryType = ExtractVectorGeometryType(e)
+                });
+            }
+            else
+            {
+                result.Add(new OgcLayerDto
+                {
+                    Name = e.Path,
+                    Title = e.Path,
+                    EntryType = e.Type,
+                    EntryPath = e.Path,
+                    EntryHash = e.Hash ?? string.Empty,
+                    BboxWgs84 = entryBbox
+                });
+            }
         }
 
         await _cache.SetRecordAsync(key, result, Ttl);
         return result;
+    }
+
+    /// <summary>
+    /// Expand a vector entry into one <see cref="OgcLayerDto"/> per inner GPKG layer
+    /// by invoking <see cref="IDdbWrapper.DescribeVector"/> on the built sidecar.
+    /// Returns null when the GPKG is missing (entry not built yet) or describe fails.
+    /// </summary>
+    private List<OgcLayerDto>? TryExpandVectorLayers(IDDB ddb, Entry e, double[]? entryBbox)
+    {
+        if (string.IsNullOrEmpty(e.Hash)) return null;
+        var gpkgPath = _artifacts.GetVectorQueryPath(ddb, e.Hash);
+        if (!_artifacts.ArtifactExists(gpkgPath)) return null;
+
+        string json;
+        try
+        {
+            json = _ddbWrapper.DescribeVector(gpkgPath);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "DescribeVector failed for {Path} ({Gpkg}); falling back to entry-level layer", e.Path, gpkgPath);
+            return null;
+        }
+
+        JToken root;
+        try { root = JToken.Parse(json); }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "DescribeVector returned invalid JSON for {Path}", e.Path);
+            return null;
+        }
+
+        var layers = root["layers"] as JArray;
+        if (layers == null || layers.Count == 0) return null;
+
+        var list = new List<OgcLayerDto>(layers.Count);
+        foreach (var l in layers)
+        {
+            var name = l["name"]?.Value<string>();
+            if (string.IsNullOrWhiteSpace(name)) continue;
+
+            var geomType = l["geometryType"]?.Value<string>();
+            var extent = l["extent"] as JArray;
+            double[]? bbox = entryBbox;
+            if (extent != null && extent.Count >= 4)
+            {
+                try
+                {
+                    bbox =
+                    [
+                        extent[0].Value<double>(),
+                        extent[1].Value<double>(),
+                        extent[2].Value<double>(),
+                        extent[3].Value<double>()
+                    ];
+                }
+                catch
+                {
+                    bbox = entryBbox;
+                }
+            }
+
+            list.Add(new OgcLayerDto
+            {
+                Name = $"{e.Path}:{name}",
+                Title = $"{e.Path}:{name}",
+                EntryType = EntryType.Vector,
+                EntryPath = e.Path,
+                EntryHash = e.Hash ?? string.Empty,
+                InnerLayerName = name,
+                BboxWgs84 = bbox,
+                GeometryType = geomType
+            });
+        }
+
+        return list.Count > 0 ? list : null;
     }
 
     public async Task<OgcLayerDto?> ResolveAsync(string orgSlug, string dsSlug, string layerName,
@@ -84,7 +207,15 @@ public class OgcLayerCatalog : IOgcLayerCatalog
         if (matches.Count == 0)
         {
             // Fallback: match by sanitized name (NCName-safe).
-            matches = layers.Where(l => string.Equals(SanitizeName(l.Name), localName, StringComparison.Ordinal)).ToList();
+            matches = layers.Where(l => string.Equals(SanitizeName(l.Name), localName, StringComparison.Ordinal)
+                                        || string.Equals(SanitizeName(l.Name), SanitizeName(layerName), StringComparison.Ordinal)).ToList();
+        }
+        if (matches.Count == 0)
+        {
+            // Fallback: when the client asks for the bare entry path of a multi-layer vector,
+            // resolve to the first inner layer so legacy single-layer URLs keep working.
+            matches = layers.Where(l => string.Equals(l.EntryPath, layerName, StringComparison.Ordinal)
+                                        || string.Equals(l.EntryPath, localName, StringComparison.Ordinal)).ToList();
         }
         if (matches.Count == 0) return null;
         // When multiple entries share a name (e.g. raw vs. built artifact), prefer the one with a bbox.
