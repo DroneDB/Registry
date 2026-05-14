@@ -74,7 +74,10 @@ public class OgcLayerCatalog : IOgcLayerCatalog
         string? folderPath = null)
     {
         var layers = await GetLayersAsync(orgSlug, dsSlug, folderPath);
-        return layers.FirstOrDefault(l => string.Equals(l.Name, layerName, StringComparison.Ordinal));
+        var matches = layers.Where(l => string.Equals(l.Name, layerName, StringComparison.Ordinal)).ToList();
+        if (matches.Count == 0) return null;
+        // When multiple entries share a name (e.g. raw vs. built artifact), prefer the one with a bbox.
+        return matches.FirstOrDefault(l => l.BboxWgs84 != null) ?? matches[0];
     }
 
     private static double[]? ExtractBboxFromPolygon(object? polygonGeom)
@@ -83,6 +86,12 @@ public class OgcLayerCatalog : IOgcLayerCatalog
         try
         {
             var token = polygonGeom as JToken ?? JToken.FromObject(polygonGeom);
+            // Support GeoJSON Feature: unwrap to geometry
+            var typeStr = token["type"]?.Value<string>();
+            if (string.Equals(typeStr, "Feature", StringComparison.OrdinalIgnoreCase))
+            {
+                token = token["geometry"] ?? token;
+            }
             var coords = token["coordinates"];
             if (coords == null || coords.Type != JTokenType.Array) return null;
             // GeoJSON Polygon coordinates: [ [ [lon,lat], [lon,lat], ... ] ]
@@ -101,7 +110,7 @@ public class OgcLayerCatalog : IOgcLayerCatalog
                 if (lat > maxLat) maxLat = lat;
             }
             if (minLon == double.MaxValue) return null;
-            return new[] { minLon, minLat, maxLon, maxLat };
+            return [minLon, minLat, maxLon, maxLat];
         }
         catch
         {

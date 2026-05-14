@@ -23,6 +23,15 @@ namespace Registry.Web.Services.Managers;
 /// </summary>
 public abstract class OgcManagerBase
 {
+    // OGC / W3C namespace URIs — single source of truth for all derived managers.
+    protected const string NsWms   = "http://www.opengis.net/wms";
+    protected const string NsWfs   = "http://www.opengis.net/wfs/2.0";
+    protected const string NsWmts  = "http://www.opengis.net/wmts/1.0";
+    protected const string NsOws   = "http://www.opengis.net/ows/1.1";
+    protected const string NsGml   = "http://www.opengis.net/gml/3.2";
+    protected const string NsXlink = "http://www.w3.org/1999/xlink";
+    protected const string NsXsd   = "http://www.w3.org/2001/XMLSchema";
+
     protected readonly IUtils Utils;
     protected readonly IAuthManager AuthManager;
     protected readonly IDdbManager DdbManager;
@@ -31,6 +40,15 @@ public abstract class OgcManagerBase
     protected readonly IOgcLayerCatalog LayerCatalog;
     protected readonly IDistributedCache Cache;
     protected static readonly TimeSpan CacheTtl = TimeSpan.FromMinutes(5);
+
+    /// <summary>XML declaration with explicit UTF-8 (matches the actual wire encoding produced by .NET strings).</summary>
+    protected const string Utf8XmlDecl = "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n";
+
+    /// <summary>Creates a reusable indented <see cref="XmlWriter"/> over the given <paramref name="sb"/>.
+    /// The XML declaration is omitted; callers must prepend <see cref="Utf8XmlDecl"/> so the wire
+    /// XML correctly reports utf-8 (StringBuilder is UTF-16 internally).</summary>
+    protected static XmlWriter CreateXmlWriter(StringBuilder sb) =>
+        XmlWriter.Create(sb, new XmlWriterSettings { Indent = true, Async = true, OmitXmlDeclaration = true });
 
     protected OgcManagerBase(IUtils utils, IAuthManager authManager, IDdbManager ddbManager,
         IBuildArtifactResolver artifacts, IDdbWrapper ddbWrapper, IOgcLayerCatalog catalog,

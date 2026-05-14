@@ -4,6 +4,7 @@ using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Text;
+using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using System.Xml;
 using Microsoft.Extensions.Caching.Distributed;
@@ -45,18 +46,16 @@ public class WmsManager : OgcManagerBase, IWmsManager
         var totalBbox = AggregateBbox(rasterLayers);
 
         var sb = new StringBuilder();
-        using (var w = XmlWriter.Create(sb, new XmlWriterSettings { Indent = true }))
+        await using (var w = CreateXmlWriter(sb))
         {
-            w.WriteStartDocument();
-            w.WriteStartElement("WMS_Capabilities");
+            await w.WriteStartElementAsync(null, "WMS_Capabilities", NsWms);
             w.WriteAttributeString("version", version);
-            w.WriteAttributeString("xmlns", "http://www.opengis.net/wms");
-            w.WriteAttributeString("xmlns", "xlink", null, "http://www.w3.org/1999/xlink");
+            await w.WriteAttributeStringAsync("xmlns", "xlink", null, NsXlink);
 
             w.WriteStartElement("Service");
             w.WriteElementString("Name", "WMS");
             w.WriteElementString("Title", $"DroneDB WMS — {orgSlug}/{dsSlug}");
-            w.WriteEndElement();
+            await w.WriteEndElementAsync();
 
             w.WriteStartElement("Capability");
             w.WriteStartElement("Request");
@@ -64,13 +63,13 @@ public class WmsManager : OgcManagerBase, IWmsManager
             {
                 w.WriteStartElement(req);
                 w.WriteElementString("Format", req == "GetMap" ? "image/png" : "text/xml");
-                w.WriteEndElement();
+                await w.WriteEndElementAsync();
             }
-            w.WriteEndElement(); // Request
+            await w.WriteEndElementAsync(); // Request
 
             w.WriteStartElement("Exception");
             w.WriteElementString("Format", "XML");
-            w.WriteEndElement();
+            await w.WriteEndElementAsync();
 
             // Aggregated root layer
             w.WriteStartElement("Layer");
@@ -98,17 +97,17 @@ public class WmsManager : OgcManagerBase, IWmsManager
                     w.WriteStartElement("Style");
                     w.WriteElementString("Name", styleName);
                     w.WriteElementString("Title", styleName == "default" ? "Default natural color" : styleName);
-                    w.WriteEndElement();
+                    await w.WriteEndElementAsync();
                 }
-                w.WriteEndElement();
+                await w.WriteEndElementAsync();
             }
-            w.WriteEndElement(); // root Layer
-            w.WriteEndElement(); // Capability
-            w.WriteEndElement(); // WMS_Capabilities
-            w.WriteEndDocument();
+            await w.WriteEndElementAsync(); // root Layer
+            await w.WriteEndElementAsync(); // Capability
+            await w.WriteEndElementAsync(); // WMS_Capabilities
+            await w.WriteEndDocumentAsync();
         }
 
-        var xml = sb.ToString();
+        var xml = Utf8XmlDecl + Regex.Replace(sb.ToString(), @"^\s*<\?xml[^?]*\?>\s*", "");
         await Cache.SetRecordAsync(key, xml, CacheTtl);
         return xml;
     }
@@ -130,7 +129,6 @@ public class WmsManager : OgcManagerBase, IWmsManager
             w.WriteAttributeString("miny", Fmt(bbox[0]));
             w.WriteAttributeString("maxx", Fmt(bbox[3]));
             w.WriteAttributeString("maxy", Fmt(bbox[2]));
-            w.WriteEndElement();
         }
         else
         {
@@ -139,8 +137,9 @@ public class WmsManager : OgcManagerBase, IWmsManager
             w.WriteAttributeString("miny", Fmt(bbox[1]));
             w.WriteAttributeString("maxx", Fmt(bbox[2]));
             w.WriteAttributeString("maxy", Fmt(bbox[3]));
-            w.WriteEndElement();
         }
+
+        w.WriteEndElement();
     }
 
     private static string Fmt(double v) => v.ToString("R", CultureInfo.InvariantCulture);
@@ -183,7 +182,7 @@ public class WmsManager : OgcManagerBase, IWmsManager
 
                 var src = ResolveRasterArtifact(ddb, layer);
                 var style = (styles != null && idx < styles.Length) ? styles[idx] : "";
-                byte[] layerBytes = IsSpectralIndex(style)
+                var layerBytes = IsSpectralIndex(style)
                     ? DdbWrapper.RenderRasterIndex(src, style.ToUpperInvariant(), bbox, crs, width, height, "image/png")
                     : DdbWrapper.RenderRasterRegion(src, bbox, crs, width, height, "image/png");
 
@@ -287,43 +286,42 @@ public class WfsManager : OgcManagerBase, IWfsManager
         var vectorLayers = layers.Where(l => l.EntryType == EntryType.Vector).ToList();
 
         var sb = new StringBuilder();
-        using (var w = XmlWriter.Create(sb, new XmlWriterSettings { Indent = true }))
+        await using (var w = CreateXmlWriter(sb))
         {
-            w.WriteStartDocument();
-            w.WriteStartElement("wfs", "WFS_Capabilities", "http://www.opengis.net/wfs/2.0");
-            w.WriteAttributeString("xmlns", "ows", null, "http://www.opengis.net/ows/1.1");
-            w.WriteAttributeString("xmlns", "gml", null, "http://www.opengis.net/gml/3.2");
+            await w.WriteStartElementAsync("wfs", "WFS_Capabilities", NsWfs);
+            await w.WriteAttributeStringAsync("xmlns", "ows", null, NsOws);
+            await w.WriteAttributeStringAsync("xmlns", "gml", null, NsGml);
             w.WriteAttributeString("version", "2.0.0");
 
-            w.WriteStartElement("ows", "ServiceIdentification", null);
-            w.WriteElementString("ows", "Title", null, $"DroneDB WFS — {orgSlug}/{dsSlug}");
-            w.WriteElementString("ows", "ServiceType", null, "WFS");
-            w.WriteElementString("ows", "ServiceTypeVersion", null, "2.0.0");
-            w.WriteEndElement();
+            await w.WriteStartElementAsync("ows", "ServiceIdentification", null);
+            await w.WriteElementStringAsync("ows", "Title", null, $"DroneDB WFS — {orgSlug}/{dsSlug}");
+            await w.WriteElementStringAsync("ows", "ServiceType", null, "WFS");
+            await w.WriteElementStringAsync("ows", "ServiceTypeVersion", null, "2.0.0");
+            await w.WriteEndElementAsync();
 
-            w.WriteStartElement("FeatureTypeList");
+            w.WriteStartElement("wfs", "FeatureTypeList", NsWfs);
             foreach (var l in vectorLayers)
             {
-                w.WriteStartElement("FeatureType");
-                w.WriteElementString("Name", l.Name);
-                w.WriteElementString("Title", l.Title);
-                w.WriteElementString("DefaultCRS", "urn:ogc:def:crs:EPSG::4326");
+                w.WriteStartElement("wfs", "FeatureType", NsWfs);
+                w.WriteElementString("wfs", "Name", NsWfs, l.Name);
+                w.WriteElementString("wfs", "Title", NsWfs, l.Title);
+                w.WriteElementString("wfs", "DefaultCRS", NsWfs, "urn:ogc:def:crs:EPSG::4326");
                 if (l.BboxWgs84 != null)
                 {
-                    w.WriteStartElement("ows", "WGS84BoundingBox", null);
-                    w.WriteElementString("ows", "LowerCorner", null,
+                    await w.WriteStartElementAsync("ows", "WGS84BoundingBox", null);
+                    await w.WriteElementStringAsync("ows", "LowerCorner", null,
                         FormattableString.Invariant($"{l.BboxWgs84[0]} {l.BboxWgs84[1]}"));
-                    w.WriteElementString("ows", "UpperCorner", null,
+                    await w.WriteElementStringAsync("ows", "UpperCorner", null,
                         FormattableString.Invariant($"{l.BboxWgs84[2]} {l.BboxWgs84[3]}"));
-                    w.WriteEndElement();
+                    await w.WriteEndElementAsync();
                 }
-                w.WriteEndElement();
+                await w.WriteEndElementAsync();
             }
-            w.WriteEndElement();
-            w.WriteEndElement();
-            w.WriteEndDocument();
+            await w.WriteEndElementAsync();
+            await w.WriteEndElementAsync();
+            await w.WriteEndDocumentAsync();
         }
-        var xml = sb.ToString();
+        var xml = Utf8XmlDecl + Regex.Replace(sb.ToString(), @"^\s*<\?xml[^?]*\?>\s*", "");
         await Cache.SetRecordAsync(key, xml, CacheTtl);
         return xml;
     }
@@ -333,10 +331,9 @@ public class WfsManager : OgcManagerBase, IWfsManager
         var (ds, ddb) = await ResolveAsync(orgSlug, dsSlug);
 
         var sb = new StringBuilder();
-        using var w = XmlWriter.Create(sb, new XmlWriterSettings { Indent = true });
-        w.WriteStartDocument();
-        w.WriteStartElement("xsd", "schema", "http://www.w3.org/2001/XMLSchema");
-        w.WriteAttributeString("xmlns", "gml", null, "http://www.opengis.net/gml/3.2");
+        await using var w = CreateXmlWriter(sb);
+        await w.WriteStartElementAsync("xsd", "schema", NsXsd);
+        await w.WriteAttributeStringAsync("xmlns", "gml", null, NsGml);
         w.WriteAttributeString("elementFormDefault", "qualified");
 
         foreach (var name in typeNames ?? Array.Empty<string>())
@@ -355,18 +352,18 @@ public class WfsManager : OgcManagerBase, IWfsManager
             foreach (var ld in layers.OfType<JObject>())
             {
                 var lname = ld["name"]?.Value<string>() ?? name;
-                w.WriteStartElement("xsd", "complexType", null);
+                await w.WriteStartElementAsync("xsd", "complexType", null);
                 w.WriteAttributeString("name", $"{lname}Type");
-                w.WriteStartElement("xsd", "complexContent", null);
-                w.WriteStartElement("xsd", "extension", null);
+                await w.WriteStartElementAsync("xsd", "complexContent", null);
+                await w.WriteStartElementAsync("xsd", "extension", null);
                 w.WriteAttributeString("base", "gml:AbstractFeatureType");
-                w.WriteStartElement("xsd", "sequence", null);
+                await w.WriteStartElementAsync("xsd", "sequence", null);
 
-                w.WriteStartElement("xsd", "element", null);
+                await w.WriteStartElementAsync("xsd", "element", null);
                 w.WriteAttributeString("name", "geom");
                 w.WriteAttributeString("type", "gml:GeometryPropertyType");
                 w.WriteAttributeString("minOccurs", "0");
-                w.WriteEndElement();
+                await w.WriteEndElementAsync();
 
                 if (ld["fields"] is JArray fields)
                 {
@@ -382,24 +379,25 @@ public class WfsManager : OgcManagerBase, IWfsManager
                             "datetime" or "date" => "xsd:dateTime",
                             _ => "xsd:string"
                         };
-                        w.WriteStartElement("xsd", "element", null);
+                        await w.WriteStartElementAsync("xsd", "element", null);
                         w.WriteAttributeString("name", fname);
                         w.WriteAttributeString("type", xsdType);
                         w.WriteAttributeString("minOccurs", "0");
-                        w.WriteEndElement();
+                        await w.WriteEndElementAsync();
                     }
                 }
 
-                w.WriteEndElement();
-                w.WriteEndElement();
-                w.WriteEndElement();
-                w.WriteEndElement();
+                await w.WriteEndElementAsync();
+                await w.WriteEndElementAsync();
+                await w.WriteEndElementAsync();
+                await w.WriteEndElementAsync();
             }
         }
 
-        w.WriteEndElement();
-        w.WriteEndDocument();
-        return sb.ToString();
+        await w.WriteEndElementAsync();
+        await w.WriteEndDocumentAsync();
+        await w.FlushAsync();
+        return Utf8XmlDecl + Regex.Replace(sb.ToString(), @"^\s*<\?xml[^?]*\?>\s*", "");
     }
 
     public async Task<string> GetFeatureAsync(string orgSlug, string dsSlug, string typeName,

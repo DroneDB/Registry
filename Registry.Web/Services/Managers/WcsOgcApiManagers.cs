@@ -4,6 +4,7 @@ using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Text;
+using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using System.Xml;
 using Microsoft.Extensions.Caching.Distributed;
@@ -40,26 +41,26 @@ public class WcsManager : OgcManagerBase, IWcsManager
 
         await ResolveAsync(orgSlug, dsSlug);
         var layers = (await LayerCatalog.GetLayersAsync(orgSlug, dsSlug, folderPath))
-            .Where(l => l.EntryType == EntryType.GeoRaster).ToList();
+            .Where(l => l.EntryType == EntryType.GeoRaster && l.BboxWgs84 != null).ToList();
 
         var sb = new StringBuilder();
-        using var w = XmlWriter.Create(sb, new XmlWriterSettings { Indent = true });
-        w.WriteStartDocument();
-        w.WriteStartElement("wcs", "Capabilities", "http://www.opengis.net/wcs/2.0");
-        w.WriteAttributeString("xmlns", "ows", null, "http://www.opengis.net/ows/2.0");
+        await using var w = XmlWriter.Create(sb, new XmlWriterSettings { Indent = true, Async = true, OmitXmlDeclaration = true });
+        await w.WriteStartElementAsync("wcs", "Capabilities", "http://www.opengis.net/wcs/2.0");
+        await w.WriteAttributeStringAsync("xmlns", "ows", null, "http://www.opengis.net/ows/2.0");
         w.WriteAttributeString("version", "2.0.1");
-        w.WriteStartElement("wcs", "Contents", null);
+        await w.WriteStartElementAsync("wcs", "Contents", null);
         foreach (var l in layers)
         {
-            w.WriteStartElement("wcs", "CoverageSummary", null);
-            w.WriteElementString("wcs", "CoverageId", null, EncodeId(l.Name));
-            w.WriteElementString("wcs", "CoverageSubtype", null, "RectifiedGridCoverage");
-            w.WriteEndElement();
+            await w.WriteStartElementAsync("wcs", "CoverageSummary", null);
+            await w.WriteElementStringAsync("wcs", "CoverageId", null, EncodeId(l.Name));
+            await w.WriteElementStringAsync("wcs", "CoverageSubtype", null, "RectifiedGridCoverage");
+            await w.WriteEndElementAsync();
         }
-        w.WriteEndElement();
-        w.WriteEndElement();
-        w.WriteEndDocument();
-        var xml = sb.ToString();
+        await w.WriteEndElementAsync();
+        await w.WriteEndElementAsync();
+        await w.WriteEndDocumentAsync();
+        await w.FlushAsync();
+        var xml = Utf8XmlDecl + Regex.Replace(sb.ToString(), @"^\s*<\?xml[^?]*\?>\s*", "");
         await Cache.SetRecordAsync(key, xml, CacheTtl);
         return xml;
     }
@@ -72,10 +73,9 @@ public class WcsManager : OgcManagerBase, IWcsManager
                     ?? throw new OgcException("NoSuchCoverage", $"Coverage '{coverageId}' not found", 404);
 
         var sb = new StringBuilder();
-        using var w = XmlWriter.Create(sb, new XmlWriterSettings { Indent = true });
-        w.WriteStartDocument();
-        w.WriteStartElement("wcs", "CoverageDescriptions", "http://www.opengis.net/wcs/2.0");
-        w.WriteStartElement("wcs", "CoverageDescription", null);
+        await using var w = XmlWriter.Create(sb, new XmlWriterSettings { Indent = true, Async = true, OmitXmlDeclaration = true });
+        await w.WriteStartElementAsync("wcs", "CoverageDescriptions", "http://www.opengis.net/wcs/2.0");
+        await w.WriteStartElementAsync("wcs", "CoverageDescription", null);
         w.WriteAttributeString("id", coverageId);
         if (layer.BboxWgs84 != null)
         {
@@ -86,13 +86,14 @@ public class WcsManager : OgcManagerBase, IWcsManager
                 FormattableString.Invariant($"{layer.BboxWgs84[0]} {layer.BboxWgs84[1]}"));
             w.WriteElementString("upperCorner",
                 FormattableString.Invariant($"{layer.BboxWgs84[2]} {layer.BboxWgs84[3]}"));
-            w.WriteEndElement();
-            w.WriteEndElement();
+            await w.WriteEndElementAsync();
+            await w.WriteEndElementAsync();
         }
-        w.WriteEndElement();
-        w.WriteEndElement();
-        w.WriteEndDocument();
-        return sb.ToString();
+        await w.WriteEndElementAsync();
+        await w.WriteEndElementAsync();
+        await w.WriteEndDocumentAsync();
+        await w.FlushAsync();
+        return Utf8XmlDecl + Regex.Replace(sb.ToString(), @"^\s*<\?xml[^?]*\?>\s*", "");
     }
 
     public async Task<byte[]> GetCoverageAsync(string orgSlug, string dsSlug, string coverageId,

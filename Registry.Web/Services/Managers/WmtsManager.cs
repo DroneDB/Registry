@@ -4,6 +4,7 @@ using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Text;
+using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using System.Xml;
 using Microsoft.Extensions.Caching.Distributed;
@@ -44,59 +45,58 @@ public class WmtsManager : OgcManagerBase, IWmtsManager
         var layers = await LayerCatalog.GetLayersAsync(orgSlug, dsSlug, folderPath);
 
         var sb = new StringBuilder();
-        using (var w = XmlWriter.Create(sb, new XmlWriterSettings { Indent = true }))
+        await using (var w = CreateXmlWriter(sb))
         {
-            w.WriteStartDocument();
-            w.WriteStartElement("Capabilities", "http://www.opengis.net/wmts/1.0");
-            w.WriteAttributeString("xmlns", "ows", null, "http://www.opengis.net/ows/1.1");
-            w.WriteAttributeString("xmlns", "xlink", null, "http://www.w3.org/1999/xlink");
+            w.WriteStartElement("Capabilities", NsWmts);
+            await w.WriteAttributeStringAsync("xmlns", "ows", null, NsOws);
+            await w.WriteAttributeStringAsync("xmlns", "xlink", null, NsXlink);
             w.WriteAttributeString("version", "1.0.0");
 
             // ServiceIdentification
-            w.WriteStartElement("ows", "ServiceIdentification", null);
-            w.WriteElementString("ows", "Title", null, $"DroneDB WMTS — {orgSlug}/{dsSlug}");
-            w.WriteElementString("ows", "ServiceType", null, "OGC WMTS");
-            w.WriteElementString("ows", "ServiceTypeVersion", null, "1.0.0");
-            w.WriteEndElement();
+            await w.WriteStartElementAsync("ows", "ServiceIdentification", null);
+            await w.WriteElementStringAsync("ows", "Title", null, $"DroneDB WMTS — {orgSlug}/{dsSlug}");
+            await w.WriteElementStringAsync("ows", "ServiceType", null, "OGC WMTS");
+            await w.WriteElementStringAsync("ows", "ServiceTypeVersion", null, "1.0.0");
+            await w.WriteEndElementAsync();
 
             // Contents
             w.WriteStartElement("Contents");
             foreach (var layer in layers)
             {
                 w.WriteStartElement("Layer");
-                w.WriteElementString("ows", "Title", null, layer.Title);
-                w.WriteElementString("ows", "Identifier", null, layer.Name);
+                await w.WriteElementStringAsync("ows", "Title", null, layer.Title);
+                await w.WriteElementStringAsync("ows", "Identifier", null, layer.Name);
                 if (layer.BboxWgs84 != null)
                 {
-                    w.WriteStartElement("ows", "WGS84BoundingBox", null);
-                    w.WriteElementString("ows", "LowerCorner", null,
+                    await w.WriteStartElementAsync("ows", "WGS84BoundingBox", null);
+                    await w.WriteElementStringAsync("ows", "LowerCorner", null,
                         FormattableString.Invariant($"{layer.BboxWgs84[0]} {layer.BboxWgs84[1]}"));
-                    w.WriteElementString("ows", "UpperCorner", null,
+                    await w.WriteElementStringAsync("ows", "UpperCorner", null,
                         FormattableString.Invariant($"{layer.BboxWgs84[2]} {layer.BboxWgs84[3]}"));
-                    w.WriteEndElement();
+                    await w.WriteEndElementAsync();
                 }
                 w.WriteStartElement("Style");
                 w.WriteAttributeString("isDefault", "true");
-                w.WriteElementString("ows", "Identifier", null, "default");
-                w.WriteEndElement();
+                await w.WriteElementStringAsync("ows", "Identifier", null, "default");
+                await w.WriteEndElementAsync();
                 w.WriteElementString("Format",
                     layer.EntryType == EntryType.Vector
                         ? "application/vnd.mapbox-vector-tile"
                         : "image/png");
                 w.WriteStartElement("TileMatrixSetLink");
                 w.WriteElementString("TileMatrixSet", "GoogleMapsCompatible");
-                w.WriteEndElement();
-                w.WriteEndElement(); // Layer
+                await w.WriteEndElementAsync();
+                await w.WriteEndElementAsync(); // Layer
             }
 
             WriteGoogleMapsCompatible(w);
-            w.WriteEndElement(); // Contents
+            await w.WriteEndElementAsync(); // Contents
 
-            w.WriteEndElement(); // Capabilities
-            w.WriteEndDocument();
+            await w.WriteEndElementAsync(); // Capabilities
+            await w.WriteEndDocumentAsync();
         }
 
-        var xml = sb.ToString();
+        var xml = Utf8XmlDecl + Regex.Replace(sb.ToString(), @"^\s*<\?xml[^?]*\?>\s*", "");
         await Cache.SetRecordAsync(key, xml, CacheTtl);
         return xml;
     }
@@ -106,7 +106,7 @@ public class WmtsManager : OgcManagerBase, IWmtsManager
         w.WriteStartElement("TileMatrixSet");
         w.WriteElementString("ows", "Identifier", null, "GoogleMapsCompatible");
         w.WriteElementString("ows", "SupportedCRS", null, "urn:ogc:def:crs:EPSG::3857");
-        var initialScale = 559082264.0287178;
+        const double initialScale = 559082264.0287178;
         for (var z = 0; z <= 18; z++)
         {
             var scale = initialScale / Math.Pow(2, z);

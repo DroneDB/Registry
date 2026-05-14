@@ -13,9 +13,15 @@ public static class OgcExceptionFormatter
 {
     public const string ContentType = "text/xml; charset=utf-8";
 
+    /// <summary>StringWriter that reports UTF-8 encoding so XmlWriter declares encoding="utf-8".</summary>
+    private sealed class Utf8StringWriter : StringWriter
+    {
+        public override Encoding Encoding => Encoding.UTF8;
+    }
+
     public static string FormatWms111(string code, string message)
     {
-        using var sw = new StringWriter();
+        using var sw = new Utf8StringWriter();
         using var w = XmlWriter.Create(sw, new XmlWriterSettings
         {
             Indent = true, Encoding = Encoding.UTF8, OmitXmlDeclaration = false
@@ -35,7 +41,7 @@ public static class OgcExceptionFormatter
 
     public static string FormatOws(string code, string message, string version = "2.0.0", string? locator = null)
     {
-        using var sw = new StringWriter();
+        using var sw = new Utf8StringWriter();
         using var w = XmlWriter.Create(sw, new XmlWriterSettings
         {
             Indent = true, Encoding = Encoding.UTF8, OmitXmlDeclaration = false

@@ -76,6 +76,8 @@ public class WmtsController : ControllerBaseEx
             "webp" => "image/webp",
             _ => "image/png"
         };
+        // Route values may arrive percent-encoded when the layer identifier contains '/' (e.g. "folder%2Ffile.shp").
+        layer = Uri.UnescapeDataString(layer);
         var bytes = await _mgr.GetTileAsync(orgSlug, dsSlug, layer, tms, z, x, y, format);
         return File(bytes, format);
     }
