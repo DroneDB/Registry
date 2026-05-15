@@ -53,7 +53,7 @@ RUN apt-get update \
         libxext6 \
         libxrender1 \
         zlib1g \
-    && curl -sSL https://dot.net/v1/dotnet-install.sh | bash /dev/stdin --channel 9.0 --runtime aspnetcore \
+    && curl -sSL https://dot.net/v1/dotnet-install.sh | bash /dev/stdin --channel 10.0 --runtime aspnetcore \
     && LATEST_RELEASE_URL=$(curl -s https://api.github.com/repos/DroneDB/DroneDB/releases/latest | grep "browser_download_url.*deb" | head -n 1 | cut -d '"' -f 4) \
     && echo "Downloading DroneDB from $LATEST_RELEASE_URL" \
     && curl -L -o dronedb.deb "$LATEST_RELEASE_URL" \
