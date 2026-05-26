@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Filters;
 using Microsoft.Extensions.Logging;
+using Registry.Adapters.DroneDB;
 using Registry.Web.Exceptions;
 
 namespace Registry.Web.Utilities.Ogc;
@@ -20,20 +21,29 @@ public class OgcExceptionFilter : IExceptionFilter
 
     public void OnException(ExceptionContext context)
     {
-        // Best-effort version recovery from the originating query string.
-        // Choose a service-appropriate default when VERSION/ACCEPTVERSIONS is missing,
-        // so OWS ExceptionReport version matches the schematron of the failing service.
         var path = context.HttpContext.Request.Path.Value ?? string.Empty;
-        string defaultVersion = "1.3.0";
-        if (path.Contains("/wfs", System.StringComparison.OrdinalIgnoreCase))
-            defaultVersion = "2.0.0";
-        else if (path.Contains("/wmts", System.StringComparison.OrdinalIgnoreCase))
-            defaultVersion = "1.0.0";
-        else if (path.Contains("/wcs", System.StringComparison.OrdinalIgnoreCase))
-            defaultVersion = "2.0.1";
-        var version = OgcRequestParser.Get(context.HttpContext.Request.Query, "VERSION")
-                      ?? OgcRequestParser.Get(context.HttpContext.Request.Query, "ACCEPTVERSIONS")
-                      ?? defaultVersion;
+        var query = context.HttpContext.Request.Query;
+
+        // Determine service from path. /wmts must be matched BEFORE /wms to avoid prefix collision.
+        var isWmts = path.Contains("/wmts", System.StringComparison.OrdinalIgnoreCase);
+        var isWms  = !isWmts && path.Contains("/wms", System.StringComparison.OrdinalIgnoreCase);
+        var isWfs  = path.Contains("/wfs", System.StringComparison.OrdinalIgnoreCase);
+        var isWcs  = path.Contains("/wcs", System.StringComparison.OrdinalIgnoreCase);
+
+        // Negotiate version per service so the ExceptionReport schema matches.
+        var requested = OgcRequestParser.Get(query, "VERSION")
+                        ?? OgcRequestParser.Get(query, "ACCEPTVERSIONS");
+        string version;
+        if (isWms)
+            version = OgcRequestParser.NegotiateWmsVersion(requested);
+        else if (isWfs)
+            version = string.IsNullOrWhiteSpace(requested) ? "2.0.0" : requested!;
+        else if (isWmts)
+            version = string.IsNullOrWhiteSpace(requested) ? "1.0.0" : requested!;
+        else if (isWcs)
+            version = string.IsNullOrWhiteSpace(requested) ? "2.0.1" : requested!;
+        else
+            version = string.IsNullOrWhiteSpace(requested) ? "1.3.0" : requested!;
 
         string code;
         string message;
@@ -63,17 +73,46 @@ public class OgcExceptionFilter : IExceptionFilter
                 message = uex.Message;
                 status = 401;
                 break;
+            case ConflictException cex:
+                code = "Conflict";
+                message = cex.Message;
+                status = 409;
+                break;
+            case DdbException dex:
+                // DroneDB native errors surface here. Map missing-dependency / build-in-progress
+                // patterns from the message; otherwise return 500 with the original message
+                // (avoids leaking implementation details while preserving diagnostic info).
+                var msg = dex.Message ?? string.Empty;
+                if (msg.Contains("BUILDDEPMISSING", System.StringComparison.OrdinalIgnoreCase)
+                    || msg.Contains("dependency missing", System.StringComparison.OrdinalIgnoreCase))
+                {
+                    code = "ServiceUnavailable";
+                    message = "Required build artifact is missing; rebuild the dataset and retry.";
+                    status = 503;
+                }
+                else if (msg.Contains("BUILDINPROGRESS", System.StringComparison.OrdinalIgnoreCase)
+                         || msg.Contains("build in progress", System.StringComparison.OrdinalIgnoreCase))
+                {
+                    code = "ServiceUnavailable";
+                    message = "Dataset build is currently in progress; retry shortly.";
+                    status = 503;
+                }
+                else
+                {
+                    _logger.LogWarning(dex, "DroneDB error in OGC pipeline: {Path}", path);
+                    code = "NoApplicableCode";
+                    message = msg.Length == 0 ? "DroneDB error" : msg;
+                    status = 500;
+                }
+                break;
             default:
-                _logger.LogError(context.Exception, "Unhandled exception in OGC pipeline");
+                _logger.LogError(context.Exception, "Unhandled exception in OGC pipeline: {Path}", path);
                 code = "NoApplicableCode";
                 message = "Internal server error";
                 status = 500;
                 break;
         }
 
-        // Use WMS-specific ServiceExceptionReport for /wms endpoints.
-        var isWms = path.Contains("/wms", System.StringComparison.OrdinalIgnoreCase)
-                    && !path.Contains("/wmts", System.StringComparison.OrdinalIgnoreCase);
         string xml;
         if (isWms && version == "1.1.1")
             xml = OgcExceptionFormatter.FormatWms111(code, message);

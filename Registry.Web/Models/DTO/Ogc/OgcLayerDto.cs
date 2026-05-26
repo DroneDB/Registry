@@ -23,6 +23,17 @@ public class OgcLayerDto
     public string[] SupportedCrs { get; set; } = { "EPSG:4326", "EPSG:3857", "CRS:84" };
     /// <summary>Vector-only: OGR geometry type name (Point/LineString/Polygon/...).</summary>
     public string? GeometryType { get; set; }
+
+    /// <summary>
+    /// Raster-only: true when the underlying raster has &gt;3 effective bands or carries
+    /// non-RGBA colour interpretations (typical of agricultural multispectral cameras).
+    /// Server-defined spectral styles (NDVI/NDRE/NDWI/EVI/SAVI) and spectral indexes
+    /// in Capabilities are only advertised / accepted when this flag is true.
+    /// </summary>
+    public bool IsMultispectral { get; set; }
+
+    /// <summary>Raster-only: number of bands reported by the underlying dataset (0 when unknown).</summary>
+    public int BandCount { get; set; }
 }
 
 public class OgcBoundingBoxDto

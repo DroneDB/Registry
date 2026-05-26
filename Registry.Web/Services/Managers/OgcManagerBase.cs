@@ -108,6 +108,9 @@ public abstract class OgcManagerBase
 
     protected async Task<(Registry.Web.Data.Models.Dataset ds, IDDB ddb)> ResolveAsync(string orgSlug, string dsSlug)
     {
+        // Note: OgcAuthorizationFilter (applied at controller level) already enforces
+        // AccessType.Read and returns OGC XML on failure. The check below remains as
+        // defense-in-depth in case a manager is invoked outside the OGC controllers.
         var ds = Utils.GetDataset(orgSlug, dsSlug);
         if (!await AuthManager.RequestAccess(ds, AccessType.Read))
             throw new UnauthorizedException("Read access denied");

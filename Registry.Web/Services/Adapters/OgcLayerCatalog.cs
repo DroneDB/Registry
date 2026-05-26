@@ -101,6 +101,7 @@ public class OgcLayerCatalog : IOgcLayerCatalog
             }
             else
             {
+                var (bandCount, multispectral) = ExtractRasterBandInfo(e);
                 result.Add(new OgcLayerDto
                 {
                     Name = e.Path,
@@ -108,7 +109,9 @@ public class OgcLayerCatalog : IOgcLayerCatalog
                     EntryType = e.Type,
                     EntryPath = e.Path,
                     EntryHash = e.Hash ?? string.Empty,
-                    BboxWgs84 = entryBbox
+                    BboxWgs84 = entryBbox,
+                    BandCount = bandCount,
+                    IsMultispectral = multispectral
                 });
             }
         }
@@ -282,5 +285,48 @@ public class OgcLayerCatalog : IOgcLayerCatalog
             return token["geometryType"]?.Value<string>();
         }
         return null;
+    }
+
+    /// <summary>
+    /// Extract (bandCount, isMultispectral) from a GeoRaster entry. Multispectral is detected when:
+    ///   - the dataset has more than 3 effective (non-alpha) bands, OR
+    ///   - any band carries a colour interpretation outside the RGBA / Gray / Palette set,
+    ///     which is typical of agricultural cameras (Undefined / NIR / Red Edge).
+    /// Returns (0, false) when bands metadata is missing or unparseable.
+    /// </summary>
+    internal static (int bandCount, bool multispectral) ExtractRasterBandInfo(Entry e)
+    {
+        if (e.Properties == null) return (0, false);
+        if (!e.Properties.TryGetValue("bands", out var raw)) return (0, false);
+
+        JArray? bands;
+        switch (raw)
+        {
+            case JArray arr: bands = arr; break;
+            case string s when !string.IsNullOrWhiteSpace(s):
+                try { bands = JArray.Parse(s); } catch { return (0, false); }
+                break;
+            default:
+                try { bands = JArray.FromObject(raw); } catch { return (0, false); }
+                break;
+        }
+        if (bands == null || bands.Count == 0) return (0, false);
+
+        var rgbaLike = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+        {
+            "Red", "Green", "Blue", "Alpha", "Gray Index", "Palette Index", "Undefined Gray"
+        };
+        var nonAlpha = 0;
+        var hasNonRgba = false;
+        foreach (var b in bands)
+        {
+            var interp = b["colorInterp"]?.Value<string>() ?? string.Empty;
+            if (string.Equals(interp, "Alpha", StringComparison.OrdinalIgnoreCase)) continue;
+            nonAlpha++;
+            if (!rgbaLike.Contains(interp)) hasNonRgba = true;
+        }
+
+        var multispectral = nonAlpha > 3 || (bands.Count >= 4 && hasNonRgba);
+        return (bands.Count, multispectral);
     }
 }
