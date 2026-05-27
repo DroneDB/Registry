@@ -183,7 +183,7 @@ public class WcsManager : OgcManagerBase, IWcsManager
                         bandNames.Add(b.Value<string>("name") ?? $"band{bandNames.Count + 1}");
             }
         }
-        catch (Exception ex) { _logger.LogDebug(ex, "WCS DescribeCoverage: probing raster info failed"); }
+        catch (Exception ex) { _logger.LogWarning(ex, "WCS DescribeCoverage: probing raster info failed"); }
         if (rWidth  <= 0) rWidth  = 1024;
         if (rHeight <= 0) rHeight = 1024;
         if (rBands  <= 0) rBands  = Math.Max(1, layer.BandCount);

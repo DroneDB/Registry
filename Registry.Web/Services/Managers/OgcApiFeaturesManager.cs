@@ -112,8 +112,11 @@ public class OgcApiFeaturesManager : OgcManagerBase, IOgcApiFeaturesManager
                 || (f["properties"] is JObject p && p["fid"]?.ToString() == featureId));
             return match?.ToString(Newtonsoft.Json.Formatting.None) ?? "{}";
         }
-        catch
+        catch (Exception ex)
         {
+            _logger.LogWarning(ex,
+                "OGC API Features: failed to parse items for {Org}/{Ds}/{Collection}/{FeatureId}",
+                orgSlug, dsSlug, collectionId, featureId);
             return "{}";
         }
     }

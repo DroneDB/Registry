@@ -279,7 +279,12 @@ public class WfsManager : OgcManagerBase, IWfsManager
                 var describeJson = DdbWrapper.DescribeVector(gpkg, layer.InnerLayerName);
                 describe = JObject.Parse(describeJson);
             }
-            catch { /* fall back to minimal definition */ }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex,
+                    "WFS DescribeFeatureType: failed to describe layer {Layer}; falling back to minimal definition",
+                    layer.InnerLayerName);
+            }
 
             var fields = describe?["layers"] is JArray jl && jl.Count > 0
                 ? jl[0]["fields"] as JArray
@@ -410,7 +415,11 @@ public class WfsManager : OgcManagerBase, IWfsManager
                 var gpkg = ResolveVectorArtifact(ddb, l);
                 raw = DdbWrapper.QueryVector(gpkg, l.InnerLayerName, null, "EPSG:4326", 10000, 0, "gml");
             }
-            catch { continue; }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "WFS FindFeatureLayer: skipping layer {Layer}", l.InnerLayerName);
+                continue;
+            }
             if (Regex.IsMatch(raw, $"gml:id=\"{Regex.Escape(id)}\""))
                 return l;
         }
@@ -584,7 +593,11 @@ public class WfsManager : OgcManagerBase, IWfsManager
                 raw = DdbWrapper.QueryVector(gpkg, l.InnerLayerName, null, "EPSG:4326",
                     10000, 0, internalFormat);
             }
-            catch { continue; }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "WFS GetFeatureById: skipping layer {Layer}", l.InnerLayerName);
+                continue;
+            }
             if (internalFormat != "gml") continue; // GeoJSON path: not supported for byId
             var wrapped = WrapAsWfsFeatureCollection(raw, l);
             var bare = ExtractBareFeatureById(wrapped, id);
@@ -685,8 +698,9 @@ public class WfsManager : OgcManagerBase, IWfsManager
                 doc.Save(xw);
             return Encoding.UTF8.GetString(ms.ToArray());
         }
-        catch
+        catch (Exception ex)
         {
+            System.Diagnostics.Debug.WriteLine($"WFS ExtractBareFeatureById: XML transformation failed ({ex.Message}); returning raw feature collection");
             return fcXml;
         }
     }
@@ -796,8 +810,9 @@ public class WfsManager : OgcManagerBase, IWfsManager
                 outDoc.Save(xw);
             return Encoding.UTF8.GetString(ms.ToArray());
         }
-        catch
+        catch (Exception ex)
         {
+            System.Diagnostics.Debug.WriteLine($"WFS WrapAsWfsFeatureCollection: XML transformation failed ({ex.Message}); returning raw GML");
             return rawGml;
         }
     }
@@ -845,8 +860,9 @@ public class WfsManager : OgcManagerBase, IWfsManager
             doc = new XmlDocument();
             doc.LoadXml(fcXml);
         }
-        catch
+        catch (Exception ex)
         {
+            System.Diagnostics.Debug.WriteLine($"WFS ApplyFesFilter: failed to parse FeatureCollection XML ({ex.Message}); returning unfiltered");
             return fcXml;
         }
         var root = doc.DocumentElement;
@@ -881,8 +897,9 @@ public class WfsManager : OgcManagerBase, IWfsManager
                 match = EvalPredicate(predicate, feat);
             }
             catch (OgcException) { throw; }
-            catch
+            catch (Exception ex)
             {
+                System.Diagnostics.Debug.WriteLine($"WFS EvalPredicate: error evaluating predicate ({ex.Message}); excluding feature");
                 match = false;
             }
             if (match) kept++; else toRemove.Add(m);

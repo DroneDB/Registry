@@ -181,8 +181,10 @@ public class OgcLayerCatalog : IOgcLayerCatalog
                         extent[3].Value<double>()
                     ];
                 }
-                catch
+                catch (Exception ex)
                 {
+                    _logger.LogDebug(ex,
+                        "OgcLayerCatalog: failed to parse layer extent for {Path}; using entry bbox", e.Path);
                     bbox = entryBbox;
                 }
             }
@@ -235,7 +237,7 @@ public class OgcLayerCatalog : IOgcLayerCatalog
         return matches.FirstOrDefault(l => l.BboxWgs84 != null) ?? matches[0];
     }
 
-    
+
     private static double[]? ExtractBboxFromPolygon(object? polygonGeom)
     {
         if (polygonGeom == null) return null;
@@ -272,8 +274,10 @@ public class OgcLayerCatalog : IOgcLayerCatalog
             if (minLon == double.MaxValue) return null;
             return [minLon, minLat, maxLon, maxLat];
         }
-        catch
+        catch (Exception ex)
         {
+            // Static method: no logger available. Best-effort fallback.
+            System.Diagnostics.Debug.WriteLine($"ExtractBboxFromPolygon failed: {ex.Message}");
             return null;
         }
     }
@@ -298,7 +302,7 @@ public class OgcLayerCatalog : IOgcLayerCatalog
     /// </summary>
     internal static (int bandCount, bool multispectral) ExtractRasterBandInfo(Entry e)
     {
-        if (e.Properties == null || !e.Properties.TryGetValue("bands", out var raw)) 
+        if (e.Properties == null || !e.Properties.TryGetValue("bands", out var raw))
             return (0, false);
 
         JArray? bands;
@@ -310,7 +314,7 @@ public class OgcLayerCatalog : IOgcLayerCatalog
                 {
                     bands = JArray.Parse(s);
                 }
-                catch
+                catch (Newtonsoft.Json.JsonException)
                 {
                     return (0, false);
                 }
@@ -321,7 +325,7 @@ public class OgcLayerCatalog : IOgcLayerCatalog
                 {
                     bands = JArray.FromObject(raw);
                 }
-                catch
+                catch (Exception)
                 {
                     return (0, false);
                 }

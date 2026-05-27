@@ -410,8 +410,9 @@ public class SystemController : ControllerBaseEx
             // The native lib returns "<semver> <commit>" — keep only the semver.
             return raw.Contains(' ') ? raw[..raw.IndexOf(' ')] : raw;
         }
-        catch
+        catch (Exception ex)
         {
+            _logger.LogWarning(ex, "Failed to retrieve DDB version from native wrapper");
             return null;
         }
     }
