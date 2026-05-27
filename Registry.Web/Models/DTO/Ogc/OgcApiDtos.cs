@@ -14,7 +14,7 @@ public class MvtMetadataDto
     [JsonProperty("maxzoom")] public int MaxZoom { get; set; } = 18;
     [JsonProperty("bounds")] public double[]? Bounds { get; set; }
     [JsonProperty("center")] public double[]? Center { get; set; }
-    [JsonProperty("vector_layers")] public List<MvtVectorLayerDto> VectorLayers { get; set; } = new();
+    [JsonProperty("vector_layers")] public List<MvtVectorLayerDto> VectorLayers { get; set; } = [];
 }
 
 public class MvtVectorLayerDto
@@ -31,7 +31,7 @@ public class OgcApiLandingDto
 {
     [JsonProperty("title")] public string Title { get; set; } = "DroneDB OGC API";
     [JsonProperty("description")] public string Description { get; set; } = "OGC API – Features + Tiles exposed by DroneDB Registry";
-    [JsonProperty("links")] public List<OgcApiLinkDto> Links { get; set; } = new();
+    [JsonProperty("links")] public List<OgcApiLinkDto> Links { get; set; } = [];
 }
 
 public class OgcApiLinkDto
@@ -44,8 +44,8 @@ public class OgcApiLinkDto
 
 public class OgcApiCollectionsDto
 {
-    [JsonProperty("links")] public List<OgcApiLinkDto> Links { get; set; } = new();
-    [JsonProperty("collections")] public List<OgcApiCollectionDto> Collections { get; set; } = new();
+    [JsonProperty("links")] public List<OgcApiLinkDto> Links { get; set; } = [];
+    [JsonProperty("collections")] public List<OgcApiCollectionDto> Collections { get; set; } = [];
 }
 
 public class OgcApiCollectionDto
@@ -54,9 +54,9 @@ public class OgcApiCollectionDto
     [JsonProperty("title")] public string Title { get; set; } = string.Empty;
     [JsonProperty("description")] public string? Description { get; set; }
     [JsonProperty("itemType")] public string ItemType { get; set; } = "feature";
-    [JsonProperty("crs")] public List<string> Crs { get; set; } = new() { "http://www.opengis.net/def/crs/OGC/1.3/CRS84" };
+    [JsonProperty("crs")] public List<string> Crs { get; set; } = ["http://www.opengis.net/def/crs/OGC/1.3/CRS84"];
     [JsonProperty("extent")] public OgcApiExtentDto? Extent { get; set; }
-    [JsonProperty("links")] public List<OgcApiLinkDto> Links { get; set; } = new();
+    [JsonProperty("links")] public List<OgcApiLinkDto> Links { get; set; } = [];
 }
 
 public class OgcApiExtentDto
@@ -66,7 +66,7 @@ public class OgcApiExtentDto
 
 public class OgcApiSpatialExtentDto
 {
-    [JsonProperty("bbox")] public double[][] Bbox { get; set; } = new[] { new[] { -180.0, -90.0, 180.0, 90.0 } };
+    [JsonProperty("bbox")] public double[][] Bbox { get; set; } = [[-180.0, -90.0, 180.0, 90.0]];
     [JsonProperty("crs")] public string Crs { get; set; } = "http://www.opengis.net/def/crs/OGC/1.3/CRS84";
 }
 
@@ -74,17 +74,17 @@ public class OgcApiTileSetDto
 {
     [JsonProperty("tileMatrixSetURI")] public string TileMatrixSetUri { get; set; } =
         "http://www.opengis.net/def/tilematrixset/OGC/1.0/WebMercatorQuad";
-    [JsonProperty("links")] public List<OgcApiLinkDto> Links { get; set; } = new();
+    [JsonProperty("links")] public List<OgcApiLinkDto> Links { get; set; } = [];
 }
 
 public class OgcConformanceDto
 {
-    [JsonProperty("conformsTo")] public List<string> ConformsTo { get; set; } = new()
-    {
+    [JsonProperty("conformsTo")] public List<string> ConformsTo { get; set; } =
+    [
         "http://www.opengis.net/spec/ogcapi-features-1/1.0/conf/core",
         "http://www.opengis.net/spec/ogcapi-features-1/1.0/conf/oas30",
         "http://www.opengis.net/spec/ogcapi-features-1/1.0/conf/geojson",
         "http://www.opengis.net/spec/ogcapi-tiles-1/1.0/conf/core",
         "http://www.opengis.net/spec/ogcapi-tiles-1/1.0/conf/geodata-tilesets"
-    };
+    ];
 }

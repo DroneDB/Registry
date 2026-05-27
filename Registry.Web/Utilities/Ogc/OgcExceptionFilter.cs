@@ -119,7 +119,11 @@ public class OgcExceptionFilter : IExceptionFilter
         else if (isWms)
             xml = OgcExceptionFormatter.FormatWms130(code, message);
         else
-            xml = OgcExceptionFormatter.FormatOws(code, message, version, locator);
+        {
+            // WCS 2.0 imports ows/2.0; WFS 2.0 / WMTS 1.0 import ows/1.1.
+            var owsNs = isWcs ? "http://www.opengis.net/ows/2.0" : "http://www.opengis.net/ows/1.1";
+            xml = OgcExceptionFormatter.FormatOws(code, message, version, locator, owsNs);
+        }
 
         context.Result = new ContentResult
         {

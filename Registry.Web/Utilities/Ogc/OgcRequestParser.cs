@@ -15,15 +15,26 @@ public static class OgcRequestParser
 {
     /// <summary>
     /// Case-insensitive query-string lookup. Returns null when missing.
+    /// When a key appears multiple times (or with different casings), the first
+    /// non-empty value is returned (CITE test suites duplicate KVP names on purpose
+    /// when probing case-insensitivity; OGC semantics treat the parameter as a
+    /// single value, not a comma-joined list).
     /// </summary>
     public static string? Get(IQueryCollection q, string key)
     {
+        string? firstMatch = null;
         foreach (var kv in q)
         {
-            if (string.Equals(kv.Key, key, StringComparison.OrdinalIgnoreCase))
-                return kv.Value.ToString();
+            if (!string.Equals(kv.Key, key, StringComparison.OrdinalIgnoreCase))
+                continue;
+            foreach (var v in kv.Value)
+            {
+                if (!string.IsNullOrEmpty(v))
+                    return v;
+            }
+            firstMatch ??= kv.Value.ToString();
         }
-        return null;
+        return firstMatch;
     }
 
     /// <summary>First value among <paramref name="keys"/> (alias resolution).</summary>
@@ -100,7 +111,7 @@ public static class OgcRequestParser
         // Internally we always work lon,lat (minX,minY,maxX,maxY).
         var swap = IsLatLonOrder(crs, wmsVersion);
         var bbox = swap
-            ? new[] { raw[1], raw[0], raw[3], raw[2] }
+            ? [raw[1], raw[0], raw[3], raw[2]]
             : raw;
 
         // WMS 1.3.0 Annex B.6: bbox is invalid when minx>=maxx or miny>=maxy.

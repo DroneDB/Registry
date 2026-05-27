@@ -74,6 +74,20 @@ public class DDB : IDDB
         }
     }
 
+    public byte[] GenerateTile(string inputPath, int tz, int tx, int ty, bool retina, string inputPathHash, string outputFormat)
+    {
+        try
+        {
+            var fullPath = GetLocalPath(inputPath);
+            return _ddbWrapper.GenerateMemoryTile(fullPath, tz, tx, ty, retina ? 512 : 256, true, false,
+                inputPathHash, outputFormat);
+        }
+        catch (DdbException ex)
+        {
+            throw new InvalidOperationException($"Cannot generate tile of '{inputPath}' (format={outputFormat})", ex);
+        }
+    }
+
     public void Init()
     {
         try

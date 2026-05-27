@@ -54,7 +54,7 @@ public class WmsManager : OgcManagerBase, IWmsManager
             w.WriteAttributeString("version", version);
             await w.WriteAttributeStringAsync("xmlns", "xlink", null, NsXlink);
             await w.WriteAttributeStringAsync("xmlns", "xsi", null, "http://www.w3.org/2001/XMLSchema-instance");
-            w.WriteAttributeString("xsi", "schemaLocation", "http://www.w3.org/2001/XMLSchema-instance",
+            await w.WriteAttributeStringAsync("xsi", "schemaLocation", "http://www.w3.org/2001/XMLSchema-instance",
                 version == "1.3.0"
                     ? "http://www.opengis.net/wms http://schemas.opengis.net/wms/1.3.0/capabilities_1_3_0.xsd"
                     : "http://www.opengis.net/wms http://schemas.opengis.net/wms/1.1.1/capabilities_1_1_1.xsd");
@@ -64,9 +64,9 @@ public class WmsManager : OgcManagerBase, IWmsManager
             w.WriteElementString("Title", $"DroneDB WMS — {orgSlug}/{dsSlug}");
             w.WriteElementString("Abstract", $"OGC Web Map Service for dataset {orgSlug}/{dsSlug}");
             w.WriteStartElement("OnlineResource");
-            w.WriteAttributeString("xlink", "type", NsXlink, "simple");
-            w.WriteAttributeString("xlink", "href", NsXlink, baseUrl + "?");
-            w.WriteEndElement(); // OnlineResource
+            await w.WriteAttributeStringAsync("xlink", "type", NsXlink, "simple");
+            await w.WriteAttributeStringAsync("xlink", "href", NsXlink, baseUrl + "?");
+            await w.WriteEndElementAsync(); // OnlineResource
             await w.WriteEndElementAsync(); // Service
 
             w.WriteStartElement("Capability");
@@ -265,7 +265,7 @@ public class WmsManager : OgcManagerBase, IWmsManager
     {
         if (string.IsNullOrWhiteSpace(bg)) return SKColors.White;
         var s = bg.Trim().TrimStart('#');
-        if (s.StartsWith("0x", StringComparison.OrdinalIgnoreCase)) s = s.Substring(2);
+        if (s.StartsWith("0x", StringComparison.OrdinalIgnoreCase)) s = s[2..];
         if (s.Length == 6 && uint.TryParse(s, NumberStyles.HexNumber, CultureInfo.InvariantCulture, out var rgb))
         {
             return new SKColor((byte)((rgb >> 16) & 0xFF), (byte)((rgb >> 8) & 0xFF), (byte)(rgb & 0xFF));
@@ -303,11 +303,9 @@ public class WmsManager : OgcManagerBase, IWmsManager
         var src = ResolveRasterArtifact(ddb, layer);
         var json = DdbWrapper.QueryRasterPoint(src, geoX, geoY, crs);
 
-        if (infoFormat.Contains("xml", StringComparison.OrdinalIgnoreCase))
-        {
-            return $"<FeatureInfoResponse>{System.Net.WebUtility.HtmlEncode(json)}</FeatureInfoResponse>";
-        }
-        return json;
+        return infoFormat.Contains("xml", StringComparison.OrdinalIgnoreCase) ? 
+            $"<FeatureInfoResponse>{System.Net.WebUtility.HtmlEncode(json)}</FeatureInfoResponse>" : 
+            json;
     }
 }
 

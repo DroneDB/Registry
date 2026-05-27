@@ -18,11 +18,11 @@ namespace Registry.Web.Utilities.Ogc;
 /// </summary>
 public static class WmsValidator
 {
-    public static readonly string[] SupportedCrs = { "EPSG:4326", "EPSG:3857", "CRS:84" };
-    public static readonly string[] SupportedMapFormats = { "image/png", "image/jpeg", "image/webp" };
+    public static readonly string[] SupportedCrs = ["EPSG:4326", "EPSG:3857", "CRS:84"];
+    public static readonly string[] SupportedMapFormats = ["image/png", "image/jpeg", "image/webp"];
     public static readonly string[] SupportedInfoFormats =
-        { "application/json", "text/xml", "application/xml", "text/html", "text/plain" };
-    public static readonly string[] SpectralIndexes = { "NDVI", "NDRE", "NDWI", "EVI", "SAVI" };
+        ["application/json", "text/xml", "application/xml", "text/html", "text/plain"];
+    public static readonly string[] SpectralIndexes = ["NDVI", "NDRE", "NDWI", "EVI", "SAVI"];
 
     public const int MinDim = 1;
     public const int MaxDim = 4096;
@@ -82,19 +82,17 @@ public static class WmsValidator
             if (string.IsNullOrEmpty(s)) continue;
             if (string.Equals(s, "default", StringComparison.OrdinalIgnoreCase)) continue;
 
-            if (IsSpectralIndex(s))
+            if (!IsSpectralIndex(s))
+                throw new OgcException("StyleNotDefined", $"Style '{s}' is not defined", 400, "STYLES");
+            
+            var layerName = i < layers.Length ? layers[i] : null;
+            var layer = string.IsNullOrEmpty(layerName) ? null : layerResolver(layerName);
+            if (layer == null || layer.EntryType != Registry.Ports.DroneDB.EntryType.GeoRaster
+                              || !layer.IsMultispectral)
             {
-                var layerName = i < layers.Length ? layers[i] : null;
-                var layer = string.IsNullOrEmpty(layerName) ? null : layerResolver(layerName);
-                if (layer == null || layer.EntryType != Registry.Ports.DroneDB.EntryType.GeoRaster
-                    || !layer.IsMultispectral)
-                {
-                    throw new OgcException("StyleNotDefined",
-                        $"Spectral style '{s}' is only defined for multispectral raster layers", 400, "STYLES");
-                }
-                continue;
+                throw new OgcException("StyleNotDefined",
+                    $"Spectral style '{s}' is only defined for multispectral raster layers", 400, "STYLES");
             }
-            throw new OgcException("StyleNotDefined", $"Style '{s}' is not defined", 400, "STYLES");
         }
     }
 

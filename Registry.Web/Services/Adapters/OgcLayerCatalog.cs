@@ -12,6 +12,7 @@ using Registry.Web.Models.DTO.Ogc;
 using Registry.Web.Services.Managers;
 using Registry.Web.Services.Ports;
 using Registry.Web.Utilities;
+using Registry.Web.Utilities.Ogc;
 
 namespace Registry.Web.Services.Adapters;
 
@@ -60,7 +61,8 @@ public class OgcLayerCatalog : IOgcLayerCatalog
         }
     }
 
-    public async Task<IReadOnlyList<OgcLayerDto>> GetLayersAsync(string orgSlug, string dsSlug, string? folderPath = null)
+    public async Task<IReadOnlyList<OgcLayerDto>> GetLayersAsync(string orgSlug, string dsSlug,
+        string? folderPath = null)
     {
         var key = $"ogc-layers-{orgSlug}-{dsSlug}-{folderPath ?? string.Empty}";
         var cached = await _cache.GetRecordAsync<List<OgcLayerDto>>(key);
@@ -69,7 +71,7 @@ public class OgcLayerCatalog : IOgcLayerCatalog
         var ds = _utils.GetDataset(orgSlug, dsSlug);
         var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
 
-        var entries = ddb.Search(folderPath ?? string.Empty, recursive: true) ?? Enumerable.Empty<Entry>();
+        var entries = ddb.Search(folderPath ?? string.Empty, recursive: true) ?? [];
         var result = new List<OgcLayerDto>();
 
         foreach (var e in entries)
@@ -87,6 +89,7 @@ public class OgcLayerCatalog : IOgcLayerCatalog
                     result.AddRange(expanded);
                     continue;
                 }
+
                 // Fallback: single layer using entry-level metadata.
                 result.Add(new OgcLayerDto
                 {
@@ -138,12 +141,16 @@ public class OgcLayerCatalog : IOgcLayerCatalog
         }
         catch (Exception ex)
         {
-            _logger.LogWarning(ex, "DescribeVector failed for {Path} ({Gpkg}); falling back to entry-level layer", e.Path, gpkgPath);
+            _logger.LogWarning(ex, "DescribeVector failed for {Path} ({Gpkg}); falling back to entry-level layer",
+                e.Path, gpkgPath);
             return null;
         }
 
         JToken root;
-        try { root = JToken.Parse(json); }
+        try
+        {
+            root = JToken.Parse(json);
+        }
         catch (Exception ex)
         {
             _logger.LogWarning(ex, "DescribeVector returned invalid JSON for {Path}", e.Path);
@@ -161,7 +168,7 @@ public class OgcLayerCatalog : IOgcLayerCatalog
 
             var geomType = l["geometryType"]?.Value<string>();
             var extent = l["extent"] as JArray;
-            double[]? bbox = entryBbox;
+            var bbox = entryBbox;
             if (extent != null && extent.Count >= 4)
             {
                 try
@@ -203,16 +210,18 @@ public class OgcLayerCatalog : IOgcLayerCatalog
         // Strip optional namespace prefix (e.g. "ddb:foo" -> "foo")
         var localName = layerName;
         var colon = layerName.IndexOf(':');
-        if (colon >= 0 && colon < layerName.Length - 1) localName = layerName.Substring(colon + 1);
+        if (colon >= 0 && colon < layerName.Length - 1) localName = layerName[(colon + 1)..];
 
         var matches = layers.Where(l => string.Equals(l.Name, layerName, StringComparison.Ordinal)
                                         || string.Equals(l.Name, localName, StringComparison.Ordinal)).ToList();
         if (matches.Count == 0)
         {
             // Fallback: match by sanitized name (NCName-safe).
-            matches = layers.Where(l => string.Equals(SanitizeName(l.Name), localName, StringComparison.Ordinal)
-                                        || string.Equals(SanitizeName(l.Name), SanitizeName(layerName), StringComparison.Ordinal)).ToList();
+            matches = layers.Where(l => string.Equals(OgcNames.ToNcName(l.Name), localName, StringComparison.Ordinal)
+                                        || string.Equals(OgcNames.ToNcName(l.Name), OgcNames.ToNcName(layerName),
+                                            StringComparison.Ordinal)).ToList();
         }
+
         if (matches.Count == 0)
         {
             // Fallback: when the client asks for the bare entry path of a multi-layer vector,
@@ -220,25 +229,13 @@ public class OgcLayerCatalog : IOgcLayerCatalog
             matches = layers.Where(l => string.Equals(l.EntryPath, layerName, StringComparison.Ordinal)
                                         || string.Equals(l.EntryPath, localName, StringComparison.Ordinal)).ToList();
         }
+
         if (matches.Count == 0) return null;
         // When multiple entries share a name (e.g. raw vs. built artifact), prefer the one with a bbox.
         return matches.FirstOrDefault(l => l.BboxWgs84 != null) ?? matches[0];
     }
 
-    private static string SanitizeName(string name)
-    {
-        if (string.IsNullOrEmpty(name)) return "_unnamed";
-        var sb = new System.Text.StringBuilder(name.Length);
-        foreach (var c in name)
-        {
-            if (char.IsLetterOrDigit(c) || c == '_' || c == '-' || c == '.') sb.Append(c);
-            else sb.Append('_');
-        }
-        var s = sb.ToString();
-        if (!(char.IsLetter(s[0]) || s[0] == '_')) s = "_" + s;
-        return s;
-    }
-
+    
     private static double[]? ExtractBboxFromPolygon(object? polygonGeom)
     {
         if (polygonGeom == null) return null;
@@ -251,13 +248,16 @@ public class OgcLayerCatalog : IOgcLayerCatalog
             {
                 token = token["geometry"] ?? token;
             }
+
             var coords = token["coordinates"];
             if (coords == null || coords.Type != JTokenType.Array) return null;
             // GeoJSON Polygon coordinates: [ [ [lon,lat], [lon,lat], ... ] ]
             var ring = coords.First as JArray;
             if (ring == null || ring.Count == 0) return null;
-            double minLon = double.MaxValue, minLat = double.MaxValue,
-                   maxLon = double.MinValue, maxLat = double.MinValue;
+            double minLon = double.MaxValue,
+                minLat = double.MaxValue,
+                maxLon = double.MinValue,
+                maxLat = double.MinValue;
             foreach (var pt in ring)
             {
                 if (pt is not JArray pa || pa.Count < 2) continue;
@@ -268,6 +268,7 @@ public class OgcLayerCatalog : IOgcLayerCatalog
                 if (lon > maxLon) maxLon = lon;
                 if (lat > maxLat) maxLat = lat;
             }
+
             if (minLon == double.MaxValue) return null;
             return [minLon, minLat, maxLon, maxLat];
         }
@@ -284,6 +285,7 @@ public class OgcLayerCatalog : IOgcLayerCatalog
         {
             return token["geometryType"]?.Value<string>();
         }
+
         return null;
     }
 
@@ -296,20 +298,37 @@ public class OgcLayerCatalog : IOgcLayerCatalog
     /// </summary>
     internal static (int bandCount, bool multispectral) ExtractRasterBandInfo(Entry e)
     {
-        if (e.Properties == null) return (0, false);
-        if (!e.Properties.TryGetValue("bands", out var raw)) return (0, false);
+        if (e.Properties == null || !e.Properties.TryGetValue("bands", out var raw)) 
+            return (0, false);
 
         JArray? bands;
         switch (raw)
         {
             case JArray arr: bands = arr; break;
             case string s when !string.IsNullOrWhiteSpace(s):
-                try { bands = JArray.Parse(s); } catch { return (0, false); }
+                try
+                {
+                    bands = JArray.Parse(s);
+                }
+                catch
+                {
+                    return (0, false);
+                }
+
                 break;
             default:
-                try { bands = JArray.FromObject(raw); } catch { return (0, false); }
+                try
+                {
+                    bands = JArray.FromObject(raw);
+                }
+                catch
+                {
+                    return (0, false);
+                }
+
                 break;
         }
+
         if (bands == null || bands.Count == 0) return (0, false);
 
         var rgbaLike = new HashSet<string>(StringComparer.OrdinalIgnoreCase)

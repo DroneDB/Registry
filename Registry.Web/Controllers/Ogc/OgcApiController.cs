@@ -6,7 +6,7 @@ using Registry.Web.Services.Ports;
 using Registry.Web.Utilities;
 using Registry.Web.Utilities.Ogc;
 
-namespace Registry.Web.Controllers;
+namespace Registry.Web.Controllers.Ogc;
 
 /// <summary>OGC API – Features + Tiles controller (JSON REST).</summary>
 [ApiController]

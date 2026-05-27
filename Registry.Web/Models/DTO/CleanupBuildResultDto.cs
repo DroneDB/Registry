@@ -33,7 +33,7 @@ public class CleanupBuildResultDto
     /// Identifiers of all background jobs enqueued for this cleanup operation,
     /// one per target dataset. Populated only when <see cref="Async"/> is true.
     /// </summary>
-    public List<string> JobIds { get; set; } = new();
+    public List<string> JobIds { get; set; } = [];
 
     /// <summary>
     /// True when the operation has been enqueued as a background job.
@@ -44,8 +44,8 @@ public class CleanupBuildResultDto
 public class DatasetCleanupBuildDto
 {
     /// <summary>Paths of entries removed from the index.</summary>
-    public string[] RemovedEntries { get; set; } = Array.Empty<string>();
+    public string[] RemovedEntries { get; set; } = [];
 
     /// <summary>Hashes of orphaned build artifacts removed.</summary>
-    public string[] RemovedBuilds { get; set; } = Array.Empty<string>();
+    public string[] RemovedBuilds { get; set; } = [];
 }

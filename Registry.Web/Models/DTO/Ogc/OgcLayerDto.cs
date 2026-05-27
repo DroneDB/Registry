@@ -20,7 +20,7 @@ public class OgcLayerDto
     /// <summary>Bounding box in EPSG:4326 lon/lat ([minLon, minLat, maxLon, maxLat]).</summary>
     public double[]? BboxWgs84 { get; set; }
     /// <summary>Supported CRSs (always includes EPSG:4326 and EPSG:3857).</summary>
-    public string[] SupportedCrs { get; set; } = { "EPSG:4326", "EPSG:3857", "CRS:84" };
+    public string[] SupportedCrs { get; set; } = ["EPSG:4326", "EPSG:3857", "CRS:84"];
     /// <summary>Vector-only: OGR geometry type name (Point/LineString/Polygon/...).</summary>
     public string? GeometryType { get; set; }
 
@@ -51,5 +51,5 @@ public class OgcServiceMetadataDto
     public string Abstract { get; set; } = "OGC services exposed by DroneDB Registry";
     public string ContactName { get; set; } = "DroneDB";
     public string ContactEmail { get; set; } = "info@dronedb.app";
-    public List<string> Keywords { get; set; } = new() { "OGC", "DroneDB" };
+    public List<string> Keywords { get; set; } = ["OGC", "DroneDB"];
 }

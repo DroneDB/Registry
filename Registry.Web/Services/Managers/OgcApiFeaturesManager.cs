@@ -43,12 +43,12 @@ public class OgcApiFeaturesManager : OgcManagerBase, IOgcApiFeaturesManager
         return new OgcApiLandingDto
         {
             Title = $"OGC API for {orgSlug}/{dsSlug}",
-            Links = new()
-            {
+            Links =
+            [
                 new() { Href = $"{b}/", Rel = "self", Type = "application/json" },
                 new() { Href = $"{b}/conformance", Rel = "conformance", Type = "application/json" },
                 new() { Href = $"{b}/collections", Rel = "data", Type = "application/json" }
-            }
+            ]
         };
     }
 
@@ -59,7 +59,7 @@ public class OgcApiFeaturesManager : OgcManagerBase, IOgcApiFeaturesManager
         var b = baseUrl.TrimEnd('/');
         var dto = new OgcApiCollectionsDto
         {
-            Links = new() { new() { Href = $"{b}/collections", Rel = "self", Type = "application/json" } }
+            Links = [new() { Href = $"{b}/collections", Rel = "self", Type = "application/json" }]
         };
         foreach (var l in layers)
         {
@@ -129,15 +129,18 @@ public class OgcApiFeaturesManager : OgcManagerBase, IOgcApiFeaturesManager
             Extent = layer.BboxWgs84 != null
                 ? new OgcApiExtentDto
                 {
-                    Spatial = new OgcApiSpatialExtentDto { Bbox = new[] { layer.BboxWgs84 } }
+                    Spatial = new OgcApiSpatialExtentDto { Bbox = [layer.BboxWgs84] }
                 }
                 : null,
-            Links = new()
-            {
+            Links =
+            [
                 new() { Href = $"{baseUrl}/collections/{id}", Rel = "self", Type = "application/json" },
-                new() { Href = $"{baseUrl}/collections/{id}/items", Rel = "items",
-                        Type = "application/geo+json" }
-            }
+                new()
+                {
+                    Href = $"{baseUrl}/collections/{id}/items", Rel = "items",
+                    Type = "application/geo+json"
+                }
+            ]
         };
     }
 }

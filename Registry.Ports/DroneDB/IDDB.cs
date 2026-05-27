@@ -36,6 +36,9 @@ public interface IDDB
     byte[] GenerateThumbnail(string imagePath, int size);
     byte[] GenerateTile(string inputPath, int tz, int tx, int ty, bool retina, string inputPathHash);
 
+    /// <summary>Generate a tile with a specific raster output format ("png" or "jpeg").</summary>
+    byte[] GenerateTile(string inputPath, int tz, int tx, int ty, bool retina, string inputPathHash, string outputFormat);
+
     void Init();
 
     Entry GetInfo();

@@ -6,5 +6,5 @@ public class GlobalReportOrganizationDto
 {
     public string Name { get; set; }
     public string Slug { get; set; }
-    public List<GlobalReportDatasetDto> Datasets { get; set; } = new();
+    public List<GlobalReportDatasetDto> Datasets { get; set; } = [];
 }

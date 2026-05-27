@@ -629,6 +629,44 @@ public class NativeDdbWrapper : IDdbWrapper
         throw new DdbException(SafeGetLastError("generate memory tile"));
     }
 
+    [DllImport("ddb", EntryPoint = "DDBMemoryTileFmt")]
+    private static extern DdbResult _GenerateMemoryTileFmt(
+        [MarshalAs(UnmanagedType.LPUTF8Str)] string inputPath, int tz, int tx, int ty, out IntPtr outBuffer,
+        out int outBufferSize, int tileSize, bool tms, bool forceRecreate,
+        [MarshalAs(UnmanagedType.LPUTF8Str)] string inputPathHash,
+        [MarshalAs(UnmanagedType.LPUTF8Str)] string outputFormat);
+
+    public byte[] GenerateMemoryTile(string inputPath, int tz, int tx, int ty, int tileSize, bool tms,
+        bool forceRecreate, string inputPathHash, string outputFormat)
+    {
+        if (inputPath == null)
+            throw new ArgumentException("inputPath is null");
+
+        try
+        {
+            if (_GenerateMemoryTileFmt(inputPath, tz, tx, ty, out var outBuffer, out var outBufferSize, tileSize, tms,
+                    forceRecreate, inputPathHash ?? string.Empty, outputFormat ?? "png") == DdbResult.Success)
+            {
+                var destBuf = new byte[outBufferSize];
+                Marshal.Copy(outBuffer, destBuf, 0, outBufferSize);
+                _DDBVSIFree(outBuffer);
+                return destBuf;
+            }
+        }
+        catch (EntryPointNotFoundException ex)
+        {
+            throw new DdbException($"Error in calling ddb lib: incompatible versions ({ex.Message})", ex);
+        }
+        catch (Exception ex)
+        {
+            throw new DdbException(
+                $"Error in calling ddb lib. Last error: \"{SafeGetLastError("generate memory tile fmt")}\", check inner exception for details",
+                ex);
+        }
+
+        throw new DdbException(SafeGetLastError("generate memory tile fmt"));
+    }
+
     [DllImport("ddb", EntryPoint = "DDBSetTag")]
     private static extern DdbResult _SetTag([MarshalAs(UnmanagedType.LPUTF8Str)] string ddbPath,
         [MarshalAs(UnmanagedType.LPUTF8Str)] string newTag);

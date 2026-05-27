@@ -11,7 +11,7 @@ using Registry.Web.Services.Ports;
 using Registry.Web.Utilities;
 using Registry.Web.Utilities.Ogc;
 
-namespace Registry.Web.Controllers;
+namespace Registry.Web.Controllers.Ogc;
 
 /// <summary>WFS 2.0.0 controller.</summary>
 [ApiController]
@@ -169,13 +169,13 @@ public class WfsController : ControllerBaseEx
             // sanitized layer name. If prefix doesn't match the requested typeName's local part, 400.
             if (!string.IsNullOrEmpty(resourceIdsCsv))
             {
-                var local = typeName.Contains(':') ? typeName.Substring(typeName.IndexOf(':') + 1) : typeName;
+                var local = typeName.Contains(':') ? typeName[(typeName.IndexOf(':') + 1)..] : typeName;
                 var sanitized = System.Text.RegularExpressions.Regex.Replace(local, @"[^A-Za-z0-9_\-]", "_");
                 foreach (var rid in resourceIdsCsv.Split(','))
                 {
                     var dot = rid.LastIndexOf('.');
                     if (dot <= 0) continue;
-                    var prefix = rid.Substring(0, dot);
+                    var prefix = rid[..dot];
                     if (!string.Equals(prefix, sanitized, StringComparison.Ordinal)
                         && !string.Equals(prefix, local, StringComparison.Ordinal))
                         throw new OgcException("InvalidParameterValue",
@@ -219,7 +219,7 @@ public class WfsController : ControllerBaseEx
             {
                 var typeNames = OgcRequestParser.GetList(q, "TYPENAMES")
                                 ?? OgcRequestParser.GetList(q, "TYPENAME")
-                                ?? Array.Empty<string>();
+                                ?? [];
                 return Content(await _mgr.DescribeFeatureTypeAsync(orgSlug, dsSlug, typeNames),
                     "text/xml; charset=utf-8");
             }
@@ -280,13 +280,13 @@ public class WfsController : ControllerBaseEx
                 }
                 if (!string.IsNullOrEmpty(resourceId))
                 {
-                    var localT = typeName.Contains(':') ? typeName.Substring(typeName.IndexOf(':') + 1) : typeName;
+                    var localT = typeName.Contains(':') ? typeName[(typeName.IndexOf(':') + 1)..] : typeName;
                     var sanitizedT = System.Text.RegularExpressions.Regex.Replace(localT, @"[^A-Za-z0-9_\-]", "_");
                     foreach (var rid in resourceId.Split(',', StringSplitOptions.RemoveEmptyEntries))
                     {
                         var dot = rid.LastIndexOf('.');
                         if (dot <= 0) continue;
-                        var prefix = rid.Substring(0, dot);
+                        var prefix = rid[..dot];
                         if (!string.Equals(prefix, sanitizedT, StringComparison.Ordinal)
                             && !string.Equals(prefix, localT, StringComparison.Ordinal))
                             throw new OgcException("InvalidParameterValue",
@@ -321,7 +321,7 @@ public class WfsController : ControllerBaseEx
                     "text/xml; charset=utf-8");
             case "DESCRIBESTOREDQUERIES":
             {
-                var ids = OgcRequestParser.GetList(q, "STOREDQUERY_ID") ?? Array.Empty<string>();
+                var ids = OgcRequestParser.GetList(q, "STOREDQUERY_ID") ?? [];
                 return Content(await _mgr.DescribeStoredQueriesAsync(orgSlug, dsSlug, ids),
                     "text/xml; charset=utf-8");
             }

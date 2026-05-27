@@ -13,8 +13,8 @@ public class RasterInfoDto
     public int Width { get; set; }
     public int Height { get; set; }
     public string? DetectedSensor { get; set; }
-    public List<BandInfoDto> Bands { get; set; } = new();
-    public List<PresetDto> AvailablePresets { get; set; } = new();
+    public List<BandInfoDto> Bands { get; set; } = [];
+    public List<PresetDto> AvailablePresets { get; set; } = [];
     public string? DefaultPreset { get; set; }
 }
 
@@ -58,8 +58,8 @@ public class MergeMultispectralRequestDto
 public class MergeValidationResultDto
 {
     public bool Ok { get; set; }
-    public List<string> Errors { get; set; } = new();
-    public List<string> Warnings { get; set; } = new();
+    public List<string> Errors { get; set; } = [];
+    public List<string> Warnings { get; set; } = [];
     public MergeSummaryDto? Summary { get; set; }
     public AlignmentStatusDto? Alignment { get; set; }
 }

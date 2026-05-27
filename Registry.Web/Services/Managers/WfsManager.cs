@@ -42,7 +42,7 @@ public class WfsManager : OgcManagerBase, IWfsManager
         await w.WriteStartElementAsync("ows", "DCP", null);
         await w.WriteStartElementAsync("ows", "HTTP", null);
         await w.WriteStartElementAsync("ows", "Get", null);
-        w.WriteAttributeString("xlink", "href", NsXlink, baseUrl + "?");
+        await w.WriteAttributeStringAsync("xlink", "href", NsXlink, baseUrl + "?");
         await w.WriteEndElementAsync();
         await w.WriteEndElementAsync();
         await w.WriteEndElementAsync();
@@ -90,7 +90,7 @@ public class WfsManager : OgcManagerBase, IWfsManager
             await w.WriteAttributeStringAsync("xmlns", "xsi", null, "http://www.w3.org/2001/XMLSchema-instance");
             await w.WriteAttributeStringAsync("xmlns", "fes", null, "http://www.opengis.net/fes/2.0");
             await w.WriteAttributeStringAsync("xmlns", "ddb", null, NsDdb);
-            w.WriteAttributeString("xsi", "schemaLocation", "http://www.w3.org/2001/XMLSchema-instance",
+            await w.WriteAttributeStringAsync("xsi", "schemaLocation", "http://www.w3.org/2001/XMLSchema-instance",
                 "http://www.opengis.net/wfs/2.0 http://schemas.opengis.net/wfs/2.0/wfs.xsd");
             w.WriteAttributeString("version", "2.0.0");
 
@@ -105,7 +105,7 @@ public class WfsManager : OgcManagerBase, IWfsManager
             await w.WriteStartElementAsync("ows", "ServiceProvider", null);
             await w.WriteElementStringAsync("ows", "ProviderName", null, "DroneDB");
             await w.WriteStartElementAsync("ows", "ProviderSite", null);
-            w.WriteAttributeString("xlink", "href", NsXlink, "https://dronedb.app");
+            await w.WriteAttributeStringAsync("xlink", "href", NsXlink, "https://dronedb.app");
             await w.WriteEndElementAsync();
             await w.WriteStartElementAsync("ows", "ServiceContact", null);
             await w.WriteElementStringAsync("ows", "IndividualName", null, "DroneDB Support");
@@ -121,12 +121,14 @@ public class WfsManager : OgcManagerBase, IWfsManager
             await w.WriteStartElementAsync("ows", "OperationsMetadata", null);
             await WriteWfsOperationAsync(w, "GetCapabilities", baseUrl);
             await WriteWfsOperationAsync(w, "DescribeFeatureType", baseUrl,
-                new[] { "application/gml+xml; version=3.2", "text/xml; subtype=gml/3.2" });
+                ["application/gml+xml; version=3.2", "text/xml; subtype=gml/3.2"]);
             await WriteWfsOperationAsync(w, "GetFeature", baseUrl,
-                new[] { "application/gml+xml; version=3.2", "text/xml; subtype=gml/3.2",
-                        "application/json", "application/json; subtype=geojson" });
+            [
+                "application/gml+xml; version=3.2", "text/xml; subtype=gml/3.2",
+                        "application/json", "application/json; subtype=geojson"
+            ]);
             await WriteWfsOperationAsync(w, "GetPropertyValue", baseUrl,
-                new[] { "application/gml+xml; version=3.2", "text/xml; subtype=gml/3.2" });
+                ["application/gml+xml; version=3.2", "text/xml; subtype=gml/3.2"]);
             await WriteWfsOperationAsync(w, "ListStoredQueries", baseUrl);
             await WriteWfsOperationAsync(w, "DescribeStoredQueries", baseUrl);
             // Service-level constraints required by WFS 2.0 (Table 13 of OGC 09-025r2).
@@ -157,14 +159,14 @@ public class WfsManager : OgcManagerBase, IWfsManager
             }
             await w.WriteEndElementAsync();
 
-            w.WriteStartElement("wfs", "FeatureTypeList", NsWfs);
+            await w.WriteStartElementAsync("wfs", "FeatureTypeList", NsWfs);
             foreach (var l in vectorLayers)
             {
-                w.WriteStartElement("wfs", "FeatureType", NsWfs);
-                w.WriteAttributeString("xmlns", "ddb", null, NsDdb);
-                w.WriteElementString("wfs", "Name", NsWfs, "ddb:" + SanitizeFeatureName(l.Name));
-                w.WriteElementString("wfs", "Title", NsWfs, l.Title);
-                w.WriteElementString("wfs", "DefaultCRS", NsWfs, "urn:ogc:def:crs:EPSG::4326");
+                await w.WriteStartElementAsync("wfs", "FeatureType", NsWfs);
+                await w.WriteAttributeStringAsync("xmlns", "ddb", null, NsDdb);
+                await w.WriteElementStringAsync("wfs", "Name", NsWfs, "ddb:" + OgcNames.ToNcName(l.Name));
+                await w.WriteElementStringAsync("wfs", "Title", NsWfs, l.Title);
+                await w.WriteElementStringAsync("wfs", "DefaultCRS", NsWfs, "urn:ogc:def:crs:EPSG::4326");
                 if (l.BboxWgs84 != null)
                 {
                     await w.WriteStartElementAsync("ows", "WGS84BoundingBox", null);
@@ -269,7 +271,7 @@ public class WfsManager : OgcManagerBase, IWfsManager
 
         foreach (var layer in targetLayers)
         {
-            var safe = SanitizeFeatureName(layer.Name);
+            var safe = OgcNames.ToNcName(layer.Name);
             JObject? describe = null;
             try
             {
@@ -327,7 +329,7 @@ public class WfsManager : OgcManagerBase, IWfsManager
                         _ => "xsd:string"
                     };
                     await w.WriteStartElementAsync("xsd", "element", null);
-                    w.WriteAttributeString("name", SanitizeFeatureName(fname));
+                    w.WriteAttributeString("name", OgcNames.ToNcName(fname));
                     w.WriteAttributeString("type", xsdType);
                     w.WriteAttributeString("minOccurs", "0");
                     await w.WriteEndElementAsync();
@@ -431,7 +433,7 @@ public class WfsManager : OgcManagerBase, IWfsManager
         await w.WriteElementStringAsync("wfs", "Title", "http://www.opengis.net/wfs/2.0", "Get feature by identifier");
         foreach (var l in vector)
             await w.WriteElementStringAsync("wfs", "ReturnFeatureType", "http://www.opengis.net/wfs/2.0",
-                $"ddb:{SanitizeFeatureName(l.Name)}");
+                $"ddb:{OgcNames.ToNcName(l.Name)}");
         await w.WriteEndElementAsync();
         await w.WriteEndElementAsync();
         await w.WriteEndDocumentAsync();
@@ -466,7 +468,7 @@ public class WfsManager : OgcManagerBase, IWfsManager
             await w.WriteEndElementAsync();
             await w.WriteStartElementAsync("wfs", "QueryExpressionText", "http://www.opengis.net/wfs/2.0");
             w.WriteAttributeString("returnFeatureTypes",
-                string.Join(' ', vector.Select(l => $"ddb:{SanitizeFeatureName(l.Name)}")));
+                string.Join(' ', vector.Select(l => $"ddb:{OgcNames.ToNcName(l.Name)}")));
             w.WriteAttributeString("language", "urn:ogc:def:queryLanguage:OGC-WFS::WFS_QueryExpression");
             w.WriteAttributeString("isPrivate", "true");
             await w.WriteEndElementAsync();
@@ -541,12 +543,12 @@ public class WfsManager : OgcManagerBase, IWfsManager
         var r = valueRef.Trim();
         if (r.StartsWith("@"))
         {
-            var name = r.Substring(1);
+            var name = r[1..];
             var colon = name.IndexOf(':');
             if (colon > 0)
             {
-                var prefix = name.Substring(0, colon);
-                var local = name.Substring(colon + 1);
+                var prefix = name[..colon];
+                var local = name[(colon + 1)..];
                 var ns = feat.GetNamespaceOfPrefix(prefix) ?? "";
                 var v = feat.GetAttribute(local, ns);
                 return string.IsNullOrEmpty(v) ? null : v;
@@ -555,7 +557,7 @@ public class WfsManager : OgcManagerBase, IWfsManager
             return string.IsNullOrEmpty(v2) ? null : v2;
         }
         var c2 = r.IndexOf(':');
-        string lp = c2 > 0 ? r.Substring(c2 + 1) : r;
+        string lp = c2 > 0 ? r[(c2 + 1)..] : r;
         foreach (XmlNode n in feat.ChildNodes)
         {
             if (n is not XmlElement e) continue;
@@ -626,24 +628,27 @@ public class WfsManager : OgcManagerBase, IWfsManager
                         imported.SetAttribute("xmlns:ddb", NsDdb);
                     using var ms = new MemoryStream();
                     using (var xw = XmlWriter.Create(ms, new XmlWriterSettings
-                    {
-                        Indent = false,
-                        OmitXmlDeclaration = false,
-                        Encoding = new UTF8Encoding(false)
-                    }))
+                           {
+                               Indent = false,
+                               OmitXmlDeclaration = false,
+                               Encoding = new UTF8Encoding(false)
+                           }))
                         outDoc.Save(xw);
                     return Encoding.UTF8.GetString(ms.ToArray());
                 }
             }
         }
-        catch { }
+        catch (Exception ex)
+        {
+            return null;
+        }
         return null;
     }
 
     /// <summary>Filters a wfs:FeatureCollection (string) to keep only members whose feature
     /// element has gml:id equal to <paramref name="resourceId"/>. Updates numberReturned/numberMatched.</summary>
     private static string FilterByResourceId(string fcXml, string resourceId, bool requireMatch)
-        => FilterByResourceIds(fcXml, new[] { resourceId });
+        => FilterByResourceIds(fcXml, [resourceId]);
 
     private static string FilterByResourceIds(string fcXml, string[] resourceIds)
     {
@@ -700,7 +705,7 @@ public class WfsManager : OgcManagerBase, IWfsManager
 
             const string nsGml = "http://www.opengis.net/gml/3.2";
             const string nsWfs = "http://www.opengis.net/wfs/2.0";
-            var safe = SanitizeFeatureName(layer.Name);
+            var safe = OgcNames.ToNcName(layer.Name);
 
             var outDoc = new XmlDocument();
             outDoc.AppendChild(outDoc.CreateXmlDeclaration("1.0", "utf-8", null));
@@ -746,7 +751,7 @@ public class WfsManager : OgcManagerBase, IWfsManager
                         {
                             var v = attr.Value;
                             var dot = v.LastIndexOf('.');
-                            newAttr.Value = dot > 0 ? safe + v.Substring(dot) : safe + "." + v;
+                            newAttr.Value = dot > 0 ? safe + v[dot..] : safe + "." + v;
                         }
                         else newAttr.Value = attr.Value;
                         newFeat.Attributes.Append(newAttr);
@@ -763,12 +768,10 @@ public class WfsManager : OgcManagerBase, IWfsManager
                             // Skip simple leaf properties with empty/whitespace text content.
                             // Empty values break downstream consumers (e.g. WFS 2.0 ETS sortValues)
                             // that attempt to parse them as numeric or temporal datatypes.
-                            bool isLeaf = true;
-                            foreach (XmlNode gc in pe.ChildNodes)
-                                if (gc is XmlElement) { isLeaf = false; break; }
+                            var isLeaf = !pe.ChildNodes.OfType<XmlElement>().Any();
                             if (isLeaf && string.IsNullOrWhiteSpace(pe.InnerText))
                                 continue;
-                            newProp = outDoc.CreateElement("ddb", SanitizeFeatureName(pe.LocalName), NsDdb);
+                            newProp = outDoc.CreateElement("ddb", OgcNames.ToNcName(pe.LocalName), NsDdb);
                             foreach (XmlNode gc in pe.ChildNodes)
                                 newProp.AppendChild(outDoc.ImportNode(gc, true));
                         }
@@ -1123,7 +1126,7 @@ public class WfsManager : OgcManagerBase, IWfsManager
                 if (text.Length == 0) continue;
                 var colon = text.IndexOf(':');
                 if (colon <= 0) continue; // unprefixed reference: assume local property
-                var prefix = text.Substring(0, colon);
+                var prefix = text[..colon];
                 var nsUri = e.GetNamespaceOfPrefix(prefix);
                 if (string.IsNullOrEmpty(nsUri)) continue;
                 if (nsUri == NsDdb
@@ -1175,11 +1178,11 @@ public class WfsManager : OgcManagerBase, IWfsManager
         // simple property names (no nested traversal beyond first step).
         // Examples: "ddb:ddbSeq", "ddbSeq", "ddb:foo/ddb:bar" -> last step.
         var step = path.Split('/').Last();
-        var local = step.Contains(':') ? step.Substring(step.IndexOf(':') + 1) : step;
+        var local = step.Contains(':') ? step[(step.IndexOf(':') + 1)..] : step;
 
         // Strip predicate brackets if any (e.g. "ddbSeq[1]").
         var br = local.IndexOf('[');
-        if (br > 0) local = local.Substring(0, br);
+        if (br > 0) local = local[..br];
 
         foreach (XmlNode c in feature.ChildNodes)
             if (c is XmlElement e && e.LocalName == local)

@@ -1353,7 +1353,7 @@ public class SystemManager : ISystemManager
             {
                 Name = org.Name,
                 Slug = org.Slug,
-                Datasets = new List<GlobalReportDatasetDto>()
+                Datasets = []
             };
 
             foreach (var ds in org.Datasets)

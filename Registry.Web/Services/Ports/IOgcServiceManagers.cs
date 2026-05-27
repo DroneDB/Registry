@@ -1,12 +1,14 @@
+using System.Collections.Generic;
 using System.Threading.Tasks;
 
 namespace Registry.Web.Services.Ports;
 
 public interface IWmtsManager
 {
-    Task<string> GetCapabilitiesAsync(string orgSlug, string dsSlug, string? folderPath = null);
+    Task<string> GetCapabilitiesAsync(string orgSlug, string dsSlug,
+        IReadOnlyCollection<string>? sections = null, string? folderPath = null);
     Task<byte[]> GetTileAsync(string orgSlug, string dsSlug, string layerName,
-        string tileMatrixSet, int z, int x, int y, string format);
+        string style, string tileMatrixSet, int z, int x, int y, string format);
 }
 
 public interface IWmsManager
@@ -38,7 +40,7 @@ public interface IWcsManager
     Task<string> GetCapabilitiesAsync(string orgSlug, string dsSlug, string? folderPath = null);
     Task<string> DescribeCoverageAsync(string orgSlug, string dsSlug, string coverageId);
     Task<byte[]> GetCoverageAsync(string orgSlug, string dsSlug, string coverageId,
-        double[]? subsetBbox, string format);
+        IReadOnlyCollection<string> subsetParams, string format);
 }
 
 public interface IOgcApiFeaturesManager

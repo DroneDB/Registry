@@ -34,24 +34,6 @@ public abstract class OgcManagerBase
     protected const string NsXsd   = "http://www.w3.org/2001/XMLSchema";
     protected const string NsDdb   = "http://www.dronedb.app/wfs";
 
-    /// <summary>
-    /// Sanitizes a layer name into a valid XML NCName.
-    /// Replaces invalid characters with '_' and ensures the first character is a letter or underscore.
-    /// </summary>
-    protected static string SanitizeFeatureName(string name)
-    {
-        if (string.IsNullOrEmpty(name)) return "_unnamed";
-        var sb = new System.Text.StringBuilder(name.Length);
-        foreach (var c in name)
-        {
-            if (char.IsLetterOrDigit(c) || c == '_' || c == '-' || c == '.') sb.Append(c);
-            else sb.Append('_');
-        }
-        var s = sb.ToString();
-        if (!(char.IsLetter(s[0]) || s[0] == '_')) s = "_" + s;
-        return s;
-    }
-
     protected readonly IUtils Utils;
     protected readonly IAuthManager AuthManager;
     protected readonly IDdbManager DdbManager;
@@ -131,15 +113,15 @@ public abstract class OgcManagerBase
             if (l.BboxWgs84[2] > maxLon) maxLon = l.BboxWgs84[2];
             if (l.BboxWgs84[3] > maxLat) maxLat = l.BboxWgs84[3];
         }
-        return any ? new[] { minLon, minLat, maxLon, maxLat } : null;
+        return any ? [minLon, minLat, maxLon, maxLat] : null;
     }
 
     protected string ResolveRasterArtifact(IDDB ddb, OgcLayerDto layer)
     {
         var cog = Artifacts.GetCogPath(ddb, layer.EntryHash);
-        if (Artifacts.ArtifactExists(cog)) return cog;
-        // Fallback to source file via ddb local path.
-        return ddb.GetLocalPath(layer.EntryPath);
+        return Artifacts.ArtifactExists(cog) ? cog :
+            // Fallback to source file via ddb local path.
+            ddb.GetLocalPath(layer.EntryPath);
     }
 
     protected string ResolveVectorArtifact(IDDB ddb, OgcLayerDto layer)
@@ -174,14 +156,29 @@ public abstract class OgcManagerBase
     /// <summary>
     /// Emits an OWS <c>&lt;ows:Operation name="..."&gt;</c> entry with HTTP Get binding pointing at <paramref name="baseUrl"/>.
     /// </summary>
-    protected static async Task WriteOwsOperationAsync(XmlWriter w, string opName, string baseUrl)
+    protected static async Task WriteOwsOperationAsync(XmlWriter w, string opName, string baseUrl,
+        bool addGetEncodingKvpConstraint = false)
     {
         await w.WriteStartElementAsync("ows", "Operation", null);
         w.WriteAttributeString("name", opName);
         await w.WriteStartElementAsync("ows", "DCP", null);
         await w.WriteStartElementAsync("ows", "HTTP", null);
         await w.WriteStartElementAsync("ows", "Get", null);
-        w.WriteAttributeString("xlink", "href", NsXlink, baseUrl + "?");
+        await w.WriteAttributeStringAsync("xlink", "href", NsXlink, baseUrl + "?");
+        if (addGetEncodingKvpConstraint)
+        {
+            // WMTS 1.0 CITE requires <ows:Constraint name="GetEncoding"> with AllowedValues=KVP
+            // on every <ows:Get> operation to advertise the KVP binding (mandatory test
+            // Server.KVP.GET.GetCapabilities.Response.Encoding.Constraint).
+            await w.WriteStartElementAsync("ows", "Constraint", null);
+            w.WriteAttributeString("name", "GetEncoding");
+            await w.WriteStartElementAsync("ows", "AllowedValues", null);
+            await w.WriteStartElementAsync("ows", "Value", null);
+            await w.WriteStringAsync("KVP");
+            await w.WriteEndElementAsync(); // Value
+            await w.WriteEndElementAsync(); // AllowedValues
+            await w.WriteEndElementAsync(); // Constraint
+        }
         await w.WriteEndElementAsync(); // Get
         await w.WriteEndElementAsync(); // HTTP
         await w.WriteEndElementAsync(); // DCP

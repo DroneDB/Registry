@@ -44,6 +44,9 @@ public interface IDdbWrapper
     public byte[] GenerateMemoryTile(string inputPath, int tz, int tx, int ty, int tileSize, bool tms,
         bool forceRecreate = false, string inputPathHash = "");
 
+    public byte[] GenerateMemoryTile(string inputPath, int tz, int tx, int ty, int tileSize, bool tms,
+        bool forceRecreate, string inputPathHash, string outputFormat);
+
     public void SetTag(string ddbPath, string newTag);
 
     public string? GetTag(string ddbPath);

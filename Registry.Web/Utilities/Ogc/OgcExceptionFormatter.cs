@@ -63,7 +63,14 @@ public static class OgcExceptionFormatter
         return sw.ToString();
     }
 
-    public static string FormatOws(string code, string message, string version = "2.0.0", string? locator = null)
+    /// <summary>
+    /// Render an ows:ExceptionReport. The namespace must match the OWS Common revision imported
+    /// by the failing OGC service: WCS 2.0 imports OWS 2.0; WFS 2.0 / WMTS 1.0 / WPS 1.0 import
+    /// OWS 1.1. CITE schema validation rejects responses whose ExceptionReport element resolves
+    /// to the wrong namespace ("Cannot find the declaration of element 'ows:ExceptionReport'").
+    /// </summary>
+    public static string FormatOws(string code, string message, string version = "2.0.0",
+        string? locator = null, string owsNamespace = "http://www.opengis.net/ows/1.1")
     {
         using var sw = new Utf8StringWriter();
         using var w = XmlWriter.Create(sw, new XmlWriterSettings
@@ -71,12 +78,12 @@ public static class OgcExceptionFormatter
             Indent = true, Encoding = Encoding.UTF8, OmitXmlDeclaration = false
         });
         w.WriteStartDocument();
-        w.WriteStartElement("ows", "ExceptionReport", "http://www.opengis.net/ows/1.1");
+        w.WriteStartElement("ows", "ExceptionReport", owsNamespace);
         w.WriteAttributeString("version", version);
-        w.WriteStartElement("ows", "Exception", "http://www.opengis.net/ows/1.1");
+        w.WriteStartElement("ows", "Exception", owsNamespace);
         if (!string.IsNullOrEmpty(code)) w.WriteAttributeString("exceptionCode", code);
         if (!string.IsNullOrEmpty(locator)) w.WriteAttributeString("locator", locator);
-        w.WriteStartElement("ows", "ExceptionText", "http://www.opengis.net/ows/1.1");
+        w.WriteStartElement("ows", "ExceptionText", owsNamespace);
         w.WriteString(message ?? string.Empty);
         w.WriteEndElement();
         w.WriteEndElement();

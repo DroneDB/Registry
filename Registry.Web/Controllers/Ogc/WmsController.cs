@@ -8,7 +8,7 @@ using Registry.Web.Services.Ports;
 using Registry.Web.Utilities;
 using Registry.Web.Utilities.Ogc;
 
-namespace Registry.Web.Controllers;
+namespace Registry.Web.Controllers.Ogc;
 
 /// <summary>WMS 1.3.0 controller (with best-effort 1.1.1 negotiation).</summary>
 [ApiController]
@@ -46,8 +46,8 @@ public class WmsController : ControllerBaseEx
             {
                 if (string.IsNullOrWhiteSpace(rawVersion))
                     throw new OgcException("MissingParameterValue", "VERSION is required for GetMap", 400, "VERSION");
-                var layers = OgcRequestParser.GetList(q, "LAYERS") ?? Array.Empty<string>();
-                var styles = OgcRequestParser.GetList(q, "STYLES") ?? Array.Empty<string>();
+                var layers = OgcRequestParser.GetList(q, "LAYERS") ?? [];
+                var styles = OgcRequestParser.GetList(q, "STYLES") ?? [];
                 var crs = OgcRequestParser.Get(q, version == "1.3.0" ? "CRS" : "SRS") ?? "EPSG:4326";
                 var width = OgcRequestParser.GetInt(q, "WIDTH", 256, 1, 4096);
                 var height = OgcRequestParser.GetInt(q, "HEIGHT", 256, 1, 4096);
@@ -76,7 +76,7 @@ public class WmsController : ControllerBaseEx
             {
                 var queryLayers = OgcRequestParser.GetList(q, "QUERY_LAYERS")
                                   ?? OgcRequestParser.GetList(q, "LAYERS")
-                                  ?? Array.Empty<string>();
+                                  ?? [];
                 if (queryLayers.Length == 0)
                     throw new OgcException("MissingParameterValue", "QUERY_LAYERS required", 400, "QUERY_LAYERS");
                 var crs = OgcRequestParser.Get(q, version == "1.3.0" ? "CRS" : "SRS") ?? "EPSG:4326";
