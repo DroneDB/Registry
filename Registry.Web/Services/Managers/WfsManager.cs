@@ -77,7 +77,9 @@ public class WfsManager : OgcManagerBase, IWfsManager
 
         await ResolveAsync(orgSlug, dsSlug);
         var layers = await LayerCatalog.GetLayersAsync(orgSlug, dsSlug, folderPath);
-        var vectorLayers = layers.Where(l => l.EntryType == EntryType.Vector).ToList();
+        // Only advertise vector layers that have a built GPKG sidecar. Unbuilt entries would
+        // surface 400/InvalidParameterValue on every WFS operation, so we hide them entirely.
+        var vectorLayers = layers.Where(l => l.EntryType == EntryType.Vector && l.HasBuiltArtifact).ToList();
         var baseUrl = GetServiceUrl(orgSlug, dsSlug, "wfs", folderPath);
 
         var sb = new StringBuilder();
@@ -382,12 +384,23 @@ public class WfsManager : OgcManagerBase, IWfsManager
 
         var gpkg = ResolveVectorArtifact(ddb, layer);
         var internalFormat = MapWfsOutputFormat(outputFormat);
+        // Per OGC 09-025r2 §7.9.2.4, RESOURCEID and FES Filter select features by
+        // identity/predicate independent of pagination. Pre-limiting at the vector
+        // query layer (count/startIndex) would drop matches that fall outside the
+        // first <count> bbox results, so when either selector is present we fetch
+        // the full feature set and apply the post-filter. Pagination still applies
+        // to plain BBOX/typename requests.
+        var hasSelector = !string.IsNullOrEmpty(resourceId) || !string.IsNullOrEmpty(filterXml);
+        var fetchCount = hasSelector ? 10000 : count;
+        var fetchStart = hasSelector ? 0 : startIndex;
         var raw = DdbWrapper.QueryVector(gpkg, layer.InnerLayerName, bbox, bboxCrs ?? "EPSG:4326",
-            count, startIndex, internalFormat);
+            fetchCount, fetchStart, internalFormat);
         if (internalFormat != "gml") return raw;
         var wrapped = WrapAsWfsFeatureCollection(raw, layer);
         if (!string.IsNullOrEmpty(resourceId))
+        {
             wrapped = FilterByResourceIds(wrapped, resourceId!.Split(',', StringSplitOptions.RemoveEmptyEntries));
+        }
         if (!string.IsNullOrEmpty(filterXml))
             wrapped = ApplyFesFilter(wrapped, filterXml!);
         return wrapped;

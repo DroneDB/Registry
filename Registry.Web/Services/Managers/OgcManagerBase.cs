@@ -128,9 +128,12 @@ public abstract class OgcManagerBase
     {
         var gpkg = Artifacts.GetVectorQueryPath(ddb, layer.EntryHash);
         if (!Artifacts.ArtifactExists(gpkg))
-            throw new OgcException("OperationNotSupported",
+            // OWS Common 2.0: a referenced layer/typeName the server cannot serve is
+            // an invalid parameter value, not an unsupported operation. Returning 404
+            // here would violate the WFS 2.0 ATS (typeNames is a parameter, not a resource).
+            throw new OgcException("InvalidParameterValue",
                 $"Vector layer '{layer.Name}' has no built GPKG sidecar. Run dataset build first.",
-                404, "LAYERS");
+                400, "typeNames");
         return gpkg;
     }
 

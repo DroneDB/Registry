@@ -90,7 +90,9 @@ public class OgcLayerCatalog : IOgcLayerCatalog
                     continue;
                 }
 
-                // Fallback: single layer using entry-level metadata.
+                // Fallback: single layer using entry-level metadata. No GPKG sidecar was found,
+                // so the layer is advertised but flagged so OGC managers can hide it from caps
+                // and emit InvalidParameterValue when referenced.
                 result.Add(new OgcLayerDto
                 {
                     Name = e.Path,
@@ -99,7 +101,8 @@ public class OgcLayerCatalog : IOgcLayerCatalog
                     EntryPath = e.Path,
                     EntryHash = e.Hash ?? string.Empty,
                     BboxWgs84 = entryBbox,
-                    GeometryType = ExtractVectorGeometryType(e)
+                    GeometryType = ExtractVectorGeometryType(e),
+                    HasBuiltArtifact = false
                 });
             }
             else

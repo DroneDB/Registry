@@ -60,11 +60,14 @@ public static class WcsSubsetParser
                     $"subset axis '{axis}' is not one of the coverage axis labels (Long, Lat)",
                     404, "subset");
 
-            // Req31: at most one subset per dimension.
+            // Req31: at most one subset per dimension. Per OGC 09-110r4 §9.3.2.2 and the
+            // WCS 2.0 CITE compliance suite, a duplicate axis label in subset parameters
+            // is reported as InvalidAxisLabel with HTTP 404 (the second occurrence does
+            // not denote a fresh, valid axis selection).
             var canonical = isLon ? "Long" : "Lat";
             if (!seenAxes.Add(canonical))
-                throw new OgcException("InvalidParameterValue",
-                    $"axis '{canonical}' appears in more than one subset operation", 400, "subset");
+                throw new OgcException("InvalidAxisLabel",
+                    $"axis '{canonical}' appears in more than one subset operation", 404, "subset");
 
             var positions = s.Substring(open + 1, close - open - 1)
                              .Split(',', StringSplitOptions.TrimEntries);

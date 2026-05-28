@@ -105,6 +105,7 @@ public class OgcLayerCatalogTests
         result.Count.ShouldBe(1);
         result[0].Name.ShouldBe(entry.Path);
         result[0].InnerLayerName.ShouldBeNull();
+        result[0].HasBuiltArtifact.ShouldBeFalse();
         _wrapper.Verify(w => w.DescribeVector(It.IsAny<string>(), It.IsAny<string>()), Times.Never);
     }
 
@@ -123,6 +124,7 @@ public class OgcLayerCatalogTests
         result.Count.ShouldBe(1);
         result[0].Name.ShouldBe(entry.Path);
         result[0].InnerLayerName.ShouldBeNull();
+        result[0].HasBuiltArtifact.ShouldBeFalse();
     }
 
     [Test]
@@ -139,6 +141,7 @@ public class OgcLayerCatalogTests
 
         result.Count.ShouldBe(1);
         result[0].Name.ShouldBe(entry.Path);
+        result[0].HasBuiltArtifact.ShouldBeFalse();
     }
 
     [Test]

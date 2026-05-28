@@ -34,6 +34,14 @@ public class OgcLayerDto
 
     /// <summary>Raster-only: number of bands reported by the underlying dataset (0 when unknown).</summary>
     public int BandCount { get; set; }
+
+    /// <summary>
+    /// True when the dataset build has produced the artifact required to serve this layer
+    /// (COG for rasters, GPKG sidecar for vectors). Layers without a built artifact are
+    /// hidden from WFS/WMTS/OGC API capabilities and surface InvalidParameterValue when
+    /// referenced by name.
+    /// </summary>
+    public bool HasBuiltArtifact { get; set; } = true;
 }
 
 public class OgcBoundingBoxDto
