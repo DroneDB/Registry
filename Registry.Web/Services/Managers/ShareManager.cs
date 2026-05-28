@@ -219,6 +219,17 @@ public class ShareManager : IShareManager
         Dataset dataset;
         var tag = parameters.Tag.ToTag();
 
+        // If no tag is specified but OrgSlug is, treat it as "create new dataset in that org"
+        // This lets callers specify a destination org without requiring a full "org/dataset" tag.
+        if (tag == null && !string.IsNullOrWhiteSpace(parameters.OrgSlug))
+        {
+            if (!parameters.OrgSlug.IsValidSlug())
+                throw new BadRequestException($"Organization slug is not valid: '{parameters.OrgSlug}'");
+
+            // Use a synthetic tag with only the org; dataset slug is null so a new one is generated below
+            tag = new TagDto(parameters.OrgSlug, null);
+        }
+
         // No organization requested
         if (tag?.OrganizationSlug == null)
         {
