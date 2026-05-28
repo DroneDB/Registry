@@ -29,6 +29,13 @@ public class FeaturesDto
     public int? MaxConcurrentDownloadsPerUser { get; set; }
 
     /// <summary>
+    /// When true, anonymous (not logged-in) users cannot download bulk archives
+    /// (whole dataset, folders, or multi-file selections). Single-file downloads are always allowed.
+    /// Clients use this flag to disable bulk-download UI controls for anonymous users.
+    /// </summary>
+    public bool DisableAnonymousBulkDownloads { get; set; }
+
+    /// <summary>
     /// Password complexity policy. Null when no policy is enforced.
     /// </summary>
     public PasswordPolicyDto? PasswordPolicy { get; set; }

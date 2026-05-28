@@ -1403,7 +1403,25 @@ public class ObjectsManager : IObjectsManager
 
         EnsurePathsValidity(orgSlug, ds.InternalRef, paths);
 
-        return GetFileStreamDescriptor(orgSlug, dsSlug, ds.InternalRef, paths);
+        var descriptor = GetFileStreamDescriptor(orgSlug, dsSlug, ds.InternalRef, paths);
+
+        // Enforce DisableAnonymousBulkDownloads policy: anonymous users cannot download
+        // bulk archives (whole dataset, folders, or multi-file selections). Single files are allowed.
+        if (_settings.DisableAnonymousBulkDownloads && descriptor.Type != FileDescriptorType.Single)
+        {
+            var currentUser = await _authManager.GetCurrentUser();
+            if (currentUser == null)
+            {
+                _logger.LogWarning(
+                    "Blocked anonymous bulk download for '{OrgSlug}/{DsSlug}' (type={Type}, paths='{Paths}')",
+                    orgSlug, dsSlug, descriptor.Type,
+                    paths != null ? string.Join(",", paths) : "(none)");
+                throw new UnauthorizedException(
+                    "Bulk downloads are not allowed for anonymous users. Please log in to download multiple files or entire datasets.");
+            }
+        }
+
+        return descriptor;
     }
 
     private FileStreamDescriptor GetFileStreamDescriptor(string orgSlug, string dsSlug, Guid internalRef,

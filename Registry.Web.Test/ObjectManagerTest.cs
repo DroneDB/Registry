@@ -20,6 +20,7 @@ using Registry.Web.Data;
 using Registry.Web.Data.Models;
 using Registry.Web.Exceptions;
 using Registry.Web.Models.Configuration;
+using Registry.Web.Models.DTO;
 using Registry.Web.Services.Adapters;
 using Registry.Web.Services.Managers;
 using Registry.Web.Services.Ports;
@@ -415,6 +416,112 @@ public class ObjectManagerTest : TestBase
 
             hash.ShouldBe(expectedHash);
         }
+    }
+
+
+    private ObjectsManager BuildObjectsManagerForBulkDownloadTest(string datasetsPath, RegistryContext context,
+        bool disableAnonymousBulkDownloads, User currentUser)
+    {
+        var settings = JsonConvert.DeserializeObject<AppSettings>(_settingsJson);
+        settings.DatasetsPath = datasetsPath;
+        settings.DisableAnonymousBulkDownloads = disableAnonymousBulkDownloads;
+        _appSettingsMock.Setup(o => o.Value).Returns(settings);
+
+        _authManagerMock.Setup(o => o.IsUserAdmin()).Returns(Task.FromResult(currentUser != null));
+        _authManagerMock.Setup(o => o.RequestAccess(It.IsAny<Dataset>(),
+            It.IsAny<AccessType>())).Returns(Task.FromResult(true));
+        _authManagerMock.Setup(o => o.RequestAccess(It.IsAny<Organization>(),
+            It.IsAny<AccessType>())).Returns(Task.FromResult(true));
+        _authManagerMock.Setup(o => o.GetCurrentUser()).Returns(Task.FromResult(currentUser));
+
+        var webUtils = new WebUtils(_authManagerMock.Object, context, _appSettingsMock.Object,
+            _httpContextAccessorMock.Object, _ddbFactoryMock.Object);
+
+        return new ObjectsManager(_objectManagerLogger, context, _appSettingsMock.Object,
+            new DdbManager(_appSettingsMock.Object, _ddbFactoryLogger, DdbWrapper), webUtils,
+            _authManagerMock.Object, _cacheManager, _fileSystem, _backgroundJobsProcessor, DdbWrapper,
+            _thumbnailGeneratorMock.Object, _jobIndexQueryMock.Object, _buildPendingService);
+    }
+
+    [Test]
+    public async Task DownloadStream_FlagOnAnonymousMulti_ThrowsUnauthorized()
+    {
+        string[] fileNames = ["DJI_0019.JPG", "DJI_0020.JPG"];
+        using var test = new TestFS(Test4ArchiveUrl, BaseTestFolder);
+        await using var context = GetTest1Context();
+
+        var manager = BuildObjectsManagerForBulkDownloadTest(test.TestFolder, context,
+            disableAnonymousBulkDownloads: true, currentUser: null);
+
+        await Should.ThrowAsync<UnauthorizedException>(async () =>
+            await manager.DownloadStream(MagicStrings.PublicOrganizationSlug,
+                MagicStrings.DefaultDatasetSlug, fileNames));
+    }
+
+    [Test]
+    public async Task DownloadStream_FlagOnAnonymousWholeDataset_ThrowsUnauthorized()
+    {
+        using var test = new TestFS(Test4ArchiveUrl, BaseTestFolder);
+        await using var context = GetTest1Context();
+
+        var manager = BuildObjectsManagerForBulkDownloadTest(test.TestFolder, context,
+            disableAnonymousBulkDownloads: true, currentUser: null);
+
+        await Should.ThrowAsync<UnauthorizedException>(async () =>
+            await manager.DownloadStream(MagicStrings.PublicOrganizationSlug,
+                MagicStrings.DefaultDatasetSlug, null));
+    }
+
+    [Test]
+    public async Task DownloadStream_FlagOnAnonymousSingleFile_Allowed()
+    {
+        using var test = new TestFS(Test4ArchiveUrl, BaseTestFolder);
+        await using var context = GetTest1Context();
+
+        var manager = BuildObjectsManagerForBulkDownloadTest(test.TestFolder, context,
+            disableAnonymousBulkDownloads: true, currentUser: null);
+
+        var res = await manager.DownloadStream(MagicStrings.PublicOrganizationSlug,
+            MagicStrings.DefaultDatasetSlug, ["DJI_0019.JPG"]);
+
+        res.ShouldNotBeNull();
+        res.Type.ShouldBe(FileDescriptorType.Single);
+    }
+
+    [Test]
+    public async Task DownloadStream_FlagOnAuthenticatedMulti_Allowed()
+    {
+        string[] fileNames = ["DJI_0019.JPG", "DJI_0020.JPG"];
+        using var test = new TestFS(Test4ArchiveUrl, BaseTestFolder);
+        await using var context = GetTest1Context();
+
+        var manager = BuildObjectsManagerForBulkDownloadTest(test.TestFolder, context,
+            disableAnonymousBulkDownloads: true, currentUser: new User { UserName = "tester" });
+
+        var res = await manager.DownloadStream(MagicStrings.PublicOrganizationSlug,
+            MagicStrings.DefaultDatasetSlug, fileNames);
+
+        res.ShouldNotBeNull();
+        res.Name.ShouldEndWith(".zip");
+        res.Type.ShouldBe(FileDescriptorType.Multiple);
+    }
+
+    [Test]
+    public async Task DownloadStream_FlagOffAnonymousMulti_Allowed()
+    {
+        string[] fileNames = ["DJI_0019.JPG", "DJI_0020.JPG"];
+        using var test = new TestFS(Test4ArchiveUrl, BaseTestFolder);
+        await using var context = GetTest1Context();
+
+        var manager = BuildObjectsManagerForBulkDownloadTest(test.TestFolder, context,
+            disableAnonymousBulkDownloads: false, currentUser: null);
+
+        var res = await manager.DownloadStream(MagicStrings.PublicOrganizationSlug,
+            MagicStrings.DefaultDatasetSlug, fileNames);
+
+        res.ShouldNotBeNull();
+        res.Name.ShouldEndWith(".zip");
+        res.Type.ShouldBe(FileDescriptorType.Multiple);
     }
 
 

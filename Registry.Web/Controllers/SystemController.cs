@@ -380,6 +380,7 @@ public class SystemController : ControllerBaseEx
             UserManagement = string.IsNullOrWhiteSpace(_appSettings.ExternalAuthUrl),
             StorageLimiter = _appSettings.EnableStorageLimiter,
             MaxConcurrentDownloadsPerUser = _appSettings.MaxConcurrentDownloadsPerUser,
+            DisableAnonymousBulkDownloads = _appSettings.DisableAnonymousBulkDownloads,
             PasswordPolicy = _appSettings.PasswordPolicy != null
                 ? new PasswordPolicyDto
                 {

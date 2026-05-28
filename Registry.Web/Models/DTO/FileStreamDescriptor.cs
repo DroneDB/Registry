@@ -35,6 +35,12 @@ public class FileStreamDescriptor
 
     public string ContentType { get; }
 
+    /// <summary>
+    /// Classification of the underlying download (single file, multi-file selection, or full dataset).
+    /// Used by callers (e.g. <see cref="ObjectsManager.DownloadStream"/>) to enforce bulk-download policies.
+    /// </summary>
+    public FileDescriptorType Type => _descriptorType;
+
     public FileStreamDescriptor(string name, string contentType, string orgSlug, Guid internalRef, string[] paths, string[] folders,
         FileDescriptorType descriptorType, ILogger<ObjectsManager> logger, IDdbManager ddbManager, long maxZipMemoryThreshold)
     {
@@ -63,11 +69,11 @@ public class FileStreamDescriptor
             {
                 var localPath = _ddb.GetLocalPath(path);
                 var fileInfo = new FileInfo(localPath);
-                
+
                 // NOTE: This could be optimized by caching file sizes during initial listing or using Length without checking existence (catch exception if not found)
                 if (fileInfo.Exists)
                     totalSize += fileInfo.Length;
-                
+
             }
             catch (Exception ex)
             {
@@ -103,7 +109,7 @@ public class FileStreamDescriptor
             using (var archive = new ZipArchive(fileStream, ZipArchiveMode.Create))
             {
                 await AddFilesToZip(archive);
-            } 
+            }
             // ZipArchive is disposed here safely on file stream
 
             // Stream the temporary file to the response stream

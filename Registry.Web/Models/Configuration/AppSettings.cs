@@ -112,6 +112,13 @@ public class AppSettings
     public int? MaxConcurrentDownloadsPerUser { get; set; }
 
     /// <summary>
+    /// When true, anonymous (not logged-in) users are not allowed to download bulk archives
+    /// (whole dataset, folders, or multi-file selections). Single-file downloads remain allowed.
+    /// Default: false (anonymous bulk downloads are permitted on public/unlisted datasets).
+    /// </summary>
+    public bool DisableAnonymousBulkDownloads { get; set; } = false;
+
+    /// <summary>
     /// Enables organization-level member management.
     /// When disabled, only system admins can manage organization members.
     /// </summary>
