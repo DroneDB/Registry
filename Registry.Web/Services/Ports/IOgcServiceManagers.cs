@@ -1,5 +1,7 @@
 using System.Collections.Generic;
 using System.Threading.Tasks;
+using Registry.Web.Models.DTO.Ogc;
+using Registry.Web.Services.Managers.Wcs;
 
 namespace Registry.Web.Services.Ports;
 
@@ -37,18 +39,24 @@ public interface IWfsManager
 
 public interface IWcsManager
 {
-    Task<string> GetCapabilitiesAsync(string orgSlug, string dsSlug, string? folderPath = null);
-    Task<string> DescribeCoverageAsync(string orgSlug, string dsSlug, string coverageId);
-    Task<byte[]> GetCoverageAsync(string orgSlug, string dsSlug, string coverageId,
-        IReadOnlyCollection<string> subsetParams, string format);
+    /// <summary>List of WCS protocol versions handled by this manager (highest first).</summary>
+    IReadOnlyList<string> SupportedVersions { get; }
+
+    Task<string> GetCapabilitiesAsync(string orgSlug, string dsSlug, string version, string? folderPath = null);
+    Task<string> DescribeCoverageAsync(string orgSlug, string dsSlug, string version, string coverageId);
+    /// <summary>Render the requested coverage. Parameter parsing is per-version and lives
+    /// in the dispatched <see cref="Registry.Web.Services.Managers.Wcs.IWcsProtocolHandler"/>;
+    /// the manager receives the raw <see cref="Microsoft.AspNetCore.Http.IQueryCollection"/>.</summary>
+    Task<WcsCoverageResult> GetCoverageAsync(
+        string orgSlug, string dsSlug, string version, Microsoft.AspNetCore.Http.IQueryCollection query);
 }
 
 public interface IOgcApiFeaturesManager
 {
-    Task<Models.DTO.Ogc.OgcApiLandingDto> GetLandingAsync(string orgSlug, string dsSlug, string baseUrl);
-    Task<Models.DTO.Ogc.OgcConformanceDto> GetConformanceAsync();
-    Task<Models.DTO.Ogc.OgcApiCollectionsDto> GetCollectionsAsync(string orgSlug, string dsSlug, string baseUrl);
-    Task<Models.DTO.Ogc.OgcApiCollectionDto?> GetCollectionAsync(string orgSlug, string dsSlug, string collectionId, string baseUrl);
+    Task<OgcApiLandingDto> GetLandingAsync(string orgSlug, string dsSlug, string baseUrl);
+    Task<OgcConformanceDto> GetConformanceAsync();
+    Task<OgcApiCollectionsDto> GetCollectionsAsync(string orgSlug, string dsSlug, string baseUrl);
+    Task<OgcApiCollectionDto?> GetCollectionAsync(string orgSlug, string dsSlug, string collectionId, string baseUrl);
     Task<string> GetItemsAsync(string orgSlug, string dsSlug, string collectionId,
         double[]? bbox, int limit, int offset);
     Task<string> GetItemAsync(string orgSlug, string dsSlug, string collectionId, string featureId);

@@ -53,7 +53,9 @@ using Registry.Ports.DroneDB;
 using Registry.Web.Identity;
 using Registry.Web.Identity.Models;
 using Registry.Web.Services.Initialization;
+using Registry.Web.Services.Managers.Wcs;
 using Registry.Web.Utilities.Auth;
+using Registry.Web.Utilities.Ogc;
 using Scalar.AspNetCore;
 using Serilog;
 using Serilog.Events;
@@ -292,11 +294,15 @@ public class Startup
         services.AddScoped<IWmtsManager, WmtsManager>();
         services.AddScoped<IWmsManager, WmsManager>();
         services.AddScoped<IWfsManager, WfsManager>();
+        services.AddScoped<IWcsCoverageService, WcsCoverageService>();
+        services.AddScoped<IWcsProtocolHandler, WcsProtocol10Handler>();
+        services.AddScoped<IWcsProtocolHandler, WcsProtocol11Handler>();
+        services.AddScoped<IWcsProtocolHandler, WcsProtocol20Handler>();
         services.AddScoped<IWcsManager, WcsManager>();
         services.AddScoped<IOgcApiFeaturesManager, OgcApiFeaturesManager>();
         services.AddScoped<IOgcApiTilesManager, OgcApiTilesManager>();
-        services.AddScoped<Registry.Web.Utilities.Ogc.OgcAuthorizationFilter>();
-        services.AddScoped<Registry.Web.Utilities.Ogc.OgcExceptionFilter>();
+        services.AddScoped<OgcAuthorizationFilter>();
+        services.AddScoped<OgcExceptionFilter>();
 
         if (!string.IsNullOrWhiteSpace(appSettings.RemoteThumbnailGeneratorUrl))
         {

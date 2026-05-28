@@ -1,5 +1,4 @@
 using System;
-using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc;
 using Registry.Web.Exceptions;
@@ -11,7 +10,9 @@ using Registry.Web.Utilities.Ogc;
 
 namespace Registry.Web.Controllers.Ogc;
 
-/// <summary>WCS 2.0 controller.</summary>
+/// <summary>WCS controller. Supports versions 1.0.0 / 1.1.1 / 2.0.1 via version
+/// negotiation; the per-version wire format is handled by
+/// <see cref="Services.Managers.Wcs.IWcsProtocolHandler"/> implementations.</summary>
 [ApiController]
 [ServiceFilter(typeof(BasicAuthFilter))]
 [ServiceFilter(typeof(OgcAuthorizationFilter))]
@@ -21,7 +22,11 @@ namespace Registry.Web.Controllers.Ogc;
 public class WcsController : ControllerBaseEx
 {
     private readonly IWcsManager _mgr;
-    public WcsController(IWcsManager mgr) { _mgr = mgr; }
+
+    public WcsController(IWcsManager mgr)
+    {
+        _mgr = mgr;
+    }
 
     [HttpGet("wcs")]
     public Task<IActionResult> Kvp([FromRoute] string orgSlug, [FromRoute] string dsSlug)
@@ -35,67 +40,42 @@ public class WcsController : ControllerBaseEx
     {
         var q = Request.Query;
         var request = OgcRequestParser.GetRequired(q, "REQUEST");
-        switch (request.ToUpperInvariant())
+        var rawVersion = OgcRequestParser.Get(q, "VERSION");
+        var acceptVersions = OgcRequestParser.Get(q, "ACCEPTVERSIONS");
+
+        // For GetCapabilities a missing VERSION is legitimate (the client is discovering it);
+        // we still negotiate so the response body matches the chosen profile.
+        var version = WcsVersionNegotiator.Negotiate(rawVersion, acceptVersions);
+
+        // WCS 1.0 §6.1.2: GetCoverage and DescribeCoverage REQUIRE VERSION. For 1.1 / 2.0 the
+        // version may also come from ACCEPTVERSIONS; we treat both as equivalent here.
+        var op = request.ToUpperInvariant();
+        if ((op == "GETCOVERAGE" || op == "DESCRIBECOVERAGE")
+            && string.IsNullOrWhiteSpace(rawVersion) && string.IsNullOrWhiteSpace(acceptVersions))
+            throw new OgcException("MissingParameterValue",
+                "VERSION is required for DescribeCoverage and GetCoverage", 400, "VERSION");
+
+        switch (op)
         {
             case "GETCAPABILITIES":
-            {
-                // WCS 2.0.1 version negotiation (OGC 09-110r4 §8.3.2).
-                // If the client explicitly requests only versions the server does not support,
-                // return VersionNegotiationFailed so the client knows to retry with 2.0.
-                // WCS 1.0.0 / 1.1.x have a completely different XML schema, axis-order rules,
-                // GetCoverage parameter encoding and subsetting syntax — implementing them on
-                // top of our WCS 2.0 stack is a separate, significant undertaking.
-                var acceptVersions = OgcRequestParser.Get(q, "ACCEPTVERSIONS");
-                if (!string.IsNullOrWhiteSpace(acceptVersions))
-                {
-                    var clientVersions = acceptVersions.Split(',',
-                        StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-                    if (!clientVersions.Any(v => v.StartsWith("2.", StringComparison.Ordinal)))
-                        throw new OgcException("VersionNegotiationFailed",
-                            $"WCS 2.0.1 is the only supported version. " +
-                            $"In QGIS: set WCS version to '2.0' in the connection dialog. " +
-                            $"Client requested: {acceptVersions}", 400, "ACCEPTVERSIONS");
-                }
-                return Content(await _mgr.GetCapabilitiesAsync(orgSlug, dsSlug, folderPath),
+                return Content(await _mgr.GetCapabilitiesAsync(orgSlug, dsSlug, version, folderPath),
                     "text/xml; charset=utf-8");
-            }
+
             case "DESCRIBECOVERAGE":
             {
-                var cid = OgcRequestParser.GetRequired(q, "COVERAGEID");
-                return Content(await _mgr.DescribeCoverageAsync(orgSlug, dsSlug, cid),
+                // WCS 1.0 uses COVERAGE, 1.1 / 2.0 use CoverageId (alias-tolerant).
+                var cid = OgcRequestParser.GetAny(q, "COVERAGE", "COVERAGEID", "IDENTIFIER", "IDENTIFIERS")
+                          ?? string.Empty;
+                return Content(await _mgr.DescribeCoverageAsync(orgSlug, dsSlug, version, cid),
                     "text/xml; charset=utf-8");
             }
+
             case "GETCOVERAGE":
             {
-                var cid = OgcRequestParser.GetRequired(q, "COVERAGEID");
-
-                // WCS 2.0 Core (OGC 09-110r4) Req29: the only legal value of mediaType is
-                // "multipart/related"; any other value MUST raise InvalidParameterValue.
-                var mediaType = OgcRequestParser.Get(q, "MEDIATYPE");
-                if (!string.IsNullOrWhiteSpace(mediaType) &&
-                    !string.Equals(mediaType, "multipart/related", StringComparison.OrdinalIgnoreCase))
-                    throw new OgcException("InvalidParameterValue",
-                        $"mediaType '{mediaType}' is invalid; only 'multipart/related' is allowed (WCS 2.0 Req29)",
-                        400, "mediaType");
-
-                // WCS 2.0 Req32/33: if FORMAT is omitted, return the coverage in its nativeFormat
-                // (image/tiff for our GeoTIFF rasters); if FORMAT is present it must match one of
-                // wcs:formatSupported advertised by GetCapabilities.
-                var format = OgcRequestParser.Get(q, "FORMAT");
-                if (string.IsNullOrWhiteSpace(format)) format = "image/tiff";
-                else if (!Utilities.Ogc.WcsConformance.SupportedFormats.Contains(format,
-                            StringComparer.OrdinalIgnoreCase))
-                    throw new OgcException("InvalidParameterValue",
-                        $"format '{format}' is not supported", 400, "format");
-
-                double[]? subset = null;
-                var subsetParams = q
-                    .Where(kv => string.Equals(kv.Key, "SUBSET", StringComparison.OrdinalIgnoreCase))
-                    .SelectMany(kv => kv.Value.ToString().Split(';', StringSplitOptions.RemoveEmptyEntries))
-                    .ToArray();
-                var bytes = await _mgr.GetCoverageAsync(orgSlug, dsSlug, cid, subsetParams, format);
-                return File(bytes, format);
+                var result = await _mgr.GetCoverageAsync(orgSlug, dsSlug, version, q);
+                return File(result.Bytes, result.ContentType);
             }
+
             default:
                 throw new OgcException("OperationNotSupported",
                     $"WCS REQUEST '{request}' not supported", 400, "REQUEST");

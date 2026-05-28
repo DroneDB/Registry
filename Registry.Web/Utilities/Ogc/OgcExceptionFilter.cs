@@ -26,9 +26,9 @@ public class OgcExceptionFilter : IExceptionFilter
 
         // Determine service from path. /wmts must be matched BEFORE /wms to avoid prefix collision.
         var isWmts = path.Contains("/wmts", System.StringComparison.OrdinalIgnoreCase);
-        var isWms  = !isWmts && path.Contains("/wms", System.StringComparison.OrdinalIgnoreCase);
-        var isWfs  = path.Contains("/wfs", System.StringComparison.OrdinalIgnoreCase);
-        var isWcs  = path.Contains("/wcs", System.StringComparison.OrdinalIgnoreCase);
+        var isWms = !isWmts && path.Contains("/wms", System.StringComparison.OrdinalIgnoreCase);
+        var isWfs = path.Contains("/wfs", System.StringComparison.OrdinalIgnoreCase);
+        var isWcs = path.Contains("/wcs", System.StringComparison.OrdinalIgnoreCase);
 
         // Negotiate version per service so the ExceptionReport schema matches.
         var requested = OgcRequestParser.Get(query, "VERSION")
@@ -41,7 +41,12 @@ public class OgcExceptionFilter : IExceptionFilter
         else if (isWmts)
             version = string.IsNullOrWhiteSpace(requested) ? "1.0.0" : requested!;
         else if (isWcs)
-            version = string.IsNullOrWhiteSpace(requested) ? "2.0.1" : requested!;
+            // Honour WCS version negotiation: WCS 1.0 uses a WMS-like ServiceExceptionReport
+            // (no OWS namespace); WCS 1.1 uses ows/1.1; WCS 2.0 uses ows/2.0. Negotiation
+            // failures here are rendered with WCS 2.0.1 as the safe default.
+            version = SafeNegotiateWcsVersion(
+                OgcRequestParser.Get(query, "VERSION"),
+                OgcRequestParser.Get(query, "ACCEPTVERSIONS"));
         else
             version = string.IsNullOrWhiteSpace(requested) ? "1.3.0" : requested!;
 
@@ -104,6 +109,7 @@ public class OgcExceptionFilter : IExceptionFilter
                     message = msg.Length == 0 ? "DroneDB error" : msg;
                     status = 500;
                 }
+
                 break;
             default:
                 _logger.LogError(context.Exception, "Unhandled exception in OGC pipeline: {Path}", path);
@@ -118,10 +124,16 @@ public class OgcExceptionFilter : IExceptionFilter
             xml = OgcExceptionFormatter.FormatWms111(code, message);
         else if (isWms)
             xml = OgcExceptionFormatter.FormatWms130(code, message);
+        else if (isWcs && version.StartsWith("1.0", System.StringComparison.Ordinal))
+            // WCS 1.0.0 predates OWS Common: errors are wrapped in <ServiceExceptionReport>
+            // (namespace http://www.opengis.net/ogc, version 1.2.0) — see OGC 03-065r6 §A.4.1.
+            xml = OgcExceptionFormatter.FormatWcs10(code, message);
         else
         {
-            // WCS 2.0 imports ows/2.0; WFS 2.0 / WMTS 1.0 import ows/1.1.
-            var owsNs = isWcs ? "http://www.opengis.net/ows/2.0" : "http://www.opengis.net/ows/1.1";
+            // WCS 1.1 → ows/1.1; WCS 2.0 → ows/2.0; WFS 2.0 / WMTS 1.0 → ows/1.1.
+            var owsNs = (isWcs && version.StartsWith("2.", System.StringComparison.Ordinal))
+                ? "http://www.opengis.net/ows/2.0"
+                : "http://www.opengis.net/ows/1.1";
             xml = OgcExceptionFormatter.FormatOws(code, message, version, locator, owsNs);
         }
 
@@ -132,5 +144,20 @@ public class OgcExceptionFilter : IExceptionFilter
             StatusCode = status
         };
         context.ExceptionHandled = true;
+    }
+
+    /// <summary>WCS version negotiation that never throws: falls back to the highest
+    /// supported version (2.0.1) when the negotiator would otherwise raise. Used by the
+    /// exception filter so we don't lose the original error to a secondary failure.</summary>
+    private static string SafeNegotiateWcsVersion(string? rawVersion, string? acceptVersions)
+    {
+        try
+        {
+            return WcsVersionNegotiator.Negotiate(rawVersion, acceptVersions);
+        }
+        catch (OgcException)
+        {
+            return "2.0.1";
+        }
     }
 }

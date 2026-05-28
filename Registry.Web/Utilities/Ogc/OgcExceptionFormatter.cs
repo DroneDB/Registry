@@ -93,8 +93,31 @@ public static class OgcExceptionFormatter
         return sw.ToString();
     }
 
+    /// <summary>WCS 1.0.0 ServiceExceptionReport (OGC 03-065r6 §A.4.1 — namespace
+    /// <c>http://www.opengis.net/ogc</c>, version <c>1.2.0</c>). Note: WCS 1.0 inherited
+    /// the WMS-like envelope and predates OWS Common entirely.</summary>
+    public static string FormatWcs10(string code, string message)
+    {
+        using var sw = new Utf8StringWriter();
+        using var w = XmlWriter.Create(sw, new XmlWriterSettings
+        {
+            Indent = true, Encoding = Encoding.UTF8, OmitXmlDeclaration = false
+        });
+        w.WriteStartDocument();
+        w.WriteStartElement("ServiceExceptionReport", "http://www.opengis.net/ogc");
+        w.WriteAttributeString("version", "1.2.0");
+        w.WriteStartElement("ServiceException", "http://www.opengis.net/ogc");
+        if (!string.IsNullOrEmpty(code)) w.WriteAttributeString("code", code);
+        w.WriteString(message ?? string.Empty);
+        w.WriteEndElement();
+        w.WriteEndElement();
+        w.WriteEndDocument();
+        w.Flush();
+        return sw.ToString();
+    }
+
     /// <summary>
-    /// Pick the right envelope flavour given the OGC service version of the failing request.
+    /// Pick the right envelope flavor given the OGC service version of the failing request.
     /// </summary>
     public static string Format(OgcException ex, string serviceVersion)
     {
