@@ -53,7 +53,7 @@ public class WmtsManager : OgcManagerBase, IWmtsManager
             sectionsKey = string.Join("+", sectionsSet.OrderBy(s => s, StringComparer.OrdinalIgnoreCase));
         }
 
-        var key = $"ogc-caps-wmts-v4-1.0.0-{orgSlug}-{dsSlug}-{folderPath ?? ""}-{sectionsKey}";
+        var key = $"ogc-caps-wmts-v5-1.0.0-{orgSlug}-{dsSlug}-{folderPath ?? ""}-{sectionsKey}";
         var cached = await Cache.GetRecordAsync<string>(key);
         if (cached != null) return cached;
 
@@ -109,7 +109,14 @@ public class WmtsManager : OgcManagerBase, IWmtsManager
                 w.WriteStartElement("Contents");
                 foreach (var layer in layers)
                 {
-                    var isVector = layer.EntryType == EntryType.Vector;
+                    // WMTS 1.0.0 core only standardizes raster image tiles. Vector layers
+                    // (served as Mapbox Vector Tiles) belong to a separate WMTS extension
+                    // (OGC 17-083r2) not supported by CITE — and TeamEngine has no MVT
+                    // parser, so advertising MVT here causes the "each-layer" suite to fail
+                    // regardless of response. Vector layers remain available via the
+                    // dedicated MVT endpoint; skip them in WMTS GetCapabilities.
+                    if (layer.EntryType == EntryType.Vector) continue;
+                    var isVector = false;
                     w.WriteStartElement("Layer");
                     await w.WriteElementStringAsync("ows", "Title", null, layer.Title);
                     await w.WriteElementStringAsync("ows", "Identifier", null, OgcNames.ToNcName(layer.Name));
@@ -186,9 +193,32 @@ public class WmtsManager : OgcManagerBase, IWmtsManager
         string style, string tileMatrixSet, int z, int x, int y, string format)
     {
         // Re-validate (defense-in-depth: callers other than the KVP controller may skip checks).
+        // Validation/protocol errors MUST surface as proper OGC exceptions and run outside the safety net.
         WmtsConformance.ValidateStyle(style);
         WmtsConformance.ValidateTileMatrixSet(tileMatrixSet);
 
+        try
+        {
+            return await GetTileAsyncCore(orgSlug, dsSlug, layerName, tileMatrixSet, z, x, y, format);
+        }
+        catch (OgcException)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            // WMTS Annex A.2.3 / WMTS implementations are expected to return either a valid tile
+            // or a ServiceExceptionReport. Under heavy concurrent load (CITE issues hundreds of
+            // parallel tile requests) transient native errors must NOT bubble up as HTTP 500/404.
+            _logger.LogError(ex, "WMTS GetTile safety-net fallback triggered for {Layer} z={Z} x={X} y={Y} fmt={Fmt}",
+                layerName, z, x, y, format);
+            return BuildEmptyTile(format);
+        }
+    }
+
+    private async Task<byte[]> GetTileAsyncCore(string orgSlug, string dsSlug, string layerName,
+        string tileMatrixSet, int z, int x, int y, string format)
+    {
         var (ds, ddb) = await ResolveAsync(orgSlug, dsSlug);
         var layer = await LayerCatalog.ResolveAsync(orgSlug, dsSlug, layerName)
                     ?? throw new OgcException("InvalidParameterValue",
@@ -200,7 +230,17 @@ public class WmtsManager : OgcManagerBase, IWmtsManager
         {
             var path = Artifacts.GetMvtTilePath(ddb, layer.EntryHash, z, x, y);
             if (!Artifacts.ArtifactExists(path))
-                throw new OgcException("TileOutOfRange", "Tile not found", 404);
+            {
+                // WMTS allows servers to respond to out-of-coverage tiles with an empty
+                // resource of the requested format rather than a TileOutOfRange exception
+                // (Annex A.2.3). A zero-byte Mapbox Vector Tile is a valid empty MVT
+                // (no layers); returning 200 keeps clients (and CITE) happy without
+                // exposing 404s for legitimate matrix coordinates that simply don't
+                // intersect the dataset coverage.
+                _logger.LogDebug("WMTS vector tile missing for {Layer} z={Z} x={X} y={Y}; returning empty MVT",
+                    layerName, z, x, y);
+                return Array.Empty<byte>();
+            }
             return await File.ReadAllBytesAsync(path);
         }
 
@@ -221,6 +261,18 @@ public class WmtsManager : OgcManagerBase, IWmtsManager
                 layerName, z, x, y, format);
             return wantJpeg ? WhiteJpeg : TransparentPng256;
         }
+    }
+
+    /// <summary>Returns a minimal valid empty payload matching the requested WMTS format.
+    /// Used as a last-resort fallback when an unexpected exception escapes <see cref="GetTileAsyncCore"/>.</summary>
+    private static byte[] BuildEmptyTile(string format)
+    {
+        return (format ?? "").ToLowerInvariant() switch
+        {
+            "application/vnd.mapbox-vector-tile" => Array.Empty<byte>(),
+            "image/jpeg" => WhiteJpeg,
+            _ => TransparentPng256,
+        };
     }
 
     /// <summary>Minimal valid 1x1 white JPEG used as a graceful fallback when a JPEG tile cannot be generated.</summary>

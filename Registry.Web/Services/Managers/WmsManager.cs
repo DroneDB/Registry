@@ -173,11 +173,37 @@ public class WmsManager : OgcManagerBase, IWmsManager
     {
         // Defense-in-depth: re-validate request-level constraints. The controller validates these
         // before BBOX parsing, but the manager guarantees the same contract for any future caller.
+        // Validation errors MUST surface as proper OGC exceptions, so they run outside the safety net.
         Utilities.Ogc.WmsValidator.ValidateLayers(layers);
         Utilities.Ogc.WmsValidator.ValidateDimensions(width, height);
         Utilities.Ogc.WmsValidator.ValidateCrs(crs);
         Utilities.Ogc.WmsValidator.ValidateMapFormat(format);
 
+        try
+        {
+            return await GetMapAsyncCore(orgSlug, dsSlug, layers, styles, bbox, crs, width, height, format, bgColor, transparent);
+        }
+        catch (OgcException)
+        {
+            // Preserve protocol-level exceptions (LayerNotDefined, StyleNotDefined, etc.) so the
+            // OgcExceptionFilter can return the proper ServiceExceptionReport XML.
+            throw;
+        }
+        catch (Exception ex)
+        {
+            // WMS 1.3 §7.3.3.11: GetMap MUST return an image when parameters are syntactically valid.
+            // Under load, native (GDAL/Skia) failures or transient I/O issues can bubble up past the
+            // per-layer try/catch; we never want a 500 here, so synthesize a fully transparent (or
+            // background-colored) image of the requested size/format as a last-resort fallback.
+            _logger.LogError(ex, "WMS GetMap safety-net fallback triggered for layers=[{L}] bbox=[{B}] crs={Crs} {W}x{H} fmt={F}",
+                string.Join(',', layers ?? Array.Empty<string>()), string.Join(',', bbox), crs, width, height, format);
+            return BuildFallbackImage(width, height, format, transparent, bgColor);
+        }
+    }
+
+    private async Task<byte[]> GetMapAsyncCore(string orgSlug, string dsSlug, string[] layers, string[] styles,
+        double[] bbox, string crs, int width, int height, string format, string? bgColor, bool transparent)
+    {
         var (ds, ddb) = await ResolveAsync(orgSlug, dsSlug);
 
         // Render each layer in declaration order, then alpha-blend top-down with SkiaSharp.
@@ -230,12 +256,38 @@ public class WmsManager : OgcManagerBase, IWmsManager
                     }
                 }
 
-                var layerBytes = IsSpectralIndex(style)
-                    ? DdbWrapper.RenderRasterIndex(src, style.ToUpperInvariant(), bbox, crs, width, height, "image/png")
-                    : DdbWrapper.RenderRasterRegion(src, bbox, crs, width, height, "image/png");
+                // Per-layer render is wrapped so failures (e.g. BBOX with no overlap on a
+                // multispectral source, GDAL warp errors on degenerate windows) do not
+                // surface as HTTP 500. The WMS 1.3 spec requires GetMap to return a valid
+                // image whenever parameters are syntactically valid; a layer that cannot be
+                // rendered for the requested area is simply drawn as fully transparent.
+                byte[]? layerBytes = null;
+                try
+                {
+                    layerBytes = IsSpectralIndex(style)
+                        ? DdbWrapper.RenderRasterIndex(src, style.ToUpperInvariant(), bbox, crs, width, height, "image/png")
+                        : DdbWrapper.RenderRasterRegion(src, bbox, crs, width, height, "image/png");
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "WMS layer '{Layer}' render failed for bbox=[{B}] crs={Crs} {W}x{H}; treating as transparent",
+                        name, string.Join(',', bbox), crs, width, height);
+                }
+
+                if (layerBytes == null || layerBytes.Length == 0)
+                {
+                    // Count as rendered so we don't 404 the request when the layer exists
+                    // but produces no pixels for the requested window.
+                    anyRendered = true;
+                    continue;
+                }
 
                 using var bmp = SKBitmap.Decode(layerBytes);
-                if (bmp == null) continue;
+                if (bmp == null)
+                {
+                    anyRendered = true;
+                    continue;
+                }
                 using var paint = new SKPaint { BlendMode = SKBlendMode.SrcOver };
                 surface.Canvas.DrawBitmap(bmp, new SKRect(0, 0, width, height), paint);
                 anyRendered = true;
@@ -283,6 +335,25 @@ public class WmsManager : OgcManagerBase, IWmsManager
         };
     }
 
+    /// <summary>Builds a single-color image (transparent or BGCOLOR) of the requested size/format.
+    /// Used as a last-resort fallback when an unexpected exception escapes <see cref="GetMapAsyncCore"/>.</summary>
+    private static byte[] BuildFallbackImage(int width, int height, string format, bool transparent, string? bgColor)
+    {
+        // Clamp to a sane minimum so SkiaSharp never sees a zero/negative dimension.
+        var w = Math.Max(1, Math.Min(width, 4096));
+        var h = Math.Max(1, Math.Min(height, 4096));
+        using var bmp = new SKBitmap(new SKImageInfo(w, h, SKColorType.Rgba8888, SKAlphaType.Premul));
+        using (var surface = SKSurface.Create(bmp.Info, bmp.GetPixels(), bmp.RowBytes))
+        {
+            surface.Canvas.Clear(transparent ? SKColors.Transparent : ParseBackground(bgColor));
+            surface.Canvas.Flush();
+        }
+        using var image = SKImage.FromBitmap(bmp);
+        var (skFormat, _) = MapFormat(format);
+        using var data = image.Encode(skFormat, 90);
+        return data.ToArray();
+    }
+
     public async Task<string> GetFeatureInfoAsync(string orgSlug, string dsSlug, string layerName,
         double[] bbox, string crs, int width, int height, int i, int j, string infoFormat)
     {
@@ -303,8 +374,8 @@ public class WmsManager : OgcManagerBase, IWmsManager
         var src = ResolveRasterArtifact(ddb, layer);
         var json = DdbWrapper.QueryRasterPoint(src, geoX, geoY, crs);
 
-        return infoFormat.Contains("xml", StringComparison.OrdinalIgnoreCase) ? 
-            $"<FeatureInfoResponse>{System.Net.WebUtility.HtmlEncode(json)}</FeatureInfoResponse>" : 
+        return infoFormat.Contains("xml", StringComparison.OrdinalIgnoreCase) ?
+            $"<FeatureInfoResponse>{System.Net.WebUtility.HtmlEncode(json)}</FeatureInfoResponse>" :
             json;
     }
 }
