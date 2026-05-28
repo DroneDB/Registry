@@ -272,7 +272,20 @@ public sealed class WcsProtocol10Handler : IWcsProtocolHandler
         var height = OgcRequestParser.GetInt(q, "HEIGHT", 0, 0, 4096);
 
         var (ddb, layer) = await _svc.ResolveCoverageAsync(orgSlug, dsSlug, coverageId);
-        var bytes = _svc.RenderRegion(ddb, layer, bbox, width, height, mime);
+
+        // Optional band subset via BANDS extension (not part of WCS 1.0 proper but
+        // accepted because QGIS users frequently expect it). Resolution requires
+        // probing the source raster band names.
+        var info = _svc.ProbeRaster(ddb, layer);
+        var bands = WcsRangeSubsetParser.ParseBands10(OgcRequestParser.Get(q, "BANDS"), info);
+
+        // RESPONSE_CRS (WCS 1.0) overrides the output CRS without changing the
+        // BBOX CRS. Falls back to RESPONSE_CRS_URI for QGIS compatibility.
+        var outputCrs = WcsConformance.NormalizeCrs(
+            OgcRequestParser.Get(q, "RESPONSE_CRS") ?? OgcRequestParser.Get(q, "RESPONSE_CRS_URI"));
+
+        var bytes = _svc.RenderRegion(ddb, layer, bbox, width, height, mime, bands,
+            string.IsNullOrEmpty(outputCrs) ? null : outputCrs);
         return new WcsCoverageResult(bytes, mime);
     }
 

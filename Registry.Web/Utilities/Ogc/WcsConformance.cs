@@ -54,4 +54,45 @@ public static class WcsConformance
         "EPSG:4326",
         "EPSG:3857"
     ];
+
+    /// <summary>
+    /// Normalise an OGC CRS reference (URI, URN or short authority code) to the
+    /// canonical "EPSG:nnnn" form expected by GDAL / DroneDB. Recognised inputs:
+    ///   • http://www.opengis.net/def/crs/EPSG/0/nnnn
+    ///   • urn:ogc:def:crs:EPSG::nnnn
+    ///   • EPSG:nnnn
+    ///   • http://www.opengis.net/def/crs/OGC/1.3/CRS84 (mapped to EPSG:4326)
+    /// Returns an empty string for empty/null input. Unrecognised values are
+    /// returned verbatim so the native side can attempt a best-effort import.
+    /// </summary>
+    public static string NormalizeCrs(string? crs)
+    {
+        if (string.IsNullOrWhiteSpace(crs)) return string.Empty;
+        var s = crs.Trim();
+        if (s.Equals("http://www.opengis.net/def/crs/OGC/1.3/CRS84",
+                System.StringComparison.OrdinalIgnoreCase) ||
+            s.Equals("urn:ogc:def:crs:OGC::CRS84", System.StringComparison.OrdinalIgnoreCase) ||
+            s.Equals("CRS84", System.StringComparison.OrdinalIgnoreCase))
+            return "EPSG:4326";
+
+        // http://www.opengis.net/def/crs/EPSG/0/4326 → EPSG:4326
+        const string opengisPrefix = "http://www.opengis.net/def/crs/EPSG/";
+        if (s.StartsWith(opengisPrefix, System.StringComparison.OrdinalIgnoreCase))
+        {
+            var rest = s[opengisPrefix.Length..]; // "0/4326"
+            var slash = rest.LastIndexOf('/');
+            if (slash >= 0 && slash + 1 < rest.Length)
+                return "EPSG:" + rest[(slash + 1)..];
+        }
+
+        // urn:ogc:def:crs:EPSG::4326 → EPSG:4326
+        const string urnPrefix = "urn:ogc:def:crs:EPSG";
+        if (s.StartsWith(urnPrefix, System.StringComparison.OrdinalIgnoreCase))
+        {
+            var idx = s.LastIndexOf(':');
+            if (idx >= 0 && idx + 1 < s.Length)
+                return "EPSG:" + s[(idx + 1)..];
+        }
+        return s;
+    }
 }

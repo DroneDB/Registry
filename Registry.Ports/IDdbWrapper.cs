@@ -252,9 +252,15 @@ public interface IDdbWrapper
     /// <param name="height">Output height in pixels (1..4096).</param>
     /// <param name="format">MIME type ("image/png", "image/jpeg", "image/webp")
     /// or shortcut ("png"/"jpeg"/"webp").</param>
+    /// <param name="bands">Optional 1-based band selection (WCS RangeSubset).
+    /// When provided the output retains exactly these bands in the requested
+    /// order and no alpha channel is appended.</param>
+    /// <param name="outputCrs">Optional target CRS authority code (WCS OutputCRS).
+    /// Null/empty means "same as <paramref name="bboxSrs"/>" (legacy behaviour).</param>
     /// <returns>Encoded image bytes.</returns>
     public byte[] RenderRasterRegion(string inputPath, double[] bbox, string bboxSrs,
-                                     int width, int height, string format);
+                                     int width, int height, string format,
+                                     int[]? bands = null, string? outputCrs = null);
 
     /// <summary>
     /// Render a spectral index (NDVI / NDRE / NDWI / EVI / SAVI) over a raster

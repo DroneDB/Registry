@@ -13,6 +13,8 @@ using Registry.Web.Models.DTO.Ogc;
 using Registry.Web.Services.Ports;
 using Registry.Web.Utilities;
 
+#nullable enable
+
 namespace Registry.Web.Services.Managers.Wcs;
 
 /// <summary>
@@ -94,14 +96,15 @@ public class WcsCoverageService : OgcManagerBase, IWcsCoverageService
             var width = j.Value<int?>("width") ?? 0;
             var height = j.Value<int?>("height") ?? 0;
             var bandCount = j.Value<int?>("bandCount") ?? 0;
+            var nativeCrs = j.Value<string>("crs") ?? string.Empty;
             var bandNames = new List<string>();
 
             if (j["bands"] is not JArray ba)
-                return new WcsRasterInfo(width, height, bandCount, bandNames);
+                return new WcsRasterInfo(width, height, bandCount, bandNames, nativeCrs);
 
             foreach (var b in ba)
                 bandNames.Add(b.Value<string>("name") ?? $"band{bandNames.Count + 1}");
-            return new WcsRasterInfo(width, height, bandCount, bandNames);
+            return new WcsRasterInfo(width, height, bandCount, bandNames, nativeCrs);
         }
         catch (Exception ex)
         {
@@ -111,7 +114,8 @@ public class WcsCoverageService : OgcManagerBase, IWcsCoverageService
     }
 
     public byte[] RenderRegion(IDDB ddb, OgcLayerDto layer, double[] bboxWgs84,
-        int width, int height, string mime)
+        int width, int height, string mime,
+        int[]? bands = null, string? outputCrs = null)
     {
         if (bboxWgs84 == null || bboxWgs84.Length < 4)
             throw new OgcException("InvalidParameterValue", "Invalid bbox", 400);
@@ -129,7 +133,8 @@ public class WcsCoverageService : OgcManagerBase, IWcsCoverageService
         height = Math.Clamp(height, targetMin, targetMax);
         var src = ResolveRasterArtifact(ddb, layer);
         var mimeNorm = string.IsNullOrWhiteSpace(mime) ? "image/tiff" : mime;
-        return DdbWrapper.RenderRasterRegion(src, bboxWgs84, "EPSG:4326", width, height, mimeNorm);
+        return DdbWrapper.RenderRasterRegion(src, bboxWgs84, "EPSG:4326",
+            width, height, mimeNorm, bands, outputCrs);
     }
 
     public string GetBaseUrl(string orgSlug, string dsSlug, string? folderPath)

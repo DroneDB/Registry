@@ -2109,17 +2109,21 @@ public class NativeDdbWrapper : IDdbWrapper
 
     #region OGC services (raster region + vector query/describe) P/Invoke
 
-    [DllImport("ddb", EntryPoint = "DDBRenderRasterRegion")]
-    private static extern DdbResult _RenderRasterRegion(
+    [DllImport("ddb", EntryPoint = "DDBRenderRasterRegionEx")]
+    private static extern DdbResult _RenderRasterRegionEx(
         [MarshalAs(UnmanagedType.LPUTF8Str)] string inputPath,
         [In] double[] bbox,
         [MarshalAs(UnmanagedType.LPUTF8Str)] string bboxSrs,
+        [MarshalAs(UnmanagedType.LPUTF8Str)] string outputCrs,
+        [In] int[] bands,
+        int bandCount,
         int width, int height,
         [MarshalAs(UnmanagedType.LPUTF8Str)] string format,
         out IntPtr outBuffer, out int outBufferSize);
 
     public byte[] RenderRasterRegion(string inputPath, double[] bbox, string bboxSrs,
-                                     int width, int height, string format)
+                                     int width, int height, string format,
+                                     int[]? bands = null, string? outputCrs = null)
     {
         if (string.IsNullOrWhiteSpace(inputPath))
             throw new ArgumentException("inputPath is null or empty");
@@ -2130,11 +2134,17 @@ public class NativeDdbWrapper : IDdbWrapper
         if (string.IsNullOrWhiteSpace(format))
             throw new ArgumentException("format is null or empty");
 
+        // Always go through the Ex entry point so both legacy and OGC WCS
+        // (band subset + alternate output CRS) callers share the same path.
+        var bandArr = bands ?? [];
+
         try
         {
-            if (_RenderRasterRegion(inputPath, bbox, bboxSrs ?? string.Empty,
-                                    width, height, format,
-                                    out var outBuffer, out var outSize) == DdbResult.Success)
+            if (_RenderRasterRegionEx(inputPath, bbox, bboxSrs ?? string.Empty,
+                                      outputCrs ?? string.Empty,
+                                      bandArr, bandArr.Length,
+                                      width, height, format,
+                                      out var outBuffer, out var outSize) == DdbResult.Success)
             {
                 var dest = new byte[outSize];
                 Marshal.Copy(outBuffer, dest, 0, outSize);

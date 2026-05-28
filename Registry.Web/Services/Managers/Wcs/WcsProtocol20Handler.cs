@@ -265,7 +265,15 @@ public sealed class WcsProtocol20Handler : IWcsProtocolHandler
         var coverageBbox = layer.BboxWgs84
             ?? throw new OgcException("InvalidParameterValue", "Coverage has no BBOX", 400);
         var bbox = WcsSubsetParser.Parse(subsetParams, coverageBbox) ?? coverageBbox;
-        var bytes = _svc.RenderRegion(ddb, layer, bbox, 0, 0, format);
+
+        // OGC 09-147r3 §8.3 — optional band subset and output CRS overrides.
+        var info = _svc.ProbeRaster(ddb, layer);
+        var bands = WcsRangeSubsetParser.ParseRangeSubset20(
+            OgcRequestParser.Get(q, "RANGESUBSET"), info);
+        var outputCrs = WcsConformance.NormalizeCrs(OgcRequestParser.Get(q, "OUTPUTCRS"));
+
+        var bytes = _svc.RenderRegion(ddb, layer, bbox, 0, 0, format, bands,
+            string.IsNullOrEmpty(outputCrs) ? null : outputCrs);
         return new WcsCoverageResult(bytes, format);
     }
 }

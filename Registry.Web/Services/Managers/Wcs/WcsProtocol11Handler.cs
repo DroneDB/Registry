@@ -233,7 +233,13 @@ public sealed class WcsProtocol11Handler : IWcsProtocolHandler
         }
 
         var (ddb, layer) = await _svc.ResolveCoverageAsync(orgSlug, dsSlug, coverageId);
-        var bytes = _svc.RenderRegion(ddb, layer, bbox, width, height, format);
+
+        // OGC 07-067r5 §9.3.2.4 — optional band subset via RangeSubset.
+        var info = _svc.ProbeRaster(ddb, layer);
+        var bands = WcsRangeSubsetParser.ParseRangeSubset11(
+            OgcRequestParser.Get(q, "RangeSubset"), info);
+
+        var bytes = _svc.RenderRegion(ddb, layer, bbox, width, height, format, bands);
         return new WcsCoverageResult(bytes, format);
     }
 
