@@ -194,41 +194,56 @@ public class AppSettings
     public long? MaxExportSizeBytes { get; set; } = 1073741824; // 1GB
 
     /// <summary>
-    /// Cron expression for cleanup expired jobs task
-    /// Default: Daily (Cron.Daily)
+    /// Cron expression for cleanup expired jobs task.
+    /// Default (when null, empty, or omitted): Hangfire's daily cron.
+    /// Set to "disabled", "off", or "none" to remove the job.
     /// </summary>
     public string CleanupExpiredJobsCron { get; set; }
 
     /// <summary>
-    /// Cron expression for sync job index states task
-    /// Default: "*/5 * * * *" (every 5 minutes)
+    /// Cron expression for sync job index states task.
+    /// Default (when null, empty, or omitted): "*/5 * * * *" (every 5 minutes).
+    /// Set to "disabled", "off", or "none" to remove the job.
     /// </summary>
     public string SyncJobIndexStatesCron { get; set; }
 
     /// <summary>
-    /// Cron expression for process pending builds task
-    /// Default: "* * * * *" (every minute)
+    /// Cron expression for process pending builds task.
+    /// Default (when null, empty, or omitted): "* * * * *" (every minute).
+    /// Set to "disabled", "off", or "none" to remove the job.
     /// </summary>
     public string ProcessPendingBuildsCron { get; set; }
 
     /// <summary>
-    /// Cron expression for orphaned dataset folder cleanup task
-    /// Default: "0 3 * * *" (daily at 3:00 AM)
+    /// Cron expression for orphaned dataset folder cleanup task.
+    /// Default (when null, empty, or omitted): "0 3 * * *" (daily at 3:00 AM).
+    /// Set to "disabled", "off", or "none" to remove the job.
     /// </summary>
     public string OrphanedDatasetCleanupCron { get; set; }
 
     /// <summary>
     /// Cron expression for the recurring full-cleanup task that runs DDB
-    /// `cleanup` (entries + build artifacts) on every dataset in every
-    /// organization.
-    /// Default (when null or not configured): "0 0 * * *" (daily at midnight).
-    /// Set to an empty/whitespace string to disable the recurring job.
+    /// <c>cleanup</c> (entries + build artifacts) on every dataset in every organization.
+    /// Default (when null, empty, or omitted): "0 0 * * *" (daily at midnight).
+    /// Set to "disabled", "off", or "none" to remove the job.
     /// </summary>
     public string DatasetCleanupCron { get; set; }
 
     /// <summary>
+    /// Cron expression for the recurring artifact completeness checker that
+    /// scans every entry in every dataset and enqueues a rebuild for any
+    /// buildable entry whose output is incomplete (missing or zero-byte
+    /// artifacts). Useful after a build-output format migration (e.g. FGB→MVT,
+    /// EPT→COPC) to bring the corpus to the new layout without a manual sweep.
+    /// Default (when null, empty, or omitted): "0 2 * * *" (daily at 2:00 AM).
+    /// Set to "disabled", "off", or "none" to remove the job.
+    /// </summary>
+    public string ArtifactCompletenessCheckerCron { get; set; }
+
+    /// <summary>
     /// Cron expression for job index cleanup task (removes old terminal records).
-    /// Default: "0 4 * * *" (daily at 4:00 AM)
+    /// Default (when null, empty, or omitted): "0 4 * * *" (daily at 4:00 AM).
+    /// Set to "disabled", "off", or "none" to remove the job.
     /// </summary>
     public string JobIndexCleanupCron { get; set; }
 

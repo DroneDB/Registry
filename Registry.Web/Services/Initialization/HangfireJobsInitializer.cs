@@ -41,82 +41,90 @@ internal class HangfireJobsInitializer
 
     private void SetupRecurringJobs(AppSettings appSettings, IRecurringJobManager recurringJobManager)
     {
-        // Cleanup expired jobs
-        var cleanupCron = string.IsNullOrWhiteSpace(appSettings.CleanupExpiredJobsCron)
-            ? Cron.Daily()
-            : appSettings.CleanupExpiredJobsCron;
+        ScheduleJob(recurringJobManager, "cleanup-expired-jobs",
+            ResolveCron(appSettings.CleanupExpiredJobsCron, Cron.Daily()),
+            cron => recurringJobManager.AddOrUpdate(
+                "cleanup-expired-jobs",
+                () => HangfireUtils.CleanupExpiredJobs(null),
+                cron));
 
-        recurringJobManager.AddOrUpdate(
-            "cleanup-expired-jobs",
-            () => HangfireUtils.CleanupExpiredJobs(null),
-            cleanupCron);
+        ScheduleJob(recurringJobManager, "sync-jobindex-states",
+            ResolveCron(appSettings.SyncJobIndexStatesCron, "*/5 * * * *"),
+            cron => recurringJobManager.AddOrUpdate<JobIndexSyncService>(
+                "sync-jobindex-states",
+                service => service.SyncJobIndexStates(null),
+                cron));
 
-        _logger.LogInformation("Scheduled 'cleanup-expired-jobs' with cron: {Cron}", cleanupCron);
+        ScheduleJob(recurringJobManager, "process-pending-builds",
+            ResolveCron(appSettings.ProcessPendingBuildsCron, "* * * * *"),
+            cron => recurringJobManager.AddOrUpdate<BuildPendingService>(
+                "process-pending-builds",
+                service => service.ProcessPendingBuilds(null),
+                cron));
 
-        // Sync JobIndex states every 5 minutes
-        var syncCron = string.IsNullOrWhiteSpace(appSettings.SyncJobIndexStatesCron) ? "*/5 * * * *" : appSettings.SyncJobIndexStatesCron;
+        ScheduleJob(recurringJobManager, "cleanup-orphaned-datasets",
+            ResolveCron(appSettings.OrphanedDatasetCleanupCron, "0 3 * * *"),
+            cron => recurringJobManager.AddOrUpdate<OrphanedDatasetCleanupService>(
+                "cleanup-orphaned-datasets",
+                service => service.CleanupOrphanedFoldersAsync(null),
+                cron));
 
-        recurringJobManager.AddOrUpdate<JobIndexSyncService>(
-            "sync-jobindex-states",
-            service => service.SyncJobIndexStates(null),
-            syncCron);
+        ScheduleJob(recurringJobManager, "cleanup-old-jobindices",
+            ResolveCron(appSettings.JobIndexCleanupCron, "0 4 * * *"),
+            cron => recurringJobManager.AddOrUpdate<JobIndexCleanupService>(
+                "cleanup-old-jobindices",
+                service => service.CleanupOldJobIndicesAsync(null),
+                cron));
 
-        _logger.LogInformation("Scheduled 'sync-jobindex-states' with cron: {Cron}", syncCron);
+        ScheduleJob(recurringJobManager, "recurring-dataset-cleanup",
+            ResolveCron(appSettings.DatasetCleanupCron, "0 0 * * *"),
+            cron => recurringJobManager.AddOrUpdate<RecurringDatasetCleanupService>(
+                "recurring-dataset-cleanup",
+                service => service.CleanupAllDatasetsAsync(null),
+                cron));
 
-        // Process pending builds every minute
-        var processCron = string.IsNullOrWhiteSpace(appSettings.ProcessPendingBuildsCron) ? "* * * * *" : appSettings.ProcessPendingBuildsCron;
+        ScheduleJob(recurringJobManager, "check-artifact-completeness",
+            ResolveCron(appSettings.ArtifactCompletenessCheckerCron, "0 2 * * *"),
+            cron => recurringJobManager.AddOrUpdate<ArtifactCompletenessCheckerService>(
+                "check-artifact-completeness",
+                service => service.CheckAndQueueAsync(null),
+                cron));
+    }
 
-        recurringJobManager.AddOrUpdate<BuildPendingService>(
-            "process-pending-builds",
-            service => service.ProcessPendingBuilds(null),
-            processCron);
-
-        _logger.LogInformation("Scheduled 'process-pending-builds' with cron: {Cron}", processCron);
-
-        // Cleanup orphaned dataset folders daily at 3:00 AM
-        var orphanedCleanupCron = string.IsNullOrWhiteSpace(appSettings.OrphanedDatasetCleanupCron)
-            ? "0 3 * * *"
-            : appSettings.OrphanedDatasetCleanupCron;
-
-        recurringJobManager.AddOrUpdate<OrphanedDatasetCleanupService>(
-            "cleanup-orphaned-datasets",
-            service => service.CleanupOrphanedFoldersAsync(null),
-            orphanedCleanupCron);
-
-        _logger.LogInformation("Scheduled 'cleanup-orphaned-datasets' with cron: {Cron}", orphanedCleanupCron);
-
-        // Cleanup old terminal JobIndex records daily at 4:00 AM
-        var jobIndexCleanupCron = string.IsNullOrWhiteSpace(appSettings.JobIndexCleanupCron)
-            ? "0 4 * * *"
-            : appSettings.JobIndexCleanupCron;
-
-        recurringJobManager.AddOrUpdate<JobIndexCleanupService>(
-            "cleanup-old-jobindices",
-            service => service.CleanupOldJobIndicesAsync(null),
-            jobIndexCleanupCron);
-
-        _logger.LogInformation("Scheduled 'cleanup-old-jobindices' with cron: {Cron}", jobIndexCleanupCron);
-
-        // Recurring full DDB cleanup over every dataset.
-        // null (not configured) -> use default; empty/whitespace -> disabled.
-        var datasetCleanupCronRaw = appSettings.DatasetCleanupCron;
-        var datasetCleanupCron = datasetCleanupCronRaw is null
-            ? "0 0 * * *"
-            : datasetCleanupCronRaw;
-
-        if (string.IsNullOrWhiteSpace(datasetCleanupCron))
+    /// <summary>
+    /// Registers or removes a recurring Hangfire job based on the resolved cron expression.
+    /// A <see langword="null"/> resolved cron means the job is explicitly disabled.
+    /// </summary>
+    private void ScheduleJob(IRecurringJobManager manager, string jobId, string resolvedCron,
+        Action<string> register)
+    {
+        if (resolvedCron is null)
         {
-            recurringJobManager.RemoveIfExists("recurring-dataset-cleanup");
-            _logger.LogInformation("Recurring 'recurring-dataset-cleanup' is disabled (empty cron)");
+            manager.RemoveIfExists(jobId);
+            _logger.LogInformation("Recurring '{JobId}' is disabled (cron set to 'disabled')", jobId);
         }
         else
         {
-            recurringJobManager.AddOrUpdate<RecurringDatasetCleanupService>(
-                "recurring-dataset-cleanup",
-                service => service.CleanupAllDatasetsAsync(null),
-                datasetCleanupCron);
-
-            _logger.LogInformation("Scheduled 'recurring-dataset-cleanup' with cron: {Cron}", datasetCleanupCron);
+            register(resolvedCron);
+            _logger.LogInformation("Scheduled '{JobId}' with cron: {Cron}", jobId, resolvedCron);
         }
+    }
+
+    /// <summary>
+    /// Resolves a raw cron string from configuration:
+    /// <list type="bullet">
+    ///   <item><description>null or empty/whitespace → <paramref name="defaultCron"/> (use built-in default)</description></item>
+    ///   <item><description>"disabled", "off", or "none" (case-insensitive) → <see langword="null"/> (job will be removed)</description></item>
+    ///   <item><description>any other value → returned as-is (treated as a valid cron expression)</description></item>
+    /// </list>
+    /// </summary>
+    private static string ResolveCron(string raw, string defaultCron)
+    {
+        if (string.IsNullOrWhiteSpace(raw))
+            return defaultCron;
+
+        return raw.Trim().ToLowerInvariant() is "disabled" or "off" or "none"
+            ? null
+            : raw;
     }
 }

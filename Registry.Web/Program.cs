@@ -341,6 +341,7 @@ public class Program
                 services.AddScoped<DatasetCleanupService>();
                 services.AddScoped<OrphanedDatasetCleanupService>();
                 services.AddScoped<RecurringDatasetCleanupService>();
+                services.AddScoped<ArtifactCompletenessCheckerService>();
 
                 services.AddHangfireProvider(appSettings, configuration);
                 services.AddHangfireServer(options => { options.WorkerCount = workers; });
