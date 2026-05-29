@@ -70,6 +70,17 @@ public interface IDdbWrapper
 
     public bool IsBuildActive(string ddbPath, string path);
 
+    /// <summary>
+    /// Checks whether the build output for an entry is complete (artifacts
+    /// exist on disk AND contain non-empty content). For Vector entries it
+    /// requires BOTH <c>vec/source.gpkg</c> AND <c>mvt/metadata.json</c> to be
+    /// present and non-empty. For PointCloud / GeoRaster / Model it requires
+    /// the <c>copc/</c> / <c>cog/</c> / <c>nxs/</c> folder to exist and contain
+    /// at least one non-empty file (recursively). Returns false for entries
+    /// that are not buildable.
+    /// </summary>
+    public bool IsBuildComplete(string ddbPath, string path);
+
     public bool IsBuildPending(string ddbPath);
 
     /// <summary>

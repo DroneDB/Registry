@@ -1021,6 +1021,32 @@ public class NativeDdbWrapper : IDdbWrapper
         throw new DdbException(SafeGetLastError("is build active"));
     }
 
+    [DllImport("ddb", EntryPoint = "DDBIsBuildComplete")]
+    private static extern DdbResult _IsBuildComplete([MarshalAs(UnmanagedType.LPUTF8Str)] string ddbPath,
+        [MarshalAs(UnmanagedType.LPUTF8Str)] string path, out bool isBuildComplete);
+
+    public bool IsBuildComplete(string ddbPath, string path)
+    {
+        path = path.Replace('\\', '/');
+        try
+        {
+            if (_IsBuildComplete(ddbPath, path, out var isBuildComplete) ==
+                DdbResult.Success) return isBuildComplete;
+        }
+        catch (EntryPointNotFoundException ex)
+        {
+            throw new DdbException($"Error in calling ddb lib: incompatible versions ({ex.Message})", ex);
+        }
+        catch (Exception ex)
+        {
+            throw new DdbException(
+                $"Error in calling ddb lib. Last error: \"{SafeGetLastError("is build complete")}\", check inner exception for details",
+                ex);
+        }
+
+        throw new DdbException(SafeGetLastError("is build complete"));
+    }
+
     [DllImport("ddb", EntryPoint = "DDBIsBuildPending")]
     private static extern DdbResult _IsBuildPending([MarshalAs(UnmanagedType.LPUTF8Str)] string ddbPath,
         out bool isBuildPending);

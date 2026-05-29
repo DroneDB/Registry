@@ -67,6 +67,7 @@ public interface IDDB
     public string GetTmpFolder(string path);
     bool IsBuildable(string path);
     bool IsBuildActive(string path);
+    bool IsBuildComplete(string path);
     bool IsBuildPending();
 
     /// <summary>

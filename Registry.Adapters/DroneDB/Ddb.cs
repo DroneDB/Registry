@@ -270,6 +270,18 @@ public class DDB : IDDB
         }
     }
 
+    public bool IsBuildComplete(string path)
+    {
+        try
+        {
+            return _ddbWrapper.IsBuildComplete(DatasetFolderPath, NormalizePath(path));
+        }
+        catch (DdbException ex)
+        {
+            throw new InvalidOperationException($"Cannot call IsBuildComplete from ddb '{DatasetFolderPath}'", ex);
+        }
+    }
+
     public bool IsBuildPending()
     {
         try
