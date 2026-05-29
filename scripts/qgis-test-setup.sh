@@ -13,7 +13,9 @@ set -euo pipefail
 
 BASE_URL="${BASE_URL:-http://localhost:7000}"
 USERNAME="${USERNAME:-admin}"
-PASSWORD="${PASSWORD:-_Rainbow1}"
+# Default matches the documented example credential in appsettings-default.json.
+# Override with --password / PASSWORD for instances that use a different admin password.
+PASSWORD="${PASSWORD:-password123}"
 ORG_SLUG="${ORG_SLUG:-qgis-test}"
 DS_SLUG="${DS_SLUG:-ogc-fixture}"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -57,13 +59,13 @@ if [[ ! -d "$SEED_FOLDER" ]]; then
 else
   echo "==> Uploading seed files from $SEED_FOLDER ..."
   pushd "$SEED_FOLDER" >/dev/null
-  find . -type f | while read -r f; do
+  while IFS= read -r -d '' f; do
     rel="${f#./}"
     echo "    + $rel"
     curl -fsS -o /dev/null -X POST "$BASE_URL/orgs/$ORG_SLUG/ds/$DS_SLUG/obj" \
       -H "Authorization: Bearer $TOKEN" \
       -F "path=$rel" -F "file=@$f" || echo "    (upload of $rel failed)" >&2
-  done
+  done < <(find . -type f -print0)
   popd >/dev/null
 
   echo "==> Triggering build (thumbs + COG + MVT) ..."

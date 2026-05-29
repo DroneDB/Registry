@@ -11,7 +11,8 @@
     Admin username. Default: admin
 
 .PARAMETER Password
-    Admin password. Default: _Rainbow1
+    Admin password. Default: password123 (the documented example credential).
+    Override with -Password for instances that use a different admin password.
 
 .PARAMETER OrgSlug
     Slug of the organization to (re)create. Default: qgis-test
@@ -31,7 +32,7 @@
 param(
     [string]$BaseUrl    = 'http://localhost:7000',
     [string]$Username   = 'admin',
-    [string]$Password   = '_Rainbow1',
+    [string]$Password   = 'password123',
     [string]$OrgSlug    = 'qgis-test',
     [string]$DsSlug     = 'ogc-fixture',
     [string]$SeedFolder = (Join-Path $PSScriptRoot '..\..\test_data\ogc-seed')
