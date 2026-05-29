@@ -7,7 +7,8 @@ namespace Registry.Web.Utilities.Ogc;
 /// <summary>
 /// WCS version negotiation per OGC 09-110r4 §8.3.2 (negotiation rules of OWS Common 2.0).
 /// Honored KVP: <c>VERSION</c> (1.0 / 1.1 style) and <c>ACCEPTVERSIONS</c> (OWS 2.0 style).
-/// Returns the highest mutually supported version, or throws
+/// Returns the first mutually supported version in the client's ACCEPTVERSIONS preference order
+/// (or the highest supported version when no version is requested), or throws
 /// <see cref="OgcException"/> with code <c>VersionNegotiationFailed</c>.
 /// </summary>
 public static class WcsVersionNegotiator
@@ -18,7 +19,8 @@ public static class WcsVersionNegotiator
     /// <returns>One of "1.0.0", "1.1.1", "2.0.1".</returns>
     public static string Negotiate(string? rawVersion, string? acceptVersions)
     {
-        // 1) ACCEPTVERSIONS wins when present (OWS 2.0 style): pick highest match in client order.
+        // 1) ACCEPTVERSIONS wins when present (OWS 2.0 style): pick the first supported version
+        //    in the client's preference order.
         if (!string.IsNullOrWhiteSpace(acceptVersions))
         {
             var requested = acceptVersions

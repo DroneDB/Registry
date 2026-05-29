@@ -1,5 +1,6 @@
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc;
+using Registry.Ports.DroneDB;
 using Registry.Web.Filters;
 using Registry.Web.Models;
 using Registry.Web.Services.Ports;
@@ -19,10 +20,11 @@ public class OgcApiController : ControllerBaseEx
 {
     private readonly IOgcApiFeaturesManager _features;
     private readonly IOgcApiTilesManager _tiles;
+    private readonly IOgcLayerCatalog _layers;
 
-    public OgcApiController(IOgcApiFeaturesManager features, IOgcApiTilesManager tiles)
+    public OgcApiController(IOgcApiFeaturesManager features, IOgcApiTilesManager tiles, IOgcLayerCatalog layers)
     {
-        _features = features; _tiles = tiles;
+        _features = features; _tiles = tiles; _layers = layers;
     }
 
     private string BaseUrl([FromRoute] string orgSlug, [FromRoute] string dsSlug)
@@ -85,6 +87,12 @@ public class OgcApiController : ControllerBaseEx
     {
         var bytes = await _tiles.GetTileAsync(orgSlug, dsSlug, collectionId, tileMatrixSet, z, x, y);
         if (bytes == null) return NotFound();
-        return File(bytes, "application/octet-stream");
+
+        // Choose the media type from the layer kind: vector layers serve MVT, rasters serve PNG.
+        var layer = await _layers.ResolveAsync(orgSlug, dsSlug, System.Uri.UnescapeDataString(collectionId));
+        var contentType = layer?.EntryType == EntryType.Vector
+            ? "application/vnd.mapbox-vector-tile"
+            : "image/png";
+        return File(bytes, contentType);
     }
 }

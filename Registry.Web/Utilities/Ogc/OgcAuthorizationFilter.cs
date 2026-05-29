@@ -28,6 +28,11 @@ public class OgcAuthorizationFilter : IAsyncAuthorizationFilter
 
     public async Task OnAuthorizationAsync(AuthorizationFilterContext context)
     {
+        // Detect service + negotiate version so denial/error envelopes match the request schema
+        // (a 401 on /wfs must not be reported as a WMS 1.3.0 ServiceExceptionReport).
+        var service = OgcServiceResolver.DetectService(context.HttpContext.Request.Path.Value);
+        var version = OgcServiceResolver.NegotiateVersion(service, context.HttpContext.Request.Query);
+
         try
         {
             var rv = context.RouteData.Values;
@@ -36,14 +41,14 @@ public class OgcAuthorizationFilter : IAsyncAuthorizationFilter
 
             if (string.IsNullOrWhiteSpace(orgSlug) || string.IsNullOrWhiteSpace(dsSlug))
             {
-                Fail(context, 400, "MissingParameterValue", "Missing organization or dataset slug");
+                Fail(context, service, version, 400, "MissingParameterValue", "Missing organization or dataset slug");
                 return;
             }
 
             var dataset = _utils.GetDataset(orgSlug, dsSlug, safe: true);
             if (dataset == null)
             {
-                Fail(context, 404, "NotFound", $"Dataset '{orgSlug}/{dsSlug}' not found");
+                Fail(context, service, version, 404, "NotFound", $"Dataset '{orgSlug}/{dsSlug}' not found");
                 return;
             }
 
@@ -51,29 +56,22 @@ public class OgcAuthorizationFilter : IAsyncAuthorizationFilter
             if (!allowed)
             {
                 BasicAuthFilter.SendBasicAuthRequest(context.HttpContext.Response);
-                var xml = OgcExceptionFormatter.FormatOws(
-                    "AuthenticationFailed",
-                    "Authentication required to access this dataset",
-                    "1.3.0");
-                context.Result = new ContentResult
-                {
-                    Content = xml,
-                    ContentType = OgcExceptionFormatter.ContentType,
-                    StatusCode = 401
-                };
+                Fail(context, service, version, 401, "AuthenticationFailed",
+                    "Authentication required to access this dataset");
             }
         }
         catch (Exception ex)
         {
-            Fail(context, 500, "NoApplicableCode", ex.Message);
+            Fail(context, service, version, 500, "NoApplicableCode", ex.Message);
         }
     }
 
-    private static void Fail(AuthorizationFilterContext context, int status, string code, string message)
+    private static void Fail(AuthorizationFilterContext context, OgcServiceResolver.Service service,
+        string version, int status, string code, string message)
     {
         context.Result = new ContentResult
         {
-            Content = OgcExceptionFormatter.FormatOws(code, message, "1.3.0"),
+            Content = OgcServiceResolver.FormatException(service, version, code, message),
             ContentType = OgcExceptionFormatter.ContentType,
             StatusCode = status
         };

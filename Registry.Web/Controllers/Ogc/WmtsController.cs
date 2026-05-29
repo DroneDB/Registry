@@ -100,7 +100,7 @@ public class WmtsController : ControllerBaseEx
         return v;
     }
 
-    [HttpGet("wmts/1.0.0/{layer}/{style}/{tms}/{z:int}/{y:int}/{x:int}.{ext}")]
+    [HttpGet("wmts/1.0.0/{layer}/{style}/{tms}/{z:int}/{y:int}/{x:int}.{ext:regex(^(pbf|png|jpe?g)$)}")]
     public async Task<IActionResult> Restful([FromRoute] string orgSlug, [FromRoute] string dsSlug,
         [FromRoute] string layer, [FromRoute] string style, [FromRoute] string tms,
         [FromRoute] int z, [FromRoute] int y, [FromRoute] int x, [FromRoute] string ext)
@@ -110,7 +110,6 @@ public class WmtsController : ControllerBaseEx
             "pbf" => "application/vnd.mapbox-vector-tile",
             "png" => "image/png",
             "jpg" or "jpeg" => "image/jpeg",
-            "webp" => "image/webp",
             _ => "image/png"
         };
         // Route values may arrive percent-encoded when the layer identifier contains '/' (e.g. "folder%2Ffile.shp").
