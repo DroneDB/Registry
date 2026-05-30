@@ -83,6 +83,20 @@ public interface IDDB
     JToken GetStac(string id, string stacCollectionRoot, string stacCatalogRoot, string path = null);
 
     /// <summary>
+    /// Generates a STAC ItemCollection (GeoJSON FeatureCollection) for the dataset,
+    /// optionally filtered by bbox and datetime, with paging.
+    /// </summary>
+    /// <param name="id">Collection id (e.g. "org/ds")</param>
+    /// <param name="stacCollectionRoot">URL of the parent STAC collection</param>
+    /// <param name="stacCatalogRoot">URL of the root STAC catalog</param>
+    /// <param name="bbox">Optional bounding box "minX,minY,maxX,maxY" (WGS84), or null</param>
+    /// <param name="datetime">Optional single RFC3339 datetime or interval "start/end" (".." for open ends), or null</param>
+    /// <param name="limit">Maximum number of items to return</param>
+    /// <param name="offset">Number of items to skip (paging)</param>
+    JToken GetStacItemCollection(string id, string stacCollectionRoot, string stacCatalogRoot,
+        string bbox = null, string datetime = null, int limit = 10, int offset = 0);
+
+    /// <summary>
     /// Rescans all files in the index to update metadata
     /// </summary>
     /// <param name="types">Comma-separated list of entry types to rescan (e.g., "image,geoimage,pointcloud"), or null/empty for all</param>

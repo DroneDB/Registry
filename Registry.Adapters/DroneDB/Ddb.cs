@@ -427,6 +427,13 @@ public class DDB : IDDB
         return _ddbWrapper.Stac(DatasetFolderPath, path, stacCollectionRoot, id, stacCatalogRoot);
     }
 
+    public JToken GetStacItemCollection(string id, string stacCollectionRoot, string stacCatalogRoot,
+        string bbox = null, string datetime = null, int limit = 10, int offset = 0)
+    {
+        return _ddbWrapper.StacItemCollection(DatasetFolderPath, stacCollectionRoot, id, stacCatalogRoot,
+            bbox, datetime, limit, offset);
+    }
+
     public List<RescanResult> RescanIndex(string? types = null, bool stopOnError = true)
     {
         try

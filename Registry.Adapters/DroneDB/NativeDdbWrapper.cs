@@ -1415,6 +1415,52 @@ public class NativeDdbWrapper : IDdbWrapper
         throw new DdbException(SafeGetLastError("stac"));
     }
 
+    [DllImport("ddb", EntryPoint = "DDBStacItemCollection")]
+    private static extern DdbResult _StacItemCollection(
+        [MarshalAs(UnmanagedType.LPUTF8Str)] string ddbPath,
+        [MarshalAs(UnmanagedType.LPUTF8Str)] string stacCollectionRoot,
+        [MarshalAs(UnmanagedType.LPUTF8Str)] string id,
+        [MarshalAs(UnmanagedType.LPUTF8Str)] string stacCatalogRoot,
+        [MarshalAs(UnmanagedType.LPUTF8Str)] string? bbox,
+        [MarshalAs(UnmanagedType.LPUTF8Str)] string? datetime,
+        int limit, int offset, out IntPtr output);
+
+    public JToken StacItemCollection(string ddbPath, string stacCollectionRoot, string id,
+        string stacCatalogRoot, string? bbox, string? datetime, int limit, int offset)
+    {
+        try
+        {
+            if (_StacItemCollection(ddbPath, stacCollectionRoot, id, stacCatalogRoot,
+                    bbox ?? string.Empty, datetime ?? string.Empty, limit, offset, out var output) ==
+                DdbResult.Success)
+            {
+                var json = MarshalAndFreeUtf8(output);
+
+                if (json == null)
+                    throw new InvalidOperationException("No result from DDBStacItemCollection call");
+
+                var res = JsonConvert.DeserializeObject<JToken>(json);
+
+                if (res == null)
+                    throw new InvalidOperationException($"Unable to deserialize stac item collection result: {json}");
+
+                return res;
+            }
+        }
+        catch (EntryPointNotFoundException ex)
+        {
+            throw new DdbException($"Error in calling ddb lib: incompatible versions ({ex.Message})", ex);
+        }
+        catch (Exception ex)
+        {
+            throw new DdbException(
+                $"Error in calling ddb lib. Last error: \"{SafeGetLastError()}\", check inner exception for details",
+                ex);
+        }
+
+        throw new DdbException(SafeGetLastError("stac item collection"));
+    }
+
     [DllImport("ddb", EntryPoint = "DDBRescan")]
     private static extern DdbResult _Rescan(
         [MarshalAs(UnmanagedType.LPUTF8Str)] string ddbPath,

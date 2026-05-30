@@ -425,6 +425,16 @@ public class Startup
         app.UseAuthentication();
         app.UseAuthorization();
 
+        // STAC API responses must be served uncompressed: STAC validators (pystac/urllib)
+        // send "Accept-Encoding: *" but cannot decode gzip/brotli, which breaks catalog
+        // traversal and JSON parsing. Strip Accept-Encoding for /stac so responses stay identity.
+        app.Use(async (context, next) =>
+        {
+            if (context.Request.Path.StartsWithSegments("/stac"))
+                context.Request.Headers.Remove("Accept-Encoding");
+            await next();
+        });
+
         app.UseResponseCompression();
         app.UseResponseCaching();
 

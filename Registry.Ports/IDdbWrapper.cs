@@ -108,6 +108,9 @@ public interface IDdbWrapper
     public JToken Stac(string ddbPath, string? entry, string stacCollectionRoot, string id,
         string stacCatalogRoot);
 
+    public JToken StacItemCollection(string ddbPath, string stacCollectionRoot, string id,
+        string stacCatalogRoot, string? bbox, string? datetime, int limit, int offset);
+
     /// <summary>
     /// Rescans all files in the index to update metadata
     /// </summary>
