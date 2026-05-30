@@ -11,7 +11,7 @@ View orthophotos, point clouds, 3D models (OBJ, GLTF, GLB), panoramas and more d
 - **Dataset Management** - Create, organize and share datasets with fine-grained permissions
 - **Interactive Visualization** - View orthophotos, point clouds, 3D models and panoramas in browser
 - **Measurements** - 2D and 3D measurement tools on maps and point clouds
-- **STAC Compliance** - Standard SpatioTemporal Asset Catalog API
+- **STAC Compliance** - Compliant with STAC 1.1.0 and STAC API 1.0.0
 - **OGC Services** - WMS, WFS, WMTS, WCS and OGC API (Features + Tiles) served directly from any dataset
 - **On-Demand Processing** - Automatic thumbnails, tiles, COG and streaming format generation
 - **User Management** - Role-based access control with organizations and storage quotas
