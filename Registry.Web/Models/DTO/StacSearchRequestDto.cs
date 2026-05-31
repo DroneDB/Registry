@@ -1,6 +1,5 @@
 using System.Collections.Generic;
 using Newtonsoft.Json;
-using Newtonsoft.Json.Linq;
 
 namespace Registry.Web.Models.DTO;
 
@@ -20,7 +19,7 @@ public class StacSearchRequestDto
     /// GeoJSON geometry filter. Mutually exclusive with <see cref="Bbox"/>.
     /// </summary>
     [JsonProperty("intersects")]
-    public JToken Intersects { get; set; }
+    public object Intersects { get; set; }
 
     /// <summary>
     /// Single RFC 3339 datetime or an interval "start/end" (".." for open ends).

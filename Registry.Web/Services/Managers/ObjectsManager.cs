@@ -634,7 +634,7 @@ public class ObjectsManager : IObjectsManager
         }
     }
 
-    public async Task<Entry> Move(string orgSlug, string dsSlug, string source, string dest)
+    public async Task<EntryDto> Move(string orgSlug, string dsSlug, string source, string dest)
     {
         var ds = _utils.GetDataset(orgSlug, dsSlug);
 
@@ -742,10 +742,10 @@ public class ObjectsManager : IObjectsManager
 
         _logger.LogInformation("Move OK");
 
-        return updatedEntry;
+        return updatedEntry.ToDto();
     }
 
-    public async Task<Entry> Copy(string orgSlug, string dsSlug, string source, string dest, bool overwrite = false)
+    public async Task<EntryDto> Copy(string orgSlug, string dsSlug, string source, string dest, bool overwrite = false)
     {
         var ds = _utils.GetDataset(orgSlug, dsSlug);
 
@@ -803,7 +803,7 @@ public class ObjectsManager : IObjectsManager
         // user's quota (clamped to 0). This avoids false-positive rejections when the new
         // content is the same size as or smaller than what it replaces.
         var entrySize = await GetEntrySizeAsync(ddb, sourceEntry);
-        long storageDelta = entrySize;
+        var storageDelta = entrySize;
         if (destEntry != null && overwrite)
         {
             var existingDestSize = await GetEntrySizeAsync(ddb, destEntry);
@@ -878,7 +878,6 @@ public class ObjectsManager : IObjectsManager
                 else
                     _fs.Move(tempCopyLocalPath, destLocalFilePath);
                 copiedToTemp = false;
-                fileSystemCopied = true;
             }
             else
             {
@@ -892,9 +891,9 @@ public class ObjectsManager : IObjectsManager
                     _logger.LogInformation("Copying file '{Source}' to '{Dest}'", source, dest);
                     _fs.Copy(sourceLocalFilePath, destLocalFilePath);
                 }
-
-                fileSystemCopied = true;
             }
+
+            fileSystemCopied = true;
 
             ddb.AddRaw(dest);
             destDdbAdded = true;
@@ -934,7 +933,7 @@ public class ObjectsManager : IObjectsManager
 
             _logger.LogInformation("Copy OK");
 
-            return ddb.GetEntry(dest);
+            return ddb.GetEntry(dest).ToDto();
         }
         catch (Exception ex)
         {
