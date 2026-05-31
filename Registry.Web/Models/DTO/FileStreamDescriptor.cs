@@ -140,7 +140,7 @@ public class FileStreamDescriptor
             _logger.LogInformation("Zipping: '{Path}'", path);
 
             var entry = archive.CreateEntry(path, CommonUtils.GetCompressionLevel(path));
-            await using var entryStream = entry.Open();
+            await using var entryStream = await entry.OpenAsync();
 
             var localPath = _ddb.GetLocalPath(path);
 

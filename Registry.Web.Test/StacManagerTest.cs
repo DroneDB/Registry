@@ -6,12 +6,15 @@ using Shouldly;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Caching.Distributed;
+using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Moq;
 using Newtonsoft.Json;
 using NUnit.Framework;
 using Registry.Ports;
+using Registry.Ports.DroneDB;
 using Registry.Test.Common;
 using Registry.Web.Data;
 using Registry.Web.Data.Models;
@@ -50,44 +53,51 @@ public class StacManagerTest : TestBase
     public async Task GetCatalog_Ok()
     {
         await using var context = GetTest1Context();
-        await using var appContext = GetAppTest1Context();
+
+        const string stacUrl = "http://localhost/orgs/public/ds/default/stac";
+        const string datasetStacUrl = "http://localhost/orgs/public/ds/default/stac/catalog.json";
+        const string expectedName = "Default";
 
         _appSettingsMock.Setup(o => o.Value).Returns(_settings);
-        _authManagerMock.Setup(o => o.IsUserAdmin()).Returns(Task.FromResult(true));
-        _authManagerMock.Setup(o => o.RequestAccess(It.IsAny<Dataset>(),
-            It.IsAny<AccessType>())).Returns(Task.FromResult(true));
-        _authManagerMock.Setup(o => o.RequestAccess(It.IsAny<Organization>(),
-            It.IsAny<AccessType>())).Returns(Task.FromResult(true));
-        _authManagerMock.Setup(o => o.GetCurrentUser()).Returns(Task.FromResult(new User
-        {
-            UserName = "admin",
-            Email = "admin@example.com"
-        }));
-/*
-        var webUtils = new WebUtils(_authManagerMock.Object, context, _appSettingsMock.Object,
-            _httpContextAccessorMock.Object, _ddbManagerMock.Object);
 
-        var datasetManager = new DatasetsManager()
+        var utilsMock = new Mock<IUtils>();
+        utilsMock.Setup(o => o.GenerateStacUrl()).Returns(stacUrl);
+        utilsMock.Setup(o => o.GenerateDatasetStacUrl(It.IsAny<string>(), It.IsAny<string>()))
+            .Returns(datasetStacUrl);
 
-        var stacManager =
-            new StacManager(_authManagerMock.Object, context, webUtils, _datasetManager)
+        var metaMock = new Mock<Registry.Ports.DroneDB.IMetaManager>();
+        metaMock.Setup(o => o.Get<int>(SafeMetaManager.VisibilityField, null))
+            .Returns((int)Visibility.Public);
+        metaMock.Setup(o => o.Get<string>(SafeMetaManager.NameField, null))
+            .Returns(expectedName);
 
-        var list = (await organizationsManager.List()).ToArray();
+        var ddbMock = new Mock<IDDB>();
+        ddbMock.Setup(o => o.Meta).Returns(metaMock.Object);
 
-        list.Count().ShouldBe(1);
+        _ddbManagerMock.Setup(o => o.Get(It.IsAny<string>(), It.IsAny<Guid>()))
+            .Returns(ddbMock.Object);
 
-        var pub = list.First();
+        var cache = new MemoryDistributedCache(
+            Microsoft.Extensions.Options.Options.Create(new MemoryDistributedCacheOptions()));
 
-        const string expectedDescription = "Public organization";
-        const string expectedSlug = MagicStrings.PublicOrganizationSlug;
-        const string expectedName = "Public";
+        var stacManager = new StacManager(_authManagerMock.Object, context, utilsMock.Object,
+            _ddbManagerMock.Object, cache, _stacManagerLogger);
 
-        pub.Description.ShouldBe(expectedDescription);
-        pub.Slug.ShouldBe(expectedSlug);
-        pub.IsPublic.ShouldBeTrue();
-        pub.Owner.ShouldBeNull();
-        pub.Name.ShouldBe(expectedName);
-        */
+        var catalog = await stacManager.GetCatalog();
+
+        catalog.ShouldNotBeNull();
+        catalog.Type.ShouldBe("Catalog");
+        catalog.StacVersion.ShouldBe("1.1.0");
+
+        var selfLink = catalog.Links.Single(l => l.Relationship == "self");
+        selfLink.Href.ShouldBe(stacUrl);
+
+        var rootLink = catalog.Links.Single(l => l.Relationship == "root");
+        rootLink.Href.ShouldBe(stacUrl);
+
+        var childLink = catalog.Links.Single(l => l.Relationship == "child");
+        childLink.Href.ShouldBe(datasetStacUrl);
+        childLink.Title.ShouldBe(expectedName);
     }
 
 

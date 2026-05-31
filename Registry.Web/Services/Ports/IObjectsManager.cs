@@ -18,13 +18,13 @@ public interface IObjectsManager
     Task<StorageEntryDto> Get(string orgSlug, string dsSlug, string path);
     Task<EntryDto> AddNew(string orgSlug, string dsSlug, string path, byte[] data);
     Task<EntryDto> AddNew(string orgSlug, string dsSlug, string path, Stream stream = null);
-    Task<Entry> Move(string orgSlug, string dsSlug, string source, string dest);
+    Task<EntryDto> Move(string orgSlug, string dsSlug, string source, string dest);
 
     /// <summary>
     /// Copies a file or folder within the same dataset. Reuses the existing
     /// build folder (content-addressed by hash, so no duplication on disk).
     /// </summary>
-    Task<Entry> Copy(string orgSlug, string dsSlug, string source, string dest, bool overwrite = false);
+    Task<EntryDto> Copy(string orgSlug, string dsSlug, string source, string dest, bool overwrite = false);
 
     Task Delete(string orgSlug, string dsSlug, string path);
     Task DeleteAll(string orgSlug, string dsSlug);

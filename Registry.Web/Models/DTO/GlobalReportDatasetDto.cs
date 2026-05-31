@@ -12,6 +12,6 @@ public class GlobalReportDatasetDto
     public bool IsPublic { get; set; }
     public string Owner { get; set; }
     public long Size { get; set; }
-    public List<GlobalReportContentDto> Contents { get; set; } = new();
+    public List<GlobalReportContentDto> Contents { get; set; } = [];
     public string Error { get; set; }
 }

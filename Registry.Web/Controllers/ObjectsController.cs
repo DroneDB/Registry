@@ -624,7 +624,7 @@ public class ObjectsController : ControllerBaseEx
     /// <param name="dest">The destination path.</param>
     /// <returns>The updated entry on success.</returns>
     [HttpPut(RoutesHelper.ObjectsRadix, Name = nameof(ObjectsController) + "." + nameof(Move))]
-    [ProducesResponseType(typeof(Entry), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(EntryDto), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status404NotFound)]
@@ -710,7 +710,7 @@ public class ObjectsController : ControllerBaseEx
     /// <param name="overwrite">Whether to overwrite an existing destination.</param>
     /// <returns>The created destination entry.</returns>
     [HttpPost(RoutesHelper.ObjectsRadix + "/copy", Name = nameof(ObjectsController) + "." + nameof(Copy))]
-    [ProducesResponseType(typeof(Entry), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(EntryDto), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status404NotFound)]

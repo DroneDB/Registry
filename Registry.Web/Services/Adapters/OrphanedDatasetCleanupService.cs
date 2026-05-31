@@ -83,7 +83,7 @@ public class OrphanedDatasetCleanupService
             var orgSlug = Path.GetFileName(orgDir);
 
             // Get valid InternalRefs for this organization
-            var validRefs = validFolders.GetValueOrDefault(orgSlug) ?? new HashSet<Guid>();
+            var validRefs = validFolders.GetValueOrDefault(orgSlug) ?? [];
 
             // Scan dataset folders within this organization
             foreach (var datasetDir in Directory.EnumerateDirectories(orgDir))

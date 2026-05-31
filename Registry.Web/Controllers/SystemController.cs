@@ -5,6 +5,7 @@ using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 using System.Linq;
 using System.Threading.Tasks;
+using Hangfire;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -12,6 +13,7 @@ using Registry.Ports;
 using Registry.Web.Models;
 using Registry.Web.Models.Configuration;
 using Registry.Web.Models.DTO;
+using Registry.Web.Services.Adapters;
 using Registry.Web.Services.Hub;
 using Registry.Web.Services.Ports;
 using Registry.Web.Utilities;
@@ -366,6 +368,35 @@ public class SystemController : ControllerBaseEx
     }
 
     /// <summary>
+    /// Triggers an immediate, one-off run of the artifact completeness checker.
+    /// Scans every entry in every dataset and enqueues a rebuild for any
+    /// buildable entry whose build output is missing or empty.
+    /// </summary>
+    /// <returns>The Hangfire job id of the enqueued scan.</returns>
+    [HttpPost("check-artifact-completeness",
+        Name = nameof(SystemController) + "." + nameof(CheckArtifactCompleteness))]
+    [ProducesResponseType(StatusCodes.Status202Accepted)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status401Unauthorized)]
+    public IActionResult CheckArtifactCompleteness()
+    {
+        try
+        {
+            _logger.LogDebug("System controller CheckArtifactCompleteness()");
+
+            var jobId = BackgroundJob.Enqueue<ArtifactCompletenessCheckerService>(
+                s => s.CheckAndQueueAsync(null));
+
+            return Accepted(new { JobId = jobId });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Exception in System controller CheckArtifactCompleteness()");
+
+            return ExceptionResult(ex);
+        }
+    }
+
+    /// <summary>
     /// Gets the status of all platform feature flags.
     /// </summary>
     /// <returns>An object with the status of each feature.</returns>
@@ -411,8 +442,9 @@ public class SystemController : ControllerBaseEx
             // The native lib returns "<semver> <commit>" — keep only the semver.
             return raw.Contains(' ') ? raw[..raw.IndexOf(' ')] : raw;
         }
-        catch
+        catch (Exception ex)
         {
+            _logger.LogWarning(ex, "Failed to retrieve DDB version from native wrapper");
             return null;
         }
     }

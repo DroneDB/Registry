@@ -74,6 +74,20 @@ public class DDB : IDDB
         }
     }
 
+    public byte[] GenerateTile(string inputPath, int tz, int tx, int ty, bool retina, string inputPathHash, string outputFormat)
+    {
+        try
+        {
+            var fullPath = GetLocalPath(inputPath);
+            return _ddbWrapper.GenerateMemoryTile(fullPath, tz, tx, ty, retina ? 512 : 256, true, false,
+                inputPathHash, outputFormat);
+        }
+        catch (DdbException ex)
+        {
+            throw new InvalidOperationException($"Cannot generate tile of '{inputPath}' (format={outputFormat})", ex);
+        }
+    }
+
     public void Init()
     {
         try
@@ -256,6 +270,18 @@ public class DDB : IDDB
         }
     }
 
+    public bool IsBuildComplete(string path)
+    {
+        try
+        {
+            return _ddbWrapper.IsBuildComplete(DatasetFolderPath, NormalizePath(path));
+        }
+        catch (DdbException ex)
+        {
+            throw new InvalidOperationException($"Cannot call IsBuildComplete from ddb '{DatasetFolderPath}'", ex);
+        }
+    }
+
     public bool IsBuildPending()
     {
         try
@@ -399,6 +425,13 @@ public class DDB : IDDB
     public JToken GetStac(string id, string stacCollectionRoot, string stacCatalogRoot, string path = null)
     {
         return _ddbWrapper.Stac(DatasetFolderPath, path, stacCollectionRoot, id, stacCatalogRoot);
+    }
+
+    public JToken GetStacItemCollection(string id, string stacCollectionRoot, string stacCatalogRoot,
+        string bbox = null, string datetime = null, int limit = 10, int offset = 0)
+    {
+        return _ddbWrapper.StacItemCollection(DatasetFolderPath, stacCollectionRoot, id, stacCatalogRoot,
+            bbox, datetime, limit, offset);
     }
 
     public List<RescanResult> RescanIndex(string? types = null, bool stopOnError = true)

@@ -53,7 +53,9 @@ using Registry.Ports.DroneDB;
 using Registry.Web.Identity;
 using Registry.Web.Identity.Models;
 using Registry.Web.Services.Initialization;
+using Registry.Web.Services.Managers.Wcs;
 using Registry.Web.Utilities.Auth;
+using Registry.Web.Utilities.Ogc;
 using Scalar.AspNetCore;
 using Serilog;
 using Serilog.Events;
@@ -280,11 +282,28 @@ public class Startup
         services.AddScoped<DatasetCleanupService>();
         services.AddScoped<OrphanedDatasetCleanupService>();
         services.AddScoped<RecurringDatasetCleanupService>();
+        services.AddScoped<ArtifactCompletenessCheckerService>();
 
         services.AddScoped<IConfigurationHelper<AppSettings>, ConfigurationHelper>(_ =>
             new ConfigurationHelper(MagicStrings.AppSettingsFileName));
 
         services.AddScoped<BasicAuthFilter>();
+
+        // OGC services (WMS/WMTS/WFS/WCS/OGC API + MVT endpoint)
+        services.AddScoped<IBuildArtifactResolver, BuildArtifactResolver>();
+        services.AddScoped<IOgcLayerCatalog, OgcLayerCatalog>();
+        services.AddScoped<IWmtsManager, WmtsManager>();
+        services.AddScoped<IWmsManager, WmsManager>();
+        services.AddScoped<IWfsManager, WfsManager>();
+        services.AddScoped<IWcsCoverageService, WcsCoverageService>();
+        services.AddScoped<IWcsProtocolHandler, WcsProtocol10Handler>();
+        services.AddScoped<IWcsProtocolHandler, WcsProtocol11Handler>();
+        services.AddScoped<IWcsProtocolHandler, WcsProtocol20Handler>();
+        services.AddScoped<IWcsManager, WcsManager>();
+        services.AddScoped<IOgcApiFeaturesManager, OgcApiFeaturesManager>();
+        services.AddScoped<IOgcApiTilesManager, OgcApiTilesManager>();
+        services.AddScoped<OgcAuthorizationFilter>();
+        services.AddScoped<OgcExceptionFilter>();
 
         if (!string.IsNullOrWhiteSpace(appSettings.RemoteThumbnailGeneratorUrl))
         {
@@ -405,6 +424,16 @@ public class Startup
 
         app.UseAuthentication();
         app.UseAuthorization();
+
+        // STAC API responses must be served uncompressed: STAC validators (pystac/urllib)
+        // send "Accept-Encoding: *" but cannot decode gzip/brotli, which breaks catalog
+        // traversal and JSON parsing. Strip Accept-Encoding for /stac so responses stay identity.
+        app.Use(async (context, next) =>
+        {
+            if (context.Request.Path.StartsWithSegments("/stac"))
+                context.Request.Headers.Remove("Accept-Encoding");
+            await next();
+        });
 
         app.UseResponseCompression();
         app.UseResponseCaching();

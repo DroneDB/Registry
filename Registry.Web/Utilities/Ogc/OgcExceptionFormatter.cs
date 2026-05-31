@@ -1,0 +1,131 @@
+using System.IO;
+using System.Text;
+using System.Xml;
+using Registry.Web.Exceptions;
+
+namespace Registry.Web.Utilities.Ogc;
+
+/// <summary>
+/// Renders OGC ExceptionReport XML envelopes. WMS 1.1.1 uses ServiceExceptionReport;
+/// WMS 1.3.0 / WFS 2.0.0 / WMTS 1.0 / WCS 2.0 use ows:ExceptionReport.
+/// </summary>
+public static class OgcExceptionFormatter
+{
+    public const string ContentType = "text/xml; charset=utf-8";
+
+    /// <summary>StringWriter that reports UTF-8 encoding so XmlWriter declares encoding="utf-8".</summary>
+    private sealed class Utf8StringWriter : StringWriter
+    {
+        public override Encoding Encoding => Encoding.UTF8;
+    }
+
+    public static string FormatWms111(string code, string message)
+    {
+        using var sw = new Utf8StringWriter();
+        using var w = XmlWriter.Create(sw, new XmlWriterSettings
+        {
+            Indent = true, Encoding = Encoding.UTF8, OmitXmlDeclaration = false
+        });
+        w.WriteStartDocument();
+        w.WriteStartElement("ServiceExceptionReport");
+        w.WriteAttributeString("version", "1.1.1");
+        w.WriteStartElement("ServiceException");
+        if (!string.IsNullOrEmpty(code)) w.WriteAttributeString("code", code);
+        w.WriteString(message ?? string.Empty);
+        w.WriteEndElement();
+        w.WriteEndElement();
+        w.WriteEndDocument();
+        w.Flush();
+        return sw.ToString();
+    }
+
+    /// <summary>WMS 1.3.0 ServiceExceptionReport (namespace http://www.opengis.net/ogc).</summary>
+    public static string FormatWms130(string code, string message)
+    {
+        using var sw = new Utf8StringWriter();
+        using var w = XmlWriter.Create(sw, new XmlWriterSettings
+        {
+            Indent = true, Encoding = Encoding.UTF8, OmitXmlDeclaration = false
+        });
+        w.WriteStartDocument();
+        w.WriteStartElement("ServiceExceptionReport", "http://www.opengis.net/ogc");
+        w.WriteAttributeString("xmlns", "xsi", null, "http://www.w3.org/2001/XMLSchema-instance");
+        w.WriteAttributeString("xsi", "schemaLocation", "http://www.w3.org/2001/XMLSchema-instance",
+            "http://www.opengis.net/ogc http://schemas.opengis.net/wms/1.3.0/exceptions_1_3_0.xsd");
+        w.WriteAttributeString("version", "1.3.0");
+        w.WriteStartElement("ServiceException", "http://www.opengis.net/ogc");
+        if (!string.IsNullOrEmpty(code)) w.WriteAttributeString("code", code);
+        w.WriteString(message ?? string.Empty);
+        w.WriteEndElement();
+        w.WriteEndElement();
+        w.WriteEndDocument();
+        w.Flush();
+        return sw.ToString();
+    }
+
+    /// <summary>
+    /// Render an ows:ExceptionReport. The namespace must match the OWS Common revision imported
+    /// by the failing OGC service: WCS 2.0 imports OWS 2.0; WFS 2.0 / WMTS 1.0 / WPS 1.0 import
+    /// OWS 1.1. CITE schema validation rejects responses whose ExceptionReport element resolves
+    /// to the wrong namespace ("Cannot find the declaration of element 'ows:ExceptionReport'").
+    /// </summary>
+    public static string FormatOws(string code, string message, string version = "2.0.0",
+        string? locator = null, string owsNamespace = "http://www.opengis.net/ows/1.1")
+    {
+        using var sw = new Utf8StringWriter();
+        using var w = XmlWriter.Create(sw, new XmlWriterSettings
+        {
+            Indent = true, Encoding = Encoding.UTF8, OmitXmlDeclaration = false
+        });
+        w.WriteStartDocument();
+        w.WriteStartElement("ows", "ExceptionReport", owsNamespace);
+        w.WriteAttributeString("version", version);
+        w.WriteStartElement("ows", "Exception", owsNamespace);
+        if (!string.IsNullOrEmpty(code)) w.WriteAttributeString("exceptionCode", code);
+        if (!string.IsNullOrEmpty(locator)) w.WriteAttributeString("locator", locator);
+        w.WriteStartElement("ows", "ExceptionText", owsNamespace);
+        w.WriteString(message ?? string.Empty);
+        w.WriteEndElement();
+        w.WriteEndElement();
+        w.WriteEndElement();
+        w.WriteEndDocument();
+        w.Flush();
+        return sw.ToString();
+    }
+
+    /// <summary>WCS 1.0.0 ServiceExceptionReport (OGC 03-065r6 §A.4.1 — namespace
+    /// <c>http://www.opengis.net/ogc</c>, version <c>1.2.0</c>). Note: WCS 1.0 inherited
+    /// the WMS-like envelope and predates OWS Common entirely.</summary>
+    public static string FormatWcs10(string code, string message)
+    {
+        using var sw = new Utf8StringWriter();
+        using var w = XmlWriter.Create(sw, new XmlWriterSettings
+        {
+            Indent = true, Encoding = Encoding.UTF8, OmitXmlDeclaration = false
+        });
+        w.WriteStartDocument();
+        w.WriteStartElement("ServiceExceptionReport", "http://www.opengis.net/ogc");
+        w.WriteAttributeString("version", "1.2.0");
+        w.WriteStartElement("ServiceException", "http://www.opengis.net/ogc");
+        if (!string.IsNullOrEmpty(code)) w.WriteAttributeString("code", code);
+        w.WriteString(message ?? string.Empty);
+        w.WriteEndElement();
+        w.WriteEndElement();
+        w.WriteEndDocument();
+        w.Flush();
+        return sw.ToString();
+    }
+
+    /// <summary>
+    /// Pick the right envelope flavor given the OGC service version of the failing request.
+    /// </summary>
+    public static string Format(OgcException ex, string serviceVersion)
+    {
+        return serviceVersion switch
+        {
+            "1.1.1" => FormatWms111(ex.Code, ex.Message),
+            "1.3.0" => FormatWms130(ex.Code, ex.Message),
+            _ => FormatOws(ex.Code, ex.Message, serviceVersion, ex.Locator)
+        };
+    }
+}

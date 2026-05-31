@@ -44,6 +44,9 @@ public interface IDdbWrapper
     public byte[] GenerateMemoryTile(string inputPath, int tz, int tx, int ty, int tileSize, bool tms,
         bool forceRecreate = false, string inputPathHash = "");
 
+    public byte[] GenerateMemoryTile(string inputPath, int tz, int tx, int ty, int tileSize, bool tms,
+        bool forceRecreate, string inputPathHash, string outputFormat);
+
     public void SetTag(string ddbPath, string newTag);
 
     public string? GetTag(string ddbPath);
@@ -66,6 +69,17 @@ public interface IDdbWrapper
     public bool IsBuildable(string ddbPath, string path);
 
     public bool IsBuildActive(string ddbPath, string path);
+
+    /// <summary>
+    /// Checks whether the build output for an entry is complete (artifacts
+    /// exist on disk AND contain non-empty content). For Vector entries it
+    /// requires BOTH <c>vec/source.gpkg</c> AND <c>mvt/metadata.json</c> to be
+    /// present and non-empty. For PointCloud / GeoRaster / Model it requires
+    /// the <c>copc/</c> / <c>cog/</c> / <c>nxs/</c> folder to exist and contain
+    /// at least one non-empty file (recursively). Returns false for entries
+    /// that are not buildable.
+    /// </summary>
+    public bool IsBuildComplete(string ddbPath, string path);
 
     public bool IsBuildPending(string ddbPath);
 
@@ -93,6 +107,9 @@ public interface IDdbWrapper
 
     public JToken Stac(string ddbPath, string? entry, string stacCollectionRoot, string id,
         string stacCatalogRoot);
+
+    public JToken StacItemCollection(string ddbPath, string stacCollectionRoot, string id,
+        string stacCatalogRoot, string? bbox, string? datetime, int limit, int offset);
 
     /// <summary>
     /// Rescans all files in the index to update metadata
@@ -233,4 +250,78 @@ public interface IDdbWrapper
     /// Mask orthophoto borders making them transparent
     /// </summary>
     public void MaskBorders(string input, string output, int nearDist = 15, bool white = false);
+
+    // =====================================================================
+    // OGC services support (raster region rendering + vector query/describe).
+    // =====================================================================
+
+    /// <summary>
+    /// Render a geographic region of a georeferenced raster to a compressed
+    /// image buffer (PNG / JPEG / WebP). Used by WMS GetMap and WMTS.
+    /// </summary>
+    /// <param name="inputPath">Path to the source raster.</param>
+    /// <param name="bbox">[minX, minY, maxX, maxY] in <paramref name="bboxSrs"/>.</param>
+    /// <param name="bboxSrs">CRS authority code (e.g. "EPSG:4326"). Empty/null defaults to EPSG:4326.</param>
+    /// <param name="width">Output width in pixels (1..4096).</param>
+    /// <param name="height">Output height in pixels (1..4096).</param>
+    /// <param name="format">MIME type ("image/png", "image/jpeg", "image/webp")
+    /// or shortcut ("png"/"jpeg"/"webp").</param>
+    /// <param name="bands">Optional 1-based band selection (WCS RangeSubset).
+    /// When provided the output retains exactly these bands in the requested
+    /// order and no alpha channel is appended.</param>
+    /// <param name="outputCrs">Optional target CRS authority code (WCS OutputCRS).
+    /// Null/empty means "same as <paramref name="bboxSrs"/>" (legacy behaviour).</param>
+    /// <returns>Encoded image bytes.</returns>
+    public byte[] RenderRasterRegion(string inputPath, double[] bbox, string bboxSrs,
+                                     int width, int height, string format,
+                                     int[]? bands = null, string? outputCrs = null);
+
+    /// <summary>
+    /// Render a spectral index (NDVI / NDRE / NDWI / EVI / SAVI) over a raster
+    /// region and apply a red-yellow-green color ramp. Used by WMS STYLES.
+    /// </summary>
+    /// <param name="inputPath">Path to the multi-band source raster.</param>
+    /// <param name="indexName">One of NDVI / NDRE / NDWI / EVI / SAVI (case-insensitive).</param>
+    /// <param name="bbox">[minX, minY, maxX, maxY] in <paramref name="bboxSrs"/>.</param>
+    /// <param name="bboxSrs">CRS authority code; null/empty defaults to "EPSG:4326".</param>
+    /// <param name="width">Output width (1..4096).</param>
+    /// <param name="height">Output height (1..4096).</param>
+    /// <param name="format">MIME type or shortcut ("image/png" / "png" / etc.).</param>
+    public byte[] RenderRasterIndex(string inputPath, string indexName, double[] bbox,
+                                    string bboxSrs, int width, int height, string format);
+
+    /// <summary>
+    /// Sample a georeferenced raster at a geographic point (WMS GetFeatureInfo /
+    /// OGC API Coverages point access).
+    /// </summary>
+    /// <param name="inputPath">Path to the source raster.</param>
+    /// <param name="x">X coordinate in <paramref name="srs"/>.</param>
+    /// <param name="y">Y coordinate in <paramref name="srs"/>.</param>
+    /// <param name="srs">CRS authority code (defaults to "EPSG:4326").</param>
+    /// <returns>JSON string with bands, pixel, lon and lat fields.</returns>
+    public string QueryRasterPoint(string inputPath, double x, double y, string? srs = null);
+
+    /// <summary>
+    /// Query features from a vector dataset (WFS GetFeature / OGC API Items).
+    /// </summary>
+    /// <param name="vectorPath">Path to the vector source (typically vec/source.gpkg).</param>
+    /// <param name="layerName">Layer to query; null uses the first layer.</param>
+    /// <param name="bbox">[minX,minY,maxX,maxY] spatial filter in <paramref name="bboxSrs"/>, or null.</param>
+    /// <param name="bboxSrs">CRS of <paramref name="bbox"/> (e.g. "EPSG:4326"); null when bbox is null.</param>
+    /// <param name="maxFeatures">Maximum features to return (clamped to [1,10000]; 0 → default 1000).</param>
+    /// <param name="startIndex">0-based feature offset for pagination.</param>
+    /// <param name="outputFormat">"application/json" (RFC7946 GeoJSON, default) or "application/gml+xml".</param>
+    /// <returns>Encoded features as a string.</returns>
+    public string QueryVector(string vectorPath, string? layerName = null,
+                              double[]? bbox = null, string? bboxSrs = null,
+                              int maxFeatures = 1000, int startIndex = 0,
+                              string outputFormat = "application/json");
+
+    /// <summary>
+    /// Describe a vector dataset (WFS DescribeFeatureType / OGC API collection).
+    /// </summary>
+    /// <param name="vectorPath">Path to the vector source.</param>
+    /// <param name="layerName">Layer to describe; null = all layers.</param>
+    /// <returns>JSON describing driver, layers, fields, geometryType, srs, extent and feature count.</returns>
+    public string DescribeVector(string vectorPath, string? layerName = null);
 }

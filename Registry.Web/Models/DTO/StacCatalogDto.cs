@@ -20,4 +20,7 @@ public class StacCatalogDto
     
     [JsonProperty("links")]
     public IEnumerable<StacLinkDto> Links { get; set; }
+
+    [JsonProperty("conformsTo", NullValueHandling = NullValueHandling.Ignore)]
+    public IEnumerable<string> ConformsTo { get; set; }
 }
