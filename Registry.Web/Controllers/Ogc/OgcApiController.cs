@@ -28,7 +28,7 @@ public class OgcApiController : ControllerBaseEx
     }
 
     private string BaseUrl([FromRoute] string orgSlug, [FromRoute] string dsSlug)
-        => $"{Request.Scheme}://{Request.Host}/orgs/{orgSlug}/ds/{dsSlug}/ogcapi";
+        => $"{Request.Scheme}://{Request.Host}{Request.PathBase}/orgs/{orgSlug}/ds/{dsSlug}/ogcapi";
 
     [HttpGet("")]
     public async Task<IActionResult> Landing([FromRoute] string orgSlug, [FromRoute] string dsSlug)

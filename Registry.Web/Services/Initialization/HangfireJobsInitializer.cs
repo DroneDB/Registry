@@ -95,7 +95,7 @@ internal class HangfireJobsInitializer
     /// Registers or removes a recurring Hangfire job based on the resolved cron expression.
     /// A <see langword="null"/> resolved cron means the job is explicitly disabled.
     /// </summary>
-    private void ScheduleJob(IRecurringJobManager manager, string jobId, string resolvedCron,
+    private void ScheduleJob(IRecurringJobManager manager, string jobId, string? resolvedCron,
         Action<string> register)
     {
         if (resolvedCron is null)
@@ -118,13 +118,14 @@ internal class HangfireJobsInitializer
     ///   <item><description>any other value → returned as-is (treated as a valid cron expression)</description></item>
     /// </list>
     /// </summary>
-    private static string ResolveCron(string raw, string defaultCron)
+    private static string? ResolveCron(string? raw, string defaultCron)
     {
         if (string.IsNullOrWhiteSpace(raw))
             return defaultCron;
 
-        return raw.Trim().ToLowerInvariant() is "disabled" or "off" or "none"
+        var trimmed = raw.Trim();
+        return trimmed.ToLowerInvariant() is "disabled" or "off" or "none"
             ? null
-            : raw;
+            : trimmed;
     }
 }

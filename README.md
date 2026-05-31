@@ -1,4 +1,4 @@
-# DroneDB Registry
+﻿# DroneDB Registry
 
 ![GitHub Release](https://img.shields.io/github/v/release/DroneDB/Registry) ![commits](https://img.shields.io/github/commit-activity/m/DroneDB/registry) ![languages](https://img.shields.io/github/languages/top/DroneDB/registry) ![.NET Core](https://github.com/DroneDB/Registry/actions/workflows/dotnet-core.yml/badge.svg) [![Discord](https://img.shields.io/discord/1491016144310767670?label=Discord&logo=discord&color=5865F2)](https://discord.gg/e9M3vBvzge)
 
@@ -82,7 +82,7 @@ Every dataset exposes a full suite of OGC-compliant endpoints at
 | WMS | 1.1.1 / 1.3.0 | `…/wms` | Raster layers (orthophotos, DEMs) + folder-scoped `…/wms/p/{folder}` |
 | WFS | 2.0 | `…/wfs` | Vector layers as GeoJSON / GML + folder-scoped variant |
 | WMTS | 1.0.0 | `…/wmts` | KVP + RESTful `…/wmts/1.0.0/{layer}/{style}/{tms}/{z}/{y}/{x}.{ext}` |
-| WCS | 2.0.1 | `…/wcs` | GeoTIFF / PNG / JPEG `GetCoverage`; `ACCEPTVERSIONS` first-match negotiation |
+| WCS | 2.0.1 / 1.1.1 / 1.0.0 | `…/wcs` | GeoTIFF / PNG / JPEG `GetCoverage`; `ACCEPTVERSIONS` first-match negotiation |
 | OGC API – Features | 1.0 | `…/ogcapi` | JSON landing, conformance, collections, items |
 | OGC API – Tiles | 1.0 | `…/ogcapi/collections/{id}/tiles` | MVT (`pbf`) for vector layers, PNG for raster |
 
@@ -94,7 +94,7 @@ Every dataset exposes a full suite of OGC-compliant endpoints at
 
 WCS supports `ACCEPTVERSIONS` (comma-separated, client-preference order): the first
 version both client and server support is selected. Supported versions:
-`2.0.1`, `1.1.2`, `1.1.1`, `1.1.0`, `1.0.0`.
+`2.0.1`, `1.1.1`, `1.0.0`.
 
 ### OGC error envelopes
 

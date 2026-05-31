@@ -33,6 +33,7 @@ public class WmsController : ControllerBaseEx
     private async Task<IActionResult> Dispatch(string orgSlug, string dsSlug, string? folderPath)
     {
         var q = Request.Query;
+        OgcKvpValidator.ValidateService(q, "WMS");
         var request = OgcRequestParser.GetRequired(q, "REQUEST");
         var rawVersion = OgcRequestParser.Get(q, "VERSION");
         var version = OgcRequestParser.NegotiateWmsVersion(rawVersion);
