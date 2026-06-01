@@ -34,4 +34,59 @@ public class JobIndexQuery(RegistryContext db) : IJobIndexQuery
             .OrderBy(x => x.CreatedAtUtc)
             .Skip(skip).Take(take)
             .ToArrayAsync(ct);
+
+    // Non-terminal states a task can be in while still running.
+    private static readonly string[] ActiveStates = ["Created", "Enqueued", "Scheduled", "Processing"];
+
+    public async Task<JobIndex[]> QueryAsync(JobIndexQueryFilter filter, CancellationToken ct = default)
+    {
+        var q = db.JobIndices.AsNoTracking()
+            .Where(x => x.OrgSlug == filter.OrgSlug && x.DsSlug == filter.DsSlug);
+
+        if (!string.IsNullOrEmpty(filter.ToolId))
+            q = q.Where(x => x.ToolId == filter.ToolId);
+        if (!string.IsNullOrEmpty(filter.State))
+            q = q.Where(x => x.CurrentState == filter.State);
+        if (!string.IsNullOrEmpty(filter.Path))
+            q = q.Where(x => x.Path == filter.Path);
+        if (!string.IsNullOrEmpty(filter.UserId))
+            q = q.Where(x => x.UserId == filter.UserId);
+        if (!string.IsNullOrEmpty(filter.WorkflowExecutionId))
+            q = q.Where(x => x.WorkflowExecutionId == filter.WorkflowExecutionId);
+        if (!string.IsNullOrEmpty(filter.ParentJobId))
+            q = q.Where(x => x.ParentJobId == filter.ParentJobId);
+
+        return await q
+            .OrderByDescending(x => x.CreatedAtUtc)
+            .Skip(filter.Skip).Take(filter.Take)
+            .ToArrayAsync(ct);
+    }
+
+    public async Task<JobIndex?> FindDedupCandidateAsync(
+        string orgSlug, string dsSlug, string toolId, string requestHash,
+        int lookbackHours, CancellationToken ct = default)
+    {
+        var cutoff = System.DateTime.UtcNow.AddHours(-lookbackHours);
+
+        return await db.JobIndices.AsNoTracking()
+            .Where(x => x.OrgSlug == orgSlug && x.DsSlug == dsSlug
+                        && x.ToolId == toolId && x.RequestHash == requestHash)
+            .Where(x => ActiveStates.Contains(x.CurrentState)
+                        || (x.CurrentState == "Succeeded" && x.CreatedAtUtc >= cutoff))
+            .OrderByDescending(x => x.CreatedAtUtc)
+            .FirstOrDefaultAsync(ct);
+    }
+
+    public async Task<long> CountActiveAsync(string? orgSlug = null, string? userId = null, CancellationToken ct = default)
+    {
+        var q = db.JobIndices.AsNoTracking()
+            .Where(x => ActiveStates.Contains(x.CurrentState));
+
+        if (!string.IsNullOrEmpty(orgSlug))
+            q = q.Where(x => x.OrgSlug == orgSlug);
+        if (!string.IsNullOrEmpty(userId))
+            q = q.Where(x => x.UserId == userId);
+
+        return await q.LongCountAsync(ct);
+    }
 }

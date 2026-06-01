@@ -156,6 +156,17 @@ public interface IDDB
         string? bandFilter = null, string? colormap = null, string? rescale = null);
 
     /// <summary>
+    /// Export raster with visualization params applied as GeoTIFF using the
+    /// block-windowed implementation (bounded peak memory), reporting incremental
+    /// progress and honoring cooperative cancellation.
+    /// </summary>
+    void ExportRaster(string inputPath, string outputPath,
+        string? preset, string? bands, string? formula, string? bandFilter,
+        string? colormap, string? rescale, int tileSize,
+        System.Action<double, string?>? progress,
+        System.Threading.CancellationToken cancellationToken);
+
+    /// <summary>
     /// Get raster value info (min/max/unit/dimensions), including thermal calibration if applicable
     /// </summary>
     string GetRasterValueInfo(string path);

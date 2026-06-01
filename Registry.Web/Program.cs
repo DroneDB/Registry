@@ -343,6 +343,9 @@ public class Program
                 services.AddScoped<RecurringDatasetCleanupService>();
                 services.AddScoped<ArtifactCompletenessCheckerService>();
 
+                // Processing Platform task substrate (native tools incl. build/raster-export)
+                services.AddProcessingPlatform();
+
                 services.AddHangfireProvider(appSettings, configuration);
                 services.AddHangfireServer(options => { options.WorkerCount = workers; });
 

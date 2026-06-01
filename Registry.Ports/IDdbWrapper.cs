@@ -173,6 +173,18 @@ public interface IDdbWrapper
         string? bandFilter = null, string? colormap = null, string? rescale = null);
 
     /// <summary>
+    /// Export raster with visualization params applied as GeoTIFF using the
+    /// block-windowed implementation (bounded peak memory), with incremental
+    /// progress reporting and cooperative cancellation. Raises
+    /// <c>DdbCanceledException</c> when canceled via the token.
+    /// </summary>
+    public void ExportRaster(string inputPath, string outputPath,
+        string? preset, string? bands, string? formula, string? bandFilter,
+        string? colormap, string? rescale,
+        int tileSize, System.Action<double, string?>? progress,
+        System.Threading.CancellationToken cancellationToken);
+
+    /// <summary>
     /// Get raster value info (min/max/unit/dimensions), including thermal calibration if applicable
     /// </summary>
     public string GetRasterValueInfo(string path);

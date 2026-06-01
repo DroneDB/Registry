@@ -570,6 +570,27 @@ public class DDB : IDDB
         }
     }
 
+    public void ExportRaster(string inputPath, string outputPath,
+        string? preset, string? bands, string? formula, string? bandFilter,
+        string? colormap, string? rescale, int tileSize,
+        Action<double, string?>? progress, CancellationToken cancellationToken)
+    {
+        try
+        {
+            var fullInputPath = GetLocalPath(inputPath);
+            _ddbWrapper.ExportRaster(fullInputPath, outputPath, preset, bands, formula, bandFilter,
+                colormap, rescale, tileSize, progress, cancellationToken);
+        }
+        catch (DdbCanceledException)
+        {
+            throw;
+        }
+        catch (DdbException ex)
+        {
+            throw new InvalidOperationException($"Cannot export raster '{inputPath}'", ex);
+        }
+    }
+
     public string GetRasterValueInfo(string path)
     {
         try

@@ -284,6 +284,9 @@ public class Startup
         services.AddScoped<RecurringDatasetCleanupService>();
         services.AddScoped<ArtifactCompletenessCheckerService>();
 
+        // Processing Platform task substrate (native tools incl. build/raster-export)
+        services.AddProcessingPlatform();
+
         services.AddScoped<IConfigurationHelper<AppSettings>, ConfigurationHelper>(_ =>
             new ConfigurationHelper(MagicStrings.AppSettingsFileName));
 

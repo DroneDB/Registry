@@ -17,7 +17,7 @@ namespace Registry.Web.Data.Mysql.Migrations
         {
 #pragma warning disable 612, 618
             modelBuilder
-                .HasAnnotation("ProductVersion", "9.0.9")
+                .HasAnnotation("ProductVersion", "10.0.7")
                 .HasAnnotation("Relational:MaxIdentifierLength", 64);
 
             MySqlModelBuilderExtensions.AutoIncrementColumns(modelBuilder);
@@ -137,6 +137,13 @@ namespace Registry.Web.Data.Mysql.Migrations
                         .HasMaxLength(64)
                         .HasColumnType("varchar(64)");
 
+                    b.Property<string>("ArtifactSha256")
+                        .HasMaxLength(64)
+                        .HasColumnType("varchar(64)");
+
+                    b.Property<long?>("ArtifactSizeBytes")
+                        .HasColumnType("bigint");
+
                     b.Property<DateTime>("CreatedAtUtc")
                         .HasColumnType("datetime(6)");
 
@@ -153,6 +160,10 @@ namespace Registry.Web.Data.Mysql.Migrations
                         .HasMaxLength(128)
                         .HasColumnType("varchar(128)");
 
+                    b.Property<string>("ErrorType")
+                        .HasMaxLength(128)
+                        .HasColumnType("varchar(128)");
+
                     b.Property<DateTime?>("FailedAtUtc")
                         .HasColumnType("datetime(6)");
 
@@ -163,6 +174,9 @@ namespace Registry.Web.Data.Mysql.Migrations
                     b.Property<DateTime?>("LastStateChangeUtc")
                         .HasColumnType("datetime(6)");
 
+                    b.Property<string>("LogTailJson")
+                        .HasColumnType("longtext");
+
                     b.Property<string>("MethodDisplay")
                         .HasMaxLength(1024)
                         .HasColumnType("varchar(1024)");
@@ -172,14 +186,32 @@ namespace Registry.Web.Data.Mysql.Migrations
                         .HasMaxLength(128)
                         .HasColumnType("varchar(128)");
 
+                    b.Property<string>("ParentJobId")
+                        .HasMaxLength(36)
+                        .HasColumnType("varchar(36)");
+
                     b.Property<string>("Path")
                         .HasMaxLength(2048)
                         .HasColumnType("varchar(2048)");
 
+                    b.Property<string>("PhaseMessage")
+                        .HasMaxLength(256)
+                        .HasColumnType("varchar(256)");
+
                     b.Property<DateTime?>("ProcessingAtUtc")
                         .HasColumnType("datetime(6)");
 
+                    b.Property<int?>("ProgressPercent")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime?>("ProgressUpdatedAtUtc")
+                        .HasColumnType("datetime(6)");
+
                     b.Property<string>("Queue")
+                        .HasMaxLength(64)
+                        .HasColumnType("varchar(64)");
+
+                    b.Property<string>("RequestHash")
                         .HasMaxLength(64)
                         .HasColumnType("varchar(64)");
 
@@ -189,19 +221,49 @@ namespace Registry.Web.Data.Mysql.Migrations
                     b.Property<DateTime?>("SucceededAtUtc")
                         .HasColumnType("datetime(6)");
 
+                    b.Property<string>("ToolId")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(64)
+                        .HasColumnType("varchar(64)")
+                        .HasDefaultValue("build");
+
+                    b.Property<string>("ToolVersion")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(16)
+                        .HasColumnType("varchar(16)")
+                        .HasDefaultValue("1");
+
                     b.Property<string>("UserId")
                         .HasMaxLength(128)
                         .HasColumnType("varchar(128)");
+
+                    b.Property<string>("WorkflowExecutionId")
+                        .HasMaxLength(36)
+                        .HasColumnType("varchar(36)");
 
                     b.HasKey("JobId");
 
                     b.HasIndex("CreatedAtUtc");
 
+                    b.HasIndex("ParentJobId")
+                        .HasDatabaseName("IX_JobIndex_Parent");
+
                     b.HasIndex("UserId");
+
+                    b.HasIndex("WorkflowExecutionId")
+                        .HasDatabaseName("IX_JobIndex_Workflow");
 
                     b.HasIndex("OrgSlug", "DsSlug");
 
                     b.HasIndex("OrgSlug", "DsSlug", "Hash");
+
+                    b.HasIndex("OrgSlug", "DsSlug", "ToolId", "RequestHash")
+                        .HasDatabaseName("IX_JobIndex_RequestHash");
+
+                    b.HasIndex("Queue", "OrgSlug", "DsSlug", "ToolId", "CurrentState", "CreatedAtUtc")
+                        .HasDatabaseName("IX_JobIndex_Tool_State");
 
                     b.ToTable("JobIndices");
                 });
