@@ -80,7 +80,7 @@ public static class OgcServiceResolver
             return OgcExceptionFormatter.FormatWms130(code, message);
         if (service == Service.Wcs && version.StartsWith("1.0", StringComparison.Ordinal))
             // WCS 1.0.0 predates OWS Common: errors are wrapped in <ServiceExceptionReport>
-            // (namespace http://www.opengis.net/ogc, version 1.2.0) — see OGC 03-065r6 §A.4.1.
+            // (namespace http://www.opengis.net/ogc, version 1.2.0) - see OGC 03-065r6 §A.4.1.
             return OgcExceptionFormatter.FormatWcs10(code, message);
 
         // WCS 1.1 → ows/1.1; WCS 2.0 → ows/2.0; WFS 2.0 / WMTS 1.0 → ows/1.1.

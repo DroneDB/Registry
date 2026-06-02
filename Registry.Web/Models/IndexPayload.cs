@@ -10,7 +10,7 @@ public record IndexPayload(
     string? UserId,
     string? Queue = null,
     string? Path = null,
-    // Processing Platform (Layer 1) additions — safe defaults keep all existing call sites working.
+    // Processing Platform (Layer 1) additions - safe defaults keep all existing call sites working.
     string ToolId = "build",
     string ToolVersion = "1",
     string? RequestHash = null,

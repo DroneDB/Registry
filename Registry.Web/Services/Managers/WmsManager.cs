@@ -61,7 +61,7 @@ public class WmsManager : OgcManagerBase, IWmsManager
 
             w.WriteStartElement("Service");
             w.WriteElementString("Name", "WMS");
-            w.WriteElementString("Title", $"DroneDB WMS — {orgSlug}/{dsSlug}");
+            w.WriteElementString("Title", $"DroneDB WMS - {orgSlug}/{dsSlug}");
             w.WriteElementString("Abstract", $"OGC Web Map Service for dataset {orgSlug}/{dsSlug}");
             w.WriteStartElement("OnlineResource");
             await w.WriteAttributeStringAsync("xlink", "type", NsXlink, "simple");

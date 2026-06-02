@@ -4,7 +4,7 @@ namespace Registry.Web.Models.Configuration;
 
 /// <summary>
 /// Modern minimal favicon / web-manifest configuration.
-/// Each href points to a publicly served URL — typical deployments drop the
+/// Each href points to a publicly served URL - typical deployments drop the
 /// referenced files under <c>{StoragePath}/branding/</c> and reference them
 /// via the <c>/branding/...</c> URL prefix.
 /// </summary>

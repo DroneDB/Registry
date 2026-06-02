@@ -90,7 +90,7 @@ public sealed class HangfireProgressSink : IProgress<HeavyToolProgress>
         }
         catch
         {
-            // swallow — telemetry only
+            // swallow - telemetry only
         }
     }
 

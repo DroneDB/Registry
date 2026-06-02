@@ -5,7 +5,7 @@ namespace Registry.Web.Services.HeavyTasks.NodeOdm;
 
 /// <summary>
 /// Resolves configured NodeODM endpoints (config-based registry for the
-/// reduced-scope integration — no DB table / admin UI).
+/// reduced-scope integration - no DB table / admin UI).
 /// </summary>
 public interface INodeOdmNodeRegistry
 {

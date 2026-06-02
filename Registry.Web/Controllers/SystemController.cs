@@ -439,7 +439,7 @@ public class SystemController : ControllerBaseEx
         {
             var raw = _ddbWrapper.GetVersion();
             if (string.IsNullOrWhiteSpace(raw)) return null;
-            // The native lib returns "<semver> <commit>" — keep only the semver.
+            // The native lib returns "<semver> <commit>" - keep only the semver.
             return raw.Contains(' ') ? raw[..raw.IndexOf(' ')] : raw;
         }
         catch (Exception ex)

@@ -31,7 +31,7 @@ public sealed class LogTailSnapshot
 
 /// <summary>
 /// Bounded ring buffer of recent log lines (spec §6.2). Keeps at most
-/// <c>maxLines</c> lines OR <c>maxBytes</c> of message payload — whichever limit
+/// <c>maxLines</c> lines OR <c>maxBytes</c> of message payload - whichever limit
 /// is hit first evicts from the head. Maintains a monotonic <c>Cursor</c> used as
 /// the <c>?since=N</c> long-poll token and counts lines lost to truncation.
 /// Not thread-safe; callers must serialize access (the progress sink does).

@@ -20,7 +20,7 @@ namespace Registry.Web.Services.HeavyTasks.Tools;
 /// Remote photogrammetry tool backed by a NodeODM (OpenDroneMap) processing node.
 /// Collects the dataset's images, submits them to NodeODM, streams progress/log,
 /// downloads the result bundle (<c>all.zip</c>) as the task artifact. Cooperatively
-/// cancellable — cancellation propagates to the remote NodeODM task.
+/// cancellable - cancellation propagates to the remote NodeODM task.
 /// </summary>
 public sealed class PhotogrammetryTool : IHeavyTool
 {

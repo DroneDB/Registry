@@ -4,7 +4,7 @@ using System.Collections.Generic;
 namespace Registry.Web.Models.Configuration;
 
 /// <summary>
-/// Processing Platform (Layer 1 — Task substrate) configuration.
+/// Processing Platform (Layer 1 - Task substrate) configuration.
 /// Bound from the <c>AppSettings:ProcessingPlatform</c> section. See spec §4.9.
 /// </summary>
 public class ProcessingPlatformSettings

@@ -31,7 +31,7 @@ public class JobIndex
     public DateTime? DeletedAtUtc { get; set; }
     public DateTime? ScheduledAtUtc { get; set; }
 
-    // --- Processing Platform (Layer 1 — Task substrate) extensions ---
+    // --- Processing Platform (Layer 1 - Task substrate) extensions ---
 
     /// <summary>Tool identifier (kebab-case). Backfilled to 'build' for legacy rows.</summary>
     public string ToolId { get; set; } = "build";

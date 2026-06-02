@@ -7,7 +7,7 @@ namespace Registry.Web.Services.Managers.Wcs;
 /// Per-version WCS protocol handler. One instance implements the wire format
 /// (KVP parsing + XML serialization) for a single version (1.0.0 / 1.1.1 / 2.0.1).
 /// Common logic (catalog resolution, raster rendering) is delegated to
-/// <see cref="IWcsCoverageService"/> — handlers focus exclusively on the
+/// <see cref="IWcsCoverageService"/> - handlers focus exclusively on the
 /// version-specific protocol surface.
 /// </summary>
 public interface IWcsProtocolHandler
