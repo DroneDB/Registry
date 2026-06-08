@@ -71,6 +71,9 @@ public static class StartupExtenders
 
                     var buildFailureLogger = sp.GetRequiredService<ILogger<BuildJobFailureFilter>>();
                     configuration.UseFilter(new BuildJobFailureFilter(sp, buildFailureLogger));
+
+                    var buildLogLogger = sp.GetRequiredService<ILogger<BuildLogCaptureFilter>>();
+                    configuration.UseFilter(new BuildLogCaptureFilter(sp, buildLogLogger));
                 });
 
                 break;
@@ -106,7 +109,8 @@ public static class StartupExtenders
                             }))
                         .WithJobExpirationTimeout(TimeSpan.FromDays(30))
                         .UseFilter(new JobIndexStateFilter(sp, logger))
-                        .UseFilter(new BuildJobFailureFilter(sp, buildFailureLogger));
+                        .UseFilter(new BuildJobFailureFilter(sp, buildFailureLogger))
+                        .UseFilter(new BuildLogCaptureFilter(sp, sp.GetRequiredService<ILogger<BuildLogCaptureFilter>>()));
 
                 });
 

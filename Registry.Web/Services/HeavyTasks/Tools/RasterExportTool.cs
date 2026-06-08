@@ -109,10 +109,23 @@ public sealed class RasterExportTool : IHeavyTool
 
         progress.Report(new HeavyToolProgress(0, "loading", LogChunk: $"Exporting '{request.Path}' to {fileName}"));
 
+        // Surface phase transitions from the native exporter as log lines so the
+        // Task History "View log" dialog shows meaningful progress for the export.
+        var lastReportedPhase = "loading";
         await Task.Run(() => ctx.Ddb.ExportRaster(
             request.Path!, outputPath, preset, bands, formula, bandFilter, colormap, rescale,
             _defaultTileSize,
-            (fraction, phase) => progress.Report(new HeavyToolProgress(fraction, phase)),
+            (fraction, phase) =>
+            {
+                string? logChunk = null;
+                if (!string.IsNullOrEmpty(phase) && phase != lastReportedPhase)
+                {
+                    lastReportedPhase = phase;
+                    var pct = (int)Math.Round(Math.Clamp(fraction, 0, 1) * 100);
+                    logChunk = $"{phase} ({pct}%)";
+                }
+                progress.Report(new HeavyToolProgress(fraction, phase, LogChunk: logChunk));
+            },
             ct), ct);
 
         ct.ThrowIfCancellationRequested();

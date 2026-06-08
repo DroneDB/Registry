@@ -218,7 +218,14 @@ public class Startup
         if (instanceType == InstanceType.Default)
         {
             var workers = appSettings.WorkerThreads > 0 ? appSettings.WorkerThreads : Environment.ProcessorCount;
-            services.AddHangfireServer(options => { options.WorkerCount = workers; });
+            services.AddHangfireServer(options =>
+            {
+                options.WorkerCount = workers;
+                // The heavy task substrate (raster-export and other native tools)
+                // enqueues onto the "tasks" queue; without listing it here the
+                // server would only process "default" and those jobs would never run.
+                options.Queues = ["tasks", "default"];
+            });
         }
 
         services.AddHealthChecks()

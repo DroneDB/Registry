@@ -12,6 +12,8 @@ using Registry.Adapters.DroneDB;
 using Registry.Ports;
 using Registry.Ports.DroneDB;
 using Registry.Web.Attributes;
+using Registry.Web.Filters;
+using Registry.Web.Services.HeavyTasks.Adapters;
 using Registry.Web.Services.Ports;
 using Serilog;
 
@@ -21,11 +23,38 @@ public static class HangfireUtils
 {
     private static readonly IFileSystem FileSystem = new FileSystem();
 
+    /// <summary>
+    /// Builds the per-job log writer. When <see cref="BuildLogCaptureFilter"/>
+    /// has attached a <see cref="LogRingBuffer"/> to the job context, console
+    /// output is mirrored into it so the filter can persist it to the JobIndex
+    /// when the job finishes. Otherwise it falls back to the Hangfire console
+    /// (or Serilog when running outside a job).
+    /// </summary>
+    private static Action<string> CreateJobWriteLine(PerformContext context)
+    {
+        if (context == null)
+            return Log.Information;
+
+        var buffer = context.Items.TryGetValue(BuildLogCaptureFilter.BufferKey, out var raw)
+            ? raw as LogRingBuffer
+            : null;
+
+        if (buffer == null)
+            return context.WriteLine;
+
+        return msg =>
+        {
+            context.WriteLine(msg);
+            lock (buffer)
+                buffer.Append(msg);
+        };
+    }
+
     [AutomaticRetry(Attempts = 1, OnAttemptsExceeded = AttemptsExceededAction.Fail)]
     public static void BuildWrapper(IDDB ddb, string path, bool force,
         PerformContext context)
     {
-        Action<string> writeLine = context != null ? context.WriteLine : Log.Information;
+        Action<string> writeLine = CreateJobWriteLine(context);
 
         writeLine($"In BuildWrapper('{ddb.DatasetFolderPath}', '{path}', '{force}')");
 
@@ -52,7 +81,7 @@ public static class HangfireUtils
     [AutomaticRetry(Attempts = 1, OnAttemptsExceeded = AttemptsExceededAction.Fail)]
     public static void BuildPendingWrapper(IDDB ddb, PerformContext context)
     {
-        Action<string> writeLine = context != null ? context.WriteLine : Log.Information;
+        Action<string> writeLine = CreateJobWriteLine(context);
 
         writeLine($"In BuildPendingWrapper('{ddb.DatasetFolderPath}')");
 
@@ -74,7 +103,7 @@ public static class HangfireUtils
     [AutomaticRetry(Attempts = 1, OnAttemptsExceeded = AttemptsExceededAction.Fail)]
     public static void CleanupWrapper(IDDB ddb, PerformContext context)
     {
-        Action<string> writeLine = context != null ? context.WriteLine : Log.Information;
+        Action<string> writeLine = CreateJobWriteLine(context);
 
         writeLine($"In CleanupWrapper('{ddb.DatasetFolderPath}')");
 
@@ -251,7 +280,7 @@ public static class HangfireUtils
     public static void MaskBordersWrapper(IDDB ddb, string inputPath, string outputPath,
         int nearDist, bool white, PerformContext context)
     {
-        Action<string> writeLine = context != null ? context.WriteLine : Log.Information;
+        Action<string> writeLine = CreateJobWriteLine(context);
 
         writeLine($"In MaskBordersWrapper('{ddb.DatasetFolderPath}', '{inputPath}')");
 
