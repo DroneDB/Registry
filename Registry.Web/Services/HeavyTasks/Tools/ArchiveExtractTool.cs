@@ -87,12 +87,17 @@ public sealed class ArchiveExtractTool : IHeavyTool
         if (!_extractor.IsSupported(sourcePath))
             throw new ArgumentException($"'{sourcePath}' is not a supported archive format.");
 
-        // Destination path safety (no traversal, not under the reserved .ddb folder).
+        // Destination path safety (no traversal, not under the reserved .ddb folder,
+        // and not targeting an existing non-folder entry).
         if (!string.IsNullOrEmpty(destPath))
         {
             CommonUtils.ValidateRelativePath(destPath, ctx.Ddb.DatasetFolderPath);
             if (IsReservedPath(destPath))
                 throw new ArgumentException($"'{destPath}' is a reserved path.");
+
+            var destEntry = ctx.Ddb.GetEntry(destPath);
+            if (destEntry != null && destEntry.Type != EntryType.Directory)
+                throw new ArgumentException($"The destination '{destPath}' is not a folder.");
         }
 
         // --- Size / quota / disk-space guards ---
@@ -119,7 +124,7 @@ public sealed class ArchiveExtractTool : IHeavyTool
 
         if (uncompressed is > 0)
         {
-            // 1) User storage quota — same guard used by single-file uploads.
+            // 1) User storage quota - same guard used by single-file uploads.
             //    Resolved through a child scope because the tool is a singleton; the
             //    current user is read from IHttpContextAccessor (valid at submit time).
             using (var scope = _scopeFactory.CreateScope())
@@ -169,49 +174,56 @@ public sealed class ArchiveExtractTool : IHeavyTool
 
         var localArchive = ctx.Ddb.GetLocalPath(sourcePath);
         var root = ctx.Ddb.DatasetFolderPath;
-
-        using var session = _extractor.Open(localArchive);
-        var total = session.FileEntryCount;
         var done = 0;
         var extracted = 0;
         var skipped = 0;
+        int total;
 
-        progress.Report(new HeavyToolProgress(total > 0 ? 0 : -1, "extracting",
-            LogChunk: $"Extracting {total} file(s) from '{sourcePath}'"));
-
-        foreach (var archiveEntry in session.Entries())
+        // The session (and its underlying file handle) is closed as soon as the
+        // extraction loop finishes, BEFORE BuildPendingWrapper and deleteArchive.
+        // This is critical: keeping the session open through deleteArchive causes
+        // the OS to refuse the File.Delete because the handle is still held.
+        using (var session = _extractor.Open(localArchive))
         {
-            ct.ThrowIfCancellationRequested();
-            if (archiveEntry.IsDirectory) continue;
+            total = session.FileEntryCount;
 
-            // Path sanitization (anti zip-slip + reserved-folder guard).
-            var target = SafeJoin(destPath, archiveEntry.Key);
-            CommonUtils.ValidateRelativePath(target, root); // defense in depth
+            progress.Report(new HeavyToolProgress(total > 0 ? 0 : -1, "extracting",
+                LogChunk: $"Extracting {total} file(s) from '{sourcePath}'"));
 
-            // Overwrite / skip semantics.
-            if (ctx.Ddb.EntryExists(target) && !overwrite)
+            foreach (var archiveEntry in session.Entries())
             {
-                skipped++;
+                ct.ThrowIfCancellationRequested();
+                if (archiveEntry.IsDirectory) continue;
+
+                // Path sanitization (anti zip-slip + reserved-folder guard).
+                var target = SafeJoin(destPath, archiveEntry.Key);
+                CommonUtils.ValidateRelativePath(target, root); // defense in depth
+
+                // Overwrite / skip semantics.
+                if (ctx.Ddb.EntryExists(target) && !overwrite)
+                {
+                    skipped++;
+                    done++;
+                    ReportProgress(progress, done, total, archiveEntry.Key);
+                    continue;
+                }
+
+                var localTarget = ctx.Ddb.GetLocalPath(target);
+                var parent = Path.GetDirectoryName(localTarget);
+                if (!string.IsNullOrEmpty(parent))
+                    Directory.CreateDirectory(parent);
+
+                // File.Create truncates an existing file -> honors overwrite=true.
+                await using (var sourceStream = archiveEntry.OpenStream())
+                await using (var fileStream = File.Create(localTarget))
+                    await sourceStream.CopyToAsync(fileStream, ct);
+
+                ctx.Ddb.AddRaw(target);
+                extracted++;
                 done++;
                 ReportProgress(progress, done, total, archiveEntry.Key);
-                continue;
             }
-
-            var localTarget = ctx.Ddb.GetLocalPath(target);
-            var parent = Path.GetDirectoryName(localTarget);
-            if (!string.IsNullOrEmpty(parent))
-                Directory.CreateDirectory(parent);
-
-            // File.Create truncates an existing file -> honors overwrite=true.
-            await using (var sourceStream = archiveEntry.OpenStream())
-            await using (var fileStream = File.Create(localTarget))
-                await sourceStream.CopyToAsync(fileStream, ct);
-
-            ctx.Ddb.AddRaw(target);
-            extracted++;
-            done++;
-            ReportProgress(progress, done, total, archiveEntry.Key);
-        }
+        } // ← session.Dispose() — file handle released here
 
         ct.ThrowIfCancellationRequested();
 

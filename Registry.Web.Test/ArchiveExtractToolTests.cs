@@ -151,6 +151,40 @@ public class ArchiveExtractToolTests
     }
 
     [Test]
+    public void ValidateAsync_DestPathTraversal_Throws()
+    {
+        var local = Path.Combine(_dir, "flight.zip");
+        CreateZip(local, "a.txt", "hello");
+        var ddb = MockDdb("flight.zip", local);
+
+        var (tool, _) = CreateTool();
+
+        Should.Throw<ArgumentException>(async () =>
+            await tool.ValidateAsync(
+                Request(new { sourcePath = "flight.zip", destPath = "../escape" }),
+                Ctx(ddb.Object), CancellationToken.None));
+    }
+
+    [Test]
+    public void ValidateAsync_DestPathIsFile_Throws()
+    {
+        var local = Path.Combine(_dir, "flight.zip");
+        CreateZip(local, "a.txt", "hello");
+        var ddb = MockDdb("flight.zip", local);
+        // The destination resolves to an existing non-folder entry.
+        ddb.Setup(d => d.GetEntry("existing.txt"))
+            .Returns(new Entry { Path = "existing.txt", Type = EntryType.Generic });
+
+        var (tool, _) = CreateTool();
+
+        var ex = Should.Throw<ArgumentException>(async () =>
+            await tool.ValidateAsync(
+                Request(new { sourcePath = "flight.zip", destPath = "existing.txt" }),
+                Ctx(ddb.Object), CancellationToken.None));
+        ex.Message.ShouldContain("not a folder");
+    }
+
+    [Test]
     public void ValidateAsync_ArchiveTooLarge_Throws()
     {
         var local = Path.Combine(_dir, "big.zip");
