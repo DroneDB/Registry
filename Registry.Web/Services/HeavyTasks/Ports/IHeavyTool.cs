@@ -29,6 +29,12 @@ public interface IHeavyTool
     /// <summary>Whether the tool produces a downloadable artifact.</summary>
     bool ProducesArtifact { get; }
 
+    /// <summary>
+    /// Default file extension (without the leading dot) of the produced artifact, or
+    /// null when the tool produces none. Authoritative source for client result naming.
+    /// </summary>
+    string? ResultExtension => null;
+
     /// <summary>JSON Schema (2020-12) describing the tool's input parameters.</summary>
     JsonDocument InputSchema { get; }
 

@@ -61,6 +61,7 @@ public sealed class PhotogrammetryTool : IHeavyTool
     public string Title => "Photogrammetry (NodeODM)";
     public HeavyToolPermission RequiredAccess => HeavyToolPermission.Read;
     public bool ProducesArtifact => true;
+    public string? ResultExtension => "zip";
     public JsonDocument InputSchema => Schema;
 
     public Task ValidateAsync(HeavyToolRequest request, IHeavyToolValidationContext ctx, CancellationToken ct)
@@ -73,7 +74,7 @@ public sealed class PhotogrammetryTool : IHeavyTool
             throw new ArgumentException($"NodeODM node '{nodeId}' is not configured.");
 
         var images = CollectImageEntries(request, ctx.Ddb);
-        
+
         return images.Count < 2 ? throw new ArgumentException("Photogrammetry requires at least 2 images.") : Task.CompletedTask;
     }
 

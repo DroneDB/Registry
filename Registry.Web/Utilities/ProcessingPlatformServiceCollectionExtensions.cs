@@ -25,6 +25,9 @@ public static class ProcessingPlatformServiceCollectionExtensions
         services.AddSingleton<IHeavyTool, BuildTool>();
         services.AddSingleton<IHeavyTool, RasterExportTool>();
         services.AddSingleton<IHeavyTool, PhotogrammetryTool>();
+        services.AddSingleton<IHeavyTool, BulkDownloadTool>();
+        services.AddSingleton<IHeavyTool, MergeMultispectralTool>();
+        services.AddSingleton<IHeavyTool, RescanIndexTool>();
 
         // Catalog is immutable for the process lifetime.
         services.AddSingleton<IHeavyToolRegistry, HeavyToolRegistry>();

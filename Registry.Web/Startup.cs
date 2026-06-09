@@ -291,6 +291,13 @@ public class Startup
         services.AddScoped<RecurringDatasetCleanupService>();
         services.AddScoped<ArtifactCompletenessCheckerService>();
 
+        // Stateless ZIP archive builder shared by the legacy download path and the
+        // bulk-download heavy tool (single source of truth).
+        services.AddSingleton<IZipArchiveBuilder, ZipArchiveBuilder>();
+
+        // Admin global tasks dashboard manager (Part B).
+        services.AddScoped<IAdminTasksManager, AdminTasksManager>();
+
         // Processing Platform task substrate (native tools incl. build/raster-export)
         services.AddProcessingPlatform();
 

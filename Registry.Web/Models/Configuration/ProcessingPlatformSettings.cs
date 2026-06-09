@@ -29,6 +29,20 @@ public class ProcessingPlatformSettings
     /// <summary>Default tile size (pixels) for windowed raster export. Default 512.</summary>
     public int DefaultRasterTileSize { get; set; } = 512;
 
+    /// <summary>
+    /// Size threshold (bytes) above which an authenticated bulk download is offloaded
+    /// to the asynchronous <c>bulk-download</c> task instead of being streamed directly.
+    /// Whole-dataset downloads always use the async path. Default 500 MB.
+    /// </summary>
+    public long BulkDownloadAsyncThresholdBytes { get; set; } = 524_288_000;
+
+    /// <summary>
+    /// Maximum number of active (queued + running) <c>bulk-download</c> tasks allowed
+    /// per user at any one time. Prevents a user from queuing multiple simultaneous
+    /// ZIP compressions and overloading the server disk/CPU. Default 1.
+    /// </summary>
+    public int MaxConcurrentBulkDownloadsPerUser { get; set; } = 1;
+
     public bool DedupEnabled { get; set; } = true;
     public int DedupLookbackHours { get; set; } = 24;
 

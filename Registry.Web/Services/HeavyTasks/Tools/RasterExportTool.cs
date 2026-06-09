@@ -53,6 +53,7 @@ public sealed class RasterExportTool : IHeavyTool
     public string Title => "Export raster (GeoTIFF)";
     public HeavyToolPermission RequiredAccess => HeavyToolPermission.Read;
     public bool ProducesArtifact => true;
+    public string? ResultExtension => "tif";
     public JsonDocument InputSchema => Schema;
 
     public Task ValidateAsync(HeavyToolRequest request, IHeavyToolValidationContext ctx, CancellationToken ct)

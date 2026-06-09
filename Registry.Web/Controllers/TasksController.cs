@@ -15,6 +15,7 @@ using Registry.Web.Data.Models;
 using Registry.Web.Models;
 using Registry.Web.Models.Configuration;
 using Registry.Web.Models.DTO;
+using Registry.Web.Services.HeavyTasks;
 using Registry.Web.Services.HeavyTasks.Adapters;
 using Registry.Web.Services.HeavyTasks.Models;
 using Registry.Web.Services.HeavyTasks.Ports;
@@ -35,7 +36,7 @@ namespace Registry.Web.Controllers;
 [Produces("application/json")]
 public class TasksController : ControllerBaseEx
 {
-    private static readonly string[] TerminalStates = ["Succeeded", "Failed", "Deleted"];
+    private static readonly string[] TerminalStates = TaskStateCatalog.Terminal;
 
     private readonly IHeavyTaskRunner _runner;
     private readonly IHeavyToolRegistry _registry;
@@ -356,14 +357,27 @@ public class TasksController : ControllerBaseEx
 
     private TaskSummaryDto ToSummary(JobIndex j) => new(
         j.JobId, j.ToolId, j.ToolVersion, j.CurrentState, j.ProgressPercent, j.PhaseMessage,
-        j.CreatedAtUtc, j.ProcessingAtUtc, FinishedAt(j), j.Path, j.ParentJobId, j.WorkflowExecutionId, j.ErrorType);
+        j.CreatedAtUtc, j.ProcessingAtUtc, FinishedAt(j), j.Path, j.ParentJobId, j.WorkflowExecutionId, j.ErrorType,
+        ArtifactExpiresAt(j));
 
     private static DateTime? FinishedAt(JobIndex j) =>
         j.SucceededAtUtc ?? j.FailedAtUtc ?? j.DeletedAtUtc;
 
+    /// <summary>
+    /// Server-authoritative expiry of a produced artifact: the work directory is
+    /// swept <c>ArtifactTtlHours</c> after completion (see <c>HeavyTaskJobWrapper</c>).
+    /// Null when the task has no downloadable artifact. Clients hide the download
+    /// control once this instant passes so they never offer a 404 link.
+    /// </summary>
+    private DateTime? ArtifactExpiresAt(JobIndex j) =>
+        j.CurrentState == "Succeeded" && j.ArtifactSizeBytes is not null && j.SucceededAtUtc is { } finished
+            ? finished.AddHours(Math.Max(1, _settings.ArtifactTtlHours))
+            : null;
+
     private TaskArtifactDto? BuildArtifactDto(JobIndex j, string orgSlug, string dsSlug) =>
         j.CurrentState == "Succeeded" && j.ArtifactSizeBytes is { } size
-            ? new TaskArtifactDto(size, j.ArtifactSha256, $"/orgs/{orgSlug}/ds/{dsSlug}/tasks/{j.JobId}/result")
+            ? new TaskArtifactDto(size, j.ArtifactSha256, $"/orgs/{orgSlug}/ds/{dsSlug}/tasks/{j.JobId}/result",
+                ArtifactExpiresAt(j))
             : null;
 
     private static LogTailSnapshot ParseLogTail(string? json)

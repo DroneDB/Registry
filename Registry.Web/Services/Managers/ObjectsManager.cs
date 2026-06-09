@@ -39,6 +39,7 @@ public class ObjectsManager : IObjectsManager
     private readonly IThumbnailGenerator _thumbnailGenerator;
     private readonly IJobIndexQuery _jobIndexQuery;
     private readonly BuildPendingService _buildPendingService;
+    private readonly IZipArchiveBuilder _zipArchiveBuilder;
     private readonly IOgcLayerCatalog? _ogcLayerCatalog;
 
     private static bool IsReservedPath(string path)
@@ -59,6 +60,7 @@ public class ObjectsManager : IObjectsManager
         IThumbnailGenerator thumbnailGenerator,
         IJobIndexQuery jobIndexQuery,
         BuildPendingService buildPendingService,
+        IZipArchiveBuilder? zipArchiveBuilder = null,
         IOgcLayerCatalog? ogcLayerCatalog = null)
     {
         _logger = logger;
@@ -74,6 +76,9 @@ public class ObjectsManager : IObjectsManager
         _thumbnailGenerator = thumbnailGenerator;
         _jobIndexQuery = jobIndexQuery;
         _buildPendingService = buildPendingService;
+        // Stateless; the DI-registered singleton is injected in production, while a
+        // local instance keeps direct (test) construction working without wiring.
+        _zipArchiveBuilder = zipArchiveBuilder ?? new ZipArchiveBuilder();
         _ogcLayerCatalog = ogcLayerCatalog;
     }
 
@@ -1459,7 +1464,7 @@ public class ObjectsManager : IObjectsManager
     {
         var ddb = _ddbManager.Get(orgSlug, internalRef);
 
-        var (files, folders, includeDdb) = GetFilePaths(paths, ddb);
+        var (files, folders, includeDdb) = _zipArchiveBuilder.ExpandPaths(ddb, paths);
 
         FileStreamDescriptor streamDescriptor;
 
@@ -1473,7 +1478,7 @@ public class ObjectsManager : IObjectsManager
             streamDescriptor = new FileStreamDescriptor(Path.GetFileName(filePath),
                 MimeUtility.GetMimeMapping(filePath),
                 orgSlug, internalRef, files, null, FileDescriptorType.Single, _logger, _ddbManager,
-                _settings.MaxZipMemoryThreshold);
+                _zipArchiveBuilder, _settings.MaxZipMemoryThreshold);
         }
         // Otherwise we zip everything together and return the package
         else
@@ -1481,81 +1486,10 @@ public class ObjectsManager : IObjectsManager
             streamDescriptor = new FileStreamDescriptor($"{orgSlug}-{dsSlug}-{CommonUtils.RandomString(8)}.zip",
                 "application/zip", orgSlug, internalRef, files, folders,
                 includeDdb ? FileDescriptorType.Dataset : FileDescriptorType.Multiple, _logger, _ddbManager,
-                _settings.MaxZipMemoryThreshold);
+                _zipArchiveBuilder, _settings.MaxZipMemoryThreshold);
         }
 
         return streamDescriptor;
-    }
-
-    private (string[] files, string[] folders, bool includeDdb) GetFilePaths(string[] paths, IDDB ddb)
-    {
-        string[] files;
-        string[] folders;
-
-        var includeDdb = false;
-
-        if (paths != null)
-        {
-            var tempFiles = new List<string>();
-            var tempFolders = new List<string>();
-
-            foreach (var path in paths)
-            {
-                var entry = ddb.GetEntry(path);
-
-                if (entry == null)
-                    throw new InvalidOperationException($"Path '{path}' not found in ddb, cannot continue");
-
-                if (entry.Type == EntryType.Directory)
-                {
-                    // We are in recursive mode because the paths could contain other folders that we need to expand
-                    var items = ddb.Search(path, true)?.ToArray();
-
-                    if (items == null)
-                        throw new InvalidOperationException("Ddb is empty, what should I get?");
-
-                    tempFolders.Add(path);
-                    tempFiles.AddRange(items.Where(item => item.Type != EntryType.Directory)
-                        .Select(item => item.Path));
-                    tempFolders.AddRange(items.Where(item => item.Type == EntryType.Directory)
-                        .Select(item => item.Path));
-                }
-                else
-                {
-                    tempFiles.Add(path);
-                }
-            }
-
-            // Get rid of possible duplicates and sort
-            files = tempFiles.Distinct().OrderBy(item => item).ToArray();
-            folders = tempFolders.Distinct().OrderBy(item => item).ToArray();
-        }
-        else
-        {
-            var entries = ddb.Search(null, true)?.ToArray();
-
-            if (entries == null || entries.Length == 0)
-                throw new InvalidOperationException("Ddb is empty, what should I get?");
-
-            // Select everything and sort
-            files = entries
-                .Where(entry => entry.Type != EntryType.Directory)
-                .Select(entry => entry.Path)
-                .OrderBy(path => path)
-                .ToArray();
-
-            folders = entries
-                .Where(entry => entry.Type == EntryType.Directory)
-                .Select(entry => entry.Path)
-                .OrderBy(path => path)
-                .ToArray();
-
-            // We include the ddb folder only when asked for the entire dataset
-            includeDdb = true;
-        }
-
-        _logger.LogInformation("Found {FilesCount} paths", files.Length);
-        return (files, folders, includeDdb);
     }
 
     #endregion
@@ -1625,7 +1559,7 @@ public class ObjectsManager : IObjectsManager
 
         return new FileStreamDescriptor($"{orgSlug}-{dsSlug}-ddb.zip",
             "application/zip", orgSlug, ds.InternalRef, [], [],
-            FileDescriptorType.Dataset, _logger, _ddbManager, _settings.MaxZipMemoryThreshold);
+            FileDescriptorType.Dataset, _logger, _ddbManager, _zipArchiveBuilder, _settings.MaxZipMemoryThreshold);
     }
 
     #region Build

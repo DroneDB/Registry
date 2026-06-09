@@ -36,13 +36,13 @@ public sealed class HeavyTaskQuota : IHeavyTaskQuota
                 $"({_settings.MaxEstimatedOutputBytesPerSubmit} bytes).");
 
         // 2. Global concurrency.
-        var global = await _query.CountActiveAsync(null, null, ct);
+        var global = await _query.CountActiveAsync(null, null, ct: ct);
         if (global >= _settings.MaxConcurrentTasksGlobal)
             return new HeavyTaskQuotaResult(HeavyTaskQuotaCode.Exceeded,
                 "The platform is at maximum task concurrency; please retry shortly.");
 
         // 3. Per-org concurrency.
-        var perOrg = await _query.CountActiveAsync(request.OrgSlug, null, ct);
+        var perOrg = await _query.CountActiveAsync(request.OrgSlug, null, ct: ct);
         if (perOrg >= _settings.MaxConcurrentTasksPerOrg)
             return new HeavyTaskQuotaResult(HeavyTaskQuotaCode.Exceeded,
                 "Your organization has reached its concurrent task limit.");
@@ -50,10 +50,23 @@ public sealed class HeavyTaskQuota : IHeavyTaskQuota
         // 4. Per-user concurrency / queue.
         if (!string.IsNullOrEmpty(request.UserId))
         {
-            var perUser = await _query.CountActiveAsync(null, request.UserId, ct);
+            var perUser = await _query.CountActiveAsync(null, request.UserId, ct: ct);
             if (perUser >= _settings.MaxQueuedTasksPerUser)
                 return new HeavyTaskQuotaResult(HeavyTaskQuotaCode.Exceeded,
                     "You have too many queued or running tasks; wait for some to finish.");
+
+            // 5. Per-tool per-user limit: bulk-download is expensive (ZIP compression +
+            //    disk space). Reject if the user already has the configured number of
+            //    active bulk-download tasks (default 1). This prevents a user from
+            //    queueing multiple simultaneous ZIP compressions.
+            if (request.ToolId == "bulk-download")
+            {
+                var perUserPerTool = await _query.CountActiveAsync(null, request.UserId, "bulk-download", ct);
+                if (perUserPerTool >= _settings.MaxConcurrentBulkDownloadsPerUser)
+                    return new HeavyTaskQuotaResult(HeavyTaskQuotaCode.Exceeded,
+                        "You already have an active download archive being prepared. " +
+                        "Please wait for it to complete before starting another.");
+            }
         }
 
         return HeavyTaskQuotaResult.Ok;

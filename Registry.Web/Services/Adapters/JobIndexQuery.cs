@@ -6,6 +6,7 @@ using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
 using Registry.Web.Data;
 using Registry.Web.Data.Models;
+using Registry.Web.Services.HeavyTasks;
 using Registry.Web.Services.Ports;
 
 namespace Registry.Web.Services.Adapters;
@@ -35,8 +36,8 @@ public class JobIndexQuery(RegistryContext db) : IJobIndexQuery
             .Skip(skip).Take(take)
             .ToArrayAsync(ct);
 
-    // Non-terminal states a task can be in while still running.
-    private static readonly string[] ActiveStates = ["Created", "Enqueued", "Scheduled", "Processing"];
+    // Non-terminal states a task can be in while still running (canonical catalog).
+    private static readonly string[] ActiveStates = TaskStateCatalog.Active;
 
     public async Task<JobIndex[]> QueryAsync(JobIndexQueryFilter filter, CancellationToken ct = default)
     {
@@ -62,6 +63,33 @@ public class JobIndexQuery(RegistryContext db) : IJobIndexQuery
             .ToArrayAsync(ct);
     }
 
+    public async Task<JobIndex[]> QueryGlobalAsync(JobIndexGlobalQueryFilter filter, CancellationToken ct = default)
+    {
+        var q = ApplyGlobalFilters(filter.ToolId, filter.State, filter.UserId);
+
+        return await q
+            .OrderByDescending(x => x.CreatedAtUtc)
+            .Skip(filter.Skip).Take(filter.Take)
+            .ToArrayAsync(ct);
+    }
+
+    public async Task<long> CountGlobalAsync(string? toolId, string? state, string? userId, CancellationToken ct = default)
+        => await ApplyGlobalFilters(toolId, state, userId).LongCountAsync(ct);
+
+    private IQueryable<JobIndex> ApplyGlobalFilters(string? toolId, string? state, string? userId)
+    {
+        var q = db.JobIndices.AsNoTracking().AsQueryable();
+
+        if (!string.IsNullOrEmpty(toolId))
+            q = q.Where(x => x.ToolId == toolId);
+        if (!string.IsNullOrEmpty(state))
+            q = q.Where(x => x.CurrentState == state);
+        if (!string.IsNullOrEmpty(userId))
+            q = q.Where(x => x.UserId == userId);
+
+        return q;
+    }
+
     public async Task<JobIndex?> FindDedupCandidateAsync(
         string orgSlug, string dsSlug, string toolId, string requestHash,
         int lookbackHours, CancellationToken ct = default)
@@ -77,7 +105,8 @@ public class JobIndexQuery(RegistryContext db) : IJobIndexQuery
             .FirstOrDefaultAsync(ct);
     }
 
-    public async Task<long> CountActiveAsync(string? orgSlug = null, string? userId = null, CancellationToken ct = default)
+    public async Task<long> CountActiveAsync(string? orgSlug = null, string? userId = null,
+        string? toolId = null, CancellationToken ct = default)
     {
         var q = db.JobIndices.AsNoTracking()
             .Where(x => ActiveStates.Contains(x.CurrentState));
@@ -86,6 +115,8 @@ public class JobIndexQuery(RegistryContext db) : IJobIndexQuery
             q = q.Where(x => x.OrgSlug == orgSlug);
         if (!string.IsNullOrEmpty(userId))
             q = q.Where(x => x.UserId == userId);
+        if (!string.IsNullOrEmpty(toolId))
+            q = q.Where(x => x.ToolId == toolId);
 
         return await q.LongCountAsync(ct);
     }

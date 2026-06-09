@@ -42,7 +42,7 @@ public sealed record SubmitTaskResponseDto(
 public sealed record TaskProgressDto(int? Percent, string? Phase, string? Message);
 
 /// <summary>Artifact descriptor of a completed task.</summary>
-public sealed record TaskArtifactDto(long SizeBytes, string? Sha256, string ResultUrl);
+public sealed record TaskArtifactDto(long SizeBytes, string? Sha256, string ResultUrl, DateTime? ExpiresAt);
 
 /// <summary>Single-row summary for TaskHistory (GET /tasks).</summary>
 public sealed record TaskSummaryDto(
@@ -58,7 +58,8 @@ public sealed record TaskSummaryDto(
     string? Path,
     string? ParentJobId,
     string? WorkflowExecutionId,
-    string? ErrorType);
+    string? ErrorType,
+    DateTime? ArtifactExpiresAt);
 
 /// <summary>Full status (GET /tasks/{id}).</summary>
 public sealed record TaskStatusDto(
