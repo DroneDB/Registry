@@ -20,6 +20,13 @@ public class ProcessingPlatformSettings
     /// <summary>Hard cap on estimated output size per submit (bytes). Default 20 GiB.</summary>
     public long MaxEstimatedOutputBytesPerSubmit { get; set; } = 21474836480;
 
+    /// <summary>
+    /// Hard cap on the compressed size (bytes) of an archive accepted by the
+    /// <c>archive-extract</c> tool. Submissions for larger archives are rejected
+    /// with an "archive too large" message. Default 5 GiB.
+    /// </summary>
+    public long MaxArchiveExtractSizeBytes { get; set; } = 5L * 1024 * 1024 * 1024;
+
     /// <summary>Per-org daily output budget in bytes, keyed by org slug ("default" fallback).</summary>
     public Dictionary<string, long> OrgDailyOutputBytes { get; set; } = new()
     {

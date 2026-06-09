@@ -21,6 +21,10 @@ public static class ProcessingPlatformServiceCollectionExtensions
         services.AddSingleton<INodeOdmNodeRegistry, NodeOdmNodeRegistry>();
         services.AddSingleton<INodeOdmClient, NodeOdmClient>();
 
+        // Archive extraction backend (SharpCompress) for the archive-extract tool.
+        services.AddSingleton<Registry.Ports.Archives.IArchiveExtractor,
+            Registry.Adapters.Archives.SharpCompressArchiveExtractor>();
+
         // Native tools (Sprint 1). Adding a new native tool = one line here.
         services.AddSingleton<IHeavyTool, BuildTool>();
         services.AddSingleton<IHeavyTool, RasterExportTool>();
@@ -28,6 +32,7 @@ public static class ProcessingPlatformServiceCollectionExtensions
         services.AddSingleton<IHeavyTool, BulkDownloadTool>();
         services.AddSingleton<IHeavyTool, MergeMultispectralTool>();
         services.AddSingleton<IHeavyTool, RescanIndexTool>();
+        services.AddSingleton<IHeavyTool, ArchiveExtractTool>();
 
         // Catalog is immutable for the process lifetime.
         services.AddSingleton<IHeavyToolRegistry, HeavyToolRegistry>();
