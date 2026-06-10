@@ -1,5 +1,6 @@
 ﻿#nullable enable
 using System;
+using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 using Registry.Web.Models;
@@ -18,6 +19,16 @@ public interface IJobIndexWriter
     /// </summary>
     /// <returns>Number of records deleted.</returns>
     Task<int> DeleteTerminalBeforeAsync(DateTime cutoffUtc, CancellationToken ct = default);
+
+    /// <summary>
+    /// Deletes every terminal (Succeeded, Failed, Deleted) JobIndex record belonging to
+    /// the given dataset, optionally restricted to a single tool. Used by the "clear
+    /// concluded tasks" action so the rows disappear from the history instead of lingering
+    /// in a terminal state.
+    /// </summary>
+    /// <returns>The JobIds of the removed records, so the caller can purge their artifacts.</returns>
+    Task<IReadOnlyList<string>> DeleteTerminalForDatasetAsync(string orgSlug, string dsSlug,
+        string? toolId = null, CancellationToken ct = default);
 
     /// <summary>Updates incremental progress, phase message and truncated log tail for a task.</summary>
     Task UpdateProgressAsync(string jobId, int? percent, string? phaseMessage,

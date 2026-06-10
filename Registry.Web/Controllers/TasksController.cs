@@ -36,11 +36,10 @@ namespace Registry.Web.Controllers;
 [Produces("application/json")]
 public class TasksController : ControllerBaseEx
 {
-    private static readonly string[] TerminalStates = TaskStateCatalog.Terminal;
-
     private readonly IHeavyTaskRunner _runner;
     private readonly IHeavyToolRegistry _registry;
     private readonly IJobIndexQuery _query;
+    private readonly IJobIndexWriter _writer;
     private readonly IAuthManager _authManager;
     private readonly IUtils _utils;
     private readonly IBackgroundJobsProcessor _processor;
@@ -52,6 +51,7 @@ public class TasksController : ControllerBaseEx
         IHeavyTaskRunner runner,
         IHeavyToolRegistry registry,
         IJobIndexQuery query,
+        IJobIndexWriter writer,
         IAuthManager authManager,
         IUtils utils,
         IBackgroundJobsProcessor processor,
@@ -61,6 +61,7 @@ public class TasksController : ControllerBaseEx
         _runner = runner;
         _registry = registry;
         _query = query;
+        _writer = writer;
         _authManager = authManager;
         _utils = utils;
         _processor = processor;
@@ -200,15 +201,15 @@ public class TasksController : ControllerBaseEx
             if (!await _authManager.RequestAccess(ds, AccessType.Write))
                 return Unauthorized(new ErrorResponse("Access denied"));
 
-            var rows = await _query.QueryAsync(new JobIndexQueryFilter(orgSlug, dsSlug, toolId, Take: 1000), ct);
-            var cleared = 0;
-            foreach (var row in rows.Where(r => TerminalStates.Contains(r.CurrentState)))
-            {
-                _processor.Delete(row.JobId);
-                cleared++;
-            }
+            // Permanently remove concluded (Succeeded/Failed/Deleted) tasks from the history
+            // and purge any artifacts they produced, instead of merely flipping them to a
+            // terminal "Deleted" state where they would linger in the list forever.
+            var removedIds = await _writer.DeleteTerminalForDatasetAsync(orgSlug, dsSlug, toolId, ct);
+            foreach (var jobId in removedIds)
+                TryDeleteArtifacts(jobId);
 
-            return Ok(new { cleared });
+            _logger.LogInformation("Cleared {Count} concluded task(s) for {Org}/{Ds}", removedIds.Count, orgSlug, dsSlug);
+            return Ok(new { cleared = removedIds.Count });
         }
         catch (Exception ex)
         {
@@ -403,6 +404,26 @@ public class TasksController : ControllerBaseEx
             return null;
 
         return Directory.EnumerateFiles(full).FirstOrDefault();
+    }
+
+    /// <summary>
+    /// Best-effort removal of a task's produced-artifact working directory
+    /// (<c>{tempPath}/tasks/{taskId}</c>). Path-guarded against traversal exactly like
+    /// <see cref="ResolveArtifactFile"/>; failures are logged but never abort the clear.
+    /// </summary>
+    private void TryDeleteArtifacts(string taskId)
+    {
+        try
+        {
+            var dir = Path.GetFullPath(Path.Combine(_tempPath, "tasks", taskId));
+            var root = Path.GetFullPath(Path.Combine(_tempPath, "tasks"));
+            if (dir.StartsWith(root, StringComparison.Ordinal) && Directory.Exists(dir))
+                Directory.Delete(dir, recursive: true);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to delete artifacts for task {TaskId}", taskId);
+        }
     }
 }
 

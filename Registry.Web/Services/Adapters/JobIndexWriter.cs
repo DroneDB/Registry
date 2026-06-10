@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -144,6 +145,36 @@ public class JobIndexWriter(RegistryContext db, ILogger<JobIndexWriter> log) : I
 
             return toDelete.Count;
         }
+    }
+
+    public async Task<IReadOnlyList<string>> DeleteTerminalForDatasetAsync(string orgSlug, string dsSlug,
+        string? toolId = null, CancellationToken ct = default)
+    {
+        var query = db.JobIndices
+            .Where(j => j.OrgSlug == orgSlug && j.DsSlug == dsSlug && TerminalStates.Contains(j.CurrentState));
+
+        if (!string.IsNullOrWhiteSpace(toolId))
+            query = query.Where(j => j.ToolId == toolId);
+
+        var ids = await query.Select(j => j.JobId).ToListAsync(ct);
+        if (ids.Count == 0)
+            return ids;
+
+        try
+        {
+            // Prefer bulk delete (EF Core 7+) - works with relational providers (MySQL, SQLite, etc.)
+            await db.JobIndices.Where(j => ids.Contains(j.JobId)).ExecuteDeleteAsync(ct);
+        }
+        catch (Exception ex)
+        {
+            log.LogWarning(ex, "Bulk delete failed in JobIndexWriter.DeleteTerminalForDatasetAsync, falling back to client-side deletion");
+            // Fallback for providers that don't support ExecuteDeleteAsync (e.g., InMemory in tests)
+            var toDelete = await db.JobIndices.Where(j => ids.Contains(j.JobId)).ToListAsync(ct);
+            db.JobIndices.RemoveRange(toDelete);
+            await db.SaveChangesAsync(ct);
+        }
+
+        return ids;
     }
 
     public async Task UpdateProgressAsync(string jobId, int? percent, string? phaseMessage,
