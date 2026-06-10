@@ -1,9 +1,11 @@
 #nullable enable
 using Microsoft.Extensions.DependencyInjection;
+using Registry.Web.Services.Adapters;
 using Registry.Web.Services.HeavyTasks.Adapters;
 using Registry.Web.Services.HeavyTasks.NodeOdm;
 using Registry.Web.Services.HeavyTasks.Ports;
 using Registry.Web.Services.HeavyTasks.Tools;
+using Registry.Web.Services.Ports;
 
 namespace Registry.Web.Utilities;
 
@@ -17,6 +19,11 @@ public static class ProcessingPlatformServiceCollectionExtensions
 {
     public static IServiceCollection AddProcessingPlatform(this IServiceCollection services)
     {
+        // ZIP archive builder shared by the legacy download streaming path and the
+        // bulk-download heavy tool. Must be registered here so both the web host and
+        // the processing-node host get the dependency (BulkDownloadTool ctor requires it).
+        services.AddSingleton<IZipArchiveBuilder, ZipArchiveBuilder>();
+
         // NodeODM (OpenDroneMap) integration: config-based node registry + HTTP client.
         services.AddSingleton<INodeOdmNodeRegistry, NodeOdmNodeRegistry>();
         services.AddSingleton<INodeOdmClient, NodeOdmClient>();
