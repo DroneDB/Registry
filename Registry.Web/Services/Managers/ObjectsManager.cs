@@ -1986,6 +1986,22 @@ public class ObjectsManager : IObjectsManager
         _logger.LogInformation("Merge complete and file added to the dataset");
     }
 
+    public async Task<string> ValidateAlignRaster(string orgSlug, string dsSlug, string sourcePath, string referencePath)
+    {
+        var ds = _utils.GetDataset(orgSlug, dsSlug);
+
+        if (!await _authManager.RequestAccess(ds, AccessType.Read))
+            throw new UnauthorizedException("The current user is not allowed to read dataset");
+
+        var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
+
+        // Validate input paths to prevent path traversal
+        CommonUtils.ValidateRelativePath(sourcePath, ddb.DatasetFolderPath);
+        CommonUtils.ValidateRelativePath(referencePath, ddb.DatasetFolderPath);
+
+        return await Task.Run(() => ddb.ValidateAlignRaster(sourcePath, referencePath));
+    }
+
     public async Task<StorageDataDto> ExportRaster(string orgSlug, string dsSlug, string path,
         string? preset = null, string? bands = null, string? formula = null,
         string? bandFilter = null, string? colormap = null, string? rescale = null)

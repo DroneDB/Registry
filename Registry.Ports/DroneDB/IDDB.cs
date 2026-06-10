@@ -149,6 +149,16 @@ public interface IDDB
     void MergeMultispectral(string[] paths, string outputCog);
 
     /// <summary>
+    /// Validate that source and reference rasters are compatible for alignment
+    /// </summary>
+    string ValidateAlignRaster(string sourcePath, string referencePath);
+
+    /// <summary>
+    /// Align a source GeoTIFF to a reference GeoTIFF and write the output COG
+    /// </summary>
+    string AlignRaster(string sourcePath, string referencePath, string outputPath, string mode = "similarity");
+
+    /// <summary>
     /// Export raster with visualization params applied as GeoTIFF
     /// </summary>
     void ExportRaster(string inputPath, string outputPath,

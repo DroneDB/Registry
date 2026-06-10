@@ -53,6 +53,17 @@ public class MergeMultispectralRequestDto
 }
 
 /// <summary>
+/// DTO for align-raster request (validate + align)
+/// </summary>
+public class AlignRasterRequestDto
+{
+    public string SourcePath { get; set; } = string.Empty;
+    public string ReferencePath { get; set; } = string.Empty;
+    public string OutputPath { get; set; } = string.Empty;
+    public string Mode { get; set; } = "similarity";
+}
+
+/// <summary>
 /// DTO for merge-multispectral validation response
 /// </summary>
 public class MergeValidationResultDto

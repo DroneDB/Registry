@@ -555,6 +555,31 @@ public class DDB : IDDB
         }
     }
 
+    public string ValidateAlignRaster(string sourcePath, string referencePath)
+    {
+        try
+        {
+            return _ddbWrapper.ValidateAlignRaster(GetLocalPath(sourcePath), GetLocalPath(referencePath));
+        }
+        catch (DdbException ex)
+        {
+            throw new InvalidOperationException("Cannot validate align raster", ex);
+        }
+    }
+
+    public string AlignRaster(string sourcePath, string referencePath, string outputPath, string mode = "similarity")
+    {
+        try
+        {
+            return _ddbWrapper.AlignRaster(GetLocalPath(sourcePath), GetLocalPath(referencePath),
+                GetLocalPath(outputPath), mode);
+        }
+        catch (DdbException ex)
+        {
+            throw new InvalidOperationException($"Cannot align raster: {ex.Message}", ex);
+        }
+    }
+
     public void ExportRaster(string inputPath, string outputPath,
         string? preset = null, string? bands = null, string? formula = null,
         string? bandFilter = null, string? colormap = null, string? rescale = null)

@@ -1779,6 +1779,84 @@ public class NativeDdbWrapper : IDdbWrapper
         throw new DdbException(SafeGetLastError("merge multispectral"));
     }
 
+    [DllImport("ddb", EntryPoint = "DDBValidateAlignRaster")]
+    private static extern DdbResult _ValidateAlignRaster(
+        [MarshalAs(UnmanagedType.LPUTF8Str)] string sourcePath,
+        [MarshalAs(UnmanagedType.LPUTF8Str)] string referencePath,
+        out IntPtr output);
+
+    public string ValidateAlignRaster(string sourcePath, string referencePath)
+    {
+        if (string.IsNullOrWhiteSpace(sourcePath))
+            throw new ArgumentException("sourcePath is null or empty");
+        if (string.IsNullOrWhiteSpace(referencePath))
+            throw new ArgumentException("referencePath is null or empty");
+
+        try
+        {
+            if (_ValidateAlignRaster(sourcePath, referencePath, out var output) == DdbResult.Success)
+            {
+                var json = MarshalAndFreeUtf8(output);
+                if (string.IsNullOrWhiteSpace(json))
+                    throw new DdbException("Unable to validate align raster");
+                return json;
+            }
+        }
+        catch (EntryPointNotFoundException ex)
+        {
+            throw new DdbException($"Error in calling ddb lib: incompatible versions ({ex.Message})", ex);
+        }
+        catch (DdbException) { throw; }
+        catch (Exception ex)
+        {
+            throw new DdbException(
+                $"Error in calling ddb lib. Last error: \"{SafeGetLastError("validate align raster")}\", check inner exception for details", ex);
+        }
+
+        throw new DdbException(SafeGetLastError("validate align raster"));
+    }
+
+    [DllImport("ddb", EntryPoint = "DDBAlignRaster")]
+    private static extern DdbResult _AlignRaster(
+        [MarshalAs(UnmanagedType.LPUTF8Str)] string sourcePath,
+        [MarshalAs(UnmanagedType.LPUTF8Str)] string referencePath,
+        [MarshalAs(UnmanagedType.LPUTF8Str)] string outputPath,
+        [MarshalAs(UnmanagedType.LPUTF8Str)] string? mode,
+        out IntPtr output);
+
+    public string AlignRaster(string sourcePath, string referencePath, string outputPath, string mode = "similarity")
+    {
+        if (string.IsNullOrWhiteSpace(sourcePath))
+            throw new ArgumentException("sourcePath is null or empty");
+        if (string.IsNullOrWhiteSpace(referencePath))
+            throw new ArgumentException("referencePath is null or empty");
+        if (string.IsNullOrWhiteSpace(outputPath))
+            throw new ArgumentException("outputPath is null or empty");
+
+        try
+        {
+            if (_AlignRaster(sourcePath, referencePath, outputPath, mode, out var output) == DdbResult.Success)
+            {
+                var json = MarshalAndFreeUtf8(output);
+                if (string.IsNullOrWhiteSpace(json))
+                    throw new DdbException("Unable to align raster");
+                return json;
+            }
+        }
+        catch (EntryPointNotFoundException ex)
+        {
+            throw new DdbException($"Error in calling ddb lib: incompatible versions ({ex.Message})", ex);
+        }
+        catch (DdbException) { throw; }
+        catch (Exception ex)
+        {
+            throw new DdbException(
+                $"Error in calling ddb lib. Last error: \"{SafeGetLastError("align raster")}\", check inner exception for details", ex);
+        }
+
+        throw new DdbException(SafeGetLastError("align raster"));
+    }
+
     [DllImport("ddb", EntryPoint = "DDBExportRaster")]
     private static extern DdbResult _ExportRaster(
         [MarshalAs(UnmanagedType.LPUTF8Str)] string inputPath,
