@@ -63,6 +63,8 @@ public sealed class HangfireProgressSink : IProgress<HeavyToolProgress>
 
         bool flush;
         string? logTailJson = null;
+        int? flushPercent = null;
+        string? flushPhase = null;
         lock (_gate)
         {
             var now = DateTime.UtcNow;
@@ -74,6 +76,8 @@ public sealed class HangfireProgressSink : IProgress<HeavyToolProgress>
                 _lastFlushUtc = now;
                 _lastPercent = percent;
                 _lastPhase = value.Phase ?? _lastPhase;
+                flushPercent = _lastPercent;
+                flushPhase = _lastPhase;
                 logTailJson = _logBuffer.ToJson();
             }
         }
@@ -85,7 +89,7 @@ public sealed class HangfireProgressSink : IProgress<HeavyToolProgress>
         try
         {
             _indexWriter
-                .UpdateProgressAsync(_taskId, _lastPercent, value.Phase ?? _lastPhase, logTailJson, DateTime.UtcNow)
+                .UpdateProgressAsync(_taskId, flushPercent, flushPhase, logTailJson, DateTime.UtcNow)
                 .GetAwaiter().GetResult();
         }
         catch
