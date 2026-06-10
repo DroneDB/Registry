@@ -73,6 +73,17 @@ public sealed class PhotogrammetryTool : IHeavyTool
         if (_nodes.Resolve(nodeId) is null)
             throw new ArgumentException($"NodeODM node '{nodeId}' is not configured.");
 
+        // Validate explicit image list before collecting: silently dropping missing
+        // paths would give confusing results (fewer images than the user intended).
+        var explicitImages = ReadStringArray(request.Params, "images");
+        if (explicitImages is { Count: > 0 })
+        {
+            var missing = explicitImages.Where(p => !ctx.Ddb.EntryExists(p)).ToList();
+            if (missing.Count > 0)
+                throw new ArgumentException(
+                    $"The following image paths do not exist in the dataset: {string.Join(", ", missing.Select(p => $"'{p}'"))}");
+        }
+
         var images = CollectImageEntries(request, ctx.Ddb);
 
         return images.Count < 2 ? throw new ArgumentException("Photogrammetry requires at least 2 images.") : Task.CompletedTask;
@@ -236,7 +247,13 @@ public sealed class PhotogrammetryTool : IHeavyTool
     private static string ResolveFileName(HeavyToolRequest request)
     {
         var name = ReadString(request.Params, "fileName");
-        if (!string.IsNullOrWhiteSpace(name)) return name!;
+        if (!string.IsNullOrWhiteSpace(name))
+        {
+            // Strip any directory components to prevent path traversal.
+            var safe = Path.GetFileName(name.Trim());
+            if (!string.IsNullOrWhiteSpace(safe))
+                return safe.EndsWith(".zip", StringComparison.OrdinalIgnoreCase) ? safe : safe + ".zip";
+        }
         return "photogrammetry_result.zip";
     }
 
