@@ -108,7 +108,7 @@ Ready-made QGIS setup scripts are in [`scripts/`](scripts/) (`qgis-test-setup.sh
 `qgis-test-setup.ps1`). See the [OGC services documentation](https://docs.dronedb.app/ogc-services)
 for detailed QGIS configuration steps.
 
-## �🛠️ Development
+## 🛠️ Development
 
 ### Requirements
 
