@@ -72,7 +72,7 @@ Open [http://localhost:5000](http://localhost:5000) • Default credentials: `ad
 
 For production deployment with MySQL/MariaDB, see the [full documentation](https://docs.dronedb.app/docs/registry#running-in-production).
 
-## �OGC Services
+## 🌍 OGC Services
 
 Every dataset exposes a full suite of OGC-compliant endpoints at
 `/orgs/{orgSlug}/ds/{dsSlug}/{service}`.
