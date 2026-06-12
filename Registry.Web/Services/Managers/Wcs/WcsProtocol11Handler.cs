@@ -60,7 +60,7 @@ public sealed class WcsProtocol11Handler : IWcsProtocolHandler
 
             // ows:ServiceIdentification
             await w.WriteStartElementAsync("ows", "ServiceIdentification", NsOws);
-            await w.WriteElementStringAsync("ows", "Title", NsOws, $"DroneDB WCS — {orgSlug}/{dsSlug}");
+            await w.WriteElementStringAsync("ows", "Title", NsOws, $"DroneDB WCS - {orgSlug}/{dsSlug}");
             await w.WriteElementStringAsync("ows", "ServiceType", NsOws, "WCS");
             await w.WriteElementStringAsync("ows", "ServiceTypeVersion", NsOws, "1.1.1");
             await w.WriteElementStringAsync("ows", "ServiceTypeVersion", NsOws, "1.1.0");
@@ -234,7 +234,7 @@ public sealed class WcsProtocol11Handler : IWcsProtocolHandler
 
         var (ddb, layer) = await _svc.ResolveCoverageAsync(orgSlug, dsSlug, coverageId);
 
-        // OGC 07-067r5 §9.3.2.4 — optional band subset via RangeSubset.
+        // OGC 07-067r5 §9.3.2.4 - optional band subset via RangeSubset.
         var info = _svc.ProbeRaster(ddb, layer);
         var bands = WcsRangeSubsetParser.ParseRangeSubset11(
             OgcRequestParser.Get(q, "RangeSubset"), info);

@@ -15,7 +15,7 @@ namespace Registry.Web.Data.SqliteMigrations.Migrations
         protected override void BuildModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
-            modelBuilder.HasAnnotation("ProductVersion", "9.0.9");
+            modelBuilder.HasAnnotation("ProductVersion", "10.0.7");
 
             modelBuilder.Entity("Registry.Web.Data.Models.Batch", b =>
                 {
@@ -128,6 +128,13 @@ namespace Registry.Web.Data.SqliteMigrations.Migrations
                         .HasMaxLength(64)
                         .HasColumnType("TEXT");
 
+                    b.Property<string>("ArtifactSha256")
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<long?>("ArtifactSizeBytes")
+                        .HasColumnType("INTEGER");
+
                     b.Property<DateTime>("CreatedAtUtc")
                         .HasColumnType("TEXT");
 
@@ -144,6 +151,10 @@ namespace Registry.Web.Data.SqliteMigrations.Migrations
                         .HasMaxLength(128)
                         .HasColumnType("TEXT");
 
+                    b.Property<string>("ErrorType")
+                        .HasMaxLength(128)
+                        .HasColumnType("TEXT");
+
                     b.Property<DateTime?>("FailedAtUtc")
                         .HasColumnType("TEXT");
 
@@ -152,6 +163,9 @@ namespace Registry.Web.Data.SqliteMigrations.Migrations
                         .HasColumnType("TEXT");
 
                     b.Property<DateTime?>("LastStateChangeUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("LogTailJson")
                         .HasColumnType("TEXT");
 
                     b.Property<string>("MethodDisplay")
@@ -163,14 +177,32 @@ namespace Registry.Web.Data.SqliteMigrations.Migrations
                         .HasMaxLength(128)
                         .HasColumnType("TEXT");
 
+                    b.Property<string>("ParentJobId")
+                        .HasMaxLength(36)
+                        .HasColumnType("TEXT");
+
                     b.Property<string>("Path")
                         .HasMaxLength(2048)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("PhaseMessage")
+                        .HasMaxLength(256)
                         .HasColumnType("TEXT");
 
                     b.Property<DateTime?>("ProcessingAtUtc")
                         .HasColumnType("TEXT");
 
+                    b.Property<int?>("ProgressPercent")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTime?>("ProgressUpdatedAtUtc")
+                        .HasColumnType("TEXT");
+
                     b.Property<string>("Queue")
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("RequestHash")
                         .HasMaxLength(64)
                         .HasColumnType("TEXT");
 
@@ -180,19 +212,49 @@ namespace Registry.Web.Data.SqliteMigrations.Migrations
                     b.Property<DateTime?>("SucceededAtUtc")
                         .HasColumnType("TEXT");
 
+                    b.Property<string>("ToolId")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT")
+                        .HasDefaultValue("build");
+
+                    b.Property<string>("ToolVersion")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(16)
+                        .HasColumnType("TEXT")
+                        .HasDefaultValue("1");
+
                     b.Property<string>("UserId")
                         .HasMaxLength(128)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("WorkflowExecutionId")
+                        .HasMaxLength(36)
                         .HasColumnType("TEXT");
 
                     b.HasKey("JobId");
 
                     b.HasIndex("CreatedAtUtc");
 
+                    b.HasIndex("ParentJobId")
+                        .HasDatabaseName("IX_JobIndex_Parent");
+
                     b.HasIndex("UserId");
+
+                    b.HasIndex("WorkflowExecutionId")
+                        .HasDatabaseName("IX_JobIndex_Workflow");
 
                     b.HasIndex("OrgSlug", "DsSlug");
 
                     b.HasIndex("OrgSlug", "DsSlug", "Hash");
+
+                    b.HasIndex("OrgSlug", "DsSlug", "ToolId", "RequestHash")
+                        .HasDatabaseName("IX_JobIndex_RequestHash");
+
+                    b.HasIndex("Queue", "OrgSlug", "DsSlug", "ToolId", "CurrentState", "CreatedAtUtc")
+                        .HasDatabaseName("IX_JobIndex_Tool_State");
 
                     b.ToTable("JobIndices");
                 });

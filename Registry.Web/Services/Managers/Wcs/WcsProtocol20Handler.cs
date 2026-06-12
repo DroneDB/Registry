@@ -63,7 +63,7 @@ public sealed class WcsProtocol20Handler : IWcsProtocolHandler
             w.WriteAttributeString("version", "2.0.1");
 
             await w.WriteStartElementAsync("ows", "ServiceIdentification", NsOws);
-            await w.WriteElementStringAsync("ows", "Title", NsOws, $"DroneDB WCS — {orgSlug}/{dsSlug}");
+            await w.WriteElementStringAsync("ows", "Title", NsOws, $"DroneDB WCS - {orgSlug}/{dsSlug}");
             await w.WriteElementStringAsync("ows", "ServiceType", NsOws, "OGC WCS");
             foreach (var v in WcsConformance.SupportedVersions)
                 await w.WriteElementStringAsync("ows", "ServiceTypeVersion", NsOws, v);
@@ -266,7 +266,7 @@ public sealed class WcsProtocol20Handler : IWcsProtocolHandler
             ?? throw new OgcException("InvalidParameterValue", "Coverage has no BBOX", 400);
         var bbox = WcsSubsetParser.Parse(subsetParams, coverageBbox) ?? coverageBbox;
 
-        // OGC 09-147r3 §8.3 — optional band subset and output CRS overrides.
+        // OGC 09-147r3 §8.3 - optional band subset and output CRS overrides.
         var info = _svc.ProbeRaster(ddb, layer);
         var bands = WcsRangeSubsetParser.ParseRangeSubset20(
             OgcRequestParser.Get(q, "RANGESUBSET"), info);

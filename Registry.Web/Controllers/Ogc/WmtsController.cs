@@ -12,7 +12,7 @@ using Registry.Web.Utilities.Ogc;
 
 namespace Registry.Web.Controllers.Ogc;
 
-/// <summary>WMTS 1.0.0 controller — KVP + RESTful tile retrieval.</summary>
+/// <summary>WMTS 1.0.0 controller - KVP + RESTful tile retrieval.</summary>
 [ApiController]
 [ServiceFilter(typeof(BasicAuthFilter))]
 [ServiceFilter(typeof(OgcAuthorizationFilter))]

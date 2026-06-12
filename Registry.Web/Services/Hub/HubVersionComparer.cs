@@ -39,7 +39,7 @@ public static class HubVersionComparer
 
     /// <summary>
     /// Parses a semver-like string (major.minor.patch[-prerelease][+build]).
-    /// Pre-release and build suffixes are ignored — only the numeric core is compared.
+    /// Pre-release and build suffixes are ignored - only the numeric core is compared.
     /// </summary>
     public static bool TryParse(string raw, out Version version)
     {

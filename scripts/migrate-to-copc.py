@@ -104,7 +104,7 @@ def convert_one(
         return "skipped"
 
     if out_file.exists():
-        # Fast path: sentinel was written by a previous successful run — skip entirely
+        # Fast path: sentinel was written by a previous successful run - skip entirely
         if sentinel_file.exists():
             print(f"{prefix} Skipping (already validated): {out_file}")
             with log_lock:
@@ -114,7 +114,7 @@ def convert_one(
                     f.write(f"{ept_json} | already validated\n")
             return "skipped"
 
-        # Sentinel missing: file exists but was never confirmed valid — validate now
+        # Sentinel missing: file exists but was never confirmed valid - validate now
         print(f"{prefix} COPC exists but not yet validated, checking: {out_file}")
         copc_points = get_pdal_num_points(out_file, use_docker, root_dir)
         if (ept_points is not None
@@ -323,7 +323,7 @@ def main() -> None:
                     active_futures[f] = ept
 
                 if not active_futures:
-                    # No jobs running; RAM still low — wait for OS to free memory
+                    # No jobs running; RAM still low - wait for OS to free memory
                     time.sleep(POLL_INTERVAL)
                     continue
 
@@ -346,7 +346,7 @@ def main() -> None:
         interrupted = True
         not_started = len(pending)
         print(
-            f"\n  Interrupted — waiting for {len(active_futures)} running job(s) to finish "
+            f"\n  Interrupted - waiting for {len(active_futures)} running job(s) to finish "
             f"({not_started} job(s) not started). Press CTRL+C again to force quit and clean up."
         )
         pending.clear()
@@ -362,7 +362,7 @@ def main() -> None:
                     results.append("failed")
                 processed.add(id(f))
         except KeyboardInterrupt:
-            print("\n  Force quitting — terminating all running processes and removing partial files...")
+            print("\n  Force quitting - terminating all running processes and removing partial files...")
             with _procs_lock:
                 for proc in _active_procs:
                     proc.terminate()

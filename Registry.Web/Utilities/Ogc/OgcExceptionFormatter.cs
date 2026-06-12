@@ -93,7 +93,7 @@ public static class OgcExceptionFormatter
         return sw.ToString();
     }
 
-    /// <summary>WCS 1.0.0 ServiceExceptionReport (OGC 03-065r6 §A.4.1 — namespace
+    /// <summary>WCS 1.0.0 ServiceExceptionReport (OGC 03-065r6 §A.4.1 - namespace
     /// <c>http://www.opengis.net/ogc</c>, version <c>1.2.0</c>). Note: WCS 1.0 inherited
     /// the WMS-like envelope and predates OWS Common entirely.</summary>
     public static string FormatWcs10(string code, string message)

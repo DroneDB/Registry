@@ -173,6 +173,98 @@ public class JobIndexCleanupServiceTest : TestBase
 
     #endregion
 
+    #region JobIndexWriter.DeleteTerminalForDatasetAsync
+
+    [Test]
+    public async Task DeleteTerminalForDatasetAsync_RemovesAllTerminalForDataset_RegardlessOfAge()
+    {
+        // Arrange
+        await using var context = GetContextWithMixedRecords();
+        var writer = new JobIndexWriter(context, _writerLogger);
+
+        // Act
+        var removed = await writer.DeleteTerminalForDatasetAsync("org1", "ds1");
+
+        // Assert - every terminal row of org1/ds1 is removed, recent ones included
+        removed.ShouldContain("old-succeeded");
+        removed.ShouldContain("old-failed");
+        removed.ShouldContain("recent-succeeded");
+        removed.Count.ShouldBe(3);
+
+        var remaining = await context.JobIndices.ToArrayAsync();
+        remaining.ShouldNotContain(j => j.JobId == "old-succeeded");
+        remaining.ShouldNotContain(j => j.JobId == "old-failed");
+        remaining.ShouldNotContain(j => j.JobId == "recent-succeeded");
+    }
+
+    [Test]
+    public async Task DeleteTerminalForDatasetAsync_KeepsActiveTasksAndOtherDatasets()
+    {
+        // Arrange
+        await using var context = GetContextWithMixedRecords();
+        var writer = new JobIndexWriter(context, _writerLogger);
+
+        // Act
+        await writer.DeleteTerminalForDatasetAsync("org1", "ds1");
+
+        // Assert - active org1/ds1 jobs survive
+        var remaining = await context.JobIndices.ToArrayAsync();
+        remaining.ShouldContain(j => j.JobId == "old-processing");
+        remaining.ShouldContain(j => j.JobId == "old-enqueued");
+        remaining.ShouldContain(j => j.JobId == "old-created");
+
+        // ... and a different dataset is untouched, even its terminal rows
+        remaining.ShouldContain(j => j.JobId == "old-deleted");
+        remaining.ShouldContain(j => j.JobId == "recent-failed");
+    }
+
+    [Test]
+    public async Task DeleteTerminalForDatasetAsync_ToolFilter_OnlyRemovesMatchingTool()
+    {
+        // Arrange - two terminal tasks in the same dataset produced by different tools
+        var options = new DbContextOptionsBuilder<RegistryContext>()
+            .UseInMemoryDatabase(databaseName: "JobIndexClearToolTestDb_" + Guid.NewGuid())
+            .Options;
+
+        await using (var seed = new RegistryContext(options))
+        {
+            seed.JobIndices.AddRange(
+                new JobIndex { JobId = "build-done", OrgSlug = "org1", DsSlug = "ds1", ToolId = "build", CurrentState = "Succeeded", CreatedAtUtc = DateTime.UtcNow, LastStateChangeUtc = DateTime.UtcNow },
+                new JobIndex { JobId = "extract-done", OrgSlug = "org1", DsSlug = "ds1", ToolId = "archive-extract", CurrentState = "Succeeded", CreatedAtUtc = DateTime.UtcNow, LastStateChangeUtc = DateTime.UtcNow }
+            );
+            await seed.SaveChangesAsync();
+        }
+
+        await using var context = new RegistryContext(options);
+        var writer = new JobIndexWriter(context, _writerLogger);
+
+        // Act - clear only the archive-extract tool
+        var removed = await writer.DeleteTerminalForDatasetAsync("org1", "ds1", "archive-extract");
+
+        // Assert
+        removed.ShouldBe(new[] { "extract-done" });
+
+        var remaining = await context.JobIndices.ToArrayAsync();
+        remaining.ShouldContain(j => j.JobId == "build-done");
+        remaining.ShouldNotContain(j => j.JobId == "extract-done");
+    }
+
+    [Test]
+    public async Task DeleteTerminalForDatasetAsync_EmptyTable_ReturnsEmpty()
+    {
+        // Arrange
+        await using var context = GetEmptyContext();
+        var writer = new JobIndexWriter(context, _writerLogger);
+
+        // Act
+        var removed = await writer.DeleteTerminalForDatasetAsync("org1", "ds1");
+
+        // Assert
+        removed.ShouldBeEmpty();
+    }
+
+    #endregion
+
     #region JobIndexCleanupService.CleanupOldJobIndicesAsync
 
     [Test]

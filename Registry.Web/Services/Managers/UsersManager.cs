@@ -937,6 +937,7 @@ public class UsersManager : IUsersManager
 
             users.Add(new UserDetailDto
             {
+                Id = first.UserId,
                 UserName = first.UserName,
                 Email = first.Email,
                 Roles = userGroup.Select(item => item.RoleName).Where(r => !string.IsNullOrEmpty(r)).ToArray(),

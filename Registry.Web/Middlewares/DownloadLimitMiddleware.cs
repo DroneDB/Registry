@@ -11,8 +11,8 @@ namespace Registry.Web.Middlewares;
 
 /// <summary>
 /// Middleware that limits concurrent downloads per user (or per IP for anonymous users).
-/// Intercepts download endpoints (/download, /ddb) and enforces the configured limit.
-/// Admins are exempt from the limit.
+/// Intercepts download endpoints (/download, /ddb and the async task artifact
+/// endpoint /tasks/{id}/result) and enforces the configured limit. Admins are exempt.
 ///
 /// Supports a preflight check via the X-Download-Check header:
 /// when present, the middleware checks slot availability without acquiring,
@@ -28,8 +28,11 @@ public partial class DownloadLimitMiddleware : IMiddleware
     private const string PreflightHeader = "X-Download-Check";
     private const string TooManyDownloadsMessage = "Too many concurrent downloads. Please wait for a download to finish.";
 
-    // Matches paths like /orgs/{org}/ds/{ds}/download or /orgs/{org}/ds/{ds}/ddb
-    [GeneratedRegex(@"/orgs/[^/]+/ds/[^/]+/(download|ddb)(/|$)", RegexOptions.IgnoreCase | RegexOptions.Compiled)]
+    // Matches the download endpoints subject to the concurrency limit:
+    //  - /orgs/{org}/ds/{ds}/download  (bulk/single direct download)
+    //  - /orgs/{org}/ds/{ds}/ddb       (ddb archive)
+    //  - /orgs/{org}/ds/{ds}/tasks/{id}/result (async heavy-task artifact, e.g. bulk-download)
+    [GeneratedRegex(@"/orgs/[^/]+/ds/[^/]+/(download|ddb)(/|$)|/orgs/[^/]+/ds/[^/]+/tasks/[^/]+/result(/|$)", RegexOptions.IgnoreCase | RegexOptions.Compiled)]
     private static partial Regex DownloadPathRegex();
 
     public DownloadLimitMiddleware(

@@ -24,7 +24,7 @@ namespace Registry.Web.Services.Managers;
 /// </summary>
 public abstract class OgcManagerBase
 {
-    // OGC / W3C namespace URIs — single source of truth for all derived managers.
+    // OGC / W3C namespace URIs - single source of truth for all derived managers.
     protected const string NsWms   = "http://www.opengis.net/wms";
     protected const string NsWfs   = "http://www.opengis.net/wfs/2.0";
     protected const string NsWmts  = "http://www.opengis.net/wmts/1.0";
@@ -66,7 +66,7 @@ public abstract class OgcManagerBase
     /// Builds the absolute base URL for the current OGC service endpoint, e.g.
     /// "http://host:port/orgs/admin/ds/test-ort/wms". Falls back to a fabricated
     /// localhost URL if there is no ambient HTTP context (e.g. unit tests).
-    /// The returned string never ends with '?' — callers append their own query string.
+    /// The returned string never ends with '?' - callers append their own query string.
     /// </summary>
     protected string GetServiceUrl(string orgSlug, string dsSlug, string service, string? folderPath = null)
     {

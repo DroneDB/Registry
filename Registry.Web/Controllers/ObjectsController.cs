@@ -1177,6 +1177,37 @@ public class ObjectsController : ControllerBaseEx
         }
     }
 
+    /// <summary>Validate that source and reference rasters are compatible for alignment.</summary>
+    [HttpPost("align/validate",
+        Name = nameof(ObjectsController) + "." + nameof(ValidateAlignRaster))]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
+    public async Task<IActionResult> ValidateAlignRaster(
+        [FromRoute, Required] string orgSlug,
+        [FromRoute, Required] string dsSlug,
+        [FromBody, Required] AlignRasterRequestDto request)
+    {
+        try
+        {
+            if (string.IsNullOrWhiteSpace(request.SourcePath))
+                return BadRequest(new ErrorResponse("sourcePath is required"));
+            if (string.IsNullOrWhiteSpace(request.ReferencePath))
+                return BadRequest(new ErrorResponse("referencePath is required"));
+
+            var validationError = ValidatePaths(new[] { request.SourcePath, request.ReferencePath });
+            if (validationError != null) return validationError;
+
+            var json = await _objectsManager.ValidateAlignRaster(orgSlug, dsSlug,
+                request.SourcePath, request.ReferencePath);
+            return Content(json, "application/json");
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Exception in ValidateAlignRaster('{OrgSlug}', '{DsSlug}')", orgSlug, dsSlug);
+            return ExceptionResult(ex);
+        }
+    }
+
     #endregion
 
     #region Raster Analysis

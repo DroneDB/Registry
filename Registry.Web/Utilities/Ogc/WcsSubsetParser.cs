@@ -41,7 +41,7 @@ public static class WcsSubsetParser
                     $"subset '{raw}' is malformed; expected axis(low[,high])", 400, "subset");
 
             // Multiple subset operations jammed into a single SUBSET value (or any nested
-            // parens) — the axis label cannot be reliably identified per OGC 09-110r4 §9.3.2.2.
+            // parens) - the axis label cannot be reliably identified per OGC 09-110r4 §9.3.2.2.
             if (s.IndexOf('(', open + 1) >= 0 || s.IndexOf(')') != close)
                 throw new OgcException("InvalidAxisLabel",
                     $"subset '{raw}' does not identify a valid coverage axis label",

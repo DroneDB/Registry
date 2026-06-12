@@ -281,4 +281,11 @@ public class AppSettings
 #nullable enable
     public string[]? AllowedOrigins { get; set; }
 #nullable restore
+
+    /// <summary>
+    /// Processing Platform (Layer 1 task substrate) settings. When null, defaults apply.
+    /// </summary>
+#nullable enable
+    public ProcessingPlatformSettings? ProcessingPlatform { get; set; }
+#nullable restore
 }

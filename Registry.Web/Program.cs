@@ -343,8 +343,18 @@ public class Program
                 services.AddScoped<RecurringDatasetCleanupService>();
                 services.AddScoped<ArtifactCompletenessCheckerService>();
 
+                // Processing Platform task substrate (native tools incl. build/raster-export)
+                services.AddProcessingPlatform();
+
                 services.AddHangfireProvider(appSettings, configuration);
-                services.AddHangfireServer(options => { options.WorkerCount = workers; });
+                services.AddHangfireServer(options =>
+                {
+                    options.WorkerCount = workers;
+                    // The heavy task substrate (raster-export and other native tools)
+                    // enqueues onto the "tasks" queue; without listing it here the
+                    // server would only process "default" and those jobs would never run.
+                    options.Queues = ["tasks", "default"];
+                });
 
                 // Register Hangfire jobs initializer as hosted service
                 services.AddHostedService<HangfireJobsHostedService>();

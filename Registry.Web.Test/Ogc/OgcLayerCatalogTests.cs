@@ -210,7 +210,7 @@ public class OgcLayerCatalogTests
         _wrapper.Setup(w => w.DescribeVector(It.IsAny<string>(), It.IsAny<string>()))
             .Returns("{\"layers\":[{\"name\":\"roads\"},{\"name\":\"poi\"}]}");
 
-        // Ask using bare entry path — should map to first inner layer.
+        // Ask using bare entry path - should map to first inner layer.
         var resolved = await _catalog.ResolveAsync(Org, Ds, "layer.geojson");
 
         resolved.ShouldNotBeNull();

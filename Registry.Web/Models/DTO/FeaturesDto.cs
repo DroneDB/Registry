@@ -52,6 +52,26 @@ public class FeaturesDto
     public long? MaxExportSizeBytes { get; set; }
 
     /// <summary>
+    /// Size threshold (bytes) above which an authenticated bulk download is offloaded to
+    /// the asynchronous <c>bulk-download</c> task. Whole-dataset downloads always use the
+    /// async path. Clients compare the selection size against this value to route the download.
+    /// </summary>
+    public long BulkDownloadAsyncThresholdBytes { get; set; }
+
+    /// <summary>
+    /// Authoritative catalog of available task tools (id, title, result extension,
+    /// artifact flag). Clients use this as the single source of truth for task tool
+    /// metadata instead of hardcoded maps.
+    /// </summary>
+    public TaskToolInfoDto[]? TaskTools { get; set; }
+
+    /// <summary>
+    /// Authoritative task state machine (value + terminal flag). Clients derive the
+    /// active/terminal classification and the state filter options from this list.
+    /// </summary>
+    public TaskStateInfoDto[]? TaskStates { get; set; }
+
+    /// <summary>
     /// Hub UI branding and customization options. Materializes <c>window.HubOptions</c>
     /// on the client. Always populated from <c>AppSettings:HubOptions</c> in production
     /// (defaults shipped via <c>appsettings-default.json</c>); only null if an admin has
@@ -76,3 +96,21 @@ public class FeaturesDto
     /// </summary>
     public string? DdbVersion { get; set; }
 }
+
+/// <summary>
+/// Authoritative descriptor of an available task tool, surfaced to clients via the
+/// features payload so the UI no longer hardcodes tool titles/extensions (spec §B.3).
+/// </summary>
+public sealed record TaskToolInfoDto(
+    string Id,
+    string Version,
+    string Title,
+    string RequiredAccess,
+    bool ProducesArtifact,
+    string? ResultExtension);
+
+/// <summary>
+/// Authoritative descriptor of a task state (value + terminal flag), surfaced to
+/// clients so the UI derives the state machine from the server (spec §B.3).
+/// </summary>
+public sealed record TaskStateInfoDto(string Value, bool Terminal);

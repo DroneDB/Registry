@@ -97,7 +97,7 @@ public class WfsManager : OgcManagerBase, IWfsManager
             w.WriteAttributeString("version", "2.0.0");
 
             await w.WriteStartElementAsync("ows", "ServiceIdentification", null);
-            await w.WriteElementStringAsync("ows", "Title", null, $"DroneDB WFS — {orgSlug}/{dsSlug}");
+            await w.WriteElementStringAsync("ows", "Title", null, $"DroneDB WFS - {orgSlug}/{dsSlug}");
             await w.WriteElementStringAsync("ows", "ServiceType", null, "WFS");
             await w.WriteElementStringAsync("ows", "ServiceTypeVersion", null, "2.0.0");
             await w.WriteElementStringAsync("ows", "Fees", null, "NONE");

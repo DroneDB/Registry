@@ -5,6 +5,7 @@ using System.IO;
 using System.Linq;
 using System.Runtime.InteropServices;
 using System.Text;
+using System.Threading;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using Registry.Ports;
@@ -1778,6 +1779,84 @@ public class NativeDdbWrapper : IDdbWrapper
         throw new DdbException(SafeGetLastError("merge multispectral"));
     }
 
+    [DllImport("ddb", EntryPoint = "DDBValidateAlignRaster")]
+    private static extern DdbResult _ValidateAlignRaster(
+        [MarshalAs(UnmanagedType.LPUTF8Str)] string sourcePath,
+        [MarshalAs(UnmanagedType.LPUTF8Str)] string referencePath,
+        out IntPtr output);
+
+    public string ValidateAlignRaster(string sourcePath, string referencePath)
+    {
+        if (string.IsNullOrWhiteSpace(sourcePath))
+            throw new ArgumentException("sourcePath is null or empty");
+        if (string.IsNullOrWhiteSpace(referencePath))
+            throw new ArgumentException("referencePath is null or empty");
+
+        try
+        {
+            if (_ValidateAlignRaster(sourcePath, referencePath, out var output) == DdbResult.Success)
+            {
+                var json = MarshalAndFreeUtf8(output);
+                if (string.IsNullOrWhiteSpace(json))
+                    throw new DdbException("Unable to validate align raster");
+                return json;
+            }
+        }
+        catch (EntryPointNotFoundException ex)
+        {
+            throw new DdbException($"Error in calling ddb lib: incompatible versions ({ex.Message})", ex);
+        }
+        catch (DdbException) { throw; }
+        catch (Exception ex)
+        {
+            throw new DdbException(
+                $"Error in calling ddb lib. Last error: \"{SafeGetLastError("validate align raster")}\", check inner exception for details", ex);
+        }
+
+        throw new DdbException(SafeGetLastError("validate align raster"));
+    }
+
+    [DllImport("ddb", EntryPoint = "DDBAlignRaster")]
+    private static extern DdbResult _AlignRaster(
+        [MarshalAs(UnmanagedType.LPUTF8Str)] string sourcePath,
+        [MarshalAs(UnmanagedType.LPUTF8Str)] string referencePath,
+        [MarshalAs(UnmanagedType.LPUTF8Str)] string outputPath,
+        [MarshalAs(UnmanagedType.LPUTF8Str)] string? mode,
+        out IntPtr output);
+
+    public string AlignRaster(string sourcePath, string referencePath, string outputPath, string mode = "similarity")
+    {
+        if (string.IsNullOrWhiteSpace(sourcePath))
+            throw new ArgumentException("sourcePath is null or empty");
+        if (string.IsNullOrWhiteSpace(referencePath))
+            throw new ArgumentException("referencePath is null or empty");
+        if (string.IsNullOrWhiteSpace(outputPath))
+            throw new ArgumentException("outputPath is null or empty");
+
+        try
+        {
+            if (_AlignRaster(sourcePath, referencePath, outputPath, mode, out var output) == DdbResult.Success)
+            {
+                var json = MarshalAndFreeUtf8(output);
+                if (string.IsNullOrWhiteSpace(json))
+                    throw new DdbException("Unable to align raster");
+                return json;
+            }
+        }
+        catch (EntryPointNotFoundException ex)
+        {
+            throw new DdbException($"Error in calling ddb lib: incompatible versions ({ex.Message})", ex);
+        }
+        catch (DdbException) { throw; }
+        catch (Exception ex)
+        {
+            throw new DdbException(
+                $"Error in calling ddb lib. Last error: \"{SafeGetLastError("align raster")}\", check inner exception for details", ex);
+        }
+
+        throw new DdbException(SafeGetLastError("align raster"));
+    }
+
     [DllImport("ddb", EntryPoint = "DDBExportRaster")]
     private static extern DdbResult _ExportRaster(
         [MarshalAs(UnmanagedType.LPUTF8Str)] string inputPath,
@@ -1813,6 +1892,101 @@ public class NativeDdbWrapper : IDdbWrapper
         {
             throw new DdbException(
                 $"Error in calling ddb lib. Last error: \"{SafeGetLastError("export raster")}\", check inner exception for details", ex);
+        }
+
+        throw new DdbException(SafeGetLastError("export raster"));
+    }
+
+    // Native progress callback contract mirroring DDBProgressCallback in ddb.h:
+    //   int (*)(double fraction, const char *phase, void *userData)
+    // Returning a non-zero value requests cooperative cancellation.
+    [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+    private delegate int DdbProgressCallbackNative(double fraction, IntPtr phase, IntPtr userData);
+
+    [DllImport("ddb", EntryPoint = "DDBExportRaster2")]
+    private static extern DdbResult _ExportRaster2(
+        [MarshalAs(UnmanagedType.LPUTF8Str)] string inputPath,
+        [MarshalAs(UnmanagedType.LPUTF8Str)] string outputPath,
+        [MarshalAs(UnmanagedType.LPUTF8Str)] string? preset,
+        [MarshalAs(UnmanagedType.LPUTF8Str)] string? bands,
+        [MarshalAs(UnmanagedType.LPUTF8Str)] string? formula,
+        [MarshalAs(UnmanagedType.LPUTF8Str)] string? bandFilter,
+        [MarshalAs(UnmanagedType.LPUTF8Str)] string? colormap,
+        [MarshalAs(UnmanagedType.LPUTF8Str)] string? rescale,
+        int tileSize,
+        DdbProgressCallbackNative? progress,
+        IntPtr progressUserData);
+
+    /// <summary>
+    /// Export raster with visualization params applied as GeoTIFF using the
+    /// block-windowed implementation (bounded peak memory). Supports incremental
+    /// progress reporting and cooperative cancellation.
+    /// </summary>
+    /// <param name="tileSize">Tile size in pixels for windowed processing; 0 = auto.</param>
+    /// <param name="progress">Optional callback invoked with (fraction 0..1, phase). May be null.</param>
+    /// <param name="cancellationToken">Cancels the operation cooperatively; raises <see cref="DdbCanceledException"/>.</param>
+    public void ExportRaster(string inputPath, string outputPath,
+        string? preset, string? bands, string? formula, string? bandFilter,
+        string? colormap, string? rescale,
+        int tileSize, Action<double, string?>? progress, CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(inputPath))
+            throw new ArgumentException("inputPath is null or empty");
+        if (string.IsNullOrWhiteSpace(outputPath))
+            throw new ArgumentException("outputPath is null or empty");
+
+        // Bridge managed progress + cancellation to the native callback contract.
+        // We only allocate a native delegate when there is something to observe.
+        DdbProgressCallbackNative? nativeCallback = null;
+        if (progress != null || cancellationToken.CanBeCanceled)
+        {
+            nativeCallback = (fraction, phasePtr, _) =>
+            {
+                if (cancellationToken.IsCancellationRequested)
+                    return 1; // request cancellation
+
+                if (progress != null)
+                {
+                    var phase = phasePtr == IntPtr.Zero ? null : Marshal.PtrToStringUTF8(phasePtr);
+                    progress(fraction, phase);
+                }
+
+                return 0; // continue
+            };
+        }
+
+        try
+        {
+            var result = _ExportRaster2(inputPath, outputPath, preset, bands, formula,
+                bandFilter, colormap, rescale, tileSize, nativeCallback, IntPtr.Zero);
+
+            if (result == DdbResult.Success)
+                return;
+
+            if (result == DdbResult.Canceled)
+                throw new DdbCanceledException(SafeGetLastError("export raster"));
+        }
+        catch (DdbCanceledException)
+        {
+            throw;
+        }
+        catch (EntryPointNotFoundException ex)
+        {
+            throw new DdbException($"Error in calling ddb lib: incompatible versions ({ex.Message})", ex);
+        }
+        catch (DdbException)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            throw new DdbException(
+                $"Error in calling ddb lib. Last error: \"{SafeGetLastError("export raster")}\", check inner exception for details", ex);
+        }
+        finally
+        {
+            // Keep the delegate alive across the synchronous P/Invoke.
+            GC.KeepAlive(nativeCallback);
         }
 
         throw new DdbException(SafeGetLastError("export raster"));

@@ -14,6 +14,8 @@ using Registry.Web.Models;
 using Registry.Web.Models.Configuration;
 using Registry.Web.Models.DTO;
 using Registry.Web.Services.Adapters;
+using Registry.Web.Services.HeavyTasks;
+using Registry.Web.Services.HeavyTasks.Ports;
 using Registry.Web.Services.Hub;
 using Registry.Web.Services.Ports;
 using Registry.Web.Utilities;
@@ -33,6 +35,7 @@ public class SystemController : ControllerBaseEx
     private readonly IDatasetsManager _datasetsManager;
     private readonly IOrganizationsManager _organizationsManager;
     private readonly IDdbWrapper _ddbWrapper;
+    private readonly IHeavyToolRegistry _toolRegistry;
     private readonly ILogger<SystemController> _logger;
     private readonly AppSettings _appSettings;
 
@@ -41,6 +44,7 @@ public class SystemController : ControllerBaseEx
         IDatasetsManager datasetsManager,
         IOrganizationsManager organizationsManager,
         IDdbWrapper ddbWrapper,
+        IHeavyToolRegistry toolRegistry,
         ILogger<SystemController> logger,
         IOptions<AppSettings> appSettings)
     {
@@ -48,6 +52,7 @@ public class SystemController : ControllerBaseEx
         _datasetsManager = datasetsManager;
         _organizationsManager = organizationsManager;
         _ddbWrapper = ddbWrapper;
+        _toolRegistry = toolRegistry;
         _logger = logger;
         _appSettings = appSettings.Value;
     }
@@ -424,6 +429,15 @@ public class SystemController : ControllerBaseEx
                 : null,
             DatasetThumbnailCandidates = _appSettings.DatasetThumbnailCandidates,
             MaxExportSizeBytes = _appSettings.MaxExportSizeBytes,
+            BulkDownloadAsyncThresholdBytes =
+                (_appSettings.ProcessingPlatform ?? new ProcessingPlatformSettings()).BulkDownloadAsyncThresholdBytes,
+            TaskTools = _toolRegistry.All
+                .Select(t => new TaskToolInfoDto(t.Id, t.Version, t.Title, t.RequiredAccess.ToString(),
+                    t.ProducesArtifact, t.ResultExtension))
+                .ToArray(),
+            TaskStates = TaskStateCatalog.All
+                .Select(s => new TaskStateInfoDto(s, TaskStateCatalog.IsTerminal(s)))
+                .ToArray(),
             HubOptions = _appSettings.HubOptions,
             HubVersion = HubInfo.CurrentVersion,
             RegistryVersion = _systemManager.GetVersion(),
@@ -439,7 +453,7 @@ public class SystemController : ControllerBaseEx
         {
             var raw = _ddbWrapper.GetVersion();
             if (string.IsNullOrWhiteSpace(raw)) return null;
-            // The native lib returns "<semver> <commit>" — keep only the semver.
+            // The native lib returns "<semver> <commit>" - keep only the semver.
             return raw.Contains(' ') ? raw[..raw.IndexOf(' ')] : raw;
         }
         catch (Exception ex)

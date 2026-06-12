@@ -555,6 +555,31 @@ public class DDB : IDDB
         }
     }
 
+    public string ValidateAlignRaster(string sourcePath, string referencePath)
+    {
+        try
+        {
+            return _ddbWrapper.ValidateAlignRaster(GetLocalPath(sourcePath), GetLocalPath(referencePath));
+        }
+        catch (DdbException ex)
+        {
+            throw new InvalidOperationException("Cannot validate align raster", ex);
+        }
+    }
+
+    public string AlignRaster(string sourcePath, string referencePath, string outputPath, string mode = "similarity")
+    {
+        try
+        {
+            return _ddbWrapper.AlignRaster(GetLocalPath(sourcePath), GetLocalPath(referencePath),
+                GetLocalPath(outputPath), mode);
+        }
+        catch (DdbException ex)
+        {
+            throw new InvalidOperationException($"Cannot align raster: {ex.Message}", ex);
+        }
+    }
+
     public void ExportRaster(string inputPath, string outputPath,
         string? preset = null, string? bands = null, string? formula = null,
         string? bandFilter = null, string? colormap = null, string? rescale = null)
@@ -563,6 +588,27 @@ public class DDB : IDDB
         {
             var fullInputPath = GetLocalPath(inputPath);
             _ddbWrapper.ExportRaster(fullInputPath, outputPath, preset, bands, formula, bandFilter, colormap, rescale);
+        }
+        catch (DdbException ex)
+        {
+            throw new InvalidOperationException($"Cannot export raster '{inputPath}'", ex);
+        }
+    }
+
+    public void ExportRaster(string inputPath, string outputPath,
+        string? preset, string? bands, string? formula, string? bandFilter,
+        string? colormap, string? rescale, int tileSize,
+        Action<double, string?>? progress, CancellationToken cancellationToken)
+    {
+        try
+        {
+            var fullInputPath = GetLocalPath(inputPath);
+            _ddbWrapper.ExportRaster(fullInputPath, outputPath, preset, bands, formula, bandFilter,
+                colormap, rescale, tileSize, progress, cancellationToken);
+        }
+        catch (DdbCanceledException)
+        {
+            throw;
         }
         catch (DdbException ex)
         {

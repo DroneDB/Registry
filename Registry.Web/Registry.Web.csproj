@@ -12,7 +12,7 @@
         <Platforms>AnyCPU;x64</Platforms>
         <PackageVersion>2.4.0</PackageVersion>
         <Configurations>Debug;Release;DebugEf</Configurations>
-        <DdbVersion>1.8.1</DdbVersion>
+        <DdbVersion>1.9.0</DdbVersion>
         <LangVersion>13</LangVersion>
     </PropertyGroup>
 

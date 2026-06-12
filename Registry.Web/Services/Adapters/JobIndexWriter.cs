@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -40,7 +41,12 @@ public class JobIndexWriter(RegistryContext db, ILogger<JobIndexWriter> log) : I
                 CreatedAtUtc = createdAtUtc,
                 LastStateChangeUtc = createdAtUtc,
                 CurrentState = "Created",
-                MethodDisplay = methodDisplay
+                MethodDisplay = methodDisplay,
+                ToolId = string.IsNullOrWhiteSpace(meta.ToolId) ? "build" : meta.ToolId,
+                ToolVersion = string.IsNullOrWhiteSpace(meta.ToolVersion) ? "1" : meta.ToolVersion,
+                RequestHash = meta.RequestHash,
+                ParentJobId = meta.ParentJobId,
+                WorkflowExecutionId = meta.WorkflowExecutionId
             });
         }
         else
@@ -52,6 +58,12 @@ public class JobIndexWriter(RegistryContext db, ILogger<JobIndexWriter> log) : I
             existing.UserId = meta.UserId;
             existing.Queue = meta.Queue ?? existing.Queue;
             existing.MethodDisplay = methodDisplay ?? existing.MethodDisplay;
+
+            existing.ToolId = string.IsNullOrWhiteSpace(meta.ToolId) ? existing.ToolId : meta.ToolId;
+            existing.ToolVersion = string.IsNullOrWhiteSpace(meta.ToolVersion) ? existing.ToolVersion : meta.ToolVersion;
+            existing.RequestHash = meta.RequestHash;
+            existing.ParentJobId = meta.ParentJobId;
+            existing.WorkflowExecutionId = meta.WorkflowExecutionId;
 
             // Reset to new creation time when re-enqueueing
             existing.CreatedAtUtc = createdAtUtc;
@@ -65,6 +77,15 @@ public class JobIndexWriter(RegistryContext db, ILogger<JobIndexWriter> log) : I
             existing.FailedAtUtc = null;
             existing.DeletedAtUtc = null;
             existing.ScheduledAtUtc = null;
+
+            // Reset progress/artifact telemetry on re-enqueue
+            existing.ProgressPercent = null;
+            existing.PhaseMessage = null;
+            existing.ArtifactSizeBytes = null;
+            existing.ArtifactSha256 = null;
+            existing.ErrorType = null;
+            existing.LogTailJson = null;
+            existing.ProgressUpdatedAtUtc = null;
         }
 
         await db.SaveChangesAsync(ct);
@@ -124,5 +145,86 @@ public class JobIndexWriter(RegistryContext db, ILogger<JobIndexWriter> log) : I
 
             return toDelete.Count;
         }
+    }
+
+    public async Task<IReadOnlyList<string>> DeleteTerminalForDatasetAsync(string orgSlug, string dsSlug,
+        string? toolId = null, CancellationToken ct = default)
+    {
+        var query = db.JobIndices
+            .Where(j => j.OrgSlug == orgSlug && j.DsSlug == dsSlug && TerminalStates.Contains(j.CurrentState));
+
+        if (!string.IsNullOrWhiteSpace(toolId))
+            query = query.Where(j => j.ToolId == toolId);
+
+        var ids = await query.Select(j => j.JobId).ToListAsync(ct);
+        if (ids.Count == 0)
+            return ids;
+
+        try
+        {
+            // Prefer bulk delete (EF Core 7+) - works with relational providers (MySQL, SQLite, etc.)
+            await db.JobIndices.Where(j => ids.Contains(j.JobId)).ExecuteDeleteAsync(ct);
+        }
+        catch (Exception ex)
+        {
+            log.LogWarning(ex, "Bulk delete failed in JobIndexWriter.DeleteTerminalForDatasetAsync, falling back to client-side deletion");
+            // Fallback for providers that don't support ExecuteDeleteAsync (e.g., InMemory in tests)
+            var toDelete = await db.JobIndices.Where(j => ids.Contains(j.JobId)).ToListAsync(ct);
+            db.JobIndices.RemoveRange(toDelete);
+            await db.SaveChangesAsync(ct);
+        }
+
+        return ids;
+    }
+
+    public async Task UpdateProgressAsync(string jobId, int? percent, string? phaseMessage,
+        string? logTailJson, DateTime updatedAtUtc, CancellationToken ct = default)
+    {
+        var ji = await db.JobIndices.AsTracking().FirstOrDefaultAsync(x => x.JobId == jobId, ct);
+        if (ji is null)
+        {
+            log.LogInformation("JobIndexWriter.UpdateProgressAsync: no existing JobIndex for job {JobId}", jobId);
+            return;
+        }
+
+        if (percent.HasValue)
+            ji.ProgressPercent = percent;
+        if (phaseMessage is not null)
+            ji.PhaseMessage = phaseMessage;
+        if (logTailJson is not null)
+            ji.LogTailJson = logTailJson;
+        ji.ProgressUpdatedAtUtc = updatedAtUtc;
+
+        await db.SaveChangesAsync(ct);
+    }
+
+    public async Task UpdateArtifactAsync(string jobId, long sizeBytes, string? sha256,
+        CancellationToken ct = default)
+    {
+        var ji = await db.JobIndices.AsTracking().FirstOrDefaultAsync(x => x.JobId == jobId, ct);
+        if (ji is null)
+        {
+            log.LogInformation("JobIndexWriter.UpdateArtifactAsync: no existing JobIndex for job {JobId}", jobId);
+            return;
+        }
+
+        ji.ArtifactSizeBytes = sizeBytes;
+        ji.ArtifactSha256 = sha256;
+
+        await db.SaveChangesAsync(ct);
+    }
+
+    public async Task UpdateErrorAsync(string jobId, string errorType, CancellationToken ct = default)
+    {
+        var ji = await db.JobIndices.AsTracking().FirstOrDefaultAsync(x => x.JobId == jobId, ct);
+        if (ji is null)
+        {
+            log.LogInformation("JobIndexWriter.UpdateErrorAsync: no existing JobIndex for job {JobId}", jobId);
+            return;
+        }
+
+        ji.ErrorType = errorType;
+
+        await db.SaveChangesAsync(ct);
     }
 }

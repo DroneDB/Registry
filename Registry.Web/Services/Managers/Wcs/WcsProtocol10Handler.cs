@@ -64,10 +64,10 @@ public sealed class WcsProtocol10Handler : IWcsProtocolHandler
             // Service
             await w.WriteStartElementAsync(null, "Service", NsWcs);
             await w.WriteElementStringAsync(null, "description", NsWcs,
-                $"DroneDB WCS 1.0.0 — {orgSlug}/{dsSlug}");
+                $"DroneDB WCS 1.0.0 - {orgSlug}/{dsSlug}");
             await w.WriteElementStringAsync(null, "name", NsWcs, "OGC:WCS");
             await w.WriteElementStringAsync(null, "label", NsWcs,
-                $"DroneDB WCS — {orgSlug}/{dsSlug}");
+                $"DroneDB WCS - {orgSlug}/{dsSlug}");
             await w.WriteElementStringAsync(null, "fees", NsWcs, "NONE");
             await w.WriteElementStringAsync(null, "accessConstraints", NsWcs, "NONE");
             await w.WriteEndElementAsync();
@@ -265,7 +265,7 @@ public sealed class WcsProtocol10Handler : IWcsProtocolHandler
         // For non-WGS84 CRS we would need to reproject the BBOX here. EPSG:3857 / 4326 are
         // both accepted; reprojection to WGS84 happens inside RenderRasterRegion only when
         // CRS=EPSG:4326. For 3857 we currently treat the BBOX as already lon/lat to avoid
-        // the dependency on a server-side projector — this is acceptable because QGIS' WCS
+        // the dependency on a server-side projector - this is acceptable because QGIS' WCS
         // 1.0 client defaults to EPSG:4326 and the GetCapabilities advertises both.
 
         var width = OgcRequestParser.GetInt(q, "WIDTH", 0, 0, 4096);

@@ -149,11 +149,32 @@ public interface IDDB
     void MergeMultispectral(string[] paths, string outputCog);
 
     /// <summary>
+    /// Validate that source and reference rasters are compatible for alignment
+    /// </summary>
+    string ValidateAlignRaster(string sourcePath, string referencePath);
+
+    /// <summary>
+    /// Align a source GeoTIFF to a reference GeoTIFF and write the output COG
+    /// </summary>
+    string AlignRaster(string sourcePath, string referencePath, string outputPath, string mode = "similarity");
+
+    /// <summary>
     /// Export raster with visualization params applied as GeoTIFF
     /// </summary>
     void ExportRaster(string inputPath, string outputPath,
         string? preset = null, string? bands = null, string? formula = null,
         string? bandFilter = null, string? colormap = null, string? rescale = null);
+
+    /// <summary>
+    /// Export raster with visualization params applied as GeoTIFF using the
+    /// block-windowed implementation (bounded peak memory), reporting incremental
+    /// progress and honoring cooperative cancellation.
+    /// </summary>
+    void ExportRaster(string inputPath, string outputPath,
+        string? preset, string? bands, string? formula, string? bandFilter,
+        string? colormap, string? rescale, int tileSize,
+        System.Action<double, string?>? progress,
+        System.Threading.CancellationToken cancellationToken);
 
     /// <summary>
     /// Get raster value info (min/max/unit/dimensions), including thermal calibration if applicable

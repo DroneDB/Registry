@@ -16,12 +16,12 @@
 
 ### Testing
 - Backend tests use **NUnit 4.x** + **Shouldly** + Moq. Integration tests use `NativeDdbWrapper` for direct C++ library calls (no Docker/subprocess). Test helpers: `TestArea.cs` in `Registry.Common/Test/` for isolated temp directories, `TestFS.cs` for extracting test archives.
-- Config: Use Options pattern (`AppSettings.cs`). Key settings: `AppSettings:Secret` (JWT signing key), `AppSettings:StoragePath` (or CLI arg `StorageFolder`). The DroneDB library path is resolved automatically from system PATH — no dedicated environment variable exists.
+- Config: Use Options pattern (`AppSettings.cs`). Key settings: `AppSettings:Secret` (JWT signing key), `AppSettings:StoragePath` (or CLI arg `StorageFolder`). The DroneDB library path is resolved automatically from system PATH - no dedicated environment variable exists.
 
 ### Best Practices
 - Use Entity Framework Core with migrations. Two DbContexts: `RegistryContext` (app data) + `ApplicationDbContext : IdentityDbContext<User>` (auth/Identity). 4 separate migration projects at solution root: `Registry.Web.Data.SqliteMigrations`, `Registry.Web.Data.MySqlMigrations`, `Registry.Web.Identity.SqliteMigrations`, `Registry.Web.Identity.MySqlMigrations`. Provider resolved at runtime via config.
 - Return appropriate HTTP responses (e.g., `Ok()`, `BadRequest()`, `NotFound()`).
-- Controllers return DTOs only, never entities directly. Mapping is manual via extension methods `ToDto()` and `ToEntity()` in `Utilities/Extenders.cs` — **no AutoMapper**.
+- Controllers return DTOs only, never entities directly. Mapping is manual via extension methods `ToDto()` and `ToEntity()` in `Utilities/Extenders.cs` - **no AutoMapper**.
 - Architecture: Interface-first with `I*Manager` interfaces in `Services/Ports/`. Controllers depend only on these interfaces. Implementation lives in `Services/*.cs` and `Services/Adapters/`. This is a simplified port-adapter pattern.
 
 ## Vue.js Frontend (`Registry.Web/ClientApp`)

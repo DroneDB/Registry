@@ -218,7 +218,14 @@ public class Startup
         if (instanceType == InstanceType.Default)
         {
             var workers = appSettings.WorkerThreads > 0 ? appSettings.WorkerThreads : Environment.ProcessorCount;
-            services.AddHangfireServer(options => { options.WorkerCount = workers; });
+            services.AddHangfireServer(options =>
+            {
+                options.WorkerCount = workers;
+                // The heavy task substrate (raster-export and other native tools)
+                // enqueues onto the "tasks" queue; without listing it here the
+                // server would only process "default" and those jobs would never run.
+                options.Queues = ["tasks", "default"];
+            });
         }
 
         services.AddHealthChecks()
@@ -283,6 +290,12 @@ public class Startup
         services.AddScoped<OrphanedDatasetCleanupService>();
         services.AddScoped<RecurringDatasetCleanupService>();
         services.AddScoped<ArtifactCompletenessCheckerService>();
+
+        // Admin global tasks dashboard manager (Part B).
+        services.AddScoped<IAdminTasksManager, AdminTasksManager>();
+
+        // Processing Platform task substrate (native tools incl. build/raster-export)
+        services.AddProcessingPlatform();
 
         services.AddScoped<IConfigurationHelper<AppSettings>, ConfigurationHelper>(_ =>
             new ConfigurationHelper(MagicStrings.AppSettingsFileName));

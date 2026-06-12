@@ -97,12 +97,12 @@ echo "$VALIDATOR_OUTPUT"
 echo ""
 ERRORS_LINE=$(echo "$VALIDATOR_OUTPUT" | grep "^Errors:" || true)
 if echo "$ERRORS_LINE" | grep -q "none"; then
-    echo -e "\033[32mRESULT: PASS — Errors: none\033[0m"
+    echo -e "\033[32mRESULT: PASS - Errors: none\033[0m"
     exit 0
 else
     ERROR_ITEMS=$(echo "$VALIDATOR_OUTPUT" | awk '/^Errors:/{found=1} found && /^- /{print}')
     if [[ -z "$ERROR_ITEMS" ]]; then
-        echo -e "\033[32mRESULT: PASS — Errors: none\033[0m"
+        echo -e "\033[32mRESULT: PASS - Errors: none\033[0m"
         exit 0
     else
         echo -e "\033[31mRESULT: FAIL\033[0m"

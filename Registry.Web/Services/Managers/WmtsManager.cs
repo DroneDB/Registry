@@ -77,7 +77,7 @@ public class WmtsManager : OgcManagerBase, IWmtsManager
             if (Include("ServiceIdentification"))
             {
                 await w.WriteStartElementAsync("ows", "ServiceIdentification", null);
-                await w.WriteElementStringAsync("ows", "Title", null, $"DroneDB WMTS — {orgSlug}/{dsSlug}");
+                await w.WriteElementStringAsync("ows", "Title", null, $"DroneDB WMTS - {orgSlug}/{dsSlug}");
                 await w.WriteElementStringAsync("ows", "ServiceType", null, "OGC WMTS");
                 await w.WriteElementStringAsync("ows", "ServiceTypeVersion", null, "1.0.0");
                 await w.WriteEndElementAsync();
@@ -111,7 +111,7 @@ public class WmtsManager : OgcManagerBase, IWmtsManager
                 {
                     // WMTS 1.0.0 core only standardizes raster image tiles. Vector layers
                     // (served as Mapbox Vector Tiles) belong to a separate WMTS extension
-                    // (OGC 17-083r2) not supported by CITE — and TeamEngine has no MVT
+                    // (OGC 17-083r2) not supported by CITE - and TeamEngine has no MVT
                     // parser, so advertising MVT here causes the "each-layer" suite to fail
                     // regardless of response. Vector layers remain available via the
                     // dedicated MVT endpoint; skip them in WMTS GetCapabilities.
@@ -152,7 +152,7 @@ public class WmtsManager : OgcManagerBase, IWmtsManager
                 await w.WriteEndElementAsync(); // Contents
             }
 
-            // ServiceMetadataURL — required by some WMTS clients/tests
+            // ServiceMetadataURL - required by some WMTS clients/tests
             w.WriteStartElement("ServiceMetadataURL");
             await w.WriteAttributeStringAsync("xlink", "href", NsXlink, baseUrl + "?service=WMTS&request=GetCapabilities&version=1.0.0");
             await w.WriteEndElementAsync();
