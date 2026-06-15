@@ -72,7 +72,7 @@ Open [http://localhost:5000](http://localhost:5000) • Default credentials: `ad
 
 For production deployment with MySQL/MariaDB, see the [full documentation](https://docs.dronedb.app/docs/registry#running-in-production).
 
-## �OGC Services
+## 🌍 OGC Services
 
 Every dataset exposes a full suite of OGC-compliant endpoints at
 `/orgs/{orgSlug}/ds/{dsSlug}/{service}`.
@@ -108,7 +108,7 @@ Ready-made QGIS setup scripts are in [`scripts/`](scripts/) (`qgis-test-setup.sh
 `qgis-test-setup.ps1`). See the [OGC services documentation](https://docs.dronedb.app/ogc-services)
 for detailed QGIS configuration steps.
 
-## �🛠️ Development
+## 🛠️ Development
 
 ### Requirements
 
