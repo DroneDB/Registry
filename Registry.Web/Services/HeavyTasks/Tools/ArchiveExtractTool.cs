@@ -223,7 +223,7 @@ public sealed class ArchiveExtractTool : IHeavyTool
                 done++;
                 ReportProgress(progress, done, total, archiveEntry.Key);
             }
-        } // ← session.Dispose() — file handle released here
+        } // ← session.Dispose() - file handle released here
 
         ct.ThrowIfCancellationRequested();
 
