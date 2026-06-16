@@ -134,7 +134,7 @@ public class UsersManager : IUsersManager
 
         // Create user if not exists because login manager has greenlighed us
         var user = await _userManager.FindByNameAsync(res.UserName) ??
-                   await CreateUserInternal(new User { UserName = res.UserName }, CommonUtils.RandomString(16));
+                   await CreateUserInternal(new User { UserName = res.UserName }, GenerateExternalUserPassword());
 
         // Deny access to deactivated accounts (see Authenticate(userName, password) for rationale):
         // the check runs before SyncRoles so the Deactivated role cannot be stripped by a re-login.
