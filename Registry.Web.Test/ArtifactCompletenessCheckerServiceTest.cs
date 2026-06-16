@@ -57,7 +57,7 @@ public class ArtifactCompletenessCheckerServiceTest : TestBase
 
         var ddbMock = new Mock<IDDB>();
         ddbMock.Setup(x => x.Search(It.IsAny<string>(), true))
-            .Returns(new[] { new DdbEntry { Path = "readme.txt", Hash = "h1" } });
+            .Returns([new DdbEntry { Path = "readme.txt", Hash = "h1" }]);
         ddbMock.Setup(x => x.IsBuildable("readme.txt")).Returns(false);
 
         _ddbManagerMock.Setup(x => x.Get(It.IsAny<string>(), It.IsAny<Guid>()))
@@ -81,7 +81,7 @@ public class ArtifactCompletenessCheckerServiceTest : TestBase
 
         var ddbMock = new Mock<IDDB>();
         ddbMock.Setup(x => x.Search(It.IsAny<string>(), true))
-            .Returns(new[] { new DdbEntry { Path = "ortho.tif", Hash = "h2" } });
+            .Returns([new DdbEntry { Path = "ortho.tif", Hash = "h2" }]);
         ddbMock.Setup(x => x.IsBuildable("ortho.tif")).Returns(true);
         ddbMock.Setup(x => x.IsBuildActive("ortho.tif")).Returns(true);
 
@@ -106,7 +106,7 @@ public class ArtifactCompletenessCheckerServiceTest : TestBase
 
         var ddbMock = new Mock<IDDB>();
         ddbMock.Setup(x => x.Search(It.IsAny<string>(), true))
-            .Returns(new[] { new DdbEntry { Path = "ortho.tif", Hash = "h2" } });
+            .Returns([new DdbEntry { Path = "ortho.tif", Hash = "h2" }]);
         ddbMock.Setup(x => x.IsBuildable("ortho.tif")).Returns(true);
         ddbMock.Setup(x => x.IsBuildActive("ortho.tif")).Returns(false);
         ddbMock.Setup(x => x.IsBuildComplete("ortho.tif")).Returns(true);
@@ -131,7 +131,7 @@ public class ArtifactCompletenessCheckerServiceTest : TestBase
 
         var ddbMock = new Mock<IDDB>();
         ddbMock.Setup(x => x.Search(It.IsAny<string>(), true))
-            .Returns(new[] { new DdbEntry { Path = "layer.geojson", Hash = "h3" } });
+            .Returns([new DdbEntry { Path = "layer.geojson", Hash = "h3" }]);
         ddbMock.Setup(x => x.IsBuildable("layer.geojson")).Returns(true);
         ddbMock.Setup(x => x.IsBuildActive("layer.geojson")).Returns(false);
         ddbMock.Setup(x => x.IsBuildComplete("layer.geojson")).Returns(false);

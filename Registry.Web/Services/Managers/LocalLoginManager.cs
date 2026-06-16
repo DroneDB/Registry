@@ -28,6 +28,8 @@ public class LocalLoginManager : ILoginManager
         _settings = settings.Value;
     }
 
+    public AuthProviderCapabilities Capabilities => AuthProviderCapabilities.Local;
+
     public Task<LoginResultDto> CheckAccess(string token)
     {
         // No token login for local auth

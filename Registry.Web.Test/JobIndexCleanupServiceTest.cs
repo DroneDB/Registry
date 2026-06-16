@@ -242,7 +242,7 @@ public class JobIndexCleanupServiceTest : TestBase
         var removed = await writer.DeleteTerminalForDatasetAsync("org1", "ds1", "archive-extract");
 
         // Assert
-        removed.ShouldBe(new[] { "extract-done" });
+        removed.ShouldBe(["extract-done"]);
 
         var remaining = await context.JobIndices.ToArrayAsync();
         remaining.ShouldContain(j => j.JobId == "build-done");

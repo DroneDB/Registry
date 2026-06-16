@@ -22,7 +22,7 @@
 - Use Entity Framework Core with migrations. Two DbContexts: `RegistryContext` (app data) + `ApplicationDbContext : IdentityDbContext<User>` (auth/Identity). 4 separate migration projects at solution root: `Registry.Web.Data.SqliteMigrations`, `Registry.Web.Data.MySqlMigrations`, `Registry.Web.Identity.SqliteMigrations`, `Registry.Web.Identity.MySqlMigrations`. Provider resolved at runtime via config.
 - Return appropriate HTTP responses (e.g., `Ok()`, `BadRequest()`, `NotFound()`).
 - Controllers return DTOs only, never entities directly. Mapping is manual via extension methods `ToDto()` and `ToEntity()` in `Utilities/Extenders.cs` - **no AutoMapper**.
-- Architecture: Interface-first with `I*Manager` interfaces in `Services/Ports/`. Controllers depend only on these interfaces. Implementation lives in `Services/*.cs` and `Services/Adapters/`. This is a simplified port-adapter pattern.
+- Architecture: Interface-first with `I*Manager` interfaces split between `Registry.Web/Services/Ports/` (web layer) and `Registry.Ports/` (core adapters like `IDdbManager`, `ICacheManager`). Controllers depend only on these interfaces. Implementation lives in `Services/*.cs` and `Services/Adapters/`. This is a simplified port-adapter pattern.
 
 ## Vue.js Frontend (`Registry.Web/ClientApp`)
 
@@ -40,7 +40,7 @@
 - Use **composition API** (if applicable) for better scalability.
 - Validate all forms before submission.
 - UI: **PrimeVue v4.x** is the sole component library (Lara theme with custom DDB preset). Bootstrap 5 is used only for grid + utilities. No other UI libraries present.
-- State: Vuex for state management, composables in `src/composables/` for reusable logic.
+- State: Composables in `src/composables/` for reusable logic and state. No Vuex/Pinia — the app uses Vue composables directly.
 - API client: Functions in `src/api/` use axios instances with JWT interceptors.
 - Testing: **No unit test framework configured** (no Jest/Vitest). Only Playwright for E2E testing.
 

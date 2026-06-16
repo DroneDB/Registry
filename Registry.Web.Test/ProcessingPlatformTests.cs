@@ -54,11 +54,10 @@ public class ProcessingPlatformTests
     [Test]
     public void Registry_Resolve_ByExactVersion_ReturnsMatch()
     {
-        var registry = new HeavyToolRegistry(new IHeavyTool[]
-        {
+        var registry = new HeavyToolRegistry([
             new FakeTool("build", "1"),
             new FakeTool("build", "2")
-        });
+        ]);
 
         registry.Resolve("build", "1")!.Version.ShouldBe("1");
         registry.Resolve("build", "2")!.Version.ShouldBe("2");
@@ -67,12 +66,11 @@ public class ProcessingPlatformTests
     [Test]
     public void Registry_Resolve_WithoutVersion_PicksHighest()
     {
-        var registry = new HeavyToolRegistry(new IHeavyTool[]
-        {
+        var registry = new HeavyToolRegistry([
             new FakeTool("build", "1"),
             new FakeTool("build", "2"),
             new FakeTool("build", "10")
-        });
+        ]);
 
         registry.Resolve("build")!.Version.ShouldBe("10");
     }
@@ -80,7 +78,7 @@ public class ProcessingPlatformTests
     [Test]
     public void Registry_Resolve_UnknownTool_ReturnsNull()
     {
-        var registry = new HeavyToolRegistry(new IHeavyTool[] { new FakeTool("build", "1") });
+        var registry = new HeavyToolRegistry([new FakeTool("build", "1")]);
 
         registry.Resolve("does-not-exist").ShouldBeNull();
         registry.Resolve("build", "99").ShouldBeNull();
@@ -89,7 +87,7 @@ public class ProcessingPlatformTests
     [Test]
     public void Registry_Resolve_IsCaseInsensitive()
     {
-        var registry = new HeavyToolRegistry(new IHeavyTool[] { new FakeTool("raster-export", "1") });
+        var registry = new HeavyToolRegistry([new FakeTool("raster-export", "1")]);
 
         registry.Resolve("RASTER-EXPORT")!.Id.ShouldBe("raster-export");
     }
@@ -97,21 +95,19 @@ public class ProcessingPlatformTests
     [Test]
     public void Registry_DuplicateRegistration_Throws()
     {
-        Should.Throw<InvalidOperationException>(() => new HeavyToolRegistry(new IHeavyTool[]
-        {
+        Should.Throw<InvalidOperationException>(() => new HeavyToolRegistry([
             new FakeTool("build", "1"),
             new FakeTool("build", "1")
-        }));
+        ]));
     }
 
     [Test]
     public void Registry_All_ExposesEveryTool()
     {
-        var registry = new HeavyToolRegistry(new IHeavyTool[]
-        {
+        var registry = new HeavyToolRegistry([
             new FakeTool("build", "1"),
             new FakeTool("raster-export", "1")
-        });
+        ]);
 
         registry.All.Count.ShouldBe(2);
     }

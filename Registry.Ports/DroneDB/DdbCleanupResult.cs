@@ -14,11 +14,11 @@ public class DdbCleanupResult
     /// file no longer existed on the filesystem.
     /// </summary>
     [JsonProperty("entries")]
-    public string[] Entries { get; set; } = Array.Empty<string>();
+    public string[] Entries { get; set; } = [];
 
     /// <summary>
     /// Hashes of orphaned build artifacts that were removed.
     /// </summary>
     [JsonProperty("builds")]
-    public string[] Builds { get; set; } = Array.Empty<string>();
+    public string[] Builds { get; set; } = [];
 }

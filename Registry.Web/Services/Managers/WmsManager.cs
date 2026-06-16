@@ -196,7 +196,7 @@ public class WmsManager : OgcManagerBase, IWmsManager
             // per-layer try/catch; we never want a 500 here, so synthesize a fully transparent (or
             // background-colored) image of the requested size/format as a last-resort fallback.
             _logger.LogError(ex, "WMS GetMap safety-net fallback triggered for layers=[{L}] bbox=[{B}] crs={Crs} {W}x{H} fmt={F}",
-                string.Join(',', layers ?? Array.Empty<string>()), string.Join(',', bbox), crs, width, height, format);
+                string.Join(',', layers ?? []), string.Join(',', bbox), crs, width, height, format);
             return BuildFallbackImage(width, height, format, transparent, bgColor);
         }
     }

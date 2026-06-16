@@ -38,6 +38,7 @@ public class SystemController : ControllerBaseEx
     private readonly IHeavyToolRegistry _toolRegistry;
     private readonly ILogger<SystemController> _logger;
     private readonly AppSettings _appSettings;
+    private readonly ILoginManager _loginManager;
 
     public SystemController(
         ISystemManager systemManager,
@@ -46,7 +47,8 @@ public class SystemController : ControllerBaseEx
         IDdbWrapper ddbWrapper,
         IHeavyToolRegistry toolRegistry,
         ILogger<SystemController> logger,
-        IOptions<AppSettings> appSettings)
+        IOptions<AppSettings> appSettings,
+        ILoginManager loginManager)
     {
         _systemManager = systemManager;
         _datasetsManager = datasetsManager;
@@ -55,6 +57,7 @@ public class SystemController : ControllerBaseEx
         _toolRegistry = toolRegistry;
         _logger = logger;
         _appSettings = appSettings.Value;
+        _loginManager = loginManager;
     }
 
     /// <summary>
@@ -413,7 +416,9 @@ public class SystemController : ControllerBaseEx
         var features = new FeaturesDto
         {
             OrganizationMemberManagement = _appSettings.EnableOrganizationMemberManagement,
-            UserManagement = string.IsNullOrWhiteSpace(_appSettings.ExternalAuthUrl),
+            // Derived from the active provider's capability so that LDAP, Remote,
+            // and any future external provider all produce false automatically.
+            UserManagement = _loginManager.Capabilities.SupportsLocalUserManagement,
             StorageLimiter = _appSettings.EnableStorageLimiter,
             MaxConcurrentDownloadsPerUser = _appSettings.MaxConcurrentDownloadsPerUser,
             DisableAnonymousBulkDownloads = _appSettings.DisableAnonymousBulkDownloads,

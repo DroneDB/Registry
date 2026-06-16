@@ -388,12 +388,11 @@ public class OrganizationManagerTest : TestBase
             It.Is<string[]>(slugs => slugs.Length == 3),
             "dest-org",
             ConflictResolutionStrategy.HaltOnConflict))
-            .ReturnsAsync(new[]
-            {
+            .ReturnsAsync([
                 new MoveDatasetResultDto { OriginalSlug = "dataset-0", NewSlug = "dataset-0", Success = true },
                 new MoveDatasetResultDto { OriginalSlug = "dataset-1", NewSlug = "dataset-1", Success = true },
                 new MoveDatasetResultDto { OriginalSlug = "dataset-2", NewSlug = "dataset-2", Success = true }
-            });
+            ]);
 
         // Act
         var result = await _organizationsManager.Merge("source-org", "dest-org");
@@ -428,11 +427,10 @@ public class OrganizationManagerTest : TestBase
             It.IsAny<string[]>(),
             "dest-org",
             ConflictResolutionStrategy.HaltOnConflict))
-            .ReturnsAsync(new[]
-            {
+            .ReturnsAsync([
                 new MoveDatasetResultDto { OriginalSlug = "dataset-0", Success = true },
                 new MoveDatasetResultDto { OriginalSlug = "dataset-1", Success = false, Error = "Conflict detected" }
-            });
+            ]);
 
         // Act
         var result = await _organizationsManager.Merge("source-org", "dest-org");
@@ -456,11 +454,10 @@ public class OrganizationManagerTest : TestBase
             It.IsAny<string[]>(),
             "dest-org",
             ConflictResolutionStrategy.Rename))
-            .ReturnsAsync(new[]
-            {
+            .ReturnsAsync([
                 new MoveDatasetResultDto { OriginalSlug = "dataset-0", NewSlug = "dataset-0_1", Success = true },
                 new MoveDatasetResultDto { OriginalSlug = "dataset-1", NewSlug = "dataset-1", Success = true }
-            });
+            ]);
 
         // Act
         var result = await _organizationsManager.Merge("source-org", "dest-org", ConflictResolutionStrategy.Rename);
@@ -485,11 +482,10 @@ public class OrganizationManagerTest : TestBase
             It.IsAny<string[]>(),
             "dest-org",
             ConflictResolutionStrategy.Overwrite))
-            .ReturnsAsync(new[]
-            {
+            .ReturnsAsync([
                 new MoveDatasetResultDto { OriginalSlug = "dataset-0", NewSlug = "dataset-0", Success = true },
                 new MoveDatasetResultDto { OriginalSlug = "dataset-1", NewSlug = "dataset-1", Success = true }
-            });
+            ]);
 
         // Act
         var result = await _organizationsManager.Merge("source-org", "dest-org", ConflictResolutionStrategy.Overwrite);
@@ -520,10 +516,9 @@ public class OrganizationManagerTest : TestBase
             It.IsAny<string[]>(),
             "dest-org",
             It.IsAny<ConflictResolutionStrategy>()))
-            .ReturnsAsync(new[]
-            {
+            .ReturnsAsync([
                 new MoveDatasetResultDto { OriginalSlug = "dataset-0", NewSlug = "dataset-0", Success = true }
-            });
+            ]);
 
         // Act
         var result = await _organizationsManager.Merge("source-org", "dest-org", deleteSourceOrganization: false);
@@ -671,11 +666,10 @@ public class OrganizationManagerTest : TestBase
             It.IsAny<string[]>(),
             "dest-org",
             It.IsAny<ConflictResolutionStrategy>()))
-            .ReturnsAsync(new[]
-            {
+            .ReturnsAsync([
                 new MoveDatasetResultDto { OriginalSlug = "dataset-0", Success = false, Error = "Error 1" },
                 new MoveDatasetResultDto { OriginalSlug = "dataset-1", Success = false, Error = "Error 2" }
-            });
+            ]);
 
         // Act
         var result = await _organizationsManager.Merge("source-org", "dest-org");

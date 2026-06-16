@@ -39,7 +39,7 @@ public class StacManager : IStacManager
 
     // STAC API 1.0.0 conformance classes implemented by this server
     private static readonly string[] ConformanceClasses =
-    {
+    [
         "https://api.stacspec.org/v1.0.0/core",
         "https://api.stacspec.org/v1.0.0/collections",
         "https://api.stacspec.org/v1.0.0/ogcapi-features",
@@ -47,7 +47,7 @@ public class StacManager : IStacManager
         "http://www.opengis.net/spec/ogcapi-features-1/1.0/conf/core",
         "http://www.opengis.net/spec/ogcapi-features-1/1.0/conf/oas30",
         "http://www.opengis.net/spec/ogcapi-features-1/1.0/conf/geojson"
-    };
+    ];
 
     private const int DefaultLimit = 10;
     private const int MaxLimit = 10000;
@@ -272,7 +272,7 @@ public class StacManager : IStacManager
                 bboxStr, datetime, lim, off) is not JObject result)
             throw new InvalidOperationException("Invalid STAC item collection result");
 
-        var features = result["features"] as JArray ?? new JArray();
+        var features = result["features"] as JArray ?? [];
         foreach (var feature in features.OfType<JObject>())
             RewriteItem(feature, orgSlug, dsSlug, collectionId);
 
@@ -362,7 +362,7 @@ public class StacManager : IStacManager
                     bboxStr, datetime, need, off) is not JObject fc)
                 continue;
 
-            var feats = fc["features"] as JArray ?? new JArray();
+            var feats = fc["features"] as JArray ?? [];
             var matched = fc["numberMatched"]?.Value<long>() ?? feats.Count;
 
             foreach (var feature in feats.OfType<JObject>())
@@ -428,7 +428,7 @@ public class StacManager : IStacManager
                     bboxStr, datetime, MaxLimit, 0) is not JObject fc)
                 continue;
 
-            var feats = fc["features"] as JArray ?? new JArray();
+            var feats = fc["features"] as JArray ?? [];
             foreach (var feature in feats.OfType<JObject>())
             {
                 RewriteItem(feature, ds.Organization.Slug, ds.Slug, collectionId);
@@ -548,7 +548,7 @@ public class StacManager : IStacManager
         double[] flat = bbox switch
         {
             { Length: 4 } => bbox,
-            { Length: 6 } => new[] { bbox[0], bbox[1], bbox[3], bbox[4] },
+            { Length: 6 } => [bbox[0], bbox[1], bbox[3], bbox[4]],
             _ => null
         };
 

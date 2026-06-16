@@ -68,6 +68,19 @@ public class UsersManager : IUsersManager
         _appSettings = appSettings.Value;
     }
 
+    /// <summary>Shorthand accessor for the active provider's capability descriptor.</summary>
+    private AuthProviderCapabilities Caps => _loginManager.Capabilities;
+
+    /// <summary>
+    /// Generates an internal password for users managed by an external identity provider.
+    /// The password is never used for authentication (auth is always delegated to the provider),
+    /// but ASP.NET Core Identity requires a hashed credential record in the local DB.
+    /// The generated string satisfies any common Identity password policy:
+    /// upper, lower, digit, non-alphanumeric, length >= 32.
+    /// </summary>
+    private static string GenerateExternalUserPassword()
+        => "!" + CommonUtils.RandomString(29) + "Aa1";
+
     public async Task<AuthenticateResponse> Authenticate(string userName, string password)
     {
         var res = await _loginManager.CheckAccess(userName, password);
@@ -75,9 +88,24 @@ public class UsersManager : IUsersManager
         if (!res.Success)
             return null;
 
-        // Create user if not exists because login manager has greenlighed us
-        var user = await _userManager.FindByNameAsync(userName) ??
-                   await CreateUserInternal(new User { UserName = userName }, password);
+        // Create user if not exists because login manager has greenlit us.
+        // For external providers (LDAP, Remote) store a random internal password that is never
+        // used for authentication - the provider handles all credential verification.
+        var user = await _userManager.FindByNameAsync(userName);
+        if (user == null)
+        {
+            var localPassword = Caps.SupportsPasswordChange ? password : GenerateExternalUserPassword();
+            user = await CreateUserInternal(new User { UserName = userName }, localPassword);
+        }
+
+        // Deny access to deactivated accounts. External providers (LDAP/Remote) authorize the bind
+        // even after a user is deactivated locally, so this guard - placed before SyncRoles, which
+        // would otherwise strip the Deactivated role - is what actually enforces the deactivation.
+        if (await _userManager.IsInRoleAsync(user, ApplicationDbContext.DeactivatedRoleName))
+        {
+            _logger.LogWarning("Authentication denied: user {UserName} is deactivated", userName);
+            return null;
+        }
 
         if (!user.Metadata.IsSameAs(res.Metadata))
         {
@@ -106,7 +134,15 @@ public class UsersManager : IUsersManager
 
         // Create user if not exists because login manager has greenlighed us
         var user = await _userManager.FindByNameAsync(res.UserName) ??
-                   await CreateUserInternal(new User { UserName = res.UserName }, CommonUtils.RandomString(16));
+                   await CreateUserInternal(new User { UserName = res.UserName }, GenerateExternalUserPassword());
+
+        // Deny access to deactivated accounts (see Authenticate(userName, password) for rationale):
+        // the check runs before SyncRoles so the Deactivated role cannot be stripped by a re-login.
+        if (await _userManager.IsInRoleAsync(user, ApplicationDbContext.DeactivatedRoleName))
+        {
+            _logger.LogWarning("Authentication denied: user {UserName} is deactivated", res.UserName);
+            return null;
+        }
 
         if (!user.Metadata.IsSameAs(res.Metadata))
         {
@@ -161,6 +197,11 @@ public class UsersManager : IUsersManager
     {
         if (!await _authManager.IsUserAdmin())
             throw new UnauthorizedException("Only admins can create new users");
+
+        if (!Caps.SupportsLocalUserManagement)
+            throw new InvalidOperationException(
+                "Manual user creation is disabled. Users are provisioned automatically on their first login " +
+                "via the configured identity provider.");
 
         if (!IsValidUserName(userName))
             throw new ArgumentException("The provided username is not valid");
@@ -292,6 +333,11 @@ public class UsersManager : IUsersManager
     private async Task<ChangePasswordResult> ChangePasswordInternal(User user, string currentPassword,
         string newPassword)
     {
+        if (!Caps.SupportsPasswordChange)
+            throw new InvalidOperationException(
+                "Password changes are not supported for accounts managed by an external identity provider. " +
+                "Please use your organisation's directory service to change your password.");
+
         IdentityResult res;
 
         if (currentPassword == null)
@@ -455,6 +501,10 @@ public class UsersManager : IUsersManager
 
         if (user == null)
             throw new BadRequestException("User does not exist");
+
+        if (Caps.ManagesProfileExternally)
+            throw new InvalidOperationException(
+                "Profile data (email) is synchronised from the identity provider and cannot be modified locally.");
 
         if (!string.IsNullOrWhiteSpace(email))
             user.Email = email;
@@ -658,6 +708,28 @@ public class UsersManager : IUsersManager
 
         if (user == null)
             throw new BadRequestException("User does not exist");
+
+        // For external providers, physically deleting a user is futile (the user would be re-created
+        // on the next login if still valid in the directory). Deactivate instead.
+        if (!Caps.SupportsLocalUserManagement)
+        {
+            // Deactivation only flags the account: no data transfer or resource cleanup is performed.
+            // Fail fast if a successor was requested so the caller is not misled into believing a
+            // transfer occurred.
+            if (!string.IsNullOrWhiteSpace(successor))
+                throw new BadRequestException(
+                    "Transferring data to a successor is not supported when an external identity " +
+                    "provider is active: the account is deactivated, not deleted.");
+
+            _logger.LogWarning(
+                "User {UserName} is managed by an external identity provider. " +
+                "Deactivating instead of deleting", userName);
+
+            if (!await _userManager.IsInRoleAsync(user, ApplicationDbContext.DeactivatedRoleName))
+                await _userManager.AddToRoleAsync(user, ApplicationDbContext.DeactivatedRoleName);
+
+            return new DeleteUserResultDto { UserName = userName, DatasetResults = [] };
+        }
 
         // Validate successor if specified
         User successorUser = null;
@@ -1008,6 +1080,11 @@ public class UsersManager : IUsersManager
             if (!roles.Contains(ApplicationDbContext.AdminRoleName, StringComparer.OrdinalIgnoreCase))
                 throw new ArgumentException("Cannot remove admin role from admin user");
         }
+
+        if (Caps.ManagesRolesExternally)
+            throw new InvalidOperationException(
+                "Role assignments are managed by the identity provider (group membership) " +
+                "and cannot be modified locally.");
 
         var currentRoles = await _userManager.GetRolesAsync(user);
 
