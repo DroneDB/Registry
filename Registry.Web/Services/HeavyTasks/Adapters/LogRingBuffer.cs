@@ -24,7 +24,7 @@ public sealed class LogLine
 /// </summary>
 public sealed class LogTailSnapshot
 {
-    [JsonPropertyName("lines")] public List<LogLine> Lines { get; set; } = new();
+    [JsonPropertyName("lines")] public List<LogLine> Lines { get; set; } = [];
     [JsonPropertyName("cursor")] public long Cursor { get; set; }
     [JsonPropertyName("truncatedFromTail")] public long TruncatedFromTail { get; set; }
 }
@@ -40,7 +40,7 @@ public sealed class LogRingBuffer
 {
     private readonly int _maxLines;
     private readonly int _maxBytes;
-    private readonly LinkedList<LogLine> _lines = new();
+    private readonly LinkedList<LogLine> _lines = [];
     private long _byteCount;
     private long _cursor;
     private long _truncatedFromTail;
@@ -88,7 +88,7 @@ public sealed class LogRingBuffer
     /// <summary>Produces a serializable snapshot of the current buffer state.</summary>
     public LogTailSnapshot Snapshot() => new()
     {
-        Lines = new List<LogLine>(_lines),
+        Lines = [.._lines],
         Cursor = _cursor,
         TruncatedFromTail = _truncatedFromTail
     };

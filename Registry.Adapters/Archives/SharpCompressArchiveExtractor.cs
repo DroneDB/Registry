@@ -26,20 +26,20 @@ public sealed class SharpCompressArchiveExtractor : IArchiveExtractor
 {
     // Order matters: longer compound extensions must be tested before their suffixes.
     private static readonly string[] SupportedExtensions =
-    {
+    [
         ".tar.gz", ".tar.bz2", ".tar.xz",
         ".tgz", ".tbz2", ".txz",
         ".zip", ".rar", ".7z", ".tar",
         ".gz", ".bz2", ".xz"
-    };
+    ];
 
     private static readonly string[] CompressedTarExtensions =
-    {
+    [
         ".tar.gz", ".tgz", ".tar.bz2", ".tbz2", ".tar.xz", ".txz"
-    };
+    ];
 
     // Single-stream formats that frequently carry no internal entry name.
-    private static readonly string[] SingleFileExtensions = { ".gz", ".bz2", ".xz" };
+    private static readonly string[] SingleFileExtensions = [".gz", ".bz2", ".xz"];
 
     public bool IsSupported(string fileName)
     {

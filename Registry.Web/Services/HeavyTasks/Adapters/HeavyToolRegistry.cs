@@ -17,7 +17,7 @@ public sealed class HeavyToolRegistry : IHeavyToolRegistry
     private readonly Dictionary<string, Dictionary<string, IHeavyTool>> _byId =
         new(StringComparer.OrdinalIgnoreCase);
 
-    private readonly List<IHeavyTool> _all = new();
+    private readonly List<IHeavyTool> _all = [];
 
     public HeavyToolRegistry(IEnumerable<IHeavyTool> tools)
     {

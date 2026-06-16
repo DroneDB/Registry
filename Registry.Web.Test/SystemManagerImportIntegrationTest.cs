@@ -215,7 +215,7 @@ public class SystemManagerImportIntegrationTest : TestBase
         // Assert
         result.ShouldNotBeNull();
         result.Errors.ShouldBeEmpty($"Import should succeed without errors. Errors: {string.Join(", ", result.Errors.Select(e => e.Message))}");
-        result.FileErrors.ShouldBeEmpty($"File imports should succeed. File errors: {string.Join(", ", result.FileErrors?.Select(e => $"{e.FilePath}: {e.Message}") ?? Array.Empty<string>())}");
+        result.FileErrors.ShouldBeEmpty($"File imports should succeed. File errors: {string.Join(", ", result.FileErrors?.Select(e => $"{e.FilePath}: {e.Message}") ?? [])}");
         result.ImportedItems.Length.ShouldBe(1);
         result.ImportedItems[0].Organization.ShouldBe("imported-org-parallel");
         result.ImportedItems[0].Dataset.ShouldBe("imported-dataset-parallel");

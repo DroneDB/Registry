@@ -18,7 +18,7 @@ public sealed class NodeOdmNodeRegistry : INodeOdmNodeRegistry
 
     public NodeOdmNodeRegistry(IOptions<AppSettings> appSettings)
     {
-        var configured = appSettings.Value.ProcessingPlatform?.NodeOdm ?? new List<NodeOdmNodeConfig>();
+        var configured = appSettings.Value.ProcessingPlatform?.NodeOdm ?? [];
 
         _nodes = configured
             .Where(c => !string.IsNullOrWhiteSpace(c.Url))

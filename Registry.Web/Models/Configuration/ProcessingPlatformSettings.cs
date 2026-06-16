@@ -65,7 +65,7 @@ public class ProcessingPlatformSettings
     /// NodeODM processing nodes available for the <c>photogrammetry</c> tool.
     /// Config-based registry (no DB table) for the reduced-scope integration.
     /// </summary>
-    public List<NodeOdmNodeConfig> NodeOdm { get; set; } = new();
+    public List<NodeOdmNodeConfig> NodeOdm { get; set; } = [];
 }
 
 /// <summary>

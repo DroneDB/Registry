@@ -239,7 +239,7 @@ public class WmtsManager : OgcManagerBase, IWmtsManager
                 // intersect the dataset coverage.
                 _logger.LogDebug("WMTS vector tile missing for {Layer} z={Z} x={X} y={Y}; returning empty MVT",
                     layerName, z, x, y);
-                return Array.Empty<byte>();
+                return [];
             }
             return await File.ReadAllBytesAsync(path);
         }
@@ -269,7 +269,7 @@ public class WmtsManager : OgcManagerBase, IWmtsManager
     {
         return (format ?? "").ToLowerInvariant() switch
         {
-            "application/vnd.mapbox-vector-tile" => Array.Empty<byte>(),
+            "application/vnd.mapbox-vector-tile" => [],
             "image/jpeg" => WhiteJpeg,
             _ => TransparentPng256,
         };

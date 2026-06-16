@@ -230,7 +230,7 @@ public class LdapLoginManagerIntegrationTest
         BindPassword = ServicePass,
         SearchFilter = "(cn={0})",
         UserDnFormat = null,
-        AdminGroupDns = new[] { AdminGroupDn },
+        AdminGroupDns = [AdminGroupDn],
         EmailAttribute = "mail",
         DisplayNameAttribute = "givenName",
         GroupMembershipAttribute = "memberOf",

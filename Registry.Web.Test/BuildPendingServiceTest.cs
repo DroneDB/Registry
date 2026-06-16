@@ -111,7 +111,7 @@ public class BuildPendingServiceTest : TestBase
         {
             Checksum = "test-checksum-456",
             Entries = [],
-            Meta = new List<string>()
+            Meta = []
         });
 
         _ddbManagerMock.Setup(x => x.Get(It.IsAny<string>(), It.IsAny<Guid>()))
@@ -154,7 +154,7 @@ public class BuildPendingServiceTest : TestBase
         {
             Checksum = "test-checksum-789",
             Entries = [],
-            Meta = new List<string>()
+            Meta = []
         });
 
         _ddbManagerMock.Setup(x => x.Get(It.IsAny<string>(), It.IsAny<Guid>()))
@@ -253,7 +253,7 @@ public class BuildPendingServiceTest : TestBase
         {
             Checksum = "new-stale-checksum",
             Entries = [],
-            Meta = new List<string>()
+            Meta = []
         });
 
         _ddbManagerMock.Setup(x => x.Get(It.IsAny<string>(), It.IsAny<Guid>()))

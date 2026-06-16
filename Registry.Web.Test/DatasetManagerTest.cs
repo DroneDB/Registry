@@ -592,7 +592,7 @@ public class DatasetManagerTest : TestBase
             _authManagerMock.Object, _cacheManager, fileSystemMock.Object, _backgroundJobMock.Object, _appSettingsMock.Object);
 
         // Act & Assert
-        var action = () => datasetsManager.MoveToOrganization("source-org", new[] { "dataset-1" }, "dest-org");
+        var action = () => datasetsManager.MoveToOrganization("source-org", ["dataset-1"], "dest-org");
         await Should.ThrowAsync<UnauthorizedException>(action);
     }
 
@@ -609,8 +609,8 @@ public class DatasetManagerTest : TestBase
             _authManagerMock.Object, _cacheManager, fileSystemMock.Object, _backgroundJobMock.Object, _appSettingsMock.Object);
 
         // Act & Assert
-        var action = () => datasetsManager.MoveToOrganization("", new[] { "dataset-1" }, "dest-org");
-        await Should.ThrowAsync<BadRequestException>(action);
+        Task<IEnumerable<MoveDatasetResultDto>> Action() => datasetsManager.MoveToOrganization("", ["dataset-1"], "dest-org");
+        await Should.ThrowAsync<BadRequestException>((Func<Task<IEnumerable<MoveDatasetResultDto>>>)Action);
     }
 
     [Test]
@@ -626,7 +626,7 @@ public class DatasetManagerTest : TestBase
             _authManagerMock.Object, _cacheManager, fileSystemMock.Object, _backgroundJobMock.Object, _appSettingsMock.Object);
 
         // Act & Assert
-        var action = () => datasetsManager.MoveToOrganization(null, new[] { "dataset-1" }, "dest-org");
+        var action = () => datasetsManager.MoveToOrganization(null, ["dataset-1"], "dest-org");
         await Should.ThrowAsync<BadRequestException>(action);
     }
 
@@ -643,7 +643,7 @@ public class DatasetManagerTest : TestBase
             _authManagerMock.Object, _cacheManager, fileSystemMock.Object, _backgroundJobMock.Object, _appSettingsMock.Object);
 
         // Act & Assert
-        var action = () => datasetsManager.MoveToOrganization("source-org", new[] { "dataset-1" }, "");
+        var action = () => datasetsManager.MoveToOrganization("source-org", ["dataset-1"], "");
         await Should.ThrowAsync<BadRequestException>(action);
     }
 
@@ -677,7 +677,7 @@ public class DatasetManagerTest : TestBase
             _authManagerMock.Object, _cacheManager, fileSystemMock.Object, _backgroundJobMock.Object, _appSettingsMock.Object);
 
         // Act & Assert
-        var action = () => datasetsManager.MoveToOrganization("source-org", Array.Empty<string>(), "dest-org");
+        var action = () => datasetsManager.MoveToOrganization("source-org", [], "dest-org");
         await Should.ThrowAsync<BadRequestException>(action);
     }
 
@@ -694,7 +694,7 @@ public class DatasetManagerTest : TestBase
             _authManagerMock.Object, _cacheManager, fileSystemMock.Object, _backgroundJobMock.Object, _appSettingsMock.Object);
 
         // Act & Assert
-        var action = () => datasetsManager.MoveToOrganization("source-org", new[] { "dataset-1" }, "source-org");
+        var action = () => datasetsManager.MoveToOrganization("source-org", ["dataset-1"], "source-org");
         await Should.ThrowAsync<BadRequestException>(action);
     }
 
@@ -716,7 +716,7 @@ public class DatasetManagerTest : TestBase
             _authManagerMock.Object, _cacheManager, fileSystemMock.Object, _backgroundJobMock.Object, _appSettingsMock.Object);
 
         // Act
-        var results = (await datasetsManager.MoveToOrganization("source-org", new[] { "dataset-1" }, "dest-org")).ToArray();
+        var results = (await datasetsManager.MoveToOrganization("source-org", ["dataset-1"], "dest-org")).ToArray();
 
         // Assert
         results.Length.ShouldBe(1);
@@ -754,7 +754,7 @@ public class DatasetManagerTest : TestBase
             _authManagerMock.Object, _cacheManager, fileSystemMock.Object, _backgroundJobMock.Object, _appSettingsMock.Object);
 
         // Act
-        var results = (await datasetsManager.MoveToOrganization("source-org", new[] { "dataset-1", "dataset-2" }, "dest-org")).ToArray();
+        var results = (await datasetsManager.MoveToOrganization("source-org", ["dataset-1", "dataset-2"], "dest-org")).ToArray();
 
         // Assert
         results.Length.ShouldBe(2);
@@ -782,7 +782,7 @@ public class DatasetManagerTest : TestBase
             _authManagerMock.Object, _cacheManager, fileSystemMock.Object, _backgroundJobMock.Object, _appSettingsMock.Object);
 
         // Act
-        var results = (await datasetsManager.MoveToOrganization("source-org", new[] { "non-existent-dataset" }, "dest-org")).ToArray();
+        var results = (await datasetsManager.MoveToOrganization("source-org", ["non-existent-dataset"], "dest-org")).ToArray();
 
         // Assert
         results.Length.ShouldBe(1);
@@ -810,7 +810,7 @@ public class DatasetManagerTest : TestBase
 
         // Act - Mix of existing and non-existing datasets
         var results = (await datasetsManager.MoveToOrganization("source-org",
-            new[] { "dataset-1", "non-existent", "dataset-2" }, "dest-org")).ToArray();
+            ["dataset-1", "non-existent", "dataset-2"], "dest-org")).ToArray();
 
         // Assert
         results.Length.ShouldBe(3);
@@ -833,7 +833,7 @@ public class DatasetManagerTest : TestBase
 
         // Act
         var results = (await datasetsManager.MoveToOrganization("source-org",
-            new[] { "conflicting-dataset" }, "dest-org", ConflictResolutionStrategy.HaltOnConflict)).ToArray();
+            ["conflicting-dataset"], "dest-org", ConflictResolutionStrategy.HaltOnConflict)).ToArray();
 
         // Assert
         results.Length.ShouldBe(1);
@@ -860,7 +860,7 @@ public class DatasetManagerTest : TestBase
 
         // Act
         var results = (await datasetsManager.MoveToOrganization("source-org",
-            new[] { "conflicting-dataset" }, "dest-org", ConflictResolutionStrategy.Rename)).ToArray();
+            ["conflicting-dataset"], "dest-org", ConflictResolutionStrategy.Rename)).ToArray();
 
         // Assert
         results.Length.ShouldBe(1);
@@ -895,7 +895,7 @@ public class DatasetManagerTest : TestBase
 
         // Act
         var results = (await datasetsManager.MoveToOrganization("source-org",
-            new[] { "conflicting-dataset" }, "dest-org", ConflictResolutionStrategy.Rename)).ToArray();
+            ["conflicting-dataset"], "dest-org", ConflictResolutionStrategy.Rename)).ToArray();
 
         // Assert
         results.Length.ShouldBe(1);
@@ -924,7 +924,7 @@ public class DatasetManagerTest : TestBase
 
         // Act
         var results = (await datasetsManager.MoveToOrganization("source-org",
-            new[] { "conflicting-dataset" }, "dest-org", ConflictResolutionStrategy.Overwrite)).ToArray();
+            ["conflicting-dataset"], "dest-org", ConflictResolutionStrategy.Overwrite)).ToArray();
 
         // Assert
         results.Length.ShouldBe(1);
@@ -958,7 +958,7 @@ public class DatasetManagerTest : TestBase
             _authManagerMock.Object, _cacheManager, fileSystemMock.Object, _backgroundJobMock.Object, _appSettingsMock.Object);
 
         // Act
-        var results = (await datasetsManager.MoveToOrganization("source-org", new[] { "dataset-1" }, "dest-org")).ToArray();
+        var results = (await datasetsManager.MoveToOrganization("source-org", ["dataset-1"], "dest-org")).ToArray();
 
         // Assert
         results.Length.ShouldBe(1);
@@ -982,7 +982,7 @@ public class DatasetManagerTest : TestBase
             _authManagerMock.Object, _cacheManager, fileSystemMock.Object, _backgroundJobMock.Object, _appSettingsMock.Object);
 
         // Act & Assert
-        var action = () => datasetsManager.MoveToOrganization("non-existent-org", new[] { "dataset-1" }, "dest-org");
+        var action = () => datasetsManager.MoveToOrganization("non-existent-org", ["dataset-1"], "dest-org");
         await Should.ThrowAsync<NotFoundException>(action);
     }
 
@@ -999,7 +999,7 @@ public class DatasetManagerTest : TestBase
             _authManagerMock.Object, _cacheManager, fileSystemMock.Object, _backgroundJobMock.Object, _appSettingsMock.Object);
 
         // Act & Assert
-        var action = () => datasetsManager.MoveToOrganization("source-org", new[] { "dataset-1" }, "non-existent-org");
+        var action = () => datasetsManager.MoveToOrganization("source-org", ["dataset-1"], "non-existent-org");
         await Should.ThrowAsync<NotFoundException>(action);
     }
 
@@ -1021,7 +1021,7 @@ public class DatasetManagerTest : TestBase
             _authManagerMock.Object, _cacheManager, fileSystemMock.Object, _backgroundJobMock.Object, _appSettingsMock.Object);
 
         // Act
-        await datasetsManager.MoveToOrganization("source-org", new[] { "dataset-1", "dataset-2" }, "dest-org");
+        await datasetsManager.MoveToOrganization("source-org", ["dataset-1", "dataset-2"], "dest-org");
 
         // Assert - Verify ClearCache was called for each moved dataset
         _stacManagerMock.Verify(x => x.ClearCache(It.IsAny<Dataset>()), Times.Exactly(2));
@@ -1046,7 +1046,7 @@ public class DatasetManagerTest : TestBase
 
         // Act - Move datasets, some will conflict, some won't
         var results = (await datasetsManager.MoveToOrganization("source-org",
-            new[] { "unique-dataset", "conflicting-dataset" }, "dest-org", ConflictResolutionStrategy.Rename)).ToArray();
+            ["unique-dataset", "conflicting-dataset"], "dest-org", ConflictResolutionStrategy.Rename)).ToArray();
 
         // Assert
         results.Length.ShouldBe(2);

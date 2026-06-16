@@ -59,7 +59,7 @@ public class LdapSettings
     /// Distinguished names of LDAP groups whose members receive the Registry admin role.
     /// Comparison is case-insensitive.
     /// </summary>
-    public string[] AdminGroupDns { get; set; } = Array.Empty<string>();
+    public string[] AdminGroupDns { get; set; } = [];
 
     /// <summary>LDAP attribute for the user email address. AD default: <c>mail</c>.</summary>
     public string EmailAttribute { get; set; } = "mail";

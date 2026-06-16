@@ -46,7 +46,7 @@ public class DatasetCleanupServiceTest : TestBase
 
         // No active jobs
         _jobIndexQueryMock.Setup(x => x.GetByOrgDsAsync(orgSlug, dsSlug, 0, int.MaxValue, default))
-            .ReturnsAsync(Array.Empty<JobIndex>());
+            .ReturnsAsync([]);
 
         var service = new DatasetCleanupService(
             context,
@@ -122,7 +122,7 @@ public class DatasetCleanupServiceTest : TestBase
         entriesBefore.ShouldBe(3);
 
         _jobIndexQueryMock.Setup(x => x.GetByOrgDsAsync(orgSlug, dsSlug, 0, int.MaxValue, default))
-            .ReturnsAsync(Array.Empty<JobIndex>());
+            .ReturnsAsync([]);
 
         var service = new DatasetCleanupService(
             context,
@@ -153,7 +153,7 @@ public class DatasetCleanupServiceTest : TestBase
         await using var context = GetEmptyContext();
 
         _jobIndexQueryMock.Setup(x => x.GetByOrgDsAsync(orgSlug, dsSlug, 0, int.MaxValue, default))
-            .ReturnsAsync(Array.Empty<JobIndex>());
+            .ReturnsAsync([]);
 
         // Simulate filesystem delete failure (file locked)
         _ddbManagerMock.Setup(x => x.Delete(orgSlug, internalRef))

@@ -187,7 +187,7 @@ public class NodeOdmTests
     private sealed class StubHandler : HttpMessageHandler
     {
         private readonly Func<HttpRequestMessage, HttpResponseMessage> _responder;
-        public List<HttpRequestMessage> Requests { get; } = new();
+        public List<HttpRequestMessage> Requests { get; } = [];
 
         public StubHandler(Func<HttpRequestMessage, HttpResponseMessage> responder) => _responder = responder;
 
@@ -251,7 +251,7 @@ public class NodeOdmTests
             var client = ClientFor(handler);
             var node = new NodeOdmEndpoint("n", "http://node:3000", null, null);
 
-            var uuid = await client.CreateTaskAsync(node, "my-task", new[] { tempImg }, "[]", CancellationToken.None);
+            var uuid = await client.CreateTaskAsync(node, "my-task", [tempImg], "[]", CancellationToken.None);
 
             uuid.ShouldBe("task-xyz");
             handler.Requests[0].Method.ShouldBe(HttpMethod.Post);
@@ -268,7 +268,7 @@ public class NodeOdmTests
     {
         var handler = new StubHandler(_ => new HttpResponseMessage(HttpStatusCode.OK)
         {
-            Content = new ByteArrayContent(new byte[] { 1, 2, 3, 4 })
+            Content = new ByteArrayContent([1, 2, 3, 4])
         });
         var client = ClientFor(handler);
         var node = new NodeOdmEndpoint("n", "http://node:3000", null, null);

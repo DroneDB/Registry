@@ -36,10 +36,9 @@ public class DownloadLimitMiddlewareTest : TestBase
 
         if (userId != null)
         {
-            context.User = new ClaimsPrincipal(new ClaimsIdentity(new[]
-            {
+            context.User = new ClaimsPrincipal(new ClaimsIdentity([
                 new Claim(ClaimTypes.Name, userId)
-            }, "test"));
+            ], "test"));
         }
 
         return context;

@@ -1442,7 +1442,7 @@ public class ObjectManagerTest : TestBase
                 ? Directory.GetFiles(destDatasetPath, "*", SearchOption.AllDirectories)
                     .Where(f => !f.Contains(".ddb"))
                     .ToArray()
-                : Array.Empty<string>();
+                : [];
 
             allDestFiles.ShouldBeEmpty(
                 "no files from failed transfer should remain in destination");

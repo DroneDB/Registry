@@ -236,7 +236,7 @@ public sealed class NodeOdmClient : INodeOdmClient
     {
         using var doc = JsonDocument.Parse(json);
         var root = doc.RootElement;
-        if (root.ValueKind != JsonValueKind.Array) return Array.Empty<string>();
+        if (root.ValueKind != JsonValueKind.Array) return [];
 
         var lines = new List<string>(root.GetArrayLength());
         foreach (var el in root.EnumerateArray())

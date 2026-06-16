@@ -89,7 +89,7 @@ public class WmsValidatorTest
     {
         Should.Throw<OgcException>(() => WmsValidator.ValidateLayers(null))
             .Code.ShouldBe("MissingParameterValue");
-        Should.Throw<OgcException>(() => WmsValidator.ValidateLayers(System.Array.Empty<string>()))
+        Should.Throw<OgcException>(() => WmsValidator.ValidateLayers([]))
             .Code.ShouldBe("MissingParameterValue");
     }
 
@@ -111,7 +111,7 @@ public class WmsValidatorTest
     public void ValidateStyles_AllowsEmptyAndDefault()
     {
         Should.NotThrow(() => WmsValidator.ValidateStyles(
-            new[] { "", "default" }, new[] { "a", "b" }, _ => null));
+            ["", "default"], ["a", "b"], _ => null));
     }
 
     [Test]
@@ -125,7 +125,7 @@ public class WmsValidatorTest
             BandCount = 3
         };
         var ex = Should.Throw<OgcException>(() => WmsValidator.ValidateStyles(
-            new[] { "NDVI" }, new[] { "ortho" }, name => layer));
+            ["NDVI"], ["ortho"], name => layer));
         ex.Code.ShouldBe("StyleNotDefined");
         ex.Locator.ShouldBe("STYLES");
     }
@@ -141,14 +141,14 @@ public class WmsValidatorTest
             BandCount = 5
         };
         Should.NotThrow(() => WmsValidator.ValidateStyles(
-            new[] { "NDVI" }, new[] { "msi" }, name => layer));
+            ["NDVI"], ["msi"], name => layer));
     }
 
     [Test]
     public void ValidateStyles_RejectsUnknownStyle()
     {
         var ex = Should.Throw<OgcException>(() => WmsValidator.ValidateStyles(
-            new[] { "thermal" }, new[] { "any" }, _ => null));
+            ["thermal"], ["any"], _ => null));
         ex.Code.ShouldBe("StyleNotDefined");
     }
 
@@ -156,7 +156,7 @@ public class WmsValidatorTest
     public void ValidateStyles_RejectsSpectralIndexOnUnknownLayer()
     {
         var ex = Should.Throw<OgcException>(() => WmsValidator.ValidateStyles(
-            new[] { "NDVI" }, new[] { "missing" }, _ => null));
+            ["NDVI"], ["missing"], _ => null));
         ex.Code.ShouldBe("StyleNotDefined");
     }
 }

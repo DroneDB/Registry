@@ -1194,7 +1194,7 @@ public class ObjectsController : ControllerBaseEx
             if (string.IsNullOrWhiteSpace(request.ReferencePath))
                 return BadRequest(new ErrorResponse("referencePath is required"));
 
-            var validationError = ValidatePaths(new[] { request.SourcePath, request.ReferencePath });
+            var validationError = ValidatePaths([request.SourcePath, request.ReferencePath]);
             if (validationError != null) return validationError;
 
             var json = await _objectsManager.ValidateAlignRaster(orgSlug, dsSlug,

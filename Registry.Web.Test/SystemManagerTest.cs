@@ -167,10 +167,7 @@ public class SystemManagerTest : TestBase
 
         var ddbMock = new Mock<IDDB>();
         ddbMock.Setup(x => x.RescanIndex("image,geoimage", true))
-            .Returns(new List<RescanResult>
-            {
-                new RescanResult { Path = "image1.jpg", Success = true, Hash = "abc123" }
-            });
+            .Returns([new RescanResult { Path = "image1.jpg", Success = true, Hash = "abc123" }]);
 
         _ddbManagerMock.Setup(x => x.Get(It.IsAny<string>(), It.IsAny<Guid>()))
             .Returns(ddbMock.Object);
