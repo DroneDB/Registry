@@ -15,6 +15,7 @@ using Registry.Web.Data.Models;
 using Registry.Web.Identity;
 using Registry.Web.Identity.Models;
 using Registry.Web.Models.Configuration;
+using Registry.Web.Services.Ports;
 using Registry.Web.Utilities;
 
 namespace Registry.Web.Services.Initialization;
@@ -124,6 +125,19 @@ internal class DatabaseInitializer
 
     private async Task CreateDefaultAdminAsync(CancellationToken token)
     {
+        var loginManager = _services.GetRequiredService<ILoginManager>();
+
+        // CAMBIO DI COMPORTAMENTO (deliberato): when an external identity provider is active
+        // (LDAP or Remote), skip creating a local default admin. Admin privileges are granted
+        // via the provider's group mapping instead. This change also affects Remote mode.
+        if (!loginManager.Capabilities.SupportsLocalUserManagement)
+        {
+            _logger.LogInformation(
+                "Default admin creation skipped: identity is managed by an external provider. " +
+                "Admin privileges are assigned via the provider's group/role mapping.");
+            return;
+        }
+
         var userManager = _services.GetRequiredService<UserManager<User>>();
         var roleManager = _services.GetRequiredService<RoleManager<IdentityRole>>();
         var appSettings = _services.GetRequiredService<IOptions<AppSettings>>().Value;

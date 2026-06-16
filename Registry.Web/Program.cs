@@ -883,6 +883,27 @@ public class Program
                 Console.WriteLine(" !> ClearCacheInterval is not valid (must be at least 1 minute)");
                 return false;
             }
+
+            if (settings.LdapSettings?.Enabled == true)
+            {
+                if (!string.IsNullOrWhiteSpace(settings.ExternalAuthUrl))
+                {
+                    Console.WriteLine(" !> Cannot enable both LDAP and External authentication simultaneously");
+                    return false;
+                }
+
+                if (string.IsNullOrWhiteSpace(settings.LdapSettings.Server))
+                {
+                    Console.WriteLine(" !> LdapSettings.Server is required when LDAP is enabled");
+                    return false;
+                }
+
+                if (string.IsNullOrWhiteSpace(settings.LdapSettings.BaseDn))
+                {
+                    Console.WriteLine(" !> LdapSettings.BaseDn is required when LDAP is enabled");
+                    return false;
+                }
+            }
         }
         catch (Exception ex)
         {

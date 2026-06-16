@@ -78,6 +78,7 @@
         <PackageReference Include="Newtonsoft.Json" Version="13.0.4" />
         <PackageReference Include="Scrutor" Version="7.0.0" />
         <PackageReference Include="Scrutor.AspNetCore" Version="3.3.0" />
+        <PackageReference Include="System.DirectoryServices.Protocols" Version="9.0.0" />
         <PackageReference Include="Serilog.AspNetCore" Version="10.0.0" />
         <PackageReference Include="Serilog.Aspnetcore.Middleware" Version="1.0.0" />
         <PackageReference Include="Serilog.Enrichers.AspNetCore" Version="1.0.0" />

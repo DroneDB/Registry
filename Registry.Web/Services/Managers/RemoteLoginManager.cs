@@ -27,6 +27,8 @@ public class RemoteLoginManager : ILoginManager
         _httpClientFactory = httpClientFactory;
     }
 
+    public AuthProviderCapabilities Capabilities => AuthProviderCapabilities.External;
+
     public async Task<LoginResultDto> CheckAccess(string token)
     {
 

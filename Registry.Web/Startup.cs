@@ -125,7 +125,16 @@ public class Startup
         services.AddDbContextWithProvider<ApplicationDbContext>(Configuration, appSettings.AuthProvider,
             MagicStrings.IdentityConnectionName, "Identity");
 
-        if (!string.IsNullOrWhiteSpace(appSettings.ExternalAuthUrl))
+        if (appSettings.LdapSettings?.Enabled == true)
+        {
+            services.AddIdentityCore<User>()
+                .AddRoles<IdentityRole>()
+                .AddEntityFrameworkStores<ApplicationDbContext>()
+                .AddDefaultTokenProviders();
+
+            services.AddScoped<ILoginManager, LdapLoginManager>();
+        }
+        else if (!string.IsNullOrWhiteSpace(appSettings.ExternalAuthUrl))
         {
             services.AddIdentityCore<User>()
                 .AddRoles<IdentityRole>()
@@ -228,7 +237,7 @@ public class Startup
             });
         }
 
-        services.AddHealthChecks()
+        var hcBuilder = services.AddHealthChecks()
             .AddCheck<CacheHealthCheck>("Cache health check", null, ["service"])
             .AddCheck<DdbHealthCheck>("DroneDB health check", null, ["service"])
             .AddCheck<UserManagerHealthCheck>("User manager health check", null, ["database"])
@@ -247,6 +256,9 @@ public class Startup
                 ["processing"])
             .AddCheck<HangFireHealthCheck>("Hangfire processing health check", null, ["processing"])
             .AddCheck<ThumbnailGeneratorHealthCheck>("Thumbnail generator health check", null, ["service"]);
+
+        if (appSettings.LdapSettings?.Enabled == true)
+            hcBuilder.AddCheck<LdapHealthCheck>("LDAP health check", null, ["service"]);
 
 
         /*

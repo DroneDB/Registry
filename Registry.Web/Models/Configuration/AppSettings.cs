@@ -96,6 +96,12 @@ public class AppSettings
     public string ExternalAuthUrl { get; set; }
 
     /// <summary>
+    /// LDAP/Active Directory authentication settings.
+    /// Mutually exclusive with <see cref="ExternalAuthUrl"/>.
+    /// </summary>
+    public LdapSettings LdapSettings { get; set; }
+
+    /// <summary>
     /// Cache provider settings
     /// </summary>
     public CacheProvider CacheProvider { get; set; }

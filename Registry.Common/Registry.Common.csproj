@@ -30,7 +30,7 @@
     <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.7" />
     <PackageReference Include="MimeTypes" Version="2.5.2">
       <PrivateAssets>all</PrivateAssets>
-      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+      <IncludeAssets>compile; runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
     </PackageReference>
     <PackageReference Include="Newtonsoft.Json" Version="13.0.4" />
     <PackageReference Include="Polly" Version="8.6.6" />

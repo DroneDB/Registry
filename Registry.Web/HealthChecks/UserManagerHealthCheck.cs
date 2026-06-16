@@ -7,6 +7,7 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Registry.Web.Identity.Models;
 using Registry.Web.Models;
+using Registry.Web.Services.Ports;
 using Registry.Web.Utilities;
 
 namespace Registry.Web.HealthChecks;
@@ -14,13 +15,22 @@ namespace Registry.Web.HealthChecks;
 public class UserManagerHealthCheck : IHealthCheck
 {
     private readonly UserManager<User> _userManager;
-    public UserManagerHealthCheck(UserManager<User> userManager)
+    private readonly ILoginManager _loginManager;
+
+    public UserManagerHealthCheck(UserManager<User> userManager, ILoginManager loginManager)
     {
         _userManager = userManager;
+        _loginManager = loginManager;
     }
 
     public async Task<HealthCheckResult> CheckHealthAsync(HealthCheckContext context, CancellationToken cancellationToken = new CancellationToken())
     {
+        // CAMBIO DI COMPORTAMENTO (deliberato): skip local user-manager test when an external
+        // identity provider is active. The test would only verify the local store, not the
+        // actual authentication path. A dedicated provider health check is registered instead.
+        if (!_loginManager.Capabilities.SupportsLocalUserManagement)
+            return HealthCheckResult.Healthy(
+                "Skipped: user management is handled by an external identity provider");
 
         var testUserName = "test-" + Guid.NewGuid();
         var testPassword = Guid.NewGuid().ToString() + Guid.NewGuid().ToString().ToUpperInvariant() + "_&%$";
