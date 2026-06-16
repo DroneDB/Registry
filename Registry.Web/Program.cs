@@ -471,10 +471,30 @@ public class Program
         switch (parts.Length)
         {
             case 1:
-            {
-                if (!int.TryParse(parts[0], out port))
                 {
-                    // Try to parse as hostname
+                    if (!int.TryParse(parts[0], out port))
+                    {
+                        // Try to parse as hostname
+                        host = parts[0];
+
+                        if (!host.Equals("localhost", StringComparison.InvariantCultureIgnoreCase) &&
+                            !IPEndPoint.TryParse(host, out _))
+                        {
+                            CommonUtils.WriteColor(" !> Invalid address", ConsoleColor.Red);
+                            return false;
+                        }
+                    }
+
+                    if (port is < 1 or > 65535)
+                    {
+                        CommonUtils.WriteColor(" !> Invalid port", ConsoleColor.Red);
+                        return false;
+                    }
+
+                    break;
+                }
+            case 2:
+                {
                     host = parts[0];
 
                     if (!host.Equals("localhost", StringComparison.InvariantCultureIgnoreCase) &&
@@ -483,41 +503,21 @@ public class Program
                         CommonUtils.WriteColor(" !> Invalid address", ConsoleColor.Red);
                         return false;
                     }
+
+                    if (!int.TryParse(parts[1], out port))
+                    {
+                        CommonUtils.WriteColor(" !> Invalid port", ConsoleColor.Red);
+                        return false;
+                    }
+
+                    if (port is < 1 or > 65535)
+                    {
+                        CommonUtils.WriteColor(" !> Invalid port", ConsoleColor.Red);
+                        return false;
+                    }
+
+                    break;
                 }
-
-                if (port is < 1 or > 65535)
-                {
-                    CommonUtils.WriteColor(" !> Invalid port", ConsoleColor.Red);
-                    return false;
-                }
-
-                break;
-            }
-            case 2:
-            {
-                host = parts[0];
-
-                if (!host.Equals("localhost", StringComparison.InvariantCultureIgnoreCase) &&
-                    !IPEndPoint.TryParse(host, out _))
-                {
-                    CommonUtils.WriteColor(" !> Invalid address", ConsoleColor.Red);
-                    return false;
-                }
-
-                if (!int.TryParse(parts[1], out port))
-                {
-                    CommonUtils.WriteColor(" !> Invalid port", ConsoleColor.Red);
-                    return false;
-                }
-
-                if (port is < 1 or > 65535)
-                {
-                    CommonUtils.WriteColor(" !> Invalid port", ConsoleColor.Red);
-                    return false;
-                }
-
-                break;
-            }
             default:
                 CommonUtils.WriteColor(" !> Invalid address", ConsoleColor.Red);
                 return false;
@@ -901,6 +901,13 @@ public class Program
                 if (string.IsNullOrWhiteSpace(settings.LdapSettings.BaseDn))
                 {
                     Console.WriteLine(" !> LdapSettings.BaseDn is required when LDAP is enabled");
+                    return false;
+                }
+
+                if (string.IsNullOrWhiteSpace(settings.LdapSettings.SearchFilter) ||
+                     !settings.LdapSettings.SearchFilter.Contains("{0}", StringComparison.Ordinal))
+                {
+                    Console.WriteLine(" !> LdapSettings.SearchFilter must contain the '{0}' placeholder for the username");
                     return false;
                 }
             }
