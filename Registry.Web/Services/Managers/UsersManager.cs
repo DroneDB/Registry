@@ -98,6 +98,15 @@ public class UsersManager : IUsersManager
             user = await CreateUserInternal(new User { UserName = userName }, localPassword);
         }
 
+        // Deny access to deactivated accounts. External providers (LDAP/Remote) authorize the bind
+        // even after a user is deactivated locally, so this guard - placed before SyncRoles, which
+        // would otherwise strip the Deactivated role - is what actually enforces the deactivation.
+        if (await _userManager.IsInRoleAsync(user, ApplicationDbContext.DeactivatedRoleName))
+        {
+            _logger.LogWarning("Authentication denied: user {UserName} is deactivated", userName);
+            return null;
+        }
+
         if (!user.Metadata.IsSameAs(res.Metadata))
         {
             user.Metadata = res.Metadata;
@@ -126,6 +135,14 @@ public class UsersManager : IUsersManager
         // Create user if not exists because login manager has greenlighed us
         var user = await _userManager.FindByNameAsync(res.UserName) ??
                    await CreateUserInternal(new User { UserName = res.UserName }, CommonUtils.RandomString(16));
+
+        // Deny access to deactivated accounts (see Authenticate(userName, password) for rationale):
+        // the check runs before SyncRoles so the Deactivated role cannot be stripped by a re-login.
+        if (await _userManager.IsInRoleAsync(user, ApplicationDbContext.DeactivatedRoleName))
+        {
+            _logger.LogWarning("Authentication denied: user {UserName} is deactivated", res.UserName);
+            return null;
+        }
 
         if (!user.Metadata.IsSameAs(res.Metadata))
         {
@@ -696,6 +713,14 @@ public class UsersManager : IUsersManager
         // on the next login if still valid in the directory). Deactivate instead.
         if (!Caps.SupportsLocalUserManagement)
         {
+            // Deactivation only flags the account: no data transfer or resource cleanup is performed.
+            // Fail fast if a successor was requested so the caller is not misled into believing a
+            // transfer occurred.
+            if (!string.IsNullOrWhiteSpace(successor))
+                throw new BadRequestException(
+                    "Transferring data to a successor is not supported when an external identity " +
+                    "provider is active: the account is deactivated, not deleted.");
+
             _logger.LogWarning(
                 "User {UserName} is managed by an external identity provider. " +
                 "Deactivating instead of deleting", userName);

@@ -127,7 +127,7 @@ internal class DatabaseInitializer
     {
         var loginManager = _services.GetRequiredService<ILoginManager>();
 
-        // CAMBIO DI COMPORTAMENTO (deliberato): when an external identity provider is active
+        // BEHAVIOR CHANGE (deliberate): when an external identity provider is active
         // (LDAP or Remote), skip creating a local default admin. Admin privileges are granted
         // via the provider's group mapping instead. This change also affects Remote mode.
         if (!loginManager.Capabilities.SupportsLocalUserManagement)

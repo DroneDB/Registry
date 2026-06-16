@@ -50,9 +50,28 @@ public class LdapHealthCheck : IHealthCheck
             }
 
             if (!string.IsNullOrWhiteSpace(_settings.BindDn))
+            {
                 conn.Bind(new NetworkCredential(_settings.BindDn, _settings.BindPassword));
-            else
+
+                return Task.FromResult(
+                    HealthCheckResult.Healthy(
+                        $"LDAP server {_settings.Server}:{_settings.Port} is reachable and the service bind succeeded"));
+            }
+
+            // No service account configured: attempt an anonymous bind. Many LDAP/AD servers reject
+            // anonymous binds by policy even though they are perfectly reachable, so a rejected bind
+            // is reported as Degraded (reachable but not validated) rather than Unhealthy.
+            try
+            {
                 conn.Bind(); // anonymous bind - tests TCP connectivity
+            }
+            catch (LdapException ex) when (!IsConnectivityError(ex.ErrorCode))
+            {
+                return Task.FromResult(
+                    HealthCheckResult.Degraded(
+                        $"LDAP server {_settings.Server}:{_settings.Port} is reachable but the anonymous bind was " +
+                        $"rejected ({ex.Message}). Configure BindDn to fully validate connectivity."));
+            }
 
             return Task.FromResult(
                 HealthCheckResult.Healthy(
@@ -65,4 +84,13 @@ public class LdapHealthCheck : IHealthCheck
                     $"LDAP server {_settings.Server}:{_settings.Port} is not reachable: {ex.Message}", ex));
         }
     }
+
+    /// <summary>
+    /// Returns true for LDAP error codes that indicate the server could not be reached
+    /// (as opposed to the server being reachable but rejecting the bind).
+    /// </summary>
+    private static bool IsConnectivityError(int errorCode) =>
+        errorCode is 81  // LDAP_SERVER_DOWN
+                  or 85  // LDAP_TIMEOUT
+                  or 91; // LDAP_CONNECT_ERROR
 }

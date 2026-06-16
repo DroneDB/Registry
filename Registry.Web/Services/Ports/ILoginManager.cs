@@ -13,9 +13,10 @@ public interface ILoginManager
 
     /// <summary>
     /// Describes what this provider allows to manage locally.
-    /// Defaults to <see cref="AuthProviderCapabilities.External"/> so that any provider
-    /// that forgets to override it "fails closed" (disables local management rather than exposing it).
-    /// <see cref="LocalLoginManager"/> overrides this to <see cref="AuthProviderCapabilities.Local"/>.
+    /// Every implementation must declare this explicitly: <see cref="LocalLoginManager"/> returns
+    /// <see cref="AuthProviderCapabilities.Local"/>, while external providers (LDAP/Remote) return
+    /// <see cref="AuthProviderCapabilities.External"/>. No default is provided so that callers and
+    /// test doubles are forced to choose an explicit capability set.
     /// </summary>
-    AuthProviderCapabilities Capabilities => AuthProviderCapabilities.External;
+    AuthProviderCapabilities Capabilities { get; }
 }

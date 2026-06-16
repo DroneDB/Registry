@@ -35,6 +35,7 @@
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="18.5.1" />
     <PackageReference Include="Serilog.Extensions.Logging" Version="10.0.0" />
     <PackageReference Include="Serilog.Sinks.NUnit" Version="1.0.3" />
+    <PackageReference Include="Testcontainers" Version="4.12.0" />
   </ItemGroup>
 
   <ItemGroup>

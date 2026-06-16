@@ -25,7 +25,7 @@ public class UserManagerHealthCheck : IHealthCheck
 
     public async Task<HealthCheckResult> CheckHealthAsync(HealthCheckContext context, CancellationToken cancellationToken = new CancellationToken())
     {
-        // CAMBIO DI COMPORTAMENTO (deliberato): skip local user-manager test when an external
+        // BEHAVIOR CHANGE (deliberate): skip local user-manager test when an external
         // identity provider is active. The test would only verify the local store, not the
         // actual authentication path. A dedicated provider health check is registered instead.
         if (!_loginManager.Capabilities.SupportsLocalUserManagement)
