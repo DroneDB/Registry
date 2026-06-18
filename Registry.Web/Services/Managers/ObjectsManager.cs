@@ -458,6 +458,7 @@ public class ObjectsManager : IObjectsManager
                 case EntryType.Panorama:
                 case EntryType.GeoPanorama:
                 case EntryType.Vector:
+                case EntryType.GaussianSplat:
                 default:
                 {
                     var sourceLocalFilePath = sourceDdb.GetLocalPath(sourcePath);
@@ -703,6 +704,7 @@ public class ObjectsManager : IObjectsManager
             case EntryType.Panorama:
             case EntryType.GeoPanorama:
             case EntryType.Vector:
+            case EntryType.GaussianSplat:
             default:
             {
                 var sourceLocalFilePath = ddb.GetLocalPath(source);
@@ -1683,6 +1685,9 @@ public class ObjectsManager : IObjectsManager
             EntryType.GeoRaster => CommonUtils.SafeCombine(BuildBasePath, entry.Hash, "cog", "cog.tif"),
             EntryType.Vector => CommonUtils.SafeCombine(BuildBasePath, entry.Hash, "vec", "source.gpkg"),
             EntryType.Model => CommonUtils.SafeCombine(BuildBasePath, entry.Hash, "nxs", "model.nxz"),
+            // Splats serve a thumbnail pre-rendered at build time (the .spz is dropped once the
+            // .rad exists). The on-demand thumbnail path then just resizes this image.
+            EntryType.GaussianSplat => CommonUtils.SafeCombine(BuildBasePath, entry.Hash, "gsplat", "thumbnail.webp"),
             _ => entry.Path
         };
 

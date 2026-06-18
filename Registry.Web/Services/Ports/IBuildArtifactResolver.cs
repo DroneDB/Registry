@@ -23,6 +23,24 @@ public interface IBuildArtifactResolver
     /// <summary>Full path to the GPKG vector sidecar (build/{hash}/vec/source.gpkg).</summary>
     string GetVectorQueryPath(IDDB ddb, string entryHash);
 
+    /// <summary>
+    /// Full path to the legacy plain Gaussian Splat artifact (build/{hash}/gsplat/model.spz).
+    /// Only present for datasets built without build-lod; new builds drop it in favour of
+    /// the canonical model.rad (see <see cref="GetGsplatLodPath"/>).
+    /// </summary>
+    string GetGsplatPath(IDDB ddb, string entryHash);
+
+    /// <summary>
+    /// Full path to the canonical Gaussian Splat level-of-detail artifact
+    /// (build/{hash}/gsplat/model.rad). Produced by build-lod for progressive streaming and
+    /// served as the sole delivery file; absent only when build-lod was unavailable, in which
+    /// case the viewer falls back to model.spz.
+    /// </summary>
+    string GetGsplatLodPath(IDDB ddb, string entryHash);
+
+    /// <summary>Full path to the Gaussian Splat georeferencing sidecar (build/{hash}/gsplat/georef.json).</summary>
+    string GetGsplatGeorefPath(IDDB ddb, string entryHash);
+
     /// <summary>Returns true if the given artifact path exists on disk.</summary>
     bool ArtifactExists(string fullPath);
 }

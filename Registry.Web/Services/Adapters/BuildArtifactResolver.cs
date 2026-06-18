@@ -52,6 +52,15 @@ public class BuildArtifactResolver : IBuildArtifactResolver
     public string GetVectorQueryPath(IDDB ddb, string entryHash) =>
         Absolute(ddb.GetLocalPath(Relative(entryHash, "vec", "source.gpkg")));
 
+    public string GetGsplatPath(IDDB ddb, string entryHash) =>
+        Absolute(ddb.GetLocalPath(Relative(entryHash, "gsplat", "model.spz")));
+
+    public string GetGsplatLodPath(IDDB ddb, string entryHash) =>
+        Absolute(ddb.GetLocalPath(Relative(entryHash, "gsplat", "model.rad")));
+
+    public string GetGsplatGeorefPath(IDDB ddb, string entryHash) =>
+        Absolute(ddb.GetLocalPath(Relative(entryHash, "gsplat", "georef.json")));
+
     public bool ArtifactExists(string fullPath) =>
         !string.IsNullOrEmpty(fullPath) && _fs.Exists(fullPath);
 }
