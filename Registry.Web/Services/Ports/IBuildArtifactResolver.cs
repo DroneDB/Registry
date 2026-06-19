@@ -24,22 +24,21 @@ public interface IBuildArtifactResolver
     string GetVectorQueryPath(IDDB ddb, string entryHash);
 
     /// <summary>
-    /// Full path to the legacy plain Gaussian Splat artifact (build/{hash}/gsplat/model.spz).
-    /// Only present for datasets built without build-lod; new builds drop it in favour of
-    /// the canonical model.rad (see <see cref="GetGsplatLodPath"/>).
+    /// Full path to the Gaussian Splat artifact (build/{hash}/gsplat/model.spz).
+    /// Reserved for future gsplat HTTP endpoints.
     /// </summary>
     string GetGsplatPath(IDDB ddb, string entryHash);
 
     /// <summary>
-    /// Full path to the canonical Gaussian Splat level-of-detail artifact
-    /// (build/{hash}/gsplat/model.rad). Produced by build-lod for progressive streaming and
-    /// served as the sole delivery file. build-lod is a required dependency, so new builds
-    /// always produce it; <see cref="GetGsplatPath"/> only resolves an artifact for legacy
-    /// datasets built before build-lod was mandatory.
+    /// Full path to the Gaussian Splat level-of-detail artifact (build/{hash}/gsplat/model.rad).
+    /// Reserved for future gsplat HTTP endpoints.
     /// </summary>
     string GetGsplatLodPath(IDDB ddb, string entryHash);
 
-    /// <summary>Full path to the Gaussian Splat georeferencing sidecar (build/{hash}/gsplat/georef.json).</summary>
+    /// <summary>
+    /// Full path to the Gaussian Splat georeferencing sidecar (build/{hash}/gsplat/georef.json).
+    /// Reserved for future gsplat HTTP endpoints.
+    /// </summary>
     string GetGsplatGeorefPath(IDDB ddb, string entryHash);
 
     /// <summary>Returns true if the given artifact path exists on disk.</summary>
