@@ -61,7 +61,10 @@ npm run build:prod
 ### Login Credentials (Development)
 
 - **Username:** `admin`
-- **Password:** `_Rainbow1`
+- **Password:** `password123`
+- **Email:** `admin@example.com`
+
+These match the `DefaultAdmin` values in `Registry.Web/appsettings-default.json`.
 
 ---
 

@@ -58,7 +58,7 @@ Join our Discord server to get help, share feedback, discuss features, and conne
 docker run -it --rm -p 5000:5000 -v ${PWD}/registry-data:/data dronedb/registry
 ```
 
-Open [http://localhost:5000](http://localhost:5000) • Default credentials: `admin` / `password`
+Open [http://localhost:5000](http://localhost:5000) • Default credentials: `admin` / `password123`
 
 > ⚠️ Change the default password immediately at [http://localhost:5000/account](http://localhost:5000/account)
 
