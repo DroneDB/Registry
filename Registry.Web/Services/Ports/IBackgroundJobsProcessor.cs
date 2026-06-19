@@ -33,6 +33,12 @@ public interface IBackgroundJobsProcessor
     public string EnqueueIndexed(Expression<Func<Task>> methodCall, IndexPayload meta);
     public string EnqueueIndexed<T>(Expression<Action<T>> methodCall, IndexPayload meta);
     public string EnqueueIndexed<T>(Expression<Func<T, Task>> methodCall, IndexPayload meta);
+
+    // Indexed scheduled (delayed) jobs - tracked in the JobIndex like EnqueueIndexed
+    public string ScheduleIndexed(Expression<Action> methodCall, IndexPayload meta, TimeSpan delay);
+    public string ScheduleIndexed(Expression<Func<Task>> methodCall, IndexPayload meta, TimeSpan delay);
+    public string ScheduleIndexed<T>(Expression<Action<T>> methodCall, IndexPayload meta, TimeSpan delay);
+    public string ScheduleIndexed<T>(Expression<Func<T, Task>> methodCall, IndexPayload meta, TimeSpan delay);
 }
 
 public enum BackgroundJobContinuationOptions

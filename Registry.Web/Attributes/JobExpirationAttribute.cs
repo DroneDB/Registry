@@ -16,6 +16,12 @@ public class JobExpirationAttribute : JobFilterAttribute, IApplyStateFilter
 
     public void OnStateApplied(ApplyStateContext context, IWriteOnlyTransaction transaction)
     {
+        // Preserve failed jobs at the global retention so their history and
+        // captured logs remain available for diagnostics. Only the short-lived,
+        // high-frequency success records are expired quickly to curb churn.
+        if (context.NewState is FailedState)
+            return;
+
         context.JobExpirationTimeout = TimeSpan.FromMinutes(ExpirationTimeoutInMinutes);
     }
 

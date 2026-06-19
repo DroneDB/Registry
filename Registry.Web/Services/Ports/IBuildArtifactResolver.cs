@@ -33,8 +33,9 @@ public interface IBuildArtifactResolver
     /// <summary>
     /// Full path to the canonical Gaussian Splat level-of-detail artifact
     /// (build/{hash}/gsplat/model.rad). Produced by build-lod for progressive streaming and
-    /// served as the sole delivery file; absent only when build-lod was unavailable, in which
-    /// case the viewer falls back to model.spz.
+    /// served as the sole delivery file. build-lod is a required dependency, so new builds
+    /// always produce it; <see cref="GetGsplatPath"/> only resolves an artifact for legacy
+    /// datasets built before build-lod was mandatory.
     /// </summary>
     string GetGsplatLodPath(IDDB ddb, string entryHash);
 

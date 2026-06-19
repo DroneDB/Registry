@@ -12,4 +12,9 @@ public interface IIndexedJobEnqueuer
     string Enqueue<T>(Expression<Action<T>> methodCall, IndexPayload meta);
     string Enqueue(Expression<Func<Task>> methodCall, IndexPayload meta);
     string Enqueue<T>(Expression<Func<T, Task>> methodCall, IndexPayload meta);
+
+    string Schedule(Expression<Action> methodCall, IndexPayload meta, TimeSpan delay);
+    string Schedule<T>(Expression<Action<T>> methodCall, IndexPayload meta, TimeSpan delay);
+    string Schedule(Expression<Func<Task>> methodCall, IndexPayload meta, TimeSpan delay);
+    string Schedule<T>(Expression<Func<T, Task>> methodCall, IndexPayload meta, TimeSpan delay);
 }

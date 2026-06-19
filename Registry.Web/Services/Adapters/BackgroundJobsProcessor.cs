@@ -69,4 +69,17 @@ public class BackgroundJobsProcessor : IBackgroundJobsProcessor
 
     public string EnqueueIndexed<T>(Expression<Func<T, Task>> methodCall, IndexPayload meta) =>
         _indexedEnqueuer.Enqueue(methodCall, meta);
+
+    // Indexed scheduled (delayed) job methods - delegate to IIndexedJobEnqueuer
+    public string ScheduleIndexed(Expression<Action> methodCall, IndexPayload meta, TimeSpan delay) =>
+        _indexedEnqueuer.Schedule(methodCall, meta, delay);
+
+    public string ScheduleIndexed(Expression<Func<Task>> methodCall, IndexPayload meta, TimeSpan delay) =>
+        _indexedEnqueuer.Schedule(methodCall, meta, delay);
+
+    public string ScheduleIndexed<T>(Expression<Action<T>> methodCall, IndexPayload meta, TimeSpan delay) =>
+        _indexedEnqueuer.Schedule(methodCall, meta, delay);
+
+    public string ScheduleIndexed<T>(Expression<Func<T, Task>> methodCall, IndexPayload meta, TimeSpan delay) =>
+        _indexedEnqueuer.Schedule(methodCall, meta, delay);
 }

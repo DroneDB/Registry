@@ -168,4 +168,34 @@ public class SimpleBackgroundJobsProcessor : IBackgroundJobsProcessor
         _jobs.Add(newId, JobStatus.Succeeded);
         return newId.ToString();
     }
+
+    // Indexed scheduled (delayed) job methods - represent a future job; we do not
+    // execute the body immediately, we just register it as Scheduled.
+    public string ScheduleIndexed(Expression<Action> methodCall, IndexPayload meta, TimeSpan delay)
+    {
+        var newId = GetNewId();
+        _jobs.Add(newId, JobStatus.Scheduled);
+        return newId.ToString();
+    }
+
+    public string ScheduleIndexed(Expression<Func<Task>> methodCall, IndexPayload meta, TimeSpan delay)
+    {
+        var newId = GetNewId();
+        _jobs.Add(newId, JobStatus.Scheduled);
+        return newId.ToString();
+    }
+
+    public string ScheduleIndexed<T>(Expression<Action<T>> methodCall, IndexPayload meta, TimeSpan delay)
+    {
+        var newId = GetNewId();
+        _jobs.Add(newId, JobStatus.Scheduled);
+        return newId.ToString();
+    }
+
+    public string ScheduleIndexed<T>(Expression<Func<T, Task>> methodCall, IndexPayload meta, TimeSpan delay)
+    {
+        var newId = GetNewId();
+        _jobs.Add(newId, JobStatus.Scheduled);
+        return newId.ToString();
+    }
 }

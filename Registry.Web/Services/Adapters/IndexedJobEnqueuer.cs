@@ -37,13 +37,28 @@ public class IndexedJobEnqueuer(IBackgroundJobClient client, IServiceProvider sp
     public string Enqueue<T>(Expression<Func<T, Task>> methodCall, IndexPayload meta) =>
         EnqueueCore(Job.FromExpression(methodCall), meta);
 
-    private string EnqueueCore(Job job, IndexPayload meta)
+    public string Schedule(Expression<Action> methodCall, IndexPayload meta, TimeSpan delay) =>
+        CreateCore(Job.FromExpression(methodCall), meta, new ScheduledState(delay));
+
+    public string Schedule<T>(Expression<Action<T>> methodCall, IndexPayload meta, TimeSpan delay) =>
+        CreateCore(Job.FromExpression(methodCall), meta, new ScheduledState(delay));
+
+    public string Schedule(Expression<Func<Task>> methodCall, IndexPayload meta, TimeSpan delay) =>
+        CreateCore(Job.FromExpression(methodCall), meta, new ScheduledState(delay));
+
+    public string Schedule<T>(Expression<Func<T, Task>> methodCall, IndexPayload meta, TimeSpan delay) =>
+        CreateCore(Job.FromExpression(methodCall), meta, new ScheduledState(delay));
+
+    private string EnqueueCore(Job job, IndexPayload meta) =>
+        CreateCore(job, meta, new EnqueuedState(meta.Queue ?? EnqueuedState.DefaultQueue));
+
+    private string CreateCore(Job job, IndexPayload meta, IState state)
     {
         meta.EnsureValid();
         var createdAt = DateTime.UtcNow;
         var queue = meta.Queue;
 
-        var jobId = client.Create(job, new EnqueuedState(queue ?? EnqueuedState.DefaultQueue));
+        var jobId = client.Create(job, state);
 
         // Set Job Parameters to track metadata in Hangfire storage
         try

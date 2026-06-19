@@ -2,6 +2,7 @@
 using System.Threading.Tasks;
 using Hangfire.Server;
 using Microsoft.Extensions.Logging;
+using Registry.Web.Attributes;
 using Registry.Web.Services.Ports;
 using Registry.Web.Utilities;
 
@@ -23,6 +24,7 @@ public class JobIndexSyncService
         _logger = logger;
     }
 
+    [JobExpiration(ExpirationTimeoutInMinutes = 60)]
     public async Task SyncJobIndexStates(PerformContext? context = null)
     {
         await HangfireUtils.SyncJobIndexStatesWrapper(context, _jobIndexQuery, _jobIndexWriter);
