@@ -1,6 +1,19 @@
 services:
     db:
         image: mariadb:10.6
+        # InnoDB tuning to prevent unbounded ibdata1 growth under background-job churn.
+        # Undo logs are kept in dedicated, auto-truncating undo tablespaces (instead of
+        # the shared ibdata1, which never shrinks) and every table is stored in its own
+        # file so space can be reclaimed with OPTIMIZE TABLE.
+        # NOTE: innodb-undo-tablespaces only takes effect on a freshly initialized data
+        # directory; an already-bloated data-mysql volume must be recreated (dump, drop
+        # the volume, restore) for these settings to apply.
+        command:
+            - --innodb-file-per-table=ON
+            - --innodb-undo-tablespaces=2
+            - --innodb-undo-log-truncate=ON
+            - --innodb-max-undo-log-size=1G
+            - --innodb-purge-rseg-truncate-frequency=128
         volumes:
             - data-mysql:/var/lib/mysql
             - ./initialize.sql:/docker-entrypoint-initdb.d/initialize.sql
