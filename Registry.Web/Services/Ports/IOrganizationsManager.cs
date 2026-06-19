@@ -9,6 +9,9 @@ using Registry.Web.Models.DTO;
 
 namespace Registry.Web.Services.Ports;
 
+/// <summary>
+/// Organization CRUD interface (list, get, add, edit, delete, merge, member management).
+/// </summary>
 public interface IOrganizationsManager
 {
     public Task<IEnumerable<OrganizationDto>> List(bool ownedOnly = false);

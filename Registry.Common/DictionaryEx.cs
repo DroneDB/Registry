@@ -4,6 +4,9 @@ using System.Text;
 
 namespace Registry.Common;
 
+/// <summary>
+/// Dictionary subclass with improved error messages on duplicate key and missing key.
+/// </summary>
 public class DictionaryEx<TKey, TValue> : Dictionary<TKey, TValue>
 {
 

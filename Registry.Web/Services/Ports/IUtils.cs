@@ -6,6 +6,9 @@ using Registry.Web.Models.DTO;
 
 namespace Registry.Web.Services.Ports;
 
+/// <summary>
+/// Utility interface for organization/dataset lookup, URL generation, and storage checks.
+/// </summary>
 public interface IUtils
 {
     Organization GetOrganization(string orgSlug, bool safe = false, bool withTracking = false, bool withDatasets = false);

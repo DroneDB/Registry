@@ -5,6 +5,9 @@ using System.Text;
 
 namespace Registry.Common;
 
+/// <summary>
+/// Zip archive creation utilities with exclusion and encoding options.
+/// </summary>
 public static class ZipUtils
 {
     public static void CreateFromDirectory(

@@ -4,7 +4,9 @@ using Registry.Ports.DroneDB;
 
 namespace Registry.Web.Models.DTO.Ogc;
 
-/// <summary>Single feature-class / coverage / layer exposed via the OGC suite.</summary>
+/// <summary>
+/// Single feature-class / coverage / layer exposed via the OGC suite.
+/// </summary>
 public class OgcLayerDto
 {
     /// <summary>Canonical layer name (entry.path or entry.path:innerLayer).</summary>

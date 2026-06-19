@@ -6,6 +6,9 @@ using Registry.Web.Models;
 
 namespace Registry.Web.Services.Ports;
 
+/// <summary>
+/// Indexed Hangfire enqueue/schedule interface that writes JobIndex rows alongside job creation.
+/// </summary>
 public interface IIndexedJobEnqueuer
 {
     string Enqueue(Expression<Action> methodCall, IndexPayload meta);

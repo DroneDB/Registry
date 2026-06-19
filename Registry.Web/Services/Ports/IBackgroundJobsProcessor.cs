@@ -8,6 +8,9 @@ using Registry.Web.Models;
 
 namespace Registry.Web.Services.Ports;
 
+/// <summary>
+/// Hangfire enqueue/schedule/delete/requeue interface for background job processing.
+/// </summary>
 public interface IBackgroundJobsProcessor
 {
     public string Enqueue(Expression<Action> methodCall);

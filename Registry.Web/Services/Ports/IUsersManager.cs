@@ -10,6 +10,9 @@ using Registry.Web.Models.DTO;
 
 namespace Registry.Web.Services.Ports;
 
+/// <summary>
+/// User CRUD interface (authenticate, list, create, delete, roles, password, storage).
+/// </summary>
 public interface IUsersManager
 {
     Task<AuthenticateResponse> Authenticate(string userName, string password);

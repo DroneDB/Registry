@@ -19,6 +19,9 @@ using Registry.Web.Utilities;
 
 namespace Registry.Web.Services.Managers;
 
+/// <summary>
+/// CRUD for organizations including creation, editing, deletion, and member management.
+/// </summary>
 public class OrganizationsManager : IOrganizationsManager
 {
     private readonly IAuthManager _authManager;

@@ -12,6 +12,9 @@ using Registry.Web.Services.Ports;
 
 namespace Registry.Web.Services.Managers;
 
+/// <summary>
+/// External login via remote Registry HTTP API.
+/// </summary>
 public class RemoteLoginManager : ILoginManager
 {
     private readonly ILogger<ILoginManager> _logger;

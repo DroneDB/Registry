@@ -10,6 +10,9 @@ using Registry.Ports;
 
 namespace Registry.Adapters.Thumbnail;
 
+/// <summary>
+/// HTTP-based thumbnail generator that calls a remote service.
+/// </summary>
 public class RemoteThumbnailGenerator : IThumbnailGenerator
 {
     private readonly ILogger<RemoteThumbnailGenerator> _logger;

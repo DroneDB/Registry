@@ -13,6 +13,9 @@ using Registry.Ports.DroneDB;
 
 namespace Registry.Adapters.DroneDB;
 
+/// <summary>
+/// P/Invoke wrapper for the native DroneDB C API.
+/// </summary>
 public class NativeDdbWrapper : IDdbWrapper
 {
     [DllImport("ddb", EntryPoint = "DDBRegisterProcess")]

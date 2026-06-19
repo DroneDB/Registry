@@ -6,6 +6,9 @@ using Registry.Web.Models.DTO;
 
 namespace Registry.Web.Services.Ports;
 
+/// <summary>
+/// Login provider interface for checking access via credentials or token.
+/// </summary>
 public interface ILoginManager
 {
     Task<LoginResultDto> CheckAccess(string userName, string password);

@@ -10,6 +10,9 @@ using Registry.Ports;
 
 namespace Registry.Web.Services.Managers;
 
+/// <summary>
+/// Distributed cache wrapper with registration/unregistration of data providers and pattern-based invalidation.
+/// </summary>
 public class CacheManager : ICacheManager
 {
     private class Carrier

@@ -6,6 +6,9 @@ using Registry.Web.Services.Ports;
 
 namespace Registry.Web.Services.Adapters;
 
+/// <summary>
+/// Read/write AppSettings from appsettings.json file.
+/// </summary>
 public class ConfigurationHelper : IConfigurationHelper<AppSettings>
 {
     private readonly string _configPath;
@@ -14,7 +17,7 @@ public class ConfigurationHelper : IConfigurationHelper<AppSettings>
     {
         _configPath = configPath;
     }
-    
+
     public AppSettings GetConfiguration()
     {
         // The appsettings file does not contain only appsettings

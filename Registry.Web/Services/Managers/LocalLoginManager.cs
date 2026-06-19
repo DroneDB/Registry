@@ -10,6 +10,9 @@ using Registry.Web.Services.Ports;
 
 namespace Registry.Web.Services.Managers;
 
+/// <summary>
+/// Local (Identity-based) login implementation for <see cref="ILoginManager"/>.
+/// </summary>
 public class LocalLoginManager : ILoginManager
 {
     private readonly UserManager<User> _userManager;

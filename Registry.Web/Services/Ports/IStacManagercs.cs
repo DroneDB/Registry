@@ -6,6 +6,9 @@ using Registry.Web.Models.DTO;
 
 namespace Registry.Web.Services.Ports;
 
+/// <summary>
+/// STAC (SpatioTemporal Asset Catalog) API interface for catalog, collection, and search operations.
+/// </summary>
 public interface IStacManager
 {
     Task<StacCatalogDto> GetCatalog();

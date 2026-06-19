@@ -27,7 +27,9 @@ public class VolumeCalculationRequestDto
     public double FlatElevation { get; set; }
 }
 
-/// <summary>Request body for <c>POST stockpile/detect</c>.</summary>
+/// <summary>
+/// Request body for <c>POST stockpile/detect</c>.
+/// </summary>
 public class StockpileDetectionRequestDto
 {
     /// <summary>Dataset-relative path of the elevation raster.</summary>
@@ -51,7 +53,9 @@ public class StockpileDetectionRequestDto
     public float? Sensitivity { get; set; }
 }
 
-/// <summary>Request body for <c>POST stockpile/detect-all</c>.</summary>
+/// <summary>
+/// Request body for <c>POST stockpile/detect-all</c>.
+/// </summary>
 public class StockpileBatchDetectionRequestDto
 {
     /// <summary>Dataset-relative path of the elevation raster.</summary>

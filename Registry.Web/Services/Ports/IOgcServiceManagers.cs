@@ -5,6 +5,9 @@ using Registry.Web.Services.Managers.Wcs;
 
 namespace Registry.Web.Services.Ports;
 
+/// <summary>
+/// OGC WMTS (Web Map Tile Service) manager interface.
+/// </summary>
 public interface IWmtsManager
 {
     Task<string> GetCapabilitiesAsync(string orgSlug, string dsSlug,

@@ -19,6 +19,9 @@ namespace Registry.Web.Services.Adapters;
 
 #nullable enable
 
+/// <summary>
+/// Write operations on the JobIndex table for Hangfire job tracking (upsert, update state, delete).
+/// </summary>
 public class JobIndexWriter(RegistryContext db, ILogger<JobIndexWriter> log) : IJobIndexWriter
 {
     public async Task UpsertOnEnqueueAsync(string jobId, IndexPayload meta, DateTime createdAtUtc,

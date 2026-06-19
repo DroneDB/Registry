@@ -25,6 +25,9 @@ using Registry.Web.Services.Ports;
 
 namespace Registry.Web.Services.Managers;
 
+/// <summary>
+/// User CRUD, authentication, role management, password changes, and storage info.
+/// </summary>
 public class UsersManager : IUsersManager
 {
     private readonly RoleManager<IdentityRole> _roleManager;

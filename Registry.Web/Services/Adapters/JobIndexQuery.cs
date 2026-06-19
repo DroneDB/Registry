@@ -11,6 +11,9 @@ using Registry.Web.Services.Ports;
 
 namespace Registry.Web.Services.Adapters;
 
+/// <summary>
+/// Query operations on the JobIndex table for Hangfire job tracking.
+/// </summary>
 public class JobIndexQuery(RegistryContext db) : IJobIndexQuery
 {
     public async Task<JobIndex[]> GetByOrgDsAsync(string orgSlug, string dsSlug, int skip = 0, int take = 200, CancellationToken ct = default)

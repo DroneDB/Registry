@@ -7,7 +7,9 @@ using Registry.Ports.DroneDB;
 
 namespace Registry.Web.Services.HeavyTasks.Models;
 
-/// <summary>Access level a tool requires on the target dataset.</summary>
+/// <summary>
+/// Access level a tool requires on the target dataset.
+/// </summary>
 public enum HeavyToolPermission
 {
     Read,
@@ -48,7 +50,9 @@ public sealed record HeavyToolProgress(
     string? Message = null,
     string? LogChunk = null);   // additional text to append to the log tail
 
-/// <summary>Context available to a tool during validation and planning.</summary>
+/// <summary>
+/// Context available to a tool during validation and planning.
+/// </summary>
 public interface IHeavyToolValidationContext
 {
     IDDB Ddb { get; }
@@ -56,7 +60,9 @@ public interface IHeavyToolValidationContext
     ILogger Logger { get; }
 }
 
-/// <summary>Context available to a tool during execution.</summary>
+/// <summary>
+/// Context available to a tool during execution.
+/// </summary>
 public interface IHeavyToolExecutionContext : IHeavyToolValidationContext
 {
     string TaskId { get; }

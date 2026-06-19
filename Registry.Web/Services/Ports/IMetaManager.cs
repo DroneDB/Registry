@@ -5,6 +5,9 @@ using Registry.Web.Models.DTO;
 
 namespace Registry.Web.Services.Ports;
 
+/// <summary>
+/// Metadata CRUD interface (add, set, remove, get, unset, list, dump).
+/// </summary>
 public interface IMetaManager
 {
     public Task<MetaDto> Add(string orgSlug, string dsSlug, string key, string data, string path = null);

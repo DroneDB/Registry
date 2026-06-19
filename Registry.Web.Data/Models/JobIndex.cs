@@ -4,31 +4,58 @@ using System.ComponentModel.DataAnnotations;
 
 namespace Registry.Web.Data.Models;
 
+/// <summary>
+/// EF entity for Hangfire job index tracking (state, timestamps, tool info).
+/// </summary>
 public class JobIndex
 {
+    /// <summary>Hangfire job identifier (primary key).</summary>
     [Key]
     public string JobId { get; set; } = null!; // PK (string)
 
+    /// <summary>Organization slug this job belongs to.</summary>
     public string OrgSlug { get; set; } = null!;
+
+    /// <summary>Dataset slug this job belongs to.</summary>
     public string DsSlug { get; set; } = null!;
 
+    /// <summary>Content hash of the entry being processed.</summary>
     public string? Hash { get; set; }
+
+    /// <summary>File path within the dataset.</summary>
     public string? Path { get; set; }
+
+    /// <summary>User ID of the user who triggered the job.</summary>
     public string? UserId { get; set; }
 
+    /// <summary>Hangfire queue name.</summary>
     public string? Queue { get; set; }
 
+    /// <summary>Job creation timestamp (UTC).</summary>
     public DateTime CreatedAtUtc { get; set; }
+
+    /// <summary>Timestamp of the last state transition (UTC).</summary>
     public DateTime? LastStateChangeUtc { get; set; }
 
+    /// <summary>Current Hangfire state (Created, Processing, Succeeded, Failed, Deleted).</summary>
     public string CurrentState { get; set; } = "Created";
 
+    /// <summary>Human-readable method display name for the job.</summary>
     public string? MethodDisplay { get; set; }
 
+    /// <summary>Timestamp when the job started processing (UTC).</summary>
     public DateTime? ProcessingAtUtc { get; set; }
+
+    /// <summary>Timestamp when the job succeeded (UTC).</summary>
     public DateTime? SucceededAtUtc { get; set; }
+
+    /// <summary>Timestamp when the job failed (UTC).</summary>
     public DateTime? FailedAtUtc { get; set; }
+
+    /// <summary>Timestamp when the job was deleted (UTC).</summary>
     public DateTime? DeletedAtUtc { get; set; }
+
+    /// <summary>Timestamp when the job was scheduled (UTC).</summary>
     public DateTime? ScheduledAtUtc { get; set; }
 
     // --- Processing Platform (Layer 1 - Task substrate) extensions ---

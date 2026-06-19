@@ -2,13 +2,16 @@
 
 namespace Registry.Adapters.DroneDB;
 
+/// <summary>
+/// Base exception for DroneDB native errors.
+/// </summary>
 public class DdbException : Exception
 {
     public DdbException()
     {
 
     }
-        
+
     public DdbException(string message) : base(message)
     {
 

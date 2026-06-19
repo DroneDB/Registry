@@ -9,6 +9,9 @@ using Registry.Web.Services.Ports;
 
 namespace Registry.Web.Services.Adapters;
 
+/// <summary>
+/// Hangfire job enqueue/schedule/delete wrapper with indexed job support.
+/// </summary>
 public class BackgroundJobsProcessor : IBackgroundJobsProcessor
 {
     private readonly IBackgroundJobClient _client;

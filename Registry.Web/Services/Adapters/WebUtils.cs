@@ -18,6 +18,9 @@ using Registry.Web.Utilities;
 
 namespace Registry.Web.Services.Adapters;
 
+/// <summary>
+/// IUtils implementation: organization/dataset lookup, URL generation, and storage checks.
+/// </summary>
 public class WebUtils : IUtils
 {
     private readonly IAuthManager _authManager;

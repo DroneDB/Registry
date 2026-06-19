@@ -7,6 +7,9 @@ using Registry.Web.Models.DTO;
 
 namespace Registry.Web.Services.Ports;
 
+/// <summary>
+/// Push workflow interface (init, upload, save meta, commit).
+/// </summary>
 public interface IPushManager
 {
     Task<PushInitResultDto> Init(string orgSlug, string dsSlug, string checksum, StampDto stamp);

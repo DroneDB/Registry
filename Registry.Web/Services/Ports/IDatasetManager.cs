@@ -5,6 +5,9 @@ using Registry.Web.Models.DTO;
 
 namespace Registry.Web.Services.Ports;
 
+/// <summary>
+/// Dataset CRUD interface (list, get, add, edit, delete, rename, move).
+/// </summary>
 public interface IDatasetsManager
 {
     public Task<IEnumerable<DatasetDto>> List(string orgSlug, bool includeThumbnailCheck = false);

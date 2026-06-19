@@ -2,6 +2,9 @@
 
 namespace Registry.Adapters.DroneDB;
 
+/// <summary>
+/// Unix timestamp to DateTime conversion helper.
+/// </summary>
 public static class Utils
 {
     private static readonly DateTime UnixEpoch = new(1970, 1, 1, 0, 0, 0, DateTimeKind.Utc);

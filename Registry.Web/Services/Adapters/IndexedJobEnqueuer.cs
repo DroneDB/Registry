@@ -12,6 +12,9 @@ using Registry.Web.Services.Ports;
 
 namespace Registry.Web.Services.Adapters;
 
+/// <summary>
+/// Parameter names used to pass metadata through Hangfire job arguments.
+/// </summary>
 public static class JobParamKeys
 {
     public const string OrgSlug = "orgSlug";
@@ -22,6 +25,9 @@ public static class JobParamKeys
     public const string Queue = "queue"; // Optional
 }
 
+/// <summary>
+/// Indexed Hangfire enqueue/schedule wrapper that writes JobIndex rows alongside job creation.
+/// </summary>
 public class IndexedJobEnqueuer(IBackgroundJobClient client, IServiceProvider sp, ILogger<IndexedJobEnqueuer> log)
     : IIndexedJobEnqueuer
 {

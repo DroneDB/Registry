@@ -16,6 +16,9 @@ using Registry.Ports.DroneDB;
 
 namespace Registry.Adapters.DroneDB;
 
+/// <summary>
+/// Main DroneDB adapter implementing <see cref="IDDB"/> (init, add, remove, info, build, clone, etc.).
+/// </summary>
 public class DDB : IDDB
 {
     private static readonly FileSystem FileSystem = new();

@@ -9,6 +9,9 @@ using Registry.Ports;
 
 namespace Registry.Adapters;
 
+/// <summary>
+/// IFileSystem implementation wrapping System.IO for testability.
+/// </summary>
 public class FileSystem : IFileSystem
 {
     #region Synchronous File Operations

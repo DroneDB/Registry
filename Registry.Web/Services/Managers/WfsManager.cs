@@ -22,7 +22,9 @@ using SkiaSharp;
 
 namespace Registry.Web.Services.Managers;
 
-/// <summary>WFS 2.0.0 manager (BBOX filter + pagination, no CQL).</summary>
+/// <summary>
+/// WFS 2.0.0 manager (BBOX filter + pagination, no CQL).
+/// </summary>
 public class WfsManager : OgcManagerBase, IWfsManager
 {
     private readonly ILogger<WfsManager> _logger;

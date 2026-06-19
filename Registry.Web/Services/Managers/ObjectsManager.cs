@@ -24,6 +24,9 @@ using static Registry.Web.Services.CacheCategories;
 
 namespace Registry.Web.Services.Managers;
 
+/// <summary>
+/// File/object operations within datasets: list, search, add, move, copy, delete, download, thumbnails, tiles, builds.
+/// </summary>
 public class ObjectsManager : IObjectsManager
 {
     private readonly ILogger<ObjectsManager> _logger;

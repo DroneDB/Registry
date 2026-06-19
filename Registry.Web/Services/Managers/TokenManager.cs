@@ -8,6 +8,9 @@ using Registry.Web.Services.Ports;
 
 namespace Registry.Web.Services.Managers;
 
+/// <summary>
+/// JWT token validation (active/revoked checks).
+/// </summary>
 public class TokenManager : ITokenManager
 {
     private readonly IHttpContextAccessor _httpContextAccessor;
@@ -24,7 +27,7 @@ public class TokenManager : ITokenManager
     public bool IsCurrentActiveToken() {
         return IsActive(GetCurrent());
     }
- 
+
     public bool IsActive(string token)
     {
         return _appSettings.RevokedTokens?.FirstOrDefault(item => item == token) == null;
@@ -39,9 +42,9 @@ public class TokenManager : ITokenManager
 
         var authorizationHeader = request.Headers["authorization"];
 
-        return 
-            authorizationHeader == StringValues.Empty ? 
-                request.Cookies[_appSettings.AuthCookieName] : 
+        return
+            authorizationHeader == StringValues.Empty ?
+                request.Cookies[_appSettings.AuthCookieName] :
                 authorizationHeader.SingleOrDefault(h => h.StartsWith("Bearer", StringComparison.OrdinalIgnoreCase), "").Split(" ").Last();
     }
 

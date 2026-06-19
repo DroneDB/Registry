@@ -22,7 +22,9 @@ using Registry.Web.Utilities.Ogc;
 
 namespace Registry.Web.Services.Managers;
 
-/// <summary>OGC API – Features manager (JSON-based REST).</summary>
+/// <summary>
+/// OGC API – Features manager (JSON-based REST).
+/// </summary>
 public class OgcApiFeaturesManager : OgcManagerBase, IOgcApiFeaturesManager
 {
     private readonly ILogger<OgcApiFeaturesManager> _logger;

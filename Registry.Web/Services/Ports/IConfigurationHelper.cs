@@ -4,6 +4,9 @@ using Registry.Web.Models.Configuration;
 
 namespace Registry.Web.Services.Ports;
 
+/// <summary>
+/// Generic configuration read/write interface.
+/// </summary>
 public interface IConfigurationHelper<T>
 {
     public T GetConfiguration();

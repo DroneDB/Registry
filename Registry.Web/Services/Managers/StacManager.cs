@@ -20,6 +20,9 @@ using Registry.Web.Utilities;
 
 namespace Registry.Web.Services.Managers;
 
+/// <summary>
+/// STAC (SpatioTemporal Asset Catalog) API implementation for dataset and item listings.
+/// </summary>
 public class StacManager : IStacManager
 {
     private readonly IAuthManager _authManager;

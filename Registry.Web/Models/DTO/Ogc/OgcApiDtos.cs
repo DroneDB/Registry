@@ -26,7 +26,9 @@ public class MvtVectorLayerDto
     [JsonProperty("maxzoom")] public int MaxZoom { get; set; } = 18;
 }
 
-/// <summary>OGC API – Features: landing page links.</summary>
+/// <summary>
+/// OGC API – Features: landing page links.
+/// </summary>
 public class OgcApiLandingDto
 {
     [JsonProperty("title")] public string Title { get; set; } = "DroneDB OGC API";
