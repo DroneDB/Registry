@@ -101,6 +101,71 @@
 - API client: Functions in `src/api/` use axios instances with JWT interceptors.
 - Testing: **No unit test framework configured** (no Jest/Vitest). Only Playwright for E2E testing.
 
+### Comment Standards
+
+#### Single-line comments (`//`)
+
+| Pattern | Usage |
+|---------|-------|
+| `// Description` (above line) | Primary style for explanatory comments |
+| `// Description` (inline) | Brief annotations on the same line (data declarations, one-liners) |
+| `// ---- Section Name ----` | Section separator inside large methods/option-objects |
+| `// TODO:` | Deferred action items |
+| `// NOTE:` | Developer notes explaining non-obvious decisions (uppercase NOTE) |
+
+Rules:
+- Always one space after `//` — never `//comment`
+- Capital first letter
+- No trailing period on short comments; longer multi-line prose may end with a period
+- Language: **English only**
+
+#### Multi-line and block comments (`/* */`)
+
+| Pattern | Usage |
+|---------|-------|
+| `catch (e) { /* noop */ }` | Intentionally empty catch — use `/* noop */` as the message |
+| `catch (e) { /* ignore */ }` | Alternative for intentionally swallowed errors |
+| `catch (e) { /* short note */ }` | One-liner description allowed when meaning differs from noop |
+| `/* Description */` in CSS | Section labels inside `<style>` blocks |
+| `/* webpackChunkName: "..." */` | Webpack magic comments in dynamic imports |
+| `/* global ... */` | ESLint global declarations |
+
+Rules:
+- Catch variable: always **`e`** — never `_`, `__`, or bare `catch { }`
+- No multi-line prose comments (`/* ... */`) in JS/Vue script code; use `//` for that
+
+#### JSDoc (`/** */`)
+
+| Context | Rule |
+|---------|------|
+| All composables (`composables/`) | Top-level `/** ComponentName - description. */` block required |
+| All components (`components/`) | Top-level `/** ComponentName - description. */` block required |
+| Complex views (`features/`) >500 lines | Top-level `/** ViewName - description. */` block required |
+| Methods in complex files | `/** Short description. */` on individual methods |
+| Simple views <500 lines | Optional |
+
+Format (follow `ErrorBoundary.vue` and `VirtualScroller.vue` as canonical examples):
+```js
+/**
+ * ComponentName - One-line summary.
+ *
+ * Optional additional context paragraph.
+ *
+ * Props:
+ *   propName - Description.
+ */
+```
+
+#### Vue template comments (`<!-- -->`)
+
+- `<!-- Section Label -->` for template regions — already consistent, no change needed
+- Capital first letter, no trailing period
+
+#### ESLint
+
+- Config: `eslint.config.js` (flat config, ESLint v10)
+- `spaced-comment` rule enforces the space-after-`//` convention as a **warning**
+
 ## AI Agent Guidelines
 
 ### Code Analysis
