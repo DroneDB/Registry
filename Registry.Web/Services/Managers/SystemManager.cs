@@ -29,6 +29,9 @@ using Registry.Web.Utilities;
 
 namespace Registry.Web.Services.Managers;
 
+/// <summary>
+/// System-level operations: cleanup, version, visibility migration, import, rescan, job index cleanup.
+/// </summary>
 public class SystemManager : ISystemManager
 {
     private readonly IAuthManager _authManager;

@@ -7,7 +7,9 @@ namespace Registry.Web.Services.HeavyTasks.NodeOdm;
 /// </summary>
 public sealed record NodeOdmEndpoint(string Id, string Url, string? Token, string? Title);
 
-/// <summary>NodeODM task lifecycle status codes (NodeODM REST contract).</summary>
+/// <summary>
+/// NodeODM task lifecycle status codes (NodeODM REST contract).
+/// </summary>
 public enum NodeOdmTaskStatusCode
 {
     Queued = 10,

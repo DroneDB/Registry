@@ -64,6 +64,27 @@ public class BuildArtifactResolverTests
     }
 
     [Test]
+    public void GetGsplatPath_EndsWithModelSpz()
+    {
+        var result = Norm(_resolver.GetGsplatPath(_ddb.Object, Hash));
+        result.ShouldEndWith($".ddb/build/{Hash}/gsplat/model.spz");
+    }
+
+    [Test]
+    public void GetGsplatLodPath_EndsWithModelRad()
+    {
+        var result = Norm(_resolver.GetGsplatLodPath(_ddb.Object, Hash));
+        result.ShouldEndWith($".ddb/build/{Hash}/gsplat/model.rad");
+    }
+
+    [Test]
+    public void GetGsplatGeorefPath_EndsWithGeorefJson()
+    {
+        var result = Norm(_resolver.GetGsplatGeorefPath(_ddb.Object, Hash));
+        result.ShouldEndWith($".ddb/build/{Hash}/gsplat/georef.json");
+    }
+
+    [Test]
     public void GetMvtDir_ReturnsAbsolutePath()
     {
         var result = _resolver.GetMvtDir(_ddb.Object, Hash);

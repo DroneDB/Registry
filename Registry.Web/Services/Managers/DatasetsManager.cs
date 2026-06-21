@@ -19,6 +19,9 @@ using Registry.Web.Utilities;
 
 namespace Registry.Web.Services.Managers;
 
+/// <summary>
+/// CRUD operations for datasets including creation, editing, deletion, renaming, and attribute changes.
+/// </summary>
 public class DatasetsManager : IDatasetsManager
 {
     private readonly RegistryContext _context;

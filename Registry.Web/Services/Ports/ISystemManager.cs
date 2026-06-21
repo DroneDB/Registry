@@ -6,6 +6,9 @@ using Registry.Web.Models.DTO;
 
 namespace Registry.Web.Services.Ports;
 
+/// <summary>
+/// System-level operations interface (cleanup, version, migration, import, rescan).
+/// </summary>
 public interface ISystemManager
 {
     public Task<CleanupBatchesResultDto> CleanupBatches();

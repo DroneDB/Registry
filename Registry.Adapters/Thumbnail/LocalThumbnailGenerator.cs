@@ -8,6 +8,9 @@ using Registry.Ports;
 
 namespace Registry.Adapters.Thumbnail;
 
+/// <summary>
+/// Local thumbnail generator using the DroneDB native library.
+/// </summary>
 public class LocalThumbnailGenerator : IThumbnailGenerator
 {
     private readonly ILogger<LocalThumbnailGenerator> _logger;

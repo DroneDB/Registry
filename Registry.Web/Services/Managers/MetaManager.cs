@@ -13,6 +13,9 @@ using Registry.Web.Utilities;
 
 namespace Registry.Web.Services.Managers;
 
+/// <summary>
+/// Key-value metadata CRUD for datasets via DroneDB native calls.
+/// </summary>
 public class MetaManager : IMetaManager
 {
     private readonly ILogger<MetaManager> _logger;

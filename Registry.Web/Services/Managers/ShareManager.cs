@@ -19,6 +19,9 @@ using Entry = Registry.Web.Data.Models.Entry;
 
 namespace Registry.Web.Services.Managers;
 
+/// <summary>
+/// Share/upload batch workflow: init, upload, commit, rollback, chunked uploads.
+/// </summary>
 public class ShareManager : IShareManager
 {    private readonly IOrganizationsManager _organizationsManager;
     private readonly IDatasetsManager _datasetsManager;

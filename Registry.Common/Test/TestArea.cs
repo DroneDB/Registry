@@ -4,6 +4,9 @@ using System.IO;
 
 namespace Registry.Common.Test;
 
+/// <summary>
+/// Temp directory creator for test isolation with auto-cleanup on dispose.
+/// </summary>
 public class TestArea : IDisposable
 {
     public string Name { get; }

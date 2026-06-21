@@ -23,7 +23,9 @@ public interface IArchiveExtractor
     IArchiveReadSession Open(string archivePath);
 }
 
-/// <summary>A read session over an opened archive. Dispose to release the file handle.</summary>
+/// <summary>
+/// A read session over an opened archive. Dispose to release the file handle.
+/// </summary>
 public interface IArchiveReadSession : IDisposable
 {
     /// <summary>Number of non-directory entries (used to compute progress).</summary>

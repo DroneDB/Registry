@@ -4,7 +4,9 @@ using System.Text.Json;
 
 namespace Registry.Web.Services.HeavyTasks.Ports;
 
-/// <summary>Outcome codes for a quota evaluation (maps to HTTP status).</summary>
+/// <summary>
+/// Outcome codes for a quota evaluation (maps to HTTP status).
+/// </summary>
 public enum HeavyTaskQuotaCode
 {
     Ok = 0,

@@ -10,7 +10,7 @@ RUN apt-get update && apt-get install -y --fix-missing --no-install-recommends g
 
 # Install dotnet and nodejs
 RUN curl -sSL https://dot.net/v1/dotnet-install.sh | bash /dev/stdin --channel 10.0 \
-    && curl -sL https://deb.nodesource.com/setup_22.x | bash - \
+    && curl -sL https://deb.nodesource.com/setup_24.x | bash - \
     && apt-get install -y nodejs \
     && apt-get clean && rm -rf /var/lib/apt/lists/*
 

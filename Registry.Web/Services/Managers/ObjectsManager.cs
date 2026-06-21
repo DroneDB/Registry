@@ -24,6 +24,9 @@ using static Registry.Web.Services.CacheCategories;
 
 namespace Registry.Web.Services.Managers;
 
+/// <summary>
+/// File/object operations within datasets: list, search, add, move, copy, delete, download, thumbnails, tiles, builds.
+/// </summary>
 public class ObjectsManager : IObjectsManager
 {
     private readonly ILogger<ObjectsManager> _logger;
@@ -458,6 +461,7 @@ public class ObjectsManager : IObjectsManager
                 case EntryType.Panorama:
                 case EntryType.GeoPanorama:
                 case EntryType.Vector:
+                case EntryType.GaussianSplat:
                 default:
                 {
                     var sourceLocalFilePath = sourceDdb.GetLocalPath(sourcePath);
@@ -703,6 +707,7 @@ public class ObjectsManager : IObjectsManager
             case EntryType.Panorama:
             case EntryType.GeoPanorama:
             case EntryType.Vector:
+            case EntryType.GaussianSplat:
             default:
             {
                 var sourceLocalFilePath = ddb.GetLocalPath(source);
@@ -1683,6 +1688,7 @@ public class ObjectsManager : IObjectsManager
             EntryType.GeoRaster => CommonUtils.SafeCombine(BuildBasePath, entry.Hash, "cog", "cog.tif"),
             EntryType.Vector => CommonUtils.SafeCombine(BuildBasePath, entry.Hash, "vec", "source.gpkg"),
             EntryType.Model => CommonUtils.SafeCombine(BuildBasePath, entry.Hash, "nxs", "model.nxz"),
+            EntryType.GaussianSplat => CommonUtils.SafeCombine(BuildBasePath, entry.Hash, "gsplat", "model.rad"),
             _ => entry.Path
         };
 

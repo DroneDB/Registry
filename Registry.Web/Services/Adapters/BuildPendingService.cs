@@ -12,6 +12,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Registry.Ports;
 using Registry.Ports.DroneDB;
+using Registry.Web.Attributes;
 using Registry.Web.Data;
 using Registry.Web.Models;
 using Registry.Web.Services.Ports;
@@ -180,6 +181,116 @@ public class BuildPendingService
         }
     }
 
+    // Exponential backoff (in minutes) for self-scheduled pending-build retries.
+    // The delay is capped at the final value; once MaxRetryAttempts is reached the
+    // chain stops and the low-frequency safety-net sweep takes over.
+    private static readonly int[] RetryBackoffMinutes = [1, 2, 5, 10, 20, 40, 60];
+    private const int MaxRetryAttempts = 12;
+
+    /// <summary>
+    /// Event-driven replacement for per-minute polling. Invoked after a build job
+    /// for a dataset reaches a terminal state. If the dataset still has pending
+    /// builds, schedules a single delayed <see cref="HangfireUtils.BuildPendingWrapper"/>
+    /// retry using exponential backoff; otherwise clears the retry tracking so the
+    /// chain stops. When the retry budget is exhausted it defers to the safety-net sweep.
+    /// </summary>
+    public async Task ScheduleRetryIfPending(string orgSlug, string dsSlug)
+    {
+        try
+        {
+            var ds = await _context.Datasets
+                .AsNoTracking()
+                .Include(d => d.Organization)
+                .FirstOrDefaultAsync(d => d.Organization.Slug == orgSlug && d.Slug == dsSlug);
+
+            if (ds?.Organization == null)
+            {
+                _logger.LogDebug("ScheduleRetryIfPending: dataset {Org}/{Ds} not found, skipping", orgSlug, dsSlug);
+                return;
+            }
+
+            var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
+
+            bool hasPending;
+            try
+            {
+                hasPending = ddb.IsBuildPending();
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "ScheduleRetryIfPending: failed to check pending for {Org}/{Ds}", orgSlug, dsSlug);
+                return;
+            }
+
+            string? stampChecksum = null;
+            try { stampChecksum = ddb.GetStamp().Checksum; } catch { /* best-effort */ }
+
+            var cacheKey = ForDataset(orgSlug, dsSlug);
+            var cached = await _cacheManager.GetAsync(MagicStrings.BuildPendingTrackerCacheSeed, cacheKey);
+            CacheState state;
+            try { state = cached is { Length: > 0 } ? DeserializeCacheState(cached) : new CacheState(); }
+            catch { state = new CacheState(); }
+
+            if (!hasPending)
+            {
+                // Nothing pending: terminate the retry chain and clear tracking.
+                state.HasPending = false;
+                state.RetryAttempt = 0;
+                state.ScheduledRetryJobId = null;
+                state.StampChecksum = stampChecksum;
+                state.LastCheckBinary = DateTime.UtcNow.ToBinary();
+                await _cacheManager.SetAsync(MagicStrings.BuildPendingTrackerCacheSeed, cacheKey, SerializeCacheState(state));
+                return;
+            }
+
+            // Dedup: skip if a retry is already in flight for this dataset.
+            if (!string.IsNullOrEmpty(state.ScheduledRetryJobId))
+            {
+                var status = _backgroundJob.GetJobStatus(state.ScheduledRetryJobId);
+                if (status is JobStatus.Scheduled or JobStatus.Enqueued or JobStatus.Processing or JobStatus.Awaiting)
+                {
+                    _logger.LogDebug("ScheduleRetryIfPending: retry {JobId} already in flight for {Org}/{Ds}, skipping",
+                        state.ScheduledRetryJobId, orgSlug, dsSlug);
+                    return;
+                }
+            }
+
+            if (state.RetryAttempt >= MaxRetryAttempts)
+            {
+                _logger.LogInformation(
+                    "ScheduleRetryIfPending: retry budget exhausted ({Attempts}) for {Org}/{Ds}; deferring to safety-net sweep",
+                    state.RetryAttempt, orgSlug, dsSlug);
+                state.HasPending = true;
+                state.StampChecksum = stampChecksum;
+                state.LastCheckBinary = DateTime.UtcNow.ToBinary();
+                await _cacheManager.SetAsync(MagicStrings.BuildPendingTrackerCacheSeed, cacheKey, SerializeCacheState(state));
+                return;
+            }
+
+            var delayMinutes = RetryBackoffMinutes[Math.Min(state.RetryAttempt, RetryBackoffMinutes.Length - 1)];
+            var delay = TimeSpan.FromMinutes(delayMinutes);
+
+            var meta = new IndexPayload(orgSlug, dsSlug, null, MagicStrings.AutoBuildServiceUserId);
+            var jobId = _backgroundJob.ScheduleIndexed(
+                () => HangfireUtils.BuildPendingWrapper(ddb, null), meta, delay);
+
+            state.HasPending = true;
+            state.RetryAttempt += 1;
+            state.ScheduledRetryJobId = jobId;
+            state.StampChecksum = stampChecksum;
+            state.LastCheckBinary = DateTime.UtcNow.ToBinary();
+            await _cacheManager.SetAsync(MagicStrings.BuildPendingTrackerCacheSeed, cacheKey, SerializeCacheState(state));
+
+            _logger.LogInformation(
+                "Scheduled pending-build retry for {Org}/{Ds} in {Delay}m (attempt {Attempt}/{Max}): JobId={JobId}",
+                orgSlug, dsSlug, delayMinutes, state.RetryAttempt, MaxRetryAttempts, jobId);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "ScheduleRetryIfPending failed for {Org}/{Ds}", orgSlug, dsSlug);
+        }
+    }
+
     /// <summary>
     /// Updates the cache with the current pending status for a dataset.
     /// </summary>
@@ -243,11 +354,14 @@ public class BuildPendingService
     }
 
     /// <summary>
-    /// Main recurring job method - processes all datasets for pending builds.
-    /// Runs every minute via Hangfire.
+    /// Low-frequency safety-net sweep that scans every dataset for pending builds.
+    /// Day-to-day retries are event-driven (see <see cref="ScheduleRetryIfPending"/>);
+    /// this recurring job only backstops retries lost to restarts or left over from
+    /// before the event-driven mechanism existed.
     /// </summary>
     [DisableConcurrentExecution(timeoutInSeconds: 300)]
-    [AutomaticRetry(Attempts = 0)] // Don't retry on failure - will run again next minute
+    [AutomaticRetry(Attempts = 0)] // Don't retry on failure - the safety-net sweep runs again later
+    [JobExpiration(ExpirationTimeoutInMinutes = 60)] // Success records are noise; expire quickly to curb churn
     public async Task ProcessPendingBuilds(PerformContext? context = null)
     {
         var startTime = DateTime.UtcNow;
@@ -477,6 +591,10 @@ public class BuildPendingService
         public bool HasPending { get; set; }
         public long LastCheckBinary { get; set; }
         public string? StampChecksum { get; set; }
+
+        // Event-driven retry tracking (see ScheduleRetryIfPending).
+        public int RetryAttempt { get; set; }
+        public string? ScheduledRetryJobId { get; set; }
     }
 
     private class ProcessingStats

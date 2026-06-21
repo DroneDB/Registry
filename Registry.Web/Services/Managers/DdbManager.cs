@@ -9,6 +9,9 @@ using Registry.Web.Models.Configuration;
 
 namespace Registry.Web.Services.Managers;
 
+/// <summary>
+/// Factory for IDDB instances; resolves dataset folder paths and creates DDB wrappers.
+/// </summary>
 public class DdbManager : IDdbManager
 {
     private readonly ILogger<DdbManager> _logger;

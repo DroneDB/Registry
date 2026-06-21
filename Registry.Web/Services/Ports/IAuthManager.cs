@@ -10,6 +10,9 @@ using Registry.Web.Services.Managers;
 
 namespace Registry.Web.Services.Ports;
 
+/// <summary>
+/// Authorization interface (current user, roles, access control checks).
+/// </summary>
 public interface IAuthManager
 {
     public Task<User> GetCurrentUser();
@@ -23,7 +26,7 @@ public interface IAuthManager
     public Task<string> SafeGetCurrentUserName();
 
     public Task<bool> IsOwnerOrAdmin(Dataset ds);
-        
+
     public Task<bool> IsOwnerOrAdmin(Organization org);
 
     public Task<bool> UserExists(string userId);
@@ -36,6 +39,6 @@ public interface IAuthManager
     public Task<bool> CanRefreshToken(User user);
 
     public Task<bool> CanRefreshToken();
-    
+
     public Task<DatasetPermissionsDto> GetDatasetPermissions(Dataset dataset);
 }

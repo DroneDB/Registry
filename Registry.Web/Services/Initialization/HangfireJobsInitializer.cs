@@ -19,6 +19,12 @@ internal class HangfireJobsInitializer
     private readonly IServiceProvider _services;
     private readonly ILogger _logger;
 
+    /// <summary>
+    /// Recurring job ids retired in newer versions. Removed on startup so older
+    /// deployments stop executing obsolete definitions left in Hangfire storage.
+    /// </summary>
+    private static readonly string[] DeprecatedRecurringJobIds = [];
+
     public HangfireJobsInitializer(IServiceProvider services, ILogger logger)
     {
         _services = services ?? throw new ArgumentNullException(nameof(services));
@@ -41,6 +47,16 @@ internal class HangfireJobsInitializer
 
     private void SetupRecurringJobs(AppSettings appSettings, IRecurringJobManager recurringJobManager)
     {
+        // Migration: remove recurring jobs retired in newer versions. Surviving jobs
+        // are re-scheduled by the AddOrUpdate calls below, which overwrite any cron
+        // previously persisted in Hangfire storage - this is how the legacy per-minute
+        // "process-pending-builds" schedule migrates to the new low-frequency cadence.
+        foreach (var jobId in DeprecatedRecurringJobIds)
+        {
+            recurringJobManager.RemoveIfExists(jobId);
+            _logger.LogInformation("Removed deprecated recurring job '{JobId}'", jobId);
+        }
+
         ScheduleJob(recurringJobManager, "cleanup-expired-jobs",
             ResolveCron(appSettings.CleanupExpiredJobsCron, Cron.Daily()),
             cron => recurringJobManager.AddOrUpdate(
@@ -49,14 +65,14 @@ internal class HangfireJobsInitializer
                 cron));
 
         ScheduleJob(recurringJobManager, "sync-jobindex-states",
-            ResolveCron(appSettings.SyncJobIndexStatesCron, "*/5 * * * *"),
+            ResolveCron(appSettings.SyncJobIndexStatesCron, "0 * * * *"),
             cron => recurringJobManager.AddOrUpdate<JobIndexSyncService>(
                 "sync-jobindex-states",
                 service => service.SyncJobIndexStates(null),
                 cron));
 
         ScheduleJob(recurringJobManager, "process-pending-builds",
-            ResolveCron(appSettings.ProcessPendingBuildsCron, "* * * * *"),
+            ResolveCron(appSettings.ProcessPendingBuildsCron, "0 */6 * * *"),
             cron => recurringJobManager.AddOrUpdate<BuildPendingService>(
                 "process-pending-builds",
                 service => service.ProcessPendingBuilds(null),

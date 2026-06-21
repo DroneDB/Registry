@@ -22,7 +22,9 @@ using SkiaSharp;
 
 namespace Registry.Web.Services.Managers;
 
-/// <summary>WMS 1.3.0 (and best-effort 1.1.1) manager.</summary>
+/// <summary>
+/// WMS 1.3.0 (and best-effort 1.1.1) manager.
+/// </summary>
 public class WmsManager : OgcManagerBase, IWmsManager
 {
     private readonly ILogger<WmsManager> _logger;

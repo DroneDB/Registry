@@ -4,7 +4,7 @@
 
 DroneDB Registry is a comprehensive geospatial data management and storage platform. It provides JWT authentication, a full REST API, and STAC compliance for interoperability.
 
-View orthophotos, point clouds, 3D models (OBJ, GLTF, GLB), panoramas and more directly in the browser with interactive measurement tools.
+View orthophotos, point clouds, 3D models (OBJ, GLTF, GLB), Gaussian splats, panoramas and more directly in the browser with interactive measurement tools.
 
 ## ✨ Features
 
@@ -14,7 +14,7 @@ View orthophotos, point clouds, 3D models (OBJ, GLTF, GLB), panoramas and more d
 - **STAC Compliance** - Compliant with STAC 1.1.0 and STAC API 1.0.0
 - **OGC Services** - WMS, WFS, WMTS, WCS and OGC API (Features + Tiles) served directly from any dataset
 - **On-Demand Processing** - Automatic thumbnails, tiles, COG and streaming format generation
-- **User Management** - Role-based access control with organizations and storage quotas
+- **User Management** - Role-based access control with organizations, storage quotas, and optional LDAP authentication
 
 ### Supported Formats
 
@@ -23,6 +23,7 @@ View orthophotos, point clouds, 3D models (OBJ, GLTF, GLB), panoramas and more d
 | Images | JPG, JPEG, DNG, TIF, TIFF, PNG, GIF, WEBP |
 | Point Clouds | LAS, LAZ, E57, PTS, XYZ, PLY* |
 | 3D Models | OBJ, GLTF, GLB, PLY* |
+| Gaussian Splats | SPLAT, SPZ |
 | Rasters | GeoTIFF (orthophotos, DEMs) |
 | Vector | GeoJSON, DXF, DWG, SHP, SHZ, FGB, TopoJSON, KML, KMZ, GPKG |
 | Videos | MP4, MOV, WEBM, M4V, AVI, MKV |
@@ -58,7 +59,7 @@ Join our Discord server to get help, share feedback, discuss features, and conne
 docker run -it --rm -p 5000:5000 -v ${PWD}/registry-data:/data dronedb/registry
 ```
 
-Open [http://localhost:5000](http://localhost:5000) • Default credentials: `admin` / `password`
+Open [http://localhost:5000](http://localhost:5000) • Default credentials: `admin` / `password123`
 
 > ⚠️ Change the default password immediately at [http://localhost:5000/account](http://localhost:5000/account)
 
@@ -112,8 +113,8 @@ for detailed QGIS configuration steps.
 
 ### Requirements
 
-* [.NET 9.0 SDK](https://dotnet.microsoft.com/en-us/download/dotnet/9.0)
-* [Node.js 22+](https://nodejs.org/) (LTS recommended)
+* [.NET 10.0 SDK](https://dotnet.microsoft.com/en-us/download/dotnet/10.0)
+* [Node.js 24+](https://nodejs.org/) (LTS recommended)
 * [DroneDB Library](https://github.com/DroneDB/DroneDB/releases/latest) (add to PATH)
 
 ### Build from Source

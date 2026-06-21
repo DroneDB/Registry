@@ -74,6 +74,9 @@ public static class StartupExtenders
 
                     var buildLogLogger = sp.GetRequiredService<ILogger<BuildLogCaptureFilter>>();
                     configuration.UseFilter(new BuildLogCaptureFilter(sp, buildLogLogger));
+
+                    var buildRetryLogger = sp.GetRequiredService<ILogger<BuildRetrySchedulerFilter>>();
+                    configuration.UseFilter(new BuildRetrySchedulerFilter(sp, buildRetryLogger));
                 });
 
                 break;
@@ -107,10 +110,11 @@ public static class StartupExtenders
                                 TransactionTimeout = TimeSpan.FromMinutes(30),
                                 TablesPrefix = "hangfire"
                             }))
-                        .WithJobExpirationTimeout(TimeSpan.FromDays(30))
+                        .WithJobExpirationTimeout(TimeSpan.FromDays(Math.Max(1, appSettings.HangfireJobRetentionDays)))
                         .UseFilter(new JobIndexStateFilter(sp, logger))
                         .UseFilter(new BuildJobFailureFilter(sp, buildFailureLogger))
-                        .UseFilter(new BuildLogCaptureFilter(sp, sp.GetRequiredService<ILogger<BuildLogCaptureFilter>>()));
+                        .UseFilter(new BuildLogCaptureFilter(sp, sp.GetRequiredService<ILogger<BuildLogCaptureFilter>>()))
+                        .UseFilter(new BuildRetrySchedulerFilter(sp, sp.GetRequiredService<ILogger<BuildRetrySchedulerFilter>>()));
 
                 });
 

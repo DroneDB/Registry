@@ -12,6 +12,9 @@ using Registry.Web.Services.Ports;
 
 namespace Registry.Web.Services.Adapters;
 
+/// <summary>
+/// Random batch token generation with configurable length.
+/// </summary>
 public class BatchTokenGenerator : IBatchTokenGenerator
 {
     private readonly int _tokenLength;

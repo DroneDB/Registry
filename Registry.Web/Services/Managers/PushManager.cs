@@ -19,6 +19,9 @@ using Stamp = Registry.Ports.DroneDB.Stamp;
 
 namespace Registry.Web.Services.Managers;
 
+/// <summary>
+/// Offline-first push workflow: init, upload files, save meta, commit.
+/// </summary>
 public class PushManager : IPushManager
 {
     private const string AddsTempFolder = "add";

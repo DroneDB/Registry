@@ -8,6 +8,9 @@ using System.Web;
 
 namespace Registry.Common;
 
+/// <summary>
+/// String extension methods for URL encoding, date parsing, and camelCase conversion.
+/// </summary>
 // Ref: https://github.com/restsharp/RestSharp/blob/dev/src/RestSharp/Extensions/StringExtensions.cs
 public static class StringExtensions
 {

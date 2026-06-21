@@ -21,6 +21,9 @@ using ZipFile = System.IO.Compression.ZipFile;
 
 namespace Registry.Common;
 
+/// <summary>
+/// General utilities: random strings, hash, tar/zip extraction, path helpers, and platform detection.
+/// </summary>
 public static class CommonUtils
 {
     public static string RandomString(int length)
@@ -261,7 +264,7 @@ public static class CommonUtils
         foreach (var path in paths)
             ValidateRelativePath(path, baseDirectory);
     }
-    
+
     /// <summary>
     /// Validates that a relative path doesn't contain path traversal attacks.
     /// Throws ArgumentException if the path is invalid or escapes the base directory.
@@ -421,7 +424,7 @@ public static class CommonUtils
         // Return formatted number with suffix
         return readable.ToString("0.### ") + suffix;
     }
-    
+
     public static int BytesPerPixel(string? dataType) => dataType switch
     {
         "Byte" or "UInt8" or "Int8" => 1,
@@ -550,7 +553,7 @@ public static class CommonUtils
 
         return ddbFolder;
     }
-    
+
     /// <summary>
     /// Removes all files and subdirectories inside <paramref name="path"/> without
     /// deleting the directory itself. This is required when the directory is a Linux

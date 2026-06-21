@@ -23,6 +23,24 @@ public interface IBuildArtifactResolver
     /// <summary>Full path to the GPKG vector sidecar (build/{hash}/vec/source.gpkg).</summary>
     string GetVectorQueryPath(IDDB ddb, string entryHash);
 
+    /// <summary>
+    /// Full path to the Gaussian Splat artifact (build/{hash}/gsplat/model.spz).
+    /// Reserved for future gsplat HTTP endpoints.
+    /// </summary>
+    string GetGsplatPath(IDDB ddb, string entryHash);
+
+    /// <summary>
+    /// Full path to the Gaussian Splat level-of-detail artifact (build/{hash}/gsplat/model.rad).
+    /// Reserved for future gsplat HTTP endpoints.
+    /// </summary>
+    string GetGsplatLodPath(IDDB ddb, string entryHash);
+
+    /// <summary>
+    /// Full path to the Gaussian Splat georeferencing sidecar (build/{hash}/gsplat/georef.json).
+    /// Reserved for future gsplat HTTP endpoints.
+    /// </summary>
+    string GetGsplatGeorefPath(IDDB ddb, string entryHash);
+
     /// <summary>Returns true if the given artifact path exists on disk.</summary>
     bool ArtifactExists(string fullPath);
 }

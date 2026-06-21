@@ -6,6 +6,9 @@ using Registry.Web.Services.Ports;
 
 namespace Registry.Web.Services.Adapters;
 
+/// <summary>
+/// Embedded resource stream reader for assembly-manifest resources.
+/// </summary>
 public class EmbeddedResourceQuery : IEmbeddedResourceQuery
 {
     public Stream Read<T>(string resource)

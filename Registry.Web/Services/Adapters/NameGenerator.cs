@@ -11,6 +11,9 @@ using Registry.Web.Models.Configuration;
 
 namespace Registry.Web.Services.Adapters;
 
+/// <summary>
+/// Random dataset name generation with configurable length.
+/// </summary>
 public class NameGenerator : INameGenerator
 {
 

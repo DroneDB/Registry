@@ -214,15 +214,21 @@ public class AppSettings
     public string CleanupExpiredJobsCron { get; set; }
 
     /// <summary>
-    /// Cron expression for sync job index states task.
-    /// Default (when null, empty, or omitted): "*/5 * * * *" (every 5 minutes).
+    /// Cron expression for the JobIndex reconciliation safety-net task. JobIndex
+    /// rows are updated in real time by <c>JobIndexStateFilter</c>; this sweep only
+    /// reconciles entries that missed a transition (e.g. across a restart), so it
+    /// runs infrequently to avoid background-job churn.
+    /// Default (when null, empty, or omitted): "0 * * * *" (hourly).
     /// Set to "disabled", "off", or "none" to remove the job.
     /// </summary>
     public string SyncJobIndexStatesCron { get; set; }
 
     /// <summary>
-    /// Cron expression for process pending builds task.
-    /// Default (when null, empty, or omitted): "* * * * *" (every minute).
+    /// Cron expression for the pending-builds safety-net sweep. Pending builds are
+    /// now retried event-driven (a delayed retry is self-scheduled whenever a build
+    /// leaves items pending), so this recurring job is only a low-frequency backstop
+    /// for retries lost to a node restart or leftover from before the upgrade.
+    /// Default (when null, empty, or omitted): "0 */6 * * *" (every 6 hours).
     /// Set to "disabled", "off", or "none" to remove the job.
     /// </summary>
     public string ProcessPendingBuildsCron { get; set; }
@@ -266,6 +272,15 @@ public class AppSettings
     /// Default: 60
     /// </summary>
     public int JobIndexRetentionDays { get; set; } = 60;
+
+    /// <summary>
+    /// Global Hangfire job retention (the expiration timeout applied to succeeded
+    /// and other non-failed terminal job records). Keeping this low sharply reduces
+    /// the row churn that inflates the InnoDB shared tablespace under frequent
+    /// background jobs. Failed jobs are exempt and kept for diagnostics.
+    /// Minimum enforced value is 1 day. Default: 2.
+    /// </summary>
+    public int HangfireJobRetentionDays { get; set; } = 2;
 
     /// <summary>
     /// Password complexity policy. When null, no password requirements are enforced.

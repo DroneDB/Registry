@@ -22,7 +22,9 @@ using Registry.Web.Utilities.Ogc;
 
 namespace Registry.Web.Services.Managers;
 
-/// <summary>OGC API – Tiles manager: thin redirect/proxy onto MVT (vector) or XYZ (raster).</summary>
+/// <summary>
+/// OGC API – Tiles manager: thin redirect/proxy onto MVT (vector) or XYZ (raster).
+/// </summary>
 public class OgcApiTilesManager : OgcManagerBase, IOgcApiTilesManager
 {
     public OgcApiTilesManager(IUtils u, IAuthManager a, IDdbManager d, IBuildArtifactResolver ar,

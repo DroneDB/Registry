@@ -9,6 +9,9 @@ using Registry.Ports.DroneDB;
 
 namespace Registry.Adapters.DroneDB;
 
+/// <summary>
+/// IMetaManager implementation via native DroneDB meta calls.
+/// </summary>
 public class MetaManager : IMetaManager
 {
     private readonly IDDB _ddb;

@@ -16,5 +16,6 @@ public enum EntryType
     Model = 11,
     Panorama = 12,
     GeoPanorama = 13,
-    Vector = 14
+    Vector = 14,
+    GaussianSplat = 15
 }

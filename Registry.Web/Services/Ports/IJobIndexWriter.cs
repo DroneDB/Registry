@@ -8,6 +8,9 @@ using Registry.Web.Services.Adapters;
 
 namespace Registry.Web.Services.Ports;
 
+/// <summary>
+/// JobIndex upsert/update/delete interface for Hangfire job tracking.
+/// </summary>
 public interface IJobIndexWriter
 {
     Task UpsertOnEnqueueAsync(string jobId, IndexPayload meta, DateTime createdAtUtc, string? methodDisplay, CancellationToken ct = default);

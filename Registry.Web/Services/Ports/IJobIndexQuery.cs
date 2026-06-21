@@ -6,6 +6,9 @@ using Registry.Web.Data.Models;
 
 namespace Registry.Web.Services.Ports;
 
+/// <summary>
+/// JobIndex query interface for Hangfire job tracking (list, filter, count).
+/// </summary>
 public interface IJobIndexQuery
 {
     Task<JobIndex[]> GetByOrgDsAsync(string orgSlug, string dsSlug, int skip = 0, int take = 200, CancellationToken ct = default);

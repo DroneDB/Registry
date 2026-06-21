@@ -7,6 +7,9 @@ using System.Threading.Tasks;
 
 namespace Registry.Common;
 
+/// <summary>
+/// Recursive directory copy utilities with exclude support.
+/// </summary>
 public static class FolderUtils
 {
 

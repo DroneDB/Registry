@@ -4,6 +4,9 @@ using System.IO;
 
 namespace Registry.Common.Test;
 
+/// <summary>
+/// Temp file downloader for test fixtures with HTTP download and auto-cleanup on dispose.
+/// </summary>
 public class TempFile : IDisposable
 {
 
@@ -29,9 +32,9 @@ public class TempFile : IDisposable
             Directory.CreateDirectory(folder);
 
             Debug.WriteLine("File does not exist, downloading it");
-                
+
             HttpHelper.DownloadFileAsync(url, FilePath).Wait();
-                
+
             Debug.WriteLine("File downloaded");
         }
         else
