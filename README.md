@@ -14,7 +14,7 @@ View orthophotos, point clouds, 3D models (OBJ, GLTF, GLB), Gaussian splats, pan
 - **STAC Compliance** - Compliant with STAC 1.1.0 and STAC API 1.0.0
 - **OGC Services** - WMS, WFS, WMTS, WCS and OGC API (Features + Tiles) served directly from any dataset
 - **On-Demand Processing** - Automatic thumbnails, tiles, COG and streaming format generation
-- **User Management** - Role-based access control with organizations and storage quotas
+- **User Management** - Role-based access control with organizations, storage quotas, and optional LDAP authentication
 
 ### Supported Formats
 
@@ -113,7 +113,7 @@ for detailed QGIS configuration steps.
 
 ### Requirements
 
-* [.NET 9.0 SDK](https://dotnet.microsoft.com/en-us/download/dotnet/9.0)
+* [.NET 10.0 SDK](https://dotnet.microsoft.com/en-us/download/dotnet/10.0)
 * [Node.js 24+](https://nodejs.org/) (LTS recommended)
 * [DroneDB Library](https://github.com/DroneDB/DroneDB/releases/latest) (add to PATH)
 
