@@ -10,7 +10,7 @@
 - Use **async/await** for asynchronous operations.
 - Ensure **null checks** and **argument validation** in public methods.
 - Structure the project using hexagonal architecture (e.g., Controllers, Services, Ports, Adapters, Models, etc...).
-- Use **dependency injection** for services.
+- Use **dependency injection** for services. Mind the fact that Registry.Web can be started in different modes and you need to check if the processing nodes need any specific service registered or not.
 - Prefer **interface-based design**.
 - Use **logging** via `ILogger<T>`.
 
