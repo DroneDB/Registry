@@ -128,6 +128,13 @@ public sealed class SharpCompressArchiveExtractor : IArchiveExtractor
             get { EnsureCounted(); return _total; }
         }
 
+        // Cheap variants that never trigger decompression. For compressed tarballs the
+        // count / size cannot be known without fully inflating the gzip/bz2/xz stream,
+        // so these return null instead of paying that cost.
+        public long? FastUncompressedBytes => _isCompressedTar ? null : _total;
+
+        public int? FastFileEntryCount => _isCompressedTar ? null : _fileEntryCount;
+
         public IEnumerable<ArchiveEntry> Entries()
             => _isCompressedTar ? CompressedTarEntries() : RandomAccessEntries();
 

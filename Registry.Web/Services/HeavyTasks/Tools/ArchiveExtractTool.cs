@@ -1,7 +1,9 @@
 #nullable enable
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Linq.Expressions;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
@@ -12,6 +14,7 @@ using Registry.Common;
 using Registry.Ports.Archives;
 using Registry.Ports.DroneDB;
 using Registry.Web.Exceptions;
+using Registry.Web.Models;
 using Registry.Web.Models.Configuration;
 using Registry.Web.Services.HeavyTasks.Models;
 using Registry.Web.Services.HeavyTasks.Ports;
@@ -25,9 +28,9 @@ namespace Registry.Web.Services.HeavyTasks.Tools;
 /// extracted file to the dataset index exactly as if it had been uploaded
 /// individually (spec ExtractArchive). Runs on the Hangfire worker (HTTP-context
 /// free) and works entirely through <see cref="IDDB"/>: it writes each entry to disk,
-/// re-indexes it with <c>AddRaw</c>, then builds the pending derivatives inline
-/// (mirrors <c>RescanIndexTool</c> / <c>MergeMultispectralTool</c>). Mutates the
-/// dataset in place, so it produces no downloadable artifact.
+/// re-indexes it with <c>AddRaw</c>, then enqueues a per-file build job for every
+/// buildable entry (mirrors <c>ObjectsManager.AddNew</c>). Mutates the dataset in
+/// place, so it produces no downloadable artifact.
 /// </summary>
 public sealed class ArchiveExtractTool : IHeavyTool
 {
@@ -70,6 +73,15 @@ public sealed class ArchiveExtractTool : IHeavyTool
     public HeavyToolPermission RequiredAccess => HeavyToolPermission.Write;
     public bool ProducesArtifact => false;
     public JsonDocument InputSchema => Schema;
+
+    // Files are indexed in batches of this size: bounds the per-transaction lock time and
+    // lets progress be reported between chunks while still collapsing the per-file native
+    // database opens into one-per-chunk.
+    private const int IndexChunkSize = 250;
+
+    // Headroom kept free on the dataset volume while extracting; the streaming guard aborts
+    // before the projected size would eat into it.
+    private const long DiskSafetyMarginBytes = 256L * 1024 * 1024;
 
     public async Task ValidateAsync(HeavyToolRequest request, IHeavyToolValidationContext ctx, CancellationToken ct)
     {
@@ -115,7 +127,7 @@ public sealed class ArchiveExtractTool : IHeavyTool
         try
         {
             using var session = _extractor.Open(localArchive);
-            uncompressed = session.TotalUncompressedBytes;
+            uncompressed = session.FastUncompressedBytes;
         }
         catch (Exception ex)
         {
@@ -124,14 +136,11 @@ public sealed class ArchiveExtractTool : IHeavyTool
 
         if (uncompressed is > 0)
         {
-            // 1) User storage quota - same guard used by single-file uploads.
-            //    The uncompressed size is known up-front (before any extraction), so the
-            //    quota is inherently a submit-time concern. It is enforced only when the
-            //    caller identity is available (ctx.Caller != null), i.e. during the
-            //    synchronous submit on the web host, where IUtils/IHttpContextAccessor are
-            //    registered. On the Hangfire worker ctx.Caller is null, IUtils is not
-            //    registered, and the quota was already validated at submit, so it is skipped.
-            //    Resolved through a child scope because the tool is a singleton.
+            // The uncompressed size is known cheaply only for random-access formats
+            // (zip/rar/7z/tar). When available we enforce the user quota + disk space here
+            // at submit. For compressed tarballs the size is null (computing it would
+            // require fully decompressing the archive), so those guards run incrementally
+            // during extraction instead - see ExecuteAsync.
             if (ctx.Caller is not null)
             {
                 using var scope = _scopeFactory.CreateScope();
@@ -139,8 +148,8 @@ public sealed class ArchiveExtractTool : IHeavyTool
                 await utils.CheckCurrentUserStorage(uncompressed.Value); // throws QuotaExceededException
             }
 
-            // 2) Free disk space on the dataset volume (best-effort). Runs in both
-            //    contexts: at execution time it is the worker's disk that matters.
+            // Free disk space on the dataset volume (best-effort). Runs in both
+            // contexts: at execution time it is the worker's disk that matters.
             EnsureDiskSpace(ctx.Ddb.DatasetFolderPath, uncompressed.Value);
         }
     }
@@ -155,7 +164,7 @@ public sealed class ArchiveExtractTool : IHeavyTool
             {
                 var localArchive = ctx.Ddb.GetLocalPath(sourcePath);
                 using var session = _extractor.Open(localArchive);
-                estimate = session.TotalUncompressedBytes;
+                estimate = session.FastUncompressedBytes;
             }
         }
         catch
@@ -185,17 +194,43 @@ public sealed class ArchiveExtractTool : IHeavyTool
         var extracted = 0;
         var skipped = 0;
         int total;
+        long uncompressedSoFar = 0;
+        var extractedPaths = new List<string>();
+
+        // For compressed tarballs the uncompressed size cannot be known without fully
+        // decompressing the archive (which we deliberately avoid), so instead of a
+        // submit-time guard we extract in a single streaming pass and enforce the space
+        // budget incrementally. If we run out of room we roll back everything extracted in
+        // this run and fail with a clear "not enough space" message. Indexing happens only
+        // AFTER the loop, so on abort nothing has been added to the index yet - we just
+        // delete the files written so far.
+        var freeAtStart = GetAvailableDiskBytes(root);
+        var maxUncompressed = _settings.MaxArchiveExtractSizeBytes; // 0 disables the absolute cap
+
+        void AbortOutOfSpace()
+        {
+            progress.Report(new HeavyToolProgress(-1, "cleanup",
+                LogChunk: $"Out of space - rolling back {extractedPaths.Count} extracted file(s)"));
+            CleanupExtracted(ctx, extractedPaths);
+            throw new QuotaExceededException(
+                "The archive is too large to extract: the server ran out of free space. " +
+                $"Rolled back after writing {CommonUtils.GetBytesReadable(uncompressedSoFar)}.");
+        }
 
         // The session (and its underlying file handle) is closed as soon as the
-        // extraction loop finishes, BEFORE BuildPendingWrapper and deleteArchive.
-        // This is critical: keeping the session open through deleteArchive causes
-        // the OS to refuse the File.Delete because the handle is still held.
+        // extraction loop finishes, BEFORE indexing and deleteArchive. This is critical:
+        // keeping the session open through deleteArchive causes the OS to refuse the
+        // File.Delete because the handle is still held.
         using (var session = _extractor.Open(localArchive))
         {
-            total = session.FileEntryCount;
+            // Null (=> 0) for compressed tarballs: the count is unknown without
+            // decompressing, so the progress bar is indeterminate during extraction.
+            total = session.FastFileEntryCount ?? 0;
 
             progress.Report(new HeavyToolProgress(total > 0 ? 0 : -1, "extracting",
-                LogChunk: $"Extracting {total} file(s) from '{sourcePath}'"));
+                LogChunk: total > 0
+                    ? $"Extracting {total} file(s) from '{sourcePath}'"
+                    : $"Extracting '{sourcePath}'"));
 
             foreach (var archiveEntry in session.Entries())
             {
@@ -205,6 +240,14 @@ public sealed class ArchiveExtractTool : IHeavyTool
                 // Path sanitization (anti zip-slip + reserved-folder guard).
                 var target = SafeJoin(destPath, archiveEntry.Key);
                 CommonUtils.ValidateRelativePath(target, root); // defense in depth
+
+                // Space guard BEFORE writing: stop before we breach the disk budget or the
+                // absolute uncompressed cap, so we never actually fill the volume.
+                var declared = archiveEntry.Size > 0 ? archiveEntry.Size : 0;
+                var projected = uncompressedSoFar + declared;
+                if ((maxUncompressed > 0 && projected > maxUncompressed) ||
+                    freeAtStart - projected < DiskSafetyMarginBytes)
+                    AbortOutOfSpace();
 
                 // Overwrite / skip semantics.
                 if (ctx.Ddb.EntryExists(target) && !overwrite)
@@ -225,7 +268,15 @@ public sealed class ArchiveExtractTool : IHeavyTool
                 await using (var fileStream = File.Create(localTarget))
                     await sourceStream.CopyToAsync(fileStream, ct);
 
-                ctx.Ddb.AddRaw(target);
+                extractedPaths.Add(target);
+
+                // Re-check against the ACTUAL bytes written: a tar/zip header size can
+                // under-report, so this also catches a single oversized entry.
+                uncompressedSoFar += SafeFileLength(localTarget);
+                if ((maxUncompressed > 0 && uncompressedSoFar > maxUncompressed) ||
+                    freeAtStart - uncompressedSoFar < DiskSafetyMarginBytes)
+                    AbortOutOfSpace();
+
                 extracted++;
                 done++;
                 ReportProgress(progress, done, total, archiveEntry.Key);
@@ -234,11 +285,51 @@ public sealed class ArchiveExtractTool : IHeavyTool
 
         ct.ThrowIfCancellationRequested();
 
-        // Build the derivatives for the newly indexed (pending) files inline, so the
-        // task only completes once everything is ready (RescanIndexTool pattern).
-        progress.Report(new HeavyToolProgress(total > 0 ? 1 : -1, "building",
-            LogChunk: "Building derivatives"));
-        HangfireUtils.BuildPendingWrapper(ctx.Ddb, ctx.Hangfire);
+        // Index everything in batches: one DDB transaction (and one native connection
+        // open) per chunk instead of one-per-file. The returned entries carry Type + Hash,
+        // so the buildable files can be scheduled without any extra per-file
+        // IsBuildable/GetEntry calls (each of which would re-open the native database).
+        var indexed = new List<Entry>(extractedPaths.Count);
+        for (var i = 0; i < extractedPaths.Count; i += IndexChunkSize)
+        {
+            ct.ThrowIfCancellationRequested();
+            var slice = extractedPaths.GetRange(i, Math.Min(IndexChunkSize, extractedPaths.Count - i));
+            indexed.AddRange(ctx.Ddb.AddRawBatch(slice));
+            progress.Report(new HeavyToolProgress(
+                extractedPaths.Count > 0 ? (double)(i + slice.Count) / extractedPaths.Count : -1,
+                "indexing", LogChunk: $"Indexed {i + slice.Count}/{extractedPaths.Count} file(s)"));
+        }
+
+        // Enqueue a per-file build job for every buildable extracted entry (mirrors
+        // ObjectsManager.AddNew). Buildability is derived from the indexed entry type, so
+        // no additional native calls are needed.
+        using (var scope = _scopeFactory.CreateScope())
+        {
+            var processor = scope.ServiceProvider.GetRequiredService<IBackgroundJobsProcessor>();
+            var buildableCount = 0;
+
+            foreach (var entry in indexed)
+            {
+                if (!ctx.Ddb.IsBuildable(entry.Path))
+                    continue;
+
+                var path = entry.Path;
+                var meta = new IndexPayload(
+                    request.OrgSlug,
+                    request.DsSlug,
+                    entry.Hash,
+                    null,
+                    Path: path,
+                    ParentJobId: ctx.TaskId);
+
+                Expression<Action> buildJob = () => HangfireUtils.BuildWrapper(ctx.Ddb, path, false, null);
+                processor.EnqueueIndexed(buildJob, meta);
+                buildableCount++;
+            }
+
+            _logger.LogInformation("Enqueued {Count} build job(s) for extracted files in {Org}/{Ds}",
+                buildableCount, request.OrgSlug, request.DsSlug);
+        }
 
         // Optionally remove the source archive (index entry + physical file).
         if (deleteArchive)
@@ -301,6 +392,56 @@ public sealed class ArchiveExtractTool : IHeavyTool
         {
             _logger.LogWarning(ex, "Could not determine free disk space for '{Path}'; skipping disk-space guard.",
                 datasetFolderPath);
+        }
+    }
+
+    // Free bytes on the volume backing the dataset folder, or long.MaxValue when it cannot
+    // be determined (the streaming guard then relies on the absolute cap only - best effort,
+    // matching EnsureDiskSpace).
+    private static long GetAvailableDiskBytes(string datasetFolderPath)
+    {
+        try
+        {
+            var root = Path.GetPathRoot(Path.GetFullPath(datasetFolderPath));
+            if (string.IsNullOrEmpty(root)) return long.MaxValue;
+
+            var drive = new DriveInfo(root);
+            return drive.IsReady ? drive.AvailableFreeSpace : long.MaxValue;
+        }
+        catch
+        {
+            return long.MaxValue;
+        }
+    }
+
+    private static long SafeFileLength(string path)
+    {
+        try
+        {
+            return new FileInfo(path).Length;
+        }
+        catch
+        {
+            return 0;
+        }
+    }
+
+    // Removes the files written during a failed extraction run. Index entries are added
+    // only after extraction completes, so on abort there is nothing to un-index.
+    private void CleanupExtracted(IHeavyToolExecutionContext ctx, List<string> paths)
+    {
+        foreach (var p in paths)
+        {
+            try
+            {
+                var local = ctx.Ddb.GetLocalPath(p);
+                if (File.Exists(local))
+                    File.Delete(local);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Could not delete partially extracted file '{Path}'", p);
+            }
         }
     }
 

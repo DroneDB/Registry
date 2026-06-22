@@ -30,6 +30,15 @@ public interface IDDB
     void Add(string path, Stream? data = null);
     void AddRaw(string path);
 
+    /// <summary>
+    /// Indexes multiple already-on-disk files in a single native call (one database
+    /// connection and one transaction for the whole batch), returning the resulting
+    /// index entries (with type and hash).
+    /// </summary>
+    /// <param name="paths">Dataset-relative paths of the files to index.</param>
+    /// <returns>The index entries produced for the supplied paths.</returns>
+    IReadOnlyList<Entry> AddRawBatch(IReadOnlyList<string> paths);
+
     void Remove(string path);
     void Move(string source, string dest);
 

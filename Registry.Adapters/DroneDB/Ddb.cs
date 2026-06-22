@@ -353,6 +353,29 @@ public class DDB : IDDB
         }
     }
 
+    public IReadOnlyList<Entry> AddRawBatch(IReadOnlyList<string> paths)
+    {
+        if (paths == null || paths.Count == 0)
+            return Array.Empty<Entry>();
+
+        try
+        {
+            // Resolve all dataset-relative paths to local absolute paths and index them
+            // in a single native call: the C++ side wraps the whole batch in one
+            // transaction (one connection open) instead of one-per-file.
+            var fullPaths = new string[paths.Count];
+            for (var i = 0; i < paths.Count; i++)
+                fullPaths[i] = GetLocalPath(paths[i]);
+
+            return _ddbWrapper.Add(DatasetFolderPath, fullPaths);
+        }
+        catch (DdbException ex)
+        {
+            throw new InvalidOperationException(
+                $"Cannot batch-add {paths.Count} file(s) to ddb '{DatasetFolderPath}'", ex);
+        }
+    }
+
     public void Add(string path, Stream? stream = null)
     {
         if (stream == null)
