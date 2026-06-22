@@ -7,6 +7,7 @@ using System.Linq;
 using System.Text.Json;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using MimeMapping;
 using Registry.Common;
@@ -44,6 +45,7 @@ public class ObjectsManager : IObjectsManager
     private readonly BuildPendingService _buildPendingService;
     private readonly IZipArchiveBuilder _zipArchiveBuilder;
     private readonly IOgcLayerCatalog? _ogcLayerCatalog;
+    private readonly IDatasetCacheInvalidator _datasetCacheInvalidator;
 
     private static bool IsReservedPath(string path)
     {
@@ -64,7 +66,8 @@ public class ObjectsManager : IObjectsManager
         IJobIndexQuery jobIndexQuery,
         BuildPendingService buildPendingService,
         IZipArchiveBuilder? zipArchiveBuilder = null,
-        IOgcLayerCatalog? ogcLayerCatalog = null)
+        IOgcLayerCatalog? ogcLayerCatalog = null,
+        IDatasetCacheInvalidator? datasetCacheInvalidator = null)
     {
         _logger = logger;
         _context = context;
@@ -83,6 +86,11 @@ public class ObjectsManager : IObjectsManager
         // local instance keeps direct (test) construction working without wiring.
         _zipArchiveBuilder = zipArchiveBuilder ?? new ZipArchiveBuilder();
         _ogcLayerCatalog = ogcLayerCatalog;
+        // Stateless; the DI-registered singleton is injected in production, while a local
+        // instance keeps direct (test) construction working without wiring.
+        _datasetCacheInvalidator = datasetCacheInvalidator
+            ?? new DatasetCacheInvalidator(NullLogger<DatasetCacheInvalidator>.Instance, cacheManager,
+                new NullCacheKeyScanner(NullLogger<NullCacheKeyScanner>.Instance));
     }
 
     /// <summary>
@@ -1366,22 +1374,8 @@ public class ObjectsManager : IObjectsManager
     }
 
     /// <inheritdoc />
-    public async Task InvalidateAllDatasetCaches(string orgSlug, string dsSlug)
-    {
-        _logger.LogInformation("Invalidating all caches for dataset {OrgSlug}/{DsSlug}", orgSlug, dsSlug);
-
-        var category = ForDataset(orgSlug, dsSlug);
-
-        await _cacheManager.RemoveByCategoryAsync(MagicStrings.TileCacheSeed, category);
-        await _cacheManager.RemoveByCategoryAsync(MagicStrings.ThumbnailCacheSeed, category);
-        await _cacheManager.RemoveByCategoryAsync(MagicStrings.BuildPendingTrackerCacheSeed, category);
-
-        // Also invalidate dataset-level thumbnail cache (uses a different category)
-        await InvalidateDatasetThumbnailCache(orgSlug, dsSlug);
-
-        // OGC layer catalog + capabilities (WMS/WMTS/WFS/WCS/OGC API)
-        await InvalidateOgcAsync(orgSlug, dsSlug);
-    }
+    public Task InvalidateAllDatasetCaches(string orgSlug, string dsSlug)
+        => _datasetCacheInvalidator.InvalidateAllDatasetCachesAsync(orgSlug, dsSlug);
 
     public async Task<StorageDataDto> GenerateTileData(string orgSlug, string dsSlug, string path, int tz, int tx,
         int ty, bool retina)

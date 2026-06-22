@@ -1,6 +1,7 @@
 using System;
 using System.IO;
 using System.IO.Compression;
+using System.Security.Claims;
 using System.Text;
 using System.Text.Json;
 using System.Threading;
@@ -47,7 +48,8 @@ public class ArchiveExtractToolTests
         }
     }
 
-    private (ArchiveExtractTool tool, Mock<IUtils> utils) CreateTool(long maxArchiveBytes = 5L * 1024 * 1024 * 1024)
+    private (ArchiveExtractTool tool, Mock<IUtils> utils) CreateTool(
+        long maxArchiveBytes = 5L * 1024 * 1024 * 1024, bool registerUtils = true)
     {
         var extractor = new SharpCompressArchiveExtractor();
 
@@ -55,7 +57,10 @@ public class ArchiveExtractToolTests
         utils.Setup(u => u.CheckCurrentUserStorage(It.IsAny<long>())).Returns(Task.CompletedTask);
 
         var services = new ServiceCollection();
-        services.AddSingleton(utils.Object);
+        // When registerUtils is false the scope has no IUtils, reproducing the
+        // processing-node container where the service is not registered.
+        if (registerUtils)
+            services.AddSingleton(utils.Object);
         var provider = services.BuildServiceProvider();
         var scopeFactory = provider.GetRequiredService<IServiceScopeFactory>();
 
@@ -71,11 +76,15 @@ public class ArchiveExtractToolTests
         return (tool, utils);
     }
 
-    private static IHeavyToolValidationContext Ctx(IDDB ddb)
+    private static IHeavyToolValidationContext Ctx(IDDB ddb, bool withCaller = true)
     {
         var ctx = new Mock<IHeavyToolValidationContext>();
         ctx.SetupGet(c => c.Ddb).Returns(ddb);
         ctx.SetupGet(c => c.Logger).Returns(NullLogger.Instance);
+        // At submit time the caller is the authenticated principal; on the Hangfire
+        // worker it is null. The quota guard only runs when the caller is present.
+        ctx.SetupGet(c => c.Caller)
+            .Returns(withCaller ? new ClaimsPrincipal(new ClaimsIdentity()) : null);
         return ctx.Object;
     }
 
@@ -107,6 +116,27 @@ public class ArchiveExtractToolTests
 
         // User storage quota must be checked against the uncompressed size.
         utils.Verify(u => u.CheckCurrentUserStorage(It.Is<long>(v => v > 0)), Times.Once);
+    }
+
+    [Test]
+    public async Task ValidateAsync_NoCaller_SkipsQuotaCheck()
+    {
+        // Reproduces the Hangfire worker (processing node) scenario: ctx.Caller is null
+        // and IUtils is NOT registered in the scope. ValidateAsync must neither resolve
+        // IUtils nor throw - the quota was already enforced at submit time.
+        var local = Path.Combine(_dir, "flight.zip");
+        CreateZip(local, "a.txt", "hello");
+        var ddb = MockDdb("flight.zip", local);
+
+        var (tool, utils) = CreateTool(registerUtils: false);
+
+        await Should.NotThrowAsync(async () =>
+            await tool.ValidateAsync(
+                Request(new { sourcePath = "flight.zip" }),
+                Ctx(ddb.Object, withCaller: false), CancellationToken.None));
+
+        // The storage quota guard must be skipped entirely on the worker.
+        utils.Verify(u => u.CheckCurrentUserStorage(It.IsAny<long>()), Times.Never);
     }
 
     [Test]

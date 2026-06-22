@@ -18,4 +18,16 @@ public static class CacheCategories
     /// Format: "{orgSlug}/{dsSlug}/ds-thumb"
     /// </summary>
     public static string ForDatasetThumbnail(string orgSlug, string dsSlug) => $"{orgSlug}/{dsSlug}/ds-thumb";
+
+    /// <summary>
+    /// Returns the cache key pattern for a dataset's OGC capabilities documents.
+    /// Format: "ogc-caps-*-{orgSlug}-{dsSlug}-*"
+    /// </summary>
+    public static string ForOgcCapabilitiesPattern(string orgSlug, string dsSlug) => $"ogc-caps-*-{orgSlug}-{dsSlug}-*";
+
+    /// <summary>
+    /// Returns the cache key pattern for a dataset's OGC layer enumerations.
+    /// Format: "ogc-layers-{orgSlug}-{dsSlug}-*"
+    /// </summary>
+    public static string ForOgcLayersPattern(string orgSlug, string dsSlug) => $"ogc-layers-{orgSlug}-{dsSlug}-*";
 }

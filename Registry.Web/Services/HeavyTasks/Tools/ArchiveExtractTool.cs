@@ -125,15 +125,22 @@ public sealed class ArchiveExtractTool : IHeavyTool
         if (uncompressed is > 0)
         {
             // 1) User storage quota - same guard used by single-file uploads.
-            //    Resolved through a child scope because the tool is a singleton; the
-            //    current user is read from IHttpContextAccessor (valid at submit time).
-            using (var scope = _scopeFactory.CreateScope())
+            //    The uncompressed size is known up-front (before any extraction), so the
+            //    quota is inherently a submit-time concern. It is enforced only when the
+            //    caller identity is available (ctx.Caller != null), i.e. during the
+            //    synchronous submit on the web host, where IUtils/IHttpContextAccessor are
+            //    registered. On the Hangfire worker ctx.Caller is null, IUtils is not
+            //    registered, and the quota was already validated at submit, so it is skipped.
+            //    Resolved through a child scope because the tool is a singleton.
+            if (ctx.Caller is not null)
             {
+                using var scope = _scopeFactory.CreateScope();
                 var utils = scope.ServiceProvider.GetRequiredService<IUtils>();
                 await utils.CheckCurrentUserStorage(uncompressed.Value); // throws QuotaExceededException
             }
 
-            // 2) Free disk space on the dataset volume (best-effort).
+            // 2) Free disk space on the dataset volume (best-effort). Runs in both
+            //    contexts: at execution time it is the worker's disk that matters.
             EnsureDiskSpace(ctx.Ddb.DatasetFolderPath, uncompressed.Value);
         }
     }
@@ -251,12 +258,13 @@ public sealed class ArchiveExtractTool : IHeavyTool
             }
         }
 
-        // Invalidate cached tiles/thumbnails/OGC (no auth needed; keyed by org/ds).
+        // Invalidate cached tiles/thumbnails/OGC (no auth needed; keyed by org/ds). Uses the
+        // focused IDatasetCacheInvalidator, registered on every host including processing nodes.
         try
         {
             using var scope = _scopeFactory.CreateScope();
-            var objects = scope.ServiceProvider.GetRequiredService<IObjectsManager>();
-            await objects.InvalidateAllDatasetCaches(request.OrgSlug, request.DsSlug);
+            var cacheInvalidator = scope.ServiceProvider.GetRequiredService<IDatasetCacheInvalidator>();
+            await cacheInvalidator.InvalidateAllDatasetCachesAsync(request.OrgSlug, request.DsSlug);
         }
         catch (Exception ex)
         {

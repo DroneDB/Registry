@@ -32,6 +32,10 @@ public static class ProcessingPlatformServiceCollectionExtensions
         services.AddSingleton<Registry.Ports.Archives.IArchiveExtractor,
             Registry.Adapters.Archives.SharpCompressArchiveExtractor>();
 
+        // Focused dataset cache invalidation (extracted from IObjectsManager) so heavy tools
+        // can clear dataset caches on hosts without the full object-management stack.
+        services.AddSingleton<IDatasetCacheInvalidator, DatasetCacheInvalidator>();
+
         // Native tools (Sprint 1). Adding a new native tool = one line here.
         services.AddSingleton<IHeavyTool, BuildTool>();
         services.AddSingleton<IHeavyTool, RasterExportTool>();

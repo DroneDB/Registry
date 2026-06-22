@@ -16,8 +16,8 @@ namespace Registry.Web.Services.HeavyTasks.Tools;
 /// Native tool that rescans the dataset index, clears caches and rebuilds the
 /// derivative products (spec §A.3). Offloads the blocking full-file scan from the
 /// request thread. Mutates the dataset in place (no downloadable artifact).
-/// Injects <see cref="IServiceScopeFactory"/> to reach the scoped
-/// <see cref="IObjectsManager"/> for Redis cache invalidation (spec §1.1).
+/// Injects <see cref="IServiceScopeFactory"/> to reach the
+/// <see cref="IDatasetCacheInvalidator"/> for Redis cache invalidation (spec §1.1).
 /// </summary>
 public sealed class RescanIndexTool : IHeavyTool
 {
@@ -69,11 +69,12 @@ public sealed class RescanIndexTool : IHeavyTool
         progress.Report(new HeavyToolProgress(-1, "clearing-cache", LogChunk: "Clearing build cache"));
         ctx.Ddb.ClearBuildCache();
 
-        // Redis tile/thumbnail cache lives behind the scoped IObjectsManager.
+        // Dataset caches are cleared through the focused IDatasetCacheInvalidator, registered
+        // on every host (including processing nodes) unlike the full IObjectsManager.
         using (var scope = _scopeFactory.CreateScope())
         {
-            var objects = scope.ServiceProvider.GetRequiredService<IObjectsManager>();
-            await objects.InvalidateAllDatasetCaches(request.OrgSlug, request.DsSlug);
+            var cacheInvalidator = scope.ServiceProvider.GetRequiredService<IDatasetCacheInvalidator>();
+            await cacheInvalidator.InvalidateAllDatasetCachesAsync(request.OrgSlug, request.DsSlug);
         }
 
         var total = results.Count;

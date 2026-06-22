@@ -51,9 +51,9 @@ public class OgcLayerCatalog : IOgcLayerCatalog
         try
         {
             // Capabilities keys: ogc-caps-{service}-v2-{version}-{org}-{ds}-{folder}
-            await _keyScanner.RemoveByPatternAsync($"ogc-caps-*-{orgSlug}-{dsSlug}-*");
+            await _keyScanner.RemoveByPatternAsync(CacheCategories.ForOgcCapabilitiesPattern(orgSlug, dsSlug));
             // Layer enumeration keys: ogc-layers-{org}-{ds}-{folder}
-            await _keyScanner.RemoveByPatternAsync($"ogc-layers-{orgSlug}-{dsSlug}-*");
+            await _keyScanner.RemoveByPatternAsync(CacheCategories.ForOgcLayersPattern(orgSlug, dsSlug));
         }
         catch (Exception ex)
         {

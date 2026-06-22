@@ -302,9 +302,6 @@ public class Program
                 var configuration = hostContext.Configuration;
                 var appSettingsSection = configuration.GetSection("AppSettings");
 
-                // Let's use a strongly typed class for settings
-                services.Configure<AppSettings>(appSettingsSection);
-
                 var appSettings = appSettingsSection.Get<AppSettings>();
 
                 if (appSettings.HangfireProvider == HangfireProvider.InMemory)
@@ -314,37 +311,11 @@ public class Program
 
                 Console.WriteLine(" ?> Using {0} worker threads", workers);
 
-                // Register database context required for job processing
-                services.AddDbContextWithProvider<RegistryContext>(configuration, appSettings.RegistryProvider,
-                    MagicStrings.RegistryConnectionName, "Data");
-
-                // Register cache services (required by BuildPendingService)
-                services.AddMemoryCache();
-                services.AddCacheProvider(appSettings);
-
-                // Register job indexing services (required by JobIndexSyncService and BackgroundJobsProcessor)
-                services.AddJobIndexing();
-
-                // Register HTTP client factory for services that need to make HTTP calls
-                services.AddHttpClient();
-
-                // Register core singleton services
-                services.AddSingleton<ICacheManager, CacheManager>();
-                services.AddSingleton<IDdbWrapper, NativeDdbWrapper>();
-                services.AddSingleton<IFileSystem, FileSystem>();
-
-                // Register scoped services required by background jobs
-                services.AddScoped<IDdbManager, DdbManager>();
-                services.AddScoped<IBackgroundJobsProcessor, BackgroundJobsProcessor>();
-                services.AddScoped<BuildPendingService>();
-                services.AddScoped<JobIndexSyncService>();
-                services.AddScoped<DatasetCleanupService>();
-                services.AddScoped<OrphanedDatasetCleanupService>();
-                services.AddScoped<RecurringDatasetCleanupService>();
-                services.AddScoped<ArtifactCompletenessCheckerService>();
-
-                // Processing Platform task substrate (native tools incl. build/raster-export)
-                services.AddProcessingPlatform();
+                // Register the application services shared by every job-executing host
+                // (incl. IOptions<AppSettings>). Kept in a single extension method so the same
+                // container can be built in tests (ProcessingNodeDiCompletenessTests) to catch
+                // missing registrations before they fail at runtime on a processing node.
+                services.AddProcessingNodeServices(configuration, appSettings);
 
                 services.AddHangfireProvider(appSettings, configuration);
                 services.AddHangfireServer(options =>
