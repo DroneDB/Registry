@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
 using Registry.Web.Models;
+using Registry.Web.Models.Configuration;
 using Registry.Web.Models.DTO;
 using Registry.Web.Services.Ports;
 using System;
@@ -33,13 +34,20 @@ namespace Registry.Web.Controllers;
 public class ShareController : ControllerBaseEx
 {
     private readonly IShareManager _shareManager;
+    private readonly IObjectsManager _objectsManager;
 
     private readonly ILogger<ShareController> _logger;
+    private readonly FormOptions _formOptions;
+    private readonly AppSettings _appSettings;
 
-    public ShareController(IShareManager shareManager, ILogger<ShareController> logger)
+    public ShareController(IShareManager shareManager, IObjectsManager objectsManager,
+        ILogger<ShareController> logger, IOptions<FormOptions> formOptions, IOptions<AppSettings> appSettings)
     {
         _shareManager = shareManager;
+        _objectsManager = objectsManager;
         _logger = logger;
+        _formOptions = formOptions.Value;
+        _appSettings = appSettings.Value;
     }
 
     /// <summary>
@@ -106,33 +114,78 @@ public class ShareController : ControllerBaseEx
     /// <param name="file">The file to upload.</param>
     /// <returns>The upload result.</returns>
     [HttpPost("upload/{token}", Name = nameof(ShareController) + "." + nameof(Upload))]
-    [DisableRequestSizeLimit]
+    [DisableFormValueModelBinding]
+    [ConfigurableUploadSizeLimit]
     [RequestFormLimits(ValueLengthLimit = int.MaxValue, MultipartBodyLengthLimit = long.MaxValue)]
     [ProducesResponseType(typeof(UploadResultDto), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> Upload(
-        [FromRoute, Required] string token,
-        [FromForm, Required] string path,
-        [Required] IFormFile file)
+    public async Task<IActionResult> Upload([FromRoute, Required] string token)
     {
         try
         {
-            _logger.LogDebug("Share controller Upload('{Token}', '{Path}', '{file?.FileName}')", token, path,
-                file?.FileName);
+            if (!MultipartRequestHelper.IsMultipartContentType(Request.ContentType))
+                return BadRequest(new ErrorResponse("Expected a multipart/form-data request"));
 
-            if (file == null)
-                throw new ArgumentException("No file uploaded");
+            // Early reject oversized uploads (defence-in-depth; Kestrel also enforces the limit mid-stream)
+            if (_appSettings.MaxRequestBodySize is { } maxBody &&
+                Request.ContentLength is { } contentLength && contentLength > maxBody)
+                return StatusCode(StatusCodes.Status413PayloadTooLarge,
+                    new ErrorResponse($"Upload exceeds the maximum allowed size of {maxBody} bytes"));
 
-            await using var stream = file.OpenReadStream();
-            var res = await _shareManager.Upload(token, path, stream);
+            // Resolve the dataset target so the file can be streamed straight onto its storage volume
+            var (orgSlug, dsSlug) = await _shareManager.GetUploadTarget(token);
+
+            var boundary = MultipartRequestHelper.GetBoundary(
+                MediaTypeHeaderValue.Parse(Request.ContentType),
+                _formOptions.MultipartBoundaryLengthLimit);
+            var reader = new MultipartReader(boundary, Request.Body);
+
+            string path = null;
+            string tempFile = null;
+            long writeBytes = 0;
+
+            var section = await reader.ReadNextSectionAsync();
+            while (section != null)
+            {
+                if (ContentDispositionHeaderValue.TryParse(section.ContentDisposition, out var contentDisposition))
+                {
+                    if (MultipartRequestHelper.HasFileContentDisposition(contentDisposition))
+                    {
+                        var streamed = await _objectsManager.StreamToTempAsync(orgSlug, dsSlug, section.Body);
+                        tempFile = streamed.TempPath;
+                        writeBytes = streamed.Bytes;
+                    }
+                    else if (MultipartRequestHelper.HasFormDataContentDisposition(contentDisposition))
+                    {
+                        var key = HeaderUtilities.RemoveQuotes(contentDisposition.Name).Value;
+                        using var sr = new StreamReader(section.Body, Encoding.UTF8);
+                        var value = await sr.ReadToEndAsync();
+                        if (string.Equals(key, "path", StringComparison.OrdinalIgnoreCase))
+                            path = value;
+                    }
+                }
+
+                section = await reader.ReadNextSectionAsync();
+            }
+
+            if (tempFile == null)
+                return BadRequest(new ErrorResponse("No file uploaded"));
+
+            _logger.LogDebug("Share controller Upload('{Token}', '{Path}')", token, path);
+
+            var res = await _shareManager.UploadStreamed(token, path, tempFile, writeBytes);
             return Ok(res);
+        }
+        catch (BadHttpRequestException bex) when (bex.StatusCode == StatusCodes.Status413PayloadTooLarge)
+        {
+            return StatusCode(StatusCodes.Status413PayloadTooLarge,
+                new ErrorResponse("Upload exceeds the maximum allowed size"));
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Exception in Share controller Upload('{Token}', '{Path}', '{file?.FileName}')",
-                token, path, file?.FileName);
+            _logger.LogError(ex, "Exception in Share controller Upload('{Token}')", token);
 
             return ExceptionResult(ex);
         }
