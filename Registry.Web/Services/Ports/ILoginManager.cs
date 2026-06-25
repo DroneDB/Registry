@@ -16,7 +16,7 @@ public interface ILoginManager
 
     /// <summary>
     /// Describes what this provider allows to manage locally.
-    /// Every implementation must declare this explicitly: <see cref="LocalLoginManager"/> returns
+    /// Every implementation must declare this explicitly: <see cref="Registry.Web.Services.Managers.LocalLoginManager"/> returns
     /// <see cref="AuthProviderCapabilities.Local"/>, while external providers (LDAP/Remote) return
     /// <see cref="AuthProviderCapabilities.External"/>. No default is provided so that callers and
     /// test doubles are forced to choose an explicit capability set.

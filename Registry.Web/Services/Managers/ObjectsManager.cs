@@ -47,9 +47,15 @@ public class ObjectsManager : IObjectsManager
     private readonly IOgcLayerCatalog? _ogcLayerCatalog;
     private readonly IDatasetCacheInvalidator _datasetCacheInvalidator;
 
+    /// <summary>
+    /// Name of the per-dataset folder that holds in-flight streamed uploads before they are
+    /// atomically moved into place. Reserved so users cannot create a conflicting entry.
+    /// </summary>
+    private const string UploadsFolderName = ".uploads";
+
     private static bool IsReservedPath(string path)
     {
-        return path.StartsWith(IDDB.DatabaseFolderName);
+        return path.StartsWith(IDDB.DatabaseFolderName) || path.StartsWith(UploadsFolderName);
     }
 
     public ObjectsManager(ILogger<ObjectsManager> logger,
@@ -189,7 +195,7 @@ public class ObjectsManager : IObjectsManager
             Name = Path.GetFileName(entry.Path),
             Size = entry.Size,
             Type = entry.Type,
-            ContentType = entry.Path != null ? MimeTypes.GetMimeType(entry.Path) : null,
+            ContentType = entry.Path != null ? MimeMapping.MimeUtility.GetMimeMapping(entry.Path) : null,
             PhysicalPath = Path.GetFullPath(ddb.GetLocalPath(entry.Path))
         };
     }
@@ -273,7 +279,7 @@ public class ObjectsManager : IObjectsManager
         var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
 
         // Temp lives under the dataset folder (same volume as the final file) -> atomic move later
-        var tempDir = Path.Combine(ddb.DatasetFolderPath, ".uploads");
+        var tempDir = Path.Combine(ddb.DatasetFolderPath, UploadsFolderName);
         _fs.FolderCreate(tempDir);
         var tempPath = Path.Combine(tempDir, Guid.NewGuid().ToString("N") + ".tmp");
 
@@ -312,6 +318,23 @@ public class ObjectsManager : IObjectsManager
 
         var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
 
+        if (string.IsNullOrWhiteSpace(tempFilePath))
+            throw new InvalidOperationException("Missing temporary upload path");
+
+        // Defense-in-depth: the temp file must live inside this dataset's reserved uploads folder.
+        // Validate BEFORE the try/finally so an arbitrary/foreign path is never moved nor deleted.
+        var uploadsRoot = Path.GetFullPath(Path.Combine(ddb.DatasetFolderPath, UploadsFolderName));
+        if (!uploadsRoot.EndsWith(Path.DirectorySeparatorChar))
+            uploadsRoot += Path.DirectorySeparatorChar;
+
+        var fullTempPath = Path.GetFullPath(tempFilePath);
+        var pathComparison = OperatingSystem.IsWindows()
+            ? StringComparison.OrdinalIgnoreCase
+            : StringComparison.Ordinal;
+
+        if (!fullTempPath.StartsWith(uploadsRoot, pathComparison))
+            throw new InvalidOperationException("Invalid temporary upload path");
+
         try
         {
             // Validate path to prevent path traversal attacks
@@ -323,23 +346,30 @@ public class ObjectsManager : IObjectsManager
             if (!await _authManager.RequestAccess(ds, AccessType.Write))
                 throw new UnauthorizedException("The current user is not allowed to write to this dataset");
 
+            // Authoritative size from disk: never trust the caller-provided count for the quota check
+            var actualBytes = _fs.GetFileSize(fullTempPath);
+            if (actualBytes != writeBytes)
+                _logger.LogWarning(
+                    "Streamed upload size mismatch for '{OrgSlug}/{DsSlug}': caller reported {Reported} bytes, temp file is {Actual} bytes",
+                    orgSlug, dsSlug, writeBytes, actualBytes);
+
             // Check user storage space
-            await _utils.CheckCurrentUserStorage(writeBytes);
+            await _utils.CheckCurrentUserStorage(actualBytes);
 
             var localFilePath = ddb.GetLocalPath(path);
             _fs.EnsureParentFolderExists(localFilePath);
 
             // Same-volume atomic move: no extra full-file copy
-            File.Move(tempFilePath, localFilePath, overwrite: true);
+            File.Move(fullTempPath, localFilePath, overwrite: true);
 
             return await FinalizeAddedFileAsync(orgSlug, dsSlug, ddb, path, localFilePath);
         }
         finally
         {
             // If the move never happened (validation/auth error), drop the orphan temp file
-            if (File.Exists(tempFilePath))
+            if (File.Exists(fullTempPath))
             {
-                try { File.Delete(tempFilePath); }
+                try { File.Delete(fullTempPath); }
                 catch { /* ignore */ }
             }
         }

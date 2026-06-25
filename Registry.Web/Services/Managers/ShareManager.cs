@@ -493,11 +493,11 @@ public class ShareManager : IShareManager
     /// <returns>The upload result.</returns>
     public async Task<UploadResultDto> UploadStreamed(string token, string path, string tempFilePath, long bytes)
     {
-        if (string.IsNullOrWhiteSpace(path))
-            throw new BadRequestException("Missing path");
-
         try
         {
+            if (string.IsNullOrWhiteSpace(path))
+                throw new BadRequestException("Missing path");
+
             var batch = await GetRunningBatchFromToken(token);
 
             // Check if user has enough space to upload this

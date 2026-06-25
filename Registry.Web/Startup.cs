@@ -33,6 +33,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi;
+using Newtonsoft.Json.Linq;
 using Newtonsoft.Json.Serialization;
 using Registry.Adapters;
 using Registry.Common;
@@ -98,6 +99,17 @@ public class Startup
                 }
             });
             c.DocumentFilter<BasePathDocumentFilter>();
+
+            // Newtonsoft's JToken serializes to a self-referential schema (an array of JToken) that
+            // makes the Scalar/OpenAPI viewer recurse infinitely ("Maximum call stack size exceeded").
+            // STAC and metadata endpoints return arbitrary JSON, so represent JToken as an open schema.
+            c.MapType<JToken>(() => new OpenApiSchema { Description = "Arbitrary JSON value." });
+
+            // Surface the generated XML documentation (controller actions + DTOs) in the API reference
+            var xmlFile = $"{Assembly.GetExecutingAssembly().GetName().Name}.xml";
+            var xmlPath = Path.Combine(AppContext.BaseDirectory, xmlFile);
+            if (File.Exists(xmlPath))
+                c.IncludeXmlComments(xmlPath, includeControllerXmlComments: true);
         });
 
         services.AddMvcCore()

@@ -133,16 +133,11 @@ public static class Extenders
     }
 
     /// <summary>
-    /// Converts a tag string in the format "organization/dataset" to a TagDto object.
+    /// Converts a <see cref="Dataset"/> and its root <see cref="Entry"/> into a <see cref="DatasetDto"/>.
     /// </summary>
-    /// <param name="tag">The tag string to convert, formatted as "organization/dataset".</param>
-    /// <returns>
-    /// A TagDto containing the organization and dataset slugs, or null if the tag string is null, empty, or whitespace.
-    /// </returns>
-    /// <exception cref="FormatException">
-    /// Thrown when the tag string is not in the expected "organization/dataset" format,
-    /// or when either the organization or dataset slug is invalid.
-    /// </exception>
+    /// <param name="dataset">The dataset entity to convert.</param>
+    /// <param name="entry">The dataset's root entry, providing size and metadata.</param>
+    /// <returns>The mapped <see cref="DatasetDto"/>.</returns>
     public static DatasetDto ToDto(this Dataset dataset, Entry entry)
     {
         return new()

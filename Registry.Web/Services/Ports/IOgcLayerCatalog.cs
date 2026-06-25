@@ -6,7 +6,7 @@ namespace Registry.Web.Services.Ports;
 
 /// <summary>
 /// Enumerates layers exposed via OGC for a dataset (raster + vector + optionally multi-layer GPKG inner layers).
-/// Cached for <see cref="OgcLayerCatalogCacheMinutes"/> in Redis.
+/// Cached for <c>OgcLayerCatalogCacheMinutes</c> in Redis.
 /// </summary>
 public interface IOgcLayerCatalog
 {

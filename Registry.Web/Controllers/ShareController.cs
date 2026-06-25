@@ -107,11 +107,10 @@ public class ShareController : ControllerBaseEx
     }
 
     /// <summary>
-    /// Uploads a file to the share.
+    /// Uploads a file to the share by streaming a <c>multipart/form-data</c> request: the single file
+    /// part is written straight to the dataset volume and the destination is taken from a <c>path</c> form field.
     /// </summary>
     /// <param name="token">The share token.</param>
-    /// <param name="path">The destination path for the file.</param>
-    /// <param name="file">The file to upload.</param>
     /// <returns>The upload result.</returns>
     [HttpPost("upload/{token}", Name = nameof(ShareController) + "." + nameof(Upload))]
     [DisableFormValueModelBinding]
@@ -153,6 +152,13 @@ public class ShareController : ControllerBaseEx
                 {
                     if (MultipartRequestHelper.HasFileContentDisposition(contentDisposition))
                     {
+                        // Only a single file part is supported; reject extras and drop the temp already on disk
+                        if (tempFile != null)
+                        {
+                            MultipartRequestHelper.TryDeleteTempFile(tempFile);
+                            return BadRequest(new ErrorResponse("Only a single file part is allowed per upload"));
+                        }
+
                         var streamed = await _objectsManager.StreamToTempAsync(orgSlug, dsSlug, section.Body);
                         tempFile = streamed.TempPath;
                         writeBytes = streamed.Bytes;

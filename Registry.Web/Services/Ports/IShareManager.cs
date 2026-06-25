@@ -21,11 +21,18 @@ public interface IShareManager
     /// Resolves the organization/dataset of a running batch so the caller can stream an upload
     /// directly onto the dataset's storage volume.
     /// </summary>
+    /// <param name="token">The share batch token.</param>
+    /// <returns>The organization and dataset slugs of the running batch.</returns>
     public Task<(string OrgSlug, string DsSlug)> GetUploadTarget(string token);
 
     /// <summary>
     /// Finalizes a streamed share upload produced via <c>IObjectsManager.StreamToTempAsync</c>.
     /// </summary>
+    /// <param name="token">The share batch token.</param>
+    /// <param name="path">The destination path within the dataset.</param>
+    /// <param name="tempFilePath">The temp file produced by <c>IObjectsManager.StreamToTempAsync</c>.</param>
+    /// <param name="bytes">The number of bytes written while streaming (used for the storage-quota check).</param>
+    /// <returns>The upload result.</returns>
     public Task<UploadResultDto> UploadStreamed(string token, string path, string tempFilePath, long bytes);
 
     public Task<CommitResultDto> Commit(string token);

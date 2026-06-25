@@ -670,6 +670,136 @@ class ShareManagerTest : TestBase
     }
 
     [Test]
+    public async Task UploadStreamed_EndToEnd_AddsEntryAndCommits()
+    {
+        // INITIALIZATION & SETUP (mirrors EndToEnd_HappyPath but exercises the streamed upload path)
+        const string userName = "admin";
+
+        using var test = new TestFS(Test4ArchiveUrl, BaseTestFolder, true);
+
+        await using var context = GetTest1Context();
+        await using var appContext = GetAppTest1Context();
+
+        var settings = JsonConvert.DeserializeObject<AppSettings>(SettingsJson);
+        settings.DatasetsPath = test.TestFolder;
+        _appSettingsMock.Setup(o => o.Value).Returns(settings);
+
+        _authManagerMock.Setup(o => o.IsUserAdmin()).Returns(Task.FromResult(true));
+        _authManagerMock.Setup(o => o.IsOwnerOrAdmin(It.IsAny<Dataset>())).Returns(Task.FromResult(true));
+        _authManagerMock.Setup(o => o.IsOwnerOrAdmin(It.IsAny<Organization>())).Returns(Task.FromResult(true));
+        _authManagerMock.Setup(o => o.RequestAccess(It.IsAny<Dataset>(),
+            It.IsAny<AccessType>())).Returns(Task.FromResult(true));
+        _authManagerMock.Setup(o => o.RequestAccess(It.IsAny<Organization>(),
+            It.IsAny<AccessType>())).Returns(Task.FromResult(true));
+
+        _authManagerMock.Setup(o => o.GetCurrentUser()).Returns(Task.FromResult(new User
+        {
+            UserName = userName,
+            Email = "admin@example.com"
+        }));
+
+        _authManagerMock.Setup(o => o.SafeGetCurrentUserName()).Returns(Task.FromResult(userName));
+
+        var attributes = new Dictionary<string, object>
+        {
+            { "public", true }
+        };
+
+        var ddbMock = new Mock<IDDB>();
+        ddbMock.Setup(x => x.GetInfo()).Returns(new Entry
+        {
+            Properties = attributes
+        });
+
+        var mockMeta = new MockMeta();
+        ddbMock.Setup(x => x.Meta).Returns(mockMeta);
+
+        _ddbFactoryMock.Setup(x => x.Get(It.IsAny<string>(), It.IsAny<Guid>())).Returns(ddbMock.Object);
+
+        var ddbFactory = new DdbManager(_appSettingsMock.Object, _ddbFactoryLogger, DdbWrapper);
+        var webUtils = new WebUtils(_authManagerMock.Object, context, _appSettingsMock.Object,
+            _httpContextAccessorMock.Object, _ddbFactoryMock.Object);
+
+        var objectManager = new ObjectsManager(_objectManagerLogger, context,
+            _appSettingsMock.Object, ddbFactory, webUtils, _authManagerMock.Object, _cacheManager,
+            _fileSystem, _backgroundJobsProcessor, DdbWrapper, _thumbnailGeneratorMock.Object,
+            _jobIndexQueryMock.Object, _buildPendingService);
+
+        var datasetManager = new DatasetsManager(context, webUtils, _datasetsManagerLogger, objectManager,
+            _stacManagerMock.Object, _ddbFactoryMock.Object, _authManagerMock.Object, _cacheManager, _fileSystem,
+            _backgroundJobsProcessor, _appSettingsMock.Object);
+        var organizationsManager = new OrganizationsManager(_authManagerMock.Object, context, webUtils,
+            datasetManager, appContext, _appSettingsMock.Object, _organizationsManagerLogger);
+
+        var shareManager = new ShareManager(_appSettingsMock.Object, _shareManagerLogger, objectManager,
+            datasetManager, organizationsManager, webUtils, _authManagerMock.Object,
+            new BatchTokenGenerator(_appSettingsMock.Object, _batchTokenGeneratorLogger),
+            new NameGenerator(_appSettingsMock.Object, _nameGeneratorLogger), context, _fileSystem);
+
+        // TEST
+        const string fileName = "DJI_0028.JPG";
+        const int fileSize = 3140384;
+        const string fileHash = "7cf58d0a06c56092aa5d6e108e385ad942225c75b462406cdf50d66f829572d3";
+        const string organizationTestName = "test";
+        const string datasetTestName = "First";
+        const string organizationTestSlug = "test";
+        const string datasetTestSlug = "first";
+        const string newFileUrl =
+            "https://github.com/DroneDB/test_data/raw/master/test-datasets/drone_dataset_brighton_beach/" + fileName;
+
+        await organizationsManager.AddNew(new OrganizationDto
+        {
+            Name = organizationTestName,
+            IsPublic = true,
+            Slug = organizationTestSlug
+        });
+
+        // Initialize
+        var initRes = await shareManager.Initialize(new ShareInitDto
+        {
+            Tag = organizationTestSlug + "/" + datasetTestSlug,
+            DatasetName = datasetTestName
+        });
+
+        initRes.ShouldNotBeNull();
+        initRes.Token.ShouldNotBeNullOrWhiteSpace();
+
+        // GetUploadTarget resolves the running batch's org/dataset
+        var (orgSlug, dsSlug) = await shareManager.GetUploadTarget(initRes.Token);
+        orgSlug.ShouldBe(organizationTestSlug);
+        dsSlug.ShouldBe(datasetTestSlug);
+
+        // Stream to a temp file on the dataset volume, then finalize via the streamed path
+        var data = CommonUtils.SmartDownloadData(newFileUrl);
+        await using var ms = new MemoryStream(data);
+        var (tempPath, bytes) = await objectManager.StreamToTempAsync(orgSlug, dsSlug, ms);
+
+        var uploadRes = await shareManager.UploadStreamed(initRes.Token, fileName, tempPath, bytes);
+
+        uploadRes.Path.ShouldBe(fileName);
+        uploadRes.Size.ShouldBe(fileSize);
+        uploadRes.Hash.ShouldBe(fileHash);
+
+        // The streamed temp file must be consumed by the commit
+        File.Exists(tempPath).ShouldBeFalse();
+
+        // Commit
+        var commitRes = await shareManager.Commit(initRes.Token);
+
+        commitRes.Url.ShouldBe($"/r/{organizationTestSlug}/{datasetTestSlug}");
+        commitRes.Tag.OrganizationSlug.ShouldBe(organizationTestSlug);
+        commitRes.Tag.DatasetSlug.ShouldBe(datasetTestSlug);
+
+        var batches = (await shareManager.ListBatches(organizationTestSlug, datasetTestSlug)).ToArray();
+        batches.Length.ShouldBe(1);
+
+        var batch = batches.First();
+        batch.Token.ShouldBe(initRes.Token);
+        batch.Status.ShouldBe(BatchStatus.Committed);
+        batch.Entries.Count().ShouldBe(1);
+    }
+
+    [Test]
     public async Task EndToEnd_ShareInit_After_ShareInit()
     {
         // INITIALIZATION & SETUP

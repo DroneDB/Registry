@@ -502,12 +502,12 @@ public class ObjectsController : ControllerBaseEx
     }
 
     /// <summary>
-    /// Creates or uploads a new object to a dataset.
+    /// Creates a folder or uploads a new object to a dataset via a <c>multipart/form-data</c> request.
+    /// The optional single file part is streamed straight to the dataset volume and the destination is
+    /// taken from a <c>path</c> form field; when no file part is present a folder is created at <c>path</c>.
     /// </summary>
     /// <param name="orgSlug">The organization slug.</param>
     /// <param name="dsSlug">The dataset slug.</param>
-    /// <param name="path">The path where to create the object.</param>
-    /// <param name="file">Optional file to upload.</param>
     /// <returns>The created entry.</returns>
     [HttpPost(RoutesHelper.ObjectsRadix, Name = nameof(ObjectsController) + "." + nameof(Post))]
     [DisableFormValueModelBinding]
@@ -550,6 +550,13 @@ public class ObjectsController : ControllerBaseEx
                 {
                     if (MultipartRequestHelper.HasFileContentDisposition(contentDisposition))
                     {
+                        // Only a single file part is supported; reject extras and drop the temp already on disk
+                        if (tempFile != null)
+                        {
+                            MultipartRequestHelper.TryDeleteTempFile(tempFile);
+                            return BadRequest(new ErrorResponse("Only a single file part is allowed per upload"));
+                        }
+
                         var streamed = await _objectsManager.StreamToTempAsync(orgSlug, dsSlug, section.Body);
                         tempFile = streamed.TempPath;
                         writeBytes = streamed.Bytes;
