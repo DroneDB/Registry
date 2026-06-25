@@ -6,6 +6,10 @@
     <Platforms>AnyCPU;x64</Platforms>
     <Configurations>Debug;Release;DebugEf</Configurations>
     <LangVersion>13</LangVersion>
+    <!-- The khellang/MimeTypes source generator (used by CommonUtils) does not emit its class when
+         GenerateDocumentationFile is enabled, so opt this project out of the solution-wide doc generation.
+         Registry.Common does not contribute XML to the API reference, so nothing is lost. -->
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
   </PropertyGroup>
 
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|AnyCPU'">

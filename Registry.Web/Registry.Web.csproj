@@ -71,10 +71,6 @@
         <PackageReference Include="Microsoft.Extensions.Hosting" Version="10.0.7" />
         <PackageReference Include="Microsoft.VisualStudio.Web.CodeGeneration.Design" Version="10.0.2" />
         <PackageReference Include="MimeMapping" Version="4.0.0" />
-        <PackageReference Include="MimeTypes" Version="2.5.2">
-            <PrivateAssets>all</PrivateAssets>
-            <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
-        </PackageReference>
         <PackageReference Include="Newtonsoft.Json" Version="13.0.4" />
         <PackageReference Include="Scrutor" Version="7.0.0" />
         <PackageReference Include="Scrutor.AspNetCore" Version="3.3.0" />

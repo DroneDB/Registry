@@ -1,0 +1,19 @@
+<Project>
+
+    <!--
+        Solution-wide build defaults.
+
+        XML documentation is generated for every project so that:
+          - the API reference (Scalar/OpenAPI) can surface controller and DTO summaries, and
+          - the compiler flags documentation that references parameters which no longer exist (CS1572).
+
+        Noise from the convention-driven docs is suppressed:
+          - CS1591: missing XML comment for a publicly visible member (we don't document everything).
+          - CS1573: a parameter has no matching param tag (params are documented only when not self-evident).
+    -->
+    <PropertyGroup>
+        <GenerateDocumentationFile>true</GenerateDocumentationFile>
+        <NoWarn>$(NoWarn);CS1591;CS1573</NoWarn>
+    </PropertyGroup>
+
+</Project>

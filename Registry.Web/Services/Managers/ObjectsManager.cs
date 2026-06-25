@@ -47,9 +47,15 @@ public class ObjectsManager : IObjectsManager
     private readonly IOgcLayerCatalog? _ogcLayerCatalog;
     private readonly IDatasetCacheInvalidator _datasetCacheInvalidator;
 
+    /// <summary>
+    /// Name of the per-dataset folder that holds in-flight streamed uploads before they are
+    /// atomically moved into place. Reserved so users cannot create a conflicting entry.
+    /// </summary>
+    private const string UploadsFolderName = ".uploads";
+
     private static bool IsReservedPath(string path)
     {
-        return path.StartsWith(IDDB.DatabaseFolderName);
+        return path.StartsWith(IDDB.DatabaseFolderName) || path.StartsWith(UploadsFolderName);
     }
 
     public ObjectsManager(ILogger<ObjectsManager> logger,
@@ -189,7 +195,7 @@ public class ObjectsManager : IObjectsManager
             Name = Path.GetFileName(entry.Path),
             Size = entry.Size,
             Type = entry.Type,
-            ContentType = entry.Path != null ? MimeTypes.GetMimeType(entry.Path) : null,
+            ContentType = entry.Path != null ? MimeMapping.MimeUtility.GetMimeMapping(entry.Path) : null,
             PhysicalPath = Path.GetFullPath(ddb.GetLocalPath(entry.Path))
         };
     }
@@ -254,6 +260,128 @@ public class ObjectsManager : IObjectsManager
         await using (var localFileStream = _fs.OpenWrite(localFilePath))
             await stream.CopyToAsync(localFileStream);
 
+        return await FinalizeAddedFileAsync(orgSlug, dsSlug, ddb, path, localFilePath);
+    }
+
+    /// <summary>
+    /// Streams a forward-only upload body to a temporary file located on the same storage
+    /// volume as the dataset, so it can later be moved (not copied) into its final place.
+    /// This avoids the IFormFile spool-to-temp + cross-volume copy of the buffered path.
+    /// </summary>
+    /// <param name="orgSlug">The organization slug.</param>
+    /// <param name="dsSlug">The dataset slug.</param>
+    /// <param name="source">The forward-only request body section stream.</param>
+    /// <returns>The temp file path and the number of bytes written.</returns>
+    public async Task<(string TempPath, long Bytes)> StreamToTempAsync(
+        string orgSlug, string dsSlug, Stream source)
+    {
+        var ds = _utils.GetDataset(orgSlug, dsSlug);
+        var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
+
+        // Temp lives under the dataset folder (same volume as the final file) -> atomic move later
+        var tempDir = Path.Combine(ddb.DatasetFolderPath, UploadsFolderName);
+        _fs.FolderCreate(tempDir);
+        var tempPath = Path.Combine(tempDir, Guid.NewGuid().ToString("N") + ".tmp");
+
+        try
+        {
+            await using var ts = _fs.OpenWrite(tempPath);
+            await source.CopyToAsync(ts, 1024 * 1024);
+        }
+        catch
+        {
+            // Aborted/oversized stream: drop the partial temp file
+            try { File.Delete(tempPath); }
+            catch { /* ignore */ }
+            throw;
+        }
+
+        return (tempPath, _fs.GetFileSize(tempPath));
+    }
+
+    /// <summary>
+    /// Finalizes a streamed upload: validates access and quota, moves the already-written
+    /// temporary file into its final dataset location and indexes it.
+    /// </summary>
+    /// <param name="orgSlug">The organization slug.</param>
+    /// <param name="dsSlug">The dataset slug.</param>
+    /// <param name="path">The destination path within the dataset.</param>
+    /// <param name="tempFilePath">The temp file produced by <see cref="StreamToTempAsync"/>.</param>
+    /// <param name="writeBytes">Bytes written while streaming (used for the storage-quota check).</param>
+    /// <returns>The created entry.</returns>
+    public async Task<EntryDto> CommitStreamedAsync(string orgSlug, string dsSlug, string path,
+        string tempFilePath, long writeBytes)
+    {
+        var ds = _utils.GetDataset(orgSlug, dsSlug);
+
+        _logger.LogInformation("In CommitStreamedAsync('{OrgSlug}/{DsSlug}')", orgSlug, dsSlug);
+
+        var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
+
+        if (string.IsNullOrWhiteSpace(tempFilePath))
+            throw new InvalidOperationException("Missing temporary upload path");
+
+        // Defense-in-depth: the temp file must live inside this dataset's reserved uploads folder.
+        // Validate BEFORE the try/finally so an arbitrary/foreign path is never moved nor deleted.
+        var uploadsRoot = Path.GetFullPath(Path.Combine(ddb.DatasetFolderPath, UploadsFolderName));
+        if (!uploadsRoot.EndsWith(Path.DirectorySeparatorChar))
+            uploadsRoot += Path.DirectorySeparatorChar;
+
+        var fullTempPath = Path.GetFullPath(tempFilePath);
+        var pathComparison = OperatingSystem.IsWindows()
+            ? StringComparison.OrdinalIgnoreCase
+            : StringComparison.Ordinal;
+
+        if (!fullTempPath.StartsWith(uploadsRoot, pathComparison))
+            throw new InvalidOperationException("Invalid temporary upload path");
+
+        try
+        {
+            // Validate path to prevent path traversal attacks
+            CommonUtils.ValidateRelativePath(path, ddb.DatasetFolderPath);
+
+            if (IsReservedPath(path))
+                throw new InvalidOperationException($"'{path}' is a reserved path");
+
+            if (!await _authManager.RequestAccess(ds, AccessType.Write))
+                throw new UnauthorizedException("The current user is not allowed to write to this dataset");
+
+            // Authoritative size from disk: never trust the caller-provided count for the quota check
+            var actualBytes = _fs.GetFileSize(fullTempPath);
+            if (actualBytes != writeBytes)
+                _logger.LogWarning(
+                    "Streamed upload size mismatch for '{OrgSlug}/{DsSlug}': caller reported {Reported} bytes, temp file is {Actual} bytes",
+                    orgSlug, dsSlug, writeBytes, actualBytes);
+
+            // Check user storage space
+            await _utils.CheckCurrentUserStorage(actualBytes);
+
+            var localFilePath = ddb.GetLocalPath(path);
+            _fs.EnsureParentFolderExists(localFilePath);
+
+            // Same-volume atomic move: no extra full-file copy
+            File.Move(fullTempPath, localFilePath, overwrite: true);
+
+            return await FinalizeAddedFileAsync(orgSlug, dsSlug, ddb, path, localFilePath);
+        }
+        finally
+        {
+            // If the move never happened (validation/auth error), drop the orphan temp file
+            if (File.Exists(fullTempPath))
+            {
+                try { File.Delete(fullTempPath); }
+                catch { /* ignore */ }
+            }
+        }
+    }
+
+    /// <summary>
+    /// Shared tail of the add-file flow: index the on-disk file, fetch the entry, schedule the
+    /// build (or thumbnail) in the background and invalidate dependent caches.
+    /// </summary>
+    private async Task<EntryDto> FinalizeAddedFileAsync(string orgSlug, string dsSlug, IDDB ddb,
+        string path, string localFilePath)
+    {
         _logger.LogInformation("File saved, adding to DDB");
         ddb.AddRaw(path);
 
@@ -325,6 +453,7 @@ public class ObjectsManager : IObjectsManager
 
         return entry.ToDto();
     }
+
 
     /// <summary>
     /// Validates that the specified entry (file or directory) does not have any active builds.

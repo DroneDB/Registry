@@ -161,7 +161,10 @@ public class FileSystem : IFileSystem
 
     public Stream OpenWrite(string path, FileMode mode = FileMode.Create)
     {
-        return new FileStream(path, mode, FileAccess.Write);
+        // Large (1 MiB) buffer + async + sequential-scan hints for high-throughput large-file writes.
+        // FileShare.Read preserves the previous sharing semantics of new FileStream(path, mode, Write).
+        return new FileStream(path, mode, FileAccess.Write, FileShare.Read, 1024 * 1024,
+            FileOptions.Asynchronous | FileOptions.SequentialScan);
     }
 
     public Stream Open(string path, FileMode mode, FileAccess access, FileShare share)

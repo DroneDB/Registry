@@ -50,4 +50,25 @@ public static class MultipartRequestHelper
                && (!string.IsNullOrEmpty(contentDisposition.FileName.Value)
                    || !string.IsNullOrEmpty(contentDisposition.FileNameStar.Value));
     }
+
+    /// <summary>
+    /// Best-effort deletion of a streamed temporary upload file, used to clean up when a
+    /// request is rejected before the temp file is committed (e.g. multiple file parts).
+    /// </summary>
+    /// <param name="path">The temp file path to delete; ignored when null or empty.</param>
+    public static void TryDeleteTempFile(string path)
+    {
+        if (string.IsNullOrEmpty(path))
+            return;
+
+        try
+        {
+            if (File.Exists(path))
+                File.Delete(path);
+        }
+        catch
+        {
+            /* ignore */
+        }
+    }
 }

@@ -5,6 +5,7 @@ using System.IO;
 using System.IO.Compression;
 using System.Linq;
 using System.Security.Cryptography;
+using System.Text;
 using System.Threading.Tasks;
 using Shouldly;
 using Microsoft.AspNetCore.Http;
@@ -573,6 +574,135 @@ public class ObjectManagerTest : TestBase
             fileName);
 
         res.Count().ShouldBe(1);
+    }
+
+    private ObjectsManager BuildStreamedUploadObjectsManager(string datasetsPath, RegistryContext context)
+    {
+        var settings = JsonConvert.DeserializeObject<AppSettings>(_settingsJson);
+        settings.DatasetsPath = datasetsPath;
+        _appSettingsMock.Setup(o => o.Value).Returns(settings);
+
+        _authManagerMock.Setup(o => o.IsUserAdmin()).Returns(Task.FromResult(true));
+        _authManagerMock.Setup(o => o.IsOwnerOrAdmin(It.IsAny<Dataset>())).Returns(Task.FromResult(true));
+        _authManagerMock.Setup(o => o.RequestAccess(It.IsAny<Dataset>(),
+            It.IsAny<AccessType>())).Returns(Task.FromResult(true));
+        _authManagerMock.Setup(o => o.RequestAccess(It.IsAny<Organization>(),
+            It.IsAny<AccessType>())).Returns(Task.FromResult(true));
+
+        var webUtils = new WebUtils(_authManagerMock.Object, context, _appSettingsMock.Object,
+            _httpContextAccessorMock.Object, _ddbFactoryMock.Object);
+
+        return new ObjectsManager(_objectManagerLogger, context, _appSettingsMock.Object,
+            new DdbManager(_appSettingsMock.Object, _ddbFactoryLogger, DdbWrapper), webUtils, _authManagerMock.Object,
+            _cacheManager, _fileSystem, _backgroundJobsProcessor, DdbWrapper, _thumbnailGeneratorMock.Object,
+            _jobIndexQueryMock.Object, _buildPendingService);
+    }
+
+    [Test]
+    public async Task StreamToTempAsync_StreamsFileUnderUploadsFolder()
+    {
+        await using var context = GetTest1Context();
+        using var test = new TestFS(Test4ArchiveUrl, BaseTestFolder);
+
+        var objectManager = BuildStreamedUploadObjectsManager(test.TestFolder, context);
+
+        var data = Encoding.UTF8.GetBytes("hello streamed upload");
+        await using var ms = new MemoryStream(data);
+
+        var (tempPath, bytes) = await objectManager.StreamToTempAsync(
+            MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug, ms);
+
+        try
+        {
+            bytes.ShouldBe(data.Length);
+            File.Exists(tempPath).ShouldBeTrue();
+            // The temp file must live in the reserved per-dataset uploads folder
+            Path.GetFileName(Path.GetDirectoryName(tempPath)).ShouldBe(".uploads");
+        }
+        finally
+        {
+            if (File.Exists(tempPath)) File.Delete(tempPath);
+        }
+    }
+
+    [Test]
+    public async Task CommitStreamedAsync_MovesFileAndDeletesTemp()
+    {
+        const string fileName = "DJI_0028.JPG";
+        const string destPath = "streamed_DJI.JPG";
+
+        await using var context = GetTest1Context();
+        using var test = new TestFS(Test4ArchiveUrl, BaseTestFolder);
+
+        var objectManager = BuildStreamedUploadObjectsManager(test.TestFolder, context);
+
+        var newFileUrl =
+            "https://github.com/DroneDB/test_data/raw/master/test-datasets/drone_dataset_brighton_beach/" + fileName;
+        var data = CommonUtils.SmartDownloadData(newFileUrl);
+
+        await using var ms = new MemoryStream(data);
+        var (tempPath, bytes) = await objectManager.StreamToTempAsync(
+            MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug, ms);
+
+        var entry = await objectManager.CommitStreamedAsync(
+            MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug, destPath, tempPath, bytes);
+
+        entry.Path.ShouldBe(destPath);
+        // The atomic move must consume the temp file
+        File.Exists(tempPath).ShouldBeFalse();
+
+        (await objectManager.List(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug, destPath))
+            .Count().ShouldBe(1);
+    }
+
+    [Test]
+    public async Task CommitStreamedAsync_ReservedUploadsPath_ThrowsAndDeletesTemp()
+    {
+        await using var context = GetTest1Context();
+        using var test = new TestFS(Test4ArchiveUrl, BaseTestFolder);
+
+        var objectManager = BuildStreamedUploadObjectsManager(test.TestFolder, context);
+
+        var data = Encoding.UTF8.GetBytes("reserved path payload");
+        await using var ms = new MemoryStream(data);
+        var (tempPath, bytes) = await objectManager.StreamToTempAsync(
+            MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug, ms);
+
+        // Committing onto the reserved uploads folder must be rejected
+        var act = async () => await objectManager.CommitStreamedAsync(
+            MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug, ".uploads/evil.bin", tempPath, bytes);
+
+        await Should.ThrowAsync<InvalidOperationException>(act);
+
+        // The temp file is cleaned up when the commit is rejected
+        File.Exists(tempPath).ShouldBeFalse();
+    }
+
+    [Test]
+    public async Task CommitStreamedAsync_TempOutsideUploads_ThrowsAndKeepsForeignFile()
+    {
+        await using var context = GetTest1Context();
+        using var test = new TestFS(Test4ArchiveUrl, BaseTestFolder);
+
+        var objectManager = BuildStreamedUploadObjectsManager(test.TestFolder, context);
+
+        // A file that lives OUTSIDE the dataset's uploads folder must never be moved nor deleted
+        var foreignFile = Path.Combine(test.TestFolder, "foreign_keepme.bin");
+        await File.WriteAllTextAsync(foreignFile, "must not be deleted");
+
+        try
+        {
+            var act = async () => await objectManager.CommitStreamedAsync(
+                MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug, "x.bin", foreignFile, 10);
+
+            await Should.ThrowAsync<InvalidOperationException>(act);
+
+            File.Exists(foreignFile).ShouldBeTrue();
+        }
+        finally
+        {
+            if (File.Exists(foreignFile)) File.Delete(foreignFile);
+        }
     }
 
     [Test]

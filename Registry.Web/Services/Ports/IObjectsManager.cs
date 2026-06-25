@@ -18,6 +18,21 @@ public interface IObjectsManager
     Task<StorageEntryDto> Get(string orgSlug, string dsSlug, string path);
     Task<EntryDto> AddNew(string orgSlug, string dsSlug, string path, byte[] data);
     Task<EntryDto> AddNew(string orgSlug, string dsSlug, string path, Stream stream = null);
+
+    /// <summary>
+    /// Streams a forward-only upload body to a temporary file on the dataset's storage volume,
+    /// so it can later be moved (not copied) into place. Used by the streaming upload endpoint.
+    /// </summary>
+    /// <returns>The temp file path and the bytes written.</returns>
+    Task<(string TempPath, long Bytes)> StreamToTempAsync(string orgSlug, string dsSlug, Stream source);
+
+    /// <summary>
+    /// Finalizes a streamed upload produced by <see cref="StreamToTempAsync"/>: validates access
+    /// and quota, atomically moves the temp file into its final location and indexes it.
+    /// </summary>
+    /// <returns>The created entry.</returns>
+    Task<EntryDto> CommitStreamedAsync(string orgSlug, string dsSlug, string path, string tempFilePath, long writeBytes);
+
     Task<EntryDto> Move(string orgSlug, string dsSlug, string source, string dest);
 
     /// <summary>

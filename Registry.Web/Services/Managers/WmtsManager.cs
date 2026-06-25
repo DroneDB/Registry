@@ -23,7 +23,7 @@ namespace Registry.Web.Services.Managers;
 
 /// <summary>
 /// WMTS 1.0.0 manager. Capabilities + tile retrieval. For raster layers we delegate
-/// to the existing XYZ tile pipeline (<see cref="IDDB.GenerateTile"/>); for vector
+/// to the existing XYZ tile pipeline (<c>IDDB.GenerateTile</c>); for vector
 /// layers we proxy MVT tiles directly.
 /// </summary>
 public class WmtsManager : OgcManagerBase, IWmtsManager

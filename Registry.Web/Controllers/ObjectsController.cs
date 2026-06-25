@@ -4,19 +4,26 @@ using System.ComponentModel.DataAnnotations;
 using System.IO;
 using System.Linq;
 using System.Net;
+using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Http.Features;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.WebUtilities;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
+using Microsoft.Net.Http.Headers;
 using Microsoft.VisualBasic.CompilerServices;
 using MimeMapping;
 using Registry.Common;
 using Registry.Common.Model;
 using Registry.Ports.DroneDB;
+using Registry.Web.Attributes;
 using Registry.Web.Exceptions;
 using Registry.Web.Models;
+using Registry.Web.Models.Configuration;
 using Registry.Web.Filters;
 using Registry.Web.Models.DTO;
 using Registry.Web.Services.Ports;
@@ -36,11 +43,16 @@ public class ObjectsController : ControllerBaseEx
 {
     private readonly IObjectsManager _objectsManager;
     private readonly ILogger<ObjectsController> _logger;
+    private readonly FormOptions _formOptions;
+    private readonly AppSettings _appSettings;
 
-    public ObjectsController(IObjectsManager datasetsManager, ILogger<ObjectsController> logger)
+    public ObjectsController(IObjectsManager datasetsManager, ILogger<ObjectsController> logger,
+        IOptions<FormOptions> formOptions, IOptions<AppSettings> appSettings)
     {
         _objectsManager = datasetsManager;
         _logger = logger;
+        _formOptions = formOptions.Value;
+        _appSettings = appSettings.Value;
     }
 
     private static bool IsTraversalPath(string path) =>
@@ -490,16 +502,17 @@ public class ObjectsController : ControllerBaseEx
     }
 
     /// <summary>
-    /// Creates or uploads a new object to a dataset.
+    /// Creates a folder or uploads a new object to a dataset via a <c>multipart/form-data</c> request.
+    /// The optional single file part is streamed straight to the dataset volume and the destination is
+    /// taken from a <c>path</c> form field; when no file part is present a folder is created at <c>path</c>.
     /// </summary>
     /// <param name="orgSlug">The organization slug.</param>
     /// <param name="dsSlug">The dataset slug.</param>
-    /// <param name="path">The path where to create the object.</param>
-    /// <param name="file">Optional file to upload.</param>
     /// <returns>The created entry.</returns>
     [HttpPost(RoutesHelper.ObjectsRadix, Name = nameof(ObjectsController) + "." + nameof(Post))]
+    [DisableFormValueModelBinding]
     [RequestFormLimits(ValueLengthLimit = int.MaxValue, MultipartBodyLengthLimit = long.MaxValue)]
-    [DisableRequestSizeLimit]
+    [ConfigurableUploadSizeLimit]
     [ProducesResponseType(typeof(EntryDto), StatusCodes.Status201Created)]
     [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status401Unauthorized)]
@@ -507,25 +520,72 @@ public class ObjectsController : ControllerBaseEx
     [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status409Conflict)]
     public async Task<IActionResult> Post(
         [FromRoute, Required] string orgSlug,
-        [FromRoute, Required] string dsSlug,
-        [FromForm] string path,
-        IFormFile file = null)
+        [FromRoute, Required] string dsSlug)
     {
         try
         {
-            _logger.LogDebug("Objects controller Post('{OrgSlug}', '{DsSlug}', '{Path}', '{file?.FileName}')",
-                orgSlug, dsSlug, path, file?.FileName);
+            if (!MultipartRequestHelper.IsMultipartContentType(Request.ContentType))
+                return BadRequest(new ErrorResponse("Expected a multipart/form-data request"));
+
+            // Early reject oversized uploads (defence-in-depth; Kestrel also enforces the limit mid-stream)
+            if (_appSettings.MaxRequestBodySize is { } maxBody &&
+                Request.ContentLength is { } contentLength && contentLength > maxBody)
+                return StatusCode(StatusCodes.Status413PayloadTooLarge,
+                    new ErrorResponse($"Upload exceeds the maximum allowed size of {maxBody} bytes"));
+
+            var boundary = MultipartRequestHelper.GetBoundary(
+                MediaTypeHeaderValue.Parse(Request.ContentType),
+                _formOptions.MultipartBoundaryLengthLimit);
+            var reader = new MultipartReader(boundary, Request.Body);
+
+            string path = null;
+            string tempFile = null;
+            long writeBytes = 0;
+
+            // Stream the file part straight to disk; capture the 'path' form field regardless of order
+            var section = await reader.ReadNextSectionAsync();
+            while (section != null)
+            {
+                if (ContentDispositionHeaderValue.TryParse(section.ContentDisposition, out var contentDisposition))
+                {
+                    if (MultipartRequestHelper.HasFileContentDisposition(contentDisposition))
+                    {
+                        // Only a single file part is supported; reject extras and drop the temp already on disk
+                        if (tempFile != null)
+                        {
+                            MultipartRequestHelper.TryDeleteTempFile(tempFile);
+                            return BadRequest(new ErrorResponse("Only a single file part is allowed per upload"));
+                        }
+
+                        var streamed = await _objectsManager.StreamToTempAsync(orgSlug, dsSlug, section.Body);
+                        tempFile = streamed.TempPath;
+                        writeBytes = streamed.Bytes;
+                    }
+                    else if (MultipartRequestHelper.HasFormDataContentDisposition(contentDisposition))
+                    {
+                        var key = HeaderUtilities.RemoveQuotes(contentDisposition.Name).Value;
+                        using var sr = new StreamReader(section.Body, Encoding.UTF8);
+                        var value = await sr.ReadToEndAsync();
+                        if (string.Equals(key, "path", StringComparison.OrdinalIgnoreCase))
+                            path = value;
+                    }
+                }
+
+                section = await reader.ReadNextSectionAsync();
+            }
+
+            _logger.LogDebug("Objects controller Post('{OrgSlug}', '{DsSlug}', '{Path}', file={HasFile})",
+                orgSlug, dsSlug, path, tempFile != null);
 
             EntryDto newObj;
-
-            if (file == null)
+            if (tempFile == null)
             {
+                // No file part: folder creation (path provided as a form field)
                 newObj = await _objectsManager.AddNew(orgSlug, dsSlug, path);
             }
             else
             {
-                await using var stream = file.OpenReadStream();
-                newObj = await _objectsManager.AddNew(orgSlug, dsSlug, path, stream);
+                newObj = await _objectsManager.CommitStreamedAsync(orgSlug, dsSlug, path, tempFile, writeBytes);
             }
 
             return CreatedAtRoute(nameof(ObjectsController) + "." + nameof(GetInfo), new
@@ -535,11 +595,16 @@ public class ObjectsController : ControllerBaseEx
                 path = newObj.Path
             }, newObj);
         }
+        catch (BadHttpRequestException bex) when (bex.StatusCode == StatusCodes.Status413PayloadTooLarge)
+        {
+            return StatusCode(StatusCodes.Status413PayloadTooLarge,
+                new ErrorResponse("Upload exceeds the maximum allowed size"));
+        }
         catch (Exception ex)
         {
             _logger.LogError(ex,
-                "Exception in Objects controller Post('{OrgSlug}', '{DsSlug}', '{Path}', '{file?.FileName}')",
-                orgSlug, dsSlug, path, file?.FileName);
+                "Exception in Objects controller Post('{OrgSlug}', '{DsSlug}')",
+                orgSlug, dsSlug);
 
             return ExceptionResult(ex);
         }

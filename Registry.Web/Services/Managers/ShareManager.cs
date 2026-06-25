@@ -457,9 +457,7 @@ public class ShareManager : IShareManager
         // Check if user has enough space to upload this
         await _utils.CheckCurrentUserStorage(stream.Length);
 
-        var entry = batch.Entries.FirstOrDefault(item => item.Path == path);
-
-        if (entry != null)
+        if (batch.Entries.Any(item => item.Path == path))
             throw new BadRequestException("Entry already uploaded");
 
         _logger.LogInformation("Adding '{Path}' in batch '{BatchToken}'", path, batch.Token);
@@ -469,13 +467,77 @@ public class ShareManager : IShareManager
 
         await _objectsManager.AddNew(orgSlug, dsSlug, path, stream);
 
+        return await RegisterBatchEntry(batch, orgSlug, dsSlug, path);
+    }
+
+    /// <summary>
+    /// Resolves the target organization/dataset of a running batch so the caller can stream the
+    /// upload directly onto the dataset's storage volume.
+    /// </summary>
+    /// <param name="token">The share batch token.</param>
+    /// <returns>The organization and dataset slugs of the running batch.</returns>
+    public async Task<(string OrgSlug, string DsSlug)> GetUploadTarget(string token)
+    {
+        var batch = await GetRunningBatchFromToken(token);
+        return (batch.Dataset.Organization.Slug, batch.Dataset.Slug);
+    }
+
+    /// <summary>
+    /// Finalizes a streamed share upload: validates the batch, moves the already-written temp file
+    /// into place (via the objects manager) and records the batch entry.
+    /// </summary>
+    /// <param name="token">The share batch token.</param>
+    /// <param name="path">The destination path within the dataset.</param>
+    /// <param name="tempFilePath">The temp file produced by <c>IObjectsManager.StreamToTempAsync</c>.</param>
+    /// <param name="bytes">The number of bytes written (for the storage-quota check).</param>
+    /// <returns>The upload result.</returns>
+    public async Task<UploadResultDto> UploadStreamed(string token, string path, string tempFilePath, long bytes)
+    {
+        try
+        {
+            if (string.IsNullOrWhiteSpace(path))
+                throw new BadRequestException("Missing path");
+
+            var batch = await GetRunningBatchFromToken(token);
+
+            // Check if user has enough space to upload this
+            await _utils.CheckCurrentUserStorage(bytes);
+
+            if (batch.Entries.Any(item => item.Path == path))
+                throw new BadRequestException("Entry already uploaded");
+
+            _logger.LogInformation("Adding (streamed) '{Path}' in batch '{BatchToken}'", path, batch.Token);
+
+            var orgSlug = batch.Dataset.Organization.Slug;
+            var dsSlug = batch.Dataset.Slug;
+
+            await _objectsManager.CommitStreamedAsync(orgSlug, dsSlug, path, tempFilePath, bytes);
+
+            return await RegisterBatchEntry(batch, orgSlug, dsSlug, path);
+        }
+        finally
+        {
+            // Backstop: drop the temp file if a pre-commit validation prevented the move
+            if (File.Exists(tempFilePath))
+            {
+                try { File.Delete(tempFilePath); }
+                catch { /* ignore */ }
+            }
+        }
+    }
+
+    /// <summary>
+    /// Shared tail of the share upload flow: looks up the freshly added entry and records it on the batch.
+    /// </summary>
+    private async Task<UploadResultDto> RegisterBatchEntry(Batch batch, string orgSlug, string dsSlug, string path)
+    {
         var info = (await _objectsManager.List(orgSlug, dsSlug, path)).FirstOrDefault();
 
         if (info == null)
             throw new BadRequestException(
                 "Underlying object storage is not working correctly: cannot find object after adding it");
 
-        entry = new Entry
+        var entry = new Entry
         {
             Type = info.Type,
             Hash = info.Hash,
