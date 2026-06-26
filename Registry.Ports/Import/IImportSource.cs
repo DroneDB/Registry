@@ -30,9 +30,9 @@ public interface IImportSource
 
     /// <summary>
     /// Downloads source files directly into <paramref name="destFolder"/> (the dataset folder),
-    /// skipping any file already present with the same hash (resumable re-import). In-flight
-    /// downloads use a temporary file outside the dataset folder and are atomically moved on
-    /// completion, so the dataset folder never contains partial files. Reports incremental progress
+    /// skipping any file already present at the expected size (resumable re-import). Downloads
+    /// stream directly to the final destination path; partial files are possible on failure and
+    /// must be cleaned up by the caller. Reports incremental progress
     /// (including <see cref="ImportProgress.BytesSoFar"/>). Must honour cancellation promptly; the
     /// tool enforces the size/quota budget by cancelling when the reported bytes exceed it.
     /// Receives decrypted params.

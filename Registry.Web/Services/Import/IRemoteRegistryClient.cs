@@ -9,7 +9,7 @@ namespace Registry.Web.Services.Import;
 
 /// <summary>
 /// Shared client for the remote-registry transfer operations (authenticate, list, parallel download
-/// with same-hash skip). Used by the <c>registry</c> import source. Downloads only - indexing is the
+/// with same-size skip). Used by the <c>registry</c> import source. Downloads only - indexing is the
 /// caller's responsibility (the import tool indexes via <c>AddRawBatch</c> after a successful fetch).
 /// </summary>
 public interface IRemoteRegistryClient
