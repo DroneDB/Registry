@@ -2,8 +2,9 @@
 using System;
 using System.IO;
 using Microsoft.AspNetCore.DataProtection;
+using Microsoft.AspNetCore.DataProtection.KeyManagement;
+using Microsoft.AspNetCore.DataProtection.StackExchangeRedis;
 using Microsoft.Extensions.DependencyInjection;
-using Newtonsoft.Json.Linq;
 using Registry.Web.Models.Configuration;
 using StackExchange.Redis;
 
@@ -34,13 +35,11 @@ public static class DataProtectionExtensions
 
         if (settings.CacheProvider?.Type == CacheType.Redis)
         {
-            var redisSettings = JObject.FromObject(settings.CacheProvider.Settings)
-                .ToObject<RedisProviderSettings>()
-                ?? throw new InvalidOperationException(
-                    "Invalid Redis cache provider settings for Data Protection key sharing.");
-
-            var redis = ConnectionMultiplexer.Connect(redisSettings.InstanceAddress);
-            dp.PersistKeysToStackExchangeRedis(redis, RedisKeyName);
+            // Reuse the shared IConnectionMultiplexer singleton already registered by AddCacheProvider,
+            // instead of opening a second connection. The Configure<> callback runs lazily at first key access.
+            dp.Services.AddOptions<KeyManagementOptions>()
+                .Configure<IConnectionMultiplexer>((opts, mux) =>
+                    opts.XmlRepository = new RedisXmlRepository(() => mux.GetDatabase(), RedisKeyName));
         }
         else if (!string.IsNullOrWhiteSpace(settings.DataProtectionKeysPath))
         {
