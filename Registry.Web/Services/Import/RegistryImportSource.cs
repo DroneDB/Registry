@@ -61,7 +61,15 @@ public sealed class RegistryImportSource : IImportSource
         await _ssrfGuard.AssertAllowedAsync(p.Host, ct);
 
         var token = await _client.AuthenticateAsync(p.Url, p.Username, p.Password, ct);
+
+        // Credentials were supplied but the remote rejected them.
+        if (!string.IsNullOrWhiteSpace(p.Username) && token is null)
+            throw new InvalidOperationException("Authentication failed.");
+
         var files = await _client.ListFilesAsync(p.Url, token, p.Organization, p.Dataset, ct);
+
+        if (files.Length == 0)
+            throw new InvalidOperationException("The remote dataset was not found or is empty.");
 
         await _client.DownloadFilesParallelAsync(p.Url, token, p.Organization, p.Dataset, destFolder, files,
             progress, ct);
