@@ -68,6 +68,44 @@ public class CreateImportRequestDto
 }
 
 /// <summary>
+/// Request to browse (list) resources available at a remote import source.
+/// </summary>
+public class BrowseImportRequestDto
+{
+    /// <summary>The import source type (e.g. <c>registry</c>).</summary>
+    [Required]
+    public string SourceType { get; set; } = string.Empty;
+
+    /// <summary>Source-specific connection parameters (url, username, password, ...).</summary>
+    public Dictionary<string, string> Params { get; set; } = new();
+
+    /// <summary>What to browse: <c>organizations</c> or <c>datasets</c>.</summary>
+    [Required]
+    public string BrowseType { get; set; } = string.Empty;
+}
+
+/// <summary>
+/// A single browsable item (organization or dataset) from a remote source.
+/// </summary>
+public class BrowseItemDto
+{
+    /// <summary>URL-safe identifier.</summary>
+    public string Slug { get; set; } = string.Empty;
+
+    /// <summary>Human-readable name.</summary>
+    public string Name { get; set; } = string.Empty;
+}
+
+/// <summary>
+/// Result of a browse operation.
+/// </summary>
+public class ImportBrowseResultDto
+{
+    /// <summary>The browsed items (organizations or datasets).</summary>
+    public BrowseItemDto[] Items { get; set; } = [];
+}
+
+/// <summary>
 /// Result of a create-and-import operation.
 /// </summary>
 public class ImportCreateResultDto

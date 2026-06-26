@@ -184,6 +184,38 @@ public class ImportManager : IImportManager
         }
     }
 
+    /// <inheritdoc />
+    public async Task<ImportBrowseResultDto> BrowseAsync(string orgSlug, BrowseImportRequestDto request,
+        CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+
+        var org = _utils.GetOrganization(orgSlug);
+        if (!await _authManager.RequestAccess(org, AccessType.Write))
+            throw new UnauthorizedException("The current user cannot browse import sources for this organization.");
+
+        EnsureSourceAllowed(request.SourceType);
+
+        var source = _factory.Resolve(request.SourceType);
+        if (source is not IBrowsableImportSource browsable)
+            throw new BadRequestException($"The '{request.SourceType}' source does not support browsing.");
+
+        var paramsElement = ToJsonElement(request.Params);
+        var items = request.BrowseType switch
+        {
+            "organizations" => await browsable.BrowseOrganizationsAsync(paramsElement, ct),
+            "datasets" => await browsable.BrowseDatasetsAsync(paramsElement, ct),
+            _ => throw new BadRequestException($"Unknown browse type '{request.BrowseType}'. Use 'organizations' or 'datasets'.")
+        };
+
+        return new ImportBrowseResultDto
+        {
+            Items = items
+                .Select(i => new BrowseItemDto { Slug = i.Slug, Name = i.Name })
+                .ToArray()
+        };
+    }
+
     private async Task<long?> ComputeRemainingBudgetAsync()
     {
         var user = await _authManager.GetCurrentUser();

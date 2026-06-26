@@ -53,4 +53,26 @@ public interface IRemoteRegistryClient
     /// <returns>A task that completes when all files have been downloaded.</returns>
     Task DownloadFilesParallelAsync(string registryUrl, string? authToken, string sourceOrg, string sourceDs,
         string destFolder, EntryDto[] files, IProgress<ImportProgress>? progress, CancellationToken ct);
+
+    /// <summary>
+    /// Lists all organizations visible to the given token (or publicly visible when token is null).
+    /// Falls back to the <c>/orgs/public</c> endpoint when the token-gated <c>/orgs</c> returns
+    /// HTTP 401 (anonymous caller on an auth-required instance).
+    /// </summary>
+    /// <param name="registryUrl">The remote registry base URL.</param>
+    /// <param name="authToken">The bearer token, or null for anonymous.</param>
+    /// <param name="ct">Cancellation token.</param>
+    /// <returns>Browse items representing accessible organizations.</returns>
+    Task<RemoteBrowseItem[]> ListOrganizationsAsync(string registryUrl, string? authToken, CancellationToken ct);
+
+    /// <summary>
+    /// Lists the datasets in a remote organization.
+    /// </summary>
+    /// <param name="registryUrl">The remote registry base URL.</param>
+    /// <param name="authToken">The bearer token, or null for anonymous.</param>
+    /// <param name="orgSlug">The remote organization slug.</param>
+    /// <param name="ct">Cancellation token.</param>
+    /// <returns>Browse items representing datasets in the organization.</returns>
+    Task<RemoteBrowseItem[]> ListDatasetsAsync(string registryUrl, string? authToken, string orgSlug,
+        CancellationToken ct);
 }

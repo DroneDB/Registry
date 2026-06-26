@@ -103,4 +103,30 @@ public class ImportController : ControllerBaseEx
             return ExceptionResult(ex);
         }
     }
+
+    /// <summary>
+    /// Browses the remote structure of an import source (lists organizations or datasets) without
+    /// creating or modifying anything. Only the <c>registry</c> source type supports this operation.
+    /// </summary>
+    /// <param name="orgSlug">The organization slug (used for access control only).</param>
+    /// <param name="body">The browse request.</param>
+    /// <param name="ct">Cancellation token.</param>
+    /// <returns>The list of organizations or datasets available at the remote source.</returns>
+    [HttpPost("browse", Name = nameof(BrowseImport))]
+    [ProducesResponseType(typeof(ImportBrowseResultDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
+    public async Task<IActionResult> BrowseImport(
+        [FromRoute, Required] string orgSlug,
+        [FromBody, Required] BrowseImportRequestDto body,
+        CancellationToken ct)
+    {
+        try
+        {
+            return Ok(await _importManager.BrowseAsync(orgSlug, body, ct));
+        }
+        catch (Exception ex)
+        {
+            return ExceptionResult(ex);
+        }
+    }
 }

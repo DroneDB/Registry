@@ -13,7 +13,7 @@ namespace Registry.Web.Services.Import;
 /// (<see cref="SourceType"/> = <c>registry</c>). Authentication is optional (anonymous for public
 /// datasets). The actual transfer is delegated to <see cref="IRemoteRegistryClient"/>.
 /// </summary>
-public sealed class RegistryImportSource : IImportSource
+public sealed class RegistryImportSource : IImportSource, IBrowsableImportSource
 {
     private readonly IRemoteRegistryClient _client;
     private readonly SsrfGuard _ssrfGuard;
@@ -77,20 +77,55 @@ public sealed class RegistryImportSource : IImportSource
 
     private static RegistryParams ReadParams(JsonElement parameters)
     {
-        var url = GetString(parameters, "url")
-                  ?? throw new ArgumentException("A registry URL is required.");
+        var (url, host, username, password) = ReadConnectionParams(parameters);
         var org = GetString(parameters, "organization")
                   ?? throw new ArgumentException("A source organization is required.");
         var dataset = GetString(parameters, "dataset")
                       ?? throw new ArgumentException("A source dataset is required.");
-        var username = GetString(parameters, "username") ?? string.Empty;
-        var password = GetString(parameters, "password") ?? string.Empty;
 
+        return new RegistryParams(url, host, org, dataset, username, password);
+    }
+
+    /// <inheritdoc />
+    public async Task<RemoteBrowseItem[]> BrowseOrganizationsAsync(JsonElement parameters, CancellationToken ct)
+    {
+        var (url, host, username, password) = ReadConnectionParams(parameters);
+        await _ssrfGuard.AssertAllowedAsync(host, ct);
+
+        var token = await _client.AuthenticateAsync(url, username, password, ct);
+        if (!string.IsNullOrWhiteSpace(username) && token is null)
+            throw new InvalidOperationException("Authentication failed.");
+
+        return await _client.ListOrganizationsAsync(url, token, ct);
+    }
+
+    /// <inheritdoc />
+    public async Task<RemoteBrowseItem[]> BrowseDatasetsAsync(JsonElement parameters, CancellationToken ct)
+    {
+        var (url, host, username, password) = ReadConnectionParams(parameters);
+        var org = GetString(parameters, "organization")
+                  ?? throw new ArgumentException("A source organization is required.");
+        await _ssrfGuard.AssertAllowedAsync(host, ct);
+
+        var token = await _client.AuthenticateAsync(url, username, password, ct);
+        if (!string.IsNullOrWhiteSpace(username) && token is null)
+            throw new InvalidOperationException("Authentication failed.");
+
+        return await _client.ListDatasetsAsync(url, token, org, ct);
+    }
+
+    private static (string Url, string Host, string Username, string Password) ReadConnectionParams(
+        JsonElement parameters)
+    {
+        var url = GetString(parameters, "url")
+                  ?? throw new ArgumentException("A registry URL is required.");
         if (!Uri.TryCreate(url, UriKind.Absolute, out var uri) ||
             (uri.Scheme != Uri.UriSchemeHttp && uri.Scheme != Uri.UriSchemeHttps))
             throw new ArgumentException($"The registry URL is not a valid http/https URL: {url}");
 
-        return new RegistryParams(url, uri.Host, org, dataset, username, password);
+        var username = GetString(parameters, "username") ?? string.Empty;
+        var password = GetString(parameters, "password") ?? string.Empty;
+        return (url, uri.Host, username, password);
     }
 
     private static string? GetString(JsonElement obj, string name)

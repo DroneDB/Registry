@@ -36,4 +36,15 @@ public interface IImportManager
     /// <param name="ct">Cancellation token.</param>
     /// <returns>The created dataset and the tracking task id.</returns>
     Task<ImportCreateResultDto> CreateAsync(string orgSlug, CreateImportRequestDto request, CancellationToken ct);
+
+    /// <summary>
+    /// Browses the remote structure of an import source (lists organizations or datasets) without
+    /// creating or modifying anything. Only sources that implement
+    /// <see cref="Registry.Web.Services.Import.IBrowsableImportSource"/> support this operation.
+    /// </summary>
+    /// <param name="orgSlug">The destination organization slug (used for access-control only).</param>
+    /// <param name="request">The browse request specifying source type, params and browse type.</param>
+    /// <param name="ct">Cancellation token.</param>
+    /// <returns>The browse result containing the matching items.</returns>
+    Task<ImportBrowseResultDto> BrowseAsync(string orgSlug, BrowseImportRequestDto request, CancellationToken ct);
 }

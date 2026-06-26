@@ -166,4 +166,65 @@ public sealed class RemoteRegistryClient : IRemoteRegistryClient
                     FilesTotal: totalFiles));
             });
     }
+
+    /// <inheritdoc />
+    public async Task<RemoteBrowseItem[]> ListOrganizationsAsync(string registryUrl, string? authToken,
+        CancellationToken ct)
+    {
+        var baseUrl = registryUrl.TrimEnd('/');
+        var client = _httpClientFactory.CreateClient();
+        if (!string.IsNullOrWhiteSpace(authToken))
+            client.DefaultRequestHeaders.Add("Authorization", $"Bearer {authToken}");
+
+        // Try the authenticated endpoint first; fall back to the public one on 401.
+        var response = await client.GetAsync($"{baseUrl}/orgs", ct);
+        if (response.StatusCode == System.Net.HttpStatusCode.Unauthorized)
+            response = await _httpClientFactory.CreateClient().GetAsync($"{baseUrl}/orgs/public", ct);
+
+        if (!response.IsSuccessStatusCode)
+        {
+            _logger.LogWarning("Failed to list remote organizations with status {StatusCode}",
+                response.StatusCode);
+            return [];
+        }
+
+        var json = await response.Content.ReadAsStringAsync(ct);
+        var orgs = JsonConvert.DeserializeObject<List<Dictionary<string, object?>>>(json) ?? [];
+
+        return orgs
+            .Select(o => new RemoteBrowseItem(
+                Slug: o.SafeGetValue("slug") as string ?? string.Empty,
+                Name: o.SafeGetValue("name") as string ?? string.Empty))
+            .Where(o => !string.IsNullOrWhiteSpace(o.Slug))
+            .ToArray();
+    }
+
+    /// <inheritdoc />
+    public async Task<RemoteBrowseItem[]> ListDatasetsAsync(string registryUrl, string? authToken,
+        string orgSlug, CancellationToken ct)
+    {
+        var client = _httpClientFactory.CreateClient();
+        if (!string.IsNullOrWhiteSpace(authToken))
+            client.DefaultRequestHeaders.Add("Authorization", $"Bearer {authToken}");
+
+        var response = await client.GetAsync(
+            $"{registryUrl.TrimEnd('/')}/orgs/{Uri.EscapeDataString(orgSlug)}/ds", ct);
+
+        if (!response.IsSuccessStatusCode)
+        {
+            _logger.LogWarning("Failed to list remote datasets for org '{OrgSlug}' with status {StatusCode}",
+                orgSlug, response.StatusCode);
+            return [];
+        }
+
+        var json = await response.Content.ReadAsStringAsync(ct);
+        var datasets = JsonConvert.DeserializeObject<List<Dictionary<string, object?>>>(json) ?? [];
+
+        return datasets
+            .Select(d => new RemoteBrowseItem(
+                Slug: d.SafeGetValue("slug") as string ?? string.Empty,
+                Name: d.SafeGetValue("name") as string ?? string.Empty))
+            .Where(d => !string.IsNullOrWhiteSpace(d.Slug))
+            .ToArray();
+    }
 }
