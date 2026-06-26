@@ -140,7 +140,7 @@ public sealed class ImportDatasetTool : IHeavyTool
             rawParams.ValueKind != JsonValueKind.Object)
             throw new InvalidOperationException("Source parameters are required.");
 
-        var sourceParams = DecryptParams(rawParams, _protector);
+        var sourceParams = DecryptParams(sourceType, rawParams, _protector);
         var source = _factory.Resolve(sourceType);
 
         var root = ctx.Ddb.DatasetFolderPath;
@@ -300,16 +300,22 @@ public sealed class ImportDatasetTool : IHeavyTool
         }
     }
 
-    // Returns a copy of the source params with any "ENC:"-prefixed string value decrypted in place.
-    private static JsonElement DecryptParams(JsonElement paramsEl, IImportCredentialProtector protector)
+    // Returns a copy of the source params with known sensitive fields decrypted in place.
+    // Only fields listed in ImportSourceDefinitions.SensitiveFields for the given sourceType are
+    // treated as ciphertext, so arbitrary user-supplied values cannot trigger Unprotect.
+    private static JsonElement DecryptParams(string sourceType, JsonElement paramsEl, IImportCredentialProtector protector)
     {
+        var sensitive = ImportSourceDefinitions.SensitiveFields.TryGetValue(sourceType, out var fields)
+            ? fields
+            : (IReadOnlySet<string>)new HashSet<string>();
+
         var obj = new JsonObject();
         foreach (var prop in paramsEl.EnumerateObject())
         {
             if (prop.Value.ValueKind == JsonValueKind.String)
             {
                 var s = prop.Value.GetString() ?? string.Empty;
-                obj[prop.Name] = s.StartsWith("ENC:", StringComparison.Ordinal)
+                obj[prop.Name] = sensitive.Contains(prop.Name) && s.StartsWith("ENC:", StringComparison.Ordinal)
                     ? protector.Unprotect(s[4..])
                     : s;
             }

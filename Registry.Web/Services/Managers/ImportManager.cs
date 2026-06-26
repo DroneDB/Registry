@@ -28,14 +28,6 @@ namespace Registry.Web.Services.Managers;
 /// </summary>
 public class ImportManager : IImportManager
 {
-    // Per-source-type fields that must be encrypted at rest before being handed to the worker.
-    private static readonly IReadOnlyDictionary<string, string[]> SensitiveFields =
-        new Dictionary<string, string[]>(StringComparer.OrdinalIgnoreCase)
-        {
-            ["registry"] = ["password"],
-            ["archive-url"] = ["password"]
-        };
-
     private readonly IUtils _utils;
     private readonly IAuthManager _authManager;
     private readonly IDatasetsManager _datasetsManager;
@@ -206,13 +198,15 @@ public class ImportManager : IImportManager
 
     private JsonElement BuildToolParams(string sourceType, Dictionary<string, string> source, long? budgetBytes)
     {
-        var sensitive = SensitiveFields.TryGetValue(sourceType, out var fields) ? fields : [];
+        var sensitive = ImportSourceDefinitions.SensitiveFields.TryGetValue(sourceType, out var fields)
+            ? fields
+            : (IReadOnlySet<string>)new HashSet<string>();
 
         var inner = new JsonObject();
         foreach (var kv in source)
         {
             var value = kv.Value ?? string.Empty;
-            if (!string.IsNullOrEmpty(value) && sensitive.Contains(kv.Key, StringComparer.OrdinalIgnoreCase))
+            if (!string.IsNullOrEmpty(value) && sensitive.Contains(kv.Key))
                 value = "ENC:" + _protector.Protect(value);
             inner[kv.Key] = value;
         }
