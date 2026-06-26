@@ -115,7 +115,20 @@ public static class HttpHelper
             {
                 MaxRetryAttempts = maxRetries,
                 BackoffType = DelayBackoffType.Exponential,
+                UseJitter = true,
                 Delay = TimeSpan.FromSeconds(2),
+                // Honor the server's Retry-After (429/503) when present; otherwise fall back to the
+                // exponential+jitter backoff above. Capped so a hostile header cannot stall forever.
+                DelayGenerator = static args =>
+                {
+                    if (args.Outcome.Exception is RetryableHttpException { RetryAfter: { } ra } && ra > TimeSpan.Zero)
+                    {
+                        var capped = ra > TimeSpan.FromMinutes(2) ? TimeSpan.FromMinutes(2) : ra;
+                        return ValueTask.FromResult<TimeSpan?>(capped);
+                    }
+
+                    return ValueTask.FromResult<TimeSpan?>(null);
+                },
                 OnRetry = args =>
                 {
                     retryCount = args.AttemptNumber;
@@ -146,6 +159,11 @@ public static class HttpHelper
                 }
 
                 using var response = await HttpClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, ct);
+
+                // Transient throttling/upstream errors are retried with the server's Retry-After delay.
+                if (IsRetryableStatus(response.StatusCode))
+                    throw new RetryableHttpException(response.StatusCode, ReadRetryAfter(response));
+
                 response.EnsureSuccessStatusCode();
 
                 // Ensure parent directory exists
@@ -203,5 +221,43 @@ public static class HttpHelper
                 RetryCount = retryCount
             };
         }
+    }
+
+    // Status codes worth retrying: rate limiting and transient upstream failures.
+    private static bool IsRetryableStatus(System.Net.HttpStatusCode status)
+        => status is System.Net.HttpStatusCode.TooManyRequests        // 429
+            or System.Net.HttpStatusCode.BadGateway                   // 502
+            or System.Net.HttpStatusCode.ServiceUnavailable           // 503
+            or System.Net.HttpStatusCode.GatewayTimeout;              // 504
+
+    // Reads the Retry-After header as a delay (supports both delta-seconds and HTTP-date forms).
+    private static TimeSpan? ReadRetryAfter(HttpResponseMessage response)
+    {
+        var retryAfter = response.Headers.RetryAfter;
+        if (retryAfter == null) return null;
+
+        if (retryAfter.Delta.HasValue)
+            return retryAfter.Delta;
+
+        if (retryAfter.Date.HasValue)
+        {
+            var delay = retryAfter.Date.Value - DateTimeOffset.UtcNow;
+            return delay > TimeSpan.Zero ? delay : TimeSpan.Zero;
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// Signals an HTTP response whose status code is transient and should be retried, optionally
+    /// carrying the server-provided <c>Retry-After</c> delay.
+    /// </summary>
+    private sealed class RetryableHttpException : Exception
+    {
+        public TimeSpan? RetryAfter { get; }
+
+        public RetryableHttpException(System.Net.HttpStatusCode statusCode, TimeSpan? retryAfter)
+            : base($"Server returned {(int)statusCode} ({statusCode}).")
+            => RetryAfter = retryAfter;
     }
 }

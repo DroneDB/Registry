@@ -321,6 +321,11 @@ public class Startup
         // Processing Platform task substrate (native tools incl. build/raster-export)
         services.AddProcessingPlatform();
 
+        // Import Dataset feature: source infrastructure + the import-dataset heavy tool (shared with
+        // the worker host) and the web-only orchestration manager.
+        services.AddImportSources(appSettings);
+        services.AddScoped<IImportManager, ImportManager>();
+
         services.AddScoped<IConfigurationHelper<AppSettings>, ConfigurationHelper>(_ =>
             new ConfigurationHelper(MagicStrings.AppSettingsFileName));
 

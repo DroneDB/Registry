@@ -71,6 +71,9 @@ public static class ProcessingNodeServiceCollectionExtensions
         // Processing Platform task substrate (native tools incl. build/raster-export)
         services.AddProcessingPlatform();
 
+        // Import Dataset feature (the import-dataset heavy tool runs on the worker host).
+        services.AddImportSources(appSettings);
+
         return services;
     }
 }

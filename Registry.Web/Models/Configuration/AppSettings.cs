@@ -309,4 +309,21 @@ public class AppSettings
 #nullable enable
     public ProcessingPlatformSettings? ProcessingPlatform { get; set; }
 #nullable restore
+
+    /// <summary>
+    /// Import Dataset feature settings. When null, defaults apply.
+    /// </summary>
+#nullable enable
+    public ImportSettings? Import { get; set; }
+#nullable restore
+
+    /// <summary>
+    /// Path to a shared directory for ASP.NET Core Data Protection key storage. Required when the
+    /// processing node runs in a separate process and Redis caching is not used, so the worker can
+    /// decrypt credentials the web host encrypted. When Redis is the cache provider the key ring is
+    /// shared via Redis instead and this can be left null.
+    /// </summary>
+#nullable enable
+    public string? DataProtectionKeysPath { get; set; }
+#nullable restore
 }
