@@ -22,6 +22,12 @@ public class ImportSettings
     /// <summary>Hostnames explicitly exempt from SSRF blocking.</summary>
     public string[] SsrfAllowedHosts { get; set; } = [];
 
+    /// <summary>
+    /// Maximum number of HTTP redirects to follow during import (default 5). Every redirect hop is
+    /// re-validated by the SSRF guard at connect time, so this only bounds redirect-chain length.
+    /// </summary>
+    public int MaxRedirects { get; set; } = 5;
+
     /// <summary>Connection/authentication timeout in seconds per source (default 30).</summary>
     public int ConnectTimeoutSeconds { get; set; } = 30;
 

@@ -28,10 +28,13 @@ public static class HttpHelper
     /// <param name="outputPath">The local path to save the file to</param>
     /// <param name="headers">Optional HTTP headers to include in the request</param>
     /// <param name="progressCallback">Optional callback for progress reporting (bytesDownloaded, totalBytes). totalBytes may be -1 if unknown.</param>
-    public static async Task DownloadFileAsync(string uri, string outputPath, Dictionary<string, string> headers = null, Action<long, long> progressCallback = null)
+    /// <param name="httpClient">Optional client to use (e.g. an SSRF-hardened one); falls back to the shared static client.</param>
+    public static async Task DownloadFileAsync(string uri, string outputPath, Dictionary<string, string> headers = null, Action<long, long> progressCallback = null, HttpClient httpClient = null)
     {
         if (!Uri.TryCreate(uri, UriKind.Absolute, out _))
             throw new InvalidOperationException("URI is invalid.");
+
+        var client = httpClient ?? HttpClient;
 
         using var request = new HttpRequestMessage(HttpMethod.Get, uri);
 
@@ -45,7 +48,7 @@ public static class HttpHelper
         }
 
         // Use streaming to avoid loading entire file in memory
-        using var response = await HttpClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead);
+        using var response = await client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead);
         response.EnsureSuccessStatusCode();
 
         var totalBytes = response.Content.Headers.ContentLength ?? -1;
@@ -96,13 +99,15 @@ public static class HttpHelper
     /// <param name="headers">Optional HTTP headers to include in the request</param>
     /// <param name="maxRetries">Maximum number of retry attempts (default: 3)</param>
     /// <param name="cancellationToken">Cancellation token</param>
+    /// <param name="httpClient">Optional client to use (e.g. an SSRF-hardened one); falls back to the shared static client.</param>
     /// <returns>Download result with success status and any error details</returns>
     public static async Task<DownloadResult> DownloadFileWithRetryAsync(
         string uri,
         string outputPath,
         Dictionary<string, string> headers = null,
         int maxRetries = 3,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        HttpClient httpClient = null)
     {
         if (!Uri.TryCreate(uri, UriKind.Absolute, out _))
             return new DownloadResult { Success = false, ErrorMessage = "URI is invalid." };
@@ -158,7 +163,7 @@ public static class HttpHelper
                     }
                 }
 
-                using var response = await HttpClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, ct);
+                using var response = await (httpClient ?? HttpClient).SendAsync(request, HttpCompletionOption.ResponseHeadersRead, ct);
 
                 // Transient throttling/upstream errors are retried with the server's Retry-After delay.
                 if (IsRetryableStatus(response.StatusCode))

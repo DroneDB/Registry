@@ -42,6 +42,10 @@ public sealed class RemoteRegistryClient : IRemoteRegistryClient
         _logger = logger;
     }
 
+    // Every outbound call goes through the SSRF-hardened client (connect-time IP validation + redirect
+    // guard). The host is also pre-validated by SsrfGuard before each operation in RegistryImportSource.
+    private HttpClient CreateClient() => _httpClientFactory.CreateClient(SsrfHttpHandler.HttpClientName);
+
     /// <inheritdoc />
     public async Task<string?> AuthenticateAsync(string registryUrl, string username, string password,
         CancellationToken ct)
@@ -50,7 +54,7 @@ public sealed class RemoteRegistryClient : IRemoteRegistryClient
         if (string.IsNullOrWhiteSpace(username) && string.IsNullOrWhiteSpace(password))
             return null;
 
-        var client = _httpClientFactory.CreateClient();
+        var client = CreateClient();
 
         var content = new FormUrlEncodedContent([
             new KeyValuePair<string, string>("username", username),
@@ -75,7 +79,7 @@ public sealed class RemoteRegistryClient : IRemoteRegistryClient
     public async Task<EntryDto[]> ListFilesAsync(string registryUrl, string? authToken, string orgSlug,
         string dsSlug, CancellationToken ct)
     {
-        var client = _httpClientFactory.CreateClient();
+        var client = CreateClient();
         if (!string.IsNullOrWhiteSpace(authToken))
             client.DefaultRequestHeaders.Add("Authorization", $"Bearer {authToken}");
 
@@ -146,7 +150,7 @@ public sealed class RemoteRegistryClient : IRemoteRegistryClient
                         $"?path={Uri.EscapeDataString(entry.Path)}&inline=1";
 
                     var result = await HttpHelper.DownloadFileWithRetryAsync(
-                        downloadUrl, localPath, headers, maxRetries, token);
+                        downloadUrl, localPath, headers, maxRetries, token, CreateClient());
 
                     if (!result.Success)
                         throw new IOException(
@@ -172,14 +176,14 @@ public sealed class RemoteRegistryClient : IRemoteRegistryClient
         CancellationToken ct)
     {
         var baseUrl = registryUrl.TrimEnd('/');
-        var client = _httpClientFactory.CreateClient();
+        var client = CreateClient();
         if (!string.IsNullOrWhiteSpace(authToken))
             client.DefaultRequestHeaders.Add("Authorization", $"Bearer {authToken}");
 
         // Try the authenticated endpoint first; fall back to the public one on 401.
         var response = await client.GetAsync($"{baseUrl}/orgs", ct);
         if (response.StatusCode == System.Net.HttpStatusCode.Unauthorized)
-            response = await _httpClientFactory.CreateClient().GetAsync($"{baseUrl}/orgs/public", ct);
+            response = await CreateClient().GetAsync($"{baseUrl}/orgs/public", ct);
 
         if (!response.IsSuccessStatusCode)
         {
@@ -203,7 +207,7 @@ public sealed class RemoteRegistryClient : IRemoteRegistryClient
     public async Task<RemoteBrowseItem[]> ListDatasetsAsync(string registryUrl, string? authToken,
         string orgSlug, CancellationToken ct)
     {
-        var client = _httpClientFactory.CreateClient();
+        var client = CreateClient();
         if (!string.IsNullOrWhiteSpace(authToken))
             client.DefaultRequestHeaders.Add("Authorization", $"Bearer {authToken}");
 

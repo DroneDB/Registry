@@ -38,11 +38,7 @@ public sealed class SsrfGuard
         if (string.IsNullOrWhiteSpace(host))
             throw new ArgumentException("A host is required.");
 
-        if (_settings.SsrfAllowPrivateNetworks)
-            return;
-
-        if (_settings.SsrfAllowedHosts is { Length: > 0 } allowed &&
-            allowed.Contains(host, StringComparer.OrdinalIgnoreCase))
+        if (IsBypassed(host))
             return;
 
         IPAddress[] addresses;
@@ -56,6 +52,47 @@ public sealed class SsrfGuard
             throw new ArgumentException($"Cannot resolve host '{host}'.");
         }
 
+        AssertAddressesAllowed(host, addresses);
+    }
+
+    /// <summary>
+    /// Resolves <paramref name="host"/> and asserts every resolved address is allowed, returning the
+    /// addresses so the caller can connect to exactly those IPs. Dialing the validated IPs (instead of
+    /// re-resolving) closes the DNS-rebinding window between this check and the socket connect; because
+    /// it runs for every connection it also blocks redirects whose target resolves to a private address.
+    /// </summary>
+    /// <param name="host">The hostname (or IP literal) to validate.</param>
+    /// <param name="ct">Cancellation token.</param>
+    /// <returns>The validated resolved addresses.</returns>
+    public async Task<IPAddress[]> ResolveAndAssertAsync(string host, CancellationToken ct)
+    {
+        if (string.IsNullOrWhiteSpace(host))
+            throw new ArgumentException("A host is required.");
+
+        IPAddress[] addresses;
+        try
+        {
+            addresses = await Dns.GetHostAddressesAsync(host, ct);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            throw new ArgumentException($"Cannot resolve host '{host}'.");
+        }
+
+        // Bypassed hosts still need resolution (the caller connects to the result) but skip blocking.
+        if (!IsBypassed(host))
+            AssertAddressesAllowed(host, addresses);
+
+        return addresses;
+    }
+
+    private bool IsBypassed(string host) =>
+        _settings.SsrfAllowPrivateNetworks ||
+        (_settings.SsrfAllowedHosts is { Length: > 0 } allowed &&
+         allowed.Contains(host, StringComparer.OrdinalIgnoreCase));
+
+    private static void AssertAddressesAllowed(string host, IPAddress[] addresses)
+    {
         foreach (var addr in addresses)
         {
             if (IsBlocked(addr))

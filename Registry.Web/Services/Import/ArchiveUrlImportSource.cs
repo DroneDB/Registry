@@ -9,9 +9,12 @@ using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 using Registry.Ports.Archives;
 using Registry.Ports.DroneDB;
 using Registry.Ports.Import;
+using Registry.Web.Models.Configuration;
+using Registry.Web.Services.HeavyTasks;
 
 namespace Registry.Web.Services.Import;
 
@@ -28,6 +31,8 @@ public sealed class ArchiveUrlImportSource : IImportSource
     private readonly IArchiveExtractor _extractor;
     private readonly SsrfGuard _ssrfGuard;
     private readonly IHttpClientFactory _httpClientFactory;
+    private readonly long _maxImportSizeBytes;
+    private readonly long _diskSafetyMarginBytes;
     private readonly ILogger<ArchiveUrlImportSource> _logger;
 
     /// <summary>
@@ -36,15 +41,24 @@ public sealed class ArchiveUrlImportSource : IImportSource
     /// <param name="extractor">The archive extractor.</param>
     /// <param name="ssrfGuard">The SSRF guard.</param>
     /// <param name="httpClientFactory">The HTTP client factory.</param>
+    /// <param name="appSettings">The application settings (import cap + disk safety margin).</param>
     /// <param name="logger">The logger.</param>
     public ArchiveUrlImportSource(IArchiveExtractor extractor, SsrfGuard ssrfGuard,
-        IHttpClientFactory httpClientFactory, ILogger<ArchiveUrlImportSource> logger)
+        IHttpClientFactory httpClientFactory, IOptions<AppSettings> appSettings,
+        ILogger<ArchiveUrlImportSource> logger)
     {
         _extractor = extractor;
         _ssrfGuard = ssrfGuard;
         _httpClientFactory = httpClientFactory;
+        _maxImportSizeBytes = (appSettings.Value.Import ?? new ImportSettings()).MaxImportSizeBytes;
+        _diskSafetyMarginBytes =
+            (appSettings.Value.ProcessingPlatform ?? new ProcessingPlatformSettings()).DiskSafetyMarginBytes;
         _logger = logger;
     }
+
+    // Outbound calls go through the SSRF-hardened client (connect-time IP validation + redirect
+    // guard); the host is also pre-validated by SsrfGuard before probe/fetch.
+    private HttpClient CreateClient() => _httpClientFactory.CreateClient(SsrfHttpHandler.HttpClientName);
 
     /// <inheritdoc />
     public string SourceType => "archive-url";
@@ -55,7 +69,7 @@ public sealed class ArchiveUrlImportSource : IImportSource
         var p = ReadParams(parameters);
         await _ssrfGuard.AssertAllowedAsync(p.Host, ct);
 
-        var client = _httpClientFactory.CreateClient();
+        var client = CreateClient();
         using var request = new HttpRequestMessage(HttpMethod.Head, p.Url);
         ApplyAuth(request, p);
 
@@ -98,7 +112,7 @@ public sealed class ArchiveUrlImportSource : IImportSource
         {
             await DownloadToFileAsync(p, scratch, progress, ct);
             // _extractor.Open throws on a truly unsupported/corrupt archive (surfaced as a task failure).
-            ExtractInto(scratch, destFolder, progress, ct);
+            await ExtractIntoAsync(scratch, destFolder, progress, ct);
         }
         finally
         {
@@ -109,7 +123,7 @@ public sealed class ArchiveUrlImportSource : IImportSource
     private async Task DownloadToFileAsync(ArchiveParams p, string scratch, IProgress<ImportProgress> progress,
         CancellationToken ct)
     {
-        var client = _httpClientFactory.CreateClient();
+        var client = CreateClient();
         using var request = new HttpRequestMessage(HttpMethod.Get, p.Url);
         ApplyAuth(request, p);
 
@@ -136,12 +150,16 @@ public sealed class ArchiveUrlImportSource : IImportSource
         }
     }
 
-    private void ExtractInto(string scratch, string destFolder, IProgress<ImportProgress> progress,
+    private async Task ExtractIntoAsync(string scratch, string destFolder, IProgress<ImportProgress> progress,
         CancellationToken ct)
     {
         using var session = _extractor.Open(scratch);
         var total = session.FastFileEntryCount ?? 0;
-        long bytesSoFar = 0;
+
+        // Cap (primary, MaxImportSizeBytes) + disk head-room (secondary, re-sampled) consolidated in
+        // ExtractionBudget: enforced per chunk, so a single entry whose header under-reports its size
+        // cannot fill the volume. The outer ImportDatasetTool sink still enforces the per-user quota.
+        var budget = new ExtractionBudget(_maxImportSizeBytes, destFolder, _diskSafetyMarginBytes);
         var done = 0;
 
         foreach (var entry in session.Entries())
@@ -157,17 +175,16 @@ public sealed class ArchiveUrlImportSource : IImportSource
             if (!string.IsNullOrEmpty(parent))
                 Directory.CreateDirectory(parent);
 
-            using (var source = entry.OpenStream())
-            using (var fileStream = File.Create(localTarget))
-                source.CopyTo(fileStream);
+            await using (var source = entry.OpenStream())
+            await using (var fileStream = File.Create(localTarget))
+                await budget.CopyGuardedAsync(source, fileStream, ct);
 
-            bytesSoFar += SafeLength(localTarget);
             done++;
             progress.Report(new ImportProgress(
                 total > 0 ? 0.5 + 0.5 * done / total : -1,
                 Phase: "extracting",
                 Message: entry.Key,
-                BytesSoFar: bytesSoFar,
+                BytesSoFar: budget.BytesWritten,
                 FilesDone: done,
                 FilesTotal: total > 0 ? total : null));
         }
@@ -187,6 +204,12 @@ public sealed class ArchiveUrlImportSource : IImportSource
         while (key.StartsWith('/')) key = key[1..];
 
         if (string.IsNullOrWhiteSpace(key)) return null;
+
+        // Reject embedded null bytes: on some native paths a NUL truncates the string, which could
+        // sidestep the rooted-path / ".." checks below (defense in depth).
+        if (key.Contains('\0'))
+            throw new InvalidOperationException($"Unsafe archive entry path (null byte): '{entryKey}'.");
+
         if (Path.IsPathRooted(key) || key.Split('/').Any(seg => seg == ".."))
             throw new InvalidOperationException($"Unsafe archive entry path (zip-slip): '{entryKey}'.");
 
@@ -248,12 +271,6 @@ public sealed class ArchiveUrlImportSource : IImportSource
         if (el.ValueKind != JsonValueKind.String) return null;
         var s = el.GetString();
         return string.IsNullOrWhiteSpace(s) ? null : s;
-    }
-
-    private static long SafeLength(string path)
-    {
-        try { return new FileInfo(path).Length; }
-        catch { return 0; }
     }
 
     private void TryDelete(string path)

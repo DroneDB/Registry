@@ -79,10 +79,6 @@ public sealed class ArchiveExtractTool : IHeavyTool
     // database opens into one-per-chunk.
     private const int IndexChunkSize = 250;
 
-    // Headroom kept free on the dataset volume while extracting; the streaming guard aborts
-    // before the projected size would eat into it.
-    private const long DiskSafetyMarginBytes = 256L * 1024 * 1024;
-
     public async Task ValidateAsync(HeavyToolRequest request, IHeavyToolValidationContext ctx, CancellationToken ct)
     {
         var sourcePath = ReadString(request.Params, "sourcePath");
@@ -194,7 +190,6 @@ public sealed class ArchiveExtractTool : IHeavyTool
         var extracted = 0;
         var skipped = 0;
         int total;
-        long uncompressedSoFar = 0;
         var extractedPaths = new List<string>();
 
         // For compressed tarballs the uncompressed size cannot be known without fully
@@ -204,18 +199,8 @@ public sealed class ArchiveExtractTool : IHeavyTool
         // this run and fail with a clear "not enough space" message. Indexing happens only
         // AFTER the loop, so on abort nothing has been added to the index yet - we just
         // delete the files written so far.
-        var freeAtStart = GetAvailableDiskBytes(root);
-        var maxUncompressed = _settings.MaxArchiveExtractSizeBytes; // 0 disables the absolute cap
-
-        void AbortOutOfSpace()
-        {
-            progress.Report(new HeavyToolProgress(-1, "cleanup",
-                LogChunk: $"Out of space - rolling back {extractedPaths.Count} extracted file(s)"));
-            CleanupExtracted(ctx, extractedPaths);
-            throw new QuotaExceededException(
-                "The archive is too large to extract: the server ran out of free space. " +
-                $"Rolled back after writing {CommonUtils.GetBytesReadable(uncompressedSoFar)}.");
-        }
+        // Cap (primary) + disk head-room (secondary, re-sampled) consolidated in ExtractionBudget.
+        var budget = new ExtractionBudget(_settings.MaxArchiveExtractSizeBytes, root, _settings.DiskSafetyMarginBytes);
 
         // The session (and its underlying file handle) is closed as soon as the
         // extraction loop finishes, BEFORE indexing and deleteArchive. This is critical:
@@ -241,14 +226,6 @@ public sealed class ArchiveExtractTool : IHeavyTool
                 var target = SafeJoin(destPath, archiveEntry.Key);
                 CommonUtils.ValidateRelativePath(target, root); // defense in depth
 
-                // Space guard BEFORE writing: stop before we breach the disk budget or the
-                // absolute uncompressed cap, so we never actually fill the volume.
-                var declared = archiveEntry.Size > 0 ? archiveEntry.Size : 0;
-                var projected = uncompressedSoFar + declared;
-                if ((maxUncompressed > 0 && projected > maxUncompressed) ||
-                    freeAtStart - projected < DiskSafetyMarginBytes)
-                    AbortOutOfSpace();
-
                 // Overwrite / skip semantics.
                 if (ctx.Ddb.EntryExists(target) && !overwrite)
                 {
@@ -263,19 +240,25 @@ public sealed class ArchiveExtractTool : IHeavyTool
                 if (!string.IsNullOrEmpty(parent))
                     Directory.CreateDirectory(parent);
 
-                // File.Create truncates an existing file -> honors overwrite=true.
-                await using (var sourceStream = archiveEntry.OpenStream())
-                await using (var fileStream = File.Create(localTarget))
-                    await sourceStream.CopyToAsync(fileStream, ct);
-
+                // Track the (possibly partial) file BEFORE writing so a rollback removes it too.
                 extractedPaths.Add(target);
 
-                // Re-check against the ACTUAL bytes written: a tar/zip header size can
-                // under-report, so this also catches a single oversized entry.
-                uncompressedSoFar += SafeFileLength(localTarget);
-                if ((maxUncompressed > 0 && uncompressedSoFar > maxUncompressed) ||
-                    freeAtStart - uncompressedSoFar < DiskSafetyMarginBytes)
-                    AbortOutOfSpace();
+                // Stream the entry through the shared budget: the cap (primary) and disk head-room
+                // (secondary) are enforced BEFORE each chunk, so an under-reported or oversized entry
+                // cannot fill the volume mid-copy. File.Create truncates -> honors overwrite=true.
+                try
+                {
+                    await using var sourceStream = archiveEntry.OpenStream();
+                    await using var fileStream = File.Create(localTarget);
+                    await budget.CopyGuardedAsync(sourceStream, fileStream, ct);
+                }
+                catch (QuotaExceededException)
+                {
+                    progress.Report(new HeavyToolProgress(-1, "cleanup",
+                        LogChunk: $"Out of budget - rolling back {extractedPaths.Count} extracted file(s)"));
+                    CleanupExtracted(ctx, extractedPaths);
+                    throw;
+                }
 
                 extracted++;
                 done++;
@@ -392,37 +375,6 @@ public sealed class ArchiveExtractTool : IHeavyTool
         {
             _logger.LogWarning(ex, "Could not determine free disk space for '{Path}'; skipping disk-space guard.",
                 datasetFolderPath);
-        }
-    }
-
-    // Free bytes on the volume backing the dataset folder, or long.MaxValue when it cannot
-    // be determined (the streaming guard then relies on the absolute cap only - best effort,
-    // matching EnsureDiskSpace).
-    private static long GetAvailableDiskBytes(string datasetFolderPath)
-    {
-        try
-        {
-            var root = Path.GetPathRoot(Path.GetFullPath(datasetFolderPath));
-            if (string.IsNullOrEmpty(root)) return long.MaxValue;
-
-            var drive = new DriveInfo(root);
-            return drive.IsReady ? drive.AvailableFreeSpace : long.MaxValue;
-        }
-        catch
-        {
-            return long.MaxValue;
-        }
-    }
-
-    private static long SafeFileLength(string path)
-    {
-        try
-        {
-            return new FileInfo(path).Length;
-        }
-        catch
-        {
-            return 0;
         }
     }
 

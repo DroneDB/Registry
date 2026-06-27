@@ -27,6 +27,14 @@ public class ProcessingPlatformSettings
     /// </summary>
     public long MaxArchiveExtractSizeBytes { get; set; } = 5L * 1024 * 1024 * 1024;
 
+    /// <summary>
+    /// Disk head-room (bytes) kept free on the dataset volume while extracting an archive or importing
+    /// a dataset. The streaming guard aborts (and rolls back) before the projected size would eat into
+    /// this margin, so a decompression bomb cannot fill the volume. Set to <c>0</c> to disable the
+    /// secondary disk-space guard (the uncompressed-size cap still applies). Default 256 MiB.
+    /// </summary>
+    public long DiskSafetyMarginBytes { get; set; } = 256L * 1024 * 1024;
+
     /// <summary>Per-org daily output budget in bytes, keyed by org slug ("default" fallback).</summary>
     public Dictionary<string, long> OrgDailyOutputBytes { get; set; } = new()
     {

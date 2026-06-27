@@ -24,6 +24,7 @@ using Registry.Web.Models;
 using Registry.Web.Models.Configuration;
 using Registry.Web.Models.DTO;
 using Registry.Web.Services.Adapters;
+using Registry.Web.Services.Import;
 using Registry.Web.Services.Ports;
 using Registry.Web.Utilities;
 
@@ -46,12 +47,13 @@ public class SystemManager : ISystemManager
     private readonly ICacheManager _cacheManager;
     private readonly IFileSystem _fileSystem;
     private readonly IJobIndexWriter _jobIndexWriter;
+    private readonly SsrfGuard _ssrfGuard;
 
     public SystemManager(IAuthManager authManager,
         RegistryContext context, IDdbManager ddbManager, ILogger<SystemManager> logger,
         IObjectsManager objectManager, IOptions<AppSettings> settings, BuildPendingService buildPendingService,
         IHttpClientFactory httpClientFactory, IBackgroundJobsProcessor backgroundJob, ICacheManager cacheManager,
-        IFileSystem fileSystem, IJobIndexWriter jobIndexWriter)
+        IFileSystem fileSystem, IJobIndexWriter jobIndexWriter, SsrfGuard ssrfGuard)
     {
         _authManager = authManager;
         _context = context;
@@ -65,7 +67,12 @@ public class SystemManager : ISystemManager
         _cacheManager = cacheManager;
         _fileSystem = fileSystem;
         _jobIndexWriter = jobIndexWriter;
+        _ssrfGuard = ssrfGuard;
     }
+
+    // Legacy import calls go through the SSRF-hardened client (connect-time IP validation + redirect
+    // guard); the source host is also pre-validated by SsrfGuard before the import starts.
+    private HttpClient CreateImportClient() => _httpClientFactory.CreateClient(SsrfHttpHandler.HttpClientName);
 
     public async Task<CleanupDatasetResultDto> CleanupEmptyDatasets()
     {
@@ -276,6 +283,10 @@ public class SystemManager : ISystemManager
 
         ValidateRegistryUrl(request.SourceRegistryUrl);
 
+        // SSRF guard: reject source URLs resolving to private/loopback/metadata addresses. The
+        // legacy admin import path previously trusted ValidateRegistryUrl (format-only) alone.
+        await _ssrfGuard.AssertAllowedAsync(new Uri(request.SourceRegistryUrl).Host, CancellationToken.None);
+
         if (string.IsNullOrWhiteSpace(request.SourceOrganization))
             throw new ArgumentException("SourceOrganization is required");
 
@@ -370,6 +381,10 @@ public class SystemManager : ISystemManager
             throw new ArgumentException("SourceRegistryUrl is required");
 
         ValidateRegistryUrl(request.SourceRegistryUrl);
+
+        // SSRF guard: reject source URLs resolving to private/loopback/metadata addresses. The
+        // legacy admin import path previously trusted ValidateRegistryUrl (format-only) alone.
+        await _ssrfGuard.AssertAllowedAsync(new Uri(request.SourceRegistryUrl).Host, CancellationToken.None);
 
         if (string.IsNullOrWhiteSpace(request.SourceOrganization))
             throw new ArgumentException("SourceOrganization is required");
@@ -475,7 +490,7 @@ public class SystemManager : ISystemManager
 
     private async Task<string> AuthenticateRemoteRegistry(string registryUrl, string username, string password)
     {
-        var client = _httpClientFactory.CreateClient();
+        var client = CreateImportClient();
 
         var content = new FormUrlEncodedContent([
             new KeyValuePair<string, string>("username", username),
@@ -498,7 +513,7 @@ public class SystemManager : ISystemManager
 
     private async Task<DatasetDto[]> GetRemoteDatasets(string registryUrl, string authToken, string orgSlug)
     {
-        var client = _httpClientFactory.CreateClient();
+        var client = CreateImportClient();
         if (!string.IsNullOrWhiteSpace(authToken))
             client.DefaultRequestHeaders.Add("Authorization", $"Bearer {authToken}");
 
@@ -519,7 +534,7 @@ public class SystemManager : ISystemManager
     /// </summary>
     private async Task<EntryDto[]> GetRemoteFileListAsync(string registryUrl, string authToken, string orgSlug, string dsSlug)
     {
-        var client = _httpClientFactory.CreateClient();
+        var client = CreateImportClient();
         if (!string.IsNullOrWhiteSpace(authToken))
             client.DefaultRequestHeaders.Add("Authorization", $"Bearer {authToken}");
 
@@ -584,7 +599,7 @@ public class SystemManager : ISystemManager
                             downloaded, total, (double)downloaded / total);
                     else
                         _logger.LogDebug("Download progress: {Downloaded:N0} bytes", downloaded);
-                });
+                }, CreateImportClient());
             }
             catch (HttpRequestException ex)
             {
@@ -941,7 +956,8 @@ public class SystemManager : ISystemManager
                             task.DestinationPath,
                             headers,
                             maxRetries: 3,
-                            cancellationToken);
+                            cancellationToken,
+                            httpClient: CreateImportClient());
 
                         await completedChannel.Writer.WriteAsync(new FileDownloadResult
                         {

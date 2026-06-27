@@ -54,6 +54,7 @@ public sealed class ImportDatasetTool : IHeavyTool
     private readonly IImportCredentialProtector _protector;
     private readonly IServiceScopeFactory _scopeFactory;
     private readonly ImportSettings _settings;
+    private readonly long _diskSafetyMarginBytes;
     private readonly ILogger<ImportDatasetTool> _logger;
 
     /// <summary>
@@ -75,6 +76,8 @@ public sealed class ImportDatasetTool : IHeavyTool
         _protector = protector;
         _scopeFactory = scopeFactory;
         _settings = appSettings.Value.Import ?? new ImportSettings();
+        _diskSafetyMarginBytes =
+            (appSettings.Value.ProcessingPlatform ?? new ProcessingPlatformSettings()).DiskSafetyMarginBytes;
         _logger = logger;
     }
 
@@ -98,10 +101,6 @@ public sealed class ImportDatasetTool : IHeavyTool
 
     // One DDB transaction (and one native connection open) per chunk instead of one-per-file.
     private const int IndexChunkSize = 250;
-
-    // Headroom kept free on the dataset volume while fetching; the streaming guard aborts before
-    // the projected size would eat into it.
-    private const long DiskSafetyMarginBytes = 256L * 1024 * 1024;
 
     /// <inheritdoc />
     public Task ValidateAsync(HeavyToolRequest request, IHeavyToolValidationContext ctx, CancellationToken ct)
@@ -155,7 +154,7 @@ public sealed class ImportDatasetTool : IHeavyTool
         var cap = long.MaxValue;
         if (_settings.MaxImportSizeBytes > 0) cap = Math.Min(cap, _settings.MaxImportSizeBytes);
         if (budgetBytes is >= 0) cap = Math.Min(cap, budgetBytes.Value);
-        var freeAtStart = GetAvailableDiskBytes(root);
+        var freeAtStart = ExtractionBudget.GetAvailableDiskBytes(root);
 
         long bytesSoFar = 0;
         var breached = false;
@@ -172,7 +171,7 @@ public sealed class ImportDatasetTool : IHeavyTool
             if (p.BytesSoFar is { } b)
             {
                 bytesSoFar = b;
-                if ((cap != long.MaxValue && b > cap) || freeAtStart - b < DiskSafetyMarginBytes)
+                if ((cap != long.MaxValue && b > cap) || freeAtStart - b < _diskSafetyMarginBytes)
                 {
                     breached = true;
                     // ReSharper disable once AccessToDisposedClosure
@@ -327,21 +326,6 @@ public sealed class ImportDatasetTool : IHeavyTool
 
         using var doc = JsonDocument.Parse(obj.ToJsonString());
         return doc.RootElement.Clone();
-    }
-
-    private static long GetAvailableDiskBytes(string datasetFolderPath)
-    {
-        try
-        {
-            var root = Path.GetPathRoot(Path.GetFullPath(datasetFolderPath));
-            if (string.IsNullOrEmpty(root)) return long.MaxValue;
-            var drive = new DriveInfo(root);
-            return drive.IsReady ? drive.AvailableFreeSpace : long.MaxValue;
-        }
-        catch
-        {
-            return long.MaxValue;
-        }
     }
 
     private static string? ReadString(JsonElement obj, string name)

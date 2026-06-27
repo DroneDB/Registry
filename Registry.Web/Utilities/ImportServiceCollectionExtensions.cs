@@ -1,4 +1,5 @@
 #nullable enable
+using System;
 using Microsoft.Extensions.DependencyInjection;
 using Registry.Ports.Import;
 using Registry.Web.Models.Configuration;
@@ -34,6 +35,14 @@ public static class ImportServiceCollectionExtensions
 
         services.AddSingleton(importSettings);
         services.AddSingleton<SsrfGuard>();
+
+        // SSRF-hardened named client used by every import source and the legacy admin import path.
+        // Its handler validates the resolved IP at connect time (DNS-rebinding safe) and blocks
+        // redirects to private/reserved addresses. A long timeout mirrors HttpHelper's static client
+        // so very large dataset transfers are not cut short.
+        services.AddHttpClient(SsrfHttpHandler.HttpClientName, c => c.Timeout = TimeSpan.FromHours(24))
+            .ConfigurePrimaryHttpMessageHandler(sp =>
+                SsrfHttpHandler.Create(sp.GetRequiredService<SsrfGuard>(), importSettings.MaxRedirects));
         services.AddSingleton<IImportCredentialProtector, ImportCredentialProtector>();
         services.AddSingleton<IRemoteRegistryClient, RemoteRegistryClient>();
 
