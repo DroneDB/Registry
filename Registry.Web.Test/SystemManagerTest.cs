@@ -18,6 +18,7 @@ using Registry.Web.Data.Models;
 using Registry.Web.Exceptions;
 using Registry.Web.Models.Configuration;
 using Registry.Web.Services.Adapters;
+using Registry.Web.Services.Import;
 using Registry.Web.Services.Managers;
 using Registry.Web.Services.Ports;
 using System.Net.Http;
@@ -568,7 +569,8 @@ public class SystemManagerTest : TestBase
             _backgroundJobMock.Object,
             _cacheManagerMock.Object,
             _fileSystem,
-            Mock.Of<IJobIndexWriter>()
+            Mock.Of<IJobIndexWriter>(),
+            new SsrfGuard(new ImportSettings())
         );
     }
 }

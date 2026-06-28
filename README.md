@@ -124,16 +124,18 @@ git clone https://github.com/DroneDB/Registry
 cd Registry
 git submodule update --init --recursive
 
-# Build Vue.js frontend
+# Build Vue.js frontend (copies output to registry-data/ClientApp/)
 cd Registry.Web/ClientApp
 npm install
-npm run build
+npm run pub-dev
 cd ../..
 
 # Build and run
 dotnet build
 dotnet run --project Registry.Web ./registry-data
 ```
+
+> For production builds, use `npm run build:prod` instead of `npm run pub-dev`.
 
 ### Run Tests
 
