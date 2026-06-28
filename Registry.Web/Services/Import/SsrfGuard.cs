@@ -101,12 +101,27 @@ public sealed class SsrfGuard
         }
     }
 
-    private static bool IsBlocked(IPAddress addr) =>
-        IPAddress.IsLoopback(addr)
-        || addr.IsIPv6LinkLocal
-        || addr.IsIPv6SiteLocal
-        || addr.Equals(MetadataEndpoint)
-        || IsPrivateIPv4(addr);
+    private static bool IsBlocked(IPAddress addr)
+    {
+        // Normalize IPv4-mapped IPv6 (::ffff:a.b.c.d) to IPv4 so the IPv4 rules below also catch it;
+        // otherwise an attacker could reach internal services via the mapped form.
+        if (addr.IsIPv4MappedToIPv6)
+            addr = addr.MapToIPv4();
+
+        return IPAddress.IsLoopback(addr)
+            || addr.IsIPv6LinkLocal
+            || addr.IsIPv6SiteLocal
+            || IsIPv6UniqueLocal(addr)
+            || addr.Equals(MetadataEndpoint)
+            || IsPrivateIPv4(addr);
+    }
+
+    // IPv6 Unique Local Address (fc00::/7, RFC 4193) - the modern private IPv6 range. IsIPv6SiteLocal
+    // only covers the deprecated fec0::/10, so ULA (e.g. fd00::/8, and the AWS IPv6 metadata endpoint
+    // fd00:ec2::254) must be checked explicitly.
+    private static bool IsIPv6UniqueLocal(IPAddress addr)
+        => addr.AddressFamily == AddressFamily.InterNetworkV6
+           && (addr.GetAddressBytes()[0] & 0xFE) == 0xFC;
 
     private static bool IsPrivateIPv4(IPAddress addr)
     {

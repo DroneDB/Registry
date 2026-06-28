@@ -22,6 +22,12 @@ public class SsrfGuardTests
     [TestCase("192.168.1.1")]
     [TestCase("172.16.0.1")]
     [TestCase("169.254.169.254")]
+    [TestCase("::1")]                       // IPv6 loopback
+    [TestCase("fc00::1")]                    // IPv6 ULA (fc00::/7)
+    [TestCase("fd00::1")]                    // IPv6 ULA (fd00::/8)
+    [TestCase("::ffff:10.0.0.1")]            // IPv4-mapped private
+    [TestCase("::ffff:127.0.0.1")]           // IPv4-mapped loopback
+    [TestCase("::ffff:169.254.169.254")]     // IPv4-mapped cloud metadata
     public async Task AssertAllowed_BlocksPrivateAndReservedAddresses(string host)
     {
         await Should.ThrowAsync<ArgumentException>(
