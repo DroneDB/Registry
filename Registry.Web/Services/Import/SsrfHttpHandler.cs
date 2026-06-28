@@ -29,8 +29,9 @@ public static class SsrfHttpHandler
     /// </summary>
     /// <param name="ssrfGuard">The guard that validates each resolved address before connecting.</param>
     /// <param name="maxRedirects">Maximum number of redirects to follow (clamped to at least 1).</param>
+    /// <param name="connectTimeout">Optional TCP connect timeout; ignored when null or non-positive.</param>
     /// <returns>The configured handler.</returns>
-    public static SocketsHttpHandler Create(SsrfGuard ssrfGuard, int maxRedirects = 5)
+    public static SocketsHttpHandler Create(SsrfGuard ssrfGuard, int maxRedirects = 5, TimeSpan? connectTimeout = null)
     {
         ArgumentNullException.ThrowIfNull(ssrfGuard);
 
@@ -39,6 +40,9 @@ public static class SsrfHttpHandler
             AllowAutoRedirect = true,
             MaxAutomaticRedirections = maxRedirects < 1 ? 1 : maxRedirects
         };
+
+        if (connectTimeout is { } timeout && timeout > TimeSpan.Zero)
+            handler.ConnectTimeout = timeout;
 
         handler.ConnectCallback = async (context, ct) =>
         {

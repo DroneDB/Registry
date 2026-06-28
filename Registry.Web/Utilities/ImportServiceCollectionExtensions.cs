@@ -37,12 +37,15 @@ public static class ImportServiceCollectionExtensions
         services.AddSingleton<SsrfGuard>();
 
         // SSRF-hardened named client used by every import source and the legacy admin import path.
-        // Its handler validates the resolved IP at connect time (DNS-rebinding safe) and blocks
-        // redirects to private/reserved addresses. A long timeout mirrors HttpHelper's static client
-        // so very large dataset transfers are not cut short.
+        // Its handler validates the resolved IP at connect time (DNS-rebinding safe), bounds the TCP
+        // connect with ConnectTimeoutSeconds, and blocks redirects to private/reserved addresses. The
+        // 24h client timeout is a backstop; the per-task transfer timeout is enforced by the import tool.
         services.AddHttpClient(SsrfHttpHandler.HttpClientName, c => c.Timeout = TimeSpan.FromHours(24))
             .ConfigurePrimaryHttpMessageHandler(sp =>
-                SsrfHttpHandler.Create(sp.GetRequiredService<SsrfGuard>(), importSettings.MaxRedirects));
+                SsrfHttpHandler.Create(
+                    sp.GetRequiredService<SsrfGuard>(),
+                    importSettings.MaxRedirects,
+                    TimeSpan.FromSeconds(importSettings.ConnectTimeoutSeconds)));
         services.AddSingleton<IImportCredentialProtector, ImportCredentialProtector>();
         services.AddSingleton<IRemoteRegistryClient, RemoteRegistryClient>();
 

@@ -1,4 +1,7 @@
 #nullable enable
+using System;
+using System.Linq;
+
 namespace Registry.Web.Models.Configuration;
 
 /// <summary>
@@ -46,4 +49,16 @@ public class ImportSettings
     /// exponential backoff with jitter and honor the remote's <c>Retry-After</c> header on HTTP 429.
     /// </summary>
     public int RegistryDownloadMaxRetries { get; set; } = 6;
+
+    /// <summary>
+    /// Returns <c>true</c> when <paramref name="sourceType"/> is permitted by <see cref="AllowedSourceTypes"/>.
+    /// A null or empty allow-list permits every registered source type. This is the single source of
+    /// truth for the allow-list policy, enforced both at the web layer and on the worker.
+    /// </summary>
+    /// <param name="sourceType">The import source type identifier (e.g. <c>registry</c>, <c>archive-url</c>).</param>
+    /// <returns><c>true</c> if the source type is allowed; otherwise <c>false</c>.</returns>
+    public bool IsSourceTypeAllowed(string sourceType)
+        => AllowedSourceTypes is null
+           || AllowedSourceTypes.Length == 0
+           || AllowedSourceTypes.Contains(sourceType, StringComparer.OrdinalIgnoreCase);
 }

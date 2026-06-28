@@ -110,7 +110,10 @@ public sealed class ImportDatasetTool : IHeavyTool
             throw new ArgumentException("A source type is required.");
 
         if (!_factory.AvailableTypes.Contains(sourceType, StringComparer.OrdinalIgnoreCase))
-            throw new ArgumentException($"Unknown or disabled import source type '{sourceType}'.");
+            throw new ArgumentException($"Unknown import source type '{sourceType}'.");
+
+        if (!_settings.IsSourceTypeAllowed(sourceType))
+            throw new ArgumentException($"The import source type '{sourceType}' is disabled on this server.");
 
         if (request.Params.ValueKind != JsonValueKind.Object ||
             !request.Params.TryGetProperty("params", out var p) || p.ValueKind != JsonValueKind.Object)
@@ -133,6 +136,13 @@ public sealed class ImportDatasetTool : IHeavyTool
     {
         var sourceType = ReadString(request.Params, "sourceType")
                          ?? throw new InvalidOperationException("A source type is required.");
+
+        // Defense in depth: re-check the allow-list on the worker, so a job enqueued before the
+        // allow-list was tightened (or a crafted job) cannot run a now-disabled source type.
+        if (!_settings.IsSourceTypeAllowed(sourceType))
+            throw new InvalidOperationException(
+                $"The import source type '{sourceType}' is disabled on this server.");
+
         var budgetBytes = ReadLong(request.Params, "budgetBytes");
 
         if (!request.Params.TryGetProperty("params", out var rawParams) ||
@@ -158,8 +168,15 @@ public sealed class ImportDatasetTool : IHeavyTool
 
         long bytesSoFar = 0;
         var breached = false;
+        var timedOut = false;
 
         using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+
+        // Enforce the per-task transfer timeout (ImportSettings.TransferTimeoutSeconds). The named
+        // HttpClient keeps a 24h backstop; this bounds the entire import deterministically.
+        var transferTimeout = _settings.TransferTimeoutSeconds;
+        if (transferTimeout > 0)
+            linkedCts.CancelAfter(TimeSpan.FromSeconds(transferTimeout));
 
         progress.Report(new HeavyToolProgress(-1, "fetching",
             LogChunk: $"Importing from '{sourceType}'"));
@@ -191,19 +208,31 @@ public sealed class ImportDatasetTool : IHeavyTool
         {
             // Expected: the budget guard cancelled the transfer. Roll back below.
         }
-
-        if (breached)
+        catch (OperationCanceledException)
+            when (transferTimeout > 0 && linkedCts.IsCancellationRequested && !ct.IsCancellationRequested)
         {
-            var added = EnumerateRelativeFiles(root).Where(f => !before.Contains(f)).ToList();
-            progress.Report(new HeavyToolProgress(-1, "cleanup",
-                LogChunk: $"Storage budget exceeded - rolling back {added.Count} file(s)"));
-            CleanupFiles(root, added);
-            throw new QuotaExceededException(
-                "The import exceeded the available storage budget. " +
-                $"Rolled back after writing {CommonUtils.GetBytesReadable(bytesSoFar)}.");
+            // The per-task transfer timeout elapsed (not a user cancellation). Roll back below.
+            timedOut = true;
         }
 
-        // A genuine user cancellation (not a breach) leaves partial files in place for a later resume.
+        if (breached || timedOut)
+        {
+            var added = EnumerateRelativeFiles(root).Where(f => !before.Contains(f)).ToList();
+            var reason = breached ? "Storage budget exceeded" : "Transfer timed out";
+            progress.Report(new HeavyToolProgress(-1, "cleanup",
+                LogChunk: $"{reason} - rolling back {added.Count} file(s)"));
+            CleanupFiles(root, added);
+
+            if (breached)
+                throw new QuotaExceededException(
+                    "The import exceeded the available storage budget. " +
+                    $"Rolled back after writing {CommonUtils.GetBytesReadable(bytesSoFar)}.");
+
+            throw new TimeoutException(
+                $"The import exceeded the configured transfer timeout of {transferTimeout}s.");
+        }
+
+        // A genuine user cancellation (not a breach/timeout) leaves partial files in place for resume.
         ct.ThrowIfCancellationRequested();
 
         // Index everything currently in the dataset folder, in batches. The returned entries carry

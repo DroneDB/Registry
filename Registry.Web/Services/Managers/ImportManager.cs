@@ -268,9 +268,7 @@ public class ImportManager : IImportManager
     }
 
     private bool IsSourceAllowed(string sourceType)
-        => _settings.AllowedSourceTypes is null
-           || _settings.AllowedSourceTypes.Length == 0
-           || _settings.AllowedSourceTypes.Contains(sourceType, StringComparer.OrdinalIgnoreCase);
+        => _settings.IsSourceTypeAllowed(sourceType);
 
     private static JsonElement ToJsonElement(Dictionary<string, string> dict)
     {
