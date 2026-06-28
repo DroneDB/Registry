@@ -136,6 +136,10 @@ public sealed class RemoteRegistryClient : IRemoteRegistryClient
             new ParallelOptions { MaxDegreeOfParallelism = maxParallel, CancellationToken = ct },
             async (entry, token) =>
             {
+                // The remote registry is untrusted: reject rooted/".." paths before building a local
+                // path, so a malicious/compromised remote cannot write outside the dataset folder.
+                CommonUtils.ValidateRelativePath(entry.Path, destFolder);
+
                 var localPath = Path.Combine(destFolder, entry.Path.Replace('/', Path.DirectorySeparatorChar));
 
                 // Resumability: a file already present at the expected size is treated as complete.
