@@ -329,6 +329,9 @@ public class Startup
         services.AddScoped<IConfigurationHelper<AppSettings>, ConfigurationHelper>(_ =>
             new ConfigurationHelper(MagicStrings.AppSettingsFileName));
 
+        // Admin configuration editor: builds ConfigurationDataDto from AppSettings + defaults
+        services.AddScoped<IConfigurationDataBuilder, Registry.Web.Services.Adapters.ConfigurationDataBuilder>();
+
         services.AddScoped<BasicAuthFilter>();
 
         // OGC services (WMS/WMTS/WFS/WCS/OGC API + MVT endpoint)

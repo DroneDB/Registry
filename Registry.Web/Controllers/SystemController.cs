@@ -39,6 +39,7 @@ public class SystemController : ControllerBaseEx
     private readonly ILogger<SystemController> _logger;
     private readonly AppSettings _appSettings;
     private readonly ILoginManager _loginManager;
+    private readonly IConfigurationDataBuilder _configurationBuilder;
 
     public SystemController(
         ISystemManager systemManager,
@@ -48,7 +49,8 @@ public class SystemController : ControllerBaseEx
         IHeavyToolRegistry toolRegistry,
         ILogger<SystemController> logger,
         IOptions<AppSettings> appSettings,
-        ILoginManager loginManager)
+        ILoginManager loginManager,
+        IConfigurationDataBuilder configurationBuilder)
     {
         _systemManager = systemManager;
         _datasetsManager = datasetsManager;
@@ -58,6 +60,7 @@ public class SystemController : ControllerBaseEx
         _logger = logger;
         _appSettings = appSettings.Value;
         _loginManager = loginManager;
+        _configurationBuilder = configurationBuilder;
     }
 
     /// <summary>
@@ -487,6 +490,32 @@ public class SystemController : ControllerBaseEx
         catch (Exception ex)
         {
             _logger.LogError(ex, "Exception in System controller GetGlobalReport()");
+
+            return ExceptionResult(ex);
+        }
+    }
+
+    /// <summary>
+    /// Gets all Registry configuration fields grouped by section, with default values,
+    /// descriptions, and typed metadata for the admin configuration editor page.
+    /// Sensitive values (secrets, passwords, tokens) are never exposed — only IsSet flags.
+    /// </summary>
+    /// <returns>ConfigurationDataDto with all sections and fields.</returns>
+    [HttpGet("config", Name = nameof(SystemController) + "." + nameof(GetConfig))]
+    [ProducesResponseType(typeof(ConfigurationDataDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status403Forbidden)]
+    public IActionResult GetConfig()
+    {
+        try
+        {
+            _logger.LogDebug("System controller GetConfig()");
+
+            return Ok(_configurationBuilder.Build());
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Exception in System controller GetConfig()");
 
             return ExceptionResult(ex);
         }
