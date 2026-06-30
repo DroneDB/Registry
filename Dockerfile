@@ -73,13 +73,24 @@ ENV LD_LIBRARY_PATH="/usr/lib/x86_64-linux-gnu:/usr/lib:/lib"
 # Copy compiled Registry
 COPY --from=dotnet-builder /Registry/Registry.Web/bin/Release/net10.0/publish/ /Registry
 
-RUN chmod +x /Registry/Registry.Web && mkdir /data && chmod 777 /data
+RUN chmod +x /Registry/Registry.Web && mkdir -p /data/temp && chmod 777 /data /data/temp
 
 EXPOSE 5000/tcp
-VOLUME [ "/data" ]
 
 # Set default instance type
 ENV INSTANCE_TYPE=0
+
+# Redirect GDAL/Nexus and general temporary files to a subdirectory of the data
+# directory instead of the container working directory / root filesystem.
+# Without this, multi-GB COG and Nexus build scratch can be written to the
+# process working directory, which on the Registry containers is an anonymous
+# Docker volume on the host root partition. Deployments bind-mount /data/temp
+# onto the large data volume; the in-process build pipeline additionally scopes
+# its own scratch to the per-build temp folder. /tmp is often a (small) tmpfs in
+# deployments, so it must NOT be used for these potentially large files.
+ENV TMPDIR=/data/temp
+ENV CPL_TMPDIR=/data/temp
+ENV TEMP=/data/temp
 
 # Run registry
 ENTRYPOINT ["sh", "-c", "./Registry/Registry.Web --address 0.0.0.0:5000 --instance-type ${INSTANCE_TYPE} /data"]

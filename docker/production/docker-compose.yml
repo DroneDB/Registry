@@ -47,6 +47,12 @@ services:
             retries: 5
         environment:
             - INSTANCE_TYPE=2
+            # Keep GDAL/Nexus build scratch on the data volume, off the container
+            # root filesystem and off the /tmp tmpfs. /data is bind-mounted below;
+            # /data/temp must exist on the host (created by the app on startup).
+            - CPL_TMPDIR=/data/temp
+            - TMPDIR=/data/temp
+            - TEMP=/data/temp
         tmpfs:
             - /tmp
         volumes:
@@ -63,6 +69,10 @@ services:
         image: dronedb/registry:latest
         environment:
             - INSTANCE_TYPE=1
+            # Keep GDAL/Nexus build scratch on the data volume (see webserver).
+            - CPL_TMPDIR=/data/temp
+            - TMPDIR=/data/temp
+            - TEMP=/data/temp
         tmpfs:
             - /tmp
         volumes:
@@ -77,6 +87,10 @@ services:
         image: dronedb/registry:latest
         environment:
             - INSTANCE_TYPE=1
+            # Keep GDAL/Nexus build scratch on the data volume (see webserver).
+            - CPL_TMPDIR=/data/temp
+            - TMPDIR=/data/temp
+            - TEMP=/data/temp
         tmpfs:
             - /tmp
         volumes:
