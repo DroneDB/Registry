@@ -50,6 +50,16 @@ public interface IObjectsManager
     Task Build(string orgSlug, string dsSlug, string path, bool force = false);
     Task<string> GetBuildFile(string orgSlug, string dsSlug, string hash, string path);
     Task<bool> CheckBuildFile(string orgSlug, string dsSlug, string hash, string path);
+
+    /// <summary>
+    /// Resolves an entry path to its build artifact path and returns the full
+    /// on-disk path, content type, and download file name. Used for direct
+    /// download of pre-built visualization artifacts (COG, COPC, GPKG).
+    /// </summary>
+    /// <returns>Tuple of (fullPath, contentType, downloadFileName).</returns>
+    Task<(string FullPath, string ContentType, string FileName)> GetBuildArtifactPath(
+        string orgSlug, string dsSlug, string entryPath);
+
     Task<EntryType?> GetEntryType(string orgSlug, string dsSlug, string path);
 
     Task Transfer(string sourceOrgSlug, string sourceDsSlug, string sourcePath, string destOrgSlug,

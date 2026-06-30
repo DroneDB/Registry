@@ -85,6 +85,20 @@ public class BuildArtifactResolverTests
     }
 
     [Test]
+    public void Get3DTilesDir_BuildsRelativePathUnderDdbBuildHash3dtiles()
+    {
+        var result = Norm(_resolver.Get3DTilesDir(_ddb.Object, Hash));
+        result.ShouldEndWith($".ddb/build/{Hash}/3dtiles");
+    }
+
+    [Test]
+    public void Get3DTilesTilesetPath_EndsWithTilesetJson()
+    {
+        var result = Norm(_resolver.Get3DTilesTilesetPath(_ddb.Object, Hash));
+        result.ShouldEndWith($".ddb/build/{Hash}/3dtiles/tileset.json");
+    }
+
+    [Test]
     public void GetMvtDir_ReturnsAbsolutePath()
     {
         var result = _resolver.GetMvtDir(_ddb.Object, Hash);

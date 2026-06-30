@@ -926,6 +926,54 @@ public class ObjectsController : ControllerBaseEx
     }
 
     /// <summary>
+    /// Downloads a pre-built visualization artifact (COG, COPC, or GPKG) for a given entry.
+    /// The entry type determines which artifact is served. Zero-copy streaming via PhysicalFileResult.
+    /// </summary>
+    [HttpGet("build-artifact", Name = nameof(ObjectsController) + "." + nameof(DownloadBuildArtifact))]
+    [ProducesResponseType(typeof(FileResult), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> DownloadBuildArtifact(
+        [FromRoute, Required] string orgSlug,
+        [FromRoute, Required] string dsSlug,
+        [FromQuery] string path)
+    {
+        try
+        {
+            _logger.LogDebug("Objects controller DownloadBuildArtifact('{OrgSlug}', '{DsSlug}', '{Path}')",
+                orgSlug, dsSlug, path);
+
+            var validation = ValidatePath(path);
+            if (validation is not null)
+                return validation;
+
+            var (fullPath, contentType, fileName) =
+                await _objectsManager.GetBuildArtifactPath(orgSlug, dsSlug, path);
+
+            return PhysicalFile(fullPath, contentType, fileName, enableRangeProcessing: true);
+        }
+        catch (UnauthorizedException ex)
+        {
+            return Unauthorized(new ErrorResponse(ex.Message));
+        }
+        catch (FileNotFoundException ex)
+        {
+            return NotFound(new ErrorResponse(ex.Message));
+        }
+        catch (ArgumentException ex)
+        {
+            return BadRequest(new ErrorResponse(ex.Message));
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Exception in DownloadBuildArtifact('{OrgSlug}', '{DsSlug}', '{Path}')",
+                orgSlug, dsSlug, path);
+            return ExceptionResult(ex);
+        }
+    }
+
+    /// <summary>
     /// Gets a paginated list of build jobs for a dataset.
     /// </summary>
     /// <param name="orgSlug">The organization slug.</param>

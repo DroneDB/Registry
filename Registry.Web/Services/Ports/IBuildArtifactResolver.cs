@@ -23,6 +23,9 @@ public interface IBuildArtifactResolver
     /// <summary>Full path to the GPKG vector sidecar (build/{hash}/vec/source.gpkg).</summary>
     string GetVectorQueryPath(IDDB ddb, string entryHash);
 
+    /// <summary>Full path to the COPC point cloud (build/{hash}/copc/cloud.copc.laz).</summary>
+    string GetCopcPath(IDDB ddb, string entryHash);
+
     /// <summary>
     /// Full path to the Gaussian Splat artifact (build/{hash}/gsplat/model.spz).
     /// Reserved for future gsplat HTTP endpoints.
@@ -40,6 +43,16 @@ public interface IBuildArtifactResolver
     /// Reserved for future gsplat HTTP endpoints.
     /// </summary>
     string GetGsplatGeorefPath(IDDB ddb, string entryHash);
+
+    /// <summary>Full path to the OGC 3D Tiles root directory (build/{hash}/3dtiles/).</summary>
+    string Get3DTilesDir(IDDB ddb, string entryHash);
+
+    /// <summary>
+    /// Full path to the OGC 3D Tiles root tileset (build/{hash}/3dtiles/tileset.json).
+    /// Produced for MODEL entries alongside the legacy Nexus output; the b3dm tiles it
+    /// references are served from the same directory by the generic build-file endpoint.
+    /// </summary>
+    string Get3DTilesTilesetPath(IDDB ddb, string entryHash);
 
     /// <summary>Returns true if the given artifact path exists on disk.</summary>
     bool ArtifactExists(string fullPath);

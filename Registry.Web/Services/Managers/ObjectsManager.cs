@@ -46,6 +46,7 @@ public class ObjectsManager : IObjectsManager
     private readonly IZipArchiveBuilder _zipArchiveBuilder;
     private readonly IOgcLayerCatalog? _ogcLayerCatalog;
     private readonly IDatasetCacheInvalidator _datasetCacheInvalidator;
+    private readonly IBuildArtifactResolver _buildArtifactResolver;
 
     /// <summary>
     /// Name of the per-dataset folder that holds in-flight streamed uploads before they are
@@ -73,7 +74,8 @@ public class ObjectsManager : IObjectsManager
         BuildPendingService buildPendingService,
         IZipArchiveBuilder? zipArchiveBuilder = null,
         IOgcLayerCatalog? ogcLayerCatalog = null,
-        IDatasetCacheInvalidator? datasetCacheInvalidator = null)
+        IDatasetCacheInvalidator? datasetCacheInvalidator = null,
+        IBuildArtifactResolver buildArtifactResolver = null!)
     {
         _logger = logger;
         _context = context;
@@ -97,6 +99,7 @@ public class ObjectsManager : IObjectsManager
         _datasetCacheInvalidator = datasetCacheInvalidator
             ?? new DatasetCacheInvalidator(NullLogger<DatasetCacheInvalidator>.Instance, cacheManager,
                 new NullCacheKeyScanner(NullLogger<NullCacheKeyScanner>.Instance));
+        _buildArtifactResolver = buildArtifactResolver;
     }
 
     /// <summary>
@@ -1785,6 +1788,52 @@ public class ObjectsManager : IObjectsManager
         var destPath = CommonUtils.SafeCombine(BuildBasePath, hash, path);
 
         return _fs.Exists(ddb.GetLocalPath(destPath));
+    }
+
+    public async Task<(string FullPath, string ContentType, string FileName)> GetBuildArtifactPath(
+        string orgSlug, string dsSlug, string entryPath)
+    {
+        _logger.LogInformation("In GetBuildArtifactPath('{OrgSlug}/{DsSlug}', '{EntryPath}')",
+            orgSlug, dsSlug, entryPath);
+
+        var ds = _utils.GetDataset(orgSlug, dsSlug);
+
+        if (!await _authManager.RequestAccess(ds, AccessType.Read))
+            throw new UnauthorizedException("The current user is not allowed to read dataset");
+
+        var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
+        var entry = ddb.GetEntry(entryPath);
+
+        if (entry is null)
+            throw new FileNotFoundException($"Entry '{entryPath}' does not exist in the dataset.");
+
+        // Resolve artifact path based on entry type
+        var (artifactPath, fileName, contentType) = entry.Type switch
+        {
+            EntryType.GeoRaster => (
+                _buildArtifactResolver.GetCogPath(ddb, entry.Hash),
+                "cog.tif",
+                "image/tiff"),
+            EntryType.PointCloud => (
+                _buildArtifactResolver.GetCopcPath(ddb, entry.Hash),
+                "cloud.copc.laz",
+                "application/octet-stream"),
+            EntryType.Vector => (
+                _buildArtifactResolver.GetVectorQueryPath(ddb, entry.Hash),
+                "source.gpkg",
+                "application/geopackage+sqlite"),
+            _ => throw new ArgumentException(
+                $"Entry type '{entry.Type}' does not have a downloadable build artifact.")
+        };
+
+        var fullPath = artifactPath;
+
+        if (!_fs.Exists(fullPath))
+            throw new FileNotFoundException(
+                $"Build artifact not found for '{entryPath}'. The entry may not have been built yet.",
+                fullPath);
+
+        return (fullPath, contentType, fileName);
     }
 
     public async Task<EntryType?> GetEntryType(string orgSlug, string dsSlug, string path)
