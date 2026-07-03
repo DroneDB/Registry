@@ -47,4 +47,11 @@ public interface INodeOdmClient
     /// (<c>GET /task/{uuid}/download/{asset}</c>).
     /// </summary>
     Task DownloadAssetAsync(NodeOdmEndpoint node, string uuid, string asset, string destFilePath, CancellationToken ct);
+
+    /// <summary>
+    /// Retrieves the list of available processing options from the node
+    /// (<c>GET /options</c>). Each option includes name, type, domain, help text,
+    /// and default value.
+    /// </summary>
+    Task<IReadOnlyList<NodeOdmOption>> GetOptionsAsync(NodeOdmEndpoint node, CancellationToken ct);
 }

@@ -34,3 +34,14 @@ public sealed record NodeOdmTaskInfo(
     string? ErrorMessage,
     double Progress,
     int ImagesCount);
+
+/// <summary>
+/// A single processing option from NodeODM <c>GET /options</c>.
+/// <c>Domain</c> is a string (unit label) for scalar types or a string array for enums.
+/// </summary>
+public sealed record NodeOdmOption(
+    string Name,
+    string Type,
+    object? Domain,
+    string? Help,
+    object? Value);

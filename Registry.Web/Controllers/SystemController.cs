@@ -18,6 +18,7 @@ using Registry.Web.Services.HeavyTasks;
 using Registry.Web.Services.HeavyTasks.Ports;
 using Registry.Web.Services.Hub;
 using Registry.Web.Services.Ports;
+using Registry.Web.Services.HeavyTasks.NodeOdm;
 using Registry.Web.Utilities;
 
 namespace Registry.Web.Controllers;
@@ -36,10 +37,12 @@ public class SystemController : ControllerBaseEx
     private readonly IOrganizationsManager _organizationsManager;
     private readonly IDdbWrapper _ddbWrapper;
     private readonly IHeavyToolRegistry _toolRegistry;
+    private readonly IHeavyToolGating _toolGating;
     private readonly ILogger<SystemController> _logger;
     private readonly AppSettings _appSettings;
     private readonly ILoginManager _loginManager;
     private readonly IConfigurationDataBuilder _configurationBuilder;
+    private readonly INodeOdmClient _nodeOdmClient;
 
     public SystemController(
         ISystemManager systemManager,
@@ -47,20 +50,24 @@ public class SystemController : ControllerBaseEx
         IOrganizationsManager organizationsManager,
         IDdbWrapper ddbWrapper,
         IHeavyToolRegistry toolRegistry,
+        IHeavyToolGating toolGating,
         ILogger<SystemController> logger,
         IOptions<AppSettings> appSettings,
         ILoginManager loginManager,
-        IConfigurationDataBuilder configurationBuilder)
+        IConfigurationDataBuilder configurationBuilder,
+        INodeOdmClient nodeOdmClient)
     {
         _systemManager = systemManager;
         _datasetsManager = datasetsManager;
         _organizationsManager = organizationsManager;
         _ddbWrapper = ddbWrapper;
         _toolRegistry = toolRegistry;
+        _toolGating = toolGating;
         _logger = logger;
         _appSettings = appSettings.Value;
         _loginManager = loginManager;
         _configurationBuilder = configurationBuilder;
+        _nodeOdmClient = nodeOdmClient;
     }
 
     /// <summary>
@@ -414,8 +421,14 @@ public class SystemController : ControllerBaseEx
     [AllowAnonymous]
     [HttpGet("features", Name = nameof(SystemController) + "." + nameof(GetFeatures))]
     [ProducesResponseType(typeof(FeaturesDto), StatusCodes.Status200OK)]
-    public IActionResult GetFeatures()
+    public async Task<IActionResult> GetFeatures()
     {
+        // Compute the per-tool gating state for the current caller. The features
+        // endpoint has no organization context, so the org allowlist is skipped
+        // (orgSlug: null) and applied later on the org-scoped tools endpoint.
+        var toolStates = await Task.WhenAll(
+            _toolRegistry.All.Select(t => _toolGating.EvaluateAsync(t.Id, orgSlug: null)));
+
         var features = new FeaturesDto
         {
             OrganizationMemberManagement = _appSettings.EnableOrganizationMemberManagement,
@@ -440,8 +453,9 @@ public class SystemController : ControllerBaseEx
             BulkDownloadAsyncThresholdBytes =
                 (_appSettings.ProcessingPlatform ?? new ProcessingPlatformSettings()).BulkDownloadAsyncThresholdBytes,
             TaskTools = _toolRegistry.All
-                .Select(t => new TaskToolInfoDto(t.Id, t.Version, t.Title, t.RequiredAccess.ToString(),
-                    t.ProducesArtifact, t.ResultExtension))
+                .Zip(toolStates, (t, st) => new TaskToolInfoDto(t.Id, t.Version, t.Title,
+                    t.RequiredAccess.ToString(), t.ProducesArtifact, t.ResultExtension,
+                    st.Hidden, st.Disabled, st.DisabledMessage))
                 .ToArray(),
             TaskStates = TaskStateCatalog.All
                 .Select(s => new TaskStateInfoDto(s, TaskStateCatalog.IsTerminal(s)))
@@ -517,6 +531,72 @@ public class SystemController : ControllerBaseEx
         {
             _logger.LogError(ex, "Exception in System controller GetConfig()");
 
+            return ExceptionResult(ex);
+        }
+    }
+
+    /// <summary>
+    /// Gets the list of configured processing nodes (NodeODM) available for photogrammetry tasks.
+    /// Only exposes non-sensitive fields (id and title). URL and token are never returned.
+    /// </summary>
+    /// <returns>A list of processing node descriptors.</returns>
+    [HttpGet("processingNodes", Name = nameof(SystemController) + "." + nameof(GetProcessingNodes))]
+    [ProducesResponseType(typeof(IEnumerable<ProcessingNodeDto>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status401Unauthorized)]
+    public IActionResult GetProcessingNodes()
+    {
+        try
+        {
+            _logger.LogDebug("System controller GetProcessingNodes()");
+
+            var nodes = (_appSettings.ProcessingPlatform?.NodeOdm ?? [])
+                .Select(n => new ProcessingNodeDto(n.Id, n.Title ?? n.Id))
+                .ToArray();
+
+            return Ok(nodes);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Exception in System controller GetProcessingNodes()");
+
+            return ExceptionResult(ex);
+        }
+    }
+
+    /// <summary>
+    /// Gets the available processing options from a specific NodeODM processing node.
+    /// The options are fetched live from the node and include name, type, domain, help text,
+    /// and default value for each option.
+    /// </summary>
+    /// <param name="nodeId">The id of the processing node.</param>
+    /// <returns>A list of processing option descriptors.</returns>
+    [HttpGet("processingNodes/{nodeId}/options", Name = nameof(SystemController) + "." + nameof(GetProcessingNodeOptions))]
+    [ProducesResponseType(typeof(IEnumerable<NodeOdmOptionDto>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> GetProcessingNodeOptions([Required] string nodeId)
+    {
+        try
+        {
+            _logger.LogDebug("System controller GetProcessingNodeOptions({NodeId})", nodeId);
+
+            var nodes = _appSettings.ProcessingPlatform?.NodeOdm ?? [];
+            var nodeConfig = nodes.FirstOrDefault(n => n.Id.Equals(nodeId, StringComparison.OrdinalIgnoreCase));
+            if (nodeConfig is null)
+                return NotFound(new ErrorResponse($"Processing node '{nodeId}' not found."));
+
+            var node = new NodeOdmEndpoint(nodeConfig.Id, nodeConfig.Url, nodeConfig.Token, nodeConfig.Title);
+
+            var options = await _nodeOdmClient.GetOptionsAsync(node, HttpContext.RequestAborted);
+
+            var dtos = options.Select(o => new NodeOdmOptionDto(
+                o.Name, o.Type, o.Domain, o.Help, o.Value)).ToArray();
+
+            return Ok(dtos);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Exception in System controller GetProcessingNodeOptions({NodeId})", nodeId);
             return ExceptionResult(ex);
         }
     }

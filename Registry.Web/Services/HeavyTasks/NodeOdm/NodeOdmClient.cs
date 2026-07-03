@@ -2,6 +2,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Net.Http;
 using System.Net.Http.Headers;
 using System.Text;
@@ -175,6 +176,13 @@ public sealed class NodeOdmClient : INodeOdmClient
         await source.CopyToAsync(dest, ct);
     }
 
+    public async Task<IReadOnlyList<NodeOdmOption>> GetOptionsAsync(NodeOdmEndpoint node, CancellationToken ct)
+    {
+        using var client = NewClient();
+        var json = await client.GetStringAsync(BuildUrl(node, "options"), ct);
+        return ParseOptions(json);
+    }
+
     private static StringContent JsonBody(object body) =>
         new(JsonSerializer.Serialize(body), Encoding.UTF8, "application/json");
 
@@ -257,6 +265,58 @@ public sealed class NodeOdmClient : INodeOdmClient
         obj.TryGetProperty(name, out var el) && el.ValueKind == JsonValueKind.Number && el.TryGetDouble(out var d)
             ? d
             : null;
+
+    private static IReadOnlyList<NodeOdmOption> ParseOptions(string json)
+    {
+        using var doc = JsonDocument.Parse(json);
+        var root = doc.RootElement;
+        if (root.ValueKind != JsonValueKind.Array)
+            return [];
+
+        var options = new List<NodeOdmOption>(root.GetArrayLength());
+        foreach (var el in root.EnumerateArray())
+        {
+            if (el.ValueKind != JsonValueKind.Object)
+                continue;
+
+            var name = GetString(el, "name") ?? string.Empty;
+            var type = GetString(el, "type") ?? "string";
+            var help = GetString(el, "help");
+
+            // domain: string (unit label) or array (enum choices)
+            object? domain = null;
+            if (el.TryGetProperty("domain", out var domEl))
+            {
+                domain = domEl.ValueKind switch
+                {
+                    JsonValueKind.String => domEl.GetString(),
+                    JsonValueKind.Array => (from item in domEl.EnumerateArray()
+                        where item.ValueKind == JsonValueKind.String
+                        select item.GetString() ?? string.Empty).ToArray(),
+                    _ => domain
+                };
+            }
+
+            // value: default value (can be string, number, bool, null)
+            object? value = null;
+            if (el.TryGetProperty("value", out var valEl) && valEl.ValueKind != JsonValueKind.Null)
+            {
+                value = valEl.ValueKind switch
+                {
+                    JsonValueKind.String => valEl.GetString(),
+                    JsonValueKind.Number when valEl.TryGetInt32(out var n) => n,
+                    JsonValueKind.Number when valEl.TryGetDouble(out var d) => d,
+                    JsonValueKind.True => true,
+                    JsonValueKind.False => false,
+                    _ => valEl.GetRawText()
+                };
+            }
+
+            options.Add(new NodeOdmOption(name, type, domain, help, value));
+        }
+
+        return options;
+    }
 
     #endregion
 }
