@@ -100,6 +100,8 @@ public class FeaturesDto
 /// <summary>
 /// Authoritative descriptor of an available task tool, surfaced to clients via the
 /// features payload so the UI no longer hardcodes tool titles/extensions (spec §B.3).
+/// The gating fields (<paramref name="Hidden"/>, <paramref name="Disabled"/>,
+/// <paramref name="DisabledMessage"/>) are computed server-side for the current caller.
 /// </summary>
 public sealed record TaskToolInfoDto(
     string Id,
@@ -107,7 +109,10 @@ public sealed record TaskToolInfoDto(
     string Title,
     string RequiredAccess,
     bool ProducesArtifact,
-    string? ResultExtension);
+    string? ResultExtension,
+    bool Hidden,
+    bool Disabled,
+    string? DisabledMessage);
 
 /// <summary>
 /// Authoritative descriptor of a task state (value + terminal flag), surfaced to

@@ -5,9 +5,12 @@ using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
+using Moq;
 using NUnit.Framework;
 using Registry.Web.Data;
 using Registry.Web.Data.Models;
+using Registry.Web.Models.Configuration;
 using Registry.Web.Services.Adapters;
 using Registry.Web.Services.HeavyTasks.Adapters;
 using Registry.Web.Services.HeavyTasks.Models;
@@ -110,6 +113,171 @@ public class ProcessingPlatformTests
         ]);
 
         registry.All.Count.ShouldBe(2);
+    }
+
+    #endregion
+
+    #region HeavyToolGating
+
+    private static HeavyToolGating Gating(
+        Dictionary<string, HeavyToolConfig> tools,
+        bool isAdmin = false,
+        IEnumerable<string>? roles = null)
+    {
+        var settings = new AppSettings
+        {
+            ProcessingPlatform = new ProcessingPlatformSettings { Tools = tools }
+        };
+
+        var auth = new Mock<IAuthManager>();
+        auth.Setup(a => a.IsUserAdmin()).ReturnsAsync(isAdmin);
+        var roleSet = new HashSet<string>(roles ?? Array.Empty<string>(), StringComparer.OrdinalIgnoreCase);
+        auth.Setup(a => a.IsUserInRole(It.IsAny<string>()))
+            .ReturnsAsync((string r) => roleSet.Contains(r));
+
+        return new HeavyToolGating(Microsoft.Extensions.Options.Options.Create(settings), auth.Object);
+    }
+
+    [Test]
+    public async Task Gating_UnlistedTool_IsEnabled()
+    {
+        var gating = Gating(new Dictionary<string, HeavyToolConfig>());
+
+        var state = await gating.EvaluateAsync("build", orgSlug: "org1");
+
+        state.Allowed.ShouldBeTrue();
+        state.Hidden.ShouldBeFalse();
+        state.Disabled.ShouldBeFalse();
+    }
+
+    [Test]
+    public async Task Gating_AvailabilityHidden_IsHidden()
+    {
+        var gating = Gating(new Dictionary<string, HeavyToolConfig>
+        {
+            ["build"] = new() { Availability = HeavyToolAvailability.Hidden }
+        });
+
+        var state = await gating.EvaluateAsync("build", orgSlug: "org1");
+
+        state.Hidden.ShouldBeTrue();
+        state.Allowed.ShouldBeFalse();
+    }
+
+    [Test]
+    public async Task Gating_AvailabilityDisabled_IsDisabledWithMessage()
+    {
+        var gating = Gating(new Dictionary<string, HeavyToolConfig>
+        {
+            ["build"] = new()
+            {
+                Availability = HeavyToolAvailability.Disabled,
+                DisabledMessage = "Temporarily off"
+            }
+        });
+
+        var state = await gating.EvaluateAsync("build", orgSlug: "org1");
+
+        state.Disabled.ShouldBeTrue();
+        state.Hidden.ShouldBeFalse();
+        state.DisabledMessage.ShouldBe("Temporarily off");
+    }
+
+    [Test]
+    public async Task Gating_RoleAllowlist_AdminAllowed()
+    {
+        var gating = Gating(new Dictionary<string, HeavyToolConfig>
+        {
+            ["photogrammetry"] = new() { AllowedRoles = { "admin" } }
+        }, isAdmin: true);
+
+        (await gating.EvaluateAsync("photogrammetry", "org1")).Allowed.ShouldBeTrue();
+    }
+
+    [Test]
+    public async Task Gating_RoleAllowlist_NonAdminHiddenByDefault()
+    {
+        var gating = Gating(new Dictionary<string, HeavyToolConfig>
+        {
+            ["photogrammetry"] = new() { AllowedRoles = { "admin" } }
+        }, isAdmin: false);
+
+        (await gating.EvaluateAsync("photogrammetry", "org1")).Hidden.ShouldBeTrue();
+    }
+
+    [Test]
+    public async Task Gating_RoleAllowlist_NonAdmin_DisabledWhenHideWhenNotAllowedFalse()
+    {
+        var gating = Gating(new Dictionary<string, HeavyToolConfig>
+        {
+            ["photogrammetry"] = new()
+            {
+                AllowedRoles = { "admin" },
+                HideWhenNotAllowed = false,
+                DisabledMessage = "Admins only"
+            }
+        }, isAdmin: false);
+
+        var state = await gating.EvaluateAsync("photogrammetry", "org1");
+
+        state.Disabled.ShouldBeTrue();
+        state.DisabledMessage.ShouldBe("Admins only");
+    }
+
+    [Test]
+    public async Task Gating_RoleAllowlist_CustomRoleMatches()
+    {
+        var gating = Gating(new Dictionary<string, HeavyToolConfig>
+        {
+            ["build"] = new() { AllowedRoles = { "power-user" } }
+        }, isAdmin: false, roles: new[] { "power-user" });
+
+        (await gating.EvaluateAsync("build", "org1")).Allowed.ShouldBeTrue();
+    }
+
+    [Test]
+    public async Task Gating_OrgAllowlist_MatchingOrgAllowed()
+    {
+        var gating = Gating(new Dictionary<string, HeavyToolConfig>
+        {
+            ["archive-extract"] = new() { AllowedOrgs = { "acme" } }
+        });
+
+        (await gating.EvaluateAsync("archive-extract", "acme")).Allowed.ShouldBeTrue();
+    }
+
+    [Test]
+    public async Task Gating_OrgAllowlist_OtherOrgHidden()
+    {
+        var gating = Gating(new Dictionary<string, HeavyToolConfig>
+        {
+            ["archive-extract"] = new() { AllowedOrgs = { "acme" } }
+        });
+
+        (await gating.EvaluateAsync("archive-extract", "other")).Hidden.ShouldBeTrue();
+    }
+
+    [Test]
+    public async Task Gating_OrgAllowlist_SkippedWhenNoOrgContext()
+    {
+        // The features endpoint passes orgSlug = null; the org allowlist must be skipped.
+        var gating = Gating(new Dictionary<string, HeavyToolConfig>
+        {
+            ["archive-extract"] = new() { AllowedOrgs = { "acme" } }
+        });
+
+        (await gating.EvaluateAsync("archive-extract", orgSlug: null)).Allowed.ShouldBeTrue();
+    }
+
+    [Test]
+    public async Task Gating_KeyLookup_IsCaseInsensitive()
+    {
+        var gating = Gating(new Dictionary<string, HeavyToolConfig>
+        {
+            ["Build"] = new() { Availability = HeavyToolAvailability.Hidden }
+        });
+
+        (await gating.EvaluateAsync("build", "org1")).Hidden.ShouldBeTrue();
     }
 
     #endregion

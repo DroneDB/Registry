@@ -49,6 +49,9 @@ public static class ProcessingPlatformServiceCollectionExtensions
         // Catalog is immutable for the process lifetime.
         services.AddSingleton<IHeavyToolRegistry, HeavyToolRegistry>();
 
+        // Feature gating: Scoped because it resolves the current caller via IAuthManager.
+        services.AddScoped<IHeavyToolGating, HeavyToolGating>();
+
         // Per-request orchestration.
         services.AddScoped<IHeavyTaskQuota, HeavyTaskQuota>();
         services.AddScoped<IHeavyTaskRunner, HeavyTaskRunner>();

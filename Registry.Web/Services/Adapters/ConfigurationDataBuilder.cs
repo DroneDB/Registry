@@ -80,6 +80,9 @@ public class ConfigurationDataBuilder : IConfigurationDataBuilder
         // 15. Processing Platform
         sections.Add(BuildProcessingPlatformSection());
 
+        // 15b. Tool Gating (per-tool feature gating, part of ProcessingPlatform)
+        sections.Add(BuildToolGatingSection());
+
         // 16. Import
         sections.Add(BuildImportSection());
 
@@ -269,6 +272,27 @@ public class ConfigurationDataBuilder : IConfigurationDataBuilder
             currentValue, defaultValue, enumOptions: enumOptions);
     }
 
+    // ---------------------------------------------------------------------------
+    // Helper: build a JSON field (complex object serialized as indented JSON text)
+    // ---------------------------------------------------------------------------
+
+    private ConfigurationFieldDataDto JsonField(
+        string key, string displayName, string description,
+        object? currentValue, object? defaultValue)
+    {
+        // Serialize enums by name (e.g. "Disabled") so the generated JSON is human-readable
+        // and round-trips cleanly back into appsettings.json.
+        var enumConverter = new Newtonsoft.Json.Converters.StringEnumConverter();
+        var curr = currentValue != null
+            ? JsonConvert.SerializeObject(currentValue, Formatting.Indented, enumConverter)
+            : null;
+        var def = defaultValue != null
+            ? JsonConvert.SerializeObject(defaultValue, Formatting.Indented, enumConverter)
+            : null;
+        return Field(key, displayName, "json", description,
+            curr, def, isSet: currentValue != null);
+    }
+
     // ===========================================================================
     // Section builders
     // ===========================================================================
@@ -277,47 +301,52 @@ public class ConfigurationDataBuilder : IConfigurationDataBuilder
     {
         return Section("Auth", "Auth & Security",
             "JWT authentication, token expiration, and external auth configuration.",
-            new List<ConfigurationFieldDataDto>
-            {
+            [
                 SensitiveField("Secret", "JWT Secret",
                     "Secret key used to sign JWT tokens. Change this to invalidate all existing tokens.",
                     _settings.Secret, _defaults.Secret),
+
                 NumberField("TokenExpirationInDays", "Token Expiration (days)",
                     "Number of days before a JWT token expires and requires re-authentication.",
                     _settings.TokenExpirationInDays, _defaults.TokenExpirationInDays,
                     minValue: 1, unit: "days"),
+
                 EnumField("AuthProvider", "Auth Database Provider",
                     "Database provider for the Identity (auth) database. This controls the database backend, NOT the authentication mode.",
                     _settings.AuthProvider.ToString(), _defaults.AuthProvider.ToString(),
-                    new[] { "Sqlite", "Mysql" }),
+                    ["Sqlite", "Mysql"]),
+
                 StringField("ExternalAuthUrl", "External Auth URL",
                     "URL of an external authentication provider. When set, RemoteLoginManager is used instead of local login.",
                     _settings.ExternalAuthUrl, _defaults.ExternalAuthUrl),
+
                 StringField("AuthCookieName", "Auth Cookie Name",
                     "Name of the HTTP cookie that stores the JWT token.",
                     _settings.AuthCookieName, _defaults.AuthCookieName),
+
                 ArrayField("RevokedTokens", "Revoked Tokens",
                     "List of JWT token identifiers that have been explicitly revoked.",
                     _settings.RevokedTokens, _defaults.RevokedTokens)
-            });
+            ]);
     }
 
     private ConfigurationSectionDataDto BuildDefaultAdminSection()
     {
         return Section("DefaultAdmin", "Default Admin",
             "Credentials for the default administrator account created on first run.",
-            new List<ConfigurationFieldDataDto>
-            {
+            [
                 StringField("Email", "Admin Email",
                     "Email address of the default admin user.",
                     _settings.DefaultAdmin.Email, _defaults.DefaultAdmin.Email),
+
                 StringField("UserName", "Admin Username",
                     "Username of the default admin user.",
                     _settings.DefaultAdmin.UserName, _defaults.DefaultAdmin.UserName),
+
                 SensitiveField("Password", "Admin Password",
                     "Password for the default admin account.",
                     _settings.DefaultAdmin.Password, _defaults.DefaultAdmin.Password)
-            });
+            ]);
     }
 
     private ConfigurationSectionDataDto BuildProvidersSection()
@@ -327,137 +356,150 @@ public class ConfigurationDataBuilder : IConfigurationDataBuilder
 
         return Section("Providers", "Database & Cache Providers",
             "Backend providers for the registry database, Hangfire jobs, and caching.",
-            new List<ConfigurationFieldDataDto>
-            {
+            [
                 EnumField("RegistryProvider", "Registry Database Provider",
                     "Database provider for the main Registry database (datasets, organizations, etc.).",
                     _settings.RegistryProvider.ToString(), _defaults.RegistryProvider.ToString(),
-                    new[] { "Sqlite", "Mysql" }),
+                    ["Sqlite", "Mysql"]),
+
                 EnumField("HangfireProvider", "Hangfire Provider",
                     "Storage backend for Hangfire background jobs.",
                     _settings.HangfireProvider.ToString(), _defaults.HangfireProvider.ToString(),
-                    new[] { "InMemory", "Mysql" }),
+                    ["InMemory", "Mysql"]),
+
                 EnumField("CacheProvider.Type", "Cache Provider",
                     "Caching backend for thumbnails, tiles, and dataset visibility. Null means InMemory.",
                     cacheType, defaultCacheType,
-                    new[] { "InMemory", "Redis" })
-            });
+                    ["InMemory", "Redis"])
+            ]);
     }
 
     private ConfigurationSectionDataDto BuildStoragePathsSection()
     {
         return Section("StoragePaths", "Storage Paths",
             "Filesystem paths for Registry data, datasets, cache, and temporary files.",
-            new List<ConfigurationFieldDataDto>
-            {
+            [
                 StringField("StoragePath", "Storage Path",
                     "Root storage path for Registry data (identity DB, config, etc.).",
                     _settings.StoragePath, _defaults.StoragePath),
+
                 StringField("DatasetsPath", "Datasets Path",
                     "Directory where dataset archives and extracted content are stored.",
                     _settings.DatasetsPath, _defaults.DatasetsPath),
+
                 StringField("CachePath", "Cache Path",
                     "Directory for file-based cache (thumbnails, tiles, etc.).",
                     _settings.CachePath, _defaults.CachePath),
+
                 StringField("TempPath", "Temp Path",
                     "Directory for temporary files during processing.",
                     _settings.TempPath, _defaults.TempPath)
-            });
+            ]);
     }
 
     private ConfigurationSectionDataDto BuildUploadSection()
     {
         return Section("Upload", "Upload Settings",
             "Request body size limits, batch upload timeouts, and token configuration.",
-            new List<ConfigurationFieldDataDto>
-            {
+            [
                 NullableNumberField("MaxRequestBodySize", "Max Request Body Size",
                     "Maximum HTTP request body size in bytes. Null means unlimited.",
                     _settings.MaxRequestBodySize, _defaults.MaxRequestBodySize,
                     unit: "bytes"),
+
                 TimeSpanField("UploadBatchTimeout", "Upload Batch Timeout",
                     "Maximum duration for a batch upload session before it expires.",
                     _settings.UploadBatchTimeout, _defaults.UploadBatchTimeout),
+
                 NumberField("BatchTokenLength", "Batch Token Length",
                     "Length of randomly generated batch upload tokens. Must be at least 8.",
                     _settings.BatchTokenLength, _defaults.BatchTokenLength,
                     minValue: 8)
-            });
+            ]);
     }
 
     private ConfigurationSectionDataDto BuildDownloadsSection()
     {
         return Section("Downloads", "Download Settings",
             "Concurrent download limits and anonymous bulk download restrictions.",
-            new List<ConfigurationFieldDataDto>
-            {
+            [
                 NullableNumberField("MaxConcurrentDownloadsPerUser", "Max Concurrent Downloads",
                     "Maximum simultaneous downloads per user. Null = unlimited.",
                     _settings.MaxConcurrentDownloadsPerUser, _defaults.MaxConcurrentDownloadsPerUser,
                     minValue: 1),
+
                 BoolField("DisableAnonymousBulkDownloads", "Disable Anonymous Bulk Downloads",
                     "When true, anonymous users cannot download bulk archives (whole dataset, folders, multi-file). Single-file downloads remain allowed.",
                     _settings.DisableAnonymousBulkDownloads, _defaults.DisableAnonymousBulkDownloads)
-            });
+            ]);
     }
 
     private ConfigurationSectionDataDto BuildCacheSection()
     {
         return Section("Cache", "Cache Expiration",
             "TTL for cached thumbnails, tiles, dataset visibility, and cache cleanup interval.",
-            new List<ConfigurationFieldDataDto>
-            {
+            [
                 TimeSpanField("ThumbnailsCacheExpiration", "Thumbnails Cache Expiration",
                     "How long thumbnail images are cached before regeneration.",
                     _settings.ThumbnailsCacheExpiration, _defaults.ThumbnailsCacheExpiration),
+
                 TimeSpanField("TilesCacheExpiration", "Tiles Cache Expiration",
                     "How long map tiles are cached before regeneration.",
                     _settings.TilesCacheExpiration, _defaults.TilesCacheExpiration),
+
                 TimeSpanField("DatasetVisibilityCacheExpiration", "Dataset Visibility Cache Expiration",
                     "How long dataset visibility settings are cached.",
                     _settings.DatasetVisibilityCacheExpiration, _defaults.DatasetVisibilityCacheExpiration),
+
                 TimeSpanField("ClearCacheInterval", "Clear Cache Interval",
                     "How often the file cache is scanned and stale entries are removed.",
                     _settings.ClearCacheInterval, _defaults.ClearCacheInterval)
-            });
+            ]);
     }
 
     private ConfigurationSectionDataDto BuildCronJobsSection()
     {
         return Section("CronJobs", "Cron Jobs",
             "Recurring background job schedules (cron expressions) and retention periods.",
-            new List<ConfigurationFieldDataDto>
-            {
+            [
                 StringField("CleanupExpiredJobsCron", "Cleanup Expired Jobs Cron",
                     "Cron expression for cleaning up expired Hangfire jobs. Default: '0 * * * *' (hourly). Set to 'disabled' to remove.",
                     _settings.CleanupExpiredJobsCron, _defaults.CleanupExpiredJobsCron, "cron"),
+
                 StringField("SyncJobIndexStatesCron", "Sync Job Index States Cron",
                     "Cron expression for reconciling JobIndex states across restarts. Default: '0 * * * *' (hourly).",
                     _settings.SyncJobIndexStatesCron, _defaults.SyncJobIndexStatesCron, "cron"),
+
                 StringField("ProcessPendingBuildsCron", "Process Pending Builds Cron",
                     "Cron expression for retrying pending builds. Default: '0 */6 * * *' (every 6 hours).",
                     _settings.ProcessPendingBuildsCron, _defaults.ProcessPendingBuildsCron, "cron"),
+
                 StringField("OrphanedDatasetCleanupCron", "Orphaned Dataset Cleanup Cron",
                     "Cron expression for cleaning up orphaned dataset folders. Default: '0 3 * * *' (daily at 3 AM).",
                     _settings.OrphanedDatasetCleanupCron, _defaults.OrphanedDatasetCleanupCron, "cron"),
+
                 StringField("DatasetCleanupCron", "Dataset Cleanup Cron",
                     "Cron expression for full DDB cleanup (entries + build artifacts) on all datasets. Default: '0 0 * * *' (daily at midnight).",
                     _settings.DatasetCleanupCron, _defaults.DatasetCleanupCron, "cron"),
+
                 StringField("ArtifactCompletenessCheckerCron", "Artifact Completeness Checker Cron",
                     "Cron expression for scanning entries and rebuilding incomplete artifacts. Default: '0 2 * * *' (daily at 2 AM).",
                     _settings.ArtifactCompletenessCheckerCron, _defaults.ArtifactCompletenessCheckerCron, "cron"),
+
                 StringField("JobIndexCleanupCron", "Job Index Cleanup Cron",
                     "Cron expression for purging old terminal JobIndex records. Default: '0 4 * * *' (daily at 4 AM).",
                     _settings.JobIndexCleanupCron, _defaults.JobIndexCleanupCron, "cron"),
+
                 NumberField("JobIndexRetentionDays", "Job Index Retention (days)",
                     "Number of days to keep terminal (Succeeded/Failed/Deleted) JobIndex records.",
                     _settings.JobIndexRetentionDays, _defaults.JobIndexRetentionDays,
                     minValue: 1, unit: "days"),
+
                 NumberField("HangfireJobRetentionDays", "Hangfire Job Retention (days)",
                     "Expiration timeout for succeeded Hangfire jobs. Failed jobs are kept for diagnostics. Minimum: 1 day.",
                     _settings.HangfireJobRetentionDays, _defaults.HangfireJobRetentionDays,
                     minValue: 1, unit: "days")
-            });
+            ]);
     }
 
     private ConfigurationSectionDataDto BuildPasswordPolicySection()
@@ -466,24 +508,27 @@ public class ConfigurationDataBuilder : IConfigurationDataBuilder
         var dp = _defaults.PasswordPolicy;
         return Section("PasswordPolicy", "Password Policy",
             "Password complexity requirements. When null in config, no policy is enforced.",
-            new List<ConfigurationFieldDataDto>
-            {
+            [
                 NumberField("MinLength", "Minimum Length",
                     "Minimum number of characters required for passwords.",
                     pp?.MinLength ?? 0, dp?.MinLength ?? 0, minValue: 1),
+
                 BoolField("RequireDigit", "Require Digit",
                     "Password must contain at least one numeric digit.",
                     pp?.RequireDigit ?? false, dp?.RequireDigit ?? false),
+
                 BoolField("RequireUppercase", "Require Uppercase",
                     "Password must contain at least one uppercase letter.",
                     pp?.RequireUppercase ?? false, dp?.RequireUppercase ?? false),
+
                 BoolField("RequireLowercase", "Require Lowercase",
                     "Password must contain at least one lowercase letter.",
                     pp?.RequireLowercase ?? false, dp?.RequireLowercase ?? false),
+
                 BoolField("RequireNonAlphanumeric", "Require Special Character",
                     "Password must contain at least one non-alphanumeric character.",
                     pp?.RequireNonAlphanumeric ?? false, dp?.RequireNonAlphanumeric ?? false)
-            });
+            ]);
     }
 
     private ConfigurationSectionDataDto BuildHubOptionsSection()
@@ -492,87 +537,95 @@ public class ConfigurationDataBuilder : IConfigurationDataBuilder
         var do_ = _defaults.HubOptions;
         return Section("HubOptions", "Hub Options",
             "UI branding, white-label customization, and feature visibility toggles.",
-            new List<ConfigurationFieldDataDto>
-            {
+            [
                 StringField("AppLogo", "App Logo",
                     "URL of the navbar logo. Use /branding/... for user-supplied assets.",
                     ho?.AppLogo, do_?.AppLogo),
+
                 StringField("AppName", "App Name",
                     "Display name used as document title. Defaults to 'DroneDB' when null.",
                     ho?.AppName, do_?.AppName),
+
                 StringField("AppIcon", "App Icon",
                     "CSS icon class or URL shown next to app name. Defaults to 'icon-dronedb'.",
                     ho?.AppIcon, do_?.AppIcon),
+
                 BoolField("ShowRegistrationLink", "Show Registration Link",
                     "Whether to show the registration link on the login page.",
                     ho?.ShowRegistrationLink ?? true, do_?.ShowRegistrationLink ?? true),
+
                 BoolField("DisableDatasetCreation", "Disable Dataset Creation",
                     "Hides the 'New dataset' button and all dataset creation entry-points.",
                     ho?.DisableDatasetCreation ?? false, do_?.DisableDatasetCreation ?? false),
+
                 BoolField("DisableStorageInfo", "Disable Storage Info",
                     "Hides the per-user storage indicator in the header.",
                     ho?.DisableStorageInfo ?? false, do_?.DisableStorageInfo ?? false),
+
                 BoolField("DisableAccountManagement", "Disable Account Management",
                     "Hides account-management menu items. Useful with external auth.",
                     ho?.DisableAccountManagement ?? false, do_?.DisableAccountManagement ?? false),
+
                 StringField("SingleOrganization", "Single Organization",
                     "When set, routes users directly to this organization slug (single-tenant mode).",
                     ho?.SingleOrganization, do_?.SingleOrganization),
+
                 BoolField("ReadOnlyOrgs", "Read-Only Organizations",
                     "Hides organization create/delete/edit actions.",
                     ho?.ReadOnlyOrgs ?? false, do_?.ReadOnlyOrgs ?? false)
-            });
+            ]);
     }
 
     private ConfigurationSectionDataDto BuildOrgManagementSection()
     {
         return Section("OrgManagement", "Organization Management",
             "Controls for organization member management and default user organizations.",
-            new List<ConfigurationFieldDataDto>
-            {
+            [
                 BoolField("EnableOrganizationMemberManagement", "Enable Member Management",
                     "When enabled, organization owners can manage members. When disabled, only system admins can.",
                     _settings.EnableOrganizationMemberManagement, _defaults.EnableOrganizationMemberManagement),
+
                 BoolField("EnableDefaultUserOrganization", "Enable Default User Organization",
                     "When enabled, new users automatically get a personal default organization.",
                     _settings.EnableDefaultUserOrganization, _defaults.EnableDefaultUserOrganization)
-            });
+            ]);
     }
 
     private ConfigurationSectionDataDto BuildThumbnailsSection()
     {
         return Section("Thumbnails", "Thumbnails",
             "Remote thumbnail generator URL, default size, and candidate file names.",
-            new List<ConfigurationFieldDataDto>
-            {
+            [
                 StringField("RemoteThumbnailGeneratorUrl", "Remote Thumbnail Generator URL",
                     "URL of a remote thumbnail generator service. Null uses the local generator.",
                     _settings.RemoteThumbnailGeneratorUrl, _defaults.RemoteThumbnailGeneratorUrl),
+
                 NumberField("DefaultThumbnailSize", "Default Thumbnail Size",
                     "Default thumbnail size in pixels when no size is specified.",
                     _settings.DefaultThumbnailSize, _defaults.DefaultThumbnailSize,
                     unit: "pixels"),
+
                 ArrayField("DatasetThumbnailCandidates", "Dataset Thumbnail Candidates",
                     "File names (in dataset root) considered as dataset thumbnail candidates, in priority order.",
                     _settings.DatasetThumbnailCandidates, _defaults.DatasetThumbnailCandidates)
-            });
+            ]);
     }
 
     private ConfigurationSectionDataDto BuildExportZipSection()
     {
         return Section("ExportZip", "Export & Zip",
             "Memory thresholds for ZIP creation and maximum GeoTIFF export sizes.",
-            new List<ConfigurationFieldDataDto>
-            {
+            [
                 NumberField("MaxZipMemoryThreshold", "Max ZIP Memory Threshold",
                     "Maximum size in bytes for keeping ZIP creation in memory. Larger archives use disk.",
                     _settings.MaxZipMemoryThreshold, _defaults.MaxZipMemoryThreshold,
                     unit: "bytes"),
+
                 NullableNumberField("MaxExportSizeBytes", "Max Export Size",
                     "Maximum estimated output size for GeoTIFF raster export. Null = unlimited.",
                     _settings.MaxExportSizeBytes, _defaults.MaxExportSizeBytes,
                     unit: "bytes")
-            });
+            ]);
     }
 
     private ConfigurationSectionDataDto BuildLdapSection()
@@ -583,54 +636,67 @@ public class ConfigurationDataBuilder : IConfigurationDataBuilder
 
         var section = Section("LdapSettings", "LDAP / Active Directory",
             "LDAP authentication settings. Mutually exclusive with ExternalAuthUrl.",
-            new List<ConfigurationFieldDataDto>
-            {
+            [
                 BoolField("Enabled", "LDAP Enabled",
                     "Enables LDAP/Active Directory authentication. Mutually exclusive with ExternalAuthUrl.",
                     ls?.Enabled ?? false, dl?.Enabled ?? false),
+
                 StringField("Server", "LDAP Server",
                     "LDAP server hostname (e.g., 'ldap.example.com' or 'dc.domain.com').",
                     ls?.Server, dl?.Server),
+
                 NumberField("Port", "LDAP Port",
                     "LDAP port: 389 for plain LDAP, 636 for LDAPS.",
                     ls?.Port ?? 0, dl?.Port ?? 0),
+
                 BoolField("UseSsl", "Use SSL/TLS",
                     "Use SSL/TLS (LDAPS) for the connection. Strongly recommended in production.",
                     ls?.UseSsl ?? false, dl?.UseSsl ?? false),
+
                 BoolField("ValidateSslCertificate", "Validate SSL Certificate",
                     "Validate the server SSL certificate chain. Disable only for self-signed certs in testing.",
                     ls?.ValidateSslCertificate ?? false, dl?.ValidateSslCertificate ?? false),
+
                 StringField("BaseDn", "Base DN",
                     "Base DN for searches (e.g., 'dc=example,dc=com').",
                     ls?.BaseDn, dl?.BaseDn),
+
                 StringField("BindDn", "Bind DN",
                     "Service account DN for the initial search bind. Null for anonymous bind.",
                     ls?.BindDn, dl?.BindDn),
+
                 SensitiveField("BindPassword", "Bind Password",
                     "Password for the Bind DN service account.",
                     ls?.BindPassword, dl?.BindPassword),
+
                 StringField("UserDnFormat", "User DN Format",
                     "Optional format string for constructing user principal directly. {0} is replaced with username.",
                     ls?.UserDnFormat, dl?.UserDnFormat),
+
                 StringField("EmailAttribute", "Email Attribute",
                     "LDAP attribute for the user email address. AD default: 'mail'.",
                     ls?.EmailAttribute, dl?.EmailAttribute),
+
                 StringField("DisplayNameAttribute", "Display Name Attribute",
                     "LDAP attribute for the display name. AD default: 'displayName'.",
                     ls?.DisplayNameAttribute, dl?.DisplayNameAttribute),
+
                 StringField("GroupMembershipAttribute", "Group Membership Attribute",
                     "LDAP attribute listing group memberships. Default: 'memberOf'.",
                     ls?.GroupMembershipAttribute, dl?.GroupMembershipAttribute),
+
                 StringField("SearchFilter", "Search Filter",
                     "LDAP search filter to locate user entry. {0} is replaced with the username.",
                     ls?.SearchFilter, dl?.SearchFilter, "text"),
+
                 ArrayField("AdminGroupDns", "Admin Group DN's",
                     "Distinguished names of LDAP groups whose members receive the Registry admin role.",
                     ls?.AdminGroupDns, dl?.AdminGroupDns),
+
                 NumberField("Timeout", "LDAP Timeout",
                     "Timeout in seconds for LDAP operations.",
                     ls?.Timeout ?? 0, dl?.Timeout ?? 0, unit: "seconds")
-            });
+            ]);
 
         // Override IsActive: LDAP section is active when Enabled == true
         section.IsActive = isActive;
@@ -645,85 +711,125 @@ public class ConfigurationDataBuilder : IConfigurationDataBuilder
 
         var section = Section("ProcessingPlatform", "Processing Platform",
             "Task substrate settings: concurrency limits, dedup, NodeODM nodes, and bulk download thresholds.",
-            new List<ConfigurationFieldDataDto>
-            {
+            [
                 NumberField("ArtifactTtlHours", "Artifact TTL (hours)",
                     "Hours before a produced artifact's WorkDir is swept.",
                     pp?.ArtifactTtlHours ?? dp?.ArtifactTtlHours ?? 0,
                     dp?.ArtifactTtlHours ?? 0, unit: "hours"),
+
                 NumberField("MaxConcurrentTasksPerUser", "Max Concurrent Tasks / User",
                     "Maximum concurrent heavy tasks per user.",
                     pp?.MaxConcurrentTasksPerUser ?? dp?.MaxConcurrentTasksPerUser ?? 0,
                     dp?.MaxConcurrentTasksPerUser ?? 0),
+
                 NumberField("MaxQueuedTasksPerUser", "Max Queued Tasks / User",
                     "Maximum queued (pending) heavy tasks per user.",
                     pp?.MaxQueuedTasksPerUser ?? dp?.MaxQueuedTasksPerUser ?? 0,
                     dp?.MaxQueuedTasksPerUser ?? 0),
+
                 NumberField("MaxConcurrentTasksPerOrg", "Max Concurrent Tasks / Org",
                     "Maximum concurrent heavy tasks per organization.",
                     pp?.MaxConcurrentTasksPerOrg ?? dp?.MaxConcurrentTasksPerOrg ?? 0,
                     dp?.MaxConcurrentTasksPerOrg ?? 0),
+
                 NumberField("MaxConcurrentTasksGlobal", "Max Concurrent Tasks (global)",
                     "Hard cap on concurrent heavy tasks across all users.",
                     pp?.MaxConcurrentTasksGlobal ?? dp?.MaxConcurrentTasksGlobal ?? 0,
                     dp?.MaxConcurrentTasksGlobal ?? 0),
+
                 NumberField("MaxEstimatedOutputBytesPerSubmit", "Max Estimated Output / Submit",
                     "Hard cap on estimated output size per task submission.",
                     pp?.MaxEstimatedOutputBytesPerSubmit ?? dp?.MaxEstimatedOutputBytesPerSubmit ?? 0,
                     dp?.MaxEstimatedOutputBytesPerSubmit ?? 0, unit: "bytes"),
+
                 NumberField("MaxArchiveExtractSizeBytes", "Max Archive Extract Size",
                     "Maximum compressed archive size accepted by archive-extract tool.",
                     pp?.MaxArchiveExtractSizeBytes ?? dp?.MaxArchiveExtractSizeBytes ?? 0,
                     dp?.MaxArchiveExtractSizeBytes ?? 0, unit: "bytes"),
+
                 NumberField("DiskSafetyMarginBytes", "Disk Safety Margin",
                     "Disk head-room kept free during archive extraction. 0 to disable.",
                     pp?.DiskSafetyMarginBytes ?? dp?.DiskSafetyMarginBytes ?? 0,
                     dp?.DiskSafetyMarginBytes ?? 0, unit: "bytes"),
+
                 NumberField("DefaultRasterTileSize", "Default Raster Tile Size",
                     "Default tile size in pixels for windowed raster export.",
                     pp?.DefaultRasterTileSize ?? dp?.DefaultRasterTileSize ?? 0,
                     dp?.DefaultRasterTileSize ?? 0, unit: "pixels"),
+
                 NumberField("BulkDownloadAsyncThresholdBytes", "Bulk Download Async Threshold",
                     "Size threshold above which bulk downloads are offloaded to async task.",
                     pp?.BulkDownloadAsyncThresholdBytes ?? dp?.BulkDownloadAsyncThresholdBytes ?? 0,
                     dp?.BulkDownloadAsyncThresholdBytes ?? 0, unit: "bytes"),
+
                 NumberField("MaxConcurrentBulkDownloadsPerUser", "Max Concurrent Bulk Downloads / User",
                     "Maximum active bulk-download tasks per user.",
                     pp?.MaxConcurrentBulkDownloadsPerUser ?? dp?.MaxConcurrentBulkDownloadsPerUser ?? 0,
                     dp?.MaxConcurrentBulkDownloadsPerUser ?? 0),
+
                 BoolField("DedupEnabled", "Dedup Enabled",
                     "Enable task deduplication (prevent duplicate submissions).",
                     pp?.DedupEnabled ?? dp?.DedupEnabled ?? false,
                     dp?.DedupEnabled ?? false),
+
                 NumberField("DedupLookbackHours", "Dedup Lookback (hours)",
                     "Time window for deduplication checks.",
                     pp?.DedupLookbackHours ?? dp?.DedupLookbackHours ?? 0,
                     dp?.DedupLookbackHours ?? 0, unit: "hours"),
+
                 NumberField("LogTailMaxLines", "Log Tail Max Lines",
                     "Maximum lines returned by log tail endpoint.",
                     pp?.LogTailMaxLines ?? dp?.LogTailMaxLines ?? 0,
                     dp?.LogTailMaxLines ?? 0),
+
                 NumberField("LogTailMaxBytes", "Log Tail Max Bytes",
                     "Maximum bytes returned by log tail endpoint.",
                     pp?.LogTailMaxBytes ?? dp?.LogTailMaxBytes ?? 0,
                     dp?.LogTailMaxBytes ?? 0, unit: "bytes"),
+
                 NumberField("ProgressUpdateThrottleSeconds", "Progress Update Throttle",
                     "Minimum seconds between progress updates.",
                     pp?.ProgressUpdateThrottleSeconds ?? dp?.ProgressUpdateThrottleSeconds ?? 0,
                     dp?.ProgressUpdateThrottleSeconds ?? 0, unit: "seconds"),
+
                 NumberField("RemoteNodePollIntervalSeconds", "Remote Node Poll Interval",
                     "Poll interval for remote NodeODM nodes.",
                     pp?.RemoteNodePollIntervalSeconds ?? dp?.RemoteNodePollIntervalSeconds ?? 0,
                     dp?.RemoteNodePollIntervalSeconds ?? 0, unit: "seconds"),
+
                 NumberField("RemoteNodePollMaxBackoffSeconds", "Remote Node Max Backoff",
                     "Maximum backoff for remote node polling.",
                     pp?.RemoteNodePollMaxBackoffSeconds ?? dp?.RemoteNodePollMaxBackoffSeconds ?? 0,
                     dp?.RemoteNodePollMaxBackoffSeconds ?? 0, unit: "seconds"),
+
                 NumberField("RemoteNodeRequestTimeoutSeconds", "Remote Node Request Timeout",
                     "HTTP request timeout for remote NodeODM nodes.",
                     pp?.RemoteNodeRequestTimeoutSeconds ?? dp?.RemoteNodeRequestTimeoutSeconds ?? 0,
                     dp?.RemoteNodeRequestTimeoutSeconds ?? 0, unit: "seconds")
-            });
+            ]);
+
+        section.IsActive = isActive;
+        return section;
+    }
+
+    private ConfigurationSectionDataDto BuildToolGatingSection()
+    {
+        var pp = _settings.ProcessingPlatform;
+        var isActive = pp?.Tools is { Count: > 0 };
+
+        // Section name is "ProcessingPlatform" so the client merges the generated JSON
+        // under the same AppSettings:ProcessingPlatform node as the main section.
+        var section = Section("ProcessingPlatform", "Tool Gating",
+            "Per-tool feature gating: hide or disable specific heavy tools, and restrict them by role or organization.",
+            [
+                JsonField("Tools", "Tool Gating Config",
+                    "JSON object keyed by tool id (e.g. \"photogrammetry\"). Each entry accepts: " +
+                    "availability (Enabled|Disabled|Hidden), disabledMessage, allowedRoles (array), " +
+                    "allowedOrgs (array), hideWhenNotAllowed (bool), maxConcurrentPerUser, maxQueuedPerUser. " +
+                    "Omit a tool to use the default (Enabled, no restrictions).",
+                    isActive ? pp!.Tools : null,
+                    null)
+            ]);
 
         section.IsActive = isActive;
         return section;
@@ -737,43 +843,50 @@ public class ConfigurationDataBuilder : IConfigurationDataBuilder
 
         var section = Section("Import", "Import Dataset",
             "Import settings: size limits, allowed source types, SSRF guard, timeouts, and concurrency.",
-            new List<ConfigurationFieldDataDto>
-            {
+            [
                 NumberField("MaxImportSizeBytes", "Max Import Size",
                     "Maximum total bytes that can be imported in a single task. 0 = unlimited.",
                     imp?.MaxImportSizeBytes ?? dImp?.MaxImportSizeBytes ?? 0,
                     dImp?.MaxImportSizeBytes ?? 0, unit: "bytes"),
+
                 ArrayField("AllowedSourceTypes", "Allowed Source Types",
                     "Allowed import source types. Null/empty = all sources allowed. Values: 'registry', 'archive-url'.",
                     imp?.AllowedSourceTypes, dImp?.AllowedSourceTypes),
+
                 BoolField("SsrfAllowPrivateNetworks", "SSRF: Allow Private Networks",
                     "Allow outbound connections to private/loopback/link-local addresses.",
                     imp?.SsrfAllowPrivateNetworks ?? dImp?.SsrfAllowPrivateNetworks ?? false,
                     dImp?.SsrfAllowPrivateNetworks ?? false),
+
                 ArrayField("SsrfAllowedHosts", "SSRF: Allowed Hosts",
                     "Hostnames explicitly exempt from SSRF blocking.",
                     imp?.SsrfAllowedHosts, dImp?.SsrfAllowedHosts),
+
                 NumberField("MaxRedirects", "Max Redirects",
                     "Maximum HTTP redirects to follow during import.",
                     imp?.MaxRedirects ?? dImp?.MaxRedirects ?? 0,
                     dImp?.MaxRedirects ?? 0),
+
                 NumberField("ConnectTimeoutSeconds", "Connect Timeout",
                     "Connection/authentication timeout per source.",
                     imp?.ConnectTimeoutSeconds ?? dImp?.ConnectTimeoutSeconds ?? 0,
                     dImp?.ConnectTimeoutSeconds ?? 0, unit: "seconds"),
+
                 NumberField("TransferTimeoutSeconds", "Transfer Timeout",
                     "Total transfer timeout per import task.",
                     imp?.TransferTimeoutSeconds ?? dImp?.TransferTimeoutSeconds ?? 0,
                     dImp?.TransferTimeoutSeconds ?? 0, unit: "seconds"),
+
                 NumberField("RegistryDownloadConcurrency", "Registry Download Concurrency",
                     "Number of files downloaded in parallel from a remote registry.",
                     imp?.RegistryDownloadConcurrency ?? dImp?.RegistryDownloadConcurrency ?? 0,
                     dImp?.RegistryDownloadConcurrency ?? 0),
+
                 NumberField("RegistryDownloadMaxRetries", "Registry Download Max Retries",
                     "Maximum retry attempts per file download against a remote registry.",
                     imp?.RegistryDownloadMaxRetries ?? dImp?.RegistryDownloadMaxRetries ?? 0,
                     dImp?.RegistryDownloadMaxRetries ?? 0)
-            });
+            ]);
 
         section.IsActive = isActive;
         return section;
@@ -792,15 +905,15 @@ public class ConfigurationDataBuilder : IConfigurationDataBuilder
 
         return Section("ConnectionStrings", "Connection Strings",
             "Database connection strings for Identity and Registry databases.",
-            new List<ConfigurationFieldDataDto>
-            {
+            [
                 SensitiveField("IdentityConnection", "Identity Connection String",
                     "Connection string for the Identity (auth) database.",
                     currentIdentity, defaultIdentity),
+
                 SensitiveField("RegistryConnection", "Registry Connection String",
                     "Connection string for the main Registry database.",
                     currentRegistry, defaultRegistry)
-            });
+            ]);
     }
 
     private ConfigurationSectionDataDto BuildSerilogSection()
@@ -812,45 +925,50 @@ public class ConfigurationDataBuilder : IConfigurationDataBuilder
 
         return Section("Serilog", "Serilog Logging",
             "Logging configuration: minimum level and file output path.",
-            new List<ConfigurationFieldDataDto>
-            {
+            [
                 StringField("MinimumLevel", "Minimum Log Level",
                     "Minimum severity level for log output. Values: Verbose, Debug, Information, Warning, Error, Fatal.",
                     defaultMinLevel, defaultMinLevel),
+
                 StringField("LogPath", "Log File Path",
                     "Path to the log file output.",
                     defaultLogPath, defaultLogPath)
-            });
+            ]);
     }
 
     private ConfigurationSectionDataDto BuildMiscSection()
     {
         return Section("Misc", "Miscellaneous",
             "Worker threads, CORS origins, external URL override, random name length, and data protection keys.",
-            new List<ConfigurationFieldDataDto>
-            {
+            [
                 NumberField("WorkerThreads", "Worker Threads",
                     "Number of worker threads. 0 or -1 uses ASP.NET default.",
                     _settings.WorkerThreads, _defaults.WorkerThreads),
+
                 ArrayField("AllowedOrigins", "Allowed CORS Origins",
                     "Allowed CORS origins. Null or empty = all origins allowed.",
                     _settings.AllowedOrigins, _defaults.AllowedOrigins),
+
                 StringField("ExternalUrlOverride", "External URL Override",
                     "Overrides the external URL used in generated links and redirects.",
                     _settings.ExternalUrlOverride, _defaults.ExternalUrlOverride),
+
                 NumberField("RandomDatasetNameLength", "Random Dataset Name Length",
                     "Length of randomly generated dataset names. Must be at least 8.",
                     _settings.RandomDatasetNameLength, _defaults.RandomDatasetNameLength,
                     minValue: 8),
+
                 BoolField("EnableStorageLimiter", "Enable Storage Limiter",
                     "Enables per-user storage quota enforcement.",
                     _settings.EnableStorageLimiter, _defaults.EnableStorageLimiter),
+
                 StringField("DataProtectionKeysPath", "Data Protection Keys Path",
                     "Path to shared directory for ASP.NET Core Data Protection keys. Required when processing node runs separately without Redis.",
                     _settings.DataProtectionKeysPath, _defaults.DataProtectionKeysPath),
+
                 SensitiveField("MonitorToken", "Monitor Token",
                     "Token for health check endpoints (/health, /quickhealth).",
                     _settings.MonitorToken, _defaults.MonitorToken)
-            });
+            ]);
     }
 }

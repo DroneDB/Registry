@@ -74,6 +74,12 @@ public class ProcessingPlatformSettings
     /// Config-based registry (no DB table) for the reduced-scope integration.
     /// </summary>
     public List<NodeOdmNodeConfig> NodeOdm { get; set; } = [];
+
+    /// <summary>
+    /// Per-tool feature gating. Key = tool id (e.g. "build", "photogrammetry").
+    /// Tools not listed here use the defaults (Enabled, no role/org restriction).
+    /// </summary>
+    public Dictionary<string, HeavyToolConfig> Tools { get; set; } = new();
 }
 
 /// <summary>

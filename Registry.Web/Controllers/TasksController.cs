@@ -38,6 +38,7 @@ public class TasksController : ControllerBaseEx
 {
     private readonly IHeavyTaskRunner _runner;
     private readonly IHeavyToolRegistry _registry;
+    private readonly IHeavyToolGating _gating;
     private readonly IJobIndexQuery _query;
     private readonly IJobIndexWriter _writer;
     private readonly IAuthManager _authManager;
@@ -50,6 +51,7 @@ public class TasksController : ControllerBaseEx
     public TasksController(
         IHeavyTaskRunner runner,
         IHeavyToolRegistry registry,
+        IHeavyToolGating gating,
         IJobIndexQuery query,
         IJobIndexWriter writer,
         IAuthManager authManager,
@@ -60,6 +62,7 @@ public class TasksController : ControllerBaseEx
     {
         _runner = runner;
         _registry = registry;
+        _gating = gating;
         _query = query;
         _writer = writer;
         _authManager = authManager;
@@ -82,10 +85,13 @@ public class TasksController : ControllerBaseEx
             if (!await _authManager.RequestAccess(ds, AccessType.Read))
                 return Unauthorized(new ErrorResponse("Access denied"));
 
-            var tools = _registry.All
-                .Select(t => new TaskToolDto(t.Id, t.Version, t.Title,
-                    t.RequiredAccess.ToString(), t.ProducesArtifact, t.InputSchema.RootElement.Clone()))
-                .ToArray();
+            var tools = await Task.WhenAll(_registry.All.Select(async t =>
+            {
+                var st = await _gating.EvaluateAsync(t.Id, orgSlug);
+                return new TaskToolDto(t.Id, t.Version, t.Title,
+                    t.RequiredAccess.ToString(), t.ProducesArtifact, t.InputSchema.RootElement.Clone(),
+                    st.Hidden, st.Disabled, st.DisabledMessage);
+            }));
 
             return Ok(tools);
         }
@@ -113,6 +119,15 @@ public class TasksController : ControllerBaseEx
             var tool = _registry.Resolve(body.ToolId, body.Version);
             if (tool is null)
                 return BadRequest(new ErrorResponse($"Tool '{body.ToolId}' is not available"));
+
+            // Feature gating: reject hidden/disabled tools (or role/org-denied) server-side,
+            // independent of the client UI. Returns 403 with the configured message.
+            var gatingState = await _gating.EvaluateAsync(tool.Id, orgSlug);
+            if (!gatingState.Allowed)
+                return StatusCode(StatusCodes.Status403Forbidden,
+                    new ErrorResponse(
+                        gatingState.DisabledMessage ?? $"Tool '{tool.Id}' is not available.",
+                        noRetry: true));
 
             var ds = _utils.GetDataset(orgSlug, dsSlug);
             var requiredAccess = tool.RequiredAccess == HeavyToolPermission.Write ? AccessType.Write : AccessType.Read;

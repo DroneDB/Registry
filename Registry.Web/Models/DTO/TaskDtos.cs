@@ -14,7 +14,10 @@ public sealed record TaskToolDto(
     string Title,
     string RequiredAccess,
     bool ProducesArtifact,
-    JsonElement InputSchema);
+    JsonElement InputSchema,
+    bool Hidden,
+    bool Disabled,
+    string? DisabledMessage);
 
 /// <summary>Body for POST /tasks.</summary>
 public sealed class SubmitTaskRequestDto
