@@ -20,7 +20,7 @@ using Registry.Web.Models;
 using Registry.Web.Models.Configuration;
 using Registry.Web.Models.DTO;
 using Registry.Web.Services.HeavyTasks.Models;
-using Registry.Web.Services.HeavyTasks.NodeOdm;
+using Registry.Web.Services.HeavyTasks.NodeOdx;
 using Registry.Web.Services.HeavyTasks.Ports;
 using Registry.Web.Services.Ports;
 using Registry.Web.Utilities;
@@ -28,12 +28,12 @@ using Registry.Web.Utilities;
 namespace Registry.Web.Services.HeavyTasks.Tools;
 
 /// <summary>
-/// Remote photogrammetry tool backed by a NodeODM (OpenDroneMap) processing node.
-/// Collects the dataset's images, submits them to NodeODM, streams progress/log,
+/// Remote photogrammetry tool backed by a NodeODX (OpenDroneMap) processing node.
+/// Collects the dataset's images, submits them to NodeODX, streams progress/log,
 /// downloads the result bundle (<c>all.zip</c>) and extracts it directly into the
 /// dataset (or into a newly created dataset). Extracted files are indexed and
 /// per-file build jobs are enqueued automatically. No downloadable artifact is produced.
-/// Cooperatively cancellable - cancellation propagates to the remote NodeODM task.
+/// Cooperatively cancellable - cancellation propagates to the remote NodeODX task.
 /// </summary>
 public sealed class PhotogrammetryTool : IHeavyTool
 {
@@ -45,9 +45,9 @@ public sealed class PhotogrammetryTool : IHeavyTool
           "properties": {
             "folder": { "type": ["string", "null"], "description": "Dataset folder to scan for images (default: whole dataset)." },
             "images": { "type": ["array", "null"], "items": { "type": "string" }, "description": "Explicit list of image entry paths." },
-            "nodeId": { "type": ["string", "null"], "description": "Target NodeODM node id (default: first configured)." },
+            "nodeId": { "type": ["string", "null"], "description": "Target NodeODX node id (default: first configured)." },
             "name": { "type": ["string", "null"], "description": "Task name shown on the node." },
-            "options": { "type": ["array", "null"], "description": "NodeODM options array [{name,value}]." },
+            "options": { "type": ["array", "null"], "description": "NodeODX options array [{name,value}]." },
             "destPath": { "type": ["string", "null"], "description": "Destination folder within the dataset for extracted results (required unless createNewDataset is true)." },
             "createNewDataset": { "type": ["boolean", "null"], "description": "If true, create a new dataset for the photogrammetry results instead of extracting into the current dataset." },
             "newDatasetName": { "type": ["string", "null"], "description": "Slug for the new dataset (kebab-case, max 128 chars). Auto-generated if not provided." },
@@ -61,8 +61,8 @@ public sealed class PhotogrammetryTool : IHeavyTool
     // Files are indexed in batches of this size: bounds the per-transaction lock time.
     private const int IndexChunkSize = 250;
 
-    private readonly INodeOdmClient _client;
-    private readonly INodeOdmNodeRegistry _nodes;
+    private readonly INodeOdxClient _client;
+    private readonly INodeOdxNodeRegistry _nodes;
     private readonly IArchiveExtractor _extractor;
     private readonly IServiceScopeFactory _scopeFactory;
     private readonly ProcessingPlatformSettings _settings;
@@ -70,8 +70,8 @@ public sealed class PhotogrammetryTool : IHeavyTool
     private readonly TimeSpan _pollInterval;
 
     public PhotogrammetryTool(
-        INodeOdmClient client,
-        INodeOdmNodeRegistry nodes,
+        INodeOdxClient client,
+        INodeOdxNodeRegistry nodes,
         IArchiveExtractor extractor,
         IServiceScopeFactory scopeFactory,
         IOptions<AppSettings> appSettings,
@@ -89,7 +89,7 @@ public sealed class PhotogrammetryTool : IHeavyTool
 
     public string Id => "photogrammetry";
     public string Version => "2";
-    public string Title => "Photogrammetry (NodeODM)";
+    public string Title => "Photogrammetry (NodeODX)";
     public HeavyToolPermission RequiredAccess => HeavyToolPermission.Write;
     public bool ProducesArtifact => false;
     public JsonDocument InputSchema => Schema;
@@ -97,11 +97,11 @@ public sealed class PhotogrammetryTool : IHeavyTool
     public async Task ValidateAsync(HeavyToolRequest request, IHeavyToolValidationContext ctx, CancellationToken ct)
     {
         if (!_nodes.HasNodes)
-            throw new InvalidOperationException("No NodeODM processing node is configured.");
+            throw new InvalidOperationException("No NodeODX processing node is configured.");
 
         var nodeId = ReadString(request.Params, "nodeId");
         if (_nodes.Resolve(nodeId) is null)
-            throw new ArgumentException($"NodeODM node '{nodeId}' is not configured.");
+            throw new ArgumentException($"NodeODX node '{nodeId}' is not configured.");
 
         // Validate explicit image list before collecting.
         var explicitImages = ReadStringArray(request.Params, "images");
@@ -183,10 +183,10 @@ public sealed class PhotogrammetryTool : IHeavyTool
         IProgress<HeavyToolProgress> progress,
         CancellationToken ct)
     {
-        // --- Phase 1: Submit to NodeODM and download results ---
+        // --- Phase 1: Submit to NodeODX and download results ---
         var nodeId = ReadString(request.Params, "nodeId");
         var node = _nodes.Resolve(nodeId)
-                   ?? throw new InvalidOperationException($"NodeODM node '{nodeId}' is not configured.");
+                   ?? throw new InvalidOperationException($"NodeODX node '{nodeId}' is not configured.");
 
         var entries = CollectImageEntries(request, ctx.Ddb);
         if (entries.Count < 2)
@@ -197,10 +197,10 @@ public sealed class PhotogrammetryTool : IHeavyTool
         var optionsJson = ReadRawJsonArray(request.Params, "options");
 
         progress.Report(new HeavyToolProgress(0, "submitting",
-            LogChunk: $"Submitting {imagePaths.Count} images to NodeODM node '{node.Id}'"));
+            LogChunk: $"Submitting {imagePaths.Count} images to NodeODX node '{node.Id}'"));
 
         var uuid = await _client.CreateTaskAsync(node, taskName, imagePaths, optionsJson, ct);
-        progress.Report(new HeavyToolProgress(0, "queued", LogChunk: $"NodeODM task created: {uuid}"));
+        progress.Report(new HeavyToolProgress(0, "queued", LogChunk: $"NodeODX task created: {uuid}"));
 
         try
         {
@@ -221,7 +221,7 @@ public sealed class PhotogrammetryTool : IHeavyTool
 
             var info = new FileInfo(tempZipPath);
             if (!info.Exists || info.Length == 0)
-                throw new InvalidOperationException("NodeODM produced no downloadable result bundle.");
+                throw new InvalidOperationException("NodeODX produced no downloadable result bundle.");
 
             // Best-effort remote cleanup.
             await _client.RemoveTaskAsync(node, uuid, CancellationToken.None);
@@ -436,7 +436,7 @@ public sealed class PhotogrammetryTool : IHeavyTool
     }
 
     private async Task PollUntilDoneAsync(
-        NodeOdmEndpoint node, string uuid, IProgress<HeavyToolProgress> progress, CancellationToken ct)
+        NodeOdxEndpoint node, string uuid, IProgress<HeavyToolProgress> progress, CancellationToken ct)
     {
         var outputLine = 0;
         while (true)
@@ -461,26 +461,26 @@ public sealed class PhotogrammetryTool : IHeavyTool
 
             switch (info.StatusCode)
             {
-                case NodeOdmTaskStatusCode.Completed:
+                case NodeOdxTaskStatusCode.Completed:
                     return;
-                case NodeOdmTaskStatusCode.Failed:
+                case NodeOdxTaskStatusCode.Failed:
                     throw new InvalidOperationException(
-                        $"NodeODM task failed: {info.ErrorMessage ?? "unknown error"}");
-                case NodeOdmTaskStatusCode.Canceled:
-                    throw new OperationCanceledException("NodeODM task was canceled.");
+                        $"NodeODX task failed: {info.ErrorMessage ?? "unknown error"}");
+                case NodeOdxTaskStatusCode.Canceled:
+                    throw new OperationCanceledException("NodeODX task was canceled.");
             }
 
             await Task.Delay(_pollInterval, ct);
         }
     }
 
-    private static string PhaseFor(NodeOdmTaskStatusCode code) => code switch
+    private static string PhaseFor(NodeOdxTaskStatusCode code) => code switch
     {
-        NodeOdmTaskStatusCode.Queued => "queued",
-        NodeOdmTaskStatusCode.Running => "processing",
-        NodeOdmTaskStatusCode.Completed => "completed",
-        NodeOdmTaskStatusCode.Failed => "failed",
-        NodeOdmTaskStatusCode.Canceled => "canceled",
+        NodeOdxTaskStatusCode.Queued => "queued",
+        NodeOdxTaskStatusCode.Running => "processing",
+        NodeOdxTaskStatusCode.Completed => "completed",
+        NodeOdxTaskStatusCode.Failed => "failed",
+        NodeOdxTaskStatusCode.Canceled => "canceled",
         _ => "processing"
     };
 

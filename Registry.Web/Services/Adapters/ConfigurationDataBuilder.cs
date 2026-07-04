@@ -710,7 +710,7 @@ public class ConfigurationDataBuilder : IConfigurationDataBuilder
         var isActive = pp != null;
 
         var section = Section("ProcessingPlatform", "Processing Platform",
-            "Task substrate settings: concurrency limits, dedup, NodeODM nodes, and bulk download thresholds.",
+            "Task substrate settings: concurrency limits, dedup, NodeODX nodes, and bulk download thresholds.",
             [
                 NumberField("ArtifactTtlHours", "Artifact TTL (hours)",
                     "Hours before a produced artifact's WorkDir is swept.",
@@ -793,7 +793,7 @@ public class ConfigurationDataBuilder : IConfigurationDataBuilder
                     dp?.ProgressUpdateThrottleSeconds ?? 0, unit: "seconds"),
 
                 NumberField("RemoteNodePollIntervalSeconds", "Remote Node Poll Interval",
-                    "Poll interval for remote NodeODM nodes.",
+                    "Poll interval for remote NodeODX nodes.",
                     pp?.RemoteNodePollIntervalSeconds ?? dp?.RemoteNodePollIntervalSeconds ?? 0,
                     dp?.RemoteNodePollIntervalSeconds ?? 0, unit: "seconds"),
 
@@ -803,7 +803,7 @@ public class ConfigurationDataBuilder : IConfigurationDataBuilder
                     dp?.RemoteNodePollMaxBackoffSeconds ?? 0, unit: "seconds"),
 
                 NumberField("RemoteNodeRequestTimeoutSeconds", "Remote Node Request Timeout",
-                    "HTTP request timeout for remote NodeODM nodes.",
+                    "HTTP request timeout for remote NodeODX nodes.",
                     pp?.RemoteNodeRequestTimeoutSeconds ?? dp?.RemoteNodeRequestTimeoutSeconds ?? 0,
                     dp?.RemoteNodeRequestTimeoutSeconds ?? 0, unit: "seconds")
             ]);

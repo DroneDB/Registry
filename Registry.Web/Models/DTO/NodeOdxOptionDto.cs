@@ -2,10 +2,10 @@
 namespace Registry.Web.Models.DTO;
 
 /// <summary>
-/// A single processing option from a NodeODM node, returned by
+/// A single processing option from a NodeODX node, returned by
 /// <c>GET /sys/processingNodes/{nodeId}/options</c>.
 /// </summary>
-public sealed record NodeOdmOptionDto(
+public sealed record NodeOdxOptionDto(
     // Option name (kebab-case), e.g. "dem-resolution"
     string Name,
     // Option type: "bool", "enum", "string", "int", "float", "json".

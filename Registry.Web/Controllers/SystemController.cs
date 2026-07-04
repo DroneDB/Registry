@@ -18,7 +18,7 @@ using Registry.Web.Services.HeavyTasks;
 using Registry.Web.Services.HeavyTasks.Ports;
 using Registry.Web.Services.Hub;
 using Registry.Web.Services.Ports;
-using Registry.Web.Services.HeavyTasks.NodeOdm;
+using Registry.Web.Services.HeavyTasks.NodeOdx;
 using Registry.Web.Utilities;
 
 namespace Registry.Web.Controllers;
@@ -42,7 +42,7 @@ public class SystemController : ControllerBaseEx
     private readonly AppSettings _appSettings;
     private readonly ILoginManager _loginManager;
     private readonly IConfigurationDataBuilder _configurationBuilder;
-    private readonly INodeOdmClient _nodeOdmClient;
+    private readonly INodeOdxClient _nodeOdxClient;
 
     public SystemController(
         ISystemManager systemManager,
@@ -55,7 +55,7 @@ public class SystemController : ControllerBaseEx
         IOptions<AppSettings> appSettings,
         ILoginManager loginManager,
         IConfigurationDataBuilder configurationBuilder,
-        INodeOdmClient nodeOdmClient)
+        INodeOdxClient nodeOdxClient)
     {
         _systemManager = systemManager;
         _datasetsManager = datasetsManager;
@@ -67,7 +67,7 @@ public class SystemController : ControllerBaseEx
         _appSettings = appSettings.Value;
         _loginManager = loginManager;
         _configurationBuilder = configurationBuilder;
-        _nodeOdmClient = nodeOdmClient;
+        _nodeOdxClient = nodeOdxClient;
     }
 
     /// <summary>
@@ -536,7 +536,7 @@ public class SystemController : ControllerBaseEx
     }
 
     /// <summary>
-    /// Gets the list of configured processing nodes (NodeODM) available for photogrammetry tasks.
+    /// Gets the list of configured processing nodes (NodeODX) available for photogrammetry tasks.
     /// Only exposes non-sensitive fields (id and title). URL and token are never returned.
     /// </summary>
     /// <returns>A list of processing node descriptors.</returns>
@@ -549,7 +549,7 @@ public class SystemController : ControllerBaseEx
         {
             _logger.LogDebug("System controller GetProcessingNodes()");
 
-            var nodes = (_appSettings.ProcessingPlatform?.NodeOdm ?? [])
+            var nodes = (_appSettings.ProcessingPlatform?.NodeOdx ?? [])
                 .Select(n => new ProcessingNodeDto(n.Id, n.Title ?? n.Id))
                 .ToArray();
 
@@ -564,14 +564,14 @@ public class SystemController : ControllerBaseEx
     }
 
     /// <summary>
-    /// Gets the available processing options from a specific NodeODM processing node.
+    /// Gets the available processing options from a specific NodeODX processing node.
     /// The options are fetched live from the node and include name, type, domain, help text,
     /// and default value for each option.
     /// </summary>
     /// <param name="nodeId">The id of the processing node.</param>
     /// <returns>A list of processing option descriptors.</returns>
     [HttpGet("processingNodes/{nodeId}/options", Name = nameof(SystemController) + "." + nameof(GetProcessingNodeOptions))]
-    [ProducesResponseType(typeof(IEnumerable<NodeOdmOptionDto>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(IEnumerable<NodeOdxOptionDto>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetProcessingNodeOptions([Required] string nodeId)
@@ -580,16 +580,16 @@ public class SystemController : ControllerBaseEx
         {
             _logger.LogDebug("System controller GetProcessingNodeOptions({NodeId})", nodeId);
 
-            var nodes = _appSettings.ProcessingPlatform?.NodeOdm ?? [];
+            var nodes = _appSettings.ProcessingPlatform?.NodeOdx ?? [];
             var nodeConfig = nodes.FirstOrDefault(n => n.Id.Equals(nodeId, StringComparison.OrdinalIgnoreCase));
             if (nodeConfig is null)
                 return NotFound(new ErrorResponse($"Processing node '{nodeId}' not found."));
 
-            var node = new NodeOdmEndpoint(nodeConfig.Id, nodeConfig.Url, nodeConfig.Token, nodeConfig.Title);
+            var node = new NodeOdxEndpoint(nodeConfig.Id, nodeConfig.Url, nodeConfig.Token, nodeConfig.Title);
 
-            var options = await _nodeOdmClient.GetOptionsAsync(node, HttpContext.RequestAborted);
+            var options = await _nodeOdxClient.GetOptionsAsync(node, HttpContext.RequestAborted);
 
-            var dtos = options.Select(o => new NodeOdmOptionDto(
+            var dtos = options.Select(o => new NodeOdxOptionDto(
                 o.Name, o.Type, o.Domain, o.Help, o.Value)).ToArray();
 
             return Ok(dtos);

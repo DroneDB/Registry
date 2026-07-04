@@ -70,10 +70,10 @@ public class ProcessingPlatformSettings
     public int RemoteNodeRequestTimeoutSeconds { get; set; } = 30;
 
     /// <summary>
-    /// NodeODM processing nodes available for the <c>photogrammetry</c> tool.
+    /// NodeODX processing nodes available for the <c>photogrammetry</c> tool.
     /// Config-based registry (no DB table) for the reduced-scope integration.
     /// </summary>
-    public List<NodeOdmNodeConfig> NodeOdm { get; set; } = [];
+    public List<NodeOdxNodeConfig> NodeOdx { get; set; } = [];
 
     /// <summary>
     /// Per-tool feature gating. Key = tool id (e.g. "build", "photogrammetry").
@@ -83,18 +83,18 @@ public class ProcessingPlatformSettings
 }
 
 /// <summary>
-/// A single NodeODM endpoint (OpenDroneMap processing node) usable by the
+/// A single NodeODX endpoint (OpenDroneMap processing node) usable by the
 /// <c>photogrammetry</c> heavy tool.
 /// </summary>
-public class NodeOdmNodeConfig
+public class NodeOdxNodeConfig
 {
     /// <summary>Stable identifier used to target this node from a submit request.</summary>
     public string Id { get; set; } = "default";
 
-    /// <summary>Base URL of the NodeODM instance, e.g. <c>http://localhost:3000</c>.</summary>
+    /// <summary>Base URL of the NodeODX instance, e.g. <c>http://localhost:3000</c>.</summary>
     public string Url { get; set; } = "";
 
-    /// <summary>Optional NodeODM access token (passed as the <c>token</c> query param).</summary>
+    /// <summary>Optional NodeODX access token (passed as the <c>token</c> query param).</summary>
     public string? Token { get; set; }
 
     /// <summary>Optional human-readable title.</summary>
