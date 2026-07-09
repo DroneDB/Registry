@@ -601,4 +601,50 @@ public class SystemController : ControllerBaseEx
         }
     }
 
+    /// <summary>
+    /// Checks whether a specific NodeODX processing node is reachable and reports its
+    /// queue capacity (used by the "Check Node" action before launching photogrammetry).
+    /// Never throws for an unreachable node: returns <c>Reachable=false</c> with the
+    /// failure reason so the UI can display it.
+    /// </summary>
+    /// <param name="nodeId">The id of the processing node.</param>
+    /// <returns>The node status descriptor.</returns>
+    [HttpGet("processingNodes/{nodeId}/status", Name = nameof(SystemController) + "." + nameof(GetProcessingNodeStatus))]
+    [ProducesResponseType(typeof(ProcessingNodeStatusDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> GetProcessingNodeStatus([Required] string nodeId)
+    {
+        try
+        {
+            _logger.LogDebug("System controller GetProcessingNodeStatus({NodeId})", nodeId);
+
+            var nodes = _appSettings.ProcessingPlatform?.NodeOdx ?? [];
+            var nodeConfig = nodes.FirstOrDefault(n => n.Id.Equals(nodeId, StringComparison.OrdinalIgnoreCase));
+            if (nodeConfig is null)
+                return NotFound(new ErrorResponse($"Processing node '{nodeId}' not found."));
+
+            var node = new NodeOdxEndpoint(nodeConfig.Id, nodeConfig.Url, nodeConfig.Token, nodeConfig.Title);
+
+            try
+            {
+                var info = await _nodeOdxClient.GetInfoAsync(node, HttpContext.RequestAborted);
+                return Ok(new ProcessingNodeStatusDto(
+                    nodeConfig.Id, Reachable: true, info.Version, info.Engine, info.EngineVersion,
+                    info.TaskQueueCount, info.MaxParallelTasks, ErrorMessage: null));
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                _logger.LogWarning(ex, "NodeODX node '{NodeId}' is unreachable", nodeId);
+                return Ok(new ProcessingNodeStatusDto(
+                    nodeConfig.Id, Reachable: false, null, null, null, 0, 0, ErrorMessage: ex.Message));
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Exception in System controller GetProcessingNodeStatus({NodeId})", nodeId);
+            return ExceptionResult(ex);
+        }
+    }
+
 }

@@ -103,6 +103,16 @@ public sealed class PhotogrammetryTool : IHeavyTool
         if (_nodes.Resolve(nodeId) is null)
             throw new ArgumentException($"NodeODX node '{nodeId}' is not configured.");
 
+        // Validate the optional image folder path (empty = whole dataset). Reject
+        // rooted paths and traversal so a clean dataset-relative path is required.
+        var folder = ReadString(request.Params, "folder");
+        if (!string.IsNullOrWhiteSpace(folder))
+        {
+            CommonUtils.ValidateRelativePath(folder, ctx.Ddb.DatasetFolderPath);
+            if (IsReservedPath(folder))
+                throw new ArgumentException($"'{folder}' is a reserved path.");
+        }
+
         // Validate explicit image list before collecting.
         var explicitImages = ReadStringArray(request.Params, "images");
         if (explicitImages is { Count: > 0 })
