@@ -54,6 +54,33 @@ public class SharpCompressArchiveExtractorTest
     }
 
     [Test]
+    public void IsValidArchive_RealZip_ReturnsTrue()
+    {
+        var zipPath = Path.Combine(_dir, "real.zip");
+        CreateZip(zipPath, new Dictionary<string, string> { ["a.txt"] = "hello" });
+
+        new SharpCompressArchiveExtractor().IsValidArchive(zipPath).ShouldBeTrue();
+    }
+
+    [Test]
+    public void IsValidArchive_NonArchiveWithArchiveName_ReturnsFalse()
+    {
+        // A text/HTML payload served with a .zip name must be rejected by the content probe,
+        // before any extraction is attempted.
+        var fake = Path.Combine(_dir, "fake.zip");
+        File.WriteAllText(fake, "<html><body>404 Not Found</body></html>");
+
+        new SharpCompressArchiveExtractor().IsValidArchive(fake).ShouldBeFalse();
+    }
+
+    [Test]
+    public void IsValidArchive_MissingFile_ReturnsFalse()
+    {
+        new SharpCompressArchiveExtractor()
+            .IsValidArchive(Path.Combine(_dir, "does-not-exist.zip")).ShouldBeFalse();
+    }
+
+    [Test]
     public void Open_Zip_CountsEntriesAndReadsContent()
     {
         var zipPath = Path.Combine(_dir, "test.zip");

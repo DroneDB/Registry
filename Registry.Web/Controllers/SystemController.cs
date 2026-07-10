@@ -512,7 +512,7 @@ public class SystemController : ControllerBaseEx
     /// <summary>
     /// Gets all Registry configuration fields grouped by section, with default values,
     /// descriptions, and typed metadata for the admin configuration editor page.
-    /// Sensitive values (secrets, passwords, tokens) are never exposed — only IsSet flags.
+    /// Sensitive values (secrets, passwords, tokens) are never exposed - only IsSet flags.
     /// </summary>
     /// <returns>ConfigurationDataDto with all sections and fields.</returns>
     [HttpGet("config", Name = nameof(SystemController) + "." + nameof(GetConfig))]

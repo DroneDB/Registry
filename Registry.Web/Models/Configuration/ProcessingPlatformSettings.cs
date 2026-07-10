@@ -58,6 +58,13 @@ public class ProcessingPlatformSettings
     /// </summary>
     public int MaxConcurrentBulkDownloadsPerUser { get; set; } = 1;
 
+    /// <summary>
+    /// Maximum number of active (queued + running) <c>import-file</c> tasks (single-file URL
+    /// imports) allowed per user at any one time. Bounds the number of concurrent server-side
+    /// downloads a single user can trigger. Default 2.
+    /// </summary>
+    public int MaxConcurrentUrlImportsPerUser { get; set; } = 2;
+
     public bool DedupEnabled { get; set; } = true;
     public int DedupLookbackHours { get; set; } = 24;
 

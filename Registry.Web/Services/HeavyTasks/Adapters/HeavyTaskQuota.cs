@@ -67,6 +67,18 @@ public sealed class HeavyTaskQuota : IHeavyTaskQuota
                         "You already have an active download archive being prepared. " +
                         "Please wait for it to complete before starting another.");
             }
+
+            // 6. Per-tool per-user limit: import-file downloads a remote file server-side.
+            //    Bound the number of concurrent downloads a single user can trigger
+            //    (default 2) so a user cannot saturate outbound bandwidth / disk.
+            if (request.ToolId == "import-file")
+            {
+                var perUserPerTool = await _query.CountActiveAsync(null, request.UserId, "import-file", ct);
+                if (perUserPerTool >= _settings.MaxConcurrentUrlImportsPerUser)
+                    return new HeavyTaskQuotaResult(HeavyTaskQuotaCode.Exceeded,
+                        "You already have the maximum number of active URL imports. " +
+                        "Please wait for one to complete before starting another.");
+            }
         }
 
         return HeavyTaskQuotaResult.Ok;

@@ -16,11 +16,12 @@ public class ControllerBaseEx : ControllerBase
     protected IActionResult ExceptionResult(Exception ex)
     {
 
-        // Do not retry if the quota is exceeded or the user is not authorized
-        var noRetry = ex is QuotaExceededException or UnauthorizedException;
-            
+        // Do not retry if the quota is exceeded, the user is not authorized, or
+        // the file extension is blocked by server policy
+        var noRetry = ex is QuotaExceededException or UnauthorizedException or ExtensionBlockedException;
+
         var err = new ErrorResponse(ex.Message, noRetry);
-            
+
         return ex switch
         {
             UnauthorizedException _ => Unauthorized(err),
@@ -29,11 +30,11 @@ public class ControllerBaseEx : ControllerBase
             _ => BadRequest(err)
         };
     }
-        
+
     protected IActionResult ExceptionResult(Exception ex, bool noRetry)
     {
         var err = new ErrorResponse(ex.Message, noRetry);
-            
+
         return ex switch
         {
             UnauthorizedException _ => Unauthorized(err),
@@ -42,5 +43,5 @@ public class ControllerBaseEx : ControllerBase
             _ => BadRequest(err)
         };
     }
- 
+
 }

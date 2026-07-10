@@ -47,6 +47,7 @@ public class ObjectsManager : IObjectsManager
     private readonly IOgcLayerCatalog? _ogcLayerCatalog;
     private readonly IDatasetCacheInvalidator _datasetCacheInvalidator;
     private readonly IBuildArtifactResolver _buildArtifactResolver;
+    private readonly ImportSettings _importSettings;
 
     /// <summary>
     /// Name of the per-dataset folder that holds in-flight streamed uploads before they are
@@ -100,6 +101,7 @@ public class ObjectsManager : IObjectsManager
             ?? new DatasetCacheInvalidator(NullLogger<DatasetCacheInvalidator>.Instance, cacheManager,
                 new NullCacheKeyScanner(NullLogger<NullCacheKeyScanner>.Instance));
         _buildArtifactResolver = buildArtifactResolver;
+        _importSettings = settings.Value.Import ?? new ImportSettings();
     }
 
     /// <summary>
@@ -227,6 +229,10 @@ public class ObjectsManager : IObjectsManager
         if (!await _authManager.RequestAccess(ds, AccessType.Write))
             throw new UnauthorizedException("The current user is not allowed to write to this dataset");
 
+        // Extension policy gate - reject before writing to disk
+        if (!_importSettings.IsExtensionAllowed(path))
+            throw new ExtensionBlockedException(path, _importSettings, _importSettings.AllowedFileExtensions.Length > 0);
+
         // If it's a folder
         if (stream == null)
         {
@@ -348,6 +354,10 @@ public class ObjectsManager : IObjectsManager
 
             if (!await _authManager.RequestAccess(ds, AccessType.Write))
                 throw new UnauthorizedException("The current user is not allowed to write to this dataset");
+
+            // Extension policy gate - reject before moving into dataset
+            if (!_importSettings.IsExtensionAllowed(path))
+                throw new ExtensionBlockedException(path, _importSettings, _importSettings.AllowedFileExtensions.Length > 0);
 
             // Authoritative size from disk: never trust the caller-provided count for the quota check
             var actualBytes = _fs.GetFileSize(fullTempPath);
@@ -544,6 +554,10 @@ public class ObjectsManager : IObjectsManager
 
         // Check if user has enough storage space in destination
         await _utils.CheckCurrentUserStorage(entrySize);
+
+        // Extension policy gate on destination path
+        if (sourceEntry.Type != EntryType.Directory && !_importSettings.IsExtensionAllowed(destPath))
+            throw new ExtensionBlockedException(destPath, _importSettings, _importSettings.AllowedFileExtensions.Length > 0);
 
         var destEntry = destDdb.GetEntry(destPath);
 
@@ -961,6 +975,10 @@ public class ObjectsManager : IObjectsManager
         }
 
         await _utils.CheckCurrentUserStorage(storageDelta);
+
+        // Extension policy gate on destination path
+        if (!_importSettings.IsExtensionAllowed(dest))
+            throw new ExtensionBlockedException(dest, _importSettings, _importSettings.AllowedFileExtensions.Length > 0);
 
         var fileSystemCopied = false;
         var destDdbAdded = false;

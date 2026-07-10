@@ -17,6 +17,17 @@ public interface IArchiveExtractor
     bool IsSupported(string fileName);
 
     /// <summary>
+    /// Content-based validation that the file at <paramref name="filePath"/> is an actual supported
+    /// archive - it inspects the archive structure (magic bytes / first entry), not just the file
+    /// name. Intended for files obtained from an untrusted source (e.g. a download URL) so that a
+    /// non-archive served with an archive name is rejected up-front, before any extraction. Returns
+    /// <c>false</c> instead of throwing when the file is missing, unreadable or not a valid archive.
+    /// </summary>
+    /// <param name="filePath">Path to the file to validate.</param>
+    /// <returns><c>true</c> when the file is a readable, supported archive; otherwise <c>false</c>.</returns>
+    bool IsValidArchive(string filePath);
+
+    /// <summary>
     /// Opens the archive at <paramref name="archivePath"/> and exposes its entries for
     /// sequential iteration. The returned session must be disposed by the caller.
     /// </summary>

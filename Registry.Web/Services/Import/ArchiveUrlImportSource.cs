@@ -10,6 +10,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using Registry.Common;
 using Registry.Ports.Archives;
 using Registry.Ports.DroneDB;
 using Registry.Ports.Import;
@@ -31,6 +32,8 @@ public sealed class ArchiveUrlImportSource : IImportSource
     private readonly IArchiveExtractor _extractor;
     private readonly SsrfGuard _ssrfGuard;
     private readonly IHttpClientFactory _httpClientFactory;
+    private readonly GuardedHttpDownloader _downloader;
+    private readonly ImportSettings _settings;
     private readonly long _maxImportSizeBytes;
     private readonly long _diskSafetyMarginBytes;
     private readonly ILogger<ArchiveUrlImportSource> _logger;
@@ -41,16 +44,19 @@ public sealed class ArchiveUrlImportSource : IImportSource
     /// <param name="extractor">The archive extractor.</param>
     /// <param name="ssrfGuard">The SSRF guard.</param>
     /// <param name="httpClientFactory">The HTTP client factory.</param>
+    /// <param name="downloader">The SSRF-hardened, disk- and speed-guarded single-file downloader.</param>
     /// <param name="appSettings">The application settings (import cap + disk safety margin).</param>
     /// <param name="logger">The logger.</param>
     public ArchiveUrlImportSource(IArchiveExtractor extractor, SsrfGuard ssrfGuard,
-        IHttpClientFactory httpClientFactory, IOptions<AppSettings> appSettings,
-        ILogger<ArchiveUrlImportSource> logger)
+        IHttpClientFactory httpClientFactory, GuardedHttpDownloader downloader,
+        IOptions<AppSettings> appSettings, ILogger<ArchiveUrlImportSource> logger)
     {
         _extractor = extractor;
         _ssrfGuard = ssrfGuard;
         _httpClientFactory = httpClientFactory;
-        _maxImportSizeBytes = (appSettings.Value.Import ?? new ImportSettings()).MaxImportSizeBytes;
+        _downloader = downloader;
+        _settings = appSettings.Value.Import ?? new ImportSettings();
+        _maxImportSizeBytes = _settings.MaxImportSizeBytes;
         _diskSafetyMarginBytes =
             (appSettings.Value.ProcessingPlatform ?? new ProcessingPlatformSettings()).DiskSafetyMarginBytes;
         _logger = logger;
@@ -111,6 +117,13 @@ public sealed class ArchiveUrlImportSource : IImportSource
         try
         {
             await DownloadToFileAsync(p, scratch, progress, ct);
+
+            // Content-based guard: reject a non-archive served with an archive name (e.g. an HTML error
+            // page) BEFORE attempting extraction, instead of relying on Open() failing mid-stream.
+            if (!_extractor.IsValidArchive(scratch))
+                throw new InvalidOperationException(
+                    "The downloaded file is not a valid or supported archive.");
+
             // _extractor.Open throws on a truly unsupported/corrupt archive (surfaced as a task failure).
             await ExtractIntoAsync(scratch, destFolder, progress, ct);
         }
@@ -123,31 +136,29 @@ public sealed class ArchiveUrlImportSource : IImportSource
     private async Task DownloadToFileAsync(ArchiveParams p, string scratch, IProgress<ImportProgress> progress,
         CancellationToken ct)
     {
-        var client = CreateClient();
-        using var request = new HttpRequestMessage(HttpMethod.Get, p.Url);
-        ApplyAuth(request, p);
-
-        using var response = await client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, ct);
-        response.EnsureSuccessStatusCode();
-
-        var total = response.Content.Headers.ContentLength;
-        await using var http = await response.Content.ReadAsStreamAsync(ct);
-        await using var file = File.Create(scratch);
-
-        var buffer = new byte[1024 * 1024];
-        long downloaded = 0;
-        int read;
-        while ((read = await http.ReadAsync(buffer, ct)) > 0)
-        {
-            await file.WriteAsync(buffer.AsMemory(0, read), ct);
-            downloaded += read;
-            // Compressed download is reported WITHOUT BytesSoFar so it does not consume the
-            // (uncompressed) storage budget; the extraction phase reports the real on-disk bytes.
+        // Map the downloader's fraction/bytes into the 0..0.5 slice reserved for the download phase.
+        // The COMPRESSED size is intentionally NOT capped (maxBytes: 0): what counts against the
+        // storage budget is the EXTRACTED footprint, enforced per-entry in ExtractIntoAsync. We still
+        // apply the low-speed/stall guard and the temp-volume disk head-room here (via the downloader).
+        var sink = new CallbackProgress<FileDownloadProgress>(fp =>
             progress.Report(new ImportProgress(
-                total is > 0 ? Math.Min(0.5, 0.5 * downloaded / total.Value) : -1,
+                fp.TotalBytes is > 0 ? Math.Min(0.5, 0.5 * fp.Fraction) : -1,
                 Phase: "downloading",
-                Message: $"Downloaded {downloaded:N0} bytes"));
-        }
+                Message: fp.TotalBytes is > 0
+                    ? $"Downloaded {CommonUtils.GetBytesReadable(fp.BytesSoFar)} / {CommonUtils.GetBytesReadable(fp.TotalBytes.Value)}"
+                    : $"Downloaded {CommonUtils.GetBytesReadable(fp.BytesSoFar)}")));
+
+        await _downloader.DownloadAsync(
+            url: new Uri(p.Url),
+            destFile: scratch,
+            username: string.IsNullOrWhiteSpace(p.Username) ? null : p.Username,
+            password: string.IsNullOrWhiteSpace(p.Password) ? null : p.Password,
+            maxBytes: 0,
+            minSpeedBytesPerSec: _settings.MinDownloadSpeedBytesPerSec,
+            lowSpeedGraceSeconds: _settings.LowSpeedGraceSeconds,
+            diskSafetyMarginBytes: _diskSafetyMarginBytes,
+            progress: sink,
+            ct: ct);
     }
 
     private async Task ExtractIntoAsync(string scratch, string destFolder, IProgress<ImportProgress> progress,
@@ -169,6 +180,14 @@ public sealed class ArchiveUrlImportSource : IImportSource
 
             var relative = SafeRelative(entry.Key);
             if (relative is null) continue; // skipped (.ddb or unsafe)
+
+            // Extension policy (allow-list / block-list): skip disallowed types (e.g. executables
+            // or scripts) with a warning; the rest of the archive still extracts.
+            if (!_settings.IsExtensionAllowed(relative))
+            {
+                _logger.LogWarning("Skipping disallowed file type during archive import: '{Path}'", relative);
+                continue;
+            }
 
             var localTarget = Path.Combine(destFolder, relative.Replace('/', Path.DirectorySeparatorChar));
             var parent = Path.GetDirectoryName(localTarget);
@@ -216,7 +235,10 @@ public sealed class ArchiveUrlImportSource : IImportSource
         if (key.StartsWith(IDDB.DatabaseFolderName + "/", StringComparison.Ordinal))
             return null;
 
-        return key;
+        // Normalize every path segment (invalid chars, Windows reserved device names, trailing
+        // dots/spaces, length); leading dots are preserved (hidden files).
+        key = FileImportPolicy.SanitizePathSegments(key);
+        return string.IsNullOrWhiteSpace(key) ? null : key;
     }
 
     private ArchiveParams ReadParams(JsonElement parameters)
@@ -287,4 +309,11 @@ public sealed class ArchiveUrlImportSource : IImportSource
 
     private readonly record struct ArchiveParams(
         string Url, string Host, string SuggestedName, string Username, string Password);
+
+    // Synchronous progress adapter (mirrors the one used by the import heavy tools) so callbacks run
+    // inline instead of being posted asynchronously by System.Progress<T>.
+    private sealed class CallbackProgress<T>(Action<T> callback) : IProgress<T>
+    {
+        public void Report(T value) => callback(value);
+    }
 }

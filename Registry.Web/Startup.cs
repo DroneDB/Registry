@@ -326,6 +326,10 @@ public class Startup
         services.AddImportSources(appSettings);
         services.AddScoped<IImportManager, ImportManager>();
 
+        // Single-file URL import into an existing dataset (web-only orchestration; the import-file
+        // heavy tool is registered by AddImportSources for both web and worker hosts).
+        services.AddScoped<IFileUrlImportManager, FileUrlImportManager>();
+
         services.AddScoped<IConfigurationHelper<AppSettings>, ConfigurationHelper>(_ =>
             new ConfigurationHelper(MagicStrings.AppSettingsFileName));
 
