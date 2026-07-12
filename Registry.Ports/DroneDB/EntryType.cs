@@ -17,5 +17,6 @@ public enum EntryType
     Panorama = 12,
     GeoPanorama = 13,
     Vector = 14,
-    GaussianSplat = 15
+    GaussianSplat = 15,
+    Tiles3D = 16
 }
