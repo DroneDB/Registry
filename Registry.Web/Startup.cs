@@ -555,9 +555,9 @@ public class Startup
                     if (string.Equals(path, "index.html", StringComparison.OrdinalIgnoreCase))
                     {
                         var headers = ctx.Context.Response.Headers;
-                        headers["Cache-Control"] = "no-cache, no-store, must-revalidate";
-                        headers["Pragma"] = "no-cache";
-                        headers["Expires"] = "0";
+                        headers.CacheControl = "no-cache, no-store, must-revalidate";
+                        headers.Pragma = "no-cache";
+                        headers.Expires = "0";
                     }
                 }
             });
