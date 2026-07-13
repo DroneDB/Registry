@@ -22,6 +22,7 @@ using Registry.Web.Models.DTO;
 using Registry.Web.Services.HeavyTasks.Models;
 using Registry.Web.Services.HeavyTasks.NodeOdx;
 using Registry.Web.Services.HeavyTasks.Ports;
+using Registry.Web.Services.Import;
 using Registry.Web.Services.Ports;
 using Registry.Web.Utilities;
 
@@ -133,17 +134,17 @@ public sealed class PhotogrammetryTool : IHeavyTool
 
         if (createNewDataset)
         {
-            // Validate new dataset name if provided.
+            // Validate new dataset name when explicitly provided; omit to auto-generate a timestamped slug.
             var newDatasetName = ReadString(request.Params, "newDatasetName");
-            if (string.IsNullOrWhiteSpace(newDatasetName))
-                throw new ArgumentException("A new dataset name (slug) is required when createNewDataset is true.");
+            if (!string.IsNullOrWhiteSpace(newDatasetName))
+            {
+                if (newDatasetName.Length > 128)
+                    throw new ArgumentException("The new dataset name must be 128 characters or less.");
 
-            if (newDatasetName!.Length > 128)
-                throw new ArgumentException("The new dataset name must be 128 characters or less.");
-
-            // Basic kebab-case validation.
-            if (!Regex.IsMatch(newDatasetName, @"^[a-z0-9]([a-z0-9-]*[a-z0-9])?$"))
-                throw new ArgumentException("The new dataset name must be kebab-case (lowercase letters, digits, and hyphens).");
+                // Basic kebab-case validation.
+                if (!Regex.IsMatch(newDatasetName, @"^[a-z0-9]([a-z0-9-]*[a-z0-9])?$"))
+                    throw new ArgumentException("The new dataset name must be kebab-case (lowercase letters, digits, and hyphens).");
+            }
 
             // Validate visibility.
             var visibilityStr = ReadString(request.Params, "newDatasetVisibility") ?? "PRIVATE";
@@ -528,6 +529,11 @@ public sealed class PhotogrammetryTool : IHeavyTool
 
         if (Path.IsPathRooted(key) || key.Split('/').Any(seg => seg == ".."))
             throw new InvalidOperationException($"Unsafe archive entry path (zip-slip): '{entryKey}'.");
+
+        // Normalize segments: Windows reserved device names, trailing dots/spaces, invalid chars.
+        key = FileImportPolicy.SanitizePathSegments(key);
+        if (string.IsNullOrWhiteSpace(key))
+            throw new InvalidOperationException($"Archive entry name is empty after sanitization: '{entryKey}'.");
 
         var combined = CommonUtils.SafeCombine(destPath ?? string.Empty, key);
 

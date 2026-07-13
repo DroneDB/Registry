@@ -267,7 +267,7 @@ public class PushManager : IPushManager
 
         // Extension policy gate - check all files being committed
         var blockedFiles = delta.Adds
-            .Where(add => !string.IsNullOrEmpty(Path.GetExtension(add.Path)) && !_importSettings.IsExtensionAllowed(add.Path))
+            .Where(add => !_importSettings.IsExtensionAllowed(add.Path))
             .Select(add => add.Path)
             .ToArray();
 

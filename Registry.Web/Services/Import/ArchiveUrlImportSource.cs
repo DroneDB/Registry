@@ -186,6 +186,7 @@ public sealed class ArchiveUrlImportSource : IImportSource
             if (!_settings.IsExtensionAllowed(relative))
             {
                 _logger.LogWarning("Skipping disallowed file type during archive import: '{Path}'", relative);
+                done++;
                 continue;
             }
 
