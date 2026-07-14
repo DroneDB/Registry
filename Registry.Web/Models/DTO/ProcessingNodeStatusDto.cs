@@ -4,7 +4,7 @@ namespace Registry.Web.Models.DTO;
 /// <summary>
 /// Health/status of a NodeODX processing node, returned by
 /// <c>GET /sys/processingNodes/{nodeId}/status</c>. When the node cannot be reached,
-/// <see cref="Reachable"/> is <c>false</c> and <see cref="Error"/> carries the reason.
+/// <see cref="Reachable"/> is <c>false</c> and <see cref="ErrorMessage"/> carries the reason.
 /// </summary>
 /// <param name="Id">The queried node id.</param>
 /// <param name="Reachable">True when the node responded to the info request.</param>

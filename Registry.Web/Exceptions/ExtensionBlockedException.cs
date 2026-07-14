@@ -33,9 +33,17 @@ public class ExtensionBlockedException : Exception
         AllowListMode = settings.AllowedFileExtensions.Length > 0;
     }
 
+    /// <summary>Normalize an extension to the display string used in error messages.</summary>
+    /// <remarks>Path.GetExtension returns an empty string (not null) for files without an extension.</remarks>
+    private static string NormalizeExt(string fileName)
+    {
+        var ext = Path.GetExtension(fileName);
+        return string.IsNullOrEmpty(ext) ? "(no extension)" : ext;
+    }
+
     private static string BuildSingleMessage(string fileName, bool allowListMode)
     {
-        var ext = Path.GetExtension(fileName) ?? "(no extension)";
+        var ext = NormalizeExt(fileName);
         if (allowListMode)
             return $"File '{fileName}' was rejected: extension '{ext}' is not in the allowed list. Only explicitly permitted file types are accepted on this server.";
         return $"File '{fileName}' was rejected: extension '{ext}' is on the server's block list.";
@@ -45,7 +53,7 @@ public class ExtensionBlockedException : Exception
     {
         var allowListMode = settings.AllowedFileExtensions.Length > 0;
         var grouped = fileNames
-            .Select(fn => new { Name = fn, Ext = Path.GetExtension(fn) ?? "(no extension)" })
+            .Select(fn => new { Name = fn, Ext = NormalizeExt(fn) })
             .GroupBy(x => x.Ext, StringComparer.OrdinalIgnoreCase)
             .Select(g => $"{g.Key} ({g.Count()})")
             .OrderBy(x => x);

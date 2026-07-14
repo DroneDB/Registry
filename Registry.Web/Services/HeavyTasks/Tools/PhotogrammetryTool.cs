@@ -67,6 +67,7 @@ public sealed class PhotogrammetryTool : IHeavyTool
     private readonly IArchiveExtractor _extractor;
     private readonly IServiceScopeFactory _scopeFactory;
     private readonly ProcessingPlatformSettings _settings;
+    private readonly ImportSettings _importSettings;
     private readonly ILogger<PhotogrammetryTool> _logger;
     private readonly TimeSpan _pollInterval;
 
@@ -83,6 +84,7 @@ public sealed class PhotogrammetryTool : IHeavyTool
         _extractor = extractor;
         _scopeFactory = scopeFactory;
         _settings = appSettings.Value.ProcessingPlatform ?? new ProcessingPlatformSettings();
+        _importSettings = appSettings.Value.Import ?? new ImportSettings();
         _logger = logger;
         var seconds = appSettings.Value.ProcessingPlatform?.RemoteNodePollIntervalSeconds ?? 2;
         _pollInterval = TimeSpan.FromSeconds(Math.Max(1, seconds));
@@ -349,6 +351,17 @@ public sealed class PhotogrammetryTool : IHeavyTool
                 // Path sanitization (anti zip-slip + reserved-folder guard).
                 var target = SafeJoin(destPath, archiveEntry.Key);
                 CommonUtils.ValidateRelativePath(target, root);
+
+                // Extension policy (allow-list / block-list): skip disallowed types with
+                // a warning, mirroring ArchiveExtractTool semantics.
+                if (!_importSettings.IsExtensionAllowed(target))
+                {
+                    _logger.LogWarning("Skipping disallowed file type during photogrammetry extraction: '{Path}'", target);
+                    skipped++;
+                    done++;
+                    ReportProgress(progress, done, total, archiveEntry.Key, 0.96);
+                    continue;
+                }
 
                 // Skip existing files (no overwrite for photogrammetry output).
                 if (ddb.EntryExists(target))
