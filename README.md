@@ -49,9 +49,8 @@ View orthophotos, point clouds, 3D models (OBJ, GLTF, GLB), Gaussian splats, pan
 
 ## 💬 Community
 
-Join our Discord server to get help, share feedback, discuss features, and connect with other DroneDB users:
+**[Join the DroneDB Discord](https://discord.gg/e9M3vBvzge)** to get help, share feedback, discuss features, and connect with other DroneDB users:
 
-**[Join the DroneDB Discord](https://discord.gg/e9M3vBvzge)**
 
 ## 🚀 Quick Start with Docker
 
