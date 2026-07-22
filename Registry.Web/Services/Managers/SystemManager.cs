@@ -97,7 +97,7 @@ public class SystemManager : ISystemManager
 
                 var entries = ddb.Search("*", true)?.ToArray();
 
-                if (entries == null || !entries.Any())
+                if (entries == null || entries.Length == 0)
                 {
                     _context.Remove(ds);
                     await _context.SaveChangesAsync();
@@ -128,7 +128,14 @@ public class SystemManager : ISystemManager
 
     public string GetVersion()
     {
-        return Assembly.GetExecutingAssembly().GetName().Version?.ToString();
+        var version = Assembly.GetExecutingAssembly().GetName().Version;
+
+        // Ensure we always return canonical major.minor.patch. The Version class
+        // stores 4 components and ToString() may emit the trailing ".0" revision.
+        // Truncate to the first 3 parts to match the format defined in AssemblyInfo.ts, and match the semver we use for REST API and UI rendering.
+        if (version == null) return null;
+        var parts = version.ToString().Split('.');
+        return parts.Length > 3 ? string.Join(".", parts.Take(3)) : string.Join(".", parts);
     }
 
     public async Task<IEnumerable<MigrateVisibilityEntryDTO>> MigrateVisibility()
@@ -943,7 +950,6 @@ public class SystemManager : ISystemManager
 
                         // OPTIMIZATION 4: For large files, use streaming download to avoid memory pressure
                         // Files larger than LargeFileSizeThreshold (300MB) are downloaded with progress tracking
-                        HttpHelper.DownloadResult result;
                         if (task.Entry.Size > LargeFileSizeThreshold)
                         {
                             _logger.LogDebug("Large file detected ({Size:N0} bytes), using streaming download: {Path}",
@@ -951,7 +957,7 @@ public class SystemManager : ISystemManager
                         }
 
                         // Download file with retry (HttpHelper already streams to disk)
-                        result = await HttpHelper.DownloadFileWithRetryAsync(
+                        var result = await HttpHelper.DownloadFileWithRetryAsync(
                             task.DownloadUrl,
                             task.DestinationPath,
                             headers,
