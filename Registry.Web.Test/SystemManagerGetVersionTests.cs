@@ -46,7 +46,7 @@ public class SystemManagerGetVersionTests : TestBase
         _fileSystem = new FileSystem();
     }
 
-    private SystemManager CreateSystemManager()
+    private async Task<SystemManager> CreateSystemManager()
     {
         var authManagerMock = new Mock<IAuthManager>();
         var appSettingsMock = new Mock<IOptions<AppSettings>>();
@@ -92,9 +92,9 @@ public class SystemManagerGetVersionTests : TestBase
     }
 
     [Test]
-    public void GetVersion_ReturnsThreePartSemver()
+    public async Task GetVersion_ReturnsThreePartSemver()
     {
-        var systemManager = CreateSystemManager();
+        var systemManager = await CreateSystemManager();
 
         var version = systemManager.GetVersion();
 
@@ -107,8 +107,8 @@ public class SystemManagerGetVersionTests : TestBase
 
         for (var i = 0; i < parts.Length; i++)
         {
-            int.TryParse(parts[i]).ShouldBeTrue(
-                $"Part at index {i} ('{parts[i]}') should be a valid integer");
+            if (!int.TryParse(parts[i], out var val))
+                Assert.Fail($"Expected part {i} to be integer but got {parts[i]}");
         }
     }
 }
