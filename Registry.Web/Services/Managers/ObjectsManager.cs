@@ -138,7 +138,8 @@ public class ObjectsManager : IObjectsManager
 
         var files = entities.Select(item => item.ToDto()).ToArray();
 
-        await _buildStatusService.AnnotateAsync(orgSlug, dsSlug, ddb, files);
+        if (_buildStatusService != null)
+            await _buildStatusService.AnnotateAsync(orgSlug, dsSlug, ddb, files);
 
         _logger.LogInformation("Found {FilesCount} objects", files.Length);
 
@@ -169,7 +170,8 @@ public class ObjectsManager : IObjectsManager
             where FileSystemName.MatchesSimpleExpression(query, name)
             select entry.ToDto()).ToArray();
 
-        await _buildStatusService.AnnotateAsync(orgSlug, dsSlug, ddb, files);
+        if (_buildStatusService != null)
+            await _buildStatusService.AnnotateAsync(orgSlug, dsSlug, ddb, files);
 
         _logger.LogInformation("Found {FilesCount} objects", files.Length);
 
