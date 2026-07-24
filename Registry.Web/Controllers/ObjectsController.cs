@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 using System.IO;
@@ -974,39 +974,34 @@ public class ObjectsController : ControllerBaseEx
     }
 
     /// <summary>
-    /// Gets a paginated list of build jobs for a dataset.
+    /// Gets information about pending (deferred) builds for a dataset, i.e.
+    /// builds skipped because one or more dependencies (companion files or
+    /// external tools) were missing at the time of the last attempt.
     /// </summary>
     /// <param name="orgSlug">The organization slug.</param>
     /// <param name="dsSlug">The dataset slug.</param>
-    /// <param name="page">The page number (1-based).</param>
-    /// <param name="pageSize">The number of items per page.</param>
-    /// <returns>A list of build jobs.</returns>
-    [HttpGet("builds", Name = nameof(ObjectsController) + "." + nameof(GetBuilds))]
-    [ProducesResponseType(typeof(IEnumerable<BuildJobDto>), StatusCodes.Status200OK)]
+    /// <returns>A list of pending builds.</returns>
+    [HttpGet("builds/pending", Name = nameof(ObjectsController) + "." + nameof(GetPendingBuilds))]
+    [ProducesResponseType(typeof(IEnumerable<PendingBuildInfoDto>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> GetBuilds(
+    public async Task<IActionResult> GetPendingBuilds(
         [FromRoute, Required] string orgSlug,
-        [FromRoute, Required] string dsSlug,
-        [FromQuery] int page = 1,
-        [FromQuery] int pageSize = 50)
+        [FromRoute, Required] string dsSlug)
     {
         try
         {
-            _logger.LogDebug(
-                "Objects controller GetBuilds('{OrgSlug}', '{DsSlug}', page: {Page}, pageSize: {PageSize})",
-                orgSlug, dsSlug, page, pageSize);
+            _logger.LogDebug("Objects controller GetPendingBuilds('{OrgSlug}', '{DsSlug}')", orgSlug, dsSlug);
 
-            var builds = await _objectsManager.GetBuilds(orgSlug, dsSlug, page, pageSize);
+            var pending = await _objectsManager.GetPendingBuilds(orgSlug, dsSlug);
 
-            return Ok(builds);
+            return Ok(pending);
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex,
-                "Exception in Objects controller GetBuilds('{OrgSlug}', '{DsSlug}', page: {Page}, pageSize: {PageSize})",
-                orgSlug, dsSlug, page, pageSize);
+            _logger.LogError(ex, "Exception in Objects controller GetPendingBuilds('{OrgSlug}', '{DsSlug}')",
+                orgSlug, dsSlug);
 
             return ExceptionResult(ex);
         }
@@ -1694,3 +1689,4 @@ public class ObjectsController : ControllerBaseEx
 
     #endregion
 }
+

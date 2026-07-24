@@ -310,6 +310,7 @@ public class Startup
         services.AddScoped<IBackgroundJobsProcessor, BackgroundJobsProcessor>();
         services.AddScoped<IMetaManager, Services.Managers.MetaManager>();
         services.AddScoped<BuildPendingService>();
+        services.AddScoped<IBuildStatusService, BuildStatusService>();
         services.AddScoped<DatasetCleanupService>();
         services.AddScoped<OrphanedDatasetCleanupService>();
         services.AddScoped<RecurringDatasetCleanupService>();

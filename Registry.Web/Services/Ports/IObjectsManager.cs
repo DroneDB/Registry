@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -65,7 +65,13 @@ public interface IObjectsManager
     Task Transfer(string sourceOrgSlug, string sourceDsSlug, string sourcePath, string destOrgSlug,
         string destDsSlug, string destPath = null, bool overwrite = false, bool keepSource = false);
 
-    Task<IEnumerable<BuildJobDto>> GetBuilds(string orgSlug, string dsSlug, int page = 1, int pageSize = 50);
+    /// <summary>
+    /// Gets information about pending (deferred) builds in a dataset, i.e. builds
+    /// skipped because one or more dependencies (companion files or external
+    /// tools) were missing at the time of the last attempt.
+    /// </summary>
+    Task<IEnumerable<PendingBuildInfoDto>> GetPendingBuilds(string orgSlug, string dsSlug);
+
     Task<int> ClearCompletedBuilds(string orgSlug, string dsSlug);
     Task Delete(string orgSlug, string dsSlug, string[] paths);
     Task<DeleteBatchResponse> DeleteBatch(string orgSlug, string dsSlug, string[] paths);

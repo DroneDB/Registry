@@ -84,6 +84,13 @@ public interface IDdbWrapper
     public bool IsBuildPending(string ddbPath);
 
     /// <summary>
+    /// Gets information about pending (deferred) builds, i.e. builds skipped
+    /// because one or more dependencies were missing at the time of the
+    /// attempt. Read-only: does not consume pending markers or trigger builds.
+    /// </summary>
+    public PendingBuildInfo[] GetPendingBuildInfo(string ddbPath);
+
+    /// <summary>
     /// Cleans up a dataset by removing index entries whose underlying files no
     /// longer exist on disk and orphaned build artifacts.
     /// </summary>

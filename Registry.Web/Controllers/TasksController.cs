@@ -9,6 +9,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Caching.Distributed;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Registry.Web.Data.Models;
@@ -44,6 +45,7 @@ public class TasksController : ControllerBaseEx
     private readonly IAuthManager _authManager;
     private readonly IUtils _utils;
     private readonly IBackgroundJobsProcessor _processor;
+    private readonly IDistributedCache _cache;
     private readonly ProcessingPlatformSettings _settings;
     private readonly string _tempPath;
     private readonly ILogger<TasksController> _logger;
@@ -57,6 +59,7 @@ public class TasksController : ControllerBaseEx
         IAuthManager authManager,
         IUtils utils,
         IBackgroundJobsProcessor processor,
+        IDistributedCache cache,
         IOptions<AppSettings> appSettings,
         ILogger<TasksController> logger)
     {
@@ -68,6 +71,7 @@ public class TasksController : ControllerBaseEx
         _authManager = authManager;
         _utils = utils;
         _processor = processor;
+        _cache = cache;
         _settings = appSettings.Value.ProcessingPlatform ?? new ProcessingPlatformSettings();
         _tempPath = appSettings.Value.TempPath ?? Path.Combine(Path.GetTempPath(), "registry");
         _logger = logger;
@@ -189,11 +193,40 @@ public class TasksController : ControllerBaseEx
             if (!await _authManager.RequestAccess(ds, AccessType.Read))
                 return Unauthorized(new ErrorResponse("Access denied"));
 
-            var filter = new JobIndexQueryFilter(orgSlug, dsSlug, toolId, state,
-                Skip: Math.Max(0, skip), Take: Math.Clamp(take, 1, 200));
+            var clavpedTake = Math.Clamp(take, 1, 200);
 
-            var rows = await _query.QueryAsync(filter, ct);
-            var dtos = rows.Select(ToSummary).ToArray();
+            // Canonical shape (no filters, skip=0): serve from distributed cache.
+            // Filtered queries bypass cache to avoid combinator explosion of cache keys.
+            // Safety: the write-through invalidation in JobIndexWriter covers all mutations.
+            bool useCache = string.IsNullOrWhiteSpace(toolId) && string.IsNullOrWhiteSpace(state) && skip == 0 && clavpedTake <= 200;
+
+            TaskSummaryDto[] dtos;
+            if (useCache)
+            {
+                var cacheKey = MagicStrings.TasksListCacheSeed + ":" + orgSlug + "/" + dsSlug;
+                var cachedBytes = await _cache.GetAsync(cacheKey, ct);
+                if (cachedBytes != null)
+                {
+                    dtos = JsonSerializer.Deserialize<TaskSummaryDto[]>(cachedBytes) ?? Array.Empty<TaskSummaryDto>();
+                    return Ok(dtos);
+                }
+
+                var filter = new JobIndexQueryFilter(orgSlug, dsSlug, toolId, state,
+                    Skip: 0, Take: clavpedTake);
+                var rows = await _query.QueryAsync(filter, ct);
+                dtos = rows.Select(ToSummary).ToArray();
+
+                var options = new DistributedCacheEntryOptions { AbsoluteExpirationRelativeToNow = TimeSpan.FromSeconds(60) };
+                await _cache.SetAsync(cacheKey, JsonSerializer.SerializeToUtf8Bytes(dtos), options, ct);
+            }
+            else
+            {
+                var filter = new JobIndexQueryFilter(orgSlug, dsSlug, toolId, state,
+                    Skip: Math.Max(0, skip), Take: clavpedTake);
+                var rows = await _query.QueryAsync(filter, ct);
+                dtos = rows.Select(ToSummary).ToArray();
+            }
+
             return Ok(dtos);
         }
         catch (Exception ex)

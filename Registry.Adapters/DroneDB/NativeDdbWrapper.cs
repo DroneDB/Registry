@@ -1076,6 +1076,47 @@ public class NativeDdbWrapper : IDdbWrapper
         }
     }
 
+    [DllImport("ddb", EntryPoint = "DDBGetPendingBuildInfo")]
+    private static extern DdbResult _GetPendingBuildInfo([MarshalAs(UnmanagedType.LPUTF8Str)] string ddbPath,
+        out IntPtr output);
+
+    public PendingBuildInfo[] GetPendingBuildInfo(string ddbPath)
+    {
+        try
+        {
+            if (_GetPendingBuildInfo(ddbPath, out var output) == DdbResult.Success)
+            {
+                var json = MarshalAndFreeUtf8(output);
+
+                if (json == null)
+                    throw new InvalidOperationException("No result from DDBGetPendingBuildInfo call");
+
+                var res = JsonConvert.DeserializeObject<PendingBuildInfo[]>(json);
+
+                if (res == null)
+                    throw new InvalidOperationException($"Unable to deserialize pending build info result: {json}");
+
+                return res;
+            }
+        }
+        catch (EntryPointNotFoundException ex)
+        {
+            throw new DdbException($"Error in calling ddb lib: incompatible versions ({ex.Message})", ex);
+        }
+        catch (DdbException)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            throw new DdbException(
+                $"Error in calling ddb lib. Last error: \"{SafeGetLastError("get pending build info")}\", check inner exception for details",
+                ex);
+        }
+
+        throw new DdbException(SafeGetLastError("get pending build info"));
+    }
+
     [DllImport("ddb", EntryPoint = "DDBCleanup")]
     private static extern DdbResult _Cleanup([MarshalAs(UnmanagedType.LPUTF8Str)] string ddbPath, out IntPtr output);
 

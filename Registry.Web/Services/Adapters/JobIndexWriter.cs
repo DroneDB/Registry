@@ -8,6 +8,7 @@ using Hangfire.Client;
 using Hangfire.Server;
 using Hangfire.States;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Caching.Distributed;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Registry.Web.Data;
@@ -21,8 +22,10 @@ namespace Registry.Web.Services.Adapters;
 
 /// <summary>
 /// Write operations on the JobIndex table for Hangfire job tracking (upsert, update state, delete).
+/// Also invalidates the per-dataset task-list cache after each mutation.
 /// </summary>
-public class JobIndexWriter(RegistryContext db, ILogger<JobIndexWriter> log) : IJobIndexWriter
+public class JobIndexWriter(RegistryContext db, ILogger<JobIndexWriter> log,
+    IDistributedCache cache) : IJobIndexWriter
 {
     public async Task UpsertOnEnqueueAsync(string jobId, IndexPayload meta, DateTime createdAtUtc,
         string? methodDisplay, CancellationToken ct = default)
@@ -92,6 +95,9 @@ public class JobIndexWriter(RegistryContext db, ILogger<JobIndexWriter> log) : I
         }
 
         await db.SaveChangesAsync(ct);
+
+        // Invalidate task-list cache for the affected dataset
+        await InvalidateTasksListCacheAsync(meta.OrgSlug, meta.DsSlug, ct);
     }
 
     public async Task UpdateStateAsync(string jobId, string newState, DateTime changedAtUtc,
@@ -119,6 +125,10 @@ public class JobIndexWriter(RegistryContext db, ILogger<JobIndexWriter> log) : I
             ji.ScheduledAtUtc = changedAtUtc;
 
         await db.SaveChangesAsync(ct);
+
+        // Invalidate task-list cache for the affected dataset
+        if (ji.OrgSlug != null && ji.DsSlug != null)
+            await InvalidateTasksListCacheAsync(ji.OrgSlug, ji.DsSlug, ct);
     }
 
     private static readonly string[] TerminalStates = ["Succeeded", "Failed", "Deleted"];
@@ -127,10 +137,23 @@ public class JobIndexWriter(RegistryContext db, ILogger<JobIndexWriter> log) : I
     {
         try
         {
-            // Prefer bulk delete (EF Core 7+) - works with relational providers (MySQL, SQLite, etc.)
+            // Bulk delete may affect multiple datasets - scan for affected org/ds pairs first
+            var affectedOrgDs = new HashSet<(string org, string ds)>();
+            var toCheck = await db.JobIndices
+                .Where(j => TerminalStates.Contains(j.CurrentState) && j.LastStateChangeUtc < cutoffUtc)
+                .Select(j => new { j.OrgSlug, j.DsSlug })
+                .ToListAsync(ct);
+
+            foreach (var r in toCheck)
+                if (r.OrgSlug != null && r.DsSlug != null)
+                    affectedOrgDs.Add((r.OrgSlug, r.DsSlug));
+
             var deleted = await db.JobIndices
                 .Where(j => TerminalStates.Contains(j.CurrentState) && j.LastStateChangeUtc < cutoffUtc)
                 .ExecuteDeleteAsync(ct);
+
+            foreach (var pair in affectedOrgDs)
+                await InvalidateTasksListCacheAsync(pair.org, pair.ds, ct);
 
             return deleted;
         }
@@ -142,6 +165,10 @@ public class JobIndexWriter(RegistryContext db, ILogger<JobIndexWriter> log) : I
             var toDelete = await db.JobIndices
                 .Where(j => TerminalStates.Contains(j.CurrentState) && j.LastStateChangeUtc < cutoffUtc)
                 .ToListAsync(ct);
+
+            foreach (var del in toDelete.DistinctBy(j => (j.OrgSlug, j.DsSlug)))
+                if (del.OrgSlug != null && del.DsSlug != null)
+                    await InvalidateTasksListCacheAsync(del.OrgSlug, del.DsSlug, ct);
 
             db.JobIndices.RemoveRange(toDelete);
             await db.SaveChangesAsync(ct);
@@ -177,6 +204,9 @@ public class JobIndexWriter(RegistryContext db, ILogger<JobIndexWriter> log) : I
             await db.SaveChangesAsync(ct);
         }
 
+        // Invalidate task-list cache for this dataset
+        await InvalidateTasksListCacheAsync(orgSlug, dsSlug, ct);
+
         return ids;
     }
 
@@ -199,6 +229,10 @@ public class JobIndexWriter(RegistryContext db, ILogger<JobIndexWriter> log) : I
         ji.ProgressUpdatedAtUtc = updatedAtUtc;
 
         await db.SaveChangesAsync(ct);
+
+        // Invalidate task-list cache for the affected dataset
+        if (ji.OrgSlug != null && ji.DsSlug != null)
+            await InvalidateTasksListCacheAsync(ji.OrgSlug, ji.DsSlug, ct);
     }
 
     public async Task UpdateArtifactAsync(string jobId, long sizeBytes, string? sha256,
@@ -215,6 +249,9 @@ public class JobIndexWriter(RegistryContext db, ILogger<JobIndexWriter> log) : I
         ji.ArtifactSha256 = sha256;
 
         await db.SaveChangesAsync(ct);
+
+        if (ji.OrgSlug != null && ji.DsSlug != null)
+            await InvalidateTasksListCacheAsync(ji.OrgSlug, ji.DsSlug, ct);
     }
 
     public async Task UpdateErrorAsync(string jobId, string errorType, CancellationToken ct = default)
@@ -229,5 +266,25 @@ public class JobIndexWriter(RegistryContext db, ILogger<JobIndexWriter> log) : I
         ji.ErrorType = errorType;
 
         await db.SaveChangesAsync(ct);
+
+        if (ji.OrgSlug != null && ji.DsSlug != null)
+            await InvalidateTasksListCacheAsync(ji.OrgSlug, ji.DsSlug, ct);
+    }
+
+    /// <summary>
+    /// Removes the per-dataset task-list cache entry.
+    /// Used after every mutation to ensure pollers get fresh data immediately.
+    /// </summary>
+    private async Task InvalidateTasksListCacheAsync(string orgSlug, string dsSlug, CancellationToken ct = default)
+    {
+        var cacheKey = $":{MagicStrings.TasksListCacheSeed}:{orgSlug}/{dsSlug}";
+        try
+        {
+            await cache.RemoveAsync(cacheKey, ct);
+        }
+        catch (Exception ex)
+        {
+            log.LogDebug(ex, "Failed to invalidate task-list cache for {Org}/{Ds}", orgSlug, dsSlug);
+        }
     }
 }

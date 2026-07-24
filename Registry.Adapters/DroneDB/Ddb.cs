@@ -297,6 +297,18 @@ public class DDB : IDDB
         }
     }
 
+    public PendingBuildInfo[] GetPendingBuildInfo()
+    {
+        try
+        {
+            return _ddbWrapper.GetPendingBuildInfo(DatasetFolderPath);
+        }
+        catch (DdbException ex)
+        {
+            throw new InvalidOperationException($"Cannot call GetPendingBuildInfo from ddb '{DatasetFolderPath}'", ex);
+        }
+    }
+
     public DdbCleanupResult Cleanup()
     {
         try

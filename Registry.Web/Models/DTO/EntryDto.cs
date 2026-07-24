@@ -36,4 +36,23 @@ public class EntryDto
 
     [JsonProperty("polygon_geom")]
     public object PolygonGeometry { get; set; }
+
+    /// <summary>
+    /// Build status of this entry: "queued" (not built yet, auto-build not
+    /// started), "building" (a build job is active), "pending" (build
+    /// deferred, see <see cref="BuildMissingDependencies"/>), or "failed"
+    /// (last build attempt failed). Null when the entry is not buildable or
+    /// its build is already complete ("ready" is the default state and is
+    /// not transmitted).
+    /// </summary>
+    [JsonProperty("buildStatus", NullValueHandling = NullValueHandling.Ignore)]
+    public string BuildStatus { get; set; }
+
+    /// <summary>
+    /// Names of the dependencies (companion/sidecar files or external tools)
+    /// still missing, blocking the build. Only set when
+    /// <see cref="BuildStatus"/> is "pending".
+    /// </summary>
+    [JsonProperty("buildMissingDependencies", NullValueHandling = NullValueHandling.Ignore)]
+    public string[] BuildMissingDependencies { get; set; }
 }
