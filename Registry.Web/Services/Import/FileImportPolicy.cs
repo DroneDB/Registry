@@ -100,9 +100,10 @@ public static class FileImportPolicy
         bare = bare.Trim().Trim('.');
         bare = ReplaceInvalidChars(bare);
 
-        // A name consisting only of dots/separators/underscores collapses to empty here.
-        bare = bare.Trim('.', ' ', '_');
-        if (string.IsNullOrWhiteSpace(bare)) return "imported-file";
+        // Reject only if the name is entirely dots/spaces/underscores (nothing usable); otherwise
+        // preserve legitimate leading/trailing underscores (e.g. "_thumbnail.jpg", "report_").
+        if (string.IsNullOrWhiteSpace(bare.Trim('.', ' ', '_')))
+            return "imported-file";
 
         return ApplyReservedAndLength(bare);
     }
