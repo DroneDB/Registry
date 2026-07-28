@@ -982,6 +982,10 @@ public class ObjectsController : ControllerBaseEx
     /// <param name="dsSlug">The dataset slug.</param>
     /// <returns>A list of pending builds.</returns>
     [HttpGet("builds/pending", Name = nameof(ObjectsController) + "." + nameof(GetPendingBuilds))]
+    [HttpGet("builds", Name = nameof(ObjectsController) + "." + nameof(GetPendingBuilds) + "Legacy")]
+    [Obsolete("Use 'GET builds/pending' instead. This alias is kept for backward compatibility with " +
+              "clients built against the pre-unified-viewer API (which returned BuildJobDto) and will " +
+              "be removed in a future version.")]
     [ProducesResponseType(typeof(IEnumerable<PendingBuildInfoDto>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status401Unauthorized)]
