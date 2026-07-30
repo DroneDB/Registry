@@ -241,8 +241,9 @@ public class ObjectsManager : IObjectsManager
         if (!await _authManager.RequestAccess(ds, AccessType.Write))
             throw new UnauthorizedException("The current user is not allowed to write to this dataset");
 
-        // Extension policy gate - reject before writing to disk
-        if (!_importSettings.IsExtensionAllowed(path))
+        // Extension policy gate - reject before writing to disk. Folders (stream == null) have no
+        // extension and must not be judged by the policy, or allow-list mode would reject them all.
+        if (stream != null && !_importSettings.IsExtensionAllowed(path))
             throw new ExtensionBlockedException(path, _importSettings, _importSettings.AllowedFileExtensions.Length > 0);
 
         // If it's a folder
@@ -988,8 +989,9 @@ public class ObjectsManager : IObjectsManager
 
         await _utils.CheckCurrentUserStorage(storageDelta);
 
-        // Extension policy gate on destination path
-        if (!_importSettings.IsExtensionAllowed(dest))
+        // Extension policy gate on destination path. Directories have no extension and would be
+        // rejected outright in allow-list mode, so the gate applies to files only.
+        if (sourceEntry.Type != EntryType.Directory && !_importSettings.IsExtensionAllowed(dest))
             throw new ExtensionBlockedException(dest, _importSettings, _importSettings.AllowedFileExtensions.Length > 0);
 
         var fileSystemCopied = false;
