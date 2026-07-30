@@ -193,36 +193,44 @@ public class TasksController : ControllerBaseEx
             if (!await _authManager.RequestAccess(ds, AccessType.Read))
                 return Unauthorized(new ErrorResponse("Access denied"));
 
-            var clavpedTake = Math.Clamp(take, 1, 200);
+            const int maxTake = 200;
+            var clampedTake = Math.Clamp(take, 1, maxTake);
 
             // Canonical shape (no filters, skip=0): serve from distributed cache.
             // Filtered queries bypass cache to avoid combinator explosion of cache keys.
             // Safety: the write-through invalidation in JobIndexWriter covers all mutations.
-            bool useCache = string.IsNullOrWhiteSpace(toolId) && string.IsNullOrWhiteSpace(state) && skip == 0 && clavpedTake <= 200;
+            bool useCache = string.IsNullOrWhiteSpace(toolId) && string.IsNullOrWhiteSpace(state) && skip == 0;
 
             TaskSummaryDto[] dtos;
             if (useCache)
             {
+                // The cached payload is always the canonical page (first maxTake rows) so that a
+                // request with a small take cannot poison later requests asking for more rows.
                 var cacheKey = MagicStrings.TasksListCacheSeed + ":" + orgSlug + "/" + dsSlug;
                 var cachedBytes = await _cache.GetAsync(cacheKey, ct);
+
+                TaskSummaryDto[] canonical;
                 if (cachedBytes != null)
                 {
-                    dtos = JsonSerializer.Deserialize<TaskSummaryDto[]>(cachedBytes) ?? Array.Empty<TaskSummaryDto>();
-                    return Ok(dtos);
+                    canonical = JsonSerializer.Deserialize<TaskSummaryDto[]>(cachedBytes) ?? [];
+                }
+                else
+                {
+                    var filter = new JobIndexQueryFilter(orgSlug, dsSlug, toolId, state,
+                        Skip: 0, Take: maxTake);
+                    var rows = await _query.QueryAsync(filter, ct);
+                    canonical = rows.Select(ToSummary).ToArray();
+
+                    var options = new DistributedCacheEntryOptions { AbsoluteExpirationRelativeToNow = TimeSpan.FromSeconds(60) };
+                    await _cache.SetAsync(cacheKey, JsonSerializer.SerializeToUtf8Bytes(canonical), options, ct);
                 }
 
-                var filter = new JobIndexQueryFilter(orgSlug, dsSlug, toolId, state,
-                    Skip: 0, Take: clavpedTake);
-                var rows = await _query.QueryAsync(filter, ct);
-                dtos = rows.Select(ToSummary).ToArray();
-
-                var options = new DistributedCacheEntryOptions { AbsoluteExpirationRelativeToNow = TimeSpan.FromSeconds(60) };
-                await _cache.SetAsync(cacheKey, JsonSerializer.SerializeToUtf8Bytes(dtos), options, ct);
+                dtos = canonical.Length > clampedTake ? canonical[..clampedTake] : canonical;
             }
             else
             {
                 var filter = new JobIndexQueryFilter(orgSlug, dsSlug, toolId, state,
-                    Skip: Math.Max(0, skip), Take: clavpedTake);
+                    Skip: Math.Max(0, skip), Take: clampedTake);
                 var rows = await _query.QueryAsync(filter, ct);
                 dtos = rows.Select(ToSummary).ToArray();
             }
