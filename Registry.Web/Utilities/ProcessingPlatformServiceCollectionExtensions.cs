@@ -2,7 +2,7 @@
 using Microsoft.Extensions.DependencyInjection;
 using Registry.Web.Services.Adapters;
 using Registry.Web.Services.HeavyTasks.Adapters;
-using Registry.Web.Services.HeavyTasks.NodeOdm;
+using Registry.Web.Services.HeavyTasks.NodeOdx;
 using Registry.Web.Services.HeavyTasks.Ports;
 using Registry.Web.Services.HeavyTasks.Tools;
 using Registry.Web.Services.Ports;
@@ -24,9 +24,9 @@ public static class ProcessingPlatformServiceCollectionExtensions
         // the processing-node host get the dependency (BulkDownloadTool ctor requires it).
         services.AddSingleton<IZipArchiveBuilder, ZipArchiveBuilder>();
 
-        // NodeODM (OpenDroneMap) integration: config-based node registry + HTTP client.
-        services.AddSingleton<INodeOdmNodeRegistry, NodeOdmNodeRegistry>();
-        services.AddSingleton<INodeOdmClient, NodeOdmClient>();
+        // NodeODX (OpenDroneMap) integration: config-based node registry + HTTP client.
+        services.AddSingleton<INodeOdxNodeRegistry, NodeOdxNodeRegistry>();
+        services.AddSingleton<INodeOdxClient, NodeOdxClient>();
 
         // Archive extraction backend (SharpCompress) for the archive-extract tool.
         services.AddSingleton<Registry.Ports.Archives.IArchiveExtractor,
@@ -48,6 +48,9 @@ public static class ProcessingPlatformServiceCollectionExtensions
 
         // Catalog is immutable for the process lifetime.
         services.AddSingleton<IHeavyToolRegistry, HeavyToolRegistry>();
+
+        // Feature gating: Scoped because it resolves the current caller via IAuthManager.
+        services.AddScoped<IHeavyToolGating, HeavyToolGating>();
 
         // Per-request orchestration.
         services.AddScoped<IHeavyTaskQuota, HeavyTaskQuota>();

@@ -112,9 +112,18 @@ public sealed class RemoteRegistryClient : IRemoteRegistryClient
         Directory.CreateDirectory(destFolder);
 
         // Exclude internal index files - those are rebuilt locally during indexing/build.
+        // Extension policy (allow-list / block-list): a remote registry is untrusted, so disallowed
+        // file types (e.g. executables/scripts) are skipped here too, mirroring every other ingestion
+        // path (ArchiveExtractTool, ArchiveUrlImportSource, PhotogrammetryTool, FileUrlImportTool).
         var toDownload = files
             .Where(e => !e.Path.StartsWith(".ddb/", StringComparison.Ordinal)
                         && !e.Path.StartsWith(".ddb\\", StringComparison.Ordinal))
+            .Where(e =>
+            {
+                if (_settings.IsExtensionAllowed(e.Path)) return true;
+                _logger.LogWarning("Skipping disallowed file type during registry import: '{Path}'", e.Path);
+                return false;
+            })
             .ToArray();
 
         var totalFiles = toDownload.Length;

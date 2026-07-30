@@ -31,8 +31,9 @@ public partial class DownloadLimitMiddleware : IMiddleware
     // Matches the download endpoints subject to the concurrency limit:
     //  - /orgs/{org}/ds/{ds}/download  (bulk/single direct download)
     //  - /orgs/{org}/ds/{ds}/ddb       (ddb archive)
+    //  - /orgs/{org}/ds/{ds}/build-artifact  (COG/COPC/GPKG build artifact download)
     //  - /orgs/{org}/ds/{ds}/tasks/{id}/result (async heavy-task artifact, e.g. bulk-download)
-    [GeneratedRegex(@"/orgs/[^/]+/ds/[^/]+/(download|ddb)(/|$)|/orgs/[^/]+/ds/[^/]+/tasks/[^/]+/result(/|$)", RegexOptions.IgnoreCase | RegexOptions.Compiled)]
+    [GeneratedRegex(@"/orgs/[^/]+/ds/[^/]+/(download|ddb|build-artifact)(/|$)|/orgs/[^/]+/ds/[^/]+/tasks/[^/]+/result(/|$)", RegexOptions.IgnoreCase | RegexOptions.Compiled)]
     private static partial Regex DownloadPathRegex();
 
     public DownloadLimitMiddleware(

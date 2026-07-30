@@ -9,6 +9,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Caching.Distributed;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Registry.Web.Data.Models;
@@ -38,11 +39,13 @@ public class TasksController : ControllerBaseEx
 {
     private readonly IHeavyTaskRunner _runner;
     private readonly IHeavyToolRegistry _registry;
+    private readonly IHeavyToolGating _gating;
     private readonly IJobIndexQuery _query;
     private readonly IJobIndexWriter _writer;
     private readonly IAuthManager _authManager;
     private readonly IUtils _utils;
     private readonly IBackgroundJobsProcessor _processor;
+    private readonly IDistributedCache _cache;
     private readonly ProcessingPlatformSettings _settings;
     private readonly string _tempPath;
     private readonly ILogger<TasksController> _logger;
@@ -50,21 +53,25 @@ public class TasksController : ControllerBaseEx
     public TasksController(
         IHeavyTaskRunner runner,
         IHeavyToolRegistry registry,
+        IHeavyToolGating gating,
         IJobIndexQuery query,
         IJobIndexWriter writer,
         IAuthManager authManager,
         IUtils utils,
         IBackgroundJobsProcessor processor,
+        IDistributedCache cache,
         IOptions<AppSettings> appSettings,
         ILogger<TasksController> logger)
     {
         _runner = runner;
         _registry = registry;
+        _gating = gating;
         _query = query;
         _writer = writer;
         _authManager = authManager;
         _utils = utils;
         _processor = processor;
+        _cache = cache;
         _settings = appSettings.Value.ProcessingPlatform ?? new ProcessingPlatformSettings();
         _tempPath = appSettings.Value.TempPath ?? Path.Combine(Path.GetTempPath(), "registry");
         _logger = logger;
@@ -82,10 +89,13 @@ public class TasksController : ControllerBaseEx
             if (!await _authManager.RequestAccess(ds, AccessType.Read))
                 return Unauthorized(new ErrorResponse("Access denied"));
 
-            var tools = _registry.All
-                .Select(t => new TaskToolDto(t.Id, t.Version, t.Title,
-                    t.RequiredAccess.ToString(), t.ProducesArtifact, t.InputSchema.RootElement.Clone()))
-                .ToArray();
+            var tools = await Task.WhenAll(_registry.All.Select(async t =>
+            {
+                var st = await _gating.EvaluateAsync(t.Id, orgSlug);
+                return new TaskToolDto(t.Id, t.Version, t.Title,
+                    t.RequiredAccess.ToString(), t.ProducesArtifact, t.InputSchema.RootElement.Clone(),
+                    st.Hidden, st.Disabled, st.DisabledMessage);
+            }));
 
             return Ok(tools);
         }
@@ -113,6 +123,15 @@ public class TasksController : ControllerBaseEx
             var tool = _registry.Resolve(body.ToolId, body.Version);
             if (tool is null)
                 return BadRequest(new ErrorResponse($"Tool '{body.ToolId}' is not available"));
+
+            // Feature gating: reject hidden/disabled tools (or role/org-denied) server-side,
+            // independent of the client UI. Returns 403 with the configured message.
+            var gatingState = await _gating.EvaluateAsync(tool.Id, orgSlug);
+            if (!gatingState.Allowed)
+                return StatusCode(StatusCodes.Status403Forbidden,
+                    new ErrorResponse(
+                        gatingState.DisabledMessage ?? $"Tool '{tool.Id}' is not available.",
+                        noRetry: true));
 
             var ds = _utils.GetDataset(orgSlug, dsSlug);
             var requiredAccess = tool.RequiredAccess == HeavyToolPermission.Write ? AccessType.Write : AccessType.Read;
@@ -174,11 +193,48 @@ public class TasksController : ControllerBaseEx
             if (!await _authManager.RequestAccess(ds, AccessType.Read))
                 return Unauthorized(new ErrorResponse("Access denied"));
 
-            var filter = new JobIndexQueryFilter(orgSlug, dsSlug, toolId, state,
-                Skip: Math.Max(0, skip), Take: Math.Clamp(take, 1, 200));
+            const int maxTake = 200;
+            var clampedTake = Math.Clamp(take, 1, maxTake);
 
-            var rows = await _query.QueryAsync(filter, ct);
-            var dtos = rows.Select(ToSummary).ToArray();
+            // Canonical shape (no filters, skip=0): serve from distributed cache.
+            // Filtered queries bypass cache to avoid combinator explosion of cache keys.
+            // Safety: the write-through invalidation in JobIndexWriter covers all mutations.
+            bool useCache = string.IsNullOrWhiteSpace(toolId) && string.IsNullOrWhiteSpace(state) && skip == 0;
+
+            TaskSummaryDto[] dtos;
+            if (useCache)
+            {
+                // The cached payload is always the canonical page (first maxTake rows) so that a
+                // request with a small take cannot poison later requests asking for more rows.
+                var cacheKey = MagicStrings.TasksListCacheSeed + ":" + orgSlug + "/" + dsSlug;
+                var cachedBytes = await _cache.GetAsync(cacheKey, ct);
+
+                TaskSummaryDto[] canonical;
+                if (cachedBytes != null)
+                {
+                    canonical = JsonSerializer.Deserialize<TaskSummaryDto[]>(cachedBytes) ?? [];
+                }
+                else
+                {
+                    var filter = new JobIndexQueryFilter(orgSlug, dsSlug, toolId, state,
+                        Skip: 0, Take: maxTake);
+                    var rows = await _query.QueryAsync(filter, ct);
+                    canonical = rows.Select(ToSummary).ToArray();
+
+                    var options = new DistributedCacheEntryOptions { AbsoluteExpirationRelativeToNow = TimeSpan.FromSeconds(60) };
+                    await _cache.SetAsync(cacheKey, JsonSerializer.SerializeToUtf8Bytes(canonical), options, ct);
+                }
+
+                dtos = canonical.Length > clampedTake ? canonical[..clampedTake] : canonical;
+            }
+            else
+            {
+                var filter = new JobIndexQueryFilter(orgSlug, dsSlug, toolId, state,
+                    Skip: Math.Max(0, skip), Take: clampedTake);
+                var rows = await _query.QueryAsync(filter, ct);
+                dtos = rows.Select(ToSummary).ToArray();
+            }
+
             return Ok(dtos);
         }
         catch (Exception ex)

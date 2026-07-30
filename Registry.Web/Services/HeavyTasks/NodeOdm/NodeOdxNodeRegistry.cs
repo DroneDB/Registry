@@ -5,40 +5,40 @@ using System.Linq;
 using Microsoft.Extensions.Options;
 using Registry.Web.Models.Configuration;
 
-namespace Registry.Web.Services.HeavyTasks.NodeOdm;
+namespace Registry.Web.Services.HeavyTasks.NodeOdx;
 
 /// <summary>
-/// <see cref="INodeOdmNodeRegistry"/> built from
-/// <see cref="ProcessingPlatformSettings.NodeOdm"/>. Immutable for the process lifetime.
+/// <see cref="INodeOdxNodeRegistry"/> built from
+/// <see cref="ProcessingPlatformSettings.NodeOdx"/>. Immutable for the process lifetime.
 /// </summary>
-public sealed class NodeOdmNodeRegistry : INodeOdmNodeRegistry
+public sealed class NodeOdxNodeRegistry : INodeOdxNodeRegistry
 {
-    private readonly List<NodeOdmEndpoint> _nodes;
-    private readonly Dictionary<string, NodeOdmEndpoint> _byId;
+    private readonly List<NodeOdxEndpoint> _nodes;
+    private readonly Dictionary<string, NodeOdxEndpoint> _byId;
 
-    public NodeOdmNodeRegistry(IOptions<AppSettings> appSettings)
+    public NodeOdxNodeRegistry(IOptions<AppSettings> appSettings)
     {
-        var configured = appSettings.Value.ProcessingPlatform?.NodeOdm ?? [];
+        var configured = appSettings.Value.ProcessingPlatform?.NodeOdx ?? [];
 
         _nodes = configured
             .Where(c => !string.IsNullOrWhiteSpace(c.Url))
-            .Select(c => new NodeOdmEndpoint(
+            .Select(c => new NodeOdxEndpoint(
                 string.IsNullOrWhiteSpace(c.Id) ? "default" : c.Id.Trim(),
                 c.Url.Trim(),
                 string.IsNullOrWhiteSpace(c.Token) ? null : c.Token,
                 c.Title))
             .ToList();
 
-        _byId = new Dictionary<string, NodeOdmEndpoint>(StringComparer.OrdinalIgnoreCase);
+        _byId = new Dictionary<string, NodeOdxEndpoint>(StringComparer.OrdinalIgnoreCase);
         foreach (var node in _nodes)
             _byId.TryAdd(node.Id, node);
     }
 
     public bool HasNodes => _nodes.Count > 0;
 
-    public IReadOnlyList<NodeOdmEndpoint> All => _nodes;
+    public IReadOnlyList<NodeOdxEndpoint> All => _nodes;
 
-    public NodeOdmEndpoint? Resolve(string? nodeId = null)
+    public NodeOdxEndpoint? Resolve(string? nodeId = null)
     {
         if (string.IsNullOrWhiteSpace(nodeId))
             return _nodes.Count > 0 ? _nodes[0] : null;

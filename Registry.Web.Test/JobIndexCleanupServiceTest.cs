@@ -2,6 +2,7 @@ using System;
 using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Caching.Distributed;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Moq;
@@ -21,13 +22,15 @@ public class JobIndexCleanupServiceTest : TestBase
 {
     private ILogger<JobIndexCleanupService> _cleanupLogger;
     private ILogger<JobIndexWriter> _writerLogger;
+        private Mock<IDistributedCache> _cache;
 
-    [SetUp]
-    public void Setup()
-    {
-        _cleanupLogger = CreateTestLogger<JobIndexCleanupService>();
-        _writerLogger = CreateTestLogger<JobIndexWriter>();
-    }
+        [SetUp]
+        public void Setup()
+        {
+            _cleanupLogger = CreateTestLogger<JobIndexCleanupService>();
+            _writerLogger = CreateTestLogger<JobIndexWriter>();
+            _cache = new Mock<IDistributedCache>();
+        }
 
     #region JobIndexWriter.DeleteTerminalBeforeAsync
 
@@ -36,7 +39,7 @@ public class JobIndexCleanupServiceTest : TestBase
     {
         // Arrange
         await using var context = GetContextWithMixedRecords();
-        var writer = new JobIndexWriter(context, _writerLogger);
+        var writer = new JobIndexWriter(context, _writerLogger, _cache.Object);
         var cutoff = DateTime.UtcNow.AddDays(-30);
 
         // Act
@@ -55,7 +58,7 @@ public class JobIndexCleanupServiceTest : TestBase
     {
         // Arrange
         await using var context = GetContextWithMixedRecords();
-        var writer = new JobIndexWriter(context, _writerLogger);
+        var writer = new JobIndexWriter(context, _writerLogger, _cache.Object);
         var cutoff = DateTime.UtcNow.AddDays(-30);
 
         // Act
@@ -71,7 +74,7 @@ public class JobIndexCleanupServiceTest : TestBase
     {
         // Arrange
         await using var context = GetContextWithMixedRecords();
-        var writer = new JobIndexWriter(context, _writerLogger);
+        var writer = new JobIndexWriter(context, _writerLogger, _cache.Object);
         var cutoff = DateTime.UtcNow.AddDays(-30);
 
         // Act
@@ -87,7 +90,7 @@ public class JobIndexCleanupServiceTest : TestBase
     {
         // Arrange
         await using var context = GetContextWithMixedRecords();
-        var writer = new JobIndexWriter(context, _writerLogger);
+        var writer = new JobIndexWriter(context, _writerLogger, _cache.Object);
         var cutoff = DateTime.UtcNow.AddDays(-30);
 
         // Act
@@ -107,7 +110,7 @@ public class JobIndexCleanupServiceTest : TestBase
     {
         // Arrange
         await using var context = GetContextWithMixedRecords();
-        var writer = new JobIndexWriter(context, _writerLogger);
+        var writer = new JobIndexWriter(context, _writerLogger, _cache.Object);
         var cutoff = DateTime.UtcNow.AddDays(-30);
 
         // Act
@@ -124,7 +127,7 @@ public class JobIndexCleanupServiceTest : TestBase
     {
         // Arrange
         await using var context = GetContextWithMixedRecords();
-        var writer = new JobIndexWriter(context, _writerLogger);
+        var writer = new JobIndexWriter(context, _writerLogger, _cache.Object);
         var cutoff = DateTime.UtcNow.AddDays(-30);
 
         // Count terminal records that should be deleted
@@ -145,7 +148,7 @@ public class JobIndexCleanupServiceTest : TestBase
     {
         // Arrange
         await using var context = GetEmptyContext();
-        var writer = new JobIndexWriter(context, _writerLogger);
+        var writer = new JobIndexWriter(context, _writerLogger, _cache.Object);
 
         // Act
         var deleted = await writer.DeleteTerminalBeforeAsync(DateTime.UtcNow);
@@ -159,7 +162,7 @@ public class JobIndexCleanupServiceTest : TestBase
     {
         // Arrange
         await using var context = GetContextWithMixedRecords();
-        var writer = new JobIndexWriter(context, _writerLogger);
+        var writer = new JobIndexWriter(context, _writerLogger, _cache.Object);
 
         // Use a cutoff far in the past so nothing qualifies
         var cutoff = DateTime.UtcNow.AddYears(-10);
@@ -180,7 +183,7 @@ public class JobIndexCleanupServiceTest : TestBase
     {
         // Arrange
         await using var context = GetContextWithMixedRecords();
-        var writer = new JobIndexWriter(context, _writerLogger);
+        var writer = new JobIndexWriter(context, _writerLogger, _cache.Object);
 
         // Act
         var removed = await writer.DeleteTerminalForDatasetAsync("org1", "ds1");
@@ -202,7 +205,7 @@ public class JobIndexCleanupServiceTest : TestBase
     {
         // Arrange
         await using var context = GetContextWithMixedRecords();
-        var writer = new JobIndexWriter(context, _writerLogger);
+        var writer = new JobIndexWriter(context, _writerLogger, _cache.Object);
 
         // Act
         await writer.DeleteTerminalForDatasetAsync("org1", "ds1");
@@ -236,7 +239,7 @@ public class JobIndexCleanupServiceTest : TestBase
         }
 
         await using var context = new RegistryContext(options);
-        var writer = new JobIndexWriter(context, _writerLogger);
+        var writer = new JobIndexWriter(context, _writerLogger, _cache.Object);
 
         // Act - clear only the archive-extract tool
         var removed = await writer.DeleteTerminalForDatasetAsync("org1", "ds1", "archive-extract");
@@ -254,7 +257,7 @@ public class JobIndexCleanupServiceTest : TestBase
     {
         // Arrange
         await using var context = GetEmptyContext();
-        var writer = new JobIndexWriter(context, _writerLogger);
+        var writer = new JobIndexWriter(context, _writerLogger, _cache.Object);
 
         // Act
         var removed = await writer.DeleteTerminalForDatasetAsync("org1", "ds1");
@@ -272,7 +275,7 @@ public class JobIndexCleanupServiceTest : TestBase
     {
         // Arrange
         await using var context = GetContextWithMixedRecords();
-        var writer = new JobIndexWriter(context, _writerLogger);
+        var writer = new JobIndexWriter(context, _writerLogger, _cache.Object);
         var settings = CreateSettings(retentionDays: 30);
         var service = new JobIndexCleanupService(writer, settings, _cleanupLogger);
 
@@ -314,7 +317,7 @@ public class JobIndexCleanupServiceTest : TestBase
         });
         await context.SaveChangesAsync();
 
-        var writer = new JobIndexWriter(context, _writerLogger);
+        var writer = new JobIndexWriter(context, _writerLogger, _cache.Object);
         var settings = CreateSettings(retentionDays: 1);
         var service = new JobIndexCleanupService(writer, settings, _cleanupLogger);
 
@@ -331,7 +334,7 @@ public class JobIndexCleanupServiceTest : TestBase
     {
         // Arrange
         await using var context = GetContextWithMixedRecords();
-        var writer = new JobIndexWriter(context, _writerLogger);
+        var writer = new JobIndexWriter(context, _writerLogger, _cache.Object);
         var settings = CreateSettings(retentionDays: 0); // Should fall back to 60
         var service = new JobIndexCleanupService(writer, settings, _cleanupLogger);
 
@@ -345,7 +348,7 @@ public class JobIndexCleanupServiceTest : TestBase
     {
         // Arrange
         await using var context = GetContextWithMixedRecords();
-        var writer = new JobIndexWriter(context, _writerLogger);
+        var writer = new JobIndexWriter(context, _writerLogger, _cache.Object);
         var settings = CreateSettings(retentionDays: -5); // Should fall back to 60
         var service = new JobIndexCleanupService(writer, settings, _cleanupLogger);
 
@@ -359,7 +362,7 @@ public class JobIndexCleanupServiceTest : TestBase
     {
         // Arrange
         await using var context = GetEmptyContext();
-        var writer = new JobIndexWriter(context, _writerLogger);
+        var writer = new JobIndexWriter(context, _writerLogger, _cache.Object);
         var settings = CreateSettings(retentionDays: 60);
         var service = new JobIndexCleanupService(writer, settings, _cleanupLogger);
 

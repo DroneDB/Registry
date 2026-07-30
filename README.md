@@ -2,9 +2,9 @@
 
 ![GitHub Release](https://img.shields.io/github/v/release/DroneDB/Registry) ![commits](https://img.shields.io/github/commit-activity/m/DroneDB/registry) ![languages](https://img.shields.io/github/languages/top/DroneDB/registry) ![.NET Core](https://github.com/DroneDB/Registry/actions/workflows/dotnet-core.yml/badge.svg) [![Discord](https://img.shields.io/discord/1491016144310767670?label=Discord&logo=discord&color=5865F2)](https://discord.gg/e9M3vBvzge)
 
-DroneDB Registry is a comprehensive geospatial data management and storage platform. It provides JWT authentication, a full REST API, and STAC compliance for interoperability.
+DroneDB Registry is a comprehensive geospatial data management and storage platform. It provides a responsive UI, full REST API, STAC / OGC Services compliance, and a configurable processing platform.
 
-View orthophotos, point clouds, 3D models (OBJ, GLTF, GLB), Gaussian splats, panoramas and more directly in the browser with interactive measurement tools.
+View orthophotos, point clouds, 3D models, Vector files, 3D Tiles, Gaussian splats, panoramas and more directly in the browser with interactive measurement tools.
 
 ## ✨ Features
 
@@ -13,7 +13,11 @@ View orthophotos, point clouds, 3D models (OBJ, GLTF, GLB), Gaussian splats, pan
 - **Measurements** - 2D and 3D measurement tools on maps and point clouds
 - **STAC Compliance** - Compliant with STAC 1.1.0 and STAC API 1.0.0
 - **OGC Services** - WMS, WFS, WMTS, WCS and OGC API (Features + Tiles) served directly from any dataset
-- **On-Demand Processing** - Automatic thumbnails, tiles, COG and streaming format generation
+- **On-Demand Processing** - Automatic thumbnails, tiles, COG, streaming format generation, and build artifact downloads (COG, COPC, GPKG)
+- **Remote Imports** - Pull datasets from another DroneDB Registry or download archives from URL, with SSRF protection and remote org/dataset browsing
+- **Streaming Uploads** - Memory-efficient file uploads with configurable size limits
+- **Feature Gating** - Control which processing tools are visible and available per organization via configuration
+- **3D Tiles** - Native support for the 3D Tiles streaming format
 - **User Management** - Role-based access control with organizations, storage quotas, and optional LDAP authentication
 
 ### Supported Formats
@@ -23,6 +27,7 @@ View orthophotos, point clouds, 3D models (OBJ, GLTF, GLB), Gaussian splats, pan
 | Images | JPG, JPEG, DNG, TIF, TIFF, PNG, GIF, WEBP |
 | Point Clouds | LAS, LAZ, E57, PTS, XYZ, PLY* |
 | 3D Models | OBJ, GLTF, GLB, PLY* |
+| 3D Tiles | 3TZ |
 | Gaussian Splats | SPLAT, SPZ |
 | Rasters | GeoTIFF (orthophotos, DEMs) |
 | Vector | GeoJSON, DXF, DWG, SHP, SHZ, FGB, TopoJSON, KML, KMZ, GPKG |
@@ -49,9 +54,8 @@ View orthophotos, point clouds, 3D models (OBJ, GLTF, GLB), Gaussian splats, pan
 
 ## 💬 Community
 
-Join our Discord server to get help, share feedback, discuss features, and connect with other DroneDB users:
+**[Join the DroneDB Discord](https://discord.gg/e9M3vBvzge)** to get help, share feedback, discuss features, and connect with other DroneDB users:
 
-**[Join the DroneDB Discord](https://discord.gg/e9M3vBvzge)**
 
 ## 🚀 Quick Start with Docker
 
@@ -61,7 +65,7 @@ docker run -it --rm -p 5000:5000 -v ${PWD}/registry-data:/data dronedb/registry
 
 Open [http://localhost:5000](http://localhost:5000) • Default credentials: `admin` / `password123`
 
-> ⚠️ Change the default password immediately at [http://localhost:5000/account](http://localhost:5000/account)
+> Change the default password immediately at [http://localhost:5000/account](http://localhost:5000/account)
 
 ### Useful Endpoints
 
@@ -70,6 +74,10 @@ Open [http://localhost:5000](http://localhost:5000) • Default credentials: `ad
 | `/scalar/v1` | API Documentation                         |
 | `/stac`      | STAC Catalog                              |
 | `/hangfire`  | Background jobs dashboard (requires auth) |
+
+### Processing Platform
+
+On-demand builds (thumbnails, tiles, COG, streaming formats) run automatically or can be triggered manually. Large downloads are offloaded to background tasks. Configuration options including per-user task limits, per-org output budgets, remote processing nodes (ODX/NodeODX), and feature gating are documented in the [Registry Guide](https://docs.dronedb.app/docs/registry).
 
 For production deployment with MySQL/MariaDB, see the [full documentation](https://docs.dronedb.app/docs/registry#running-in-production).
 
@@ -84,8 +92,8 @@ Every dataset exposes a full suite of OGC-compliant endpoints at
 | WFS | 2.0 | `…/wfs` | Vector layers as GeoJSON / GML + folder-scoped variant |
 | WMTS | 1.0.0 | `…/wmts` | KVP + RESTful `…/wmts/1.0.0/{layer}/{style}/{tms}/{z}/{y}/{x}.{ext}` |
 | WCS | 2.0.1 / 1.1.1 / 1.0.0 | `…/wcs` | GeoTIFF / PNG / JPEG `GetCoverage`; `ACCEPTVERSIONS` first-match negotiation |
-| OGC API – Features | 1.0 | `…/ogcapi` | JSON landing, conformance, collections, items |
-| OGC API – Tiles | 1.0 | `…/ogcapi/collections/{id}/tiles` | MVT (`pbf`) for vector layers, PNG for raster |
+| OGC API: Features | 1.0 | `…/ogcapi` | JSON landing, conformance, collections, items |
+| OGC API: Tiles | 1.0 | `…/ogcapi/collections/{id}/tiles` | MVT (`pbf`) for vector layers, PNG for raster |
 
 ### WMTS tile formats
 

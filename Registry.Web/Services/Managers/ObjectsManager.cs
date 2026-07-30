@@ -47,6 +47,8 @@ public class ObjectsManager : IObjectsManager
     private readonly IOgcLayerCatalog? _ogcLayerCatalog;
     private readonly IDatasetCacheInvalidator _datasetCacheInvalidator;
     private readonly IBuildArtifactResolver _buildArtifactResolver;
+    private readonly ImportSettings _importSettings;
+    private readonly IBuildStatusService _buildStatusService;
 
     /// <summary>
     /// Name of the per-dataset folder that holds in-flight streamed uploads before they are
@@ -75,7 +77,8 @@ public class ObjectsManager : IObjectsManager
         IZipArchiveBuilder? zipArchiveBuilder = null,
         IOgcLayerCatalog? ogcLayerCatalog = null,
         IDatasetCacheInvalidator? datasetCacheInvalidator = null,
-        IBuildArtifactResolver buildArtifactResolver = null!)
+        IBuildArtifactResolver buildArtifactResolver = null!,
+        IBuildStatusService? buildStatusService = null)
     {
         _logger = logger;
         _context = context;
@@ -95,11 +98,16 @@ public class ObjectsManager : IObjectsManager
         _zipArchiveBuilder = zipArchiveBuilder ?? new ZipArchiveBuilder();
         _ogcLayerCatalog = ogcLayerCatalog;
         // Stateless; the DI-registered singleton is injected in production, while a local
+        // instance (backed by the same job index query) keeps direct (test) construction
+        // working without wiring.
+        _buildStatusService = buildStatusService;
+        // Stateless; the DI-registered singleton is injected in production, while a local
         // instance keeps direct (test) construction working without wiring.
         _datasetCacheInvalidator = datasetCacheInvalidator
             ?? new DatasetCacheInvalidator(NullLogger<DatasetCacheInvalidator>.Instance, cacheManager,
                 new NullCacheKeyScanner(NullLogger<NullCacheKeyScanner>.Instance));
         _buildArtifactResolver = buildArtifactResolver;
+        _importSettings = settings.Value.Import ?? new ImportSettings();
     }
 
     /// <summary>
@@ -130,6 +138,9 @@ public class ObjectsManager : IObjectsManager
 
         var files = entities.Select(item => item.ToDto()).ToArray();
 
+        if (_buildStatusService != null)
+            await _buildStatusService.AnnotateAsync(orgSlug, dsSlug, ddb, files);
+
         _logger.LogInformation("Found {FilesCount} objects", files.Length);
 
         return files;
@@ -158,6 +169,9 @@ public class ObjectsManager : IObjectsManager
             let name = Path.GetFileName(entry.Path)
             where FileSystemName.MatchesSimpleExpression(query, name)
             select entry.ToDto()).ToArray();
+
+        if (_buildStatusService != null)
+            await _buildStatusService.AnnotateAsync(orgSlug, dsSlug, ddb, files);
 
         _logger.LogInformation("Found {FilesCount} objects", files.Length);
 
@@ -226,6 +240,11 @@ public class ObjectsManager : IObjectsManager
 
         if (!await _authManager.RequestAccess(ds, AccessType.Write))
             throw new UnauthorizedException("The current user is not allowed to write to this dataset");
+
+        // Extension policy gate - reject before writing to disk. Folders (stream == null) have no
+        // extension and must not be judged by the policy, or allow-list mode would reject them all.
+        if (stream != null && !_importSettings.IsExtensionAllowed(path))
+            throw new ExtensionBlockedException(path, _importSettings, _importSettings.AllowedFileExtensions.Length > 0);
 
         // If it's a folder
         if (stream == null)
@@ -348,6 +367,10 @@ public class ObjectsManager : IObjectsManager
 
             if (!await _authManager.RequestAccess(ds, AccessType.Write))
                 throw new UnauthorizedException("The current user is not allowed to write to this dataset");
+
+            // Extension policy gate - reject before moving into dataset
+            if (!_importSettings.IsExtensionAllowed(path))
+                throw new ExtensionBlockedException(path, _importSettings, _importSettings.AllowedFileExtensions.Length > 0);
 
             // Authoritative size from disk: never trust the caller-provided count for the quota check
             var actualBytes = _fs.GetFileSize(fullTempPath);
@@ -544,6 +567,10 @@ public class ObjectsManager : IObjectsManager
 
         // Check if user has enough storage space in destination
         await _utils.CheckCurrentUserStorage(entrySize);
+
+        // Extension policy gate on destination path
+        if (sourceEntry.Type != EntryType.Directory && !_importSettings.IsExtensionAllowed(destPath))
+            throw new ExtensionBlockedException(destPath, _importSettings, _importSettings.AllowedFileExtensions.Length > 0);
 
         var destEntry = destDdb.GetEntry(destPath);
 
@@ -961,6 +988,11 @@ public class ObjectsManager : IObjectsManager
         }
 
         await _utils.CheckCurrentUserStorage(storageDelta);
+
+        // Extension policy gate on destination path. Directories have no extension and would be
+        // rejected outright in allow-list mode, so the gate applies to files only.
+        if (sourceEntry.Type != EntryType.Directory && !_importSettings.IsExtensionAllowed(dest))
+            throw new ExtensionBlockedException(dest, _importSettings, _importSettings.AllowedFileExtensions.Length > 0);
 
         var fileSystemCopied = false;
         var destDdbAdded = false;
@@ -1888,36 +1920,23 @@ public class ObjectsManager : IObjectsManager
         return path;
     }
 
-    public async Task<IEnumerable<BuildJobDto>> GetBuilds(string orgSlug, string dsSlug, int page = 1,
-        int pageSize = 50)
+    public async Task<IEnumerable<PendingBuildInfoDto>> GetPendingBuilds(string orgSlug, string dsSlug)
     {
         var ds = _utils.GetDataset(orgSlug, dsSlug);
 
-        _logger.LogInformation("In GetBuilds('{OrgSlug}/{DsSlug}')", orgSlug, dsSlug);
+        _logger.LogInformation("In GetPendingBuilds('{OrgSlug}/{DsSlug}')", orgSlug, dsSlug);
 
         if (!await _authManager.RequestAccess(ds, AccessType.Read))
             throw new UnauthorizedException("The current user is not allowed to read dataset");
 
-        // Convert page/pageSize to skip/take
-        var skip = (page - 1) * pageSize;
+        var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
 
-        var jobIndexes = await _jobIndexQuery.GetByOrgDsAsync(orgSlug, dsSlug, skip, pageSize);
-
-        return jobIndexes.Select(ji => new BuildJobDto
+        return ddb.GetPendingBuildInfo().Select(p => new PendingBuildInfoDto
         {
-            JobId = ji.JobId,
-            Hash = ji.Hash,
-            Path = ji.Path,
-            CurrentState = ji.CurrentState,
-            CreatedAt = DateTime.SpecifyKind(ji.CreatedAtUtc, DateTimeKind.Utc),
-            ProcessingAt = ji.ProcessingAtUtc.HasValue
-                ? DateTime.SpecifyKind(ji.ProcessingAtUtc.Value, DateTimeKind.Utc)
-                : null,
-            SucceededAt = ji.SucceededAtUtc.HasValue
-                ? DateTime.SpecifyKind(ji.SucceededAtUtc.Value, DateTimeKind.Utc)
-                : null,
-            FailedAt = ji.FailedAtUtc.HasValue ? DateTime.SpecifyKind(ji.FailedAtUtc.Value, DateTimeKind.Utc) : null,
-            DeletedAt = ji.DeletedAtUtc.HasValue ? DateTime.SpecifyKind(ji.DeletedAtUtc.Value, DateTimeKind.Utc) : null
+            Path = p.Path,
+            Hash = p.Hash,
+            MissingDependencies = p.MissingDependencies,
+            LastAttempt = DateTimeOffset.FromUnixTimeSeconds(p.LastAttempt).UtcDateTime
         });
     }
 

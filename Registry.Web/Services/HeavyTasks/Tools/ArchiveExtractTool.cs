@@ -18,6 +18,7 @@ using Registry.Web.Models;
 using Registry.Web.Models.Configuration;
 using Registry.Web.Services.HeavyTasks.Models;
 using Registry.Web.Services.HeavyTasks.Ports;
+using Registry.Web.Services.Import;
 using Registry.Web.Services.Ports;
 using Registry.Web.Utilities;
 
@@ -53,6 +54,7 @@ public sealed class ArchiveExtractTool : IHeavyTool
     private readonly IArchiveExtractor _extractor;
     private readonly IServiceScopeFactory _scopeFactory;
     private readonly ProcessingPlatformSettings _settings;
+    private readonly ImportSettings _importSettings;
     private readonly ILogger<ArchiveExtractTool> _logger;
 
     public ArchiveExtractTool(
@@ -64,6 +66,7 @@ public sealed class ArchiveExtractTool : IHeavyTool
         _extractor = extractor;
         _scopeFactory = scopeFactory;
         _settings = appSettings.Value.ProcessingPlatform ?? new ProcessingPlatformSettings();
+        _importSettings = appSettings.Value.Import ?? new ImportSettings();
         _logger = logger;
     }
 
@@ -225,6 +228,17 @@ public sealed class ArchiveExtractTool : IHeavyTool
                 // Path sanitization (anti zip-slip + reserved-folder guard).
                 var target = SafeJoin(destPath, archiveEntry.Key);
                 CommonUtils.ValidateRelativePath(target, root); // defense in depth
+
+                // Extension policy (allow-list / block-list): skip disallowed types (e.g. executables
+                // or scripts) with a warning, mirroring the overwrite=false skip semantics.
+                if (!_importSettings.IsExtensionAllowed(target))
+                {
+                    _logger.LogWarning("Skipping disallowed file type during extraction: '{Path}'", target);
+                    skipped++;
+                    done++;
+                    ReportProgress(progress, done, total, archiveEntry.Key);
+                    continue;
+                }
 
                 // Overwrite / skip semantics.
                 if (ctx.Ddb.EntryExists(target) && !overwrite)
@@ -408,6 +422,13 @@ public sealed class ArchiveExtractTool : IHeavyTool
 
         if (Path.IsPathRooted(key) || key.Split('/').Any(seg => seg == ".."))
             throw new InvalidOperationException($"Unsafe archive entry path (zip-slip): '{entryKey}'.");
+
+        // Normalize every path segment (invalid chars, Windows reserved device names, trailing
+        // dots/spaces, length). Leading dots are preserved so the reserved-folder guard below still
+        // recognizes the ".ddb" index folder.
+        key = FileImportPolicy.SanitizePathSegments(key);
+        if (string.IsNullOrWhiteSpace(key))
+            throw new InvalidOperationException($"Archive entry name is empty after sanitization: '{entryKey}'.");
 
         var combined = CommonUtils.SafeCombine(destPath ?? string.Empty, key);
 

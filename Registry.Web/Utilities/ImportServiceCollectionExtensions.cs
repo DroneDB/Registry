@@ -54,8 +54,12 @@ public static class ImportServiceCollectionExtensions
         services.AddSingleton<IImportSource, ArchiveUrlImportSource>();
         services.AddSingleton<IImportSourceFactory, ImportSourceFactory>();
 
-        // The import heavy tool must run on every host that executes heavy tasks.
+        // SSRF-hardened single-file downloader shared by the verify path and the import-file tool.
+        services.AddSingleton<GuardedHttpDownloader>();
+
+        // The import heavy tools must run on every host that executes heavy tasks.
         services.AddSingleton<IHeavyTool, ImportDatasetTool>();
+        services.AddSingleton<IHeavyTool, FileUrlImportTool>();
 
         return services;
     }

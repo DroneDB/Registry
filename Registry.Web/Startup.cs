@@ -310,6 +310,7 @@ public class Startup
         services.AddScoped<IBackgroundJobsProcessor, BackgroundJobsProcessor>();
         services.AddScoped<IMetaManager, Services.Managers.MetaManager>();
         services.AddScoped<BuildPendingService>();
+        services.AddScoped<IBuildStatusService, BuildStatusService>();
         services.AddScoped<DatasetCleanupService>();
         services.AddScoped<OrphanedDatasetCleanupService>();
         services.AddScoped<RecurringDatasetCleanupService>();
@@ -325,6 +326,10 @@ public class Startup
         // the worker host) and the web-only orchestration manager.
         services.AddImportSources(appSettings);
         services.AddScoped<IImportManager, ImportManager>();
+
+        // Single-file URL import into an existing dataset (web-only orchestration; the import-file
+        // heavy tool is registered by AddImportSources for both web and worker hosts).
+        services.AddScoped<IFileUrlImportManager, FileUrlImportManager>();
 
         services.AddScoped<IConfigurationHelper<AppSettings>, ConfigurationHelper>(_ =>
             new ConfigurationHelper(MagicStrings.AppSettingsFileName));
@@ -551,9 +556,9 @@ public class Startup
                     if (string.Equals(path, "index.html", StringComparison.OrdinalIgnoreCase))
                     {
                         var headers = ctx.Context.Response.Headers;
-                        headers["Cache-Control"] = "no-cache, no-store, must-revalidate";
-                        headers["Pragma"] = "no-cache";
-                        headers["Expires"] = "0";
+                        headers.CacheControl = "no-cache, no-store, must-revalidate";
+                        headers.Pragma = "no-cache";
+                        headers.Expires = "0";
                     }
                 }
             });

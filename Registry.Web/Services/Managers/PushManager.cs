@@ -41,6 +41,7 @@ public class PushManager : IPushManager
     private readonly ICacheManager _cacheManager;
     private readonly IFileSystem _fileSystem;
     private readonly BuildPendingService _buildPendingService;
+    private readonly ImportSettings _importSettings;
 
     public PushManager(IUtils utils, IDdbManager ddbManager,
         IObjectsManager objectsManager, ILogger<PushManager> logger, IDatasetsManager datasetsManager,
@@ -60,6 +61,7 @@ public class PushManager : IPushManager
         _cacheManager = cacheManager;
         _fileSystem = fileSystem;
         _buildPendingService = buildPendingService;
+        _importSettings = settings.Value.Import ?? new ImportSettings();
     }
 
     public async Task<PushInitResultDto> Init(string orgSlug, string dsSlug, string checksum, StampDto stamp)
@@ -262,6 +264,15 @@ public class PushManager : IPushManager
         foreach (var add in delta.Adds.Where(item => item.Hash.Length > 0))
             if (!_fileSystem.Exists(Path.Combine(addTempFolder, add.Path)))
                 throw new InvalidOperationException($"Cannot commit: missing '{add.Path}'");
+
+        // Extension policy gate - check all files being committed
+        var blockedFiles = delta.Adds
+            .Where(add => !_importSettings.IsExtensionAllowed(add.Path))
+            .Select(add => add.Path)
+            .ToArray();
+
+        if (blockedFiles.Length > 0)
+            throw new ExtensionBlockedException(blockedFiles, _importSettings);
 
         // Read meta dump
         string metaDump = null;

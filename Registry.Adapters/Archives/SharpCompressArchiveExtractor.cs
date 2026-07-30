@@ -48,6 +48,28 @@ public sealed class SharpCompressArchiveExtractor : IArchiveExtractor
         return SupportedExtensions.Any(ext => lower.EndsWith(ext, StringComparison.Ordinal));
     }
 
+    public bool IsValidArchive(string filePath)
+    {
+        if (string.IsNullOrWhiteSpace(filePath) || !File.Exists(filePath))
+            return false;
+
+        try
+        {
+            // Content-based probe: Open() reads the actual file (random-access formats throw here for
+            // a non-archive). Touching the first entry additionally forces compressed tarballs to
+            // validate their outer gzip/bz2/xz layer, so a disguised non-archive (e.g. an HTML error
+            // page saved with a .zip / .tar.gz name) is rejected before any extraction begins.
+            using var session = Open(filePath);
+            foreach (var _ in session.Entries())
+                break;
+            return true;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
     public IArchiveReadSession Open(string archivePath)
     {
         if (string.IsNullOrWhiteSpace(archivePath))

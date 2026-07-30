@@ -80,6 +80,14 @@ public interface IDDB
     bool IsBuildPending();
 
     /// <summary>
+    /// Gets information about pending (deferred) builds in this dataset, i.e.
+    /// builds skipped because one or more dependencies were missing at the
+    /// time of the attempt. Read-only: does not consume pending markers or
+    /// trigger builds.
+    /// </summary>
+    PendingBuildInfo[] GetPendingBuildInfo();
+
+    /// <summary>
     /// Cleans up the dataset by removing index entries whose underlying files no
     /// longer exist on disk and orphaned build artifacts.
     /// </summary>
