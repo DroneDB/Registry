@@ -2,9 +2,9 @@
 
 ![GitHub Release](https://img.shields.io/github/v/release/DroneDB/Registry) ![commits](https://img.shields.io/github/commit-activity/m/DroneDB/registry) ![languages](https://img.shields.io/github/languages/top/DroneDB/registry) ![.NET Core](https://github.com/DroneDB/Registry/actions/workflows/dotnet-core.yml/badge.svg) [![Discord](https://img.shields.io/discord/1491016144310767670?label=Discord&logo=discord&color=5865F2)](https://discord.gg/e9M3vBvzge)
 
-DroneDB Registry is a comprehensive geospatial data management and storage platform. It provides JWT authentication, a full REST API, STAC / OGC Services compliance, and a configurable processing platform.
+DroneDB Registry is a comprehensive geospatial data management and storage platform. It provides a responsive UI, full REST API, STAC / OGC Services compliance, and a configurable processing platform.
 
-View orthophotos, point clouds, 3D models (OBJ, GLTF, GLB), 3D Tiles, Gaussian splats, panoramas and more directly in the browser with interactive measurement tools.
+View orthophotos, point clouds, 3D models, Vector files, 3D Tiles, Gaussian splats, panoramas and more directly in the browser with interactive measurement tools.
 
 ## ✨ Features
 
