@@ -54,7 +54,7 @@ View orthophotos, point clouds, 3D models, Vector files, 3D Tiles, Gaussian spla
 
 ## 💬 Community
 
-**[Join the DroneDB Discord](https://discord.gg/e9M3vBvzge)** to get help, share feedback, discuss features, and connect with other DroneDB users:
+**[Join the DroneDB Discord](https://discord.gg/e9M3vBvzge)** to get help, share feedback, discuss features, and connect with other DroneDB users
 
 
 ## 🚀 Quick Start with Docker
