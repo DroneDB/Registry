@@ -59,6 +59,7 @@ public static class HangfireUtils
         writeLine($"In BuildWrapper('{ddb.DatasetFolderPath}', '{path}', '{force}')");
 
         writeLine("Running build");
+        var skipped = false;
         try
         {
             ddb.Build(path, force: force);
@@ -68,9 +69,10 @@ public static class HangfireUtils
             // Benign: the lock holder is doing the work. Throwing here would trip
             // AutomaticRetry -> Failed -> BuildJobFailureFilter and wrongly invalidate the cache.
             writeLine($"Build lock currently held by another process ({ex.Message}); skipping");
+            skipped = true;
         }
 
-        writeLine("Done build");
+        writeLine(skipped ? "Done build (skipped: lock held elsewhere)" : "Done build");
     }
 
     [AutomaticRetry(Attempts = 1, OnAttemptsExceeded = AttemptsExceededAction.Fail)]
@@ -81,6 +83,7 @@ public static class HangfireUtils
         writeLine($"In BuildPendingWrapper('{ddb.DatasetFolderPath}')");
 
         writeLine("Running build pending");
+        var skipped = false;
         try
         {
             ddb.BuildPending();
@@ -89,9 +92,10 @@ public static class HangfireUtils
         {
             // Benign: the lock holder will process the pending builds. See BuildWrapper.
             writeLine($"Build lock currently held by another process ({ex.Message}); skipping");
+            skipped = true;
         }
 
-        writeLine("Done build pending");
+        writeLine(skipped ? "Done build pending (skipped: lock held elsewhere)" : "Done build pending");
     }
 
     [AutomaticRetry(Attempts = 1, OnAttemptsExceeded = AttemptsExceededAction.Fail)]
