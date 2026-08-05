@@ -65,14 +65,9 @@ public static class HangfireUtils
         }
         catch (DdbBuildInProgressException ex)
         {
-            // Another DDB process holds the kernel-managed build lock. With the
-            // refactored cross-platform locking the lock is auto-released when
-            // the holder dies, so a short backoff + force retry is the safest
-            // recovery path. Inline retry avoids re-queueing through Hangfire,
-            // which would otherwise restart the whole job from scratch.
-            writeLine($"Build lock currently held by another process ({ex.Message}); waiting 10s and retrying with force=true");
-            Thread.Sleep(TimeSpan.FromSeconds(10));
-            ddb.Build(path, force: true);
+            // Benign: the lock holder is doing the work. Throwing here would trip
+            // AutomaticRetry -> Failed -> BuildJobFailureFilter and wrongly invalidate the cache.
+            writeLine($"Build lock currently held by another process ({ex.Message}); skipping");
         }
 
         writeLine("Done build");
@@ -92,9 +87,8 @@ public static class HangfireUtils
         }
         catch (DdbBuildInProgressException ex)
         {
-            writeLine($"Build lock currently held by another process ({ex.Message}); waiting 10s and retrying");
-            Thread.Sleep(TimeSpan.FromSeconds(10));
-            ddb.BuildPending();
+            // Benign: the lock holder will process the pending builds. See BuildWrapper.
+            writeLine($"Build lock currently held by another process ({ex.Message}); skipping");
         }
 
         writeLine("Done build pending");
