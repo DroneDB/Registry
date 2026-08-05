@@ -498,7 +498,12 @@ public class ConfigurationDataBuilder : IConfigurationDataBuilder
                 NumberField("HangfireJobRetentionDays", "Hangfire Job Retention (days)",
                     "Expiration timeout for succeeded Hangfire jobs. Failed jobs are kept for diagnostics. Minimum: 1 day.",
                     _settings.HangfireJobRetentionDays, _defaults.HangfireJobRetentionDays,
-                    minValue: 1, unit: "days")
+                    minValue: 1, unit: "days"),
+
+                NumberField("HangfireInvisibilityTimeoutHours", "Hangfire Invisibility Timeout (hours)",
+                    "MySQL storage: hours before a running job is considered abandoned and eligible for re-dequeue. Raise for long-running builds. Minimum: 1 hour.",
+                    _settings.HangfireInvisibilityTimeoutHours, _defaults.HangfireInvisibilityTimeoutHours,
+                    minValue: 1, unit: "hours")
             ]);
     }
 
