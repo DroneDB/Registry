@@ -105,6 +105,7 @@ public static class StartupExtenders
                                 QueuePollInterval = TimeSpan.FromSeconds(3),
                                 JobExpirationCheckInterval = TimeSpan.FromMinutes(15),
                                 CountersAggregateInterval = TimeSpan.FromMinutes(5),
+                                InvisibilityTimeout = TimeSpan.FromHours(Math.Max(1, appSettings.HangfireInvisibilityTimeoutHours)),
                                 PrepareSchemaIfNecessary = true,
                                 DashboardJobListLimit = 50000,
                                 TransactionTimeout = TimeSpan.FromMinutes(30),

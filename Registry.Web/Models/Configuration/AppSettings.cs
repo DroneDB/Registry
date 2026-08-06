@@ -283,6 +283,15 @@ public class AppSettings
     public int HangfireJobRetentionDays { get; set; } = 2;
 
     /// <summary>
+    /// MySQL storage invisibility timeout in hours. When using the MySQL Hangfire
+    /// provider, a job that runs longer than this timeout may be re-dequeued by
+    /// another worker because the storage backend treats it as abandoned. Raise
+    /// this value when builds can take longer than the default (e.g. large point
+    /// clouds or meshes). Default: 4 (hours).
+    /// </summary>
+    public int HangfireInvisibilityTimeoutHours { get; set; } = 4;
+
+    /// <summary>
     /// Password complexity policy. When null, no password requirements are enforced.
     /// </summary>
 #nullable enable
