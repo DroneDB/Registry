@@ -1,6 +1,7 @@
 #nullable enable
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -24,20 +25,51 @@ namespace Registry.Web.Services.Managers;
 public sealed class AdminTasksManager : IAdminTasksManager
 {
     private readonly IJobIndexQuery _query;
+    private readonly IJobIndexWriter _writer;
     private readonly IAuthManager _authManager;
     private readonly UserManager<User> _userManager;
     private readonly int _artifactTtlHours;
+    private readonly string _tempPath;
 
     public AdminTasksManager(
         IJobIndexQuery query,
+        IJobIndexWriter writer,
         IAuthManager authManager,
         UserManager<User> userManager,
         IOptions<AppSettings> appSettings)
     {
         _query = query;
+        _writer = writer;
         _authManager = authManager;
         _userManager = userManager;
         _artifactTtlHours = (appSettings.Value.ProcessingPlatform ?? new ProcessingPlatformSettings()).ArtifactTtlHours;
+        _tempPath = appSettings.Value.TempPath ?? Path.Combine(Path.GetTempPath(), "registry");
+    }
+
+    public async Task<bool> DeleteTaskAsync(string jobId, CancellationToken ct = default)
+    {
+        if (!await _authManager.IsUserAdmin())
+            throw new UnauthorizedException("Only admins can delete tasks from the global list");
+
+        // Look up the job globally, then delegate deletion to the writer
+        // QueryAsync with global filter finds job by jobId across all datasets
+        var globalRows = await _query.QueryGlobalAsync(new JobIndexGlobalQueryFilter(Take: 10000), ct);
+        var ji = globalRows.FirstOrDefault(r => r.JobId == jobId);
+        if (ji is null)
+            return false;
+
+        // Check terminal state
+        if (ji.CurrentState is not "Succeeded" and not "Failed" and not "Deleted")
+            return false;
+
+        var (deleted, _, _) = await _writer.DeleteTerminalJobByIdAsync(jobId, ct);
+        if (!deleted)
+            return false;
+
+        // Best-effort artifact cleanup
+        TryDeleteArtifacts(jobId, _tempPath);
+
+        return true;
     }
 
     public async Task<AdminTaskListDto> ListAsync(string? toolId, string? state, string? userId,
@@ -113,4 +145,23 @@ public sealed class AdminTasksManager : IAdminTasksManager
         j.CurrentState == "Succeeded" && j.ArtifactSizeBytes is not null && j.SucceededAtUtc is { } finished
             ? finished.AddHours(Math.Max(1, _artifactTtlHours))
             : null;
+
+    /// <summary>
+    /// Best-effort removal of a task's produced-artifact working directory
+    /// (<c>{tempPath}/tasks/{taskId}</c>). Path-guarded against traversal.
+    /// </summary>
+    private static void TryDeleteArtifacts(string taskId, string tempPath)
+    {
+        try
+        {
+            var dir = Path.GetFullPath(Path.Combine(tempPath, "tasks", taskId));
+            var root = Path.GetFullPath(Path.Combine(tempPath, "tasks"));
+            if (dir.StartsWith(root, StringComparison.Ordinal) && Directory.Exists(dir))
+                Directory.Delete(dir, recursive: true);
+        }
+        catch
+        {
+            // Ignore — artifacts may already be cleaned up
+        }
+    }
 }

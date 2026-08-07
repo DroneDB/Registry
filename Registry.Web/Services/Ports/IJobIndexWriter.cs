@@ -37,6 +37,11 @@ public interface IJobIndexWriter
     Task UpdateProgressAsync(string jobId, int? percent, string? phaseMessage,
         string? logTailJson, DateTime updatedAtUtc, CancellationToken ct = default);
 
+    /// <summary>
+    /// Deletes a single terminal (Succeeded/Failed/Deleted) JobIndex record by id.
+    /// </summary>
+    Task<(bool deleted, string? orgSlug, string? dsSlug)> DeleteTerminalJobByIdAsync(string jobId, CancellationToken ct = default);
+
     /// <summary>Persists produced-artifact metadata (size + SHA-256) for a task.</summary>
     Task UpdateArtifactAsync(string jobId, long sizeBytes, string? sha256, CancellationToken ct = default);
 

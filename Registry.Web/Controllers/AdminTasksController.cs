@@ -1,5 +1,6 @@
 #nullable enable
 using System;
+using System.ComponentModel.DataAnnotations;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
@@ -44,6 +45,31 @@ public class AdminTasksController : ControllerBaseEx
         try
         {
             return Ok(await _admin.ListAsync(toolId, state, userId, skip, take, ct));
+        }
+        catch (Exception ex)
+        {
+            return ExceptionResult(ex);
+        }
+    }
+
+    // ---- POST /sys/tasks/{id}/delete ------------------------------------
+
+    [HttpPost("{id}/delete", Name = nameof(AdminTasksController) + "." + nameof(Delete))]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    public async Task<IActionResult> Delete(
+        [FromRoute, Required] string id, CancellationToken ct)
+    {
+        try
+        {
+            var deleted = await _admin.DeleteTaskAsync(id, ct);
+            if (!deleted)
+                return NotFound(new ErrorResponse("Task not found or cannot be deleted (only concluded tasks can be removed from history)"));
+
+            return Ok(new { deleted });
         }
         catch (Exception ex)
         {
