@@ -56,6 +56,9 @@ public class ConfigurationDataBuilder : IConfigurationDataBuilder
         // 7. Cache
         sections.Add(BuildCacheSection());
 
+        // 7b. Redis Config (only shown when CacheProvider.Type is Redis)
+        sections.Add(BuildRedisSection());
+
         // 8. Cron Jobs
         sections.Add(BuildCronJobsSection());
 
@@ -457,6 +460,39 @@ public class ConfigurationDataBuilder : IConfigurationDataBuilder
             ]);
     }
 
+    // Only active (fields populated) when CacheProvider.Type is Redis
+    private ConfigurationSectionDataDto BuildRedisSection()
+    {
+        var cacheType = _settings.CacheProvider?.Type.ToString() ?? "InMemory";
+        if (cacheType != "Redis")
+        {
+            var inactive = Section("RedisConfig", "Redis Configuration",
+                "Redis connection and cache settings. Only applied when Cache Provider is set to Redis. Current provider: " + cacheType + ".",
+                []);
+            inactive.IsActive = false;
+            return inactive;
+        }
+
+        var redisSettings = _settings.CacheProvider?.Settings?.ToObject<RedisProviderSettings>();
+        var redisDefaults = _defaults.CacheProvider?.Settings?.ToObject<RedisProviderSettings>();
+
+        return Section("RedisConfig", "Redis Configuration",
+            "Redis cache connection address, key prefix, and default TTL. Only used when Cache Provider is Redis.",
+            [
+                StringField("CacheProvider.InstanceAddress", "Redis Instance Address",
+                    "Connection address for Redis (e.g., 'localhost:6379').",
+                    redisSettings?.InstanceAddress, redisDefaults?.InstanceAddress),
+
+                StringField("CacheProvider.InstanceName", "Redis Key Prefix",
+                    "Instance name used as a prefix for all cache keys, enabling multi-instance isolation on a shared Redis server.",
+                    redisSettings?.InstanceName, redisDefaults?.InstanceName),
+
+                TimeSpanField("CacheProvider.Expiration", "Redis Default Expiration",
+                    "Default TTL for cache entries stored in Redis, if not specified by the caller.",
+                    redisSettings?.Expiration, redisDefaults?.Expiration)
+            ]);
+    }
+
     private ConfigurationSectionDataDto BuildCronJobsSection()
     {
         return Section("CronJobs", "Cron Jobs",
@@ -577,7 +613,11 @@ public class ConfigurationDataBuilder : IConfigurationDataBuilder
 
                 BoolField("ReadOnlyOrgs", "Read-Only Organizations",
                     "Hides organization create/delete/edit actions.",
-                    ho?.ReadOnlyOrgs ?? false, do_?.ReadOnlyOrgs ?? false)
+                    ho?.ReadOnlyOrgs ?? false, do_?.ReadOnlyOrgs ?? false),
+
+                JsonField("Favicon", "Favicon / Web Manifest",
+                    "Favicon and web manifest configuration: FaviconIco, Favicon16, Favicon32, AppleTouchIcon, Manifest, ThemeColor. Files should be placed under {StoragePath}/branding/.",
+                    ho?.Favicon, do_?.Favicon)
             ]);
     }
 
@@ -810,7 +850,20 @@ public class ConfigurationDataBuilder : IConfigurationDataBuilder
                 NumberField("RemoteNodeRequestTimeoutSeconds", "Remote Node Request Timeout",
                     "HTTP request timeout for remote NodeODX nodes.",
                     pp?.RemoteNodeRequestTimeoutSeconds ?? dp?.RemoteNodeRequestTimeoutSeconds ?? 0,
-                    dp?.RemoteNodeRequestTimeoutSeconds ?? 0, unit: "seconds")
+                    dp?.RemoteNodeRequestTimeoutSeconds ?? 0, unit: "seconds"),
+
+                NumberField("MaxConcurrentUrlImportsPerUser", "Max Concurrent URL Imports / User",
+                    "Maximum active import-file (single-file URL import) tasks per user.",
+                    pp?.MaxConcurrentUrlImportsPerUser ?? dp?.MaxConcurrentUrlImportsPerUser ?? 0,
+                    dp?.MaxConcurrentUrlImportsPerUser ?? 0),
+
+                JsonField("OrgDailyOutputBytes", "Per-Org Daily Output Budget (bytes)",
+                    "Per-organization daily output size budget in bytes, keyed by org slug ('default' is the fallback).",
+                    pp?.OrgDailyOutputBytes, dp?.OrgDailyOutputBytes),
+
+                JsonField("NodeOdx", "NodeODX Processing Nodes",
+                    "Array of NodeODX processing node configurations. Each entry: { Id, Url, Token, Title }.",
+                    pp?.NodeOdx, dp?.NodeOdx)
             ]);
 
         section.IsActive = isActive;
@@ -890,7 +943,30 @@ public class ConfigurationDataBuilder : IConfigurationDataBuilder
                 NumberField("RegistryDownloadMaxRetries", "Registry Download Max Retries",
                     "Maximum retry attempts per file download against a remote registry.",
                     imp?.RegistryDownloadMaxRetries ?? dImp?.RegistryDownloadMaxRetries ?? 0,
-                    dImp?.RegistryDownloadMaxRetries ?? 0)
+                    dImp?.RegistryDownloadMaxRetries ?? 0),
+
+                NumberField("MaxFileImportSizeBytes", "Max Single-File Import Size",
+                    "Maximum size of a single file imported from URL (0 = fall back to MaxImportSizeBytes).",
+                    imp?.MaxFileImportSizeBytes ?? dImp?.MaxFileImportSizeBytes ?? 0,
+                    dImp?.MaxFileImportSizeBytes ?? 0, unit: "bytes"),
+
+                NumberField("MinDownloadSpeedBytesPerSec", "Min Download Speed",
+                    "Minimum sustained download speed before import is aborted (0 = disable).",
+                    imp?.MinDownloadSpeedBytesPerSec ?? dImp?.MinDownloadSpeedBytesPerSec ?? 0,
+                    dImp?.MinDownloadSpeedBytesPerSec ?? 0, unit: "bytes/s"),
+
+                NumberField("LowSpeedGraceSeconds", "Low-Speed Grace Period",
+                    "Time window for low-speed detection and hard stall timeout.",
+                    imp?.LowSpeedGraceSeconds ?? dImp?.LowSpeedGraceSeconds ?? 0,
+                    dImp?.LowSpeedGraceSeconds ?? 0, unit: "seconds"),
+
+                ArrayField("BlockedFileExtensions", "Blocked File Extensions",
+                    "File extensions rejected by all ingestion paths (block-list). Ignored when AllowedFileExtensions is non-empty.",
+                    imp?.BlockedFileExtensions, dImp?.BlockedFileExtensions),
+
+                ArrayField("AllowedFileExtensions", "Allowed File Extensions",
+                    "File extensions accepted by all ingestion paths (allow-list). When non-empty, switches to allow-list mode and ignores BlockedFileExtensions.",
+                    imp?.AllowedFileExtensions, dImp?.AllowedFileExtensions)
             ]);
 
         section.IsActive = isActive;
