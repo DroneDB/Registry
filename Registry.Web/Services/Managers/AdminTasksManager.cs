@@ -51,17 +51,7 @@ public sealed class AdminTasksManager : IAdminTasksManager
         if (!await _authManager.IsUserAdmin())
             throw new UnauthorizedException("Only admins can delete tasks from the global list");
 
-        // Look up the job globally, then delegate deletion to the writer
-        // QueryAsync with global filter finds job by jobId across all datasets
-        var globalRows = await _query.QueryGlobalAsync(new JobIndexGlobalQueryFilter(Take: 10000), ct);
-        var ji = globalRows.FirstOrDefault(r => r.JobId == jobId);
-        if (ji is null)
-            return false;
-
-        // Check terminal state
-        if (ji.CurrentState is not "Succeeded" and not "Failed" and not "Deleted")
-            return false;
-
+        // Writer performs the direct lookup and terminal-state check
         var (deleted, _, _) = await _writer.DeleteTerminalJobByIdAsync(jobId, ct);
         if (!deleted)
             return false;
@@ -156,7 +146,8 @@ public sealed class AdminTasksManager : IAdminTasksManager
         {
             var dir = Path.GetFullPath(Path.Combine(tempPath, "tasks", taskId));
             var root = Path.GetFullPath(Path.Combine(tempPath, "tasks"));
-            if (dir.StartsWith(root, StringComparison.Ordinal) && Directory.Exists(dir))
+            // Require a separator boundary so "tasks_evil" can't pass a bare prefix match
+            if (dir.StartsWith(root + Path.DirectorySeparatorChar, StringComparison.Ordinal) && Directory.Exists(dir))
                 Directory.Delete(dir, recursive: true);
         }
         catch

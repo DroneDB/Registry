@@ -479,15 +479,15 @@ public class ConfigurationDataBuilder : IConfigurationDataBuilder
         return Section("RedisConfig", "Redis Configuration",
             "Redis cache connection address, key prefix, and default TTL. Only used when Cache Provider is Redis.",
             [
-                StringField("CacheProvider.InstanceAddress", "Redis Instance Address",
+                StringField("CacheProvider.Settings.InstanceAddress", "Redis Instance Address",
                     "Connection address for Redis (e.g., 'localhost:6379').",
                     redisSettings?.InstanceAddress, redisDefaults?.InstanceAddress),
 
-                StringField("CacheProvider.InstanceName", "Redis Key Prefix",
+                StringField("CacheProvider.Settings.InstanceName", "Redis Key Prefix",
                     "Instance name used as a prefix for all cache keys, enabling multi-instance isolation on a shared Redis server.",
                     redisSettings?.InstanceName, redisDefaults?.InstanceName),
 
-                TimeSpanField("CacheProvider.Expiration", "Redis Default Expiration",
+                TimeSpanField("CacheProvider.Settings.Expiration", "Redis Default Expiration",
                     "Default TTL for cache entries stored in Redis, if not specified by the caller.",
                     redisSettings?.Expiration, redisDefaults?.Expiration)
             ]);
