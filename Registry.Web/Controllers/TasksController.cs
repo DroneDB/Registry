@@ -378,6 +378,30 @@ public class TasksController : ControllerBaseEx
         return Ok(new { requeued });
     }
 
+    // ---- POST /tasks/{id}/delete -----------------------------------------
+
+    [HttpPost("{id}/delete", Name = nameof(TasksController) + "." + nameof(Delete))]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> Delete(
+        [FromRoute, Required] string orgSlug, [FromRoute, Required] string dsSlug,
+        [FromRoute, Required] string id, CancellationToken ct)
+    {
+        var (job, error) = await LoadAuthorizedTask(orgSlug, dsSlug, id, AccessType.Write, ct);
+        if (error is not null) return error;
+
+        var (deleted, _, _) = await _writer.DeleteTerminalJobByIdAsync(job!.JobId, ct);
+        if (!deleted)
+            return BadRequest(new ErrorResponse($"Task '{job.CurrentState}' cannot be deleted; only concluded tasks can be removed from history"));
+
+        // Best-effort artifact cleanup (same as Clear endpoint)
+        TryDeleteArtifacts(job.JobId);
+
+        _logger.LogInformation("Deleted terminal JobIndex record for job {JobId} in {Org}/{Ds}", job.JobId, orgSlug, dsSlug);
+        return Ok(new { deleted });
+    }
+
     // ---- helpers ----------------------------------------------------------
 
     private async Task<(JobIndex? job, IActionResult? error)> LoadAuthorizedTask(

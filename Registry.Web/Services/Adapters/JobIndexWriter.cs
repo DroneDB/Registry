@@ -210,6 +210,32 @@ public class JobIndexWriter(RegistryContext db, ILogger<JobIndexWriter> log,
         return ids;
     }
 
+    public async Task<(bool deleted, string? orgSlug, string? dsSlug)> DeleteTerminalJobByIdAsync(
+        string jobId, CancellationToken ct = default)
+    {
+        var ji = await db.JobIndices.AsTracking().FirstOrDefaultAsync(x => x.JobId == jobId, ct);
+        if (ji is null)
+            return (false, null, null);
+
+        if (!TerminalStates.Contains(ji.CurrentState))
+        {
+            log.LogInformation("JobIndexWriter.DeleteTerminalJobByIdAsync: job {JobId} is in non-terminal state '{State}', skipping", jobId, ji.CurrentState);
+            return (false, null, null);
+        }
+
+        var orgSlug = ji.OrgSlug;
+        var dsSlug = ji.DsSlug;
+
+        db.JobIndices.Remove(ji);
+        await db.SaveChangesAsync(ct);
+
+        if (orgSlug != null && dsSlug != null)
+            await InvalidateTasksListCacheAsync(orgSlug, dsSlug, ct);
+
+        log.LogInformation("Deleted terminal JobIndex record for job {JobId} in {Org}/{Ds}", jobId, orgSlug, dsSlug);
+        return (true, orgSlug, dsSlug);
+    }
+
     public async Task UpdateProgressAsync(string jobId, int? percent, string? phaseMessage,
         string? logTailJson, DateTime updatedAtUtc, CancellationToken ct = default)
     {
