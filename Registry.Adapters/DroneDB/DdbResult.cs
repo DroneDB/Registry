@@ -6,5 +6,6 @@ public enum DdbResult
     Exception = 1, // Generic app exception
     BuildDependencyMissing = 2,
     BuildInProgress = 3, // Another process holds the build lock
-    Canceled = 4 // Operation canceled by the progress callback
+    Canceled = 4, // Operation canceled by the progress callback
+    Busy = 5 // Transient DB contention (SQLITE_BUSY/LOCKED); safe to retry
 };

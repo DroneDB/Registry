@@ -6,6 +6,7 @@ using System.IO.Compression;
 using System.Linq;
 using System.Security.Cryptography;
 using System.Text;
+using System.Threading;
 using System.Threading.Tasks;
 using Shouldly;
 using Microsoft.AspNetCore.Http;
@@ -703,6 +704,67 @@ public class ObjectManagerTest : TestBase
         {
             if (File.Exists(foreignFile)) File.Delete(foreignFile);
         }
+    }
+
+    [Test]
+    public async Task CommitStreamedAsync_IndexingFails_QuarantinesFileInsteadOfLeavingOrphan()
+    {
+        const string fileName = "DJI_0028.JPG";
+        const string destPath = "streamed_DJI_quarantine.JPG";
+
+        await using var context = GetTest1Context();
+        using var test = new TestFS(Test4ArchiveUrl, BaseTestFolder);
+
+        var settings = JsonConvert.DeserializeObject<AppSettings>(_settingsJson);
+        settings.DatasetsPath = test.TestFolder;
+        _appSettingsMock.Setup(o => o.Value).Returns(settings);
+        _authManagerMock.Setup(o => o.IsUserAdmin()).Returns(Task.FromResult(true));
+        _authManagerMock.Setup(o => o.IsOwnerOrAdmin(It.IsAny<Dataset>())).Returns(Task.FromResult(true));
+        _authManagerMock.Setup(o => o.RequestAccess(It.IsAny<Dataset>(),
+            It.IsAny<AccessType>())).Returns(Task.FromResult(true));
+        _authManagerMock.Setup(o => o.RequestAccess(It.IsAny<Organization>(),
+            It.IsAny<AccessType>())).Returns(Task.FromResult(true));
+
+        var webUtils = new WebUtils(_authManagerMock.Object, context, _appSettingsMock.Object,
+            _httpContextAccessorMock.Object, _ddbFactoryMock.Object);
+
+        // Simulates a native indexing failure after the file has already been moved into place.
+        var failingIndexQueue = new Mock<IDatasetIndexQueue>();
+        failingIndexQueue.Setup(q => q.EnqueueAsync(It.IsAny<DatasetKey>(), It.IsAny<string>(),
+                It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new InvalidOperationException("simulated index failure"));
+
+        var objectManager = new ObjectsManager(_objectManagerLogger, context, _appSettingsMock.Object,
+            new DdbManager(_appSettingsMock.Object, _ddbFactoryLogger, DdbWrapper), webUtils, _authManagerMock.Object,
+            _cacheManager, _fileSystem, _backgroundJobsProcessor, DdbWrapper, _thumbnailGeneratorMock.Object,
+            _jobIndexQueryMock.Object, _buildPendingService, indexQueue: failingIndexQueue.Object);
+
+        var newFileUrl =
+            "https://github.com/DroneDB/test_data/raw/master/test-datasets/drone_dataset_brighton_beach/" + fileName;
+        var data = CommonUtils.SmartDownloadData(newFileUrl);
+
+        await using var ms = new MemoryStream(data);
+        var (tempPath, bytes) = await objectManager.StreamToTempAsync(
+            MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug, ms);
+
+        var act = async () => await objectManager.CommitStreamedAsync(
+            MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug, destPath, tempPath, bytes);
+
+        await Should.ThrowAsync<InvalidOperationException>(act);
+
+        // Temp file already consumed by the atomic move, before indexing was attempted
+        File.Exists(tempPath).ShouldBeFalse();
+
+        var datasetFolder = Path.Combine(test.TestFolder, MagicStrings.PublicOrganizationSlug,
+            _defaultDatasetGuid.ToString());
+
+        // Must not be left as an untracked orphan at its destination path
+        File.Exists(Path.Combine(datasetFolder, destPath)).ShouldBeFalse();
+
+        // Must be quarantined instead, under .uploads/quarantine
+        var quarantineDir = Path.Combine(datasetFolder, ".uploads", "quarantine");
+        Directory.Exists(quarantineDir).ShouldBeTrue();
+        Directory.EnumerateFiles(quarantineDir).ShouldContain(f => f.EndsWith(destPath));
     }
 
     [Test]

@@ -58,6 +58,11 @@ public static class ProcessingNodeServiceCollectionExtensions
         services.AddSingleton<IDdbWrapper, NativeDdbWrapper>();
         services.AddSingleton<IFileSystem, FileSystem>();
 
+        // Per-dataset index write coalescer: recurring jobs on this host (notably
+        // IndexReconciliationService) re-enqueue unindexed files through the same lane the web
+        // host's uploads use (ImproveParallelWrites plan, workstream 04 §5.2).
+        services.AddSingleton<IDatasetIndexQueue, DatasetIndexQueue>();
+
         // Register scoped services required by background jobs
         services.AddScoped<IDdbManager, DdbManager>();
         services.AddScoped<IBackgroundJobsProcessor, BackgroundJobsProcessor>();
@@ -67,6 +72,7 @@ public static class ProcessingNodeServiceCollectionExtensions
         services.AddScoped<OrphanedDatasetCleanupService>();
         services.AddScoped<RecurringDatasetCleanupService>();
         services.AddScoped<ArtifactCompletenessCheckerService>();
+        services.AddScoped<IndexReconciliationService>();
 
         // Processing Platform task substrate (native tools incl. build/raster-export)
         services.AddProcessingPlatform();

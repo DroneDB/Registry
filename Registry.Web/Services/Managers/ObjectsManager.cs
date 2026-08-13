@@ -49,12 +49,20 @@ public class ObjectsManager : IObjectsManager
     private readonly IBuildArtifactResolver _buildArtifactResolver;
     private readonly ImportSettings _importSettings;
     private readonly IBuildStatusService _buildStatusService;
+    private readonly IDatasetIndexQueue? _indexQueue;
 
     /// <summary>
     /// Name of the per-dataset folder that holds in-flight streamed uploads before they are
     /// atomically moved into place. Reserved so users cannot create a conflicting entry.
     /// </summary>
     private const string UploadsFolderName = ".uploads";
+
+    /// <summary>
+    /// Sub-folder of <see cref="UploadsFolderName"/> holding files that were placed on disk but
+    /// failed to index, pending the reconciliation sweep. Already covered by
+    /// <see cref="IsReservedPath"/> since it is nested under the reserved uploads folder.
+    /// </summary>
+    private const string QuarantineFolderName = "quarantine";
 
     private static bool IsReservedPath(string path)
     {
@@ -78,7 +86,8 @@ public class ObjectsManager : IObjectsManager
         IOgcLayerCatalog? ogcLayerCatalog = null,
         IDatasetCacheInvalidator? datasetCacheInvalidator = null,
         IBuildArtifactResolver buildArtifactResolver = null!,
-        IBuildStatusService? buildStatusService = null)
+        IBuildStatusService? buildStatusService = null,
+        IDatasetIndexQueue? indexQueue = null)
     {
         _logger = logger;
         _context = context;
@@ -108,6 +117,10 @@ public class ObjectsManager : IObjectsManager
                 new NullCacheKeyScanner(NullLogger<NullCacheKeyScanner>.Instance));
         _buildArtifactResolver = buildArtifactResolver;
         _importSettings = settings.Value.Import ?? new ImportSettings();
+        // Optional: not supplied by most unit tests constructing this class directly. When
+        // absent, FinalizeAddedFileAsync falls back to the old direct AddRaw+GetEntry path
+        // (see ImproveParallelWrites plan, workstream 04 §4.3).
+        _indexQueue = indexQueue;
     }
 
     /// <summary>
@@ -282,7 +295,7 @@ public class ObjectsManager : IObjectsManager
         await using (var localFileStream = _fs.OpenWrite(localFilePath))
             await stream.CopyToAsync(localFileStream);
 
-        return await FinalizeAddedFileAsync(orgSlug, dsSlug, ddb, path, localFilePath);
+        return await FinalizeAddedFileAsync(orgSlug, dsSlug, ds.InternalRef, ddb, path, localFilePath);
     }
 
     /// <summary>
@@ -388,7 +401,17 @@ public class ObjectsManager : IObjectsManager
             // Same-volume atomic move: no extra full-file copy
             File.Move(fullTempPath, localFilePath, overwrite: true);
 
-            return await FinalizeAddedFileAsync(orgSlug, dsSlug, ddb, path, localFilePath);
+            try
+            {
+                return await FinalizeAddedFileAsync(orgSlug, dsSlug, ds.InternalRef, ddb, path, localFilePath);
+            }
+            catch (Exception ex)
+            {
+                // The file is already on disk but failed to index (or failed post-index steps):
+                // compensate by quarantining it instead of leaving an untracked file behind.
+                await QuarantineAsync(ddb, orgSlug, dsSlug, path, localFilePath, ex);
+                throw;
+            }
         }
         finally
         {
@@ -402,18 +425,64 @@ public class ObjectsManager : IObjectsManager
     }
 
     /// <summary>
+    /// Compensating action for <see cref="CommitStreamedAsync"/>: moves a file that was placed on
+    /// disk but failed to index into a per-dataset quarantine folder, so it is neither lost nor
+    /// left as an untracked orphan. Never throws; a failed compensation is logged for the
+    /// reconciliation sweep to pick up.
+    /// </summary>
+    private async Task QuarantineAsync(IDDB ddb, string orgSlug, string dsSlug, string path,
+        string localFilePath, Exception cause)
+    {
+        try
+        {
+            if (!File.Exists(localFilePath))
+                return;
+
+            var quarantineDir = Path.Combine(ddb.DatasetFolderPath, UploadsFolderName, QuarantineFolderName);
+            _fs.FolderCreate(quarantineDir);
+
+            var safeName = Path.GetFileName(path);
+            var quarantinePath = Path.Combine(quarantineDir, $"{DateTime.UtcNow:yyyyMMddTHHmmssfffZ}-{safeName}");
+
+            File.Move(localFilePath, quarantinePath, overwrite: true);
+
+            _logger.LogError(cause,
+                "Quarantined '{Path}' in dataset '{OrgSlug}/{DsSlug}' after index failure -> '{QuarantinePath}'",
+                path, orgSlug, dsSlug, quarantinePath);
+        }
+        catch (Exception quarantineEx)
+        {
+            _logger.LogError(quarantineEx,
+                "Failed to quarantine '{Path}' in dataset '{OrgSlug}/{DsSlug}' after index failure (original cause: {Cause})",
+                path, orgSlug, dsSlug, cause.Message);
+        }
+
+        await Task.CompletedTask;
+    }
+
+    /// <summary>
     /// Shared tail of the add-file flow: index the on-disk file, fetch the entry, schedule the
     /// build (or thumbnail) in the background and invalidate dependent caches.
     /// </summary>
-    private async Task<EntryDto> FinalizeAddedFileAsync(string orgSlug, string dsSlug, IDDB ddb,
-        string path, string localFilePath)
+    private async Task<EntryDto> FinalizeAddedFileAsync(string orgSlug, string dsSlug, Guid internalRef,
+        IDDB ddb, string path, string localFilePath)
     {
         _logger.LogInformation("File saved, adding to DDB");
-        ddb.AddRaw(path);
 
-        _logger.LogInformation("Added to DDB, checking entry now...");
-
-        var entry = ddb.GetEntry(path);
+        Entry? entry;
+        if (_indexQueue != null)
+        {
+            // Coalesces with other concurrent uploads to the same dataset into one native batch
+            // and one write transaction (see ImproveParallelWrites plan, workstream 04 §4.2/§4.3),
+            // and returns the committed entry directly instead of a second AddRaw+GetEntry round-trip.
+            entry = await _indexQueue.EnqueueAsync(new DatasetKey(orgSlug, internalRef), path);
+        }
+        else
+        {
+            // Fallback for callers/tests that construct ObjectsManager without DI wiring.
+            ddb.AddRaw(path);
+            entry = ddb.GetEntry(path);
+        }
 
         if (entry == null)
             throw new InvalidOperationException("Cannot find just added file!");

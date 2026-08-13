@@ -12,6 +12,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Registry.Ports;
+using Registry.Adapters.DroneDB;
 using Registry.Web.Data;
 using Registry.Web.Models.Configuration;
 using Registry.Web.Services.HeavyTasks.Models;
@@ -48,7 +49,11 @@ public sealed class HeavyTaskJobWrapper
         _log = log;
     }
 
-    [AutomaticRetry(Attempts = 1, OnAttemptsExceeded = AttemptsExceededAction.Fail)]
+    // Transient DDB contention gets a backoff retry chain; anything else fails fast without
+    // burning worker slots (ImproveParallelWrites plan, workstream 04 §5.4).
+    [AutomaticRetry(Attempts = 5, DelaysInSeconds = new[] { 15, 60, 180, 600, 1800 },
+        OnAttemptsExceeded = AttemptsExceededAction.Fail,
+        OnlyOn = new[] { typeof(DdbBusyException), typeof(DdbBuildInProgressException) })]
     [Queue("tasks")]
     public async Task Run(string toolId, string toolVersion, string requestJson,
         PerformContext ctx, CancellationToken cancellationToken)

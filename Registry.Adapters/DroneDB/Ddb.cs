@@ -359,6 +359,12 @@ public class DDB : IDDB
             var fullPath = GetLocalPath(path);
             _ddbWrapper.Add(DatasetFolderPath, fullPath);
         }
+        catch (DdbBusyException)
+        {
+            // Preserve type: callers (IDatasetIndexQueue, ApiExceptionFilter) need to
+            // distinguish transient contention from a permanent failure.
+            throw;
+        }
         catch (DdbException ex)
         {
             throw new InvalidOperationException($"Cannot add '{path}' to ddb '{DatasetFolderPath}'", ex);
@@ -381,10 +387,40 @@ public class DDB : IDDB
 
             return _ddbWrapper.Add(DatasetFolderPath, fullPaths);
         }
+        catch (DdbBusyException)
+        {
+            // Preserve type: callers (IDatasetIndexQueue, ApiExceptionFilter) need to
+            // distinguish transient contention from a permanent failure.
+            throw;
+        }
         catch (DdbException ex)
         {
             throw new InvalidOperationException(
                 $"Cannot batch-add {paths.Count} file(s) to ddb '{DatasetFolderPath}'", ex);
+        }
+    }
+
+    public BatchAddResult AddRawBatchWithOptions(IReadOnlyList<string> paths, bool stopOnError = false)
+    {
+        if (paths == null || paths.Count == 0)
+            return new BatchAddResult();
+
+        try
+        {
+            var fullPaths = new string[paths.Count];
+            for (var i = 0; i < paths.Count; i++)
+                fullPaths[i] = GetLocalPath(paths[i]);
+
+            return _ddbWrapper.AddWithOptions(DatasetFolderPath, fullPaths, stopOnError);
+        }
+        catch (DdbBusyException)
+        {
+            throw;
+        }
+        catch (DdbException ex)
+        {
+            throw new InvalidOperationException(
+                $"Cannot batch-add {paths.Count} file(s) (with options) to ddb '{DatasetFolderPath}'", ex);
         }
     }
 

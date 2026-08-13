@@ -105,6 +105,13 @@ internal class HangfireJobsInitializer
                 "check-artifact-completeness",
                 service => service.CheckAndQueueAsync(null),
                 cron));
+
+        ScheduleJob(recurringJobManager, "index-reconciliation",
+            ResolveCron(appSettings.IndexReconciliationCron, "0 * * * *"),
+            cron => recurringJobManager.AddOrUpdate<IndexReconciliationService>(
+                "index-reconciliation",
+                service => service.ReconcileAllDatasetsAsync(null),
+                cron));
     }
 
     /// <summary>

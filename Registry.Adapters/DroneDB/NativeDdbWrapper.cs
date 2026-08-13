@@ -144,9 +144,11 @@ public class NativeDdbWrapper : IDdbWrapper
     {
         paths = paths.Select(p => p?.Replace('\\', '/')).ToArray();
         var utf8Ptrs = MarshalStringArrayToUtf8(paths);
+        var result = DdbResult.Exception;
         try
         {
-            if (_Add(ddbPath, utf8Ptrs, paths.Length, out var output, recursive) == DdbResult.Success)
+            result = _Add(ddbPath, utf8Ptrs, paths.Length, out var output, recursive);
+            if (result == DdbResult.Success)
             {
                 var json = MarshalAndFreeUtf8(output);
 
@@ -180,7 +182,77 @@ public class NativeDdbWrapper : IDdbWrapper
             FreeUtf8StringArray(utf8Ptrs);
         }
 
+        // Transient contention (SQLITE_BUSY/LOCKED): typed so callers can retry instead of
+        // matching on a message string (see ImproveParallelWrites plan, workstream 03 §3.1).
+        if (result == DdbResult.Busy)
+            throw new DdbBusyException(SafeGetLastError("add"));
+
         throw new DdbException(SafeGetLastError("add"));
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct NativeAddOptions
+    {
+        [MarshalAs(UnmanagedType.I1)] public bool Recursive;
+        [MarshalAs(UnmanagedType.I1)] public bool StopOnError;
+        public int MaxConflictRetries;
+    }
+
+    [DllImport("ddb", EntryPoint = "DDBAddWithOptions")]
+    private static extern DdbResult _AddWithOptions([MarshalAs(UnmanagedType.LPUTF8Str)] string ddbPath,
+        IntPtr[] paths, int numPaths, ref NativeAddOptions options, out IntPtr output);
+
+    public BatchAddResult AddWithOptions(string ddbPath, string[] paths, bool stopOnError = false,
+        int maxConflictRetries = 2, bool recursive = false)
+    {
+        paths = paths.Select(p => p?.Replace('\\', '/')).ToArray();
+        var utf8Ptrs = MarshalStringArrayToUtf8(paths);
+        var options = new NativeAddOptions
+        {
+            Recursive = recursive, StopOnError = stopOnError, MaxConflictRetries = maxConflictRetries
+        };
+        var result = DdbResult.Exception;
+        try
+        {
+            result = _AddWithOptions(ddbPath, utf8Ptrs, paths.Length, ref options, out var output);
+            if (result == DdbResult.Success)
+            {
+                var json = MarshalAndFreeUtf8(output);
+
+                if (string.IsNullOrWhiteSpace(json))
+                    throw new DdbException("Unable to add");
+
+                var res = JsonConvert.DeserializeObject<BatchAddResult>(json);
+
+                if (res == null)
+                    throw new InvalidOperationException($"Unable to deserialize add result: {json}");
+
+                return res;
+            }
+        }
+        catch (EntryPointNotFoundException ex)
+        {
+            throw new DdbException($"Error in calling ddb lib: incompatible versions ({ex.Message})", ex);
+        }
+        catch (DdbException)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            throw new DdbException(
+                $"Error in calling ddb lib. Last error: \"{SafeGetLastError("addWithOptions")}\", check inner exception for details",
+                ex);
+        }
+        finally
+        {
+            FreeUtf8StringArray(utf8Ptrs);
+        }
+
+        if (result == DdbResult.Busy)
+            throw new DdbBusyException(SafeGetLastError("addWithOptions"));
+
+        throw new DdbException(SafeGetLastError("addWithOptions"));
     }
 
     [DllImport("ddb", EntryPoint = "DDBRemove")]

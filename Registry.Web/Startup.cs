@@ -77,7 +77,7 @@ public class Startup
     public void ConfigureServices(IServiceCollection services)
     {
         services.AddCors();
-        services.AddControllers();
+        services.AddControllers(o => o.Filters.Add<ApiExceptionFilter>());
 
         services.AddSwaggerGen(c =>
         {
@@ -315,6 +315,7 @@ public class Startup
         services.AddScoped<OrphanedDatasetCleanupService>();
         services.AddScoped<RecurringDatasetCleanupService>();
         services.AddScoped<ArtifactCompletenessCheckerService>();
+        services.AddScoped<IndexReconciliationService>();
 
         // Admin global tasks dashboard manager (Part B).
         services.AddScoped<IAdminTasksManager, AdminTasksManager>();
@@ -376,6 +377,7 @@ public class Startup
         services.AddSingleton<INameGenerator, NameGenerator>();
         services.AddSingleton<ICacheManager, CacheManager>();
         services.AddSingleton<IPasswordPolicyValidator, PasswordPolicyValidator>();
+        services.AddSingleton<IDatasetIndexQueue, DatasetIndexQueue>();
 
         services.AddResponseCompression();
 

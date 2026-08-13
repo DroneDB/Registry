@@ -50,7 +50,11 @@ public static class HangfireUtils
         };
     }
 
-    [AutomaticRetry(Attempts = 1, OnAttemptsExceeded = AttemptsExceededAction.Fail)]
+    // Transient DDB contention gets a backoff retry chain; anything else fails fast without
+    // burning worker slots (ImproveParallelWrites plan, workstream 04 §5.4).
+    [AutomaticRetry(Attempts = 5, DelaysInSeconds = new[] { 15, 60, 180, 600, 1800 },
+        OnAttemptsExceeded = AttemptsExceededAction.Fail,
+        OnlyOn = new[] { typeof(DdbBusyException), typeof(DdbBuildInProgressException) })]
     public static void BuildWrapper(IDDB ddb, string path, bool force,
         PerformContext context)
     {
@@ -75,7 +79,9 @@ public static class HangfireUtils
         writeLine(skipped ? "Done build (skipped: lock held elsewhere)" : "Done build");
     }
 
-    [AutomaticRetry(Attempts = 1, OnAttemptsExceeded = AttemptsExceededAction.Fail)]
+    [AutomaticRetry(Attempts = 5, DelaysInSeconds = new[] { 15, 60, 180, 600, 1800 },
+        OnAttemptsExceeded = AttemptsExceededAction.Fail,
+        OnlyOn = new[] { typeof(DdbBusyException), typeof(DdbBuildInProgressException) })]
     public static void BuildPendingWrapper(IDDB ddb, PerformContext context)
     {
         Action<string> writeLine = CreateJobWriteLine(context);
@@ -98,7 +104,9 @@ public static class HangfireUtils
         writeLine(skipped ? "Done build pending (skipped: lock held elsewhere)" : "Done build pending");
     }
 
-    [AutomaticRetry(Attempts = 1, OnAttemptsExceeded = AttemptsExceededAction.Fail)]
+    [AutomaticRetry(Attempts = 5, DelaysInSeconds = new[] { 15, 60, 180, 600, 1800 },
+        OnAttemptsExceeded = AttemptsExceededAction.Fail,
+        OnlyOn = new[] { typeof(DdbBusyException), typeof(DdbBuildInProgressException) })]
     public static void CleanupWrapper(IDDB ddb, PerformContext context)
     {
         Action<string> writeLine = CreateJobWriteLine(context);
@@ -109,7 +117,9 @@ public static class HangfireUtils
         writeLine($"Removed {result.Entries?.Length ?? 0} entries and {result.Builds?.Length ?? 0} build artifacts");
     }
 
-    [AutomaticRetry(Attempts = 1, OnAttemptsExceeded = AttemptsExceededAction.Fail)]
+    [AutomaticRetry(Attempts = 5, DelaysInSeconds = new[] { 15, 60, 180, 600, 1800 },
+        OnAttemptsExceeded = AttemptsExceededAction.Fail,
+        OnlyOn = new[] { typeof(DdbBusyException), typeof(DdbBuildInProgressException) })]
     public static void GenerateThumbnailWrapper(IDDB ddb, string path, int size, string dest,
         PerformContext context)
     {
@@ -274,7 +284,9 @@ public static class HangfireUtils
         }
     }
 
-    [AutomaticRetry(Attempts = 1, OnAttemptsExceeded = AttemptsExceededAction.Fail)]
+    [AutomaticRetry(Attempts = 5, DelaysInSeconds = new[] { 15, 60, 180, 600, 1800 },
+        OnAttemptsExceeded = AttemptsExceededAction.Fail,
+        OnlyOn = new[] { typeof(DdbBusyException), typeof(DdbBuildInProgressException) })]
     public static void MaskBordersWrapper(IDDB ddb, string inputPath, string outputPath,
         int nearDist, bool white, PerformContext context)
     {
