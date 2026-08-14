@@ -15,7 +15,7 @@ namespace Registry.Web.Utilities;
 /// workstream 04 §5.3). Registered once via <c>services.AddControllers(o =>
 /// o.Filters.Add&lt;ApiExceptionFilter&gt;())</c>; classification rules live here once instead of
 /// being duplicated across ~49 per-action <c>catch (Exception ex) { return 500; }</c> blocks.
-/// Additive: existing controller-level try/catch + <see cref="ControllerBaseEx.ExceptionResult"/>
+/// Additive: existing controller-level try/catch + <see cref="ControllerBaseEx.ExceptionResult(Exception)"/>
 /// still work as-is for actions that already handle their own errors; this filter only fires for
 /// exceptions that escape the action unhandled.
 /// </summary>

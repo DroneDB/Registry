@@ -150,7 +150,7 @@ public class IndexReconciliationService
         if (missingPaths.Length > 0)
         {
             var sample = string.Join(", ", missingPaths.Take(10));
-            writeLine($"{missingPaths.Length} indexed entrie(s) missing on disk (report only): {sample}" +
+            writeLine($"{missingPaths.Length} indexed entries missing on disk (report only): {sample}" +
                       (missingPaths.Length > 10 ? ", …" : ""));
         }
 

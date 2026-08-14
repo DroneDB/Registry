@@ -21,7 +21,7 @@ namespace Registry.Web.Services.Adapters;
 /// <summary>
 /// Default <see cref="IDatasetIndexQueue"/>: a per-dataset FIFO lane that coalesces concurrent
 /// <see cref="EnqueueAsync(DatasetKey,string,CancellationToken)"/> calls into a single native
-/// <see cref="IDDB.AddRawBatchWithOptions"/> call. Registered as a singleton (one set of lanes
+/// <see cref="IDdbIndex.AddRawBatchWithOptions"/> call. Registered as a singleton (one set of lanes
 /// for the whole process); resolves the scoped <see cref="IDdbManager"/> via
 /// <see cref="IServiceScopeFactory"/> once per batch, not once per file (see
 /// ImproveParallelWrites plan, workstream 04 §4.2).
@@ -104,7 +104,7 @@ public sealed class DatasetIndexQueue : IDatasetIndexQueue, IDisposable
         // zero work and waiting for the lane to have drained at least once. Since there is
         // nothing to enqueue, and per-request completion already guarantees the corresponding
         // batch was committed, an explicit flush of an idle lane is a no-op.
-        return _lanes.TryGetValue(dataset, out _) ? Task.CompletedTask : Task.CompletedTask;
+        return Task.CompletedTask;
     }
 
     private DatasetLane CreateLane(DatasetKey key)
