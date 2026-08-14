@@ -1025,6 +1025,12 @@ public class NativeDdbWrapper : IDdbWrapper
             if (result == DdbResult.BuildInProgress)
                 throw new DdbBuildInProgressException(SafeGetLastError("build"));
 
+            // Transient DB contention the native side.
+            // Hangfire retry decorators (OnlyOn = DdbBusyException) are wired to handle this;
+            // without this check, Busy silently returns as success. 
+            if (result == DdbResult.Busy)
+                throw new DdbBusyException(SafeGetLastError("build"));
+
             if (result != DdbResult.Exception) return;
         }
         catch (DdbBuildInProgressException)

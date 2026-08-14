@@ -65,7 +65,13 @@ public class ApiExceptionFilter : IAsyncExceptionFilter
         if (retryAfterSeconds.HasValue)
             context.HttpContext.Response.Headers.RetryAfter = retryAfterSeconds.Value.ToString();
 
-        context.Result = new ObjectResult(new ErrorResponse(ex.Message, noRetry))
+        // For 500s use a generic message to avoid leaking DB/native library details.
+        // Details are already logged above; specific messages are fine for classified client/transient errors.
+        var message = status == StatusCodes.Status500InternalServerError
+            ? "Internal server error"
+            : ex.Message;
+
+        context.Result = new ObjectResult(new ErrorResponse(message, noRetry))
         {
             StatusCode = status
         };

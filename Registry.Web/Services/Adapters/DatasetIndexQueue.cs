@@ -73,20 +73,20 @@ public sealed class DatasetIndexQueue : IDatasetIndexQueue, IDisposable
         using var linked = CancellationTokenSource.CreateLinkedTokenSource(ct, timeout.Token, _shutdown.Token);
 
         var tasks = new Task<Entry>[paths.Count];
-        for (var i = 0; i < paths.Count; i++)
-        {
-            var tcs = new TaskCompletionSource<Entry>(TaskCreationOptions.RunContinuationsAsynchronously);
-            var request = new IndexRequest { Path = paths[i], Tcs = tcs };
-            tasks[i] = tcs.Task;
-
-            // Backpressure: if the lane's channel is full, this await blocks the caller (does
-            // not throw or silently drop) until room is available or the deadline/cancellation
-            // fires.
-            await lane.Channel.Writer.WriteAsync(request, linked.Token);
-        }
-
         try
         {
+            for (var i = 0; i < paths.Count; i++)
+            {
+                var tcs = new TaskCompletionSource<Entry>(TaskCreationOptions.RunContinuationsAsynchronously);
+                var request = new IndexRequest { Path = paths[i], Tcs = tcs };
+                tasks[i] = tcs.Task;
+
+                // Backpressure: if the lane's channel is full, this await blocks the caller (does
+                // not throw or silently drop) until room is available or the deadline/cancellation
+                // fires.
+                await lane.Channel.Writer.WriteAsync(request, linked.Token);
+            }
+
             return await Task.WhenAll(tasks);
         }
         catch (OperationCanceledException) when (timeout.IsCancellationRequested && !ct.IsCancellationRequested)
@@ -99,11 +99,10 @@ public sealed class DatasetIndexQueue : IDatasetIndexQueue, IDisposable
 
     public Task FlushAsync(DatasetKey dataset, CancellationToken ct = default)
     {
-        // The drain loop commits everything currently queued on every iteration; enqueueing
-        // paths is what waits for a commit, so flushing is naturally expressed as enqueueing
-        // zero work and waiting for the lane to have drained at least once. Since there is
-        // nothing to enqueue, and per-request completion already guarantees the corresponding
-        // batch was committed, an explicit flush of an idle lane is a no-op.
+        // The drain loop commits everything currently queued on every iteration; per-request
+        // completion guarantees the corresponding batch was committed before the TCS
+        // resolves, so an explicit flush of an idle lane is a no-op.
+        // TODO: Real flush semantics if needed: signal + wait for lane drain.
         return Task.CompletedTask;
     }
 

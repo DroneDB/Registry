@@ -401,17 +401,25 @@ public class ObjectsManager : IObjectsManager
             // Same-volume atomic move: no extra full-file copy
             File.Move(fullTempPath, localFilePath, overwrite: true);
 
+            // Index the file first, with quarantine compensation on failure.
+            // Post-index steps (auth, build scheduling, cache invalidation) are not quarantined:
+            // by the time they run, the entry is already committed to the index, so removing
+            // the file would orphan the index row. The reconciliation sweep handles any divergence.
+            Entry entry;
             try
             {
-                return await FinalizeAddedFileAsync(orgSlug, dsSlug, ds.InternalRef, ddb, path, localFilePath);
+                entry = await IndexFileAsync(orgSlug, ds.InternalRef, ddb, path);
             }
             catch (Exception ex)
             {
-                // The file is already on disk but failed to index (or failed post-index steps):
-                // compensate by quarantining it instead of leaving an untracked file behind.
+                // File is on disk but failed to index: quarantine instead of leaving an
+                // untracked file behind.
                 await QuarantineAsync(ddb, orgSlug, dsSlug, path, localFilePath, ex);
                 throw;
             }
+
+            // Post-index finalization (no quarantine risk — file is already committed to index)
+            return await FinalizeIndexedFileAsync(orgSlug, dsSlug, ddb, entry, path, localFilePath);
         }
         finally
         {
@@ -442,7 +450,11 @@ public class ObjectsManager : IObjectsManager
             _fs.FolderCreate(quarantineDir);
 
             var safeName = Path.GetFileName(path);
-            var quarantinePath = Path.Combine(quarantineDir, $"{DateTime.UtcNow:yyyyMMddTHHmmssfffZ}-{safeName}");
+            // GUID suffix for collision resistance: parallel failures for paths with the same
+            // basename (e.g. a/data.tif, b/data.tif) could otherwise generate the same target
+            // and overwrite silently.
+            var quarantinePath = Path.Combine(quarantineDir,
+                $"{DateTime.UtcNow:yyyyMMddTHHmmssfffZ}-{Guid.NewGuid():N}-{safeName}");
 
             File.Move(localFilePath, quarantinePath, overwrite: true);
 
@@ -461,11 +473,9 @@ public class ObjectsManager : IObjectsManager
     }
 
     /// <summary>
-    /// Shared tail of the add-file flow: index the on-disk file, fetch the entry, schedule the
-    /// build (or thumbnail) in the background and invalidate dependent caches.
+    /// Index a single on-disk file in the dataset.
     /// </summary>
-    private async Task<EntryDto> FinalizeAddedFileAsync(string orgSlug, string dsSlug, Guid internalRef,
-        IDDB ddb, string path, string localFilePath)
+    private async Task<Entry> IndexFileAsync(string orgSlug, Guid internalRef, IDDB ddb, string path)
     {
         _logger.LogInformation("File saved, adding to DDB");
 
@@ -488,7 +498,28 @@ public class ObjectsManager : IObjectsManager
             throw new InvalidOperationException("Cannot find just added file!");
 
         _logger.LogInformation("Entry OK");
+        return entry;
+    }
 
+    /// <summary>
+    /// Shared tail of the add-file flow: index the on-disk file, fetch the entry, schedule the
+    /// build (or thumbnail) in the background and invalidate dependent caches.
+    /// </summary>
+    private async Task<EntryDto> FinalizeAddedFileAsync(string orgSlug, string dsSlug, Guid internalRef,
+        IDDB ddb, string path, string localFilePath)
+    {
+        Entry entry = await IndexFileAsync(orgSlug, internalRef, ddb, path);
+        return await FinalizeIndexedFileAsync(orgSlug, dsSlug, ddb, entry, path, localFilePath);
+    }
+
+    /// <summary>
+    /// Finalization after a file is successfully indexed: schedule build/thumbnail and invalidate caches.
+    /// Called after the index step — the entry is already committed, so failures here do not
+    /// quarantine the file (the index row would be orphaned).
+    /// </summary>
+    private async Task<EntryDto> FinalizeIndexedFileAsync(string orgSlug, string dsSlug, IDDB ddb,
+        Entry entry, string path, string localFilePath)
+    {
         var user = await _authManager.GetCurrentUser();
 
         if (ddb.IsBuildable(entry.Path))
