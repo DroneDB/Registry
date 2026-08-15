@@ -53,6 +53,26 @@ public sealed class DatasetIndexQueue : IDatasetIndexQueue, IDisposable
         _scopeFactory = scopeFactory;
         _logger = logger;
         _opts = appSettings.Value.IndexQueue ?? new IndexQueueSettings();
+        ValidateSettings(_opts);
+    }
+
+    // Fail fast at startup: a non-positive tuning value would make every enqueue on this
+    // process hang (zero window/timeout) or commit an empty batch, instead of surfacing
+    // the misconfiguration at boot.
+    private static void ValidateSettings(IndexQueueSettings o)
+    {
+        if (o.BatchWindowMs <= 0)
+            throw new ArgumentException(
+                $"{nameof(IndexQueueSettings)}.{nameof(IndexQueueSettings.BatchWindowMs)} must be > 0, got {o.BatchWindowMs}.",
+                nameof(o));
+        if (o.MaxBatchSize <= 0)
+            throw new ArgumentException(
+                $"{nameof(IndexQueueSettings)}.{nameof(IndexQueueSettings.MaxBatchSize)} must be > 0, got {o.MaxBatchSize}.",
+                nameof(o));
+        if (o.EnqueueTimeoutSeconds <= 0)
+            throw new ArgumentException(
+                $"{nameof(IndexQueueSettings)}.{nameof(IndexQueueSettings.EnqueueTimeoutSeconds)} must be > 0, got {o.EnqueueTimeoutSeconds}.",
+                nameof(o));
     }
 
     public async Task<Entry> EnqueueAsync(DatasetKey dataset, string path, CancellationToken ct = default)
@@ -131,13 +151,12 @@ public sealed class DatasetIndexQueue : IDatasetIndexQueue, IDisposable
         // loop continues with the next batch.
         while (!_shutdown.IsCancellationRequested)
         {
-            List<IndexRequest> batch;
+            var batch = new List<IndexRequest>(_opts.MaxBatchSize);
             try
             {
                 if (!await reader.WaitToReadAsync(_shutdown.Token))
                     break; // channel completed (never happens today; no Complete() caller)
 
-                batch = new List<IndexRequest>(_opts.MaxBatchSize);
                 if (reader.TryRead(out var first))
                     batch.Add(first);
 
@@ -173,6 +192,15 @@ public sealed class DatasetIndexQueue : IDatasetIndexQueue, IDisposable
             {
                 _logger.LogError(ex, "Dataset index queue drain loop failed reading lane for {Org}/{Ref}",
                     lane.Key.OrgSlug, lane.Key.InternalRef);
+
+                // Requests already pulled out of the lane must not be discarded: failing
+                // their TCSs is what keeps callers off a forever hang (they await
+                // Task.WhenAll and would otherwise never observe a result). Transient,
+                // because the batch was never even attempted - a retry is the remedy.
+                foreach (var req in batch)
+                    req.Tcs.TrySetException(new TransientException(
+                        $"Dataset index queue failed reading '{lane.Key.OrgSlug}/{lane.Key.InternalRef}'; retry the request",
+                        ex));
                 continue;
             }
 

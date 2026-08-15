@@ -9,6 +9,7 @@ using Microsoft.Extensions.Options;
 using Moq;
 using NUnit.Framework;
 using Registry.Adapters.DroneDB;
+using Registry.Common.Test;
 using Registry.Ports;
 using Registry.Ports.DroneDB;
 using Registry.Web.Exceptions;
@@ -209,5 +210,54 @@ public class DatasetIndexQueueTests
 
         var ex = await Should.ThrowAsync<Exception>(async () => await queue.EnqueueAsync(key, "ghost.txt"));
         ex.Message.ShouldContain("ghost.txt");
+    }
+
+    [Test]
+    public void Constructor_InvalidSettings_FailsFast()
+    {
+        var exWindow = Assert.Throws<ArgumentException>(
+            () => CreateQueue(new IndexQueueSettings { BatchWindowMs = 0 }));
+        exWindow.Message.ShouldContain("BatchWindowMs");
+
+        var exBatch = Assert.Throws<ArgumentException>(
+            () => CreateQueue(new IndexQueueSettings { MaxBatchSize = 0 }));
+        exBatch.Message.ShouldContain("MaxBatchSize");
+
+        var exTimeout = Assert.Throws<ArgumentException>(
+            () => CreateQueue(new IndexQueueSettings { EnqueueTimeoutSeconds = 0 }));
+        exTimeout.Message.ShouldContain("EnqueueTimeoutSeconds");
+    }
+
+    [Test]
+    public async Task EnqueueAsync_DrainIterationFails_ResolvesWithErrorInsteadOfHanging()
+    {
+        // IDdbManager resolution inside the drain iteration throws (simulates a scoped-
+        // resolution failure escaping CommitBatchAsync's own try): the caller must observe
+        // the failure, never await Task.WhenAll forever.
+        var ddb = new Mock<IDDB>();
+        var ddbManager = new Mock<IDdbManager>();
+        ddbManager.Setup(m => m.Get(It.IsAny<string>(), It.IsAny<Guid>()))
+            .Throws(new Exception("scope resolution failed"));
+
+        var services = new ServiceCollection();
+        services.AddSingleton(ddbManager.Object);
+        var provider = services.BuildServiceProvider();
+
+        var settings = Microsoft.Extensions.Options.Options.Create(new AppSettings
+        {
+            IndexQueue = new IndexQueueSettings()
+        });
+
+        var queue = new DatasetIndexQueue(provider.GetRequiredService<IServiceScopeFactory>(),
+            NullLogger<DatasetIndexQueue>.Instance, settings);
+
+        var key = new DatasetKey("org", Guid.NewGuid());
+        var task = queue.EnqueueAsync(key, "a.txt");
+
+        // Throws TimeoutException on a hang (the regression this guards); the completion fault is
+        // surfaced separately so we can assert on its message.
+        var finished = await TestUtils.AwaitWithin(task, TimeSpan.FromSeconds(15));
+        var ex = Should.Throw<Exception>(async () => await finished);
+        ex.Message.ShouldContain("scope resolution failed");
     }
 }
