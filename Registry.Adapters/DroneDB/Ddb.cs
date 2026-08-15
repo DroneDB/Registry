@@ -204,6 +204,12 @@ public class DDB : IDDB
             // can apply their backoff + force-retry strategy.
             throw;
         }
+        catch (DdbBusyException)
+        {
+            // Recoverable: propagate untouched so Hangfire retry decorators
+            // (OnlyOn = DdbBusyException) can match it.
+            throw;
+        }
         catch (DdbException ex)
         {
             throw new InvalidOperationException($"Cannot build '{path}' from ddb '{DatasetFolderPath}'", ex);
@@ -220,6 +226,10 @@ public class DDB : IDDB
         {
             throw;
         }
+        catch (DdbBusyException)
+        {
+            throw;
+        }
         catch (DdbException ex)
         {
             throw new InvalidOperationException($"Cannot build all from ddb '{DatasetFolderPath}'", ex);
@@ -233,6 +243,10 @@ public class DDB : IDDB
             _ddbWrapper.Build(DatasetFolderPath, null, dest, force, true);
         }
         catch (DdbBuildInProgressException)
+        {
+            throw;
+        }
+        catch (DdbBusyException)
         {
             throw;
         }

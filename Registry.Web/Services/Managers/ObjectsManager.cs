@@ -10,6 +10,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using MimeMapping;
+using Registry.Adapters.DroneDB;
 using Registry.Common;
 using Registry.Ports;
 using Registry.Ports.DroneDB;
@@ -409,6 +410,17 @@ public class ObjectsManager : IObjectsManager
             try
             {
                 entry = await IndexFileAsync(orgSlug, ds.InternalRef, ddb, path);
+            }
+            catch (TransientException)
+            {
+                // Retryable index contention: the file on disk is healthy and was never
+                // committed to the index. Quarantining would lose a perfectly good upload;
+                // reconciliation + client retry (503 + Retry-After) is sufficient.
+                throw;
+            }
+            catch (DdbBusyException)
+            {
+                throw;
             }
             catch (Exception ex)
             {
