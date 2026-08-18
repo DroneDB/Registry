@@ -27,6 +27,7 @@ using Registry.Web.Models;
 using Registry.Web.Models.Configuration;
 using Registry.Web.Services.Adapters;
 using Registry.Web.Services.HeavyTasks.Ports;
+using Registry.Web.Test.Adapters;
 using Registry.Web.Services.Managers;
 using Registry.Web.Services.Ports;
 using Shouldly;
@@ -46,18 +47,6 @@ public class RetryEndpointTest : IDisposable
 {
     private const string Org = "org1";
     private const string Ds = "ds1";
-
-    private sealed class NullIndexedEnqueuer : IIndexedJobEnqueuer
-    {
-        public string Enqueue(Expression<Action> methodCall, IndexPayload meta) => throw new NotImplementedException();
-        public string Enqueue<T>(Expression<Action<T>> methodCall, IndexPayload meta) => throw new NotImplementedException();
-        public string Enqueue(Expression<Func<Task>> methodCall, IndexPayload meta) => throw new NotImplementedException();
-        public string Enqueue<T>(Expression<Func<T, Task>> methodCall, IndexPayload meta) => throw new NotImplementedException();
-        public string Schedule(Expression<Action> methodCall, IndexPayload meta, TimeSpan delay) => throw new NotImplementedException();
-        public string Schedule<T>(Expression<Action<T>> methodCall, IndexPayload meta, TimeSpan delay) => throw new NotImplementedException();
-        public string Schedule(Expression<Func<Task>> methodCall, IndexPayload meta, TimeSpan delay) => throw new NotImplementedException();
-        public string Schedule<T>(Expression<Func<T, Task>> methodCall, IndexPayload meta, TimeSpan delay) => throw new NotImplementedException();
-    }
 
     private RegistryContext _db = null!;
     private Mock<IBackgroundJobClient> _client = null!;
@@ -86,7 +75,11 @@ public class RetryEndpointTest : IDisposable
         // Every Requeue/Delete helper funnels to the single interface method
         // ChangeState(jobId, state, fromState); default: the transition succeeds.
         _client.Setup(x => x.ChangeState(It.IsAny<string>(), It.IsAny<IState>(), It.IsAny<string>())).Returns(true);
-        JobStorage.Current = new TestJobStorage(Mock.Of<IMonitoringApi>(x => x.JobDetails(It.IsAny<string>()) == null));
+        // Swap JobStorage.Current for this test; Dispose restores the previous value (used to
+        // leak into sibling fixtures because the _client mock below hangs off this storage).
+        DisposeJobScope();
+        _jobScope = new JobStorageScope(
+            new TestJobStorage(Mock.Of<IMonitoringApi>(x => x.JobDetails(It.IsAny<string>()) == null)));
 
         // Auth: everyone may see the dataset and owns every task (UserId null breaks the chain into IsOwnerOrAdmin).
         var authManager = new Mock<IAuthManager>();
@@ -117,15 +110,21 @@ public class RetryEndpointTest : IDisposable
             writer,
             authManager.Object,
             _utils.Object,
-            new BackgroundJobsProcessor(_client.Object, new NullIndexedEnqueuer()),
+            new BackgroundJobsProcessor(_client.Object, NullIndexedEnqueuer.Create()),
             ddbManager.Object,
             new Mock<IDistributedCache>().Object,
             appSettings.Object,
             new Mock<ILogger<TasksController>>().Object);
     }
 
+    private JobStorageScope? _jobScope;
+
+    private void DisposeJobScope() => _jobScope?.Dispose();
+
     public void Dispose()
     {
+        DisposeJobScope();
+        _jobScope = null;
     }
 
     private static JobIndex NewRow(string jobId, string state, string toolId = null) => new()

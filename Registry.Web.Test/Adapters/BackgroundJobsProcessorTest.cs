@@ -26,18 +26,6 @@ namespace Registry.Web.Test.Adapters;
 [TestFixture]
 public class BackgroundJobsProcessorTest
 {
-    private sealed class NullIndexedEnqueuer : IIndexedJobEnqueuer
-    {
-        public string Enqueue(Expression<Action> methodCall, IndexPayload meta) => throw new NotImplementedException();
-        public string Enqueue<T>(Expression<Action<T>> methodCall, IndexPayload meta) => throw new NotImplementedException();
-        public string Enqueue(Expression<Func<Task>> methodCall, IndexPayload meta) => throw new NotImplementedException();
-        public string Enqueue<T>(Expression<Func<T, Task>> methodCall, IndexPayload meta) => throw new NotImplementedException();
-        public string Schedule(Expression<Action> methodCall, IndexPayload meta, TimeSpan delay) => throw new NotImplementedException();
-        public string Schedule<T>(Expression<Action<T>> methodCall, IndexPayload meta, TimeSpan delay) => throw new NotImplementedException();
-        public string Schedule(Expression<Func<Task>> methodCall, IndexPayload meta, TimeSpan delay) => throw new NotImplementedException();
-        public string Schedule<T>(Expression<Func<T, Task>> methodCall, IndexPayload meta, TimeSpan delay) => throw new NotImplementedException();
-    }
-
     private readonly Mock<IBackgroundJobClient> _client;
     private readonly BackgroundJobsProcessor _processor;
 
@@ -51,10 +39,27 @@ public class BackgroundJobsProcessorTest
         public override IStorageConnection GetConnection() => throw new NotSupportedException();
     }
 
+    private JobStorageScope? _jobStorageScope;
+
     public BackgroundJobsProcessorTest()
     {
         _client = new Mock<IBackgroundJobClient>();
-        _processor = new BackgroundJobsProcessor(_client.Object, new NullIndexedEnqueuer());
+        _processor = new BackgroundJobsProcessor(_client.Object, NullIndexedEnqueuer.Create());
+
+        // Baseline storage for this test instance (missing job => JobDetails yields null).
+        // Passed-reset isolation: fixtures no longer rely on another fixture having
+        // leaked its TestJobStorage into the static JobStorage.Current (see JobStorageScope).
+        _jobStorageScope = new JobStorageScope(new TestJobStorage(
+            Mock.Of<IMonitoringApi>(m => m.JobDetails(It.IsAny<string>()) == null)));
+    }
+
+    [TearDown]
+    public void TearDown()
+    {
+        // Restore JobStorage.Current (used to leak the fixture's TestJobStorage into other
+        // fixtures because nothing ever cleared JobStorage.Current).
+        _jobStorageScope?.Dispose();
+        _jobStorageScope = null;
     }
 
     /// <summary>
@@ -63,7 +68,7 @@ public class BackgroundJobsProcessorTest
     /// A <paramref name="stateName"/> of null models a job no longer present in Hangfire
     /// (<c>JobDetails</c> returns null).
     /// </summary>
-    private static void SetLiveState(string jobId, string stateName)
+    private void SetLiveState(string jobId, string stateName)
     {
         var dto = stateName is null
             ? null
@@ -72,7 +77,10 @@ public class BackgroundJobsProcessorTest
                 History = new List<StateHistoryDto> { new StateHistoryDto { StateName = stateName } }
             };
         var monitor = Mock.Of<IMonitoringApi>(x => x.JobDetails(jobId) == dto);
-        JobStorage.Current = new TestJobStorage(monitor);
+        // Swap per call scope; dispose the previous replacement so the restore chain reaches
+        // the original (null) value on teardown.
+        _jobStorageScope?.Dispose();
+        _jobStorageScope = new JobStorageScope(new TestJobStorage(monitor));
     }
 
     [Test]
