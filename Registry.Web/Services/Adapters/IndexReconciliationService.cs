@@ -28,10 +28,6 @@ namespace Registry.Web.Services.Adapters;
 /// </summary>
 public class IndexReconciliationService
 {
-    /// <summary>Mirrors <c>ObjectsManager.UploadsFolderName</c> / <c>QuarantineFolderName</c>.</summary>
-    private const string UploadsFolderName = ".uploads";
-    private const string QuarantineFolderName = "quarantine";
-
     private readonly record struct ReconcileSummary(
         int Unindexed, int Reindexed, int Missing, int QuarantineRemoved, long DurationMs);
 
@@ -48,6 +44,8 @@ public class IndexReconciliationService
         IOptions<AppSettings> appSettings,
         ILogger<IndexReconciliationService> logger)
     {
+        // Fail-fast policy: hard failures for the three required collaborators; lenient defaults
+        // only for the settings bag (tests construct this service without full DI)
         _context = context ?? throw new ArgumentNullException(nameof(context));
         _ddbManager = ddbManager ?? throw new ArgumentNullException(nameof(ddbManager));
         _indexQueue = indexQueue ?? throw new ArgumentNullException(nameof(indexQueue));
@@ -107,16 +105,31 @@ public class IndexReconciliationService
         var sw = Stopwatch.StartNew();
         var root = ddb.DatasetFolderPath;
 
-        // 1. Enumerate files on disk, excluding .ddb / .uploads / other reserved paths.
+        // 1. Enumerate files on disk. Walk directories iteratively and prune the reserved
+        //    folders during the walk (review round 2): Directory.EnumerateFiles with
+        //    SearchOption.AllDirectories would recurse into .ddb, holding the live database,
+        //    and scan every staged/quarantined upload; neither should ever count as
+        //    "unindexed". IsReservedPath remains as a belt-and-braces post-filter.
         var onDisk = new HashSet<string>(StringComparer.Ordinal);
         if (Directory.Exists(root))
         {
-            foreach (var file in Directory.EnumerateFiles(root, "*", SearchOption.AllDirectories))
+            var stack = new Stack<string>();
+            stack.Push(root);
+            while (stack.Count > 0)
             {
-                var rel = Path.GetRelativePath(root, file).Replace(Path.DirectorySeparatorChar, '/');
-                if (IsReservedPath(rel))
-                    continue;
-                onDisk.Add(rel);
+                var dir = stack.Pop();
+                foreach (var file in Directory.EnumerateFiles(dir))
+                {
+                    var rel = Path.GetRelativePath(root, file).Replace(Path.DirectorySeparatorChar, '/');
+                    if (!IsReservedPath(rel))
+                        onDisk.Add(rel);
+                }
+                foreach (var sub in Directory.EnumerateDirectories(dir))
+                {
+                    if (Path.GetFileName(sub) is IDDB.DatabaseFolderName or IDDB.UploadsFolderName)
+                        continue; // Live database and upload staging/quarantine folders
+                    stack.Push(sub);
+                }
             }
         }
 
@@ -164,7 +177,7 @@ public class IndexReconciliationService
 
     private int AgeOutQuarantine(string datasetRoot, Action<string> writeLine)
     {
-        var quarantineDir = Path.Combine(datasetRoot, UploadsFolderName, QuarantineFolderName);
+        var quarantineDir = Path.Combine(datasetRoot, IDDB.UploadsFolderName, IDDB.QuarantineFolderName);
         if (!Directory.Exists(quarantineDir))
             return 0;
 
@@ -193,6 +206,6 @@ public class IndexReconciliationService
     private static bool IsReservedPath(string relativePath)
     {
         return relativePath.StartsWith(IDDB.DatabaseFolderName, StringComparison.Ordinal)
-               || relativePath.StartsWith(UploadsFolderName, StringComparison.Ordinal);
+               || relativePath.StartsWith(IDDB.UploadsFolderName, StringComparison.Ordinal);
     }
 }

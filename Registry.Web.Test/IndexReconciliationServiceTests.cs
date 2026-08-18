@@ -134,6 +134,52 @@ public class IndexReconciliationServiceTests
         }
     }
 
+    /// <summary>
+    /// Regression (review round 2): the walk used to be a single recursive
+    /// <c>Directory.EnumerateFiles(root, "*", SearchOption.AllDirectories)</c>, which recursed
+    /// into the live <c>.ddb</c> folder and could surface database internals as "unindexed".
+    /// The iterative, pruned walk must never emit a path under a reserved prefix at any depth
+    /// (not just depth-1 files like <c>.ddb/unrelated.bin</c>).
+    /// </summary>
+    [Test]
+    public async Task ReconcileAllDatasetsAsync_NestedReservedDirs_ArePrunedDuringWalk()
+    {
+        using var context = CreateContext(out var orgSlug, out _, out var internalRef);
+        var root = Path.Combine(Path.GetTempPath(), "ddb_reconcile_test_" + Guid.NewGuid());
+        Directory.CreateDirectory(Path.Combine(root, IDDB.DatabaseFolderName, "build"));
+        Directory.CreateDirectory(Path.Combine(root, IDDB.UploadsFolderName, IDDB.QuarantineFolderName, "nested"));
+        try
+        {
+            File.WriteAllText(Path.Combine(root, IDDB.DatabaseFolderName, "db.sqlite"), "x");
+            File.WriteAllText(Path.Combine(root, IDDB.DatabaseFolderName, "build", "widget.bin"), "x");
+            File.WriteAllText(
+                Path.Combine(root, IDDB.UploadsFolderName, IDDB.QuarantineFolderName, "nested", "stale.tif"), "x");
+            File.WriteAllText(Path.Combine(root, "real.jpg"), "data");
+
+            var ddb = new Mock<IDDB>();
+            ddb.Setup(d => d.Search(".", true)).Returns(Enumerable.Empty<Entry>());
+
+            var indexQueue = new Mock<IDatasetIndexQueue>();
+            indexQueue.Setup(q => q.EnqueueAsync(It.IsAny<DatasetKey>(), It.IsAny<IReadOnlyList<string>>(),
+                    It.IsAny<CancellationToken>()))
+                .ReturnsAsync((IReadOnlyList<Entry>)Array.Empty<Entry>());
+
+            var service = CreateService(context, root, ddb, indexQueue);
+
+            await service.ReconcileAllDatasetsAsync();
+
+            // Exactly the one real file is re-enqueued; nested reserved-folder paths never leak.
+            indexQueue.Verify(q => q.EnqueueAsync(
+                It.Is<DatasetKey>(k => k.OrgSlug == orgSlug && k.InternalRef == internalRef),
+                It.Is<IReadOnlyList<string>>(paths => paths.Count == 1 && paths[0] == "real.jpg"),
+                It.IsAny<CancellationToken>()), Times.Once);
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
     [Test]
     public async Task ReconcileAllDatasetsAsync_EverythingIndexed_DoesNotEnqueueAnything()
     {
