@@ -29,6 +29,11 @@ public interface IDatasetIndexQueue
     Task<IReadOnlyList<Entry>> EnqueueAsync(DatasetKey dataset, IReadOnlyList<string> paths,
         CancellationToken ct = default);
 
-    /// <summary>Flushes any pending work for the dataset and waits for it to commit.</summary>
-    Task FlushAsync(DatasetKey dataset, CancellationToken ct = default);
+    /// <summary>
+    /// Releases the per-dataset lane so idle memory is not retained for a removed dataset.
+    /// In-flight requests already written to the lane keep committing (the drain loop
+    /// processes the remainder before retiring); enqueues after the release transparently
+    /// recreate a fresh lane unless the dataset is truly gone.
+    /// </summary>
+    void Release(DatasetKey dataset);
 }

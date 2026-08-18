@@ -39,6 +39,16 @@ public sealed class DatasetIndexQueue : IDatasetIndexQueue, IDisposable
         public required DatasetKey Key { get; init; }
         public required Channel<IndexRequest> Channel { get; init; }
         public required Task DrainLoop { get; set; }
+
+        /// <summary>
+        /// Set when the lane is being retired (explicit <see cref="Release"/> or idle trim).
+        /// Readers recreate a fresh lane instead of enqueueing into a lane whose drain loop
+        /// may no longer exist (a write into a dead lane would hang until the enqueue timeout).
+        /// </summary>
+        public volatile bool Retired;
+
+        /// <summary>Ticks of the last enqueue activity (best-effort, for idle trimming).</summary>
+        public long LastActivityTicks;
     }
 
     private readonly IServiceScopeFactory _scopeFactory;
@@ -73,6 +83,10 @@ public sealed class DatasetIndexQueue : IDatasetIndexQueue, IDisposable
             throw new ArgumentException(
                 $"{nameof(IndexQueueSettings)}.{nameof(IndexQueueSettings.EnqueueTimeoutSeconds)} must be > 0, got {o.EnqueueTimeoutSeconds}.",
                 nameof(o));
+        if (o.IdleLaneTrimSeconds <= 0)
+            throw new ArgumentException(
+                $"{nameof(IndexQueueSettings)}.{nameof(IndexQueueSettings.IdleLaneTrimSeconds)} must be > 0, got {o.IdleLaneTrimSeconds}.",
+                nameof(o));
     }
 
     public async Task<Entry> EnqueueAsync(DatasetKey dataset, string path, CancellationToken ct = default)
@@ -87,7 +101,28 @@ public sealed class DatasetIndexQueue : IDatasetIndexQueue, IDisposable
         if (paths.Count == 0)
             return Array.Empty<Entry>();
 
-        var lane = _lanes.GetOrAdd(dataset, CreateLane);
+        // Grab a usable lane. A lane can be retired between the lookup and the use (dataset
+        // removal or idle trim); recreate until one is found (a write into a dead lane would
+        // only complete when the enqueue timeout fired).
+        // A residual race remains (the flag is set after this check but before WriteAsync): in
+        // that case the reader waits out the bounded enqueue timeout and surfaces a
+        // TransientException, which is the correct behavior anyway for a vanishing dataset.
+        DatasetLane lane;
+        while (true)
+        {
+            var candidate = _lanes.GetOrAdd(dataset, CreateLane);
+            if (!candidate.Retired)
+            {
+                lane = candidate;
+                break;
+            }
+
+            // Replace the retired candidate only for which we can prove ownership; otherwise a
+            // concurrent enqueuer has already installed a new lane - retry against it.
+            if (!_lanes.TryRemove(dataset, out var removed) || !ReferenceEquals(removed, candidate))
+                continue;
+        }
+        Volatile.Write(ref lane.LastActivityTicks, Environment.TickCount64);
 
         using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(_opts.EnqueueTimeoutSeconds));
         using var linked = CancellationTokenSource.CreateLinkedTokenSource(ct, timeout.Token, _shutdown.Token);
@@ -117,13 +152,16 @@ public sealed class DatasetIndexQueue : IDatasetIndexQueue, IDisposable
         }
     }
 
-    public Task FlushAsync(DatasetKey dataset, CancellationToken ct = default)
+    public void Release(DatasetKey dataset)
     {
-        // The drain loop commits everything currently queued on every iteration; per-request
-        // completion guarantees the corresponding batch was committed before the TCS
-        // resolves, so an explicit flush of an idle lane is a no-op.
-        // TODO: Real flush semantics if needed: signal + wait for lane drain.
-        return Task.CompletedTask;
+        if (_lanes.TryRemove(dataset, out var lane))
+        {
+            // Flag before returning: the drain loop keeps committing any remainder and then
+            // retairs (idle-trim) itself; a new enqueue transparently recreates the lane.
+            lane.Retired = true;
+            _logger.LogDebug("Released index lane for {Org}/{Ref} (dataset removal)",
+                dataset.OrgSlug, dataset.InternalRef);
+        }
     }
 
     private DatasetLane CreateLane(DatasetKey key)
@@ -136,7 +174,13 @@ public sealed class DatasetIndexQueue : IDatasetIndexQueue, IDisposable
                 FullMode = BoundedChannelFullMode.Wait
             });
 
-        var lane = new DatasetLane { Key = key, Channel = channel, DrainLoop = Task.CompletedTask };
+        var lane = new DatasetLane
+        {
+            Key = key,
+            Channel = channel,
+            DrainLoop = Task.CompletedTask,
+            LastActivityTicks = Environment.TickCount64
+        };
         lane.DrainLoop = Task.Run(() => DrainLoopAsync(lane));
         return lane;
     }
@@ -151,6 +195,11 @@ public sealed class DatasetIndexQueue : IDatasetIndexQueue, IDisposable
         // loop continues with the next batch.
         while (!_shutdown.IsCancellationRequested)
         {
+            // Idle trim: release the lane when it holds no work and has had no enqueues for
+            // IdleLaneTrimSeconds - per-dataset lanes are long-lived singletons otherwise.
+            if (TrimIfIdle(lane, reader))
+                return;
+
             var batch = new List<IndexRequest>(_opts.MaxBatchSize);
             try
             {
@@ -226,6 +275,20 @@ public sealed class DatasetIndexQueue : IDatasetIndexQueue, IDisposable
         // Shutdown: fail whatever is left so callers do not hang forever.
         while (reader.TryRead(out var leftover))
             leftover.Tcs.TrySetException(new OperationCanceledException("Index queue is shutting down"));
+    }
+
+    private bool TrimIfIdle(DatasetLane lane, ChannelReader<IndexRequest> reader)
+    {
+        if (reader.TryPeek(out _))
+            return false; // work still queued - not idle
+        var idleMs = Environment.TickCount64 - Volatile.Read(ref lane.LastActivityTicks);
+        if (idleMs < _opts.IdleLaneTrimSeconds * 1000L)
+            return false;
+        lane.Retired = true;
+        _lanes.TryRemove(lane.Key, out _);
+        _logger.LogDebug("Released idle index lane for {Org}/{Ref} after {IdleSec}s",
+            lane.Key.OrgSlug, lane.Key.InternalRef, _opts.IdleLaneTrimSeconds);
+        return true;
     }
 
     private async Task CommitBatchAsync(DatasetKey key, List<IndexRequest> batch)

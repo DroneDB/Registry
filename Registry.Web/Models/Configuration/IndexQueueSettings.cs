@@ -22,4 +22,11 @@ public class IndexQueueSettings
 
     /// <summary>Caller-side deadline before a transient failure is returned.</summary>
     public int EnqueueTimeoutSeconds { get; set; } = 120;
+
+    /// <summary>
+    /// Seconds a per-dataset lane may stay idle (no queued work, no enqueue activity) before
+    /// it is released and its memory reclaimed. New enqueues transparently recreate the lane.
+    /// Must be &gt; 0 (validated at startup).
+    /// </summary>
+    public int IdleLaneTrimSeconds { get; set; } = 1800;
 }

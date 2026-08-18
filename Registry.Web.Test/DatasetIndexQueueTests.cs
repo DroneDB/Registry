@@ -260,4 +260,29 @@ public class DatasetIndexQueueTests
         var ex = Should.Throw<Exception>(async () => await finished);
         ex.Message.ShouldContain("scope resolution failed");
     }
+
+    /// <summary>
+    /// <see cref="IDatasetIndexQueue.Release"/> (invoked on dataset cleanup) must not break
+    /// subsequent writes: a following enqueue transparently recreates the lane and commits.
+    /// </summary>
+    [Test]
+    public async Task EnqueueAsync_AfterRelease_RecreatesLaneAndSucceeds()
+    {
+        var (queue, ddb) = CreateQueue();
+        var key = new DatasetKey("org-release", Guid.NewGuid());
+
+        ddb.Setup(d => d.AddRawBatchWithOptions(It.IsAny<IReadOnlyList<string>>(), It.IsAny<bool>()))
+            .Returns((IReadOnlyList<string> paths, bool _) => new BatchAddResult
+            {
+                Entries = paths.Select(p => MakeAdded(p)).ToList()
+            });
+
+        (await queue.EnqueueAsync(key, "a.txt")).Path.ShouldBe("a.txt");
+
+        // simulate the dataset-cleanup release
+        queue.Release(key);
+
+        var result = await queue.EnqueueAsync(key, "b.txt");
+        result.Path.ShouldBe("b.txt");
+    }
 }
