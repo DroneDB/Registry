@@ -98,12 +98,26 @@ public class SimpleBackgroundJobsProcessor : IBackgroundJobsProcessor
 
     public bool Delete(string jobId)
     {
-        throw new NotImplementedException();
+        if (!_jobs.TryGetValue(int.Parse(jobId), out var status))
+            return false;
+
+        if (status is JobStatus.Processing or JobStatus.Succeeded or JobStatus.Failed)
+            _jobs[int.Parse(jobId)] = JobStatus.Deleted;
+
+        return true;
     }
 
+    // Mirrors the production contract: flipped to Enqueued only from Failed (Failed-only guard).
     public bool Requeue(string jobId)
     {
-        throw new NotImplementedException();
+        if (!_jobs.TryGetValue(int.Parse(jobId), out var status))
+            return false;
+
+        if (status != JobStatus.Failed)
+            return false;
+
+        _jobs[int.Parse(jobId)] = JobStatus.Enqueued;
+        return true;
     }
 
     public JobStatus GetJobStatus(string jobId)

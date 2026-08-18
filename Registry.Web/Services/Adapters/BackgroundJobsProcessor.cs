@@ -4,6 +4,7 @@ using System.Linq;
 using System.Linq.Expressions;
 using System.Threading.Tasks;
 using Hangfire;
+using Hangfire.States;
 using Registry.Web.Models;
 using Registry.Web.Services.Ports;
 
@@ -41,7 +42,29 @@ public class BackgroundJobsProcessor : IBackgroundJobsProcessor
 
     public bool Delete(string jobId) => _client.Delete(jobId);
 
-    public bool Requeue(string jobId) => _client.Delete(jobId);
+    /// <summary>
+    /// Re-runs jobId under the same id by transitioning it back to <c>EnqueuedState</c>
+    /// (same-id state transition, not delete). Failed-only by design: jobs in any other
+    /// state are rejected. The live Hangfire state is authoritative for the guard —
+    /// <c>JobIndex.CurrentState</c> is display-only because the state-filter write is async
+    /// and may lag.
+    /// </summary>
+    /// <param name="jobId">The Hangfire job id to re-queue.</param>
+    /// <returns>True when the job was re-queued; false when it no longer exists in Hangfire or is not in <c>Failed</c>.</returns>
+    public bool Requeue(string jobId)
+    {
+        if (JobStorage.Current is null) return false;
+
+        var details = JobStorage.Current.GetMonitoringApi().JobDetails(jobId);
+        // Stock JobDetailsDto (1.8.23) has no direct current-state property (in contrast
+        // to newer versions); the current state is the last history entry, same as GetJobStatus.
+        var stateName = details?.History.LastOrDefault()?.StateName;
+
+        if (stateName == null) return false; // no such job in Hangfire (expired/purged)
+        if (stateName != FailedState.StateName) return false; // Failed-only guard
+
+        return _client.Requeue(jobId, stateName); // BackgroundJobClientExtensions.Requeue
+    }
 
     public JobStatus GetJobStatus(string jobId)
     {
