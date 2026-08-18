@@ -100,6 +100,34 @@ public class JobIndexWriter(RegistryContext db, ILogger<JobIndexWriter> log,
         await InvalidateTasksListCacheAsync(meta.OrgSlug, meta.DsSlug, ct);
     }
 
+    public async Task ResetForRequeueAsync(string jobId, CancellationToken ct = default)
+    {
+        var ji = await db.JobIndices.AsTracking().FirstOrDefaultAsync(x => x.JobId == jobId, ct);
+        if (ji is null || ji.CurrentState != "Failed")
+            return; // nothing to reset: missing row or state already changed
+
+        // Mirror the reset block in UpsertOnEnqueueAsync so a re-queued run starts clean.
+        // Called by the Retry controller BEFORE the re-queue, while the row is still Failed,
+        // so the async Enqueued state-filter write always lands after this reset.
+        ji.ProcessingAtUtc = null;
+        ji.SucceededAtUtc = null;
+        ji.FailedAtUtc = null;
+        ji.DeletedAtUtc = null;
+        ji.ScheduledAtUtc = null;
+        ji.ProgressPercent = null;
+        ji.PhaseMessage = null;
+        ji.ArtifactSizeBytes = null;
+        ji.ArtifactSha256 = null;
+        ji.ErrorType = null;
+        ji.LogTailJson = null;
+        ji.ProgressUpdatedAtUtc = null;
+
+        await db.SaveChangesAsync(ct);
+
+        if (ji.OrgSlug != null && ji.DsSlug != null)
+            await InvalidateTasksListCacheAsync(ji.OrgSlug, ji.DsSlug, ct);
+    }
+
     public async Task UpdateStateAsync(string jobId, string newState, DateTime changedAtUtc,
         CancellationToken ct = default)
     {

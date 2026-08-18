@@ -20,6 +20,7 @@ using Registry.Web.Services.HeavyTasks;
 using Registry.Web.Services.HeavyTasks.Adapters;
 using Registry.Web.Services.HeavyTasks.Models;
 using Registry.Web.Services.HeavyTasks.Ports;
+using Registry.Ports;
 using Registry.Web.Services.Managers;
 using Registry.Web.Services.Ports;
 using Registry.Web.Utilities;
@@ -45,6 +46,7 @@ public class TasksController : ControllerBaseEx
     private readonly IAuthManager _authManager;
     private readonly IUtils _utils;
     private readonly IBackgroundJobsProcessor _processor;
+    private readonly IDdbManager _ddbManager;
     private readonly IDistributedCache _cache;
     private readonly ProcessingPlatformSettings _settings;
     private readonly string _tempPath;
@@ -59,6 +61,7 @@ public class TasksController : ControllerBaseEx
         IAuthManager authManager,
         IUtils utils,
         IBackgroundJobsProcessor processor,
+        IDdbManager ddbManager,
         IDistributedCache cache,
         IOptions<AppSettings> appSettings,
         ILogger<TasksController> logger)
@@ -71,6 +74,7 @@ public class TasksController : ControllerBaseEx
         _authManager = authManager;
         _utils = utils;
         _processor = processor;
+        _ddbManager = ddbManager;
         _cache = cache;
         _settings = appSettings.Value.ProcessingPlatform ?? new ProcessingPlatformSettings();
         _tempPath = appSettings.Value.TempPath ?? Path.Combine(Path.GetTempPath(), "registry");
@@ -364,8 +368,12 @@ public class TasksController : ControllerBaseEx
 
     // ---- POST /tasks/{id}/retry -------------------------------------------
 
+    // Build tool identifier (matches the JobIndex.ToolId default and BuildStatusService.BuildToolId).
+    private const string BuildToolId = "build";
+
     [HttpPost("{id}/retry", Name = nameof(TasksController) + "." + nameof(Retry))]
     [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status409Conflict)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> Retry(
         [FromRoute, Required] string orgSlug, [FromRoute, Required] string dsSlug,
@@ -374,8 +382,48 @@ public class TasksController : ControllerBaseEx
         var (job, error) = await LoadAuthorizedTask(orgSlug, dsSlug, id, AccessType.Write, ct);
         if (error is not null) return error;
 
-        var requeued = _processor.Requeue(job!.JobId);
+        // Sweep-ownership rule: dependency-gated builds are re-run by the pending-build sweep;
+        // the Retry button must not start a competing run while a .pending marker exists.
+        if (job!.ToolId == BuildToolId && IsBuildPendingSafe(orgSlug, dsSlug))
+            return Conflict(new ErrorResponse(
+                "A pending build retry is already scheduled for this dataset; the pending-build sweep owns that retry"));
+
+        // Reset stale prior-run state (error fields, timestamps, artifacts) while the row is
+        // still Failed, BEFORE the re-queue, so it cannot race the async Enqueued stamp.
+        await _writer.ResetForRequeueAsync(job.JobId, ct);
+
+        var requeued = _processor.Requeue(job.JobId);
+        if (!requeued)
+        {
+            _logger.LogInformation(
+                "Retry of task {JobId} rejected: row state '{State}' (Failed-only guard or job missing in Hangfire)",
+                job.JobId, job.CurrentState);
+            // State-free message on purpose: the DB row state can lag the guard's live read,
+            // so do not assert a state here; details are in the log line above.
+            return Conflict(new ErrorResponse(
+                "Task cannot be retried in its current state or no longer exists in the job store"));
+        }
         return Ok(new { requeued });
+    }
+
+    /// <summary>
+    /// Checks the dataset for on-disk pending-build markers (the <c>.pending</c> files the
+    /// DroneDB build rethrow leaves behind). Any failure returns false so that a ddb
+    /// availability hiccup never blocks the user-initiated retry.
+    /// </summary>
+    private bool IsBuildPendingSafe(string orgSlug, string dsSlug)
+    {
+        try
+        {
+            var ds = _utils.GetDataset(orgSlug, dsSlug);
+            var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
+            return ddb.IsBuildPending();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Retry: IsBuildPending check failed for {Org}/{Ds}, continuing retry", orgSlug, dsSlug);
+            return false;
+        }
     }
 
     // ---- POST /tasks/{id}/delete -----------------------------------------

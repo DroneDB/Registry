@@ -42,6 +42,14 @@ public interface IJobIndexWriter
     /// </summary>
     Task<(bool deleted, string? orgSlug, string? dsSlug)> DeleteTerminalJobByIdAsync(string jobId, CancellationToken ct = default);
 
+    /// <summary>
+    /// Clears stale prior-run state (state timestamps, progress, artifact, error fields) from a
+    /// JobIndex record before the job is re-queued under the same id. No-op unless the row is
+    /// currently in the <c>Failed</c> state, which protects against racing the asynchronous
+    /// state-filter write that will stamp <c>Enqueued</c> right after the re-queue call.
+    /// </summary>
+    Task ResetForRequeueAsync(string jobId, CancellationToken ct = default);
+
     /// <summary>Persists produced-artifact metadata (size + SHA-256) for a task.</summary>
     Task UpdateArtifactAsync(string jobId, long sizeBytes, string? sha256, CancellationToken ct = default);
 
