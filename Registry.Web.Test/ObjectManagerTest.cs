@@ -767,6 +767,130 @@ public class ObjectManagerTest : TestBase
         Directory.EnumerateFiles(quarantineDir).ShouldContain(f => f.EndsWith(destPath));
     }
 
+    /// <summary>
+    /// Regression (review round 2, finding 1): AddNew with a payload used to write straight to
+    /// the final dataset path with no compensation. After the path unification it goes through the
+    /// same stage → atomic-move → quarantine flow as streamed uploads; an index failure must
+    /// quarantine the file rather than leave an untracked orphan at the destination path.
+    /// </summary>
+    [Test]
+    public async Task AddNew_IndexFails_QuarantinesFileInsteadOfLeavingOrphan()
+    {
+        const string destPath = "a/data-addnew-orphan.tif";
+
+        await using var context = GetTest1Context();
+        using var test = new TestFS(Test4ArchiveUrl, BaseTestFolder);
+
+        var settings = JsonConvert.DeserializeObject<AppSettings>(_settingsJson);
+        settings.DatasetsPath = test.TestFolder;
+        _appSettingsMock.Setup(o => o.Value).Returns(settings);
+        _authManagerMock.Setup(o => o.IsUserAdmin()).Returns(Task.FromResult(true));
+        _authManagerMock.Setup(o => o.IsOwnerOrAdmin(It.IsAny<Dataset>())).Returns(Task.FromResult(true));
+        _authManagerMock.Setup(o => o.RequestAccess(It.IsAny<Dataset>(),
+            It.IsAny<AccessType>())).Returns(Task.FromResult(true));
+        _authManagerMock.Setup(o => o.RequestAccess(It.IsAny<Organization>(),
+            It.IsAny<AccessType>())).Returns(Task.FromResult(true));
+
+        var webUtils = new WebUtils(_authManagerMock.Object, context, _appSettingsMock.Object,
+            _httpContextAccessorMock.Object, _ddbFactoryMock.Object);
+
+        var failingIndexQueue = new Mock<IDatasetIndexQueue>();
+        failingIndexQueue.Setup(q => q.EnqueueAsync(It.IsAny<DatasetKey>(), It.IsAny<string>(),
+                It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new InvalidOperationException("simulated index failure"));
+
+        var objectManager = new ObjectsManager(_objectManagerLogger, context, _appSettingsMock.Object,
+            new DdbManager(_appSettingsMock.Object, _ddbFactoryLogger, DdbWrapper), webUtils, _authManagerMock.Object,
+            _cacheManager, _fileSystem, _backgroundJobsProcessor, DdbWrapper, _thumbnailGeneratorMock.Object,
+            _jobIndexQueryMock.Object, _buildPendingService, indexQueue: failingIndexQueue.Object);
+
+        var stream = new MemoryStream(new byte[64 * 1024], 0, 64 * 1024, false, true);
+
+        var act = async () => await objectManager.AddNew(
+            MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug, destPath, stream);
+
+        await Should.ThrowAsync<InvalidOperationException>(act);
+
+        var datasetFolder = Path.Combine(test.TestFolder, MagicStrings.PublicOrganizationSlug,
+            _defaultDatasetGuid.ToString());
+
+        // Not left as an untracked orphan
+        File.Exists(Path.Combine(datasetFolder, "a", "data-addnew-orphan.tif")).ShouldBeFalse();
+
+        // Quarantined instead
+        var quarantineDir = Path.Combine(datasetFolder, IDDB.UploadsFolderName, IDDB.QuarantineFolderName);
+        Directory.Exists(quarantineDir).ShouldBeTrue();
+        Directory.EnumerateFiles(quarantineDir).ShouldContain(f => f.EndsWith("data-addnew-orphan.tif"));
+    }
+
+    /// <summary>
+    /// Happy-path companion: a successful AddNew pays off the staged temp file exactly once
+    /// (atomic move), so no orphan temp residue remains under the per-dataset uploads folder.
+    /// </summary>
+    [Test]
+    public async Task AddNew_Succeeds_PaysOffStagedTempFile()
+    {
+        const string destPath = "done/addnew-happy.txt";
+
+        await using var context = GetTest1Context();
+        using var test = new TestFS(Test4ArchiveUrl, BaseTestFolder);
+
+        var settings = JsonConvert.DeserializeObject<AppSettings>(_settingsJson);
+        settings.DatasetsPath = test.TestFolder;
+        _appSettingsMock.Setup(o => o.Value).Returns(settings);
+        _authManagerMock.Setup(o => o.IsUserAdmin()).Returns(Task.FromResult(true));
+        _authManagerMock.Setup(o => o.IsOwnerOrAdmin(It.IsAny<Dataset>())).Returns(Task.FromResult(true));
+        _authManagerMock.Setup(o => o.RequestAccess(It.IsAny<Dataset>(),
+            It.IsAny<AccessType>())).Returns(Task.FromResult(true));
+        _authManagerMock.Setup(o => o.RequestAccess(It.IsAny<Organization>(),
+            It.IsAny<AccessType>())).Returns(Task.FromResult(true));
+
+        var webUtils = new WebUtils(_authManagerMock.Object, context, _appSettingsMock.Object,
+            _httpContextAccessorMock.Object, _ddbFactoryMock.Object);
+
+        var payload = "ok"u8.ToArray(); // tiny file: finalization takes the Level-1 branch
+        var datasetFolder = Path.Combine(test.TestFolder, MagicStrings.PublicOrganizationSlug,
+            _defaultDatasetGuid.ToString());
+
+        var okIndexQueue = new Mock<IDatasetIndexQueue>(MockBehavior.Loose);
+        // The coalescer is mocked, but the underlying native index is the real one (same
+        // fixture wrapper the dataset uses), so the path after commit is a valid database
+        // entry for the real IsBuildable/EntryExists checks in finalization.
+        okIndexQueue
+            .Setup(q => q.EnqueueAsync(It.IsAny<DatasetKey>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .Returns((DatasetKey key, string p, CancellationToken _) =>
+            {
+                // The native Add validates containment against the dataset folder, so it wants
+                // the fully-qualified on-disk path (mirrors DDB.AddRaw -> GetLocalPath()).
+                DdbWrapper.Add(datasetFolder, Path.GetFullPath(Path.Combine(datasetFolder, p)));
+                return Task.FromResult(new Registry.Ports.DroneDB.Entry { Path = p, Size = payload.Length });
+            });
+
+        var objectManager = new ObjectsManager(_objectManagerLogger, context, _appSettingsMock.Object,
+            new DdbManager(_appSettingsMock.Object, _ddbFactoryLogger, DdbWrapper), webUtils, _authManagerMock.Object,
+            _cacheManager, _fileSystem, _backgroundJobsProcessor, DdbWrapper, _thumbnailGeneratorMock.Object,
+            _jobIndexQueryMock.Object, _buildPendingService, indexQueue: okIndexQueue.Object);
+
+        var stream = new MemoryStream(payload, 0, payload.Length, false, true);
+
+        var dto = await objectManager.AddNew(
+            MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug, destPath, stream);
+
+        dto.Path.ShouldBe(destPath);
+
+        // Final file exists...
+        var finalFile = Path.Combine(datasetFolder, "done", "addnew-happy.txt");
+        File.Exists(finalFile).ShouldBeTrue();
+        File.ReadAllBytes(finalFile).ShouldBe(payload);
+
+        // ...and the staged temp (.uploads/*.tmp) was consumed, not duplicated
+        var uploadsDir = Path.Combine(datasetFolder, IDDB.UploadsFolderName);
+        var leftovers = Directory.Exists(uploadsDir)
+            ? Directory.EnumerateFiles(uploadsDir, "*.tmp", SearchOption.AllDirectories).ToList()
+            : [];
+        leftovers.ShouldBeEmpty();
+    }
+
     [Test]
     public async Task EndToEnd_HappyPath()
     {

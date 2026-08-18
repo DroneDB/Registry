@@ -52,22 +52,9 @@ public class ObjectsManager : IObjectsManager
     private readonly IBuildStatusService _buildStatusService;
     private readonly IDatasetIndexQueue? _indexQueue;
 
-    /// <summary>
-    /// Name of the per-dataset folder that holds in-flight streamed uploads before they are
-    /// atomically moved into place. Reserved so users cannot create a conflicting entry.
-    /// </summary>
-    private const string UploadsFolderName = ".uploads";
-
-    /// <summary>
-    /// Sub-folder of <see cref="UploadsFolderName"/> holding files that were placed on disk but
-    /// failed to index, pending the reconciliation sweep. Already covered by
-    /// <see cref="IsReservedPath"/> since it is nested under the reserved uploads folder.
-    /// </summary>
-    private const string QuarantineFolderName = "quarantine";
-
     private static bool IsReservedPath(string path)
     {
-        return path.StartsWith(IDDB.DatabaseFolderName) || path.StartsWith(UploadsFolderName);
+        return path.StartsWith(IDDB.DatabaseFolderName) || path.StartsWith(IDDB.UploadsFolderName);
     }
 
     public ObjectsManager(ILogger<ObjectsManager> logger,
@@ -240,29 +227,25 @@ public class ObjectsManager : IObjectsManager
 
     public async Task<EntryDto> AddNew(string orgSlug, string dsSlug, string path, Stream stream = null)
     {
-        var ds = _utils.GetDataset(orgSlug, dsSlug);
-
         _logger.LogInformation("In AddNew('{OrgSlug}/{DsSlug}')", orgSlug, dsSlug);
 
-        var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
-
-        // Validate path to prevent path traversal attacks
-        CommonUtils.ValidateRelativePath(path, ddb.DatasetFolderPath);
-
-        if (IsReservedPath(path))
-            throw new InvalidOperationException($"'{path}' is a reserved path");
-
-        if (!await _authManager.RequestAccess(ds, AccessType.Write))
-            throw new UnauthorizedException("The current user is not allowed to write to this dataset");
-
-        // Extension policy gate - reject before writing to disk. Folders (stream == null) have no
-        // extension and must not be judged by the policy, or allow-list mode would reject them all.
-        if (stream != null && !_importSettings.IsExtensionAllowed(path))
-            throw new ExtensionBlockedException(path, _importSettings, _importSettings.AllowedFileExtensions.Length > 0);
-
-        // If it's a folder
+        // Folder creation has no payload to stage: validate and create/index the empty folder
+        // directly (the upload/quarantine flow does not apply).
         if (stream == null)
         {
+            var ds = _utils.GetDataset(orgSlug, dsSlug);
+
+            var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
+
+            // Validate path to prevent path traversal attacks
+            CommonUtils.ValidateRelativePath(path, ddb.DatasetFolderPath);
+
+            if (IsReservedPath(path))
+                throw new InvalidOperationException($"'{path}' is a reserved path");
+
+            if (!await _authManager.RequestAccess(ds, AccessType.Write))
+                throw new UnauthorizedException("The current user is not allowed to write to this dataset");
+
             if (ddb.EntryExists(path))
                 throw new InvalidOperationException("Cannot create a folder on another entry");
 
@@ -284,19 +267,16 @@ public class ObjectsManager : IObjectsManager
             };
         }
 
-        // Check user storage space
-        await _utils.CheckCurrentUserStorage(stream.Length);
-
-        var localFilePath = ddb.GetLocalPath(path);
-        _fs.EnsureParentFolderExists(localFilePath);
-
-        _logger.LogInformation("Local file path is '{LocalFilePath}'", localFilePath);
-
-        // Write down the file
-        await using (var localFileStream = _fs.OpenWrite(localFilePath))
-            await stream.CopyToAsync(localFileStream);
-
-        return await FinalizeAddedFileAsync(orgSlug, dsSlug, ds.InternalRef, ddb, path, localFilePath);
+        // File upload: stage the stream in the per-dataset temp folder, then run the exact same
+        // validation / atomic-move / index / quarantine flow as streamed uploads. The buffered
+        // path used to write straight to the final location with no compensation, leaving an
+        // untracked orphan on index failure (review round 2, finding 1); unifying it under
+        // CommitStreamedAsync guarantees quarantine compensation on every failure path.
+        // Path/auth/extension checks still run before anything is committed (inside the commit);
+        // storage quota is checked against the authoritative on-disk size, as in the streamed
+        // flow.
+        var (tempFilePath, writeBytes) = await StreamToTempAsync(orgSlug, dsSlug, stream);
+        return await CommitStreamedAsync(orgSlug, dsSlug, path, tempFilePath, writeBytes);
     }
 
     /// <summary>
@@ -314,8 +294,9 @@ public class ObjectsManager : IObjectsManager
         var ds = _utils.GetDataset(orgSlug, dsSlug);
         var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
 
-        // Temp lives under the dataset folder (same volume as the final file) -> atomic move later
-        var tempDir = Path.Combine(ddb.DatasetFolderPath, UploadsFolderName);
+        // Temp lives under the dataset folder (same volume as the final file) -> a same-volume
+        // File.Move at commit time is a genuine atomic rename (review round 2, finding 6).
+        var tempDir = Path.Combine(ddb.DatasetFolderPath, IDDB.UploadsFolderName);
         _fs.FolderCreate(tempDir);
         var tempPath = Path.Combine(tempDir, Guid.NewGuid().ToString("N") + ".tmp");
 
@@ -359,7 +340,7 @@ public class ObjectsManager : IObjectsManager
 
         // Defense-in-depth: the temp file must live inside this dataset's reserved uploads folder.
         // Validate BEFORE the try/finally so an arbitrary/foreign path is never moved nor deleted.
-        var uploadsRoot = Path.GetFullPath(Path.Combine(ddb.DatasetFolderPath, UploadsFolderName));
+        var uploadsRoot = Path.GetFullPath(Path.Combine(ddb.DatasetFolderPath, IDDB.UploadsFolderName));
         if (!uploadsRoot.EndsWith(Path.DirectorySeparatorChar))
             uploadsRoot += Path.DirectorySeparatorChar;
 
@@ -426,7 +407,7 @@ public class ObjectsManager : IObjectsManager
             {
                 // File is on disk but failed to index: quarantine instead of leaving an
                 // untracked file behind.
-                await QuarantineAsync(ddb, orgSlug, dsSlug, path, localFilePath, ex);
+                Quarantine(ddb, orgSlug, dsSlug, path, localFilePath, ex);
                 throw;
             }
 
@@ -445,12 +426,12 @@ public class ObjectsManager : IObjectsManager
     }
 
     /// <summary>
-    /// Compensating action for <see cref="CommitStreamedAsync"/>: moves a file that was placed on
-    /// disk but failed to index into a per-dataset quarantine folder, so it is neither lost nor
-    /// left as an untracked orphan. Never throws; a failed compensation is logged for the
-    /// reconciliation sweep to pick up.
+    /// Compensating action for the commit flow: moves a file that was placed on disk but failed
+    /// to index into a per-dataset quarantine folder, so it is neither lost nor left as an
+    /// untracked orphan. Synchronous by design (no awaitable dependency remains); never throws —
+    /// a failed compensation is logged for the reconciliation sweep to pick up.
     /// </summary>
-    private async Task QuarantineAsync(IDDB ddb, string orgSlug, string dsSlug, string path,
+    private void Quarantine(IDDB ddb, string orgSlug, string dsSlug, string path,
         string localFilePath, Exception cause)
     {
         try
@@ -458,7 +439,7 @@ public class ObjectsManager : IObjectsManager
             if (!File.Exists(localFilePath))
                 return;
 
-            var quarantineDir = Path.Combine(ddb.DatasetFolderPath, UploadsFolderName, QuarantineFolderName);
+            var quarantineDir = Path.Combine(ddb.DatasetFolderPath, IDDB.UploadsFolderName, IDDB.QuarantineFolderName);
             _fs.FolderCreate(quarantineDir);
 
             var safeName = Path.GetFileName(path);
@@ -480,8 +461,6 @@ public class ObjectsManager : IObjectsManager
                 "Failed to quarantine '{Path}' in dataset '{OrgSlug}/{DsSlug}' after index failure (original cause: {Cause})",
                 path, orgSlug, dsSlug, cause.Message);
         }
-
-        await Task.CompletedTask;
     }
 
     /// <summary>
@@ -511,17 +490,6 @@ public class ObjectsManager : IObjectsManager
 
         _logger.LogInformation("Entry OK");
         return entry;
-    }
-
-    /// <summary>
-    /// Shared tail of the add-file flow: index the on-disk file, fetch the entry, schedule the
-    /// build (or thumbnail) in the background and invalidate dependent caches.
-    /// </summary>
-    private async Task<EntryDto> FinalizeAddedFileAsync(string orgSlug, string dsSlug, Guid internalRef,
-        IDDB ddb, string path, string localFilePath)
-    {
-        Entry entry = await IndexFileAsync(orgSlug, internalRef, ddb, path);
-        return await FinalizeIndexedFileAsync(orgSlug, dsSlug, ddb, entry, path, localFilePath);
     }
 
     /// <summary>

@@ -22,4 +22,18 @@ public interface IDDB : IDdbIndex, IDdbBuild, IDdbMeta, IDdbRaster, IDdbAnalytic
     public const string DatabaseFolderName = ".ddb";
     public const string BuildFolderName = "build";
     public const string TmpFolderName = "tmp";
+
+    /// <summary>
+    /// Per-dataset folder holding in-flight uploads (staged temp files and the quarantine
+    /// sub-folder) before they are atomically moved into place. Reserved so users cannot
+    /// create a conflicting entry. Single source of truth shared by the upload flow
+    /// (ObjectsManager) and the reconciliation sweep (IndexReconciliationService).
+    /// </summary>
+    public const string UploadsFolderName = ".uploads";
+
+    /// <summary>
+    /// Sub-folder of <see cref="UploadsFolderName"/> holding files that were placed on disk
+    /// but failed to index, pending the reconciliation sweep.
+    /// </summary>
+    public const string QuarantineFolderName = "quarantine";
 }
