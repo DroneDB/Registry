@@ -285,4 +285,39 @@ public class DatasetIndexQueueTests
         var result = await queue.EnqueueAsync(key, "b.txt");
         result.Path.ShouldBe("b.txt");
     }
+
+    /// <summary>
+    /// Idle trim retires a lane while callers keep enqueueing. Every request must still resolve:
+    /// requests accepted by the retiring lane are committed by it, the rest replay on a fresh lane.
+    /// </summary>
+    [Test]
+    public async Task EnqueueAsync_ConcurrentWithIdleTrim_LosesNoCompletion()
+    {
+        var (queue, ddb) = CreateQueue(new IndexQueueSettings
+        {
+            BatchWindowMs = 5,
+            MaxBatchSize = 8,
+            IdleLaneTrimSeconds = 1
+        });
+        var key = new DatasetKey("org-trim", Guid.NewGuid());
+
+        ddb.Setup(d => d.AddRawBatchWithOptions(It.IsAny<IReadOnlyList<string>>(), It.IsAny<bool>()))
+            .Returns((IReadOnlyList<string> paths, bool _) => new BatchAddResult
+            {
+                Entries = paths.Select(p => MakeAdded(p)).ToList()
+            });
+
+        // Span more than IdleLaneTrimSeconds, with gaps long enough for the lane to go idle.
+        var deadline = DateTime.UtcNow.AddSeconds(4);
+        var i = 0;
+        while (DateTime.UtcNow < deadline)
+        {
+            var path = $"f{i++}.txt";
+            var entry = await queue.EnqueueAsync(key, path);
+            entry.Path.ShouldBe(path);
+            await Task.Delay(300);
+        }
+
+        i.ShouldBeGreaterThan(1);
+    }
 }

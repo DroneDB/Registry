@@ -26,7 +26,7 @@ public class IndexQueueSettings
     /// <summary>
     /// Seconds a per-dataset lane may stay idle (no queued work, no enqueue activity) before
     /// it is released and its memory reclaimed. New enqueues transparently recreate the lane.
-    /// Must be &gt; 0 (validated at startup).
+    /// Must be in (0, 86400] (validated at startup).
     /// </summary>
     public int IdleLaneTrimSeconds { get; set; } = 1800;
 }

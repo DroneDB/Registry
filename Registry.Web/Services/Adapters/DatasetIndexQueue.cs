@@ -57,6 +57,8 @@ public sealed class DatasetIndexQueue : IDatasetIndexQueue, IDisposable
     private readonly ConcurrentDictionary<DatasetKey, DatasetLane> _lanes = new();
     private readonly CancellationTokenSource _shutdown = new();
 
+    private const int MaxIdleLaneTrimSeconds = 86_400;
+
     public DatasetIndexQueue(IServiceScopeFactory scopeFactory, ILogger<DatasetIndexQueue> logger,
         IOptions<AppSettings> appSettings)
     {
@@ -83,9 +85,11 @@ public sealed class DatasetIndexQueue : IDatasetIndexQueue, IDisposable
             throw new ArgumentException(
                 $"{nameof(IndexQueueSettings)}.{nameof(IndexQueueSettings.EnqueueTimeoutSeconds)} must be > 0, got {o.EnqueueTimeoutSeconds}.",
                 nameof(o));
-        if (o.IdleLaneTrimSeconds <= 0)
+        // Upper bound keeps TimeSpan.FromSeconds() below the CancellationTokenSource delay limit
+        // used by the drain loop's idle deadline.
+        if (o.IdleLaneTrimSeconds is <= 0 or > MaxIdleLaneTrimSeconds)
             throw new ArgumentException(
-                $"{nameof(IndexQueueSettings)}.{nameof(IndexQueueSettings.IdleLaneTrimSeconds)} must be > 0, got {o.IdleLaneTrimSeconds}.",
+                $"{nameof(IndexQueueSettings)}.{nameof(IndexQueueSettings.IdleLaneTrimSeconds)} must be in (0, {MaxIdleLaneTrimSeconds}], got {o.IdleLaneTrimSeconds}.",
                 nameof(o));
     }
 
@@ -101,48 +105,48 @@ public sealed class DatasetIndexQueue : IDatasetIndexQueue, IDisposable
         if (paths.Count == 0)
             return Array.Empty<Entry>();
 
-        // Grab a usable lane. A lane can be retired between the lookup and the use (dataset
-        // removal or idle trim); recreate until one is found (a write into a dead lane would
-        // only complete when the enqueue timeout fired).
-        // A residual race remains (the flag is set after this check but before WriteAsync): in
-        // that case the reader waits out the bounded enqueue timeout and surfaces a
-        // TransientException, which is the correct behavior anyway for a vanishing dataset.
-        DatasetLane lane;
-        while (true)
-        {
-            var candidate = _lanes.GetOrAdd(dataset, CreateLane);
-            if (!candidate.Retired)
-            {
-                lane = candidate;
-                break;
-            }
-
-            // Replace the retired candidate only for which we can prove ownership; otherwise a
-            // concurrent enqueuer has already installed a new lane - retry against it.
-            if (!_lanes.TryRemove(dataset, out var removed) || !ReferenceEquals(removed, candidate))
-                continue;
-        }
-        Volatile.Write(ref lane.LastActivityTicks, Environment.TickCount64);
-
         using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(_opts.EnqueueTimeoutSeconds));
         using var linked = CancellationTokenSource.CreateLinkedTokenSource(ct, timeout.Token, _shutdown.Token);
 
-        var tasks = new Task<Entry>[paths.Count];
         try
         {
-            for (var i = 0; i < paths.Count; i++)
+            while (true)
             {
-                var tcs = new TaskCompletionSource<Entry>(TaskCreationOptions.RunContinuationsAsynchronously);
-                var request = new IndexRequest { Path = paths[i], Tcs = tcs };
-                tasks[i] = tcs.Task;
+                // Bounds the retry-on-retirement loop below by the caller deadline.
+                linked.Token.ThrowIfCancellationRequested();
 
-                // Backpressure: if the lane's channel is full, this await blocks the caller (does
-                // not throw or silently drop) until room is available or the deadline/cancellation
-                // fires.
-                await lane.Channel.Writer.WriteAsync(request, linked.Token);
+                var lane = AcquireLane(dataset);
+                Volatile.Write(ref lane.LastActivityTicks, Environment.TickCount64);
+
+                var tasks = new Task<Entry>[paths.Count];
+                var accepted = 0;
+                try
+                {
+                    for (var i = 0; i < paths.Count; i++)
+                    {
+                        var tcs = new TaskCompletionSource<Entry>(TaskCreationOptions.RunContinuationsAsynchronously);
+                        var request = new IndexRequest { Path = paths[i], Tcs = tcs };
+                        tasks[i] = tcs.Task;
+
+                        // Backpressure: if the lane's channel is full, this await blocks the caller
+                        // (does not throw or silently drop) until room is available or the
+                        // deadline/cancellation fires.
+                        await lane.Channel.Writer.WriteAsync(request, linked.Token);
+                        accepted = i + 1;
+                    }
+                }
+                catch (ChannelClosedException)
+                {
+                    // The lane retired mid-write. Whatever it already accepted is committed (or
+                    // failed) by the retiring drain loop, so those results are redundant: observe
+                    // them and replay the whole set on a fresh lane. Re-adding an already-committed
+                    // path is safe - the native layer reports it as unchanged.
+                    ObserveAbandoned(tasks, accepted);
+                    continue;
+                }
+
+                return await Task.WhenAll(tasks);
             }
-
-            return await Task.WhenAll(tasks);
         }
         catch (OperationCanceledException) when (timeout.IsCancellationRequested && !ct.IsCancellationRequested)
         {
@@ -152,13 +156,45 @@ public sealed class DatasetIndexQueue : IDatasetIndexQueue, IDisposable
         }
     }
 
+    /// <summary>
+    /// Returns a lane that is registered and not retired, recreating it if needed. A write into a
+    /// retired lane would never be drained, so a retired candidate is never handed out.
+    /// </summary>
+    private DatasetLane AcquireLane(DatasetKey dataset)
+    {
+        while (true)
+        {
+            var candidate = _lanes.GetOrAdd(dataset, CreateLane);
+            if (!candidate.Retired)
+                return candidate;
+
+            // Evict the exact retired instance only: an unconditional TryRemove(key) would drop a
+            // healthy replacement already installed by a concurrent enqueuer, leaving two drain
+            // loops writing to the same dataset.
+            _lanes.TryRemove(new KeyValuePair<DatasetKey, DatasetLane>(dataset, candidate));
+        }
+    }
+
+    // Requests handed to a lane that retired mid-write are completed by that lane, but nobody
+    // awaits them anymore; observe faults so they never surface as UnobservedTaskException.
+    private static void ObserveAbandoned(Task<Entry>[] tasks, int count)
+    {
+        for (var i = 0; i < count; i++)
+            _ = tasks[i].ContinueWith(static t => _ = t.Exception,
+                TaskContinuationOptions.OnlyOnFaulted | TaskContinuationOptions.ExecuteSynchronously);
+    }
+
     public void Release(DatasetKey dataset)
     {
         if (_lanes.TryRemove(dataset, out var lane))
         {
-            // Flag before returning: the drain loop keeps committing any remainder and then
-            // retairs (idle-trim) itself; a new enqueue transparently recreates the lane.
             lane.Retired = true;
+
+            // Completing the writer is what lets the lane actually go away: the drain loop commits
+            // whatever is still queued, then observes the closed channel and exits. Without it the
+            // loop would park on WaitToReadAsync forever, since no writer can reach an unregistered
+            // lane again. A new enqueue transparently recreates the lane.
+            lane.Channel.Writer.TryComplete();
             _logger.LogDebug("Released index lane for {Org}/{Ref} (dataset removal)",
                 dataset.OrgSlug, dataset.InternalRef);
         }
@@ -197,14 +233,27 @@ public sealed class DatasetIndexQueue : IDatasetIndexQueue, IDisposable
         {
             // Idle trim: release the lane when it holds no work and has had no enqueues for
             // IdleLaneTrimSeconds - per-dataset lanes are long-lived singletons otherwise.
-            if (TrimIfIdle(lane, reader))
+            if (await TryTrimIfIdleAsync(lane, reader))
                 return;
 
             var batch = new List<IndexRequest>(_opts.MaxBatchSize);
             try
             {
-                if (!await reader.WaitToReadAsync(_shutdown.Token))
-                    break; // channel completed (never happens today; no Complete() caller)
+                // The wait needs a deadline, otherwise the loop parks here forever and the trim
+                // check above is never re-evaluated on a quiet dataset.
+                using var idle = new CancellationTokenSource(TimeSpan.FromSeconds(_opts.IdleLaneTrimSeconds));
+                using var idleLinked =
+                    CancellationTokenSource.CreateLinkedTokenSource(idle.Token, _shutdown.Token);
+                try
+                {
+                    if (!await reader.WaitToReadAsync(idleLinked.Token))
+                        break; // channel completed by Release or by retirement
+                }
+                catch (OperationCanceledException) when (idle.IsCancellationRequested &&
+                                                        !_shutdown.IsCancellationRequested)
+                {
+                    continue; // idle deadline elapsed - re-evaluate the trim check
+                }
 
                 if (reader.TryRead(out var first))
                     batch.Add(first);
@@ -277,15 +326,48 @@ public sealed class DatasetIndexQueue : IDatasetIndexQueue, IDisposable
             leftover.Tcs.TrySetException(new OperationCanceledException("Index queue is shutting down"));
     }
 
-    private bool TrimIfIdle(DatasetLane lane, ChannelReader<IndexRequest> reader)
+    /// <summary>
+    /// Retires the lane when it holds no work and has seen no enqueue activity for
+    /// <see cref="IndexQueueSettings.IdleLaneTrimSeconds"/>. Called from the drain loop only, so
+    /// the single-reader contract of the channel still holds while leftovers are drained.
+    /// </summary>
+    private async Task<bool> TryTrimIfIdleAsync(DatasetLane lane, ChannelReader<IndexRequest> reader)
     {
         if (reader.TryPeek(out _))
             return false; // work still queued - not idle
         var idleMs = Environment.TickCount64 - Volatile.Read(ref lane.LastActivityTicks);
         if (idleMs < _opts.IdleLaneTrimSeconds * 1000L)
             return false;
+
         lane.Retired = true;
-        _lanes.TryRemove(lane.Key, out _);
+        _lanes.TryRemove(new KeyValuePair<DatasetKey, DatasetLane>(lane.Key, lane));
+
+        // Closing the writer is what makes retirement atomic against enqueue: once it returns, no
+        // further write can be accepted, so what is read below is the complete set of requests
+        // that slipped past the Retired check. Writers still blocked in WriteAsync get a
+        // ChannelClosedException and replay on a fresh lane.
+        lane.Channel.Writer.TryComplete();
+
+        var leftover = new List<IndexRequest>();
+        while (reader.TryRead(out var req))
+            leftover.Add(req);
+
+        if (leftover.Count > 0)
+        {
+            try
+            {
+                await CommitBatchAsync(lane.Key, leftover);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex,
+                    "Dataset index queue: unhandled failure committing retirement batch for {Org}/{Ref}",
+                    lane.Key.OrgSlug, lane.Key.InternalRef);
+                foreach (var req in leftover)
+                    req.Tcs.TrySetException(ex);
+            }
+        }
+
         _logger.LogDebug("Released idle index lane for {Org}/{Ref} after {IdleSec}s",
             lane.Key.OrgSlug, lane.Key.InternalRef, _opts.IdleLaneTrimSeconds);
         return true;
