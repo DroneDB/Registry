@@ -52,6 +52,12 @@ public static class HangfireUtils
 
     // Transient DDB contention gets a backoff retry chain; anything else fails fast without
     // burning worker slots (ImproveParallelWrites plan, workstream 04 §5.4).
+    //
+    // NOTE: this exact policy is intentionally re-declared on every job wrapper below rather
+    // than extracted once (attribute class/method helper). Hangfire discovers AutomaticRetry via
+    // reflection per job method; an indicator attribute is not supported, and a helper would add
+    // indirection without a measurable gain. Keeping the policy text inline next to each job is
+    // the cost of that discovery model (review round 2, finding 7).
     [AutomaticRetry(Attempts = 5, DelaysInSeconds = new[] { 15, 60, 180, 600, 1800 },
         OnAttemptsExceeded = AttemptsExceededAction.Fail,
         OnlyOn = new[] { typeof(DdbBusyException), typeof(DdbBuildInProgressException) })]
@@ -79,6 +85,7 @@ public static class HangfireUtils
         writeLine(skipped ? "Done build (skipped: lock held elsewhere)" : "Done build");
     }
 
+    // Same retry policy as BuildWrapper (intentionally duplicated inline - see there).
     [AutomaticRetry(Attempts = 5, DelaysInSeconds = new[] { 15, 60, 180, 600, 1800 },
         OnAttemptsExceeded = AttemptsExceededAction.Fail,
         OnlyOn = new[] { typeof(DdbBusyException), typeof(DdbBuildInProgressException) })]
@@ -104,6 +111,7 @@ public static class HangfireUtils
         writeLine(skipped ? "Done build pending (skipped: lock held elsewhere)" : "Done build pending");
     }
 
+    // Same retry policy as BuildWrapper (intentionally duplicated inline - see there).
     [AutomaticRetry(Attempts = 5, DelaysInSeconds = new[] { 15, 60, 180, 600, 1800 },
         OnAttemptsExceeded = AttemptsExceededAction.Fail,
         OnlyOn = new[] { typeof(DdbBusyException), typeof(DdbBuildInProgressException) })]
@@ -117,6 +125,7 @@ public static class HangfireUtils
         writeLine($"Removed {result.Entries?.Length ?? 0} entries and {result.Builds?.Length ?? 0} build artifacts");
     }
 
+    // Same retry policy as BuildWrapper (intentionally duplicated inline - see there).
     [AutomaticRetry(Attempts = 5, DelaysInSeconds = new[] { 15, 60, 180, 600, 1800 },
         OnAttemptsExceeded = AttemptsExceededAction.Fail,
         OnlyOn = new[] { typeof(DdbBusyException), typeof(DdbBuildInProgressException) })]
@@ -284,6 +293,7 @@ public static class HangfireUtils
         }
     }
 
+    // Same retry policy as BuildWrapper (intentionally duplicated inline - see there).
     [AutomaticRetry(Attempts = 5, DelaysInSeconds = new[] { 15, 60, 180, 600, 1800 },
         OnAttemptsExceeded = AttemptsExceededAction.Fail,
         OnlyOn = new[] { typeof(DdbBusyException), typeof(DdbBuildInProgressException) })]

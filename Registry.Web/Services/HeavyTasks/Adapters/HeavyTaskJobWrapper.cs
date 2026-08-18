@@ -51,6 +51,8 @@ public sealed class HeavyTaskJobWrapper
 
     // Transient DDB contention gets a backoff retry chain; anything else fails fast without
     // burning worker slots (ImproveParallelWrites plan, workstream 04 §5.4).
+    // Same policy as the wrappers in the HangfireUtils class - intentionally duplicated inline
+    // because Hangfire discovers AutomaticRetry per-job-method via reflection (see there).
     [AutomaticRetry(Attempts = 5, DelaysInSeconds = new[] { 15, 60, 180, 600, 1800 },
         OnAttemptsExceeded = AttemptsExceededAction.Fail,
         OnlyOn = new[] { typeof(DdbBusyException), typeof(DdbBuildInProgressException) })]
