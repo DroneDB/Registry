@@ -74,7 +74,7 @@ public class ShareController : ControllerBaseEx
         {
             _logger.LogError(ex, "Exception in Share controller Init('{Tag}')", parameters.Tag);
 
-            return ExceptionResult(ex);
+            throw;
         }
     }
 
@@ -102,7 +102,7 @@ public class ShareController : ControllerBaseEx
         {
             _logger.LogError(ex, "Exception in Share controller Info('{Token}')", token);
 
-            return ExceptionResult(ex);
+            throw;
         }
     }
 
@@ -193,7 +193,7 @@ public class ShareController : ControllerBaseEx
         {
             _logger.LogError(ex, "Exception in Share controller Upload('{Token}')", token);
 
-            return ExceptionResult(ex);
+            throw;
         }
     }
 
@@ -221,7 +221,7 @@ public class ShareController : ControllerBaseEx
         {
             _logger.LogError(ex, "Exception in Share controller Commit('{Token}')", token);
 
-            return ExceptionResult(ex);
+            throw;
         }
     }
 
@@ -249,7 +249,7 @@ public class ShareController : ControllerBaseEx
         {
             _logger.LogError(ex, "Exception in Share controller Rollback('{Token}')", token);
 
-            return ExceptionResult(ex);
+            throw;
         }
     }
 
@@ -304,7 +304,7 @@ public class ShareController : ControllerBaseEx
             _logger.LogError(ex, "Exception in Share controller UploadChunked('{Token}', FileId: {FileId}, ChunkIndex: {ChunkIndex})",
                 token, chunkInfo.FileId, chunkInfo.ChunkIndex);
 
-            return ExceptionResult(ex);
+            throw;
         }
     }
 }

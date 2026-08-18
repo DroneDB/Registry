@@ -57,7 +57,7 @@ public class OrganizationsController : ControllerBaseEx
         {
             _logger.LogError(ex, "Exception in Organizations controller GetAll()");
 
-            return ExceptionResult(ex);
+            throw;
         }
     }
 
@@ -81,7 +81,7 @@ public class OrganizationsController : ControllerBaseEx
         {
             _logger.LogError(ex, "Exception in Organizations controller GetAllPublic()");
 
-            return ExceptionResult(ex);
+            throw;
         }
     }
 
@@ -107,7 +107,7 @@ public class OrganizationsController : ControllerBaseEx
         {
             _logger.LogError(ex, "Exception in Organizations controller Get('{OrgSlug}')", orgSlug);
 
-            return ExceptionResult(ex);
+            throw;
         }
 
     }
@@ -137,7 +137,7 @@ public class OrganizationsController : ControllerBaseEx
         {
             _logger.LogError(ex, "Exception in Organizations controller Create('{organization?.Slug}')", organization?.Slug);
 
-            return ExceptionResult(ex);
+            throw;
         }
 
     }
@@ -169,7 +169,7 @@ public class OrganizationsController : ControllerBaseEx
         {
             _logger.LogError(ex, "Exception in Organizations controller Update('{OrgSlug}', {organization?.Slug}')", orgSlug, organization?.Slug);
 
-            return ExceptionResult(ex);
+            throw;
         }
 
     }
@@ -198,7 +198,7 @@ public class OrganizationsController : ControllerBaseEx
         {
             _logger.LogError(ex, "Exception in Organizations controller Delete('{OrgSlug}')", orgSlug);
 
-            return ExceptionResult(ex);
+            throw;
         }
 
     }
@@ -224,7 +224,7 @@ public class OrganizationsController : ControllerBaseEx
         catch (Exception ex)
         {
             _logger.LogError(ex, "Exception in Organizations controller GetMembers('{OrgSlug}')", orgSlug);
-            return ExceptionResult(ex);
+            throw;
         }
     }
 
@@ -254,7 +254,7 @@ public class OrganizationsController : ControllerBaseEx
         catch (Exception ex)
         {
             _logger.LogError(ex, "Exception in Organizations controller AddMember('{OrgSlug}', '{UserName}')", orgSlug, request.UserName);
-            return ExceptionResult(ex);
+            throw;
         }
     }
 
@@ -287,7 +287,7 @@ public class OrganizationsController : ControllerBaseEx
         {
             _logger.LogError(ex, "Exception in Organizations controller UpdateMemberPermission('{OrgSlug}', '{UserName}')",
                 orgSlug, userName);
-            return ExceptionResult(ex);
+            throw;
         }
     }
 
@@ -315,7 +315,7 @@ public class OrganizationsController : ControllerBaseEx
         catch (Exception ex)
         {
             _logger.LogError(ex, "Exception in Organizations controller RemoveMember('{OrgSlug}', '{UserName}')", orgSlug, userName);
-            return ExceptionResult(ex);
+            throw;
         }
     }
 

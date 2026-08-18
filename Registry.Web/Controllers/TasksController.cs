@@ -87,26 +87,19 @@ public class TasksController : ControllerBaseEx
     [ProducesResponseType(StatusCodes.Status200OK)]
     public async Task<IActionResult> GetTools([FromRoute, Required] string orgSlug, [FromRoute, Required] string dsSlug)
     {
-        try
-        {
-            var ds = _utils.GetDataset(orgSlug, dsSlug);
-            if (!await _authManager.RequestAccess(ds, AccessType.Read))
-                return Unauthorized(new ErrorResponse("Access denied"));
+        var ds = _utils.GetDataset(orgSlug, dsSlug);
+        if (!await _authManager.RequestAccess(ds, AccessType.Read))
+            return Unauthorized(new ErrorResponse("Access denied"));
 
-            var tools = await Task.WhenAll(_registry.All.Select(async t =>
-            {
-                var st = await _gating.EvaluateAsync(t.Id, orgSlug);
-                return new TaskToolDto(t.Id, t.Version, t.Title,
-                    t.RequiredAccess.ToString(), t.ProducesArtifact, t.InputSchema.RootElement.Clone(),
-                    st.Hidden, st.Disabled, st.DisabledMessage);
-            }));
-
-            return Ok(tools);
-        }
-        catch (Exception ex)
+        var tools = await Task.WhenAll(_registry.All.Select(async t =>
         {
-            return ExceptionResult(ex);
-        }
+            var st = await _gating.EvaluateAsync(t.Id, orgSlug);
+            return new TaskToolDto(t.Id, t.Version, t.Title,
+                t.RequiredAccess.ToString(), t.ProducesArtifact, t.InputSchema.RootElement.Clone(),
+                st.Hidden, st.Disabled, st.DisabledMessage);
+        }));
+
+        return Ok(tools);
     }
 
     // ---- POST /tasks ------------------------------------------------------
@@ -163,22 +156,10 @@ public class TasksController : ControllerBaseEx
             // Dedup hit returns 200; fresh enqueue returns 202.
             return result.Deduplicated ? Ok(response) : Accepted(baseUrl, response);
         }
-        catch (HeavyToolNotFoundException ex)
-        {
-            return BadRequest(new ErrorResponse(ex.Message));
-        }
-        catch (HeavyTaskQuotaException ex)
-        {
-            return StatusCode((int)ex.Code, new ErrorResponse(ex.Message, noRetry: true));
-        }
-        catch (ArgumentException ex)
-        {
-            return BadRequest(new ErrorResponse(ex.Message));
-        }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Task submit failed for tool '{ToolId}' on {OrgSlug}/{DsSlug}", body?.ToolId, orgSlug, dsSlug);
-            return ExceptionResult(ex);
+            throw;
         }
     }
 
@@ -191,60 +172,53 @@ public class TasksController : ControllerBaseEx
         [FromQuery] string? toolId, [FromQuery] string? state,
         [FromQuery] int skip = 0, [FromQuery] int take = 50, CancellationToken ct = default)
     {
-        try
+        var ds = _utils.GetDataset(orgSlug, dsSlug);
+        if (!await _authManager.RequestAccess(ds, AccessType.Read))
+            return Unauthorized(new ErrorResponse("Access denied"));
+
+        const int maxTake = 200;
+        var clampedTake = Math.Clamp(take, 1, maxTake);
+
+        // Canonical shape (no filters, skip=0): serve from distributed cache.
+        // Filtered queries bypass cache to avoid combinator explosion of cache keys.
+        // Safety: the write-through invalidation in JobIndexWriter covers all mutations.
+        bool useCache = string.IsNullOrWhiteSpace(toolId) && string.IsNullOrWhiteSpace(state) && skip == 0;
+
+        TaskSummaryDto[] dtos;
+        if (useCache)
         {
-            var ds = _utils.GetDataset(orgSlug, dsSlug);
-            if (!await _authManager.RequestAccess(ds, AccessType.Read))
-                return Unauthorized(new ErrorResponse("Access denied"));
+            // The cached payload is always the canonical page (first maxTake rows) so that a
+            // request with a small take cannot poison later requests asking for more rows.
+            var cacheKey = MagicStrings.TasksListCacheSeed + ":" + orgSlug + "/" + dsSlug;
+            var cachedBytes = await _cache.GetAsync(cacheKey, ct);
 
-            const int maxTake = 200;
-            var clampedTake = Math.Clamp(take, 1, maxTake);
-
-            // Canonical shape (no filters, skip=0): serve from distributed cache.
-            // Filtered queries bypass cache to avoid combinator explosion of cache keys.
-            // Safety: the write-through invalidation in JobIndexWriter covers all mutations.
-            bool useCache = string.IsNullOrWhiteSpace(toolId) && string.IsNullOrWhiteSpace(state) && skip == 0;
-
-            TaskSummaryDto[] dtos;
-            if (useCache)
+            TaskSummaryDto[] canonical;
+            if (cachedBytes != null)
             {
-                // The cached payload is always the canonical page (first maxTake rows) so that a
-                // request with a small take cannot poison later requests asking for more rows.
-                var cacheKey = MagicStrings.TasksListCacheSeed + ":" + orgSlug + "/" + dsSlug;
-                var cachedBytes = await _cache.GetAsync(cacheKey, ct);
-
-                TaskSummaryDto[] canonical;
-                if (cachedBytes != null)
-                {
-                    canonical = JsonSerializer.Deserialize<TaskSummaryDto[]>(cachedBytes) ?? [];
-                }
-                else
-                {
-                    var filter = new JobIndexQueryFilter(orgSlug, dsSlug, toolId, state,
-                        Skip: 0, Take: maxTake);
-                    var rows = await _query.QueryAsync(filter, ct);
-                    canonical = rows.Select(ToSummary).ToArray();
-
-                    var options = new DistributedCacheEntryOptions { AbsoluteExpirationRelativeToNow = TimeSpan.FromSeconds(60) };
-                    await _cache.SetAsync(cacheKey, JsonSerializer.SerializeToUtf8Bytes(canonical), options, ct);
-                }
-
-                dtos = canonical.Length > clampedTake ? canonical[..clampedTake] : canonical;
+                canonical = JsonSerializer.Deserialize<TaskSummaryDto[]>(cachedBytes) ?? [];
             }
             else
             {
                 var filter = new JobIndexQueryFilter(orgSlug, dsSlug, toolId, state,
-                    Skip: Math.Max(0, skip), Take: clampedTake);
+                    Skip: 0, Take: maxTake);
                 var rows = await _query.QueryAsync(filter, ct);
-                dtos = rows.Select(ToSummary).ToArray();
+                canonical = rows.Select(ToSummary).ToArray();
+
+                var options = new DistributedCacheEntryOptions { AbsoluteExpirationRelativeToNow = TimeSpan.FromSeconds(60) };
+                await _cache.SetAsync(cacheKey, JsonSerializer.SerializeToUtf8Bytes(canonical), options, ct);
             }
 
-            return Ok(dtos);
+            dtos = canonical.Length > clampedTake ? canonical[..clampedTake] : canonical;
         }
-        catch (Exception ex)
+        else
         {
-            return ExceptionResult(ex);
+            var filter = new JobIndexQueryFilter(orgSlug, dsSlug, toolId, state,
+                Skip: Math.Max(0, skip), Take: clampedTake);
+            var rows = await _query.QueryAsync(filter, ct);
+            dtos = rows.Select(ToSummary).ToArray();
         }
+
+        return Ok(dtos);
     }
 
     // ---- POST /tasks/clear ------------------------------------------------
@@ -255,26 +229,19 @@ public class TasksController : ControllerBaseEx
         [FromRoute, Required] string orgSlug, [FromRoute, Required] string dsSlug,
         [FromQuery] string? toolId, CancellationToken ct)
     {
-        try
-        {
-            var ds = _utils.GetDataset(orgSlug, dsSlug);
-            if (!await _authManager.RequestAccess(ds, AccessType.Write))
-                return Unauthorized(new ErrorResponse("Access denied"));
+        var ds = _utils.GetDataset(orgSlug, dsSlug);
+        if (!await _authManager.RequestAccess(ds, AccessType.Write))
+            return Unauthorized(new ErrorResponse("Access denied"));
 
-            // Permanently remove concluded (Succeeded/Failed/Deleted) tasks from the history
-            // and purge any artifacts they produced, instead of merely flipping them to a
-            // terminal "Deleted" state where they would linger in the list forever.
-            var removedIds = await _writer.DeleteTerminalForDatasetAsync(orgSlug, dsSlug, toolId, ct);
-            foreach (var jobId in removedIds)
-                TryDeleteArtifacts(jobId);
+        // Permanently remove concluded (Succeeded/Failed/Deleted) tasks from the history
+        // and purge any artifacts they produced, instead of merely flipping them to a
+        // terminal "Deleted" state where they would linger in the list forever.
+        var removedIds = await _writer.DeleteTerminalForDatasetAsync(orgSlug, dsSlug, toolId, ct);
+        foreach (var jobId in removedIds)
+            TryDeleteArtifacts(jobId);
 
-            _logger.LogInformation("Cleared {Count} concluded task(s) for {Org}/{Ds}", removedIds.Count, orgSlug, dsSlug);
-            return Ok(new { cleared = removedIds.Count });
-        }
-        catch (Exception ex)
-        {
-            return ExceptionResult(ex);
-        }
+        _logger.LogInformation("Cleared {Count} concluded task(s) for {Org}/{Ds}", removedIds.Count, orgSlug, dsSlug);
+        return Ok(new { cleared = removedIds.Count });
     }
 
     // ---- GET /tasks/{id} --------------------------------------------------
@@ -455,15 +422,9 @@ public class TasksController : ControllerBaseEx
     private async Task<(JobIndex? job, IActionResult? error)> LoadAuthorizedTask(
         string orgSlug, string dsSlug, string id, AccessType access, CancellationToken ct)
     {
-        Dataset ds;
-        try
-        {
-            ds = _utils.GetDataset(orgSlug, dsSlug);
-        }
-        catch (Exception ex)
-        {
-            return (null, ExceptionResult(ex));
-        }
+        // A missing/unknown dataset surfaces as the action's unhandled exception; the global
+        // classifier maps it to the same 404 the per-action build used to produce (phase D).
+        var ds = _utils.GetDataset(orgSlug, dsSlug);
 
         if (!await _authManager.RequestAccess(ds, access))
             return (null, Unauthorized(new ErrorResponse("Access denied")));

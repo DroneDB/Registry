@@ -55,7 +55,7 @@ public class StacController : ControllerBaseEx
         {
             _logger.LogError(ex, "Exception in Stac controller GetCatalog()");
 
-            return ExceptionResult(ex);
+            throw;
         }
     }
 
@@ -77,7 +77,7 @@ public class StacController : ControllerBaseEx
         {
             _logger.LogError(ex, "Exception in Stac controller GetConformance()");
 
-            return ExceptionResult(ex);
+            throw;
         }
     }
 
@@ -99,7 +99,7 @@ public class StacController : ControllerBaseEx
         {
             _logger.LogError(ex, "Exception in Stac controller GetCollections()");
 
-            return ExceptionResult(ex);
+            throw;
         }
     }
 
@@ -125,7 +125,7 @@ public class StacController : ControllerBaseEx
         {
             _logger.LogError(ex, "Exception in Stac controller GetCollection()");
 
-            return ExceptionResult(ex);
+            throw;
         }
     }
 
@@ -168,7 +168,7 @@ public class StacController : ControllerBaseEx
         {
             _logger.LogError(ex, "Exception in Stac controller GetCollectionItems()");
 
-            return ExceptionResult(ex);
+            throw;
         }
     }
 
@@ -197,7 +197,7 @@ public class StacController : ControllerBaseEx
         {
             _logger.LogError(ex, "Exception in Stac controller GetCollectionItem()");
 
-            return ExceptionResult(ex);
+            throw;
         }
     }
 
@@ -270,7 +270,7 @@ public class StacController : ControllerBaseEx
         {
             _logger.LogError(ex, "Exception in Stac controller SearchGet()");
 
-            return ExceptionResult(ex);
+            throw;
         }
     }
 
@@ -305,7 +305,7 @@ public class StacController : ControllerBaseEx
         {
             _logger.LogError(ex, "Exception in Stac controller SearchPost()");
 
-            return ExceptionResult(ex);
+            throw;
         }
     }
 
@@ -492,7 +492,7 @@ public class StacController : ControllerBaseEx
         {
             _logger.LogError(ex, "Exception in Stac controller GetStacChild()");
 
-            return ExceptionResult(ex);
+            throw;
         }
     }
 }

@@ -68,7 +68,7 @@ public class PushController : ControllerBaseEx
         {
             _logger.LogError(ex, "Exception in Push controller Init('{OrgSlug}', '{DsSlug}', '{Checksum}', '{StampJson}')", orgSlug, dsSlug, checksum, stampJson);
 
-            return ExceptionResult(ex);
+            throw;
         }
 
 
@@ -113,7 +113,7 @@ public class PushController : ControllerBaseEx
         {
             _logger.LogError(ex, "Exception in Push controller Upload('{OrgSlug}', '{DsSlug}', '{Token}', '{FileName}')", orgSlug, dsSlug, token, file?.FileName);
 
-            return ExceptionResult(ex);
+            throw;
         }
     }
 
@@ -154,7 +154,7 @@ public class PushController : ControllerBaseEx
         {
             _logger.LogError(ex, "Exception in Push controller Meta('{OrgSlug}', '{DsSlug}', '{Token}', '{Meta}')", orgSlug, dsSlug, token, meta);
 
-            return ExceptionResult(ex);
+            throw;
         }
     }
 
@@ -187,7 +187,7 @@ public class PushController : ControllerBaseEx
         {
             _logger.LogError(ex, "Exception in Push controller Commit('{OrgSlug}', '{DsSlug}', '{Token}')", orgSlug, dsSlug, token);
 
-            return ExceptionResult(ex);
+            throw;
         }
     }
 

@@ -66,7 +66,7 @@ public class UsersController : ControllerBaseEx
         catch (Exception ex)
         {
             _logger.LogError(ex, "Exception in Users controller Authenticate('{Username}')", model?.Username);
-            return ExceptionResult(ex);
+            throw;
         }
     }
 
@@ -93,7 +93,7 @@ public class UsersController : ControllerBaseEx
         catch (Exception ex)
         {
             _logger.LogError(ex, "Exception in Users controller Refresh()");
-            return ExceptionResult(ex);
+            throw;
         }
     }
 
@@ -124,7 +124,7 @@ public class UsersController : ControllerBaseEx
             _logger.LogError(ex, "Exception in Users controller CreateUser('{UserName}', '{Email}')",
                 model?.UserName, model?.Email);
 
-            return ExceptionResult(ex);
+            throw;
         }
     }
 
@@ -155,7 +155,7 @@ public class UsersController : ControllerBaseEx
         {
             _logger.LogError(ex, "Exception in Users controller ChangePasswordPost('XXX','XXX')");
 
-            return ExceptionResult(ex);
+            throw;
         }
     }
 
@@ -188,7 +188,7 @@ public class UsersController : ControllerBaseEx
         {
             _logger.LogError(ex, "Exception in Users controller ChangePassword('{UserName}')", userName);
 
-            return ExceptionResult(ex);
+            throw;
         }
     }
 
@@ -220,7 +220,7 @@ public class UsersController : ControllerBaseEx
         catch (Exception ex)
         {
             _logger.LogError(ex, "Exception in Users controller DeleteUserRoute('{UserName}')", userName);
-            return ExceptionResult(ex);
+            throw;
         }
     }
 
@@ -245,7 +245,7 @@ public class UsersController : ControllerBaseEx
         catch (Exception ex)
         {
             _logger.LogError(ex, "Users controller GetRoles()");
-            return ExceptionResult(ex);
+            throw;
         }
     }
 
@@ -276,7 +276,7 @@ public class UsersController : ControllerBaseEx
         catch (Exception ex)
         {
             _logger.LogError(ex, "Exception in Users controller DeleteUser('{UserName}')", model?.UserName);
-            return ExceptionResult(ex);
+            throw;
         }
     }
 
@@ -301,7 +301,7 @@ public class UsersController : ControllerBaseEx
         catch (Exception ex)
         {
             _logger.LogError(ex, "Exception in Users controller GetAll()");
-            return ExceptionResult(ex);
+            throw;
         }
     }
 
@@ -326,7 +326,7 @@ public class UsersController : ControllerBaseEx
         catch (Exception ex)
         {
             _logger.LogError(ex, "Exception in Users controller GetAllDetailed()");
-            return ExceptionResult(ex);
+            throw;
         }
     }
 
@@ -351,7 +351,7 @@ public class UsersController : ControllerBaseEx
         catch (Exception ex)
         {
             _logger.LogError(ex, "Exception in Users controller GetCurrentUserStorageInfo()");
-            return ExceptionResult(ex);
+            throw;
         }
     }
 
@@ -377,7 +377,7 @@ public class UsersController : ControllerBaseEx
         catch (Exception ex)
         {
             _logger.LogError(ex, "Exception in Users controller GetUserStorageInfo('{UserName}')", userName);
-            return ExceptionResult(ex);
+            throw;
         }
     }
 
@@ -402,7 +402,7 @@ public class UsersController : ControllerBaseEx
         catch (Exception ex)
         {
             _logger.LogError(ex, "Exception in Users controller GetCurrentUserMeta()");
-            return ExceptionResult(ex);
+            throw;
         }
     }
 
@@ -428,7 +428,7 @@ public class UsersController : ControllerBaseEx
         catch (Exception ex)
         {
             _logger.LogError(ex, "Exception in Users controller GetUserMeta('{UserName}')", userName);
-            return ExceptionResult(ex);
+            throw;
         }
     }
 
@@ -457,7 +457,7 @@ public class UsersController : ControllerBaseEx
         catch (Exception ex)
         {
             _logger.LogError(ex, "Exception in Users controller SetUserMeta('{UserName}')", userName);
-            return ExceptionResult(ex);
+            throw;
         }
     }
 
@@ -485,7 +485,7 @@ public class UsersController : ControllerBaseEx
         catch (Exception ex)
         {
             _logger.LogError(ex, "Exception in Users controller GetOrganizations('{UserName}')", userName);
-            return ExceptionResult(ex);
+            throw;
         }
     }
 
@@ -514,7 +514,7 @@ public class UsersController : ControllerBaseEx
         catch (Exception ex)
         {
             _logger.LogError(ex, "Exception in Users controller AddUserToOrganization('{UserName}', '{OrgSlug}')", userName, request.OrgSlug);
-            return ExceptionResult(ex);
+            throw;
         }
     }
 
@@ -545,7 +545,7 @@ public class UsersController : ControllerBaseEx
         catch (Exception ex)
         {
             _logger.LogError(ex, "Exception in Users controller UpdateUserOrganizationPermissions('{UserName}', '{OrgSlug}')", userName, orgSlug);
-            return ExceptionResult(ex);
+            throw;
         }
     }
 
@@ -574,7 +574,7 @@ public class UsersController : ControllerBaseEx
         catch (Exception ex)
         {
             _logger.LogError(ex, "Exception in Users controller RemoveUserFromOrganization('{UserName}', '{OrgSlug}')", userName, orgSlug);
-            return ExceptionResult(ex);
+            throw;
         }
     }
 
@@ -607,7 +607,7 @@ public class UsersController : ControllerBaseEx
         catch (Exception ex)
         {
             _logger.LogError(ex, "Exception in Users controller CreateRole('{RoleName}')", request.RoleName);
-            return ExceptionResult(ex);
+            throw;
         }
     }
 
@@ -633,7 +633,7 @@ public class UsersController : ControllerBaseEx
         catch (Exception ex)
         {
             _logger.LogError(ex, "Exception in Users controller DeleteRole('{RoleName}')", roleName);
-            return ExceptionResult(ex);
+            throw;
         }
     }
 
@@ -663,7 +663,7 @@ public class UsersController : ControllerBaseEx
         catch (Exception ex)
         {
             _logger.LogError(ex, "Exception in Users controller UpdateUser('{UserName}')", userName);
-            return ExceptionResult(ex);
+            throw;
         }
     }
 }

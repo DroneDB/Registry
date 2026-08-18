@@ -58,14 +58,7 @@ public class DatasetImportController : ControllerBaseEx
         [FromBody, Required] UrlImportVerifyRequestDto body,
         CancellationToken ct)
     {
-        try
-        {
-            return Ok(await _importManager.VerifyAsync(orgSlug, dsSlug, body, ct));
-        }
-        catch (Exception ex)
-        {
-            return ExceptionResult(ex);
-        }
+        return Ok(await _importManager.VerifyAsync(orgSlug, dsSlug, body, ct));
     }
 
     /// <summary>
@@ -86,13 +79,6 @@ public class DatasetImportController : ControllerBaseEx
         [FromBody, Required] UrlImportRequestDto body,
         CancellationToken ct)
     {
-        try
-        {
-            return Ok(await _importManager.ImportAsync(orgSlug, dsSlug, body, ct));
-        }
-        catch (Exception ex)
-        {
-            return ExceptionResult(ex);
-        }
+        return Ok(await _importManager.ImportAsync(orgSlug, dsSlug, body, ct));
     }
 }

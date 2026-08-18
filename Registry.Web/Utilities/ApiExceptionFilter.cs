@@ -4,20 +4,17 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Filters;
 using Microsoft.Extensions.Logging;
-using Registry.Adapters.DroneDB;
-using Registry.Web.Exceptions;
 using Registry.Web.Models;
 
 namespace Registry.Web.Utilities;
 
 /// <summary>
-/// Global exception -> HTTP status mapping for API controllers (see ImproveParallelWrites plan,
-/// workstream 04 §5.3). Registered once via <c>services.AddControllers(o =>
-/// o.Filters.Add&lt;ApiExceptionFilter&gt;())</c>; classification rules live here once instead of
-/// being duplicated across ~49 per-action <c>catch (Exception ex) { return 500; }</c> blocks.
-/// Additive: existing controller-level try/catch + <see cref="ControllerBaseEx.ExceptionResult(Exception)"/>
-/// still work as-is for actions that already handle their own errors; this filter only fires for
-/// exceptions that escape the action unhandled.
+/// Global exception-to-HTTP filter for API controllers (ImproveParallelWrites
+/// workstream 04, unified in phase D). Registered once via <c>services.AddControllers(o =>
+/// o.Filters.Add&lt;ApiExceptionFilter&gt;())</c>; classification rules live in
+/// <see cref="ApiExceptionClassifier"/>, the single mapping table for every managed
+/// exception. The legacy per-action <c>ControllerBaseEx.ExceptionResult</c> helper was
+/// deleted in phase D5 — no per-controller error wrappers remain.
 /// </summary>
 public class ApiExceptionFilter : IAsyncExceptionFilter
 {
@@ -31,50 +28,20 @@ public class ApiExceptionFilter : IAsyncExceptionFilter
     public Task OnExceptionAsync(ExceptionContext context)
     {
         var ex = context.Exception;
+        var d = ApiExceptionClassifier.Classify(ex);
 
-        // Client disconnected mid-request: not a server error (see 02-target-architecture.md §8
-        // for the 499->408 rationale; ASP.NET Core has no 499, 408 is the closest standard code).
-        if (ex is OperationCanceledException)
-        {
-            context.Result = new StatusCodeResult(StatusCodes.Status408RequestTimeout);
-            context.ExceptionHandled = true;
-            return Task.CompletedTask;
-        }
+        // Every incident is logged at the level chosen by the classifier (500s at
+        // Error with the full exception, 408 client-disconnects at Debug, etc.).
+        _logger.Log(d.Level, ex, "Exception in {Path}", context.HttpContext.Request.Path);
 
-        var (status, retryAfterSeconds) = ex switch
-        {
-            DdbBusyException => (StatusCodes.Status503ServiceUnavailable, (int?)2),
-            TransientException tex => (StatusCodes.Status503ServiceUnavailable, (int?)tex.RetryAfterSeconds),
-            DdbBuildInProgressException => (StatusCodes.Status503ServiceUnavailable, (int?)2),
-            BadRequestException => (StatusCodes.Status400BadRequest, null),
-            ExtensionBlockedException => (StatusCodes.Status400BadRequest, null),
-            UnauthorizedException => (StatusCodes.Status401Unauthorized, null),
-            NotFoundException => (StatusCodes.Status404NotFound, null),
-            ConflictException => (StatusCodes.Status409Conflict, null),
-            QuotaExceededException => (StatusCodes.Status507InsufficientStorage, null),
-            _ => (StatusCodes.Status500InternalServerError, (int?)null)
-        };
+        if (d.RetryAfterSeconds.HasValue)
+            context.HttpContext.Response.Headers.RetryAfter = d.RetryAfterSeconds.Value.ToString();
 
-        if (status == StatusCodes.Status500InternalServerError)
-        {
-            _logger.LogError(ex, "Unhandled exception in {Path}", context.HttpContext.Request.Path);
-        }
-
-        var noRetry = ex is QuotaExceededException or UnauthorizedException or ExtensionBlockedException;
-
-        if (retryAfterSeconds.HasValue)
-            context.HttpContext.Response.Headers.RetryAfter = retryAfterSeconds.Value.ToString();
-
-        // For 500s use a generic message to avoid leaking DB/native library details.
-        // Details are already logged above; specific messages are fine for classified client/transient errors.
-        var message = status == StatusCodes.Status500InternalServerError
-            ? "Internal server error"
-            : ex.Message;
-
-        context.Result = new ObjectResult(new ErrorResponse(message, noRetry))
-        {
-            StatusCode = status
-        };
+        // 408 (client went away) is produced without a body: nobody is left to read it.
+        context.Result = d.StatusCode == StatusCodes.Status408RequestTimeout
+            ? new StatusCodeResult(StatusCodes.Status408RequestTimeout)
+            : new ObjectResult(new ErrorResponse(d.Message, d.NoRetry))
+            { StatusCode = d.StatusCode };
         context.ExceptionHandled = true;
         return Task.CompletedTask;
     }
