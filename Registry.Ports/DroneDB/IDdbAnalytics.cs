@@ -2,7 +2,7 @@ namespace Registry.Ports.DroneDB;
 
 /// <summary>
 /// Geospatial analytics computed over rasters: stockpile volume/detection and contour
-/// generation. See ImproveParallelWrites plan, workstream 04 §7.
+/// generation.
 /// </summary>
 public interface IDdbAnalytics
 {

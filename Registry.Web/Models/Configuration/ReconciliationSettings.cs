@@ -3,8 +3,7 @@ namespace Registry.Web.Models.Configuration;
 
 /// <summary>
 /// Tuning for the recurring index reconciliation sweep (<c>IndexReconciliationService</c>).
-/// Bound from the <c>AppSettings:Reconciliation</c> section. See ImproveParallelWrites plan,
-/// workstream 04 §5.2.
+/// Bound from the <c>AppSettings:Reconciliation</c> section.
 /// </summary>
 public class ReconciliationSettings
 {

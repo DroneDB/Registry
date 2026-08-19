@@ -39,8 +39,8 @@ namespace Registry.Web.Test;
 /// the re-queue (Failed-only accepted set), sweep-ownership 409 for pending builds, 409 for jobs
 /// missing from Hangfire, and stale JobIndex error fields are cleared before the re-queue. The
 /// Hangfire client and the live job state are mocked so assertions are deterministic; the same-id
-/// re-queue-to-Enqueued transition is covered by BackgroundJobsProcessorTest and the manual E2E
-/// in FIX_PLAN §5.
+/// re-queue-to-Enqueued transition is covered by BackgroundJobsProcessorTest and by a manual
+/// E2E run of the retry endpoint.
 /// </summary>
 [TestFixture]
 public class RetryEndpointTest : IDisposable

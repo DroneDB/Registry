@@ -60,7 +60,7 @@ public static class ProcessingNodeServiceCollectionExtensions
 
         // Per-dataset index write coalescer: recurring jobs on this host (notably
         // IndexReconciliationService) re-enqueue unindexed files through the same lane the web
-        // host's uploads use (ImproveParallelWrites plan, workstream 04 §5.2).
+        // host's uploads use.
         services.AddSingleton<IDatasetIndexQueue, DatasetIndexQueue>();
 
         // Register scoped services required by background jobs

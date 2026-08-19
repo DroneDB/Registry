@@ -20,7 +20,7 @@ namespace Registry.Web.Services.HeavyTasks.Adapters;
 /// <summary>
 /// Default <see cref="IHeavyTaskRunner"/>: resolves a native tool, validates and
 /// plans the request, deduplicates, enforces quota and enqueues the
-/// <see cref="HeavyTaskJobWrapper"/> on the <c>tasks</c> queue (spec §4).
+/// <see cref="HeavyTaskJobWrapper"/> on the <c>tasks</c> queue.
 /// </summary>
 public sealed class HeavyTaskRunner : IHeavyTaskRunner
 {
@@ -57,12 +57,12 @@ public sealed class HeavyTaskRunner : IHeavyTaskRunner
 
     public async Task<HeavyTaskSubmitResult> SubmitAsync(HeavyTaskSubmitRequest request, CancellationToken ct = default)
     {
-        
+
         var tool = _registry.Resolve(request.ToolId, request.Version)
                    ?? throw new HeavyToolNotFoundException($"Tool '{request.ToolId}' is not available.");
 
         var ds = _utils.GetDataset(request.OrgSlug, request.DsSlug);
-        
+
         var ddb = _ddbManager.Get(request.OrgSlug, ds.InternalRef);
 
         var toolRequest = new HeavyToolRequest(

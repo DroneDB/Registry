@@ -5,7 +5,7 @@ using System.Collections.Generic;
 namespace Registry.Web.Models.DTO;
 
 /// <summary>
-/// Summary of a single task for the admin dashboard (spec §B.1.3). Extends the
+/// Summary of a single task for the admin dashboard. Extends the
 /// per-dataset task summary with org/dataset and owner identity columns.
 /// </summary>
 public sealed record AdminTaskSummaryDto(
@@ -26,7 +26,7 @@ public sealed record AdminTaskSummaryDto(
     string? ErrorType,
     DateTime? ArtifactExpiresAt);
 
-/// <summary>Paged result of the admin task list (spec §B.1.3).</summary>
+/// <summary>Paged result of the admin task list.</summary>
 public sealed record AdminTaskListDto(
     IReadOnlyList<AdminTaskSummaryDto> Items,
     long Total,

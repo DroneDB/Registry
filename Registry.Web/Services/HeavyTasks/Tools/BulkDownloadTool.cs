@@ -14,7 +14,7 @@ namespace Registry.Web.Services.HeavyTasks.Tools;
 
 /// <summary>
 /// Native tool that packages dataset entries (a selection or the whole dataset)
-/// into a downloadable ZIP archive (spec §A.1). Offloads the bulk-download work
+/// into a downloadable ZIP archive. Offloads the bulk-download work
 /// from the request thread; small selections / single files keep using the legacy
 /// direct streaming path. Produces exactly one <c>.zip</c> in the work directory,
 /// which the generic <c>GET /tasks/{id}/result</c> endpoint serves as-is.

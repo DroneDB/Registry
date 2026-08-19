@@ -5,8 +5,7 @@ namespace Registry.Ports.DroneDB;
 
 /// <summary>
 /// Raster analysis and visualization: tiles, thumbnails, raster info/stats, export, borders
-/// masking, multispectral merge and raster alignment. See ImproveParallelWrites plan,
-/// workstream 04 §7.
+/// masking, multispectral merge and raster alignment.
 /// </summary>
 public interface IDdbRaster
 {

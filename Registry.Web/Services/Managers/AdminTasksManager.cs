@@ -18,7 +18,7 @@ using Registry.Web.Services.Ports;
 namespace Registry.Web.Services.Managers;
 
 /// <summary>
-/// Admin-only manager backing the global tasks dashboard (spec §B.1.2). Reuses the
+/// Admin-only manager backing the global tasks dashboard. Reuses the
 /// existing JobIndex query layer and resolves task owner identities across the
 /// Identity DbContext (no cross-context SQL join).
 /// </summary>

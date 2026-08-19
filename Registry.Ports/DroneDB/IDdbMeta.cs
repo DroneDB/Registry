@@ -2,7 +2,6 @@ namespace Registry.Ports.DroneDB;
 
 /// <summary>
 /// Dataset-level metadata and self-description: tag operations, info commands, size and stamp.
-/// See ImproveParallelWrites plan, workstream 04 §7.
 /// </summary>
 public interface IDdbMeta
 {

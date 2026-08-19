@@ -180,7 +180,7 @@ public class NativeDdbWrapper : IDdbWrapper
         }
 
         // Non-success results map to typed exceptions (Busy → DdbBusyException) so callers can
-        // retry instead of matching on a message string (workstream 03 §3.1).
+        // retry instead of matching on a message string.
         ThrowForFinalResult(result, "add");
 
         // Unreachable in practice (Success returns above); kept for exhaustiveness.
@@ -1095,8 +1095,7 @@ public class NativeDdbWrapper : IDdbWrapper
 
             // BuildInProgress (kernel build lock held) and Busy (transient DB contention) surface
             // as typed exceptions via the shared mapper so Hangfire retry decorators
-            // (OnlyOn = DdbBusyException / DdbBuildInProgressException) can retry with backoff
-            // (ImproveParallelWrites plan, workstream 03 §3.1).
+            // (OnlyOn = DdbBusyException / DdbBuildInProgressException) can retry with backoff.
             ThrowForFinalResult(result, "build");
         }
         catch (DdbBuildInProgressException)

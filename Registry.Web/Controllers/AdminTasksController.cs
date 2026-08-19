@@ -14,10 +14,10 @@ using Registry.Web.Utilities;
 namespace Registry.Web.Controllers;
 
 /// <summary>
-/// Admin-only dashboard listing tasks across all users and datasets (spec §B.1.4).
+/// Admin-only dashboard listing tasks across all users and datasets.
 /// Lives under the system radix (<c>/sys/tasks</c>). Per-task actions (log, result,
 /// cancel, retry) reuse the existing per-dataset endpoints in <see cref="TasksController"/>,
-/// which already authorize admins via dataset ownership (spec §B.2).
+/// which already authorize admins via dataset ownership.
 /// </summary>
 [Authorize]
 [ApiController]

@@ -51,7 +51,7 @@ public static class HangfireUtils
     }
 
     // Transient DDB contention gets a backoff retry chain; anything else fails fast without
-    // burning worker slots (ImproveParallelWrites plan, workstream 04 §5.4).
+    // burning worker slots.
     //
     // NOTE: this exact policy is intentionally re-declared on every job wrapper below rather
     // than extracted once (attribute class/method helper). Hangfire discovers AutomaticRetry via

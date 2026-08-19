@@ -14,10 +14,10 @@ namespace Registry.Web.Services.HeavyTasks.Tools;
 
 /// <summary>
 /// Native tool that rescans the dataset index, clears caches and rebuilds the
-/// derivative products (spec §A.3). Offloads the blocking full-file scan from the
+/// derivative products. Offloads the blocking full-file scan from the
 /// request thread. Mutates the dataset in place (no downloadable artifact).
 /// Injects <see cref="IServiceScopeFactory"/> to reach the
-/// <see cref="IDatasetCacheInvalidator"/> for Redis cache invalidation (spec §1.1).
+/// <see cref="IDatasetCacheInvalidator"/> for Redis cache invalidation.
 /// </summary>
 public sealed class RescanIndexTool : IHeavyTool
 {

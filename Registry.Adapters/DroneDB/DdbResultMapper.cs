@@ -30,7 +30,7 @@ public static class DdbResultMapper
     /// Maps a native call's final <see cref="DdbResult"/> to typed exceptions (or returns for
     /// <see cref="DdbResult.Success"/>). Central point where transient contention surfaces as
     /// <see cref="DdbBusyException"/> so Hangfire retry policies (OnlyOn = DdbBusyException) and
-    /// the 503 + Retry-After client path actually trigger (ImproveParallelWrites plan, workstream 03).
+    /// the 503 + Retry-After client path actually trigger.
     /// </summary>
     public static void ThrowForFinalResult(DdbResult result, string operation)
     {

@@ -23,8 +23,7 @@ namespace Registry.Web.Services.Adapters;
 /// <see cref="EnqueueAsync(DatasetKey,string,CancellationToken)"/> calls into a single native
 /// <see cref="IDdbIndex.AddRawBatchWithOptions"/> call. Registered as a singleton (one set of lanes
 /// for the whole process); resolves the scoped <see cref="IDdbManager"/> via
-/// <see cref="IServiceScopeFactory"/> once per batch, not once per file (see
-/// ImproveParallelWrites plan, workstream 04 §4.2).
+/// <see cref="IServiceScopeFactory"/> once per batch, not once per file.
 /// </summary>
 public sealed class DatasetIndexQueue : IDatasetIndexQueue, IDisposable
 {
@@ -394,7 +393,7 @@ public sealed class DatasetIndexQueue : IDatasetIndexQueue, IDisposable
         try
         {
             // Narrowed to the index role interface only - this coalescer never needs build,
-            // meta, raster or analytics operations (ImproveParallelWrites plan, workstream 04 §7).
+            // meta, raster or analytics operations.
             IDdbIndex ddb = ddbManager.Get(key.OrgSlug, key.InternalRef);
             result = ddb.AddRawBatchWithOptions(paths, stopOnError: false);
         }
@@ -484,7 +483,7 @@ public sealed class DatasetIndexQueue : IDatasetIndexQueue, IDisposable
 
         // Completeness contract: every path must land in exactly one bucket. A path absent
         // from all three is an adapter bug, not silent success - fail it loudly rather than
-        // leaving its caller hanging until EnqueueTimeoutSeconds (see plan §4.2/§5.1).
+        // leaving its caller hanging until EnqueueTimeoutSeconds.
         foreach (var path in paths)
         {
             if (handled.Contains(path)) continue;

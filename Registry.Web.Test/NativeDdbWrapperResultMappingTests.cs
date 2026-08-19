@@ -5,8 +5,7 @@ using Shouldly;
 namespace Registry.Web.Test;
 
 /// <summary>
-/// Unit coverage for the DdbResult → typed-exception mapping added by the
-/// improve-parallel-writes PR (workstream 03 §3.1), centralized in
+/// Unit coverage for the DdbResult → typed-exception mapping, centralized in
 /// <see cref="DdbResultMapper.ThrowForFinalResult"/>. The assertions target the exception
 /// TYPES (the systemic property: transient contention must surface as the typed transient
 /// exception, not a generic <c>DdbException</c>), and do not pin the native last-error

@@ -2,7 +2,7 @@ namespace Registry.Ports.DroneDB;
 
 /// <summary>
 /// Build orchestration: build/rebuild artifacts, buildability/build-state queries and cache
-/// cleanup. See ImproveParallelWrites plan, workstream 04 §7.
+/// cleanup.
 /// </summary>
 public interface IDdbBuild
 {

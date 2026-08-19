@@ -9,12 +9,12 @@ using Registry.Web.Models;
 namespace Registry.Web.Utilities;
 
 /// <summary>
-/// Global exception-to-HTTP filter for API controllers (ImproveParallelWrites
-/// workstream 04, unified in phase D). Registered once via <c>services.AddControllers(o =>
+/// Global exception-to-HTTP filter for API controllers (added during the
+/// exception-handling unification). Registered once via <c>services.AddControllers(o =>
 /// o.Filters.Add&lt;ApiExceptionFilter&gt;())</c>; classification rules live in
 /// <see cref="ApiExceptionClassifier"/>, the single mapping table for every managed
 /// exception. The legacy per-action <c>ControllerBaseEx.ExceptionResult</c> helper was
-/// deleted in phase D5 — no per-controller error wrappers remain.
+/// deleted during the unification — no per-controller error wrappers remain.
 /// </summary>
 public class ApiExceptionFilter : IAsyncExceptionFilter
 {

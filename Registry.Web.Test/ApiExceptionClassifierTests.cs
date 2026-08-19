@@ -14,15 +14,15 @@ using Shouldly;
 namespace Registry.Web.Test;
 
 /// <summary>
-/// Phase D3 of ImproveParallelWrites — characterization safety net.
+/// Exception-classifier characterization safety net.
 ///
 /// These tests pin the exception-type → HTTP-response decision table that
 /// <see cref="ApiExceptionClassifier"/> must produce after the two formerly
 /// divergent mappings (ApiExceptionFilter and ControllerBaseEx.ExceptionResult)
 /// were unified. Every row here is a client-observable status that must be
-/// stable through the catch-block deletion waves (D4) and the residual-helper
-/// removal (D5). Rows marked "intentional flip" document the status that
-/// deliberately changed at unification (the union table in PLAN.md phase D):
+/// stable through the catch-block deletion waves and the residual-helper
+/// removal. Rows marked "intentional flip" document the status that
+/// deliberately changed at unification (the union mapping table):
 /// server bugs are 500 (not masked 400), cancellations are 408 (not 400),
 /// build-in-progress is 503 (not 400), quota is 507/413/429 (not 400).
 /// </summary>

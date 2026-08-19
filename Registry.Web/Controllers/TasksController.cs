@@ -28,9 +28,9 @@ using Registry.Web.Utilities;
 namespace Registry.Web.Controllers;
 
 /// <summary>
-/// Processing Platform task substrate REST surface (spec §4.6). All routes live
+/// Processing Platform task substrate REST surface. All routes live
 /// under <c>/orgs/{org}/ds/{ds}/tasks</c>. Authorization combines dataset access
-/// with per-task ownership (spec §4.8).
+/// with per-task ownership.
 /// </summary>
 [ApiController]
 [Route(RoutesHelper.OrganizationsRadix + "/" + RoutesHelper.OrganizationSlug + "/" + RoutesHelper.DatasetRadix +
@@ -423,7 +423,7 @@ public class TasksController : ControllerBaseEx
         string orgSlug, string dsSlug, string id, AccessType access, CancellationToken ct)
     {
         // A missing/unknown dataset surfaces as the action's unhandled exception; the global
-        // classifier maps it to the same 404 the per-action build used to produce (phase D).
+        // classifier maps it to the same 404 the per-action build used to produce before the unification.
         var ds = _utils.GetDataset(orgSlug, dsSlug);
 
         if (!await _authManager.RequestAccess(ds, access))

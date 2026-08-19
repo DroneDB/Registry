@@ -9,7 +9,7 @@ namespace Registry.Web.Utilities.Ogc;
 /// <summary>
 /// Translates exceptions thrown by OGC controllers into the appropriate XML response
 /// (ExceptionReport / ServiceExceptionReport) following the OGC version negotiated by the request.
-/// Always marks the exception handled (phase D6 check) so the global
+/// Always marks the exception handled so the global
 /// <see cref="ApiExceptionFilter"/> never double-writes the response with its JSON envelope.
 /// </summary>
 public class OgcExceptionFilter : IExceptionFilter

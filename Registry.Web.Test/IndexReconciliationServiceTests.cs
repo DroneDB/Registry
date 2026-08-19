@@ -22,8 +22,8 @@ using Entry = Registry.Ports.DroneDB.Entry;
 namespace Registry.Web.Test;
 
 /// <summary>
-/// Unit tests for <see cref="IndexReconciliationService"/> (ImproveParallelWrites plan,
-/// workstream 04 §5.2): unindexed-on-disk re-indexing, missing-on-disk report-only behaviour,
+/// Unit tests for <see cref="IndexReconciliationService"/>: unindexed-on-disk re-indexing,
+/// missing-on-disk report-only behaviour,
 /// and quarantine ageing.
 /// </summary>
 [TestFixture]

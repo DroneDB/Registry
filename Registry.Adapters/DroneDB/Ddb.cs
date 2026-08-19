@@ -204,7 +204,7 @@ public class DDB : IDDB
             // can apply their backoff + force-retry strategy.
             throw;
         }
-        // DdbBusyException passes through the filtered catch below (workstream 03 §3.1): callers
+        // DdbBusyException passes through the filtered catch below: callers
         // (Hangfire retry decorators) need the typed transient outcome, not an IOE wrapper.
         catch (DdbException ex) when (ex is not DdbBusyException && ex is not DdbBuildInProgressException)
         {
@@ -365,7 +365,7 @@ public class DDB : IDDB
         {
             // Transient DdbBusyException passes through unfiltered: callers (IDatasetIndexQueue, the
             // API filter's 503+Retry-After path) need to distinguish contention from a permanent
-            // failure (workstream 03 §3.1).
+            // failure.
             throw new InvalidOperationException($"Cannot add '{path}' to ddb '{DatasetFolderPath}'", ex);
         }
     }

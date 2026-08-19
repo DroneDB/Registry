@@ -874,7 +874,7 @@ public class ObjectsController : ControllerBaseEx
         catch (UnauthorizedException)
         {
             // Attach the challenge header, then let the global classifier produce the
-            // canonical 401 body (phase D removed the per-action result builder).
+            // canonical 401 body (the per-action result builder was removed during unification).
             BasicAuthFilter.SendBasicAuthRequest(Response);
             throw;
         }
@@ -911,7 +911,7 @@ public class ObjectsController : ControllerBaseEx
         catch (UnauthorizedException)
         {
             // Attach the challenge header, then let the global classifier produce the
-            // canonical 401 body (phase D removed the per-action result builder).
+            // canonical 401 body (the per-action result builder was removed during unification).
             BasicAuthFilter.SendBasicAuthRequest(Response);
             throw;
         }

@@ -32,7 +32,7 @@ public class BatchAddItemError
 /// <summary>
 /// Result of a batch add with per-item error isolation (DDBAddWithOptions). Every input path
 /// appears in exactly one of <see cref="Entries"/>, <see cref="Unchanged"/> or <see cref="Errors"/>
-/// (completeness contract - see ImproveParallelWrites plan, 02-target-architecture.md §5.1).
+/// (completeness contract).
 /// </summary>
 public class BatchAddResult
 {

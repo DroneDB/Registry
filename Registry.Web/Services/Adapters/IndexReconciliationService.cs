@@ -20,7 +20,7 @@ using Registry.Web.Services.Ports;
 namespace Registry.Web.Services.Adapters;
 
 /// <summary>
-/// Recurring safety-net sweep (ImproveParallelWrites plan, workstream 04 §5.2). Per dataset:
+/// Recurring safety-net sweep. Per dataset:
 /// re-enqueues on-disk files that are not indexed, reports (never deletes) indexed entries whose
 /// file is missing on disk, and ages out old quarantined files
 /// (see <see cref="Managers.ObjectsManager"/>'s <c>.uploads/quarantine</c> compensation).
@@ -81,7 +81,7 @@ public class IndexReconciliationService
             try
             {
                 // Narrowed to the index role interface - reconciliation only reads/writes the
-                // index, never build/meta/raster/analytics (ImproveParallelWrites plan, 04 §7).
+                // index, never build/meta/raster/analytics.
                 IDdbIndex ddb = _ddbManager.Get(ds.OrgSlug, ds.InternalRef);
                 var summary = await ReconcileDatasetAsync(ds.OrgSlug, ds.InternalRef, ddb, WriteLine);
 

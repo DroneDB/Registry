@@ -24,7 +24,7 @@ namespace Registry.Web.Services.HeavyTasks.Adapters;
 
 /// <summary>
 /// Hangfire entry point that executes a resolved <see cref="IHeavyTool"/> on the
-/// <c>tasks</c> queue (spec §4.10). Creates the per-task work directory, bridges
+/// <c>tasks</c> queue. Creates the per-task work directory, bridges
 /// progress/log to <c>JobIndex</c>, persists artifact/error metadata and schedules
 /// TTL cleanup of the work directory.
 /// </summary>
@@ -50,7 +50,7 @@ public sealed class HeavyTaskJobWrapper
     }
 
     // Transient DDB contention gets a backoff retry chain; anything else fails fast without
-    // burning worker slots (ImproveParallelWrites plan, workstream 04 §5.4).
+    // burning worker slots.
     // Same policy as the wrappers in the HangfireUtils class - intentionally duplicated inline
     // because Hangfire discovers AutomaticRetry per-job-method via reflection (see there).
     [AutomaticRetry(Attempts = 5, DelaysInSeconds = new[] { 15, 60, 180, 600, 1800 },

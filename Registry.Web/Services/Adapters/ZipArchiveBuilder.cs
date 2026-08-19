@@ -15,7 +15,7 @@ namespace Registry.Web.Services.Adapters;
 
 /// <summary>
 /// Stateless ZIP archive builder shared by the legacy download streaming path and
-/// the <c>bulk-download</c> heavy tool (spec §A.0). Centralizes the path-expansion
+/// the <c>bulk-download</c> heavy tool. Centralizes the path-expansion
 /// and entry-writing logic that previously lived in <c>ObjectsManager.GetFilePaths</c>
 /// and <c>FileStreamDescriptor.AddFilesToZip</c>.
 /// </summary>

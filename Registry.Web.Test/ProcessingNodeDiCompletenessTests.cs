@@ -80,7 +80,7 @@ public class ProcessingNodeDiCompletenessTests
 
         // The IndexReconciliationService recurring job (registered on this host too, since
         // HangfireJobsInitializer runs on every job-executing host) re-enqueues unindexed
-        // files through this singleton (ImproveParallelWrites plan, workstream 04 §5.2).
+        // files through this singleton.
         var queue = scope.ServiceProvider.GetService<IDatasetIndexQueue>();
 
         queue.ShouldNotBeNull();

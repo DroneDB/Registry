@@ -106,8 +106,7 @@ public class ObjectsManager : IObjectsManager
         _buildArtifactResolver = buildArtifactResolver;
         _importSettings = settings.Value.Import ?? new ImportSettings();
         // Optional: not supplied by most unit tests constructing this class directly. When
-        // absent, FinalizeAddedFileAsync falls back to the old direct AddRaw+GetEntry path
-        // (see ImproveParallelWrites plan, workstream 04 §4.3).
+        // absent, FinalizeAddedFileAsync falls back to the old direct AddRaw+GetEntry path.
         _indexQueue = indexQueue;
     }
 
@@ -474,7 +473,7 @@ public class ObjectsManager : IObjectsManager
         if (_indexQueue != null)
         {
             // Coalesces with other concurrent uploads to the same dataset into one native batch
-            // and one write transaction (see ImproveParallelWrites plan, workstream 04 §4.2/§4.3),
+            // and one write transaction,
             // and returns the committed entry directly instead of a second AddRaw+GetEntry round-trip.
             entry = await _indexQueue.EnqueueAsync(new DatasetKey(orgSlug, internalRef), path);
         }

@@ -8,8 +8,8 @@ using Registry.Web.Services.HeavyTasks.Ports;
 namespace Registry.Web.Utilities;
 
 /// <summary>
-/// Describes the HTTP response a managed exception maps to (Phase D of
-/// ImproveParallelWrites): status, optional Retry-After hint, the NoRetry flag
+/// Describes the HTTP response a managed exception maps to: status, optional
+/// Retry-After hint, the NoRetry flag
 /// surfaced to clients via <c>ErrorResponse.NoRetry</c>, the client-facing
 /// message, and the level at which the server should log the incident.
 /// </summary>
@@ -27,11 +27,11 @@ public readonly record struct ApiErrorDescriptor(
 
 /// <summary>
 /// Single source of truth for the managed-exception → HTTP-response mapping
-/// (Phase D of ImproveParallelWrites). Replaces the two previously divergent
+/// Replaces the two previously divergent
 /// tables (<see cref="ApiExceptionFilter"/> and the former
 /// <c>ControllerBaseEx.ExceptionResult</c>); both call sites now delegate here.
 /// The mapping is the union of every per-controller interpretation that
-/// existed pre-unification (see PLAN.md phase D table). Unlisted exception
+/// existed pre-unification. Unlisted exception
 /// types deliberately fall through to 500 + "Internal server error": masking
 /// server bugs as 400 was the bug being removed.
 /// </summary>

@@ -7,7 +7,7 @@ using Newtonsoft.Json.Linq;
 
 namespace Registry.Web.Models.DTO;
 
-/// <summary>Catalog entry describing an available tool (spec §4.6 GET /tasks/tools).</summary>
+/// <summary>Catalog entry describing an available tool (GET /tasks/tools).</summary>
 public sealed record TaskToolDto(
     string Id,
     string Version,

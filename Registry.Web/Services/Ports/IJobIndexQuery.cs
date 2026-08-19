@@ -19,7 +19,7 @@ public interface IJobIndexQuery
     Task<JobIndex[]> QueryAsync(JobIndexQueryFilter filter, CancellationToken ct = default);
 
     /// <summary>
-    /// Global (cross org/dataset) task query for the admin dashboard (spec §B.1.1).
+    /// Global (cross org/dataset) task query for the admin dashboard.
     /// Filtered by tool/state/user with server-side paging, ordered by creation desc.
     /// </summary>
     Task<JobIndex[]> QueryGlobalAsync(JobIndexGlobalQueryFilter filter, CancellationToken ct = default);

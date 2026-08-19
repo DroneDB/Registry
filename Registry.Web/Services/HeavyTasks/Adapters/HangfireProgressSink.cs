@@ -9,7 +9,7 @@ namespace Registry.Web.Services.HeavyTasks.Adapters;
 
 /// <summary>
 /// Bridges tool-emitted <see cref="HeavyToolProgress"/> to the three persistence
-/// channels (spec §6): the Hangfire console (permanent operator log), the
+/// channels: the Hangfire console (permanent operator log), the
 /// <see cref="LogRingBuffer"/> tail (what TaskHistory shows), and throttled
 /// <c>JobIndex</c> progress/phase updates.
 /// </summary>

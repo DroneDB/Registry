@@ -3,14 +3,14 @@ namespace Registry.Web.Models.Configuration;
 
 /// <summary>
 /// Tuning for the per-dataset index write queue (<c>IDatasetIndexQueue</c>). Bound from the
-/// <c>AppSettings:IndexQueue</c> section. See ImproveParallelWrites plan, workstream 04 §4.4.
+/// <c>AppSettings:IndexQueue</c> section.
 /// </summary>
 public class IndexQueueSettings
 {
     /// <summary>
     /// How long to wait for stragglers before committing a batch. Kept small: under real
     /// concurrency, requests already pipeline behind the previous batch's commit, so this is
-    /// only a burst-detection window, not the dominant source of latency (see plan §4.2 caveat).
+    /// only a burst-detection window, not the dominant source of latency.
     /// </summary>
     public int BatchWindowMs { get; set; } = 20;
 

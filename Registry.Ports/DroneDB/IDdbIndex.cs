@@ -7,7 +7,7 @@ namespace Registry.Ports.DroneDB;
 /// <summary>
 /// Index read/write operations: search, add, remove, move, dataset identity/paths and STAC
 /// export. The narrowest role interface for code that only reads or writes the index (e.g.
-/// <c>IDatasetIndexQueue</c>) — see ImproveParallelWrites plan, workstream 04 §7.
+/// <c>IDatasetIndexQueue</c>).
 /// </summary>
 public interface IDdbIndex
 {
