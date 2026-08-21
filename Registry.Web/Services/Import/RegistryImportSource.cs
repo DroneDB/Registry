@@ -5,6 +5,7 @@ using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using Registry.Ports.Import;
+using Registry.Web.Exceptions;
 
 namespace Registry.Web.Services.Import;
 
@@ -15,6 +16,13 @@ namespace Registry.Web.Services.Import;
 /// </summary>
 public sealed class RegistryImportSource : IImportSource, IBrowsableImportSource
 {
+    /// <summary>
+    /// Client-facing message for a remote authentication failure surfaced by the browse endpoints
+    /// (maps to 401 via <c>ApiExceptionClassifier</c>). <c>FetchAsync</c> keeps its own message as the
+    /// heavy-task failure reason.
+    /// </summary>
+    public const string AuthFailureMessage = "Authentication to the remote registry failed. Check the username and password.";
+
     private readonly IRemoteRegistryClient _client;
     private readonly SsrfGuard _ssrfGuard;
 
@@ -94,7 +102,7 @@ public sealed class RegistryImportSource : IImportSource, IBrowsableImportSource
 
         var token = await _client.AuthenticateAsync(url, username, password, ct);
         if (!string.IsNullOrWhiteSpace(username) && token is null)
-            throw new InvalidOperationException("Authentication failed.");
+            throw new UnauthorizedException(AuthFailureMessage);
 
         return await _client.ListOrganizationsAsync(url, token, ct);
     }
@@ -109,7 +117,7 @@ public sealed class RegistryImportSource : IImportSource, IBrowsableImportSource
 
         var token = await _client.AuthenticateAsync(url, username, password, ct);
         if (!string.IsNullOrWhiteSpace(username) && token is null)
-            throw new InvalidOperationException("Authentication failed.");
+            throw new UnauthorizedException(AuthFailureMessage);
 
         return await _client.ListDatasetsAsync(url, token, org, ct);
     }
