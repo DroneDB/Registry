@@ -212,7 +212,7 @@ public class ObjectsManager : IObjectsManager
             Name = Path.GetFileName(entry.Path),
             Size = entry.Size,
             Type = entry.Type,
-            ContentType = entry.Path != null ? MimeMapping.MimeUtility.GetMimeMapping(entry.Path) : null,
+            ContentType = entry.Path != null ? MimeUtility.GetMimeMapping(entry.Path) : null,
             PhysicalPath = Path.GetFullPath(ddb.GetLocalPath(entry.Path))
         };
     }
@@ -1443,7 +1443,7 @@ public class ObjectsManager : IObjectsManager
         if (deleted.Count > 0)
             await InvalidateOgcAsync(orgSlug, dsSlug);
 
-        response.Deleted = deleted.ToArray();
+        response.Deleted = [.. deleted];
         response.Failed = failed;
 
         _logger.LogInformation("DeleteBatch complete: {DeletedCount} deleted, {FailedCount} failed",

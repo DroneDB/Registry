@@ -21,12 +21,12 @@ public class ExtensionBlockedException : Exception
     public ExtensionBlockedException(string fileName, ImportSettings settings, bool allowListMode)
         : base(BuildSingleMessage(fileName, allowListMode))
     {
-        FileNames = new[] { fileName };
+        FileNames = [fileName];
         AllowListMode = allowListMode;
     }
 
     public ExtensionBlockedException(IEnumerable<string> fileNames, ImportSettings settings)
-        : base(BuildBatchMessage(fileNames.ToArray(), settings))
+        : base(BuildBatchMessage([.. fileNames], settings))
     {
         var names = fileNames.ToArray();
         FileNames = names;

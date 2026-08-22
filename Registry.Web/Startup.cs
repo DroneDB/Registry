@@ -336,7 +336,7 @@ public class Startup
             new ConfigurationHelper(MagicStrings.AppSettingsFileName));
 
         // Admin configuration editor: builds ConfigurationDataDto from AppSettings + defaults
-        services.AddScoped<IConfigurationDataBuilder, Registry.Web.Services.Adapters.ConfigurationDataBuilder>();
+        services.AddScoped<IConfigurationDataBuilder, ConfigurationDataBuilder>();
 
         services.AddScoped<BasicAuthFilter>();
 

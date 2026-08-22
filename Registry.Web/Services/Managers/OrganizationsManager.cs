@@ -423,7 +423,7 @@ public class OrganizationsManager : IOrganizationsManager
                 destOrgSlug,
                 conflictResolution);
 
-            result.DatasetResults = moveResults.ToArray();
+            result.DatasetResults = [.. moveResults];
             result.DatasetsMovedCount = result.DatasetResults.Count(r => r.Success);
             result.DatasetsFailedCount = result.DatasetResults.Count(r => !r.Success);
         }

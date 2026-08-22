@@ -36,6 +36,6 @@ public class EmbeddedResourceQuery : IEmbeddedResourceQuery
     public string[] GetResourceNames(Assembly assembly)
     {
         var prefix = $"{assembly.GetName().Name}.";
-        return assembly.GetManifestResourceNames().Select(item => item[prefix.Length..]).ToArray();
+        return [.. assembly.GetManifestResourceNames().Select(item => item[prefix.Length..])];
     }
 }

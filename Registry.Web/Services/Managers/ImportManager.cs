@@ -65,7 +65,7 @@ public class ImportManager : IImportManager
 
     /// <inheritdoc />
     public IReadOnlyList<string> GetAvailableSourceTypes()
-        => _factory.AvailableTypes.Where(IsSourceAllowed).ToList();
+        => [.. _factory.AvailableTypes.Where(IsSourceAllowed)];
 
     /// <inheritdoc />
     public async Task<ImportVerifyResultDto> VerifyAsync(string orgSlug, VerifyImportRequestDto request,
@@ -210,9 +210,11 @@ public class ImportManager : IImportManager
 
         return new ImportBrowseResultDto
         {
-            Items = items
-                .Select(i => new BrowseItemDto { Slug = i.Slug, Name = i.Name })
-                .ToArray()
+            Items =
+            [
+                .. items
+                    .Select(i => new BrowseItemDto { Slug = i.Slug, Name = i.Name })
+            ]
         };
     }
 

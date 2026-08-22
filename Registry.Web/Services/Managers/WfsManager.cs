@@ -243,7 +243,7 @@ public class WfsManager : OgcManagerBase, IWfsManager
         if (typeNames == null || typeNames.Length == 0)
         {
             var all = await LayerCatalog.GetLayersAsync(orgSlug, dsSlug);
-            targetLayers = all.Where(l => l.EntryType == EntryType.Vector).ToList();
+            targetLayers = [.. all.Where(l => l.EntryType == EntryType.Vector)];
         }
         else
         {
@@ -1006,10 +1006,10 @@ public class WfsManager : OgcManagerBase, IWfsManager
         bool Compare(string a, string b)
         {
             // Numeric compare if both parse as double, else string.
-            if (double.TryParse(a, System.Globalization.NumberStyles.Float,
-                    System.Globalization.CultureInfo.InvariantCulture, out var da)
-                && double.TryParse(b, System.Globalization.NumberStyles.Float,
-                    System.Globalization.CultureInfo.InvariantCulture, out var db))
+            if (double.TryParse(a, NumberStyles.Float,
+                    CultureInfo.InvariantCulture, out var da)
+                && double.TryParse(b, NumberStyles.Float,
+                    CultureInfo.InvariantCulture, out var db))
             {
                 return op switch
                 {
@@ -1063,9 +1063,9 @@ public class WfsManager : OgcManagerBase, IWfsManager
         var hi = ResolveLiteralOrRef(upper, feature);
         foreach (var v in leftVals)
         {
-            if (double.TryParse(v, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var dv)
-                && double.TryParse(lo, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var dlo)
-                && double.TryParse(hi, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var dhi))
+            if (double.TryParse(v, NumberStyles.Float, CultureInfo.InvariantCulture, out var dv)
+                && double.TryParse(lo, NumberStyles.Float, CultureInfo.InvariantCulture, out var dlo)
+                && double.TryParse(hi, NumberStyles.Float, CultureInfo.InvariantCulture, out var dhi))
             {
                 if (dv >= dlo && dv <= dhi) return true;
             }

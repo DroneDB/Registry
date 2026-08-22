@@ -34,7 +34,7 @@ public class PasswordPolicyValidator : IPasswordPolicyValidator
 
             // Short-circuit: if password is null or empty, no point checking further rules
             if (string.IsNullOrEmpty(password))
-                return PasswordValidationResult.Failure(errors.ToArray());
+                return PasswordValidationResult.Failure([.. errors]);
         }
 
         if (_policy.RequireDigit && !password.Any(char.IsDigit))
@@ -50,7 +50,7 @@ public class PasswordPolicyValidator : IPasswordPolicyValidator
             errors.Add("Password must contain at least one special character");
 
         return errors.Count > 0
-            ? PasswordValidationResult.Failure(errors.ToArray())
+            ? PasswordValidationResult.Failure([.. errors])
             : PasswordValidationResult.Success();
     }
 }

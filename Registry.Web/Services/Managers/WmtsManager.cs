@@ -293,8 +293,10 @@ public class WmtsManager : OgcManagerBase, IWmtsManager
         ms.Write([0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A]);
         // IHDR
         WritePngChunk(ms, "IHDR",
-            BigEndian(256).Concat(BigEndian(256))
-                .Concat(new byte[] { 8, 6, 0, 0, 0 }).ToArray());
+        [
+            .. BigEndian(256), .. BigEndian(256),
+            8, 6, 0, 0, 0
+        ]);
         // IDAT: 256 rows of (filter=0 + 256*4 zero bytes), zlib-compressed
         var raw = new byte[256 * (1 + 256 * 4)];
         var idat = ZlibCompress(raw);
@@ -311,7 +313,7 @@ public class WmtsManager : OgcManagerBase, IWmtsManager
         var typeBytes = Encoding.ASCII.GetBytes(type);
         s.Write(typeBytes);
         s.Write(data);
-        var crc = Crc32(typeBytes.Concat(data).ToArray());
+        var crc = Crc32([.. typeBytes, .. data]);
         s.Write(BigEndian((int)crc));
     }
 

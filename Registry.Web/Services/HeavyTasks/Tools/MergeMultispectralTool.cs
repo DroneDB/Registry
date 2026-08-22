@@ -148,7 +148,7 @@ public sealed class MergeMultispectralTool : IHeavyTool
                 if (!string.IsNullOrWhiteSpace(s)) list.Add(s!);
             }
         }
-        return list.ToArray();
+        return [.. list];
     }
 
     private static string[]? ReadStringArray(JsonElement obj, string name)
@@ -164,7 +164,7 @@ public sealed class MergeMultispectralTool : IHeavyTool
             if (!string.IsNullOrWhiteSpace(s)) list.Add(s!);
         }
 
-        return list.Count > 0 ? list.ToArray() : null;
+        return list.Count > 0 ? [.. list] : null;
     }
 
     private static string? ReadString(JsonElement obj, string name)

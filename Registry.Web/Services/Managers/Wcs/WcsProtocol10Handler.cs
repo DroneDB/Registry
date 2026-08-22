@@ -125,7 +125,7 @@ public sealed class WcsProtocol10Handler : IWcsProtocolHandler
         if (string.IsNullOrWhiteSpace(coverageIds))
         {
             var (_, all) = await _svc.GetCoveragesAsync(orgSlug, dsSlug, null);
-            ids = all.Select(l => l.Name).ToArray();
+            ids = [.. all.Select(l => l.Name)];
         }
         else
         {

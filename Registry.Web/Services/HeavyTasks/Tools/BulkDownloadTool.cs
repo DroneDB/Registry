@@ -190,7 +190,7 @@ public sealed class BulkDownloadTool : IHeavyTool
             if (!string.IsNullOrWhiteSpace(s)) list.Add(s!);
         }
 
-        return list.Count > 0 ? list.ToArray() : null;
+        return list.Count > 0 ? [.. list] : null;
     }
 
     private static string? ReadString(JsonElement obj, string name)

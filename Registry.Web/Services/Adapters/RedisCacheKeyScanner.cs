@@ -53,14 +53,14 @@ public class RedisCacheKeyScanner : ICacheKeyScanner
 
                 if (batch.Count < batchSize) continue;
                 
-                deletedCount += (int)await db.KeyDeleteAsync(batch.ToArray());
+                deletedCount += (int)await db.KeyDeleteAsync([.. batch]);
                 batch.Clear();
             }
 
             // Delete remaining keys
             if (batch.Count > 0)
             {
-                deletedCount += (int)await db.KeyDeleteAsync(batch.ToArray());
+                deletedCount += (int)await db.KeyDeleteAsync([.. batch]);
             }
 
             _logger.LogDebug("Removed {Count} cache entries matching pattern '{Pattern}'",

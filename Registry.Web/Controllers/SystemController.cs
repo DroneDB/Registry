@@ -452,14 +452,18 @@ public class SystemController : ControllerBaseEx
             MaxExportSizeBytes = _appSettings.MaxExportSizeBytes,
             BulkDownloadAsyncThresholdBytes =
                 (_appSettings.ProcessingPlatform ?? new ProcessingPlatformSettings()).BulkDownloadAsyncThresholdBytes,
-            TaskTools = _toolRegistry.All
-                .Zip(toolStates, (t, st) => new TaskToolInfoDto(t.Id, t.Version, t.Title,
-                    t.RequiredAccess.ToString(), t.ProducesArtifact, t.ResultExtension,
-                    st.Hidden, st.Disabled, st.DisabledMessage))
-                .ToArray(),
-            TaskStates = TaskStateCatalog.All
-                .Select(s => new TaskStateInfoDto(s, TaskStateCatalog.IsTerminal(s)))
-                .ToArray(),
+            TaskTools =
+            [
+                .. _toolRegistry.All
+                    .Zip(toolStates, (t, st) => new TaskToolInfoDto(t.Id, t.Version, t.Title,
+                        t.RequiredAccess.ToString(), t.ProducesArtifact, t.ResultExtension,
+                        st.Hidden, st.Disabled, st.DisabledMessage))
+            ],
+            TaskStates =
+            [
+                .. TaskStateCatalog.All
+                    .Select(s => new TaskStateInfoDto(s, TaskStateCatalog.IsTerminal(s)))
+            ],
             HubOptions = _appSettings.HubOptions,
             HubVersion = HubInfo.CurrentVersion,
             RegistryVersion = _systemManager.GetVersion(),

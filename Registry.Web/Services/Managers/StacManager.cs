@@ -38,7 +38,7 @@ public class StacManager : IStacManager
     private const string CatalogTitle = "DroneDB public datasets catalog";
     private const string CatalogId = "DroneDB Catalog";
     private const string StacVersion = "1.1.0";
-    private readonly TimeSpan Expiration = TimeSpan.FromMinutes(5);
+    private readonly TimeSpan _expiration = TimeSpan.FromMinutes(5);
 
     // STAC API 1.0.0 conformance classes implemented by this server
     private static readonly string[] ConformanceClasses =
@@ -121,7 +121,7 @@ public class StacManager : IStacManager
                 Title = meta.Name
             };
 
-            await _cache.SetRecordAsync(key, item, Expiration);
+            await _cache.SetRecordAsync(key, item, _expiration);
 
             links.Add(item);
         }
@@ -210,7 +210,7 @@ public class StacManager : IStacManager
             Links = links
         };
 
-        await _cache.SetRecordAsync(cacheKey, result, Expiration);
+        await _cache.SetRecordAsync(cacheKey, result, _expiration);
         return result;
     }
 
@@ -242,7 +242,7 @@ public class StacManager : IStacManager
         };
 
         var result = new StacCollectionsDto { Collections = collections, Links = links };
-        await _cache.SetRecordAsync(cacheKey, result, Expiration);
+        await _cache.SetRecordAsync(cacheKey, result, _expiration);
         return result;
     }
 
@@ -338,9 +338,11 @@ public class StacManager : IStacManager
         if (request.Collections is { Length: > 0 })
         {
             var wanted = new HashSet<string>(request.Collections);
-            datasets = datasets
-                .Where(d => wanted.Contains($"{d.Organization.Slug}/{d.Slug}"))
-                .ToList();
+            datasets =
+            [
+                .. datasets
+                    .Where(d => wanted.Contains($"{d.Organization.Slug}/{d.Slug}"))
+            ];
         }
 
         if (request.Ids is { Length: > 0 })

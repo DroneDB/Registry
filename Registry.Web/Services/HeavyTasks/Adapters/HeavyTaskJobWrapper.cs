@@ -53,9 +53,9 @@ public sealed class HeavyTaskJobWrapper
     // burning worker slots.
     // Same policy as the wrappers in the HangfireUtils class - intentionally duplicated inline
     // because Hangfire discovers AutomaticRetry per-job-method via reflection (see there).
-    [AutomaticRetry(Attempts = 5, DelaysInSeconds = new[] { 15, 60, 180, 600, 1800 },
+    [AutomaticRetry(Attempts = 5, DelaysInSeconds = [15, 60, 180, 600, 1800],
         OnAttemptsExceeded = AttemptsExceededAction.Fail,
-        OnlyOn = new[] { typeof(DdbBusyException), typeof(DdbBuildInProgressException) })]
+        OnlyOn = [typeof(DdbBusyException), typeof(DdbBuildInProgressException)])]
     [Queue("tasks")]
     public async Task Run(string toolId, string toolVersion, string requestJson,
         PerformContext ctx, CancellationToken cancellationToken)

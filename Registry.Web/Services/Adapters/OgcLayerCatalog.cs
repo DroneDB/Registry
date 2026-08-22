@@ -222,17 +222,23 @@ public class OgcLayerCatalog : IOgcLayerCatalog
         if (matches.Count == 0)
         {
             // Fallback: match by sanitized name (NCName-safe).
-            matches = layers.Where(l => string.Equals(OgcNames.ToNcName(l.Name), localName, StringComparison.Ordinal)
-                                        || string.Equals(OgcNames.ToNcName(l.Name), OgcNames.ToNcName(layerName),
-                                            StringComparison.Ordinal)).ToList();
+            matches =
+            [
+                .. layers.Where(l => string.Equals(OgcNames.ToNcName(l.Name), localName, StringComparison.Ordinal)
+                                     || string.Equals(OgcNames.ToNcName(l.Name), OgcNames.ToNcName(layerName),
+                                         StringComparison.Ordinal))
+            ];
         }
 
         if (matches.Count == 0)
         {
             // Fallback: when the client asks for the bare entry path of a multi-layer vector,
             // resolve to the first inner layer so legacy single-layer URLs keep working.
-            matches = layers.Where(l => string.Equals(l.EntryPath, layerName, StringComparison.Ordinal)
-                                        || string.Equals(l.EntryPath, localName, StringComparison.Ordinal)).ToList();
+            matches =
+            [
+                .. layers.Where(l => string.Equals(l.EntryPath, layerName, StringComparison.Ordinal)
+                                     || string.Equals(l.EntryPath, localName, StringComparison.Ordinal))
+            ];
         }
 
         if (matches.Count == 0) return null;

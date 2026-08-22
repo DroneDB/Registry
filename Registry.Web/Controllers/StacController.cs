@@ -325,7 +325,7 @@ public class StacController : ControllerBaseEx
         new(@"^(\d{4})-(\d{2})-(\d{2})[Tt](\d{2}):(\d{2}):(\d{2})(\.\d+)?([Zz]|[+-]\d{2}:\d{2})$",
             System.Text.RegularExpressions.RegexOptions.Compiled);
 
-    private static bool TryValidateInstant(string value, out System.DateTimeOffset? parsed)
+    private static bool TryValidateInstant(string value, out DateTimeOffset? parsed)
     {
         parsed = null;
 
@@ -356,7 +356,7 @@ public class StacController : ControllerBaseEx
         if (fraction.Length > 8)
             normalized = value[..match.Groups[7].Index] + fraction[..8] + match.Groups[8].Value;
 
-        if (System.DateTimeOffset.TryParse(normalized,
+        if (DateTimeOffset.TryParse(normalized,
                 System.Globalization.CultureInfo.InvariantCulture,
                 System.Globalization.DateTimeStyles.None, out var dto))
             parsed = dto;
@@ -389,7 +389,7 @@ public class StacController : ControllerBaseEx
         if (startOpen && endOpen)
             return false;
 
-        System.DateTimeOffset? startDt = null, endDt = null;
+        DateTimeOffset? startDt = null, endDt = null;
 
         if (!startOpen && !TryValidateInstant(start, out startDt))
             return false;

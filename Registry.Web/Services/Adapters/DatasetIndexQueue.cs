@@ -102,7 +102,7 @@ public sealed class DatasetIndexQueue : IDatasetIndexQueue, IDisposable
         CancellationToken ct = default)
     {
         if (paths.Count == 0)
-            return Array.Empty<Entry>();
+            return [];
 
         using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(_opts.EnqueueTimeoutSeconds));
         using var linked = CancellationTokenSource.CreateLinkedTokenSource(ct, timeout.Token, _shutdown.Token);
@@ -201,7 +201,7 @@ public sealed class DatasetIndexQueue : IDatasetIndexQueue, IDisposable
 
     private DatasetLane CreateLane(DatasetKey key)
     {
-        var channel = System.Threading.Channels.Channel.CreateBounded<IndexRequest>(
+        var channel = Channel.CreateBounded<IndexRequest>(
             new BoundedChannelOptions(Math.Max(1, _opts.QueueCapacityPerDataset))
             {
                 SingleReader = true,
@@ -380,7 +380,7 @@ public sealed class DatasetIndexQueue : IDatasetIndexQueue, IDisposable
         foreach (var req in batch)
         {
             if (!byPath.TryGetValue(req.Path, out var list))
-                byPath[req.Path] = list = new List<IndexRequest>();
+                byPath[req.Path] = list = [];
             list.Add(req);
         }
 
