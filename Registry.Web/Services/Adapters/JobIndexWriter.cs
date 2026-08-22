@@ -331,7 +331,7 @@ public class JobIndexWriter(RegistryContext db, ILogger<JobIndexWriter> log,
     /// </summary>
     private async Task InvalidateTasksListCacheAsync(string orgSlug, string dsSlug, CancellationToken ct = default)
     {
-        var cacheKey = $"{MagicStrings.TasksListCacheSeed}:{orgSlug}/{dsSlug}";
+        var cacheKey = MagicStrings.TasksListCacheKey(orgSlug, dsSlug);
         try
         {
             await cache.RemoveAsync(cacheKey, ct);

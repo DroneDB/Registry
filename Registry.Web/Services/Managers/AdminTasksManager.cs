@@ -57,7 +57,7 @@ public sealed class AdminTasksManager : IAdminTasksManager
             return false;
 
         // Best-effort artifact cleanup
-        TryDeleteArtifacts(jobId, _tempPath);
+        TaskJobHelpers.TryDeleteArtifacts(jobId, _tempPath);
 
         return true;
     }
@@ -119,40 +119,7 @@ public sealed class AdminTasksManager : IAdminTasksManager
 
         return new AdminTaskSummaryDto(
             j.JobId, j.OrgSlug, j.DsSlug, j.ToolId, j.ToolVersion, j.CurrentState,
-            j.ProgressPercent, j.PhaseMessage, j.CreatedAtUtc, j.ProcessingAtUtc, FinishedAt(j),
-            j.Path, j.UserId, owner, j.ErrorType, ArtifactExpiresAt(j));
-    }
-
-    private static DateTime? FinishedAt(JobIndex j) =>
-        j.SucceededAtUtc ?? j.FailedAtUtc ?? j.DeletedAtUtc;
-
-    /// <summary>
-    /// Server-authoritative artifact expiry: the work directory is swept
-    /// <c>ArtifactTtlHours</c> after completion (see <c>HeavyTaskJobWrapper</c>).
-    /// Null when the task has no downloadable artifact.
-    /// </summary>
-    private DateTime? ArtifactExpiresAt(JobIndex j) =>
-        j.CurrentState == "Succeeded" && j.ArtifactSizeBytes is not null && j.SucceededAtUtc is { } finished
-            ? finished.AddHours(Math.Max(1, _artifactTtlHours))
-            : null;
-
-    /// <summary>
-    /// Best-effort removal of a task's produced-artifact working directory
-    /// (<c>{tempPath}/tasks/{taskId}</c>). Path-guarded against traversal.
-    /// </summary>
-    private static void TryDeleteArtifacts(string taskId, string tempPath)
-    {
-        try
-        {
-            var dir = Path.GetFullPath(Path.Combine(tempPath, "tasks", taskId));
-            var root = Path.GetFullPath(Path.Combine(tempPath, "tasks"));
-            // Require a separator boundary so "tasks_evil" can't pass a bare prefix match
-            if (dir.StartsWith(root + Path.DirectorySeparatorChar, StringComparison.Ordinal) && Directory.Exists(dir))
-                Directory.Delete(dir, recursive: true);
-        }
-        catch
-        {
-            // Ignore — artifacts may already be cleaned up
-        }
+            j.ProgressPercent, j.PhaseMessage, j.CreatedAtUtc, j.ProcessingAtUtc, TaskJobHelpers.FinishedAt(j),
+            j.Path, j.UserId, owner, j.ErrorType, TaskJobHelpers.ArtifactExpiresAt(j, _artifactTtlHours));
     }
 }

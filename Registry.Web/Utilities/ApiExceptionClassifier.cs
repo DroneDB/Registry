@@ -65,7 +65,8 @@ public static class ApiExceptionClassifier
             HeavyToolNotFoundException e => new ApiErrorDescriptor(StatusCodes.Status400BadRequest, null, false, e.Message, LogLevel.Information),
             BadRequestException e => new ApiErrorDescriptor(StatusCodes.Status400BadRequest, null, false, e.Message, LogLevel.Information),
             ArgumentException e => new ApiErrorDescriptor(StatusCodes.Status400BadRequest, null, false, e.Message, LogLevel.Information),
-            UnauthorizedException e => new ApiErrorDescriptor(StatusCodes.Status401Unauthorized, null, true, e.Message, LogLevel.Information),
+            UnauthorizedException e => new ApiErrorDescriptor(StatusCodes.Status401Unauthorized, null, e.NoRetry, e.Message, LogLevel.Information),
+            ForbiddenException e => new ApiErrorDescriptor(StatusCodes.Status403Forbidden, null, e.NoRetry, e.Message, LogLevel.Information),
             NotFoundException e => new ApiErrorDescriptor(StatusCodes.Status404NotFound, null, false, e.Message, LogLevel.Information),
             ConflictException e => new ApiErrorDescriptor(StatusCodes.Status409Conflict, null, false, e.Message, LogLevel.Information),
 

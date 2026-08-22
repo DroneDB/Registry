@@ -10,7 +10,7 @@ using Hangfire.Client;
 using Hangfire.Storage;
 using Hangfire.Storage.Monitoring;
 using Hangfire.States;
-using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Http;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Caching.Distributed;
 using Microsoft.Extensions.Logging;
@@ -19,7 +19,6 @@ using Moq;
 using NUnit.Framework;
 using Registry.Ports;
 using Registry.Ports.DroneDB;
-using Registry.Web.Controllers;
 using Registry.Web.Data;
 using Registry.Web.Data.Models;
 using Registry.Web.Identity.Models;
@@ -30,12 +29,13 @@ using Registry.Web.Services.HeavyTasks.Ports;
 using Registry.Web.Test.Adapters;
 using Registry.Web.Services.Managers;
 using Registry.Web.Services.Ports;
+using Registry.Web.Utilities;
 using Shouldly;
 
 namespace Registry.Web.Test;
 
 /// <summary>
-/// Controller contract for POST /orgs/{o}/ds/{d}/tasks/{id}/retry: the live Hangfire state gates
+/// Manager contract for POST /orgs/{o}/ds/{d}/tasks/{id}/retry: the live Hangfire state gates
 /// the re-queue (Failed-only accepted set), sweep-ownership 409 for pending builds, 409 for jobs
 /// missing from Hangfire, and stale JobIndex error fields are cleared before the re-queue. The
 /// Hangfire client and the live job state are mocked so assertions are deterministic; the same-id
@@ -50,7 +50,7 @@ public class RetryEndpointTest : IDisposable
 
     private RegistryContext _db = null!;
     private Mock<IBackgroundJobClient> _client = null!;
-    private TasksController _controller = null!;
+    private TasksManager _manager = null!;
     private Mock<IDDB> _ddb = null!;
     private Mock<IUtils> _utils = null!;
 
@@ -102,7 +102,7 @@ public class RetryEndpointTest : IDisposable
         var appSettings = new Mock<IOptions<AppSettings>>();
         appSettings.SetupGet(x => x.Value).Returns(new AppSettings { TempPath = Path.GetTempPath() });
 
-        _controller = new TasksController(
+        _manager = new TasksManager(
             new Mock<IHeavyTaskRunner>().Object,
             new Mock<IHeavyToolRegistry>().Object,
             new Mock<IHeavyToolGating>().Object,
@@ -113,8 +113,9 @@ public class RetryEndpointTest : IDisposable
             new BackgroundJobsProcessor(_client.Object, NullIndexedEnqueuer.Create()),
             ddbManager.Object,
             new Mock<IDistributedCache>().Object,
+            new Mock<IHttpContextAccessor>().Object,
             appSettings.Object,
-            new Mock<ILogger<TasksController>>().Object);
+            new Mock<ILogger<TasksManager>>().Object);
     }
 
     private JobStorageScope? _jobScope;
@@ -147,12 +148,17 @@ public class RetryEndpointTest : IDisposable
 
     private int Retry(string id)
     {
-        var result = _controller.Retry(Org, Ds, id, CancellationToken.None).GetAwaiter().GetResult();
-        // Ok / Conflict / NotFound / Unauthorized all surface as ObjectResult with a StatusCode,
-        // with the exception of raw StatusCodeResult (unused by this controller today).
-        if (result is ObjectResult obj) return obj.StatusCode ?? 200;
-        if (result is StatusCodeResult sr) return (int)sr.StatusCode;
-        return -1;
+        try
+        {
+            _manager.RetryAsync(Org, Ds, id, CancellationToken.None).GetAwaiter().GetResult();
+            return 200;
+        }
+        catch (Exception ex)
+        {
+            // The manager reports refusals as managed exceptions; the global filter turns them
+            // into the very status codes the endpoint used to return inline.
+            return ApiExceptionClassifier.Classify(ex).StatusCode;
+        }
     }
 
     /// <summary>

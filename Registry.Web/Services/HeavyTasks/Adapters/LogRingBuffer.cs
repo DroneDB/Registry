@@ -1,6 +1,7 @@
 #nullable enable
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
@@ -27,6 +28,34 @@ public sealed class LogTailSnapshot
     [JsonPropertyName("lines")] public List<LogLine> Lines { get; set; } = [];
     [JsonPropertyName("cursor")] public long Cursor { get; set; }
     [JsonPropertyName("truncatedFromTail")] public long TruncatedFromTail { get; set; }
+
+    /// <summary>
+    /// Lenient counterpart of <see cref="LogRingBuffer.ToJson"/>: a null, empty or
+    /// malformed payload yields an empty snapshot instead of throwing, so a corrupted
+    /// <c>JobIndex.LogTailJson</c> can never break a status or log response.
+    /// </summary>
+    public static LogTailSnapshot Parse(string? json)
+    {
+        if (string.IsNullOrEmpty(json)) return new LogTailSnapshot();
+        try
+        {
+            return JsonSerializer.Deserialize<LogTailSnapshot>(json) ?? new LogTailSnapshot();
+        }
+        catch
+        {
+            return new LogTailSnapshot();
+        }
+    }
+}
+
+/// <summary>
+/// Rendering helpers for <see cref="LogTailSnapshot"/>.
+/// </summary>
+public static class LogTailSnapshotExtensions
+{
+    /// <summary>Formats the buffered lines as <c>[HH:mm:ss] message</c>, resolving the Unix-ms timestamps.</summary>
+    public static IReadOnlyList<string> AsStrings(this LogTailSnapshot snap) =>
+        [.. snap.Lines.Select(l => $"[{DateTimeOffset.FromUnixTimeMilliseconds(l.T):HH:mm:ss}] {l.Msg}")];
 }
 
 /// <summary>

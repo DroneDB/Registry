@@ -31,7 +31,7 @@ public class BuildStatusService : IBuildStatusService
         EntryType.Vector, EntryType.GaussianSplat, EntryType.Tiles3D
     ];
 
-    private const string BuildToolId = "build";
+    private const string BuildToolId = HeavyToolIds.Build;
 
     private readonly IJobIndexQuery _jobIndexQuery;
     private readonly ILogger<BuildStatusService> _logger;

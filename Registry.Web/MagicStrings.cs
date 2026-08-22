@@ -23,6 +23,9 @@ public static class MagicStrings
 
     public const string AutoBuildServiceUserId = "auto-build-service";
 
+    /// <summary>Single source of truth for the per-dataset tasks-list cache key (read and write-through invalidation sides).</summary>
+    public static string TasksListCacheKey(string orgSlug, string dsSlug) => $"{TasksListCacheSeed}:{orgSlug}/{dsSlug}";
+
     public const string IdentityConnectionName = "IdentityConnection";
     public const string RegistryConnectionName = "RegistryConnection";
     public const string HangfireConnectionName = "HangfireConnection";

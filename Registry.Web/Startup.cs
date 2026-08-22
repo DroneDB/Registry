@@ -320,6 +320,9 @@ public class Startup
         // Admin global tasks dashboard manager (Part B).
         services.AddScoped<IAdminTasksManager, AdminTasksManager>();
 
+        // Per-dataset Processing Platform task manager backing TasksController.
+        services.AddScoped<ITasksManager, TasksManager>();
+
         // Processing Platform task substrate (native tools incl. build/raster-export)
         services.AddProcessingPlatform();
 
