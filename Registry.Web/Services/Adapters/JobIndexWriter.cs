@@ -142,10 +142,18 @@ public class JobIndexWriter(RegistryContext db, ILogger<JobIndexWriter> log,
 
         ji.CurrentState = newState;
         ji.LastStateChangeUtc = changedAtUtc;
+        // A fresh attempt (Processing) or a recovery (Succeeded) supersedes any transient error a
+        // prior attempt recorded (e.g. a DdbBusyException auto-retried to success).
         if (newState == ProcessingState.StateName)
+        {
             ji.ProcessingAtUtc = changedAtUtc;
+            ji.ErrorType = null;
+        }
         else if (newState == SucceededState.StateName)
+        {
             ji.SucceededAtUtc = changedAtUtc;
+            ji.ErrorType = null;
+        }
         else if (newState == FailedState.StateName)
             ji.FailedAtUtc = changedAtUtc;
         else if (newState == DeletedState.StateName)
