@@ -262,23 +262,25 @@ public sealed class TasksManager : ITasksManager
             throw new ConflictException(
                 "A pending build retry is already scheduled for this dataset; the pending-build sweep owns that retry");
 
-        // Reset stale prior-run state (error fields, timestamps, artifacts) while the row is
-        // still Failed, BEFORE the re-queue, so it cannot race the async Enqueued stamp.
-        await _writer.ResetForRequeueAsync(job.JobId, ct);
-
+        // Re-queue is gated by Hangfire's LIVE state (Failed-only) - authoritative, since it
+        // reads the actual store rather than the lagging display-only JobIndex row. Wipe stale
+        // prior-run state (error fields, timestamps, artifacts) only AFTER an accepted transition,
+        // so a rejected retry (job purged/expired or state moved on) never destroys the still
+        // valid failure diagnostics the user just asked about.
         var requeued = _processor.Requeue(job.JobId);
-        if (!requeued)
+        if (requeued)
         {
-            _logger.LogInformation(
-                "Retry of task {JobId} rejected: row state '{State}' (Failed-only guard or job missing in Hangfire)",
-                job.JobId, job.CurrentState);
-            // State-free message on purpose: the DB row state can lag the guard's live read,
-            // so do not assert a state here; details are in the log line above.
-            throw new ConflictException(
-                "Task cannot be retried in its current state or no longer exists in the job store");
+            await _writer.ResetForRequeueAsync(job.JobId, ct);
+            return true;
         }
 
-        return true;
+        _logger.LogInformation(
+            "Retry of task {JobId} rejected: row state '{State}' (Failed-only guard or job missing in Hangfire)",
+            job.JobId, job.CurrentState);
+        // State-free message on purpose: the DB row state can lag the guard's live read,
+        // so do not assert a state here; details are in the log line above.
+        throw new ConflictException(
+            "Task cannot be retried in its current state or no longer exists in the job store");
     }
 
     public async Task<bool> DeleteAsync(string orgSlug, string dsSlug, string id, CancellationToken ct = default)

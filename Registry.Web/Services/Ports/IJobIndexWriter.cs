@@ -44,9 +44,10 @@ public interface IJobIndexWriter
 
     /// <summary>
     /// Clears stale prior-run state (state timestamps, progress, artifact, error fields) from a
-    /// JobIndex record before the job is re-queued under the same id. No-op unless the row is
-    /// currently in the <c>Failed</c> state, which protects against racing the asynchronous
-    /// state-filter write that will stamp <c>Enqueued</c> right after the re-queue call.
+    /// JobIndex record after the job has been re-queued under the same id. Call it only when the
+    /// re-queue was accepted. No-op unless the row is in the <c>Failed</c> or (freshly stamped)
+    /// <c>Enqueued</c> state, which protects against wiping a row already at a live/terminal state
+    /// after a concurrent fresh run has started.
     /// </summary>
     Task ResetForRequeueAsync(string jobId, CancellationToken ct = default);
 

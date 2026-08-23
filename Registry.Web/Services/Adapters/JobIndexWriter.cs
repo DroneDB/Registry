@@ -103,12 +103,13 @@ public class JobIndexWriter(RegistryContext db, ILogger<JobIndexWriter> log,
     public async Task ResetForRequeueAsync(string jobId, CancellationToken ct = default)
     {
         var ji = await db.JobIndices.AsTracking().FirstOrDefaultAsync(x => x.JobId == jobId, ct);
-        if (ji is null || ji.CurrentState != "Failed")
-            return; // nothing to reset: missing row or state already changed
+        // Called AFTER an accepted re-queue: the row is still "Failed" (async stamp not yet
+        // visible) or freshly "Enqueued". Refuse anything else - a row already at a live/terminal
+        // state belongs to a fresh/final run and its fields must not be wiped.
+        if (ji is null || (ji.CurrentState != "Failed" && ji.CurrentState != "Enqueued"))
+            return;
 
         // Mirror the reset block in UpsertOnEnqueueAsync so a re-queued run starts clean.
-        // Called by the Retry controller BEFORE the re-queue, while the row is still Failed,
-        // so the async Enqueued state-filter write always lands after this reset.
         ji.ProcessingAtUtc = null;
         ji.SucceededAtUtc = null;
         ji.FailedAtUtc = null;
