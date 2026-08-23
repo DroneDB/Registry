@@ -71,7 +71,7 @@ public class DatasetsController : ControllerBaseEx
         {
             _logger.LogError(ex, "Exception in Dataset controller GetBatches('{OrgSlug}', '{DsSlug}')", orgSlug, dsSlug);
 
-            return ExceptionResult(ex);
+            throw;
         }
     }
 
@@ -95,7 +95,7 @@ public class DatasetsController : ControllerBaseEx
         catch (Exception ex)
         {
             _logger.LogError(ex, "Exception in Dataset controller GetAll('{OrgSlug}')", orgSlug);
-            return ExceptionResult(ex);
+            throw;
         }
     }
 
@@ -123,7 +123,7 @@ public class DatasetsController : ControllerBaseEx
         catch (Exception ex)
         {
             _logger.LogError(ex, "Exception in Dataset controller Get('{OrgSlug}', '{DsSlug}')", orgSlug, dsSlug);
-            return ExceptionResult(ex);
+            throw;
         }
     }
 
@@ -151,7 +151,7 @@ public class DatasetsController : ControllerBaseEx
         catch (Exception ex)
         {
             _logger.LogError(ex, "Exception in Dataset controller GetEx('{OrgSlug}', '{DsSlug}')", orgSlug, dsSlug);
-            return ExceptionResult(ex);
+            throw;
         }
     }
 
@@ -179,7 +179,7 @@ public class DatasetsController : ControllerBaseEx
         catch (Exception ex)
         {
             _logger.LogError(ex, "Exception in Dataset controller GetStamp('{OrgSlug}', '{DsSlug}')", orgSlug, dsSlug);
-            return ExceptionResult(ex);
+            throw;
         }
     }
 
@@ -211,7 +211,7 @@ public class DatasetsController : ControllerBaseEx
         catch (Exception ex)
         {
             _logger.LogError(ex, "Exception in Dataset controller Create('{OrgSlug}', '{DatasetSlug}')", orgSlug, dataset?.Slug);
-            return ExceptionResult(ex);
+            throw;
         }
     }
 
@@ -244,7 +244,7 @@ public class DatasetsController : ControllerBaseEx
         catch (Exception ex)
         {
             _logger.LogError(ex, "Exception in Dataset controller Rename('{OrgSlug}', '{Dslug}', '{NewSlug}')", orgSlug, dsSlug, newSlug);
-            return ExceptionResult(ex);
+            throw;
         }
     }
 
@@ -281,7 +281,7 @@ public class DatasetsController : ControllerBaseEx
         catch (Exception ex)
         {
             _logger.LogError(ex, "Exception in Dataset controller ChangeAttributes('{OrgSlug}', '{DsSlug}', '{RawAttributes}')", orgSlug, dsSlug, rawAttributes);
-            return ExceptionResult(ex);
+            throw;
         }
     }
 
@@ -312,7 +312,7 @@ public class DatasetsController : ControllerBaseEx
         catch (Exception ex)
         {
             _logger.LogError(ex, "Exception in Dataset controller Update('{OrgSlug}', '{DsSlug}')", orgSlug, dsSlug);
-            return ExceptionResult(ex);
+            throw;
         }
     }
 
@@ -341,7 +341,7 @@ public class DatasetsController : ControllerBaseEx
         catch (Exception ex)
         {
             _logger.LogError(ex, "Exception in Dataset controller Delete('{OrgSlug}', '{DsSlug}')", orgSlug, dsSlug);
-            return ExceptionResult(ex);
+            throw;
         }
     }
 
@@ -377,7 +377,7 @@ public class DatasetsController : ControllerBaseEx
             _logger.LogError(ex, "Exception in Dataset controller RescanIndex('{OrgSlug}/{DsSlug}')",
                 orgSlug, dsSlug);
 
-            return ExceptionResult(ex);
+            throw;
         }
     }
 

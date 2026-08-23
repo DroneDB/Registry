@@ -66,7 +66,7 @@ public class MetaController : ControllerBaseEx
         catch (Exception ex)
         {
             _logger.LogError(ex, "Exception in Meta controller Add('{OrgSlug}', '{DsSlug}', '{Key}', '{Path}')", orgSlug, dsSlug, key, path);
-            return ExceptionResult(ex);
+            throw;
         }
     }
 
@@ -111,7 +111,7 @@ public class MetaController : ControllerBaseEx
         catch (Exception ex)
         {
             _logger.LogError(ex, "Exception in Meta controller Add('{OrgSlug}', '{DsSlug}', '{Key}', '{Path}')", orgSlug, dsSlug, key, path);
-            return ExceptionResult(ex);
+            throw;
         }
     }
 
@@ -147,7 +147,7 @@ public class MetaController : ControllerBaseEx
         catch (Exception ex)
         {
             _logger.LogError(ex, "Exception in Meta controller Set('{OrgSlug}', '{DsSlug}', '{Key}', '{Path}')", orgSlug, dsSlug, key, path);
-            return ExceptionResult(ex);
+            throw;
         }
     }
 
@@ -192,7 +192,7 @@ public class MetaController : ControllerBaseEx
         catch (Exception ex)
         {
             _logger.LogError(ex, "Exception in Meta controller Set('{OrgSlug}', '{DsSlug}', '{Key}', '{Path}')", orgSlug, dsSlug, key, path);
-            return ExceptionResult(ex);
+            throw;
         }
     }
 
@@ -224,7 +224,7 @@ public class MetaController : ControllerBaseEx
         catch (Exception ex)
         {
             _logger.LogError(ex, "Exception in Meta controller Remove('{OrgSlug}', '{DsSlug}', '{Id}')", orgSlug, dsSlug, id);
-            return ExceptionResult(ex);
+            throw;
         }
     }
 
@@ -257,7 +257,7 @@ public class MetaController : ControllerBaseEx
         catch (Exception ex)
         {
             _logger.LogError(ex, "Exception in Meta controller RemoveAlt('{OrgSlug}', '{DsSlug}', '{Id}')", orgSlug, dsSlug, id);
-            return ExceptionResult(ex);
+            throw;
         }
     }
 
@@ -292,7 +292,7 @@ public class MetaController : ControllerBaseEx
         {
             _logger.LogError(ex,
                 "Exception in Meta controller Remove('{OrgSlug}', '{DsSlug}', '{Key}', '{Path}')", orgSlug, dsSlug, key, path);
-            return ExceptionResult(ex);
+            throw;
         }
     }
 
@@ -336,7 +336,7 @@ public class MetaController : ControllerBaseEx
         {
             _logger.LogError(ex,
                 "Exception in Meta controller UnsetAlt('{OrgSlug}', '{DsSlug}', '{Key}', '{Path}')", orgSlug, dsSlug, key, path);
-            return ExceptionResult(ex);
+            throw;
         }
     }
 
@@ -368,7 +368,7 @@ public class MetaController : ControllerBaseEx
         catch (Exception ex)
         {
             _logger.LogError(ex, "Exception in Meta controller List('{OrgSlug}', '{DsSlug}', '{Path}')", orgSlug, dsSlug, path);
-            return ExceptionResult(ex);
+            throw;
         }
     }
 
@@ -402,7 +402,7 @@ public class MetaController : ControllerBaseEx
         catch (Exception ex)
         {
             _logger.LogError(ex, "Exception in Meta controller Get('{OrgSlug}', '{DsSlug}', '{Key}', '{Path}')", orgSlug, dsSlug, key, path);
-            return ExceptionResult(ex);
+            throw;
         }
     }
 
@@ -435,7 +435,7 @@ public class MetaController : ControllerBaseEx
         catch (Exception ex)
         {
             _logger.LogError(ex, "Exception in Meta controller Dump('{OrgSlug}', '{DsSlug}', '{Ids}')", orgSlug, dsSlug, ids);
-            return ExceptionResult(ex);
+            throw;
         }
     }
 }

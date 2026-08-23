@@ -82,15 +82,17 @@ public class MvtController : ControllerBaseEx
             Response.Headers.ETag = $"\"{hash}-{z}-{x}-{y}\"";
             return PhysicalFile(tilePath, "application/vnd.mapbox-vector-tile");
         }
-        catch (UnauthorizedException ex)
+        catch (UnauthorizedException)
         {
+            // Attach the challenge header, then let the global classifier produce the
+            // canonical 401 body (the per-action result builder was removed during unification).
             BasicAuthFilter.SendBasicAuthRequest(Response);
-            return ExceptionResult(ex);
+            throw;
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error in MVT GetTile {Org}/{Ds} {Hash} z={Z}", orgSlug, dsSlug, hash, z);
-            return ExceptionResult(ex);
+            throw;
         }
     }
 
@@ -118,14 +120,12 @@ public class MvtController : ControllerBaseEx
             if (!_artifacts.ArtifactExists(path)) return NotFound();
             return PhysicalFile(path, "application/json");
         }
-        catch (UnauthorizedException ex)
+        catch (UnauthorizedException)
         {
+            // Attach the challenge header, then let the global classifier produce the
+            // canonical 401 body (the per-action result builder was removed during unification).
             BasicAuthFilter.SendBasicAuthRequest(Response);
-            return ExceptionResult(ex);
-        }
-        catch (Exception ex)
-        {
-            return ExceptionResult(ex);
+            throw;
         }
     }
 }

@@ -14,10 +14,10 @@ using Registry.Web.Utilities;
 namespace Registry.Web.Controllers;
 
 /// <summary>
-/// Admin-only dashboard listing tasks across all users and datasets (spec §B.1.4).
+/// Admin-only dashboard listing tasks across all users and datasets.
 /// Lives under the system radix (<c>/sys/tasks</c>). Per-task actions (log, result,
 /// cancel, retry) reuse the existing per-dataset endpoints in <see cref="TasksController"/>,
-/// which already authorize admins via dataset ownership (spec §B.2).
+/// which already authorize admins via dataset ownership.
 /// </summary>
 [Authorize]
 [ApiController]
@@ -42,14 +42,7 @@ public class AdminTasksController : ControllerBaseEx
         [FromQuery] string? toolId, [FromQuery] string? state, [FromQuery] string? userId,
         [FromQuery] int skip = 0, [FromQuery] int take = 50, CancellationToken ct = default)
     {
-        try
-        {
-            return Ok(await _admin.ListAsync(toolId, state, userId, skip, take, ct));
-        }
-        catch (Exception ex)
-        {
-            return ExceptionResult(ex);
-        }
+        return Ok(await _admin.ListAsync(toolId, state, userId, skip, take, ct));
     }
 
     // ---- POST /sys/tasks/{id}/delete ------------------------------------
@@ -63,17 +56,10 @@ public class AdminTasksController : ControllerBaseEx
     public async Task<IActionResult> Delete(
         [FromRoute, Required] string id, CancellationToken ct)
     {
-        try
-        {
-            var deleted = await _admin.DeleteTaskAsync(id, ct);
-            if (!deleted)
-                return NotFound(new ErrorResponse("Task not found or cannot be deleted (only concluded tasks can be removed from history)"));
+        var deleted = await _admin.DeleteTaskAsync(id, ct);
+        if (!deleted)
+            return NotFound(new ErrorResponse("Task not found or cannot be deleted (only concluded tasks can be removed from history)"));
 
-            return Ok(new { deleted });
-        }
-        catch (Exception ex)
-        {
-            return ExceptionResult(ex);
-        }
+        return Ok(new { deleted });
     }
 }

@@ -87,7 +87,7 @@ public static class WmsValidator
             
             var layerName = i < layers.Length ? layers[i] : null;
             var layer = string.IsNullOrEmpty(layerName) ? null : layerResolver(layerName);
-            if (layer == null || layer.EntryType != Registry.Ports.DroneDB.EntryType.GeoRaster
+            if (layer == null || layer.EntryType != Ports.DroneDB.EntryType.GeoRaster
                               || !layer.IsMultispectral)
             {
                 throw new OgcException("StyleNotDefined",

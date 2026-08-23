@@ -90,7 +90,7 @@ public class SystemController : ControllerBaseEx
         {
             _logger.LogError(ex, "Exception in System controller GetVersion()");
 
-            return ExceptionResult(ex);
+            throw;
         }
     }
 
@@ -114,7 +114,7 @@ public class SystemController : ControllerBaseEx
         {
             _logger.LogError(ex, "Exception in System controller CleanupBatches()");
 
-            return ExceptionResult(ex);
+            throw;
         }
     }
 
@@ -139,7 +139,7 @@ public class SystemController : ControllerBaseEx
         {
             _logger.LogError(ex, "Exception in System controller CleanupDatasets()");
 
-            return ExceptionResult(ex);
+            throw;
         }
     }
 
@@ -174,7 +174,7 @@ public class SystemController : ControllerBaseEx
         {
             _logger.LogError(ex, "Exception in System controller Cleanup()");
 
-            return ExceptionResult(ex);
+            throw;
         }
     }
 
@@ -198,7 +198,7 @@ public class SystemController : ControllerBaseEx
         {
             _logger.LogError(ex, "Exception in System controller CleanupDatasets()");
 
-            return ExceptionResult(ex);
+            throw;
         }
     }
 
@@ -222,7 +222,7 @@ public class SystemController : ControllerBaseEx
         {
             _logger.LogError(ex, "Exception in System controller GetBuildPendingStatus()");
 
-            return ExceptionResult(ex);
+            throw;
         }
     }
 
@@ -250,7 +250,7 @@ public class SystemController : ControllerBaseEx
             _logger.LogError(ex, "Exception in System controller ImportDataset('{SourceOrg}/{SourceDs}' from '{SourceUrl}')",
                 request?.SourceOrganization, request?.SourceDataset, request?.SourceRegistryUrl);
 
-            return ExceptionResult(ex);
+            throw;
         }
     }
 
@@ -278,7 +278,7 @@ public class SystemController : ControllerBaseEx
             _logger.LogError(ex, "Exception in System controller ImportOrganization('{SourceOrg}' from '{SourceUrl}')",
                 request?.SourceOrganization, request?.SourceRegistryUrl);
 
-            return ExceptionResult(ex);
+            throw;
         }
     }
 
@@ -316,7 +316,7 @@ public class SystemController : ControllerBaseEx
         catch (Exception ex)
         {
             _logger.LogError(ex, "Exception in System controller MoveDatasets");
-            return ExceptionResult(ex);
+            throw;
         }
     }
 
@@ -355,7 +355,7 @@ public class SystemController : ControllerBaseEx
         catch (Exception ex)
         {
             _logger.LogError(ex, "Exception in System controller MergeOrganizations");
-            return ExceptionResult(ex);
+            throw;
         }
     }
 
@@ -381,7 +381,7 @@ public class SystemController : ControllerBaseEx
         {
             _logger.LogError(ex, "Exception in System controller CleanupJobIndices()");
 
-            return ExceptionResult(ex);
+            throw;
         }
     }
 
@@ -410,7 +410,7 @@ public class SystemController : ControllerBaseEx
         {
             _logger.LogError(ex, "Exception in System controller CheckArtifactCompleteness()");
 
-            return ExceptionResult(ex);
+            throw;
         }
     }
 
@@ -452,14 +452,18 @@ public class SystemController : ControllerBaseEx
             MaxExportSizeBytes = _appSettings.MaxExportSizeBytes,
             BulkDownloadAsyncThresholdBytes =
                 (_appSettings.ProcessingPlatform ?? new ProcessingPlatformSettings()).BulkDownloadAsyncThresholdBytes,
-            TaskTools = _toolRegistry.All
-                .Zip(toolStates, (t, st) => new TaskToolInfoDto(t.Id, t.Version, t.Title,
-                    t.RequiredAccess.ToString(), t.ProducesArtifact, t.ResultExtension,
-                    st.Hidden, st.Disabled, st.DisabledMessage))
-                .ToArray(),
-            TaskStates = TaskStateCatalog.All
-                .Select(s => new TaskStateInfoDto(s, TaskStateCatalog.IsTerminal(s)))
-                .ToArray(),
+            TaskTools =
+            [
+                .. _toolRegistry.All
+                    .Zip(toolStates, (t, st) => new TaskToolInfoDto(t.Id, t.Version, t.Title,
+                        t.RequiredAccess.ToString(), t.ProducesArtifact, t.ResultExtension,
+                        st.Hidden, st.Disabled, st.DisabledMessage))
+            ],
+            TaskStates =
+            [
+                .. TaskStateCatalog.All
+                    .Select(s => new TaskStateInfoDto(s, TaskStateCatalog.IsTerminal(s)))
+            ],
             HubOptions = _appSettings.HubOptions,
             HubVersion = HubInfo.CurrentVersion,
             RegistryVersion = _systemManager.GetVersion(),
@@ -505,7 +509,7 @@ public class SystemController : ControllerBaseEx
         {
             _logger.LogError(ex, "Exception in System controller GetGlobalReport()");
 
-            return ExceptionResult(ex);
+            throw;
         }
     }
 
@@ -531,7 +535,7 @@ public class SystemController : ControllerBaseEx
         {
             _logger.LogError(ex, "Exception in System controller GetConfig()");
 
-            return ExceptionResult(ex);
+            throw;
         }
     }
 
@@ -559,7 +563,7 @@ public class SystemController : ControllerBaseEx
         {
             _logger.LogError(ex, "Exception in System controller GetProcessingNodes()");
 
-            return ExceptionResult(ex);
+            throw;
         }
     }
 
@@ -597,7 +601,7 @@ public class SystemController : ControllerBaseEx
         catch (Exception ex)
         {
             _logger.LogError(ex, "Exception in System controller GetProcessingNodeOptions({NodeId})", nodeId);
-            return ExceptionResult(ex);
+            throw;
         }
     }
 
@@ -643,7 +647,7 @@ public class SystemController : ControllerBaseEx
         catch (Exception ex)
         {
             _logger.LogError(ex, "Exception in System controller GetProcessingNodeStatus({NodeId})", nodeId);
-            return ExceptionResult(ex);
+            throw;
         }
     }
 

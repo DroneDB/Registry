@@ -6,7 +6,7 @@ using Registry.Web.Models.DTO;
 namespace Registry.Web.Services.Ports;
 
 /// <summary>
-/// Admin-only global task dashboard manager (spec §B.1.2). Lists tasks across all
+/// Admin-only global task dashboard manager. Lists tasks across all
 /// users and datasets with server-side paging and tool/state/user filters.
 /// </summary>
 public interface IAdminTasksManager

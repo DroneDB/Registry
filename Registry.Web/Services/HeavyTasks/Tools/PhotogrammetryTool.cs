@@ -526,9 +526,11 @@ public sealed class PhotogrammetryTool : IHeavyTool
             entries = ddb.Search(folder, recursive: true);
         }
 
-        return entries
-            .Where(e => e.Type is EntryType.Image or EntryType.GeoImage)
-            .ToList();
+        return
+        [
+            .. entries
+                .Where(e => e.Type is EntryType.Image or EntryType.GeoImage)
+        ];
     }
 
     private static string SafeJoin(string destPath, string entryKey)
@@ -605,10 +607,12 @@ public sealed class PhotogrammetryTool : IHeavyTool
     {
         if (obj.ValueKind != JsonValueKind.Object) return null;
         if (!obj.TryGetProperty(name, out var el) || el.ValueKind != JsonValueKind.Array) return null;
-        return el.EnumerateArray()
-            .Where(x => x.ValueKind == JsonValueKind.String)
-            .Select(x => x.GetString()!)
-            .ToList();
+        return
+        [
+            .. el.EnumerateArray()
+                .Where(x => x.ValueKind == JsonValueKind.String)
+                .Select(x => x.GetString()!)
+        ];
     }
 
     private static string? ReadRawJsonArray(JsonElement obj, string name)

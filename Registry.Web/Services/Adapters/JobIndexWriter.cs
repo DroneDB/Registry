@@ -100,6 +100,35 @@ public class JobIndexWriter(RegistryContext db, ILogger<JobIndexWriter> log,
         await InvalidateTasksListCacheAsync(meta.OrgSlug, meta.DsSlug, ct);
     }
 
+    public async Task ResetForRequeueAsync(string jobId, CancellationToken ct = default)
+    {
+        var ji = await db.JobIndices.AsTracking().FirstOrDefaultAsync(x => x.JobId == jobId, ct);
+        // Called AFTER an accepted re-queue: the row is still "Failed" (async stamp not yet
+        // visible) or freshly "Enqueued". Refuse anything else - a row already at a live/terminal
+        // state belongs to a fresh/final run and its fields must not be wiped.
+        if (ji is null || (ji.CurrentState != "Failed" && ji.CurrentState != "Enqueued"))
+            return;
+
+        // Mirror the reset block in UpsertOnEnqueueAsync so a re-queued run starts clean.
+        ji.ProcessingAtUtc = null;
+        ji.SucceededAtUtc = null;
+        ji.FailedAtUtc = null;
+        ji.DeletedAtUtc = null;
+        ji.ScheduledAtUtc = null;
+        ji.ProgressPercent = null;
+        ji.PhaseMessage = null;
+        ji.ArtifactSizeBytes = null;
+        ji.ArtifactSha256 = null;
+        ji.ErrorType = null;
+        ji.LogTailJson = null;
+        ji.ProgressUpdatedAtUtc = null;
+
+        await db.SaveChangesAsync(ct);
+
+        if (ji.OrgSlug != null && ji.DsSlug != null)
+            await InvalidateTasksListCacheAsync(ji.OrgSlug, ji.DsSlug, ct);
+    }
+
     public async Task UpdateStateAsync(string jobId, string newState, DateTime changedAtUtc,
         CancellationToken ct = default)
     {
@@ -113,10 +142,18 @@ public class JobIndexWriter(RegistryContext db, ILogger<JobIndexWriter> log,
 
         ji.CurrentState = newState;
         ji.LastStateChangeUtc = changedAtUtc;
+        // A fresh attempt (Processing) or a recovery (Succeeded) supersedes any transient error a
+        // prior attempt recorded (e.g. a DdbBusyException auto-retried to success).
         if (newState == ProcessingState.StateName)
+        {
             ji.ProcessingAtUtc = changedAtUtc;
+            ji.ErrorType = null;
+        }
         else if (newState == SucceededState.StateName)
+        {
             ji.SucceededAtUtc = changedAtUtc;
+            ji.ErrorType = null;
+        }
         else if (newState == FailedState.StateName)
             ji.FailedAtUtc = changedAtUtc;
         else if (newState == DeletedState.StateName)
@@ -303,7 +340,7 @@ public class JobIndexWriter(RegistryContext db, ILogger<JobIndexWriter> log,
     /// </summary>
     private async Task InvalidateTasksListCacheAsync(string orgSlug, string dsSlug, CancellationToken ct = default)
     {
-        var cacheKey = $"{MagicStrings.TasksListCacheSeed}:{orgSlug}/{dsSlug}";
+        var cacheKey = MagicStrings.TasksListCacheKey(orgSlug, dsSlug);
         try
         {
             await cache.RemoveAsync(cacheKey, ct);

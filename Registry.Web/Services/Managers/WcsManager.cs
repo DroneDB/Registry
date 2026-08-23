@@ -23,7 +23,7 @@ public class WcsManager : IWcsManager
         _handlers = handlers.ToDictionary(h => h.Version, System.StringComparer.OrdinalIgnoreCase);
     }
 
-    public IReadOnlyList<string> SupportedVersions => _handlers.Keys.ToList();
+    public IReadOnlyList<string> SupportedVersions => [.. _handlers.Keys];
 
     public Task<string> GetCapabilitiesAsync(string orgSlug, string dsSlug, string version, string? folderPath = null)
         => Resolve(version).GetCapabilitiesAsync(orgSlug, dsSlug, folderPath);

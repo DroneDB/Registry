@@ -223,11 +223,13 @@ public class UsersManager : IUsersManager
             UserName = user.UserName,
             Email = user.Email,
             Roles = roles ?? [],
-            Organizations = _registryContext.Organizations
-                .AsNoTracking()
-                .Where(org => org.OwnerId == user.Id || org.Users.Any(item => item.UserId == user.Id))
-                .Select(org => org.Slug)
-                .ToArray()
+            Organizations =
+            [
+                .. _registryContext.Organizations
+                    .AsNoTracking()
+                    .Where(org => org.OwnerId == user.Id || org.Users.Any(item => item.UserId == user.Id))
+                    .Select(org => org.Slug)
+            ]
         };
     }
 
@@ -565,7 +567,7 @@ public class UsersManager : IUsersManager
             });
         }
 
-        return results.ToArray();
+        return [.. results];
     }
 
     public async Task AddUserToOrganization(string userName, string orgSlug, OrganizationPermissions permissions)
@@ -819,7 +821,7 @@ public class UsersManager : IUsersManager
                 }
             }
 
-            result.DatasetResults = allDatasetResults.ToArray();
+            result.DatasetResults = [.. allDatasetResults];
             await _registryContext.SaveChangesAsync();
         }
         else
@@ -887,7 +889,7 @@ public class UsersManager : IUsersManager
                 OrgIds = g.Select(item => item.Slug).ToArray()
             };
 
-        var union = userOrgQuery.ToArray().Union(userOrgQuery2.ToArray());
+        var union = userOrgQuery.ToArray().Union([.. userOrgQuery2]);
 
         var merge = from m in union
             group m by m.UserId
@@ -922,7 +924,7 @@ public class UsersManager : IUsersManager
             {
                 UserName = first.UserName,
                 Email = first.Email,
-                Roles = grp.Select(item => item.RoleName).ToArray(),
+                Roles = [.. grp.Select(item => item.RoleName)],
                 Organizations = userOrg.SafeGetValue(first.UserId)
             };
 
@@ -955,7 +957,7 @@ public class UsersManager : IUsersManager
                 OrgCount = g.Count()
             };
 
-        var union = userOrgQuery.ToArray().Union(userOrgQuery2.ToArray());
+        var union = userOrgQuery.ToArray().Union([.. userOrgQuery2]);
 
         var merge = from m in union
             group m by m.UserId
@@ -1015,7 +1017,7 @@ public class UsersManager : IUsersManager
                 Id = first.UserId,
                 UserName = first.UserName,
                 Email = first.Email,
-                Roles = userGroup.Select(item => item.RoleName).Where(r => !string.IsNullOrEmpty(r)).ToArray(),
+                Roles = [.. userGroup.Select(item => item.RoleName).Where(r => !string.IsNullOrEmpty(r))],
                 Organizations = orgInfo?.OrgIds ?? [],
                 StorageQuota = storageInfo.Total,
                 StorageUsed = storageInfo.Used,

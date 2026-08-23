@@ -16,7 +16,7 @@ namespace Registry.Web.Services.HeavyTasks.Tools;
 /// Native tool that exports a single raster entry to GeoTIFF applying the
 /// visualization params (preset/bands/formula/colormap/rescale). Uses the
 /// block-windowed <c>DDBExportRaster2</c> path (bounded peak memory) with
-/// incremental progress and cooperative cancellation (spec §4.11, §9.1).
+/// incremental progress and cooperative cancellation.
 /// </summary>
 public sealed class RasterExportTool : IHeavyTool
 {

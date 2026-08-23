@@ -13,6 +13,16 @@ public interface IDdbWrapper
 
     public List<Entry> Add(string ddbPath, string[] paths, bool recursive = false);
 
+    /// <summary>
+    /// Batch add with per-item error isolation (DDBAddWithOptions). With stopOnError false, an
+    /// item-scoped failure is reported in the result's Errors list instead of aborting the
+    /// whole call; every input path appears in exactly one of Entries/Unchanged/Errors.
+    /// Paths are dataset-relative and are indexed exactly as given (never recursively: a
+    /// recursive native walk would surface paths the caller never asked for and break the
+    /// completeness mapping).
+    /// </summary>
+    public BatchAddResult AddWithOptions(string ddbPath, string[] paths, bool stopOnError = false);
+
     public void Remove(string ddbPath, string path);
 
     public void Remove(string ddbPath, string[] paths);

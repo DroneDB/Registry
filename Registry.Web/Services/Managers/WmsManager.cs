@@ -117,7 +117,7 @@ public class WmsManager : OgcManagerBase, IWmsManager
 
                 if (layer.IsMultispectral)
                 {
-                    foreach (var idx in Utilities.Ogc.WmsValidator.SpectralIndexes)
+                    foreach (var idx in WmsValidator.SpectralIndexes)
                     {
                         w.WriteStartElement("Style");
                         w.WriteElementString("Name", idx);
@@ -176,10 +176,10 @@ public class WmsManager : OgcManagerBase, IWmsManager
         // Defense-in-depth: re-validate request-level constraints. The controller validates these
         // before BBOX parsing, but the manager guarantees the same contract for any future caller.
         // Validation errors MUST surface as proper OGC exceptions, so they run outside the safety net.
-        Utilities.Ogc.WmsValidator.ValidateLayers(layers);
-        Utilities.Ogc.WmsValidator.ValidateDimensions(width, height);
-        Utilities.Ogc.WmsValidator.ValidateCrs(crs);
-        Utilities.Ogc.WmsValidator.ValidateMapFormat(format);
+        WmsValidator.ValidateLayers(layers);
+        WmsValidator.ValidateDimensions(width, height);
+        WmsValidator.ValidateCrs(crs);
+        WmsValidator.ValidateMapFormat(format);
 
         try
         {

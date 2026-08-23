@@ -9,6 +9,8 @@ namespace Registry.Web.Utilities.Ogc;
 /// <summary>
 /// Translates exceptions thrown by OGC controllers into the appropriate XML response
 /// (ExceptionReport / ServiceExceptionReport) following the OGC version negotiated by the request.
+/// Always marks the exception handled so the global
+/// <see cref="ApiExceptionFilter"/> never double-writes the response with its JSON envelope.
 /// </summary>
 public class OgcExceptionFilter : IExceptionFilter
 {
@@ -60,6 +62,21 @@ public class OgcExceptionFilter : IExceptionFilter
                 code = "Conflict";
                 message = cex.Message;
                 status = 409;
+                break;
+            case DdbBusyException:
+                // Transient DB write contention: 503 + Retry-After, matching the API pipeline's
+                // unified transient mapping (ApiExceptionClassifier) rather than the 500 arm below.
+                code = "ServiceUnavailable";
+                message = "Dataset index is busy; retry shortly.";
+                status = 503;
+                context.HttpContext.Response.Headers.RetryAfter = "2";
+                break;
+            case DdbBuildInProgressException:
+                // Kernel build lock held: 503 + Retry-After (same rationale as above).
+                code = "ServiceUnavailable";
+                message = "Dataset build is currently in progress; retry shortly.";
+                status = 503;
+                context.HttpContext.Response.Headers.RetryAfter = "2";
                 break;
             case DdbException dex:
                 // DroneDB native errors surface here. Map missing-dependency / build-in-progress

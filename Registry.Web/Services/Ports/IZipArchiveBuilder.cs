@@ -10,7 +10,7 @@ namespace Registry.Web.Services.Ports;
 /// <summary>
 /// Single source of truth for building a ZIP archive out of dataset entries.
 /// Shared by the legacy download streaming path (<c>FileStreamDescriptor</c>)
-/// and the asynchronous <c>bulk-download</c> heavy tool (spec §A.0).
+/// and the asynchronous <c>bulk-download</c> heavy tool.
 /// Stateless: all dataset state is passed in via <see cref="IDDB"/>, so the
 /// implementation is registered as a singleton.
 /// </summary>

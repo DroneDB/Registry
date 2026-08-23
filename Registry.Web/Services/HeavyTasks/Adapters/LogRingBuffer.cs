@@ -1,6 +1,7 @@
 #nullable enable
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
@@ -27,10 +28,55 @@ public sealed class LogTailSnapshot
     [JsonPropertyName("lines")] public List<LogLine> Lines { get; set; } = [];
     [JsonPropertyName("cursor")] public long Cursor { get; set; }
     [JsonPropertyName("truncatedFromTail")] public long TruncatedFromTail { get; set; }
+
+    /// <summary>
+    /// Lenient counterpart of <see cref="LogRingBuffer.ToJson"/>: a null, empty or
+    /// malformed payload yields an empty snapshot instead of throwing, so a corrupted
+    /// <c>JobIndex.LogTailJson</c> can never break a status or log response. An explicit
+    /// null <c>lines</c> and entries that are null or carry an out-of-range timestamp
+    /// (both would throw later in <see cref="LogTailSnapshotExtensions.AsStrings"/>)
+    /// are normalized away before the snapshot is returned.
+    /// </summary>
+    public static LogTailSnapshot Parse(string? json)
+    {
+        if (string.IsNullOrEmpty(json)) return new LogTailSnapshot();
+        try
+        {
+            var snap = JsonSerializer.Deserialize<LogTailSnapshot>(json) ?? new LogTailSnapshot();
+            // An explicit JSON null replaces the non-null initializer; range-check T so
+            // FromUnixTimeMilliseconds can never throw on AsStrings.
+            if (snap.Lines is null)
+            {
+                snap.Lines = [];
+            }
+            else
+            {
+                snap.Lines = [.. snap.Lines.Where(l => l is not null && l.T >= MinUnixMs && l.T <= MaxUnixMs)];
+            }
+            return snap;
+        }
+        catch
+        {
+            return new LogTailSnapshot();
+        }
+    }
+
+    private static readonly long MinUnixMs = DateTimeOffset.MinValue.ToUnixTimeMilliseconds();
+    private static readonly long MaxUnixMs = DateTimeOffset.MaxValue.ToUnixTimeMilliseconds();
 }
 
 /// <summary>
-/// Bounded ring buffer of recent log lines (spec §6.2). Keeps at most
+/// Rendering helpers for <see cref="LogTailSnapshot"/>.
+/// </summary>
+public static class LogTailSnapshotExtensions
+{
+    /// <summary>Formats the buffered lines as <c>[HH:mm:ss] message</c>, resolving the Unix-ms timestamps.</summary>
+    public static IReadOnlyList<string> AsStrings(this LogTailSnapshot snap) =>
+        [.. snap.Lines.Select(l => $"[{DateTimeOffset.FromUnixTimeMilliseconds(l.T):HH:mm:ss}] {l.Msg}")];
+}
+
+/// <summary>
+/// Bounded ring buffer of recent log lines. Keeps at most
 /// <c>maxLines</c> lines OR <c>maxBytes</c> of message payload - whichever limit
 /// is hit first evicts from the head. Maintains a monotonic <c>Cursor</c> used as
 /// the <c>?since=N</c> long-poll token and counts lines lost to truncation.

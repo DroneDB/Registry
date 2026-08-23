@@ -71,4 +71,29 @@ public class ProcessingNodeDiCompletenessTests
         tools.ShouldNotBeEmpty();
         tools.ShouldAllBe(t => t != null);
     }
+
+    [Test]
+    public void ProcessingNode_RegistersDatasetIndexQueue()
+    {
+        using var provider = BuildNodeProvider();
+        using var scope = provider.CreateScope();
+
+        // The IndexReconciliationService recurring job (registered on this host too, since
+        // HangfireJobsInitializer runs on every job-executing host) re-enqueues unindexed
+        // files through this singleton.
+        var queue = scope.ServiceProvider.GetService<IDatasetIndexQueue>();
+
+        queue.ShouldNotBeNull();
+    }
+
+    [Test]
+    public void ProcessingNode_ActivatesIndexReconciliationService()
+    {
+        using var provider = BuildNodeProvider();
+        using var scope = provider.CreateScope();
+
+        var service = scope.ServiceProvider.GetService<Registry.Web.Services.Adapters.IndexReconciliationService>();
+
+        service.ShouldNotBeNull();
+    }
 }

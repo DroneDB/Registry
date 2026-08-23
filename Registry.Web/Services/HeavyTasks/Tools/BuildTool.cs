@@ -9,7 +9,7 @@ using Registry.Web.Utilities;
 namespace Registry.Web.Services.HeavyTasks.Tools;
 
 /// <summary>
-/// Native tool wrapping DroneDB derivative build (spec §4.11). Produces no
+/// Native tool wrapping DroneDB derivative build. Produces no
 /// downloadable artifact; it mutates the dataset build cache in place. This is a
 /// thin forwarder over the pre-existing <see cref="HangfireUtils.BuildWrapper"/>
 /// so the migration of the 8 legacy enqueue sites is behaviour-preserving.

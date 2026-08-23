@@ -1,4 +1,4 @@
-﻿#nullable enable
+#nullable enable
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -53,28 +53,22 @@ public class NativeDdbWrapper : IDdbWrapper
         return res;
     }
 
-    [DllImport("ddb", EntryPoint = "DDBGetLastError")]
-    private static extern IntPtr _GetLastError();
+    // Thin forwarders: implementation lives in DdbResultMapper (public static, unit-testable
+    // without InternalsVisibleTo); call sites in this class keep their unqualified names.
+    private static string SafeGetLastError(string? operation = null) => DdbResultMapper.SafeGetLastError(operation);
 
-    private static string? GetLastError()
-    {
-        var ptr = _GetLastError();
-        return Marshal.PtrToStringUTF8(ptr);
-    }
-
-    private static string SafeGetLastError(string? operation = null)
-    {
-        return GetLastError() ?? (operation != null ? "Unknown error in " + operation : "Unknown error");
-    }
+    private static void ThrowForFinalResult(DdbResult result, string operation) => DdbResultMapper.ThrowForFinalResult(result, operation);
 
     [DllImport("ddb", EntryPoint = "DDBInit")]
     private static extern DdbResult _Init([MarshalAs(UnmanagedType.LPUTF8Str)] string directory, out IntPtr outPath);
 
     public string Init(string directory)
     {
+        DdbResult result;
         try
         {
-            if (_Init(directory, out var outPath) == DdbResult.Success)
+            result = _Init(directory, out var outPath);
+            if (result == DdbResult.Success)
             {
                 var res = MarshalAndFreeUtf8(outPath);
 
@@ -95,6 +89,9 @@ public class NativeDdbWrapper : IDdbWrapper
                 ex);
         }
 
+        ThrowForFinalResult(result, "init");
+
+        // Unreachable in practice (Success bails above); kept for exhaustiveness.
         throw new DdbException(SafeGetLastError("init"));
     }
 
@@ -144,9 +141,11 @@ public class NativeDdbWrapper : IDdbWrapper
     {
         paths = paths.Select(p => p?.Replace('\\', '/')).ToArray();
         var utf8Ptrs = MarshalStringArrayToUtf8(paths);
+        var result = DdbResult.Exception;
         try
         {
-            if (_Add(ddbPath, utf8Ptrs, paths.Length, out var output, recursive) == DdbResult.Success)
+            result = _Add(ddbPath, utf8Ptrs, paths.Length, out var output, recursive);
+            if (result == DdbResult.Success)
             {
                 var json = MarshalAndFreeUtf8(output);
 
@@ -180,7 +179,80 @@ public class NativeDdbWrapper : IDdbWrapper
             FreeUtf8StringArray(utf8Ptrs);
         }
 
+        // Non-success results map to typed exceptions (Busy → DdbBusyException) so callers can
+        // retry instead of matching on a message string.
+        ThrowForFinalResult(result, "add");
+
+        // Unreachable in practice (Success returns above); kept for exhaustiveness.
         throw new DdbException(SafeGetLastError("add"));
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct NativeAddOptions
+    {
+        [MarshalAs(UnmanagedType.I1)] public bool Recursive;
+        [MarshalAs(UnmanagedType.I1)] public bool StopOnError;
+        public int MaxConflictRetries;
+    }
+
+    [DllImport("ddb", EntryPoint = "DDBAddWithOptions")]
+    private static extern DdbResult _AddWithOptions([MarshalAs(UnmanagedType.LPUTF8Str)] string ddbPath,
+        IntPtr[] paths, int numPaths, ref NativeAddOptions options, out IntPtr output);
+
+    public BatchAddResult AddWithOptions(string ddbPath, string[] paths, bool stopOnError = false)
+    {
+        paths = paths.Select(p => p?.Replace('\\', '/')).ToArray();
+        var utf8Ptrs = MarshalStringArrayToUtf8(paths);
+        // Fixed policy (not caller-configurable): never recurse (a recursive native walk would
+        // report paths the caller never provided, breaking the completeness contract) and keep
+        // the native conflict-retry budget at its default of 2. The NativeAddOptions struct and
+        // the DDBAddWithOptions ABI are unchanged.
+        var options = new NativeAddOptions
+        {
+            Recursive = false, StopOnError = stopOnError, MaxConflictRetries = 2
+        };
+        var result = DdbResult.Exception;
+        try
+        {
+            result = _AddWithOptions(ddbPath, utf8Ptrs, paths.Length, ref options, out var output);
+            if (result == DdbResult.Success)
+            {
+                var json = MarshalAndFreeUtf8(output);
+
+                if (string.IsNullOrWhiteSpace(json))
+                    throw new DdbException("Unable to add");
+
+                var res = JsonConvert.DeserializeObject<BatchAddResult>(json);
+
+                if (res == null)
+                    throw new InvalidOperationException($"Unable to deserialize add result: {json}");
+
+                return res;
+            }
+        }
+        catch (EntryPointNotFoundException ex)
+        {
+            throw new DdbException($"Error in calling ddb lib: incompatible versions ({ex.Message})", ex);
+        }
+        catch (DdbException)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            throw new DdbException(
+                $"Error in calling ddb lib. Last error: \"{SafeGetLastError("addWithOptions")}\", check inner exception for details",
+                ex);
+        }
+        finally
+        {
+            FreeUtf8StringArray(utf8Ptrs);
+        }
+
+        ThrowForFinalResult(result, "addWithOptions");
+
+        // Unreachable in practice (Success bails above); kept for exhaustiveness.
+        throw new DdbException(SafeGetLastError("addWithOptions"));
     }
 
     [DllImport("ddb", EntryPoint = "DDBRemove")]
@@ -197,9 +269,11 @@ public class NativeDdbWrapper : IDdbWrapper
     {
         paths = paths.Select(p => p?.Replace('\\', '/')).ToArray();
         var utf8Ptrs = MarshalStringArrayToUtf8(paths);
+        DdbResult result;
         try
         {
-            if (_Remove(ddbPath, utf8Ptrs, paths?.Length ?? 0) == DdbResult.Success) return;
+            result = _Remove(ddbPath, utf8Ptrs, paths?.Length ?? 0);
+            if (result == DdbResult.Success) return;
         }
         catch (EntryPointNotFoundException ex)
         {
@@ -216,7 +290,7 @@ public class NativeDdbWrapper : IDdbWrapper
             FreeUtf8StringArray(utf8Ptrs);
         }
 
-        throw new DdbException(SafeGetLastError("remove"));
+        ThrowForFinalResult(result, "remove");
     }
 
     [DllImport("ddb", EntryPoint = "DDBInfo")]
@@ -238,11 +312,12 @@ public class NativeDdbWrapper : IDdbWrapper
         bool withHash = false)
     {
         var utf8Ptrs = MarshalStringArrayToUtf8(paths);
+        DdbResult result;
         try
         {
-            if (_Info(utf8Ptrs, paths?.Length ?? 0, out var output, "json", recursive, maxRecursionDepth, "auto",
-                    withHash) ==
-                DdbResult.Success)
+            result = _Info(utf8Ptrs, paths?.Length ?? 0, out var output, "json", recursive, maxRecursionDepth, "auto",
+                                    withHash);
+            if (result == DdbResult.Success)
             {
                 var json = MarshalAndFreeUtf8(output);
 
@@ -277,6 +352,9 @@ public class NativeDdbWrapper : IDdbWrapper
             FreeUtf8StringArray(utf8Ptrs);
         }
 
+        ThrowForFinalResult(result, "info");
+
+        // Unreachable in practice (Success bails above); kept for exhaustiveness.
         throw new DdbException(SafeGetLastError("info"));
     }
 
@@ -301,9 +379,10 @@ public class NativeDdbWrapper : IDdbWrapper
 
         paths = paths.Select(item => item.Replace('\\', '/')).ToArray();
         var utf8Ptrs = MarshalStringArrayToUtf8(paths);
+        DdbResult lst;
         try
         {
-            var lst = _List(ddbPath, utf8Ptrs, paths.Length, out var output, "json", recursive, maxRecursionDepth);
+            lst = _List(ddbPath, utf8Ptrs, paths.Length, out var output, "json", recursive, maxRecursionDepth);
 
             if (lst == DdbResult.Success)
             {
@@ -339,6 +418,9 @@ public class NativeDdbWrapper : IDdbWrapper
             FreeUtf8StringArray(utf8Ptrs);
         }
 
+        ThrowForFinalResult(lst, "list");
+
+        // Unreachable in practice (Success bails above); kept for exhaustiveness.
         throw new DdbException(SafeGetLastError("list"));
     }
 
@@ -349,9 +431,11 @@ public class NativeDdbWrapper : IDdbWrapper
 
     public void AppendPassword(string ddbPath, string password)
     {
+        DdbResult result;
         try
         {
-            if (_AppendPassword(ddbPath, password) == DdbResult.Success) return;
+            result = _AppendPassword(ddbPath, password);
+            if (result == DdbResult.Success) return;
         }
         catch (EntryPointNotFoundException ex)
         {
@@ -364,7 +448,7 @@ public class NativeDdbWrapper : IDdbWrapper
                 ex);
         }
 
-        throw new DdbException(SafeGetLastError("append password"));
+        ThrowForFinalResult(result, "append password");
     }
 
     [DllImport("ddb", EntryPoint = "DDBVerifyPassword")]
@@ -375,10 +459,11 @@ public class NativeDdbWrapper : IDdbWrapper
 
     public bool VerifyPassword(string ddbPath, string password)
     {
+        DdbResult result;
         try
         {
-            if (_VerifyPassword(ddbPath, password, out var res) ==
-                DdbResult.Success) return res;
+            result = _VerifyPassword(ddbPath, password, out var res);
+            if (result == DdbResult.Success) return res;
         }
         catch (EntryPointNotFoundException ex)
         {
@@ -391,6 +476,9 @@ public class NativeDdbWrapper : IDdbWrapper
                 ex);
         }
 
+        ThrowForFinalResult(result, "verify password");
+
+        // Unreachable in practice (Success bails above); kept for exhaustiveness.
         throw new DdbException(SafeGetLastError("verify password"));
     }
 
@@ -400,9 +488,11 @@ public class NativeDdbWrapper : IDdbWrapper
 
     public void ClearPasswords(string ddbPath)
     {
+        DdbResult result;
         try
         {
-            if (_ClearPasswords(ddbPath) == DdbResult.Success) return;
+            result = _ClearPasswords(ddbPath);
+            if (result == DdbResult.Success) return;
         }
         catch (EntryPointNotFoundException ex)
         {
@@ -415,7 +505,7 @@ public class NativeDdbWrapper : IDdbWrapper
                 ex);
         }
 
-        throw new DdbException(SafeGetLastError("clear passwords"));
+        ThrowForFinalResult(result, "clear passwords");
     }
 
     [DllImport("ddb", EntryPoint = "DDBChattr")]
@@ -428,12 +518,13 @@ public class NativeDdbWrapper : IDdbWrapper
         if (attributes == null)
             throw new ArgumentException("Attributes is null");
 
+        DdbResult result;
         try
         {
             var attrs = JsonConvert.SerializeObject(attributes);
 
-            if (_ChangeAttributes(ddbPath, attrs, out var output) ==
-                DdbResult.Success)
+            result = _ChangeAttributes(ddbPath, attrs, out var output);
+            if (result == DdbResult.Success)
             {
                 var res = MarshalAndFreeUtf8(output);
 
@@ -459,6 +550,9 @@ public class NativeDdbWrapper : IDdbWrapper
                 ex);
         }
 
+        ThrowForFinalResult(result, "change attributes");
+
+        // Unreachable in practice (Success bails above); kept for exhaustiveness.
         throw new DdbException(SafeGetLastError("change attributes"));
     }
 
@@ -486,10 +580,11 @@ public class NativeDdbWrapper : IDdbWrapper
         if (!File.Exists(filePath))
             throw new DdbException($"File not found: '{filePath}'. Cannot generate thumbnail for non-existent file.");
 
+        DdbResult result;
         try
         {
-            if (_GenerateThumbnail(filePath, size, destPath) ==
-                DdbResult.Success) return;
+            result = _GenerateThumbnail(filePath, size, destPath);
+            if (result == DdbResult.Success) return;
         }
         catch (EntryPointNotFoundException ex)
         {
@@ -501,6 +596,10 @@ public class NativeDdbWrapper : IDdbWrapper
                 $"Error in calling ddb lib. Last error: \"{SafeGetLastError("generate thumbnail")}\", check inner exception for details",
                 ex);
         }
+
+        // Preserving the file context in the message (generic mapper drops call-site context).
+        if (result == DdbResult.Busy)
+            throw new DdbBusyException($"{SafeGetLastError("generate thumbnail")} (file: '{filePath}', size: {size}, dest: '{destPath}')");
 
         throw new DdbException($"{SafeGetLastError("generate thumbnail")} (file: '{filePath}', size: {size}, dest: '{destPath}')");
     }
@@ -528,10 +627,11 @@ public class NativeDdbWrapper : IDdbWrapper
         if (!File.Exists(filePath))
             throw new DdbException($"File not found: '{filePath}'. Cannot generate thumbnail for non-existent file.");
 
+        DdbResult result;
         try
         {
-            if (_GenerateMemoryThumbnail(filePath, size, out var outBuffer, out var outBufferSize) ==
-                DdbResult.Success)
+            result = _GenerateMemoryThumbnail(filePath, size, out var outBuffer, out var outBufferSize);
+            if (result == DdbResult.Success)
             {
                 var destBuf = new byte[outBufferSize];
                 Marshal.Copy(outBuffer, destBuf, 0, outBufferSize);
@@ -552,6 +652,10 @@ public class NativeDdbWrapper : IDdbWrapper
                 ex);
         }
 
+        // Preserving the file context in the message (generic mapper drops call-site context).
+        if (result == DdbResult.Busy)
+            throw new DdbBusyException($"{SafeGetLastError("generate memory thumbnail")} (file: '{filePath}', size: {size})");
+
         throw new DdbException($"{SafeGetLastError("generate memory thumbnail")} (file: '{filePath}', size: {size})");
     }
 
@@ -566,10 +670,11 @@ public class NativeDdbWrapper : IDdbWrapper
         if (inputPath == null)
             throw new ArgumentException("inputPath is null");
 
+        DdbResult result;
         try
         {
-            if (_GenerateTile(inputPath, tz, tx, ty, out var output, tileSize, tms, forceRecreate) ==
-                DdbResult.Success)
+            result = _GenerateTile(inputPath, tz, tx, ty, out var output, tileSize, tms, forceRecreate);
+            if (result == DdbResult.Success)
             {
                 var res = MarshalAndFreeUtf8(output);
 
@@ -590,6 +695,9 @@ public class NativeDdbWrapper : IDdbWrapper
                 ex);
         }
 
+        ThrowForFinalResult(result, "generate tile");
+
+        // Unreachable in practice (Success bails above); kept for exhaustiveness.
         throw new DdbException(SafeGetLastError("generate tile"));
     }
 
@@ -605,11 +713,12 @@ public class NativeDdbWrapper : IDdbWrapper
         if (inputPath == null)
             throw new ArgumentException("inputPath is null");
 
+        DdbResult result;
         try
         {
-            if (_GenerateMemoryTile(inputPath, tz, tx, ty, out var outBuffer, out var outBufferSize, tileSize, tms,
-                    forceRecreate, inputPathHash) ==
-                DdbResult.Success)
+            result = _GenerateMemoryTile(inputPath, tz, tx, ty, out var outBuffer, out var outBufferSize, tileSize, tms,
+                                    forceRecreate, inputPathHash);
+            if (result == DdbResult.Success)
             {
                 var destBuf = new byte[outBufferSize];
                 Marshal.Copy(outBuffer, destBuf, 0, outBufferSize);
@@ -630,6 +739,9 @@ public class NativeDdbWrapper : IDdbWrapper
                 ex);
         }
 
+        ThrowForFinalResult(result, "generate memory tile");
+
+        // Unreachable in practice (Success bails above); kept for exhaustiveness.
         throw new DdbException(SafeGetLastError("generate memory tile"));
     }
 
@@ -646,10 +758,12 @@ public class NativeDdbWrapper : IDdbWrapper
         if (inputPath == null)
             throw new ArgumentException("inputPath is null");
 
+        DdbResult result;
         try
         {
-            if (_GenerateMemoryTileFmt(inputPath, tz, tx, ty, out var outBuffer, out var outBufferSize, tileSize, tms,
-                    forceRecreate, inputPathHash ?? string.Empty, outputFormat ?? "png") == DdbResult.Success)
+            result = _GenerateMemoryTileFmt(inputPath, tz, tx, ty, out var outBuffer, out var outBufferSize, tileSize, tms,
+                                    forceRecreate, inputPathHash ?? string.Empty, outputFormat ?? "png");
+            if (result == DdbResult.Success)
             {
                 var destBuf = new byte[outBufferSize];
                 Marshal.Copy(outBuffer, destBuf, 0, outBufferSize);
@@ -668,6 +782,9 @@ public class NativeDdbWrapper : IDdbWrapper
                 ex);
         }
 
+        ThrowForFinalResult(result, "generate memory tile fmt");
+
+        // Unreachable in practice (Success bails above); kept for exhaustiveness.
         throw new DdbException(SafeGetLastError("generate memory tile fmt"));
     }
 
@@ -683,9 +800,11 @@ public class NativeDdbWrapper : IDdbWrapper
         if (newTag == null)
             throw new ArgumentException("New tag is null");
 
+        DdbResult result;
         try
         {
-            if (_SetTag(ddbPath, newTag) == DdbResult.Success) return;
+            result = _SetTag(ddbPath, newTag);
+            if (result == DdbResult.Success) return;
         }
         catch (EntryPointNotFoundException ex)
         {
@@ -698,7 +817,7 @@ public class NativeDdbWrapper : IDdbWrapper
                 ex);
         }
 
-        throw new DdbException(SafeGetLastError("set tag"));
+        ThrowForFinalResult(result, "set tag");
     }
 
     [DllImport("ddb", EntryPoint = "DDBGetTag")]
@@ -711,8 +830,8 @@ public class NativeDdbWrapper : IDdbWrapper
 
         try
         {
-            if (_GetTag(ddbPath, out var outTag) !=
-                DdbResult.Success) throw new DdbException(SafeGetLastError());
+            var result = _GetTag(ddbPath, out var outTag);
+            ThrowForFinalResult(result, "get tag");
 
             var res = MarshalAndFreeUtf8(outTag);
 
@@ -722,10 +841,15 @@ public class NativeDdbWrapper : IDdbWrapper
         {
             throw new DdbException($"Error in calling ddb lib: incompatible versions ({ex.Message})", ex);
         }
+        catch (DdbException)
+        {
+            // Keep typed outcomes (e.g. DdbBusyException from the helper) unwrapped.
+            throw;
+        }
         catch (Exception ex)
         {
             throw new DdbException(
-                $"Error in calling ddb lib. Last error: \"{SafeGetLastError()}\", check inner exception for details",
+                $"Error in calling ddb lib. Last error: \"{SafeGetLastError("get tag")}\", check inner exception for details",
                 ex);
         }
     }
@@ -738,10 +862,11 @@ public class NativeDdbWrapper : IDdbWrapper
         if (ddbPath == null)
             throw new ArgumentException("DDB path is null");
 
+        DdbResult result;
         try
         {
-            if (_DDBGetStamp(ddbPath, out var output) ==
-                DdbResult.Success)
+            result = _DDBGetStamp(ddbPath, out var output);
+            if (result == DdbResult.Success)
             {
                 var json = MarshalAndFreeUtf8(output);
 
@@ -767,6 +892,9 @@ public class NativeDdbWrapper : IDdbWrapper
                 ex);
         }
 
+        ThrowForFinalResult(result, "get stamp");
+
+        // Unreachable in practice (Success bails above); kept for exhaustiveness.
         throw new DdbException(SafeGetLastError("get stamp"));
     }
 
@@ -789,13 +917,14 @@ public class NativeDdbWrapper : IDdbWrapper
     public List<string> ApplyDelta(Delta delta, string sourcePath, string ddbPath, MergeStrategy mergeStrategy,
         string? sourceMetaDump = null)
     {
+        DdbResult result;
         try
         {
             var deltaJson = JsonConvert.SerializeObject(delta);
 
-            if (_ApplyDelta(deltaJson, sourcePath, ddbPath, (int)mergeStrategy, sourceMetaDump ?? "[]",
-                    out var conflictsPtr) ==
-                DdbResult.Success)
+            result = _ApplyDelta(deltaJson, sourcePath, ddbPath, (int)mergeStrategy, sourceMetaDump ?? "[]",
+                                    out var conflictsPtr);
+            if (result == DdbResult.Success)
             {
                 var conflicts = MarshalAndFreeUtf8(conflictsPtr);
 
@@ -821,19 +950,23 @@ public class NativeDdbWrapper : IDdbWrapper
                 ex);
         }
 
+        ThrowForFinalResult(result, "apply delta");
+
+        // Unreachable in practice (Success bails above); kept for exhaustiveness.
         throw new DdbException(SafeGetLastError("apply delta"));
     }
 
 
     public Delta Delta(Stamp source, Stamp target)
     {
+        DdbResult result;
         try
         {
             var sourceJson = JsonConvert.SerializeObject(source);
             var targetJson = JsonConvert.SerializeObject(target);
 
-            if (_Delta(sourceJson, targetJson, out var output, "json") ==
-                DdbResult.Success)
+            result = _Delta(sourceJson, targetJson, out var output, "json");
+            if (result == DdbResult.Success)
             {
                 var json = MarshalAndFreeUtf8(output);
 
@@ -859,6 +992,9 @@ public class NativeDdbWrapper : IDdbWrapper
                 ex);
         }
 
+        ThrowForFinalResult(result, "delta");
+
+        // Unreachable in practice (Success bails above); kept for exhaustiveness.
         throw new DdbException(SafeGetLastError("delta"));
     }
 
@@ -870,12 +1006,13 @@ public class NativeDdbWrapper : IDdbWrapper
 
     public Dictionary<string, bool> ComputeDeltaLocals(Delta delta, string ddbPath, string hlDestFolder = "")
     {
+        DdbResult result;
         try
         {
             var deltaJson = JsonConvert.SerializeObject(delta);
 
-            if (_ComputeDeltaLocals(deltaJson, ddbPath, hlDestFolder, out var outputPtr) ==
-                DdbResult.Success)
+            result = _ComputeDeltaLocals(deltaJson, ddbPath, hlDestFolder, out var outputPtr);
+            if (result == DdbResult.Success)
             {
                 var output = MarshalAndFreeUtf8(outputPtr);
 
@@ -901,6 +1038,9 @@ public class NativeDdbWrapper : IDdbWrapper
                 ex);
         }
 
+        ThrowForFinalResult(result, "compute delta locals");
+
+        // Unreachable in practice (Success bails above); kept for exhaustiveness.
         throw new DdbException(SafeGetLastError("compute delta locals"));
     }
 
@@ -913,9 +1053,11 @@ public class NativeDdbWrapper : IDdbWrapper
     {
         source = source.Replace('\\', '/');
         dest = dest.Replace('\\', '/');
+        DdbResult result;
         try
         {
-            if (_MoveEntry(ddbPath, source, dest) == DdbResult.Success) return;
+            result = _MoveEntry(ddbPath, source, dest);
+            if (result == DdbResult.Success) return;
         }
         catch (EntryPointNotFoundException ex)
         {
@@ -928,7 +1070,7 @@ public class NativeDdbWrapper : IDdbWrapper
                 ex);
         }
 
-        throw new DdbException(SafeGetLastError("move entry"));
+        ThrowForFinalResult(result, "move entry");
     }
 
     [DllImport("ddb", EntryPoint = "DDBBuild")]
@@ -945,18 +1087,28 @@ public class NativeDdbWrapper : IDdbWrapper
         {
             var result = _Build(ddbPath, source, dest, force, pendingOnly);
 
-            // BuildInProgress is a specific, recoverable condition: another process
-            // (or a previous attempt within this process) currently holds the
-            // kernel-managed build lock. Surface it as a typed exception so callers
-            // (e.g. Hangfire job wrappers) can retry with force=true after a backoff
-            // without resorting to string matching on the generic DdbException.
-            if (result == DdbResult.BuildInProgress)
-                throw new DdbBuildInProgressException(SafeGetLastError("build"));
+            // Success: build scheduled/committed. BuildDependencyMissing: a dependency is not
+            // indexed yet, so the build is intentionally skipped (legacy silent-return — NOT an
+            // error; see the Ddb.BuildDependencyMissing adapter contract), so both return here.
+            if (result == DdbResult.Success || result == DdbResult.BuildDependencyMissing)
+                return;
 
-            if (result != DdbResult.Exception) return;
+            // BuildInProgress (kernel build lock held) and Busy (transient DB contention) surface
+            // as typed exceptions via the shared mapper so Hangfire retry decorators
+            // (OnlyOn = DdbBusyException / DdbBuildInProgressException) can retry with backoff.
+            ThrowForFinalResult(result, "build");
         }
         catch (DdbBuildInProgressException)
         {
+            throw;
+        }
+        catch (DdbBusyException)
+        {
+            throw;
+        }
+        catch (DdbException)
+        {
+            // Keep typed outcomes from the helper unwrapped (it throws DdbException-family types).
             throw;
         }
         catch (EntryPointNotFoundException ex)
@@ -970,6 +1122,7 @@ public class NativeDdbWrapper : IDdbWrapper
                 ex);
         }
 
+        // Unreachable (every path returns or throws earlier); kept as a compiler fallback.
         throw new DdbException(SafeGetLastError("build"));
     }
 
@@ -980,10 +1133,11 @@ public class NativeDdbWrapper : IDdbWrapper
     public bool IsBuildable(string ddbPath, string path)
     {
         path = path.Replace('\\', '/');
+        DdbResult result;
         try
         {
-            if (_IsBuildable(ddbPath, path, out var isBuildable) ==
-                DdbResult.Success) return isBuildable;
+            result = _IsBuildable(ddbPath, path, out var isBuildable);
+            if (result == DdbResult.Success) return isBuildable;
         }
         catch (EntryPointNotFoundException ex)
         {
@@ -996,6 +1150,9 @@ public class NativeDdbWrapper : IDdbWrapper
                 ex);
         }
 
+        ThrowForFinalResult(result, "is buildable");
+
+        // Unreachable in practice (Success bails above); kept for exhaustiveness.
         throw new DdbException(SafeGetLastError("is buildable"));
     }
 
@@ -1006,10 +1163,11 @@ public class NativeDdbWrapper : IDdbWrapper
     public bool IsBuildActive(string ddbPath, string path)
     {
         path = path.Replace('\\', '/');
+        DdbResult result;
         try
         {
-            if (_IsBuildActive(ddbPath, path, out var isBuildActive) ==
-                DdbResult.Success) return isBuildActive;
+            result = _IsBuildActive(ddbPath, path, out var isBuildActive);
+            if (result == DdbResult.Success) return isBuildActive;
         }
         catch (EntryPointNotFoundException ex)
         {
@@ -1022,6 +1180,9 @@ public class NativeDdbWrapper : IDdbWrapper
                 ex);
         }
 
+        ThrowForFinalResult(result, "is build active");
+
+        // Unreachable in practice (Success bails above); kept for exhaustiveness.
         throw new DdbException(SafeGetLastError("is build active"));
     }
 
@@ -1032,10 +1193,11 @@ public class NativeDdbWrapper : IDdbWrapper
     public bool IsBuildComplete(string ddbPath, string path)
     {
         path = path.Replace('\\', '/');
+        DdbResult result;
         try
         {
-            if (_IsBuildComplete(ddbPath, path, out var isBuildComplete) ==
-                DdbResult.Success) return isBuildComplete;
+            result = _IsBuildComplete(ddbPath, path, out var isBuildComplete);
+            if (result == DdbResult.Success) return isBuildComplete;
         }
         catch (EntryPointNotFoundException ex)
         {
@@ -1048,6 +1210,9 @@ public class NativeDdbWrapper : IDdbWrapper
                 ex);
         }
 
+        ThrowForFinalResult(result, "is build complete");
+
+        // Unreachable in practice (Success bails above); kept for exhaustiveness.
         throw new DdbException(SafeGetLastError("is build complete"));
     }
 
@@ -1059,8 +1224,8 @@ public class NativeDdbWrapper : IDdbWrapper
     {
         try
         {
-            if (_IsBuildPending(ddbPath, out var isBuildPending) !=
-                DdbResult.Success) throw new DdbException(SafeGetLastError());
+            var result = _IsBuildPending(ddbPath, out var isBuildPending);
+            ThrowForFinalResult(result, "is build pending");
 
             return isBuildPending;
         }
@@ -1068,10 +1233,15 @@ public class NativeDdbWrapper : IDdbWrapper
         {
             throw new DdbException($"Error in calling ddb lib: incompatible versions ({ex.Message})", ex);
         }
+        catch (DdbException)
+        {
+            // Keep typed outcomes (e.g. DdbBusyException from the helper) unwrapped.
+            throw;
+        }
         catch (Exception ex)
         {
             throw new DdbException(
-                $"Error in calling ddb lib. Last error: \"{SafeGetLastError()}\", check inner exception for details",
+                $"Error in calling ddb lib. Last error: \"{SafeGetLastError("is build pending")}\", check inner exception for details",
                 ex);
         }
     }
@@ -1082,9 +1252,11 @@ public class NativeDdbWrapper : IDdbWrapper
 
     public PendingBuildInfo[] GetPendingBuildInfo(string ddbPath)
     {
+        DdbResult result;
         try
         {
-            if (_GetPendingBuildInfo(ddbPath, out var output) == DdbResult.Success)
+            result = _GetPendingBuildInfo(ddbPath, out var output);
+            if (result == DdbResult.Success)
             {
                 var json = MarshalAndFreeUtf8(output);
 
@@ -1114,6 +1286,9 @@ public class NativeDdbWrapper : IDdbWrapper
                 ex);
         }
 
+        ThrowForFinalResult(result, "get pending build info");
+
+        // Unreachable in practice (Success bails above); kept for exhaustiveness.
         throw new DdbException(SafeGetLastError("get pending build info"));
     }
 
@@ -1122,9 +1297,11 @@ public class NativeDdbWrapper : IDdbWrapper
 
     public DdbCleanupResult Cleanup(string ddbPath)
     {
+        DdbResult result;
         try
         {
-            if (_Cleanup(ddbPath, out var output) == DdbResult.Success)
+            result = _Cleanup(ddbPath, out var output);
+            if (result == DdbResult.Success)
             {
                 var json = MarshalAndFreeUtf8(output);
 
@@ -1150,6 +1327,9 @@ public class NativeDdbWrapper : IDdbWrapper
                 ex);
         }
 
+        ThrowForFinalResult(result, "cleanup");
+
+        // Unreachable in practice (Success bails above); kept for exhaustiveness.
         throw new DdbException(SafeGetLastError("cleanup"));
     }
 
@@ -1161,10 +1341,11 @@ public class NativeDdbWrapper : IDdbWrapper
 
     public Meta MetaAdd(string ddbPath, string key, string data, string? path = null)
     {
+        DdbResult result;
         try
         {
-            if (_MetaAdd(ddbPath, path ?? string.Empty, key, data, out var output) ==
-                DdbResult.Success)
+            result = _MetaAdd(ddbPath, path ?? string.Empty, key, data, out var output);
+            if (result == DdbResult.Success)
             {
                 var json = MarshalAndFreeUtf8(output);
 
@@ -1190,6 +1371,9 @@ public class NativeDdbWrapper : IDdbWrapper
                 ex);
         }
 
+        ThrowForFinalResult(result, "meta add");
+
+        // Unreachable in practice (Success bails above); kept for exhaustiveness.
         throw new DdbException(SafeGetLastError("meta add"));
     }
 
@@ -1200,10 +1384,11 @@ public class NativeDdbWrapper : IDdbWrapper
 
     public Meta MetaSet(string ddbPath, string key, string data, string? path = null)
     {
+        DdbResult result;
         try
         {
-            if (_MetaSet(ddbPath, path ?? string.Empty, key, data, out var output) ==
-                DdbResult.Success)
+            result = _MetaSet(ddbPath, path ?? string.Empty, key, data, out var output);
+            if (result == DdbResult.Success)
             {
                 var json = MarshalAndFreeUtf8(output);
 
@@ -1229,6 +1414,9 @@ public class NativeDdbWrapper : IDdbWrapper
                 ex);
         }
 
+        ThrowForFinalResult(result, "meta set");
+
+        // Unreachable in practice (Success bails above); kept for exhaustiveness.
         throw new DdbException(SafeGetLastError("meta set"));
     }
 
@@ -1238,10 +1426,11 @@ public class NativeDdbWrapper : IDdbWrapper
 
     public int MetaRemove(string ddbPath, string id)
     {
+        DdbResult result;
         try
         {
-            if (_MetaRemove(ddbPath, id, out var output) ==
-                DdbResult.Success)
+            result = _MetaRemove(ddbPath, id, out var output);
+            if (result == DdbResult.Success)
             {
                 var json = MarshalAndFreeUtf8(output);
 
@@ -1268,6 +1457,9 @@ public class NativeDdbWrapper : IDdbWrapper
                 ex);
         }
 
+        ThrowForFinalResult(result, "meta remove");
+
+        // Unreachable in practice (Success bails above); kept for exhaustiveness.
         throw new DdbException(SafeGetLastError("meta remove"));
     }
 
@@ -1278,10 +1470,11 @@ public class NativeDdbWrapper : IDdbWrapper
 
     public string? MetaGet(string ddbPath, string key, string? path = null)
     {
+        DdbResult result;
         try
         {
-            if (_MetaGet(ddbPath, path ?? string.Empty, key, out var output) ==
-                DdbResult.Success)
+            result = _MetaGet(ddbPath, path ?? string.Empty, key, out var output);
+            if (result == DdbResult.Success)
             {
                 var json = MarshalAndFreeUtf8(output);
 
@@ -1299,6 +1492,9 @@ public class NativeDdbWrapper : IDdbWrapper
                 ex);
         }
 
+        ThrowForFinalResult(result, "meta get");
+
+        // Unreachable in practice (Success bails above); kept for exhaustiveness.
         throw new DdbException(SafeGetLastError("meta get"));
     }
 
@@ -1309,10 +1505,11 @@ public class NativeDdbWrapper : IDdbWrapper
 
     public int MetaUnset(string ddbPath, string key, string? path = null)
     {
+        DdbResult result;
         try
         {
-            if (_MetaUnset(ddbPath, path ?? string.Empty, key, out var output) ==
-                DdbResult.Success)
+            result = _MetaUnset(ddbPath, path ?? string.Empty, key, out var output);
+            if (result == DdbResult.Success)
             {
                 var json = MarshalAndFreeUtf8(output);
 
@@ -1339,6 +1536,9 @@ public class NativeDdbWrapper : IDdbWrapper
                 ex);
         }
 
+        ThrowForFinalResult(result, "meta unset");
+
+        // Unreachable in practice (Success bails above); kept for exhaustiveness.
         throw new DdbException(SafeGetLastError("meta unset"));
     }
 
@@ -1349,10 +1549,11 @@ public class NativeDdbWrapper : IDdbWrapper
 
     public List<MetaListItem> MetaList(string ddbPath, string? path = null)
     {
+        DdbResult result;
         try
         {
-            if (_MetaList(ddbPath, path ?? string.Empty, out var output) ==
-                DdbResult.Success)
+            result = _MetaList(ddbPath, path ?? string.Empty, out var output);
+            if (result == DdbResult.Success)
             {
                 var json = MarshalAndFreeUtf8(output);
 
@@ -1378,6 +1579,9 @@ public class NativeDdbWrapper : IDdbWrapper
                 ex);
         }
 
+        ThrowForFinalResult(result, "meta list");
+
+        // Unreachable in practice (Success bails above); kept for exhaustiveness.
         throw new DdbException(SafeGetLastError("meta list"));
     }
 
@@ -1387,10 +1591,11 @@ public class NativeDdbWrapper : IDdbWrapper
 
     public List<MetaDump> MetaDump(string ddbPath, string? ids = null)
     {
+        DdbResult result;
         try
         {
-            if (_MetaDump(ddbPath, ids ?? "[]", out var output) ==
-                DdbResult.Success)
+            result = _MetaDump(ddbPath, ids ?? "[]", out var output);
+            if (result == DdbResult.Success)
             {
                 var json = MarshalAndFreeUtf8(output);
 
@@ -1416,6 +1621,9 @@ public class NativeDdbWrapper : IDdbWrapper
                 ex);
         }
 
+        ThrowForFinalResult(result, "meta dump");
+
+        // Unreachable in practice (Success bails above); kept for exhaustiveness.
         throw new DdbException(SafeGetLastError("meta dump"));
     }
 
@@ -1428,10 +1636,11 @@ public class NativeDdbWrapper : IDdbWrapper
     public JToken Stac(string ddbPath, string? entry, string stacCollectionRoot, string id,
         string stacCatalogRoot)
     {
+        DdbResult result;
         try
         {
-            if (_Stac(ddbPath, entry ?? string.Empty, stacCollectionRoot, id, stacCatalogRoot, out var output) ==
-                DdbResult.Success)
+            result = _Stac(ddbPath, entry ?? string.Empty, stacCollectionRoot, id, stacCatalogRoot, out var output);
+            if (result == DdbResult.Success)
             {
                 var json = MarshalAndFreeUtf8(output);
 
@@ -1457,6 +1666,9 @@ public class NativeDdbWrapper : IDdbWrapper
                 ex);
         }
 
+        ThrowForFinalResult(result, "stac");
+
+        // Unreachable in practice (Success bails above); kept for exhaustiveness.
         throw new DdbException(SafeGetLastError("stac"));
     }
 
@@ -1473,11 +1685,12 @@ public class NativeDdbWrapper : IDdbWrapper
     public JToken StacItemCollection(string ddbPath, string stacCollectionRoot, string id,
         string stacCatalogRoot, string? bbox, string? datetime, int limit, int offset)
     {
+        DdbResult result;
         try
         {
-            if (_StacItemCollection(ddbPath, stacCollectionRoot, id, stacCatalogRoot,
-                    bbox ?? string.Empty, datetime ?? string.Empty, limit, offset, out var output) ==
-                DdbResult.Success)
+            result = _StacItemCollection(ddbPath, stacCollectionRoot, id, stacCatalogRoot,
+                                    bbox ?? string.Empty, datetime ?? string.Empty, limit, offset, out var output);
+            if (result == DdbResult.Success)
             {
                 var json = MarshalAndFreeUtf8(output);
 
@@ -1503,6 +1716,9 @@ public class NativeDdbWrapper : IDdbWrapper
                 ex);
         }
 
+        ThrowForFinalResult(result, "stac item collection");
+
+        // Unreachable in practice (Success bails above); kept for exhaustiveness.
         throw new DdbException(SafeGetLastError("stac item collection"));
     }
 
@@ -1515,9 +1731,11 @@ public class NativeDdbWrapper : IDdbWrapper
 
     public List<RescanResult> RescanIndex(string ddbPath, string? types = null, bool stopOnError = true)
     {
+        DdbResult result;
         try
         {
-            if (_Rescan(ddbPath, out var output, types ?? string.Empty, stopOnError) == DdbResult.Success)
+            result = _Rescan(ddbPath, out var output, types ?? string.Empty, stopOnError);
+            if (result == DdbResult.Success)
             {
                 var json = MarshalAndFreeUtf8(output);
 
@@ -1543,6 +1761,9 @@ public class NativeDdbWrapper : IDdbWrapper
                 ex);
         }
 
+        ThrowForFinalResult(result, "rescan");
+
+        // Unreachable in practice (Success bails above); kept for exhaustiveness.
         throw new DdbException(SafeGetLastError("rescan"));
     }
 
@@ -1556,9 +1777,11 @@ public class NativeDdbWrapper : IDdbWrapper
     {
         if (path == null) throw new ArgumentException("path is null");
 
+        DdbResult result;
         try
         {
-            if (_GetRasterInfo(path, out var output) == DdbResult.Success)
+            result = _GetRasterInfo(path, out var output);
+            if (result == DdbResult.Success)
             {
                 var json = MarshalAndFreeUtf8(output);
                 if (string.IsNullOrWhiteSpace(json))
@@ -1577,6 +1800,9 @@ public class NativeDdbWrapper : IDdbWrapper
                 $"Error in calling ddb lib. Last error: \"{SafeGetLastError("get raster info")}\", check inner exception for details", ex);
         }
 
+        ThrowForFinalResult(result, "get raster info");
+
+        // Unreachable in practice (Success bails above); kept for exhaustiveness.
         throw new DdbException(SafeGetLastError("get raster info"));
     }
 
@@ -1591,9 +1817,11 @@ public class NativeDdbWrapper : IDdbWrapper
     {
         if (path == null) throw new ArgumentException("path is null");
 
+        DdbResult result;
         try
         {
-            if (_GetRasterMetadata(path, formula, bandFilter, out var output) == DdbResult.Success)
+            result = _GetRasterMetadata(path, formula, bandFilter, out var output);
+            if (result == DdbResult.Success)
             {
                 var json = MarshalAndFreeUtf8(output);
                 if (string.IsNullOrWhiteSpace(json))
@@ -1612,6 +1840,9 @@ public class NativeDdbWrapper : IDdbWrapper
                 $"Error in calling ddb lib. Last error: \"{SafeGetLastError("get raster metadata")}\", check inner exception for details", ex);
         }
 
+        ThrowForFinalResult(result, "get raster metadata");
+
+        // Unreachable in practice (Success bails above); kept for exhaustiveness.
         throw new DdbException(SafeGetLastError("get raster metadata"));
     }
 
@@ -1636,10 +1867,12 @@ public class NativeDdbWrapper : IDdbWrapper
         if (!File.Exists(filePath))
             throw new DdbException($"File not found: '{filePath}'. Cannot generate thumbnail for non-existent file.");
 
+        DdbResult result;
         try
         {
-            if (_GenerateMemoryThumbnailEx(filePath, size, preset, bands, formula, bandFilter,
-                    colormap, rescale, out var outBuffer, out var outBufferSize) == DdbResult.Success)
+            result = _GenerateMemoryThumbnailEx(filePath, size, preset, bands, formula, bandFilter,
+                    colormap, rescale, out var outBuffer, out var outBufferSize);
+            if (result == DdbResult.Success)
             {
                 var destBuf = new byte[outBufferSize];
                 Marshal.Copy(outBuffer, destBuf, 0, outBufferSize);
@@ -1682,11 +1915,13 @@ public class NativeDdbWrapper : IDdbWrapper
     {
         if (inputPath == null) throw new ArgumentException("inputPath is null");
 
+        DdbResult result;
         try
         {
-            if (_GenerateMemoryTileEx(inputPath, tz, tx, ty, tileSize, tms, forceRecreate,
-                    inputPathHash, preset, bands, formula, bandFilter, colormap, rescale,
-                    out var outBuffer, out var outBufferSize) == DdbResult.Success)
+            result = _GenerateMemoryTileEx(inputPath, tz, tx, ty, tileSize, tms, forceRecreate,
+                                    inputPathHash, preset, bands, formula, bandFilter, colormap, rescale,
+                                    out var outBuffer, out var outBufferSize);
+            if (result == DdbResult.Success)
             {
                 var destBuf = new byte[outBufferSize];
                 Marshal.Copy(outBuffer, destBuf, 0, outBufferSize);
@@ -1705,6 +1940,9 @@ public class NativeDdbWrapper : IDdbWrapper
                 $"Error in calling ddb lib. Last error: \"{SafeGetLastError("generate memory tile ex")}\", check inner exception for details", ex);
         }
 
+        ThrowForFinalResult(result, "generate memory tile ex");
+
+        // Unreachable in practice (Success bails above); kept for exhaustiveness.
         throw new DdbException(SafeGetLastError("generate memory tile ex"));
     }
 
@@ -1718,9 +1956,11 @@ public class NativeDdbWrapper : IDdbWrapper
             throw new ArgumentException("paths is null or empty");
 
         var utf8Ptrs = MarshalStringArrayToUtf8(paths);
+        DdbResult result;
         try
         {
-            if (_ValidateMergeMultispectral(utf8Ptrs, paths.Length, out var output) == DdbResult.Success)
+            result = _ValidateMergeMultispectral(utf8Ptrs, paths.Length, out var output);
+            if (result == DdbResult.Success)
             {
                 var json = MarshalAndFreeUtf8(output);
                 if (string.IsNullOrWhiteSpace(json))
@@ -1743,6 +1983,9 @@ public class NativeDdbWrapper : IDdbWrapper
             FreeUtf8StringArray(utf8Ptrs);
         }
 
+        ThrowForFinalResult(result, "validate merge multispectral");
+
+        // Unreachable in practice (Success bails above); kept for exhaustiveness.
         throw new DdbException(SafeGetLastError("validate merge multispectral"));
     }
 
@@ -1759,10 +2002,12 @@ public class NativeDdbWrapper : IDdbWrapper
             throw new ArgumentException("paths is null or empty");
 
         var utf8Ptrs = MarshalStringArrayToUtf8(paths);
+        DdbResult result;
         try
         {
-            if (_PreviewMergeMultispectral(utf8Ptrs, paths.Length, previewBands, thumbSize,
-                    out var outBuffer, out var outBufferSize) == DdbResult.Success)
+            result = _PreviewMergeMultispectral(utf8Ptrs, paths.Length, previewBands, thumbSize,
+                                    out var outBuffer, out var outBufferSize);
+            if (result == DdbResult.Success)
             {
                 var destBuf = new byte[outBufferSize];
                 Marshal.Copy(outBuffer, destBuf, 0, outBufferSize);
@@ -1785,6 +2030,9 @@ public class NativeDdbWrapper : IDdbWrapper
             FreeUtf8StringArray(utf8Ptrs);
         }
 
+        ThrowForFinalResult(result, "preview merge multispectral");
+
+        // Unreachable in practice (Success bails above); kept for exhaustiveness.
         throw new DdbException(SafeGetLastError("preview merge multispectral"));
     }
 
@@ -1801,9 +2049,11 @@ public class NativeDdbWrapper : IDdbWrapper
             throw new ArgumentException("outputCog is null or empty");
 
         var utf8Ptrs = MarshalStringArrayToUtf8(paths);
+        DdbResult result;
         try
         {
-            if (_MergeMultispectral(utf8Ptrs, paths.Length, outputCog) == DdbResult.Success) return;
+            result = _MergeMultispectral(utf8Ptrs, paths.Length, outputCog);
+            if (result == DdbResult.Success) return;
         }
         catch (EntryPointNotFoundException ex)
         {
@@ -1820,7 +2070,7 @@ public class NativeDdbWrapper : IDdbWrapper
             FreeUtf8StringArray(utf8Ptrs);
         }
 
-        throw new DdbException(SafeGetLastError("merge multispectral"));
+        ThrowForFinalResult(result, "merge multispectral");
     }
 
     [DllImport("ddb", EntryPoint = "DDBValidateAlignRaster")]
@@ -1836,9 +2086,11 @@ public class NativeDdbWrapper : IDdbWrapper
         if (string.IsNullOrWhiteSpace(referencePath))
             throw new ArgumentException("referencePath is null or empty");
 
+        DdbResult result;
         try
         {
-            if (_ValidateAlignRaster(sourcePath, referencePath, out var output) == DdbResult.Success)
+            result = _ValidateAlignRaster(sourcePath, referencePath, out var output);
+            if (result == DdbResult.Success)
             {
                 var json = MarshalAndFreeUtf8(output);
                 if (string.IsNullOrWhiteSpace(json))
@@ -1857,6 +2109,9 @@ public class NativeDdbWrapper : IDdbWrapper
                 $"Error in calling ddb lib. Last error: \"{SafeGetLastError("validate align raster")}\", check inner exception for details", ex);
         }
 
+        ThrowForFinalResult(result, "validate align raster");
+
+        // Unreachable in practice (Success bails above); kept for exhaustiveness.
         throw new DdbException(SafeGetLastError("validate align raster"));
     }
 
@@ -1877,9 +2132,11 @@ public class NativeDdbWrapper : IDdbWrapper
         if (string.IsNullOrWhiteSpace(outputPath))
             throw new ArgumentException("outputPath is null or empty");
 
+        DdbResult result;
         try
         {
-            if (_AlignRaster(sourcePath, referencePath, outputPath, mode, out var output) == DdbResult.Success)
+            result = _AlignRaster(sourcePath, referencePath, outputPath, mode, out var output);
+            if (result == DdbResult.Success)
             {
                 var json = MarshalAndFreeUtf8(output);
                 if (string.IsNullOrWhiteSpace(json))
@@ -1898,6 +2155,9 @@ public class NativeDdbWrapper : IDdbWrapper
                 $"Error in calling ddb lib. Last error: \"{SafeGetLastError("align raster")}\", check inner exception for details", ex);
         }
 
+        ThrowForFinalResult(result, "align raster");
+
+        // Unreachable in practice (Success bails above); kept for exhaustiveness.
         throw new DdbException(SafeGetLastError("align raster"));
     }
 
@@ -1921,10 +2181,12 @@ public class NativeDdbWrapper : IDdbWrapper
         if (string.IsNullOrWhiteSpace(outputPath))
             throw new ArgumentException("outputPath is null or empty");
 
+        DdbResult result;
         try
         {
-            if (_ExportRaster(inputPath, outputPath, preset, bands, formula, bandFilter,
-                    colormap, rescale) == DdbResult.Success)
+            result = _ExportRaster(inputPath, outputPath, preset, bands, formula, bandFilter,
+                                    colormap, rescale);
+            if (result == DdbResult.Success)
                 return;
         }
         catch (EntryPointNotFoundException ex)
@@ -1938,7 +2200,7 @@ public class NativeDdbWrapper : IDdbWrapper
                 $"Error in calling ddb lib. Last error: \"{SafeGetLastError("export raster")}\", check inner exception for details", ex);
         }
 
-        throw new DdbException(SafeGetLastError("export raster"));
+        ThrowForFinalResult(result, "export raster");
     }
 
     // Native progress callback contract mirroring DDBProgressCallback in ddb.h:
@@ -2004,11 +2266,10 @@ public class NativeDdbWrapper : IDdbWrapper
             var result = _ExportRaster2(inputPath, outputPath, preset, bands, formula,
                 bandFilter, colormap, rescale, tileSize, nativeCallback, IntPtr.Zero);
 
-            if (result == DdbResult.Success)
-                return;
-
-            if (result == DdbResult.Canceled)
-                throw new DdbCanceledException(SafeGetLastError("export raster"));
+            // Canceled → DdbCanceledException, all other non-success codes → typed exceptions
+            // (see ThrowForFinalResult); the explicit rethrow below keeps the canceled type
+            // from being re-wrapped by the generic catch.
+            ThrowForFinalResult(result, "export raster");
         }
         catch (DdbCanceledException)
         {
@@ -2032,8 +2293,6 @@ public class NativeDdbWrapper : IDdbWrapper
             // Keep the delegate alive across the synchronous P/Invoke.
             GC.KeepAlive(nativeCallback);
         }
-
-        throw new DdbException(SafeGetLastError("export raster"));
     }
 
     #endregion
@@ -2048,9 +2307,11 @@ public class NativeDdbWrapper : IDdbWrapper
     {
         if (path == null) throw new ArgumentException("path is null");
 
+        DdbResult result;
         try
         {
-            if (_GetRasterValueInfo(path, out var output) == DdbResult.Success)
+            result = _GetRasterValueInfo(path, out var output);
+            if (result == DdbResult.Success)
             {
                 var json = MarshalAndFreeUtf8(output);
                 if (string.IsNullOrWhiteSpace(json))
@@ -2069,6 +2330,9 @@ public class NativeDdbWrapper : IDdbWrapper
                 $"Error in calling ddb lib. Last error: \"{SafeGetLastError("get raster value info")}\", check inner exception for details", ex);
         }
 
+        ThrowForFinalResult(result, "get raster value info");
+
+        // Unreachable in practice (Success bails above); kept for exhaustiveness.
         throw new DdbException(SafeGetLastError("get raster value info"));
     }
 
@@ -2080,9 +2344,11 @@ public class NativeDdbWrapper : IDdbWrapper
     {
         if (path == null) throw new ArgumentException("path is null");
 
+        DdbResult result;
         try
         {
-            if (_GetRasterPointValue(path, x, y, out var output) == DdbResult.Success)
+            result = _GetRasterPointValue(path, x, y, out var output);
+            if (result == DdbResult.Success)
             {
                 var json = MarshalAndFreeUtf8(output);
                 if (string.IsNullOrWhiteSpace(json))
@@ -2101,6 +2367,9 @@ public class NativeDdbWrapper : IDdbWrapper
                 $"Error in calling ddb lib. Last error: \"{SafeGetLastError("get raster point value")}\", check inner exception for details", ex);
         }
 
+        ThrowForFinalResult(result, "get raster point value");
+
+        // Unreachable in practice (Success bails above); kept for exhaustiveness.
         throw new DdbException(SafeGetLastError("get raster point value"));
     }
 
@@ -2112,9 +2381,11 @@ public class NativeDdbWrapper : IDdbWrapper
     {
         if (path == null) throw new ArgumentException("path is null");
 
+        DdbResult result;
         try
         {
-            if (_GetRasterAreaStats(path, x0, y0, x1, y1, out var output) == DdbResult.Success)
+            result = _GetRasterAreaStats(path, x0, y0, x1, y1, out var output);
+            if (result == DdbResult.Success)
             {
                 var json = MarshalAndFreeUtf8(output);
                 if (string.IsNullOrWhiteSpace(json))
@@ -2133,6 +2404,9 @@ public class NativeDdbWrapper : IDdbWrapper
                 $"Error in calling ddb lib. Last error: \"{SafeGetLastError("get raster area stats")}\", check inner exception for details", ex);
         }
 
+        ThrowForFinalResult(result, "get raster area stats");
+
+        // Unreachable in practice (Success bails above); kept for exhaustiveness.
         throw new DdbException(SafeGetLastError("get raster area stats"));
     }
 
@@ -2148,9 +2422,11 @@ public class NativeDdbWrapper : IDdbWrapper
         if (path == null) throw new ArgumentException("path is null");
         if (geoJsonLineString == null) throw new ArgumentException("geoJsonLineString is null");
 
+        DdbResult result;
         try
         {
-            if (_GetRasterProfile(path, geoJsonLineString, samples, out var output) == DdbResult.Success)
+            result = _GetRasterProfile(path, geoJsonLineString, samples, out var output);
+            if (result == DdbResult.Success)
             {
                 var json = MarshalAndFreeUtf8(output);
                 if (string.IsNullOrWhiteSpace(json))
@@ -2169,6 +2445,9 @@ public class NativeDdbWrapper : IDdbWrapper
                 $"Error in calling ddb lib. Last error: \"{SafeGetLastError("get raster profile")}\", check inner exception for details", ex);
         }
 
+        ThrowForFinalResult(result, "get raster profile");
+
+        // Unreachable in practice (Success bails above); kept for exhaustiveness.
         throw new DdbException(SafeGetLastError("get raster profile"));
     }
 
@@ -2186,9 +2465,11 @@ public class NativeDdbWrapper : IDdbWrapper
         if (polygonGeoJson == null) throw new ArgumentException("polygonGeoJson is null");
         baseMethod ??= string.Empty;
 
+        DdbResult result;
         try
         {
-            if (_CalculateVolume(path, polygonGeoJson, baseMethod, flatElevation, out var output) == DdbResult.Success)
+            result = _CalculateVolume(path, polygonGeoJson, baseMethod, flatElevation, out var output);
+            if (result == DdbResult.Success)
             {
                 var json = MarshalAndFreeUtf8(output);
                 if (string.IsNullOrWhiteSpace(json))
@@ -2207,6 +2488,9 @@ public class NativeDdbWrapper : IDdbWrapper
                 $"Error in calling ddb lib. Last error: \"{SafeGetLastError("calculate volume")}\", check inner exception for details", ex);
         }
 
+        ThrowForFinalResult(result, "calculate volume");
+
+        // Unreachable in practice (Success bails above); kept for exhaustiveness.
         throw new DdbException(SafeGetLastError("calculate volume"));
     }
 
@@ -2224,9 +2508,11 @@ public class NativeDdbWrapper : IDdbWrapper
         if (path == null) throw new ArgumentException("path is null");
         if (!(radiusMeters > 0)) throw new ArgumentException("radius must be positive", nameof(radiusMeters));
 
+        DdbResult result;
         try
         {
-            if (_DetectStockpile(path, lat, lon, radiusMeters, sensitivity, out var output) == DdbResult.Success)
+            result = _DetectStockpile(path, lat, lon, radiusMeters, sensitivity, out var output);
+            if (result == DdbResult.Success)
             {
                 var json = MarshalAndFreeUtf8(output);
                 if (string.IsNullOrWhiteSpace(json))
@@ -2245,6 +2531,9 @@ public class NativeDdbWrapper : IDdbWrapper
                 $"Error in calling ddb lib. Last error: \"{SafeGetLastError("detect stockpile")}\", check inner exception for details", ex);
         }
 
+        ThrowForFinalResult(result, "detect stockpile");
+
+        // Unreachable in practice (Success bails above); kept for exhaustiveness.
         throw new DdbException(SafeGetLastError("detect stockpile"));
     }
 
@@ -2263,9 +2552,11 @@ public class NativeDdbWrapper : IDdbWrapper
         if (minAreaM2 < 0.0) throw new ArgumentException("minAreaM2 must be >= 0", nameof(minAreaM2));
         if (maxResults <= 0) throw new ArgumentException("maxResults must be > 0", nameof(maxResults));
 
+        DdbResult result;
         try
         {
-            if (_DetectAllStockpiles(path, sensitivity, minAreaM2, maxResults, out var output) == DdbResult.Success)
+            result = _DetectAllStockpiles(path, sensitivity, minAreaM2, maxResults, out var output);
+            if (result == DdbResult.Success)
             {
                 var json = MarshalAndFreeUtf8(output);
                 if (string.IsNullOrWhiteSpace(json))
@@ -2284,6 +2575,9 @@ public class NativeDdbWrapper : IDdbWrapper
                 $"Error in calling ddb lib. Last error: \"{SafeGetLastError("detect all stockpiles")}\", check inner exception for details", ex);
         }
 
+        ThrowForFinalResult(result, "detect all stockpiles");
+
+        // Unreachable in practice (Success bails above); kept for exhaustiveness.
         throw new DdbException(SafeGetLastError("detect all stockpiles"));
     }
 
@@ -2338,10 +2632,12 @@ public class NativeDdbWrapper : IDdbWrapper
         var lo = minElev ?? double.NaN;  // NaN => unset on native side
         var hi = maxElev ?? double.NaN;  // NaN => unset on native side
 
+        DdbResult result;
         try
         {
-            if (_GenerateContours(path, iv, cnt, baseOffset, lo, hi,
-                                  simplifyTolerance, bandIndex, out var output) == DdbResult.Success)
+            result = _GenerateContours(path, iv, cnt, baseOffset, lo, hi,
+                                                  simplifyTolerance, bandIndex, out var output);
+            if (result == DdbResult.Success)
             {
                 var json = MarshalAndFreeUtf8(output);
                 if (string.IsNullOrWhiteSpace(json))
@@ -2360,6 +2656,9 @@ public class NativeDdbWrapper : IDdbWrapper
                 $"Error in calling ddb lib. Last error: \"{SafeGetLastError("generate contours")}\", check inner exception for details", ex);
         }
 
+        ThrowForFinalResult(result, "generate contours");
+
+        // Unreachable in practice (Success bails above); kept for exhaustiveness.
         throw new DdbException(SafeGetLastError("generate contours"));
     }
 
@@ -2379,9 +2678,11 @@ public class NativeDdbWrapper : IDdbWrapper
         if (string.IsNullOrWhiteSpace(output))
             throw new ArgumentException("output is null or empty");
 
+        DdbResult result;
         try
         {
-            if (_MaskBorders(input, output, nearDist, white) == DdbResult.Success) return;
+            result = _MaskBorders(input, output, nearDist, white);
+            if (result == DdbResult.Success) return;
         }
         catch (EntryPointNotFoundException ex)
         {
@@ -2394,7 +2695,7 @@ public class NativeDdbWrapper : IDdbWrapper
                 $"Error in calling ddb lib. Last error: \"{SafeGetLastError("mask borders")}\", check inner exception for details", ex);
         }
 
-        throw new DdbException(SafeGetLastError("mask borders"));
+        ThrowForFinalResult(result, "mask borders");
     }
 
     #region OGC services (raster region + vector query/describe) P/Invoke
@@ -2428,13 +2729,15 @@ public class NativeDdbWrapper : IDdbWrapper
         // (band subset + alternate output CRS) callers share the same path.
         var bandArr = bands ?? [];
 
+        DdbResult result;
         try
         {
-            if (_RenderRasterRegionEx(inputPath, bbox, bboxSrs ?? string.Empty,
-                                      outputCrs ?? string.Empty,
-                                      bandArr, bandArr.Length,
-                                      width, height, format,
-                                      out var outBuffer, out var outSize) == DdbResult.Success)
+            result = _RenderRasterRegionEx(inputPath, bbox, bboxSrs ?? string.Empty,
+                                                      outputCrs ?? string.Empty,
+                                                      bandArr, bandArr.Length,
+                                                      width, height, format,
+                                                      out var outBuffer, out var outSize);
+            if (result == DdbResult.Success)
             {
                 var dest = new byte[outSize];
                 Marshal.Copy(outBuffer, dest, 0, outSize);
@@ -2453,6 +2756,9 @@ public class NativeDdbWrapper : IDdbWrapper
                 $"Error in calling ddb lib. Last error: \"{SafeGetLastError("render raster region")}\", check inner exception for details", ex);
         }
 
+        ThrowForFinalResult(result, "render raster region");
+
+        // Unreachable in practice (Success bails above); kept for exhaustiveness.
         throw new DdbException(SafeGetLastError("render raster region"));
     }
 
@@ -2480,11 +2786,13 @@ public class NativeDdbWrapper : IDdbWrapper
         if (string.IsNullOrWhiteSpace(format))
             throw new ArgumentException("format is null or empty");
 
+        DdbResult result;
         try
         {
-            if (_RenderRasterIndex(inputPath, indexName, bbox, bboxSrs ?? string.Empty,
-                                   width, height, format,
-                                   out var outBuffer, out var outSize) == DdbResult.Success)
+            result = _RenderRasterIndex(inputPath, indexName, bbox, bboxSrs ?? string.Empty,
+                                                   width, height, format,
+                                                   out var outBuffer, out var outSize);
+            if (result == DdbResult.Success)
             {
                 var dest = new byte[outSize];
                 Marshal.Copy(outBuffer, dest, 0, outSize);
@@ -2503,6 +2811,9 @@ public class NativeDdbWrapper : IDdbWrapper
                 $"Error in calling ddb lib. Last error: \"{SafeGetLastError("render raster index")}\", check inner exception for details", ex);
         }
 
+        ThrowForFinalResult(result, "render raster index");
+
+        // Unreachable in practice (Success bails above); kept for exhaustiveness.
         throw new DdbException(SafeGetLastError("render raster index"));
     }
 
@@ -2518,9 +2829,11 @@ public class NativeDdbWrapper : IDdbWrapper
         if (string.IsNullOrWhiteSpace(inputPath))
             throw new ArgumentException("inputPath is null or empty");
 
+        DdbResult result;
         try
         {
-            if (_QueryRasterPoint(inputPath, x, y, srs ?? string.Empty, out var output) == DdbResult.Success)
+            result = _QueryRasterPoint(inputPath, x, y, srs ?? string.Empty, out var output);
+            if (result == DdbResult.Success)
             {
                 var json = MarshalAndFreeUtf8(output);
                 if (string.IsNullOrWhiteSpace(json))
@@ -2539,6 +2852,9 @@ public class NativeDdbWrapper : IDdbWrapper
                 $"Error in calling ddb lib. Last error: \"{SafeGetLastError("query raster point")}\", check inner exception for details", ex);
         }
 
+        ThrowForFinalResult(result, "query raster point");
+
+        // Unreachable in practice (Success bails above); kept for exhaustiveness.
         throw new DdbException(SafeGetLastError("query raster point"));
     }
 
@@ -2562,12 +2878,14 @@ public class NativeDdbWrapper : IDdbWrapper
         if (bbox != null && bbox.Length != 4)
             throw new ArgumentException("bbox must contain exactly 4 elements when provided");
 
+        DdbResult result;
         try
         {
-            if (_QueryVector(vectorPath, layerName, bbox, bboxSrs,
-                             maxFeatures, startIndex,
-                             outputFormat ?? "application/json",
-                             out var output) == DdbResult.Success)
+            result = _QueryVector(vectorPath, layerName, bbox, bboxSrs,
+                                             maxFeatures, startIndex,
+                                             outputFormat ?? "application/json",
+                                             out var output);
+            if (result == DdbResult.Success)
             {
                 var data = MarshalAndFreeUtf8(output);
                 if (string.IsNullOrWhiteSpace(data))
@@ -2586,6 +2904,9 @@ public class NativeDdbWrapper : IDdbWrapper
                 $"Error in calling ddb lib. Last error: \"{SafeGetLastError("query vector")}\", check inner exception for details", ex);
         }
 
+        ThrowForFinalResult(result, "query vector");
+
+        // Unreachable in practice (Success bails above); kept for exhaustiveness.
         throw new DdbException(SafeGetLastError("query vector"));
     }
 
@@ -2600,9 +2921,11 @@ public class NativeDdbWrapper : IDdbWrapper
         if (string.IsNullOrWhiteSpace(vectorPath))
             throw new ArgumentException("vectorPath is null or empty");
 
+        DdbResult result;
         try
         {
-            if (_DescribeVector(vectorPath, layerName, out var output) == DdbResult.Success)
+            result = _DescribeVector(vectorPath, layerName, out var output);
+            if (result == DdbResult.Success)
             {
                 var json = MarshalAndFreeUtf8(output);
                 if (string.IsNullOrWhiteSpace(json))
@@ -2621,6 +2944,9 @@ public class NativeDdbWrapper : IDdbWrapper
                 $"Error in calling ddb lib. Last error: \"{SafeGetLastError("describe vector")}\", check inner exception for details", ex);
         }
 
+        ThrowForFinalResult(result, "describe vector");
+
+        // Unreachable in practice (Success bails above); kept for exhaustiveness.
         throw new DdbException(SafeGetLastError("describe vector"));
     }
 

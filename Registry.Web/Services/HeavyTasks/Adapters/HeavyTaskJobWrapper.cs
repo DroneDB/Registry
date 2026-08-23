@@ -12,6 +12,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Registry.Ports;
+using Registry.Adapters.DroneDB;
 using Registry.Web.Data;
 using Registry.Web.Models.Configuration;
 using Registry.Web.Services.HeavyTasks.Models;
@@ -23,7 +24,7 @@ namespace Registry.Web.Services.HeavyTasks.Adapters;
 
 /// <summary>
 /// Hangfire entry point that executes a resolved <see cref="IHeavyTool"/> on the
-/// <c>tasks</c> queue (spec §4.10). Creates the per-task work directory, bridges
+/// <c>tasks</c> queue. Creates the per-task work directory, bridges
 /// progress/log to <c>JobIndex</c>, persists artifact/error metadata and schedules
 /// TTL cleanup of the work directory.
 /// </summary>
@@ -48,7 +49,13 @@ public sealed class HeavyTaskJobWrapper
         _log = log;
     }
 
-    [AutomaticRetry(Attempts = 1, OnAttemptsExceeded = AttemptsExceededAction.Fail)]
+    // Transient DDB contention gets a backoff retry chain; anything else fails fast without
+    // burning worker slots.
+    // Same policy as the wrappers in the HangfireUtils class - intentionally duplicated inline
+    // because Hangfire discovers AutomaticRetry per-job-method via reflection (see there).
+    [AutomaticRetry(Attempts = 5, DelaysInSeconds = [15, 60, 180, 600, 1800],
+        OnAttemptsExceeded = AttemptsExceededAction.Fail,
+        OnlyOn = [typeof(DdbBusyException), typeof(DdbBuildInProgressException)])]
     [Queue("tasks")]
     public async Task Run(string toolId, string toolVersion, string requestJson,
         PerformContext ctx, CancellationToken cancellationToken)

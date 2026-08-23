@@ -12,7 +12,7 @@ using Registry.Web.Services.HeavyTasks.Ports;
 namespace Registry.Web.Services.HeavyTasks.Tools;
 
 /// <summary>
-/// Native tool that merges single-band rasters into a multi-band COG (spec §A.2).
+/// Native tool that merges single-band rasters into a multi-band COG.
 /// CPU-bound (GDAL); offloaded from the request thread. Mutates the dataset in
 /// place (re-indexes the merged output) so it produces no downloadable artifact.
 /// Mirrors the legacy <c>ObjectsManager.MergeMultispectral</c> behaviour exactly.
@@ -148,7 +148,7 @@ public sealed class MergeMultispectralTool : IHeavyTool
                 if (!string.IsNullOrWhiteSpace(s)) list.Add(s!);
             }
         }
-        return list.ToArray();
+        return [.. list];
     }
 
     private static string[]? ReadStringArray(JsonElement obj, string name)
@@ -164,7 +164,7 @@ public sealed class MergeMultispectralTool : IHeavyTool
             if (!string.IsNullOrWhiteSpace(s)) list.Add(s!);
         }
 
-        return list.Count > 0 ? list.ToArray() : null;
+        return list.Count > 0 ? [.. list] : null;
     }
 
     private static string? ReadString(JsonElement obj, string name)

@@ -15,7 +15,7 @@ namespace Registry.Web.Services.Adapters;
 
 /// <summary>
 /// Stateless ZIP archive builder shared by the legacy download streaming path and
-/// the <c>bulk-download</c> heavy tool (spec §A.0). Centralizes the path-expansion
+/// the <c>bulk-download</c> heavy tool. Centralizes the path-expansion
 /// and entry-writing logic that previously lived in <c>ObjectsManager.GetFilePaths</c>
 /// and <c>FileStreamDescriptor.AddFilesToZip</c>.
 /// </summary>
@@ -60,8 +60,8 @@ public sealed class ZipArchiveBuilder : IZipArchiveBuilder
             }
 
             // Get rid of possible duplicates and sort
-            files = tempFiles.Distinct().OrderBy(item => item).ToArray();
-            folders = tempFolders.Distinct().OrderBy(item => item).ToArray();
+            files = [.. tempFiles.Distinct().OrderBy(item => item)];
+            folders = [.. tempFolders.Distinct().OrderBy(item => item)];
         }
         else
         {
@@ -71,17 +71,21 @@ public sealed class ZipArchiveBuilder : IZipArchiveBuilder
                 throw new InvalidOperationException("Ddb is empty, what should I get?");
 
             // Select everything and sort
-            files = entries
-                .Where(entry => entry.Type != EntryType.Directory)
-                .Select(entry => entry.Path)
-                .OrderBy(path => path)
-                .ToArray();
+            files =
+            [
+                .. entries
+                    .Where(entry => entry.Type != EntryType.Directory)
+                    .Select(entry => entry.Path)
+                    .OrderBy(path => path)
+            ];
 
-            folders = entries
-                .Where(entry => entry.Type == EntryType.Directory)
-                .Select(entry => entry.Path)
-                .OrderBy(path => path)
-                .ToArray();
+            folders =
+            [
+                .. entries
+                    .Where(entry => entry.Type == EntryType.Directory)
+                    .Select(entry => entry.Path)
+                    .OrderBy(path => path)
+            ];
 
             // We include the ddb folder only when asked for the entire dataset
             includeDdb = true;

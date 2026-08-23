@@ -1,6 +1,7 @@
 #nullable enable
 using System;
 using System.IO;
+using System.Linq;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
@@ -45,9 +46,9 @@ public sealed class AlignRasterTool : IHeavyTool
 
     public Task ValidateAsync(HeavyToolRequest request, IHeavyToolValidationContext ctx, CancellationToken ct)
     {
-        var sourcePath    = ReadString(request.Params, "sourcePath");
+        var sourcePath = ReadString(request.Params, "sourcePath");
         var referencePath = ReadString(request.Params, "referencePath");
-        var outputPath    = ReadString(request.Params, "outputPath");
+        var outputPath = ReadString(request.Params, "outputPath");
 
         if (string.IsNullOrWhiteSpace(sourcePath))
             throw new ArgumentException("sourcePath is required.");
@@ -63,25 +64,24 @@ public sealed class AlignRasterTool : IHeavyTool
 
         // Native validation (CRS, overlap, type compatibility)
         var validationJson = ctx.Ddb.ValidateAlignRaster(sourcePath, referencePath);
-        if (!string.IsNullOrWhiteSpace(validationJson))
+        if (string.IsNullOrWhiteSpace(validationJson)) return Task.CompletedTask;
+
+        try
         {
-            try
+            using var doc = JsonDocument.Parse(validationJson);
+            if (doc.RootElement.TryGetProperty("ok", out var okEl) &&
+                okEl.ValueKind == JsonValueKind.False)
             {
-                using var doc = JsonDocument.Parse(validationJson);
-                if (doc.RootElement.TryGetProperty("ok", out var okEl) &&
-                    okEl.ValueKind == JsonValueKind.False)
-                {
-                    var errors = ReadErrors(doc.RootElement);
-                    throw new ArgumentException(
-                        errors.Length > 0
-                            ? $"Alignment not possible: {string.Join("; ", errors)}"
-                            : "Alignment validation failed.");
-                }
+                var errors = ReadErrors(doc.RootElement);
+                throw new ArgumentException(
+                    errors.Length > 0
+                        ? $"Alignment not possible: {string.Join("; ", errors)}"
+                        : "Alignment validation failed.");
             }
-            catch (JsonException)
-            {
-                // If native output is not parseable, defer to execution phase.
-            }
+        }
+        catch (JsonException)
+        {
+            // If native output is not parseable, defer to execution phase.
         }
 
         return Task.CompletedTask;
@@ -114,13 +114,13 @@ public sealed class AlignRasterTool : IHeavyTool
         IProgress<HeavyToolProgress> progress,
         CancellationToken ct)
     {
-        var sourcePath    = ReadString(request.Params, "sourcePath")
-                            ?? throw new InvalidOperationException("sourcePath is required.");
+        var sourcePath = ReadString(request.Params, "sourcePath")
+                         ?? throw new InvalidOperationException("sourcePath is required.");
         var referencePath = ReadString(request.Params, "referencePath")
                             ?? throw new InvalidOperationException("referencePath is required.");
-        var outputPath    = ReadString(request.Params, "outputPath")
-                            ?? throw new InvalidOperationException("outputPath is required.");
-        var mode          = ReadString(request.Params, "mode") ?? "similarity";
+        var outputPath = ReadString(request.Params, "outputPath")
+                         ?? throw new InvalidOperationException("outputPath is required.");
+        var mode = ReadString(request.Params, "mode") ?? "similarity";
 
         progress.Report(new HeavyToolProgress(-1, "aligning",
             LogChunk: $"Aligning '{sourcePath}' → '{outputPath}' (mode: {mode})"));
@@ -142,29 +142,26 @@ public sealed class AlignRasterTool : IHeavyTool
 
         // Emit compact (single-line) JSON so the log tail delivers it as a single
         // entry that the frontend can JSON.parse after stripping the timestamp prefix.
-        using var doc = System.Text.Json.JsonDocument.Parse(resultJson);
-        var compact = System.Text.Json.JsonSerializer.Serialize(doc);
+        using var doc = JsonDocument.Parse(resultJson);
+        var compact = JsonSerializer.Serialize(doc);
         progress.Report(new HeavyToolProgress(1, "done", LogChunk: compact));
         return null;
     }
 
-    // ── helpers ──────────────────────────────────────────────────────────────
-
-    private static string[]  ReadErrors(JsonElement root)
+    private static string[] ReadErrors(JsonElement root)
     {
         if (!root.TryGetProperty("errors", out var errEl) || errEl.ValueKind != JsonValueKind.Array)
             return [];
 
-        var list = new System.Collections.Generic.List<string>();
-        foreach (var item in errEl.EnumerateArray())
-        {
-            if (item.ValueKind == JsonValueKind.String)
-            {
-                var s = item.GetString();
-                if (!string.IsNullOrWhiteSpace(s)) list.Add(s!);
-            }
-        }
-        return list.ToArray();
+        return
+        [
+            .. from item in errEl.EnumerateArray()
+            where item.ValueKind == JsonValueKind.String
+            select item.GetString()
+            into s
+            where !string.IsNullOrWhiteSpace(s)
+            select s!
+        ];
     }
 
     private static string? ReadString(JsonElement obj, string name)

@@ -11,7 +11,7 @@ namespace Registry.Web.Services.HeavyTasks.Adapters;
 
 /// <summary>
 /// Default quota guard backed by <see cref="IJobIndexQuery"/> active-task counts
-/// (spec §4.9). Checks, in order: estimated output size, global concurrency,
+/// Checks, in order: estimated output size, global concurrency,
 /// per-org concurrency, per-user concurrency/queue. Org daily-output budget is
 /// configured but not enforced in Sprint 1 (requires a 24h artifact-sum query).
 /// </summary>

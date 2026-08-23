@@ -29,8 +29,8 @@ public static class ProcessingPlatformServiceCollectionExtensions
         services.AddSingleton<INodeOdxClient, NodeOdxClient>();
 
         // Archive extraction backend (SharpCompress) for the archive-extract tool.
-        services.AddSingleton<Registry.Ports.Archives.IArchiveExtractor,
-            Registry.Adapters.Archives.SharpCompressArchiveExtractor>();
+        services.AddSingleton<Ports.Archives.IArchiveExtractor,
+            Adapters.Archives.SharpCompressArchiveExtractor>();
 
         // Focused dataset cache invalidation (extracted from IObjectsManager) so heavy tools
         // can clear dataset caches on hosts without the full object-management stack.

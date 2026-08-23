@@ -1,47 +1,14 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Security.Claims;
-using System.Threading.Tasks;
-using Microsoft.AspNetCore.Identity;
-using Microsoft.AspNetCore.Mvc;
-using Registry.Web.Exceptions;
-using Registry.Web.Services.Ports;
+﻿using Microsoft.AspNetCore.Mvc;
 
 namespace Registry.Web.Models;
 
+/// <summary>
+/// Base controller for Registry controllers. Since the exception-handling unification,
+/// every controller exception is handled centrally by the global
+/// <see cref="Registry.Web.Utilities.ApiExceptionFilter"/>, whose status/noRetry/message
+/// rules live in <see cref="Registry.Web.Utilities.ApiExceptionClassifier"/>; per-action
+/// error wrappers and the legacy in-controller result builders no longer exist.
+/// </summary>
 public class ControllerBaseEx : ControllerBase
 {
-
-    protected IActionResult ExceptionResult(Exception ex)
-    {
-
-        // Do not retry if the quota is exceeded, the user is not authorized, or
-        // the file extension is blocked by server policy
-        var noRetry = ex is QuotaExceededException or UnauthorizedException or ExtensionBlockedException;
-
-        var err = new ErrorResponse(ex.Message, noRetry);
-
-        return ex switch
-        {
-            UnauthorizedException _ => Unauthorized(err),
-            ConflictException _ => Conflict(err),
-            NotFoundException _ => NotFound(err),
-            _ => BadRequest(err)
-        };
-    }
-
-    protected IActionResult ExceptionResult(Exception ex, bool noRetry)
-    {
-        var err = new ErrorResponse(ex.Message, noRetry);
-
-        return ex switch
-        {
-            UnauthorizedException _ => Unauthorized(err),
-            ConflictException _ => Conflict(err),
-            NotFoundException _ => NotFound(err),
-            _ => BadRequest(err)
-        };
-    }
-
 }

@@ -327,6 +327,30 @@ public class AppSettings
 #nullable restore
 
     /// <summary>
+    /// Per-dataset index write queue settings (coalesces concurrent add requests into
+    /// short-lived native batches). When null, defaults apply.
+    /// </summary>
+#nullable enable
+    public IndexQueueSettings? IndexQueue { get; set; }
+#nullable restore
+
+    /// <summary>
+    /// Recurring index reconciliation sweep settings (unindexed re-index, missing report,
+    /// quarantine ageing). When null, defaults apply.
+    /// </summary>
+#nullable enable
+    public ReconciliationSettings? Reconciliation { get; set; }
+#nullable restore
+
+    /// <summary>
+    /// Cron expression for the recurring index reconciliation sweep. Re-enqueues unindexed
+    /// on-disk files, reports (never deletes) indexed entries missing on disk, and ages out
+    /// quarantined files. Default (when null, empty, or omitted): "0 * * * *" (hourly).
+    /// Set to "disabled", "off", or "none" to remove the job.
+    /// </summary>
+    public string IndexReconciliationCron { get; set; }
+
+    /// <summary>
     /// Path to a shared directory for ASP.NET Core Data Protection key storage. Required when the
     /// processing node runs in a separate process and Redis caching is not used, so the worker can
     /// decrypt credentials the web host encrypted. When Redis is the cache provider the key ring is

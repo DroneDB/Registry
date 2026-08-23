@@ -8,246 +8,32 @@ using Registry.Common.Model;
 
 namespace Registry.Ports.DroneDB;
 
-public interface IDDB
+/// <summary>
+/// Full DroneDB dataset API. Decomposed into role interfaces (<see cref="IDdbIndex"/>,
+/// <see cref="IDdbBuild"/>, <see cref="IDdbMeta"/>, <see cref="IDdbRaster"/>,
+/// <see cref="IDdbAnalytics"/>) per the Interface Segregation Principle so narrow consumers can
+/// depend on just the role they need instead of this 50+ member aggregate.
+/// <c>DDB</c> (Registry.Adapters) implements this unchanged - no
+/// consumer of <see cref="IDDB"/> itself breaks.
+/// </summary>
+public interface IDDB : IDdbIndex, IDdbBuild, IDdbMeta, IDdbRaster, IDdbAnalytics
 {
-    /// <summary>
-    /// DroneDB client version
-    /// </summary>
-    string Version { get; }
-
-    /// <summary>
-    /// DroneDB dataset folder path
-    /// </summary>
-    string DatasetFolderPath { get; }
-
-    /// <summary>
-    /// The build folder path
-    /// </summary>
-    string BuildFolderPath { get; }
-
-    IEnumerable<Entry> Search(string path, bool recursive = false);
-    void Add(string path, byte[] data);
-    void Add(string path, Stream? data = null);
-    void AddRaw(string path);
-
-    /// <summary>
-    /// Indexes multiple already-on-disk files in a single native call (one database
-    /// connection and one transaction for the whole batch), returning the resulting
-    /// index entries (with type and hash).
-    /// </summary>
-    /// <param name="paths">Dataset-relative paths of the files to index.</param>
-    /// <returns>The index entries produced for the supplied paths.</returns>
-    IReadOnlyList<Entry> AddRawBatch(IReadOnlyList<string> paths);
-
-    void Remove(string path);
-    void Move(string source, string dest);
-
-    byte[] GenerateThumbnail(string imagePath, int size);
-    byte[] GenerateTile(string inputPath, int tz, int tx, int ty, bool retina, string inputPathHash);
-
-    /// <summary>Generate a tile with a specific raster output format ("png" or "jpeg").</summary>
-    byte[] GenerateTile(string inputPath, int tz, int tx, int ty, bool retina, string inputPathHash, string outputFormat);
-
-    void Init();
-
-    Entry GetInfo();
-
-    /// <summary>
-    /// Calls DDB info command on specified path
-    /// </summary>
-    /// <param name="path"></param>
-    /// <returns></returns>
-    Entry GetInfo(string path);
-
-    string GetLocalPath(string path);
-
-    /// <summary>
-    /// Gets the specified path inside the DDB database
-    /// </summary>
-    /// <param name="path"></param>
-    /// <returns></returns>
-    Entry? GetEntry(string path);
-
-    bool EntryExists(string path);
-    void Build(string path, string dest = null, bool force = false);
-    void BuildAll(string dest = null, bool force = false);
-    void BuildPending(string dest = null, bool force = false);
-
-    public string GetTmpFolder(string path);
-    bool IsBuildable(string path);
-    bool IsBuildActive(string path);
-    bool IsBuildComplete(string path);
-    bool IsBuildPending();
-
-    /// <summary>
-    /// Gets information about pending (deferred) builds in this dataset, i.e.
-    /// builds skipped because one or more dependencies were missing at the
-    /// time of the attempt. Read-only: does not consume pending markers or
-    /// trigger builds.
-    /// </summary>
-    PendingBuildInfo[] GetPendingBuildInfo();
-
-    /// <summary>
-    /// Cleans up the dataset by removing index entries whose underlying files no
-    /// longer exist on disk and orphaned build artifacts.
-    /// </summary>
-    DdbCleanupResult Cleanup();
-
-    IMetaManager Meta { get; }
-    long GetSize();
-    Stamp GetStamp();
-
-    JToken GetStac(string id, string stacCollectionRoot, string stacCatalogRoot, string path = null);
-
-    /// <summary>
-    /// Generates a STAC ItemCollection (GeoJSON FeatureCollection) for the dataset,
-    /// optionally filtered by bbox and datetime, with paging.
-    /// </summary>
-    /// <param name="id">Collection id (e.g. "org/ds")</param>
-    /// <param name="stacCollectionRoot">URL of the parent STAC collection</param>
-    /// <param name="stacCatalogRoot">URL of the root STAC catalog</param>
-    /// <param name="bbox">Optional bounding box "minX,minY,maxX,maxY" (WGS84), or null</param>
-    /// <param name="datetime">Optional single RFC3339 datetime or interval "start/end" (".." for open ends), or null</param>
-    /// <param name="limit">Maximum number of items to return</param>
-    /// <param name="offset">Number of items to skip (paging)</param>
-    JToken GetStacItemCollection(string id, string stacCollectionRoot, string stacCatalogRoot,
-        string bbox = null, string datetime = null, int limit = 10, int offset = 0);
-
-    /// <summary>
-    /// Rescans all files in the index to update metadata
-    /// </summary>
-    /// <param name="types">Comma-separated list of entry types to rescan (e.g., "image,geoimage,pointcloud"), or null/empty for all</param>
-    /// <param name="stopOnError">Whether to stop processing on first error</param>
-    /// <returns>List of rescan results for each processed entry</returns>
-    List<RescanResult> RescanIndex(string? types = null, bool stopOnError = true);
-
-    /// <summary>
-    /// Clears the build cache (thumbnails, tiles, COGs, etc.) for the dataset
-    /// </summary>
-    void ClearBuildCache();
-
-    /// <summary>
-    /// Get raster info including bands, detected sensor, and presets
-    /// </summary>
-    string GetRasterInfo(string path);
-
-    /// <summary>
-    /// Get raster statistics and histogram for a band or formula
-    /// </summary>
-    string GetRasterMetadata(string path, string? formula = null, string? bandFilter = null);
-
-    /// <summary>
-    /// Generate thumbnail with extended visualization params
-    /// </summary>
-    byte[] GenerateThumbnailEx(string imagePath, int size, string? preset = null,
-        string? bands = null, string? formula = null, string? bandFilter = null,
-        string? colormap = null, string? rescale = null);
-
-    /// <summary>
-    /// Generate tile with extended visualization params
-    /// </summary>
-    byte[] GenerateTileEx(string inputPath, int tz, int tx, int ty, bool retina, string inputPathHash,
-        string? preset = null, string? bands = null, string? formula = null,
-        string? bandFilter = null, string? colormap = null, string? rescale = null);
-
-    /// <summary>
-    /// Validate merge-multispectral inputs
-    /// </summary>
-    string ValidateMergeMultispectral(string[] paths);
-
-    /// <summary>
-    /// Preview merge-multispectral result
-    /// </summary>
-    byte[] PreviewMergeMultispectral(string[] paths, string? previewBands = null, int thumbSize = 512);
-
-    /// <summary>
-    /// Merge single-band rasters into multi-band COG
-    /// </summary>
-    void MergeMultispectral(string[] paths, string outputCog);
-
-    /// <summary>
-    /// Validate that source and reference rasters are compatible for alignment
-    /// </summary>
-    string ValidateAlignRaster(string sourcePath, string referencePath);
-
-    /// <summary>
-    /// Align a source GeoTIFF to a reference GeoTIFF and write the output COG
-    /// </summary>
-    string AlignRaster(string sourcePath, string referencePath, string outputPath, string mode = "similarity");
-
-    /// <summary>
-    /// Export raster with visualization params applied as GeoTIFF
-    /// </summary>
-    void ExportRaster(string inputPath, string outputPath,
-        string? preset = null, string? bands = null, string? formula = null,
-        string? bandFilter = null, string? colormap = null, string? rescale = null);
-
-    /// <summary>
-    /// Export raster with visualization params applied as GeoTIFF using the
-    /// block-windowed implementation (bounded peak memory), reporting incremental
-    /// progress and honoring cooperative cancellation.
-    /// </summary>
-    void ExportRaster(string inputPath, string outputPath,
-        string? preset, string? bands, string? formula, string? bandFilter,
-        string? colormap, string? rescale, int tileSize,
-        System.Action<double, string?>? progress,
-        System.Threading.CancellationToken cancellationToken);
-
-    /// <summary>
-    /// Get raster value info (min/max/unit/dimensions), including thermal calibration if applicable
-    /// </summary>
-    string GetRasterValueInfo(string path);
-
-    /// <summary>
-    /// Get raster value (temperature/elevation/etc.) at a specific pixel location
-    /// </summary>
-    string GetRasterPointValue(string path, int x, int y);
-
-    /// <summary>
-    /// Get raster value statistics for a rectangular area
-    /// </summary>
-    string GetRasterAreaStats(string path, int x0, int y0, int x1, int y1);
-
-    /// <summary>
-    /// Sample raster values along a GeoJSON LineString (WGS84)
-    /// </summary>
-    string GetRasterProfile(string path, string geoJsonLineString, int samples);
-
-    /// <summary>
-    /// Calculate stockpile volume (cut/fill/net) over a polygon on a DEM raster
-    /// </summary>
-    string CalculateVolume(string path, string polygonGeoJson, string baseMethod, double flatElevation);
-
-    /// <summary>
-    /// Auto-detect a stockpile footprint starting from a click on the raster
-    /// </summary>
-    string DetectStockpile(string path, double lat, double lon, double radiusMeters, float sensitivity);
-
-    /// <summary>
-    /// Auto-detect ALL stockpile footprints by full-DEM scan.
-    /// </summary>
-    string DetectAllStockpiles(string path, float sensitivity, double minAreaM2, int maxResults);
-
-    /// <summary>
-    /// Generate contour lines from a single-band elevation raster (DEM/DSM/DTM).
-    /// Returns a GeoJSON FeatureCollection of LineString features.
-    /// </summary>
-    string GenerateContours(string path,
-                            double? interval,
-                            int? count,
-                            double baseOffset = 0.0,
-                            double? minElev = null,
-                            double? maxElev = null,
-                            double simplifyTolerance = 0.0,
-                            int bandIndex = 1);
-
-    /// <summary>
-    /// Mask orthophoto borders making them transparent
-    /// </summary>
-    void MaskBorders(string input, string output, int nearDist = 15, bool white = false);
-
     // These consts are like magic strings: if anything changes this goes kaboom!
     public const string DatabaseFolderName = ".ddb";
     public const string BuildFolderName = "build";
     public const string TmpFolderName = "tmp";
+
+    /// <summary>
+    /// Per-dataset folder holding in-flight uploads (staged temp files and the quarantine
+    /// sub-folder) before they are atomically moved into place. Reserved so users cannot
+    /// create a conflicting entry. Single source of truth shared by the upload flow
+    /// (ObjectsManager) and the reconciliation sweep (IndexReconciliationService).
+    /// </summary>
+    public const string UploadsFolderName = ".uploads";
+
+    /// <summary>
+    /// Sub-folder of <see cref="UploadsFolderName"/> holding files that were placed on disk
+    /// but failed to index, pending the reconciliation sweep.
+    /// </summary>
+    public const string QuarantineFolderName = "quarantine";
 }

@@ -25,6 +25,7 @@ public class DatasetCleanupService
     private readonly IBackgroundJobsProcessor _backgroundJob;
     private readonly IJobIndexQuery _jobIndexQuery;
     private readonly ILogger<DatasetCleanupService> _logger;
+    private readonly IDatasetIndexQueue? _indexQueue;
 
     // Active Hangfire job states that should be cancelled. These string values map directly to
     // Hangfire's built-in job state names (e.g., Created, Enqueued, Processing, Scheduled, Awaiting).
@@ -39,13 +40,15 @@ public class DatasetCleanupService
         IDdbManager ddbManager,
         IBackgroundJobsProcessor backgroundJob,
         IJobIndexQuery jobIndexQuery,
-        ILogger<DatasetCleanupService> logger)
+        ILogger<DatasetCleanupService> logger,
+        IDatasetIndexQueue? indexQueue = null)
     {
         _context = context ?? throw new ArgumentNullException(nameof(context));
         _ddbManager = ddbManager ?? throw new ArgumentNullException(nameof(ddbManager));
         _backgroundJob = backgroundJob ?? throw new ArgumentNullException(nameof(backgroundJob));
         _jobIndexQuery = jobIndexQuery ?? throw new ArgumentNullException(nameof(jobIndexQuery));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        _indexQueue = indexQueue;
     }
 
     /// <summary>
@@ -78,6 +81,15 @@ public class DatasetCleanupService
         // 2. Remove all JobIndex entries for this dataset
         var removedCount = await RemoveJobIndexEntriesAsync(orgSlug, dsSlug);
         WriteLine($"Removed {removedCount} JobIndex entries");
+
+        // 2.5. Release the dataset's per-dataset index lane so it is not retained after the
+        //      dataset ceases to exist (new enqueues transparently recreate a fresh lane for
+        //      the remainder of the shutdown).
+        if (_indexQueue != null)
+        {
+            _indexQueue.Release(new DatasetKey(orgSlug, internalRef));
+            WriteLine("Released index lane for the removed dataset");
+        }
 
         // 3. Delete filesystem folder
         try

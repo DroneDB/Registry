@@ -10,7 +10,7 @@ namespace Registry.Web.Services.HeavyTasks.Ports;
 /// <summary>
 /// Contract for a heavy (long-running, asynchronous) tool tracked in the
 /// Processing Platform task substrate. Implementations must be stateless,
-/// HTTP-context free, and cooperatively cancellable (see spec §4.5).
+/// HTTP-context free, and cooperatively cancellable.
 /// </summary>
 public interface IHeavyTool
 {

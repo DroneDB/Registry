@@ -46,14 +46,7 @@ public class ImportController : ControllerBaseEx
     [ProducesResponseType(typeof(IEnumerable<string>), StatusCodes.Status200OK)]
     public IActionResult GetImportSources([FromRoute, Required] string orgSlug)
     {
-        try
-        {
-            return Ok(_importManager.GetAvailableSourceTypes());
-        }
-        catch (Exception ex)
-        {
-            return ExceptionResult(ex);
-        }
+        return Ok(_importManager.GetAvailableSourceTypes());
     }
 
     /// <summary>
@@ -70,14 +63,7 @@ public class ImportController : ControllerBaseEx
         [FromBody, Required] VerifyImportRequestDto body,
         CancellationToken ct)
     {
-        try
-        {
-            return Ok(await _importManager.VerifyAsync(orgSlug, body, ct));
-        }
-        catch (Exception ex)
-        {
-            return ExceptionResult(ex);
-        }
+        return Ok(await _importManager.VerifyAsync(orgSlug, body, ct));
     }
 
     /// <summary>
@@ -94,14 +80,7 @@ public class ImportController : ControllerBaseEx
         [FromBody, Required] CreateImportRequestDto body,
         CancellationToken ct)
     {
-        try
-        {
-            return Ok(await _importManager.CreateAsync(orgSlug, body, ct));
-        }
-        catch (Exception ex)
-        {
-            return ExceptionResult(ex);
-        }
+        return Ok(await _importManager.CreateAsync(orgSlug, body, ct));
     }
 
     /// <summary>
@@ -120,13 +99,6 @@ public class ImportController : ControllerBaseEx
         [FromBody, Required] BrowseImportRequestDto body,
         CancellationToken ct)
     {
-        try
-        {
-            return Ok(await _importManager.BrowseAsync(orgSlug, body, ct));
-        }
-        catch (Exception ex)
-        {
-            return ExceptionResult(ex);
-        }
+        return Ok(await _importManager.BrowseAsync(orgSlug, body, ct));
     }
 }

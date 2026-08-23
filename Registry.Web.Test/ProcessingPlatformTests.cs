@@ -467,5 +467,30 @@ public class ProcessingPlatformTests
         json.ShouldContain("p1");
     }
 
+    [Test]
+    public void LogTail_Parse_NullLinesFallback_EmptySnapshot()
+    {
+        var snap = LogTailSnapshot.Parse("{\"lines\":null,\"cursor\":5}");
+        snap.Lines.ShouldBeEmpty();
+        snap.AsStrings().ShouldBeEmpty();
+    }
+
+    [Test]
+    public void LogTail_Parse_OutOfRangeOrNullOrEmptyEntries_Dropped()
+    {
+        var json = $$"""
+            {"lines":[
+               {"t":9223372036854775807,"lvl":"info","msg":"future"},
+               null,
+               {"t":{{DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()}},"lvl":"info","msg":"ok"}
+            ],"cursor":3}
+            """;
+        var snap = LogTailSnapshot.Parse(json);
+
+        snap.Lines.Count.ShouldBe(1);
+        snap.Lines[0].Msg.ShouldBe("ok");
+        snap.AsStrings().Single().ShouldContain("ok");
+    }
+
     #endregion
 }

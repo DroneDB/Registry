@@ -24,7 +24,7 @@ public sealed class ImportSourceFactory : IImportSourceFactory
     }
 
     /// <inheritdoc />
-    public IReadOnlyList<string> AvailableTypes => _sources.Keys.ToList();
+    public IReadOnlyList<string> AvailableTypes => [.. _sources.Keys];
 
     /// <inheritdoc />
     public IImportSource Resolve(string sourceType)

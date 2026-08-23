@@ -7,8 +7,8 @@ namespace Registry.Web.Services.HeavyTasks.NodeOdx;
 
 /// <summary>
 /// Thin HTTP client over the NodeODX REST API (OpenDroneMap processing node).
-/// Stateless; one instance serves every configured node. See spec §5 (Layer 2),
-/// reduced here to a direct NodeODX integration (no generic /v1/node protocol).
+/// Stateless; one instance serves every configured node. Narrowed to a direct
+/// NodeODX integration (no generic /v1/node protocol).
 /// </summary>
 public interface INodeOdxClient
 {

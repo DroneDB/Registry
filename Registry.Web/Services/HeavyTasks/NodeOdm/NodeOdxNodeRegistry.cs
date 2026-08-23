@@ -20,14 +20,16 @@ public sealed class NodeOdxNodeRegistry : INodeOdxNodeRegistry
     {
         var configured = appSettings.Value.ProcessingPlatform?.NodeOdx ?? [];
 
-        _nodes = configured
-            .Where(c => !string.IsNullOrWhiteSpace(c.Url))
-            .Select(c => new NodeOdxEndpoint(
-                string.IsNullOrWhiteSpace(c.Id) ? "default" : c.Id.Trim(),
-                c.Url.Trim(),
-                string.IsNullOrWhiteSpace(c.Token) ? null : c.Token,
-                c.Title))
-            .ToList();
+        _nodes =
+        [
+            .. configured
+                .Where(c => !string.IsNullOrWhiteSpace(c.Url))
+                .Select(c => new NodeOdxEndpoint(
+                    string.IsNullOrWhiteSpace(c.Id) ? "default" : c.Id.Trim(),
+                    c.Url.Trim(),
+                    string.IsNullOrWhiteSpace(c.Token) ? null : c.Token,
+                    c.Title))
+        ];
 
         _byId = new Dictionary<string, NodeOdxEndpoint>(StringComparer.OrdinalIgnoreCase);
         foreach (var node in _nodes)

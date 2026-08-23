@@ -40,7 +40,7 @@ public class DdbManager : IDdbManager
             _logger.LogInformation("Initialized new ddb in '{DaseDdbPath}'", baseDdbPath);
         }
         else
-            _logger.LogInformation("Opened ddb in '{BaseDdbPath}'", baseDdbPath);
+            _logger.LogDebug("Opened ddb in '{BaseDdbPath}'", baseDdbPath);
 
         return ddb;
     }

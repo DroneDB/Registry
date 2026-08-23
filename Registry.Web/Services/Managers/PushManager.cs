@@ -140,11 +140,13 @@ public class PushManager : IPushManager
         return new PushInitResultDto
         {
             Token = uuid,
-            NeededFiles = delta.Adds
-                .Where(item => item.Hash.Length > 0 && !locals.ContainsKey(item.Hash))
-                .Select(item => item.Path)
-                .ToArray(),
-            NeededMeta = delta.MetaAdds.ToArray(),
+            NeededFiles =
+            [
+                .. delta.Adds
+                    .Where(item => item.Hash.Length > 0 && !locals.ContainsKey(item.Hash))
+                    .Select(item => item.Path)
+            ],
+            NeededMeta = [.. delta.MetaAdds],
             PullRequired = false
         };
     }

@@ -118,7 +118,7 @@ public class ObjectsController : ControllerBaseEx
         {
             _logger.LogError(ex, "Exception in Objects controller GetDdb('{OrgSlug}', '{DsSlug}')", orgSlug,
                 dsSlug);
-            return ExceptionResult(ex);
+            throw;
         }
     }
 
@@ -166,7 +166,7 @@ public class ObjectsController : ControllerBaseEx
             _logger.LogError(ex,
                 "Exception in Objects controller GenerateThumbnail('{OrgSlug}', '{DsSlug}', '{Path}', '{Size}')",
                 orgSlug, dsSlug, path, size);
-            return ExceptionResult(new Exception("Cannot generate thumbnail"));
+            throw;
         }
     }
 
@@ -216,7 +216,7 @@ public class ObjectsController : ControllerBaseEx
             _logger.LogError(ex,
                 "Exception in Objects controller GenerateTile('{OrgSlug}', '{DsSlug}', '{Path}', '{Tz}', '{Tx}', '{TyRaw}')",
                 orgSlug, dsSlug, path, tz, tx, tyRaw);
-            return ExceptionResult(ex);
+            throw;
         }
     }
 
@@ -261,7 +261,7 @@ public class ObjectsController : ControllerBaseEx
                 "Exception in Objects controller Download('{OrgSlug}', '{DsSlug}', '{Paths}', '{IsInline}')",
                 orgSlug, dsSlug, paths != null ? string.Join("; ", paths) : string.Empty, isInline);
 
-            return ExceptionResult(ex);
+            throw;
         }
     }
 
@@ -383,7 +383,7 @@ public class ObjectsController : ControllerBaseEx
             _logger.LogError(ex, "Exception in Objects controller Get('{OrgSlug}', '{DsSlug}', '{Path}')", orgSlug,
                 dsSlug, path);
 
-            return ExceptionResult(ex);
+            throw;
         }
     }
 
@@ -420,7 +420,7 @@ public class ObjectsController : ControllerBaseEx
                 "Exception in Objects controller GetInfo('{OrgSlug}', '{DsSlug}', '{Path}', '{Type}')", orgSlug,
                 dsSlug, path, type);
 
-            return ExceptionResult(ex);
+            throw;
         }
     }
 
@@ -456,7 +456,7 @@ public class ObjectsController : ControllerBaseEx
             _logger.LogError(ex,
                 "Exception in Objects controller GetInfoEx('{OrgSlug}', '{DsSlug}', '{Path}, {Type})", orgSlug,
                 dsSlug, path, type);
-            return ExceptionResult(ex);
+            throw;
         }
     }
 
@@ -497,7 +497,7 @@ public class ObjectsController : ControllerBaseEx
             _logger.LogError(ex,
                 "Exception in Objects controller Search('{OrgSlug}', '{DsSlug}', '{Path}', '{Type}')", orgSlug,
                 dsSlug, path, type);
-            return ExceptionResult(ex);
+            throw;
         }
     }
 
@@ -606,7 +606,7 @@ public class ObjectsController : ControllerBaseEx
                 "Exception in Objects controller Post('{OrgSlug}', '{DsSlug}')",
                 orgSlug, dsSlug);
 
-            return ExceptionResult(ex);
+            throw;
         }
     }
 
@@ -640,7 +640,7 @@ public class ObjectsController : ControllerBaseEx
             _logger.LogError(ex, "Exception in Objects controller Delete('{OrgSlug}', '{DsSlug}', '{Path}')",
                 orgSlug, dsSlug, path);
 
-            return ExceptionResult(ex);
+            throw;
         }
     }
 
@@ -676,7 +676,7 @@ public class ObjectsController : ControllerBaseEx
             _logger.LogError(ex, "Exception in Objects controller DeleteBatch('{OrgSlug}', '{DsSlug}')",
                 orgSlug, dsSlug);
 
-            return ExceptionResult(ex);
+            throw;
         }
     }
 
@@ -713,7 +713,7 @@ public class ObjectsController : ControllerBaseEx
                 "Exception in Objects controller Move('{OrgSlug}', '{DsSlug}', '{Source}', '{Dest}')", orgSlug,
                 dsSlug, source, dest);
 
-            return ExceptionResult(ex);
+            throw;
         }
     }
 
@@ -761,7 +761,7 @@ public class ObjectsController : ControllerBaseEx
                 orgSlug,
                 dsSlug, sourcePath, destOrgSlug, destDsSlug, destPath, overwrite, keepSource);
 
-            return ExceptionResult(ex);
+            throw;
         }
     }
 
@@ -802,7 +802,7 @@ public class ObjectsController : ControllerBaseEx
                 "Exception in Objects controller Copy('{OrgSlug}', '{DsSlug}', '{Source}' -> '{Dest}', overwrite={Overwrite})",
                 orgSlug, dsSlug, source, dest, overwrite);
 
-            return ExceptionResult(ex);
+            throw;
         }
     }
 
@@ -837,7 +837,7 @@ public class ObjectsController : ControllerBaseEx
             _logger.LogError(ex, "Exception in Objects controller Build('{OrgSlug}', '{DsSlug}', '{Path}')",
                 orgSlug, dsSlug, path);
 
-            return ExceptionResult(ex);
+            throw;
         }
     }
 
@@ -871,14 +871,12 @@ public class ObjectsController : ControllerBaseEx
 
             return PhysicalFile(res, MimeUtility.GetMimeMapping(res), true);
         }
-        catch (UnauthorizedException ex)
+        catch (UnauthorizedException)
         {
+            // Attach the challenge header, then let the global classifier produce the
+            // canonical 401 body (the per-action result builder was removed during unification).
             BasicAuthFilter.SendBasicAuthRequest(Response);
-            return ExceptionResult(ex);
-        }
-        catch (Exception ex)
-        {
-            return ExceptionResult(ex);
+            throw;
         }
     }
 
@@ -910,10 +908,12 @@ public class ObjectsController : ControllerBaseEx
 
             return res ? Ok() : NotFound();
         }
-        catch (UnauthorizedException ex)
+        catch (UnauthorizedException)
         {
+            // Attach the challenge header, then let the global classifier produce the
+            // canonical 401 body (the per-action result builder was removed during unification).
             BasicAuthFilter.SendBasicAuthRequest(Response);
-            return ExceptionResult(ex);
+            throw;
         }
         catch (Exception ex)
         {
@@ -921,7 +921,7 @@ public class ObjectsController : ControllerBaseEx
                 "Exception in Objects controller CheckBuildFile('{OrgSlug}', '{DsSlug}', '{Path}')", orgSlug,
                 dsSlug, path);
 
-            return ExceptionResult(ex);
+            throw;
         }
     }
 
@@ -969,7 +969,7 @@ public class ObjectsController : ControllerBaseEx
         {
             _logger.LogError(ex, "Exception in DownloadBuildArtifact('{OrgSlug}', '{DsSlug}', '{Path}')",
                 orgSlug, dsSlug, path);
-            return ExceptionResult(ex);
+            throw;
         }
     }
 
@@ -1007,7 +1007,7 @@ public class ObjectsController : ControllerBaseEx
             _logger.LogError(ex, "Exception in Objects controller GetPendingBuilds('{OrgSlug}', '{DsSlug}')",
                 orgSlug, dsSlug);
 
-            return ExceptionResult(ex);
+            throw;
         }
     }
 
@@ -1039,7 +1039,7 @@ public class ObjectsController : ControllerBaseEx
             _logger.LogError(ex,
                 "Exception in Objects controller ClearCompletedBuilds('{OrgSlug}', '{DsSlug}')", orgSlug, dsSlug);
 
-            return ExceptionResult(ex);
+            throw;
         }
     }
 
@@ -1067,7 +1067,7 @@ public class ObjectsController : ControllerBaseEx
         {
             _logger.LogError(ex, "Exception in GetRasterInfo('{OrgSlug}', '{DsSlug}', '{Path}')", orgSlug, dsSlug,
                 path);
-            return ExceptionResult(ex);
+            throw;
         }
     }
 
@@ -1095,7 +1095,7 @@ public class ObjectsController : ControllerBaseEx
         {
             _logger.LogError(ex, "Exception in GetRasterMetadata('{OrgSlug}', '{DsSlug}', '{Path}')", orgSlug, dsSlug,
                 path);
-            return ExceptionResult(ex);
+            throw;
         }
     }
 
@@ -1131,7 +1131,7 @@ public class ObjectsController : ControllerBaseEx
         {
             _logger.LogError(ex, "Exception in GenerateThumbnailEx('{OrgSlug}', '{DsSlug}', '{Path}')", orgSlug, dsSlug,
                 path);
-            return ExceptionResult(new Exception("Cannot generate thumbnail"));
+            throw;
         }
     }
 
@@ -1174,7 +1174,7 @@ public class ObjectsController : ControllerBaseEx
         {
             _logger.LogError(ex, "Exception in GenerateTileEx('{OrgSlug}', '{DsSlug}', '{Path}')", orgSlug, dsSlug,
                 path);
-            return ExceptionResult(ex);
+            throw;
         }
     }
 
@@ -1207,7 +1207,7 @@ public class ObjectsController : ControllerBaseEx
         catch (Exception ex)
         {
             _logger.LogError(ex, "Exception in ExportRaster('{OrgSlug}', '{DsSlug}', '{Path}')", orgSlug, dsSlug, path);
-            return ExceptionResult(ex);
+            throw;
         }
     }
 
@@ -1232,7 +1232,7 @@ public class ObjectsController : ControllerBaseEx
         catch (Exception ex)
         {
             _logger.LogError(ex, "Exception in ValidateMergeMultispectral('{OrgSlug}', '{DsSlug}')", orgSlug, dsSlug);
-            return ExceptionResult(ex);
+            throw;
         }
     }
 
@@ -1258,7 +1258,7 @@ public class ObjectsController : ControllerBaseEx
         catch (Exception ex)
         {
             _logger.LogError(ex, "Exception in PreviewMergeMultispectral('{OrgSlug}', '{DsSlug}')", orgSlug, dsSlug);
-            return ExceptionResult(ex);
+            throw;
         }
     }
 
@@ -1285,7 +1285,7 @@ public class ObjectsController : ControllerBaseEx
         catch (Exception ex)
         {
             _logger.LogError(ex, "Exception in MergeMultispectral('{OrgSlug}', '{DsSlug}')", orgSlug, dsSlug);
-            return ExceptionResult(ex);
+            throw;
         }
     }
 
@@ -1316,7 +1316,7 @@ public class ObjectsController : ControllerBaseEx
         catch (Exception ex)
         {
             _logger.LogError(ex, "Exception in ValidateAlignRaster('{OrgSlug}', '{DsSlug}')", orgSlug, dsSlug);
-            return ExceptionResult(ex);
+            throw;
         }
     }
 
@@ -1346,7 +1346,7 @@ public class ObjectsController : ControllerBaseEx
         {
             _logger.LogError(ex, "Exception in GetRasterValueInfo('{OrgSlug}', '{DsSlug}', '{Path}')", orgSlug, dsSlug,
                 path);
-            return ExceptionResult(ex);
+            throw;
         }
     }
 
@@ -1374,7 +1374,7 @@ public class ObjectsController : ControllerBaseEx
         {
             _logger.LogError(ex, "Exception in GetRasterPointValue('{OrgSlug}', '{DsSlug}', '{Path}')", orgSlug, dsSlug,
                 path);
-            return ExceptionResult(ex);
+            throw;
         }
     }
 
@@ -1404,7 +1404,7 @@ public class ObjectsController : ControllerBaseEx
         {
             _logger.LogError(ex, "Exception in GetRasterAreaStats('{OrgSlug}', '{DsSlug}', '{Path}')", orgSlug, dsSlug,
                 path);
-            return ExceptionResult(ex);
+            throw;
         }
     }
 
@@ -1442,7 +1442,7 @@ public class ObjectsController : ControllerBaseEx
         {
             _logger.LogError(ex, "Exception in GetRasterProfile('{OrgSlug}', '{DsSlug}', '{Path}')", orgSlug, dsSlug,
                 request?.Path);
-            return ExceptionResult(ex);
+            throw;
         }
     }
 
@@ -1482,7 +1482,7 @@ public class ObjectsController : ControllerBaseEx
         {
             _logger.LogError(ex, "Exception in CalculateStockpileVolume('{OrgSlug}', '{DsSlug}', '{Path}')",
                 orgSlug, dsSlug, request?.Path);
-            return ExceptionResult(ex);
+            throw;
         }
     }
 
@@ -1522,7 +1522,7 @@ public class ObjectsController : ControllerBaseEx
         {
             _logger.LogError(ex, "Exception in DetectStockpile('{OrgSlug}', '{DsSlug}', '{Path}')",
                 orgSlug, dsSlug, request?.Path);
-            return ExceptionResult(ex);
+            throw;
         }
     }
 
@@ -1565,7 +1565,7 @@ public class ObjectsController : ControllerBaseEx
         {
             _logger.LogError(ex, "Exception in DetectAllStockpiles('{OrgSlug}', '{DsSlug}', '{Path}')",
                 orgSlug, dsSlug, request?.Path);
-            return ExceptionResult(ex);
+            throw;
         }
     }
 
@@ -1626,7 +1626,7 @@ public class ObjectsController : ControllerBaseEx
         {
             _logger.LogError(ex, "Exception in GenerateContours('{OrgSlug}', '{DsSlug}', '{Path}')",
                 orgSlug, dsSlug, request?.Path);
-            return ExceptionResult(ex);
+            throw;
         }
     }
 
@@ -1658,7 +1658,7 @@ public class ObjectsController : ControllerBaseEx
         {
             _logger.LogError(ex, "Exception in CheckMaskBorders('{OrgSlug}', '{DsSlug}', '{Path}')",
                 orgSlug, dsSlug, request.Path);
-            return ExceptionResult(ex);
+            throw;
         }
     }
 
@@ -1687,7 +1687,7 @@ public class ObjectsController : ControllerBaseEx
         {
             _logger.LogError(ex, "Exception in MaskBorders('{OrgSlug}', '{DsSlug}', '{Path}')",
                 orgSlug, dsSlug, request.Path);
-            return ExceptionResult(ex);
+            throw;
         }
     }
 

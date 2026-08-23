@@ -12,6 +12,10 @@ namespace Registry.Web.Services.Ports;
 public interface IJobIndexQuery
 {
     Task<JobIndex[]> GetByOrgDsAsync(string orgSlug, string dsSlug, int skip = 0, int take = 200, CancellationToken ct = default);
+
+    /// <summary>Single task lookup scoped to its dataset, for per-task status/ownership checks.</summary>
+    Task<JobIndex?> GetByJobIdAsync(string orgSlug, string dsSlug, string jobId, CancellationToken ct = default);
+
     Task<JobIndex[]> GetByOrgDsHashAsync(string orgSlug, string dsSlug, string hash, int skip = 0, int take = 200, CancellationToken ct = default);
     Task<JobIndex[]> GetByStateAsync(string state, int skip = 0, int take = 1000, CancellationToken ct = default);
 
@@ -19,7 +23,7 @@ public interface IJobIndexQuery
     Task<JobIndex[]> QueryAsync(JobIndexQueryFilter filter, CancellationToken ct = default);
 
     /// <summary>
-    /// Global (cross org/dataset) task query for the admin dashboard (spec §B.1.1).
+    /// Global (cross org/dataset) task query for the admin dashboard.
     /// Filtered by tool/state/user with server-side paging, ordered by creation desc.
     /// </summary>
     Task<JobIndex[]> QueryGlobalAsync(JobIndexGlobalQueryFilter filter, CancellationToken ct = default);

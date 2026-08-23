@@ -120,8 +120,8 @@ public class SystemManager : ISystemManager
 
         return new CleanupDatasetResultDto
         {
-            RemoveDatasetErrors = notDeleted.ToArray(),
-            RemovedDatasets = deleted.ToArray()
+            RemoveDatasetErrors = [.. notDeleted],
+            RemovedDatasets = [.. deleted]
         };
 
     }
@@ -266,8 +266,8 @@ public class SystemManager : ISystemManager
 
         return new CleanupBatchesResultDto
         {
-            RemovedBatches = removed.ToArray(),
-            RemoveBatchErrors = errors.ToArray()
+            RemovedBatches = [.. removed],
+            RemoveBatchErrors = [.. errors]
         };
 
     }
@@ -565,7 +565,7 @@ public class SystemManager : ISystemManager
         var entries = JsonConvert.DeserializeObject<EntryDto[]>(result) ?? [];
 
         // Filter out directories (we only want files)
-        return entries.Where(e => e.Type != EntryType.Directory).ToArray();
+        return [.. entries.Where(e => e.Type != EntryType.Directory)];
     }
 
     private async Task ImportSingleDataset(
@@ -1236,8 +1236,8 @@ public class SystemManager : ISystemManager
     {
         return new ImportResultDto
         {
-            ImportedItems = importedItems.ToArray(),
-            Errors = errors.ToArray(),
+            ImportedItems = [.. importedItems],
+            Errors = [.. errors],
             FileErrors = fileErrors?.ToArray() ?? [],
             TotalSize = importedItems.Sum(i => i.Size),
             TotalFiles = importedItems.Sum(i => i.FileCount),

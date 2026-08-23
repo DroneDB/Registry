@@ -101,7 +101,7 @@ public sealed class RemoteRegistryClient : IRemoteRegistryClient
         var result = await response.Content.ReadAsStringAsync(ct);
         var entries = JsonConvert.DeserializeObject<EntryDto[]>(result) ?? [];
 
-        return entries.Where(e => e.Type != EntryType.Directory).ToArray();
+        return [.. entries.Where(e => e.Type != EntryType.Directory)];
     }
 
     /// <inheritdoc />
@@ -208,12 +208,14 @@ public sealed class RemoteRegistryClient : IRemoteRegistryClient
         var json = await response.Content.ReadAsStringAsync(ct);
         var orgs = JsonConvert.DeserializeObject<List<Dictionary<string, object?>>>(json) ?? [];
 
-        return orgs
-            .Select(o => new RemoteBrowseItem(
-                Slug: o.SafeGetValue("slug") as string ?? string.Empty,
-                Name: o.SafeGetValue("name") as string ?? string.Empty))
-            .Where(o => !string.IsNullOrWhiteSpace(o.Slug))
-            .ToArray();
+        return
+        [
+            .. orgs
+                .Select(o => new RemoteBrowseItem(
+                    Slug: o.SafeGetValue("slug") as string ?? string.Empty,
+                    Name: o.SafeGetValue("name") as string ?? string.Empty))
+                .Where(o => !string.IsNullOrWhiteSpace(o.Slug))
+        ];
     }
 
     /// <inheritdoc />
@@ -237,11 +239,13 @@ public sealed class RemoteRegistryClient : IRemoteRegistryClient
         var json = await response.Content.ReadAsStringAsync(ct);
         var datasets = JsonConvert.DeserializeObject<List<Dictionary<string, object?>>>(json) ?? [];
 
-        return datasets
-            .Select(d => new RemoteBrowseItem(
-                Slug: d.SafeGetValue("slug") as string ?? string.Empty,
-                Name: d.SafeGetValue("name") as string ?? string.Empty))
-            .Where(d => !string.IsNullOrWhiteSpace(d.Slug))
-            .ToArray();
+        return
+        [
+            .. datasets
+                .Select(d => new RemoteBrowseItem(
+                    Slug: d.SafeGetValue("slug") as string ?? string.Empty,
+                    Name: d.SafeGetValue("name") as string ?? string.Empty))
+                .Where(d => !string.IsNullOrWhiteSpace(d.Slug))
+        ];
     }
 }

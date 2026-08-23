@@ -58,6 +58,13 @@ public static class ProcessingNodeServiceCollectionExtensions
         services.AddSingleton<IDdbWrapper, NativeDdbWrapper>();
         services.AddSingleton<IFileSystem, FileSystem>();
 
+        // Per-dataset index write coalescer (process-local singleton): coalesces concurrent index
+        // writes on THIS host - notably the reconciliation sweep - into one native batch.
+        // SQLite serializes across processes regardless, so this does not (and cannot) keep a
+        // cross-process lane shared with the web host; it only keeps this host's write bursts
+        // aligned on a single lane.
+        services.AddSingleton<IDatasetIndexQueue, DatasetIndexQueue>();
+
         // Register scoped services required by background jobs
         services.AddScoped<IDdbManager, DdbManager>();
         services.AddScoped<IBackgroundJobsProcessor, BackgroundJobsProcessor>();
@@ -67,6 +74,7 @@ public static class ProcessingNodeServiceCollectionExtensions
         services.AddScoped<OrphanedDatasetCleanupService>();
         services.AddScoped<RecurringDatasetCleanupService>();
         services.AddScoped<ArtifactCompletenessCheckerService>();
+        services.AddScoped<IndexReconciliationService>();
 
         // Processing Platform task substrate (native tools incl. build/raster-export)
         services.AddProcessingPlatform();

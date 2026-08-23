@@ -77,7 +77,7 @@ public class Startup
     public void ConfigureServices(IServiceCollection services)
     {
         services.AddCors();
-        services.AddControllers();
+        services.AddControllers(o => o.Filters.Add<ApiExceptionFilter>());
 
         services.AddSwaggerGen(c =>
         {
@@ -315,9 +315,13 @@ public class Startup
         services.AddScoped<OrphanedDatasetCleanupService>();
         services.AddScoped<RecurringDatasetCleanupService>();
         services.AddScoped<ArtifactCompletenessCheckerService>();
+        services.AddScoped<IndexReconciliationService>();
 
         // Admin global tasks dashboard manager (Part B).
         services.AddScoped<IAdminTasksManager, AdminTasksManager>();
+
+        // Per-dataset Processing Platform task manager backing TasksController.
+        services.AddScoped<ITasksManager, TasksManager>();
 
         // Processing Platform task substrate (native tools incl. build/raster-export)
         services.AddProcessingPlatform();
@@ -335,7 +339,7 @@ public class Startup
             new ConfigurationHelper(MagicStrings.AppSettingsFileName));
 
         // Admin configuration editor: builds ConfigurationDataDto from AppSettings + defaults
-        services.AddScoped<IConfigurationDataBuilder, Registry.Web.Services.Adapters.ConfigurationDataBuilder>();
+        services.AddScoped<IConfigurationDataBuilder, ConfigurationDataBuilder>();
 
         services.AddScoped<BasicAuthFilter>();
 
@@ -376,6 +380,7 @@ public class Startup
         services.AddSingleton<INameGenerator, NameGenerator>();
         services.AddSingleton<ICacheManager, CacheManager>();
         services.AddSingleton<IPasswordPolicyValidator, PasswordPolicyValidator>();
+        services.AddSingleton<IDatasetIndexQueue, DatasetIndexQueue>();
 
         services.AddResponseCompression();
 
