@@ -55,7 +55,7 @@ public static class ApiExceptionClassifier
         // from DdbException but must not collapse into the default 500 arm.
         return ex switch
         {
-            // Transient contentment: 503 + Retry-After so clients can retry.
+            // Transient contention: 503 + Retry-After so clients can retry.
             DdbBusyException e => new ApiErrorDescriptor(StatusCodes.Status503ServiceUnavailable, 2, false, e.Message, LogLevel.Warning),
             TransientException e => new ApiErrorDescriptor(StatusCodes.Status503ServiceUnavailable, e.RetryAfterSeconds, false, e.Message, LogLevel.Warning),
             DdbBuildInProgressException e => new ApiErrorDescriptor(StatusCodes.Status503ServiceUnavailable, 2, false, e.Message, LogLevel.Warning),

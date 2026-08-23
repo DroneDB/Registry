@@ -63,6 +63,21 @@ public class OgcExceptionFilter : IExceptionFilter
                 message = cex.Message;
                 status = 409;
                 break;
+            case DdbBusyException:
+                // Transient DB write contention: 503 + Retry-After, matching the API pipeline's
+                // unified transient mapping (ApiExceptionClassifier) rather than the 500 arm below.
+                code = "ServiceUnavailable";
+                message = "Dataset index is busy; retry shortly.";
+                status = 503;
+                context.HttpContext.Response.Headers.RetryAfter = "2";
+                break;
+            case DdbBuildInProgressException:
+                // Kernel build lock held: 503 + Retry-After (same rationale as above).
+                code = "ServiceUnavailable";
+                message = "Dataset build is currently in progress; retry shortly.";
+                status = 503;
+                context.HttpContext.Response.Headers.RetryAfter = "2";
+                break;
             case DdbException dex:
                 // DroneDB native errors surface here. Map missing-dependency / build-in-progress
                 // patterns from the message; otherwise return 500 with the original message
