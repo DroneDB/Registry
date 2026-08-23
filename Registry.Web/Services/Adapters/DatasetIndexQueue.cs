@@ -144,7 +144,19 @@ public sealed class DatasetIndexQueue : IDatasetIndexQueue, IDisposable
                     continue;
                 }
 
-                return await Task.WhenAll(tasks);
+                // Guard the await too, not just the channel writes: once the whole set is
+                // accepted, a stalled native batch must still respect the deadline/cancellation
+                // instead of hanging the caller. On timeout/cancel the lane keeps completing
+                // these TCSs, so observe the now-unawaited results before rethrowing.
+                try
+                {
+                    return await Task.WhenAll(tasks).WaitAsync(linked.Token);
+                }
+                catch (OperationCanceledException)
+                {
+                    ObserveAbandoned(tasks, paths.Count);
+                    throw;
+                }
             }
         }
         catch (OperationCanceledException) when (timeout.IsCancellationRequested && !ct.IsCancellationRequested)
