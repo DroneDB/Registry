@@ -32,20 +32,37 @@ public sealed class LogTailSnapshot
     /// <summary>
     /// Lenient counterpart of <see cref="LogRingBuffer.ToJson"/>: a null, empty or
     /// malformed payload yields an empty snapshot instead of throwing, so a corrupted
-    /// <c>JobIndex.LogTailJson</c> can never break a status or log response.
+    /// <c>JobIndex.LogTailJson</c> can never break a status or log response. An explicit
+    /// null <c>lines</c> and entries that are null or carry an out-of-range timestamp
+    /// (both would throw later in <see cref="LogTailSnapshotExtensions.AsStrings"/>)
+    /// are normalized away before the snapshot is returned.
     /// </summary>
     public static LogTailSnapshot Parse(string? json)
     {
         if (string.IsNullOrEmpty(json)) return new LogTailSnapshot();
         try
         {
-            return JsonSerializer.Deserialize<LogTailSnapshot>(json) ?? new LogTailSnapshot();
+            var snap = JsonSerializer.Deserialize<LogTailSnapshot>(json) ?? new LogTailSnapshot();
+            // An explicit JSON null replaces the non-null initializer; range-check T so
+            // FromUnixTimeMilliseconds can never throw on AsStrings.
+            if (snap.Lines is null)
+            {
+                snap.Lines = [];
+            }
+            else
+            {
+                snap.Lines = [.. snap.Lines.Where(l => l is not null && l.T >= MinUnixMs && l.T <= MaxUnixMs)];
+            }
+            return snap;
         }
         catch
         {
             return new LogTailSnapshot();
         }
     }
+
+    private static readonly long MinUnixMs = DateTimeOffset.MinValue.ToUnixTimeMilliseconds();
+    private static readonly long MaxUnixMs = DateTimeOffset.MaxValue.ToUnixTimeMilliseconds();
 }
 
 /// <summary>
