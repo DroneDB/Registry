@@ -95,7 +95,8 @@ public static class StartupExtenders
                         .UseSerilogLogProvider()
                         .UseConsole(new ConsoleOptions
                         {
-                            FollowJobRetentionPolicy = true
+                            FollowJobRetentionPolicy = false,
+                            ExpireIn = TimeSpan.FromDays(Math.Max(1, appSettings.HangfireJobRetentionDays))
                         })
                         .UseStorage(new MySqlStorage(
                             appConfig.GetConnectionString(MagicStrings.HangfireConnectionName),
