@@ -1,5 +1,7 @@
 # copilot-instructions.md
 
+> **Doc rule**: Do not hardcode release or dependency version numbers in this file — they drift with every release. Read them from `Registry.Web/Registry.Web.csproj` (`<Version>`, `<DdbVersion>`, package references) and `Registry.Web/ClientApp/package.json` when you need current values. Framework identities (net10 TFM, Vue 3, PrimeVue 4, NUnit 4) are stable enough to write down.
+
 ## .NET Core Backend (`Registry.*`)
 
 ### General Guidelines
@@ -16,6 +18,7 @@
 
 ### Testing
 - Backend tests use **NUnit 4.x** + **Shouldly** + Moq. Integration tests use `NativeDdbWrapper` for direct C++ library calls (no Docker/subprocess). Test helpers: `TestArea.cs` in `Registry.Common/Test/` for isolated temp directories, `TestFS.cs` for extracting test archives.
+- Native interop: `Registry.Adapters/DroneDB/NativeDdbWrapper.cs` binds `libddb` via ~35 `[DllImport("ddb", EntryPoint="DDB…")]` P/Invokes (no CLI subprocess, no binding generator — the ABI is a flat C API defined in DroneDB's `src/include/ddb.h`). The required native version is pinned as `<DdbVersion>` in `Registry.Web/Registry.Web.csproj`; bump it when the native ABI changes.
 - Config: Use Options pattern (`AppSettings.cs`). Key settings: `AppSettings:Secret` (JWT signing key), `AppSettings:StoragePath` (or CLI arg `StorageFolder`). The DroneDB library path is resolved automatically from system PATH - no dedicated environment variable exists.
 
 ### Best Practices
@@ -81,11 +84,11 @@
 - Auto-generated files (`*Designer.cs`, `*ModelSnapshot.cs`, migration files)
 - 3rd-party code (`EchoStream.cs`, `SubsetStream.cs`)
 
-## Vue.js Frontend (`Registry.Web/ClientApp`)
+## Vue.js Frontend (`Registry.Web/ClientApp` — git submodule of the separate **DroneDB/Hub** repo)
 
 ### Build Instructions
-- **Sviluppo locale**: `npm run pub-dev` (builda e copia automaticamente l'output in `registry-data/ClientApp/`, dove il backend serve i file statici).
-- **Produzione**: `npm run build:prod` (webpack output in `build/`).
+- **Local dev**: `npm run pub-dev` — builds and copies the output to `registry-data/ClientApp/`, where the backend serves the static files.
+- **Production**: `npm run build:prod` (webpack output goes to `ClientApp/build/`).
 
 ### Coding Standards
 - Use **single-file components** (`.vue`).
@@ -97,9 +100,9 @@
 - Use **composition API** (if applicable) for better scalability.
 - Validate all forms before submission.
 - UI: **PrimeVue v4.x** is the sole component library (Lara theme with custom DDB preset). Bootstrap 5 is used only for grid + utilities. No other UI libraries present.
-- State: Composables in `src/composables/` for reusable logic and state. No Vuex/Pinia — the app uses Vue composables directly.
-- API client: Functions in `src/api/` use axios instances with JWT interceptors.
-- Testing: **No unit test framework configured** (no Jest/Vitest). Only Playwright for E2E testing.
+- State: Composables in `webapp/js/composables/` (under `ClientApp/`, there is **no `src/` folder**) for reusable logic and state. No Vuex/Pinia — the app uses Vue composables directly. Layout: `webapp/js/{components,features,composables,libs,vendor,layout,dynamic}`; views live in `webapp/js/features/`.
+- API client: Plain `fetch()` wrappers that attach an `Authorization: Bearer <token>` header — implemented in `webapp/js/libs/ddb/` (`registry.js`, `dataset.js`, `entry.js`) and `webapp/js/libs/api/`. **There is no axios dependency.**
+- Testing: **Vitest 3** is configured (`vitest.config.js`, `happy-dom` environment) — but the `npm test` script is an intentional stub, so run `npx vitest`. No `@vitest/coverage` package is installed (`--coverage` will fail). Playwright is only a devDependency (no config file in this repo). 3D/Tiles rendering: **Giro3D + three.js** in `features/viewers/unified/`, plus vendored Potree and spark for splats.
 
 ### Comment Standards
 
