@@ -16,7 +16,7 @@ View orthophotos, point clouds, 3D models, Vector files, 3D Tiles, Gaussian spla
 - **On-Demand Processing** - Automatic thumbnails, tiles, COG, streaming format generation, and build artifact downloads (COG, COPC, GPKG)
 - **Remote Imports** - Pull datasets from another DroneDB Registry or download archives from URL, with SSRF protection and remote org/dataset browsing
 - **Streaming Uploads** - Memory-efficient file uploads with configurable size limits
-- **Feature Gating** - Control which processing tools are visible and available per organization via configuration
+- **Feature Gating** - Control which processing tools users see and may run via server configuration
 - **3D Tiles** - Native support for the 3D Tiles streaming format
 - **User Management** - Role-based access control with organizations, storage quotas, and optional LDAP authentication
 
@@ -49,8 +49,8 @@ View orthophotos, point clouds, 3D models, Vector files, 3D Tiles, Gaussian spla
 | Guide | Description |
 |-------|-------------|
 | [Registry Guide](https://docs.dronedb.app/docs/registry) | Installation, configuration, deployment |
-| [User Management](https://docs.dronedb.app/docs/user-management) | Users, roles, organizations, quotas |
-| [API Reference](https://docs.dronedb.app/docs/api-reference) | REST API documentation |
+| [User Management](https://docs.dronedb.app/docs/registry/admin/user-management) | Users, roles, organizations, quotas |
+| [API Reference](https://docs.dronedb.app/docs/integrations/api-reference) | REST API documentation |
 
 ## 💬 Community
 
@@ -79,7 +79,7 @@ Open [http://localhost:5000](http://localhost:5000) • Default credentials: `ad
 
 On-demand builds (thumbnails, tiles, COG, streaming formats) run automatically or can be triggered manually. Large downloads are offloaded to background tasks. Configuration options including per-user task limits, per-org output budgets, remote processing nodes (ODX/NodeODX), and feature gating are documented in the [Registry Guide](https://docs.dronedb.app/docs/registry).
 
-For production deployment with MySQL/MariaDB, see the [full documentation](https://docs.dronedb.app/docs/registry#running-in-production).
+For production deployment with MySQL/MariaDB, see the [full documentation](https://docs.dronedb.app/docs/registry/admin/production#running-in-production).
 
 ## 🌍 OGC Services
 
@@ -114,7 +114,7 @@ not the generic Registry error page.
 ### QGIS setup
 
 Ready-made QGIS setup scripts are in [`scripts/`](scripts/) (`qgis-test-setup.sh` /
-`qgis-test-setup.ps1`). See the [OGC services documentation](https://docs.dronedb.app/ogc-services)
+`qgis-test-setup.ps1`). See the [OGC services documentation](https://docs.dronedb.app/docs/integrations/ogc-services)
 for detailed QGIS configuration steps.
 
 ## 🛠️ Development
@@ -122,7 +122,7 @@ for detailed QGIS configuration steps.
 ### Requirements
 
 * [.NET 10.0 SDK](https://dotnet.microsoft.com/en-us/download/dotnet/10.0)
-* [Node.js 24+](https://nodejs.org/) (LTS recommended)
+* [Node.js](https://nodejs.org/) — the frontend pins a version in `Registry.Web/ClientApp/.nvmrc`; the container image builds with the current Node LTS
 * [DroneDB Library](https://github.com/DroneDB/DroneDB/releases/latest) (add to PATH)
 
 ### Build from Source
