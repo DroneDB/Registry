@@ -270,7 +270,8 @@ public class ObjectsController : ControllerBaseEx
     /// </summary>
     /// <param name="orgSlug">The organization slug.</param>
     /// <param name="dsSlug">The dataset slug.</param>
-    /// <param name="pathsRaw">Comma-separated list of paths to download.</param>
+    /// <param name="pathsRaw">Paths to download: one or more "path" query parameters (each occurrence is
+    /// a literal path, so file names may contain ',' and '&amp;') or a single legacy comma-separated value.</param>
     /// <param name="isInlineRaw">If 1, display inline instead of as attachment.</param>
     /// <returns>The file(s) as a downloadable stream.</returns>
     [HttpGet("download", Name = nameof(ObjectsController) + "." + nameof(Download))]
@@ -285,11 +286,20 @@ public class ObjectsController : ControllerBaseEx
         [FromQuery(Name = "inline")] int? isInlineRaw,
         CancellationToken cancellationToken)
     {
-        var paths = pathsRaw?.Split(",", StringSplitOptions.RemoveEmptyEntries);
+        // NOTE: read the raw query here instead of trusting the [FromQuery] string binding:
+        // simple-type binding only sees the FIRST occurrence of a repeated parameter,
+        // and an array binding would still split each value on commas.
+        // With multiple ?path= occurrences every value is taken as a literal path;
+        // with a single occurrence the legacy comma-split behaviour is preserved
+        // so already-shared download links keep working.
+        var rawPaths = Request.Query["path"];
+        var paths = rawPaths.Count > 1
+            ? rawPaths.Where(p => !string.IsNullOrEmpty(p)).Select(p => (string)p!).ToArray()
+            : pathsRaw?.Split(",", StringSplitOptions.RemoveEmptyEntries);
         var isInline = isInlineRaw == 1;
 
-        _logger.LogDebug("Objects controller Download('{OrgSlug}', '{DsSlug}', '{PathsRaw}', '{IsInlineRaw}')",
-            orgSlug, dsSlug, pathsRaw, isInlineRaw);
+        _logger.LogDebug("Objects controller Download('{OrgSlug}', '{DsSlug}', '{PathCount} path(s): {Paths}', '{IsInlineRaw}')",
+            orgSlug, dsSlug, paths?.Length ?? 0, paths != null ? string.Join("; ", paths) : string.Empty, isInlineRaw);
 
         return InternalDownload(orgSlug, dsSlug, paths, isInline, cancellationToken);
     }
