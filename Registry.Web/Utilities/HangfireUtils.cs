@@ -50,6 +50,39 @@ public static class HangfireUtils
         };
     }
 
+    /// <summary>
+    /// Formats an exception as a single display line for the job log tail:
+    /// <c>TypeName: message [InnerTypeName]</c>, message truncated to 500 chars.
+    /// Ring-buffer lines are display lines, so newlines are collapsed.
+    ///
+    /// Audience note: the log tail is served by TasksManager GetLogAsync/GetStatusAsync
+    /// to anyone with dataset Read access (public datasets include anonymous users).
+    /// Raw messages may carry absolute server paths - accepted for this release (the
+    /// "In BuildWrapper('...')" line already exposes the dataset path); redaction is a
+    /// tracked follow-up.
+    /// </summary>
+    internal static string Describe(Exception ex)
+    {
+        if (ex == null) return "Unknown error";
+
+        var message = SanitizeSingleLine(ex.Message);
+        if (message.Length > 500)
+            message = message.Substring(0, 500) + "...";
+
+        // Surfacing the inner type (not its message) keeps the line compact while
+        // pinpointing the failure layer, e.g. "DdbException: Cannot open ... [WebException]".
+        var inner = ex.InnerException != null ? $" [{ex.InnerException.GetType().Name}]" : string.Empty;
+
+        return $"{ex.GetType().Name}: {message}{inner}";
+    }
+
+    // Collapses newlines/CR so an exception message stays a single ring-buffer display line.
+    private static string SanitizeSingleLine(string value)
+    {
+        if (string.IsNullOrEmpty(value)) return string.Empty;
+        return value.Replace("\r\n", " ").Replace('\n', ' ').Replace('\r', ' ').Trim();
+    }
+
     // Transient DDB contention gets a backoff retry chain; anything else fails fast without
     // burning worker slots.
     //
@@ -81,6 +114,15 @@ public static class HangfireUtils
             writeLine($"Build lock currently held by another process ({ex.Message}); skipping");
             skipped = true;
         }
+        catch (Exception ex)
+        {
+            // Must land in the JobIndex log tail: without this the Task History shows
+            // only "Running build" and admins cannot triage build failures at all.
+            // Rethrow keeps Hangfire Failed-state semantics; AutomaticRetry OnlyOn
+            // DdbBusy/DdbBuildInProgress still fails non-transient errors fast.
+            writeLine($"Build failed: {Describe(ex)}");
+            throw;
+        }
 
         writeLine(skipped ? "Done build (skipped: lock held elsewhere)" : "Done build");
     }
@@ -106,6 +148,13 @@ public static class HangfireUtils
             // Benign: the lock holder will process the pending builds. See BuildWrapper.
             writeLine($"Build lock currently held by another process ({ex.Message}); skipping");
             skipped = true;
+        }
+        catch (Exception ex)
+        {
+            // See BuildWrapper: persist the failure reason into the JobIndex log tail,
+            // then rethrow so Hangfire marks the job Failed (and retries apply per policy).
+            writeLine($"Build pending failed: {Describe(ex)}");
+            throw;
         }
 
         writeLine(skipped ? "Done build pending (skipped: lock held elsewhere)" : "Done build pending");

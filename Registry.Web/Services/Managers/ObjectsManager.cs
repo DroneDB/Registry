@@ -1498,6 +1498,7 @@ public class ObjectsManager : IObjectsManager
             throw new ArgumentException("Path is not valid");
 
         var sourcePath = GetBuildSource(entry, ddbSingle);
+        EnsureBuildArtifactAvailable(ddbSingle, entry, sourcePath, path);
         var localPath = ddbSingle.GetLocalPath(sourcePath);
 
         var size = sizeRaw ?? _settings.DefaultThumbnailSize;
@@ -1637,6 +1638,7 @@ public class ObjectsManager : IObjectsManager
         var entry = EnsurePathValidity(orgSlug, ds.InternalRef, path, out var ddb);
 
         var sourcePath = GetBuildSource(entry, ddb);
+        EnsureBuildArtifactAvailable(ddb, entry, sourcePath, path);
 
         try
         {
@@ -1965,6 +1967,8 @@ public class ObjectsManager : IObjectsManager
 
     public string GetBuildSource(Entry entry, IDDB ddb)
     {
+        // NOTE: this is the path-resolver owner only. Artifact availability is enforced
+        // per call-site by EnsureBuildArtifactAvailable (pre-cache), not here.
         var path = entry.Type switch
         {
             EntryType.PointCloud => CommonUtils.SafeCombine(BuildBasePath, entry.Hash, "copc", "cloud.copc.laz"),
@@ -1997,6 +2001,34 @@ public class ObjectsManager : IObjectsManager
         }
 
         return path;
+    }
+
+    /// <summary>
+    /// Guards the image/tile/raster-info pipeline endpoints: when
+    /// <see cref="GetBuildSource"/> rewrote an entry to its build artifact
+    /// (.ddb/build/&lt;hash&gt;/...), the artifact must exist on disk, otherwise
+    /// callers get a 404 "not processed yet" instead of a generator-level 500
+    /// (FileNotFoundException from the thumbnail/tile generators).
+    /// Runs BEFORE the response cache: artifact absence intentionally trumps any
+    /// cached thumbnail/tile (deleting an artifact invalidates served content).
+    /// </summary>
+    private void EnsureBuildArtifactAvailable(IDDB ddb, Entry entry, string sourcePath, string originalPath)
+    {
+        // GetBuildSource rewrites buildable types to .ddb/build/<hash>/... ; for non-buildable
+        // types it returns entry.Path itself -> string equality is the skip test.
+        // NEVER ReferenceEquals(sourcePath, originalPath): entry.Path is a different string
+        // instance than the caller's request-path variable, so the skip branch would be dead
+        // code and the file-exists check would run on every non-buildable entry too (review A2).
+        if (sourcePath == entry.Path) return; // non-buildable: source itself
+
+        if (!_fs.Exists(ddb.GetLocalPath(sourcePath)))
+        {
+            _logger.LogInformation(
+                "Build artifact for '{OriginalPath}' (hash {Hash}) not available yet at '{SourcePath}'",
+                originalPath, entry.Hash, sourcePath);
+            throw new NotFoundException(
+                $"Processed data for '{originalPath}' is not available yet (build pending or failed)");
+        }
     }
 
     public async Task<IEnumerable<PendingBuildInfoDto>> GetPendingBuilds(string orgSlug, string dsSlug)
@@ -2100,6 +2132,7 @@ public class ObjectsManager : IObjectsManager
 
         var entry = EnsurePathValidity(orgSlug, ds.InternalRef, path, out var ddb);
         var sourcePath = GetBuildSource(entry, ddb);
+        EnsureBuildArtifactAvailable(ddb, entry, sourcePath, path);
 
         return ddb.GetRasterInfo(sourcePath);
     }
@@ -2116,6 +2149,7 @@ public class ObjectsManager : IObjectsManager
 
         var entry = EnsurePathValidity(orgSlug, ds.InternalRef, path, out var ddb);
         var sourcePath = GetBuildSource(entry, ddb);
+        EnsureBuildArtifactAvailable(ddb, entry, sourcePath, path);
 
         return ddb.GetRasterMetadata(sourcePath, formula, bandFilter);
     }
@@ -2133,6 +2167,7 @@ public class ObjectsManager : IObjectsManager
 
         var entry = EnsurePathValidity(orgSlug, ds.InternalRef, path, out var ddb);
         var sourcePath = GetBuildSource(entry, ddb);
+        EnsureBuildArtifactAvailable(ddb, entry, sourcePath, path);
 
         var size = sizeRaw ?? _settings.DefaultThumbnailSize;
         var fileName = Path.GetFileName(path);
@@ -2167,6 +2202,7 @@ public class ObjectsManager : IObjectsManager
 
         var entry = EnsurePathValidity(orgSlug, ds.InternalRef, path, out var ddb);
         var sourcePath = GetBuildSource(entry, ddb);
+        EnsureBuildArtifactAvailable(ddb, entry, sourcePath, path);
 
         try
         {
@@ -2291,6 +2327,7 @@ public class ObjectsManager : IObjectsManager
 
         var entry = EnsurePathValidity(orgSlug, ds.InternalRef, path, out var ddb);
         var sourcePath = GetBuildSource(entry, ddb);
+        EnsureBuildArtifactAvailable(ddb, entry, sourcePath, path);
 
         // Enforce export size limit (conservative upper bound based on raw input size)
         EnsureExportSizeWithinLimit(ddb, sourcePath);
@@ -2339,6 +2376,7 @@ public class ObjectsManager : IObjectsManager
 
         var entry = EnsurePathValidity(orgSlug, ds.InternalRef, path, out var ddb);
         var sourcePath = GetBuildSource(entry, ddb);
+        EnsureBuildArtifactAvailable(ddb, entry, sourcePath, path);
 
         return EstimateRasterOutputBytes(ddb, sourcePath);
     }
