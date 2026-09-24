@@ -7,6 +7,7 @@ using Microsoft.Extensions.Logging;
 using Registry.Ports;
 using Registry.Web.Services;
 using Registry.Web.Services.Adapters;
+using Registry.Web.Services.Ports;
 
 namespace Registry.Web.Filters;
 
@@ -32,7 +33,7 @@ public sealed class BuildJobFailureFilter(
     {
         try
         {
-            if (context.NewState is not FailedState) return;
+            if (context.NewState is not FailedState failedState) return;
 
             var methodName = context.BackgroundJob?.Job?.Method?.Name;
             if (string.IsNullOrEmpty(methodName)) return;
@@ -60,6 +61,21 @@ public sealed class BuildJobFailureFilter(
             var category = CacheCategories.ForDataset(orgSlug, dsSlug);
             cache.RemoveByCategoryAsync(MagicStrings.BuildPendingTrackerCacheSeed, category)
                 .GetAwaiter().GetResult();
+
+            // Persist WHY the build failed: JobIndex.ErrorType = bare exception type name,
+            // same convention as heavy tasks (HeavyTaskJobWrapper). The message itself lives
+            // in the log tail persisted by BuildLogCaptureFilter; here we only record the
+            // class (native failures surface as DdbException). Synchronous filter ->
+            // GetAwaiter().GetResult() like the cache call above.
+            // Runs only when org/ds params are present (above early return): the writer
+            // also busts the org/ds-scoped tasks-list cache. Errors stay inside the outer
+            // try/catch so logging-path failures never break state transitions.
+            var errorType = failedState.Exception?.GetType().Name ?? "Failed";
+            var writer = scope.ServiceProvider.GetRequiredService<IJobIndexWriter>();
+            writer.UpdateErrorAsync(jobId, errorType).GetAwaiter().GetResult();
+            log.LogInformation(
+                "BuildJobFailureFilter: job {JobId} ErrorType recorded as '{ErrorType}'",
+                jobId, errorType);
         }
         catch (Exception ex)
         {
