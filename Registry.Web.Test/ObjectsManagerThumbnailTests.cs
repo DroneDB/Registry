@@ -2,6 +2,7 @@
 using System;
 using System.IO;
 using System.Linq;
+using System.Linq.Expressions;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
@@ -301,4 +302,76 @@ public class ObjectsManagerThumbnailTests : TestBase
 
         _ddbMock.Verify(x => x.GetRasterInfo(It.IsAny<string>()), Times.Never);
     }
+
+    // ---- Raster analysis endpoint family: same pre-native 404 guard ----
+
+    private async Task GeoRasterAnalysisGuard_MissingCog_ThrowsNotFound(
+        Func<ObjectsManager, Task> invoke, Expression<Action<IDDB>> nativeCall)
+    {
+        SetupEntry("ortho.tif", EntryType.GeoRaster, "raster1");
+        _fsMock.Setup(x => x.Exists(It.IsAny<string>())).Returns(false);
+
+        var mgr = CreateManager();
+
+        await Should.ThrowAsync<NotFoundException>(() => invoke(mgr));
+
+        // GeoRaster has no EPT fallback: the guard probes the cog artifact exactly once
+        // and the native call is never reached.
+        _fsMock.Verify(x => x.Exists(It.Is<string>(p => IsCogArtifact(p))), Times.Once);
+        _ddbMock.Verify(nativeCall, Times.Never);
+        _cacheManagerMock.Verify(x => x.GetAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<object[]>()), Times.Never);
+    }
+
+    [Test]
+    public Task GetRasterValueInfo_GeoRaster_MissingCogArtifact_ThrowsNotFound() =>
+        GeoRasterAnalysisGuard_MissingCog_ThrowsNotFound(
+            m => m.GetRasterValueInfo(OrgSlug, DsSlug, "ortho.tif"),
+            x => x.GetRasterValueInfo(It.IsAny<string>()));
+
+    [Test]
+    public Task GetRasterPointValue_GeoRaster_MissingCogArtifact_ThrowsNotFound() =>
+        GeoRasterAnalysisGuard_MissingCog_ThrowsNotFound(
+            m => m.GetRasterPointValue(OrgSlug, DsSlug, "ortho.tif", 1, 2),
+            x => x.GetRasterPointValue(It.IsAny<string>(), It.IsAny<int>(), It.IsAny<int>()));
+
+    [Test]
+    public Task GetRasterAreaStats_GeoRaster_MissingCogArtifact_ThrowsNotFound() =>
+        GeoRasterAnalysisGuard_MissingCog_ThrowsNotFound(
+            m => m.GetRasterAreaStats(OrgSlug, DsSlug, "ortho.tif", 0, 0, 10, 10),
+            x => x.GetRasterAreaStats(It.IsAny<string>(), It.IsAny<int>(), It.IsAny<int>(),
+                It.IsAny<int>(), It.IsAny<int>()));
+
+    [Test]
+    public Task GetRasterProfile_GeoRaster_MissingCogArtifact_ThrowsNotFound() =>
+        GeoRasterAnalysisGuard_MissingCog_ThrowsNotFound(
+            m => m.GetRasterProfile(OrgSlug, DsSlug, "ortho.tif", "LINESTRING(0 0, 1 1)", 10),
+            x => x.GetRasterProfile(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<int>()));
+
+    [Test]
+    public Task CalculateVolume_GeoRaster_MissingCogArtifact_ThrowsNotFound() =>
+        GeoRasterAnalysisGuard_MissingCog_ThrowsNotFound(
+            m => m.CalculateVolume(OrgSlug, DsSlug, "ortho.tif", "{}", null, 0.0),
+            x => x.CalculateVolume(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<double>()));
+
+    [Test]
+    public Task DetectStockpile_GeoRaster_MissingCogArtifact_ThrowsNotFound() =>
+        GeoRasterAnalysisGuard_MissingCog_ThrowsNotFound(
+            m => m.DetectStockpile(OrgSlug, DsSlug, "ortho.tif", 0.0, 0.0, 5.0, 0.5f),
+            x => x.DetectStockpile(It.IsAny<string>(), It.IsAny<double>(), It.IsAny<double>(),
+                It.IsAny<double>(), It.IsAny<float>()));
+
+    [Test]
+    public Task DetectAllStockpiles_GeoRaster_MissingCogArtifact_ThrowsNotFound() =>
+        GeoRasterAnalysisGuard_MissingCog_ThrowsNotFound(
+            m => m.DetectAllStockpiles(OrgSlug, DsSlug, "ortho.tif", 0.5f, 10.0, 50),
+            x => x.DetectAllStockpiles(It.IsAny<string>(), It.IsAny<float>(), It.IsAny<double>(),
+                It.IsAny<int>()));
+
+    [Test]
+    public Task GenerateContours_GeoRaster_MissingCogArtifact_ThrowsNotFound() =>
+        GeoRasterAnalysisGuard_MissingCog_ThrowsNotFound(
+            m => m.GenerateContours(OrgSlug, DsSlug, "ortho.tif", 1.0, null, 0.0, null, null, 0.0, 0),
+            x => x.GenerateContours(It.IsAny<string>(), It.IsAny<double?>(), It.IsAny<int?>(),
+                It.IsAny<double>(), It.IsAny<double?>(), It.IsAny<double?>(), It.IsAny<double>(),
+                It.IsAny<int>()));
 }

@@ -1497,8 +1497,7 @@ public class ObjectsManager : IObjectsManager
         if (fileName == null)
             throw new ArgumentException("Path is not valid");
 
-        var sourcePath = GetBuildSource(entry, ddbSingle);
-        EnsureBuildArtifactAvailable(ddbSingle, entry, sourcePath, path);
+        var sourcePath = GetAvailableBuildSource(entry, ddbSingle, path);
         var localPath = ddbSingle.GetLocalPath(sourcePath);
 
         var size = sizeRaw ?? _settings.DefaultThumbnailSize;
@@ -1637,8 +1636,7 @@ public class ObjectsManager : IObjectsManager
 
         var entry = EnsurePathValidity(orgSlug, ds.InternalRef, path, out var ddb);
 
-        var sourcePath = GetBuildSource(entry, ddb);
-        EnsureBuildArtifactAvailable(ddb, entry, sourcePath, path);
+        var sourcePath = GetAvailableBuildSource(entry, ddb, path);
 
         try
         {
@@ -1967,8 +1965,7 @@ public class ObjectsManager : IObjectsManager
 
     public string GetBuildSource(Entry entry, IDDB ddb)
     {
-        // NOTE: this is the path-resolver owner only. Artifact availability is enforced
-        // per call-site by EnsureBuildArtifactAvailable (pre-cache), not here.
+        // NOTE: path-resolver only; data endpoints go through GetAvailableBuildSource.
         var path = entry.Type switch
         {
             EntryType.PointCloud => CommonUtils.SafeCombine(BuildBasePath, entry.Hash, "copc", "cloud.copc.laz"),
@@ -2001,6 +1998,14 @@ public class ObjectsManager : IObjectsManager
         }
 
         return path;
+    }
+
+    // Data endpoints must resolve through here so a missing artifact is a 404, not a native 500.
+    private string GetAvailableBuildSource(Entry entry, IDDB ddb, string requestPath)
+    {
+        var sourcePath = GetBuildSource(entry, ddb);
+        EnsureBuildArtifactAvailable(ddb, entry, sourcePath, requestPath);
+        return sourcePath;
     }
 
     /// <summary>
@@ -2131,8 +2136,7 @@ public class ObjectsManager : IObjectsManager
         if (path.StartsWith('/')) path = path[1..];
 
         var entry = EnsurePathValidity(orgSlug, ds.InternalRef, path, out var ddb);
-        var sourcePath = GetBuildSource(entry, ddb);
-        EnsureBuildArtifactAvailable(ddb, entry, sourcePath, path);
+        var sourcePath = GetAvailableBuildSource(entry, ddb, path);
 
         return ddb.GetRasterInfo(sourcePath);
     }
@@ -2148,8 +2152,7 @@ public class ObjectsManager : IObjectsManager
         if (path.StartsWith('/')) path = path[1..];
 
         var entry = EnsurePathValidity(orgSlug, ds.InternalRef, path, out var ddb);
-        var sourcePath = GetBuildSource(entry, ddb);
-        EnsureBuildArtifactAvailable(ddb, entry, sourcePath, path);
+        var sourcePath = GetAvailableBuildSource(entry, ddb, path);
 
         return ddb.GetRasterMetadata(sourcePath, formula, bandFilter);
     }
@@ -2166,8 +2169,7 @@ public class ObjectsManager : IObjectsManager
         if (path.StartsWith('/')) path = path[1..];
 
         var entry = EnsurePathValidity(orgSlug, ds.InternalRef, path, out var ddb);
-        var sourcePath = GetBuildSource(entry, ddb);
-        EnsureBuildArtifactAvailable(ddb, entry, sourcePath, path);
+        var sourcePath = GetAvailableBuildSource(entry, ddb, path);
 
         var size = sizeRaw ?? _settings.DefaultThumbnailSize;
         var fileName = Path.GetFileName(path);
@@ -2201,8 +2203,7 @@ public class ObjectsManager : IObjectsManager
         if (path.StartsWith('/')) path = path[1..];
 
         var entry = EnsurePathValidity(orgSlug, ds.InternalRef, path, out var ddb);
-        var sourcePath = GetBuildSource(entry, ddb);
-        EnsureBuildArtifactAvailable(ddb, entry, sourcePath, path);
+        var sourcePath = GetAvailableBuildSource(entry, ddb, path);
 
         try
         {
@@ -2326,8 +2327,7 @@ public class ObjectsManager : IObjectsManager
         if (path.StartsWith('/')) path = path[1..];
 
         var entry = EnsurePathValidity(orgSlug, ds.InternalRef, path, out var ddb);
-        var sourcePath = GetBuildSource(entry, ddb);
-        EnsureBuildArtifactAvailable(ddb, entry, sourcePath, path);
+        var sourcePath = GetAvailableBuildSource(entry, ddb, path);
 
         // Enforce export size limit (conservative upper bound based on raw input size)
         EnsureExportSizeWithinLimit(ddb, sourcePath);
@@ -2375,8 +2375,7 @@ public class ObjectsManager : IObjectsManager
         if (path.StartsWith('/')) path = path[1..];
 
         var entry = EnsurePathValidity(orgSlug, ds.InternalRef, path, out var ddb);
-        var sourcePath = GetBuildSource(entry, ddb);
-        EnsureBuildArtifactAvailable(ddb, entry, sourcePath, path);
+        var sourcePath = GetAvailableBuildSource(entry, ddb, path);
 
         return EstimateRasterOutputBytes(ddb, sourcePath);
     }
@@ -2443,7 +2442,7 @@ public class ObjectsManager : IObjectsManager
         if (path.StartsWith('/')) path = path[1..];
 
         var entry = EnsurePathValidity(orgSlug, ds.InternalRef, path, out var ddb);
-        var sourcePath = GetBuildSource(entry, ddb);
+        var sourcePath = GetAvailableBuildSource(entry, ddb, path);
 
         return ddb.GetRasterValueInfo(sourcePath);
     }
@@ -2458,7 +2457,7 @@ public class ObjectsManager : IObjectsManager
         if (path.StartsWith('/')) path = path[1..];
 
         var entry = EnsurePathValidity(orgSlug, ds.InternalRef, path, out var ddb);
-        var sourcePath = GetBuildSource(entry, ddb);
+        var sourcePath = GetAvailableBuildSource(entry, ddb, path);
 
         return ddb.GetRasterPointValue(sourcePath, x, y);
     }
@@ -2474,7 +2473,7 @@ public class ObjectsManager : IObjectsManager
         if (path.StartsWith('/')) path = path[1..];
 
         var entry = EnsurePathValidity(orgSlug, ds.InternalRef, path, out var ddb);
-        var sourcePath = GetBuildSource(entry, ddb);
+        var sourcePath = GetAvailableBuildSource(entry, ddb, path);
 
         return ddb.GetRasterAreaStats(sourcePath, x0, y0, x1, y1);
     }
@@ -2493,7 +2492,7 @@ public class ObjectsManager : IObjectsManager
         if (path.StartsWith('/')) path = path[1..];
 
         var entry = EnsurePathValidity(orgSlug, ds.InternalRef, path, out var ddb);
-        var sourcePath = GetBuildSource(entry, ddb);
+        var sourcePath = GetAvailableBuildSource(entry, ddb, path);
 
         return ddb.GetRasterProfile(sourcePath, geoJsonLineString, samples);
     }
@@ -2512,7 +2511,7 @@ public class ObjectsManager : IObjectsManager
         if (path.StartsWith('/')) path = path[1..];
 
         var entry = EnsurePathValidity(orgSlug, ds.InternalRef, path, out var ddb);
-        var sourcePath = GetBuildSource(entry, ddb);
+        var sourcePath = GetAvailableBuildSource(entry, ddb, path);
 
         return ddb.CalculateVolume(sourcePath, polygonGeoJson, baseMethod ?? string.Empty, flatElevation);
     }
@@ -2533,7 +2532,7 @@ public class ObjectsManager : IObjectsManager
         if (path.StartsWith('/')) path = path[1..];
 
         var entry = EnsurePathValidity(orgSlug, ds.InternalRef, path, out var ddb);
-        var sourcePath = GetBuildSource(entry, ddb);
+        var sourcePath = GetAvailableBuildSource(entry, ddb, path);
 
         return ddb.DetectStockpile(sourcePath, lat, lon, radiusMeters, sensitivity);
     }
@@ -2555,7 +2554,7 @@ public class ObjectsManager : IObjectsManager
         if (path.StartsWith('/')) path = path[1..];
 
         var entry = EnsurePathValidity(orgSlug, ds.InternalRef, path, out var ddb);
-        var sourcePath = GetBuildSource(entry, ddb);
+        var sourcePath = GetAvailableBuildSource(entry, ddb, path);
 
         return ddb.DetectAllStockpiles(sourcePath, sensitivity, minAreaM2, maxResults);
     }
@@ -2587,7 +2586,7 @@ public class ObjectsManager : IObjectsManager
         if (path.StartsWith('/')) path = path[1..];
 
         var entry = EnsurePathValidity(orgSlug, ds.InternalRef, path, out var ddb);
-        var sourcePath = GetBuildSource(entry, ddb);
+        var sourcePath = GetAvailableBuildSource(entry, ddb, path);
 
         return ddb.GenerateContours(sourcePath, interval, count, baseOffset,
             minElev, maxElev, simplifyTolerance, bandIndex);
