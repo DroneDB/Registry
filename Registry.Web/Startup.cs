@@ -99,6 +99,7 @@ public class Startup
                 }
             });
             c.DocumentFilter<BasePathDocumentFilter>();
+            c.OperationFilter<DownloadPathsParameterFilter>();
 
             // Newtonsoft's JToken serializes to a self-referential schema (an array of JToken) that
             // makes the Scalar/OpenAPI viewer recurse infinitely ("Maximum call stack size exceeded").
