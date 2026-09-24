@@ -173,4 +173,68 @@ public class HangfireUtilsTests
     {
         HangfireUtils.Describe(new InvalidOperationException("")).ShouldBe("InvalidOperationException: ");
     }
+
+    // ---- Dataset-path scrubbing of the anonymous-visible job log tail ----
+
+    [Test]
+    public void BuildWrapper_DdbBusyException_RethrowsForRetryAndScrubsDatasetPathEverywhere()
+    {
+        var ddb = MockDdb();
+        ddb.Setup(x => x.Build("ortho.tif", null, false))
+            .Throws(new DdbBusyException(
+                "sqlite3_busy: cannot write /data/datasets/test-org/test-ds/.ddb/build/raster1/cog/cog.tif"));
+
+        // The exception must propagate so AutomaticRetry (OnlyOn DdbBusy/DdbBuildInProgress) applies.
+        Should.Throw<DdbBusyException>(() =>
+            HangfireUtils.BuildWrapper(ddb.Object, "ortho.tif", false, null));
+
+        _sink.Messages.ShouldContain(m => m.StartsWith("In BuildWrapper('[dataset]'"));
+        _sink.Messages.ShouldContain(m => m.Contains("Build failed: DdbBusyException:"));
+        _sink.Messages.ShouldContain(m => m.Contains("[dataset]/.ddb/build/raster1/cog/cog.tif"));
+        // The absolute storage root must never reach the ring buffer / Serilog fallback.
+        _sink.Messages.ShouldNotContain(m => m.Contains("/data/datasets"));
+        _sink.Messages.ShouldNotContain(m => m.Contains("Done build"));
+    }
+
+    [Test]
+    public void BuildWrapper_BuildInProgressSkipLine_ScrubsBackslashPathVariant()
+    {
+        var ddb = MockDdb();
+        ddb.Setup(x => x.Build("locked.tif", null, false))
+            .Throws(new DdbBuildInProgressException(
+                @"lock file \data\datasets\test-org\test-ds\.ddb\build.lock held"));
+
+        Should.NotThrow(() => HangfireUtils.BuildWrapper(ddb.Object, "locked.tif", false, null));
+
+        _sink.Messages.ShouldContain(m =>
+            m.Contains("lock file [dataset]\\.ddb\\build.lock held"));
+        _sink.Messages.ShouldNotContain(m => m.Contains(@"\data\datasets"));
+    }
+
+    [Test]
+    public void BuildPendingWrapper_Failure_ScrubsDatasetPathFromEntryAndFailureLines()
+    {
+        var ddb = MockDdb();
+        ddb.Setup(x => x.BuildPending(null, false))
+            .Throws(new Exception("boom at /data/datasets/test-org/test-ds/laz/file.laz"));
+
+        Should.Throw<Exception>(() => HangfireUtils.BuildPendingWrapper(ddb.Object, null));
+
+        _sink.Messages.ShouldContain(m => m.StartsWith("In BuildPendingWrapper('[dataset]'"));
+        _sink.Messages.ShouldContain(m =>
+            m.Contains("Build pending failed: Exception: boom at [dataset]/laz/file.laz"));
+        _sink.Messages.ShouldNotContain(m => m.Contains("/data/datasets"));
+    }
+
+    [Test]
+    public void CleanupWrapper_ScrubsDatasetPath()
+    {
+        var ddb = MockDdb();
+        ddb.Setup(x => x.Cleanup()).Returns(new DdbCleanupResult());
+
+        HangfireUtils.CleanupWrapper(ddb.Object, null);
+
+        _sink.Messages.ShouldContain(m => m.StartsWith("In CleanupWrapper('[dataset]'"));
+        _sink.Messages.ShouldNotContain(m => m.Contains("/data/datasets"));
+    }
 }

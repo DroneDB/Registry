@@ -28,9 +28,16 @@ public static class HangfireUtils
     /// has attached a <see cref="LogRingBuffer"/> to the job context, console
     /// output is mirrored into it so the filter can persist it to the JobIndex
     /// when the job finishes. Otherwise it falls back to the Hangfire console
-    /// (or Serilog when running outside a job).
+    /// (or Serilog when running outside a job). Every line is scrubbed of
+    /// <paramref name="datasetFolderPath"/>: the tail is readable by anonymous users on public datasets.
     /// </summary>
-    private static Action<string> CreateJobWriteLine(PerformContext context)
+    private static Action<string> CreateJobWriteLine(PerformContext context, string datasetFolderPath)
+    {
+        var write = CreateRawJobWriteLine(context);
+        return msg => write(ScrubDatasetPath(msg, datasetFolderPath));
+    }
+
+    private static Action<string> CreateRawJobWriteLine(PerformContext context)
     {
         if (context == null)
             return Log.Information;
@@ -54,12 +61,6 @@ public static class HangfireUtils
     /// Formats an exception as a single display line for the job log tail:
     /// <c>TypeName: message [InnerTypeName]</c>, message truncated to 500 chars.
     /// Ring-buffer lines are display lines, so newlines are collapsed.
-    ///
-    /// Audience note: the log tail is served by TasksManager GetLogAsync/GetStatusAsync
-    /// to anyone with dataset Read access (public datasets include anonymous users).
-    /// Raw messages may carry absolute server paths - accepted for this release (the
-    /// "In BuildWrapper('...')" line already exposes the dataset path); redaction is a
-    /// tracked follow-up.
     /// </summary>
     internal static string Describe(Exception ex)
     {
@@ -83,6 +84,19 @@ public static class HangfireUtils
         return value.Replace("\r\n", " ").Replace('\n', ' ').Replace('\r', ' ').Trim();
     }
 
+    // Native messages may use either separator style, so both variants are replaced.
+    private static string ScrubDatasetPath(string value, string datasetFolderPath)
+    {
+        if (string.IsNullOrEmpty(value) || string.IsNullOrEmpty(datasetFolderPath)) return value;
+
+        var trimmed = datasetFolderPath.TrimEnd('\\', '/');
+        if (trimmed.Length == 0) return value;
+
+        return value
+            .Replace(trimmed.Replace('\\', '/'), "[dataset]", StringComparison.OrdinalIgnoreCase)
+            .Replace(trimmed.Replace('/', '\\'), "[dataset]", StringComparison.OrdinalIgnoreCase);
+    }
+
     // Transient DDB contention gets a backoff retry chain; anything else fails fast without
     // burning worker slots.
     //
@@ -97,7 +111,7 @@ public static class HangfireUtils
     public static void BuildWrapper(IDDB ddb, string path, bool force,
         PerformContext context)
     {
-        Action<string> writeLine = CreateJobWriteLine(context);
+        Action<string> writeLine = CreateJobWriteLine(context, ddb.DatasetFolderPath);
 
         writeLine($"In BuildWrapper('{ddb.DatasetFolderPath}', '{path}', '{force}')");
 
@@ -133,7 +147,7 @@ public static class HangfireUtils
         OnlyOn = [typeof(DdbBusyException), typeof(DdbBuildInProgressException)])]
     public static void BuildPendingWrapper(IDDB ddb, PerformContext context)
     {
-        Action<string> writeLine = CreateJobWriteLine(context);
+        Action<string> writeLine = CreateJobWriteLine(context, ddb.DatasetFolderPath);
 
         writeLine($"In BuildPendingWrapper('{ddb.DatasetFolderPath}')");
 
@@ -166,7 +180,7 @@ public static class HangfireUtils
         OnlyOn = [typeof(DdbBusyException), typeof(DdbBuildInProgressException)])]
     public static void CleanupWrapper(IDDB ddb, PerformContext context)
     {
-        Action<string> writeLine = CreateJobWriteLine(context);
+        Action<string> writeLine = CreateJobWriteLine(context, ddb.DatasetFolderPath);
 
         writeLine($"In CleanupWrapper('{ddb.DatasetFolderPath}')");
 
@@ -349,7 +363,7 @@ public static class HangfireUtils
     public static void MaskBordersWrapper(IDDB ddb, string inputPath, string outputPath,
         int nearDist, bool white, PerformContext context)
     {
-        Action<string> writeLine = CreateJobWriteLine(context);
+        Action<string> writeLine = CreateJobWriteLine(context, ddb.DatasetFolderPath);
 
         writeLine($"In MaskBordersWrapper('{ddb.DatasetFolderPath}', '{inputPath}')");
 
