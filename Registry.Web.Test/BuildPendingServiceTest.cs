@@ -673,7 +673,10 @@ public class BuildPendingServiceTest : TestBase
 
         await service.ScheduleRetryIfPending(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug);
 
-        // RetryBackoffMinutes = [1, 2, 5, ...]; attempt index 2 -> 5 minutes
+        // RetryBackoffMinutes = [1, 2, 5, ...]; attempt index 2 -> 5 minutes.
+        // Note: BuildPendingWrapper now only enqueues per-entry BuildWrapper jobs, so every
+        // successful BuildPendingWrapper run consumes an attempt here, including a no-op one
+        // whose entries were all inside the 60 s backoff or already building.
         _backgroundJobMock.Verify(x => x.ScheduleIndexed(
             It.IsAny<System.Linq.Expressions.Expression<Action>>(),
             It.IsAny<IndexPayload>(),

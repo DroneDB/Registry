@@ -190,7 +190,7 @@ public class BuildPendingService
     /// <summary>
     /// Event-driven replacement for per-minute polling. Invoked after a build job
     /// for a dataset reaches a terminal state. If the dataset still has pending
-    /// builds, schedules a single delayed <see cref="HangfireUtils.BuildPendingWrapper"/>
+    /// builds, schedules a single delayed <see cref="HangfireUtils.BuildPendingWrapper(IDDB, PerformContext)"/>
     /// retry using exponential backoff; otherwise clears the retry tracking so the
     /// chain stops. When the retry budget is exhausted it defers to the safety-net sweep.
     /// </summary>

@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Linq.Expressions;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
@@ -9,9 +10,11 @@ using NUnit.Framework;
 using Registry.Ports.DroneDB;
 using Registry.Test.Common;
 using Registry.Web.Data.Models;
+using Registry.Web.Models;
 using Registry.Web.Models.DTO;
 using Registry.Web.Services.Adapters;
 using Registry.Web.Services.Ports;
+using Registry.Web.Utilities;
 using Shouldly;
 
 namespace Registry.Web.Test;
@@ -171,5 +174,60 @@ public class BuildStatusServiceTest : TestBase
         _jobIndexQueryMock.Verify(
             x => x.GetByOrgDsAsync(OrgSlug, DsSlug, 0, int.MaxValue, It.IsAny<CancellationToken>()),
             Times.Once);
+    }
+
+    [Test]
+    public async Task AnnotateAsync_PendingRetryFailsForNonDependencyReason_MarksFailed()
+    {
+        // A pending OBJ was deferred by its original (succeeded) build job. The retry is the
+        // indexed BuildWrapper enqueued by HangfireUtils.BuildPendingWrapper; build the JobIndex
+        // row from that exact payload so the Path BuildStatusService matches on is the real one.
+        const string path = "sub/model.obj";
+        var entry = Entry(path, EntryType.Model);
+        _ddbMock.Setup(x => x.IsBuildable(path)).Returns(true);
+        _ddbMock.Setup(x => x.IsBuildComplete(path)).Returns(false);
+        _ddbMock.Setup(x => x.GetPendingBuildInfo()).Returns([
+            new PendingBuildInfo { Hash = "h1", Path = path, MissingDependencies = ["sub/model.mtl"], LastAttempt = 0 }
+        ]);
+
+        IndexPayload retryMeta = null;
+        var jobs = new Mock<IBackgroundJobsProcessor>();
+        jobs.Setup(x => x.EnqueueIndexed(It.IsAny<Expression<Action>>(), It.IsAny<IndexPayload>()))
+            .Callback<Expression<Action>, IndexPayload>((_, meta) => retryMeta = meta)
+            .Returns("retry-1");
+        var original = new JobIndex
+        {
+            JobId = "orig", OrgSlug = OrgSlug, DsSlug = DsSlug, Path = path, ToolId = "build",
+            CurrentState = "Succeeded", CreatedAtUtc = DateTime.UtcNow.AddMinutes(-5)
+        };
+        _jobIndexQueryMock
+            .Setup(x => x.GetByOrgDsAsync(OrgSlug, DsSlug, 0, int.MaxValue, It.IsAny<CancellationToken>()))
+            .ReturnsAsync([original]);
+
+        HangfireUtils.BuildPendingWrapper(_ddbMock.Object, null, jobs.Object, _jobIndexQueryMock.Object,
+            OrgSlug, DsSlug, () => 1_800_000_000);
+
+        retryMeta.ShouldNotBeNull();
+        JobIndex Retry(string state) => new()
+        {
+            JobId = "retry-1", OrgSlug = retryMeta.OrgSlug, DsSlug = retryMeta.DsSlug, Hash = retryMeta.Hash,
+            Path = retryMeta.Path, ToolId = retryMeta.ToolId, CurrentState = state, CreatedAtUtc = DateTime.UtcNow
+        };
+
+        // While the retry runs it is "building".
+        _jobIndexQueryMock
+            .Setup(x => x.GetByOrgDsAsync(OrgSlug, DsSlug, 0, int.MaxValue, It.IsAny<CancellationToken>()))
+            .ReturnsAsync([original, Retry("Processing")]);
+        await CreateService().AnnotateAsync(OrgSlug, DsSlug, _ddbMock.Object, [entry]);
+        entry.BuildStatus.ShouldBe("building");
+
+        // The attempt consumed ".pending" and failed for a non-dependency reason: "failed".
+        _ddbMock.Setup(x => x.GetPendingBuildInfo()).Returns([]);
+        _jobIndexQueryMock
+            .Setup(x => x.GetByOrgDsAsync(OrgSlug, DsSlug, 0, int.MaxValue, It.IsAny<CancellationToken>()))
+            .ReturnsAsync([original, Retry("Failed")]);
+        entry.BuildStatus = null;
+        await CreateService().AnnotateAsync(OrgSlug, DsSlug, _ddbMock.Object, [entry]);
+        entry.BuildStatus.ShouldBe("failed");
     }
 }

@@ -11,7 +11,7 @@ namespace Registry.Web.Filters;
 /// <summary>
 /// Event-driven replacement for the high-frequency "process-pending-builds"
 /// poller. When a build job (<see cref="Utilities.HangfireUtils.BuildWrapper"/> or
-/// <see cref="Utilities.HangfireUtils.BuildPendingWrapper"/>) reaches a terminal
+/// <see cref="Utilities.HangfireUtils.BuildPendingWrapper(Registry.Ports.DroneDB.IDDB, Hangfire.Server.PerformContext)"/>) reaches a terminal
 /// state, this filter asks <see cref="BuildPendingService"/> whether the affected
 /// dataset still has pending builds and, if so, self-schedules a single delayed
 /// retry with exponential backoff. When nothing remains pending the chain stops,

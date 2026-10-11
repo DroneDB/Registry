@@ -13,6 +13,9 @@ using Registry.Ports;
 using Registry.Ports.DroneDB;
 using Registry.Web.Attributes;
 using Registry.Web.Filters;
+using Registry.Web.Models;
+using Registry.Web.Services.Adapters;
+using Registry.Web.Services.HeavyTasks;
 using Registry.Web.Services.HeavyTasks.Adapters;
 using Registry.Web.Services.Ports;
 using Serilog;
@@ -141,7 +144,20 @@ public static class HangfireUtils
         writeLine(skipped ? "Done build (skipped: lock held elsewhere)" : "Done build");
     }
 
+    /// <summary>
+    /// Minimum time since a pending entry's last build attempt before it is retried
+    /// (same 60 s backoff libddb's buildPending applies).
+    /// </summary>
+    internal const long PendingRetryBackoffSeconds = 60;
+
     // Same retry policy as BuildWrapper (intentionally duplicated inline - see there).
+    //
+    // A pending retry is a build attempt: instead of running ddb.BuildPending() (one opaque
+    // job for the whole dataset), this enqueues one indexed BuildWrapper per due pending
+    // entry, so a failure lands on that entry's own job and BuildStatusService shows it as
+    // "failed". The signature is kept so jobs already stored in Hangfire still deserialize.
+    // The org/ds slugs come from the job parameters (set by IndexedJobEnqueuer); when they
+    // or the DI services are unavailable (no job context), it falls back to ddb.BuildPending().
     [AutomaticRetry(Attempts = 5, DelaysInSeconds = [15, 60, 180, 600, 1800],
         OnAttemptsExceeded = AttemptsExceededAction.Fail,
         OnlyOn = [typeof(DdbBusyException), typeof(DdbBuildInProgressException)])]
@@ -151,6 +167,161 @@ public static class HangfireUtils
 
         writeLine($"In BuildPendingWrapper('{ddb.DatasetFolderPath}')");
 
+        var target = TryResolvePendingRetryTarget(context, out var reason);
+        if (target == null)
+        {
+            writeLine($"Warning: {reason}; falling back to native build pending");
+            Log.Warning("BuildPendingWrapper: job context or services unavailable; falling back to native build pending");
+            RunNativeBuildPending(ddb, writeLine);
+            return;
+        }
+
+        using (target.Scope)
+            EnqueueDuePendingBuilds(ddb, target.Jobs, target.JobIndex, target.OrgSlug, target.DsSlug,
+                UtcNowUnixSeconds, writeLine);
+    }
+
+    /// <summary>
+    /// Testable core of <see cref="BuildPendingWrapper(IDDB, PerformContext)"/> with its
+    /// dependencies passed explicitly (never enqueued as a Hangfire job itself).
+    /// </summary>
+    internal static void BuildPendingWrapper(IDDB ddb, PerformContext context,
+        IBackgroundJobsProcessor jobs, IJobIndexQuery jobIndexQuery, string orgSlug, string dsSlug,
+        Func<long> nowUnixSeconds)
+    {
+        Action<string> writeLine = CreateJobWriteLine(context, ddb.DatasetFolderPath);
+
+        writeLine($"In BuildPendingWrapper('{ddb.DatasetFolderPath}')");
+
+        EnqueueDuePendingBuilds(ddb, jobs, jobIndexQuery, orgSlug, dsSlug, nowUnixSeconds, writeLine);
+    }
+
+    private static long UtcNowUnixSeconds() => DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+
+    private sealed record PendingRetryTarget(
+        JobActivatorScope Scope, IBackgroundJobsProcessor Jobs, IJobIndexQuery JobIndex,
+        string OrgSlug, string DsSlug);
+
+    // Resolves what the enqueue path needs from the running job. Returns null (with a reason)
+    // when anything is missing, so the caller can fall back to the native path.
+    private static PendingRetryTarget TryResolvePendingRetryTarget(PerformContext context, out string reason)
+    {
+        if (context?.BackgroundJob?.Id == null || context.Connection == null)
+        {
+            reason = "no job context";
+            return null;
+        }
+
+        string orgSlug, dsSlug;
+        try
+        {
+            // Raw read (as BuildRetrySchedulerFilter does): IndexedJobEnqueuer stores the slugs
+            // as plain strings, not JSON, so PerformContext.GetJobParameter<T> would not parse them.
+            var jobId = context.BackgroundJob.Id;
+            orgSlug = context.Connection.GetJobParameter(jobId, JobParamKeys.OrgSlug);
+            dsSlug = context.Connection.GetJobParameter(jobId, JobParamKeys.DsSlug);
+        }
+        catch (Exception ex)
+        {
+            reason = $"cannot read job parameters ({Describe(ex)})";
+            return null;
+        }
+
+        if (string.IsNullOrWhiteSpace(orgSlug) || string.IsNullOrWhiteSpace(dsSlug))
+        {
+            reason = "job has no organization/dataset parameters";
+            return null;
+        }
+
+        JobActivatorScope scope = null;
+        try
+        {
+            scope = JobActivator.Current.BeginScope(
+                new JobActivatorContext(context.Connection, context.BackgroundJob, context.CancellationToken));
+            var jobs = scope.Resolve(typeof(IBackgroundJobsProcessor)) as IBackgroundJobsProcessor;
+            var jobIndex = scope.Resolve(typeof(IJobIndexQuery)) as IJobIndexQuery;
+
+            if (jobs == null || jobIndex == null)
+            {
+                scope.Dispose();
+                reason = "job services are not available";
+                return null;
+            }
+
+            reason = null;
+            return new PendingRetryTarget(scope, jobs, jobIndex, orgSlug, dsSlug);
+        }
+        catch (Exception ex)
+        {
+            scope?.Dispose();
+            reason = $"cannot resolve job services ({Describe(ex)})";
+            return null;
+        }
+    }
+
+    private static void EnqueueDuePendingBuilds(IDDB ddb, IBackgroundJobsProcessor jobs,
+        IJobIndexQuery jobIndexQuery, string orgSlug, string dsSlug, Func<long> nowUnixSeconds,
+        Action<string> writeLine)
+    {
+        writeLine("Enqueueing due pending builds");
+
+        try
+        {
+            var pending = ddb.GetPendingBuildInfo() ?? [];
+            var now = nowUnixSeconds();
+
+            var emptyPath = pending.Count(p => string.IsNullOrWhiteSpace(p.Path));
+            var withPath = pending.Where(p => !string.IsNullOrWhiteSpace(p.Path)).ToArray();
+            var due = withPath.Where(p => now - p.LastAttempt >= PendingRetryBackoffSeconds).ToArray();
+            var inBackoff = withPath.Length - due.Length;
+
+            // Same "active build job for this path" view as BuildStatusService ("building").
+            // Only queried when something is due, so idle retries cost no JobIndex round-trip.
+            var activePaths = due.Length == 0
+                ? []
+                : jobIndexQuery.GetByOrgDsAsync(orgSlug, dsSlug, 0, int.MaxValue)
+                    .GetAwaiter().GetResult()
+                    .Where(j => j.ToolId == HeavyToolIds.Build && j.Path != null &&
+                                TaskStateCatalog.Active.Contains(j.CurrentState))
+                    .Select(j => j.Path)
+                    .ToHashSet();
+
+            var enqueued = 0;
+            var active = 0;
+            foreach (var entry in due)
+            {
+                // Add() is false when a job is already active, or was enqueued above for a
+                // duplicate path.
+                if (!activePaths.Add(entry.Path))
+                {
+                    active++;
+                    continue;
+                }
+
+                var path = entry.Path;
+                var meta = new IndexPayload(orgSlug, dsSlug, entry.Hash, MagicStrings.AutoBuildServiceUserId,
+                    null, path);
+                var jobId = jobs.EnqueueIndexed(() => BuildWrapper(ddb, path, false, null), meta);
+                enqueued++;
+                writeLine($"Enqueued build of '{path}' (job {jobId})");
+            }
+
+            writeLine($"Pending builds: {pending.Length}; enqueued {enqueued}; skipped {inBackoff + active + emptyPath} " +
+                      $"({inBackoff} attempted less than {PendingRetryBackoffSeconds}s ago, " +
+                      $"{active} with an active build job, {emptyPath} without a path)");
+        }
+        catch (Exception ex)
+        {
+            writeLine($"Build pending failed: {Describe(ex)}");
+            throw;
+        }
+
+        writeLine("Done build pending");
+    }
+
+    // Legacy path: libddb runs every due pending build inline in this job.
+    private static void RunNativeBuildPending(IDDB ddb, Action<string> writeLine)
+    {
         writeLine("Running build pending");
         var skipped = false;
         try
