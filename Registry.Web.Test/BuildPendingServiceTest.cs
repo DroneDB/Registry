@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using Hangfire.InMemory;
 using System.Threading.Tasks;
 using Shouldly;
 using Microsoft.EntityFrameworkCore;
@@ -25,15 +26,24 @@ public class BuildPendingServiceTest : TestBase
     private Mock<IBackgroundJobsProcessor> _backgroundJobMock;
     private Mock<ICacheManager> _cacheManager;
     private ILogger<BuildPendingService> _logger;
+    private JobStorageScope _storageScope;
 
     [SetUp]
     public void Setup()
     {
+        _storageScope = new JobStorageScope(new InMemoryStorage());
         _ddbManagerMock = new Mock<IDdbManager>();
         _backgroundJobMock = new Mock<IBackgroundJobsProcessor>();
         _cacheManager = new Mock<ICacheManager>();
         _logger = CreateTestLogger<BuildPendingService>();
+        _backgroundJobMock.Setup(x => x.EnqueueIndexed(It.IsAny<System.Linq.Expressions.Expression<Action>>(),
+            It.IsAny<IndexPayload>())).Returns(() => Guid.NewGuid().ToString());
+        _backgroundJobMock.Setup(x => x.ScheduleIndexed(It.IsAny<System.Linq.Expressions.Expression<Action>>(),
+            It.IsAny<IndexPayload>(), It.IsAny<TimeSpan>())).Returns(() => Guid.NewGuid().ToString());
     }
+
+    [TearDown]
+    public void CleanupStorage() => _storageScope.Dispose();
 
     [Test]
     public async Task ProcessPendingBuilds_EmptyDatabase_CompletesSuccessfully()
@@ -486,7 +496,7 @@ public class BuildPendingServiceTest : TestBase
     }
 
     [Test]
-    public async Task ProcessPendingBuilds_PendingButStampUnchanged_SkipsEnqueue()
+    public async Task ProcessPendingBuilds_PendingButStampUnchanged_RestartsMissingRetryChain()
     {
         // Arrange
         await using var context = GetTest1Context();
@@ -528,14 +538,14 @@ public class BuildPendingServiceTest : TestBase
         // Act
         await service.ProcessPendingBuilds(null);
 
-        // Assert - Should check pending status but NOT enqueue job (stamp unchanged)
+        // An unchanged stamp does not suppress pending work after the coordinator is lost.
         ddbMock.Verify(x => x.IsBuildPending(), Times.AtLeastOnce);
         _backgroundJobMock.Verify(
             x => x.EnqueueIndexed(
                 It.IsAny<System.Linq.Expressions.Expression<Action>>(),
                 It.IsAny<IndexPayload>()
             ),
-            Times.Never
+            Times.Once
         );
     }
 

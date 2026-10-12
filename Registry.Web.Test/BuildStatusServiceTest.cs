@@ -4,6 +4,7 @@ using System.Linq;
 using System.Linq.Expressions;
 using System.Threading;
 using System.Threading.Tasks;
+using Hangfire.InMemory;
 using Microsoft.Extensions.Logging;
 using Moq;
 using NUnit.Framework;
@@ -205,7 +206,7 @@ public class BuildStatusServiceTest : TestBase
             .ReturnsAsync([original]);
 
         HangfireUtils.BuildPendingWrapper(_ddbMock.Object, null, jobs.Object, _jobIndexQueryMock.Object,
-            OrgSlug, DsSlug, () => 1_800_000_000);
+            OrgSlug, DsSlug, () => 1_800_000_000, new InMemoryStorage());
 
         retryMeta.ShouldNotBeNull();
         JobIndex Retry(string state) => new()

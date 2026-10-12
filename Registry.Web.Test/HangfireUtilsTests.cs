@@ -6,6 +6,7 @@ using System.Linq.Expressions;
 using System.Threading;
 using Hangfire;
 using Hangfire.Server;
+using Hangfire.InMemory;
 using Hangfire.Storage;
 using Serilog;
 using Serilog.Core;
@@ -44,10 +45,12 @@ public class HangfireUtilsTests
 
     private CollectingSink _sink = null!;
     private Serilog.ILogger _savedLogger = null!;
+    private JobStorageScope _storageScope = null!;
 
     [SetUp]
     public void SetUp()
     {
+        _storageScope = new JobStorageScope(new InMemoryStorage());
         _sink = new CollectingSink();
         _savedLogger = Log.Logger;
         Log.Logger = new LoggerConfiguration()
@@ -57,7 +60,11 @@ public class HangfireUtilsTests
     }
 
     [TearDown]
-    public void TearDown() => Log.Logger = _savedLogger;
+    public void TearDown()
+    {
+        Log.Logger = _savedLogger;
+        _storageScope.Dispose();
+    }
 
     private static Mock<IDDB> MockDdb()
     {
@@ -279,10 +286,25 @@ public class HangfireUtilsTests
 
     private static Mock<IJobIndexQuery> MockJobIndex(params JobIndex[] rows)
     {
+        // Script real storage states as well as the display rows: dedup consults
+        // authoritative Hangfire state after acquiring the dataset lock.
+        var client = new BackgroundJobClient(JobStorage.Current);
+        foreach (var row in rows)
+            row.JobId = client.Create(Hangfire.Common.Job.FromExpression(() => HangfireUtils.DummyJob(null)),
+                row.CurrentState == "Enqueued" ? new Hangfire.States.EnqueuedState() : new SnapshotState(row.CurrentState));
         var q = new Mock<IJobIndexQuery>();
         q.Setup(x => x.GetByOrgDsAsync(Org, Ds, 0, int.MaxValue, It.IsAny<CancellationToken>()))
             .ReturnsAsync(rows);
         return q;
+    }
+
+    private sealed class SnapshotState(string name) : Hangfire.States.IState
+    {
+        public string Name => name;
+        public string Reason => "Test snapshot";
+        public bool IsFinal => name is "Failed" or "Succeeded" or "Deleted";
+        public bool IgnoreJobLoadException => false;
+        public Dictionary<string, string> SerializeData() => [];
     }
 
     private static PendingBuildInfo Pending(string path, long secondsAgo, string hash = "h") =>
@@ -397,6 +419,8 @@ public class HangfireUtilsTests
     private static (PerformContext Context, LogRingBuffer Buffer) ContextWithParams(string? org, string? ds)
     {
         var conn = new Mock<IStorageConnection>();
+        conn.Setup(x => x.AcquireDistributedLock(It.IsAny<string>(), It.IsAny<TimeSpan>()))
+            .Returns(Mock.Of<IDisposable>());
         conn.Setup(x => x.GetJobParameter("42", JobParamKeys.OrgSlug)).Returns(org!);
         conn.Setup(x => x.GetJobParameter("42", JobParamKeys.DsSlug)).Returns(ds!);
         var job = new BackgroundJob("42", Hangfire.Common.Job.FromExpression(() => HangfireUtils.DummyJob(null!)),

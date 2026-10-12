@@ -31,21 +31,16 @@ public sealed class BuildRetrySchedulerFilter(
     {
         try
         {
-            // React only to successful completion. A deferred (missing-dependency)
-            // build always completes successfully and simply leaves its ".pending"
-            // marker behind, so success is the correct trigger to re-evaluate and
-            // schedule the next retry. Genuine build failures are handled by
-            // BuildJobFailureFilter (cache invalidation) and the low-frequency
-            // safety-net sweep; reacting to them here would create a tight retry
-            // loop for a persistently broken build.
-            if (context.NewState is not SucceededState) return;
+            if (context.NewState is not SucceededState && context.NewState is not FailedState) return;
 
             var methodName = context.BackgroundJob?.Job?.Method?.Name;
             if (string.IsNullOrEmpty(methodName)) return;
             if (Array.IndexOf(BuildMethodNames, methodName) < 0) return;
+            // Only a failed entry with its own retained native marker is recoverable.
+            if (context.NewState is FailedState && methodName != nameof(Utilities.HangfireUtils.BuildWrapper)) return;
 
             var jobId = context.BackgroundJob!.Id;
-            using var conn = Hangfire.JobStorage.Current.GetConnection();
+            var conn = context.Connection;
             var orgSlug = conn.GetJobParameter(jobId, JobParamKeys.OrgSlug);
             var dsSlug = conn.GetJobParameter(jobId, JobParamKeys.DsSlug);
 
@@ -59,7 +54,16 @@ public sealed class BuildRetrySchedulerFilter(
 
             using var scope = sp.CreateScope();
             var buildPending = scope.ServiceProvider.GetRequiredService<BuildPendingService>();
-            buildPending.ScheduleRetryIfPending(orgSlug, dsSlug).GetAwaiter().GetResult();
+            string? failedPath = null, failedHash = null;
+            if (context.NewState is FailedState)
+            {
+                failedPath = context.BackgroundJob.Job.Args.Count > 1
+                    ? context.BackgroundJob.Job.Args[1] as string : null;
+                failedHash = conn.GetJobParameter(jobId, JobParamKeys.Hash);
+                if (string.IsNullOrWhiteSpace(failedPath) || string.IsNullOrWhiteSpace(failedHash)) return;
+            }
+            buildPending.ScheduleRetryIfPending(orgSlug, dsSlug, jobId, failedPath, failedHash, context.Storage)
+                .GetAwaiter().GetResult();
         }
         catch (Exception ex)
         {

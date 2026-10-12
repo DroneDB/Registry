@@ -7,6 +7,8 @@ using Hangfire;
 using Hangfire.Console;
 using Hangfire.Server;
 using Hangfire.Storage;
+using Hangfire.MySql;
+using Microsoft.Extensions.Configuration;
 using Registry.Adapters;
 using Registry.Adapters.DroneDB;
 using Registry.Ports;
@@ -160,7 +162,8 @@ public static class HangfireUtils
     // or the DI services are unavailable (no job context), it falls back to ddb.BuildPending().
     [AutomaticRetry(Attempts = 5, DelaysInSeconds = [15, 60, 180, 600, 1800],
         OnAttemptsExceeded = AttemptsExceededAction.Fail,
-        OnlyOn = [typeof(DdbBusyException), typeof(DdbBuildInProgressException)])]
+        OnlyOn = [typeof(DdbBusyException), typeof(DdbBuildInProgressException),
+            typeof(PendingBuildCoordinatorContentionException)])]
     public static void BuildPendingWrapper(IDDB ddb, PerformContext context)
     {
         Action<string> writeLine = CreateJobWriteLine(context, ddb.DatasetFolderPath);
@@ -177,8 +180,18 @@ public static class HangfireUtils
         }
 
         using (target.Scope)
+        {
+            // Missing MySQL configuration must fail visibly instead of silently
+            // taking the native fallback without dataset coordination.
+            var mysqlConnectionString = context.Storage is MySqlStorage
+                ? (target.Scope.Resolve(typeof(IConfiguration)) as IConfiguration)?
+                    .GetConnectionString(MagicStrings.HangfireConnectionName)
+                : null;
+            using var coordination = DatasetBuildCoordinator.Acquire(target.OrgSlug, target.DsSlug,
+                context.Storage, context.Connection, mysqlConnectionString);
             EnqueueDuePendingBuilds(ddb, target.Jobs, target.JobIndex, target.OrgSlug, target.DsSlug,
-                UtcNowUnixSeconds, writeLine);
+                UtcNowUnixSeconds, writeLine, context.Storage, context.Connection);
+        }
     }
 
     /// <summary>
@@ -187,13 +200,14 @@ public static class HangfireUtils
     /// </summary>
     internal static void BuildPendingWrapper(IDDB ddb, PerformContext context,
         IBackgroundJobsProcessor jobs, IJobIndexQuery jobIndexQuery, string orgSlug, string dsSlug,
-        Func<long> nowUnixSeconds)
+        Func<long> nowUnixSeconds, JobStorage storage = null, string mysqlConnectionString = null)
     {
         Action<string> writeLine = CreateJobWriteLine(context, ddb.DatasetFolderPath);
 
         writeLine($"In BuildPendingWrapper('{ddb.DatasetFolderPath}')");
 
-        EnqueueDuePendingBuilds(ddb, jobs, jobIndexQuery, orgSlug, dsSlug, nowUnixSeconds, writeLine);
+        using (DatasetBuildCoordinator.Acquire(orgSlug, dsSlug, storage, mysqlConnectionString: mysqlConnectionString))
+            EnqueueDuePendingBuilds(ddb, jobs, jobIndexQuery, orgSlug, dsSlug, nowUnixSeconds, writeLine, storage);
     }
 
     private static long UtcNowUnixSeconds() => DateTimeOffset.UtcNow.ToUnixTimeSeconds();
@@ -261,7 +275,7 @@ public static class HangfireUtils
 
     private static void EnqueueDuePendingBuilds(IDDB ddb, IBackgroundJobsProcessor jobs,
         IJobIndexQuery jobIndexQuery, string orgSlug, string dsSlug, Func<long> nowUnixSeconds,
-        Action<string> writeLine)
+        Action<string> writeLine, JobStorage storage = null, IStorageConnection connection = null)
     {
         writeLine("Enqueueing due pending builds");
 
@@ -275,16 +289,24 @@ public static class HangfireUtils
             var due = withPath.Where(p => now - p.LastAttempt >= PendingRetryBackoffSeconds).ToArray();
             var inBackoff = withPath.Length - due.Length;
 
-            // Same "active build job for this path" view as BuildStatusService ("building").
-            // Only queried when something is due, so idle retries cost no JobIndex round-trip.
-            var activePaths = due.Length == 0
-                ? []
-                : jobIndexQuery.GetByOrgDsAsync(orgSlug, dsSlug, 0, int.MaxValue)
+            var activePaths = new System.Collections.Generic.HashSet<string>();
+            if (due.Length != 0)
+            {
+                var duePaths = due.Select(p => p.Path).ToHashSet();
+                var indexed = jobIndexQuery.GetByOrgDsAsync(orgSlug, dsSlug, 0, int.MaxValue)
                     .GetAwaiter().GetResult()
-                    .Where(j => j.ToolId == HeavyToolIds.Build && j.Path != null &&
-                                TaskStateCatalog.Active.Contains(j.CurrentState))
-                    .Select(j => j.Path)
-                    .ToHashSet();
+                    .Where(j => j.ToolId == HeavyToolIds.Build && j.Path != null && duePaths.Contains(j.Path));
+                using var ownedConnection = connection == null ? (storage ?? JobStorage.Current).GetConnection() : null;
+                foreach (var row in indexed)
+                {
+                    // Hangfire is authoritative: a missing/terminal job or an
+                    // interrupted, unqueued Indexing publication cannot suppress
+                    // this pending entry forever through a stale Created index row.
+                    var actualState = (connection ?? ownedConnection).GetStateData(row.JobId)?.Name;
+                    if (actualState != null && TaskStateCatalog.Active.Contains(actualState))
+                        activePaths.Add(row.Path);
+                }
+            }
 
             var enqueued = 0;
             var active = 0;
@@ -302,6 +324,8 @@ public static class HangfireUtils
                 var meta = new IndexPayload(orgSlug, dsSlug, entry.Hash, MagicStrings.AutoBuildServiceUserId,
                     null, path);
                 var jobId = jobs.EnqueueIndexed(() => BuildWrapper(ddb, path, false, null), meta);
+                if (string.IsNullOrWhiteSpace(jobId))
+                    throw new InvalidOperationException("Pending build enqueue returned no job ID");
                 enqueued++;
                 writeLine($"Enqueued build of '{path}' (job {jobId})");
             }

@@ -4,8 +4,6 @@ using Hangfire.States;
 using Hangfire.Storage;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
-using Registry.Ports;
-using Registry.Web.Services;
 using Registry.Web.Services.Adapters;
 using Registry.Web.Services.Ports;
 
@@ -14,10 +12,8 @@ namespace Registry.Web.Filters;
 /// <summary>
 /// Hangfire state filter that reacts to build jobs entering the Failed state.
 /// When a BuildWrapper / BuildPendingWrapper job exhausts its retries and is
-/// marked as failed, any cached "build pending" tracker entries for the
-/// affected dataset are invalidated so that subsequent build-pending checks
-/// re-read the authoritative state from disk instead of returning stale
-/// "build in progress" results.
+/// marked as failed, observations are refreshed from native state while the
+/// affected dataset's bounded retry controls are preserved.
 /// </summary>
 public sealed class BuildJobFailureFilter(
     IServiceProvider sp,
@@ -40,7 +36,7 @@ public sealed class BuildJobFailureFilter(
             if (Array.IndexOf(BuildMethodNames, methodName) < 0) return;
 
             var jobId = context.BackgroundJob!.Id;
-            using var conn = Hangfire.JobStorage.Current.GetConnection();
+            var conn = context.Connection;
             var orgSlug = conn.GetJobParameter(jobId, JobParamKeys.OrgSlug);
             var dsSlug = conn.GetJobParameter(jobId, JobParamKeys.DsSlug);
 
@@ -53,20 +49,15 @@ public sealed class BuildJobFailureFilter(
             }
 
             log.LogWarning(
-                "BuildJobFailureFilter: build job {JobId} ({Method}) for {Org}/{Ds} entered Failed state; invalidating build-pending cache",
+                "BuildJobFailureFilter: build job {JobId} ({Method}) for {Org}/{Ds} entered Failed state; refreshing build-pending observations",
                 jobId, methodName, orgSlug, dsSlug);
 
             using var scope = sp.CreateScope();
-            var cache = scope.ServiceProvider.GetRequiredService<ICacheManager>();
-            var category = CacheCategories.ForDataset(orgSlug, dsSlug);
-            cache.RemoveByCategoryAsync(MagicStrings.BuildPendingTrackerCacheSeed, category)
-                .GetAwaiter().GetResult();
-
             // Persist WHY the build failed: JobIndex.ErrorType = bare exception type name,
             // same convention as heavy tasks (HeavyTaskJobWrapper). The message itself lives
             // in the log tail persisted by BuildLogCaptureFilter; here we only record the
             // class (native failures surface as DdbException). Synchronous filter ->
-            // GetAwaiter().GetResult() like the cache call above.
+            // GetAwaiter().GetResult() like the observation refresh below.
             // Runs only when org/ds params are present (above early return): the writer
             // also busts the org/ds-scoped tasks-list cache. Errors stay inside the outer
             // try/catch so logging-path failures never break state transitions.
@@ -76,11 +67,14 @@ public sealed class BuildJobFailureFilter(
             log.LogInformation(
                 "BuildJobFailureFilter: job {JobId} ErrorType recorded as '{ErrorType}'",
                 jobId, errorType);
+
+            var pending = scope.ServiceProvider.GetRequiredService<BuildPendingService>();
+            pending.RefreshPendingStatus(orgSlug, dsSlug, context.Storage).GetAwaiter().GetResult();
         }
         catch (Exception ex)
         {
             log.LogError(ex,
-                "BuildJobFailureFilter.OnStateApplied: error while invalidating cache for job {JobId}",
+                "BuildJobFailureFilter.OnStateApplied: error recording failure or refreshing pending observations for job {JobId}",
                 context.BackgroundJob?.Id);
         }
     }

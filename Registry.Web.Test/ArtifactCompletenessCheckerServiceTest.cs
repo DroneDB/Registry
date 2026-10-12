@@ -248,6 +248,29 @@ public class ArtifactCompletenessCheckerServiceTest : TestBase
             Times.Once);
     }
 
+    [Test]
+    public async Task CheckAndQueueAsync_ModelSwapRecoveryQueuedAndOrdinaryNexusOnlyModelSkipped()
+    {
+        await using var context = GetTest1Context();
+        var ddb = new Mock<IDDB>();
+        ddb.Setup(x => x.Search(It.IsAny<string>(), true)).Returns([
+            new DdbEntry { Path = "interrupted.obj", Hash = "swap-hash" },
+            new DdbEntry { Path = "nexus-only.obj", Hash = "ordinary-hash" }
+        ]);
+        ddb.Setup(x => x.IsBuildable(It.IsAny<string>())).Returns(true);
+        // Native DDBIsBuildComplete is read-only and reports only the identifiable
+        // interrupted tiles swap as incomplete, while ordinary Nexus output is complete.
+        ddb.Setup(x => x.IsBuildComplete("interrupted.obj")).Returns(false);
+        ddb.Setup(x => x.IsBuildComplete("nexus-only.obj")).Returns(true);
+        _ddbManagerMock.Setup(x => x.Get(It.IsAny<string>(), It.IsAny<Guid>())).Returns(ddb.Object);
+        await new ArtifactCompletenessCheckerService(context, _ddbManagerMock.Object, _backgroundJobMock.Object, _logger)
+            .CheckAndQueueAsync(null);
+        _backgroundJobMock.Verify(x => x.EnqueueIndexed(It.IsAny<Expression<Action>>(),
+            It.Is<IndexPayload>(meta => meta.Path == "interrupted.obj" && meta.Hash == "swap-hash")), Times.Once);
+        _backgroundJobMock.Verify(x => x.EnqueueIndexed(It.IsAny<Expression<Action>>(),
+            It.IsAny<IndexPayload>()), Times.Once);
+    }
+
     private static RegistryContext GetEmptyContext()
     {
         var options = new DbContextOptionsBuilder<RegistryContext>()
