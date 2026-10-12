@@ -223,6 +223,9 @@ public class PendingRecoveryIntegrationTests
             command.CommandText = "SET FOREIGN_KEY_CHECKS=1";
             await command.ExecuteNonQueryAsync();
         }
+        // Pooled SQLite connections keep registry.sqlite open, which blocks the
+        // delete on Windows.
+        Microsoft.Data.Sqlite.SqliteConnection.ClearAllPools();
         Directory.Delete(_root, recursive: true);
         _initialized = false;
     }
