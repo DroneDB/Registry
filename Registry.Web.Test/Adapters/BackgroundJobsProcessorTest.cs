@@ -19,68 +19,69 @@ namespace Registry.Web.Test.Adapters;
 /// <summary>
 /// Requeue contract for <see cref="BackgroundJobsProcessor"/>: requeue must delegate to the
 /// client's same-id re-queue and be permitted from Failed only; delete must remain a separate
-/// terminal operation. The Hangfire client and the live job state (read from the monitoring
+/// terminal operation. The Hangfire client and the live job state (read from the configured
 /// storage) are mocked so the assertions are deterministic and never depend on an in-process
 /// Hangfire server being able to process a job.
 /// </summary>
 [TestFixture]
 public class BackgroundJobsProcessorTest
 {
-    private readonly Mock<IBackgroundJobClient> _client;
-    private readonly BackgroundJobsProcessor _processor;
+    private Mock<IBackgroundJobClient> _client;
+    private Mock<IStorageConnection> _connection;
+    private Mock<JobStorage> _storage;
+    private BackgroundJobsProcessor _processor;
 
-    /// <summary>Minimal JobStorage whose monitoring API reports a scripted live state per job id.</summary>
-    private sealed class TestJobStorage : JobStorage
-    {
-        private readonly IMonitoringApi _monitor;
-
-        public TestJobStorage(IMonitoringApi monitor) => _monitor = monitor;
-        public override IMonitoringApi GetMonitoringApi() => _monitor;
-        public override IStorageConnection GetConnection() => throw new NotSupportedException();
-    }
-
-    private JobStorageScope? _jobStorageScope;
-
-    public BackgroundJobsProcessorTest()
+    [SetUp]
+    public void SetUp()
     {
         _client = new Mock<IBackgroundJobClient>();
-        _processor = new BackgroundJobsProcessor(_client.Object, NullIndexedEnqueuer.Create());
-
-        // Baseline storage for this test instance (missing job => JobDetails yields null).
-        // Passed-reset isolation: fixtures no longer rely on another fixture having
-        // leaked its TestJobStorage into the static JobStorage.Current (see JobStorageScope).
-        _jobStorageScope = new JobStorageScope(new TestJobStorage(
-            Mock.Of<IMonitoringApi>(m => m.JobDetails(It.IsAny<string>()) == null)));
-    }
-
-    [TearDown]
-    public void TearDown()
-    {
-        // Restore JobStorage.Current (used to leak the fixture's TestJobStorage into other
-        // fixtures because nothing ever cleared JobStorage.Current).
-        _jobStorageScope?.Dispose();
-        _jobStorageScope = null;
+        _connection = new Mock<IStorageConnection>();
+        _storage = new Mock<JobStorage>();
+        _storage.Setup(x => x.GetConnection()).Returns(_connection.Object);
+        // Inject storage per test; these fixtures do not mutate global storage.
+        _processor = new BackgroundJobsProcessor(_client.Object, NullIndexedEnqueuer.Create(), _storage.Object);
     }
 
     /// <summary>
-    /// Points the static <c>JobStorage.Current</c> at a storage whose monitoring API reports the
-    /// given live state for the given job id (the same read the Failed-only requeue guard uses).
+    /// Reports the current stored state for the given job id.
     /// A <paramref name="stateName"/> of null models a job no longer present in Hangfire
-    /// (<c>JobDetails</c> returns null).
+    /// (<c>GetStateData</c> returns null).
     /// </summary>
     private void SetLiveState(string jobId, string stateName)
     {
-        var dto = stateName is null
-            ? null
-            : new JobDetailsDto
-            {
-                History = new List<StateHistoryDto> { new StateHistoryDto { StateName = stateName } }
-            };
-        var monitor = Mock.Of<IMonitoringApi>(x => x.JobDetails(jobId) == dto);
-        // Swap per call scope; dispose the previous replacement so the restore chain reaches
-        // the original (null) value on teardown.
-        _jobStorageScope?.Dispose();
-        _jobStorageScope = new JobStorageScope(new TestJobStorage(monitor));
+        _connection.Setup(x => x.GetStateData(jobId)).Returns(stateName is null ? null :
+            new StateData { Name = stateName, Data = new Dictionary<string, string>() });
+    }
+
+    [TestCase("Succeeded", "Failed", false)]
+    [TestCase("Failed", "Processing", true)]
+    public void Requeue_CurrentStoredStateWinsOverMonitoringHistory(string currentState, string historyState, bool accepted)
+    {
+        const string jobId = "history-out-of-order";
+        SetLiveState(jobId, currentState);
+        var history = new JobDetailsDto
+        {
+            History = new List<StateHistoryDto> { new() { StateName = historyState } }
+        };
+        _storage.Setup(x => x.GetMonitoringApi()).Returns(Mock.Of<IMonitoringApi>(x => x.JobDetails(jobId) == history));
+        _client.Setup(x => x.ChangeState(jobId, It.IsAny<IState>(), FailedState.StateName)).Returns(true);
+
+        _processor.Requeue(jobId).ShouldBe(accepted);
+        _client.Verify(x => x.ChangeState(jobId, It.IsAny<EnqueuedState>(), FailedState.StateName),
+            accepted ? Times.Once() : Times.Never());
+    }
+
+    [Test]
+    public void GetJobStatus_CurrentStoredStateWinsOverMonitoringHistory()
+    {
+        const string jobId = "current-coordinator";
+        SetLiveState(jobId, ScheduledState.StateName);
+        var history = new JobDetailsDto
+        {
+            History = new List<StateHistoryDto> { new() { StateName = FailedState.StateName } }
+        };
+        _storage.Setup(x => x.GetMonitoringApi()).Returns(Mock.Of<IMonitoringApi>(x => x.JobDetails(jobId) == history));
+        _processor.GetJobStatus(jobId).ShouldBe(JobStatus.Scheduled);
     }
 
     [Test]
