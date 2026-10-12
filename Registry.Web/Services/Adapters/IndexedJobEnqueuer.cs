@@ -1,6 +1,7 @@
 ﻿#nullable enable
 using System;
 using System.Linq.Expressions;
+using System.Collections.Generic;
 using System.Threading.Tasks;
 using Hangfire;
 using Hangfire.Common;
@@ -26,9 +27,10 @@ public static class JobParamKeys
 }
 
 /// <summary>
-/// Indexed Hangfire enqueue/schedule wrapper that writes JobIndex rows alongside job creation.
+/// Publishes metadata and JobIndex before making an indexed Hangfire job runnable.
 /// </summary>
-public class IndexedJobEnqueuer(IBackgroundJobClient client, IServiceProvider sp, ILogger<IndexedJobEnqueuer> log)
+public class IndexedJobEnqueuer(IBackgroundJobClient client, IServiceProvider sp, ILogger<IndexedJobEnqueuer> log,
+    JobStorage? storage = null)
     : IIndexedJobEnqueuer
 {
     public string Enqueue(Expression<Action> methodCall, IndexPayload meta) =>
@@ -58,43 +60,66 @@ public class IndexedJobEnqueuer(IBackgroundJobClient client, IServiceProvider sp
     private string EnqueueCore(Job job, IndexPayload meta) =>
         CreateCore(job, meta, new EnqueuedState(meta.Queue ?? EnqueuedState.DefaultQueue));
 
+    internal const string PreparationStateName = "Indexing";
+
+    // Hangfire persists arbitrary non-final states but does not dispatch them to
+    // workers. Publication completes before the transition to Enqueued/Scheduled,
+    // so no fast worker can lose a terminal state/error against a missing index row.
+    private sealed class PreparationState : IState
+    {
+        public string Name => PreparationStateName;
+        public string Reason => "Publishing indexed job metadata";
+        public bool IsFinal => false;
+        public bool IgnoreJobLoadException => false;
+        public Dictionary<string, string> SerializeData() => [];
+    }
+
     private string CreateCore(Job job, IndexPayload meta, IState state)
     {
         meta.EnsureValid();
         var createdAt = DateTime.UtcNow;
-        var queue = meta.Queue;
+        var jobId = client.Create(job, new PreparationState());
+        if (string.IsNullOrWhiteSpace(jobId))
+            throw new InvalidOperationException("Hangfire did not create the indexed job");
 
-        var jobId = client.Create(job, state);
-
-        // Set Job Parameters to track metadata in Hangfire storage
         try
         {
-            using var conn = JobStorage.Current.GetConnection();
-            conn.SetJobParameter(jobId, JobParamKeys.OrgSlug, meta.OrgSlug);
-            conn.SetJobParameter(jobId, JobParamKeys.DsSlug, meta.DsSlug);
-            if (!string.IsNullOrWhiteSpace(meta.Path)) conn.SetJobParameter(jobId, JobParamKeys.Path, meta.Path);
-            if (!string.IsNullOrWhiteSpace(meta.Hash)) conn.SetJobParameter(jobId, JobParamKeys.Hash, meta.Hash);
-            if (!string.IsNullOrWhiteSpace(meta.UserId)) conn.SetJobParameter(jobId, JobParamKeys.UserId, meta.UserId);
-            if (!string.IsNullOrWhiteSpace(queue)) conn.SetJobParameter(jobId, JobParamKeys.Queue, queue);
-        }
-        catch (Exception ex)
-        {
-            log.LogWarning(ex, "Failed to set Job Parameters for Job {JobId}", jobId);
-        }
+            using (var conn = (storage ?? JobStorage.Current).GetConnection())
+            {
+                conn.SetJobParameter(jobId, JobParamKeys.OrgSlug, meta.OrgSlug);
+                conn.SetJobParameter(jobId, JobParamKeys.DsSlug, meta.DsSlug);
+                if (!string.IsNullOrWhiteSpace(meta.Path)) conn.SetJobParameter(jobId, JobParamKeys.Path, meta.Path);
+                if (!string.IsNullOrWhiteSpace(meta.Hash)) conn.SetJobParameter(jobId, JobParamKeys.Hash, meta.Hash);
+                if (!string.IsNullOrWhiteSpace(meta.UserId)) conn.SetJobParameter(jobId, JobParamKeys.UserId, meta.UserId);
+                if (!string.IsNullOrWhiteSpace(meta.Queue)) conn.SetJobParameter(jobId, JobParamKeys.Queue, meta.Queue);
+            }
 
-        // Write/update the application index
-        try
-        {
             using var scope = sp.CreateScope();
             var writer = scope.ServiceProvider.GetRequiredService<IJobIndexWriter>();
-            var methodDisplay = job.ToString();
-            writer.UpsertOnEnqueueAsync(jobId, meta, createdAt, methodDisplay).GetAwaiter().GetResult();
+            writer.UpsertOnEnqueueAsync(jobId, meta, createdAt, job.ToString()).GetAwaiter().GetResult();
+            if (!client.ChangeState(jobId, state, PreparationStateName))
+                throw new InvalidOperationException($"Cannot publish indexed job '{jobId}' from its preparation state");
+            return jobId;
         }
         catch (Exception ex)
         {
-            log.LogError(ex, "Failed to write JobIndex for Job {JobId}", jobId);
+            log.LogError(ex, "Failed to publish indexed job {JobId}; cancelling the unpublished job", jobId);
+            try
+            {
+                // The expected-state guard cannot cancel a job already running or
+                // completed through an external state transition.
+                if (client.ChangeState(jobId, new DeletedState { Reason = "Index publication failed" }, PreparationStateName))
+                {
+                    using var scope = sp.CreateScope();
+                    scope.ServiceProvider.GetRequiredService<IJobIndexWriter>()
+                        .UpdateStateAsync(jobId, DeletedState.StateName, DateTime.UtcNow).GetAwaiter().GetResult();
+                }
+            }
+            catch (Exception cleanupError)
+            {
+                log.LogError(cleanupError, "Cannot cancel unpublished indexed job {JobId}", jobId);
+            }
+            throw;
         }
-
-        return jobId;
     }
 }
