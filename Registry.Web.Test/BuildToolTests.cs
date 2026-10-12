@@ -40,7 +40,7 @@ public class BuildToolTests
         new("build", "1", "o", "d", path, JsonDocument.Parse("{}").RootElement);
 
     [Test]
-    public async Task ExecuteAsync_EmptyPath_RunsPendingBuildAndReportsEnqueued()
+    public async Task ExecuteAsync_EmptyPath_RunsPendingBuildAndReportsNeutralCompletion()
     {
         var (ddb, ctx) = Context();
         var progress = new Progress();
@@ -50,7 +50,7 @@ public class BuildToolTests
         result.ShouldBeNull();
         ddb.Verify(x => x.BuildPending(null, false), Times.Once);
         ddb.Verify(x => x.Build(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<bool>()), Times.Never);
-        progress.Items.ShouldContain(p => p.LogChunk == "Pending builds enqueued");
+        progress.Items.ShouldContain(p => p.LogChunk == "Pending build check complete");
         progress.Items.ShouldNotContain(p => p.LogChunk == "Build complete");
     }
 
