@@ -299,9 +299,10 @@ public static class HangfireUtils
                 using var ownedConnection = connection == null ? (storage ?? JobStorage.Current).GetConnection() : null;
                 foreach (var row in indexed)
                 {
-                    // Hangfire is authoritative: a missing/terminal job or an
-                    // interrupted, unqueued Indexing publication cannot suppress
-                    // this pending entry forever through a stale Created index row.
+                    // Hangfire is authoritative: a missing/terminal job cannot suppress
+                    // this pending entry forever through a stale Created/Indexing index
+                    // row, while a live Indexing job (publication in progress or awaiting
+                    // recovery) is active and blocks a duplicate build.
                     var actualState = (connection ?? ownedConnection).GetStateData(row.JobId)?.Name;
                     if (actualState != null && TaskStateCatalog.Active.Contains(actualState))
                         activePaths.Add(row.Path);
@@ -474,7 +475,7 @@ public static class HangfireUtils
         try
         {
             var logger = Log.ForContext("SourceContext", "HangfireUtils");
-            await SyncJobIndexStatesAsync(jobIndexQuery, jobIndexWriter, logger);
+            await SyncJobIndexStatesAsync(jobIndexQuery, jobIndexWriter, context?.Storage ?? JobStorage.Current, logger);
             writeLine("JobIndex state synchronization completed successfully");
         }
         catch (Exception ex)
@@ -484,20 +485,41 @@ public static class HangfireUtils
         }
     }
 
-    private static async Task SyncJobIndexStatesAsync(IJobIndexQuery jobIndexQuery, IJobIndexWriter jobIndexWriter, ILogger logger, CancellationToken ct = default)
+    /// <summary>
+    /// JobIndex row states that can lag behind Hangfire and are reconciled from the live job state:
+    /// the legacy initial state and the initial state of an indexed job publication.
+    /// </summary>
+    internal static readonly string[] SyncedJobIndexStates = ["Created", IndexingState.StateName];
+
+    /// <summary>
+    /// Reconciles JobIndex rows still in <see cref="SyncedJobIndexStates"/> with the live state of their
+    /// job in <paramref name="storage"/> (the configured Hangfire storage). A row is written only when
+    /// the live state differs, and only while it is still in a synced state, so a row a concurrent
+    /// writer already advanced keeps its state and telemetry. A job missing from Hangfire is Deleted.
+    /// </summary>
+    internal static async Task SyncJobIndexStatesAsync(IJobIndexQuery jobIndexQuery, IJobIndexWriter jobIndexWriter,
+        JobStorage storage, ILogger logger, CancellationToken ct = default)
     {
+        ArgumentNullException.ThrowIfNull(storage);
+
         logger.Information("Starting JobIndex state synchronization");
 
         try
         {
-            // Get all JobIndex records with "Created" state
-            var createdJobs = await jobIndexQuery.GetByStateAsync("Created", ct: ct);
-            logger.Information("Found {Count} JobIndex entries with 'Created' state", createdJobs.Length);
+            var rows = new System.Collections.Generic.List<Registry.Web.Data.Models.JobIndex>();
+            foreach (var state in SyncedJobIndexStates)
+            {
+                var found = await jobIndexQuery.GetByStateAsync(state, ct: ct);
+                logger.Information("Found {Count} JobIndex entries with '{State}' state", found.Length, state);
+                rows.AddRange(found);
+            }
 
+            var monitoringApi = storage.GetMonitoringApi();
             var updatedCount = 0;
             var notFoundCount = 0;
+            var skippedCount = 0;
 
-            foreach (var jobIndex in createdJobs)
+            foreach (var jobIndex in rows)
             {
                 if (ct.IsCancellationRequested)
                     break;
@@ -505,7 +527,6 @@ public static class HangfireUtils
                 try
                 {
                     // Get job details from Hangfire
-                    var monitoringApi = JobStorage.Current.GetMonitoringApi();
                     var jobDetails = monitoringApi.JobDetails(jobIndex.JobId);
 
                     if (jobDetails?.History != null && jobDetails.History.Count > 0)
@@ -513,18 +534,20 @@ public static class HangfireUtils
                         var latestHistoryEntry = jobDetails.History[0];
                         var currentState = latestHistoryEntry.StateName;
 
-                        // If the state in Hangfire is different from "Created", update it
-                        if (currentState != "Created")
-                        {
-                            // Use the actual timestamp from Hangfire's state history instead of UtcNow
-                            var stateTimestamp = latestHistoryEntry.CreatedAt;
+                        if (currentState == jobIndex.CurrentState)
+                            continue;
 
-                            logger.Debug("Updating job {JobId} from 'Created' to '{CurrentState}' with timestamp {Timestamp}",
-                                jobIndex.JobId, currentState, stateTimestamp);
+                        // Use the actual timestamp from Hangfire's state history instead of UtcNow
+                        var stateTimestamp = latestHistoryEntry.CreatedAt;
 
-                            await jobIndexWriter.UpdateStateAsync(jobIndex.JobId, currentState, stateTimestamp, ct);
+                        logger.Debug("Updating job {JobId} from '{RowState}' to '{CurrentState}' with timestamp {Timestamp}",
+                            jobIndex.JobId, jobIndex.CurrentState, currentState, stateTimestamp);
+
+                        if (await jobIndexWriter.UpdateStateIfCurrentAsync(jobIndex.JobId, SyncedJobIndexStates,
+                                currentState, stateTimestamp, ct))
                             updatedCount++;
-                        }
+                        else
+                            skippedCount++;
                     }
                     else
                     {
@@ -532,8 +555,11 @@ public static class HangfireUtils
                         logger.Debug("Job {JobId} not found in Hangfire, marking as deleted", jobIndex.JobId);
 
                         // For deleted jobs, we use UtcNow since this is when we discovered they're missing
-                        await jobIndexWriter.UpdateStateAsync(jobIndex.JobId, "Deleted", DateTime.UtcNow, ct);
-                        notFoundCount++;
+                        if (await jobIndexWriter.UpdateStateIfCurrentAsync(jobIndex.JobId, SyncedJobIndexStates,
+                                "Deleted", DateTime.UtcNow, ct))
+                            notFoundCount++;
+                        else
+                            skippedCount++;
                     }
                 }
                 catch (Exception ex)
@@ -542,7 +568,8 @@ public static class HangfireUtils
                 }
             }
 
-            logger.Information("JobIndex state synchronization completed. Updated: {UpdatedCount}, Not found: {NotFoundCount}", updatedCount, notFoundCount);
+            logger.Information("JobIndex state synchronization completed. Updated: {UpdatedCount}, Not found: {NotFoundCount}, " +
+                               "Changed concurrently: {SkippedCount}", updatedCount, notFoundCount, skippedCount);
         }
         catch (Exception ex)
         {

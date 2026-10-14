@@ -224,6 +224,15 @@ public class AppSettings
     public string SyncJobIndexStatesCron { get; set; }
 
     /// <summary>
+    /// Cron expression for the recovery of indexed jobs whose publication was interrupted
+    /// (left in the non-runnable <c>Indexing</c> state, e.g. by a crash right after creation).
+    /// Each run completes the publication of due jobs on their original job id.
+    /// Default (when null, empty, or omitted): "* * * * *" (every minute).
+    /// Set to "disabled", "off", or "none" to remove the job.
+    /// </summary>
+    public string RecoverIndexedJobPublicationsCron { get; set; }
+
+    /// <summary>
     /// Cron expression for the pending-builds safety-net sweep. Pending builds are
     /// now retried event-driven (a delayed retry is self-scheduled whenever a build
     /// leaves items pending), so this recurring job is only a low-frequency backstop

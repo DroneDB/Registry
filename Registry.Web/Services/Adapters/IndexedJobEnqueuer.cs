@@ -1,7 +1,6 @@
 ﻿#nullable enable
 using System;
 using System.Linq.Expressions;
-using System.Collections.Generic;
 using System.Threading.Tasks;
 using Hangfire;
 using Hangfire.Common;
@@ -46,80 +45,65 @@ public class IndexedJobEnqueuer(IBackgroundJobClient client, IServiceProvider sp
         EnqueueCore(Job.FromExpression(methodCall), meta);
 
     public string Schedule(Expression<Action> methodCall, IndexPayload meta, TimeSpan delay) =>
-        CreateCore(Job.FromExpression(methodCall), meta, new ScheduledState(delay));
+        ScheduleCore(Job.FromExpression(methodCall), meta, delay);
 
     public string Schedule<T>(Expression<Action<T>> methodCall, IndexPayload meta, TimeSpan delay) =>
-        CreateCore(Job.FromExpression(methodCall), meta, new ScheduledState(delay));
+        ScheduleCore(Job.FromExpression(methodCall), meta, delay);
 
     public string Schedule(Expression<Func<Task>> methodCall, IndexPayload meta, TimeSpan delay) =>
-        CreateCore(Job.FromExpression(methodCall), meta, new ScheduledState(delay));
+        ScheduleCore(Job.FromExpression(methodCall), meta, delay);
 
     public string Schedule<T>(Expression<Func<T, Task>> methodCall, IndexPayload meta, TimeSpan delay) =>
-        CreateCore(Job.FromExpression(methodCall), meta, new ScheduledState(delay));
+        ScheduleCore(Job.FromExpression(methodCall), meta, delay);
 
     private string EnqueueCore(Job job, IndexPayload meta) =>
-        CreateCore(job, meta, new EnqueuedState(meta.Queue ?? EnqueuedState.DefaultQueue));
+        CreateCore(job, meta, createdAt => IndexedJobPublicationRecord.ForImmediate(meta, createdAt,
+            meta.Queue ?? EnqueuedState.DefaultQueue));
 
-    internal const string PreparationStateName = "Indexing";
+    private string ScheduleCore(Job job, IndexPayload meta, TimeSpan delay) =>
+        CreateCore(job, meta, createdAt => IndexedJobPublicationRecord.ForScheduled(meta, createdAt, delay));
 
-    // Hangfire persists arbitrary non-final states but does not dispatch them to
-    // workers. Publication completes before the transition to Enqueued/Scheduled,
-    // so no fast worker can lose a terminal state/error against a missing index row.
-    private sealed class PreparationState : IState
-    {
-        public string Name => PreparationStateName;
-        public string Reason => "Publishing indexed job metadata";
-        public bool IsFinal => false;
-        public bool IgnoreJobLoadException => false;
-        public Dictionary<string, string> SerializeData() => [];
-    }
+    internal const string PreparationStateName = IndexingState.StateName;
 
-    private string CreateCore(Job job, IndexPayload meta, IState state)
+    /// <summary>
+    /// Creates the job in <see cref="IndexingState"/> carrying its publication record, then publishes it.
+    /// Only a failure up to the creation commit reaches the caller ("not created"). Once the job exists
+    /// it is never cancelled here: publication failures are logged, the job id is returned and
+    /// IndexingStateHandler's recovery-set member lets recovery finish the publication.
+    /// </summary>
+    private string CreateCore(Job job, IndexPayload meta, Func<DateTime, IndexedJobPublicationRecord> recordFor)
     {
         meta.EnsureValid();
-        var createdAt = DateTime.UtcNow;
-        var jobId = client.Create(job, new PreparationState());
+        var record = recordFor(DateTime.UtcNow);
+        var invalid = record.Validate();
+        if (invalid != null)
+            throw new ArgumentException($"Invalid indexed job publication: {invalid}", nameof(meta));
+
+        // Without the handler a stranded job would never enter the recovery set.
+        if (!IndexingStateHandler.IsRegistered())
+            throw new InvalidOperationException(
+                $"{nameof(IndexingStateHandler)} is not registered in GlobalStateHandlers; refusing to create an indexed job");
+
+        var jobId = client.Create(job, new IndexingState(record));
         if (string.IsNullOrWhiteSpace(jobId))
             throw new InvalidOperationException("Hangfire did not create the indexed job");
 
         try
         {
-            using (var conn = (storage ?? JobStorage.Current).GetConnection())
-            {
-                conn.SetJobParameter(jobId, JobParamKeys.OrgSlug, meta.OrgSlug);
-                conn.SetJobParameter(jobId, JobParamKeys.DsSlug, meta.DsSlug);
-                if (!string.IsNullOrWhiteSpace(meta.Path)) conn.SetJobParameter(jobId, JobParamKeys.Path, meta.Path);
-                if (!string.IsNullOrWhiteSpace(meta.Hash)) conn.SetJobParameter(jobId, JobParamKeys.Hash, meta.Hash);
-                if (!string.IsNullOrWhiteSpace(meta.UserId)) conn.SetJobParameter(jobId, JobParamKeys.UserId, meta.UserId);
-                if (!string.IsNullOrWhiteSpace(meta.Queue)) conn.SetJobParameter(jobId, JobParamKeys.Queue, meta.Queue);
-            }
-
             using var scope = sp.CreateScope();
             var writer = scope.ServiceProvider.GetRequiredService<IJobIndexWriter>();
-            writer.UpsertOnEnqueueAsync(jobId, meta, createdAt, job.ToString()).GetAwaiter().GetResult();
-            if (!client.ChangeState(jobId, state, PreparationStateName))
-                throw new InvalidOperationException($"Cannot publish indexed job '{jobId}' from its preparation state");
-            return jobId;
+            var result = IndexedJobPublication.PublishAsync(jobId, record, storage ?? JobStorage.Current, client,
+                writer, job.ToString(), log).GetAwaiter().GetResult();
+
+            if (result.Outcome != IndexedJobPublicationOutcome.Published)
+                log.LogWarning("Indexed job {JobId} was not published by its creator (outcome {Outcome}, state {State}); " +
+                               "recovery will complete or classify it", jobId, result.Outcome, result.ActualState);
         }
         catch (Exception ex)
         {
-            log.LogError(ex, "Failed to publish indexed job {JobId}; cancelling the unpublished job", jobId);
-            try
-            {
-                // The expected-state guard cannot cancel a job already running or
-                // completed through an external state transition.
-                if (client.ChangeState(jobId, new DeletedState { Reason = "Index publication failed" }, PreparationStateName))
-                {
-                    using var scope = sp.CreateScope();
-                    scope.ServiceProvider.GetRequiredService<IJobIndexWriter>()
-                        .UpdateStateAsync(jobId, DeletedState.StateName, DateTime.UtcNow).GetAwaiter().GetResult();
-                }
-            }
-            catch (Exception cleanupError)
-            {
-                log.LogError(cleanupError, "Cannot cancel unpublished indexed job {JobId}", jobId);
-            }
-            throw;
+            log.LogError(ex, "Failed to publish indexed job {JobId} after creation; recovery will complete it", jobId);
         }
+
+        return jobId;
     }
 }

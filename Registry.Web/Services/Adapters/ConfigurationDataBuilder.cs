@@ -506,6 +506,10 @@ public class ConfigurationDataBuilder : IConfigurationDataBuilder
                     "Cron expression for reconciling JobIndex states across restarts. Default: '0 * * * *' (hourly).",
                     _settings.SyncJobIndexStatesCron, _defaults.SyncJobIndexStatesCron, "cron"),
 
+                StringField("RecoverIndexedJobPublicationsCron", "Recover Indexed Job Publications Cron",
+                    "Cron expression for completing indexed job publications interrupted before the job became runnable. Default: '* * * * *' (every minute).",
+                    _settings.RecoverIndexedJobPublicationsCron, _defaults.RecoverIndexedJobPublicationsCron, "cron"),
+
                 StringField("ProcessPendingBuildsCron", "Process Pending Builds Cron",
                     "Cron expression for retrying pending builds. Default: '0 */6 * * *' (every 6 hours).",
                     _settings.ProcessPendingBuildsCron, _defaults.ProcessPendingBuildsCron, "cron"),

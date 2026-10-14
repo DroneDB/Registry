@@ -70,6 +70,7 @@ public static class ProcessingNodeServiceCollectionExtensions
         services.AddScoped<IBackgroundJobsProcessor, BackgroundJobsProcessor>();
         services.AddScoped<BuildPendingService>();
         services.AddScoped<JobIndexSyncService>();
+        services.AddScoped<IndexedJobPublicationRecoveryService>();
         services.AddScoped<DatasetCleanupService>();
         services.AddScoped<OrphanedDatasetCleanupService>();
         services.AddScoped<RecurringDatasetCleanupService>();

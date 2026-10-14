@@ -71,6 +71,13 @@ internal class HangfireJobsInitializer
                 service => service.SyncJobIndexStates(null),
                 cron));
 
+        ScheduleJob(recurringJobManager, "recover-indexed-job-publications",
+            ResolveCron(appSettings.RecoverIndexedJobPublicationsCron, "* * * * *"),
+            cron => recurringJobManager.AddOrUpdate<IndexedJobPublicationRecoveryService>(
+                "recover-indexed-job-publications",
+                service => service.RecoverPublications(null),
+                cron));
+
         ScheduleJob(recurringJobManager, "process-pending-builds",
             ResolveCron(appSettings.ProcessPendingBuildsCron, "0 */6 * * *"),
             cron => recurringJobManager.AddOrUpdate<BuildPendingService>(

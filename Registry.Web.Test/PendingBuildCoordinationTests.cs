@@ -502,10 +502,24 @@ public class PendingBuildCoordinationTests
         State().GetProperty("ScheduledRetryJobId").GetString().ShouldBe("live");
     }
 
-    [TestCase("Indexing")]
     [TestCase("Failed")]
     [TestCase("Missing")]
     public void StaleCreatedRowCannotBlockNextPendingAttempt(string actualState)
+    {
+        RunPendingBuildWithLiveState(actualState, "Created");
+        _enqueued.ShouldBe(1);
+    }
+
+    [TestCase("Created")]
+    [TestCase("Indexing")]
+    public void LiveIndexingBuildBlocksDuplicatePendingAttempt(string rowState)
+    {
+        // An Indexing job is still being published (or awaits publication recovery): it is active.
+        RunPendingBuildWithLiveState("Indexing", rowState);
+        _enqueued.ShouldBe(0);
+    }
+
+    private void RunPendingBuildWithLiveState(string actualState, string rowState)
     {
         var storage = new Mock<JobStorage>();
         var connection = new Mock<IStorageConnection>();
@@ -516,11 +530,10 @@ public class PendingBuildCoordinationTests
         _ddb.Setup(x => x.GetPendingBuildInfo()).Returns([new PendingBuildInfo { Path = "model.obj", Hash = "h", LastAttempt = 0 }]);
         var index = new Mock<IJobIndexQuery>();
         index.Setup(x => x.GetByOrgDsAsync(Org, Ds, 0, int.MaxValue, It.IsAny<CancellationToken>())).ReturnsAsync([
-            new JobIndex { JobId = "stale-job", OrgSlug = Org, DsSlug = Ds, Path = "model.obj", ToolId = "build", CurrentState = "Created" }
+            new JobIndex { JobId = "stale-job", OrgSlug = Org, DsSlug = Ds, Path = "model.obj", ToolId = "build", CurrentState = rowState }
         ]);
         HangfireUtils.BuildPendingWrapper(_ddb.Object, null, _jobs.Object, index.Object, Org, Ds,
             () => 1_800_000_000, storage.Object);
-        _enqueued.ShouldBe(1);
     }
 
     [Test]

@@ -62,6 +62,7 @@ public class PendingRecoveryIntegrationTests
     private JobStorage? _previousStorage;
     private JobActivator _previousActivator = null!;
     private JobFilter[] _previousFilters = [];
+    private Hangfire.States.IStateHandler[] _previousStateHandlers = [];
     private static JobFilter[] _consoleFilters = [];
     private readonly ConcurrentDictionary<Guid, IDDB> _datasets = new();
     private readonly WorkerGate _gate = new();
@@ -86,6 +87,7 @@ public class PendingRecoveryIntegrationTests
         _gate.Reset();
         _previousActivator = JobActivator.Current;
         _previousFilters = GlobalJobFilters.Filters.ToArray();
+        _previousStateHandlers = GlobalStateHandlers.Handlers.ToArray();
         try { _previousStorage = JobStorage.Current; }
         catch (InvalidOperationException) { _previousStorage = null; }
         _diskSetting = Environment.GetEnvironmentVariable("DDB_MIN_FREE_DISK_MB");
@@ -163,6 +165,7 @@ public class PendingRecoveryIntegrationTests
             foreach (var filter in _consoleFilters) GlobalJobFilters.Filters.Add(filter.Instance, filter.Order);
         }
         GlobalJobFilters.Filters.Add(new AutomaticRetryAttribute { Attempts = 1 });
+        IndexingStateHandler.EnsureRegistered();
         GlobalJobFilters.Filters.Add(new JobIndexStateFilter(_provider,
             _provider.GetRequiredService<Microsoft.Extensions.Logging.ILogger<JobIndexStateFilter>>()));
         InstallFailureFilters(failureFirst: true);
@@ -183,6 +186,8 @@ public class PendingRecoveryIntegrationTests
         GlobalJobFilters.Filters.Clear();
         foreach (var filter in _previousFilters)
             GlobalJobFilters.Filters.Add(filter.Instance, filter.Order);
+        GlobalStateHandlers.Handlers.Clear();
+        foreach (var handler in _previousStateHandlers) GlobalStateHandlers.Handlers.Add(handler);
         GlobalConfiguration.Configuration.UseActivator(_previousActivator);
         if (_previousStorage != null) JobStorage.Current = _previousStorage;
         SetNativeEnvironment("DDB_MIN_FREE_DISK_MB", _diskSetting);
@@ -568,7 +573,7 @@ public class PendingRecoveryIntegrationTests
         using var releaseIndex = new ManualResetEventSlim();
         string? stagedId = null;
         var writer = new Mock<IJobIndexWriter>();
-        writer.Setup(x => x.UpsertOnEnqueueAsync(It.IsAny<string>(), It.IsAny<IndexPayload>(), It.IsAny<DateTime>(),
+        writer.Setup(x => x.PrepareForPublicationAsync(It.IsAny<string>(), It.IsAny<IndexPayload>(), It.IsAny<DateTime>(),
                 It.IsAny<string>(), It.IsAny<CancellationToken>()))
             .Returns<string, IndexPayload, DateTime, string, CancellationToken>(async (id, meta, created, method, ct) =>
             {
@@ -576,7 +581,8 @@ public class PendingRecoveryIntegrationTests
                 beforeIndex.Set();
                 if (!releaseIndex.Wait(TimeSpan.FromSeconds(30))) throw new TimeoutException("Publication barrier not released");
                 using var scope = _provider.CreateScope();
-                await scope.ServiceProvider.GetRequiredService<IJobIndexWriter>().UpsertOnEnqueueAsync(id, meta, created, method, ct);
+                return await scope.ServiceProvider.GetRequiredService<IJobIndexWriter>()
+                    .PrepareForPublicationAsync(id, meta, created, method, ct);
             });
         using var publicationProvider = new ServiceCollection().AddSingleton(writer.Object).BuildServiceProvider();
         var indexed = new IndexedJobEnqueuer(Client, publicationProvider,
