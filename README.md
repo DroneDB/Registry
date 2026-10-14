@@ -59,21 +59,43 @@ View orthophotos, point clouds, 3D models, Vector files, 3D Tiles, Gaussian spla
 
 ## 🚀 Quick Start with Docker
 
+The fastest way to get started is with Docker. Download [Docker](https://www.docker.com/community-edition) and run:
+
 ```bash
 docker run -it --rm -p 5000:5000 -v ${PWD}/registry-data:/data dronedb/registry
 ```
 
-Open [http://localhost:5000](http://localhost:5000) • Default credentials: `admin` / `password123`
+Data will be stored in the local folder `registry-data`.
+Open [http://localhost:5000](http://localhost:5000) in your browser to start using the application.
 
-> Change the default password immediately at [http://localhost:5000/account](http://localhost:5000/account)
+> **macOS users:** do not bind-mount a local folder to `/data`. Docker Desktop shares host folders through virtiofs, and DroneDB cannot create dataset indexes on it. Use a named volume instead:
+>
+> ```bash
+> docker volume create registry-data
+> docker run -d --name registry --restart unless-stopped \
+>   -p 5000:5000 \
+>   -v registry-data:/data \
+>   dronedb/registry
+> ```
+>
+> See [macOS: use a named volume](https://docs.dronedb.app/docs/registry/getting-started#macos-use-a-named-volume) for details.
+
+**Default credentials**: `admin` / `password123`
+
+> ⚠️ Change the default password immediately after first login at [http://localhost:5000/account](http://localhost:5000/account)
 
 ### Useful Endpoints
 
-| Endpoint     | Description                               |
-| ------------ | ----------------------------------------- |
-| `/scalar/v1` | API Documentation                         |
-| `/stac`      | STAC Catalog                              |
-| `/hangfire`  | Background jobs dashboard (requires auth) |
+| Endpoint                                          | Description                               |
+| ------------------------------------------------- | ----------------------------------------- |
+| [/scalar/v1](http://localhost:5000/scalar/v1)     | API Documentation (Scalar UI)             |
+| [/version](http://localhost:5000/version)         | Version information                       |
+| [/quickhealth](http://localhost:5000/quickhealth) | Quick health check (requires auth)        |
+| [/health](http://localhost:5000/health)           | Detailed health check (requires auth)     |
+| [/hangfire](http://localhost:5000/hangfire)       | Background jobs dashboard (requires auth) |
+| [/stac](http://localhost:5000/stac)               | STAC Catalog root                         |
+
+The log file is located in `registry-data/logs/registry.txt`.
 
 ### Processing Platform
 
