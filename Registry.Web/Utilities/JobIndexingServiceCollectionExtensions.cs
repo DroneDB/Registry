@@ -22,6 +22,7 @@ public static class JobIndexingServiceCollectionExtensions
 
         // Service for sync jobs that need DI
         services.AddScoped<JobIndexSyncService>();
+        services.AddScoped<IndexedJobPublicationRecoveryService>();
 
         return services;
     }

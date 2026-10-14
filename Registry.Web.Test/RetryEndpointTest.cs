@@ -53,15 +53,8 @@ public class RetryEndpointTest : IDisposable
     private TasksManager _manager = null!;
     private Mock<IDDB> _ddb = null!;
     private Mock<IUtils> _utils = null!;
-
-    /// <summary>Minimal JobStorage whose monitoring API reports the scripted live state per test.</summary>
-    private sealed class TestJobStorage : JobStorage
-    {
-        private readonly IMonitoringApi _monitor;
-        public TestJobStorage(IMonitoringApi monitor) => _monitor = monitor;
-        public override IMonitoringApi GetMonitoringApi() => _monitor;
-        public override IStorageConnection GetConnection() => throw new NotSupportedException();
-    }
+    private Mock<IStorageConnection> _connection = null!;
+    private Mock<JobStorage> _storage = null!;
 
     [SetUp]
     public void SetUp()
@@ -69,17 +62,15 @@ public class RetryEndpointTest : IDisposable
         _db = new RegistryContext(new DbContextOptionsBuilder<RegistryContext>()
             .UseInMemoryDatabase($"RetryTest_{Guid.NewGuid()}").Options);
 
-        // Default live state: no jobs in Hangfire (JobDetails returns null). Individual tests
+        // Default live state: no jobs in Hangfire (GetStateData returns null). Individual tests
         // override via SetLiveState; the client's Requeue defaults to success (stock semantics).
         _client = new Mock<IBackgroundJobClient>();
         // Every Requeue/Delete helper funnels to the single interface method
         // ChangeState(jobId, state, fromState); default: the transition succeeds.
         _client.Setup(x => x.ChangeState(It.IsAny<string>(), It.IsAny<IState>(), It.IsAny<string>())).Returns(true);
-        // Swap JobStorage.Current for this test; Dispose restores the previous value (used to
-        // leak into sibling fixtures because the _client mock below hangs off this storage).
-        DisposeJobScope();
-        _jobScope = new JobStorageScope(
-            new TestJobStorage(Mock.Of<IMonitoringApi>(x => x.JobDetails(It.IsAny<string>()) == null)));
+        _connection = new Mock<IStorageConnection>();
+        _storage = new Mock<JobStorage>();
+        _storage.Setup(x => x.GetConnection()).Returns(_connection.Object);
 
         // Auth: everyone may see the dataset and owns every task (UserId null breaks the chain into IsOwnerOrAdmin).
         var authManager = new Mock<IAuthManager>();
@@ -110,7 +101,7 @@ public class RetryEndpointTest : IDisposable
             writer,
             authManager.Object,
             _utils.Object,
-            new BackgroundJobsProcessor(_client.Object, NullIndexedEnqueuer.Create()),
+            new BackgroundJobsProcessor(_client.Object, NullIndexedEnqueuer.Create(), _storage.Object),
             ddbManager.Object,
             new Mock<IDistributedCache>().Object,
             new Mock<IHttpContextAccessor>().Object,
@@ -118,14 +109,10 @@ public class RetryEndpointTest : IDisposable
             new Mock<ILogger<TasksManager>>().Object);
     }
 
-    private JobStorageScope? _jobScope;
-
-    private void DisposeJobScope() => _jobScope?.Dispose();
-
+    [TearDown]
     public void Dispose()
     {
-        DisposeJobScope();
-        _jobScope = null;
+        _db?.Dispose();
     }
 
     private static JobIndex NewRow(string jobId, string state, string toolId = null) => new()
@@ -165,16 +152,10 @@ public class RetryEndpointTest : IDisposable
     /// Reports the given live Hangfire state for the given job id via a fabricated JobStorage.
     /// A <paramref name="stateName"/> of null models a job no longer present in Hangfire.
     /// </summary>
-    private static void SetLiveState(string jobId, string stateName)
+    private void SetLiveState(string jobId, string stateName)
     {
-        var dto = stateName is null
-            ? null
-            : new JobDetailsDto
-            {
-                History = new List<StateHistoryDto> { new StateHistoryDto { StateName = stateName } }
-            };
-        var monitor = Mock.Of<IMonitoringApi>(x => x.JobDetails(jobId) == dto);
-        JobStorage.Current = new TestJobStorage(monitor);
+        _connection.Setup(x => x.GetStateData(jobId)).Returns(stateName is null ? null :
+            new StateData { Name = stateName, Data = new Dictionary<string, string>() });
     }
 
     /// <summary>Seeds a Failed JobIndex row plus a live Failed Hangfire state for the given tool.</summary>

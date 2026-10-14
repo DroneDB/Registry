@@ -129,6 +129,11 @@ public static class StartupExtenders
 
         // Specify the global number of retries
         GlobalJobFilters.Filters.Add(new AutomaticRetryAttribute { Attempts = 1 });
+
+        // Registered eagerly (not in the lazy configuration callback above) for both providers, so
+        // every host that creates or transitions indexed jobs keeps Indexing jobs discoverable by
+        // recovery. Idempotent: hosts and tests may call this more than once.
+        IndexingStateHandler.EnsureRegistered();
     }
 
     public static void AddCacheProvider(this IServiceCollection services, AppSettings appSettings)

@@ -100,6 +100,174 @@ public class JobIndexWriter(RegistryContext db, ILogger<JobIndexWriter> log,
         await InvalidateTasksListCacheAsync(meta.OrgSlug, meta.DsSlug, ct);
     }
 
+    private const string IndexingStateName = "Indexing";
+    private const int MaxPreparationAttempts = 3;
+
+    public async Task<JobIndexPreparationResult> PrepareForPublicationAsync(string jobId, IndexPayload meta,
+        DateTime createdAtUtc, string? methodDisplay, CancellationToken ct = default)
+    {
+        meta.EnsureValid();
+
+        // Publication records carry millisecond precision, which both MySQL datetime(6) and SQLite
+        // TEXT columns round-trip exactly, so "same creation time" means "same publication".
+        var created = new DateTime(createdAtUtc.Ticks - createdAtUtc.Ticks % TimeSpan.TicksPerMillisecond,
+            DateTimeKind.Utc);
+        var toolId = string.IsNullOrWhiteSpace(meta.ToolId) ? "build" : meta.ToolId;
+
+        for (var attempt = 1; ; attempt++)
+        {
+            var existing = await db.JobIndices.AsNoTracking().FirstOrDefaultAsync(x => x.JobId == jobId, ct);
+            if (existing is null)
+            {
+                var row = new JobIndex { JobId = jobId };
+                ApplyFreshIndexingRow(row, meta, created, methodDisplay);
+                db.JobIndices.Add(row);
+                try
+                {
+                    await db.SaveChangesAsync(ct);
+                }
+                catch (Exception ex)
+                {
+                    // The context is scoped and reused (e.g. by the recovery pass): never leave the
+                    // failed insert tracked, or the next SaveChanges would replay it.
+                    db.Entry(row).State = EntityState.Detached;
+                    if (ex is not DbUpdateException || attempt >= MaxPreparationAttempts)
+                        throw;
+
+                    // A concurrent preparer inserted the row first: classify against its row instead.
+                    log.LogDebug(ex, "JobIndex row of job {JobId} was inserted concurrently; re-reading", jobId);
+                    continue;
+                }
+
+                await InvalidateTasksListCacheAsync(meta.OrgSlug, meta.DsSlug, ct);
+                return JobIndexPreparationResult.Inserted;
+            }
+
+            // The row of this publication is never modified, whatever state it reached.
+            if (existing.CreatedAtUtc.Ticks == created.Ticks)
+                return existing.OrgSlug == meta.OrgSlug && existing.DsSlug == meta.DsSlug &&
+                       existing.ToolId == toolId && existing.RequestHash == meta.RequestHash
+                    ? JobIndexPreparationResult.Compatible
+                    : JobIndexPreparationResult.Incompatible;
+
+            // A different creation time means the job id was reused (e.g. InMemory ids restart after
+            // a process restart) and the row belongs to an earlier job.
+            if (await TryReplaceWithIndexingRowAsync(jobId, meta, created, methodDisplay, ct))
+            {
+                log.LogWarning("Replaced JobIndex row of job {JobId} created at {PreviousCreatedAtUtc} " +
+                               "(state {PreviousState}) left over from an earlier job with the same id",
+                    jobId, existing.CreatedAtUtc, existing.CurrentState);
+
+                if (existing.OrgSlug != meta.OrgSlug || existing.DsSlug != meta.DsSlug)
+                    await InvalidateTasksListCacheAsync(existing.OrgSlug, existing.DsSlug, ct);
+                await InvalidateTasksListCacheAsync(meta.OrgSlug, meta.DsSlug, ct);
+                return JobIndexPreparationResult.Replaced;
+            }
+
+            // Another preparer replaced or removed the row concurrently: classify the current row.
+            if (attempt >= MaxPreparationAttempts)
+                throw new InvalidOperationException(
+                    $"JobIndex row of job '{jobId}' kept changing during publication preparation");
+        }
+    }
+
+    /// <summary>
+    /// Overwrites a row whose creation time differs from <paramref name="created"/>. The creation-time
+    /// guard is evaluated by the database, so concurrent preparers of the same publication converge:
+    /// only the first one writes, and a row that publication already advanced is never reset.
+    /// </summary>
+    private async Task<bool> TryReplaceWithIndexingRowAsync(string jobId, IndexPayload meta, DateTime created,
+        string? methodDisplay, CancellationToken ct)
+    {
+        if (db.Database.IsRelational())
+        {
+            var toolId = string.IsNullOrWhiteSpace(meta.ToolId) ? "build" : meta.ToolId;
+            var toolVersion = string.IsNullOrWhiteSpace(meta.ToolVersion) ? "1" : meta.ToolVersion;
+            var updated = await db.JobIndices
+                .Where(x => x.JobId == jobId && x.CreatedAtUtc != created)
+                .ExecuteUpdateAsync(s => s
+                    .SetProperty(x => x.OrgSlug, meta.OrgSlug)
+                    .SetProperty(x => x.DsSlug, meta.DsSlug)
+                    .SetProperty(x => x.Hash, meta.Hash)
+                    .SetProperty(x => x.Path, meta.Path)
+                    .SetProperty(x => x.UserId, meta.UserId)
+                    .SetProperty(x => x.Queue, meta.Queue)
+                    .SetProperty(x => x.CreatedAtUtc, created)
+                    .SetProperty(x => x.LastStateChangeUtc, created)
+                    .SetProperty(x => x.CurrentState, IndexingStateName)
+                    .SetProperty(x => x.MethodDisplay, methodDisplay)
+                    .SetProperty(x => x.ToolId, toolId)
+                    .SetProperty(x => x.ToolVersion, toolVersion)
+                    .SetProperty(x => x.RequestHash, meta.RequestHash)
+                    .SetProperty(x => x.ParentJobId, meta.ParentJobId)
+                    .SetProperty(x => x.WorkflowExecutionId, meta.WorkflowExecutionId)
+                    .SetProperty(x => x.ProcessingAtUtc, (DateTime?)null)
+                    .SetProperty(x => x.SucceededAtUtc, (DateTime?)null)
+                    .SetProperty(x => x.FailedAtUtc, (DateTime?)null)
+                    .SetProperty(x => x.DeletedAtUtc, (DateTime?)null)
+                    .SetProperty(x => x.ScheduledAtUtc, (DateTime?)null)
+                    .SetProperty(x => x.ProgressPercent, (int?)null)
+                    .SetProperty(x => x.PhaseMessage, (string?)null)
+                    .SetProperty(x => x.ArtifactSizeBytes, (long?)null)
+                    .SetProperty(x => x.ArtifactSha256, (string?)null)
+                    .SetProperty(x => x.ErrorType, (string?)null)
+                    .SetProperty(x => x.LogTailJson, (string?)null)
+                    .SetProperty(x => x.ProgressUpdatedAtUtc, (DateTime?)null), ct);
+            return updated > 0;
+        }
+
+        // Non-relational providers (in-memory tests) cannot run set-based updates.
+        var row = await db.JobIndices.AsTracking().FirstOrDefaultAsync(x => x.JobId == jobId, ct);
+        if (row is null || row.CreatedAtUtc.Ticks == created.Ticks)
+            return false;
+
+        ApplyFreshIndexingRow(row, meta, created, methodDisplay);
+        try
+        {
+            await db.SaveChangesAsync(ct);
+        }
+        catch
+        {
+            // Do not leave the failed update tracked in the reused scoped context.
+            db.Entry(row).State = EntityState.Detached;
+            throw;
+        }
+        return true;
+    }
+
+    // Field set of a freshly prepared row: identity from the payload, Indexing state at the original
+    // creation time and no telemetry (mirrors the reset in UpsertOnEnqueueAsync).
+    private static void ApplyFreshIndexingRow(JobIndex row, IndexPayload meta, DateTime created, string? methodDisplay)
+    {
+        row.OrgSlug = meta.OrgSlug;
+        row.DsSlug = meta.DsSlug;
+        row.Hash = meta.Hash;
+        row.Path = meta.Path;
+        row.UserId = meta.UserId;
+        row.Queue = meta.Queue;
+        row.CreatedAtUtc = created;
+        row.LastStateChangeUtc = created;
+        row.CurrentState = IndexingStateName;
+        row.MethodDisplay = methodDisplay;
+        row.ToolId = string.IsNullOrWhiteSpace(meta.ToolId) ? "build" : meta.ToolId;
+        row.ToolVersion = string.IsNullOrWhiteSpace(meta.ToolVersion) ? "1" : meta.ToolVersion;
+        row.RequestHash = meta.RequestHash;
+        row.ParentJobId = meta.ParentJobId;
+        row.WorkflowExecutionId = meta.WorkflowExecutionId;
+        row.ProcessingAtUtc = null;
+        row.SucceededAtUtc = null;
+        row.FailedAtUtc = null;
+        row.DeletedAtUtc = null;
+        row.ScheduledAtUtc = null;
+        row.ProgressPercent = null;
+        row.PhaseMessage = null;
+        row.ArtifactSizeBytes = null;
+        row.ArtifactSha256 = null;
+        row.ErrorType = null;
+        row.LogTailJson = null;
+        row.ProgressUpdatedAtUtc = null;
+    }
+
     public async Task ResetForRequeueAsync(string jobId, CancellationToken ct = default)
     {
         var ji = await db.JobIndices.AsTracking().FirstOrDefaultAsync(x => x.JobId == jobId, ct);
@@ -140,6 +308,94 @@ public class JobIndexWriter(RegistryContext db, ILogger<JobIndexWriter> log,
             return;
         }
 
+        ApplyStateChange(ji, newState, changedAtUtc);
+
+        try
+        {
+            await db.SaveChangesAsync(ct);
+        }
+        catch
+        {
+            // Do not leave the failed update tracked in the reused scoped context.
+            db.Entry(ji).State = EntityState.Detached;
+            throw;
+        }
+
+        // Invalidate task-list cache for the affected dataset
+        if (ji.OrgSlug != null && ji.DsSlug != null)
+            await InvalidateTasksListCacheAsync(ji.OrgSlug, ji.DsSlug, ct);
+    }
+
+    public async Task<bool> UpdateStateIfCurrentAsync(string jobId, IReadOnlyCollection<string> expectedCurrentStates,
+        string newState, DateTime changedAtUtc, CancellationToken ct = default)
+    {
+        var expected = expectedCurrentStates.ToArray();
+
+        var ji = await db.JobIndices.AsNoTracking().FirstOrDefaultAsync(x => x.JobId == jobId, ct);
+        if (ji is null || !expected.Contains(ji.CurrentState))
+            return false;
+
+        if (db.Database.IsRelational())
+        {
+            // The expected-state guard is evaluated by the database, so a row a concurrent writer
+            // (e.g. JobIndexStateFilter) already advanced is never moved back. Setters mirror
+            // ApplyStateChange.
+            var updated = await db.JobIndices
+                .Where(x => x.JobId == jobId && expected.Contains(x.CurrentState))
+                .ExecuteUpdateAsync(s =>
+                {
+                    s.SetProperty(x => x.CurrentState, newState)
+                        .SetProperty(x => x.LastStateChangeUtc, changedAtUtc);
+                    if (newState == ProcessingState.StateName)
+                        s.SetProperty(x => x.ProcessingAtUtc, changedAtUtc)
+                            .SetProperty(x => x.ErrorType, (string?)null);
+                    else if (newState == SucceededState.StateName)
+                        s.SetProperty(x => x.SucceededAtUtc, changedAtUtc)
+                            .SetProperty(x => x.ErrorType, (string?)null);
+                    else if (newState == FailedState.StateName)
+                        s.SetProperty(x => x.FailedAtUtc, changedAtUtc);
+                    else if (newState == DeletedState.StateName)
+                        s.SetProperty(x => x.DeletedAtUtc, changedAtUtc);
+                    else if (newState == ScheduledState.StateName)
+                        s.SetProperty(x => x.ScheduledAtUtc, changedAtUtc);
+                }, ct);
+
+            // A set-based update bypasses the change tracker: drop any stale tracked copy.
+            var local = db.JobIndices.Local.FirstOrDefault(x => x.JobId == jobId);
+            if (local != null)
+                db.Entry(local).State = EntityState.Detached;
+
+            if (updated == 0)
+                return false;
+        }
+        else
+        {
+            // Non-relational providers (in-memory tests) cannot run set-based updates.
+            var tracked = await db.JobIndices.AsTracking().FirstOrDefaultAsync(x => x.JobId == jobId, ct);
+            if (tracked is null || !expected.Contains(tracked.CurrentState))
+                return false;
+
+            ApplyStateChange(tracked, newState, changedAtUtc);
+            try
+            {
+                await db.SaveChangesAsync(ct);
+            }
+            catch
+            {
+                // Do not leave the failed update tracked in the reused scoped context.
+                db.Entry(tracked).State = EntityState.Detached;
+                throw;
+            }
+        }
+
+        if (ji.OrgSlug != null && ji.DsSlug != null)
+            await InvalidateTasksListCacheAsync(ji.OrgSlug, ji.DsSlug, ct);
+        return true;
+    }
+
+    // State stamping shared by UpdateStateAsync and the non-relational path of UpdateStateIfCurrentAsync.
+    private static void ApplyStateChange(JobIndex ji, string newState, DateTime changedAtUtc)
+    {
         ji.CurrentState = newState;
         ji.LastStateChangeUtc = changedAtUtc;
         // A fresh attempt (Processing) or a recovery (Succeeded) supersedes any transient error a
@@ -160,12 +416,6 @@ public class JobIndexWriter(RegistryContext db, ILogger<JobIndexWriter> log,
             ji.DeletedAtUtc = changedAtUtc;
         else if (newState == ScheduledState.StateName)
             ji.ScheduledAtUtc = changedAtUtc;
-
-        await db.SaveChangesAsync(ct);
-
-        // Invalidate task-list cache for the affected dataset
-        if (ji.OrgSlug != null && ji.DsSlug != null)
-            await InvalidateTasksListCacheAsync(ji.OrgSlug, ji.DsSlug, ct);
     }
 
     private static readonly string[] TerminalStates = ["Succeeded", "Failed", "Deleted"];
@@ -328,7 +578,16 @@ public class JobIndexWriter(RegistryContext db, ILogger<JobIndexWriter> log,
 
         ji.ErrorType = errorType;
 
-        await db.SaveChangesAsync(ct);
+        try
+        {
+            await db.SaveChangesAsync(ct);
+        }
+        catch
+        {
+            // Do not leave the failed update tracked in the reused scoped context.
+            db.Entry(ji).State = EntityState.Detached;
+            throw;
+        }
 
         if (ji.OrgSlug != null && ji.DsSlug != null)
             await InvalidateTasksListCacheAsync(ji.OrgSlug, ji.DsSlug, ct);

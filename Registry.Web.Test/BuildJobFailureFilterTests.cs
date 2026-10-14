@@ -8,6 +8,8 @@ using Hangfire.States;
 using Hangfire.Storage;
 using Hangfire.Storage.Monitoring;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.EntityFrameworkCore;
+using Registry.Web.Data;
 using Microsoft.Extensions.Logging;
 using Moq;
 using NUnit.Framework;
@@ -56,6 +58,7 @@ public class BuildJobFailureFilterTests
     private ServiceProvider _provider = null!;
     private JobStorageScope _storageScope = null!;
     private BuildJobFailureFilter _filter = null!;
+    private RegistryContext _registryContext = null!;
 
     [SetUp]
     public void SetUp()
@@ -63,17 +66,22 @@ public class BuildJobFailureFilterTests
         _cacheMock = new Mock<ICacheManager>();
         _writerMock = new Mock<IJobIndexWriter>();
 
-        var services = new ServiceCollection();
-        services.AddSingleton(_cacheMock.Object);
-        services.AddSingleton(_writerMock.Object);
-        _provider = services.BuildServiceProvider();
-
         _connMock = new Mock<JobStorageConnection> { CallBase = false };
         _connMock.Setup(c => c.GetJobParameter(JobId, JobParamKeys.OrgSlug)).Returns(OrgSlug);
         _connMock.Setup(c => c.GetJobParameter(JobId, JobParamKeys.DsSlug)).Returns(DsSlug);
-
+        _connMock.Setup(c => c.AcquireDistributedLock(It.IsAny<string>(), It.IsAny<TimeSpan>()))
+            .Returns(Mock.Of<IDisposable>());
         var storage = new TestJobStorage(Mock.Of<IMonitoringApi>(), _connMock.Object);
         _storageScope = new JobStorageScope(storage);
+        _registryContext = new RegistryContext(new DbContextOptionsBuilder<RegistryContext>()
+            .UseInMemoryDatabase(Guid.NewGuid().ToString()).Options);
+
+        var services = new ServiceCollection();
+        services.AddSingleton(_cacheMock.Object);
+        services.AddSingleton(_writerMock.Object);
+        services.AddSingleton(new BuildPendingService(_registryContext, Mock.Of<IDdbManager>(),
+            Mock.Of<IBackgroundJobsProcessor>(), _cacheMock.Object, Mock.Of<ILogger<BuildPendingService>>(), storage));
+        _provider = services.BuildServiceProvider();
 
         _filter = new BuildJobFailureFilter(_provider, Mock.Of<ILogger<BuildJobFailureFilter>>());
     }
@@ -83,6 +91,7 @@ public class BuildJobFailureFilterTests
     {
         _storageScope.Dispose();
         _provider.Dispose();
+        _registryContext.Dispose();
     }
 
     private ApplyStateContext BuildContext(string methodName, IState newState)
@@ -99,7 +108,7 @@ public class BuildJobFailureFilterTests
     }
 
     [Test]
-    public void OnStateApplied_FailedBuild_WritesErrorTypeNameAndInvalidatesCache()
+    public void OnStateApplied_FailedBuild_WritesErrorTypeNameAndPreservesRetryCache()
     {
         var ctx = BuildContext(nameof(HangfireUtils.BuildWrapper),
             new FailedState(new DdbException("gdal cannot open")));
@@ -108,7 +117,8 @@ public class BuildJobFailureFilterTests
 
         _writerMock.Verify(w => w.UpdateErrorAsync(JobId, "DdbException", default), Times.Once);
         _cacheMock.Verify(c => c.RemoveByCategoryAsync(
-            MagicStrings.BuildPendingTrackerCacheSeed, It.IsAny<string>()), Times.Once);
+            MagicStrings.BuildPendingTrackerCacheSeed, It.IsAny<string>()), Times.Never);
+        _cacheMock.Verify(c => c.GetAsync(MagicStrings.BuildPendingTrackerCacheSeed, It.IsAny<string>()), Times.Once);
     }
 
     [Test]

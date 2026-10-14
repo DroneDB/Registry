@@ -10,6 +10,7 @@ using Hangfire.Console;
 using Hangfire.Server;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Configuration;
 using Registry.Ports;
 using Registry.Ports.DroneDB;
 using Registry.Web.Attributes;
@@ -32,6 +33,8 @@ public class BuildPendingService
     private readonly IBackgroundJobsProcessor _backgroundJob;
     private readonly ICacheManager _cacheManager;
     private readonly ILogger<BuildPendingService> _logger;
+    private readonly JobStorage? _storage;
+    private readonly string? _mysqlConnectionString;
 
     // Statistics tracking
     private DateTime? _lastRun;
@@ -44,290 +47,248 @@ public class BuildPendingService
         IDdbManager ddbManager,
         IBackgroundJobsProcessor backgroundJob,
         ICacheManager cacheManager,
-        ILogger<BuildPendingService> logger)
+        ILogger<BuildPendingService> logger,
+        JobStorage? storage = null,
+        IConfiguration? configuration = null)
     {
         _context = context ?? throw new ArgumentNullException(nameof(context));
         _ddbManager = ddbManager ?? throw new ArgumentNullException(nameof(ddbManager));
         _backgroundJob = backgroundJob ?? throw new ArgumentNullException(nameof(backgroundJob));
         _cacheManager = cacheManager ?? throw new ArgumentNullException(nameof(cacheManager));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        _storage = storage;
+        _mysqlConnectionString = configuration?.GetConnectionString(MagicStrings.HangfireConnectionName);
     }
 
-    /// <summary>
-    /// Determines if a dataset should be checked for pending builds based on cache state.
-    /// Uses DroneDB stamp checksum to detect if the database has actually changed.
-    /// </summary>
-    /// <param name="orgSlug">Organization slug</param>
-    /// <param name="dsSlug">Dataset slug</param>
-    /// <param name="ddb">DDB instance to get current stamp</param>
-    /// <returns>True if the dataset should be checked, false to skip</returns>
-    private async Task<bool> ShouldCheckDataset(string orgSlug, string dsSlug, IDDB ddb)
+    // Observations remain cacheable. Retry controls live in shared Hangfire storage
+    // so host-local caches and category invalidation cannot split/reset a retry chain.
+    // The old flat cache fields are imported once, then mirrored for compatibility.
+    private async Task<CacheState> ReadState(string orgSlug, string dsSlug, JobStorage? storage = null)
     {
+        byte[]? cached = null;
         try
         {
-            var cacheKey = ForDataset(orgSlug, dsSlug);
-            var cached = await _cacheManager.GetAsync(MagicStrings.BuildPendingTrackerCacheSeed, cacheKey);
-
-            if (cached == null || cached.Length == 0)
-            {
-                // Never checked before - must check
-                return true;
-            }
-
-            // Deserialize cache state
-            var state = DeserializeCacheState(cached);
-
-            // Get current stamp checksum
-            string? currentChecksum = null;
-            try
-            {
-                var stamp = ddb.GetStamp();
-                currentChecksum = stamp.Checksum;
-            }
-            catch (Exception ex)
-            {
-                _logger.LogWarning(ex,
-                    "Failed to get stamp for {Org}/{Ds}, forcing check",
-                    orgSlug, dsSlug);
-                // If we can't get stamp, force check for safety
-                return true;
-            }
-
-            // If checksum hasn't changed and there's no pending, skip check
-            if (!string.IsNullOrEmpty(state.StampChecksum) &&
-                state.StampChecksum == currentChecksum &&
-                !state.HasPending)
-            {
-                _logger.LogDebug(
-                    "Skipping {Org}/{Ds}: checksum unchanged ({Checksum})",
-                    orgSlug, dsSlug, currentChecksum);
-                return false;
-            }
-
-            // If checksum changed, we need to check
-            if (!string.IsNullOrEmpty(state.StampChecksum) &&
-                state.StampChecksum != currentChecksum)
-            {
-                _logger.LogDebug(
-                    "Checksum changed for {Org}/{Ds}: {OldChecksum} -> {NewChecksum}",
-                    orgSlug, dsSlug, state.StampChecksum, currentChecksum);
-                return true;
-            }
-
-            // If it has pending builds, always check
-            if (state.HasPending)
-            {
-                return true;
-            }
-
-            // Calculate age since last check
-            var lastCheck = DateTime.FromBinary(state.LastCheckBinary);
-            var age = DateTime.UtcNow - lastCheck;
-
-            // Staleness check: force check every 6 hours
-            // Also handle clock skew (negative age)
-            if (age > TimeSpan.FromHours(6) || age < TimeSpan.Zero)
-            {
-                _logger.LogDebug(
-                    "Staleness check triggered for {Org}/{Ds}: age={Age}, forcing check",
-                    orgSlug, dsSlug, age);
-                return true;
-            }
-
-            // Cache is fresh and no pending - skip check
-            return false;
+            cached = await _cacheManager.GetAsync(MagicStrings.BuildPendingTrackerCacheSeed,
+                ForDataset(orgSlug, dsSlug));
         }
         catch (Exception ex)
         {
-            _logger.LogWarning(ex,
-                "Error checking pending cache for {Org}/{Ds}, forcing check for safety",
+            _logger.LogWarning(ex, "Pending observation cache unavailable for {Org}/{Ds}; using shared controls and native state",
                 orgSlug, dsSlug);
+        }
+        var state = new CacheState();
+        if (cached is { Length: > 0 })
+        {
+            try { state = DeserializeCacheState(cached); }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Malformed pending cache for {Org}/{Ds}; checking native state", orgSlug, dsSlug);
+            }
+        }
 
-            // On error, always check (fail-safe behavior)
-            return true;
+        using var connection = (storage ?? _storage ?? JobStorage.Current).GetConnection();
+        var controls = PendingBuildRetryControlStore.Load(connection,
+            DatasetBuildCoordinator.RetryStateKey(orgSlug, dsSlug), cached, _logger);
+        state.RetryAttempt = controls.RetryAttempt;
+        state.ScheduledRetryJobId = controls.ScheduledRetryJobId;
+        state.RetryEpoch = controls.RetryEpoch;
+        state.LegacyImportComplete = controls.LegacyImportComplete;
+        state.RetryControlsVersion = 1;
+        return state;
+    }
+
+    private async Task SaveState(string orgSlug, string dsSlug, CacheState state, JobStorage? storage = null)
+    {
+        using (var connection = (storage ?? _storage ?? JobStorage.Current).GetConnection())
+            PendingBuildRetryControlStore.Save(connection, DatasetBuildCoordinator.RetryStateKey(orgSlug, dsSlug),
+                new PendingBuildRetryControlStore.Controls
+                {
+                    RetryAttempt = state.RetryAttempt,
+                    ScheduledRetryJobId = state.ScheduledRetryJobId,
+                    RetryEpoch = state.RetryEpoch,
+                    LegacyImportComplete = state.LegacyImportComplete
+                });
+        // Publish shared controls first: an unavailable observation cache must not
+        // erase the budget or permit a second coordinator after a successful enqueue.
+        await _cacheManager.SetAsync(MagicStrings.BuildPendingTrackerCacheSeed,
+            ForDataset(orgSlug, dsSlug), SerializeCacheState(state));
+    }
+
+    private string? GetStampChecksum(IDDB ddb, string orgSlug, string dsSlug)
+    {
+        try { return ddb.GetStamp()?.Checksum; }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Cannot get stamp for {Org}/{Ds}; checking pending state", orgSlug, dsSlug);
+            return null;
         }
     }
 
+    private static bool ShouldCheckDataset(CacheState state, string? checksum)
+    {
+        if (state.HasPending || state.RetryAttempt != 0 || state.ScheduledRetryJobId != null ||
+            string.IsNullOrEmpty(checksum) || state.StampChecksum != checksum)
+            return true;
+        try
+        {
+            var age = DateTime.UtcNow - DateTime.FromBinary(state.LastCheckBinary);
+            return age < TimeSpan.Zero || age > TimeSpan.FromHours(6);
+        }
+        catch (ArgumentException) { return true; }
+    }
+
+    private static void Observe(CacheState state, bool hasPending, string? checksum)
+    {
+        state.HasPending = hasPending;
+        state.StampChecksum = checksum;
+        state.LastCheckBinary = DateTime.UtcNow.ToBinary();
+    }
+
+    private static void ClearRetryControls(CacheState state)
+    {
+        state.RetryAttempt = 0;
+        state.ScheduledRetryJobId = null;
+        state.RetryEpoch = null;
+        // Authoritative no-pending ends migration too: stale host observations
+        // must not resurrect a retry chain that native state already completed.
+        state.LegacyImportComplete = true;
+    }
+
+    private bool HasLiveCoordinator(CacheState state, string? terminalJobId = null)
+    {
+        if (string.IsNullOrEmpty(state.ScheduledRetryJobId) || state.ScheduledRetryJobId == terminalJobId)
+            return false;
+        var status = _backgroundJob.GetJobStatus(state.ScheduledRetryJobId);
+        return status is JobStatus.Scheduled or JobStatus.Enqueued or JobStatus.Processing or JobStatus.Awaiting;
+    }
+
     /// <summary>
-    /// Sets the pending builds flag for a dataset in cache.
-    /// Called by ObjectsManager and PushManager when builds are enqueued.
-    /// Non-critical: failures are logged as warnings and do not propagate.
+    /// Updates the upload-side observation without erasing an existing retry chain.
+    /// Failures are logged and do not fail the upload.
     /// </summary>
+    /// <returns>A task representing the observation update.</returns>
     public async Task SetDatasetHasPendingBuilds(string orgSlug, string dsSlug, bool hasPending)
     {
         try
         {
-            var cacheKey = ForDataset(orgSlug, dsSlug);
-
-            var state = new CacheState
-            {
-                HasPending = hasPending,
-                LastCheckBinary = DateTime.UtcNow.ToBinary()
-            };
-
-            var serialized = SerializeCacheState(state);
-            await _cacheManager.SetAsync(MagicStrings.BuildPendingTrackerCacheSeed, cacheKey, serialized);
-
-            _logger.LogDebug(
-                "Set pending flag for {Org}/{Ds}: HasPending={HasPending}",
-                orgSlug, dsSlug, hasPending);
+            using var coordination = DatasetBuildCoordinator.Acquire(orgSlug, dsSlug, _storage, mysqlConnectionString: _mysqlConnectionString);
+            var state = await ReadState(orgSlug, dsSlug);
+            // Uploads invalidate the stamp observation, including companion uploads.
+            Observe(state, hasPending, null);
+            await SaveState(orgSlug, dsSlug, state);
         }
         catch (Exception ex)
         {
-            // Non-critical - don't fail upload if cache update fails
-            _logger.LogWarning(ex,
-                "Failed to update pending cache for {Org}/{Ds}, continuing anyway",
-                orgSlug, dsSlug);
+            _logger.LogWarning(ex, "Failed to update pending observation for {Org}/{Ds}", orgSlug, dsSlug);
         }
     }
 
-    // Exponential backoff (in minutes) for self-scheduled pending-build retries.
-    // The delay is capped at the final value; once MaxRetryAttempts is reached the
-    // chain stops and the low-frequency safety-net sweep takes over.
+    /// <summary>
+    /// Refreshes native pending observations after a failed job while preserving
+    /// the budget and coordinator scheduled by another state filter.
+    /// </summary>
+    /// <returns>A task representing the observation refresh.</returns>
+    public async Task RefreshPendingStatus(string orgSlug, string dsSlug)
+        => await RefreshPendingStatus(orgSlug, dsSlug, _storage);
+
+    internal async Task RefreshPendingStatus(string orgSlug, string dsSlug, JobStorage? storage)
+    {
+        using var coordination = DatasetBuildCoordinator.Acquire(orgSlug, dsSlug, storage ?? _storage,
+            mysqlConnectionString: _mysqlConnectionString);
+        var state = await ReadState(orgSlug, dsSlug, storage);
+        var ds = await FindDataset(orgSlug, dsSlug);
+        if (ds?.Organization == null) return;
+        var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
+        try
+        {
+            var hasPending = ddb.IsBuildPending();
+            Observe(state, hasPending, GetStampChecksum(ddb, orgSlug, dsSlug));
+            if (!hasPending) ClearRetryControls(state);
+        }
+        catch (Exception ex)
+        {
+            // Force the sweep to re-read disk without deleting retry controls.
+            Observe(state, true, null);
+            _logger.LogWarning(ex, "Cannot refresh pending status for {Org}/{Ds}", orgSlug, dsSlug);
+        }
+        await SaveState(orgSlug, dsSlug, state, storage);
+    }
+
+    private Task<Data.Models.Dataset?> FindDataset(string orgSlug, string dsSlug) =>
+        _context.Datasets.AsNoTracking().Include(d => d.Organization)
+            .FirstOrDefaultAsync(d => d.Organization.Slug == orgSlug && d.Slug == dsSlug);
+
+    // Keep the existing bounded policy; exhausted chains await the low-frequency sweep.
     private static readonly int[] RetryBackoffMinutes = [1, 2, 5, 10, 20, 40, 60];
-    private const int MaxRetryAttempts = 12;
+    private const int MaxRetryAttempts = PendingBuildRetryControlStore.MaxRetryAttempts;
 
     /// <summary>
-    /// Event-driven replacement for per-minute polling. Invoked after a build job
-    /// for a dataset reaches a terminal state. If the dataset still has pending
-    /// builds, schedules a single delayed <see cref="HangfireUtils.BuildPendingWrapper"/>
-    /// retry using exponential backoff; otherwise clears the retry tracking so the
-    /// chain stops. When the retry budget is exhausted it defers to the safety-net sweep.
+    /// Schedules one bounded delayed coordinator when native pending work remains.
     /// </summary>
-    public async Task ScheduleRetryIfPending(string orgSlug, string dsSlug)
+    /// <returns>A task representing the scheduling attempt.</returns>
+    public Task ScheduleRetryIfPending(string orgSlug, string dsSlug) =>
+        ScheduleRetryIfPending(orgSlug, dsSlug, null, null, null);
+
+    // A terminal job's state is still Processing in storage until OnStateApplied's
+    // transaction commits. Exclude precisely that ID from live-coordinator dedup.
+    // Failed entry jobs additionally require their own path/hash pending marker.
+    internal async Task ScheduleRetryIfPending(string orgSlug, string dsSlug, string? terminalJobId,
+        string? requiredPendingPath, string? requiredPendingHash, JobStorage? storage = null)
     {
         try
         {
-            var ds = await _context.Datasets
-                .AsNoTracking()
-                .Include(d => d.Organization)
-                .FirstOrDefaultAsync(d => d.Organization.Slug == orgSlug && d.Slug == dsSlug);
-
-            if (ds?.Organization == null)
-            {
-                _logger.LogDebug("ScheduleRetryIfPending: dataset {Org}/{Ds} not found, skipping", orgSlug, dsSlug);
-                return;
-            }
-
+            using var coordination = DatasetBuildCoordinator.Acquire(orgSlug, dsSlug, storage ?? _storage,
+            mysqlConnectionString: _mysqlConnectionString);
+            var ds = await FindDataset(orgSlug, dsSlug);
+            if (ds?.Organization == null) return;
             var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
-
-            bool hasPending;
-            try
-            {
-                hasPending = ddb.IsBuildPending();
-            }
-            catch (Exception ex)
-            {
-                _logger.LogWarning(ex, "ScheduleRetryIfPending: failed to check pending for {Org}/{Ds}", orgSlug, dsSlug);
+            if (requiredPendingPath != null &&
+                (string.IsNullOrWhiteSpace(requiredPendingPath) || string.IsNullOrWhiteSpace(requiredPendingHash) ||
+                 !(ddb.GetPendingBuildInfo() ?? []).Any(p =>
+                     p.Path == requiredPendingPath && p.Hash == requiredPendingHash)))
                 return;
-            }
 
-            string? stampChecksum = null;
-            try { stampChecksum = ddb.GetStamp().Checksum; } catch { /* best-effort */ }
-
-            var cacheKey = ForDataset(orgSlug, dsSlug);
-            var cached = await _cacheManager.GetAsync(MagicStrings.BuildPendingTrackerCacheSeed, cacheKey);
-            CacheState state;
-            try { state = cached is { Length: > 0 } ? DeserializeCacheState(cached) : new CacheState(); }
-            catch { state = new CacheState(); }
-
+            var hasPending = ddb.IsBuildPending();
+            var state = await ReadState(orgSlug, dsSlug, storage);
+            Observe(state, hasPending, GetStampChecksum(ddb, orgSlug, dsSlug));
             if (!hasPending)
             {
-                // Nothing pending: terminate the retry chain and clear tracking.
-                state.HasPending = false;
-                state.RetryAttempt = 0;
-                state.ScheduledRetryJobId = null;
-                state.StampChecksum = stampChecksum;
-                state.LastCheckBinary = DateTime.UtcNow.ToBinary();
-                await _cacheManager.SetAsync(MagicStrings.BuildPendingTrackerCacheSeed, cacheKey, SerializeCacheState(state));
+                ClearRetryControls(state);
+                await SaveState(orgSlug, dsSlug, state, storage);
                 return;
             }
 
-            // Dedup: skip if a retry is already in flight for this dataset.
-            if (!string.IsNullOrEmpty(state.ScheduledRetryJobId))
+            if (HasLiveCoordinator(state, terminalJobId))
             {
-                var status = _backgroundJob.GetJobStatus(state.ScheduledRetryJobId);
-                if (status is JobStatus.Scheduled or JobStatus.Enqueued or JobStatus.Processing or JobStatus.Awaiting)
-                {
-                    _logger.LogDebug("ScheduleRetryIfPending: retry {JobId} already in flight for {Org}/{Ds}, skipping",
-                        state.ScheduledRetryJobId, orgSlug, dsSlug);
-                    return;
-                }
+                await SaveState(orgSlug, dsSlug, state, storage);
+                return;
             }
 
+            state.ScheduledRetryJobId = null;
             if (state.RetryAttempt >= MaxRetryAttempts)
             {
-                _logger.LogInformation(
-                    "ScheduleRetryIfPending: retry budget exhausted ({Attempts}) for {Org}/{Ds}; deferring to safety-net sweep",
-                    state.RetryAttempt, orgSlug, dsSlug);
-                state.HasPending = true;
-                state.StampChecksum = stampChecksum;
-                state.LastCheckBinary = DateTime.UtcNow.ToBinary();
-                await _cacheManager.SetAsync(MagicStrings.BuildPendingTrackerCacheSeed, cacheKey, SerializeCacheState(state));
+                await SaveState(orgSlug, dsSlug, state, storage);
+                _logger.LogInformation("Pending retry budget exhausted for {Org}/{Ds}; awaiting safety-net sweep",
+                    orgSlug, dsSlug);
                 return;
             }
 
             var delayMinutes = RetryBackoffMinutes[Math.Min(state.RetryAttempt, RetryBackoffMinutes.Length - 1)];
-            var delay = TimeSpan.FromMinutes(delayMinutes);
-
             var meta = new IndexPayload(orgSlug, dsSlug, null, MagicStrings.AutoBuildServiceUserId);
             var jobId = _backgroundJob.ScheduleIndexed(
-                () => HangfireUtils.BuildPendingWrapper(ddb, null), meta, delay);
-
-            state.HasPending = true;
+                () => HangfireUtils.BuildPendingWrapper(ddb, null), meta, TimeSpan.FromMinutes(delayMinutes));
+            if (string.IsNullOrWhiteSpace(jobId))
+                throw new InvalidOperationException("Pending retry schedule returned no job ID");
+            state.RetryEpoch ??= Guid.NewGuid().ToString("N");
             state.RetryAttempt += 1;
             state.ScheduledRetryJobId = jobId;
-            state.StampChecksum = stampChecksum;
-            state.LastCheckBinary = DateTime.UtcNow.ToBinary();
-            await _cacheManager.SetAsync(MagicStrings.BuildPendingTrackerCacheSeed, cacheKey, SerializeCacheState(state));
-
-            _logger.LogInformation(
-                "Scheduled pending-build retry for {Org}/{Ds} in {Delay}m (attempt {Attempt}/{Max}): JobId={JobId}",
+            await SaveState(orgSlug, dsSlug, state, storage);
+            _logger.LogInformation("Scheduled pending retry for {Org}/{Ds} in {Delay}m (attempt {Attempt}/{Max}): {JobId}",
                 orgSlug, dsSlug, delayMinutes, state.RetryAttempt, MaxRetryAttempts, jobId);
         }
         catch (Exception ex)
         {
             _logger.LogWarning(ex, "ScheduleRetryIfPending failed for {Org}/{Ds}", orgSlug, dsSlug);
-        }
-    }
-
-    /// <summary>
-    /// Updates the cache with the current pending status for a dataset.
-    /// </summary>
-    /// <param name="orgSlug">Organization slug</param>
-    /// <param name="dsSlug">Dataset slug</param>
-    /// <param name="hasPending">Whether the dataset has pending builds</param>
-    /// <param name="stampChecksum">Current DroneDB stamp checksum</param>
-    private async Task UpdatePendingStatus(string orgSlug, string dsSlug, bool hasPending, string? stampChecksum = null)
-    {
-        try
-        {
-            var cacheKey = ForDataset(orgSlug, dsSlug);
-            var state = new CacheState
-            {
-                HasPending = hasPending,
-                LastCheckBinary = DateTime.UtcNow.ToBinary(),
-                StampChecksum = stampChecksum
-            };
-
-            var serialized = SerializeCacheState(state);
-
-            await _cacheManager.SetAsync(
-                MagicStrings.BuildPendingTrackerCacheSeed,
-                cacheKey,
-                serialized
-            );
-
-            _logger.LogDebug(
-                "Updated pending cache for {Org}/{Ds}: HasPending={HasPending}, Checksum={Checksum}",
-                orgSlug, dsSlug, hasPending, stampChecksum);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogWarning(ex,
-                "Error updating pending cache for {Org}/{Ds}, continuing anyway",
-                orgSlug, dsSlug);
-            // Non-blocking - cache update failure shouldn't stop processing
         }
     }
 
@@ -359,7 +320,6 @@ public class BuildPendingService
     /// this recurring job only backstops retries lost to restarts or left over from
     /// before the event-driven mechanism existed.
     /// </summary>
-    [DisableConcurrentExecution(timeoutInSeconds: 300)]
     [AutomaticRetry(Attempts = 0)] // Don't retry on failure - the safety-net sweep runs again later
     [JobExpiration(ExpirationTimeoutInMinutes = 60)] // Success records are noise; expire quickly to curb churn
     public async Task ProcessPendingBuilds(PerformContext? context = null)
@@ -413,124 +373,55 @@ public class BuildPendingService
                         continue;
                     }
 
-                    // Cache optimization: check if we should skip this dataset
-                    // This now uses GetStamp internally to detect database changes
-                    if (!await ShouldCheckDataset(ds.Organization.Slug, ds.Slug, ddb))
+                    using var coordination = DatasetBuildCoordinator.Acquire(ds.Organization.Slug, ds.Slug, _storage,
+                        mysqlConnectionString: _mysqlConnectionString);
+                    var state = await ReadState(ds.Organization.Slug, ds.Slug);
+                    var stampChecksum = GetStampChecksum(ddb, ds.Organization.Slug, ds.Slug);
+                    if (!ShouldCheckDataset(state, stampChecksum))
                     {
                         stats.Skipped++;
                         continue;
                     }
-
                     stats.Checked++;
 
-                    // Get current stamp for tracking
-                    string? stampChecksum = null;
-                    try
-                    {
-                        var stamp = ddb.GetStamp();
-                        stampChecksum = stamp.Checksum;
-                    }
-                    catch (Exception ex)
-                    {
-                        _logger.LogWarning(ex,
-                            "Failed to get stamp checksum for {Org}/{Ds}",
-                            ds.Organization.Slug, ds.Slug);
-                        // Continue anyway - we'll just cache without checksum
-                    }
-
-                    // Check if this dataset has pending builds
                     bool hasPending;
-                    try
-                    {
-                        hasPending = ddb.IsBuildPending();
-                    }
+                    try { hasPending = ddb.IsBuildPending(); }
                     catch (Exception ex)
                     {
-                        _logger.LogWarning(ex,
-                            "Failed to check pending status for {Org}/{Ds}, assuming has pending",
+                        _logger.LogWarning(ex, "Cannot check pending for {Org}/{Ds}; attempting bounded recovery",
                             ds.Organization.Slug, ds.Slug);
-
-                        // On error, assume pending (conservative approach)
                         hasPending = true;
+                        stampChecksum = null;
                     }
-
-                    // Update cache with current status and checksum
-                    await UpdatePendingStatus(ds.Organization.Slug, ds.Slug, hasPending, stampChecksum);
-
+                    Observe(state, hasPending, stampChecksum);
                     if (!hasPending)
                     {
-                        // No pending builds for this dataset
+                        ClearRetryControls(state);
+                        await SaveState(ds.Organization.Slug, ds.Slug, state);
                         continue;
                     }
-
                     stats.PendingFound++;
 
-                    // Check if we should enqueue a job based on stamp changes
-                    // If stamp hasn't changed, the same files are still pending - no need to reprocess
-                    var cacheKey = ForDataset(ds.Organization.Slug, ds.Slug);
-                    var cachedData = await _cacheManager.GetAsync(MagicStrings.BuildPendingTrackerCacheSeed, cacheKey);
-
-                    var shouldEnqueue = true;
-                    if (cachedData is { Length: > 0 } && !string.IsNullOrEmpty(stampChecksum))
+                    if (HasLiveCoordinator(state))
                     {
-                        try
-                        {
-                            var cachedState = DeserializeCacheState(cachedData);
-                            if (!string.IsNullOrEmpty(cachedState.StampChecksum) &&
-                                cachedState.StampChecksum == stampChecksum &&
-                                cachedState.HasPending)
-                            {
-                                // Stamp hasn't changed and it was already pending - same files waiting
-                                shouldEnqueue = false;
-                                _logger.LogDebug(
-                                    "Skipping job enqueue for {Org}/{Ds}: stamp unchanged ({Checksum}), same files still pending",
-                                    ds.Organization.Slug, ds.Slug, stampChecksum);
-                            }
-                        }
-                        catch (Exception ex)
-                        {
-                            _logger.LogWarning(ex,
-                                "Failed to check cached stamp for {Org}/{Ds}, will enqueue job for safety",
-                                ds.Organization.Slug, ds.Slug);
-                            // On error, enqueue for safety
-                        }
-                    }
-
-                    if (!shouldEnqueue)
-                    {
+                        await SaveState(ds.Organization.Slug, ds.Slug, state);
                         continue;
                     }
 
-                    // Enqueue BuildPending job for this dataset
-                    var meta = new IndexPayload(
-                        ds.Organization.Slug,
-                        ds.Slug,
-                        null,
-                        MagicStrings.AutoBuildServiceUserId, // Special user ID for automated service
-                        null,
-                        null
-                    );
-
-                    try
-                    {
-                        var jobId = _backgroundJob.EnqueueIndexed(
-                            () => HangfireUtils.BuildPendingWrapper(ddb, null),
-                            meta
-                        );
-
-                        stats.JobsEnqueued++;
-
-                        _logger.LogInformation(
-                            "Enqueued BuildPending job for {Org}/{Ds}: JobId={JobId}",
-                            ds.Organization.Slug, ds.Slug, jobId);
-                    }
-                    catch (Exception ex)
-                    {
-                        _logger.LogError(ex,
-                            "Failed to enqueue BuildPending job for {Org}/{Ds}",
-                            ds.Organization.Slug, ds.Slug);
-                        stats.Errors++;
-                    }
+                    // Restart one bounded epoch only after the previous coordinator
+                    // is missing/terminal, irrespective of an unchanged database stamp.
+                    var meta = new IndexPayload(ds.Organization.Slug, ds.Slug, null,
+                        MagicStrings.AutoBuildServiceUserId);
+                    var jobId = _backgroundJob.EnqueueIndexed(() => HangfireUtils.BuildPendingWrapper(ddb, null), meta);
+                    if (string.IsNullOrWhiteSpace(jobId))
+                        throw new InvalidOperationException("Pending coordinator enqueue returned no job ID");
+                    state.RetryAttempt = 0;
+                    state.RetryEpoch = Guid.NewGuid().ToString("N");
+                    state.ScheduledRetryJobId = jobId;
+                    await SaveState(ds.Organization.Slug, ds.Slug, state);
+                    stats.JobsEnqueued++;
+                    _logger.LogInformation("Started pending recovery epoch for {Org}/{Ds}: {JobId}",
+                        ds.Organization.Slug, ds.Slug, jobId);
                 }
                 catch (Exception ex)
                 {
@@ -592,9 +483,13 @@ public class BuildPendingService
         public long LastCheckBinary { get; set; }
         public string? StampChecksum { get; set; }
 
-        // Event-driven retry tracking (see ScheduleRetryIfPending).
+        // Legacy mirrors only; shared Hangfire controls are authoritative.
         public int RetryAttempt { get; set; }
         public string? ScheduledRetryJobId { get; set; }
+        public string? RetryEpoch { get; set; }
+        public int RetryControlsVersion { get; set; }
+        [System.Text.Json.Serialization.JsonIgnore]
+        public bool LegacyImportComplete { get; set; }
     }
 
     private class ProcessingStats

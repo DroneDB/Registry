@@ -61,9 +61,13 @@ public sealed class BuildTool : IHeavyTool
         progress.Report(new HeavyToolProgress(-1, "building", LogChunk: $"Building '{path ?? "(pending)"}'"));
 
         if (string.IsNullOrEmpty(path))
+        {
             HangfireUtils.BuildPendingWrapper(ctx.Ddb, ctx.Hangfire);
-        else
-            HangfireUtils.BuildWrapper(ctx.Ddb, path!, force, ctx.Hangfire);
+            progress.Report(new HeavyToolProgress(1, "done", LogChunk: "Pending build check complete"));
+            return Task.FromResult<HeavyToolArtifact?>(null);
+        }
+
+        HangfireUtils.BuildWrapper(ctx.Ddb, path!, force, ctx.Hangfire);
 
         progress.Report(new HeavyToolProgress(1, "done", LogChunk: "Build complete"));
         return Task.FromResult<HeavyToolArtifact?>(null);

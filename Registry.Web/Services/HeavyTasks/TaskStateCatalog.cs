@@ -11,15 +11,19 @@ namespace Registry.Web.Services.HeavyTasks;
 /// </summary>
 public static class TaskStateCatalog
 {
-    /// <summary>Non-terminal states a task can be in while still running.</summary>
-    public static readonly string[] Active = ["Created", "Enqueued", "Scheduled", "Processing"];
+    /// <summary>
+    /// Non-terminal states a task can be in while still running. "Indexing" is the initial state
+    /// of an indexed job until its publication completes (IndexingState.StateName, kept as a
+    /// literal so this catalog does not depend on the Hangfire adapters).
+    /// </summary>
+    public static readonly string[] Active = ["Created", "Indexing", "Enqueued", "Scheduled", "Processing"];
 
     /// <summary>Terminal states a task ends in.</summary>
     public static readonly string[] Terminal = ["Succeeded", "Failed", "Deleted"];
 
     /// <summary>All states in lifecycle order (active first, then terminal).</summary>
     public static readonly string[] All =
-        ["Created", "Enqueued", "Scheduled", "Processing", "Succeeded", "Failed", "Deleted"];
+        ["Created", "Indexing", "Enqueued", "Scheduled", "Processing", "Succeeded", "Failed", "Deleted"];
 
     public static bool IsTerminal(string state) => Array.IndexOf(Terminal, state) >= 0;
 }

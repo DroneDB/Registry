@@ -17,11 +17,13 @@ public class BackgroundJobsProcessor : IBackgroundJobsProcessor
 {
     private readonly IBackgroundJobClient _client;
     private readonly IIndexedJobEnqueuer _indexedEnqueuer;
+    private readonly JobStorage _storage;
 
-    public BackgroundJobsProcessor(IBackgroundJobClient client, IIndexedJobEnqueuer indexedEnqueuer)
+    public BackgroundJobsProcessor(IBackgroundJobClient client, IIndexedJobEnqueuer indexedEnqueuer, JobStorage storage = null)
     {
         _client = client;
         _indexedEnqueuer = indexedEnqueuer;
+        _storage = storage;
     }
 
     public string Enqueue(Expression<Action> methodCall) => _client.Enqueue(methodCall);
@@ -53,12 +55,8 @@ public class BackgroundJobsProcessor : IBackgroundJobsProcessor
     /// <returns>True when the job was re-queued; false when it no longer exists in Hangfire or is not in <c>Failed</c>.</returns>
     public bool Requeue(string jobId)
     {
-        if (JobStorage.Current is null) return false;
-
-        var details = JobStorage.Current.GetMonitoringApi().JobDetails(jobId);
-        // Stock JobDetailsDto (1.8.23) has no direct current-state property (in contrast
-        // to newer versions); the current state is the last history entry, same as GetJobStatus.
-        var stateName = details?.History.LastOrDefault()?.StateName;
+        using var connection = (_storage ?? JobStorage.Current).GetConnection();
+        var stateName = connection.GetStateData(jobId)?.Name;
 
         if (stateName == null) return false; // no such job in Hangfire (expired/purged)
         if (stateName != FailedState.StateName) return false; // Failed-only guard
@@ -68,13 +66,9 @@ public class BackgroundJobsProcessor : IBackgroundJobsProcessor
 
     public JobStatus GetJobStatus(string jobId)
     {
-        var details = JobStorage.Current.GetMonitoringApi().JobDetails(jobId);
-
-        var lastState = details.History.LastOrDefault();
-
-        if (lastState == null) return JobStatus.Unknown;
-
-        return !Enum.TryParse(lastState.StateName, out JobStatus state) ? JobStatus.Unknown : state;
+        using var connection = (_storage ?? JobStorage.Current).GetConnection();
+        var stateName = connection.GetStateData(jobId)?.Name;
+        return Enum.TryParse(stateName, out JobStatus state) ? state : JobStatus.Unknown;
     }
 
     public string ContinueJobWith(string parentId, Expression<Action> methodCall,

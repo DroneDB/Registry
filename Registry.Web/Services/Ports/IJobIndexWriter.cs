@@ -9,12 +9,53 @@ using Registry.Web.Services.Adapters;
 namespace Registry.Web.Services.Ports;
 
 /// <summary>
+/// Result of <see cref="IJobIndexWriter.PrepareForPublicationAsync"/>.
+/// </summary>
+public enum JobIndexPreparationResult
+{
+    /// <summary>No row existed; a new <c>Indexing</c> row was inserted.</summary>
+    Inserted,
+
+    /// <summary>The row of this publication already exists with a compatible identity; nothing was written.</summary>
+    Compatible,
+
+    /// <summary>A row left over from an earlier job with the same id (different creation time) was overwritten.</summary>
+    Replaced,
+
+    /// <summary>The row of this publication has a different identity; nothing was written.</summary>
+    Incompatible
+}
+
+/// <summary>
 /// JobIndex upsert/update/delete interface for Hangfire job tracking.
 /// </summary>
 public interface IJobIndexWriter
 {
     Task UpsertOnEnqueueAsync(string jobId, IndexPayload meta, DateTime createdAtUtc, string? methodDisplay, CancellationToken ct = default);
+
+    /// <summary>
+    /// Forward-only, idempotent JobIndex preparation for an indexed job publication. Inserts a missing
+    /// row in <c>Indexing</c> with the original creation time. An existing row with the same creation
+    /// time (compared in whole milliseconds) belongs to this publication and is never modified in any
+    /// state; its identity (org, dataset, tool, request hash) decides between
+    /// <see cref="JobIndexPreparationResult.Compatible"/> and <see cref="JobIndexPreparationResult.Incompatible"/>.
+    /// A row with a different creation time is left over from an earlier storage incarnation that
+    /// reused the job id and is replaced by a fresh <c>Indexing</c> row. Safe for concurrent callers.
+    /// </summary>
+    Task<JobIndexPreparationResult> PrepareForPublicationAsync(string jobId, IndexPayload meta, DateTime createdAtUtc,
+        string? methodDisplay, CancellationToken ct = default);
+
     Task UpdateStateAsync(string jobId, string newState, DateTime changedAtUtc, CancellationToken ct = default);
+
+    /// <summary>
+    /// Same state change as <see cref="UpdateStateAsync"/> (state timestamps, error clearing, cache
+    /// invalidation), applied only while the row is still in one of <paramref name="expectedCurrentStates"/>.
+    /// The guard is evaluated atomically by the database on relational providers, so a concurrent
+    /// writer that already advanced the row is never overwritten.
+    /// </summary>
+    /// <returns><c>true</c> when the row was updated; <c>false</c> when it is missing or not in an expected state.</returns>
+    Task<bool> UpdateStateIfCurrentAsync(string jobId, IReadOnlyCollection<string> expectedCurrentStates,
+        string newState, DateTime changedAtUtc, CancellationToken ct = default);
 
     /// <summary>
     /// Deletes all JobIndex records with terminal states (Succeeded, Failed, Deleted)
