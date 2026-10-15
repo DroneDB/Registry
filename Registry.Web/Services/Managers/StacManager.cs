@@ -55,6 +55,10 @@ public class StacManager : IStacManager
     private const int DefaultLimit = 10;
     private const int MaxLimit = 10000;
 
+    private const int DefaultCollectionsLimit = 10;
+    private const int MaxCollectionsLimit = 100;
+    private static readonly TimeSpan NameExpiration = TimeSpan.FromHours(1);
+
 
     public StacManager(
         IAuthManager authManager,
@@ -144,6 +148,7 @@ public class StacManager : IStacManager
         _logger.LogInformation("In ClearCache('{DsSlug}')", ds.Slug);
 
         await _cache.RemoveAsync(MakeCacheKey(ds));
+        await _cache.RemoveAsync(MakeNameCacheKey(ds));
     }
 
     public async Task<JToken> GetStacChild(string orgSlug, string dsSlug, string path = null)
@@ -189,14 +194,14 @@ public class StacManager : IStacManager
             new() { Href = host + "/scalar/v1", Relationship = "service-doc", Type = "text/html" }
         };
 
-        foreach (var item in await GetAccessibleDatasets())
+        foreach (var ds in await GetReadableDatasets())
         {
             links.Add(new StacLinkDto
             {
-                Href = CollectionUrl(item.ds.Organization.Slug, item.ds.Slug),
+                Href = CollectionUrl(ds.Organization.Slug, ds.Slug),
                 Relationship = "child",
                 Type = "application/json",
-                Title = item.meta.Name
+                Title = await GetDatasetName(ds)
             });
         }
 
@@ -219,29 +224,64 @@ public class StacManager : IStacManager
         return new StacConformanceDto { ConformsTo = ConformanceClasses };
     }
 
-    public async Task<StacCollectionsDto> GetCollections()
+    public async Task<StacCollectionsDto> GetCollections(int? limit = null, int? offset = null)
     {
-        var cacheKey = $"stac-collections-{await _authManager.SafeGetCurrentUserName()}";
+        // Every collection embeds its asset list (tens of KB each), so the listing is paged
+        var lim = Math.Clamp(limit ?? DefaultCollectionsLimit, 1, MaxCollectionsLimit);
+        var off = Math.Max(offset ?? 0, 0);
+
+        var cacheKey = $"stac-collections-{await _authManager.SafeGetCurrentUserName()}-{lim}-{off}";
         var cached = await _cache.GetRecordAsync<StacCollectionsDto>(cacheKey);
         if (cached != null)
             return cached;
 
+        var datasets = await GetReadableDatasets();
+
         var collections = new List<JToken>();
-        foreach (var (ds, _) in await GetAccessibleDatasets())
+        foreach (var ds in datasets.Skip(off).Take(lim))
         {
-            var collection = GetCollectionInternal(ds.Organization.Slug, ds.Slug, ds.InternalRef);
-            if (collection != null)
-                collections.Add(collection);
+            // One unreadable dataset index must not take the whole listing down
+            try
+            {
+                var collection = GetCollectionInternal(ds);
+                if (collection != null)
+                    collections.Add(collection);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Skipping STAC collection {OrgSlug}/{DsSlug}",
+                    ds.Organization.Slug, ds.Slug);
+            }
         }
 
         var links = new List<StacLinkDto>
         {
-            new() { Href = CollectionsUrl(), Relationship = "self", Type = "application/json" },
+            new() { Href = CollectionsUrl() + BuildItemsSelfQuery(null, null, limit, offset), Relationship = "self", Type = "application/json" },
             new() { Href = StacRoot(), Relationship = "root", Type = "application/json" },
             new() { Href = StacRoot(), Relationship = "parent", Type = "application/json" }
         };
 
-        var result = new StacCollectionsDto { Collections = collections, Links = links };
+        if (off + lim < datasets.Count)
+            links.Add(new StacLinkDto
+            {
+                Href = CollectionsUrl() + BuildItemsQuery(null, null, lim, off + lim),
+                Relationship = "next", Type = "application/json"
+            });
+
+        if (off > 0)
+            links.Add(new StacLinkDto
+            {
+                Href = CollectionsUrl() + BuildItemsQuery(null, null, lim, Math.Max(off - lim, 0)),
+                Relationship = "prev", Type = "application/json"
+            });
+
+        var result = new StacCollectionsDto
+        {
+            Collections = collections,
+            Links = links,
+            NumberMatched = datasets.Count,
+            NumberReturned = collections.Count
+        };
         await _cache.SetRecordAsync(cacheKey, result, _expiration);
         return result;
     }
@@ -253,7 +293,7 @@ public class StacManager : IStacManager
         if (!await _authManager.RequestAccess(ds, AccessType.Read))
             throw new UnauthorizedException("The current user is not allowed to access this dataset");
 
-        return GetCollectionInternal(orgSlug, dsSlug, ds.InternalRef);
+        return GetCollectionInternal(ds);
     }
 
     public async Task<JToken> GetCollectionItems(string orgSlug, string dsSlug, double[] bbox = null,
@@ -333,7 +373,7 @@ public class StacManager : IStacManager
         var bboxStr = BboxToString(request.Bbox);
         var datetime = request.Datetime;
 
-        var datasets = (await GetAccessibleDatasets()).Select(x => x.ds).ToList();
+        var datasets = await GetReadableDatasets();
 
         if (request.Collections is { Length: > 0 })
         {
@@ -461,16 +501,16 @@ public class StacManager : IStacManager
 
     #region STAC API helpers
 
-    private JToken GetCollectionInternal(string orgSlug, string dsSlug, Guid internalRef)
+    private JToken GetCollectionInternal(Dataset ds)
     {
-        var ds = _utils.GetDataset(orgSlug, dsSlug);
-        var collectionId = $"{orgSlug}/{dsSlug}";
-        var ddb = _ddbManager.Get(orgSlug, internalRef);
+        var orgSlug = ds.Organization.Slug;
+        var collectionId = $"{orgSlug}/{ds.Slug}";
+        var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
 
         if (ddb.GetStac(collectionId, _utils.GenerateDatasetUrl(ds), _utils.GetLocalHost(), null) is not JObject collection)
             return null;
 
-        RewriteCollection(collection, orgSlug, dsSlug);
+        RewriteCollection(collection, orgSlug, ds.Slug);
         return collection;
     }
 
@@ -512,22 +552,40 @@ public class StacManager : IStacManager
         };
     }
 
-    private async Task<List<(Dataset ds, SafeMetaManager meta)>> GetAccessibleDatasets()
+    /// <summary>
+    /// Datasets the current user can read, ordered by id so that collection offsets and
+    /// search tokens stay stable across requests. No native index is opened here
+    /// (visibility comes from its own cache).
+    /// </summary>
+    private async Task<List<Dataset>> GetReadableDatasets()
     {
-        var result = new List<(Dataset, SafeMetaManager)>();
-        var datasets = _context.Datasets.Include(ds => ds.Organization).ToArray();
+        var result = new List<Dataset>();
+        var datasets = _context.Datasets.Include(ds => ds.Organization).OrderBy(ds => ds.Id).ToArray();
 
         foreach (var ds in datasets)
         {
-            if (!await _authManager.RequestAccess(ds, AccessType.Read))
-                continue;
-
-            var ddb = _ddbManager.Get(ds.Organization.Slug, ds.InternalRef);
-            var meta = ddb.Meta.GetSafe();
-            result.Add((ds, meta));
+            if (await _authManager.RequestAccess(ds, AccessType.Read))
+                result.Add(ds);
         }
 
         return result;
+    }
+
+    /// <summary>
+    /// Dataset display name, cached per dataset so that the landing page does not open
+    /// every native index (1–4 ms each, thousands of datasets). ClearCache drops it on
+    /// dataset updates; renames through the generic meta API show up within NameExpiration.
+    /// </summary>
+    private async Task<string> GetDatasetName(Dataset ds)
+    {
+        var key = MakeNameCacheKey(ds);
+        var cached = await _cache.GetRecordAsync<string>(key);
+        if (cached != null)
+            return cached.Length == 0 ? null : cached;
+
+        var name = _ddbManager.Get(ds.Organization.Slug, ds.InternalRef).Meta.GetSafe().Name;
+        await _cache.SetRecordAsync(key, name ?? string.Empty, NameExpiration);
+        return name;
     }
 
     private static JObject Link(string rel, string href, string type)
@@ -690,6 +748,11 @@ public class StacManager : IStacManager
     private static string MakeCacheKey(Dataset ds)
     {
         return $"{CacheKey}-{ds.InternalRef}";
+    }
+
+    private static string MakeNameCacheKey(Dataset ds)
+    {
+        return $"stac-name-{ds.InternalRef}";
     }
 
 }

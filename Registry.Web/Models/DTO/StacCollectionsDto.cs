@@ -10,4 +10,10 @@ public class StacCollectionsDto
 
     [JsonProperty("links")]
     public IEnumerable<StacLinkDto> Links { get; set; }
+
+    [JsonProperty("numberMatched")]
+    public int NumberMatched { get; set; }
+
+    [JsonProperty("numberReturned")]
+    public int NumberReturned { get; set; }
 }

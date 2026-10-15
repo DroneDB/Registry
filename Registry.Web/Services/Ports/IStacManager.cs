@@ -18,7 +18,7 @@ public interface IStacManager
     // STAC API 1.0.0 endpoints
     Task<StacCatalogDto> GetLandingPage();
     StacConformanceDto GetConformance();
-    Task<StacCollectionsDto> GetCollections();
+    Task<StacCollectionsDto> GetCollections(int? limit = null, int? offset = null);
     Task<JToken> GetCollection(string orgSlug, string dsSlug);
     Task<JToken> GetCollectionItems(string orgSlug, string dsSlug, double[] bbox = null,
         string datetime = null, int? limit = null, int? offset = null);

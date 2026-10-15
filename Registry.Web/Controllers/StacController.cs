@@ -82,18 +82,25 @@ public class StacController : ControllerBaseEx
     }
 
     /// <summary>
-    /// Lists all STAC collections the current user can access.
+    /// Lists the STAC collections the current user can access, one page at a time
+    /// (follow the "next" link for the rest).
     /// </summary>
     [HttpGet("/stac/collections", Name = nameof(StacController) + "." + nameof(GetCollections))]
     [ProducesResponseType(typeof(StacCollectionsDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status500InternalServerError)]
-    public async Task<IActionResult> GetCollections()
+    public async Task<IActionResult> GetCollections(
+        [FromQuery] int? limit = null,
+        [FromQuery] int? offset = null)
     {
         try
         {
             _logger.LogDebug("Stac controller GetCollections()");
 
-            return StacContent(await _stacManager.GetCollections(), MediaTypeJson);
+            if (limit is < 1)
+                return BadRequest(new ErrorResponse(LimitError));
+
+            return StacContent(await _stacManager.GetCollections(limit, offset), MediaTypeJson);
         }
         catch (Exception ex)
         {

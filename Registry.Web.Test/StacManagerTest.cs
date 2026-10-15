@@ -12,6 +12,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Moq;
 using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
 using NUnit.Framework;
 using Registry.Ports;
 using Registry.Ports.DroneDB;
@@ -98,6 +99,143 @@ public class StacManagerTest : TestBase
         var childLink = catalog.Links.Single(l => l.Relationship == "child");
         childLink.Href.ShouldBe(datasetStacUrl);
         childLink.Title.ShouldBe(expectedName);
+    }
+
+    [Test]
+    public async Task GetCollections_ListsFromLoadedEntities_NoSlugLookup()
+    {
+        // The listing works on the entities it already loaded: no per-dataset lookup by slug
+        await using var context = GetContextWithDatasets("listed");
+        var (stacManager, utilsMock, _) = CreateCollectionsManager(context);
+
+        var result = await stacManager.GetCollections();
+
+        result.Collections.Cast<JObject>().Select(c => c["id"]!.Value<string>())
+            .ShouldBe(["public/listed"]);
+        utilsMock.Verify(o => o.GetDataset(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<bool>(),
+            It.IsAny<bool>()), Times.Never);
+    }
+
+    [Test]
+    public async Task GetCollections_OneBrokenIndex_OthersStillListed()
+    {
+        await using var context = GetContextWithDatasets("good-1", "broken", "good-2");
+        var (stacManager, _, _) = CreateCollectionsManager(context, brokenSlug: "broken");
+
+        var result = await stacManager.GetCollections();
+
+        result.Collections.Cast<JObject>().Select(c => c["id"]!.Value<string>())
+            .ShouldBe(["public/good-1", "public/good-2"]);
+    }
+
+    [Test]
+    public async Task GetCollections_Paged_NextAndPrevLinks()
+    {
+        await using var context = GetContextWithDatasets("ds-a", "ds-b", "ds-c");
+        var (stacManager, _, _) = CreateCollectionsManager(context);
+
+        var first = await stacManager.GetCollections(limit: 2);
+
+        first.Collections.Cast<JObject>().Select(c => c["id"]!.Value<string>())
+            .ShouldBe(["public/ds-a", "public/ds-b"]);
+        first.NumberMatched.ShouldBe(3);
+        first.NumberReturned.ShouldBe(2);
+        first.Links.Single(l => l.Relationship == "next").Href
+            .ShouldBe("http://localhost/stac/collections?limit=2&offset=2");
+        first.Links.ShouldNotContain(l => l.Relationship == "prev");
+
+        var second = await stacManager.GetCollections(limit: 2, offset: 2);
+
+        second.Collections.Cast<JObject>().Select(c => c["id"]!.Value<string>())
+            .ShouldBe(["public/ds-c"]);
+        second.Links.ShouldNotContain(l => l.Relationship == "next");
+        second.Links.Single(l => l.Relationship == "prev").Href
+            .ShouldBe("http://localhost/stac/collections?limit=2&offset=0");
+    }
+
+    [Test]
+    public async Task GetLandingPage_ColdPageCache_DoesNotReopenIndexesForNames()
+    {
+        await using var context = GetContextWithDatasets("ds-a", "ds-b", "ds-c");
+        var (stacManager, _, _) = CreateCollectionsManager(context);
+
+        // Two different users: the per-user landing page cache is cold for the second one
+        _authManagerMock.SetupSequence(o => o.SafeGetCurrentUserName())
+            .ReturnsAsync("user-1").ReturnsAsync("user-2");
+
+        var first = await stacManager.GetLandingPage();
+        _ddbManagerMock.Invocations.Clear();
+        var second = await stacManager.GetLandingPage();
+
+        _ddbManagerMock.Verify(o => o.Get(It.IsAny<string>(), It.IsAny<Guid>()), Times.Never);
+        second.Links.Where(l => l.Relationship == "child").Select(l => l.Title)
+            .ShouldBe(first.Links.Where(l => l.Relationship == "child").Select(l => l.Title));
+        second.Links.Where(l => l.Relationship == "child").Select(l => l.Title)
+            .ShouldBe(["Name ds-a", "Name ds-b", "Name ds-c"]);
+    }
+
+    private (StacManager manager, Mock<IUtils> utils, MemoryDistributedCache cache) CreateCollectionsManager(
+        RegistryContext context, string brokenSlug = null)
+    {
+        _authManagerMock.Setup(o => o.RequestAccess(It.IsAny<Dataset>(), AccessType.Read)).ReturnsAsync(true);
+        _authManagerMock.Setup(o => o.SafeGetCurrentUserName()).ReturnsAsync("user");
+
+        var utilsMock = new Mock<IUtils>();
+        utilsMock.Setup(o => o.GetLocalHost(It.IsAny<bool>())).Returns("http://localhost");
+        utilsMock.Setup(o => o.GenerateDatasetUrl(It.IsAny<Dataset>(), It.IsAny<bool>()))
+            .Returns((Dataset d, bool _) => $"http://localhost/orgs/public/ds/{d.Slug}");
+        utilsMock.Setup(o => o.GetDataset(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<bool>(), It.IsAny<bool>()))
+            .Throws(new InvalidOperationException("GetDataset must not be called"));
+
+        foreach (var ds in context.Datasets.Include(d => d.Organization).ToArray())
+        {
+            var metaMock = new Mock<Registry.Ports.DroneDB.IMetaManager>();
+            metaMock.Setup(o => o.Get<string>(SafeMetaManager.NameField, null)).Returns("Name " + ds.Slug);
+
+            var ddbMock = new Mock<IDDB>();
+            ddbMock.Setup(o => o.Meta).Returns(metaMock.Object);
+            var slug = ds.Slug;
+            if (slug == brokenSlug)
+                ddbMock.Setup(o => o.GetStac(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), null))
+                    .Throws(new InvalidOperationException("corrupt index"));
+            else
+                ddbMock.Setup(o => o.GetStac(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), null))
+                    .Returns((string id, string _, string _, string _) =>
+                        new JObject { ["id"] = id, ["type"] = "Collection" });
+
+            _ddbManagerMock.Setup(o => o.Get(ds.Organization.Slug, ds.InternalRef)).Returns(ddbMock.Object);
+        }
+
+        var cache = new MemoryDistributedCache(
+            Microsoft.Extensions.Options.Options.Create(new MemoryDistributedCacheOptions()));
+
+        return (new StacManager(_authManagerMock.Object, context, utilsMock.Object, _ddbManagerMock.Object,
+            cache, _stacManagerLogger), utilsMock, cache);
+    }
+
+    private static RegistryContext GetContextWithDatasets(params string[] slugs)
+    {
+        var options = new DbContextOptionsBuilder<RegistryContext>()
+            .UseInMemoryDatabase(databaseName: "RegistryDatabase-" + Guid.NewGuid())
+            .Options;
+
+        using (var context = new RegistryContext(options))
+        {
+            context.Organizations.Add(new Organization
+            {
+                Slug = MagicStrings.PublicOrganizationSlug,
+                Name = "Public",
+                CreationDate = DateTime.Now,
+                IsPublic = true,
+                Datasets = slugs.Select(s => new Dataset
+                {
+                    Slug = s, CreationDate = DateTime.Now, InternalRef = Guid.NewGuid()
+                }).ToList()
+            });
+            context.SaveChanges();
+        }
+
+        return new RegistryContext(options);
     }
 
 
