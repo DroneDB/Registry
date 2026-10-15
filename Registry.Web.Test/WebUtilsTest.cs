@@ -201,6 +201,19 @@ public class WebUtilsTest : TestBase
 
     }
 
+    [TestCase("")]
+    [TestCase("-abc")]
+    [TestCase("_abc")]
+    [TestCase("Abc")]
+    [TestCase("a b")]
+    [TestCase("a/b")]
+    [TestCase("jane--eric")]
+    [TestCase("wawa---w-16th-ave-hialeah")]
+    public void IsValidSlug_Invalid(string slug)
+    {
+        slug.IsValidSlug().ShouldBeFalse();
+    }
+
     #region Test Data
 
     private readonly AppSettings _settings = JsonConvert.DeserializeObject<AppSettings>(@"{

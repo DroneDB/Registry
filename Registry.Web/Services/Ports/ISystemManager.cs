@@ -17,6 +17,13 @@ public interface ISystemManager
 
     Task<IEnumerable<MigrateVisibilityEntryDTO>> MigrateVisibility();
 
+    /// <summary>
+    /// Renames organizations and datasets whose slug fails validation (e.g. "--" from the
+    /// pre-collapsing slug generator) to their ToSlug form, moving organization folders.
+    /// With dryRun only the plan is returned.
+    /// </summary>
+    Task<FixInvalidSlugsResultDto> FixInvalidSlugs(bool dryRun = true);
+
     Task<BuildPendingStatusDto> GetBuildPendingStatus();
 
     Task<ImportResultDto> ImportDataset(ImportDatasetRequestDto request);

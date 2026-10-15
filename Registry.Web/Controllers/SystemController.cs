@@ -203,6 +203,31 @@ public class SystemController : ControllerBaseEx
     }
 
     /// <summary>
+    /// Renames organizations and datasets whose slug is invalid (e.g. contains "--") to their
+    /// ToSlug form and moves organization folders accordingly. Dry run by default: pass
+    /// dryRun=false to apply. Entries with active jobs are skipped; run again once they finish.
+    /// </summary>
+    /// <param name="dryRun">When true (default) only returns the planned renames.</param>
+    [HttpPost("fix-invalid-slugs", Name = nameof(SystemController) + "." + nameof(FixInvalidSlugs))]
+    [ProducesResponseType(typeof(FixInvalidSlugsResultDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status401Unauthorized)]
+    public async Task<IActionResult> FixInvalidSlugs([FromQuery] bool dryRun = true)
+    {
+        try
+        {
+            _logger.LogDebug("System controller FixInvalidSlugs(dryRun: {DryRun})", dryRun);
+
+            return Ok(await _systemManager.FixInvalidSlugs(dryRun));
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Exception in System controller FixInvalidSlugs()");
+
+            throw;
+        }
+    }
+
+    /// <summary>
     /// Gets the status of the build pending background job.
     /// </summary>
     /// <returns>The current status of the build pending job including metrics and next scheduled run.</returns>

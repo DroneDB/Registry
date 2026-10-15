@@ -138,6 +138,209 @@ public class SystemManager : ISystemManager
         return parts.Length > 3 ? string.Join(".", parts.Take(3)) : string.Join(".", parts);
     }
 
+    // Job states during which a dataset's slug and folder must not change under the job
+    private static readonly string[] SlugFixBlockingJobStates =
+        ["Created", "Indexing", "Enqueued", "Scheduled", "Processing", "Awaiting"];
+
+    public async Task<FixInvalidSlugsResultDto> FixInvalidSlugs(bool dryRun = true)
+    {
+        if (!await _authManager.IsUserAdmin())
+            throw new UnauthorizedException("Only admins can perform system related tasks");
+
+        var result = new FixInvalidSlugsResultDto { DryRun = dryRun };
+
+        var orgs = _context.Organizations.AsNoTracking().Include(o => o.Datasets).ToArray();
+        var takenOrgSlugs = orgs.Select(o => o.Slug).ToHashSet();
+
+        var busy = _context.JobIndices.AsNoTracking()
+            .Where(j => SlugFixBlockingJobStates.Contains(j.CurrentState))
+            .Select(j => new { j.OrgSlug, j.DsSlug })
+            .ToArray()
+            .Select(j => (j.OrgSlug, j.DsSlug))
+            .ToHashSet();
+
+        foreach (var org in orgs)
+        {
+            var renameOrg = !org.Slug.IsValidSlug();
+            var badDatasets = org.Datasets.Where(d => !d.Slug.IsValidSlug()).ToArray();
+            if (!renameOrg && badDatasets.Length == 0) continue;
+
+            string newOrgSlug = null;
+            if (renameOrg)
+            {
+                takenOrgSlugs.Remove(org.Slug);
+                newOrgSlug = FreeSlug(org.Slug, takenOrgSlugs);
+                takenOrgSlugs.Add(newOrgSlug);
+            }
+
+            var takenDsSlugs = org.Datasets.Select(d => d.Slug).ToHashSet();
+            var dsRenames = new Dictionary<string, string>();
+            foreach (var ds in badDatasets)
+            {
+                takenDsSlugs.Remove(ds.Slug);
+                dsRenames[ds.Slug] = FreeSlug(ds.Slug, takenDsSlugs);
+                takenDsSlugs.Add(dsRenames[ds.Slug]);
+            }
+
+            var entries = new List<SlugFixEntryDto>();
+            if (renameOrg)
+                entries.Add(new SlugFixEntryDto
+                {
+                    Kind = "organization", OrganizationSlug = org.Slug, OldSlug = org.Slug, NewSlug = newOrgSlug
+                });
+            entries.AddRange(dsRenames.Select(r => new SlugFixEntryDto
+            {
+                Kind = "dataset", OrganizationSlug = org.Slug, OldSlug = r.Key, NewSlug = r.Value
+            }));
+            result.Entries.AddRange(entries);
+
+            // An organization rename moves the folder of every dataset in it
+            var blocked = renameOrg
+                ? org.Datasets.Any(d => busy.Contains((org.Slug, d.Slug)))
+                : dsRenames.Keys.Any(s => busy.Contains((org.Slug, s)));
+
+            if (dryRun)
+            {
+                entries.ForEach(e =>
+                {
+                    e.Status = blocked ? "skipped" : "planned";
+                    e.Reason = blocked ? "active jobs" : null;
+                });
+                continue;
+            }
+
+            if (blocked)
+            {
+                entries.ForEach(e => { e.Status = "skipped"; e.Reason = "active jobs, retry when they finish"; });
+                continue;
+            }
+
+            try
+            {
+                await ApplySlugFix(org.Slug, newOrgSlug, dsRenames);
+                entries.ForEach(e => e.Status = "renamed");
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Cannot fix slugs of organization '{OrgSlug}'", org.Slug);
+                entries.ForEach(e => { e.Status = "failed"; e.Reason = ex.Message; });
+            }
+        }
+
+        return result;
+    }
+
+    // ToSlug form of an invalid slug, suffixed with _N when already taken
+    private static string FreeSlug(string invalidSlug, ISet<string> taken)
+    {
+        var baseSlug = invalidSlug.ToSlug();
+        var slug = baseSlug;
+        for (var n = 1; taken.Contains(slug); n++)
+        {
+            var suffix = $"_{n}";
+            slug = baseSlug[..Math.Min(baseSlug.Length, 128 - suffix.Length)] + suffix;
+        }
+
+        if (!slug.IsValidSlug())
+            throw new InvalidOperationException($"Cannot derive a valid slug from '{invalidSlug}'");
+
+        return slug;
+    }
+
+    // Renames one organization (newOrgSlug != null) and/or some of its datasets in one transaction.
+    // The organization folder is moved first and moved back if the database update fails.
+    private async Task ApplySlugFix(string orgSlug, string newOrgSlug, IReadOnlyDictionary<string, string> dsRenames)
+    {
+        var oldPath = Path.Combine(_settings.DatasetsPath, orgSlug);
+        var newPath = newOrgSlug != null ? Path.Combine(_settings.DatasetsPath, newOrgSlug) : null;
+        var folderMoved = false;
+
+        if (newPath != null && _fileSystem.FolderExists(oldPath))
+        {
+            if (_fileSystem.FolderExists(newPath))
+                throw new InvalidOperationException($"Folder '{newPath}' already exists");
+
+            _fileSystem.FolderMove(oldPath, newPath);
+            folderMoved = true;
+        }
+
+        try
+        {
+            await using var tx = await _context.Database.BeginTransactionAsync();
+
+            var org = _context.Organizations
+                .Include(o => o.Datasets)
+                .Include(o => o.Users)
+                .First(o => o.Slug == orgSlug);
+            var datasets = org.Datasets.ToArray();
+
+            var targetOrg = org;
+            if (newOrgSlug != null)
+            {
+                // The slug is the primary key: create the new organization, repoint, drop the old one
+                targetOrg = new Organization
+                {
+                    Slug = newOrgSlug,
+                    Name = org.Name,
+                    Description = org.Description,
+                    CreationDate = org.CreationDate,
+                    OwnerId = org.OwnerId,
+                    IsPublic = org.IsPublic,
+                    Users = []
+                };
+                _context.Organizations.Add(targetOrg);
+
+                foreach (var user in org.Users?.ToArray() ?? [])
+                {
+                    targetOrg.Users.Add(new OrganizationUser
+                    {
+                        Organization = targetOrg,
+                        OrganizationSlug = newOrgSlug,
+                        UserId = user.UserId,
+                        Permissions = user.Permissions,
+                        GrantedAt = user.GrantedAt,
+                        GrantedBy = user.GrantedBy
+                    });
+                    _context.OrganizationsUsers.Remove(user);
+                }
+
+                foreach (var ds in datasets)
+                    ds.Organization = targetOrg;
+            }
+
+            foreach (var ds in datasets)
+                if (dsRenames.TryGetValue(ds.Slug, out var newDsSlug))
+                    ds.Slug = newDsSlug;
+
+            foreach (var job in _context.JobIndices.Where(j => j.OrgSlug == orgSlug).ToArray())
+            {
+                if (newOrgSlug != null) job.OrgSlug = newOrgSlug;
+                if (dsRenames.TryGetValue(job.DsSlug, out var newDsSlug)) job.DsSlug = newDsSlug;
+            }
+
+            await _context.SaveChangesAsync();
+
+            if (newOrgSlug != null)
+            {
+                // Deleting cascades to datasets: only once they all point to the new organization
+                _context.Organizations.Remove(org);
+                await _context.SaveChangesAsync();
+            }
+
+            await tx.CommitAsync();
+        }
+        catch
+        {
+            _context.ChangeTracker.Clear();
+            if (folderMoved)
+                _fileSystem.FolderMove(newPath, oldPath);
+            throw;
+        }
+
+        _logger.LogInformation("Fixed slugs of organization '{OrgSlug}' (new slug: {NewOrgSlug}, datasets: {Datasets})",
+            orgSlug, newOrgSlug ?? orgSlug, string.Join(", ", dsRenames.Select(r => $"{r.Key} -> {r.Value}")));
+    }
+
     public async Task<IEnumerable<MigrateVisibilityEntryDTO>> MigrateVisibility()
     {
 
@@ -568,6 +771,23 @@ public class SystemManager : ISystemManager
         return [.. entries.Where(e => e.Type != EntryType.Directory)];
     }
 
+    // Imports create organizations and datasets directly, so they must apply the same slug
+    // rules as the rest of the Hub (source registries may still hold legacy slugs like "a--b")
+    private static bool HasValidDestination(string sourceOrg, string sourceDs, string destOrg, string destDs,
+        List<ImportErrorDto> errors)
+    {
+        if (destOrg.IsValidSlug() && destDs.IsValidSlug()) return true;
+
+        errors.Add(new ImportErrorDto
+        {
+            Organization = sourceOrg,
+            Dataset = sourceDs,
+            Message = $"Invalid destination slug '{destOrg}/{destDs}': choose a valid destination",
+            Phase = ImportPhase.General
+        });
+        return false;
+    }
+
     private async Task ImportSingleDataset(
         string registryUrl,
         string authToken,
@@ -578,6 +798,8 @@ public class SystemManager : ISystemManager
         List<ImportedItemDto> importedItems,
         List<ImportErrorDto> errors)
     {
+        if (!HasValidDestination(sourceOrg, sourceDs, destOrg, destDs, errors)) return;
+
         string tempZipPath = null;
 
         try
@@ -811,6 +1033,8 @@ public class SystemManager : ISystemManager
         List<FileImportErrorDto> fileErrors,
         CancellationToken cancellationToken = default)
     {
+        if (!HasValidDestination(sourceOrg, sourceDs, destOrg, destDs, errors)) return;
+
         try
         {
             _logger.LogInformation("Importing dataset {SourceOrg}/{SourceDs} to {DestOrg}/{DestDs} using parallel file downloads",
