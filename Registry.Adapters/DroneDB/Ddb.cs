@@ -119,16 +119,22 @@ public class DDB : IDDB
 
     public Entry? GetEntry(string path)
     {
-        var objs = Search(path, true).ToArray();
+        // Resolve the path like Search does ("./a", "a/../b", "dir/"); the dataset root has
+        // no entry of its own and nothing outside the dataset is indexed.
+        var relativePath = NormalizePath(Path.GetRelativePath(DatasetFolderPath, GetLocalPath(path ?? string.Empty)))
+            .TrimEnd('/');
+        if (relativePath is "." or "" || relativePath == ".." || relativePath.StartsWith("../") ||
+            Path.IsPathRooted(relativePath))
+            return null;
 
-        if (objs.Any(p => p.Path == path))
-            return objs.First();
-
-        var parent = Path.GetDirectoryName(path);
-
-        objs = Search(parent).ToArray();
-
-        return objs.FirstOrDefault(item => item.Path == path);
+        try
+        {
+            return _ddbWrapper.GetEntry(DatasetFolderPath, relativePath);
+        }
+        catch (DdbException ex) when (ex is not DdbBusyException && ex is not DdbBuildInProgressException)
+        {
+            throw new InvalidOperationException($"Cannot get '{path}' from ddb '{DatasetFolderPath}'", ex);
+        }
     }
 
     public bool EntryExists(string path)

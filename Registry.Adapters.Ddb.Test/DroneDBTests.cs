@@ -287,6 +287,64 @@ public class NativeDdbWrapperTests : TestBase
     }
 
     [Test]
+    public void GetEntry_ExistingFile_MatchesListing()
+    {
+        using var test = new TestFS(Test1ArchiveUrl, BaseTestFolder);
+
+        var ddbPath = Path.Combine(test.TestFolder, "public", "default");
+
+        var listed = DdbWrapper.List(ddbPath, Path.Combine(ddbPath, "Sub/20200610_144436.jpg")).Single();
+        var entry = DdbWrapper.GetEntry(ddbPath, "Sub/20200610_144436.jpg");
+
+        entry.ShouldNotBeNull();
+        entry.ShouldBeEquivalentTo(listed);
+    }
+
+    [Test]
+    public void GetEntry_Folder_ReturnsTheFolder()
+    {
+        using var test = new TestFS(Test1ArchiveUrl, BaseTestFolder);
+
+        var ddbPath = Path.Combine(test.TestFolder, "public", "default");
+
+        var entry = DdbWrapper.GetEntry(ddbPath, "Sub");
+
+        entry.ShouldNotBeNull();
+        entry.Path.ShouldBe("Sub");
+        entry.Type.ShouldBe(EntryType.Directory);
+    }
+
+    [Test]
+    public void GetEntry_Missing_ReturnsNull()
+    {
+        using var test = new TestFS(Test1ArchiveUrl, BaseTestFolder);
+
+        var ddbPath = Path.Combine(test.TestFolder, "public", "default");
+
+        DdbWrapper.GetEntry(ddbPath, "missing.jpg").ShouldBeNull();
+        // Exact lookup: no wildcards, case-sensitive
+        DdbWrapper.GetEntry(ddbPath, "*.JPG").ShouldBeNull();
+        DdbWrapper.GetEntry(ddbPath, "dji_0027.jpg").ShouldBeNull();
+    }
+
+    [Test]
+    public void GetEntry_EntryWithSeveralMetaRows_Ok()
+    {
+        using var test = new TestFS(Test1ArchiveUrl, BaseTestFolder);
+
+        var ddbPath = Path.Combine(test.TestFolder, "public", "default");
+
+        DdbWrapper.MetaAdd(ddbPath, "annotations", "{\"a\":1}", "DJI_0027.JPG");
+        DdbWrapper.MetaAdd(ddbPath, "annotations", "{\"a\":2}", "DJI_0027.JPG");
+
+        var entry = DdbWrapper.GetEntry(ddbPath, "DJI_0027.JPG");
+
+        entry.ShouldNotBeNull();
+        entry.Path.ShouldBe("DJI_0027.JPG");
+        DdbWrapper.List(ddbPath, Path.Combine(ddbPath, "DJI_0027.JPG")).Count.ShouldBe(1);
+    }
+
+    [Test]
     public void List_AllFiles_Ok()
     {
         using var test = new TestFS(Test1ArchiveUrl, BaseTestFolder);

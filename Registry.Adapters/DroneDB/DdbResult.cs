@@ -7,5 +7,6 @@ public enum DdbResult
     BuildDependencyMissing = 2,
     BuildInProgress = 3, // Another process holds the build lock
     Canceled = 4, // Operation canceled by the progress callback
-    Busy = 5 // Transient DB contention (SQLITE_BUSY/LOCKED); safe to retry
+    Busy = 5, // Transient DB contention (SQLITE_BUSY/LOCKED); safe to retry
+    NotFound = 6 // The requested entry does not exist
 };

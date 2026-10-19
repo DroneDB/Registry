@@ -31,6 +31,14 @@ public interface IDdbWrapper
 
     public List<Entry> Info(string[] paths, bool recursive = false, int maxRecursionDepth = 0, bool withHash = false);
 
+    /// <summary>
+    /// Exact lookup of one entry (file or folder), including its metadata.
+    /// </summary>
+    /// <param name="ddbPath">Dataset folder (parent of .ddb)</param>
+    /// <param name="path">Dataset-relative path with forward slashes, no wildcards</param>
+    /// <returns>The entry, or null if the index has no entry with this path</returns>
+    public Entry? GetEntry(string ddbPath, string path);
+
     public List<Entry> List(string ddbPath, string path, bool recursive = false, int maxRecursionDepth = 0);
     public List<Entry> List(string ddbPath, string[] paths, bool recursive = false, int maxRecursionDepth = 0);
 

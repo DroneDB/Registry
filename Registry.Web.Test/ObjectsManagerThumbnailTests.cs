@@ -196,6 +196,35 @@ public class ObjectsManagerThumbnailTests : TestBase
     }
 
     [Test]
+    public async Task GenerateThumbnailData_FolderPath_IsRejectedInsteadOfFirstChild()
+    {
+        // DDB-11 B5: the folder listing's first child used to be thumbnailed in its place
+        var folder = new Entry { Path = "photos", Type = EntryType.Directory };
+        var child = new Entry { Path = "photos/a.jpg", Type = EntryType.GeoImage, Hash = "img1", Size = 100 };
+        _ddbMock.Setup(x => x.Search("photos", It.IsAny<bool>())).Returns(new[] { child });
+        _ddbMock.Setup(x => x.GetEntry("photos")).Returns(folder);
+
+        var ex = await Should.ThrowAsync<ArgumentException>(
+            () => CreateManager().GenerateThumbnailData(OrgSlug, DsSlug, "photos", null));
+
+        ex.Message.ShouldContain("folder");
+        _ddbMock.Verify(x => x.Search(It.IsAny<string>(), It.IsAny<bool>()), Times.Never);
+        _thumbsMock.Verify(t => t.GenerateThumbnailAsync(It.IsAny<string>(), It.IsAny<int>(), It.IsAny<Stream>()), Times.Never);
+    }
+
+    [Test]
+    public async Task GenerateThumbnailData_MissingPath_IsInvalid()
+    {
+        _ddbMock.Setup(x => x.GetEntry("missing.jpg")).Returns((Entry?)null);
+
+        await Should.ThrowAsync<ArgumentException>(
+            () => CreateManager().GenerateThumbnailData(OrgSlug, DsSlug, "missing.jpg", null));
+
+        _ddbMock.Verify(x => x.GetEntry("missing.jpg"), Times.Once);
+        _ddbMock.Verify(x => x.Search(It.IsAny<string>(), It.IsAny<bool>()), Times.Never);
+    }
+
+    [Test]
     public async Task GenerateThumbnailData_Recreate_RemovesTheKeyItReads()
     {
         SetupEntry("photo.jpg", EntryType.GeoImage, "img1");

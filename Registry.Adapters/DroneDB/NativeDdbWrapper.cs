@@ -358,6 +358,51 @@ public class NativeDdbWrapper : IDdbWrapper
         throw new DdbException(SafeGetLastError("info"));
     }
 
+    [DllImport("ddb", EntryPoint = "DDBGet")]
+    private static extern DdbResult _Get([MarshalAs(UnmanagedType.LPUTF8Str)] string ddbPath,
+        [MarshalAs(UnmanagedType.LPUTF8Str)] string path, out IntPtr output);
+
+    public Entry? GetEntry(string ddbPath, string path)
+    {
+        if (ddbPath == null)
+            throw new ArgumentException("DDB path is null");
+
+        if (string.IsNullOrWhiteSpace(path))
+            throw new ArgumentException("Path is null or empty");
+
+        try
+        {
+            var result = _Get(ddbPath, path.Replace('\\', '/'), out var output);
+
+            if (result == DdbResult.NotFound)
+                return null;
+
+            ThrowForFinalResult(result, "get");
+
+            var json = MarshalAndFreeUtf8(output);
+
+            if (string.IsNullOrWhiteSpace(json))
+                throw new InvalidOperationException("Unable to get entry");
+
+            return JsonConvert.DeserializeObject<Entry>(json) ??
+                   throw new InvalidOperationException($"Unable to deserialize entry: {json}");
+        }
+        catch (EntryPointNotFoundException ex)
+        {
+            throw new DdbException($"Error in calling ddb lib: incompatible versions ({ex.Message})", ex);
+        }
+        catch (DdbException)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            throw new DdbException(
+                $"Error in calling ddb lib. Last error: \"{SafeGetLastError("get")}\", check inner exception for details",
+                ex);
+        }
+    }
+
     [DllImport("ddb", EntryPoint = "DDBList")]
     private static extern DdbResult _List([MarshalAs(UnmanagedType.LPUTF8Str)] string ddbPath,
         IntPtr[] paths,

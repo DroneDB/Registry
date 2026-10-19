@@ -1159,9 +1159,8 @@ public class ObjectsManager : IObjectsManager
             ddb.AddRaw(dest);
             destDdbAdded = true;
 
-            if (!ddb.EntryExists(dest))
-                throw new InvalidOperationException(
-                    $"Cannot find destination '{dest}' after copy, something wrong with ddb");
+            var copiedEntry = ddb.GetEntry(dest) ?? throw new InvalidOperationException(
+                $"Cannot find destination '{dest}' after copy, something wrong with ddb");
 
             // Commit: discard the trash copy of the previous destination.
             if (trashCreated && trashLocalPath != null)
@@ -1194,7 +1193,7 @@ public class ObjectsManager : IObjectsManager
 
             _logger.LogInformation("Copy OK");
 
-            return ddb.GetEntry(dest).ToDto();
+            return copiedEntry.ToDto();
         }
         catch (Exception ex)
         {
@@ -1756,12 +1755,13 @@ public class ObjectsManager : IObjectsManager
         // Validate path to prevent path traversal
         CommonUtils.ValidateRelativePath(path, ddb.DatasetFolderPath);
 
-        var res = ddb.Search(path)?.ToArray();
+        var entry = ddb.GetEntry(path) ?? throw new ArgumentException($"Invalid path: '{path}'");
 
-        if (res == null || res.Length == 0)
-            throw new ArgumentException($"Invalid path: '{path}'");
+        // Every caller reads the file content (thumbnails, tiles, raster operations)
+        if (entry.Type == EntryType.Directory)
+            throw new ArgumentException($"'{path}' is a folder");
 
-        return res.First();
+        return entry;
     }
 
     private static void EnsureNoWildcardOrEmptyPaths(string path)
