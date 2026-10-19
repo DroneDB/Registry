@@ -44,6 +44,14 @@ public class OgcLayerDto
     /// referenced by name.
     /// </summary>
     public bool HasBuiltArtifact { get; set; } = true;
+
+    /// <summary>
+    /// True for a CAD drawing without a coordinate system (DDB-12): its GPKG keeps the
+    /// drawing coordinates and has no SRS. Such layers are never advertised by OGC
+    /// services (they cannot be served in any CRS); only OGC API Features resolves them,
+    /// for the Hub's local (no globe) viewer. <see cref="BboxWgs84"/> is null for them.
+    /// </summary>
+    public bool IsLocal { get; set; }
 }
 
 public class OgcBoundingBoxDto

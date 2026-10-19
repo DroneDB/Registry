@@ -75,7 +75,9 @@ public class OgcApiFeaturesManager : OgcManagerBase, IOgcApiFeaturesManager
     {
         var name = Uri.UnescapeDataString(collectionId);
         await ResolveAsync(orgSlug, dsSlug);
-        var layer = await LayerCatalog.ResolveAsync(orgSlug, dsSlug, name);
+        // Local layers (no CRS) resolve here and in items for the Hub's local viewer; they are
+        // never listed in /collections.
+        var layer = await LayerCatalog.ResolveAsync(orgSlug, dsSlug, name, includeLocal: true);
         return layer == null ? null : BuildCollection(layer, baseUrl.TrimEnd('/'));
     }
 
@@ -88,12 +90,16 @@ public class OgcApiFeaturesManager : OgcManagerBase, IOgcApiFeaturesManager
 
         var name = Uri.UnescapeDataString(collectionId);
         var (_, ddb) = await ResolveAsync(orgSlug, dsSlug);
-        var layer = await LayerCatalog.ResolveAsync(orgSlug, dsSlug, name)
+        var layer = await LayerCatalog.ResolveAsync(orgSlug, dsSlug, name, includeLocal: true)
                     ?? throw new OgcException("InvalidParameterValue",
                         $"Unknown collection '{collectionId}'", 404, "collectionId");
         if (layer.EntryType != EntryType.Vector)
             throw new OgcException("OperationNotSupported",
                 "OGC API – Features supports only Vector layers", 400);
+        if (layer.IsLocal && bbox != null)
+            throw new OgcException("InvalidParameterValue",
+                "This collection has no coordinate system (local drawing coordinates); bbox is not supported",
+                400, "bbox");
 
         var gpkg = ResolveVectorArtifact(ddb, layer);
         return DdbWrapper.QueryVector(gpkg, layer.InnerLayerName, bbox, bbox != null ? "EPSG:4326" : null,

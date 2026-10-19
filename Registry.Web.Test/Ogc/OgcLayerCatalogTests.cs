@@ -92,6 +92,57 @@ public class OgcLayerCatalogTests
         result[1].BboxWgs84.ShouldBe([5.0, 6.0, 7.0, 8.0]);
     }
 
+    // ---- DDB-12: local CAD drawings (no CRS) ----
+
+    [Test]
+    public async Task LocalLayer_HiddenFromListingsButResolvableForFeatures()
+    {
+        var entry = VectorEntry("site.dwg");
+        _ddb.Setup(d => d.Search(string.Empty, true)).Returns([entry]);
+        _artifacts.Setup(a => a.GetVectorQueryPath(_ddb.Object, entry.Hash)).Returns("/tmp/source.gpkg");
+        _artifacts.Setup(a => a.ArtifactExists("/tmp/source.gpkg")).Returns(true);
+        _wrapper.Setup(w => w.DescribeVector("/tmp/source.gpkg", null)).Returns(
+            "{\"layers\":[{\"name\":\"entities\",\"geometryType\":\"LineString\",\"srs\":\"\"," +
+            "\"extent\":[514000.0,5034000.0,514500.0,5034500.0]}]}");
+
+        (await _catalog.GetLayersAsync(Org, Ds)).ShouldBeEmpty();
+        (await _catalog.ResolveAsync(Org, Ds, "site.dwg:entities")).ShouldBeNull();
+
+        var all = await _catalog.GetLayersAsync(Org, Ds, includeLocal: true);
+        all.Count.ShouldBe(1);
+        all[0].IsLocal.ShouldBeTrue();
+        all[0].BboxWgs84.ShouldBeNull(); // drawing units are not WGS84
+        all[0].SupportedCrs.ShouldBeEmpty();
+        (await _catalog.ResolveAsync(Org, Ds, "site.dwg:entities", includeLocal: true)).ShouldNotBeNull();
+    }
+
+    [Test]
+    public async Task LocalEntryWithoutArtifact_FlaggedFromIndexProperties()
+    {
+        var entry = VectorEntry("site.dwg");
+        entry.Properties = new Dictionary<string, object> { ["georeferenced"] = false };
+        _ddb.Setup(d => d.Search(string.Empty, true)).Returns([entry]);
+        _artifacts.Setup(a => a.ArtifactExists(It.IsAny<string>())).Returns(false);
+
+        (await _catalog.GetLayersAsync(Org, Ds)).ShouldBeEmpty();
+        (await _catalog.GetLayersAsync(Org, Ds, includeLocal: true)).Single().IsLocal.ShouldBeTrue();
+    }
+
+    [Test]
+    public async Task GeoreferencedLayerWithSrs_StaysListed()
+    {
+        var entry = VectorEntry("site.dwg");
+        _ddb.Setup(d => d.Search(string.Empty, true)).Returns([entry]);
+        _artifacts.Setup(a => a.GetVectorQueryPath(_ddb.Object, entry.Hash)).Returns("/tmp/source.gpkg");
+        _artifacts.Setup(a => a.ArtifactExists("/tmp/source.gpkg")).Returns(true);
+        _wrapper.Setup(w => w.DescribeVector("/tmp/source.gpkg", null)).Returns(
+            "{\"layers\":[{\"name\":\"entities\",\"srs\":\"EPSG:4326\",\"extent\":[9.1,45.4,9.2,45.5]}]}");
+
+        var layers = await _catalog.GetLayersAsync(Org, Ds);
+        layers.Single().IsLocal.ShouldBeFalse();
+        layers.Single().BboxWgs84.ShouldBe([9.1, 45.4, 9.2, 45.5]);
+    }
+
     [Test]
     public async Task GetLayersAsync_VectorArtifactMissing_FallsBackToSingleEntryLayer()
     {

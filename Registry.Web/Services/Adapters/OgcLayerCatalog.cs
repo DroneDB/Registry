@@ -62,7 +62,13 @@ public class OgcLayerCatalog : IOgcLayerCatalog
     }
 
     public async Task<IReadOnlyList<OgcLayerDto>> GetLayersAsync(string orgSlug, string dsSlug,
-        string? folderPath = null)
+        string? folderPath = null, bool includeLocal = false)
+    {
+        var all = await GetAllLayersAsync(orgSlug, dsSlug, folderPath);
+        return includeLocal ? all : all.Where(l => !l.IsLocal).ToList();
+    }
+
+    private async Task<List<OgcLayerDto>> GetAllLayersAsync(string orgSlug, string dsSlug, string? folderPath)
     {
         var key = $"ogc-layers-{orgSlug}-{dsSlug}-{folderPath ?? string.Empty}";
         var cached = await _cache.GetRecordAsync<List<OgcLayerDto>>(key);
@@ -102,7 +108,8 @@ public class OgcLayerCatalog : IOgcLayerCatalog
                     EntryHash = e.Hash ?? string.Empty,
                     BboxWgs84 = entryBbox,
                     GeometryType = ExtractVectorGeometryType(e),
-                    HasBuiltArtifact = false
+                    HasBuiltArtifact = false,
+                    IsLocal = IsLocalEntry(e)
                 });
             }
             else
@@ -125,6 +132,10 @@ public class OgcLayerCatalog : IOgcLayerCatalog
         await _cache.SetRecordAsync(key, result, Ttl);
         return result;
     }
+
+    // Index-time flag set by DroneDB for drawings without a coordinate system.
+    private static bool IsLocalEntry(Entry e) =>
+        e.Properties != null && e.Properties.TryGetValue("georeferenced", out var g) && g is bool b && !b;
 
     /// <summary>
     /// Expand a vector entry into one <see cref="OgcLayerDto"/> per inner GPKG layer
@@ -170,6 +181,27 @@ public class OgcLayerCatalog : IOgcLayerCatalog
             if (string.IsNullOrWhiteSpace(name)) continue;
 
             var geomType = l["geometryType"]?.Value<string>();
+
+            // A GPKG layer without an SRS (DescribeVector reports "srs": "") is a local CAD
+            // drawing: its extent is in drawing units, not WGS84.
+            if (l["srs"] is JValue { Type: JTokenType.String } srs && string.IsNullOrEmpty(srs.Value<string>()))
+            {
+                list.Add(new OgcLayerDto
+                {
+                    Name = $"{e.Path}:{name}",
+                    Title = $"{e.Path}:{name}",
+                    EntryType = EntryType.Vector,
+                    EntryPath = e.Path,
+                    EntryHash = e.Hash ?? string.Empty,
+                    InnerLayerName = name,
+                    BboxWgs84 = null,
+                    SupportedCrs = [],
+                    GeometryType = geomType,
+                    IsLocal = true
+                });
+                continue;
+            }
+
             var extent = l["extent"] as JArray;
             var bbox = entryBbox;
             if (extent != null && extent.Count >= 4)
@@ -209,9 +241,9 @@ public class OgcLayerCatalog : IOgcLayerCatalog
     }
 
     public async Task<OgcLayerDto?> ResolveAsync(string orgSlug, string dsSlug, string layerName,
-        string? folderPath = null)
+        string? folderPath = null, bool includeLocal = false)
     {
-        var layers = await GetLayersAsync(orgSlug, dsSlug, folderPath);
+        var layers = await GetLayersAsync(orgSlug, dsSlug, folderPath, includeLocal);
         // Strip optional namespace prefix (e.g. "ddb:foo" -> "foo")
         var localName = layerName;
         var colon = layerName.IndexOf(':');
