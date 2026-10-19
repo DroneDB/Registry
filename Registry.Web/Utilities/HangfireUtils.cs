@@ -64,23 +64,33 @@ public static class HangfireUtils
 
     /// <summary>
     /// Formats an exception as a single display line for the job log tail:
-    /// <c>TypeName: message [InnerTypeName]</c>, message truncated to 500 chars.
-    /// Ring-buffer lines are display lines, so newlines are collapsed.
+    /// <c>TypeName: message [InnerTypeName: inner message]</c>, message truncated to
+    /// 500 chars and inner message to 300. Ring-buffer lines are display lines, so
+    /// newlines are collapsed.
     /// </summary>
     internal static string Describe(Exception ex)
     {
         if (ex == null) return "Unknown error";
 
-        var message = SanitizeSingleLine(ex.Message);
-        if (message.Length > 500)
-            message = message.Substring(0, 500) + "...";
+        var message = Truncate(SanitizeSingleLine(ex.Message), 500);
 
-        // Surfacing the inner type (not its message) keeps the line compact while
-        // pinpointing the failure layer, e.g. "DdbException: Cannot open ... [WebException]".
-        var inner = ex.InnerException != null ? $" [{ex.InnerException.GetType().Name}]" : string.Empty;
+        // The inner exception carries the cause: adapters wrap the native error, e.g.
+        // "InvalidOperationException: Cannot build 'a.dwg' ... [DdbException: DWG support
+        // needs dwg2dxf ...]". Without its message the log only says that a build failed.
+        var inner = string.Empty;
+        if (ex.InnerException != null)
+        {
+            var innerMessage = Truncate(SanitizeSingleLine(ex.InnerException.Message), 300);
+            inner = innerMessage.Length > 0
+                ? $" [{ex.InnerException.GetType().Name}: {innerMessage}]"
+                : $" [{ex.InnerException.GetType().Name}]";
+        }
 
         return $"{ex.GetType().Name}: {message}{inner}";
     }
+
+    private static string Truncate(string value, int max) =>
+        value.Length > max ? value.Substring(0, max) + "..." : value;
 
     // Collapses newlines/CR so an exception message stays a single ring-buffer display line.
     private static string SanitizeSingleLine(string value)
@@ -140,6 +150,10 @@ public static class HangfireUtils
             // Rethrow keeps Hangfire Failed-state semantics; AutomaticRetry OnlyOn
             // DdbBusy/DdbBuildInProgress still fails non-transient errors fast.
             writeLine($"Build failed: {Describe(ex)}");
+            // Seq/server log too: the job log is per task and BuildJobFailureFilter
+            // records only the exception type.
+            Log.Warning("Build job {JobId} failed for {Path}: {Error}", context?.BackgroundJob?.Id, path,
+                ScrubDatasetPath(Describe(ex), ddb.DatasetFolderPath));
             throw;
         }
 

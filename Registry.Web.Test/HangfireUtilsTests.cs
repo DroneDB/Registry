@@ -100,7 +100,7 @@ public class HangfireUtilsTests
             HangfireUtils.BuildWrapper(ddb.Object, "cloud.laz", false, null));
 
         _sink.Messages.ShouldContain(m =>
-            m.Contains("Build failed: DdbException: Cannot open raster [InvalidOperationException]"));
+            m.Contains("Build failed: DdbException: Cannot open raster [InvalidOperationException: GDAL failed]"));
     }
 
     [Test]
@@ -174,11 +174,35 @@ public class HangfireUtilsTests
     }
 
     [Test]
-    public void Describe_IncludesTypeNameMessageAndInnerType()
+    public void Describe_IncludesTypeNameMessageAndInnerMessage()
     {
         var line = HangfireUtils.Describe(
             new DdbException("GDAL failed to open", new System.Net.WebException("502")));
-        line.ShouldBe("DdbException: GDAL failed to open [WebException]");
+        line.ShouldBe("DdbException: GDAL failed to open [WebException: 502]");
+    }
+
+    [Test]
+    public void Describe_SurfacesTheNativeErrorBehindAdapterWrappers()
+    {
+        // Ddb.Build wraps every native failure; the cause is the inner message.
+        var line = HangfireUtils.Describe(new InvalidOperationException("Cannot build 'a.dwg' from ddb '[dataset]'",
+            new DdbException("DWG support needs dwg2dxf (LibreDWG)\nset DDB_DWG2DXF_PATH")));
+        line.ShouldBe("InvalidOperationException: Cannot build 'a.dwg' from ddb '[dataset]' " +
+                      "[DdbException: DWG support needs dwg2dxf (LibreDWG) set DDB_DWG2DXF_PATH]");
+    }
+
+    [Test]
+    public void Describe_InnerWithoutMessage_KeepsInnerType()
+    {
+        HangfireUtils.Describe(new Exception("outer", new TimeoutException("")))
+            .ShouldBe("Exception: outer [TimeoutException]");
+    }
+
+    [Test]
+    public void Describe_TruncatesLongInnerMessagesTo300Chars()
+    {
+        var line = HangfireUtils.Describe(new Exception("outer", new Exception(new string('y', 400))));
+        line.ShouldBe("Exception: outer [Exception: " + new string('y', 300) + "...]");
     }
 
     [Test]
