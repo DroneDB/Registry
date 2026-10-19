@@ -136,52 +136,18 @@ public class ShareController : ControllerBaseEx
             // Resolve the dataset target so the file can be streamed straight onto its storage volume
             var (orgSlug, dsSlug) = await _shareManager.GetUploadTarget(token);
 
-            var boundary = MultipartRequestHelper.GetBoundary(
-                MediaTypeHeaderValue.Parse(Request.ContentType),
-                _formOptions.MultipartBoundaryLengthLimit);
-            var reader = new MultipartReader(boundary, Request.Body);
-
-            string path = null;
-            string tempFile = null;
-            long writeBytes = 0;
-
-            var section = await reader.ReadNextSectionAsync();
-            while (section != null)
-            {
-                if (ContentDispositionHeaderValue.TryParse(section.ContentDisposition, out var contentDisposition))
-                {
-                    if (MultipartRequestHelper.HasFileContentDisposition(contentDisposition))
-                    {
-                        // Only a single file part is supported; reject extras and drop the temp already on disk
-                        if (tempFile != null)
-                        {
-                            MultipartRequestHelper.TryDeleteTempFile(tempFile);
-                            return BadRequest(new ErrorResponse("Only a single file part is allowed per upload"));
-                        }
-
-                        var streamed = await _objectsManager.StreamToTempAsync(orgSlug, dsSlug, section.Body);
-                        tempFile = streamed.TempPath;
-                        writeBytes = streamed.Bytes;
-                    }
-                    else if (MultipartRequestHelper.HasFormDataContentDisposition(contentDisposition))
-                    {
-                        var key = HeaderUtilities.RemoveQuotes(contentDisposition.Name).Value;
-                        using var sr = new StreamReader(section.Body, Encoding.UTF8);
-                        var value = await sr.ReadToEndAsync();
-                        if (string.Equals(key, "path", StringComparison.OrdinalIgnoreCase))
-                            path = value;
-                    }
-                }
-
-                section = await reader.ReadNextSectionAsync();
-            }
+            var form = await MultipartRequestHelper.ReadSingleFileFormAsync(Request,
+                _formOptions.MultipartBoundaryLengthLimit,
+                body => _objectsManager.StreamToTempAsync(orgSlug, dsSlug, body));
+            var path = form.GetField("path");
+            var tempFile = form.TempFile;
 
             if (tempFile == null)
                 return BadRequest(new ErrorResponse("No file uploaded"));
 
             _logger.LogDebug("Share controller Upload('{Token}', '{Path}')", token, path);
 
-            var res = await _shareManager.UploadStreamed(token, path, tempFile, writeBytes);
+            var res = await _shareManager.UploadStreamed(token, path, tempFile, form.Bytes);
             return Ok(res);
         }
         catch (BadHttpRequestException bex) when (bex.StatusCode == StatusCodes.Status413PayloadTooLarge)

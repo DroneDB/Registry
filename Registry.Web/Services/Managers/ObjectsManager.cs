@@ -293,26 +293,7 @@ public class ObjectsManager : IObjectsManager
         var ds = _utils.GetDataset(orgSlug, dsSlug);
         var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
 
-        // Temp lives under the dataset folder (same volume as the final file) -> a same-volume
-        // File.Move at commit time is a genuine atomic rename (review round 2, finding 6).
-        var tempDir = Path.Combine(ddb.DatasetFolderPath, IDDB.UploadsFolderName);
-        _fs.FolderCreate(tempDir);
-        var tempPath = Path.Combine(tempDir, Guid.NewGuid().ToString("N") + ".tmp");
-
-        try
-        {
-            await using var ts = _fs.OpenWrite(tempPath);
-            await source.CopyToAsync(ts, 1024 * 1024);
-        }
-        catch
-        {
-            // Aborted/oversized stream: drop the partial temp file
-            try { File.Delete(tempPath); }
-            catch { /* ignore */ }
-            throw;
-        }
-
-        return (tempPath, _fs.GetFileSize(tempPath));
+        return await DatasetUploads.StreamToTempAsync(_fs, ddb.DatasetFolderPath, source);
     }
 
     /// <summary>

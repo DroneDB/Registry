@@ -583,46 +583,12 @@ public class ObjectsController : ControllerBaseEx
                 return StatusCode(StatusCodes.Status413PayloadTooLarge,
                     new ErrorResponse($"Upload exceeds the maximum allowed size of {maxBody} bytes"));
 
-            var boundary = MultipartRequestHelper.GetBoundary(
-                MediaTypeHeaderValue.Parse(Request.ContentType),
-                _formOptions.MultipartBoundaryLengthLimit);
-            var reader = new MultipartReader(boundary, Request.Body);
-
-            string path = null;
-            string tempFile = null;
-            long writeBytes = 0;
-
             // Stream the file part straight to disk; capture the 'path' form field regardless of order
-            var section = await reader.ReadNextSectionAsync();
-            while (section != null)
-            {
-                if (ContentDispositionHeaderValue.TryParse(section.ContentDisposition, out var contentDisposition))
-                {
-                    if (MultipartRequestHelper.HasFileContentDisposition(contentDisposition))
-                    {
-                        // Only a single file part is supported; reject extras and drop the temp already on disk
-                        if (tempFile != null)
-                        {
-                            MultipartRequestHelper.TryDeleteTempFile(tempFile);
-                            return BadRequest(new ErrorResponse("Only a single file part is allowed per upload"));
-                        }
-
-                        var streamed = await _objectsManager.StreamToTempAsync(orgSlug, dsSlug, section.Body);
-                        tempFile = streamed.TempPath;
-                        writeBytes = streamed.Bytes;
-                    }
-                    else if (MultipartRequestHelper.HasFormDataContentDisposition(contentDisposition))
-                    {
-                        var key = HeaderUtilities.RemoveQuotes(contentDisposition.Name).Value;
-                        using var sr = new StreamReader(section.Body, Encoding.UTF8);
-                        var value = await sr.ReadToEndAsync();
-                        if (string.Equals(key, "path", StringComparison.OrdinalIgnoreCase))
-                            path = value;
-                    }
-                }
-
-                section = await reader.ReadNextSectionAsync();
-            }
+            var form = await MultipartRequestHelper.ReadSingleFileFormAsync(Request,
+                _formOptions.MultipartBoundaryLengthLimit,
+                body => _objectsManager.StreamToTempAsync(orgSlug, dsSlug, body));
+            var path = form.GetField("path");
+            var tempFile = form.TempFile;
 
             _logger.LogDebug("Objects controller Post('{OrgSlug}', '{DsSlug}', '{Path}', file={HasFile})",
                 orgSlug, dsSlug, path, tempFile != null);
@@ -635,7 +601,7 @@ public class ObjectsController : ControllerBaseEx
             }
             else
             {
-                newObj = await _objectsManager.CommitStreamedAsync(orgSlug, dsSlug, path, tempFile, writeBytes);
+                newObj = await _objectsManager.CommitStreamedAsync(orgSlug, dsSlug, path, tempFile, form.Bytes);
             }
 
             return CreatedAtRoute(nameof(ObjectsController) + "." + nameof(GetInfo), new
