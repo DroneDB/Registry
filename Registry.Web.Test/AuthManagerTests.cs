@@ -1,4 +1,5 @@
 using System;
+using Microsoft.Extensions.Caching.Memory;
 using System.Collections.Generic;
 using System.Linq;
 using System.Security.Claims;
@@ -168,7 +169,10 @@ public class AuthManagerTests : TestBase
             _ddbManagerMock.Object,
             _context.Object,
             _loggerMock.Object,
-            _cacheManagerMock.Object
+            _cacheManagerMock.Object,
+            // Rules only: no snapshot reuse between checks (see AuthSnapshotTests for the cache)
+            new UserAuthSnapshotProvider(_userManagerMock.Object,
+                new UserAuthSnapshotCache(new MemoryCache(new MemoryCacheOptions()), TimeSpan.Zero))
         );
     }
 

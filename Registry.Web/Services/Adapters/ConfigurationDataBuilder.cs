@@ -443,7 +443,7 @@ public class ConfigurationDataBuilder : IConfigurationDataBuilder
     private ConfigurationSectionDataDto BuildCacheSection()
     {
         return Section("Cache", "Cache Expiration",
-            "TTL for cached thumbnails, tiles, dataset visibility, and cache cleanup interval.",
+            "TTL for cached thumbnails, tiles, dataset visibility, authorization facts, and cache cleanup interval.",
             [
                 TimeSpanField("ThumbnailsCacheExpiration", "Thumbnails Cache Expiration",
                     "How long thumbnail images are cached before regeneration.",
@@ -456,6 +456,10 @@ public class ConfigurationDataBuilder : IConfigurationDataBuilder
                 TimeSpanField("DatasetVisibilityCacheExpiration", "Dataset Visibility Cache Expiration",
                     "How long dataset visibility settings are cached.",
                     _settings.DatasetVisibilityCacheExpiration, _defaults.DatasetVisibilityCacheExpiration),
+
+                TimeSpanField("AuthorizationCacheExpiration", "Authorization Cache Expiration",
+                    "How long a user's roles and existence are reused across requests for access checks.",
+                    _settings.AuthorizationCacheExpiration, _defaults.AuthorizationCacheExpiration),
 
                 TimeSpanField("ClearCacheInterval", "Clear Cache Interval",
                     "How often the file cache is scanned and stale entries are removed.",

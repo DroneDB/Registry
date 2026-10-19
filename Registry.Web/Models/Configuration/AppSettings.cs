@@ -188,6 +188,14 @@ public class AppSettings
     public TimeSpan? DatasetVisibilityCacheExpiration { get; set; }
 
     /// <summary>
+    /// How long a user's authorization facts (exists, admin, deactivated) are reused across
+    /// requests. Role changes and deletions made by this instance take effect at once; the
+    /// expiration bounds changes made elsewhere (other instances, direct database edits).
+    /// Zero disables the cache. Default: 30 seconds.
+    /// </summary>
+    public TimeSpan? AuthorizationCacheExpiration { get; set; }
+
+    /// <summary>
     /// Clear cache interval
     /// </summary>
     public TimeSpan? ClearCacheInterval { get; set; }

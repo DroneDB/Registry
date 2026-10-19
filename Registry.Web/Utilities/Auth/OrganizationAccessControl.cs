@@ -1,7 +1,6 @@
 ﻿using System;
 using System.Linq;
 using System.Threading.Tasks;
-using Microsoft.AspNetCore.Identity;
 using Microsoft.Extensions.Logging;
 using Registry.Common;
 using Registry.Web.Data;
@@ -9,6 +8,7 @@ using Registry.Web.Data.Models;
 using Registry.Web.Identity.Models;
 using Registry.Web.Models;
 using Registry.Web.Services.Managers;
+using Registry.Web.Services.Ports;
 
 namespace Registry.Web.Utilities.Auth;
 
@@ -17,41 +17,44 @@ namespace Registry.Web.Utilities.Auth;
 /// </summary>
 public class OrganizationAccessControl : AccessControlBase
 {
-    public OrganizationAccessControl(UserManager<User> usersManager, RegistryContext context, ILogger logger)
-        : base(usersManager, context, logger)
+    public OrganizationAccessControl(IUserAuthSnapshotProvider snapshots, RegistryContext context, ILogger logger)
+        : base(snapshots, context, logger)
     {
     }
 
-    public async Task<bool> CanAccessOrganization(Organization org, AccessType access, User user)
+    public Task<bool> CanAccessOrganization(Organization org, AccessType access, User user)
+        => CanAccessOrganization(org, access, user?.Id);
+
+    /// <param name="userId">Id of an existing user, or null for anonymous access</param>
+    public async Task<bool> CanAccessOrganization(Organization org, AccessType access, string userId)
     {
         ArgumentNullException.ThrowIfNull(org);
 
         // Anonymous access check
-        if (user == null)
+        if (userId == null)
         {
-            // Anonymous users can access only public organizations with Read access
+            // Anonymous users can access only public organizations with Read access,
+            // and only while the owner is not deactivated
             if (access != AccessType.Read || !org.IsPublic)
                 return false;
 
-            var owner = await UsersManager.FindByIdAsync(org.OwnerId);
-
-            // Check if the owner is not deactivated
-            return owner != null && !await IsUserDeactivated(owner);
+            return await IsOwnerActive(org.OwnerId);
         }
 
+        var user = await Snapshots.GetAsync(userId);
+
         // Deactivated user check
-        if (await IsUserDeactivated(user))
+        if (user.IsDeactivated)
             return false;
 
         // Admin privileges - system admins have full access
-        var isAdmin = await IsUserAdmin(user);
-        if (isAdmin)
+        if (user.IsAdmin)
         {
             return true;
         }
 
         // Owner privileges - owner always has full access (except delete on public org)
-        var isOwner = org.OwnerId == user.Id;
+        var isOwner = org.OwnerId == userId;
         if (isOwner)
         {
             // Owner can perform any action except delete on the public organization
@@ -63,7 +66,7 @@ public class OrganizationAccessControl : AccessControlBase
             await _context.Entry(org).Collection(o => o.Users).LoadAsync();
 
         // Find the user's membership
-        var orgUser = org.Users?.FirstOrDefault(u => u.UserId == user.Id);
+        var orgUser = org.Users?.FirstOrDefault(u => u.UserId == userId);
         if (orgUser == null)
             return false;
 
@@ -82,11 +85,11 @@ public class OrganizationAccessControl : AccessControlBase
         if (user == null)
             return false;
 
-        if (await IsUserDeactivated(user))
+        if (await IsUserDeactivated(user.Id))
             return false;
 
         // System admin can always manage members
-        if (await IsUserAdmin(user))
+        if (await IsUserAdmin(user.Id))
             return true;
 
         // Owner can always manage members

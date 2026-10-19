@@ -141,6 +141,7 @@ public class Startup
         if (appSettings.LdapSettings?.Enabled == true)
         {
             services.AddIdentityCore<User>()
+                .AddUserManager<RegistryUserManager>()
                 .AddRoles<IdentityRole>()
                 .AddEntityFrameworkStores<ApplicationDbContext>()
                 .AddDefaultTokenProviders();
@@ -150,6 +151,7 @@ public class Startup
         else if (!string.IsNullOrWhiteSpace(appSettings.ExternalAuthUrl))
         {
             services.AddIdentityCore<User>()
+                .AddUserManager<RegistryUserManager>()
                 .AddRoles<IdentityRole>()
                 .AddEntityFrameworkStores<ApplicationDbContext>()
                 .AddDefaultTokenProviders();
@@ -159,6 +161,7 @@ public class Startup
         else
         {
             services.AddIdentityCore<User>()
+                .AddUserManager<RegistryUserManager>()
                 .AddRoles<IdentityRole>()
                 .AddEntityFrameworkStores<ApplicationDbContext>()
                 .AddSignInManager()
@@ -292,6 +295,8 @@ public class Startup
         services.AddSingleton<IHttpContextAccessor, HttpContextAccessor>();
 
         services.AddScoped<IUtils, WebUtils>();
+        services.AddSingleton<UserAuthSnapshotCache>();
+        services.AddScoped<IUserAuthSnapshotProvider, UserAuthSnapshotProvider>();
         services.AddScoped<IAuthManager, AuthManager>();
 
         services.AddScoped<IUsersManager, UsersManager>();

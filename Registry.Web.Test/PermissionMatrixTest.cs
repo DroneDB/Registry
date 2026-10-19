@@ -20,6 +20,8 @@ using Registry.Web.Services.Ports;
 using Registry.Web.Utilities.Auth;
 using Registry.Test.Common;
 using System;
+using Registry.Web.Services.Adapters;
+using Microsoft.Extensions.Caching.Memory;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
@@ -328,14 +330,19 @@ public class PermissionMatrixTest : TestBase
         _userManagerMock.Setup(x => x.FindByIdAsync(_deactivatedOwner.Id)).ReturnsAsync(_deactivatedOwner);
     }
 
+    // Rules only: no snapshot reuse between checks
+    private UserAuthSnapshotProvider Snapshots() =>
+        new(_userManagerMock.Object,
+            new UserAuthSnapshotCache(new MemoryCache(new MemoryCacheOptions()), TimeSpan.Zero));
+
     private OrganizationAccessControl CreateOrgAccessControl()
     {
-        return new OrganizationAccessControl(_userManagerMock.Object, _context, _orgLogger);
+        return new OrganizationAccessControl(Snapshots(), _context, _orgLogger);
     }
 
     private DatasetAccessControl CreateDatasetAccessControl()
     {
-        return new DatasetAccessControl(_userManagerMock.Object, _context, _datasetLogger, _ddbManagerMock.Object,
+        return new DatasetAccessControl(Snapshots(), _context, _datasetLogger, _ddbManagerMock.Object,
             _cacheManagerMock.Object);
     }
 
@@ -401,7 +408,7 @@ public class PermissionMatrixTest : TestBase
         var control = CreateOrgAccessControl();
         var org = GetOrg(orgIsPublic);
 
-        var result = await control.CanAccessOrganization(org, access, null);
+        var result = await control.CanAccessOrganization(org, access, (User)null);
 
         result.ShouldBe(expected);
     }
@@ -607,7 +614,7 @@ public class PermissionMatrixTest : TestBase
         var control = CreateDatasetAccessControl();
         var dataset = GetDataset(orgIsPublic, dsVisibility);
 
-        var result = await control.CanAccessDataset(dataset, access, null);
+        var result = await control.CanAccessDataset(dataset, access, (User)null);
 
         result.ShouldBe(expected);
     }
@@ -1465,7 +1472,7 @@ public class PermissionMatrixTest : TestBase
         // When the org owner is deactivated, anonymous cannot read even public datasets
         var control = CreateDatasetAccessControl();
 
-        var result = await control.CanAccessDataset(_deactivatedOwnerOrgPublicDs, AccessType.Read, null);
+        var result = await control.CanAccessDataset(_deactivatedOwnerOrgPublicDs, AccessType.Read, (User)null);
 
         result.ShouldBeFalse();
     }
@@ -1476,7 +1483,7 @@ public class PermissionMatrixTest : TestBase
         // When the org owner is deactivated, anonymous cannot read the public org
         var control = CreateOrgAccessControl();
 
-        var result = await control.CanAccessOrganization(_deactivatedOwnerOrg, AccessType.Read, null);
+        var result = await control.CanAccessOrganization(_deactivatedOwnerOrg, AccessType.Read, (User)null);
 
         result.ShouldBeFalse();
     }
@@ -1526,7 +1533,7 @@ public class PermissionMatrixTest : TestBase
         // Even though the org is public, anonymous cannot read a private dataset
         var control = CreateDatasetAccessControl();
 
-        var result = await control.CanAccessDataset(_publicOrgPrivateDs, AccessType.Read, null);
+        var result = await control.CanAccessDataset(_publicOrgPrivateDs, AccessType.Read, (User)null);
 
         result.ShouldBeFalse();
     }
@@ -1538,7 +1545,7 @@ public class PermissionMatrixTest : TestBase
         // (DatasetAccessControl checks dataset visibility, not org visibility)
         var control = CreateDatasetAccessControl();
 
-        var result = await control.CanAccessDataset(_privateOrgPublicDs, AccessType.Read, null);
+        var result = await control.CanAccessDataset(_privateOrgPublicDs, AccessType.Read, (User)null);
 
         result.ShouldBeTrue();
     }

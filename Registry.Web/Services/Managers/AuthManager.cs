@@ -25,6 +25,7 @@ public class AuthManager : IAuthManager
 {
     private readonly UserManager<User> _usersManager;
     private readonly IHttpContextAccessor _httpContextAccessor;
+    private readonly IUserAuthSnapshotProvider _snapshots;
     private readonly ResourceAccessControl _resourceAccess;
     private readonly OrganizationAccessControl _organizationAccess;
     private readonly DatasetAccessControl _datasetAccess;
@@ -38,24 +39,40 @@ public class AuthManager : IAuthManager
         IDdbManager ddbManager,
         RegistryContext context,
         ILogger<AuthManager> logger,
-        ICacheManager cacheManager)
+        ICacheManager cacheManager,
+        IUserAuthSnapshotProvider snapshots)
     {
         _usersManager = usersManager;
         _httpContextAccessor = httpContextAccessor;
-        _resourceAccess = new ResourceAccessControl(usersManager, context, logger);
-        _organizationAccess = new OrganizationAccessControl(usersManager, context, logger);
-        _datasetAccess = new DatasetAccessControl(usersManager, context, logger, ddbManager, cacheManager);
+        _snapshots = snapshots;
+        _resourceAccess = new ResourceAccessControl(snapshots, context, logger);
+        _organizationAccess = new OrganizationAccessControl(snapshots, context, logger);
+        _datasetAccess = new DatasetAccessControl(snapshots, context, logger, ddbManager, cacheManager);
 
         // Initialize lazy - evaluated once per request (AuthManager is Scoped)
         _currentUserLazy = new Lazy<Task<User>>(LoadCurrentUserAsync);
+        _currentUserIdLazy = new Lazy<Task<string>>(LoadCurrentUserIdAsync);
     }
+
+    // Request-scoped lazy cache for the id of the current user (null when anonymous)
+    private readonly Lazy<Task<string>> _currentUserIdLazy;
+
+    private string CurrentUserIdClaim => _httpContextAccessor.HttpContext?.User.Claims
+        .FirstOrDefault(c => c.Type == ClaimTypes.Name)?.Value;
 
     private async Task<User> LoadCurrentUserAsync()
     {
-        var userId = _httpContextAccessor.HttpContext?.User.Claims
-            .FirstOrDefault(c => c.Type == ClaimTypes.Name)?.Value;
-
+        var userId = CurrentUserIdClaim;
         return userId == null ? null : await _usersManager.FindByIdAsync(userId);
+    }
+
+    // Access checks only need the id: resolved from the token and the cached snapshot, so a
+    // request does not load the user. A token of a deleted user is anonymous, as in
+    // GetCurrentUser().
+    private async Task<string> LoadCurrentUserIdAsync()
+    {
+        var userId = CurrentUserIdClaim;
+        return userId != null && (await _snapshots.GetAsync(userId)).Exists ? userId : null;
     }
 
     public Task<User> GetCurrentUser() => _currentUserLazy.Value;
@@ -71,19 +88,17 @@ public class AuthManager : IAuthManager
         return currentUser != null && await _usersManager.IsInRoleAsync(currentUser, roleName);
     }
 
-    public async Task<bool> IsUserAdmin() => await IsUserInRole(ApplicationDbContext.AdminRoleName);
+    public async Task<bool> IsUserAdmin()
+    {
+        var userId = await _currentUserIdLazy.Value;
+        return userId != null && (await _snapshots.GetAsync(userId)).IsAdmin;
+    }
 
     public async Task<bool> IsOwnerOrAdmin(Organization org)
-    {
-        var user = await GetCurrentUser();
-        return await _resourceAccess.HasElevatedPrivileges(user, org.OwnerId);
-    }
+        => await _resourceAccess.HasElevatedPrivileges(await _currentUserIdLazy.Value, org.OwnerId);
 
     public async Task<bool> IsOwnerOrAdmin(Dataset ds)
-    {
-        var user = await GetCurrentUser();
-        return await _resourceAccess.HasElevatedPrivileges(user, ds.Organization.OwnerId);
-    }
+        => await _resourceAccess.HasElevatedPrivileges(await _currentUserIdLazy.Value, ds.Organization.OwnerId);
 
     public async Task<bool> UserExists(string userId)
     {
@@ -92,13 +107,13 @@ public class AuthManager : IAuthManager
 
     public async Task<bool> RequestAccess<T>(T obj, AccessType access) where T : IRequestAccess
     {
-        return await RequestAccess(obj, access, await GetCurrentUser());
+        return await RequestAccessById(obj, access, await _currentUserIdLazy.Value);
     }
 
     public async Task<bool> CanListOrganizations(User user)
     {
         // User can list organizations if it's not null and not deactivated
-        return user != null && !await _resourceAccess.IsUserDeactivated(user);
+        return user != null && !await _resourceAccess.IsUserDeactivated(user.Id);
     }
 
     public async Task<bool> CanListOrganizations()
@@ -108,7 +123,8 @@ public class AuthManager : IAuthManager
 
     public async Task<bool> CanRefreshToken(User user)
     {
-        return user != null && !await _resourceAccess.IsUserDeactivated(user);
+        // Read the identity store, not the snapshot: a refresh extends the token's life
+        return user != null && !await _usersManager.IsInRoleAsync(user, ApplicationDbContext.DeactivatedRoleName);
     }
 
     public async Task<bool> CanRefreshToken()
@@ -116,29 +132,32 @@ public class AuthManager : IAuthManager
         return await CanRefreshToken(await GetCurrentUser());
     }
 
-    public async Task<bool> RequestAccess<T>(T obj, AccessType access, User user) where T : IRequestAccess
+    public Task<bool> RequestAccess<T>(T obj, AccessType access, User user) where T : IRequestAccess
+        => RequestAccessById(obj, access, user?.Id);
+
+    private async Task<bool> RequestAccessById<T>(T obj, AccessType access, string userId) where T : IRequestAccess
     {
         ArgumentNullException.ThrowIfNull(obj);
 
         return typeof(T) switch
         {
             var t when t == typeof(Organization) =>
-                await _organizationAccess.CanAccessOrganization(obj as Organization, access, user),
+                await _organizationAccess.CanAccessOrganization(obj as Organization, access, userId),
             var t when t == typeof(Dataset) =>
-                await _datasetAccess.CanAccessDataset(obj as Dataset, access, user),
+                await _datasetAccess.CanAccessDataset(obj as Dataset, access, userId),
             _ => throw new InvalidEnumArgumentException($"Not supported type {typeof(T)}")
         };
     }
 
     public async Task<DatasetPermissionsDto> GetDatasetPermissions(Dataset dataset)
     {
-        var user = await GetCurrentUser();
+        var userId = await _currentUserIdLazy.Value;
 
         return new DatasetPermissionsDto
         {
-            CanRead = await _datasetAccess.CanAccessDataset(dataset, AccessType.Read, user),
-            CanWrite = await _datasetAccess.CanAccessDataset(dataset, AccessType.Write, user),
-            CanDelete = await _datasetAccess.CanAccessDataset(dataset, AccessType.Delete, user)
+            CanRead = await _datasetAccess.CanAccessDataset(dataset, AccessType.Read, userId),
+            CanWrite = await _datasetAccess.CanAccessDataset(dataset, AccessType.Write, userId),
+            CanDelete = await _datasetAccess.CanAccessDataset(dataset, AccessType.Delete, userId)
         };
     }
 }
