@@ -2,6 +2,7 @@
 
 using System;
 using System.Collections.Concurrent;
+using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Caching.Distributed;
@@ -12,6 +13,8 @@ namespace Registry.Web.Services.Managers;
 
 /// <summary>
 /// Distributed cache wrapper with registration/unregistration of data providers and pattern-based invalidation.
+/// Concurrent misses for the same key share one generation (single-flight), and cache read/write
+/// failures fall back to generating the data instead of failing the request (fail-open).
 /// </summary>
 public class CacheManager : ICacheManager
 {
@@ -21,6 +24,25 @@ public class CacheManager : ICacheManager
         public TimeSpan Expiration { get; init; }
     }
 
+    /// <summary>
+    /// One in-progress generation for a key. Invalidating the key detaches the flight from
+    /// <see cref="_inFlight"/> (new callers start a fresh generation) and marks it so its
+    /// result, computed from pre-invalidation state, is not written to the cache.
+    /// </summary>
+    private sealed class Flight
+    {
+        private readonly TaskCompletionSource<byte[]> _completion =
+            new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        private volatile bool _invalidated;
+
+        public Task<byte[]> Completion => _completion.Task;
+        public bool Invalidated => _invalidated;
+        public void Invalidate() => _invalidated = true;
+        public void Complete(byte[] data) => _completion.SetResult(data);
+        public void Fail(Exception ex) => _completion.SetException(ex);
+    }
+
     private readonly IDistributedCache _cache;
     private readonly ILogger<CacheManager> _logger;
     private readonly ICacheKeyScanner _keyScanner;
@@ -28,6 +50,7 @@ public class CacheManager : ICacheManager
     private readonly TimeSpan _defaultCacheExpiration = new(0, 30, 0);
 
     private readonly ConcurrentDictionary<string, Carrier> _providers = new();
+    private readonly ConcurrentDictionary<string, Flight> _inFlight = new();
 
     public CacheManager(IDistributedCache cache, ILogger<CacheManager> logger,
         ICacheKeyScanner keyScanner)
@@ -75,6 +98,8 @@ public class CacheManager : ICacheManager
         ArgumentNullException.ThrowIfNull(category);
 
         var key = MakeKey(seed, category, parameters);
+        if (_inFlight.TryRemove(key, out var flight))
+            flight.Invalidate();
 
         try
         {
@@ -94,7 +119,15 @@ public class CacheManager : ICacheManager
         ArgumentNullException.ThrowIfNull(category);
 
         // Build pattern using the same key format: ":seed:category:*"
-        var pattern = MakeKey(seed, category, null) + ":*";
+        var prefix = MakeKey(seed, category, null) + ":";
+        foreach (var entry in _inFlight)
+        {
+            if (entry.Key.StartsWith(prefix, StringComparison.Ordinal) &&
+                _inFlight.TryRemove(entry))
+                entry.Value.Invalidate();
+        }
+
+        var pattern = prefix + "*";
         var deletedCount = await _keyScanner.RemoveByPatternAsync(pattern);
 
         _logger.LogInformation(
@@ -118,36 +151,100 @@ public class CacheManager : ICacheManager
 
         var key = MakeKey(seed, category, parameters);
 
+        var cachedData = await TryGetCachedAsync(key);
+        if (cachedData != null)
+            return cachedData;
+
+        var flight = new Flight();
+        var current = _inFlight.GetOrAdd(key, flight);
+        if (ReferenceEquals(current, flight))
+            await RunFlightAsync(key, carrier, parameters, flight);
+        else
+            _logger.LogDebug("Joining in-flight generation for key: {Key}", key);
+
+        return await current.Completion;
+    }
+
+    /// <summary>
+    /// Generates the data for <paramref name="key"/> once and completes <paramref name="flight"/>
+    /// with it (or with the generation's exception). Never throws.
+    /// </summary>
+    private async Task RunFlightAsync(string key, Carrier carrier, object[] parameters, Flight flight)
+    {
         try
         {
-            // Try to get from cache first
-            var cachedData = await _cache.GetAsync(key);
-            if (cachedData != null)
+            // A flight for this key that finished between our cache miss and our registration has
+            // already stored its result: re-check so that a key is generated once per miss window.
+            var data = await TryGetCachedAsync(key);
+            if (data == null)
             {
-                _logger.LogDebug("Cache hit for key: {Key}, size: {Size} bytes", key, cachedData.Length);
-                return cachedData;
+                _logger.LogDebug("Cache miss for key: {Key}, generating data", key);
+                data = await carrier.GetDataAsync(parameters);
+
+                if (!flight.Invalidated)
+                {
+                    await TrySetCachedAsync(key, data, carrier.Expiration);
+
+                    // Invalidation flags the flight before it removes the key, so an invalidation
+                    // that raced with the write above is visible here: drop what we just stored.
+                    if (flight.Invalidated)
+                        await TryRemoveCachedAsync(key);
+                }
+                else
+                {
+                    _logger.LogDebug("Key {Key} was invalidated during generation; not caching the result", key);
+                }
             }
 
-            _logger.LogDebug("Cache miss for key: {Key}, generating data", key);
-
-            // Cache miss - generate data asynchronously
-            var data = await carrier.GetDataAsync(parameters);
-
-            // Store in cache with expiration
-            var options = new DistributedCacheEntryOptions
-            {
-                SlidingExpiration = carrier.Expiration
-            };
-
-            await _cache.SetAsync(key, data, options);
-
-            _logger.LogDebug("Data generated and cached for key: {Key}, size: {Size} bytes", key, data.Length);
-            return data;
+            _inFlight.TryRemove(new KeyValuePair<string, Flight>(key, flight));
+            flight.Complete(data);
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Failed to get/generate data for key: {Key}", key);
-            throw;
+            _logger.LogError(ex, "Failed to generate data for key: {Key}", key);
+            _inFlight.TryRemove(new KeyValuePair<string, Flight>(key, flight));
+            flight.Fail(ex);
+        }
+    }
+
+    private async Task<byte[]?> TryGetCachedAsync(string key)
+    {
+        try
+        {
+            var cachedData = await _cache.GetAsync(key);
+            if (cachedData != null)
+                _logger.LogDebug("Cache hit for key: {Key}, size: {Size} bytes", key, cachedData.Length);
+            return cachedData;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Cache read failed for key: {Key}; generating the data instead", key);
+            return null;
+        }
+    }
+
+    private async Task TrySetCachedAsync(string key, byte[] data, TimeSpan expiration)
+    {
+        try
+        {
+            await _cache.SetAsync(key, data, new DistributedCacheEntryOptions { SlidingExpiration = expiration });
+            _logger.LogDebug("Data generated and cached for key: {Key}, size: {Size} bytes", key, data.Length);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Cache write failed for key: {Key}; returning the generated data uncached", key);
+        }
+    }
+
+    private async Task TryRemoveCachedAsync(string key)
+    {
+        try
+        {
+            await _cache.RemoveAsync(key);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to drop invalidated cache entry with key: {Key}", key);
         }
     }
 
