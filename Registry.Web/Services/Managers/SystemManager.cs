@@ -168,8 +168,8 @@ public class SystemManager : ISystemManager
             string newOrgSlug = null;
             if (renameOrg)
             {
-                takenOrgSlugs.Remove(org.Slug);
                 newOrgSlug = FreeSlug(org.Slug, takenOrgSlugs);
+                takenOrgSlugs.Remove(org.Slug);
                 takenOrgSlugs.Add(newOrgSlug);
             }
 
@@ -177,8 +177,8 @@ public class SystemManager : ISystemManager
             var dsRenames = new Dictionary<string, string>();
             foreach (var ds in badDatasets)
             {
-                takenDsSlugs.Remove(ds.Slug);
                 dsRenames[ds.Slug] = FreeSlug(ds.Slug, takenDsSlugs);
+                takenDsSlugs.Remove(ds.Slug);
                 takenDsSlugs.Add(dsRenames[ds.Slug]);
             }
 
@@ -230,12 +230,15 @@ public class SystemManager : ISystemManager
         return result;
     }
 
-    // ToSlug form of an invalid slug, suffixed with _N when already taken
-    private static string FreeSlug(string invalidSlug, ISet<string> taken)
+    // ToSlug form of an invalid slug, suffixed with _N when another slug already takes it.
+    // Compared ignoring case: case-insensitive collations (MySQL) see "a-b" and "A-B" as the same key
+    private static string FreeSlug(string invalidSlug, IEnumerable<string> taken)
     {
+        var others = taken.Where(t => t != invalidSlug).ToHashSet(StringComparer.OrdinalIgnoreCase);
+
         var baseSlug = invalidSlug.ToSlug();
         var slug = baseSlug;
-        for (var n = 1; taken.Contains(slug); n++)
+        for (var n = 1; others.Contains(slug); n++)
         {
             var suffix = $"_{n}";
             slug = baseSlug[..Math.Min(baseSlug.Length, 128 - suffix.Length)] + suffix;
@@ -257,89 +260,150 @@ public class SystemManager : ISystemManager
 
         if (newPath != null && _fileSystem.FolderExists(oldPath))
         {
-            if (_fileSystem.FolderExists(newPath))
-                throw new InvalidOperationException($"Folder '{newPath}' already exists");
-
             _ddbManager.ReleaseConnections(oldPath);
-            _fileSystem.FolderMove(oldPath, newPath);
+            MoveFolder(oldPath, newPath);
             folderMoved = true;
         }
 
         try
         {
-            await using var tx = await _context.Database.BeginTransactionAsync();
-
-            var org = _context.Organizations
-                .Include(o => o.Datasets)
-                .Include(o => o.Users)
-                .First(o => o.Slug == orgSlug);
-            var datasets = org.Datasets.ToArray();
-
-            var targetOrg = org;
-            if (newOrgSlug != null)
-            {
-                // The slug is the primary key: create the new organization, repoint, drop the old one
-                targetOrg = new Organization
-                {
-                    Slug = newOrgSlug,
-                    Name = org.Name,
-                    Description = org.Description,
-                    CreationDate = org.CreationDate,
-                    OwnerId = org.OwnerId,
-                    IsPublic = org.IsPublic,
-                    Users = []
-                };
-                _context.Organizations.Add(targetOrg);
-
-                foreach (var user in org.Users?.ToArray() ?? [])
-                {
-                    targetOrg.Users.Add(new OrganizationUser
-                    {
-                        Organization = targetOrg,
-                        OrganizationSlug = newOrgSlug,
-                        UserId = user.UserId,
-                        Permissions = user.Permissions,
-                        GrantedAt = user.GrantedAt,
-                        GrantedBy = user.GrantedBy
-                    });
-                    _context.OrganizationsUsers.Remove(user);
-                }
-
-                foreach (var ds in datasets)
-                    ds.Organization = targetOrg;
-            }
-
-            foreach (var ds in datasets)
-                if (dsRenames.TryGetValue(ds.Slug, out var newDsSlug))
-                    ds.Slug = newDsSlug;
-
-            foreach (var job in _context.JobIndices.Where(j => j.OrgSlug == orgSlug).ToArray())
-            {
-                if (newOrgSlug != null) job.OrgSlug = newOrgSlug;
-                if (dsRenames.TryGetValue(job.DsSlug, out var newDsSlug)) job.DsSlug = newDsSlug;
-            }
-
-            await _context.SaveChangesAsync();
-
-            if (newOrgSlug != null)
-            {
-                // Deleting cascades to datasets: only once they all point to the new organization
-                _context.Organizations.Remove(org);
-                await _context.SaveChangesAsync();
-            }
-
-            await tx.CommitAsync();
+            // Retrying execution strategies (MySQL) refuse user-initiated transactions: the strategy owns the
+            // transaction and replays the whole unit after a transient failure. Others run it once.
+            await _context.Database.CreateExecutionStrategy().ExecuteInTransactionAsync(
+                ct => RenameSlugRows(orgSlug, newOrgSlug, dsRenames, ct),
+                ct => SlugRowsRenamed(orgSlug, newOrgSlug, dsRenames, ct));
         }
         catch
         {
             _context.ChangeTracker.Clear();
             if (folderMoved)
-                _fileSystem.FolderMove(newPath, oldPath);
+                MoveFolder(newPath, oldPath);
             throw;
         }
 
         _logger.LogInformation("Fixed slugs of organization '{OrgSlug}' (new slug: {NewOrgSlug}, datasets: {Datasets})",
             orgSlug, newOrgSlug ?? orgSlug, string.Join(", ", dsRenames.Select(r => $"{r.Key} -> {r.Value}")));
+    }
+
+    // Database part of ApplySlugFix, run inside the transaction of the execution strategy
+    private async Task RenameSlugRows(string orgSlug, string newOrgSlug,
+        IReadOnlyDictionary<string, string> dsRenames, CancellationToken ct)
+    {
+        // A replay after a transient failure starts from the database, not from the failed attempt
+        _context.ChangeTracker.Clear();
+
+        var org = await _context.Organizations
+            .Include(o => o.Datasets)
+            .Include(o => o.Users)
+            .AsSplitQuery()
+            .FirstAsync(o => o.Slug == orgSlug, ct);
+        var datasets = org.Datasets.ToArray();
+
+        if (newOrgSlug != null)
+        {
+            // Case-insensitive collations (MySQL) see "abc" as taken by "ABC": hop through a temporary slug
+            if (string.Equals(orgSlug, newOrgSlug, StringComparison.OrdinalIgnoreCase))
+                org = await RepointOrganization(org, datasets, "slugfix-" + Guid.NewGuid().ToString("N"), ct);
+
+            await RepointOrganization(org, datasets, newOrgSlug, ct);
+        }
+
+        foreach (var ds in datasets)
+            if (dsRenames.TryGetValue(ds.Slug, out var newDsSlug))
+                ds.Slug = newDsSlug;
+
+        foreach (var job in await _context.JobIndices.Where(j => j.OrgSlug == orgSlug).ToArrayAsync(ct))
+        {
+            if (newOrgSlug != null) job.OrgSlug = newOrgSlug;
+            if (dsRenames.TryGetValue(job.DsSlug, out var newDsSlug)) job.DsSlug = newDsSlug;
+        }
+
+        await _context.SaveChangesAsync(ct);
+    }
+
+    // The slug is the primary key: create the organization under the new slug, repoint its members and
+    // datasets, then drop the old row
+    private async Task<Organization> RepointOrganization(Organization org, IReadOnlyCollection<Dataset> datasets,
+        string newSlug, CancellationToken ct)
+    {
+        var target = new Organization
+        {
+            Slug = newSlug,
+            Name = org.Name,
+            Description = org.Description,
+            CreationDate = org.CreationDate,
+            OwnerId = org.OwnerId,
+            IsPublic = org.IsPublic,
+            Users = []
+        };
+        _context.Organizations.Add(target);
+
+        foreach (var user in org.Users?.ToArray() ?? [])
+        {
+            target.Users.Add(new OrganizationUser
+            {
+                Organization = target,
+                OrganizationSlug = newSlug,
+                UserId = user.UserId,
+                Permissions = user.Permissions,
+                GrantedAt = user.GrantedAt,
+                GrantedBy = user.GrantedBy
+            });
+            _context.OrganizationsUsers.Remove(user);
+        }
+
+        foreach (var ds in datasets)
+            ds.Organization = target;
+
+        await _context.SaveChangesAsync(ct);
+
+        // Deleting cascades to datasets: only once they all point to the new organization
+        _context.Organizations.Remove(org);
+        await _context.SaveChangesAsync(ct);
+
+        return target;
+    }
+
+    // Asked by the execution strategy when a commit failed transiently: whether it reached the database anyway.
+    // Slugs are compared in memory because case-insensitive collations match "abc" and "ABC" in SQL.
+    private async Task<bool> SlugRowsRenamed(string orgSlug, string newOrgSlug,
+        IReadOnlyDictionary<string, string> dsRenames, CancellationToken ct)
+    {
+        var finalOrgSlug = newOrgSlug ?? orgSlug;
+
+        var org = await _context.Organizations.AsNoTracking()
+            .Where(o => o.Slug == finalOrgSlug)
+            .Select(o => new { o.Slug, Datasets = o.Datasets.Select(d => d.Slug).ToArray() })
+            .FirstOrDefaultAsync(ct);
+
+        return org != null && org.Slug == finalOrgSlug &&
+               dsRenames.All(r => !org.Datasets.Contains(r.Key) && org.Datasets.Contains(r.Value));
+    }
+
+    // Case-insensitive file systems (Windows, macOS) see the target of a case-only rename as existing:
+    // such a move hops through a temporary name
+    private void MoveFolder(string from, string to)
+    {
+        if (!string.Equals(from, to, StringComparison.OrdinalIgnoreCase))
+        {
+            if (_fileSystem.FolderExists(to))
+                throw new InvalidOperationException($"Folder '{to}' already exists");
+
+            _fileSystem.FolderMove(from, to);
+            return;
+        }
+
+        var hop = from + ".slugfix-" + Guid.NewGuid().ToString("N");
+        _fileSystem.FolderMove(from, hop);
+        try
+        {
+            _fileSystem.FolderMove(hop, to);
+        }
+        catch
+        {
+            _fileSystem.FolderMove(hop, from);
+            throw;
+        }
     }
 
     public async Task<IEnumerable<MigrateVisibilityEntryDTO>> MigrateVisibility()
