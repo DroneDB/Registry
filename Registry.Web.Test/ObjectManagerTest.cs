@@ -577,6 +577,45 @@ public class ObjectManagerTest : TestBase
         res.Count().ShouldBe(1);
     }
 
+    // DDB-12: deleting a drawing's .prj re-reads it as local (DroneDB) and drops its
+    // georeferenced artifacts; Registry must rebuild it right away (here the build
+    // runs synchronously) instead of leaving it unbuilt until the nightly sweep.
+    [Test]
+    public async Task Delete_PrjSidecar_RebuildsDrawingAsLocal()
+    {
+        static Stream CadAsset(string name)
+        {
+            var local = Environment.GetEnvironmentVariable("DDB_CAD_TEST_ASSETS");
+            if (!string.IsNullOrEmpty(local))
+                return new MemoryStream(File.ReadAllBytes(Path.Combine(local, name)));
+            return new MemoryStream(CommonUtils.SmartDownloadData(
+                "https://github.com/DroneDB/test_data/raw/refs/heads/master/vector/autocad/" + name));
+        }
+
+        await using var context = GetTest1Context();
+        using var test = new TestFS(Test4ArchiveUrl, BaseTestFolder);
+        var objectManager = BuildStreamedUploadObjectsManager(test.TestFolder, context);
+        // Builds of uploaded buildable files are enqueued on behalf of the current user.
+        _authManagerMock.Setup(o => o.GetCurrentUser()).ReturnsAsync(new User { Id = "cad-tester", UserName = "cad" });
+        const string org = MagicStrings.PublicOrganizationSlug, ds = MagicStrings.DefaultDatasetSlug;
+
+        await objectManager.AddNew(org, ds, "site.dxf", CadAsset("utm32n_site.dxf"));
+        await objectManager.AddNew(org, ds, "site.prj", CadAsset("utm32n_site.prj"));
+
+        var ddbManager = new DdbManager(_appSettingsMock.Object, _ddbFactoryLogger, DdbWrapper);
+        var ddb = ddbManager.Get(org, context.Datasets.First(d => d.Slug == ds).InternalRef);
+        var hash = ddb.GetEntry("site.dxf")!.Hash;
+        var build = Path.Combine(ddb.BuildFolderPath, hash);
+        if (!File.Exists(Path.Combine(build, "mvt", "metadata.json")))
+            Assert.Ignore("The loaded native libddb predates CAD coordinate systems (DDB-12)");
+
+        await objectManager.Delete(org, ds, "site.prj");
+
+        File.Exists(Path.Combine(build, "vec", "local.json")).ShouldBeTrue();
+        Directory.Exists(Path.Combine(build, "mvt")).ShouldBeFalse();
+        ddb.IsBuildComplete("site.dxf").ShouldBeTrue();
+    }
+
     private ObjectsManager BuildStreamedUploadObjectsManager(string datasetsPath, RegistryContext context)
     {
         var settings = JsonConvert.DeserializeObject<AppSettings>(_settingsJson);

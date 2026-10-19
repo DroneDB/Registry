@@ -1360,7 +1360,46 @@ public class ObjectsManager : IObjectsManager
 
         await InvalidateOgcAsync(orgSlug, dsSlug);
 
+        await RebuildAfterSidecarRemoval(orgSlug, dsSlug, ddb, paths);
+
         _logger.LogInformation("Deletion complete");
+    }
+
+    // A .prj gives its shapefile or CAD drawing a coordinate system. Removing it makes
+    // DroneDB re-read the main file (local, without a CRS) and drop its stale vector
+    // artifacts, so the main file needs a rebuild now rather than at the next nightly
+    // completeness sweep.
+    private async Task RebuildAfterSidecarRemoval(string orgSlug, string dsSlug, IDDB ddb,
+        IEnumerable<string> deletedPaths)
+    {
+        var prjs = deletedPaths.Where(p => p.EndsWith(".prj", StringComparison.OrdinalIgnoreCase)).ToArray();
+        if (prjs.Length == 0) return;
+
+        var user = await _authManager.GetCurrentUser();
+        foreach (var prj in prjs)
+        {
+            foreach (var ext in new[] { ".shp", ".SHP", ".dxf", ".DXF", ".dwg", ".DWG" })
+            {
+                var mainPath = Path.ChangeExtension(prj, ext);
+                try
+                {
+                    var main = ddb.GetEntry(mainPath);
+                    if (main == null || !ddb.IsBuildable(mainPath)) continue;
+
+                    await _buildPendingService.SetDatasetHasPendingBuilds(orgSlug, dsSlug, true);
+                    var meta = new IndexPayload(orgSlug, dsSlug, main.Hash, user?.Id, null, mainPath);
+                    var jobId = _backgroundJob.EnqueueIndexed(
+                        () => HangfireUtils.BuildWrapper(ddb, mainPath, false, null), meta);
+                    _logger.LogInformation("Rebuilding {MainPath} after removing {Prj} (job {JobId})",
+                        mainPath, prj, jobId);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Cannot enqueue the rebuild of {MainPath} after removing {Prj}",
+                        mainPath, prj);
+                }
+            }
+        }
     }
 
     public Task Delete(string orgSlug, string dsSlug, string path)
@@ -1441,6 +1480,8 @@ public class ObjectsManager : IObjectsManager
 
         if (deleted.Count > 0)
             await InvalidateOgcAsync(orgSlug, dsSlug);
+
+        await RebuildAfterSidecarRemoval(orgSlug, dsSlug, ddb, deleted);
 
         response.Deleted = [.. deleted];
         response.Failed = failed;
