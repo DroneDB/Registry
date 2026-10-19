@@ -671,6 +671,36 @@ public class NativeDdbWrapperTests : TestBase
     }
 
     [Test]
+    public void GetBuildStatus_MatchesPerEntryCalls()
+    {
+        using var test = new TestFS(Test1ArchiveUrl, BaseTestFolder);
+
+        var ddbPath = Path.Combine(test.TestFolder, "public", "default");
+
+        using var tempFile = new TempFile(TestPointCloudUrl, BaseTestFolder);
+        var destPath = Path.Combine(ddbPath, Path.GetFileName(tempFile.FilePath));
+        File.Move(tempFile.FilePath, destPath);
+        DdbWrapper.Add(ddbPath, destPath);
+        var cloud = Path.GetFileName(destPath);
+
+        string[] paths = [cloud, "DJI_0027.JPG", "Sub", "missing.tif"];
+        var statuses = DdbWrapper.GetBuildStatus(ddbPath, paths);
+
+        statuses.Select(s => s.Path).ShouldBe(paths);
+        statuses[0].Exists.ShouldBeTrue();
+        statuses[0].Buildable.ShouldBeTrue();
+        statuses[0].Complete.ShouldBe(DdbWrapper.IsBuildComplete(ddbPath, cloud));
+        statuses[1].Buildable.ShouldBe(DdbWrapper.IsBuildable(ddbPath, "DJI_0027.JPG"));
+        statuses[2].Exists.ShouldBeTrue();
+        statuses[2].Buildable.ShouldBeFalse();
+        statuses[3].Exists.ShouldBeFalse();
+        statuses[3].Buildable.ShouldBeFalse();
+        statuses[3].Complete.ShouldBeFalse();
+
+        DdbWrapper.GetBuildStatus(ddbPath, []).ShouldBeEmpty();
+    }
+
+    [Test]
     public void IsBuildable_TextFile_False()
     {
 

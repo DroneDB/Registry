@@ -1261,6 +1261,60 @@ public class NativeDdbWrapper : IDdbWrapper
         throw new DdbException(SafeGetLastError("is build complete"));
     }
 
+    [DllImport("ddb", EntryPoint = "DDBGetBuildStatus")]
+    private static extern DdbResult _GetBuildStatus([MarshalAs(UnmanagedType.LPUTF8Str)] string ddbPath,
+        IntPtr[] paths, int numPaths, out IntPtr output);
+
+    public EntryBuildStatus[] GetBuildStatus(string ddbPath, string[] paths)
+    {
+        if (ddbPath == null)
+            throw new ArgumentException("DDB path is null");
+
+        if (paths.Length == 0)
+            return [];
+
+        paths = paths.Select(p => p.Replace('\\', '/')).ToArray();
+        var utf8Ptrs = MarshalStringArrayToUtf8(paths);
+        var result = DdbResult.Exception;
+        try
+        {
+            result = _GetBuildStatus(ddbPath, utf8Ptrs, paths.Length, out var output);
+            if (result == DdbResult.Success)
+            {
+                var json = MarshalAndFreeUtf8(output);
+
+                if (string.IsNullOrWhiteSpace(json))
+                    throw new InvalidOperationException("Unable to get build status");
+
+                return JsonConvert.DeserializeObject<EntryBuildStatus[]>(json) ??
+                       throw new InvalidOperationException($"Unable to deserialize build status: {json}");
+            }
+        }
+        catch (EntryPointNotFoundException ex)
+        {
+            throw new DdbException($"Error in calling ddb lib: incompatible versions ({ex.Message})", ex);
+        }
+        catch (DdbException)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            throw new DdbException(
+                $"Error in calling ddb lib. Last error: \"{SafeGetLastError("get build status")}\", check inner exception for details",
+                ex);
+        }
+        finally
+        {
+            FreeUtf8StringArray(utf8Ptrs);
+        }
+
+        ThrowForFinalResult(result, "get build status");
+
+        // Unreachable in practice (Success returns above); kept for exhaustiveness.
+        throw new DdbException(SafeGetLastError("get build status"));
+    }
+
     [DllImport("ddb", EntryPoint = "DDBIsBuildPending")]
     private static extern DdbResult _IsBuildPending([MarshalAs(UnmanagedType.LPUTF8Str)] string ddbPath,
         out bool isBuildPending);

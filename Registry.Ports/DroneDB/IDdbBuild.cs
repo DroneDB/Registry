@@ -22,6 +22,12 @@ public interface IDdbBuild
     bool IsBuildPending();
 
     /// <summary>
+    /// <see cref="IsBuildable"/> and <see cref="IsBuildComplete"/> for several entries with
+    /// one native call (one index open). One status per path, in input order.
+    /// </summary>
+    EntryBuildStatus[] GetBuildStatus(string[] paths);
+
+    /// <summary>
     /// Gets information about pending (deferred) builds in this dataset, i.e.
     /// builds skipped because one or more dependencies were missing at the
     /// time of the attempt. Read-only: does not consume pending markers or

@@ -16,6 +16,20 @@ public interface IJobIndexQuery
     /// <summary>Single task lookup scoped to its dataset, for per-task status/ownership checks.</summary>
     Task<JobIndex?> GetByJobIdAsync(string orgSlug, string dsSlug, string jobId, CancellationToken ct = default);
 
+    /// <summary>
+    /// The given paths that have a not-yet-finished job of <paramref name="toolId"/>.
+    /// Reads only the active rows of those paths.
+    /// </summary>
+    Task<HashSet<string>> GetActivePathsAsync(string orgSlug, string dsSlug, string toolId,
+        IReadOnlyCollection<string> paths, CancellationToken ct = default);
+
+    /// <summary>
+    /// State of the most recent <paramref name="toolId"/> job of each given path that has one.
+    /// Reads only the jobs of those paths, never the whole dataset history.
+    /// </summary>
+    Task<Dictionary<string, string>> GetLatestStatesByPathAsync(string orgSlug, string dsSlug, string toolId,
+        IReadOnlyCollection<string> paths, CancellationToken ct = default);
+
     Task<JobIndex[]> GetByOrgDsHashAsync(string orgSlug, string dsSlug, string hash, int skip = 0, int take = 200, CancellationToken ct = default);
     Task<JobIndex[]> GetByStateAsync(string state, int skip = 0, int take = 1000, CancellationToken ct = default);
 

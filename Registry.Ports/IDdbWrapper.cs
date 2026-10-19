@@ -109,6 +109,12 @@ public interface IDdbWrapper
     public PendingBuildInfo[] GetPendingBuildInfo(string ddbPath);
 
     /// <summary>
+    /// Buildability and build completeness of several entries with one index open
+    /// (DDBGetBuildStatus). One status per path, in input order.
+    /// </summary>
+    public EntryBuildStatus[] GetBuildStatus(string ddbPath, string[] paths);
+
+    /// <summary>
     /// Cleans up a dataset by removing index entries whose underlying files no
     /// longer exist on disk and orphaned build artifacts.
     /// </summary>

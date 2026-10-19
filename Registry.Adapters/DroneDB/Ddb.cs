@@ -305,6 +305,21 @@ public class DDB : IDDB
         }
     }
 
+    public EntryBuildStatus[] GetBuildStatus(string[] paths)
+    {
+        if (paths.Length == 0)
+            return [];
+
+        try
+        {
+            return _ddbWrapper.GetBuildStatus(DatasetFolderPath, paths.Select(NormalizePath).ToArray());
+        }
+        catch (DdbException ex) when (ex is not DdbBusyException && ex is not DdbBuildInProgressException)
+        {
+            throw new InvalidOperationException($"Cannot call GetBuildStatus from ddb '{DatasetFolderPath}'", ex);
+        }
+    }
+
     public PendingBuildInfo[] GetPendingBuildInfo()
     {
         try
