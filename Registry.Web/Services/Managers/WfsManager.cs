@@ -376,36 +376,47 @@ public class WfsManager : OgcManagerBase, IWfsManager
             throw new OgcException("OperationNotSupported", "WFS supports only Vector layers", 400);
 
         // resourceId: must be non-empty when provided.
+        long[]? fids = null;
         if (!string.IsNullOrEmpty(resourceId))
         {
             var ids = resourceId!.Split(',', StringSplitOptions.RemoveEmptyEntries)
                 .Select(s => s.Trim()).Where(s => s.Length > 0).ToArray();
             if (ids.Length == 0)
                 throw new OgcException("InvalidParameterValue", "RESOURCEID is empty", 400, "RESOURCEID");
+            fids = FeatureIdsOf(ids, layer);
+            if (fids.Length == 0)
+                return WfsFeatureCollectionWriter.ToFeatureCollection(EmptyOgrCollection, layer.Name);
         }
 
         var gpkg = ResolveVectorArtifact(ddb, layer);
         var internalFormat = MapWfsOutputFormat(outputFormat);
-        // Per OGC 09-025r2 §7.9.2.4, RESOURCEID and FES Filter select features by
-        // identity/predicate independent of pagination. Pre-limiting at the vector
-        // query layer (count/startIndex) would drop matches that fall outside the
-        // first <count> bbox results, so when either selector is present we fetch
-        // the full feature set and apply the post-filter. Pagination still applies
-        // to plain BBOX/typename requests.
-        var hasSelector = !string.IsNullOrEmpty(resourceId) || !string.IsNullOrEmpty(filterXml);
-        var fetchCount = hasSelector ? 10000 : count;
-        var fetchStart = hasSelector ? 0 : startIndex;
-        var raw = DdbWrapper.QueryVector(gpkg, layer.InnerLayerName, bbox, bboxCrs ?? "EPSG:4326",
-            fetchCount, fetchStart, internalFormat);
+        // RESOURCEID selects by feature id in DroneDB (GeoPackage primary key), so paging applies
+        // to the selected features. A FES Filter is evaluated here on the selected features
+        // (OGC 09-025r2 §7.9.2.4: independent of pagination), so all of them are fetched (up to
+        // 10 000) when one is present.
+        var hasFilter = !string.IsNullOrEmpty(filterXml);
+        var query = new VectorQuery(layer.InnerLayerName, bbox, bboxCrs ?? "EPSG:4326", fids,
+            hasFilter ? 10000 : count, hasFilter ? 0 : startIndex, internalFormat);
+        var raw = DdbWrapper.QueryVector(gpkg, query);
         if (internalFormat != "gml") return raw;
-        var wrapped = WrapAsWfsFeatureCollection(raw, layer);
-        if (!string.IsNullOrEmpty(resourceId))
-        {
-            wrapped = FilterByResourceIds(wrapped, resourceId!.Split(',', StringSplitOptions.RemoveEmptyEntries));
-        }
-        if (!string.IsNullOrEmpty(filterXml))
-            wrapped = ApplyFesFilter(wrapped, filterXml!);
-        return wrapped;
+        if (hasFilter)
+            return ApplyFesFilter(WfsFeatureCollectionWriter.ToFeatureCollection(raw, layer.Name), filterXml!);
+        return WfsFeatureCollectionWriter.ToFeatureCollection(raw, layer.Name, DdbWrapper.CountVector(gpkg, query));
+    }
+
+    /// <summary>An OGR GML response without features.</summary>
+    private const string EmptyOgrCollection =
+        "<ogr:FeatureCollection xmlns:ogr=\"http://ogr.maptools.org/\" xmlns:gml=\"" + NsGml + "\"/>";
+
+    /// <summary>The fids of the feature ids that belong to <paramref name="layer"/>'s feature type.</summary>
+    private static long[] FeatureIdsOf(IEnumerable<string> ids, OgcLayerDto layer)
+    {
+        var featureType = OgcNames.ToNcName(layer.Name);
+        return ids
+            .Select(id => WfsFeatureIds.TryParse(id, out var type, out var fid) && type == featureType ? fid : -1)
+            .Where(fid => fid >= 0)
+            .Distinct()
+            .ToArray();
     }
 
     private static bool IsSupportedCrs(string crs)
@@ -416,29 +427,6 @@ public class WfsManager : OgcManagerBase, IWfsManager
             || c.Equals("http://www.opengis.net/def/crs/EPSG/0/4326", StringComparison.OrdinalIgnoreCase)
             || c.Equals("CRS:84", StringComparison.OrdinalIgnoreCase)
             || c.Equals("urn:ogc:def:crs:OGC:1.3:CRS84", StringComparison.OrdinalIgnoreCase);
-    }
-
-    private async Task<OgcLayerDto?> FindFeatureLayerAsync(string orgSlug, string dsSlug, string id,
-        IEnumerable<OgcLayerDto> vectorLayers)
-    {
-        var (ds, ddb) = await ResolveAsync(orgSlug, dsSlug);
-        foreach (var l in vectorLayers)
-        {
-            string raw;
-            try
-            {
-                var gpkg = ResolveVectorArtifact(ddb, l);
-                raw = DdbWrapper.QueryVector(gpkg, l.InnerLayerName, null, "EPSG:4326", 10000, 0, "gml");
-            }
-            catch (Exception ex)
-            {
-                _logger.LogWarning(ex, "WFS FindFeatureLayer: skipping layer {Layer}", l.InnerLayerName);
-                continue;
-            }
-            if (Regex.IsMatch(raw, $"gml:id=\"{Regex.Escape(id)}\""))
-                return l;
-        }
-        return null;
     }
 
     public async Task<string> ListStoredQueriesAsync(string orgSlug, string dsSlug)
@@ -595,241 +583,37 @@ public class WfsManager : OgcManagerBase, IWfsManager
     {
         if (string.IsNullOrWhiteSpace(id))
             throw new OgcException("MissingParameterValue", "id is required", 400, "id");
-        var layers = await LayerCatalog.GetLayersAsync(orgSlug, dsSlug);
-        var vector = layers.Where(l => l.EntryType == EntryType.Vector).ToList();
-        var (ds, ddb) = await ResolveAsync(orgSlug, dsSlug);
-        var internalFormat = MapWfsOutputFormat(outputFormat);
-        foreach (var l in vector)
+
+        // "<feature type>.<fid>": one primary-key read in the layer(s) of that feature type
+        // (two layer names can map to the same NCName)
+        if (WfsFeatureIds.TryParse(id, out var featureType, out var fid))
         {
-            string raw;
-            try
+            var layers = await LayerCatalog.GetLayersAsync(orgSlug, dsSlug);
+            var (_, ddb) = await ResolveAsync(orgSlug, dsSlug);
+            var internalFormat = MapWfsOutputFormat(outputFormat);
+            foreach (var l in layers.Where(l =>
+                         l.EntryType == EntryType.Vector && OgcNames.ToNcName(l.Name) == featureType))
             {
-                var gpkg = ResolveVectorArtifact(ddb, l);
-                raw = DdbWrapper.QueryVector(gpkg, l.InnerLayerName, null, "EPSG:4326",
-                    10000, 0, internalFormat);
+                if (internalFormat != "gml") continue; // GeoJSON path: not supported for byId
+                string raw;
+                try
+                {
+                    raw = DdbWrapper.QueryVector(ResolveVectorArtifact(ddb, l),
+                        new VectorQuery(l.InnerLayerName, Fids: [fid], MaxFeatures: 1, OutputFormat: internalFormat));
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "WFS GetFeatureById: skipping layer {Layer}", l.InnerLayerName);
+                    continue;
+                }
+
+                var feature = WfsFeatureCollectionWriter.ToSingleFeature(raw, l.Name);
+                if (feature != null) return feature;
             }
-            catch (Exception ex)
-            {
-                _logger.LogWarning(ex, "WFS GetFeatureById: skipping layer {Layer}", l.InnerLayerName);
-                continue;
-            }
-            if (internalFormat != "gml") continue; // GeoJSON path: not supported for byId
-            var wrapped = WrapAsWfsFeatureCollection(raw, l);
-            var bare = ExtractBareFeatureById(wrapped, id);
-            if (bare != null) return bare;
         }
+
         // Not found: per ETS WFS 2.0, GetFeatureById with unknown identifier returns HTTP 404.
         throw new OgcException("NotFound", $"No feature found with id '{id}'", 404, "id");
-    }
-
-    /// <summary>Extracts the bare feature element with gml:id == <paramref name="resourceId"/>
-    /// from a wfs:FeatureCollection, returning its serialized XML as the document root.
-    /// Returns null if not found. Required for the WFS 2.0 GetFeatureById stored query,
-    /// whose response document root must be the feature itself (OGC 09-025 §7.9.3.6).</summary>
-    private static string? ExtractBareFeatureById(string fcXml, string resourceId)
-    {
-        try
-        {
-            var doc = new XmlDocument();
-            doc.LoadXml(fcXml);
-            var root = doc.DocumentElement;
-            if (root == null) return null;
-            const string nsWfs = "http://www.opengis.net/wfs/2.0";
-            const string nsGml = "http://www.opengis.net/gml/3.2";
-            foreach (XmlNode child in root.ChildNodes)
-            {
-                if (child is not XmlElement m) continue;
-                if (m.LocalName != "member" || m.NamespaceURI != nsWfs) continue;
-                foreach (XmlNode fc in m.ChildNodes)
-                {
-                    if (fc is not XmlElement feat) continue;
-                    var gid = feat.GetAttribute("id", nsGml);
-                    if (gid != resourceId) continue;
-                    // Build a new document with feat as root and propagate xmlns decls.
-                    var outDoc = new XmlDocument();
-                    var imported = (XmlElement)outDoc.ImportNode(feat, true);
-                    outDoc.AppendChild(imported);
-                    // Ensure gml namespace is declared on the new root.
-                    if (string.IsNullOrEmpty(imported.GetAttribute("xmlns:gml")))
-                        imported.SetAttribute("xmlns:gml", nsGml);
-                    if (string.IsNullOrEmpty(imported.GetAttribute("xmlns:ddb")))
-                        imported.SetAttribute("xmlns:ddb", NsDdb);
-                    using var ms = new MemoryStream();
-                    using (var xw = XmlWriter.Create(ms, new XmlWriterSettings
-                           {
-                               Indent = false,
-                               OmitXmlDeclaration = false,
-                               Encoding = new UTF8Encoding(false)
-                           }))
-                        outDoc.Save(xw);
-                    return Encoding.UTF8.GetString(ms.ToArray());
-                }
-            }
-        }
-        catch (Exception ex)
-        {
-            return null;
-        }
-        return null;
-    }
-
-    /// <summary>Filters a wfs:FeatureCollection (string) to keep only members whose feature
-    /// element has gml:id equal to <paramref name="resourceId"/>. Updates numberReturned/numberMatched.</summary>
-    private static string FilterByResourceId(string fcXml, string resourceId, bool requireMatch)
-        => FilterByResourceIds(fcXml, [resourceId]);
-
-    private static string FilterByResourceIds(string fcXml, string[] resourceIds)
-    {
-        try
-        {
-            var idSet = new HashSet<string>(resourceIds.Select(s => s.Trim()).Where(s => s.Length > 0));
-            var doc = new XmlDocument();
-            doc.LoadXml(fcXml);
-            var root = doc.DocumentElement;
-            if (root == null) return fcXml;
-            const string nsWfs = "http://www.opengis.net/wfs/2.0";
-            const string nsGml = "http://www.opengis.net/gml/3.2";
-            var toRemove = new List<XmlNode>();
-            int kept = 0;
-            foreach (XmlNode child in root.ChildNodes)
-            {
-                if (child is not XmlElement m) continue;
-                if (m.LocalName != "member" || m.NamespaceURI != nsWfs) continue;
-                bool match = false;
-                foreach (XmlNode fc in m.ChildNodes)
-                {
-                    if (fc is not XmlElement feat) continue;
-                    var gid = feat.GetAttribute("id", nsGml);
-                    if (idSet.Contains(gid)) { match = true; break; }
-                }
-                if (match) kept++;
-                else toRemove.Add(m);
-            }
-            foreach (var n in toRemove) root.RemoveChild(n);
-            ((XmlElement)root).SetAttribute("numberReturned", kept.ToString());
-            ((XmlElement)root).SetAttribute("numberMatched", kept.ToString());
-            using var ms = new MemoryStream();
-            using (var xw = XmlWriter.Create(ms, new XmlWriterSettings { Indent = false, OmitXmlDeclaration = false, Encoding = new UTF8Encoding(false) }))
-                doc.Save(xw);
-            return Encoding.UTF8.GetString(ms.ToArray());
-        }
-        catch (Exception ex)
-        {
-            System.Diagnostics.Debug.WriteLine($"WFS ExtractBareFeatureById: XML transformation failed ({ex.Message}); returning raw feature collection");
-            return fcXml;
-        }
-    }
-
-    /// <summary>Transforms the GDAL OGR GML 3.2 output (rooted at &lt;ogr:FeatureCollection&gt;)
-    /// into a proper &lt;wfs:FeatureCollection&gt; in the DDB namespace, as required by
-    /// WFS 2.0 (OGC 09-025r2) and the OGC ETS for WFS 2.0.</summary>
-    private static string WrapAsWfsFeatureCollection(string rawGml, OgcLayerDto layer)
-    {
-        try
-        {
-            var doc = new XmlDocument();
-            doc.LoadXml(rawGml);
-            var root = doc.DocumentElement;
-            if (root == null) return rawGml;
-
-            const string nsGml = "http://www.opengis.net/gml/3.2";
-            const string nsWfs = "http://www.opengis.net/wfs/2.0";
-            var safe = OgcNames.ToNcName(layer.Name);
-
-            var outDoc = new XmlDocument();
-            outDoc.AppendChild(outDoc.CreateXmlDeclaration("1.0", "utf-8", null));
-            var fc = outDoc.CreateElement("wfs", "FeatureCollection", nsWfs);
-            fc.SetAttribute("xmlns:gml", nsGml);
-            fc.SetAttribute("xmlns:ddb", NsDdb);
-            fc.SetAttribute("xmlns:xsi", "http://www.w3.org/2001/XMLSchema-instance");
-            var slAttr = outDoc.CreateAttribute("xsi", "schemaLocation", "http://www.w3.org/2001/XMLSchema-instance");
-            slAttr.Value = "http://www.opengis.net/wfs/2.0 http://schemas.opengis.net/wfs/2.0/wfs.xsd " +
-                "http://www.opengis.net/gml/3.2 http://schemas.opengis.net/gml/3.2.1/gml.xsd";
-            fc.Attributes.Append(slAttr);
-            fc.SetAttribute("timeStamp", DateTime.UtcNow.ToString("yyyy-MM-ddTHH:mm:ssZ"));
-
-            // Copy boundedBy from source (if any), wrapping in wfs:boundedBy per WFS 2.0 schema.
-            foreach (XmlNode child in root.ChildNodes)
-                if (child is XmlElement e && e.LocalName == "boundedBy" && e.NamespaceURI == nsGml)
-                {
-                    var wfsBb = outDoc.CreateElement("wfs", "boundedBy", nsWfs);
-                    foreach (XmlNode gc in e.ChildNodes)
-                        wfsBb.AppendChild(outDoc.ImportNode(gc, true));
-                    fc.AppendChild(wfsBb);
-                    break;
-                }
-
-            int count = 0;
-            foreach (XmlNode child in root.ChildNodes)
-            {
-                if (child is not XmlElement fm) continue;
-                if (fm.LocalName != "featureMember") continue;
-                var member = outDoc.CreateElement("wfs", "member", nsWfs);
-                foreach (XmlNode fc2 in fm.ChildNodes)
-                {
-                    if (fc2 is not XmlElement feat) continue;
-                    // Rename feature element to ddb:{safe} preserving gml:id and children.
-                    var newFeat = outDoc.CreateElement("ddb", safe, NsDdb);
-                    foreach (XmlAttribute attr in feat.Attributes)
-                    {
-                        if (attr.NamespaceURI == "http://www.w3.org/2000/xmlns/") continue;
-                        var newAttr = outDoc.CreateAttribute(attr.Prefix, attr.LocalName, attr.NamespaceURI);
-                        // Rewrite gml:id so the prefix matches our advertised feature type.
-                        // OGR typically emits "<innerLayer>.<n>"; we normalize to "<safe>.<n>".
-                        if (attr.LocalName == "id" && attr.NamespaceURI == nsGml)
-                        {
-                            var v = attr.Value;
-                            var dot = v.LastIndexOf('.');
-                            newAttr.Value = dot > 0 ? safe + v[dot..] : safe + "." + v;
-                        }
-                        else newAttr.Value = attr.Value;
-                        newFeat.Attributes.Append(newAttr);
-                    }
-                    foreach (XmlNode prop in feat.ChildNodes)
-                    {
-                        if (prop is not XmlElement pe) continue;
-                        // ogr:* properties -> ddb:{sanitized}; gml:* preserved as-is.
-                        XmlElement newProp;
-                        if (pe.NamespaceURI == nsGml)
-                            newProp = (XmlElement)outDoc.ImportNode(pe, true);
-                        else
-                        {
-                            // Skip simple leaf properties with empty/whitespace text content.
-                            // Empty values break downstream consumers (e.g. WFS 2.0 ETS sortValues)
-                            // that attempt to parse them as numeric or temporal datatypes.
-                            var isLeaf = !pe.ChildNodes.OfType<XmlElement>().Any();
-                            if (isLeaf && string.IsNullOrWhiteSpace(pe.InnerText))
-                                continue;
-                            newProp = outDoc.CreateElement("ddb", OgcNames.ToNcName(pe.LocalName), NsDdb);
-                            foreach (XmlNode gc in pe.ChildNodes)
-                                newProp.AppendChild(outDoc.ImportNode(gc, true));
-                        }
-                        newFeat.AppendChild(newProp);
-                    }
-                    // Inject synthetic ddb:ddbSeq xs:int property (0-based per FC) to give
-                    // FES filter ETS tests a guaranteed comparable property for ordering predicates.
-                    var seq = outDoc.CreateElement("ddb", "ddbSeq", NsDdb);
-                    seq.AppendChild(outDoc.CreateTextNode(count.ToString()));
-                    newFeat.AppendChild(seq);
-                    member.AppendChild(newFeat);
-                    count++;
-                }
-                fc.AppendChild(member);
-            }
-
-            fc.SetAttribute("numberReturned", count.ToString());
-            fc.SetAttribute("numberMatched", count.ToString());
-            outDoc.AppendChild(fc);
-            using var ms = new MemoryStream();
-            using (var xw = XmlWriter.Create(ms, new XmlWriterSettings { Indent = false, OmitXmlDeclaration = false, Encoding = new UTF8Encoding(false) }))
-                outDoc.Save(xw);
-            return Encoding.UTF8.GetString(ms.ToArray());
-        }
-        catch (Exception ex)
-        {
-            System.Diagnostics.Debug.WriteLine($"WFS WrapAsWfsFeatureCollection: XML transformation failed ({ex.Message}); returning raw GML");
-            return rawGml;
-        }
     }
 
     // =====================================================================================
@@ -842,7 +626,7 @@ public class WfsManager : OgcManagerBase, IWfsManager
     //   - Logical: And / Or / Not
     // Operates on the wfs:FeatureCollection XML string produced by WrapAsWfsFeatureCollection.
     // =====================================================================================
-    private const string NsFes = "http://www.opengis.net/fes/2.0";
+    private const string NsFes = OgcNamespaces.Fes;
 
     /// <summary>Apply an FES Filter (as raw XML) to a wfs:FeatureCollection. Returns the
     /// filtered FC as XML (with updated numberReturned/numberMatched).</summary>

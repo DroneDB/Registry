@@ -50,6 +50,9 @@
     <None Include="Data\Ddb\public\0a223495-84a0-4c15-b425-c7ef88110e75\.ddb\dbase.sqlite">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </None>
+    <None Include="Data\Wfs\**">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
   </ItemGroup>
 
 </Project>

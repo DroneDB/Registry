@@ -11,6 +11,7 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Caching.Distributed;
 using Microsoft.Extensions.Logging;
 using Newtonsoft.Json;
+using Formatting = Newtonsoft.Json.Formatting;
 using Newtonsoft.Json.Linq;
 using Registry.Ports;
 using Registry.Ports.DroneDB;
@@ -88,37 +89,27 @@ public class OgcApiFeaturesManager : OgcManagerBase, IOgcApiFeaturesManager
         limit = Math.Clamp(limit, 1, 1000);
         if (offset < 0) offset = 0;
 
-        var name = Uri.UnescapeDataString(collectionId);
-        var (_, ddb) = await ResolveAsync(orgSlug, dsSlug);
-        var layer = await LayerCatalog.ResolveAsync(orgSlug, dsSlug, name, includeLocal: true)
-                    ?? throw new OgcException("InvalidParameterValue",
-                        $"Unknown collection '{collectionId}'", 404, "collectionId");
-        if (layer.EntryType != EntryType.Vector)
-            throw new OgcException("OperationNotSupported",
-                "OGC API – Features supports only Vector layers", 400);
+        var (gpkg, layer) = await ResolveFeatureCollectionAsync(orgSlug, dsSlug, collectionId);
         if (layer.IsLocal && bbox != null)
             throw new OgcException("InvalidParameterValue",
                 "This collection has no coordinate system (local drawing coordinates); bbox is not supported",
                 400, "bbox");
 
-        var gpkg = ResolveVectorArtifact(ddb, layer);
-        return DdbWrapper.QueryVector(gpkg, layer.InnerLayerName, bbox, bbox != null ? "EPSG:4326" : null,
-            limit, offset, "application/json");
+        return DdbWrapper.QueryVector(gpkg, new VectorQuery(layer.InnerLayerName, bbox,
+            bbox != null ? "EPSG:4326" : null, MaxFeatures: limit, StartIndex: offset));
     }
 
     public async Task<string> GetItemAsync(string orgSlug, string dsSlug, string collectionId, string featureId)
     {
-        // Best-effort: pull a single page of features and filter client-side by 'id'/'fid' property.
-        var items = await GetItemsAsync(orgSlug, dsSlug, collectionId, bbox: null, limit: 1000, offset: 0);
+        // Feature ids are the GeoPackage fids (GeoJSON "id"): one primary-key read
+        if (!long.TryParse(featureId, NumberStyles.None, CultureInfo.InvariantCulture, out var fid))
+            return "{}";
+
+        var (gpkg, layer) = await ResolveFeatureCollectionAsync(orgSlug, dsSlug, collectionId);
+        var items = DdbWrapper.QueryVector(gpkg, new VectorQuery(layer.InnerLayerName, Fids: [fid], MaxFeatures: 1));
         try
         {
-            var fc = JObject.Parse(items);
-            var features = fc["features"] as JArray;
-            if (features == null) return "{}";
-            var match = features.OfType<JObject>().FirstOrDefault(f =>
-                f["id"]?.ToString() == featureId
-                || (f["properties"] is JObject p && p["fid"]?.ToString() == featureId));
-            return match?.ToString(Newtonsoft.Json.Formatting.None) ?? "{}";
+            return (JObject.Parse(items)["features"] as JArray)?.FirstOrDefault()?.ToString(Formatting.None) ?? "{}";
         }
         catch (Exception ex)
         {
@@ -127,6 +118,21 @@ public class OgcApiFeaturesManager : OgcManagerBase, IOgcApiFeaturesManager
                 orgSlug, dsSlug, collectionId, featureId);
             return "{}";
         }
+    }
+
+    /// <summary>The GeoPackage and layer of a vector collection (local layers included).</summary>
+    private async Task<(string Gpkg, OgcLayerDto Layer)> ResolveFeatureCollectionAsync(string orgSlug, string dsSlug,
+        string collectionId)
+    {
+        var name = Uri.UnescapeDataString(collectionId);
+        var (_, ddb) = await ResolveAsync(orgSlug, dsSlug);
+        var layer = await LayerCatalog.ResolveAsync(orgSlug, dsSlug, name, includeLocal: true)
+                    ?? throw new OgcException("InvalidParameterValue",
+                        $"Unknown collection '{collectionId}'", 404, "collectionId");
+        if (layer.EntryType != EntryType.Vector)
+            throw new OgcException("OperationNotSupported",
+                "OGC API – Features supports only Vector layers", 400);
+        return (ResolveVectorArtifact(ddb, layer), layer);
     }
 
     private static OgcApiCollectionDto BuildCollection(OgcLayerDto layer, string baseUrl)

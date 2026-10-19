@@ -2912,40 +2912,73 @@ public class NativeDdbWrapper : IDdbWrapper
         throw new DdbException(SafeGetLastError("query raster point"));
     }
 
-    [DllImport("ddb", EntryPoint = "DDBQueryVector")]
-    private static extern DdbResult _QueryVector(
+    [DllImport("ddb", EntryPoint = "DDBQueryVectorEx")]
+    private static extern DdbResult _QueryVectorEx(
         [MarshalAs(UnmanagedType.LPUTF8Str)] string vectorPath,
         [MarshalAs(UnmanagedType.LPUTF8Str)] string? layerName,
         [In] double[]? bbox,
         [MarshalAs(UnmanagedType.LPUTF8Str)] string? bboxSrs,
+        [In] long[]? fids, int numFids,
         int maxFeatures, int startIndex,
         [MarshalAs(UnmanagedType.LPUTF8Str)] string outputFormat,
         out IntPtr output);
 
-    public string QueryVector(string vectorPath, string? layerName = null,
-                              double[]? bbox = null, string? bboxSrs = null,
-                              int maxFeatures = 1000, int startIndex = 0,
-                              string outputFormat = "application/json")
+    [DllImport("ddb", EntryPoint = "DDBCountVector")]
+    private static extern DdbResult _CountVector(
+        [MarshalAs(UnmanagedType.LPUTF8Str)] string vectorPath,
+        [MarshalAs(UnmanagedType.LPUTF8Str)] string? layerName,
+        [In] double[]? bbox,
+        [MarshalAs(UnmanagedType.LPUTF8Str)] string? bboxSrs,
+        [In] long[]? fids, int numFids,
+        out long count);
+
+    private static void ValidateVectorQuery(string vectorPath, VectorQuery query)
     {
         if (string.IsNullOrWhiteSpace(vectorPath))
             throw new ArgumentException("vectorPath is null or empty");
-        if (bbox != null && bbox.Length != 4)
+        ArgumentNullException.ThrowIfNull(query);
+        if (query.Bbox != null && query.Bbox.Length != 4)
             throw new ArgumentException("bbox must contain exactly 4 elements when provided");
+    }
 
-        DdbResult result;
+    public string QueryVector(string vectorPath, VectorQuery query)
+    {
+        ValidateVectorQuery(vectorPath, query);
+        var fids = query.Fids?.ToArray();
+
+        return CallVector("query vector", () =>
+        {
+            var result = _QueryVectorEx(vectorPath, query.LayerName, query.Bbox, query.BboxSrs, fids,
+                fids?.Length ?? 0, query.MaxFeatures, query.StartIndex, query.OutputFormat ?? "application/json",
+                out var output);
+            ThrowForFinalResult(result, "query vector");
+            var data = MarshalAndFreeUtf8(output);
+            if (string.IsNullOrWhiteSpace(data))
+                throw new DdbException("Unable to query vector");
+            return data;
+        });
+    }
+
+    public long CountVector(string vectorPath, VectorQuery query)
+    {
+        ValidateVectorQuery(vectorPath, query);
+        var fids = query.Fids?.ToArray();
+
+        return CallVector("count vector", () =>
+        {
+            var result = _CountVector(vectorPath, query.LayerName, query.Bbox, query.BboxSrs, fids,
+                fids?.Length ?? 0, out var count);
+            ThrowForFinalResult(result, "count vector");
+            return count;
+        });
+    }
+
+    /// <summary>Runs a vector call, mapping interop failures to <see cref="DdbException"/>.</summary>
+    private static T CallVector<T>(string operation, Func<T> call)
+    {
         try
         {
-            result = _QueryVector(vectorPath, layerName, bbox, bboxSrs,
-                                             maxFeatures, startIndex,
-                                             outputFormat ?? "application/json",
-                                             out var output);
-            if (result == DdbResult.Success)
-            {
-                var data = MarshalAndFreeUtf8(output);
-                if (string.IsNullOrWhiteSpace(data))
-                    throw new DdbException("Unable to query vector");
-                return data;
-            }
+            return call();
         }
         catch (EntryPointNotFoundException ex)
         {
@@ -2955,13 +2988,8 @@ public class NativeDdbWrapper : IDdbWrapper
         catch (Exception ex)
         {
             throw new DdbException(
-                $"Error in calling ddb lib. Last error: \"{SafeGetLastError("query vector")}\", check inner exception for details", ex);
+                $"Error in calling ddb lib. Last error: \"{SafeGetLastError(operation)}\", check inner exception for details", ex);
         }
-
-        ThrowForFinalResult(result, "query vector");
-
-        // Unreachable in practice (Success bails above); kept for exhaustiveness.
-        throw new DdbException(SafeGetLastError("query vector"));
     }
 
     [DllImport("ddb", EntryPoint = "DDBDescribeVector")]

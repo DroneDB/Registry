@@ -383,17 +383,16 @@ public interface IDdbWrapper
     /// Query features from a vector dataset (WFS GetFeature / OGC API Items).
     /// </summary>
     /// <param name="vectorPath">Path to the vector source (typically vec/source.gpkg).</param>
-    /// <param name="layerName">Layer to query; null uses the first layer.</param>
-    /// <param name="bbox">[minX,minY,maxX,maxY] spatial filter in <paramref name="bboxSrs"/>, or null.</param>
-    /// <param name="bboxSrs">CRS of <paramref name="bbox"/> (e.g. "EPSG:4326"); null when bbox is null.</param>
-    /// <param name="maxFeatures">Maximum features to return (clamped to [1,10000]; 0 → default 1000).</param>
-    /// <param name="startIndex">0-based feature offset for pagination.</param>
-    /// <param name="outputFormat">"application/json" (RFC7946 GeoJSON, default) or "application/gml+xml".</param>
+    /// <param name="query">Layer, filters, paging and output format.</param>
     /// <returns>Encoded features as a string.</returns>
-    public string QueryVector(string vectorPath, string? layerName = null,
-                              double[]? bbox = null, string? bboxSrs = null,
-                              int maxFeatures = 1000, int startIndex = 0,
-                              string outputFormat = "application/json");
+    public string QueryVector(string vectorPath, VectorQuery query);
+
+    /// <summary>
+    /// Number of features of <paramref name="query"/>'s layer that match its bbox and feature ids
+    /// (paging and format are ignored): WFS numberMatched. A GeoPackage counts with its R-tree
+    /// and primary key, without reading features.
+    /// </summary>
+    public long CountVector(string vectorPath, VectorQuery query);
 
     /// <summary>
     /// Describe a vector dataset (WFS DescribeFeatureType / OGC API collection).
