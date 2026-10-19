@@ -1,5 +1,6 @@
 #nullable enable
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using Hangfire;
@@ -11,6 +12,7 @@ using Registry.Ports;
 using Registry.Ports.DroneDB;
 using Registry.Web.Data;
 using Registry.Web.Models;
+using Registry.Web.Services.HeavyTasks;
 using Registry.Web.Services.Ports;
 using Registry.Web.Utilities;
 
@@ -80,7 +82,7 @@ public class ArtifactCompletenessCheckerService
                 if (ds_stats.Queued > 0)
                     WriteLine(
                         $"{key}: scanned {ds_stats.Scanned}, " +
-                        $"skipped {ds_stats.SkippedNotBuildable + ds_stats.SkippedActive + ds_stats.SkippedComplete}, " +
+                        $"skipped {ds_stats.SkippedNotBuildable + ds_stats.SkippedActive + ds_stats.SkippedComplete + ds_stats.SkippedPending + ds_stats.SkippedBackoff}, " +
                         $"queued {ds_stats.Queued} rebuild(s)");
             }
             catch (Exception ex)
@@ -94,7 +96,8 @@ public class ArtifactCompletenessCheckerService
         WriteLine(
             $"Artifact completeness check completed: {datasets.Length - totals.Failed}/{datasets.Length} datasets, " +
             $"scanned {totals.Scanned} entries " +
-            $"(not buildable: {totals.SkippedNotBuildable}, active: {totals.SkippedActive}, complete: {totals.SkippedComplete}), " +
+            $"(not buildable: {totals.SkippedNotBuildable}, active: {totals.SkippedActive}, complete: {totals.SkippedComplete}, " +
+            $"pending: {totals.SkippedPending}, backing off after failures: {totals.SkippedBackoff}), " +
             $"queued {totals.Queued} rebuild(s), {totals.Failed} dataset failure(s)");
     }
 
@@ -102,6 +105,7 @@ public class ArtifactCompletenessCheckerService
     {
         var stats = new DatasetStats();
         var entries = ddb.Search(string.Empty, recursive: true);
+        var candidates = new List<Entry>();
 
         foreach (var entry in entries)
         {
@@ -130,6 +134,44 @@ public class ArtifactCompletenessCheckerService
                     continue;
                 }
 
+                candidates.Add(entry);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex,
+                    "Failed to evaluate completeness for {Key} path={Path}",
+                    key, entry.Path);
+            }
+        }
+
+        if (candidates.Count == 0)
+            return stats;
+
+        // Pending builds wait for a dependency; adding it retries them (BuildPendingWrapper).
+        var pending = GetPendingPaths(ddb, key);
+        var history = await GetBuildHistoryAsync(orgSlug, dsSlug, candidates.Select(e => e.Path).ToArray());
+        var now = DateTime.UtcNow;
+
+        foreach (var entry in candidates)
+        {
+            if (pending.Contains(entry.Path))
+            {
+                stats.SkippedPending++;
+                continue;
+            }
+
+            if (history.TryGetValue(entry.Path, out var jobs) &&
+                ShouldBackOff(jobs, entry.Hash, now, out var failures, out var retryAt))
+            {
+                stats.SkippedBackoff++;
+                _logger.LogDebug(
+                    "Not re-enqueuing {Key} path={Path}: {Failures} failed build(s) of this content, next retry after {RetryAt:u}",
+                    key, entry.Path, failures, retryAt);
+                continue;
+            }
+
+            try
+            {
                 var meta = new IndexPayload(
                     orgSlug,
                     dsSlug,
@@ -152,12 +194,98 @@ public class ArtifactCompletenessCheckerService
             catch (Exception ex)
             {
                 _logger.LogWarning(ex,
-                    "Failed to evaluate completeness for {Key} path={Path}",
+                    "Failed to enqueue rebuild for {Key} path={Path}",
                     key, entry.Path);
             }
         }
 
         return stats;
+    }
+
+    // Failures that say nothing about the content: the build retries them itself
+    // (AutomaticRetry) and they never count towards the back-off.
+    private static readonly HashSet<string> TransientErrorTypes = new(StringComparer.Ordinal)
+    {
+        "DdbBusyException", "DdbBuildInProgressException"
+    };
+
+    private const int MaxBackoffDays = 30;
+
+    /// <summary>
+    /// Exponential back-off per entry content: after n consecutive failed builds of the
+    /// same hash (latest first), the next nightly retry waits 2^(n-1) days, at most
+    /// <see cref="MaxBackoffDays"/>. A build that keeps failing (an unreadable file)
+    /// fades to a monthly attempt instead of failing every night, while a transient
+    /// failure (disk full, tool timeout: they reach Registry with the same generic
+    /// exception type) is still retried within a day or two. A new upload (new hash)
+    /// or any non-failed build (e.g. a manual retry that succeeded) resets the count.
+    /// </summary>
+    internal static bool ShouldBackOff(IReadOnlyList<BuildAttempt> jobsLatestFirst, string hash, DateTime now,
+        out int failures, out DateTime retryAt)
+    {
+        failures = 0;
+        retryAt = now;
+        DateTime? lastFailure = null;
+
+        foreach (var job in jobsLatestFirst)
+        {
+            if (job.Hash != hash) continue;
+            if (job.State != "Failed") break;
+            if (TransientErrorTypes.Contains(job.ErrorType ?? string.Empty)) continue;
+            failures++;
+            lastFailure ??= job.FailedAtUtc;
+        }
+
+        if (failures == 0 || lastFailure == null)
+            return false;
+
+        var days = Math.Min(MaxBackoffDays, 1 << Math.Min(failures - 1, 5));
+        // Nightly runs drift by minutes: allow an hour of slack so "one day" means
+        // the next night, not the one after.
+        retryAt = lastFailure.Value.AddDays(days).AddHours(-1);
+        return now < retryAt;
+    }
+
+    internal sealed record BuildAttempt(string Hash, string State, string? ErrorType, DateTime FailedAtUtc);
+
+    private async Task<Dictionary<string, List<BuildAttempt>>> GetBuildHistoryAsync(string orgSlug, string dsSlug,
+        IReadOnlyCollection<string> paths)
+    {
+        var result = new Dictionary<string, List<BuildAttempt>>();
+        foreach (var chunk in paths.Distinct().Chunk(500))
+        {
+            var jobs = await _context.JobIndices
+                .AsNoTracking()
+                .Where(x => x.OrgSlug == orgSlug && x.DsSlug == dsSlug && x.ToolId == HeavyToolIds.Build &&
+                            chunk.Contains(x.Path!))
+                .Select(x => new
+                {
+                    Path = x.Path!, x.Hash, x.CurrentState, x.ErrorType, x.CreatedAtUtc,
+                    When = x.FailedAtUtc ?? x.LastStateChangeUtc ?? x.CreatedAtUtc
+                })
+                .ToArrayAsync();
+
+            foreach (var group in jobs.GroupBy(j => j.Path))
+                result[group.Key] = group
+                    .OrderByDescending(j => j.CreatedAtUtc)
+                    .Select(j => new BuildAttempt(j.Hash ?? string.Empty, j.CurrentState, j.ErrorType, j.When))
+                    .ToList();
+        }
+
+        return result;
+    }
+
+    private HashSet<string> GetPendingPaths(IDDB ddb, string key)
+    {
+        try
+        {
+            return ddb.GetPendingBuildInfo().Select(p => p.Path).ToHashSet(StringComparer.Ordinal);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Cannot read pending builds for {Key}", key);
+            return [];
+        }
     }
 
     private sealed class DatasetStats
@@ -166,6 +294,8 @@ public class ArtifactCompletenessCheckerService
         public int SkippedNotBuildable;
         public int SkippedActive;
         public int SkippedComplete;
+        public int SkippedPending;
+        public int SkippedBackoff;
         public int Queued;
     }
 
@@ -175,6 +305,8 @@ public class ArtifactCompletenessCheckerService
         public int SkippedNotBuildable;
         public int SkippedActive;
         public int SkippedComplete;
+        public int SkippedPending;
+        public int SkippedBackoff;
         public int Queued;
         public int Failed;
 
@@ -184,6 +316,8 @@ public class ArtifactCompletenessCheckerService
             SkippedNotBuildable += s.SkippedNotBuildable;
             SkippedActive += s.SkippedActive;
             SkippedComplete += s.SkippedComplete;
+            SkippedPending += s.SkippedPending;
+            SkippedBackoff += s.SkippedBackoff;
             Queued += s.Queued;
         }
     }

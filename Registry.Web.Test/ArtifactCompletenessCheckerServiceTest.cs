@@ -271,6 +271,113 @@ public class ArtifactCompletenessCheckerServiceTest : TestBase
             It.IsAny<IndexPayload>()), Times.Once);
     }
 
+    // ---- DDB-12: pending entries and repeated failures are not re-enqueued every night ----
+
+    private Mock<IDDB> SingleIncompleteEntry(string path, string hash, PendingBuildInfo[] pending = null)
+    {
+        var ddb = new Mock<IDDB>();
+        ddb.Setup(x => x.Search(It.IsAny<string>(), true)).Returns([new DdbEntry { Path = path, Hash = hash }]);
+        ddb.Setup(x => x.IsBuildable(path)).Returns(true);
+        ddb.Setup(x => x.IsBuildActive(path)).Returns(false);
+        ddb.Setup(x => x.IsBuildComplete(path)).Returns(false);
+        ddb.Setup(x => x.GetPendingBuildInfo()).Returns(pending ?? []);
+        _ddbManagerMock.Setup(x => x.Get(It.IsAny<string>(), It.IsAny<Guid>())).Returns(ddb.Object);
+        return ddb;
+    }
+
+    private static void AddBuildJob(RegistryContext context, string path, string hash, string state,
+        DateTime at, string errorType = null)
+    {
+        var ds = context.Datasets.Include(d => d.Organization).First();
+        context.JobIndices.Add(new JobIndex
+        {
+            JobId = Guid.NewGuid().ToString("N"),
+            OrgSlug = ds.Organization.Slug,
+            DsSlug = ds.Slug,
+            Path = path,
+            Hash = hash,
+            ToolId = "build",
+            CurrentState = state,
+            ErrorType = errorType,
+            CreatedAtUtc = at,
+            FailedAtUtc = state == "Failed" ? at : null,
+            LastStateChangeUtc = at
+        });
+        context.SaveChanges();
+    }
+
+    private int EnqueuedCount() => _backgroundJobMock.Invocations.Count(i => i.Method.Name == "EnqueueIndexed");
+
+    [Test]
+    public async Task CheckAndQueueAsync_PendingBuild_NotReenqueued()
+    {
+        await using var context = GetTest1Context();
+        SingleIncompleteEntry("site.dwg", "h1",
+            [new PendingBuildInfo { Path = "site.dwg", Hash = "h1", MissingDependencies = ["site.prj"] }]);
+
+        await new ArtifactCompletenessCheckerService(context, _ddbManagerMock.Object, _backgroundJobMock.Object, _logger)
+            .CheckAndQueueAsync(null);
+
+        EnqueuedCount().ShouldBe(0);
+    }
+
+    [Test]
+    public async Task CheckAndQueueAsync_FailedLastNight_WaitsBeforeRetrying()
+    {
+        await using var context = GetTest1Context();
+        SingleIncompleteEntry("bad.dwg", "h1");
+        AddBuildJob(context, "bad.dwg", "h1", "Failed", DateTime.UtcNow.AddHours(-2), "InvalidOperationException");
+
+        await new ArtifactCompletenessCheckerService(context, _ddbManagerMock.Object, _backgroundJobMock.Object, _logger)
+            .CheckAndQueueAsync(null);
+
+        EnqueuedCount().ShouldBe(0);
+    }
+
+    [Test]
+    public async Task CheckAndQueueAsync_NewContentAfterFailures_RetriedAtOnce()
+    {
+        await using var context = GetTest1Context();
+        SingleIncompleteEntry("bad.dwg", "h2"); // re-uploaded: new hash
+        AddBuildJob(context, "bad.dwg", "h1", "Failed", DateTime.UtcNow.AddHours(-2), "InvalidOperationException");
+
+        await new ArtifactCompletenessCheckerService(context, _ddbManagerMock.Object, _backgroundJobMock.Object, _logger)
+            .CheckAndQueueAsync(null);
+
+        EnqueuedCount().ShouldBe(1);
+    }
+
+    [Test]
+    public void ShouldBackOff_DoublesPerConsecutiveFailureUpTo30Days()
+    {
+        var now = new DateTime(2026, 10, 19, 2, 30, 0, DateTimeKind.Utc);
+        ArtifactCompletenessCheckerService.BuildAttempt Failed(double daysAgo, string hash = "h", string type = "InvalidOperationException") =>
+            new(hash, "Failed", type, now.AddDays(-daysAgo));
+
+        // 1 failure: retry the next night.
+        ArtifactCompletenessCheckerService.ShouldBackOff([Failed(0.1)], "h", now, out _, out _).ShouldBeTrue();
+        ArtifactCompletenessCheckerService.ShouldBackOff([Failed(1)], "h", now, out _, out _).ShouldBeFalse();
+
+        // 3 consecutive failures: wait 4 days after the latest.
+        var three = new[] { Failed(3), Failed(4), Failed(5) };
+        ArtifactCompletenessCheckerService.ShouldBackOff(three, "h", now, out var n, out _).ShouldBeTrue();
+        n.ShouldBe(3);
+        ArtifactCompletenessCheckerService.ShouldBackOff([Failed(4), Failed(5), Failed(6)], "h", now, out _, out _).ShouldBeFalse();
+
+        // Many failures: capped at 30 days.
+        var many = Enumerable.Range(0, 10).Select(i => Failed(29 + i)).ToArray();
+        ArtifactCompletenessCheckerService.ShouldBackOff(many, "h", now, out _, out _).ShouldBeTrue();
+        many = Enumerable.Range(0, 10).Select(i => Failed(30 + i)).ToArray();
+        ArtifactCompletenessCheckerService.ShouldBackOff(many, "h", now, out _, out _).ShouldBeFalse();
+
+        // A later success resets the count; transient failures and other hashes do not count.
+        ArtifactCompletenessCheckerService.ShouldBackOff(
+            [new("h", "Succeeded", null, now.AddDays(-0.5)), Failed(1), Failed(2)], "h", now, out _, out _).ShouldBeFalse();
+        ArtifactCompletenessCheckerService.ShouldBackOff(
+            [Failed(0.1, type: "DdbBusyException")], "h", now, out _, out _).ShouldBeFalse();
+        ArtifactCompletenessCheckerService.ShouldBackOff([Failed(0.1, hash: "old")], "h", now, out _, out _).ShouldBeFalse();
+    }
+
     private static RegistryContext GetEmptyContext()
     {
         var options = new DbContextOptionsBuilder<RegistryContext>()
