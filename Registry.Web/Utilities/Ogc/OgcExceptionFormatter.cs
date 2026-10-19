@@ -13,12 +13,6 @@ public static class OgcExceptionFormatter
 {
     public const string ContentType = "text/xml; charset=utf-8";
 
-    /// <summary>StringWriter that reports UTF-8 encoding so XmlWriter declares encoding="utf-8".</summary>
-    private sealed class Utf8StringWriter : StringWriter
-    {
-        public override Encoding Encoding => Encoding.UTF8;
-    }
-
     public static string FormatWms111(string code, string message)
     {
         using var sw = new Utf8StringWriter();

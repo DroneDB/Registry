@@ -24,15 +24,15 @@ namespace Registry.Web.Services.Managers;
 /// </summary>
 public abstract class OgcManagerBase
 {
-    // OGC / W3C namespace URIs - single source of truth for all derived managers.
-    protected const string NsWms   = "http://www.opengis.net/wms";
-    protected const string NsWfs   = "http://www.opengis.net/wfs/2.0";
-    protected const string NsWmts  = "http://www.opengis.net/wmts/1.0";
-    protected const string NsOws   = "http://www.opengis.net/ows/1.1";
-    protected const string NsGml   = "http://www.opengis.net/gml/3.2";
-    protected const string NsXlink = "http://www.w3.org/1999/xlink";
-    protected const string NsXsd   = "http://www.w3.org/2001/XMLSchema";
-    protected const string NsDdb   = "http://www.dronedb.app/wfs";
+    // OGC / W3C namespace URIs (single source of truth: OgcNamespaces)
+    protected const string NsWms   = OgcNamespaces.Wms;
+    protected const string NsWfs   = OgcNamespaces.Wfs;
+    protected const string NsWmts  = OgcNamespaces.Wmts;
+    protected const string NsOws   = OgcNamespaces.Ows;
+    protected const string NsGml   = OgcNamespaces.Gml;
+    protected const string NsXlink = OgcNamespaces.Xlink;
+    protected const string NsXsd   = OgcNamespaces.Xsd;
+    protected const string NsDdb   = OgcNamespaces.Ddb;
 
     protected readonly IUtils Utils;
     protected readonly IAuthManager AuthManager;
