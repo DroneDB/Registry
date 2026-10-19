@@ -95,9 +95,7 @@ public class SystemManager : ISystemManager
                 // Check if objects count is ok
                 var ddb = _ddbManager.Get(ds.Organization.Slug, ds.InternalRef);
 
-                var entries = ddb.Search("*", true)?.ToArray();
-
-                if (entries == null || entries.Length == 0)
+                if (ddb.IsEmpty())
                 {
                     _context.Remove(ds);
                     await _context.SaveChangesAsync();
@@ -499,7 +497,7 @@ public class SystemManager : ISystemManager
                     var ddb = _ddbManager.Get(org.Slug, ds.InternalRef);
 
                     // Remove empty ddb
-                    if (!ddb.Search("*", true).Any())
+                    if (ddb.IsEmpty())
                         _ddbManager.Delete(org.Slug, ds.InternalRef);
 
                 }

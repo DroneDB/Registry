@@ -39,22 +39,16 @@ public class DatasetAccessControl : AccessControlBase
         ArgumentNullException.ThrowIfNull(dataset);
         var org = dataset.Organization;
 
-        var visibilityBytes = await _cacheManager.GetAsync(
-            MagicStrings.DatasetVisibilityCacheSeed,
-            org.Slug,
-            org.Slug,
-            dataset.InternalRef,
-            _ddbManager
-        );
+        var visibility = await _cacheManager.GetDatasetVisibilityAsync(org.Slug, dataset.InternalRef, _ddbManager);
 
-        if (visibilityBytes.Length < sizeof(int))
+        if (visibility == null)
         {
             Logger.LogWarning("Invalid visibility cache data for dataset {OrgSlug}/{DatasetSlug}, defaulting to Private",
                 org.Slug, dataset.Slug);
             return Visibility.Private;
         }
 
-        return (Visibility)BitConverter.ToInt32(visibilityBytes, 0);
+        return visibility.Value;
     }
 
     public Task<bool> CanAccessDataset(Dataset dataset, AccessType access, User user)

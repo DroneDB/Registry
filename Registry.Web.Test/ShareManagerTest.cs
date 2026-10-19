@@ -205,14 +205,14 @@ class ShareManagerTest : TestBase
 
         var ddbFactory = new DdbManager(_appSettingsMock.Object, _ddbFactoryLogger, DdbWrapper);
         var webUtils = new WebUtils(_authManagerMock.Object, context, _appSettingsMock.Object,
-            _httpContextAccessorMock.Object, _ddbFactoryMock.Object);
+            _httpContextAccessorMock.Object, TestCaches.Summaries(_ddbFactoryMock.Object));
 
         var objectManager = new ObjectsManager(_objectManagerLogger, context,
             _appSettingsMock.Object, ddbFactory, webUtils, _authManagerMock.Object, _cacheManager,
             _fileSystem, _backgroundJobsProcessor, DdbWrapper, _thumbnailGeneratorMock.Object, _jobIndexQueryMock.Object, _buildPendingService);
 
         var datasetManager = new DatasetsManager(context, webUtils, _datasetsManagerLogger, objectManager,
-            _stacManagerMock.Object, _ddbFactoryMock.Object, _authManagerMock.Object, _cacheManager, _fileSystem, _backgroundJobsProcessor, _appSettingsMock.Object);
+            _stacManagerMock.Object, _ddbFactoryMock.Object, _authManagerMock.Object, _cacheManager, _fileSystem, _backgroundJobsProcessor, _appSettingsMock.Object, TestCaches.Summaries(_ddbFactoryMock.Object));
         var organizationsManager = new OrganizationsManager(_authManagerMock.Object, context, webUtils,
             datasetManager, appContext, _appSettingsMock.Object, _organizationsManagerLogger);
 
@@ -311,14 +311,14 @@ class ShareManagerTest : TestBase
 
         var ddbFactory = new DdbManager(_appSettingsMock.Object, _ddbFactoryLogger, DdbWrapper);
         var webUtils = new WebUtils(_authManagerMock.Object, context, _appSettingsMock.Object,
-            _httpContextAccessorMock.Object, _ddbFactoryMock.Object);
+            _httpContextAccessorMock.Object, TestCaches.Summaries(_ddbFactoryMock.Object));
 
         var objectManager = new ObjectsManager(_objectManagerLogger, context,
             _appSettingsMock.Object, ddbFactory, webUtils, _authManagerMock.Object, _cacheManager,
             _fileSystem, _backgroundJobsProcessor, DdbWrapper, _thumbnailGeneratorMock.Object, _jobIndexQueryMock.Object, _buildPendingService);
 
         var datasetManager = new DatasetsManager(context, webUtils, _datasetsManagerLogger, objectManager,
-            _stacManagerMock.Object, _ddbFactoryMock.Object, _authManagerMock.Object, _cacheManager, _fileSystem, _backgroundJobsProcessor, _appSettingsMock.Object);
+            _stacManagerMock.Object, _ddbFactoryMock.Object, _authManagerMock.Object, _cacheManager, _fileSystem, _backgroundJobsProcessor, _appSettingsMock.Object, TestCaches.Summaries(_ddbFactoryMock.Object));
         var organizationsManager = new OrganizationsManager(_authManagerMock.Object, context, webUtils,
             datasetManager, appContext, _appSettingsMock.Object, _organizationsManagerLogger);
 
@@ -427,14 +427,14 @@ class ShareManagerTest : TestBase
 
         var ddbFactory = new DdbManager(_appSettingsMock.Object, _ddbFactoryLogger, DdbWrapper);
         var webUtils = new WebUtils(_authManagerMock.Object, context, _appSettingsMock.Object,
-            _httpContextAccessorMock.Object, _ddbFactoryMock.Object);
+            _httpContextAccessorMock.Object, TestCaches.Summaries(_ddbFactoryMock.Object));
 
         var objectManager = new ObjectsManager(_objectManagerLogger, context,
             _appSettingsMock.Object, ddbFactory, webUtils, _authManagerMock.Object, _cacheManager,
             _fileSystem, _backgroundJobsProcessor, DdbWrapper, _thumbnailGeneratorMock.Object, _jobIndexQueryMock.Object, _buildPendingService);
 
         var datasetManager = new DatasetsManager(context, webUtils, _datasetsManagerLogger, objectManager,
-            _stacManagerMock.Object, _ddbFactoryMock.Object, _authManagerMock.Object, _cacheManager, _fileSystem, _backgroundJobsProcessor, _appSettingsMock.Object);
+            _stacManagerMock.Object, _ddbFactoryMock.Object, _authManagerMock.Object, _cacheManager, _fileSystem, _backgroundJobsProcessor, _appSettingsMock.Object, TestCaches.Summaries(_ddbFactoryMock.Object));
         var organizationsManager = new OrganizationsManager(_authManagerMock.Object, context, webUtils,
             datasetManager, appContext, _appSettingsMock.Object, _organizationsManagerLogger);
 
@@ -570,14 +570,14 @@ class ShareManagerTest : TestBase
 
         var ddbFactory = new DdbManager(_appSettingsMock.Object, _ddbFactoryLogger, DdbWrapper);
         var webUtils = new WebUtils(_authManagerMock.Object, context, _appSettingsMock.Object,
-            _httpContextAccessorMock.Object, _ddbFactoryMock.Object);
+            _httpContextAccessorMock.Object, TestCaches.Summaries(_ddbFactoryMock.Object));
 
         var objectManager = new ObjectsManager(_objectManagerLogger, context,
             _appSettingsMock.Object, ddbFactory, webUtils, _authManagerMock.Object, _cacheManager,
             _fileSystem, _backgroundJobsProcessor, DdbWrapper, _thumbnailGeneratorMock.Object, _jobIndexQueryMock.Object, _buildPendingService);
 
         var datasetManager = new DatasetsManager(context, webUtils, _datasetsManagerLogger, objectManager,
-            _stacManagerMock.Object, _ddbFactoryMock.Object, _authManagerMock.Object, _cacheManager, _fileSystem, _backgroundJobsProcessor, _appSettingsMock.Object);
+            _stacManagerMock.Object, _ddbFactoryMock.Object, _authManagerMock.Object, _cacheManager, _fileSystem, _backgroundJobsProcessor, _appSettingsMock.Object, TestCaches.Summaries(_ddbFactoryMock.Object));
         var organizationsManager = new OrganizationsManager(_authManagerMock.Object, context, webUtils,
             datasetManager, appContext, _appSettingsMock.Object, _organizationsManagerLogger);
 
@@ -718,7 +718,7 @@ class ShareManagerTest : TestBase
 
         var ddbFactory = new DdbManager(_appSettingsMock.Object, _ddbFactoryLogger, DdbWrapper);
         var webUtils = new WebUtils(_authManagerMock.Object, context, _appSettingsMock.Object,
-            _httpContextAccessorMock.Object, _ddbFactoryMock.Object);
+            _httpContextAccessorMock.Object, TestCaches.Summaries(_ddbFactoryMock.Object));
 
         var objectManager = new ObjectsManager(_objectManagerLogger, context,
             _appSettingsMock.Object, ddbFactory, webUtils, _authManagerMock.Object, _cacheManager,
@@ -727,7 +727,7 @@ class ShareManagerTest : TestBase
 
         var datasetManager = new DatasetsManager(context, webUtils, _datasetsManagerLogger, objectManager,
             _stacManagerMock.Object, _ddbFactoryMock.Object, _authManagerMock.Object, _cacheManager, _fileSystem,
-            _backgroundJobsProcessor, _appSettingsMock.Object);
+            _backgroundJobsProcessor, _appSettingsMock.Object, TestCaches.Summaries(_ddbFactoryMock.Object));
         var organizationsManager = new OrganizationsManager(_authManagerMock.Object, context, webUtils,
             datasetManager, appContext, _appSettingsMock.Object, _organizationsManagerLogger);
 
@@ -852,14 +852,14 @@ class ShareManagerTest : TestBase
 
         var ddbFactory = new DdbManager(_appSettingsMock.Object, _ddbFactoryLogger, DdbWrapper);
         var webUtils = new WebUtils(_authManagerMock.Object, context, _appSettingsMock.Object,
-            _httpContextAccessorMock.Object, _ddbFactoryMock.Object);
+            _httpContextAccessorMock.Object, TestCaches.Summaries(_ddbFactoryMock.Object));
 
         var objectManager = new ObjectsManager(_objectManagerLogger, context,
             _appSettingsMock.Object, ddbFactory, webUtils, _authManagerMock.Object, _cacheManager,
             _fileSystem, _backgroundJobsProcessor, DdbWrapper, _thumbnailGeneratorMock.Object, _jobIndexQueryMock.Object, _buildPendingService);
 
         var datasetManager = new DatasetsManager(context, webUtils, _datasetsManagerLogger, objectManager,
-            _stacManagerMock.Object, _ddbFactoryMock.Object, _authManagerMock.Object, _cacheManager, _fileSystem, _backgroundJobsProcessor, _appSettingsMock.Object);
+            _stacManagerMock.Object, _ddbFactoryMock.Object, _authManagerMock.Object, _cacheManager, _fileSystem, _backgroundJobsProcessor, _appSettingsMock.Object, TestCaches.Summaries(_ddbFactoryMock.Object));
         var organizationsManager = new OrganizationsManager(_authManagerMock.Object, context, webUtils,
             datasetManager, appContext, _appSettingsMock.Object, _organizationsManagerLogger);
 

@@ -20,6 +20,7 @@ public interface IDDB : IDdbIndex, IDdbBuild, IDdbMeta, IDdbRaster, IDdbAnalytic
 {
     // These consts are like magic strings: if anything changes this goes kaboom!
     public const string DatabaseFolderName = ".ddb";
+    public const string DatabaseFileName = "dbase.sqlite";
     public const string BuildFolderName = "build";
     public const string TmpFolderName = "tmp";
 

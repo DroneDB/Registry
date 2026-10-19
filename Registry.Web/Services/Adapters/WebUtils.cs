@@ -27,17 +27,17 @@ public class WebUtils : IUtils
     private readonly RegistryContext _context;
     private readonly AppSettings _settings;
     private readonly IHttpContextAccessor _accessor;
-    private readonly IDdbManager _ddbManager;
+    private readonly IDatasetSummaryProvider _summaries;
 
     public WebUtils(IAuthManager authManager,
         RegistryContext context,
         IOptions<AppSettings> settings,
-        IHttpContextAccessor accessor, IDdbManager ddbManager)
+        IHttpContextAccessor accessor, IDatasetSummaryProvider summaries)
     {
         _authManager = authManager;
         _context = context;
         _accessor = accessor;
-        _ddbManager = ddbManager;
+        _summaries = summaries;
         _settings = settings.Value;
     }
 
@@ -157,12 +157,6 @@ public class WebUtils : IUtils
         return $"{GetLocalHost()}/orgs/{orgSlug}/ds/{dsSlug}/stac";
     }
 
-    // NOTE: This function can be optimized down the line.
-    // It currently enumerates all the datasets and asks DDB for size.
-    // If we notice a slowdown of the upload/share/push process this could be the culprit
-    // A simple cache level could be the solution but it needs to be kept in sync
-    // with all the dataset operations. Really a pain if it is not necessary.
-
     public UserStorageInfo GetUserStorage(User user)
     {
         if (user == null)
@@ -179,11 +173,8 @@ public class WebUtils : IUtils
             .Select(dataset => new { OrgSlug = dataset.Organization.Slug, dataset.InternalRef })
             .ToArray();
 
-        // Get the size and sum
-        var size =
-            (from ds in datasets
-                let ddb = _ddbManager.Get(ds.OrgSlug, ds.InternalRef)
-                select ddb.GetSize()).Sum();
+        // Sizes are cached per dataset until its index changes: no native call per upload chunk
+        var size = datasets.Sum(ds => _summaries.Get(ds.OrgSlug, ds.InternalRef).Size);
 
         return new UserStorageInfo
         {

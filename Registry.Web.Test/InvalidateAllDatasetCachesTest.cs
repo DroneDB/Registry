@@ -58,7 +58,7 @@ public class InvalidateAllDatasetCachesTest : TestBase
         var context = new RegistryContext(dbOptions);
 
         var webUtils = new WebUtils(authManagerMock.Object, context, appSettingsMock.Object,
-            httpContextAccessorMock.Object, ddbFactoryMock.Object);
+            httpContextAccessorMock.Object, TestCaches.Summaries(ddbFactoryMock.Object));
 
         var buildPendingService = new BuildPendingService(
             context, ddbFactoryMock.Object, backgroundJobsProcessor, _cacheManagerMock.Object,

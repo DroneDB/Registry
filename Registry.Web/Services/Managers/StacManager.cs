@@ -30,6 +30,7 @@ public class StacManager : IStacManager
     private readonly IUtils _utils;
     private readonly IDdbManager _ddbManager;
     private readonly IDistributedCache _cache;
+    private readonly ICacheManager _cacheManager;
     private readonly ILogger<StacManager> _logger;
 
     private const string CacheKey = "stac-catalog";
@@ -66,7 +67,8 @@ public class StacManager : IStacManager
         IUtils utils,
         IDdbManager ddbManager,
         IDistributedCache cache,
-        ILogger<StacManager> logger)
+        ILogger<StacManager> logger,
+        ICacheManager cacheManager)
     {
         _authManager = authManager;
         _context = context;
@@ -74,6 +76,7 @@ public class StacManager : IStacManager
         _ddbManager = ddbManager;
         _cache = cache;
         _logger = logger;
+        _cacheManager = cacheManager;
     }
 
 
@@ -114,15 +117,15 @@ public class StacManager : IStacManager
                 continue;
             }
 
-            var ddb = _ddbManager.Get(ds.Organization.Slug, ds.InternalRef);
-            var meta = ddb.Meta.GetSafe();
-            if (meta.Visibility != Visibility.Public) continue;
+            // From the shared visibility cache: a private dataset costs no native call once cached
+            var visibility = await _cacheManager.GetDatasetVisibilityAsync(ds.Organization.Slug, ds.InternalRef, _ddbManager);
+            if (visibility != Visibility.Public) continue;
 
             item = new StacLinkDto
             {
                 Href = _utils.GenerateDatasetStacUrl(ds.Organization.Slug, ds.Slug),
                 Relationship = "child",
-                Title = meta.Name
+                Title = await GetDatasetName(ds)
             };
 
             await _cache.SetRecordAsync(key, item, _expiration);

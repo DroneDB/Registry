@@ -18,4 +18,15 @@ public interface IDdbMeta
 
     long GetSize();
     Stamp GetStamp();
+
+    /// <summary>
+    /// Whether the index has no entries (one aggregate query, no listing).
+    /// </summary>
+    bool IsEmpty();
+
+    /// <summary>
+    /// Changes whenever the index is written: size and write time of the index database and its
+    /// WAL file. Null when the index files cannot be read.
+    /// </summary>
+    string? GetIndexFingerprint();
 }

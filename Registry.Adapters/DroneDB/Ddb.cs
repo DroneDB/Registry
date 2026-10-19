@@ -110,6 +110,35 @@ public class DDB : IDDB
         return _ddbWrapper.Info(DatasetFolderPath).FirstOrDefault()?.Size ?? 0;
     }
 
+    public bool IsEmpty()
+    {
+        // The dataset root info counts the entries (SELECT COUNT)
+        var properties = GetInfo().Properties;
+        if (properties == null || !properties.TryGetValue("entries", out var entries) || entries == null)
+            throw new InvalidOperationException($"Cannot count the entries of ddb '{DatasetFolderPath}'");
+
+        return Convert.ToInt64(entries) == 0;
+    }
+
+    public string? GetIndexFingerprint()
+    {
+        try
+        {
+            var database = new FileInfo(Path.Combine(DatasetFolderPath, IDDB.DatabaseFolderName, IDDB.DatabaseFileName));
+            if (!database.Exists)
+                return null;
+
+            // A commit appends to the WAL (size and write time change); a checkpoint rewrites the database
+            var wal = new FileInfo(database.FullName + "-wal");
+            return $"{database.LastWriteTimeUtc.Ticks}:{database.Length}|" +
+                   (wal.Exists ? $"{wal.LastWriteTimeUtc.Ticks}:{wal.Length}" : "-");
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return null;
+        }
+    }
+
     public string GetLocalPath(string path)
     {
         return CommonUtils.SafeCombine(DatasetFolderPath, path);

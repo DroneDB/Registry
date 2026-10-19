@@ -92,7 +92,7 @@ public class UsersManagerTest : TestBase
 
         // Initialize utils
         _webUtils = new WebUtils(_authManagerMock.Object, _context, _appSettingsMock.Object,
-            _httpContextAccessorMock.Object, _ddbManagerMock.Object);
+            _httpContextAccessorMock.Object, TestCaches.Summaries(_ddbManagerMock.Object));
 
         _usersManager = new UsersManager(
             _appSettingsMock.Object,

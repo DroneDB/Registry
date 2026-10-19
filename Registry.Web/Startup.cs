@@ -295,6 +295,7 @@ public class Startup
         services.AddSingleton<IHttpContextAccessor, HttpContextAccessor>();
 
         services.AddScoped<IUtils, WebUtils>();
+        services.AddScoped<IDatasetSummaryProvider, DatasetSummaryProvider>();
         services.AddSingleton<UserAuthSnapshotCache>();
         services.AddScoped<IUserAuthSnapshotProvider, UserAuthSnapshotProvider>();
         services.AddScoped<IAuthManager, AuthManager>();

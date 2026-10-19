@@ -84,7 +84,7 @@ internal class MetaManagerTest : TestBase
         var ddbManager = new DdbManager(_appSettingsMock.Object, _ddbFactoryLogger, DdbWrapper);
 
         var webUtils = new WebUtils(_authManagerMock.Object, context, _appSettingsMock.Object,
-            _httpContextAccessorMock.Object, ddbManager);
+            _httpContextAccessorMock.Object, TestCaches.Summaries(ddbManager));
 
         var metaManager = new MetaManager(_metaManagerLogger, ddbManager, _authManagerMock.Object, webUtils, _cacheManager);
 
@@ -114,7 +114,7 @@ internal class MetaManagerTest : TestBase
         var ddbManager = new DdbManager(_appSettingsMock.Object, _ddbFactoryLogger, DdbWrapper);
 
         var webUtils = new WebUtils(_authManagerMock.Object, context, _appSettingsMock.Object,
-            _httpContextAccessorMock.Object, ddbManager);
+            _httpContextAccessorMock.Object, TestCaches.Summaries(ddbManager));
 
         var metaManager = new MetaManager(_metaManagerLogger, ddbManager, _authManagerMock.Object, webUtils, _cacheManager);
 

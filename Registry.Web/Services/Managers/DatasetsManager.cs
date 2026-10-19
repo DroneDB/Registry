@@ -35,6 +35,7 @@ public class DatasetsManager : IDatasetsManager
     private readonly IFileSystem _fileSystem;
     private readonly IBackgroundJobsProcessor _backgroundJob;
     private readonly AppSettings _settings;
+    private readonly IDatasetSummaryProvider _summaries;
 
     public DatasetsManager(
         RegistryContext context,
@@ -47,7 +48,8 @@ public class DatasetsManager : IDatasetsManager
         ICacheManager cacheManager,
         IFileSystem fileSystem,
         IBackgroundJobsProcessor backgroundJob,
-        IOptions<AppSettings> settings)
+        IOptions<AppSettings> settings,
+        IDatasetSummaryProvider summaries)
     {
         _context = context;
         _utils = utils;
@@ -60,6 +62,7 @@ public class DatasetsManager : IDatasetsManager
         _fileSystem = fileSystem;
         _backgroundJob = backgroundJob;
         _settings = settings.Value;
+        _summaries = summaries;
     }
 
     public async Task<IEnumerable<DatasetDto>> List(string orgSlug, bool includeThumbnailCheck = false)
@@ -102,17 +105,16 @@ public class DatasetsManager : IDatasetsManager
                     continue;
             }
 
-            var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
-            var info = ddb.GetInfo();
+            var summary = _summaries.Get(orgSlug, ds.InternalRef);
 
             var dto = new DatasetDto
             {
                 Slug = ds.Slug,
                 CreationDate = ds.CreationDate,
-                Properties = info.Properties,
-                Size = info.Size,
+                Properties = summary.Properties,
+                Size = summary.Size,
                 Permissions = permissions,
-                HasThumbnail = includeThumbnailCheck ? CheckHasThumbnail(ddb) : null
+                HasThumbnail = includeThumbnailCheck ? CheckHasThumbnail(_ddbManager.Get(orgSlug, ds.InternalRef)) : null
             };
 
             result.Add(dto);

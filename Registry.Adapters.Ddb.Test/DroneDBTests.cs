@@ -673,6 +673,31 @@ public class NativeDdbWrapperTests : TestBase
     }
 
     [Test]
+    public void IndexFingerprint_ChangesOnWritesOnly()
+    {
+        using var area = new TestArea(nameof(IndexFingerprint_ChangesOnWritesOnly));
+        DdbWrapper.Init(area.TestFolder);
+        var ddb = new DDB(area.TestFolder, DdbWrapper);
+
+        ddb.IsEmpty().ShouldBeTrue();
+        var empty = ddb.GetIndexFingerprint();
+        empty.ShouldNotBeNull();
+
+        File.WriteAllText(Path.Join(area.TestFolder, "file.txt"), "test");
+        DdbWrapper.Add(area.TestFolder, Path.Join(area.TestFolder, "file.txt"));
+        var afterAdd = ddb.GetIndexFingerprint();
+        afterAdd.ShouldNotBe(empty);
+
+        ddb.IsEmpty().ShouldBeFalse();
+        ddb.GetInfo();
+        DdbWrapper.List(area.TestFolder, area.TestFolder, true);
+        ddb.GetIndexFingerprint().ShouldBe(afterAdd, "reads do not change the fingerprint");
+
+        var noIndex = Directory.CreateDirectory(Path.Join(area.TestFolder, "no-index")).FullName;
+        new DDB(noIndex, DdbWrapper).GetIndexFingerprint().ShouldBeNull();
+    }
+
+    [Test]
     public void MoveEntry_SimpleRename_Ok()
     {
         using var test = new TestFS(TestDelta2ArchiveUrl, BaseTestFolder);
