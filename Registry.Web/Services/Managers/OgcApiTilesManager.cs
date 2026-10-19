@@ -27,9 +27,15 @@ namespace Registry.Web.Services.Managers;
 /// </summary>
 public class OgcApiTilesManager : OgcManagerBase, IOgcApiTilesManager
 {
+    private readonly IOgcRasterTileSource _rasterTiles;
+
     public OgcApiTilesManager(IUtils u, IAuthManager a, IDdbManager d, IBuildArtifactResolver ar,
-        IDdbWrapper w, IOgcLayerCatalog c, IDistributedCache cache, IHttpContextAccessor ctx)
-        : base(u, a, d, ar, w, c, cache, ctx) { }
+        IDdbWrapper w, IOgcLayerCatalog c, IDistributedCache cache, IHttpContextAccessor ctx,
+        IOgcRasterTileSource rasterTiles)
+        : base(u, a, d, ar, w, c, cache, ctx)
+    {
+        _rasterTiles = rasterTiles;
+    }
 
     public async Task<object> GetTileSetsAsync(string orgSlug, string dsSlug, string collectionId, string baseUrl)
     {
@@ -74,6 +80,6 @@ public class OgcApiTilesManager : OgcManagerBase, IOgcApiTilesManager
             var path = Artifacts.GetMvtTilePath(ddb, layer.EntryHash, z, x, y);
             return Artifacts.ArtifactExists(path) ? await File.ReadAllBytesAsync(path) : null;
         }
-        return ddb.GenerateTile(layer.EntryPath, z, x, y, retina: false, inputPathHash: layer.EntryHash);
+        return await _rasterTiles.GetTileAsync(orgSlug, dsSlug, ddb, layer, z, x, y, "png");
     }
 }

@@ -147,7 +147,7 @@ public sealed class WcsProtocol20Handler : IWcsProtocolHandler
     private async Task WriteCoverageDescriptionAsync(XmlWriter w, IDDB ddb, string id, OgcLayerDto layer)
     {
         var gmlId = OgcNames.ToNcName(id);
-        var info = _svc.ProbeRaster(ddb, layer);
+        var info = await _svc.ProbeRasterAsync(ddb, layer);
         var rWidth = info.Width > 0 ? info.Width : 1024;
         var rHeight = info.Height > 0 ? info.Height : 1024;
         var rBands = info.BandCount > 0 ? info.BandCount : Math.Max(1, layer.BandCount);
@@ -267,7 +267,7 @@ public sealed class WcsProtocol20Handler : IWcsProtocolHandler
         var bbox = WcsSubsetParser.Parse(subsetParams, coverageBbox) ?? coverageBbox;
 
         // OGC 09-147r3 §8.3 - optional band subset and output CRS overrides.
-        var info = _svc.ProbeRaster(ddb, layer);
+        var info = await _svc.ProbeRasterAsync(ddb, layer);
         var bands = WcsRangeSubsetParser.ParseRangeSubset20(
             OgcRequestParser.Get(q, "RANGESUBSET"), info);
         var outputCrs = WcsConformance.NormalizeCrs(OgcRequestParser.Get(q, "OUTPUTCRS"));

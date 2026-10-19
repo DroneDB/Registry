@@ -58,7 +58,11 @@ public class OgcAuthorizationFilter : IAsyncAuthorizationFilter
                 BasicAuthFilter.SendBasicAuthRequest(context.HttpContext.Response);
                 Fail(context, service, version, 401, "AuthenticationFailed",
                     "Authentication required to access this dataset");
+                return;
             }
+
+            // The managers serving this request reuse the grant instead of authorizing again
+            OgcAuthorizedDataset.Store(context.HttpContext, orgSlug, dsSlug, dataset);
         }
         catch (Exception ex)
         {

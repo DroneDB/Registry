@@ -20,6 +20,7 @@ public static class MagicStrings
     public const string DatasetVisibilityCacheSeed = "dataset-visibility";
     public const string OrganizationsListCacheSeed = "organizations-list";
     public const string DatasetsListCacheSeed = "datasets-list";
+    public const string OgcRenderCacheSeed = "ogc-render";
 
     public const string AutoBuildServiceUserId = "auto-build-service";
 

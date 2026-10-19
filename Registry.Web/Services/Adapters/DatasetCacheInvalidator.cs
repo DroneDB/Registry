@@ -59,6 +59,7 @@ public sealed class DatasetCacheInvalidator : IDatasetCacheInvalidator
         // Per-file caches keyed by the dataset category.
         await _cacheManager.RemoveByCategoryAsync(MagicStrings.TileCacheSeed, category);
         await _cacheManager.RemoveByCategoryAsync(MagicStrings.ThumbnailCacheSeed, category);
+        await _cacheManager.RemoveByCategoryAsync(MagicStrings.OgcRenderCacheSeed, category);
         // Retry controls are authoritative in Hangfire; evicting these observations
         // cannot erase a live coordinator or replenish its bounded budget.
         if (await PreserveLegacyRetryControls(orgSlug, dsSlug, category))

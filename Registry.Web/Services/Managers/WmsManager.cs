@@ -15,6 +15,7 @@ using Registry.Ports;
 using Registry.Ports.DroneDB;
 using Registry.Web.Exceptions;
 using Registry.Web.Models.DTO.Ogc;
+using Registry.Web.Services;
 using Registry.Web.Services.Ports;
 using Registry.Web.Utilities;
 using Registry.Web.Utilities.Ogc;
@@ -28,12 +29,15 @@ namespace Registry.Web.Services.Managers;
 public class WmsManager : OgcManagerBase, IWmsManager
 {
     private readonly ILogger<WmsManager> _logger;
+    private readonly ICacheManager _cacheManager;
 
     public WmsManager(IUtils u, IAuthManager a, IDdbManager d, IBuildArtifactResolver ar,
-        IDdbWrapper w, IOgcLayerCatalog c, IDistributedCache cache, IHttpContextAccessor ctx, ILogger<WmsManager> logger)
+        IDdbWrapper w, IOgcLayerCatalog c, IDistributedCache cache, IHttpContextAccessor ctx, ILogger<WmsManager> logger,
+        ICacheManager cacheManager)
         : base(u, a, d, ar, w, c, cache, ctx)
     {
         _logger = logger;
+        _cacheManager = cacheManager;
     }
 
     public async Task<string> GetCapabilitiesAsync(string orgSlug, string dsSlug, string version,
@@ -206,58 +210,136 @@ public class WmsManager : OgcManagerBase, IWmsManager
     private async Task<byte[]> GetMapAsyncCore(string orgSlug, string dsSlug, string[] layers, string[] styles,
         double[] bbox, string crs, int width, int height, string format, string? bgColor, bool transparent)
     {
-        var (ds, ddb) = await ResolveAsync(orgSlug, dsSlug);
+        var (_, ddb) = await ResolveAsync(orgSlug, dsSlug);
+        var rasters = await ResolveRasterLayersAsync(orgSlug, dsSlug, layers, styles);
 
-        // Render each layer in declaration order, then alpha-blend top-down with SkiaSharp.
-        // Each per-layer render is decoded as RGBA8888 to a transparent canvas.
+        // Identical (and sub-pixel jittered) requests share one render; the render uses the
+        // snapped BBOX so that a cached image is what a fresh render returns
+        var renderKey = WmsRenderKey.Build(bbox, crs, width, height, format, transparent, bgColor,
+            rasters.Select(r => (r.Layer.EntryHash, r.Style)));
+        try
+        {
+            return await _cacheManager.GetAsync(MagicStrings.OgcRenderCacheSeed,
+                CacheCategories.ForDataset(orgSlug, dsSlug), renderKey.Key,
+                new Func<Task<byte[]>>(() => Task.Run(() =>
+                    Render(ddb, rasters, renderKey.Bbox, crs, width, height, format, bgColor, transparent))));
+        }
+        catch (DegradedRenderException ex)
+        {
+            // Served once, never cached: the next request renders again
+            return ex.Image;
+        }
+    }
+
+    /// <summary>
+    /// The raster layers of LAYERS in drawing order with their style. Unknown layers and styles are
+    /// protocol errors (raised before any render or cache lookup); non-raster layers are skipped.
+    /// </summary>
+    private async Task<List<(OgcLayerDto Layer, string Style)>> ResolveRasterLayersAsync(string orgSlug,
+        string dsSlug, string[] layers, string[] styles)
+    {
+        var rasters = new List<(OgcLayerDto Layer, string Style)>();
+        for (var idx = 0; idx < layers.Length; idx++)
+        {
+            var name = layers[idx];
+            var layer = await LayerCatalog.ResolveAsync(orgSlug, dsSlug, name);
+            if (layer == null)
+                throw new OgcException("LayerNotDefined", $"Layer '{name}' not found", 404, "LAYERS");
+            if (layer.EntryType != EntryType.GeoRaster)
+                continue;
+
+            var style = (styles != null && idx < styles.Length) ? styles[idx] : "";
+
+            // STYLES contract: "" / "default" → natural render. Spectral indexes
+            // (NDVI/NDRE/NDWI/EVI/SAVI) are server-defined styles that are only
+            // meaningful on multispectral rasters; reject them otherwise so the
+            // accepted contract matches what GetCapabilities advertises per-layer.
+            if (!string.IsNullOrEmpty(style)
+                && !string.Equals(style, "default", StringComparison.OrdinalIgnoreCase))
+            {
+                if (IsSpectralIndex(style))
+                {
+                    if (!layer.IsMultispectral)
+                        throw new OgcException("StyleNotDefined",
+                            $"Spectral style '{style}' is not defined for layer '{name}' (not multispectral)",
+                            400, "STYLES");
+                }
+                else
+                {
+                    throw new OgcException("StyleNotDefined",
+                        $"Style '{style}' is not defined", 400, "STYLES");
+                }
+            }
+
+            rasters.Add((layer, style));
+        }
+
+        if (rasters.Count == 0)
+            throw new OgcException("LayerNotDefined", "No renderable raster layers", 404, "LAYERS");
+        return rasters;
+    }
+
+    private byte[] Render(IDDB ddb, List<(OgcLayerDto Layer, string Style)> rasters, double[] bbox, string crs,
+        int width, int height, string format, string? bgColor, bool transparent)
+    {
+        var (_, mime) = MapFormat(format);
+
+        // One layer whose native render is already the requested image: no decode, composite
+        // and re-encode in managed code
+        if (rasters.Count == 1 && NativeRenderMatches(mime, bgColor, transparent))
+        {
+            try
+            {
+                var bytes = RenderLayer(ddb, rasters[0], bbox, crs, width, height, mime);
+                if (bytes.Length > 0)
+                    return bytes;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "WMS layer '{Layer}' native render failed for bbox=[{B}] crs={Crs} {W}x{H}; compositing instead",
+                    rasters[0].Layer.Name, string.Join(',', bbox), crs, width, height);
+            }
+        }
+
+        return Composite(ddb, rasters, bbox, crs, width, height, format, bgColor, transparent);
+    }
+
+    /// <summary>
+    /// True when the native render of a single layer equals the composited image: PNG/WebP keep
+    /// the layer's transparency (TRANSPARENT=TRUE); JPEG has none and the native renderer fills
+    /// nodata with white, the default BGCOLOR.
+    /// </summary>
+    private static bool NativeRenderMatches(string mime, string? bgColor, bool transparent)
+    {
+        if (mime == "image/jpeg")
+            return !transparent && ParseBackground(bgColor) == SKColors.White;
+        return transparent;
+    }
+
+    private byte[] RenderLayer(IDDB ddb, (OgcLayerDto Layer, string Style) raster, double[] bbox, string crs,
+        int width, int height, string mime)
+    {
+        var src = ResolveRasterArtifact(ddb, raster.Layer);
+        return IsSpectralIndex(raster.Style)
+            ? DdbWrapper.RenderRasterIndex(src, raster.Style.ToUpperInvariant(), bbox, crs, width, height, mime)
+            : DdbWrapper.RenderRasterRegion(src, bbox, crs, width, height, mime);
+    }
+
+    /// <summary>
+    /// Renders each layer in declaration order and alpha-blends them top-down with SkiaSharp.
+    /// Throws <see cref="DegradedRenderException"/> (carrying the image) when a layer failed.
+    /// </summary>
+    private byte[] Composite(IDDB ddb, List<(OgcLayerDto Layer, string Style)> rasters, double[] bbox, string crs,
+        int width, int height, string format, string? bgColor, bool transparent)
+    {
+        var failed = false;
         using var canvas = new SKBitmap(new SKImageInfo(width, height, SKColorType.Rgba8888, SKAlphaType.Premul));
         using (var surface = SKSurface.Create(canvas.Info, canvas.GetPixels(), canvas.RowBytes))
         {
-            // Background fill
-            if (!transparent)
+            surface.Canvas.Clear(transparent ? SKColors.Transparent : ParseBackground(bgColor));
+
+            foreach (var raster in rasters)
             {
-                var bg = ParseBackground(bgColor);
-                surface.Canvas.Clear(bg);
-            }
-            else
-            {
-                surface.Canvas.Clear(SKColors.Transparent);
-            }
-
-            var anyRendered = false;
-            for (var idx = 0; idx < layers.Length; idx++)
-            {
-                var name = layers[idx];
-                var layer = await LayerCatalog.ResolveAsync(orgSlug, dsSlug, name);
-                if (layer == null)
-                    throw new OgcException("LayerNotDefined", $"Layer '{name}' not found", 404, "LAYERS");
-                if (layer.EntryType != EntryType.GeoRaster)
-                    continue;
-
-                var src = ResolveRasterArtifact(ddb, layer);
-                var style = (styles != null && idx < styles.Length) ? styles[idx] : "";
-
-                // STYLES contract: "" / "default" → natural render. Spectral indexes
-                // (NDVI/NDRE/NDWI/EVI/SAVI) are server-defined styles that are only
-                // meaningful on multispectral rasters; reject them otherwise so the
-                // accepted contract matches what GetCapabilities advertises per-layer.
-                if (!string.IsNullOrEmpty(style)
-                    && !string.Equals(style, "default", StringComparison.OrdinalIgnoreCase))
-                {
-                    if (IsSpectralIndex(style))
-                    {
-                        if (!layer.IsMultispectral)
-                            throw new OgcException("StyleNotDefined",
-                                $"Spectral style '{style}' is not defined for layer '{name}' (not multispectral)",
-                                400, "STYLES");
-                    }
-                    else
-                    {
-                        throw new OgcException("StyleNotDefined",
-                            $"Style '{style}' is not defined", 400, "STYLES");
-                    }
-                }
-
                 // Per-layer render is wrapped so failures (e.g. BBOX with no overlap on a
                 // multispectral source, GDAL warp errors on degenerate windows) do not
                 // surface as HTTP 500. The WMS 1.3 spec requires GetMap to return a valid
@@ -266,37 +348,24 @@ public class WmsManager : OgcManagerBase, IWmsManager
                 byte[]? layerBytes = null;
                 try
                 {
-                    layerBytes = IsSpectralIndex(style)
-                        ? DdbWrapper.RenderRasterIndex(src, style.ToUpperInvariant(), bbox, crs, width, height, "image/png")
-                        : DdbWrapper.RenderRasterRegion(src, bbox, crs, width, height, "image/png");
+                    layerBytes = RenderLayer(ddb, raster, bbox, crs, width, height, "image/png");
                 }
                 catch (Exception ex)
                 {
+                    failed = true;
                     _logger.LogWarning(ex, "WMS layer '{Layer}' render failed for bbox=[{B}] crs={Crs} {W}x{H}; treating as transparent",
-                        name, string.Join(',', bbox), crs, width, height);
+                        raster.Layer.Name, string.Join(',', bbox), crs, width, height);
                 }
 
                 if (layerBytes == null || layerBytes.Length == 0)
-                {
-                    // Count as rendered so we don't 404 the request when the layer exists
-                    // but produces no pixels for the requested window.
-                    anyRendered = true;
                     continue;
-                }
 
                 using var bmp = SKBitmap.Decode(layerBytes);
                 if (bmp == null)
-                {
-                    anyRendered = true;
                     continue;
-                }
                 using var paint = new SKPaint { BlendMode = SKBlendMode.SrcOver };
                 surface.Canvas.DrawBitmap(bmp, new SKRect(0, 0, width, height), paint);
-                anyRendered = true;
             }
-
-            if (!anyRendered)
-                throw new OgcException("LayerNotDefined", "No renderable raster layers", 404, "LAYERS");
 
             surface.Canvas.Flush();
         }
@@ -305,7 +374,14 @@ public class WmsManager : OgcManagerBase, IWmsManager
         using var image = SKImage.FromBitmap(canvas);
         var (skFormat, _) = MapFormat(format);
         using var data = image.Encode(skFormat, 90);
-        return data.ToArray();
+        var result = data.ToArray();
+        return failed ? throw new DegradedRenderException(result) : result;
+    }
+
+    /// <summary>A GetMap image rendered with a layer missing: returned to the client, not cached.</summary>
+    private sealed class DegradedRenderException(byte[] image) : Exception("A WMS layer failed to render")
+    {
+        public byte[] Image { get; } = image;
     }
 
     private static bool IsSpectralIndex(string? style)

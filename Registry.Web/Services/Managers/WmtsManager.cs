@@ -29,12 +29,15 @@ namespace Registry.Web.Services.Managers;
 public class WmtsManager : OgcManagerBase, IWmtsManager
 {
     private readonly ILogger<WmtsManager> _logger;
+    private readonly IOgcRasterTileSource _rasterTiles;
 
     public WmtsManager(IUtils u, IAuthManager a, IDdbManager d, IBuildArtifactResolver ar,
-        IDdbWrapper w, IOgcLayerCatalog c, IDistributedCache cache, IHttpContextAccessor ctx, ILogger<WmtsManager> logger)
+        IDdbWrapper w, IOgcLayerCatalog c, IDistributedCache cache, IHttpContextAccessor ctx, ILogger<WmtsManager> logger,
+        IOgcRasterTileSource rasterTiles)
         : base(u, a, d, ar, w, c, cache, ctx)
     {
         _logger = logger;
+        _rasterTiles = rasterTiles;
     }
 
     public async Task<string> GetCapabilitiesAsync(string orgSlug, string dsSlug,
@@ -252,8 +255,7 @@ public class WmtsManager : OgcManagerBase, IWmtsManager
         var wantJpeg = string.Equals(format, "image/jpeg", StringComparison.OrdinalIgnoreCase);
         try
         {
-            return ddb.GenerateTile(layer.EntryPath, z, x, y, retina: false,
-                inputPathHash: layer.EntryHash, outputFormat: wantJpeg ? "jpeg" : "png");
+            return await _rasterTiles.GetTileAsync(orgSlug, dsSlug, ddb, layer, z, x, y, wantJpeg ? "jpeg" : "png");
         }
         catch (Exception ex)
         {

@@ -157,7 +157,7 @@ public sealed class WcsProtocol10Handler : IWcsProtocolHandler
     private async Task WriteCoverageOfferingAsync(XmlWriter w, IDDB ddb, string id, OgcLayerDto layer)
     {
         var bbox = layer.BboxWgs84 ?? [-180.0, -90.0, 180.0, 90.0];
-        var info = _svc.ProbeRaster(ddb, layer);
+        var info = await _svc.ProbeRasterAsync(ddb, layer);
         var rWidth = info.Width > 0 ? info.Width : 1024;
         var rHeight = info.Height > 0 ? info.Height : 1024;
 
@@ -276,7 +276,7 @@ public sealed class WcsProtocol10Handler : IWcsProtocolHandler
         // Optional band subset via BANDS extension (not part of WCS 1.0 proper but
         // accepted because QGIS users frequently expect it). Resolution requires
         // probing the source raster band names.
-        var info = _svc.ProbeRaster(ddb, layer);
+        var info = await _svc.ProbeRasterAsync(ddb, layer);
         var bands = WcsRangeSubsetParser.ParseBands10(OgcRequestParser.Get(q, "BANDS"), info);
 
         // RESPONSE_CRS (WCS 1.0) overrides the output CRS without changing the

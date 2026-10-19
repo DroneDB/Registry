@@ -105,6 +105,11 @@ public class InvalidateAllDatasetCachesTest : TestBase
             c => c.RemoveByCategoryAsync(MagicStrings.BuildPendingTrackerCacheSeed, expectedCategory),
             Times.Once);
 
+        // Verify WMS render cache invalidation
+        _cacheManagerMock.Verify(
+            c => c.RemoveByCategoryAsync(MagicStrings.OgcRenderCacheSeed, expectedCategory),
+            Times.Once);
+
         // Verify dataset-level thumbnail cache invalidation (different category)
         _cacheManagerMock.Verify(
             c => c.RemoveByCategoryAsync(MagicStrings.ThumbnailCacheSeed, expectedThumbCategory),
@@ -122,7 +127,7 @@ public class InvalidateAllDatasetCachesTest : TestBase
         // Verify the category string format is correct
         _cacheManagerMock.Verify(
             c => c.RemoveByCategoryAsync(It.IsAny<string>(), "acme/survey-2024"),
-            Times.Exactly(3)); // tile, thumb, build-pending all use this
+            Times.Exactly(4)); // tile, thumb, ogc-render, build-pending all use this
 
         _cacheManagerMock.Verify(
             c => c.RemoveByCategoryAsync(It.IsAny<string>(), "acme/survey-2024/ds-thumb"),
@@ -130,13 +135,13 @@ public class InvalidateAllDatasetCachesTest : TestBase
     }
 
     [Test]
-    public async Task InvalidateAllDatasetCaches_TotalCallsAreFour()
+    public async Task InvalidateAllDatasetCaches_TotalCallsAreFive()
     {
         await _objectsManager.InvalidateAllDatasetCaches("org", "ds");
 
-        // Total: tile + thumb + build-pending + ds-thumb = 4 calls
+        // Total: tile + thumb + ogc-render + build-pending + ds-thumb = 5 calls
         _cacheManagerMock.Verify(
             c => c.RemoveByCategoryAsync(It.IsAny<string>(), It.IsAny<string>()),
-            Times.Exactly(4));
+            Times.Exactly(5));
     }
 }

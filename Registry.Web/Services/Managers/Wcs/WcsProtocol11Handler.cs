@@ -141,7 +141,7 @@ public sealed class WcsProtocol11Handler : IWcsProtocolHandler
     private async Task WriteCoverageDescriptionAsync(XmlWriter w, IDDB ddb, string id, OgcLayerDto layer)
     {
         var bbox = layer.BboxWgs84 ?? [-180.0, -90.0, 180.0, 90.0];
-        var info = _svc.ProbeRaster(ddb, layer);
+        var info = await _svc.ProbeRasterAsync(ddb, layer);
         var rWidth = info.Width > 0 ? info.Width : 1024;
         var rHeight = info.Height > 0 ? info.Height : 1024;
 
@@ -235,7 +235,7 @@ public sealed class WcsProtocol11Handler : IWcsProtocolHandler
         var (ddb, layer) = await _svc.ResolveCoverageAsync(orgSlug, dsSlug, coverageId);
 
         // OGC 07-067r5 §9.3.2.4 - optional band subset via RangeSubset.
-        var info = _svc.ProbeRaster(ddb, layer);
+        var info = await _svc.ProbeRasterAsync(ddb, layer);
         var bands = WcsRangeSubsetParser.ParseRangeSubset11(
             OgcRequestParser.Get(q, "RangeSubset"), info);
 

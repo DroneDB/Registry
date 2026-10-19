@@ -53,6 +53,9 @@ internal class CacheInitializer
         }
     }
 
+    /// <summary>WMS GetMap renders are kept 10 minutes after their last use.</summary>
+    private static readonly TimeSpan OgcRenderCacheExpiration = TimeSpan.FromMinutes(10);
+
     private void RegisterCacheProviders(AppSettings appSettings)
     {
         _logger.LogInformation("Registering cache providers");
@@ -76,6 +79,14 @@ internal class CacheInitializer
 
         _logger.LogDebug("Registered thumbnail cache provider with expiration: {Expiration}",
             appSettings.ThumbnailsCacheExpiration?.ToString() ?? "default");
+
+        // Register the WMS render cache provider (pass-through: WmsManager encodes the image)
+        cacheManager.Register(
+            MagicStrings.OgcRenderCacheSeed,
+            CacheProviderFactories.CreatePassThroughProvider(),
+            OgcRenderCacheExpiration);
+
+        _logger.LogDebug("Registered OGC render cache provider with expiration: {Expiration}", OgcRenderCacheExpiration);
 
         // Register dataset visibility cache provider
         cacheManager.Register(

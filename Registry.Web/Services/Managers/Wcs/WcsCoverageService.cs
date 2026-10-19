@@ -85,32 +85,50 @@ public class WcsCoverageService : OgcManagerBase, IWcsCoverageService
         return (ddb, resolved);
     }
 
-    public WcsRasterInfo ProbeRaster(IDDB ddb, OgcLayerDto layer)
+    /// <summary>Probes do not change for a given raster content: kept a day after their last use.</summary>
+    private static readonly TimeSpan ProbeCacheExpiration = TimeSpan.FromDays(1);
+
+    public async Task<WcsRasterInfo> ProbeRasterAsync(IDDB ddb, OgcLayerDto layer)
     {
         try
         {
             var src = ResolveRasterArtifact(ddb, layer);
-            var info = DdbWrapper.GetRasterInfo(src);
-            if (string.IsNullOrEmpty(info)) return WcsRasterInfo.Empty;
-            var j = JObject.Parse(info);
-            var width = j.Value<int?>("width") ?? 0;
-            var height = j.Value<int?>("height") ?? 0;
-            var bandCount = j.Value<int?>("bandCount") ?? 0;
-            var nativeCrs = j.Value<string>("crs") ?? string.Empty;
-            var bandNames = new List<string>();
+            // The build COG and the source it falls back to are probed separately
+            var key = $"ogc-wcs-probe-{layer.EntryHash}-{(src == Artifacts.GetCogPath(ddb, layer.EntryHash) ? "cog" : "src")}";
 
-            if (j["bands"] is not JArray ba)
-                return new WcsRasterInfo(width, height, bandCount, bandNames, nativeCrs);
+            var cached = await Cache.GetRecordAsync<WcsRasterInfo>(key);
+            if (cached != null)
+                return cached;
 
-            foreach (var b in ba)
-                bandNames.Add(b.Value<string>("name") ?? $"band{bandNames.Count + 1}");
-            return new WcsRasterInfo(width, height, bandCount, bandNames, nativeCrs);
+            var info = ParseRasterInfo(DdbWrapper.GetRasterInfo(src));
+            if (info.Width > 0 && info.Height > 0)
+                await Cache.SetRecordAsync(key, info, unusedExpireTime: ProbeCacheExpiration,
+                    absoluteExpireTime: ProbeCacheExpiration);
+            return info;
         }
         catch (Exception ex)
         {
             _logger.LogWarning(ex, "WCS: probing raster info failed");
             return WcsRasterInfo.Empty;
         }
+    }
+
+    private static WcsRasterInfo ParseRasterInfo(string info)
+    {
+        if (string.IsNullOrEmpty(info)) return WcsRasterInfo.Empty;
+        var j = JObject.Parse(info);
+        var width = j.Value<int?>("width") ?? 0;
+        var height = j.Value<int?>("height") ?? 0;
+        var bandCount = j.Value<int?>("bandCount") ?? 0;
+        var nativeCrs = j.Value<string>("crs") ?? string.Empty;
+        var bandNames = new List<string>();
+
+        if (j["bands"] is not JArray ba)
+            return new WcsRasterInfo(width, height, bandCount, bandNames, nativeCrs);
+
+        foreach (var b in ba)
+            bandNames.Add(b.Value<string>("name") ?? $"band{bandNames.Count + 1}");
+        return new WcsRasterInfo(width, height, bandCount, bandNames, nativeCrs);
     }
 
     public byte[] RenderRegion(IDDB ddb, OgcLayerDto layer, double[] bboxWgs84,

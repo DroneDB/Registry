@@ -46,9 +46,10 @@ public class DatasetCacheInvalidatorTests
         _cacheManager.Verify(c => c.RemoveByCategoryAsync(MagicStrings.ThumbnailCacheSeed, category), Times.Once);
         _cacheManager.Verify(c => c.RemoveByCategoryAsync(MagicStrings.BuildPendingTrackerCacheSeed, category), Times.Once);
         _cacheManager.Verify(c => c.RemoveByCategoryAsync(MagicStrings.ThumbnailCacheSeed, thumbCategory), Times.Once);
+        _cacheManager.Verify(c => c.RemoveByCategoryAsync(MagicStrings.OgcRenderCacheSeed, category), Times.Once);
 
-        // Exactly four category removals (tile, thumb, build-pending, ds-thumb).
-        _cacheManager.Verify(c => c.RemoveByCategoryAsync(It.IsAny<string>(), It.IsAny<string>()), Times.Exactly(4));
+        // Exactly five category removals (tile, thumb, ogc-render, build-pending, ds-thumb).
+        _cacheManager.Verify(c => c.RemoveByCategoryAsync(It.IsAny<string>(), It.IsAny<string>()), Times.Exactly(5));
     }
 
     [Test]
@@ -72,6 +73,6 @@ public class DatasetCacheInvalidatorTests
         await Should.NotThrowAsync(() => _sut.InvalidateAllDatasetCachesAsync("org", "ds"));
 
         // The category removals run before the OGC step, so they must still have happened.
-        _cacheManager.Verify(c => c.RemoveByCategoryAsync(It.IsAny<string>(), It.IsAny<string>()), Times.Exactly(4));
+        _cacheManager.Verify(c => c.RemoveByCategoryAsync(It.IsAny<string>(), It.IsAny<string>()), Times.Exactly(5));
     }
 }

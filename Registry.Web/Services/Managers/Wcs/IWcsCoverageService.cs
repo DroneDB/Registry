@@ -28,9 +28,10 @@ public interface IWcsCoverageService
     Task<(IDDB Ddb, IReadOnlyList<(string Id, OgcLayerDto Layer)> Coverages)> ResolveCoveragesAsync(
         string orgSlug, string dsSlug, IEnumerable<string> coverageIds);
 
-    /// <summary>Probe raster width/height/band metadata for a coverage. Failures are caught
-    /// and reported as zeros so callers can fall back to defaults.</summary>
-    WcsRasterInfo ProbeRaster(IDDB ddb, OgcLayerDto layer);
+    /// <summary>Probe raster width/height/band metadata for a coverage, cached per raster content
+    /// (entry hash). Failures are caught and reported as zeros so callers can fall back to
+    /// defaults (and are not cached).</summary>
+    Task<WcsRasterInfo> ProbeRasterAsync(IDDB ddb, OgcLayerDto layer);
 
     /// <summary>Render the requested region of a coverage to the chosen MIME format.</summary>
     /// <param name="ddb">Resolved DDB handle for the dataset.</param>

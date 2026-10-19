@@ -349,6 +349,7 @@ public class Startup
         // OGC services (WMS/WMTS/WFS/WCS/OGC API + MVT endpoint)
         services.AddScoped<IBuildArtifactResolver, BuildArtifactResolver>();
         services.AddScoped<IOgcLayerCatalog, OgcLayerCatalog>();
+        services.AddScoped<IOgcRasterTileSource, OgcRasterTileSource>();
         services.AddScoped<IWmtsManager, WmtsManager>();
         services.AddScoped<IWmsManager, WmsManager>();
         services.AddScoped<IWfsManager, WfsManager>();
