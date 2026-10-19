@@ -1,16 +1,13 @@
 #nullable enable
 using System;
-using System.IO;
-using System.Security.Cryptography;
-using System.Text;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Registry.Ports;
-using Registry.Web.Models;
 using Registry.Web.Models.Configuration;
+using Registry.Web.Services.HeavyTasks;
 using Registry.Web.Services.HeavyTasks.Models;
 using Registry.Web.Services.HeavyTasks.Ports;
 using Registry.Web.Services.Ports;
@@ -24,8 +21,6 @@ namespace Registry.Web.Services.HeavyTasks.Adapters;
 /// </summary>
 public sealed class HeavyTaskRunner : IHeavyTaskRunner
 {
-    private const string TasksQueue = "tasks";
-
     private readonly IHeavyToolRegistry _registry;
     private readonly IUtils _utils;
     private readonly IDdbManager _ddbManager;
@@ -73,7 +68,7 @@ public sealed class HeavyTaskRunner : IHeavyTaskRunner
         await tool.ValidateAsync(toolRequest, validationCtx, ct);
         var plan = tool.Plan(toolRequest, validationCtx);
 
-        var requestHash = ComputeRequestHash(tool.Id, tool.Version, request.Hash, request.Params);
+        var requestHash = HeavyTaskRequestHash.Compute(tool.Id, tool.Version, request.Hash, request.Params);
 
         // Dedup: workflow sub-tasks always force (never reuse a pre-existing terminal task).
         if (_settings.DedupEnabled && !request.Force)
@@ -92,87 +87,17 @@ public sealed class HeavyTaskRunner : IHeavyTaskRunner
         if (!quotaResult.IsAllowed)
             throw new HeavyTaskQuotaException(quotaResult.Code, quotaResult.Message ?? "Quota exceeded.");
 
-        var requestJson = JsonSerializer.Serialize(toolRequest);
-        var version = tool.Version;
-        var toolId = tool.Id;
+        var jobId = _processor.EnqueueHeavyTask(toolRequest, request.UserId, request.Hash, requestHash,
+            request.ParentJobId, request.WorkflowExecutionId);
 
-        var payload = new IndexPayload(
-            request.OrgSlug, request.DsSlug, request.Hash, request.UserId,
-            Queue: TasksQueue, Path: request.Path,
-            ToolId: toolId, ToolVersion: version,
-            RequestHash: requestHash,
-            ParentJobId: request.ParentJobId,
-            WorkflowExecutionId: request.WorkflowExecutionId);
-
-        var jobId = _processor.EnqueueIndexed<HeavyTaskJobWrapper>(
-            w => w.Run(toolId, version, requestJson, null!, CancellationToken.None), payload);
-
-        return new HeavyTaskSubmitResult(jobId, toolId, version, false, plan.EstimatedOutputBytes);
+        return new HeavyTaskSubmitResult(jobId, tool.Id, tool.Version, false, plan.EstimatedOutputBytes);
     }
 
     public string SubmitSystemBuild(string orgSlug, string dsSlug, string? path, bool force, string? hash = null)
     {
-        const string toolId = "build";
-        const string version = "1";
-
         var prms = JsonSerializer.SerializeToElement(new { path, force });
-        var toolRequest = new HeavyToolRequest(toolId, version, orgSlug, dsSlug, path, prms);
-        var requestJson = JsonSerializer.Serialize(toolRequest);
+        var toolRequest = new HeavyToolRequest(HeavyToolIds.Build, "1", orgSlug, dsSlug, path, prms);
 
-        var payload = new IndexPayload(
-            orgSlug, dsSlug, hash, UserId: null,
-            Queue: TasksQueue, Path: path,
-            ToolId: toolId, ToolVersion: version);
-
-        return _processor.EnqueueIndexed<HeavyTaskJobWrapper>(
-            w => w.Run(toolId, version, requestJson, null!, CancellationToken.None), payload);
-    }
-
-    private static string ComputeRequestHash(string toolId, string version, string? entryHash, JsonElement prms)
-    {
-        var canonical = $"{toolId}|{version}|{entryHash}|{CanonicalJson(prms)}";
-        var bytes = SHA256.HashData(Encoding.UTF8.GetBytes(canonical));
-        return Convert.ToHexString(bytes).ToLowerInvariant();
-    }
-
-    private static string CanonicalJson(JsonElement element)
-    {
-        // Guard: Undefined means the field was absent from the JSON body.
-        if (element.ValueKind is JsonValueKind.Undefined or JsonValueKind.Null)
-            return "null";
-
-        // Stable serialization for dedup: sort object keys recursively.
-        using var stream = new MemoryStream();
-        using (var writer = new Utf8JsonWriter(stream))
-            WriteCanonical(element, writer);
-        return Encoding.UTF8.GetString(stream.ToArray());
-    }
-
-    private static void WriteCanonical(JsonElement element, Utf8JsonWriter writer)
-    {
-        switch (element.ValueKind)
-        {
-            case JsonValueKind.Object:
-                writer.WriteStartObject();
-                var props = new System.Collections.Generic.SortedDictionary<string, JsonElement>(StringComparer.Ordinal);
-                foreach (var p in element.EnumerateObject())
-                    props[p.Name] = p.Value;
-                foreach (var kv in props)
-                {
-                    writer.WritePropertyName(kv.Key);
-                    WriteCanonical(kv.Value, writer);
-                }
-                writer.WriteEndObject();
-                break;
-            case JsonValueKind.Array:
-                writer.WriteStartArray();
-                foreach (var item in element.EnumerateArray())
-                    WriteCanonical(item, writer);
-                writer.WriteEndArray();
-                break;
-            default:
-                element.WriteTo(writer);
-                break;
-        }
+        return _processor.EnqueueHeavyTask(toolRequest, userId: null, entryHash: hash);
     }
 }

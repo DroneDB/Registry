@@ -1742,53 +1742,17 @@ public class SystemManager : ISystemManager
             throw new UnauthorizedException("Only admins can perform system related tasks");
 
         request ??= new CleanupBuildRequestDto();
-        var orgSlug = string.IsNullOrWhiteSpace(request.OrganizationSlug) ? null : request.OrganizationSlug.Trim();
-        var dsSlug = string.IsNullOrWhiteSpace(request.DatasetSlug) ? null : request.DatasetSlug.Trim();
+        var scope = DatasetScope.Parse(request.OrganizationSlug, request.DatasetSlug);
 
-        if (dsSlug != null && orgSlug == null)
-            throw new ArgumentException("DatasetSlug requires OrganizationSlug");
-
-        // Resolve target datasets
-        Dataset[] targets;
-        if (orgSlug == null)
-        {
-            // Cleanup across every dataset in every organization
-            targets = await _context.Datasets
-                .AsNoTracking()
-                .Include(d => d.Organization)
-                .ToArrayAsync();
-        }
-        else if (dsSlug == null)
-        {
-            // Cleanup all datasets in one organization
-            targets = await _context.Datasets
-                .AsNoTracking()
-                .Include(d => d.Organization)
-                .Where(d => d.Organization.Slug == orgSlug)
-                .ToArrayAsync();
-
-            if (targets.Length == 0)
-                throw new ArgumentException($"Organization '{orgSlug}' has no datasets or does not exist");
-        }
-        else
-        {
-            // Single dataset
-            var dataset = await _context.Datasets
-                .AsNoTracking()
-                .Include(d => d.Organization)
-                .FirstOrDefaultAsync(d => d.Organization.Slug == orgSlug && d.Slug == dsSlug);
-
-            if (dataset == null)
-                throw new ArgumentException($"Dataset '{orgSlug}/{dsSlug}' not found");
-
-            targets = [dataset];
-        }
+        var targets = await scope.Apply(_context.Datasets.AsNoTracking().Include(d => d.Organization))
+            .ToArrayAsync();
+        scope.EnsureFound(targets.Length);
 
         // Async (background jobs) when the request scope targets more than one dataset
         // (i.e. all orgs, or all datasets in one org). A single targeted dataset always
         // runs synchronously. This matches the documented API contract regardless of
         // how many datasets actually exist for the resolved scope.
-        var async = dsSlug == null;
+        var async = !scope.IsSingleDataset;
 
         // Empty target set: nothing to enqueue. Return a synchronous, empty result so the
         // controller does not respond with 202 Accepted carrying a null JobId.
