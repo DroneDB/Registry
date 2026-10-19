@@ -25,7 +25,7 @@ public interface IDDB : IDdbIndex, IDdbBuild, IDdbMeta, IDdbRaster, IDdbAnalytic
 
     /// <summary>
     /// Prefix of the push folders in <see cref="TmpFolderName"/> (<c>push-&lt;token&gt;</c>),
-    /// used by the push workflow.
+    /// shared by the push workflow and the sweep of abandoned pushes.
     /// </summary>
     public const string PushFolderPrefix = "push-";
 

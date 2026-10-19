@@ -9,27 +9,32 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Registry.Ports;
 using Registry.Web.Data;
+using Registry.Web.Utilities;
 
 namespace Registry.Web.Services.Adapters;
 
 /// <summary>
 /// Recurring service that runs DDB cleanup (entries + build artifacts) on every
-/// dataset of every organization. Scheduled via Hangfire (cron from
+/// dataset of every organization, and deletes what interrupted uploads left behind
+/// (abandoned push folders and upload temp files). Scheduled via Hangfire (cron from
 /// <see cref="Registry.Web.Models.Configuration.AppSettings.DatasetCleanupCron"/>).
 /// </summary>
 public class RecurringDatasetCleanupService
 {
     private readonly RegistryContext _context;
     private readonly IDdbManager _ddbManager;
+    private readonly IFileSystem _fileSystem;
     private readonly ILogger<RecurringDatasetCleanupService> _logger;
 
     public RecurringDatasetCleanupService(
         RegistryContext context,
         IDdbManager ddbManager,
+        IFileSystem fileSystem,
         ILogger<RecurringDatasetCleanupService> logger)
     {
         _context = context ?? throw new ArgumentNullException(nameof(context));
         _ddbManager = ddbManager ?? throw new ArgumentNullException(nameof(ddbManager));
+        _fileSystem = fileSystem ?? throw new ArgumentNullException(nameof(fileSystem));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
@@ -52,6 +57,7 @@ public class RecurringDatasetCleanupService
 
         var totalEntries = 0;
         var totalBuilds = 0;
+        var totalUploads = 0;
         var totalSucceeded = 0;
         var totalFailed = 0;
 
@@ -65,12 +71,16 @@ public class RecurringDatasetCleanupService
 
                 var entries = result.Entries?.Length ?? 0;
                 var builds = result.Builds?.Length ?? 0;
+                var uploads = DatasetUploads.RemoveAbandoned(_fileSystem, ddb.DatasetFolderPath, DateTime.UtcNow,
+                    DatasetUploads.AbandonedAfter);
                 totalEntries += entries;
                 totalBuilds += builds;
+                totalUploads += uploads;
                 totalSucceeded++;
 
-                if (entries > 0 || builds > 0)
-                    WriteLine($"Cleaned {key}: removed {entries} entries, {builds} build artifacts");
+                if (entries > 0 || builds > 0 || uploads > 0)
+                    WriteLine($"Cleaned {key}: removed {entries} entries, {builds} build artifacts, " +
+                              $"{uploads} abandoned uploads");
             }
             catch (Exception ex)
             {
@@ -83,6 +93,6 @@ public class RecurringDatasetCleanupService
         WriteLine(
             $"Recurring dataset cleanup completed: {totalSucceeded}/{datasets.Length} datasets " +
             $"processed, {totalFailed} failed, {totalEntries} entries removed, " +
-            $"{totalBuilds} build artifacts removed");
+            $"{totalBuilds} build artifacts removed, {totalUploads} abandoned uploads removed");
     }
 }
