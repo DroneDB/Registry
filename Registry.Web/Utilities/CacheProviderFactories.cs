@@ -13,22 +13,29 @@ namespace Registry.Web.Utilities;
 public static class CacheProviderFactories
 {
     /// <summary>
-    /// Creates a cache provider function for tiles.
+    /// Creates a cache provider function that stores what the caller generates.
     /// </summary>
     /// <returns>
-    /// A function that takes parameters (fileHash, tx, ty, tz, retina, [vizKey], generateFunc)
-    /// and returns the tile data converted to WebP format.
+    /// A function that takes parameters (key parts..., generateFunc) and returns the bytes of
+    /// generateFunc as they are.
     /// </returns>
-    public static Func<object[], Task<byte[]>> CreateTileProvider()
+    public static Func<object[], Task<byte[]>> CreatePassThroughProvider()
     {
-        return async parameters =>
+        return parameters =>
         {
             // The generateFunc is always the last parameter
             var generateFunc = (Func<Task<byte[]>>)parameters[^1];
-            var data = await generateFunc();
-            return data.ToWebp(90);
+            return generateFunc();
         };
     }
+
+    /// <summary>
+    /// Creates a cache provider function for tiles: parameters (fileHash, tx, ty, tz, retina,
+    /// [vizKey | format], generateFunc). Each producer encodes its tiles in the format it serves
+    /// (the tile endpoint gets WebP from the native tiler, WMTS PNG or JPEG), so the bytes are
+    /// stored as they are.
+    /// </summary>
+    public static Func<object[], Task<byte[]>> CreateTileProvider() => CreatePassThroughProvider();
 
     /// <summary>
     /// Creates a cache provider function for thumbnails.

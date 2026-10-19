@@ -1696,7 +1696,7 @@ public class ObjectsManager : IObjectsManager
                 await _cacheManager.GetAsync(MagicStrings.TileCacheSeed, ForDataset(obj.OrgSlug, obj.DsSlug), obj.Hash,
                     tx, ty, tz, retina,
                     new Func<Task<byte[]>>(() =>
-                        Task.Run(() => obj.Ddb.GenerateTile(obj.SourcePath, tz, tx, ty, retina, obj.Hash))));
+                        Task.Run(() => obj.Ddb.GenerateTile(obj.SourcePath, tz, tx, ty, retina, obj.Hash, "webp"))));
 
             return new StorageDataDto
             {
@@ -2263,7 +2263,7 @@ public class ObjectsManager : IObjectsManager
                 entry.Hash, tx, ty, tz, retina, vizKey,
                 new Func<Task<byte[]>>(() => Task.Run(() =>
                     ddb.GenerateTileEx(sourcePath, tz, tx, ty, retina, entry.Hash,
-                        preset, bands, formula, bandFilter, colormap, rescale))));
+                        preset, bands, formula, bandFilter, colormap, rescale).ToWebp(90))));
 
             return new StorageDataDto
             {
