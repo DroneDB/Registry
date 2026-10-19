@@ -7,6 +7,7 @@ using System.Reflection;
 using System.Text;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -311,6 +312,15 @@ public class PushPipelineTests : TestBase
         upload.GetCustomAttribute<DisableFormValueModelBindingAttribute>().ShouldNotBeNull();
         upload.GetParameters().ShouldNotContain(p => p.ParameterType == typeof(IFormFile),
             "an IFormFile parameter makes MVC buffer the whole part to a temp file first");
+    }
+
+    [Test]
+    public void InitAction_AcceptsLargeStamps()
+    {
+        // A 50k-entry stamp is ~4.4 MiB, above the default 4 MiB form value limit
+        var init = typeof(PushController).GetMethod(nameof(PushController.Init))!;
+
+        init.GetCustomAttribute<RequestFormLimitsAttribute>()!.ValueLengthLimit.ShouldBe(int.MaxValue);
     }
 
     [Test]

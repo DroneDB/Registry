@@ -48,6 +48,10 @@ public class PushController : ControllerBaseEx
     /// <param name="checksum">The checksum of the files to push.</param>
     /// <param name="stampJson">The stamp JSON containing file information.</param>
     /// <returns>The push initialization result containing needed files and token.</returns>
+    // The stamp lists every entry (~90 bytes each): above ~45k entries it exceeds the default
+    // 4 MiB form value limit
+    [DisableRequestSizeLimit]
+    [RequestFormLimits(ValueLengthLimit = int.MaxValue, MultipartBodyLengthLimit = long.MaxValue)]
     [HttpPost("init")]
     [ProducesResponseType(typeof(PushInitResultDto), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
