@@ -42,6 +42,7 @@ public sealed class AlignRasterTool : IHeavyTool
     public string Title => "Align GeoTIFF to reference";
     public HeavyToolPermission RequiredAccess => HeavyToolPermission.Write;
     public bool ProducesArtifact => false;
+    public bool RunsNativeBuild => true;
     public JsonDocument InputSchema => Schema;
 
     public Task ValidateAsync(HeavyToolRequest request, IHeavyToolValidationContext ctx, CancellationToken ct)

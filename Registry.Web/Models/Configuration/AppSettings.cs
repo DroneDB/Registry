@@ -137,9 +137,15 @@ public class AppSettings
     public bool EnableDefaultUserOrganization { get; set; } = true;
 
     /// <summary>
-    /// Number of worker threads (0 to use ASP.NET default)
+    /// Number of worker threads (0 to use ASP.NET default). When set, it is also the default
+    /// number of light background workers (<see cref="ProcessingBudgetSettings.LightWorkers"/>).
     /// </summary>
     public int WorkerThreads { get; set; }
+
+    /// <summary>
+    /// Concurrency and native resource budget of background jobs (REG-09).
+    /// </summary>
+    public ProcessingBudgetSettings ProcessingBudget { get; set; } = new();
 
     /// <summary>
     /// File cache path

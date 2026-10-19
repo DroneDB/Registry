@@ -307,9 +307,10 @@ public class Program
                 if (appSettings.HangfireProvider == HangfireProvider.InMemory)
                     throw new NotSupportedException("Hangfire in-memory provider is not supported for processing node");
 
-                var workers = appSettings.WorkerThreads > 0 ? appSettings.WorkerThreads : Environment.ProcessorCount;
+                var budget = ProcessingBudget.Derive(HostFacts.Current(), appSettings.ProcessingBudget,
+                    appSettings.WorkerThreads);
 
-                Console.WriteLine(" ?> Using {0} worker threads", workers);
+                Console.WriteLine(" ?> Processing budget: {0}", budget);
 
                 // Register the application services shared by every job-executing host
                 // (incl. IOptions<AppSettings>). Kept in a single extension method so the same
@@ -318,14 +319,7 @@ public class Program
                 services.AddProcessingNodeServices(configuration, appSettings);
 
                 services.AddHangfireProvider(appSettings, configuration);
-                services.AddHangfireServer(options =>
-                {
-                    options.WorkerCount = workers;
-                    // The heavy task substrate (raster-export and other native tools)
-                    // enqueues onto the "tasks" queue; without listing it here the
-                    // server would only process "default" and those jobs would never run.
-                    options.Queues = ["tasks", "default"];
-                });
+                services.AddBudgetedHangfireServers(budget);
 
                 // Register Hangfire jobs initializer as hosted service
                 services.AddHostedService<HangfireJobsHostedService>();

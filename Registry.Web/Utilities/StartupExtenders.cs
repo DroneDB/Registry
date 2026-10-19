@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Configuration;
+using System.Globalization;
 using System.Threading.Tasks;
 using System.Transactions;
 using Hangfire;
@@ -10,12 +11,15 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using Registry.Adapters.DroneDB;
 using Registry.Ports;
 using Registry.Web.Data;
 using Registry.Web.Filters;
 using Registry.Web.Identity;
 using Registry.Web.Models.Configuration;
 using Registry.Web.Services.Adapters;
+using Registry.Web.Services.HeavyTasks.Ports;
+using Serilog;
 using StackExchange.Redis;
 
 namespace Registry.Web.Utilities;
@@ -77,6 +81,8 @@ public static class StartupExtenders
 
                     var buildRetryLogger = sp.GetRequiredService<ILogger<BuildRetrySchedulerFilter>>();
                     configuration.UseFilter(new BuildRetrySchedulerFilter(sp, buildRetryLogger));
+
+                    configuration.UseFilter(CreateBuildQueueRoutingFilter(sp));
                 });
 
                 break;
@@ -116,7 +122,8 @@ public static class StartupExtenders
                         .UseFilter(new JobIndexStateFilter(sp, logger))
                         .UseFilter(new BuildJobFailureFilter(sp, buildFailureLogger))
                         .UseFilter(new BuildLogCaptureFilter(sp, sp.GetRequiredService<ILogger<BuildLogCaptureFilter>>()))
-                        .UseFilter(new BuildRetrySchedulerFilter(sp, sp.GetRequiredService<ILogger<BuildRetrySchedulerFilter>>()));
+                        .UseFilter(new BuildRetrySchedulerFilter(sp, sp.GetRequiredService<ILogger<BuildRetrySchedulerFilter>>()))
+                        .UseFilter(CreateBuildQueueRoutingFilter(sp));
 
                 });
 
@@ -134,6 +141,57 @@ public static class StartupExtenders
         // every host that creates or transitions indexed jobs keeps Indexing jobs discoverable by
         // recovery. Idempotent: hosts and tests may call this more than once.
         IndexingStateHandler.EnsureRegistered();
+    }
+
+    private static BuildQueueRoutingFilter CreateBuildQueueRoutingFilter(IServiceProvider sp) =>
+        new((toolId, version) =>
+            sp.GetService<IHeavyToolRegistry>()?.Resolve(toolId, version)?.RunsNativeBuild == true);
+
+    /// <summary>
+    /// Registers the Hangfire servers of a job-executing host (REG-09): one for the
+    /// <see cref="JobQueues.Builds"/> queue with <see cref="ProcessingBudget.HeavyWorkers"/> workers,
+    /// one for the other queues with <see cref="ProcessingBudget.LightWorkers"/> workers, and passes
+    /// the per-build limits to libddb.
+    /// </summary>
+    public static void AddBudgetedHangfireServers(this IServiceCollection services, ProcessingBudget budget)
+    {
+        ArgumentNullException.ThrowIfNull(budget);
+
+        ApplyNativeBuildBudget(budget);
+
+        services.AddHangfireServer(options =>
+        {
+            options.ServerName = $"{Environment.MachineName}:builds";
+            options.WorkerCount = budget.HeavyWorkers;
+            options.Queues = [JobQueues.Builds];
+        });
+
+        services.AddHangfireServer(options =>
+        {
+            options.ServerName = $"{Environment.MachineName}:jobs";
+            options.WorkerCount = budget.LightWorkers;
+            // "tasks" carries the heavy-task substrate jobs that do not build (exports run on
+            // "builds"); without it here those jobs would never run.
+            options.Queues = JobQueues.Light;
+        });
+    }
+
+    /// <summary>
+    /// libddb reads its build limits (DDB-08) from the environment; values set explicitly in the
+    /// deployment environment win over the budget.
+    /// </summary>
+    private static void ApplyNativeBuildBudget(ProcessingBudget budget)
+    {
+        foreach (var (name, value) in new[]
+                 {
+                     ("DDB_BUILD_THREADS", budget.BuildThreads),
+                     ("DDB_COG_CACHE_MB", budget.BuildCacheMb),
+                     ("DDB_WARP_MEMORY_MB", budget.BuildWarpMemoryMb)
+                 })
+        {
+            if (!NativeEnvironment.SetIfUnset(name, value.ToString(CultureInfo.InvariantCulture)))
+                Log.Information("Keeping {Name}={Value} from the environment", name, NativeEnvironment.Get(name));
+        }
     }
 
     public static void AddCacheProvider(this IServiceCollection services, AppSettings appSettings)

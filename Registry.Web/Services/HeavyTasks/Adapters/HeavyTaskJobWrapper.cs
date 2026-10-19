@@ -56,7 +56,7 @@ public sealed class HeavyTaskJobWrapper
     [AutomaticRetry(Attempts = 5, DelaysInSeconds = [15, 60, 180, 600, 1800],
         OnAttemptsExceeded = AttemptsExceededAction.Fail,
         OnlyOn = [typeof(DdbBusyException), typeof(DdbBuildInProgressException)])]
-    [Queue("tasks")]
+    // No [Queue]: BuildQueueRoutingFilter routes this job to "tasks" or "builds" by tool.
     public async Task Run(string toolId, string toolVersion, string requestJson,
         PerformContext ctx, CancellationToken cancellationToken)
     {

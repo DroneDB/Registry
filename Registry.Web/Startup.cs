@@ -239,15 +239,10 @@ public class Startup
         // If we are running both the webserver and the processing node
         if (instanceType == InstanceType.Default)
         {
-            var workers = appSettings.WorkerThreads > 0 ? appSettings.WorkerThreads : Environment.ProcessorCount;
-            services.AddHangfireServer(options =>
-            {
-                options.WorkerCount = workers;
-                // The heavy task substrate (raster-export and other native tools)
-                // enqueues onto the "tasks" queue; without listing it here the
-                // server would only process "default" and those jobs would never run.
-                options.Queues = ["tasks", "default"];
-            });
+            var budget = ProcessingBudget.Derive(HostFacts.Current(), appSettings.ProcessingBudget,
+                appSettings.WorkerThreads);
+            Log.Information("Processing budget: {Budget}", budget);
+            services.AddBudgetedHangfireServers(budget);
         }
 
         var hcBuilder = services.AddHealthChecks()

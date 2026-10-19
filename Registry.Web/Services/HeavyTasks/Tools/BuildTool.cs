@@ -34,6 +34,7 @@ public sealed class BuildTool : IHeavyTool
     public string Title => "Build";
     public HeavyToolPermission RequiredAccess => HeavyToolPermission.Write;
     public bool ProducesArtifact => false;
+    public bool RunsNativeBuild => true;
     public JsonDocument InputSchema => Schema;
 
     public Task ValidateAsync(HeavyToolRequest request, IHeavyToolValidationContext ctx, CancellationToken ct)

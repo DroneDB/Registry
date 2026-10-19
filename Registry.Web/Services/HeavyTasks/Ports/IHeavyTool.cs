@@ -30,6 +30,13 @@ public interface IHeavyTool
     bool ProducesArtifact { get; }
 
     /// <summary>
+    /// Whether the tool runs a native build or raster processing inline (GDAL warps, COG/COPC
+    /// builds). Such jobs run on the "builds" queue, whose worker count bounds concurrent
+    /// builds (REG-09). Tools that only enqueue build jobs keep the default.
+    /// </summary>
+    bool RunsNativeBuild => false;
+
+    /// <summary>
     /// Default file extension (without the leading dot) of the produced artifact, or
     /// null when the tool produces none. Authoritative source for client result naming.
     /// </summary>

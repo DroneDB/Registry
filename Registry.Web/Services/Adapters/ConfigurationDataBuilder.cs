@@ -86,6 +86,9 @@ public class ConfigurationDataBuilder : IConfigurationDataBuilder
         // 15b. Tool Gating (per-tool feature gating, part of ProcessingPlatform)
         sections.Add(BuildToolGatingSection());
 
+        // 15c. Background job concurrency and native build budget
+        sections.Add(BuildProcessingBudgetSection());
+
         // 16. Import
         sections.Add(BuildImportSection());
 
@@ -750,6 +753,37 @@ public class ConfigurationDataBuilder : IConfigurationDataBuilder
         // Override IsActive: LDAP section is active when Enabled == true
         section.IsActive = isActive;
         return section;
+    }
+
+    private ConfigurationSectionDataDto BuildProcessingBudgetSection()
+    {
+        var pb = _settings.ProcessingBudget ?? new ProcessingBudgetSettings();
+        var db = _defaults.ProcessingBudget ?? new ProcessingBudgetSettings();
+        var effective = ProcessingBudget.Derive(HostFacts.Current(), pb, _settings.WorkerThreads);
+
+        return Section("ProcessingBudget", "Processing Budget",
+            $"Background job concurrency and per-build native limits. 0 = derived from the host. Effective: {effective}.",
+            [
+                NumberField("HeavyWorkers", "Heavy Workers",
+                    $"Concurrent jobs that run native builds (\"builds\" queue). Effective: {effective.HeavyWorkers}.",
+                    pb.HeavyWorkers, db.HeavyWorkers, minValue: 0),
+
+                NumberField("LightWorkers", "Light Workers",
+                    $"Concurrent other jobs (\"tasks\" and \"default\" queues). Effective: {effective.LightWorkers}.",
+                    pb.LightWorkers, db.LightWorkers, minValue: 0),
+
+                NumberField("BuildThreads", "Build Threads",
+                    $"Threads per native build (DDB_BUILD_THREADS). Effective: {effective.BuildThreads}.",
+                    pb.BuildThreads, db.BuildThreads, minValue: 0),
+
+                NumberField("BuildCacheMb", "Build Cache",
+                    $"GDAL block cache during a raster build (DDB_COG_CACHE_MB). Effective: {effective.BuildCacheMb} MB.",
+                    pb.BuildCacheMb, db.BuildCacheMb, minValue: 0, unit: "MB"),
+
+                NumberField("BuildWarpMemoryMb", "Build Warp Memory",
+                    $"GDAL warp memory during a raster build (DDB_WARP_MEMORY_MB). Effective: {effective.BuildWarpMemoryMb} MB.",
+                    pb.BuildWarpMemoryMb, db.BuildWarpMemoryMb, minValue: 0, unit: "MB")
+            ]);
     }
 
     private ConfigurationSectionDataDto BuildProcessingPlatformSection()

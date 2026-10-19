@@ -38,6 +38,7 @@ public sealed class MergeMultispectralTool : IHeavyTool
     public string Title => "Merge multispectral bands";
     public HeavyToolPermission RequiredAccess => HeavyToolPermission.Write;
     public bool ProducesArtifact => false;
+    public bool RunsNativeBuild => true;
     public JsonDocument InputSchema => Schema;
 
     public Task ValidateAsync(HeavyToolRequest request, IHeavyToolValidationContext ctx, CancellationToken ct)
