@@ -6,6 +6,7 @@ using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Newtonsoft.Json;
+using Registry.Common;
 using Registry.Ports;
 using Registry.Ports.DroneDB;
 using Registry.Web.Exceptions;
@@ -25,8 +26,6 @@ namespace Registry.Web.Services.Managers;
 public class PushManager : IPushManager
 {
     private const string AddsTempFolder = "add";
-    private const string StampFileName = "stamp.json";
-    private const string OurStampFileName = "our_stamp.json";
     private const string MetaFile = "meta.json";
 
     private readonly IUtils _utils;
@@ -42,12 +41,13 @@ public class PushManager : IPushManager
     private readonly IFileSystem _fileSystem;
     private readonly BuildPendingService _buildPendingService;
     private readonly ImportSettings _importSettings;
+    private readonly IPushSessionStore _sessionStore;
 
     public PushManager(IUtils utils, IDdbManager ddbManager,
         IObjectsManager objectsManager, ILogger<PushManager> logger, IDatasetsManager datasetsManager,
         IAuthManager authManager, IDdbWrapper ddbWrapper,
         IBackgroundJobsProcessor backgroundJob, IOptions<AppSettings> settings, ICacheManager cacheManager,
-        IFileSystem fileSystem, BuildPendingService buildPendingService)
+        IFileSystem fileSystem, BuildPendingService buildPendingService, IPushSessionStore sessionStore)
     {
         _utils = utils;
         _ddbManager = ddbManager;
@@ -62,6 +62,7 @@ public class PushManager : IPushManager
         _fileSystem = fileSystem;
         _buildPendingService = buildPendingService;
         _importSettings = settings.Value.Import ?? new ImportSettings();
+        _sessionStore = sessionStore;
     }
 
     public async Task<PushInitResultDto> Init(string orgSlug, string dsSlug, string checksum, StampDto stamp)
@@ -127,14 +128,12 @@ public class PushManager : IPushManager
         // Generate UUID
         var uuid = Guid.NewGuid().ToString();
 
-        // Create tmp folder
-        var baseTempFolder = ddb.GetTmpFolder("push-" + uuid);
-
-        // Save incoming stamp as well as our stamp in temp folder
-        await _fileSystem.WriteAllTextAsync(Path.Combine(baseTempFolder, StampFileName),
-            JsonConvert.SerializeObject(stamp));
-        await _fileSystem.WriteAllTextAsync(Path.Combine(baseTempFolder, OurStampFileName),
-            JsonConvert.SerializeObject(ourStamp));
+        // Commit applies this delta if the dataset is still at ourStamp
+        await _sessionStore.SaveAsync(GetPushFolder(ddb, uuid), new PushSession
+        {
+            OurChecksum = ourStamp.Checksum,
+            Delta = delta
+        });
 
         // Return missing files list (excluding folders)
         return new PushInitResultDto
@@ -151,45 +150,58 @@ public class PushManager : IPushManager
         };
     }
 
-    public async Task Upload(string orgSlug, string dsSlug, string path, string token, Stream stream)
+    public async Task<PushUpload> StreamUploadAsync(string orgSlug, string dsSlug, Stream source,
+        long? expectedBytes)
     {
-        if (string.IsNullOrWhiteSpace(path))
-            throw new ArgumentException("Path cannot be empty");
-
-        if (!stream.CanRead)
-            throw new ArgumentException("Stream is null or is not readable");
-
         var ds = _utils.GetDataset(orgSlug, dsSlug);
 
         if (!await _authManager.RequestAccess(ds, AccessType.Write))
             throw new UnauthorizedException("The current user is not allowed to upload to this dataset");
 
-        // Check if user has enough space to upload this
-        await _utils.CheckCurrentUserStorage(stream.Length);
-
-        if (path.Contains(".."))
-            throw new InvalidOperationException("Path cannot contain dot notation");
+        // Check if user has enough space to upload this: before writing when the size is known
+        if (expectedBytes is { } expected)
+            await _utils.CheckCurrentUserStorage(expected);
 
         var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
+        var (tempPath, bytes) = await DatasetUploads.StreamToTempAsync(_fileSystem, ddb.DatasetFolderPath, source);
 
-        var baseTempFolder = ddb.GetTmpFolder("push-" + token);
+        if (expectedBytes is null)
+        {
+            try
+            {
+                await _utils.CheckCurrentUserStorage(bytes);
+            }
+            catch
+            {
+                _fileSystem.Delete(tempPath);
+                throw;
+            }
+        }
 
-        if (!_fileSystem.FolderExists(baseTempFolder))
+        return new PushUpload(ddb, tempPath, bytes);
+    }
+
+    public void Upload(PushUpload upload, string path, string token)
+    {
+        ArgumentNullException.ThrowIfNull(upload);
+
+        if (string.IsNullOrWhiteSpace(path))
+            throw new ArgumentException("Path cannot be empty");
+
+        var baseTempFolder = GetPushFolder(upload.Ddb, token);
+
+        if (!_sessionStore.Exists(baseTempFolder))
             throw new InvalidOperationException("Cannot upload file before initializing push");
 
         var addTempFolder = Path.Combine(baseTempFolder, AddsTempFolder);
-        _fileSystem.FolderCreate(addTempFolder);
+        CommonUtils.ValidateRelativePath(path, addTempFolder);
 
-        // Calculate new file path
+        // Move the streamed file (same volume) to its place in the push folder
         var filePath = Path.Combine(addTempFolder, path);
-
-        // Ensure subfolder exists
-        var parentPath = Path.GetDirectoryName(filePath);
-        if (parentPath != null) _fileSystem.FolderCreate(parentPath);
-
-        // Save file in temp folder
-        await using var file = _fileSystem.OpenWrite(filePath);
-        await stream.CopyToAsync(file);
+        _fileSystem.EnsureParentFolderExists(filePath);
+        if (_fileSystem.Exists(filePath))
+            _fileSystem.Delete(filePath);
+        _fileSystem.Move(upload.TempPath, filePath);
     }
 
     public async Task SaveMeta(string orgSlug, string dsSlug, string token, string meta)
@@ -199,14 +211,11 @@ public class PushManager : IPushManager
         if (!await _authManager.RequestAccess(ds, AccessType.Write))
             throw new UnauthorizedException("The current user is not allowed to upload to this dataset");
 
-        // Check if user has enough space to upload this
-        await _utils.CheckCurrentUserStorage(meta.Length);
-
         var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
 
-        var baseTempFolder = ddb.GetTmpFolder("push-" + token);
+        var baseTempFolder = GetPushFolder(ddb, token);
 
-        if (!_fileSystem.FolderExists(baseTempFolder))
+        if (!_sessionStore.Exists(baseTempFolder))
             throw new InvalidOperationException("Cannot save meta before initializing push");
 
         var metaFile = Path.Combine(baseTempFolder, MetaFile);
@@ -227,41 +236,27 @@ public class PushManager : IPushManager
 
         var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
 
-        var baseTempFolder = ddb.GetTmpFolder("push-" + token);
-        var stampFilePath = Path.Combine(baseTempFolder, StampFileName);
-        var ourStampFilePath = Path.Combine(baseTempFolder, OurStampFileName);
+        var baseTempFolder = GetPushFolder(ddb, token);
         var addTempFolder = Path.Combine(baseTempFolder, AddsTempFolder);
         var metaFile = Path.Combine(baseTempFolder, MetaFile);
 
-        // Check push folder integrity
-        if (!_fileSystem.Exists(stampFilePath))
-            throw new InvalidOperationException("Stamp not found");
+        var session = await _sessionStore.LoadAsync(baseTempFolder) ??
+                      throw new InvalidOperationException("Push session not found, please push again");
 
-        if (!_fileSystem.Exists(ourStampFilePath))
-            throw new InvalidOperationException("Our stamp not found");
-
-        var stamp = JsonConvert.DeserializeObject<Stamp>(await _fileSystem.ReadAllTextAsync(stampFilePath));
-        var ourStamp = JsonConvert.DeserializeObject<Stamp>(await _fileSystem.ReadAllTextAsync(ourStampFilePath));
-
-        if (ourStamp == null)
-            throw new InvalidOperationException("Our stamp is invalid (cannot deserialize)");
-
-        // Check that our stamp has not changed! If it has, another client
+        // Check that the dataset has not changed since Init! If it has, another client
         // might have performed changes that could conflict with our operation
         // TODO: we could check for conflicts rather than failing and continue
         // the operation if no conflicts are detected.
-
-        var currentStamp = _ddbWrapper.GetStamp(ddb.DatasetFolderPath);
-        if (currentStamp.Checksum != ourStamp.Checksum)
+        if (_ddbWrapper.GetStampChecksum(ddb.DatasetFolderPath) != session.OurChecksum)
         {
             throw new InvalidOperationException("The dataset has been changed by another user while pushing. Please try again!");
         }
 
-        // Recompute delta
-        var delta = _ddbWrapper.Delta(stamp, currentStamp);
+        // Unchanged dataset: the delta computed by Init still holds
+        var delta = session.Delta;
 
         // Create hard links for local files
-        var _ = _ddbWrapper.ComputeDeltaLocals(delta, ddb.DatasetFolderPath, addTempFolder);
+        _ddbWrapper.ComputeDeltaLocals(delta, ddb.DatasetFolderPath, addTempFolder);
 
         foreach (var add in delta.Adds.Where(item => item.Hash.Length > 0))
             if (!_fileSystem.Exists(Path.Combine(addTempFolder, add.Path)))
@@ -297,11 +292,14 @@ public class PushManager : IPushManager
 
         // Build items
         var user = await _authManager.GetCurrentUser();
+        var files = delta.Adds.Where(item => item.Hash.Length > 0).ToArray();
+        var statuses = ddb.GetBuildStatus([.. files.Select(item => item.Path)]);
         var hasBuildableFiles = false;
 
-        foreach (var item in delta.Adds)
+        // One status per path, in input order
+        foreach (var (item, status) in files.Zip(statuses))
         {
-            if (!ddb.IsBuildable(item.Path)) continue;
+            if (!status.Buildable) continue;
 
             hasBuildableFiles = true;
             var meta = new IndexPayload(orgSlug, dsSlug, item.Hash, user.Id, null, item.Path);
@@ -324,4 +322,12 @@ public class PushManager : IPushManager
         }
     }
 
+    // Tokens are the GUIDs generated by Init: anything else could point outside the tmp folder
+    private static string GetPushFolder(IDDB ddb, string token)
+    {
+        if (!Guid.TryParse(token, out _))
+            throw new ArgumentException("Invalid push token");
+
+        return ddb.GetTmpFolder(IDDB.PushFolderPrefix + token);
+    }
 }

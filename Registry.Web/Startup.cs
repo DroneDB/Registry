@@ -306,6 +306,7 @@ public class Startup
         services.AddScoped<IObjectsManager, ObjectsManager>();
         services.AddScoped<IShareManager, ShareManager>();
         services.AddScoped<IPushManager, PushManager>();
+        services.AddSingleton<IPushSessionStore, PushSessionStore>();
         services.AddScoped<IDdbManager, DdbManager>();
         services.AddScoped<ISystemManager, SystemManager>();
         services.AddScoped<IRescanManager, RescanManager>();

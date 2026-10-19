@@ -4,9 +4,12 @@ using System.ComponentModel.DataAnnotations;
 using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Http.Features;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 using Newtonsoft.Json;
+using Registry.Web.Attributes;
 using Registry.Web.Models;
 using Registry.Web.Models.DTO;
 using Registry.Web.Services.Ports;
@@ -28,11 +31,13 @@ public class PushController : ControllerBaseEx
 {
     private readonly IPushManager _pushManager;
     private readonly ILogger<PushController> _logger;
+    private readonly FormOptions _formOptions;
 
-    public PushController(IPushManager pushManager, ILogger<PushController> logger)
+    public PushController(IPushManager pushManager, ILogger<PushController> logger, IOptions<FormOptions> formOptions)
     {
         _pushManager = pushManager;
         _logger = logger;
+        _formOptions = formOptions.Value;
     }
 
     /// <summary>
@@ -75,15 +80,15 @@ public class PushController : ControllerBaseEx
     }
 
     /// <summary>
-    /// Uploads a file as part of a push operation.
+    /// Uploads a file as part of a push operation, by streaming a <c>multipart/form-data</c> request
+    /// with the form fields <c>path</c> (destination path) and <c>token</c> (from init) and one file
+    /// part. The file is written once, straight to the dataset volume.
     /// </summary>
     /// <param name="orgSlug">The organization slug.</param>
     /// <param name="dsSlug">The dataset slug.</param>
-    /// <param name="path">The destination path for the file.</param>
-    /// <param name="token">The push token obtained from init.</param>
-    /// <param name="file">The file to upload.</param>
     /// <returns>OK if the upload was successful.</returns>
     [DisableRequestSizeLimit]
+    [DisableFormValueModelBinding]
     [RequestFormLimits(ValueLengthLimit = int.MaxValue, MultipartBodyLengthLimit = long.MaxValue)]
     [HttpPost("upload")]
     [ProducesResponseType(StatusCodes.Status200OK)]
@@ -92,28 +97,44 @@ public class PushController : ControllerBaseEx
     [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> Upload(
         [FromRoute, Required] string orgSlug,
-        [FromRoute, Required] string dsSlug,
-        [FromForm, Required] string path,
-        [FromForm, Required] string token,
-        [Required] IFormFile file)
+        [FromRoute, Required] string dsSlug)
     {
+        PushUpload upload = null;
         try
         {
-            _logger.LogDebug("Push controller Upload('{OrgSlug}', '{DsSlug}', '{Token}', '{FileName}')", orgSlug, dsSlug, token, file?.FileName);
+            if (!MultipartRequestHelper.IsMultipartContentType(Request.ContentType))
+                return BadRequest(new ErrorResponse("Expected a multipart/form-data request"));
 
-            if (file == null)
+            var form = await MultipartRequestHelper.ReadSingleFileFormAsync(Request,
+                _formOptions.MultipartBoundaryLengthLimit,
+                async body =>
+                {
+                    upload = await _pushManager.StreamUploadAsync(orgSlug, dsSlug, body, Request.ContentLength);
+                    return (upload.TempPath, upload.Bytes);
+                });
+
+            var path = form.GetField("path");
+            var token = form.GetField("token");
+
+            _logger.LogDebug("Push controller Upload('{OrgSlug}', '{DsSlug}', '{Token}', '{Path}')", orgSlug, dsSlug, token, path);
+
+            if (upload == null)
                 throw new ArgumentException("No file uploaded");
 
-            await using var stream = file.OpenReadStream();
-            await _pushManager.Upload(orgSlug, dsSlug, path, token, stream);
+            _pushManager.Upload(upload, path, token);
 
             return Ok();
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Exception in Push controller Upload('{OrgSlug}', '{DsSlug}', '{Token}', '{FileName}')", orgSlug, dsSlug, token, file?.FileName);
+            _logger.LogError(ex, "Exception in Push controller Upload('{OrgSlug}', '{DsSlug}')", orgSlug, dsSlug);
 
             throw;
+        }
+        finally
+        {
+            // Moved into the push folder on success
+            MultipartRequestHelper.TryDeleteTempFile(upload?.TempPath);
         }
     }
 

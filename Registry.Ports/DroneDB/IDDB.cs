@@ -24,6 +24,12 @@ public interface IDDB : IDdbIndex, IDdbBuild, IDdbMeta, IDdbRaster, IDdbAnalytic
     public const string TmpFolderName = "tmp";
 
     /// <summary>
+    /// Prefix of the push folders in <see cref="TmpFolderName"/> (<c>push-&lt;token&gt;</c>),
+    /// used by the push workflow.
+    /// </summary>
+    public const string PushFolderPrefix = "push-";
+
+    /// <summary>
     /// Per-dataset folder holding in-flight uploads (staged temp files and the quarantine
     /// sub-folder) before they are atomically moved into place. Reserved so users cannot
     /// create a conflicting entry. Single source of truth shared by the upload flow

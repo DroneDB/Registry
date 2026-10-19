@@ -964,6 +964,42 @@ public class NativeDdbWrapper : IDdbWrapper
         throw new DdbException(SafeGetLastError("get stamp"));
     }
 
+    [DllImport("ddb", EntryPoint = "DDBGetStampChecksum")]
+    private static extern DdbResult _DDBGetStampChecksum([MarshalAs(UnmanagedType.LPUTF8Str)] string ddbPath, out IntPtr output);
+
+    public string GetStampChecksum(string ddbPath)
+    {
+        if (ddbPath == null)
+            throw new ArgumentException("DDB path is null");
+
+        try
+        {
+            var result = _DDBGetStampChecksum(ddbPath, out var output);
+            ThrowForFinalResult(result, "get stamp checksum");
+
+            var res = MarshalAndFreeUtf8(output);
+            if (string.IsNullOrWhiteSpace(res))
+                throw new InvalidOperationException("No result from DDBGetStampChecksum call");
+
+            return res;
+        }
+        catch (EntryPointNotFoundException ex)
+        {
+            throw new DdbException($"Error in calling ddb lib: incompatible versions ({ex.Message})", ex);
+        }
+        catch (DdbException)
+        {
+            // Keep typed outcomes (e.g. DdbBusyException from the helper) unwrapped.
+            throw;
+        }
+        catch (Exception ex)
+        {
+            throw new DdbException(
+                $"Error in calling ddb lib. Last error: \"{SafeGetLastError("get stamp checksum")}\", check inner exception for details",
+                ex);
+        }
+    }
+
     [DllImport("ddb", EntryPoint = "DDBDelta")]
     private static extern DdbResult _Delta([MarshalAs(UnmanagedType.LPUTF8Str)] string ddbSourceStamp,
         [MarshalAs(UnmanagedType.LPUTF8Str)] string ddbTargetStamp, out IntPtr output,

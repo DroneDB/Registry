@@ -77,6 +77,12 @@ public interface IDdbWrapper
 
     public Stamp GetStamp(string ddbPath);
 
+    /// <summary>
+    /// The checksum of the dataset's stamp (<see cref="Stamp.Checksum"/>) without building the
+    /// stamp (DDBGetStampChecksum).
+    /// </summary>
+    public string GetStampChecksum(string ddbPath);
+
     public Delta Delta(string ddbPath, string ddbTarget);
 
     public List<string> ApplyDelta(Delta delta, string sourcePath, string ddbPath, MergeStrategy mergeStrategy,

@@ -630,6 +630,49 @@ public class NativeDdbWrapperTests : TestBase
     }
 
     [Test]
+    public void GetStampChecksum_MatchesStamp()
+    {
+        using var test = new TestFS(Test3ArchiveUrl, BaseTestFolder);
+        var ddbPath = Path.Combine(test.TestFolder, DdbFolder);
+
+        DdbWrapper.GetStampChecksum(ddbPath).ShouldBe(DdbWrapper.GetStamp(ddbPath).Checksum);
+        Should.Throw<DdbException>(() => DdbWrapper.GetStampChecksum("nonexistant"));
+    }
+
+    [Test]
+    public void ApplyDelta_PushFolder_MovesAndVerifiesFiles()
+    {
+        // Like PushManager.Commit: the added files sit in .ddb/tmp/push-<token>/add
+        using var area = new TestArea(nameof(ApplyDelta_PushFolder_MovesAndVerifiesFiles));
+        DdbWrapper.Init(area.TestFolder);
+        var addFolder = Path.Combine(area.TestFolder, ".ddb", "tmp", "push-test", "add");
+        Directory.CreateDirectory(Path.Combine(addFolder, "dir"));
+        File.WriteAllText(Path.Combine(addFolder, "dir", "a.txt"), "alpha");
+        var hash = Convert.ToHexStringLower(System.Security.Cryptography.SHA256.HashData("alpha"u8.ToArray()));
+
+        var delta = new Delta
+        {
+            Adds = [new AddAction("dir", ""), new AddAction("dir/a.txt", hash)],
+            Removes = [], MetaAdds = [], MetaRemoves = []
+        };
+        DdbWrapper.ApplyDelta(delta, addFolder, area.TestFolder, MergeStrategy.KeepTheirs).ShouldBeEmpty();
+
+        File.Exists(Path.Combine(addFolder, "dir", "a.txt")).ShouldBeFalse("the file is moved, not copied");
+        File.ReadAllText(Path.Combine(area.TestFolder, "dir", "a.txt")).ShouldBe("alpha");
+        DdbWrapper.GetEntry(area.TestFolder, "dir/a.txt")!.Hash.ShouldBe(hash);
+
+        // A file that does not match the declared hash is rejected before anything changes
+        File.WriteAllText(Path.Combine(addFolder, "b.txt"), "bravo");
+        var bad = new Delta
+        {
+            Adds = [new AddAction("b.txt", hash)], Removes = [], MetaAdds = [], MetaRemoves = []
+        };
+        Should.Throw<DdbException>(() => DdbWrapper.ApplyDelta(bad, addFolder, area.TestFolder, MergeStrategy.KeepTheirs));
+        File.Exists(Path.Combine(addFolder, "b.txt")).ShouldBeTrue();
+        DdbWrapper.GetEntry(area.TestFolder, "b.txt").ShouldBeNull();
+    }
+
+    [Test]
     public void MoveEntry_SimpleRename_Ok()
     {
         using var test = new TestFS(TestDelta2ArchiveUrl, BaseTestFolder);
