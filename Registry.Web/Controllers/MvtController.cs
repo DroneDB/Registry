@@ -47,7 +47,7 @@ public class MvtController : ControllerBaseEx
         _logger = logger;
     }
 
-    [ServiceFilter(typeof(BasicAuthFilter))]
+    [BasicAuthentication]
     [HttpGet("{hash}/{z:int}/{x:int}/{y:int}.pbf")]
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status401Unauthorized)]
@@ -96,7 +96,7 @@ public class MvtController : ControllerBaseEx
         }
     }
 
-    [ServiceFilter(typeof(BasicAuthFilter))]
+    [BasicAuthentication]
     [HttpGet("{hash}/metadata.json")]
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status401Unauthorized)]

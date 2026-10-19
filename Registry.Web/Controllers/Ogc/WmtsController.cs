@@ -14,7 +14,7 @@ namespace Registry.Web.Controllers.Ogc;
 
 /// <summary>WMTS 1.0.0 controller - KVP + RESTful tile retrieval.</summary>
 [ApiController]
-[ServiceFilter(typeof(BasicAuthFilter))]
+[BasicAuthentication]
 [ServiceFilter(typeof(OgcAuthorizationFilter))]
 [TypeFilter(typeof(OgcExceptionFilter))]
 [Route(RoutesHelper.OrganizationsRadix + "/" + RoutesHelper.OrganizationSlug + "/" +

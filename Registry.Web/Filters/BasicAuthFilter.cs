@@ -1,26 +1,27 @@
-﻿using Microsoft.AspNetCore.Authentication;
-using Microsoft.AspNetCore.Authentication.Cookies;
-using Microsoft.AspNetCore.Authentication.JwtBearer;
+#nullable enable
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc.Filters;
 using Microsoft.Extensions.Options;
-using Registry.Web.Models;
 using Registry.Web.Models.Configuration;
-using Registry.Web.Services;
 using Registry.Web.Services.Ports;
 using System;
 using System.Security.Claims;
-using System.Security.Principal;
 using System.Text;
 using System.Threading.Tasks;
-using System.Web;
 using Registry.Web.Identity;
 using Registry.Web.Identity.Models;
 
 namespace Registry.Web.Filters;
 
-public class BasicAuthFilter : ActionFilterAttribute
+/// <summary>
+/// Authenticates a request that carries HTTP Basic credentials (OGC clients, scripts) as the
+/// matching user. It runs as an authorization filter, declared with
+/// <see cref="BasicAuthenticationAttribute"/>, so that the user is known before any access check
+/// (<c>OgcAuthorizationFilter</c>, the action's own checks). Missing or wrong credentials leave
+/// the request anonymous: what an anonymous user may read stays readable.
+/// </summary>
+public class BasicAuthFilter : IAsyncAuthorizationFilter
 {
     private readonly IUsersManager _usersManager;
     private readonly UserManager<User> _userManager;
@@ -39,49 +40,66 @@ public class BasicAuthFilter : ActionFilterAttribute
         response.StatusCode = 401;
     }
 
-    public override async Task OnActionExecutionAsync(ActionExecutingContext context, ActionExecutionDelegate next)
+    public async Task OnAuthorizationAsync(AuthorizationFilterContext context)
     {
         var httpContext = context.HttpContext;
+        if (!TryReadCredentials(httpContext.Request.Headers.Authorization, out var username, out var password))
+            return;
 
-        string authHeader = httpContext.Request.Headers.Authorization;
+        var res = await _usersManager.Authenticate(username, password);
+        if (res == null)
+            return;
 
+        var user = await _userManager.FindByNameAsync(res.Username);
+        if (user == null)
+            return;
+        var isAdmin = await _userManager.IsInRoleAsync(user, ApplicationDbContext.AdminRoleName);
+
+        httpContext.Response.Cookies.Append(_settings.AuthCookieName, res.Token);
+
+        var identity = new ClaimsIdentity([
+            new Claim(ClaimTypes.Name, user.Id),
+            new Claim(ApplicationDbContext.AdminRoleName.ToLowerInvariant(), isAdmin.ToString())
+        ], "authenticated");
+        httpContext.User = new ClaimsPrincipal(identity);
+    }
+
+    /// <summary>Reads "Basic base64(user:password)"; false for any other or malformed header.</summary>
+    public static bool TryReadCredentials(string? header, out string username, out string password)
+    {
+        username = password = string.Empty;
+        if (header == null || !header.StartsWith("Basic ", StringComparison.OrdinalIgnoreCase))
+            return false;
+
+        string decoded;
         try
         {
-            if (authHeader != null && authHeader.StartsWith("Basic"))
-            {
-                var encodedUsernamePassword = authHeader["Basic ".Length..].Trim();
-                var encoding = Encoding.GetEncoding("iso-8859-1");
-                var usernamePassword = encoding.GetString(Convert.FromBase64String(encodedUsernamePassword));
-
-                var separatorIndex = usernamePassword.IndexOf(':');
-
-                var username = usernamePassword[..separatorIndex];
-                var password = usernamePassword[(separatorIndex + 1)..];
-                    
-                var res = await _usersManager.Authenticate(username, password);
-                if (res != null)
-                {
-                    var user = await _userManager.FindByNameAsync(res.Username);
-                    var isAdmin = await _userManager.IsInRoleAsync(user, ApplicationDbContext.AdminRoleName);
-
-                    httpContext.Response.Cookies.Append(_settings.AuthCookieName, res.Token);
-
-                    var identity = new ClaimsIdentity([
-                        new Claim(ClaimTypes.Name, user.Id),
-                        new Claim(ApplicationDbContext.AdminRoleName.ToLowerInvariant(), isAdmin.ToString())
-                    ], "authenticated");
-                    var principal = new ClaimsPrincipal(identity);
-
-                    httpContext.User = principal;
-                }
-            }
+            decoded = Encoding.Latin1.GetString(Convert.FromBase64String(header["Basic ".Length..].Trim()));
         }
         catch (FormatException)
         {
-            // Invalid auth header chars
-            // Do nothing
+            return false;
         }
 
-        await next();
+        var separatorIndex = decoded.IndexOf(':');
+        if (separatorIndex < 0)
+            return false;
+
+        username = decoded[..separatorIndex];
+        password = decoded[(separatorIndex + 1)..];
+        return true;
+    }
+}
+
+/// <summary>
+/// Accepts HTTP Basic credentials on a controller or action: runs <see cref="BasicAuthFilter"/>
+/// before every other filter (lowest order), so access checks see the authenticated user.
+/// </summary>
+[AttributeUsage(AttributeTargets.Class | AttributeTargets.Method)]
+public sealed class BasicAuthenticationAttribute : Microsoft.AspNetCore.Mvc.ServiceFilterAttribute
+{
+    public BasicAuthenticationAttribute() : base(typeof(BasicAuthFilter))
+    {
+        Order = int.MinValue;
     }
 }

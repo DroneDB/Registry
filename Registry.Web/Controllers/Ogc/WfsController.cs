@@ -15,7 +15,7 @@ namespace Registry.Web.Controllers.Ogc;
 
 /// <summary>WFS 2.0.0 controller.</summary>
 [ApiController]
-[ServiceFilter(typeof(BasicAuthFilter))]
+[BasicAuthentication]
 [ServiceFilter(typeof(OgcAuthorizationFilter))]
 [TypeFilter(typeof(OgcExceptionFilter))]
 [Route(RoutesHelper.OrganizationsRadix + "/" + RoutesHelper.OrganizationSlug + "/" +

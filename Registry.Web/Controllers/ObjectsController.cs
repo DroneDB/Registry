@@ -899,7 +899,7 @@ public class ObjectsController : ControllerBaseEx
     /// <param name="hash">The build hash.</param>
     /// <param name="path">The path to the file within the build.</param>
     /// <returns>The build file.</returns>
-    [ServiceFilter(typeof(BasicAuthFilter))]
+    [BasicAuthentication]
     [HttpGet("build/{hash}/{*path}", Name = nameof(ObjectsController) + "." + nameof(GetBuildFile))]
     [ProducesResponseType(typeof(FileResult), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
@@ -938,7 +938,7 @@ public class ObjectsController : ControllerBaseEx
     /// <param name="hash">The build hash.</param>
     /// <param name="path">The path to the file within the build.</param>
     /// <returns>Ok if file exists, NotFound otherwise.</returns>
-    [ServiceFilter(typeof(BasicAuthFilter))]
+    [BasicAuthentication]
     [HttpHead("build/{hash}/{*path}", Name = nameof(ObjectsController) + "." + nameof(CheckBuildFile))]
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status401Unauthorized)]

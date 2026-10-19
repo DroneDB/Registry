@@ -11,7 +11,7 @@ namespace Registry.Web.Controllers.Ogc;
 
 /// <summary>OGC API – Features + Tiles controller (JSON REST).</summary>
 [ApiController]
-[ServiceFilter(typeof(BasicAuthFilter))]
+[BasicAuthentication]
 [ServiceFilter(typeof(OgcAuthorizationFilter))]
 [TypeFilter(typeof(OgcExceptionFilter))]
 [Route(RoutesHelper.OrganizationsRadix + "/" + RoutesHelper.OrganizationSlug + "/" +

@@ -14,7 +14,7 @@ namespace Registry.Web.Controllers.Ogc;
 /// negotiation; the per-version wire format is handled by
 /// <see cref="Services.Managers.Wcs.IWcsProtocolHandler"/> implementations.</summary>
 [ApiController]
-[ServiceFilter(typeof(BasicAuthFilter))]
+[BasicAuthentication]
 [ServiceFilter(typeof(OgcAuthorizationFilter))]
 [TypeFilter(typeof(OgcExceptionFilter))]
 [Route(RoutesHelper.OrganizationsRadix + "/" + RoutesHelper.OrganizationSlug + "/" +

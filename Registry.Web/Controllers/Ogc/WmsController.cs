@@ -12,7 +12,7 @@ namespace Registry.Web.Controllers.Ogc;
 
 /// <summary>WMS 1.3.0 controller (with best-effort 1.1.1 negotiation).</summary>
 [ApiController]
-[ServiceFilter(typeof(BasicAuthFilter))]
+[BasicAuthentication]
 [ServiceFilter(typeof(OgcAuthorizationFilter))]
 [TypeFilter(typeof(OgcExceptionFilter))]
 [Route(RoutesHelper.OrganizationsRadix + "/" + RoutesHelper.OrganizationSlug + "/" +

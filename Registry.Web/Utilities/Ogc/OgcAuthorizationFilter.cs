@@ -12,8 +12,9 @@ namespace Registry.Web.Utilities.Ogc;
 /// <summary>
 /// Common authorization for all OGC controllers. Resolves the dataset from {orgSlug}/{dsSlug}
 /// route values and enforces <see cref="AccessType.Read"/>. Re-uses the existing JWT cookie auth
-/// pipeline transparently and falls back to Basic auth (handled separately by BasicAuthFilter,
-/// which is layered before this filter on each controller).
+/// pipeline transparently and falls back to Basic auth (handled separately by BasicAuthFilter:
+/// each controller declares <see cref="Filters.BasicAuthenticationAttribute"/>, which runs it
+/// before this filter, so the access check sees the Basic user).
 /// </summary>
 public class OgcAuthorizationFilter : IAsyncAuthorizationFilter
 {
