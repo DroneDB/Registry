@@ -129,9 +129,11 @@ public class ObjectsController : ControllerBaseEx
     /// <param name="dsSlug">The dataset slug.</param>
     /// <param name="path">The path to the object.</param>
     /// <param name="size">Optional thumbnail size.</param>
+    /// <param name="v">Optional entry hash; when it matches the entry, the response may be cached without revalidation.</param>
     /// <returns>The thumbnail image file.</returns>
     [HttpGet("thumb", Name = nameof(ObjectsController) + "." + nameof(GenerateThumbnail))]
     [ProducesResponseType(typeof(FileResult), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status304NotModified)]
     [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status404NotFound)]
@@ -139,14 +141,34 @@ public class ObjectsController : ControllerBaseEx
         [FromRoute, Required] string orgSlug,
         [FromRoute, Required] string dsSlug,
         [FromQuery] string path,
-        [FromQuery] int? size)
+        [FromQuery] int? size,
+        [FromQuery] string v = null)
     {
         try
         {
             _logger.LogDebug("Objects controller GenerateThumbnail('{OrgSlug}', '{DsSlug}', '{Path}', '{Size}')",
                 orgSlug, dsSlug, path, size);
 
-            var res = await _objectsManager.GenerateThumbnailData(orgSlug, dsSlug, path, size);
+            StorageDataDto res;
+            HashedContentCachePolicy cachePolicy = null;
+
+            // Dataset thumbnails (no path) are not tied to one entry hash: no validator.
+            if (string.IsNullOrWhiteSpace(path))
+            {
+                res = await _objectsManager.GenerateThumbnailData(orgSlug, dsSlug, path, size);
+            }
+            else
+            {
+                var obj = await _objectsManager.ResolveReadableObject(orgSlug, dsSlug,
+                    path.StartsWith('/') ? path[1..] : path);
+
+                cachePolicy = HashedContentCachePolicy.For(obj.Hash, v, "thumb",
+                    size ?? _appSettings.DefaultThumbnailSize);
+                if (cachePolicy.IsNotModified(Request))
+                    return NotModified(cachePolicy);
+
+                res = await _objectsManager.GenerateThumbnailData(obj, size);
+            }
 
             if (res == null)
             {
@@ -159,6 +181,7 @@ public class ObjectsController : ControllerBaseEx
                 "Successfully generated thumbnail for '{OrgSlug}/{DsSlug}' path: '{Path}', size: {DataSize} bytes",
                 orgSlug, dsSlug, path, res.Data.Length);
 
+            cachePolicy?.Apply(Response);
             return File(res.Data, res.ContentType, res.Name);
         }
         catch (Exception ex)
@@ -180,10 +203,12 @@ public class ObjectsController : ControllerBaseEx
     /// <param name="tyRaw">The tile Y coordinate (supports @2x retina suffix).</param>
     /// <param name="path">The path to the object.</param>
     /// <param name="ext">The tile image extension (png or webp).</param>
+    /// <param name="v">Optional entry hash; when it matches the entry, the response may be cached without revalidation.</param>
     /// <returns>The tile image file.</returns>
     [HttpGet("tiles/{tz:int}/{tx:int}/{tyRaw}.{ext:regex(^(png|webp)$)}",
         Name = nameof(ObjectsController) + "." + nameof(GenerateTile))]
     [ProducesResponseType(typeof(FileResult), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status304NotModified)]
     [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status404NotFound)]
@@ -194,7 +219,8 @@ public class ObjectsController : ControllerBaseEx
         [FromRoute, Required] int tx,
         [FromRoute, Required] string tyRaw,
         [FromQuery] string path,
-        [FromRoute, Required] string ext)
+        [FromRoute, Required] string ext,
+        [FromQuery] string v = null)
     {
         try
         {
@@ -207,8 +233,16 @@ public class ObjectsController : ControllerBaseEx
             if (!int.TryParse(retina ? tyRaw.Replace("@2x", string.Empty) : tyRaw, out var ty))
                 throw new ArgumentException("Invalid input parameters (retina indicator should be '@2x')");
 
-            var res = await _objectsManager.GenerateTileData(orgSlug, dsSlug, path, tz, tx, ty, retina);
+            // Access check and lookup only; the 304 below skips the cache and the native render.
+            var obj = await _objectsManager.ResolveReadableObject(orgSlug, dsSlug, path);
 
+            var cachePolicy = HashedContentCachePolicy.For(obj.Hash, v, "tile", tz, tx, ty, retina ? 2 : 1);
+            if (cachePolicy.IsNotModified(Request))
+                return NotModified(cachePolicy);
+
+            var res = await _objectsManager.GenerateTileData(obj, tz, tx, ty, retina);
+
+            cachePolicy.Apply(Response);
             return File(res.Data, res.ContentType, res.Name);
         }
         catch (Exception ex)
@@ -218,6 +252,12 @@ public class ObjectsController : ControllerBaseEx
                 orgSlug, dsSlug, path, tz, tx, tyRaw);
             throw;
         }
+    }
+
+    private StatusCodeResult NotModified(HashedContentCachePolicy cachePolicy)
+    {
+        cachePolicy.Apply(Response);
+        return StatusCode(StatusCodes.Status304NotModified);
     }
 
     #region Downloads

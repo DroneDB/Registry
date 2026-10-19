@@ -196,6 +196,26 @@ public class ObjectsManagerThumbnailTests : TestBase
     }
 
     [Test]
+    public async Task GenerateThumbnailData_Recreate_RemovesTheKeyItReads()
+    {
+        SetupEntry("photo.jpg", EntryType.GeoImage, "img1");
+        object[]? removed = null, read = null;
+        _cacheManagerMock.Setup(x => x.RemoveAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<object[]>()))
+            .Callback<string, string, object[]>((_, _, p) => removed = p)
+            .Returns(Task.CompletedTask);
+        _cacheManagerMock.Setup(x => x.GetAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<object[]>()))
+            .Callback<string, string, object[]>((_, _, p) => read = p)
+            .ReturnsAsync(ThumbBytes);
+
+        await CreateManager().GenerateThumbnailData(OrgSlug, DsSlug, "photo.jpg", 256, recreate: true);
+
+        removed.ShouldNotBeNull();
+        read.ShouldNotBeNull();
+        // Delegates are not part of the cache key.
+        removed.ShouldBe(read.Where(p => p is not Delegate).ToArray());
+    }
+
+    [Test]
     public async Task GenerateTileData_GeoRaster_MissingCogArtifact_ThrowsNotFound_BeforeCache()
     {
         SetupEntry("ortho.tif", EntryType.GeoRaster, "raster1");

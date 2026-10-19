@@ -1472,18 +1472,17 @@ public class ObjectsManager : IObjectsManager
     public async Task<StorageDataDto> GenerateThumbnailData(string orgSlug, string dsSlug, string? path, int? sizeRaw,
         bool recreate = false)
     {
-        var ds = _utils.GetDataset(orgSlug, dsSlug);
-
         _logger.LogInformation(
             "In GenerateThumbnailData('{OrgSlug}/{DsSlug}', path: '{Path}', size: {Size}, recreate: {Recreate})",
             orgSlug, dsSlug, path, sizeRaw, recreate);
 
-        if (!await _authManager.RequestAccess(ds, AccessType.Read))
-            throw new UnauthorizedException("The current user is not allowed to read dataset");
-
         // Dataset thumbnail mode: path is null or empty
         if (string.IsNullOrWhiteSpace(path))
         {
+            var ds = _utils.GetDataset(orgSlug, dsSlug);
+            if (!await _authManager.RequestAccess(ds, AccessType.Read))
+                throw new UnauthorizedException("The current user is not allowed to read dataset");
+
             var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
             return await GenerateDatasetThumbnailData(orgSlug, dsSlug, ddb, sizeRaw, recreate);
         }
@@ -1491,27 +1490,44 @@ public class ObjectsManager : IObjectsManager
         // Fix fox '/img.png' -> 'img.png'
         if (path.StartsWith('/')) path = path[1..];
 
-        var entry = EnsurePathValidity(orgSlug, ds.InternalRef, path, out var ddbSingle);
-
-        var fileName = Path.GetFileName(path);
-        if (fileName == null)
-            throw new ArgumentException("Path is not valid");
-
-        var sourcePath = GetAvailableBuildSource(entry, ddbSingle, path);
-        var localPath = ddbSingle.GetLocalPath(sourcePath);
-
-        var size = sizeRaw ?? _settings.DefaultThumbnailSize;
-
+        var obj = await ResolveReadableObject(orgSlug, dsSlug, path);
 
         if (recreate)
         {
-            _logger.LogDebug("Removing cached thumbnail for {OrgSlug}/{DsSlug}, hash: {Hash}", orgSlug, dsSlug,
-                entry.Hash);
-            await _cacheManager.RemoveAsync(MagicStrings.ThumbnailCacheSeed, ForDataset(orgSlug, dsSlug), entry.Hash);
+            var size = sizeRaw ?? _settings.DefaultThumbnailSize;
+            _logger.LogDebug("Removing cached thumbnail for {OrgSlug}/{DsSlug}, hash: {Hash}, size: {Size}",
+                orgSlug, dsSlug, obj.Hash, size);
+            // Same key parts as the GetAsync below, otherwise nothing is removed.
+            await _cacheManager.RemoveAsync(MagicStrings.ThumbnailCacheSeed, ForDataset(orgSlug, dsSlug), obj.Hash,
+                size);
         }
 
-        var thumbData = await _cacheManager.GetAsync(MagicStrings.ThumbnailCacheSeed, ForDataset(orgSlug, dsSlug),
-            entry.Hash, size,
+        return await GenerateThumbnailData(obj, sizeRaw);
+    }
+
+    public async Task<ReadableObject> ResolveReadableObject(string orgSlug, string dsSlug, string path)
+    {
+        var ds = _utils.GetDataset(orgSlug, dsSlug);
+
+        if (!await _authManager.RequestAccess(ds, AccessType.Read))
+            throw new UnauthorizedException("The current user is not allowed to read dataset");
+
+        if (Path.GetFileName(path) == null)
+            throw new ArgumentException("Path is not valid");
+
+        var entry = EnsurePathValidity(orgSlug, ds.InternalRef, path, out var ddb);
+        var sourcePath = GetAvailableBuildSource(entry, ddb, path);
+
+        return new ReadableObject(orgSlug, dsSlug, path, entry.Hash, sourcePath, ddb);
+    }
+
+    public async Task<StorageDataDto> GenerateThumbnailData(ReadableObject obj, int? sizeRaw)
+    {
+        var localPath = obj.Ddb.GetLocalPath(obj.SourcePath);
+        var size = sizeRaw ?? _settings.DefaultThumbnailSize;
+
+        var thumbData = await _cacheManager.GetAsync(MagicStrings.ThumbnailCacheSeed,
+            ForDataset(obj.OrgSlug, obj.DsSlug), obj.Hash, size,
             new Func<Task<byte[]>>(async () =>
             {
                 _logger.LogDebug("Cache miss - generating new thumbnail for: '{LocalPath}'", localPath);
@@ -1529,7 +1545,7 @@ public class ObjectsManager : IObjectsManager
 
         return new StorageDataDto
         {
-            Name = Path.ChangeExtension(fileName, extension),
+            Name = Path.ChangeExtension(Path.GetFileName(obj.Path), extension),
             Data = thumbData,
             ContentType = _ddbWrapper.ThumbnailMimeType
         };
@@ -1623,31 +1639,24 @@ public class ObjectsManager : IObjectsManager
     public async Task<StorageDataDto> GenerateTileData(string orgSlug, string dsSlug, string path, int tz, int tx,
         int ty, bool retina)
     {
-        var ds = _utils.GetDataset(orgSlug, dsSlug);
-
         _logger.LogInformation("In GenerateTileData('{OrgSlug}/{DsSlug}')", orgSlug, dsSlug);
 
-        if (!await _authManager.RequestAccess(ds, AccessType.Read))
-            throw new UnauthorizedException("The current user is not allowed to read dataset");
+        var obj = await ResolveReadableObject(orgSlug, dsSlug, path);
+        return await GenerateTileData(obj, tz, tx, ty, retina);
+    }
 
-        var fileName = Path.GetFileName(path);
-        if (fileName == null)
-            throw new ArgumentException("Path is not valid");
-
-        var entry = EnsurePathValidity(orgSlug, ds.InternalRef, path, out var ddb);
-
-        var sourcePath = GetAvailableBuildSource(entry, ddb, path);
-
+    public async Task<StorageDataDto> GenerateTileData(ReadableObject obj, int tz, int tx, int ty, bool retina)
+    {
         try
         {
             // NOTE: We wrap GenerateTile in a Task to avoid blocking the main thread
             // This is needed because GenerateTile is CPU intensive and may take some time
             // We want to free up the main thread to handle other requests
             var tileData =
-                await _cacheManager.GetAsync(MagicStrings.TileCacheSeed, ForDataset(orgSlug, dsSlug), entry.Hash, tx,
-                    ty, tz, retina,
+                await _cacheManager.GetAsync(MagicStrings.TileCacheSeed, ForDataset(obj.OrgSlug, obj.DsSlug), obj.Hash,
+                    tx, ty, tz, retina,
                     new Func<Task<byte[]>>(() =>
-                        Task.Run(() => ddb.GenerateTile(sourcePath, tz, tx, ty, retina, entry.Hash))));
+                        Task.Run(() => obj.Ddb.GenerateTile(obj.SourcePath, tz, tx, ty, retina, obj.Hash))));
 
             return new StorageDataDto
             {

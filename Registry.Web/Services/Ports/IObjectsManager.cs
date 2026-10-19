@@ -46,6 +46,18 @@ public interface IObjectsManager
     Task<FileStreamDescriptor> DownloadStream(string orgSlug, string dsSlug, string[] paths);
     Task<StorageDataDto> GenerateThumbnailData(string orgSlug, string dsSlug, string? path, int? size, bool recreate = false);
     Task<StorageDataDto> GenerateTileData(string orgSlug, string dsSlug, string path, int tz, int tx, int ty, bool retina);
+
+    /// <summary>
+    /// Checks read access and resolves <paramref name="path"/> to its entry and render source,
+    /// without rendering anything.
+    /// </summary>
+    Task<ReadableObject> ResolveReadableObject(string orgSlug, string dsSlug, string path);
+
+    /// <summary>Thumbnail of an entry resolved by <see cref="ResolveReadableObject"/>.</summary>
+    Task<StorageDataDto> GenerateThumbnailData(ReadableObject obj, int? size);
+
+    /// <summary>Map tile of an entry resolved by <see cref="ResolveReadableObject"/>.</summary>
+    Task<StorageDataDto> GenerateTileData(ReadableObject obj, int tz, int tx, int ty, bool retina);
     Task<FileStreamDescriptor> GetDdb(string orgSlug, string dsSlug);
     Task Build(string orgSlug, string dsSlug, string path, bool force = false);
     Task<string> GetBuildFile(string orgSlug, string dsSlug, string hash, string path);
