@@ -32,6 +32,12 @@ public interface IDdbWrapper
     public List<Entry> Info(string[] paths, bool recursive = false, int maxRecursionDepth = 0, bool withHash = false);
 
     /// <summary>
+    /// Closes the idle pooled index connections of the datasets under a folder
+    /// (DDBReleaseConnections). Returns how many were closed.
+    /// </summary>
+    public int ReleaseConnections(string path);
+
+    /// <summary>
     /// Exact lookup of one entry (file or folder), including its metadata.
     /// </summary>
     /// <param name="ddbPath">Dataset folder (parent of .ddb)</param>

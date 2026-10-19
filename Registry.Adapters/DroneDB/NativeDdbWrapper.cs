@@ -358,6 +358,27 @@ public class NativeDdbWrapper : IDdbWrapper
         throw new DdbException(SafeGetLastError("info"));
     }
 
+    [DllImport("ddb", EntryPoint = "DDBReleaseConnections")]
+    private static extern DdbResult _ReleaseConnections([MarshalAs(UnmanagedType.LPUTF8Str)] string path,
+        out int closed);
+
+    public int ReleaseConnections(string path)
+    {
+        if (string.IsNullOrWhiteSpace(path))
+            throw new ArgumentException("Path is null or empty");
+
+        try
+        {
+            var result = _ReleaseConnections(path, out var closed);
+            ThrowForFinalResult(result, "release connections");
+            return closed;
+        }
+        catch (EntryPointNotFoundException ex)
+        {
+            throw new DdbException($"Error in calling ddb lib: incompatible versions ({ex.Message})", ex);
+        }
+    }
+
     [DllImport("ddb", EntryPoint = "DDBGet")]
     private static extern DdbResult _Get([MarshalAs(UnmanagedType.LPUTF8Str)] string ddbPath,
         [MarshalAs(UnmanagedType.LPUTF8Str)] string path, out IntPtr output);

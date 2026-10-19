@@ -57,6 +57,7 @@ public class DdbManager : IDdbManager
 
         _logger.LogInformation("Removing ddb dataset '{BaseDdbPath}'", baseDdbPath);
 
+        ReleaseConnections(baseDdbPath);
         Directory.Delete(baseDdbPath, true);
 
     }
@@ -72,7 +73,15 @@ public class DdbManager : IDdbManager
 
         _logger.LogInformation("Removing ddb '{OrgPath}'", orgPath);
 
+        ReleaseConnections(orgPath);
         Directory.Delete(orgPath, true);
+    }
+
+    public void ReleaseConnections(string folder)
+    {
+        var closed = _ddbWrapper.ReleaseConnections(folder);
+        if (closed > 0)
+            _logger.LogDebug("Closed {Count} idle index connections under '{Folder}'", closed, folder);
     }
 
     private string GetDdbPath(string orgSlug, Guid internalRef)

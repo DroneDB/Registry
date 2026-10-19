@@ -301,6 +301,22 @@ public class NativeDdbWrapperTests : TestBase
     }
 
     [Test]
+    public void ReleaseConnections_ClosesTheIdleConnectionsOfThatDataset()
+    {
+        using var test = new TestFS(Test1ArchiveUrl, BaseTestFolder);
+
+        var ddbPath = Path.Combine(test.TestFolder, "public", "default");
+
+        DdbWrapper.GetEntry(ddbPath, "Sub").ShouldNotBeNull();
+        DdbWrapper.GetEntry(ddbPath, "DJI_0027.JPG").ShouldNotBeNull();
+
+        DdbWrapper.ReleaseConnections(ddbPath).ShouldBe(1);
+        DdbWrapper.ReleaseConnections(ddbPath).ShouldBe(0);
+        DdbWrapper.GetEntry(ddbPath, "Sub").ShouldNotBeNull();
+        DdbWrapper.ReleaseConnections(test.TestFolder).ShouldBe(1);
+    }
+
+    [Test]
     public void GetEntry_Folder_ReturnsTheFolder()
     {
         using var test = new TestFS(Test1ArchiveUrl, BaseTestFolder);

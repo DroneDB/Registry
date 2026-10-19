@@ -468,6 +468,8 @@ public class DatasetsManager : IDatasetsManager
 
                 if (_fileSystem.FolderExists(sourcePath))
                 {
+                    // The copy then the delete of the source need its index files closed
+                    _ddbManager.ReleaseConnections(sourcePath);
                     _logger.LogInformation("Copying dataset files from '{SourcePath}' to '{DestPath}'", sourcePath, destPath);
 
                     // Copy all files and subdirectories

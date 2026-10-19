@@ -67,6 +67,24 @@ public class DdbFactoryTest : TestBase
     }
 
     [Test]
+    public void Delete_AfterLookups_ClosesPooledConnectionsAndRemovesTheFolder()
+    {
+        using var fs = new TestFS(DbTest1ArchiveUrl, nameof(DdbFactoryTest));
+
+        _settings.DatasetsPath = fs.TestFolder;
+        _appSettingsMock.Setup(o => o.Value).Returns(_settings);
+
+        var factory = new DdbManager(_appSettingsMock.Object, _ddbFactoryLogger, DdbWrapper);
+        var ddb = factory.Get(MagicStrings.PublicOrganizationSlug, _datasetGuid);
+        ddb.GetEntry("Sub/20200610_144436.jpg").ShouldNotBeNull(); // leaves an idle native connection
+
+        factory.Delete(MagicStrings.PublicOrganizationSlug, _datasetGuid);
+
+        Directory.Exists(ddb.DatasetFolderPath).ShouldBeFalse();
+        DdbWrapper.ReleaseConnections(ddb.DatasetFolderPath).ShouldBe(0, "Delete already closed them");
+    }
+
+    [Test]
     public void Search_MissingEntry_Empty()
     {
 

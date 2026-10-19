@@ -260,6 +260,7 @@ public class SystemManager : ISystemManager
             if (_fileSystem.FolderExists(newPath))
                 throw new InvalidOperationException($"Folder '{newPath}' already exists");
 
+            _ddbManager.ReleaseConnections(oldPath);
             _fileSystem.FolderMove(oldPath, newPath);
             folderMoved = true;
         }
@@ -912,6 +913,7 @@ public class SystemManager : ISystemManager
             {
                 _logger.LogInformation("Removing existing dataset content ({DirCount} directories, {FileCount} files)",
                     destDirs.Length, destFiles.Length);
+                _ddbManager.ReleaseConnections(destPath);
                 foreach (var dir in destDirs)
                 {
                     _fileSystem.FolderDelete(dir);
