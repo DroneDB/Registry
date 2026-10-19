@@ -308,6 +308,7 @@ public class Startup
         services.AddScoped<IPushManager, PushManager>();
         services.AddScoped<IDdbManager, DdbManager>();
         services.AddScoped<ISystemManager, SystemManager>();
+        services.AddScoped<IRescanManager, RescanManager>();
         services.AddScoped<IBackgroundJobsProcessor, BackgroundJobsProcessor>();
         services.AddScoped<IMetaManager, Services.Managers.MetaManager>();
         services.AddScoped<BuildPendingService>();
@@ -316,6 +317,7 @@ public class Startup
         services.AddScoped<OrphanedDatasetCleanupService>();
         services.AddScoped<RecurringDatasetCleanupService>();
         services.AddScoped<ArtifactCompletenessCheckerService>();
+        services.AddScoped<IndexRescanService>();
         services.AddScoped<IndexReconciliationService>();
 
         // Admin global tasks dashboard manager (Part B).

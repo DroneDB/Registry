@@ -32,14 +32,14 @@ public class DatasetsController : ControllerBaseEx
 {
     private readonly IDatasetsManager _datasetsManager;
     private readonly IShareManager _shareManager;
-    private readonly ISystemManager _systemManager;
+    private readonly IRescanManager _rescanManager;
     private readonly ILogger<DatasetsController> _logger;
 
-    public DatasetsController(IDatasetsManager datasetsManager, IShareManager shareManager, ISystemManager systemManager, ILogger<DatasetsController> logger)
+    public DatasetsController(IDatasetsManager datasetsManager, IShareManager shareManager, IRescanManager rescanManager, ILogger<DatasetsController> logger)
     {
         _datasetsManager = datasetsManager;
         _shareManager = shareManager;
-        _systemManager = systemManager;
+        _rescanManager = rescanManager;
         _logger = logger;
     }
 
@@ -353,6 +353,7 @@ public class DatasetsController : ControllerBaseEx
     /// <param name="dsSlug">The dataset slug.</param>
     /// <param name="types">Optional comma-separated list of entry types to rescan (e.g., "image,geoimage,pointcloud"). If not specified, all types are rescanned.</param>
     /// <param name="stopOnError">Whether to stop processing on first error. Default is true.</param>
+    /// <param name="extensions">Optional comma-separated list of file extensions to rescan (e.g., "dwg,dxf"). An entry must match both filters. With a filter only the rescanned entries are rebuilt.</param>
     /// <returns>The rescan result with processed entries and statistics.</returns>
     [HttpPost(RoutesHelper.DatasetSlug + "/rescan", Name = nameof(DatasetsController) + "." + nameof(RescanIndex))]
     [ProducesResponseType(typeof(RescanResultDto), StatusCodes.Status200OK)]
@@ -363,14 +364,16 @@ public class DatasetsController : ControllerBaseEx
         [FromRoute, Required] string orgSlug,
         [FromRoute, Required] string dsSlug,
         [FromQuery] string? types = null,
-        [FromQuery] bool stopOnError = true)
+        [FromQuery] bool stopOnError = true,
+        [FromQuery] string? extensions = null)
     {
         try
         {
-            _logger.LogDebug("Dataset controller RescanIndex('{OrgSlug}/{DsSlug}', types: {Types}, stopOnError: {StopOnError})",
-                orgSlug, dsSlug, types ?? "all", stopOnError);
+            _logger.LogDebug("Dataset controller RescanIndex('{OrgSlug}/{DsSlug}', types: {Types}, extensions: {Extensions}, stopOnError: {StopOnError})",
+                orgSlug, dsSlug, types ?? "all", extensions ?? "all", stopOnError);
 
-            return Ok(await _systemManager.RescanDatasetIndex(orgSlug, dsSlug, types, stopOnError));
+            return Ok(await _rescanManager.RescanDatasetIndex(orgSlug, dsSlug,
+                new RescanOptions(types, extensions, stopOnError)));
         }
         catch (Exception ex)
         {

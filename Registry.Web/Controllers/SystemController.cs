@@ -33,6 +33,7 @@ namespace Registry.Web.Controllers;
 public class SystemController : ControllerBaseEx
 {
     private readonly ISystemManager _systemManager;
+    private readonly IRescanManager _rescanManager;
     private readonly IDatasetsManager _datasetsManager;
     private readonly IOrganizationsManager _organizationsManager;
     private readonly IDdbWrapper _ddbWrapper;
@@ -46,6 +47,7 @@ public class SystemController : ControllerBaseEx
 
     public SystemController(
         ISystemManager systemManager,
+        IRescanManager rescanManager,
         IDatasetsManager datasetsManager,
         IOrganizationsManager organizationsManager,
         IDdbWrapper ddbWrapper,
@@ -58,6 +60,7 @@ public class SystemController : ControllerBaseEx
         INodeOdxClient nodeOdxClient)
     {
         _systemManager = systemManager;
+        _rescanManager = rescanManager;
         _datasetsManager = datasetsManager;
         _organizationsManager = organizationsManager;
         _ddbWrapper = ddbWrapper;
@@ -173,6 +176,41 @@ public class SystemController : ControllerBaseEx
         catch (Exception ex)
         {
             _logger.LogError(ex, "Exception in System controller Cleanup()");
+
+            throw;
+        }
+    }
+
+    /// <summary>
+    /// Rescans the index entries that match a type and/or extension filter across all
+    /// organizations, one organization or one dataset, e.g. to re-read every DWG drawing
+    /// after DroneDB learns the format. Admin only.
+    /// A background job submits one rescan-index task per dataset that holds matching
+    /// entries; each task re-reads those entries and rebuilds only them.
+    /// </summary>
+    /// <param name="request">
+    /// Scope (OrganizationSlug, DatasetSlug; both null for every dataset) and filters
+    /// (Types, Extensions; an entry must match both, at least one is required).
+    /// </param>
+    /// <returns>The id of the background job that submits the dataset tasks.</returns>
+    [HttpPost("rescan", Name = nameof(SystemController) + "." + nameof(Rescan))]
+    [ProducesResponseType(typeof(RescanJobDto), StatusCodes.Status202Accepted)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status401Unauthorized)]
+    public async Task<IActionResult> Rescan([FromBody] RescanRequestDto request)
+    {
+        try
+        {
+            _logger.LogDebug("System controller Rescan({OrgSlug}/{DsSlug}, types: {Types}, extensions: {Extensions})",
+                request?.OrganizationSlug, request?.DatasetSlug,
+                request?.Types == null ? "all" : string.Join(",", request.Types),
+                request?.Extensions == null ? "all" : string.Join(",", request.Extensions));
+
+            return Accepted(await _rescanManager.Rescan(request ?? new RescanRequestDto()));
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Exception in System controller Rescan()");
 
             throw;
         }

@@ -152,10 +152,9 @@ public interface IDdbWrapper
     /// Rescans all files in the index to update metadata
     /// </summary>
     /// <param name="ddbPath">Path to the DroneDB database</param>
-    /// <param name="types">Comma-separated list of entry types to rescan (e.g., "image,geoimage,pointcloud"), or null/empty for all</param>
-    /// <param name="stopOnError">Whether to stop processing on first error</param>
+    /// <param name="options">What to rescan; null rescans every entry and stops on the first error</param>
     /// <returns>List of rescan results for each processed entry</returns>
-    public List<RescanResult> RescanIndex(string ddbPath, string? types = null, bool stopOnError = true);
+    public List<RescanResult> RescanIndex(string ddbPath, RescanOptions? options = null);
 
     void RegisterProcess(bool verbose = false);
 

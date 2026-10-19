@@ -36,6 +36,9 @@ public static class ProcessingPlatformServiceCollectionExtensions
         // can clear dataset caches on hosts without the full object-management stack.
         services.AddSingleton<IDatasetCacheInvalidator, DatasetCacheInvalidator>();
 
+        // What a rescan rebuilds, shared by the rescan-index tool and the rescan endpoint.
+        services.AddScoped<RescanRebuild>();
+
         // Native tools (Sprint 1). Adding a new native tool = one line here.
         services.AddSingleton<IHeavyTool, BuildTool>();
         services.AddSingleton<IHeavyTool, RasterExportTool>();
@@ -55,6 +58,7 @@ public static class ProcessingPlatformServiceCollectionExtensions
         // Per-request orchestration.
         services.AddScoped<IHeavyTaskQuota, HeavyTaskQuota>();
         services.AddScoped<IHeavyTaskRunner, HeavyTaskRunner>();
+        services.AddScoped<ISystemTaskSubmitter, SystemTaskSubmitter>();
 
         // Hangfire activates the wrapper from DI on the worker host.
         services.AddScoped<HeavyTaskJobWrapper>();

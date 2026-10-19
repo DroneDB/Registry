@@ -984,7 +984,7 @@ public class NativeDdbWrapperTests : TestBase
         var ddbPath = Path.Combine(test.TestFolder, "public", "default");
 
         // Use stopOnError = false because test dataset may not have all physical files
-        var res = DdbWrapper.RescanIndex(ddbPath, null, false);
+        var res = DdbWrapper.RescanIndex(ddbPath, new RescanOptions(StopOnError: false));
 
         res.ShouldNotBeNull();
         res.ShouldNotBeEmpty();
@@ -1004,7 +1004,7 @@ public class NativeDdbWrapperTests : TestBase
         var ddbPath = Path.Combine(test.TestFolder, "public", "default");
 
         // Rescan only images with stopOnError = false for test dataset
-        var res = DdbWrapper.RescanIndex(ddbPath, "image,geoimage", false);
+        var res = DdbWrapper.RescanIndex(ddbPath, new RescanOptions("image,geoimage", StopOnError: false));
 
         res.ShouldNotBeNull();
 
@@ -1012,6 +1012,39 @@ public class NativeDdbWrapperTests : TestBase
         {
             TestContext.WriteLine($"Path: {entry.Path}, Success: {entry.Success}, Hash: {entry.Hash}");
         }
+    }
+
+    [Test]
+    public void RescanIndex_WithExtensionsFilter_OnlyMatchingEntries()
+    {
+        using var area = new TestArea(nameof(RescanIndex_WithExtensionsFilter_OnlyMatchingEntries));
+
+        DdbWrapper.Init(area.TestFolder);
+        File.WriteAllText(Path.Join(area.TestFolder, "notes.txt"), "notes");
+        File.WriteAllText(Path.Join(area.TestFolder, "OTHER.TXT"), "other");
+        File.WriteAllText(Path.Join(area.TestFolder, "readme.md"), "# readme");
+        DdbWrapper.Add(area.TestFolder,
+        [
+            Path.Join(area.TestFolder, "notes.txt"), Path.Join(area.TestFolder, "OTHER.TXT"),
+            Path.Join(area.TestFolder, "readme.md")
+        ]);
+
+        List<RescanResult> res;
+        try
+        {
+            res = DdbWrapper.RescanIndex(area.TestFolder, new RescanOptions(Extensions: ".txt"));
+        }
+        catch (DdbException ex) when (ex.InnerException is EntryPointNotFoundException)
+        {
+            Assert.Ignore("The DroneDB library has no DDBRescanEx yet");
+            return;
+        }
+
+        res.Select(r => r.Path).OrderBy(p => p, StringComparer.Ordinal).ShouldBe(["OTHER.TXT", "notes.txt"]);
+        res.ShouldAllBe(r => r.Success);
+
+        DdbWrapper.RescanIndex(area.TestFolder, new RescanOptions("markdown", "txt")).ShouldBeEmpty();
+        Should.Throw<DdbException>(() => DdbWrapper.RescanIndex(area.TestFolder, new RescanOptions(Extensions: "*.txt")));
     }
 
     [Test]
@@ -1029,7 +1062,7 @@ public class NativeDdbWrapperTests : TestBase
         var ddbPath = Path.Combine(test.TestFolder, "public", "default");
 
         // Should not throw even if there are errors, when stopOnError is false
-        var res = DdbWrapper.RescanIndex(ddbPath, null, false);
+        var res = DdbWrapper.RescanIndex(ddbPath, new RescanOptions(StopOnError: false));
 
         res.ShouldNotBeNull();
     }

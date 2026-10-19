@@ -4,6 +4,7 @@ using Moq;
 using NUnit.Framework;
 using Registry.Adapters.DroneDB;
 using Registry.Ports;
+using Registry.Ports.DroneDB;
 using Shouldly;
 
 namespace Registry.Web.Test;
@@ -129,7 +130,7 @@ public class DdbBuildBusyPassthroughTests
     public void RescanIndex_DdbBusyException_PassesThroughUnwrapped()
     {
         var (ddb, wrapper) = CreateDdb();
-        wrapper.Setup(w => w.RescanIndex(It.IsAny<string>(), It.IsAny<string?>(), It.IsAny<bool>()))
+        wrapper.Setup(w => w.RescanIndex(It.IsAny<string>(), It.IsAny<RescanOptions>()))
             .Throws(new DdbBusyException("locked"));
 
         var ex = Assert.Throws<DdbBusyException>(() => ddb.RescanIndex());
@@ -150,7 +151,7 @@ public class DdbBuildBusyPassthroughTests
     public void RescanIndex_PlainDdbException_StillWrappedInInvalidOperationException()
     {
         var (ddb, wrapper) = CreateDdb();
-        wrapper.Setup(w => w.RescanIndex(It.IsAny<string>(), It.IsAny<string?>(), It.IsAny<bool>()))
+        wrapper.Setup(w => w.RescanIndex(It.IsAny<string>(), It.IsAny<RescanOptions>()))
             .Throws(new DdbException("boom"));
 
         var ex = Assert.Throws<InvalidOperationException>(() => ddb.RescanIndex());

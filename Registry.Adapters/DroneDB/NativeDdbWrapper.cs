@@ -1849,12 +1849,28 @@ public class NativeDdbWrapper : IDdbWrapper
         [MarshalAs(UnmanagedType.LPUTF8Str)] string types,
         bool stopOnError);
 
-    public List<RescanResult> RescanIndex(string ddbPath, string? types = null, bool stopOnError = true)
+    [DllImport("ddb", EntryPoint = "DDBRescanEx")]
+    private static extern DdbResult _RescanEx(
+        [MarshalAs(UnmanagedType.LPUTF8Str)] string ddbPath,
+        out IntPtr output,
+        [MarshalAs(UnmanagedType.LPUTF8Str)] string types,
+        [MarshalAs(UnmanagedType.LPUTF8Str)] string extensions,
+        bool stopOnError);
+
+    public List<RescanResult> RescanIndex(string ddbPath, RescanOptions? options = null)
     {
+        options ??= new RescanOptions();
+        var types = options.Types ?? string.Empty;
+
         DdbResult result;
         try
         {
-            result = _Rescan(ddbPath, out var output, types ?? string.Empty, stopOnError);
+            // DDBRescanEx is only called with an extension filter, so libraries without it
+            // still serve the type-only rescan.
+            IntPtr output;
+            result = string.IsNullOrWhiteSpace(options.Extensions)
+                ? _Rescan(ddbPath, out output, types, options.StopOnError)
+                : _RescanEx(ddbPath, out output, types, options.Extensions, options.StopOnError);
             if (result == DdbResult.Success)
             {
                 var json = MarshalAndFreeUtf8(output);

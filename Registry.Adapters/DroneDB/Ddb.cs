@@ -520,11 +520,11 @@ public class DDB : IDDB
             bbox, datetime, limit, offset);
     }
 
-    public List<RescanResult> RescanIndex(string? types = null, bool stopOnError = true)
+    public List<RescanResult> RescanIndex(RescanOptions? options = null)
     {
         try
         {
-            return _ddbWrapper.RescanIndex(DatasetFolderPath, types, stopOnError);
+            return _ddbWrapper.RescanIndex(DatasetFolderPath, options);
         }
         catch (DdbException ex) when (ex is not DdbBusyException && ex is not DdbBuildInProgressException)
         {

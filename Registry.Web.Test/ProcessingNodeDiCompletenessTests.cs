@@ -1,7 +1,10 @@
+using System;
 using System.Collections.Generic;
 using System.Linq;
+using Hangfire;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Moq;
 using NUnit.Framework;
 using Registry.Web.Models.Configuration;
 using Registry.Web.Services.HeavyTasks.Ports;
@@ -25,7 +28,7 @@ namespace Registry.Web.Test;
 [TestFixture]
 public class ProcessingNodeDiCompletenessTests
 {
-    private static ServiceProvider BuildNodeProvider()
+    private static ServiceProvider BuildNodeProvider(Action<IServiceCollection>? configure = null)
     {
         var configuration = new ConfigurationBuilder()
             .AddInMemoryCollection(new Dictionary<string, string?>
@@ -42,6 +45,7 @@ public class ProcessingNodeDiCompletenessTests
         var services = new ServiceCollection();
         services.AddLogging();
         services.AddProcessingNodeServices(configuration, appSettings);
+        configure?.Invoke(services);
         return services.BuildServiceProvider();
     }
 
@@ -93,6 +97,19 @@ public class ProcessingNodeDiCompletenessTests
         using var scope = provider.CreateScope();
 
         var service = scope.ServiceProvider.GetService<Registry.Web.Services.Adapters.IndexReconciliationService>();
+
+        service.ShouldNotBeNull();
+    }
+
+    [Test]
+    public void ProcessingNode_ActivatesIndexRescanService()
+    {
+        // The system rescan job runs on the default queue, which processing nodes serve too.
+        // A node gets the Hangfire client from AddHangfireProvider, which needs real storage.
+        using var provider = BuildNodeProvider(s => s.AddSingleton(Mock.Of<IBackgroundJobClient>()));
+        using var scope = provider.CreateScope();
+
+        var service = scope.ServiceProvider.GetService<Registry.Web.Services.Adapters.IndexRescanService>();
 
         service.ShouldNotBeNull();
     }

@@ -75,6 +75,7 @@ public static class ProcessingNodeServiceCollectionExtensions
         services.AddScoped<OrphanedDatasetCleanupService>();
         services.AddScoped<RecurringDatasetCleanupService>();
         services.AddScoped<ArtifactCompletenessCheckerService>();
+        services.AddScoped<IndexRescanService>();
         services.AddScoped<IndexReconciliationService>();
 
         // Processing Platform task substrate (native tools incl. build/raster-export)
