@@ -70,7 +70,7 @@ public class OgcLayerCatalogTests
     public async Task GetLayersAsync_MultiLayerGpkg_ExpandsToOneDtoPerInnerLayer()
     {
         var entry = VectorEntry();
-        _ddb.Setup(d => d.Search(string.Empty, true)).Returns([entry]);
+        _ddb.Setup(d => d.Find(It.IsAny<EntryQuery>())).Returns([entry]);
 
         _artifacts.Setup(a => a.GetVectorQueryPath(_ddb.Object, entry.Hash)).Returns("/tmp/source.gpkg");
         _artifacts.Setup(a => a.ArtifactExists("/tmp/source.gpkg")).Returns(true);
@@ -98,7 +98,7 @@ public class OgcLayerCatalogTests
     public async Task LocalLayer_HiddenFromListingsButResolvableForFeatures()
     {
         var entry = VectorEntry("site.dwg");
-        _ddb.Setup(d => d.Search(string.Empty, true)).Returns([entry]);
+        _ddb.Setup(d => d.Find(It.IsAny<EntryQuery>())).Returns([entry]);
         _artifacts.Setup(a => a.GetVectorQueryPath(_ddb.Object, entry.Hash)).Returns("/tmp/source.gpkg");
         _artifacts.Setup(a => a.ArtifactExists("/tmp/source.gpkg")).Returns(true);
         _wrapper.Setup(w => w.DescribeVector("/tmp/source.gpkg", null)).Returns(
@@ -121,7 +121,7 @@ public class OgcLayerCatalogTests
     {
         var entry = VectorEntry("site.dwg");
         entry.Properties = new Dictionary<string, object> { ["georeferenced"] = false };
-        _ddb.Setup(d => d.Search(string.Empty, true)).Returns([entry]);
+        _ddb.Setup(d => d.Find(It.IsAny<EntryQuery>())).Returns([entry]);
         _artifacts.Setup(a => a.ArtifactExists(It.IsAny<string>())).Returns(false);
 
         (await _catalog.GetLayersAsync(Org, Ds)).ShouldBeEmpty();
@@ -132,7 +132,7 @@ public class OgcLayerCatalogTests
     public async Task GeoreferencedLayerWithSrs_StaysListed()
     {
         var entry = VectorEntry("site.dwg");
-        _ddb.Setup(d => d.Search(string.Empty, true)).Returns([entry]);
+        _ddb.Setup(d => d.Find(It.IsAny<EntryQuery>())).Returns([entry]);
         _artifacts.Setup(a => a.GetVectorQueryPath(_ddb.Object, entry.Hash)).Returns("/tmp/source.gpkg");
         _artifacts.Setup(a => a.ArtifactExists("/tmp/source.gpkg")).Returns(true);
         _wrapper.Setup(w => w.DescribeVector("/tmp/source.gpkg", null)).Returns(
@@ -147,7 +147,7 @@ public class OgcLayerCatalogTests
     public async Task GetLayersAsync_VectorArtifactMissing_FallsBackToSingleEntryLayer()
     {
         var entry = VectorEntry();
-        _ddb.Setup(d => d.Search(string.Empty, true)).Returns([entry]);
+        _ddb.Setup(d => d.Find(It.IsAny<EntryQuery>())).Returns([entry]);
         _artifacts.Setup(a => a.GetVectorQueryPath(_ddb.Object, entry.Hash)).Returns("/tmp/source.gpkg");
         _artifacts.Setup(a => a.ArtifactExists(It.IsAny<string>())).Returns(false);
 
@@ -164,7 +164,7 @@ public class OgcLayerCatalogTests
     public async Task GetLayersAsync_DescribeVectorThrows_FallsBackToSingleEntryLayer()
     {
         var entry = VectorEntry();
-        _ddb.Setup(d => d.Search(string.Empty, true)).Returns([entry]);
+        _ddb.Setup(d => d.Find(It.IsAny<EntryQuery>())).Returns([entry]);
         _artifacts.Setup(a => a.GetVectorQueryPath(_ddb.Object, entry.Hash)).Returns("/tmp/source.gpkg");
         _artifacts.Setup(a => a.ArtifactExists(It.IsAny<string>())).Returns(true);
         _wrapper.Setup(w => w.DescribeVector(It.IsAny<string>(), It.IsAny<string>()))
@@ -182,7 +182,7 @@ public class OgcLayerCatalogTests
     public async Task GetLayersAsync_DescribeVectorReturnsEmptyLayers_FallsBackToSingleEntryLayer()
     {
         var entry = VectorEntry();
-        _ddb.Setup(d => d.Search(string.Empty, true)).Returns([entry]);
+        _ddb.Setup(d => d.Find(It.IsAny<EntryQuery>())).Returns([entry]);
         _artifacts.Setup(a => a.GetVectorQueryPath(_ddb.Object, entry.Hash)).Returns("/tmp/source.gpkg");
         _artifacts.Setup(a => a.ArtifactExists(It.IsAny<string>())).Returns(true);
         _wrapper.Setup(w => w.DescribeVector(It.IsAny<string>(), It.IsAny<string>()))
@@ -196,14 +196,18 @@ public class OgcLayerCatalogTests
     }
 
     [Test]
-    public async Task GetLayersAsync_SkipsNonGeoEntries()
+    public async Task GetLayersAsync_AsksDroneDbForRastersAndVectorsOnly()
     {
-        var img = new Entry { Path = "img.jpg", Hash = "h", Type = EntryType.Image };
         var raster = new Entry { Path = "ortho.tif", Hash = "hr", Type = EntryType.GeoRaster };
-        _ddb.Setup(d => d.Search(string.Empty, true)).Returns([img, raster]);
+        _ddb.Setup(d => d.Find(It.IsAny<EntryQuery>())).Returns([raster]);
 
         var result = await _catalog.GetLayersAsync(Org, Ds);
 
+        _ddb.Verify(d => d.Find(It.Is<EntryQuery>(q => string.IsNullOrEmpty(q.Path) && q.Recursive &&
+                                                        q.NamePattern == null && q.Types != null &&
+                                                        q.Types.Count == 2 &&
+                                                        q.Types.Contains(EntryType.GeoRaster) &&
+                                                        q.Types.Contains(EntryType.Vector))), Times.Once);
         result.Count.ShouldBe(1);
         result[0].Name.ShouldBe("ortho.tif");
         result[0].EntryType.ShouldBe(EntryType.GeoRaster);
@@ -239,7 +243,7 @@ public class OgcLayerCatalogTests
     public async Task ResolveAsync_ExactMatch_ReturnsInnerLayer()
     {
         var entry = VectorEntry();
-        _ddb.Setup(d => d.Search(string.Empty, true)).Returns([entry]);
+        _ddb.Setup(d => d.Find(It.IsAny<EntryQuery>())).Returns([entry]);
         _artifacts.Setup(a => a.GetVectorQueryPath(_ddb.Object, entry.Hash)).Returns("/tmp/source.gpkg");
         _artifacts.Setup(a => a.ArtifactExists(It.IsAny<string>())).Returns(true);
         _wrapper.Setup(w => w.DescribeVector(It.IsAny<string>(), It.IsAny<string>()))
@@ -255,7 +259,7 @@ public class OgcLayerCatalogTests
     public async Task ResolveAsync_BareEntryPath_FallsBackToFirstInnerLayer()
     {
         var entry = VectorEntry();
-        _ddb.Setup(d => d.Search(string.Empty, true)).Returns([entry]);
+        _ddb.Setup(d => d.Find(It.IsAny<EntryQuery>())).Returns([entry]);
         _artifacts.Setup(a => a.GetVectorQueryPath(_ddb.Object, entry.Hash)).Returns("/tmp/source.gpkg");
         _artifacts.Setup(a => a.ArtifactExists(It.IsAny<string>())).Returns(true);
         _wrapper.Setup(w => w.DescribeVector(It.IsAny<string>(), It.IsAny<string>()))
@@ -273,7 +277,7 @@ public class OgcLayerCatalogTests
     public async Task ResolveAsync_NamespacedPrefix_StripsAndResolves()
     {
         var raster = new Entry { Path = "ortho.tif", Hash = "hr", Type = EntryType.GeoRaster };
-        _ddb.Setup(d => d.Search(string.Empty, true)).Returns([raster]);
+        _ddb.Setup(d => d.Find(It.IsAny<EntryQuery>())).Returns([raster]);
 
         var resolved = await _catalog.ResolveAsync(Org, Ds, "ddb:ortho.tif");
 
@@ -284,7 +288,7 @@ public class OgcLayerCatalogTests
     [Test]
     public async Task ResolveAsync_UnknownLayer_ReturnsNull()
     {
-        _ddb.Setup(d => d.Search(string.Empty, true)).Returns([]);
+        _ddb.Setup(d => d.Find(It.IsAny<EntryQuery>())).Returns([]);
         var resolved = await _catalog.ResolveAsync(Org, Ds, "nope");
         resolved.ShouldBeNull();
     }
@@ -293,13 +297,13 @@ public class OgcLayerCatalogTests
     public async Task GetLayersAsync_CachesResultsAcrossCalls()
     {
         var entry = new Entry { Path = "ortho.tif", Hash = "hr", Type = EntryType.GeoRaster };
-        _ddb.Setup(d => d.Search(string.Empty, true)).Returns([entry]);
+        _ddb.Setup(d => d.Find(It.IsAny<EntryQuery>())).Returns([entry]);
 
         var first = await _catalog.GetLayersAsync(Org, Ds);
         var second = await _catalog.GetLayersAsync(Org, Ds);
 
         first.Count.ShouldBe(1);
         second.Count.ShouldBe(1);
-        _ddb.Verify(d => d.Search(string.Empty, true), Times.Once);
+        _ddb.Verify(d => d.Find(It.IsAny<EntryQuery>()), Times.Once);
     }
 }

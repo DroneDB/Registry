@@ -93,7 +93,7 @@ public sealed class RescanFilter
     }
 
     /// <summary>True if the rescan selects <paramref name="entry"/>. Directories never match.</summary>
-    public bool Matches(Entry entry)
+    public bool Matches(EntrySummary entry)
     {
         if (entry.Type == EntryType.Directory || string.IsNullOrEmpty(entry.Path))
             return false;

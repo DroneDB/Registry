@@ -135,7 +135,7 @@ public class IndexReconciliationService
 
         // 2. Compare against the index (files only - directories have no on-disk counterpart to diff).
         var indexed = new HashSet<string>(
-            ddb.Search(".", recursive: true)
+            ddb.FindSummaries(EntryQuery.All)
                 .Where(e => e.Type != EntryType.Directory)
                 .Select(e => e.Path),
             StringComparer.Ordinal);

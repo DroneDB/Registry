@@ -22,6 +22,19 @@ public interface IDdbIndex
     string DatasetFolderPath { get; }
 
     IEnumerable<Entry> Search(string path, bool recursive = false);
+
+    /// <summary>
+    /// The entries selected by <paramref name="query"/>, sorted by path. DroneDB filters by
+    /// folder, name and type in the index query, so prefer this to filtering
+    /// <see cref="Search"/> results.
+    /// </summary>
+    IReadOnlyList<Entry> Find(EntryQuery query);
+
+    /// <summary>
+    /// <see cref="Find"/> without properties, geometries and meta, for callers that only need
+    /// paths, hashes, types or sizes.
+    /// </summary>
+    IReadOnlyList<EntrySummary> FindSummaries(EntryQuery query);
     void Add(string path, byte[] data);
     void Add(string path, Stream? data = null);
     void AddRaw(string path);

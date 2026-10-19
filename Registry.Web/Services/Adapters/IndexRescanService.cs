@@ -8,6 +8,7 @@ using Hangfire.Server;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Registry.Ports;
+using Registry.Ports.DroneDB;
 using Registry.Web.Data;
 using Registry.Web.Models;
 using Registry.Web.Services.HeavyTasks;
@@ -78,7 +79,7 @@ public class IndexRescanService
             try
             {
                 var ddb = _ddbManager.Get(ds.OrgSlug, ds.InternalRef);
-                var count = ddb.Search(string.Empty, recursive: true).Count(filter.Matches);
+                var count = ddb.FindSummaries(EntryQuery.All).Count(filter.Matches);
                 if (count == 0)
                     continue;
 

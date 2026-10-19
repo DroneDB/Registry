@@ -104,8 +104,8 @@ public class ArtifactCompletenessCheckerService
     private async Task<DatasetStats> ScanDatasetAsync(IDDB ddb, string orgSlug, string dsSlug, string key)
     {
         var stats = new DatasetStats();
-        var entries = ddb.Search(string.Empty, recursive: true);
-        var candidates = new List<Entry>();
+        var entries = ddb.FindSummaries(EntryQuery.All);
+        var candidates = new List<EntrySummary>();
 
         foreach (var entry in entries)
         {

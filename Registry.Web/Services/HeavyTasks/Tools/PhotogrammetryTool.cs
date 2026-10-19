@@ -523,7 +523,7 @@ public sealed class PhotogrammetryTool : IHeavyTool
         else
         {
             var folder = ReadString(request.Params, "folder") ?? request.Path ?? string.Empty;
-            entries = ddb.Search(folder, recursive: true);
+            entries = ddb.Find(EntryQuery.OfTypes(folder, EntryType.Image, EntryType.GeoImage));
         }
 
         return

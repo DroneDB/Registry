@@ -1170,7 +1170,7 @@ public class SystemManager : ISystemManager
             var existingHashes = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
             try
             {
-                var existingEntries = ddb.Search("*", recursive: true);
+                var existingEntries = ddb.FindSummaries(EntryQuery.All);
                 foreach (var entry in existingEntries)
                 {
                     if (!string.IsNullOrEmpty(entry.Hash))
@@ -1611,10 +1611,10 @@ public class SystemManager : ISystemManager
                     var info = ddb.GetInfo();
 
                     // Group entries by extension
-                    var entries = ddb.Search("*", true)?.ToArray();
+                    var entries = ddb.FindSummaries(EntryQuery.All);
                     var contents = new List<GlobalReportContentDto>();
 
-                    if (entries != null && entries.Length != 0)
+                    if (entries.Count != 0)
                     {
                         var grouped = entries
                             .GroupBy(e => string.IsNullOrEmpty(e.Path) ? "" : Path.GetExtension(e.Path).TrimStart('.'))

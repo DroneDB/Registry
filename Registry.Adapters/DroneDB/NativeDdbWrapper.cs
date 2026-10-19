@@ -127,6 +127,23 @@ public class NativeDdbWrapper : IDdbWrapper
         return str;
     }
 
+    /// <summary>
+    /// Deserializes a native JSON result in place (<see cref="NativeJson"/>) and frees it.
+    /// A missing or null result throws <see cref="DdbException"/> with <paramref name="emptyMessage"/>.
+    /// </summary>
+    private static T DeserializeAndFree<T>(IntPtr output, string emptyMessage) where T : class
+    {
+        try
+        {
+            return NativeJson.Deserialize<T>(output) ?? throw new DdbException(emptyMessage);
+        }
+        finally
+        {
+            if (output != IntPtr.Zero)
+                _DDBFree(output);
+        }
+    }
+
     [DllImport("ddb", EntryPoint = "DDBAdd")]
     private static extern DdbResult _Add([MarshalAs(UnmanagedType.LPUTF8Str)] string ddbPath,
         IntPtr[] paths,
@@ -147,17 +164,7 @@ public class NativeDdbWrapper : IDdbWrapper
             result = _Add(ddbPath, utf8Ptrs, paths.Length, out var output, recursive);
             if (result == DdbResult.Success)
             {
-                var json = MarshalAndFreeUtf8(output);
-
-                if (string.IsNullOrWhiteSpace(json))
-                    throw new DdbException("Unable to add");
-
-                var res = JsonConvert.DeserializeObject<List<Entry>>(json);
-
-                if (res == null)
-                    throw new InvalidOperationException($"Unable to deserialize add result: {json}");
-
-                return res;
+                return DeserializeAndFree<List<Entry>>(output, "Unable to add");
             }
         }
         catch (EntryPointNotFoundException ex)
@@ -217,17 +224,7 @@ public class NativeDdbWrapper : IDdbWrapper
             result = _AddWithOptions(ddbPath, utf8Ptrs, paths.Length, ref options, out var output);
             if (result == DdbResult.Success)
             {
-                var json = MarshalAndFreeUtf8(output);
-
-                if (string.IsNullOrWhiteSpace(json))
-                    throw new DdbException("Unable to add");
-
-                var res = JsonConvert.DeserializeObject<BatchAddResult>(json);
-
-                if (res == null)
-                    throw new InvalidOperationException($"Unable to deserialize add result: {json}");
-
-                return res;
+                return DeserializeAndFree<BatchAddResult>(output, "Unable to add");
             }
         }
         catch (EntryPointNotFoundException ex)
@@ -319,17 +316,7 @@ public class NativeDdbWrapper : IDdbWrapper
                                     withHash);
             if (result == DdbResult.Success)
             {
-                var json = MarshalAndFreeUtf8(output);
-
-                if (string.IsNullOrWhiteSpace(json))
-                    throw new DdbException("Unable get info");
-
-                var res = JsonConvert.DeserializeObject<List<Entry>>(json);
-
-                if (res == null)
-                    throw new InvalidOperationException($"Unable to deserialize info result: {json}");
-
-                return res;
+                return DeserializeAndFree<List<Entry>>(output, "Unable get info");
             }
         }
         catch (EntryPointNotFoundException ex)
@@ -400,13 +387,7 @@ public class NativeDdbWrapper : IDdbWrapper
 
             ThrowForFinalResult(result, "get");
 
-            var json = MarshalAndFreeUtf8(output);
-
-            if (string.IsNullOrWhiteSpace(json))
-                throw new InvalidOperationException("Unable to get entry");
-
-            return JsonConvert.DeserializeObject<Entry>(json) ??
-                   throw new InvalidOperationException($"Unable to deserialize entry: {json}");
+            return DeserializeAndFree<Entry>(output, "Unable to get entry");
         }
         catch (EntryPointNotFoundException ex)
         {
@@ -420,6 +401,53 @@ public class NativeDdbWrapper : IDdbWrapper
         {
             throw new DdbException(
                 $"Error in calling ddb lib. Last error: \"{SafeGetLastError("get")}\", check inner exception for details",
+                ex);
+        }
+    }
+
+    [DllImport("ddb", EntryPoint = "DDBListEntries")]
+    private static extern DdbResult _ListEntries([MarshalAs(UnmanagedType.LPUTF8Str)] string ddbPath,
+        [MarshalAs(UnmanagedType.LPUTF8Str)] string folder,
+        [MarshalAs(UnmanagedType.I1)] bool recursive,
+        [MarshalAs(UnmanagedType.LPUTF8Str)] string namePattern,
+        [MarshalAs(UnmanagedType.LPUTF8Str)] string types,
+        [MarshalAs(UnmanagedType.I1)] bool withDetails,
+        out IntPtr output);
+
+    public List<Entry> ListEntries(string ddbPath, EntryQuery query) => ListEntries<Entry>(ddbPath, query, true);
+
+    public List<EntrySummary> ListEntrySummaries(string ddbPath, EntryQuery query) =>
+        ListEntries<EntrySummary>(ddbPath, query, false);
+
+    private static List<T> ListEntries<T>(string ddbPath, EntryQuery query, bool withDetails)
+    {
+        ArgumentNullException.ThrowIfNull(ddbPath);
+        ArgumentNullException.ThrowIfNull(query);
+
+        // Native type names are the enum names (typeFromHuman ignores case)
+        var types = query.Types is { Count: > 0 }
+            ? string.Join(',', query.Types.Distinct().Select(t => t.ToString().ToLowerInvariant()))
+            : string.Empty;
+
+        try
+        {
+            var result = _ListEntries(ddbPath, (query.Path ?? string.Empty).Replace('\\', '/'), query.Recursive,
+                query.NamePattern ?? string.Empty, types, withDetails, out var output);
+            ThrowForFinalResult(result, "list entries");
+            return DeserializeAndFree<List<T>>(output, "Unable to list entries");
+        }
+        catch (EntryPointNotFoundException ex)
+        {
+            throw new DdbException($"Error in calling ddb lib: incompatible versions ({ex.Message})", ex);
+        }
+        catch (DdbException)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            throw new DdbException(
+                $"Error in calling ddb lib. Last error: \"{SafeGetLastError("list entries")}\", check inner exception for details",
                 ex);
         }
     }
@@ -452,17 +480,7 @@ public class NativeDdbWrapper : IDdbWrapper
 
             if (lst == DdbResult.Success)
             {
-                var json = MarshalAndFreeUtf8(output);
-
-                if (string.IsNullOrWhiteSpace(json))
-                    throw new InvalidOperationException("Unable get list");
-
-                var res = JsonConvert.DeserializeObject<List<Entry>>(json);
-
-                if (res == null)
-                    throw new InvalidOperationException($"Unable to deserialize list result: {json}");
-
-                return res;
+                return DeserializeAndFree<List<Entry>>(output, "Unable get list");
             }
         }
         catch (EntryPointNotFoundException ex)
@@ -934,17 +952,7 @@ public class NativeDdbWrapper : IDdbWrapper
             result = _DDBGetStamp(ddbPath, out var output);
             if (result == DdbResult.Success)
             {
-                var json = MarshalAndFreeUtf8(output);
-
-                if (json == null)
-                    throw new InvalidOperationException("No result from DDBGetStamp call");
-
-                var res = JsonConvert.DeserializeObject<Stamp>(json);
-
-                if (res == null)
-                    throw new InvalidOperationException($"Unable to deserialize stamp result: {json}");
-
-                return res;
+                return DeserializeAndFree<Stamp>(output, "No result from DDBGetStamp call");
             }
         }
         catch (EntryPointNotFoundException ex)
@@ -1028,17 +1036,7 @@ public class NativeDdbWrapper : IDdbWrapper
                                     out var conflictsPtr);
             if (result == DdbResult.Success)
             {
-                var conflicts = MarshalAndFreeUtf8(conflictsPtr);
-
-                if (string.IsNullOrWhiteSpace(conflicts))
-                    throw new DdbException("Unable get applydelta result");
-
-                var res = JsonConvert.DeserializeObject<List<string>>(conflicts);
-
-                if (res == null)
-                    throw new InvalidOperationException($"Unable to deserialize apply delta result: {conflicts}");
-
-                return res;
+                return DeserializeAndFree<List<string>>(conflictsPtr, "Unable get applydelta result");
             }
         }
         catch (EntryPointNotFoundException ex)
@@ -1070,17 +1068,7 @@ public class NativeDdbWrapper : IDdbWrapper
             result = _Delta(sourceJson, targetJson, out var output, "json");
             if (result == DdbResult.Success)
             {
-                var json = MarshalAndFreeUtf8(output);
-
-                if (string.IsNullOrWhiteSpace(json))
-                    throw new InvalidOperationException("Unable get delta");
-
-                var res = JsonConvert.DeserializeObject<Delta>(json);
-
-                if (res == null)
-                    throw new InvalidOperationException($"Unable to deserialize delta result: {json}");
-
-                return res;
+                return DeserializeAndFree<Delta>(output, "Unable get delta");
             }
         }
         catch (EntryPointNotFoundException ex)
@@ -1116,17 +1104,7 @@ public class NativeDdbWrapper : IDdbWrapper
             result = _ComputeDeltaLocals(deltaJson, ddbPath, hlDestFolder, out var outputPtr);
             if (result == DdbResult.Success)
             {
-                var output = MarshalAndFreeUtf8(outputPtr);
-
-                if (string.IsNullOrWhiteSpace(output))
-                    throw new DdbException("Unable get ComputeDeltaLocals result");
-
-                var res = JsonConvert.DeserializeObject<Dictionary<string, bool>>(output);
-
-                if (res == null)
-                    throw new InvalidOperationException($"Unable to deserialize ComputeDeltaLocals result: {output}");
-
-                return res;
+                return DeserializeAndFree<Dictionary<string, bool>>(outputPtr, "Unable get ComputeDeltaLocals result");
             }
         }
         catch (EntryPointNotFoundException ex)
@@ -1338,13 +1316,7 @@ public class NativeDdbWrapper : IDdbWrapper
             result = _GetBuildStatus(ddbPath, utf8Ptrs, paths.Length, out var output);
             if (result == DdbResult.Success)
             {
-                var json = MarshalAndFreeUtf8(output);
-
-                if (string.IsNullOrWhiteSpace(json))
-                    throw new InvalidOperationException("Unable to get build status");
-
-                return JsonConvert.DeserializeObject<EntryBuildStatus[]>(json) ??
-                       throw new InvalidOperationException($"Unable to deserialize build status: {json}");
+                return DeserializeAndFree<EntryBuildStatus[]>(output, "Unable to get build status");
             }
         }
         catch (EntryPointNotFoundException ex)
@@ -1414,17 +1386,7 @@ public class NativeDdbWrapper : IDdbWrapper
             result = _GetPendingBuildInfo(ddbPath, out var output);
             if (result == DdbResult.Success)
             {
-                var json = MarshalAndFreeUtf8(output);
-
-                if (json == null)
-                    throw new InvalidOperationException("No result from DDBGetPendingBuildInfo call");
-
-                var res = JsonConvert.DeserializeObject<PendingBuildInfo[]>(json);
-
-                if (res == null)
-                    throw new InvalidOperationException($"Unable to deserialize pending build info result: {json}");
-
-                return res;
+                return DeserializeAndFree<PendingBuildInfo[]>(output, "No result from DDBGetPendingBuildInfo call");
             }
         }
         catch (EntryPointNotFoundException ex)
@@ -1459,17 +1421,7 @@ public class NativeDdbWrapper : IDdbWrapper
             result = _Cleanup(ddbPath, out var output);
             if (result == DdbResult.Success)
             {
-                var json = MarshalAndFreeUtf8(output);
-
-                if (json == null)
-                    throw new InvalidOperationException("No result from DDBCleanup call");
-
-                var res = JsonConvert.DeserializeObject<DdbCleanupResult>(json);
-
-                if (res == null)
-                    throw new InvalidOperationException($"Unable to deserialize cleanup result: {json}");
-
-                return res;
+                return DeserializeAndFree<DdbCleanupResult>(output, "No result from DDBCleanup call");
             }
         }
         catch (EntryPointNotFoundException ex)
@@ -1503,17 +1455,7 @@ public class NativeDdbWrapper : IDdbWrapper
             result = _MetaAdd(ddbPath, path ?? string.Empty, key, data, out var output);
             if (result == DdbResult.Success)
             {
-                var json = MarshalAndFreeUtf8(output);
-
-                if (json == null)
-                    throw new InvalidOperationException("No result from DDBMetaAdd call");
-
-                var res = JsonConvert.DeserializeObject<Meta>(json);
-
-                if (res == null)
-                    throw new InvalidOperationException($"Unable to deserialize meta result: {json}");
-
-                return res;
+                return DeserializeAndFree<Meta>(output, "No result from DDBMetaAdd call");
             }
         }
         catch (EntryPointNotFoundException ex)
@@ -1546,17 +1488,7 @@ public class NativeDdbWrapper : IDdbWrapper
             result = _MetaSet(ddbPath, path ?? string.Empty, key, data, out var output);
             if (result == DdbResult.Success)
             {
-                var json = MarshalAndFreeUtf8(output);
-
-                if (json == null)
-                    throw new InvalidOperationException("No result from DDBMetaSet call");
-
-                var res = JsonConvert.DeserializeObject<Meta>(json);
-
-                if (res == null)
-                    throw new InvalidOperationException($"Unable to deserialize meta result: {json}");
-
-                return res;
+                return DeserializeAndFree<Meta>(output, "No result from DDBMetaSet call");
             }
         }
         catch (EntryPointNotFoundException ex)
@@ -1711,17 +1643,7 @@ public class NativeDdbWrapper : IDdbWrapper
             result = _MetaList(ddbPath, path ?? string.Empty, out var output);
             if (result == DdbResult.Success)
             {
-                var json = MarshalAndFreeUtf8(output);
-
-                if (json == null)
-                    throw new InvalidOperationException("No result from DDBMetaList call");
-
-                var res = JsonConvert.DeserializeObject<List<MetaListItem>>(json);
-
-                if (res == null)
-                    throw new InvalidOperationException($"Unable to deserialize meta list result: {json}");
-
-                return res;
+                return DeserializeAndFree<List<MetaListItem>>(output, "No result from DDBMetaList call");
             }
         }
         catch (EntryPointNotFoundException ex)
@@ -1753,17 +1675,7 @@ public class NativeDdbWrapper : IDdbWrapper
             result = _MetaDump(ddbPath, ids ?? "[]", out var output);
             if (result == DdbResult.Success)
             {
-                var json = MarshalAndFreeUtf8(output);
-
-                if (json == null)
-                    throw new InvalidOperationException("No result from DDBMetaDump call");
-
-                var res = JsonConvert.DeserializeObject<List<MetaDump>>(json);
-
-                if (res == null)
-                    throw new InvalidOperationException($"Unable to deserialize meta dump result: {json}");
-
-                return res;
+                return DeserializeAndFree<List<MetaDump>>(output, "No result from DDBMetaDump call");
             }
         }
         catch (EntryPointNotFoundException ex)
@@ -1798,17 +1710,7 @@ public class NativeDdbWrapper : IDdbWrapper
             result = _Stac(ddbPath, entry ?? string.Empty, stacCollectionRoot, id, stacCatalogRoot, out var output);
             if (result == DdbResult.Success)
             {
-                var json = MarshalAndFreeUtf8(output);
-
-                if (json == null)
-                    throw new InvalidOperationException("No result from DDBStac call");
-
-                var res = JsonConvert.DeserializeObject<JToken>(json);
-
-                if (res == null)
-                    throw new InvalidOperationException($"Unable to deserialize stac result: {json}");
-
-                return res;
+                return DeserializeAndFree<JToken>(output, "No result from DDBStac call");
             }
         }
         catch (EntryPointNotFoundException ex)
@@ -1848,17 +1750,7 @@ public class NativeDdbWrapper : IDdbWrapper
                                     bbox ?? string.Empty, datetime ?? string.Empty, limit, offset, out var output);
             if (result == DdbResult.Success)
             {
-                var json = MarshalAndFreeUtf8(output);
-
-                if (json == null)
-                    throw new InvalidOperationException("No result from DDBStacItemCollection call");
-
-                var res = JsonConvert.DeserializeObject<JToken>(json);
-
-                if (res == null)
-                    throw new InvalidOperationException($"Unable to deserialize stac item collection result: {json}");
-
-                return res;
+                return DeserializeAndFree<JToken>(output, "No result from DDBStacItemCollection call");
             }
         }
         catch (EntryPointNotFoundException ex)
@@ -1909,17 +1801,7 @@ public class NativeDdbWrapper : IDdbWrapper
                 : _RescanEx(ddbPath, out output, types, options.Extensions, options.StopOnError);
             if (result == DdbResult.Success)
             {
-                var json = MarshalAndFreeUtf8(output);
-
-                if (string.IsNullOrWhiteSpace(json))
-                    throw new DdbException("Unable to get rescan results");
-
-                var res = JsonConvert.DeserializeObject<List<RescanResult>>(json);
-
-                if (res == null)
-                    throw new InvalidOperationException($"Unable to deserialize rescan result: {json}");
-
-                return res;
+                return DeserializeAndFree<List<RescanResult>>(output, "Unable to get rescan results");
             }
         }
         catch (EntryPointNotFoundException ex)

@@ -286,6 +286,51 @@ public class NativeDdbWrapperTests : TestBase
 
     }
 
+    /// <summary>
+    /// REG-08: DDBListEntries returns what DDBList returns once filtered with the rules
+    /// ObjectsManager.Search applies (FileSystemName expression on the name, entry type).
+    /// </summary>
+    [TestCase("", true, null, null)]
+    [TestCase("", false, null, null)]
+    [TestCase("Sub", true, null, null)]
+    [TestCase("", true, "*.jpg", null)]
+    [TestCase("", true, "dji_00?7.JPG", null)]
+    [TestCase("", true, "*", new[] { EntryType.Directory })]
+    [TestCase("", true, null, new[] { EntryType.GeoImage, EntryType.Image })]
+    [TestCase("Sub", false, "2020*", new[] { EntryType.GeoImage })]
+    public void ListEntries_MatchesFilteredFullListing(string folder, bool recursive, string pattern,
+        EntryType[] types)
+    {
+        using var test = new TestFS(Test1ArchiveUrl, BaseTestFolder);
+        var ddbPath = Path.Combine(test.TestFolder, "public", "default");
+
+        var full = DdbWrapper.List(ddbPath, Path.Combine(ddbPath, folder), recursive);
+        var expected = full
+            .Where(e => pattern == null ||
+                        System.IO.Enumeration.FileSystemName.MatchesSimpleExpression(pattern, Path.GetFileName(e.Path)))
+            .Where(e => types == null || types.Contains(e.Type))
+            .ToList();
+        expected.ShouldNotBeEmpty();
+
+        var query = new EntryQuery(folder, recursive, pattern, types);
+        var found = DdbWrapper.ListEntries(ddbPath, query);
+        found.ShouldBeEquivalentTo(expected);
+
+        var summaries = DdbWrapper.ListEntrySummaries(ddbPath, query);
+        summaries.Select(e => (e.Path, e.Hash, e.Type, e.Size, e.ModifiedTime, e.Depth))
+            .ShouldBe(expected.Select(e => (e.Path, e.Hash, e.Type, e.Size, e.ModifiedTime, e.Depth)));
+        summaries.ShouldAllBe(e => e.GetType() == typeof(EntrySummary));
+    }
+
+    [Test]
+    public void ListEntries_UnknownType_Throws()
+    {
+        using var test = new TestFS(Test1ArchiveUrl, BaseTestFolder);
+        var ddbPath = Path.Combine(test.TestFolder, "public", "default");
+
+        Should.Throw<DdbException>(() => DdbWrapper.ListEntries(ddbPath, new EntryQuery(Types: [(EntryType)99])));
+    }
+
     [Test]
     public void GetEntry_ExistingFile_MatchesListing()
     {

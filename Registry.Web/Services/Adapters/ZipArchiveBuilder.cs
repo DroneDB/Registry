@@ -42,10 +42,7 @@ public sealed class ZipArchiveBuilder : IZipArchiveBuilder
                 if (entry.Type == EntryType.Directory)
                 {
                     // Recursive mode: the paths could contain nested folders that we need to expand.
-                    var items = ddb.Search(path, true)?.ToArray();
-
-                    if (items == null)
-                        throw new InvalidOperationException("Ddb is empty, what should I get?");
+                    var items = ddb.FindSummaries(EntryQuery.Under(path));
 
                     tempFolders.Add(path);
                     tempFiles.AddRange(items.Where(item => item.Type != EntryType.Directory)
@@ -65,9 +62,9 @@ public sealed class ZipArchiveBuilder : IZipArchiveBuilder
         }
         else
         {
-            var entries = ddb.Search(null, true)?.ToArray();
+            var entries = ddb.FindSummaries(EntryQuery.All);
 
-            if (entries == null || entries.Length == 0)
+            if (entries.Count == 0)
                 throw new InvalidOperationException("Ddb is empty, what should I get?");
 
             // Select everything and sort

@@ -117,7 +117,7 @@ public class SystemManagerTest : TestBase
 
         var ddbMock = new Mock<IDDB>();
         ddbMock.Setup(x => x.GetInfo()).Returns(new Registry.Ports.DroneDB.Entry { Size = 1024L });
-        ddbMock.Setup(x => x.Search("*", true)).Returns(new List<Registry.Ports.DroneDB.Entry>
+        ddbMock.Setup(x => x.FindSummaries(EntryQuery.All)).Returns(new List<Registry.Ports.DroneDB.Entry>
         {
             new Registry.Ports.DroneDB.Entry { Path = "image1.jpg", Size = 100 },
             new Registry.Ports.DroneDB.Entry { Path = "image2.jpg", Size = 200 },

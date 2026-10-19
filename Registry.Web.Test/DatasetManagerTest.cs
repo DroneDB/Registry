@@ -142,6 +142,7 @@ public class DatasetManagerTest : TestBase
             _httpContextAccessorMock.Object, TestCaches.Summaries(_ddbFactoryMock.Object));
 
         var ddbMock = new Mock<IDDB>();
+        ddbMock.Setup(x => x.FindSummaries(It.IsAny<EntryQuery>())).Returns([]);
         ddbMock.Setup(x => x.GetInfo()).Returns(new Entry
         {
             Properties = new Dictionary<string, object>
@@ -199,6 +200,7 @@ public class DatasetManagerTest : TestBase
             _httpContextAccessorMock.Object, TestCaches.Summaries(_ddbFactoryMock.Object));
 
         var ddbMock = new Mock<IDDB>();
+        ddbMock.Setup(x => x.FindSummaries(It.IsAny<EntryQuery>())).Returns([]);
         ddbMock.Setup(x => x.GetInfo()).Returns(new Entry
         {
             Properties = new Dictionary<string, object>

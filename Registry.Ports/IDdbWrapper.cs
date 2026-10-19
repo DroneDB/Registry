@@ -48,6 +48,20 @@ public interface IDdbWrapper
     public List<Entry> List(string ddbPath, string path, bool recursive = false, int maxRecursionDepth = 0);
     public List<Entry> List(string ddbPath, string[] paths, bool recursive = false, int maxRecursionDepth = 0);
 
+    /// <summary>
+    /// The entries selected by <paramref name="query"/> (filtered natively), sorted by path,
+    /// with properties, geometries and meta.
+    /// </summary>
+    /// <param name="ddbPath">Dataset folder (parent of .ddb)</param>
+    /// <param name="query">Dataset-relative folder with forward slashes, and filters</param>
+    public List<Entry> ListEntries(string ddbPath, EntryQuery query);
+
+    /// <summary>
+    /// <see cref="ListEntries"/> without properties, geometries and meta: a fraction of the
+    /// native work, payload and managed allocations.
+    /// </summary>
+    public List<EntrySummary> ListEntrySummaries(string ddbPath, EntryQuery query);
+
     public void AppendPassword(string ddbPath, string password);
 
     public bool VerifyPassword(string ddbPath, string password);

@@ -211,6 +211,47 @@ public class ObjectManagerTest : TestBase
         res.Count().ShouldBe(1);
     }
 
+    /// <summary>
+    /// REG-08: the name and type filters of a search run in DroneDB; the dataset is never listed
+    /// in full and filtered here.
+    /// </summary>
+    [Test]
+    public async Task Search_PushesNameAndTypeFiltersToDroneDb()
+    {
+        using var test = new TestFS(Test4ArchiveUrl, BaseTestFolder);
+        await using var context = GetTest1Context();
+
+        var settings = JsonConvert.DeserializeObject<AppSettings>(_settingsJson);
+        settings.DatasetsPath = test.TestFolder;
+        _appSettingsMock.Setup(o => o.Value).Returns(settings);
+        _authManagerMock.Setup(o => o.IsUserAdmin()).Returns(Task.FromResult(true));
+        _authManagerMock.Setup(o => o.RequestAccess(It.IsAny<Dataset>(),
+            It.IsAny<AccessType>())).Returns(Task.FromResult(true));
+
+        // Forwards the filtered listing to libddb; any other listing call fails (strict mock)
+        var wrapper = new Mock<IDdbWrapper>(MockBehavior.Strict);
+        wrapper.Setup(w => w.ListEntries(It.IsAny<string>(), It.IsAny<EntryQuery>()))
+            .Returns((string ddbPath, EntryQuery query) => DdbWrapper.ListEntries(ddbPath, query));
+
+        var webUtils = new WebUtils(_authManagerMock.Object, context, _appSettingsMock.Object,
+            _httpContextAccessorMock.Object, TestCaches.Summaries(_ddbFactoryMock.Object));
+        var objectManager = new ObjectsManager(_objectManagerLogger, context,
+            _appSettingsMock.Object,
+            new DdbManager(_appSettingsMock.Object, _ddbFactoryLogger, wrapper.Object), webUtils,
+            _authManagerMock.Object, _cacheManager, _fileSystem, _backgroundJobsProcessor, wrapper.Object,
+            _thumbnailGeneratorMock.Object, _jobIndexQueryMock.Object, _buildPendingService);
+
+        var res = (await objectManager.Search(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug,
+            "dji_003?.jpg", null, true, EntryType.GeoImage)).ToArray();
+
+        res.Length.ShouldBe(6, "same answer as the C# expression over the full listing");
+        res.ShouldAllBe(e => e.Type == EntryType.GeoImage);
+        wrapper.Verify(w => w.ListEntries(It.IsAny<string>(), It.Is<EntryQuery>(q =>
+            q.Path == string.Empty && q.Recursive && q.NamePattern == "dji_003?.jpg" &&
+            q.Types != null && q.Types.Single() == EntryType.GeoImage)), Times.Once);
+        wrapper.VerifyNoOtherCalls();
+    }
+
     [Test]
     public async Task Get_MissingFile_NotFound()
     {

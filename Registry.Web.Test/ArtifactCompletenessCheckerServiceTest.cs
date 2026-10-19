@@ -56,7 +56,7 @@ public class ArtifactCompletenessCheckerServiceTest : TestBase
         await using var context = GetTest1Context();
 
         var ddbMock = new Mock<IDDB>();
-        ddbMock.Setup(x => x.Search(It.IsAny<string>(), true))
+        ddbMock.Setup(x => x.FindSummaries(It.IsAny<EntryQuery>()))
             .Returns([new DdbEntry { Path = "readme.txt", Hash = "h1" }]);
         ddbMock.Setup(x => x.IsBuildable("readme.txt")).Returns(false);
 
@@ -80,7 +80,7 @@ public class ArtifactCompletenessCheckerServiceTest : TestBase
         await using var context = GetTest1Context();
 
         var ddbMock = new Mock<IDDB>();
-        ddbMock.Setup(x => x.Search(It.IsAny<string>(), true))
+        ddbMock.Setup(x => x.FindSummaries(It.IsAny<EntryQuery>()))
             .Returns([new DdbEntry { Path = "ortho.tif", Hash = "h2" }]);
         ddbMock.Setup(x => x.IsBuildable("ortho.tif")).Returns(true);
         ddbMock.Setup(x => x.IsBuildActive("ortho.tif")).Returns(true);
@@ -105,7 +105,7 @@ public class ArtifactCompletenessCheckerServiceTest : TestBase
         await using var context = GetTest1Context();
 
         var ddbMock = new Mock<IDDB>();
-        ddbMock.Setup(x => x.Search(It.IsAny<string>(), true))
+        ddbMock.Setup(x => x.FindSummaries(It.IsAny<EntryQuery>()))
             .Returns([new DdbEntry { Path = "ortho.tif", Hash = "h2" }]);
         ddbMock.Setup(x => x.IsBuildable("ortho.tif")).Returns(true);
         ddbMock.Setup(x => x.IsBuildActive("ortho.tif")).Returns(false);
@@ -130,7 +130,7 @@ public class ArtifactCompletenessCheckerServiceTest : TestBase
         await using var context = GetTest1Context();
 
         var ddbMock = new Mock<IDDB>();
-        ddbMock.Setup(x => x.Search(It.IsAny<string>(), true))
+        ddbMock.Setup(x => x.FindSummaries(It.IsAny<EntryQuery>()))
             .Returns([new DdbEntry { Path = "layer.geojson", Hash = "h3" }]);
         ddbMock.Setup(x => x.IsBuildable("layer.geojson")).Returns(true);
         ddbMock.Setup(x => x.IsBuildActive("layer.geojson")).Returns(false);
@@ -167,7 +167,7 @@ public class ArtifactCompletenessCheckerServiceTest : TestBase
             new DdbEntry { Path = "layer.fgb",  Hash = "h4" },          // INCOMPLETE
         };
         var ddbMock = new Mock<IDDB>();
-        ddbMock.Setup(x => x.Search(It.IsAny<string>(), true)).Returns(entries);
+        ddbMock.Setup(x => x.FindSummaries(It.IsAny<EntryQuery>())).Returns(entries);
         ddbMock.Setup(x => x.IsBuildable("readme.txt")).Returns(false);
         ddbMock.Setup(x => x.IsBuildable("ortho.tif")).Returns(true);
         ddbMock.Setup(x => x.IsBuildable("pc.laz")).Returns(true);
@@ -226,7 +226,7 @@ public class ArtifactCompletenessCheckerServiceTest : TestBase
             new DdbEntry { Path = "good.tif",   Hash = "h2" },
         };
         var ddbMock = new Mock<IDDB>();
-        ddbMock.Setup(x => x.Search(It.IsAny<string>(), true)).Returns(entries);
+        ddbMock.Setup(x => x.FindSummaries(It.IsAny<EntryQuery>())).Returns(entries);
         ddbMock.Setup(x => x.IsBuildable("broken.tif"))
             .Throws(new InvalidOperationException("boom"));
         ddbMock.Setup(x => x.IsBuildable("good.tif")).Returns(true);
@@ -253,7 +253,7 @@ public class ArtifactCompletenessCheckerServiceTest : TestBase
     {
         await using var context = GetTest1Context();
         var ddb = new Mock<IDDB>();
-        ddb.Setup(x => x.Search(It.IsAny<string>(), true)).Returns([
+        ddb.Setup(x => x.FindSummaries(It.IsAny<EntryQuery>())).Returns([
             new DdbEntry { Path = "interrupted.obj", Hash = "swap-hash" },
             new DdbEntry { Path = "nexus-only.obj", Hash = "ordinary-hash" }
         ]);
@@ -276,7 +276,7 @@ public class ArtifactCompletenessCheckerServiceTest : TestBase
     private Mock<IDDB> SingleIncompleteEntry(string path, string hash, PendingBuildInfo[] pending = null)
     {
         var ddb = new Mock<IDDB>();
-        ddb.Setup(x => x.Search(It.IsAny<string>(), true)).Returns([new DdbEntry { Path = path, Hash = hash }]);
+        ddb.Setup(x => x.FindSummaries(It.IsAny<EntryQuery>())).Returns([new DdbEntry { Path = path, Hash = hash }]);
         ddb.Setup(x => x.IsBuildable(path)).Returns(true);
         ddb.Setup(x => x.IsBuildActive(path)).Returns(false);
         ddb.Setup(x => x.IsBuildComplete(path)).Returns(false);

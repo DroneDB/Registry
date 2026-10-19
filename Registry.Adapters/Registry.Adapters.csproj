@@ -5,6 +5,8 @@
         <Configurations>Debug;Release;DebugEf</Configurations>
         <Nullable>enable</Nullable>
         <LangVersion>13</LangVersion>
+        <!-- NativeJson reads libddb's UTF-8 output in place -->
+        <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     </PropertyGroup>
 
     <ItemGroup>

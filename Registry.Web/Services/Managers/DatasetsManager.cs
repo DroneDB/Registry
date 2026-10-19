@@ -141,7 +141,7 @@ public class DatasetsManager : IDatasetsManager
 
     private bool CheckHasThumbnail(IDDB ddb)
     {
-        var rootEntries = ddb.Search("", recursive: false);
+        var rootEntries = ddb.FindSummaries(new EntryQuery(Recursive: false));
         var rootNames = new HashSet<string>(
             rootEntries.Select(e => Path.GetFileName(e.Path)),
             StringComparer.OrdinalIgnoreCase);

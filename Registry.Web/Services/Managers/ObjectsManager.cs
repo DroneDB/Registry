@@ -131,10 +131,7 @@ public class ObjectsManager : IObjectsManager
 
         _logger.LogInformation("Searching in '{Path}'", path);
 
-        var entities = ddb.Search(path, recursive);
-
-        if (type != null)
-            entities = entities.Where(item => item.Type == type);
+        var entities = ddb.Find(new EntryQuery(path, recursive, Types: TypesOf(type)));
 
         var files = entities.Select(item => item.ToDto()).ToArray();
 
@@ -160,10 +157,10 @@ public class ObjectsManager : IObjectsManager
 
         _logger.LogInformation("Searching in '{Path}' -> {Query} ({Recursive}", path, query, recursive ? 'r' : 'n');
 
-        var entities = ddb.Search(path, recursive);
-
-        if (type != null)
-            entities = entities.Where(item => item.Type == type);
+        // DroneDB selects by folder, name and type; the expression check keeps the exact
+        // FileSystemName rules (non-ASCII case, '\' escapes) on what it returns
+        var entities = ddb.Find(new EntryQuery(path, recursive, string.IsNullOrEmpty(query) ? null : query,
+            TypesOf(type)));
 
         var files = (from entry in entities
             let name = Path.GetFileName(entry.Path)
@@ -177,6 +174,8 @@ public class ObjectsManager : IObjectsManager
 
         return files;
     }
+
+    private static EntryType[]? TypesOf(EntryType? type) => type is { } t ? [t] : null;
 
     public async Task<StorageEntryDto> Get(string orgSlug, string dsSlug, string path)
     {
@@ -554,7 +553,7 @@ public class ObjectsManager : IObjectsManager
         if (entry.Type == EntryType.Directory)
         {
             // For directories, check all files inside
-            var allEntries = ddb.Search(path, true);
+            var allEntries = ddb.FindSummaries(EntryQuery.Under(path));
             var filesWithActiveBuild = allEntries
                 .Where(item => item.Type != EntryType.Directory && ddb.IsBuildActive(item.Path))
                 .ToArray();
@@ -743,7 +742,7 @@ public class ObjectsManager : IObjectsManager
             else
             {
                 // If this is a folder we need to copy all build folders for each file in the folder
-                var allEntries = sourceDdb.Search(sourcePath, true);
+                var allEntries = sourceDdb.FindSummaries(EntryQuery.Under(sourcePath));
                 var files = allEntries.Where(item => item.Type != EntryType.Directory).ToArray();
                 _logger.LogInformation("This is a folder transfer, checking build folders for {FilesCount} files",
                     files.Length);
@@ -1294,7 +1293,7 @@ public class ObjectsManager : IObjectsManager
 
         foreach (var path in paths)
         {
-            var objs = ddb.Search(path, true).ToArray();
+            var objs = ddb.FindSummaries(EntryQuery.Under(path)).ToArray();
 
             // Let's delete from DDB first
             try
@@ -1419,7 +1418,7 @@ public class ObjectsManager : IObjectsManager
                     continue;
                 }
 
-                var objs = ddb.Search(path, true).ToArray();
+                var objs = ddb.FindSummaries(EntryQuery.Under(path)).ToArray();
 
                 // Delete from DDB first
                 _logger.LogInformation("Removing from DDB: {ObjPath}", path);

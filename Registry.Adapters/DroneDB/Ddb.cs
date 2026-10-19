@@ -146,14 +146,26 @@ public class DDB : IDDB
 
     private static string NormalizePath(string path) => path.Replace('\\', '/');
 
-    public Entry? GetEntry(string path)
+    /// <summary>
+    /// Dataset-relative form of <paramref name="path"/>, resolved like the native listing
+    /// ("./a", "a/../b", "dir/"): "" for the dataset root, null outside the dataset.
+    /// </summary>
+    private string? ToDatasetRelative(string? path)
     {
-        // Resolve the path like Search does ("./a", "a/../b", "dir/"); the dataset root has
-        // no entry of its own and nothing outside the dataset is indexed.
         var relativePath = NormalizePath(Path.GetRelativePath(DatasetFolderPath, GetLocalPath(path ?? string.Empty)))
             .TrimEnd('/');
-        if (relativePath is "." or "" || relativePath == ".." || relativePath.StartsWith("../") ||
-            Path.IsPathRooted(relativePath))
+        if (relativePath is "." or "")
+            return string.Empty;
+        if (relativePath == ".." || relativePath.StartsWith("../") || Path.IsPathRooted(relativePath))
+            return null;
+        return relativePath;
+    }
+
+    public Entry? GetEntry(string path)
+    {
+        // The dataset root has no entry of its own and nothing outside the dataset is indexed
+        var relativePath = ToDatasetRelative(path);
+        if (string.IsNullOrEmpty(relativePath))
             return null;
 
         try
@@ -191,6 +203,26 @@ public class DDB : IDDB
         catch (DdbException ex) when (ex is not DdbBusyException && ex is not DdbBuildInProgressException)
         {
             throw new InvalidOperationException($"Cannot list '{path}' to ddb '{DatasetFolderPath}'", ex);
+        }
+    }
+
+    public IReadOnlyList<Entry> Find(EntryQuery query) => FindWith(query, _ddbWrapper.ListEntries);
+
+    public IReadOnlyList<EntrySummary> FindSummaries(EntryQuery query) =>
+        FindWith(query, _ddbWrapper.ListEntrySummaries);
+
+    private List<T> FindWith<T>(EntryQuery query, Func<string, EntryQuery, List<T>> list)
+    {
+        ArgumentNullException.ThrowIfNull(query);
+        var folder = ToDatasetRelative(query.Path) ??
+                     throw new ArgumentException($"Path '{query.Path}' is outside the dataset", nameof(query));
+        try
+        {
+            return list(DatasetFolderPath, query with { Path = folder });
+        }
+        catch (DdbException ex) when (ex is not DdbBusyException && ex is not DdbBuildInProgressException)
+        {
+            throw new InvalidOperationException($"Cannot list '{query.Path}' in ddb '{DatasetFolderPath}'", ex);
         }
     }
 

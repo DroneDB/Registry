@@ -77,13 +77,11 @@ public class OgcLayerCatalog : IOgcLayerCatalog
         var ds = _utils.GetDataset(orgSlug, dsSlug);
         var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
 
-        var entries = ddb.Search(folderPath ?? string.Empty, recursive: true) ?? [];
+        var entries = ddb.Find(EntryQuery.OfTypes(folderPath, EntryType.GeoRaster, EntryType.Vector));
         var result = new List<OgcLayerDto>();
 
         foreach (var e in entries)
         {
-            if (e == null) continue;
-            if (e.Type != EntryType.GeoRaster && e.Type != EntryType.Vector) continue;
 
             var entryBbox = ExtractBboxFromPolygon(e.PolygonGeometry);
 

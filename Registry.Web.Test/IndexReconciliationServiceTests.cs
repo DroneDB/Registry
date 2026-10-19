@@ -81,7 +81,7 @@ public class IndexReconciliationServiceTests
             File.WriteAllText(Path.Combine(root, "unindexed.jpg"), "data");
 
             var ddb = new Mock<IDDB>();
-            ddb.Setup(d => d.Search(".", true)).Returns(Enumerable.Empty<Entry>());
+            ddb.Setup(d => d.FindSummaries(EntryQuery.All)).Returns([]);
 
             var indexQueue = new Mock<IDatasetIndexQueue>();
             indexQueue.Setup(q => q.EnqueueAsync(It.IsAny<DatasetKey>(), It.IsAny<IReadOnlyList<string>>(),
@@ -116,7 +116,7 @@ public class IndexReconciliationServiceTests
             File.WriteAllText(Path.Combine(root, ".uploads", "in-flight.tmp"), "x");
 
             var ddb = new Mock<IDDB>();
-            ddb.Setup(d => d.Search(".", true)).Returns(Enumerable.Empty<Entry>());
+            ddb.Setup(d => d.FindSummaries(EntryQuery.All)).Returns([]);
 
             var indexQueue = new Mock<IDatasetIndexQueue>();
 
@@ -157,7 +157,7 @@ public class IndexReconciliationServiceTests
             File.WriteAllText(Path.Combine(root, "real.jpg"), "data");
 
             var ddb = new Mock<IDDB>();
-            ddb.Setup(d => d.Search(".", true)).Returns(Enumerable.Empty<Entry>());
+            ddb.Setup(d => d.FindSummaries(EntryQuery.All)).Returns([]);
 
             var indexQueue = new Mock<IDatasetIndexQueue>();
             indexQueue.Setup(q => q.EnqueueAsync(It.IsAny<DatasetKey>(), It.IsAny<IReadOnlyList<string>>(),
@@ -191,7 +191,7 @@ public class IndexReconciliationServiceTests
             File.WriteAllText(Path.Combine(root, "indexed.jpg"), "data");
 
             var ddb = new Mock<IDDB>();
-            ddb.Setup(d => d.Search(".", true))
+            ddb.Setup(d => d.FindSummaries(EntryQuery.All))
                 .Returns([new Entry { Path = "indexed.jpg", Type = EntryType.Image }]);
 
             var indexQueue = new Mock<IDatasetIndexQueue>();
@@ -219,7 +219,7 @@ public class IndexReconciliationServiceTests
         {
             // Indexed entry has no corresponding file on disk.
             var ddb = new Mock<IDDB>();
-            ddb.Setup(d => d.Search(".", true))
+            ddb.Setup(d => d.FindSummaries(EntryQuery.All))
                 .Returns([new Entry { Path = "gone.jpg", Type = EntryType.Image }]);
 
             var indexQueue = new Mock<IDatasetIndexQueue>();
@@ -255,7 +255,7 @@ public class IndexReconciliationServiceTests
             File.SetLastWriteTimeUtc(recentFile, DateTime.UtcNow);
 
             var ddb = new Mock<IDDB>();
-            ddb.Setup(d => d.Search(".", true)).Returns(Enumerable.Empty<Entry>());
+            ddb.Setup(d => d.FindSummaries(EntryQuery.All)).Returns([]);
 
             var indexQueue = new Mock<IDatasetIndexQueue>();
 
