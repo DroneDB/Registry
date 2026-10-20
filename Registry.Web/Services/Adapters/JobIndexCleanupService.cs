@@ -21,6 +21,8 @@ public class JobIndexCleanupService
     private readonly AppSettings _settings;
     private readonly ILogger<JobIndexCleanupService> _logger;
 
+    private const int DefaultRetentionDays = 60;
+
     public JobIndexCleanupService(
         IJobIndexWriter jobIndexWriter,
         IOptions<AppSettings> settings,
@@ -46,7 +48,7 @@ public class JobIndexCleanupService
 
         var retentionDays = _settings.JobIndexRetentionDays;
         if (retentionDays <= 0)
-            retentionDays = 60;
+            retentionDays = DefaultRetentionDays;
 
         var cutoff = DateTime.UtcNow.AddDays(-retentionDays);
 
