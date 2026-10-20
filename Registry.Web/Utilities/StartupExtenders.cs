@@ -29,13 +29,18 @@ public static class StartupExtenders
     /// <summary>
     /// Configures a DbContext with the specified provider (Sqlite or MySql)
     /// </summary>
+    /// <param name="mySqlVersions">MySQL server version source; defaults to one built from
+    /// <paramref name="configuration"/>, which probes once per connection string per registration
+    /// (not once per scope) unless the version is pinned.</param>
     public static void AddDbContextWithProvider<T>(this IServiceCollection services,
         IConfiguration configuration,
         DbProvider provider,
         string connectionStringName,
-        string migrationsNamespace) where T : DbContext
+        string migrationsNamespace,
+        MySqlServerVersionCache mySqlVersions = null) where T : DbContext
     {
         var connectionString = configuration.GetConnectionString(connectionStringName);
+        mySqlVersions ??= MySqlServerVersionCache.FromConfiguration(configuration);
 
         services.AddDbContext<T>((sp, options) =>
         {
@@ -45,7 +50,7 @@ public static class StartupExtenders
             {
                 DbProvider.Sqlite => options.UseSqlite(connectionString,
                     x => x.MigrationsAssembly($"Registry.Web.{migrationsNamespace}.SqliteMigrations")),
-                DbProvider.Mysql => options.UseMySql(connectionString, ServerVersion.AutoDetect(connectionString),
+                DbProvider.Mysql => options.UseMySql(connectionString, mySqlVersions.Resolve(connectionString),
                     x =>
                     {
                         x.EnableRetryOnFailure();

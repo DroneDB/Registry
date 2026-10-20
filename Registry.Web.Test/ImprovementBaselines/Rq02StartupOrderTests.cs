@@ -2,7 +2,6 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Runtime.InteropServices;
 using System.Threading;
 using System.Threading.Tasks;
 using Hangfire;
@@ -45,18 +44,13 @@ public class Rq02StartupOrderTests
     private static readonly string[] NativeBudgetVariables =
         ["DDB_BUILD_THREADS", "DDB_COG_CACHE_MB", "DDB_WARP_MEMORY_MB"];
 
-    private Dictionary<string, string?> _savedEnvironment = null!;
+    private NativeEnvironmentScope _environment = null!;
 
     [SetUp]
-    public void SetUp() =>
-        _savedEnvironment = NativeBudgetVariables.ToDictionary(n => n, Environment.GetEnvironmentVariable);
+    public void SetUp() => _environment = new NativeEnvironmentScope(NativeBudgetVariables);
 
     [TearDown]
-    public void TearDown()
-    {
-        foreach (var (name, value) in _savedEnvironment)
-            SetNativeEnvironment(name, value);
-    }
+    public void TearDown() => _environment.Dispose();
 
     [Test]
     public void Initialization_CompletesBeforeAnyHostedServiceStarts_IncludingHangfireServers()
@@ -135,23 +129,5 @@ public class Rq02StartupOrderTests
         }
 
         public Task StopAsync(CancellationToken cancellationToken) => Task.CompletedTask;
-    }
-
-    // Native getenv must see the restored value too (libddb reads the native environment)
-    [DllImport("libc", EntryPoint = "setenv")]
-    private static extern int SetEnv(string name, string value, int overwrite);
-
-    [DllImport("libc", EntryPoint = "unsetenv")]
-    private static extern int UnsetEnv(string name);
-
-    [DllImport("ucrtbase", EntryPoint = "_putenv_s", CallingConvention = CallingConvention.Cdecl)]
-    private static extern int PutEnv(string name, string value);
-
-    private static void SetNativeEnvironment(string name, string? value)
-    {
-        Environment.SetEnvironmentVariable(name, value);
-        var result = OperatingSystem.IsWindows() ? PutEnv(name, value ?? "") :
-            value == null ? UnsetEnv(name) : SetEnv(name, value, 1);
-        result.ShouldBe(0);
     }
 }

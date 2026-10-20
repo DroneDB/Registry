@@ -35,6 +35,13 @@ public class AppSettings
     public DbProvider RegistryProvider { get; set; }
 
     /// <summary>
+    /// MySQL server version used by the MySql providers, e.g. "8.0.36-mysql" or "10.11.6-mariadb".
+    /// When set, the server is never probed for its version; when empty it is auto-detected once
+    /// per connection string on first use (see <c>MySqlServerVersionCache</c>).
+    /// </summary>
+    public string MySqlServerVersion { get; set; }
+
+    /// <summary>
     /// Provider for hangfire
     /// </summary>
     [JsonConverter(typeof(StringEnumConverter))]

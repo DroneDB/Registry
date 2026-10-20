@@ -126,11 +126,7 @@ public sealed class ExtractionBudget
     {
         try
         {
-            var root = Path.GetPathRoot(Path.GetFullPath(path));
-            if (string.IsNullOrEmpty(root)) return long.MaxValue;
-
-            var drive = new DriveInfo(root);
-            return drive.IsReady ? drive.AvailableFreeSpace : long.MaxValue;
+            return VolumeInfo.For(path)?.AvailableFreeBytes ?? long.MaxValue;
         }
         catch
         {

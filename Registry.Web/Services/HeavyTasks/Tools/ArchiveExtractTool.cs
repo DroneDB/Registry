@@ -369,17 +369,15 @@ public sealed class ArchiveExtractTool : IHeavyTool
     {
         try
         {
-            var root = Path.GetPathRoot(Path.GetFullPath(datasetFolderPath));
-            if (string.IsNullOrEmpty(root)) return;
+            // The dataset volume, not Path.GetPathRoot (always "/" on Linux)
+            var volume = VolumeInfo.For(datasetFolderPath);
+            if (volume == null) return;
 
-            var drive = new DriveInfo(root);
-            if (!drive.IsReady) return;
-
-            if (drive.AvailableFreeSpace < requiredBytes)
+            if (volume.AvailableFreeBytes < requiredBytes)
                 throw new QuotaExceededException(
                     "Not enough free disk space to extract the archive. " +
                     $"Required: {CommonUtils.GetBytesReadable(requiredBytes)}, " +
-                    $"available: {CommonUtils.GetBytesReadable(drive.AvailableFreeSpace)}.");
+                    $"available: {CommonUtils.GetBytesReadable(volume.AvailableFreeBytes)}.");
         }
         catch (QuotaExceededException)
         {

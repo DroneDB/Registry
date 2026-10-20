@@ -373,6 +373,10 @@ public class ConfigurationDataBuilder : IConfigurationDataBuilder
                     _settings.RegistryProvider.ToString(), _defaults.RegistryProvider.ToString(),
                     ["Sqlite", "Mysql"]),
 
+                StringField("MySqlServerVersion", "MySQL Server Version",
+                    "Pinned MySQL/MariaDB server version (e.g. 8.0.36-mysql, 10.11.6-mariadb). Empty: auto-detected once per connection string on first use.",
+                    _settings.MySqlServerVersion, _defaults.MySqlServerVersion),
+
                 EnumField("HangfireProvider", "Hangfire Provider",
                     "Storage backend for Hangfire background jobs.",
                     _settings.HangfireProvider.ToString(), _defaults.HangfireProvider.ToString(),

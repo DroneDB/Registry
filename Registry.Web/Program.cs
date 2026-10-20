@@ -945,6 +945,9 @@ public class Program
                         /*var registrySqlServerConnectionString =
                             configuration.GetConnectionString("RegistrySqlServerConnection");*/
 
+                        // One probe per connection string for the whole host, or none when pinned
+                        var mySqlVersions = MySqlServerVersionCache.FromConfiguration(configuration);
+
                         services.AddDbContext<RegistryContext>(
                             options => _ = provider switch
                             {
@@ -953,7 +956,7 @@ public class Program
                                     x => x.MigrationsAssembly("Registry.Web.Data.SqliteMigrations")),
 
                                 "MySql" => options.UseMySql(
-                                    registryMysqlConnectionString, ServerVersion.AutoDetect(registryMysqlConnectionString),
+                                    registryMysqlConnectionString, mySqlVersions.Resolve(registryMysqlConnectionString),
                                     x => x.MigrationsAssembly("Registry.Web.Data.MySqlMigrations")),
 
                                 /* NOTE: This is not implemented yet
@@ -980,7 +983,7 @@ public class Program
                                     x => x.MigrationsAssembly("Registry.Web.Identity.SqliteMigrations")),
 
                                 "MySql" => options.UseMySql(
-                                    identityMysqlConnectionString, ServerVersion.AutoDetect(identityMysqlConnectionString),
+                                    identityMysqlConnectionString, mySqlVersions.Resolve(identityMysqlConnectionString),
                                     x => x.MigrationsAssembly("Registry.Web.Identity.MySqlMigrations")),
 
                                 /* NOTE: This is not implemented yet

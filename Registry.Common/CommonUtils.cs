@@ -226,17 +226,14 @@ public static class CommonUtils
         return data;
     }
 
+    /// <summary>
+    /// Size and free space of the volume backing <paramref name="path"/> (the longest matching mount
+    /// point, see <see cref="VolumeInfo.For(string)"/>), or null when it cannot be determined.
+    /// </summary>
     public static StorageInfo GetStorageInfo(string path)
     {
-        var f = new FileInfo(path);
-        var drive = Path.GetPathRoot(f.FullName);
-
-        // This could be improved but It's enough for now
-        var info = DriveInfo.GetDrives()
-            .FirstOrDefault(drv =>
-                string.Equals(drv.Name, drive, StringComparison.OrdinalIgnoreCase));
-
-        return info == null ? null : new StorageInfo(info.TotalSize, info.AvailableFreeSpace);
+        var volume = VolumeInfo.For(path);
+        return volume == null ? null : new StorageInfo(volume.TotalBytes, volume.AvailableFreeBytes);
     }
 
     /// <summary>

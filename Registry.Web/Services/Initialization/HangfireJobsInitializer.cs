@@ -57,66 +57,66 @@ internal class HangfireJobsInitializer
             _logger.LogInformation("Removed deprecated recurring job '{JobId}'", jobId);
         }
 
-        ScheduleJob(recurringJobManager, "cleanup-expired-jobs",
+        ScheduleJob(recurringJobManager, RecurringJobIds.CleanupExpiredJobs,
             ResolveCron(appSettings.CleanupExpiredJobsCron, Cron.Daily()),
             cron => recurringJobManager.AddOrUpdate(
-                "cleanup-expired-jobs",
+                RecurringJobIds.CleanupExpiredJobs,
                 () => HangfireUtils.CleanupExpiredJobs(null),
                 cron));
 
-        ScheduleJob(recurringJobManager, "sync-jobindex-states",
+        ScheduleJob(recurringJobManager, RecurringJobIds.SyncJobIndexStates,
             ResolveCron(appSettings.SyncJobIndexStatesCron, "0 * * * *"),
             cron => recurringJobManager.AddOrUpdate<JobIndexSyncService>(
-                "sync-jobindex-states",
+                RecurringJobIds.SyncJobIndexStates,
                 service => service.SyncJobIndexStates(null),
                 cron));
 
-        ScheduleJob(recurringJobManager, "recover-indexed-job-publications",
+        ScheduleJob(recurringJobManager, RecurringJobIds.RecoverIndexedJobPublications,
             ResolveCron(appSettings.RecoverIndexedJobPublicationsCron, "* * * * *"),
             cron => recurringJobManager.AddOrUpdate<IndexedJobPublicationRecoveryService>(
-                "recover-indexed-job-publications",
+                RecurringJobIds.RecoverIndexedJobPublications,
                 service => service.RecoverPublications(null),
                 cron));
 
-        ScheduleJob(recurringJobManager, "process-pending-builds",
+        ScheduleJob(recurringJobManager, RecurringJobIds.ProcessPendingBuilds,
             ResolveCron(appSettings.ProcessPendingBuildsCron, "0 */6 * * *"),
             cron => recurringJobManager.AddOrUpdate<BuildPendingService>(
-                "process-pending-builds",
+                RecurringJobIds.ProcessPendingBuilds,
                 service => service.ProcessPendingBuilds(null),
                 cron));
 
-        ScheduleJob(recurringJobManager, "cleanup-orphaned-datasets",
+        ScheduleJob(recurringJobManager, RecurringJobIds.CleanupOrphanedDatasets,
             ResolveCron(appSettings.OrphanedDatasetCleanupCron, "0 3 * * *"),
             cron => recurringJobManager.AddOrUpdate<OrphanedDatasetCleanupService>(
-                "cleanup-orphaned-datasets",
+                RecurringJobIds.CleanupOrphanedDatasets,
                 service => service.CleanupOrphanedFoldersAsync(null),
                 cron));
 
-        ScheduleJob(recurringJobManager, "cleanup-old-jobindices",
+        ScheduleJob(recurringJobManager, RecurringJobIds.CleanupOldJobIndices,
             ResolveCron(appSettings.JobIndexCleanupCron, "0 4 * * *"),
             cron => recurringJobManager.AddOrUpdate<JobIndexCleanupService>(
-                "cleanup-old-jobindices",
+                RecurringJobIds.CleanupOldJobIndices,
                 service => service.CleanupOldJobIndicesAsync(null),
                 cron));
 
-        ScheduleJob(recurringJobManager, "recurring-dataset-cleanup",
+        ScheduleJob(recurringJobManager, RecurringJobIds.RecurringDatasetCleanup,
             ResolveCron(appSettings.DatasetCleanupCron, "0 0 * * *"),
             cron => recurringJobManager.AddOrUpdate<RecurringDatasetCleanupService>(
-                "recurring-dataset-cleanup",
+                RecurringJobIds.RecurringDatasetCleanup,
                 service => service.CleanupAllDatasetsAsync(null),
                 cron));
 
-        ScheduleJob(recurringJobManager, "check-artifact-completeness",
+        ScheduleJob(recurringJobManager, RecurringJobIds.CheckArtifactCompleteness,
             ResolveCron(appSettings.ArtifactCompletenessCheckerCron, "0 2 * * *"),
             cron => recurringJobManager.AddOrUpdate<ArtifactCompletenessCheckerService>(
-                "check-artifact-completeness",
+                RecurringJobIds.CheckArtifactCompleteness,
                 service => service.CheckAndQueueAsync(null),
                 cron));
 
-        ScheduleJob(recurringJobManager, "index-reconciliation",
+        ScheduleJob(recurringJobManager, RecurringJobIds.IndexReconciliation,
             ResolveCron(appSettings.IndexReconciliationCron, "0 * * * *"),
             cron => recurringJobManager.AddOrUpdate<IndexReconciliationService>(
-                "index-reconciliation",
+                RecurringJobIds.IndexReconciliation,
                 service => service.ReconcileAllDatasetsAsync(null),
                 cron));
     }

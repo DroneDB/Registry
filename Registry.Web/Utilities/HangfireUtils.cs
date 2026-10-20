@@ -6,6 +6,7 @@ using System.Threading.Tasks;
 using Hangfire;
 using Hangfire.Console;
 using Hangfire.Server;
+using Hangfire.States;
 using Hangfire.Storage;
 using Hangfire.MySql;
 using Microsoft.Extensions.Configuration;
@@ -19,6 +20,7 @@ using Registry.Web.Models;
 using Registry.Web.Services.Adapters;
 using Registry.Web.Services.HeavyTasks;
 using Registry.Web.Services.HeavyTasks.Adapters;
+using Registry.Web.Services.Initialization;
 using Registry.Web.Services.Ports;
 using Serilog;
 
@@ -451,20 +453,43 @@ public static class HangfireUtils
     [AutomaticRetry(Attempts = 1, OnAttemptsExceeded = AttemptsExceededAction.Fail)]
     public static void CleanupExpiredJobs(PerformContext context)
     {
-        using var connection = JobStorage.Current.GetConnection();
-
         Action<string> writeLine = context != null ? context.WriteLine : Log.Information;
+        CleanupExpiredJobs(context?.Storage ?? JobStorage.Current, TimeProvider.System, writeLine);
+    }
+
+    /// <summary>Age after which a recurring job whose last run failed is considered abandoned.</summary>
+    internal static readonly TimeSpan ExpiredRecurringJobAge = TimeSpan.FromDays(30);
+
+    /// <summary>
+    /// Removes recurring jobs whose last run failed and that were created more than
+    /// <see cref="ExpiredRecurringJobAge"/> ago (UTC, from <paramref name="time"/>). The application's own
+    /// recurring jobs (<see cref="RecurringJobIds.Owned"/>) are never removed: they are re-created only
+    /// at the next start, so one failed run would otherwise disable them until then.
+    /// </summary>
+    internal static void CleanupExpiredJobs(JobStorage storage, TimeProvider time, Action<string> writeLine)
+    {
+        ArgumentNullException.ThrowIfNull(storage);
+        ArgumentNullException.ThrowIfNull(time);
+        ArgumentNullException.ThrowIfNull(writeLine);
+
+        using var connection = storage.GetConnection();
+
+        // RecurringJobDto.CreatedAt is UTC
+        var cutoffUtc = time.GetUtcNow().UtcDateTime - ExpiredRecurringJobAge;
 
         var toDelete = connection.GetRecurringJobs()
-            .Where(j => j.LastJobState == "Failed" && j.CreatedAt < DateTime.Now.AddDays(-30))
+            .Where(j => j.LastJobState == FailedState.StateName
+                        && j.CreatedAt < cutoffUtc
+                        && !RecurringJobIds.Owned.Contains(j.Id))
             .ToList();
 
         writeLine($"Found {toDelete.Count} jobs to delete");
 
+        var manager = new RecurringJobManager(storage);
         foreach (var job in toDelete)
         {
             writeLine($"Deleting job {job.Id}");
-            RecurringJob.RemoveIfExists(job.Id);
+            manager.RemoveIfExists(job.Id);
         }
     }
 

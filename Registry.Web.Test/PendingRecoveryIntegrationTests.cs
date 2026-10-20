@@ -7,7 +7,6 @@ using System.Linq;
 using System.Linq.Expressions;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Caching.Distributed;
-using System.Runtime.InteropServices;
 using System.Text;
 using System.Text.Json;
 using System.Threading;
@@ -35,6 +34,7 @@ using Registry.Web.Services;
 using Registry.Web.Services.Adapters;
 using Registry.Web.Services.Managers;
 using Registry.Web.Services.Ports;
+using Registry.Web.Test.Support;
 using Registry.Web.Utilities;
 using Shouldly;
 
@@ -69,8 +69,7 @@ public class PendingRecoveryIntegrationTests
     private IBackgroundJobClient Client => _provider.GetRequiredService<IBackgroundJobClient>();
     private IBackgroundJobsProcessor Jobs => _provider.GetRequiredService<IBackgroundJobsProcessor>();
     private ICacheManager Cache => _provider.GetRequiredService<ICacheManager>();
-    private string? _diskSetting;
-    private string? _tilesSetting;
+    private NativeEnvironmentScope _environment = null!;
     private bool _initialized;
 
     [SetUp]
@@ -90,12 +89,11 @@ public class PendingRecoveryIntegrationTests
         _previousStateHandlers = GlobalStateHandlers.Handlers.ToArray();
         try { _previousStorage = JobStorage.Current; }
         catch (InvalidOperationException) { _previousStorage = null; }
-        _diskSetting = Environment.GetEnvironmentVariable("DDB_MIN_FREE_DISK_MB");
-        _tilesSetting = Environment.GetEnvironmentVariable("DDB_OBJ2TILES_PATH");
-        SetNativeEnvironment("DDB_MIN_FREE_DISK_MB", "0");
+        _environment = new NativeEnvironmentScope("DDB_MIN_FREE_DISK_MB", "DDB_OBJ2TILES_PATH");
+        _environment.Set("DDB_MIN_FREE_DISK_MB", "0");
         // Tiles are optional here; the real bundled converter is exercised by
         // the native regression suite. Nexus remains a real native build.
-        SetNativeEnvironment("DDB_OBJ2TILES_PATH", Path.Combine(_root, "missing-Obj2Tiles"));
+        _environment.Set("DDB_OBJ2TILES_PATH", Path.Combine(_root, "missing-Obj2Tiles"));
         _initialized = true;
 
         _storage = new MySqlStorage(_connection, new MySqlStorageOptions
@@ -190,8 +188,7 @@ public class PendingRecoveryIntegrationTests
         foreach (var handler in _previousStateHandlers) GlobalStateHandlers.Handlers.Add(handler);
         GlobalConfiguration.Configuration.UseActivator(_previousActivator);
         if (_previousStorage != null) JobStorage.Current = _previousStorage;
-        SetNativeEnvironment("DDB_MIN_FREE_DISK_MB", _diskSetting);
-        SetNativeEnvironment("DDB_OBJ2TILES_PATH", _tilesSetting);
+        _environment.Dispose();
 
         // Drop only the exact random prefix owned by this test. Never drop the
         // supplied database or use a broad LIKE pattern that could match others.
@@ -335,7 +332,7 @@ public class PendingRecoveryIntegrationTests
         var ddb = await PendingModel("transient");
         Add(ddb, "late.mtl", "newmtl plain\nKd 1 1 1\n");
         MakeDue(ddb, "model.obj");
-        SetNativeEnvironment("DDB_MIN_FREE_DISK_MB", "9000000000000");
+        _environment.Set("DDB_MIN_FREE_DISK_MB", "9000000000000");
         var failed = StageEntry(ddb, "transient", "model.obj");
         StartWorkers();
         var before = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
@@ -353,7 +350,7 @@ public class PendingRecoveryIntegrationTests
         (await CacheState("transient")).GetProperty("RetryAttempt").GetInt32().ShouldBe(1);
         (await CacheState("transient")).GetProperty("ScheduledRetryJobId").GetString().ShouldBe(retry);
 
-        SetNativeEnvironment("DDB_MIN_FREE_DISK_MB", "0");
+        _environment.Set("DDB_MIN_FREE_DISK_MB", "0");
         MakeDue(ddb, "model.obj");
         Promote(retry);
         await Until(async () => ddb.IsBuildComplete("model.obj") &&
@@ -369,7 +366,7 @@ public class PendingRecoveryIntegrationTests
         var ddb = await PendingModel("budget");
         Add(ddb, "late.mtl", "newmtl plain\nKd 1 1 1\n");
         var checksum = ddb.GetStamp().Checksum;
-        SetNativeEnvironment("DDB_MIN_FREE_DISK_MB", "9000000000000");
+        _environment.Set("DDB_MIN_FREE_DISK_MB", "9000000000000");
         var first = StageEntry(ddb, "budget", "model.obj");
         StartWorkers();
         Promote(first);
@@ -409,7 +406,7 @@ public class PendingRecoveryIntegrationTests
         // otherwise the real worker may finish before the assertion reads it.
         _gate.ReleaseEntries.Reset();
         MakeDue(ddb, "model.obj");
-        SetNativeEnvironment("DDB_MIN_FREE_DISK_MB", "0");
+        _environment.Set("DDB_MIN_FREE_DISK_MB", "0");
         using (var scope = _provider.CreateScope())
             await scope.ServiceProvider.GetRequiredService<BuildPendingService>().ProcessPendingBuilds();
         var restarted = await CacheState("budget");
@@ -568,7 +565,7 @@ public class PendingRecoveryIntegrationTests
         var ddb = await PendingModel(ds);
         Add(ddb, "late.mtl", "newmtl plain\nKd 1 1 1\n");
         MakeDue(ddb, "model.obj");
-        SetNativeEnvironment("DDB_MIN_FREE_DISK_MB", "9000000000000");
+        _environment.Set("DDB_MIN_FREE_DISK_MB", "9000000000000");
         using var beforeIndex = new ManualResetEventSlim();
         using var releaseIndex = new ManualResetEventSlim();
         string? stagedId = null;
@@ -610,7 +607,7 @@ public class PendingRecoveryIntegrationTests
         failed.CurrentState.ShouldBe("Failed");
         failed.ErrorType.ShouldBe(nameof(InvalidOperationException));
         var retry = await WaitForRetry(ds, 1);
-        SetNativeEnvironment("DDB_MIN_FREE_DISK_MB", "0");
+        _environment.Set("DDB_MIN_FREE_DISK_MB", "0");
         MakeDue(ddb, "model.obj");
         Promote(retry);
         await Until(async () => ddb.IsBuildComplete("model.obj") &&
@@ -779,23 +776,6 @@ public class PendingRecoveryIntegrationTests
                 text.Append($"f {a} {a + 1} {a + n + 1}\nf {a} {a + n + 1} {a + n}\n");
             }
         return text.ToString();
-    }
-
-    // Native getenv must observe the same setting as managed code on every
-    // supported platform; the fixture restores both representations on exit.
-    [DllImport("libc", EntryPoint = "setenv")]
-    private static extern int SetEnv(string name, string value, int overwrite);
-    [DllImport("libc", EntryPoint = "unsetenv")]
-    private static extern int UnsetEnv(string name);
-    [DllImport("ucrtbase", EntryPoint = "_putenv_s", CallingConvention = CallingConvention.Cdecl)]
-    private static extern int PutEnv(string name, string value);
-
-    private static void SetNativeEnvironment(string name, string? value)
-    {
-        Environment.SetEnvironmentVariable(name, value);
-        var result = OperatingSystem.IsWindows() ? PutEnv(name, value ?? "") :
-            value == null ? UnsetEnv(name) : SetEnv(name, value, 1);
-        result.ShouldBe(0);
     }
 
     private sealed class ProviderActivator(IServiceProvider provider) : JobActivator
