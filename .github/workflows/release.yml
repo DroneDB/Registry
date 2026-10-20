@@ -6,7 +6,12 @@ on:
       - v*
 
 jobs:
+  # The same build + tests (Hub and Registry, against DroneDB) as every push and PR
+  test:
+    uses: ./.github/workflows/dotnet-core.yml
+
   build:
+    needs: test
     runs-on: ubuntu-24.04
     steps:
       # The Hub is the commit this Registry pins, never Hub master: a release ships the
@@ -24,10 +29,8 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 24
-      - name: Build
+      - name: Write the release commit
         run: echo ${{ github.sha }} > Release.txt
-      - name: Test
-        run: cat Release.txt
       - name: Build ClientApp
         run: |
           cd registry/Registry.Web/ClientApp

@@ -15,6 +15,7 @@ using Microsoft.AspNetCore.Builder;
 using Registry.Common;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Routing;
 using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
@@ -197,10 +198,7 @@ public class Program
         var args = new[] { "--urls", $"http://{opts.Address}" };
 
         using var host = Host.CreateDefaultBuilder(args)
-            .UseSerilog((context, services, configuration) => configuration
-                .ReadFrom.Configuration(context.Configuration)
-                .ReadFrom.Services(services)
-                .Enrich.FromLogContext())
+            .UseSerilog(ConfigureSerilog)
             .ConfigureServices((context, services) =>
                 services.AddSingleton(sp => CreateThumbnailRequestHandler(context.Configuration,
                     sp.GetRequiredService<ILogger<ThumbnailRequestHandler>>())))
@@ -211,10 +209,7 @@ public class Program
                     var handler = app.ApplicationServices.GetRequiredService<ThumbnailRequestHandler>();
 
                     app.UseRouting();
-
-                    // POST /generate-thumbnail (form: path, size; header: the shared token)
-                    // Response is a binary stream of the thumbnail taken from DDBWrapper.GenerateThumbnail
-                    app.UseEndpoints(endpoints => endpoints.MapPost(ThumbnailRequestHandler.Route, handler.HandleAsync));
+                    app.UseEndpoints(endpoints => MapThumbnailGeneratorEndpoints(endpoints, handler));
                 });
             })
             .Build();
@@ -236,6 +231,21 @@ public class Program
         }
 
         host.Run();
+    }
+
+    /// <summary>
+    /// The thumbnail generator host routes:
+    /// <list type="bullet">
+    /// <item><c>POST /generate-thumbnail</c> (form: path, size; header: the shared token); the response is the
+    /// binary thumbnail from <c>DDBWrapper.GenerateThumbnail</c>;</item>
+    /// <item><c>GET /health/live</c>, the anonymous liveness probe used by the container HEALTHCHECK.</item>
+    /// </list>
+    /// </summary>
+    internal static void MapThumbnailGeneratorEndpoints(IEndpointRouteBuilder endpoints,
+        ThumbnailRequestHandler handler)
+    {
+        endpoints.MapPost(ThumbnailRequestHandler.Route, handler.HandleAsync);
+        endpoints.MapLiveness();
     }
 
     /// <summary>
@@ -272,10 +282,7 @@ public class Program
         Console.WriteLine(" -> Starting processing node");
 
         var host = Host.CreateDefaultBuilder()
-            .UseSerilog((context, services, configuration) => configuration
-                .ReadFrom.Configuration(context.Configuration)
-                .ReadFrom.Services(services)
-                .Enrich.FromLogContext())
+            .UseSerilog(ConfigureSerilog)
             .ConfigureServices((hostContext, services) =>
             {
                 var configuration = hostContext.Configuration;
@@ -346,11 +353,19 @@ public class Program
     /// <returns>The configured, not yet built, host builder.</returns>
     public static IHostBuilder CreateHostBuilder(string[] args) =>
         Host.CreateDefaultBuilder(args)
-            .UseSerilog((context, services, configuration) => configuration
-                .ReadFrom.Configuration(context.Configuration)
-                .ReadFrom.Services(services)
-                .Enrich.FromLogContext())
+            .UseSerilog(ConfigureSerilog)
             .ConfigureWebHostDefaults(webBuilder => webBuilder.UseStartup<Startup>());
+
+    /// <summary>
+    /// The one Serilog setup of every host (web server, processing node, thumbnail generator): sinks and
+    /// levels come from the <c>Serilog</c> configuration section, so all instances log the same way.
+    /// </summary>
+    private static void ConfigureSerilog(HostBuilderContext context, IServiceProvider services,
+        LoggerConfiguration configuration) =>
+        configuration
+            .ReadFrom.Configuration(context.Configuration)
+            .ReadFrom.Services(services)
+            .Enrich.FromLogContext();
 
     private static bool InitializeDdb()
     {

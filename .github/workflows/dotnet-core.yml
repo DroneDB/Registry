@@ -5,6 +5,8 @@ on:
     branches: [ master ]
   pull_request:
     branches: [ master ]
+  # release.yml runs this same build + test before it publishes
+  workflow_call:
 
 # A new push to a PR supersedes the run in progress; master and tag runs always finish.
 concurrency:

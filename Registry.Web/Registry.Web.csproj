@@ -157,8 +157,16 @@
         <!-- Build Hub if not built -->
         <CallTarget Condition="!Exists('$(ProjectDir)/ClientApp/build')" Targets="BuildSPA" />
 
-        <!-- Embed ddb release on windows -->
-        <CallTarget Condition="$([MSBuild]::IsOSPlatform('Windows'))" Targets="EmbedDdbRelease" />
+        <!--
+          Embed the ddb release when the build targets Windows. The target OS is the RuntimeIdentifier,
+          not the build OS: the release builds the win-* zips on Ubuntu. Without a RID (local dev build)
+          the build OS decides, as before.
+        -->
+        <PropertyGroup>
+            <EmbedDdbForTarget Condition="'$(RuntimeIdentifier)' != ''">$(RuntimeIdentifier.StartsWith('win'))</EmbedDdbForTarget>
+            <EmbedDdbForTarget Condition="'$(RuntimeIdentifier)' == ''">$([MSBuild]::IsOSPlatform('Windows'))</EmbedDdbForTarget>
+        </PropertyGroup>
+        <CallTarget Condition="'$(EmbedDdbForTarget)' == 'true'" Targets="EmbedDdbRelease" />
 
         <Delete Files="$(ProjectDir)/ClientApp.zip" />
 

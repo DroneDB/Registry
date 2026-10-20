@@ -581,6 +581,8 @@ public class Startup
                 ResponseWriter = UIResponseWriter.WriteHealthCheckUIResponse
             }).RequireAdminOrMonitorToken();
 
+            endpoints.MapLiveness();
+
             endpoints.MapGet(MagicStrings.VersionUrl,
                 async context =>
                 {

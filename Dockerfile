@@ -3,9 +3,8 @@ FROM ubuntu:noble AS dotnet-builder
 
 LABEL Author="Luca Di Leo <ldileo@digipa.it>"
 
-# Prerequisites
-ENV TZ=Europe/Rome
-RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone
+# Prerequisites (build-only: no interactive tzdata/apt prompts)
+ARG DEBIAN_FRONTEND=noninteractive
 RUN apt-get update && apt-get install -y --fix-missing --no-install-recommends git curl software-properties-common gpg-agent wget
 
 # Install dotnet and nodejs
@@ -18,13 +17,34 @@ RUN curl -sSL https://dot.net/v1/dotnet-install.sh | bash /dev/stdin --channel 1
 ENV PATH="/root/.dotnet:$PATH"
 ENV DOTNET_ROOT="/root/.dotnet"
 
-# Copy registry
+WORKDIR /Registry
+
+# Restore first, from the manifests only, so a source change does not invalidate the npm ci and
+# dotnet restore layers
+COPY Registry.Web/ClientApp/package.json Registry.Web/ClientApp/package-lock.json Registry.Web/ClientApp/
+RUN cd Registry.Web/ClientApp && npm ci
+
+COPY Directory.Build.props ./
+COPY Registry.Web/.config/dotnet-tools.json Registry.Web/.config/
+COPY Registry.Web/Registry.Web.csproj Registry.Web/
+COPY Registry.Adapters/Registry.Adapters.csproj Registry.Adapters/
+COPY Registry.Common/Registry.Common.csproj Registry.Common/
+COPY Registry.Ports/Registry.Ports.csproj Registry.Ports/
+COPY Registry.Web.Data/Registry.Web.Data.csproj Registry.Web.Data/
+COPY Registry.Web.Data.MySqlMigrations/Registry.Web.Data.MySqlMigrations.csproj Registry.Web.Data.MySqlMigrations/
+COPY Registry.Web.Data.SqliteMigrations/Registry.Web.Data.SqliteMigrations.csproj Registry.Web.Data.SqliteMigrations/
+COPY Registry.Web.Identity/Registry.Web.Identity.csproj Registry.Web.Identity/
+COPY Registry.Web.Identity.MySqlMigrations/Registry.Web.Identity.MySqlMigrations.csproj Registry.Web.Identity.MySqlMigrations/
+COPY Registry.Web.Identity.SqliteMigrations/Registry.Web.Identity.SqliteMigrations.csproj Registry.Web.Identity.SqliteMigrations/
+RUN cd Registry.Web && dotnet tool restore && dotnet restore -r linux-x64
+
+# Copy the rest of the sources
 COPY . /Registry
 
 # Compile client app
-RUN cd /Registry/Registry.Web/ClientApp && npm ci && npm run build:prod
+RUN cd /Registry/Registry.Web/ClientApp && npm run build:prod
 
-# Publish Registry
+# Publish Registry (self-contained single file, see docker/FolderProfile.xml)
 COPY docker/FolderProfile.xml /Registry/Registry.Web/Properties/PublishProfiles/FolderProfile.pubxml
 RUN cd /Registry/Registry.Web && dotnet dev-certs https && dotnet publish -p:PublishProfile=FolderProfile
 
@@ -32,14 +52,16 @@ RUN cd /Registry/Registry.Web && dotnet dev-certs https && dotnet publish -p:Pub
 FROM ubuntu:noble AS runner
 
 # Prerequisites
+ARG DEBIAN_FRONTEND=noninteractive
 ENV DOTNET_GENERATE_ASPNET_CERTIFICATE=false
-ENV TZ=Europe/Rome
-RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone
 
-# Install runtime dependencies in single layer including SkiaSharp dependencies
+# Install runtime dependencies in single layer including SkiaSharp dependencies.
+# No .NET runtime: the app is published self-contained (docker/FolderProfile.xml).
+# tzdata: the image runs in UTC; set TZ (e.g. TZ=Europe/Rome, see docker/production) to change it.
 RUN apt-get update \
     && apt-get install -y --fix-missing --no-install-recommends \
         ca-certificates \
+        tzdata \
         wget \
         curl \
         libfontconfig1 \
@@ -56,7 +78,6 @@ RUN apt-get update \
         libldap2 \
         libldap-common \
         libsasl2-2 \
-    && curl -sSL https://dot.net/v1/dotnet-install.sh | bash /dev/stdin --channel 10.0 --runtime aspnetcore \
     && LATEST_RELEASE_URL=$(curl -s https://api.github.com/repos/DroneDB/DroneDB/releases/latest | grep "browser_download_url.*deb" | head -n 1 | cut -d '"' -f 4) \
     && echo "Downloading DroneDB from $LATEST_RELEASE_URL" \
     && curl -L -o dronedb.deb "$LATEST_RELEASE_URL" \
@@ -64,17 +85,27 @@ RUN apt-get update \
     && rm dronedb.deb \
     && apt-get clean && rm -rf /var/lib/apt/lists/*
 
-# Add dotnet to PATH
-ENV PATH="/root/.dotnet:$PATH"
-ENV DOTNET_ROOT="/root/.dotnet"
 # Ensure SkiaSharp can find native libraries
 ENV LD_LIBRARY_PATH="/usr/lib/x86_64-linux-gnu:/usr/lib:/lib"
 
+# Unprivileged user the app runs as (uid/gid 1654, the .NET container convention; uid 1000 is the
+# image's "ubuntu" user). docker/entrypoint.sh starts as root only to hand /data to this user.
+ARG APP_UID=1654
+RUN groupadd --system --gid "$APP_UID" registry \
+    && useradd --system --uid "$APP_UID" --gid registry --create-home --home-dir /home/registry \
+        --shell /usr/sbin/nologin registry
+
 # Copy compiled Registry
 COPY --from=dotnet-builder /Registry/Registry.Web/bin/Release/net10.0/publish/ /Registry
+COPY --chmod=755 docker/entrypoint.sh /entrypoint.sh
+COPY --chmod=755 docker/healthcheck.sh /healthcheck.sh
 
-RUN chmod +x /Registry/Registry.Web && mkdir -p /data/temp && chmod 777 /data /data/temp
+# Strip CRs in case the scripts were checked out with CRLF (Windows autocrlf)
+RUN sed -i 's/\r$//' /entrypoint.sh /healthcheck.sh \
+    && chmod +x /Registry/Registry.Web \
+    && mkdir -p /data/temp && chown -R registry:registry /data
 
+ENV REGISTRY_PORT=5000
 EXPOSE 5000/tcp
 
 # Set default instance type
@@ -92,5 +123,8 @@ ENV TMPDIR=/data/temp
 ENV CPL_TMPDIR=/data/temp
 ENV TEMP=/data/temp
 
-# Run registry
-ENTRYPOINT ["sh", "-c", "./Registry/Registry.Web --address 0.0.0.0:5000 --instance-type ${INSTANCE_TYPE} /data"]
+# Liveness per instance type (HTTP probe, or the process for a processing node)
+HEALTHCHECK --interval=30s --timeout=10s --start-period=120s --retries=5 CMD ["/healthcheck.sh"]
+
+# Run registry (exec'ed by the entrypoint: PID 1, receives SIGTERM, runs as the registry user)
+ENTRYPOINT ["/entrypoint.sh"]

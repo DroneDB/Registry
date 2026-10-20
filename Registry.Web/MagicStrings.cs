@@ -36,6 +36,12 @@ public static class MagicStrings
     public const string ScalarUrl = "/scalar/v1";
     public const string QuickHealthUrl = "/quickhealth";
     public const string HealthUrl = "/health";
+
+    /// <summary>
+    /// Anonymous liveness probe (container HEALTHCHECK): the process serves HTTP, nothing more.
+    /// Mapped by every HTTP host (web server and thumbnail generator), see <c>LivenessEndpoint</c>.
+    /// </summary>
+    public const string LivenessUrl = "/health/live";
     public const string VersionUrl = "/version";
 
     public const string DefaultHost = "localhost";

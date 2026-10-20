@@ -39,6 +39,8 @@ services:
         depends_on:
             - db
         image: dronedb/registry:dev
+        environment:
+            - TZ=Europe/Rome
         tmpfs:
             - /tmp
         volumes:

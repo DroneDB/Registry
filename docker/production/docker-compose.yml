@@ -40,13 +40,19 @@ services:
             db:
                 condition: service_healthy
         image: dronedb/registry:latest
+        # Anonymous liveness (GET /health/live; /quickhealth needs the monitor token). The image
+        # HEALTHCHECK runs the same script; it is repeated here for the longer start period: the
+        # first start after the switch to the non-root user hands ./data to it (see entrypoint.sh).
         healthcheck:
-            test: [ "CMD", "curl", "-f", "http://localhost:5000/quickhealth" ]
+            test: [ "CMD", "/healthcheck.sh" ]
             interval: 30s
             timeout: 10s
             retries: 5
+            start_period: 10m
         environment:
             - INSTANCE_TYPE=2
+            # The image runs in UTC; keep the local time these deployments always used
+            - TZ=Europe/Rome
             # Keep GDAL/Nexus build scratch on the data volume, off the container
             # root filesystem and off the /tmp tmpfs. /data is bind-mounted below;
             # /data/temp must exist on the host (created by the app on startup).
@@ -74,8 +80,10 @@ services:
             registry_webserver:
                 condition: service_healthy
         image: dronedb/registry:latest
+        # Healthcheck: the image HEALTHCHECK (docker/healthcheck.sh: the Registry process is alive)
         environment:
             - INSTANCE_TYPE=1
+            - TZ=Europe/Rome
             # Keep GDAL/Nexus build scratch on the data volume (see webserver).
             - CPL_TMPDIR=/data/temp
             - TMPDIR=/data/temp
@@ -99,8 +107,10 @@ services:
             registry_webserver:
                 condition: service_healthy
         image: dronedb/registry:latest
+        # Healthcheck: the image HEALTHCHECK (docker/healthcheck.sh: the Registry process is alive)
         environment:
             - INSTANCE_TYPE=1
+            - TZ=Europe/Rome
             # Keep GDAL/Nexus build scratch on the data volume (see webserver).
             - CPL_TMPDIR=/data/temp
             - TMPDIR=/data/temp
