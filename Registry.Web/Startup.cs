@@ -459,7 +459,8 @@ public class Startup
             ThreadPool.SetMinThreads(appSettings.WorkerThreads, ioCompletionThreads);
         }
 
-        // Register application initializer
+        // Application initializer: runs in IHostedLifecycleService.StartingAsync, so before every
+        // hosted service registered above starts, regardless of this position
         services.AddHostedService<AppInitializer>();
     }
 

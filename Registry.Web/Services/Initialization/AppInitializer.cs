@@ -10,8 +10,15 @@ namespace Registry.Web.Services.Initialization;
 /// <summary>
 /// Orchestrates application initialization tasks during startup.
 /// Executes database setup, cache validation, cache configuration, and Hangfire job setup.
+/// <para>
+/// Runs in <see cref="IHostedLifecycleService.StartingAsync"/>, which the host completes for every
+/// lifecycle service before it calls any <see cref="IHostedService.StartAsync"/>: the Hangfire
+/// servers, the upload queues and the web server, whatever their registration order, start only
+/// after the schema is migrated, the cache providers are registered and the recurring jobs are
+/// (re)defined (RQ-02.1).
+/// </para>
 /// </summary>
-public class AppInitializer : IHostedService, IDisposable
+public class AppInitializer : IHostedLifecycleService, IDisposable
 {
     private readonly IServiceScopeFactory _scopeFactory;
     private readonly ILogger<AppInitializer> _logger;
@@ -24,7 +31,7 @@ public class AppInitializer : IHostedService, IDisposable
         _cts = new CancellationTokenSource();
     }
 
-    public async Task StartAsync(CancellationToken cancellationToken)
+    public async Task StartingAsync(CancellationToken cancellationToken)
     {
         _logger.LogInformation("Application initialization starting");
 
@@ -89,12 +96,20 @@ public class AppInitializer : IHostedService, IDisposable
         }
     }
 
+    public Task StartAsync(CancellationToken cancellationToken) => Task.CompletedTask;
+
+    public Task StartedAsync(CancellationToken cancellationToken) => Task.CompletedTask;
+
+    public Task StoppingAsync(CancellationToken cancellationToken) => Task.CompletedTask;
+
     public Task StopAsync(CancellationToken cancellationToken)
     {
         _logger.LogInformation("Application initialization stopping");
         _cts.Cancel();
         return Task.CompletedTask;
     }
+
+    public Task StoppedAsync(CancellationToken cancellationToken) => Task.CompletedTask;
 
     public void Dispose()
     {
