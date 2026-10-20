@@ -398,7 +398,16 @@ public class Startup
         services.AddSingleton<IPasswordPolicyValidator, PasswordPolicyValidator>();
         services.AddSingleton<IDatasetIndexQueue, DatasetIndexQueue>();
 
-        services.AddResponseCompression();
+        // Dynamic compression for API responses (the Hub's static files are precompressed at build
+        // time); also behind TLS termination. ZIP downloads are already compressed. Responses that
+        // carry tokens are never compressed (CompressionPolicy, applied where the middleware runs).
+        services.AddResponseCompression(options =>
+        {
+            options.EnableForHttps = true;
+            options.MimeTypes = Microsoft.AspNetCore.ResponseCompression.ResponseCompressionDefaults.MimeTypes
+                .Concat(["application/geo+json", "application/vnd.mapbox-vector-tile", "image/svg+xml"])
+                .Where(t => t != "application/zip");
+        });
 
         if (appSettings.MaxRequestBodySize.HasValue)
         {
@@ -506,7 +515,9 @@ public class Startup
             await next();
         });
 
-        app.UseResponseCompression();
+        // Not for responses that carry tokens (BREACH, CompressionPolicy)
+        app.UseWhen(context => !CompressionPolicy.CarriesSecrets(context.Request.Path),
+            compressed => compressed.UseResponseCompression());
         app.UseResponseCaching();
 
         app.UseMiddleware<TokenManagerMiddleware>();
@@ -564,31 +575,23 @@ public class Startup
                 ServeUnknownFileTypes = true
             });
 
-            builder.UseSpaStaticFiles(new StaticFileOptions
-            {
-                ServeUnknownFileTypes = true,
-                OnPrepareResponse = ctx =>
-                {
-                    // Force browsers/proxies to revalidate index.html so a Hub
-                    // upgrade on the server is picked up by clients with a
-                    // stale cached document. Hashed JS/CSS chunks remain
-                    // cacheable.
-                    var path = ctx.File?.Name;
-                    if (string.Equals(path, "index.html", StringComparison.OrdinalIgnoreCase))
-                    {
-                        var headers = ctx.Context.Response.Headers;
-                        headers.CacheControl = "no-cache, no-store, must-revalidate";
-                        headers.Pragma = "no-cache";
-                        headers.Expires = "0";
-                    }
-                }
-            });
+            // Build-time .br/.gz twins of the Hub's JS/CSS (HUB-09)
+            var spaFiles = builder.ApplicationServices
+                .GetService<Microsoft.AspNetCore.SpaServices.StaticFiles.ISpaStaticFileProvider>();
+            builder.UseMiddleware<PrecompressedStaticFilesMiddleware>(
+                new Func<Microsoft.Extensions.FileProviders.IFileProvider>(() => spaFiles?.FileProvider));
+
+            // Hashed files immutable, index.html revalidated (HUB-09)
+            var hubStaticFiles = HubCachePolicy.StaticFileOptions();
+            builder.UseSpaStaticFiles(hubStaticFiles);
 
             builder.UseSpa(spa =>
             {
                 // To learn more about options for serving an Angular SPA from ASP.NET Core,
                 // see https://go.microsoft.com/fwlink/?linkid=864501
                 spa.Options.SourcePath = "ClientApp";
+                // Client routes (/login, /r/...) answer with index.html: same headers as /index.html
+                spa.Options.DefaultPageStaticFileOptions = hubStaticFiles;
 
                 if (env.IsDevelopment())
                 {
