@@ -283,8 +283,8 @@ public class WmtsManager : OgcManagerBase, IWmtsManager
 
     /// <summary>1x1 → 256x256 transparent PNG used as a graceful fallback for out-of-range raster tiles.</summary>
     /// <remarks>Lazy so the Crc32 table (declared later) is initialized before first use.</remarks>
-    private static readonly Lazy<byte[]> _transparentPng256 = new(BuildTransparentPng);
-    private static byte[] TransparentPng256 => _transparentPng256.Value;
+    private static readonly Lazy<byte[]> LazyTransparentPng256 = new(BuildTransparentPng);
+    private static byte[] TransparentPng256 => LazyTransparentPng256.Value;
 
     private static byte[] BuildTransparentPng()
     {

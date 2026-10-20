@@ -34,16 +34,12 @@ indent_style = tab
 csharp_style_namespace_declarations = file_scoped:warning
 dotnet_diagnostic.IDE0161.severity = warning
 
-# Naming of private fields.
-#   private const              -> PascalCase  (DefaultTimeout)            0 violations: warning
-#   private static readonly    -> PascalCase  (SupportedExtensions)       2 violations: suggestion
-#   other private fields       -> _camelCase  (_logger, _consoleFilters)  10 violations: suggestion
-# The violations are in RemoteThumbnailGenerator._httpClient, WmtsManager._transparentPng256
-# and the m_ fields of Registry.Common/EchoStream.cs.
+# Naming of private fields (0 violations each, so all three rules are warnings).
+#   private const              -> PascalCase  (DefaultTimeout)
+#   private static readonly    -> PascalCase  (SupportedExtensions)
+#   other private fields       -> _camelCase  (_logger, _consoleFilters)
 # Note: `dotnet build` reports IDE1006 only when EnforceCodeStyleInBuild is on and
-# dotnet_diagnostic.IDE1006.severity is set. Both are set (R2-2). The build reports every
-# naming violation at the IDE1006 severity: the suggestion severities above apply in the
-# IDE only. The 12 violations listed above are in build/warnings-baseline.txt.
+# dotnet_diagnostic.IDE1006.severity is set. Both are set (R2-2).
 dotnet_diagnostic.IDE1006.severity = warning
 dotnet_naming_rule.private_constants_pascal.symbols = private_constants
 dotnet_naming_rule.private_constants_pascal.style = pascal_case
@@ -51,11 +47,11 @@ dotnet_naming_rule.private_constants_pascal.severity = warning
 
 dotnet_naming_rule.private_static_readonly_pascal.symbols = private_static_readonly_fields
 dotnet_naming_rule.private_static_readonly_pascal.style = pascal_case
-dotnet_naming_rule.private_static_readonly_pascal.severity = suggestion
+dotnet_naming_rule.private_static_readonly_pascal.severity = warning
 
 dotnet_naming_rule.private_fields_underscore_camel.symbols = private_fields
 dotnet_naming_rule.private_fields_underscore_camel.style = underscore_camel_case
-dotnet_naming_rule.private_fields_underscore_camel.severity = suggestion
+dotnet_naming_rule.private_fields_underscore_camel.severity = warning
 
 dotnet_naming_symbols.private_constants.applicable_kinds = field
 dotnet_naming_symbols.private_constants.applicable_accessibilities = private

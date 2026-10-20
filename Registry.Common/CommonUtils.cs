@@ -1,28 +1,17 @@
 using System;
 using System.Collections.Generic;
-using System.ComponentModel.DataAnnotations;
-using System.Diagnostics;
-using System.Globalization;
 using System.IO;
 using System.IO.Compression;
 using System.Linq;
-using System.Net;
 using System.Runtime.InteropServices;
 using System.Security.Cryptography;
 using System.Text;
-using System.Text.RegularExpressions;
-using System.Threading;
-using System.Threading.Tasks;
-using ICSharpCode.SharpZipLib.GZip;
-using ICSharpCode.SharpZipLib.Tar;
-using ICSharpCode.SharpZipLib.Zip;
 using Registry.Common.Model;
-using ZipFile = System.IO.Compression.ZipFile;
 
 namespace Registry.Common;
 
 /// <summary>
-/// General utilities: random strings, hash, tar/zip extraction, path helpers, and platform detection.
+/// General utilities: random strings, path helpers, downloads, and platform detection.
 /// </summary>
 public static class CommonUtils
 {
@@ -44,65 +33,9 @@ public static class CommonUtils
         return res.ToString();
     }
 
-    private const int BytesToRead = sizeof(long);
-
-    public static bool FilesAreEqual(string first, string second)
-    {
-        return FilesAreEqual(new FileInfo(first), new FileInfo(second));
-    }
-
-    public static bool FilesAreEqual(FileInfo first, FileInfo second)
-    {
-        if (first.Length != second.Length)
-            return false;
-
-        if (string.Equals(first.FullName, second.FullName, StringComparison.OrdinalIgnoreCase))
-            return true;
-
-        var iterations = (int)Math.Ceiling((double)first.Length / BytesToRead);
-
-        using var fs1 = first.OpenRead();
-        using var fs2 = second.OpenRead();
-
-        var one = new byte[BytesToRead];
-        var two = new byte[BytesToRead];
-
-        for (var i = 0; i < iterations; i++)
-        {
-            var c1 = fs1.Read(one, 0, BytesToRead);
-            var c2 = fs2.Read(two, 0, BytesToRead);
-
-            if (c1 != c2)
-                return false;
-
-            if (BitConverter.ToInt64(one, 0) != BitConverter.ToInt64(two, 0))
-                return false;
-        }
-
-        return true;
-    }
-
     public static TValue SafeGetValue<TKey, TValue>(this IDictionary<TKey, TValue> dictionary, TKey key)
     {
         return !dictionary.TryGetValue(key, out var value) ? default : value;
-    }
-
-    public static TValue GetOrAdd<TKey, TValue>(
-        this Dictionary<TKey, TValue> dict, TKey key, TValue value) where TKey : notnull
-    {
-        ref var val = ref CollectionsMarshal.GetValueRefOrAddDefault(dict, key, out var exists);
-
-        if (exists)
-            return val;
-
-        val = value;
-        return value;
-    }
-
-    public static TValueOut? SafeGetValue<TKey, TValue, TValueOut>(this IDictionary<TKey, TValue> dictionary,
-        TKey key, Func<TValue, TValueOut> selector) where TValueOut : struct
-    {
-        return !dictionary.TryGetValue(key, out var value) ? null : selector(value);
     }
 
     /// <summary>
@@ -127,61 +60,6 @@ public static class CommonUtils
                     Directory.CreateDirectory(folder);
             }
         }
-    }
-
-    public static void SmartExtractFolder(string archive, string dest, bool overwrite = true)
-    {
-        var ext = Path.GetExtension(archive).ToLowerInvariant();
-
-        if (ext == ".tar.gz" || ext == ".tgz")
-            ExtractTGZ(archive, dest);
-        else
-            ZipFile.ExtractToDirectory(archive, dest, overwrite);
-    }
-
-    public static void ExtractTGZ(string archive, string destFolder)
-    {
-        using Stream inStream = File.OpenRead(archive);
-        using Stream gzipStream = new GZipInputStream(inStream);
-
-        var tarArchive = TarArchive.CreateInputTarArchive(gzipStream, Encoding.Default);
-        tarArchive.ExtractContents(destFolder);
-        tarArchive.Close();
-
-        gzipStream.Close();
-        inStream.Close();
-    }
-
-    public static string ComputeSha256Hash(string str)
-    {
-        return ComputeSha256Hash(Encoding.UTF8.GetBytes(str));
-    }
-
-    public static string ComputeFileHash(string filePath)
-    {
-        using var fileStream = File.OpenRead(filePath);
-        using var sha256Hash = SHA256.Create();
-        var bytes = sha256Hash.ComputeHash(fileStream);
-
-        return ConvertBytesToString(bytes);
-    }
-
-    private static string ConvertBytesToString(byte[] bytes)
-    {
-        // Convert byte array to a string
-        var builder = new StringBuilder();
-        foreach (var t in bytes)
-            builder.Append(t.ToString("x2"));
-
-        return builder.ToString();
-    }
-
-    public static string ComputeSha256Hash(byte[] rawData)
-    {
-        using var sha256Hash = SHA256.Create();
-        var bytes = sha256Hash.ComputeHash(rawData);
-
-        return ConvertBytesToString(bytes);
     }
 
     private const string SmartFileCacheFolder = "SmartFileCache";
@@ -341,13 +219,6 @@ public static class CommonUtils
         return candidate.StartsWith(rootFull, comparison);
     }
 
-    public static (string, Stream) GetTempStream(int bufferSize = 104857600)
-    {
-        var file = Path.Combine(Path.GetTempPath(), "temp-files", RandomString(16));
-
-        return (file, new BufferedStream(File.Open(file, FileMode.CreateNew, FileAccess.ReadWrite), bufferSize));
-    }
-
     private static readonly HashSet<string> AddCompressibleMimeTypes =
     [
         "text/html",
@@ -457,62 +328,6 @@ public static class CommonUtils
         _ => 4 // Conservative default for unknown types
     };
 
-    public static bool Validate<T>(T obj, out ICollection<ValidationResult> results)
-    {
-        results = new List<ValidationResult>();
-
-        return Validator.TryValidateObject(obj, new ValidationContext(obj), results, true);
-    }
-
-    public static string ToErrorString(this IEnumerable<ValidationResult> results)
-    {
-        var builder = new StringBuilder();
-
-        foreach (var res in results)
-        {
-            builder.Append(res.ErrorMessage);
-
-            if (res.MemberNames.Any())
-            {
-                builder.Append(" (");
-                builder.Append(string.Join(", ", res.MemberNames));
-                builder.Append(')');
-            }
-
-            builder.Append("; ");
-        }
-
-        return builder.ToString();
-    }
-    /*
-    public static async Task<FileStream> WaitForFile(string fullPath, FileMode mode, FileAccess access, FileShare share,
-        int hops = 15, int baseDelay = 10, int incrementDelay = 2)
-    {
-        int delay = baseDelay;
-
-        for (var hop = 0; hop < hops; hops++)
-        {
-            FileStream fs = null;
-            try
-            {
-                fs = new FileStream(fullPath, mode, access, share);
-                return fs;
-            }
-            catch (IOException)
-            {
-                if (fs != null)
-                {
-                    await fs.DisposeAsync();
-                }
-
-                delay *= 2;
-                await Task.Delay(delay);
-            }
-        }
-
-        return null;
-    }*/
-
     public static void WriteLineColor(string text, ConsoleColor color)
     {
         Console.ForegroundColor = color;
@@ -525,11 +340,6 @@ public static class CommonUtils
         Console.ForegroundColor = color;
         Console.Write(text);
         Console.ResetColor();
-    }
-
-    public static int? SafeParse(string str, IFormatProvider provider = null)
-    {
-        return int.TryParse(str, NumberStyles.Integer, provider, out var result) ? result : null;
     }
 
     public static void SetDefaultDllPath(string path)

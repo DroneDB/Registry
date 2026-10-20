@@ -6,12 +6,13 @@
         PrivateAssets/IncludeAssets stay on the PackageReference in the project.
 
         Packages that ship together move together, so they share one version property:
-          - DotNetPackagesVersion: ASP.NET Core, EF Core, Microsoft.Extensions.* and System.* packages
+          - DotNetPackagesVersion: ASP.NET Core, EF Core and Microsoft.Extensions.* packages
             of the .NET 10 servicing train (EF Core packages must all have the same version).
           - HangfireVersion, AspNetCoreHealthChecksVersion and SkiaSharpVersion: the packages
             of one family (SkiaSharp and its native assets must match).
-        The older AspNetCore 2.x/3.x packages and System.DirectoryServices.Protocols 9.0.0 are not
-        part of the .NET 10 train and keep their own versions.
+        System.DirectoryServices.Protocols 9.0.0 is not part of the .NET 10 train and keeps its own version.
+        Packages whose assemblies ship in the shared framework (Microsoft.NETCore.App or
+        Microsoft.AspNetCore.App) are not referenced: NuGet reports them as NU1510.
 
         Transitive pinning (CentralPackageTransitivePinningEnabled) is off, so restore resolves the
         same transitive versions as before.
@@ -37,24 +38,13 @@
         <PackageVersion Include="Microsoft.EntityFrameworkCore.InMemory" Version="$(DotNetPackagesVersion)" />
         <PackageVersion Include="Microsoft.EntityFrameworkCore.Relational" Version="$(DotNetPackagesVersion)" />
         <PackageVersion Include="Microsoft.EntityFrameworkCore.Sqlite" Version="$(DotNetPackagesVersion)" />
-        <PackageVersion Include="Microsoft.EntityFrameworkCore.SqlServer" Version="$(DotNetPackagesVersion)" />
         <PackageVersion Include="Microsoft.EntityFrameworkCore.Tools" Version="$(DotNetPackagesVersion)" />
         <PackageVersion Include="Microsoft.Extensions.Caching.Abstractions" Version="$(DotNetPackagesVersion)" />
         <PackageVersion Include="Microsoft.Extensions.Caching.Memory" Version="$(DotNetPackagesVersion)" />
         <PackageVersion Include="Microsoft.Extensions.Caching.StackExchangeRedis" Version="$(DotNetPackagesVersion)" />
         <PackageVersion Include="Microsoft.Extensions.Diagnostics.HealthChecks.EntityFrameworkCore" Version="$(DotNetPackagesVersion)" />
-        <PackageVersion Include="Microsoft.Extensions.Hosting" Version="$(DotNetPackagesVersion)" />
         <PackageVersion Include="Microsoft.Extensions.Logging.Abstractions" Version="$(DotNetPackagesVersion)" />
         <PackageVersion Include="Microsoft.Extensions.Options" Version="$(DotNetPackagesVersion)" />
-        <PackageVersion Include="System.Text.Encoding.CodePages" Version="$(DotNetPackagesVersion)" />
-        <PackageVersion Include="System.Threading.Tasks.Dataflow" Version="$(DotNetPackagesVersion)" />
-    </ItemGroup>
-
-    <!-- Legacy ASP.NET Core packages (R2-3 reviews them for removal) -->
-    <ItemGroup>
-        <PackageVersion Include="Microsoft.AspNetCore.Authentication.Core" Version="2.3.9" />
-        <PackageVersion Include="Microsoft.AspNetCore.ResponseCompression" Version="2.3.9" />
-        <PackageVersion Include="Microsoft.AspNetCore.SpaServices" Version="3.1.32" />
     </ItemGroup>
 
     <!-- Data access -->
@@ -67,7 +57,6 @@
     <ItemGroup>
         <PackageVersion Include="AspNetCore.HealthChecks.Hangfire" Version="$(AspNetCoreHealthChecksVersion)" />
         <PackageVersion Include="AspNetCore.HealthChecks.UI.Client" Version="$(AspNetCoreHealthChecksVersion)" />
-        <PackageVersion Include="AspNetCore.HealthChecks.UI.Core" Version="$(AspNetCoreHealthChecksVersion)" />
         <PackageVersion Include="Hangfire.AspNetCore" Version="$(HangfireVersion)" />
         <PackageVersion Include="Hangfire.Core" Version="$(HangfireVersion)" />
         <PackageVersion Include="Hangfire.Console" Version="1.4.3" />
@@ -79,8 +68,6 @@
     <ItemGroup>
         <PackageVersion Include="Serilog" Version="4.3.1" />
         <PackageVersion Include="Serilog.AspNetCore" Version="10.0.0" />
-        <PackageVersion Include="Serilog.Aspnetcore.Middleware" Version="1.0.0" />
-        <PackageVersion Include="Serilog.Enrichers.AspNetCore" Version="1.0.0" />
         <PackageVersion Include="Serilog.Enrichers.Environment" Version="3.0.1" />
         <PackageVersion Include="Serilog.Enrichers.Thread" Version="4.0.0" />
         <PackageVersion Include="Serilog.Extensions.Hosting" Version="10.0.0" />
@@ -88,16 +75,12 @@
         <PackageVersion Include="Serilog.Sinks.Console" Version="6.1.1" />
         <PackageVersion Include="Serilog.Sinks.File" Version="7.0.0" />
         <PackageVersion Include="Serilog.Sinks.NUnit" Version="1.0.3" />
-        <PackageVersion Include="Serilog.Sinks.Seq" Version="9.0.0" />
     </ItemGroup>
 
     <!-- Web API, security and tooling -->
     <ItemGroup>
         <PackageVersion Include="CommandLineParser" Version="2.9.1" />
-        <PackageVersion Include="Microsoft.VisualStudio.Web.CodeGeneration.Design" Version="10.0.2" />
         <PackageVersion Include="Scalar.AspNetCore" Version="2.14.11" />
-        <PackageVersion Include="Scrutor" Version="7.0.0" />
-        <PackageVersion Include="Scrutor.AspNetCore" Version="3.3.0" />
         <PackageVersion Include="Swashbuckle.AspNetCore" Version="10.1.7" />
         <PackageVersion Include="System.DirectoryServices.Protocols" Version="9.0.0" />
         <PackageVersion Include="System.IdentityModel.Tokens.Jwt" Version="8.18.0" />

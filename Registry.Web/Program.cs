@@ -17,7 +17,6 @@ using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Routing;
-using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -1199,9 +1198,6 @@ public class Program
                         var registryMysqlConnectionString =
                             configuration.GetConnectionString("RegistryMysqlConnection");
 
-                        /*var registrySqlServerConnectionString =
-                            configuration.GetConnectionString("RegistrySqlServerConnection");*/
-
                         // One probe per connection string for the whole host, or none when pinned
                         var mySqlVersions = MySqlServerVersionCache.FromConfiguration(configuration);
 
@@ -1216,11 +1212,6 @@ public class Program
                                     registryMysqlConnectionString, mySqlVersions.Resolve(registryMysqlConnectionString),
                                     x => x.MigrationsAssembly("Registry.Web.Data.MySqlMigrations")),
 
-                                /* NOTE: This is not implemented yet
-                                "SqlServer" => options.UseSqlServer(registrySqlServerConnectionString,
-                                    x => x.MigrationsAssembly("Registry.Web.Data.SqlServerMigrations")),
-                                    */
-
                                 _ => throw new Exception($"Unsupported provider: {provider}")
                             });
 
@@ -1228,9 +1219,6 @@ public class Program
                             configuration.GetConnectionString("IdentitySqliteConnection");
                         var identityMysqlConnectionString =
                             configuration.GetConnectionString("IdentityMysqlConnection");
-
-                        /*var identitySqlServerConnectionString =
-                            configuration.GetConnectionString("IdentitySqlServerConnection");*/
 
                         services.AddDbContext<ApplicationDbContext>(
                             options => _ = provider switch
@@ -1242,11 +1230,6 @@ public class Program
                                 "MySql" => options.UseMySql(
                                     identityMysqlConnectionString, mySqlVersions.Resolve(identityMysqlConnectionString),
                                     x => x.MigrationsAssembly("Registry.Web.Identity.MySqlMigrations")),
-
-                                /* NOTE: This is not implemented yet
-                                "SqlServer" => options.UseSqlServer(identitySqlServerConnectionString,
-                                    x => x.MigrationsAssembly("Registry.Web.Identity.SqlServerMigrations")),
-                                    */
 
                                 _ => throw new Exception($"Unsupported provider: {provider}")
                             });

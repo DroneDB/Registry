@@ -82,7 +82,6 @@
 #### Exclusions
 
 - Auto-generated files (`*Designer.cs`, `*ModelSnapshot.cs`, migration files)
-- 3rd-party code (`EchoStream.cs`, `SubsetStream.cs`)
 
 ## Vue.js Frontend (`Registry.Web/ClientApp` — git submodule of the separate **DroneDB/Hub** repo)
 

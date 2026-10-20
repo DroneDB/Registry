@@ -349,9 +349,6 @@ public class Startup
         // heavy tool is registered by AddImportSources for both web and worker hosts).
         services.AddScoped<IFileUrlImportManager, FileUrlImportManager>();
 
-        services.AddScoped<IConfigurationHelper<AppSettings>, ConfigurationHelper>(_ =>
-            new ConfigurationHelper(MagicStrings.AppSettingsFileName));
-
         // Admin configuration editor: builds ConfigurationDataDto from AppSettings + defaults
         services.AddScoped<IConfigurationDataBuilder, ConfigurationDataBuilder>();
 

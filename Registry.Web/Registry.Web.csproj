@@ -47,51 +47,37 @@
     <ItemGroup>
         <PackageReference Include="AspNetCore.HealthChecks.Hangfire" />
         <PackageReference Include="AspNetCore.HealthChecks.UI.Client" />
-        <PackageReference Include="AspNetCore.HealthChecks.UI.Core" />
         <PackageReference Include="CommandLineParser" />
         <PackageReference Include="Hangfire.AspNetCore" />
         <PackageReference Include="Hangfire.Console" />
         <PackageReference Include="Hangfire.Core" />
         <PackageReference Include="Hangfire.InMemory" />
         <PackageReference Include="Hangfire.MySqlStorage" />
-        <PackageReference Include="Microsoft.AspNetCore.Authentication.Core" />
         <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" />
         <PackageReference Include="Microsoft.AspNetCore.Mvc.NewtonsoftJson" />
-        <PackageReference Include="Microsoft.AspNetCore.ResponseCompression" />
-        <PackageReference Include="Microsoft.AspNetCore.SpaServices" />
         <PackageReference Include="Microsoft.AspNetCore.SpaServices.Extensions" />
         <PackageReference Include="Microsoft.AspNetCore.DataProtection.StackExchangeRedis" />
         <PackageReference Include="Microsoft.EntityFrameworkCore" />
         <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" />
-        <PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" />
         <PackageReference Include="Microsoft.EntityFrameworkCore.Tools">
             <PrivateAssets>all</PrivateAssets>
             <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
         </PackageReference>
         <PackageReference Include="Microsoft.Extensions.Caching.StackExchangeRedis" />
         <PackageReference Include="Microsoft.Extensions.Diagnostics.HealthChecks.EntityFrameworkCore" />
-        <PackageReference Include="Microsoft.Extensions.Hosting" />
-        <PackageReference Include="Microsoft.VisualStudio.Web.CodeGeneration.Design" />
         <PackageReference Include="MimeMapping" />
         <PackageReference Include="Newtonsoft.Json" />
-        <PackageReference Include="Scrutor" />
-        <PackageReference Include="Scrutor.AspNetCore" />
         <PackageReference Include="System.DirectoryServices.Protocols" />
         <PackageReference Include="Serilog.AspNetCore" />
-        <PackageReference Include="Serilog.Aspnetcore.Middleware" />
-        <PackageReference Include="Serilog.Enrichers.AspNetCore" />
         <PackageReference Include="Serilog.Enrichers.Environment" />
         <PackageReference Include="Serilog.Enrichers.Thread" />
         <PackageReference Include="Serilog.Extensions.Hosting" />
         <PackageReference Include="Serilog.Sinks.File" />
-        <PackageReference Include="Serilog.Sinks.Seq" />
         <PackageReference Include="SkiaSharp" />
         <PackageReference Include="SkiaSharp.NativeAssets.Linux" />
         <PackageReference Include="Scalar.AspNetCore" />
         <PackageReference Include="Swashbuckle.AspNetCore" />
         <PackageReference Include="System.IdentityModel.Tokens.Jwt" />
-        <PackageReference Include="System.Text.Encoding.CodePages" />
-        <PackageReference Include="System.Threading.Tasks.Dataflow" />
     </ItemGroup>
 
     <ItemGroup>

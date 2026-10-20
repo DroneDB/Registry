@@ -2,22 +2,20 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Net;
 using System.Net.Http;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using MsOptions = Microsoft.Extensions.Options.Options;
-using Moq;
 using NUnit.Framework;
 using Registry.Web.Identity.Models;
 using Registry.Web.Models.Configuration;
 using Registry.Web.Services.Initialization;
-using Registry.Web.Services.Ports;
 using Registry.Web.Test.Support;
 using Shouldly;
 
@@ -46,18 +44,11 @@ public class Rq01AdminPasswordTests
 
     private RegistryWebFactory _factory = null!;
     private HttpClient _client = null!;
-    private Mock<IConfigurationHelper<AppSettings>> _configurationHelper = null!;
 
     [SetUp]
     public void SetUp()
     {
-        _configurationHelper = new Mock<IConfigurationHelper<AppSettings>>(MockBehavior.Loose);
-        _factory = new RegistryWebFactory(configureServices: services =>
-        {
-            // ConfigurationHelper writes ./appsettings.json (relative to the process directory)
-            services.RemoveAll<IConfigurationHelper<AppSettings>>();
-            services.AddSingleton(_configurationHelper.Object);
-        });
+        _factory = new RegistryWebFactory();
         _client = _factory.CreateClient();
     }
 
@@ -134,13 +125,32 @@ public class Rq01AdminPasswordTests
         (await AdminPasswordIsAsync(RegistryWebFactory.AdminPassword)).ShouldBeTrue();
     }
 
+    /// <summary>
+    /// The appsettings.json files the host could write: relative to the process directory (where the
+    /// removed ConfigurationHelper wrote it), in the content root and next to the binaries.
+    /// Maps each full path to its content, or null when the file does not exist.
+    /// </summary>
+    private Dictionary<string, byte[]?> SnapshotAppSettingsFiles() =>
+        new[]
+            {
+                Path.GetFullPath(MagicStrings.AppSettingsFileName),
+                Path.Combine(_factory.RootPath, MagicStrings.AppSettingsFileName),
+                Path.Combine(AppContext.BaseDirectory, MagicStrings.AppSettingsFileName)
+            }
+            .Select(Path.GetFullPath)
+            .Distinct()
+            .ToDictionary(path => path, path => File.Exists(path) ? File.ReadAllBytes(path) : null);
+
     [Test]
     public async Task ChangedAdminPassword_IsNotPersistedToConfiguration()
     {
+        var before = SnapshotAppSettingsFiles();
+
         await ChangeAdminPasswordAsync();
 
-        _configurationHelper.Verify(h => h.SaveConfiguration(It.IsAny<AppSettings>()), Times.Never,
-            "the admin password must not be written to appsettings.json");
+        var after = SnapshotAppSettingsFiles();
+        foreach (var (path, content) in before)
+            after[path].ShouldBe(content, $"the admin password must not be written to {path}");
         _factory.Services.GetRequiredService<IOptions<AppSettings>>().Value.DefaultAdmin.Password
             .ShouldBe(RegistryWebFactory.AdminPassword, "a request must not mutate the singleton settings");
     }
