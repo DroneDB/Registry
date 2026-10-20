@@ -53,6 +53,9 @@ services:
             - INSTANCE_TYPE=2
             # The image runs in UTC; keep the local time these deployments always used
             - TZ=Europe/Rome
+            # OpenTopography API key for DSM altitude lookups (libddb); without it the relative
+            # altitude of images without one in their EXIF falls back to the GPS altitude
+            - DDB_OPENTOPOGRAPHY_KEY=${DDB_OPENTOPOGRAPHY_KEY:-}
             # Keep GDAL/Nexus build scratch on the data volume, off the container
             # root filesystem and off the /tmp tmpfs. /data is bind-mounted below;
             # /data/temp must exist on the host (created by the app on startup).
@@ -87,6 +90,9 @@ services:
         environment:
             - INSTANCE_TYPE=1
             - TZ=Europe/Rome
+            # OpenTopography API key for DSM altitude lookups (libddb); without it the relative
+            # altitude of images without one in their EXIF falls back to the GPS altitude
+            - DDB_OPENTOPOGRAPHY_KEY=${DDB_OPENTOPOGRAPHY_KEY:-}
             # Keep GDAL/Nexus build scratch on the data volume (see webserver).
             - CPL_TMPDIR=/data/temp
             - TMPDIR=/data/temp
@@ -117,6 +123,9 @@ services:
         environment:
             - INSTANCE_TYPE=1
             - TZ=Europe/Rome
+            # OpenTopography API key for DSM altitude lookups (libddb); without it the relative
+            # altitude of images without one in their EXIF falls back to the GPS altitude
+            - DDB_OPENTOPOGRAPHY_KEY=${DDB_OPENTOPOGRAPHY_KEY:-}
             # Keep GDAL/Nexus build scratch on the data volume (see webserver).
             - CPL_TMPDIR=/data/temp
             - TMPDIR=/data/temp
