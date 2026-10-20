@@ -76,7 +76,20 @@ public class WfsFeatureQueryTests
         _wrapper = new Mock<IDdbWrapper>(MockBehavior.Strict);
         _wrapper.Setup(w => w.QueryVector(Gpkg, It.IsAny<VectorQuery>())).Returns(_polygons);
         _wrapper.Setup(w => w.CountVector(Gpkg, It.IsAny<VectorQuery>())).Returns(25036);
+        _wrapper.Setup(w => w.DescribeVector(Gpkg, "A010101")).Returns(
+            "{\"layers\":[{\"name\":\"A010101\",\"fields\":[{\"name\":\"FEATURE_ID\",\"type\":\"String\"}," +
+            "{\"name\":\"STRATO\",\"type\":\"String\"},{\"name\":\"CLASSE\",\"type\":\"String\"}]}]}");
     }
+
+    private const string Json = "application/json";
+
+    private static string Filter(string predicate) =>
+        "<fes:Filter xmlns:fes=\"http://www.opengis.net/fes/2.0\" xmlns:gml=\"http://www.opengis.net/gml/3.2\">" +
+        predicate + "</fes:Filter>";
+
+    private static string EqualTo(string property, string literal) =>
+        $"<fes:PropertyIsEqualTo><fes:ValueReference>{property}</fes:ValueReference>" +
+        $"<fes:Literal>{literal}</fes:Literal></fes:PropertyIsEqualTo>";
 
     private IDistributedCache Cache() =>
         new MemoryDistributedCache(Microsoft.Extensions.Options.Options.Create(new MemoryDistributedCacheOptions()));
@@ -164,18 +177,98 @@ public class WfsFeatureQueryTests
     }
 
     [Test]
-    public async Task GetFeature_FesFilter_EvaluatesAllSelectedFeatures()
+    public async Task GetFeature_TranslatedFilter_IsEvaluatedPagedAndCountedByDroneDb()
     {
-        const string filter = "<fes:Filter xmlns:fes=\"http://www.opengis.net/fes/2.0\"><fes:PropertyIsEqualTo>" +
-                              "<fes:ValueReference>ddbSeq</fes:ValueReference><fes:Literal>1</fes:Literal>" +
-                              "</fes:PropertyIsEqualTo></fes:Filter>";
+        var fc = await CreateWfs().GetFeatureAsync(Org, Ds, Layer.Name, null, null, 5, 10, Gml,
+            filterXml: Filter(EqualTo("ddb:FEATURE_ID", "000000000002")));
 
-        var fc = await CreateWfs().GetFeatureAsync(Org, Ds, Layer.Name, null, null, 1, 0, Gml, filterXml: filter);
+        const string where = "\"FEATURE_ID\" = '000000000002'";
+        XDocument.Parse(fc).Root!.Attribute("numberMatched")!.Value.ShouldBe("25036");
+        _wrapper.Verify(w => w.QueryVector(Gpkg, It.Is<VectorQuery>(q =>
+            q.Where == where && q.MaxFeatures == 5 && q.StartIndex == 10 && q.OutputFormat == "gml")), Times.Once);
+        _wrapper.Verify(w => w.CountVector(Gpkg, It.Is<VectorQuery>(q => q.Where == where)), Times.Once);
+        _wrapper.Verify(w => w.QueryVector(Gpkg, It.Is<VectorQuery>(q => q.MaxFeatures == 10000)), Times.Never);
+    }
 
-        XDocument.Parse(fc).Root!.Attribute("numberReturned")!.Value.ShouldBe("1");
-        _wrapper.Verify(w => w.QueryVector(Gpkg, It.Is<VectorQuery>(q => q.MaxFeatures == 10000 && q.StartIndex == 0)),
-            Times.Once);
+    [Test]
+    public async Task GetFeature_TranslatedFilter_AppliesToGeoJson()
+    {
+        await CreateWfs().GetFeatureAsync(Org, Ds, Layer.Name, null, null, 5, 0, Json,
+            filterXml: Filter(EqualTo("STRATO", "01")));
+
+        _wrapper.Verify(w => w.QueryVector(Gpkg, It.Is<VectorQuery>(q =>
+            q.Where == "\"STRATO\" = '01'" && q.OutputFormat == "geojson")), Times.Once);
+    }
+
+    [Test]
+    public async Task GetFeature_BboxInFilter_BecomesTheQueryBbox()
+    {
+        const string bbox = "<fes:BBOX><fes:ValueReference>geom</fes:ValueReference>" +
+                            "<gml:Envelope srsName=\"urn:ogc:def:crs:EPSG::4326\"><gml:lowerCorner>45.4 9.15</gml:lowerCorner>" +
+                            "<gml:upperCorner>45.42 9.16</gml:upperCorner></gml:Envelope></fes:BBOX>";
+
+        await CreateWfs().GetFeatureAsync(Org, Ds, Layer.Name, null, null, 5, 0, Gml,
+            filterXml: Filter("<fes:And>" + bbox + EqualTo("CLASSE", "01") + "</fes:And>"));
+
+        _wrapper.Verify(w => w.QueryVector(Gpkg, It.Is<VectorQuery>(q =>
+            q.Bbox != null && q.Bbox.SequenceEqual(new[] { 9.15, 45.4, 9.16, 45.42 }) &&
+            q.Where == "\"CLASSE\" = '01'")), Times.Once);
+    }
+
+    [Test]
+    public async Task GetFeature_UntranslatableFilter_IsEvaluatedHereOnAllSelectedFeatures()
+    {
+        var fc = await CreateWfs().GetFeatureAsync(Org, Ds, Layer.Name, null, null, 1, 0, Gml,
+            filterXml: Filter(EqualTo("ddbSeq", "1")));
+
+        var root = XDocument.Parse(fc).Root!;
+        root.Attribute("numberReturned")!.Value.ShouldBe("1");
+        root.Attribute("numberMatched")!.Value.ShouldBe("1");
+        _wrapper.Verify(w => w.QueryVector(Gpkg, It.Is<VectorQuery>(q =>
+            q.MaxFeatures == 10000 && q.StartIndex == 0 && q.Where == null)), Times.Once);
         _wrapper.Verify(w => w.CountVector(It.IsAny<string>(), It.IsAny<VectorQuery>()), Times.Never);
+    }
+
+    // The filter used to be ignored for every format but GML, and count/startIndex with it
+    [Test]
+    public async Task GetFeature_UntranslatableFilter_IsPagedAndKeepsDdbSeq()
+    {
+        var fc = await CreateWfs().GetFeatureAsync(Org, Ds, Layer.Name, null, null, 1, 1, Gml,
+            filterXml: Filter("<fes:PropertyIsGreaterThanOrEqualTo><fes:ValueReference>ddbSeq</fes:ValueReference>" +
+                              "<fes:Literal>0</fes:Literal></fes:PropertyIsGreaterThanOrEqualTo>"));
+
+        var root = XDocument.Parse(fc).Root!;
+        root.Attribute("numberMatched")!.Value.ShouldBe("2");
+        root.Attribute("numberReturned")!.Value.ShouldBe("1");
+        var seq = root.Descendants(XName.Get("ddbSeq", OgcNamespaces.Ddb)).Single();
+        seq.Value.ShouldBe("1", "the second feature keeps its position in the unfiltered collection");
+    }
+
+    [Test]
+    public async Task GetFeature_UntranslatableFilter_AppliesToGeoJson()
+    {
+        var geoJson = await CreateWfs().GetFeatureAsync(Org, Ds, Layer.Name, null, null, 10, 0, Json,
+            filterXml: Filter(EqualTo("ddbSeq", "1")));
+
+        geoJson.ShouldBe(_polygons, "the page of matches is read again in the requested format");
+        _wrapper.Verify(w => w.QueryVector(Gpkg, It.Is<VectorQuery>(q =>
+            q.MaxFeatures == 10000 && q.OutputFormat == "gml")), Times.Once);
+        _wrapper.Verify(w => w.QueryVector(Gpkg, It.Is<VectorQuery>(q =>
+            Fids(q, 2) && q.OutputFormat == "geojson" && q.StartIndex == 0)), Times.Once);
+    }
+
+    [Test]
+    public async Task GetFeature_FilterDroneDbRejects_IsEvaluatedHere()
+    {
+        _wrapper.Setup(w => w.QueryVector(Gpkg, It.Is<VectorQuery>(q => q.Where != null)))
+            .Throws(new Registry.Adapters.DroneDB.DdbException("no such column"));
+
+        var fc = await CreateWfs().GetFeatureAsync(Org, Ds, Layer.Name, null, null, 10, 0, Gml,
+            filterXml: Filter(EqualTo("FEATURE_ID", "000000000001")));
+
+        var root = XDocument.Parse(fc).Root!;
+        root.Attribute("numberMatched")!.Value.ShouldBe("1");
+        _wrapper.Verify(w => w.QueryVector(Gpkg, It.Is<VectorQuery>(q => q.MaxFeatures == 10000)), Times.Once);
     }
 
     [Test]

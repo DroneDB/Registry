@@ -11,6 +11,7 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Caching.Distributed;
 using Microsoft.Extensions.Logging;
 using Newtonsoft.Json.Linq;
+using Registry.Adapters.DroneDB;
 using Registry.Ports;
 using Registry.Ports.DroneDB;
 using Registry.Web.Exceptions;
@@ -276,12 +277,10 @@ public class WfsManager : OgcManagerBase, IWfsManager
         foreach (var layer in targetLayers)
         {
             var safe = OgcNames.ToNcName(layer.Name);
-            JObject? describe = null;
+            JArray? fields = null;
             try
             {
-                var gpkg = ResolveVectorArtifact(ddb, layer);
-                var describeJson = DdbWrapper.DescribeVector(gpkg, layer.InnerLayerName);
-                describe = JObject.Parse(describeJson);
+                fields = LayerFields(ResolveVectorArtifact(ddb, layer), layer);
             }
             catch (Exception ex)
             {
@@ -289,10 +288,6 @@ public class WfsManager : OgcManagerBase, IWfsManager
                     "WFS DescribeFeatureType: failed to describe layer {Layer}; falling back to minimal definition",
                     layer.InnerLayerName);
             }
-
-            var fields = describe?["layers"] is JArray jl && jl.Count > 0
-                ? jl[0]["fields"] as JArray
-                : null;
 
             // <xsd:element name="safe" type="ddb:safeType" substitutionGroup="gml:AbstractFeature"/>
             await w.WriteStartElementAsync("xsd", "element", null);
@@ -391,17 +386,94 @@ public class WfsManager : OgcManagerBase, IWfsManager
         var gpkg = ResolveVectorArtifact(ddb, layer);
         var internalFormat = MapWfsOutputFormat(outputFormat);
         // RESOURCEID selects by feature id in DroneDB (GeoPackage primary key), so paging applies
-        // to the selected features. A FES Filter is evaluated here on the selected features
-        // (OGC 09-025r2 §7.9.2.4: independent of pagination), so all of them are fetched (up to
-        // 10 000) when one is present.
-        var hasFilter = !string.IsNullOrEmpty(filterXml);
-        var query = new VectorQuery(layer.InnerLayerName, bbox, bboxCrs ?? "EPSG:4326", fids,
-            hasFilter ? 10000 : count, hasFilter ? 0 : startIndex, internalFormat);
+        // to the selected features. A FES Filter selects before paging too (OGC 09-025r2 §7.9.2.4):
+        // DroneDB evaluates the filters FesSqlTranslator can express; the others are evaluated
+        // here on up to 10 000 features.
+        var query = new VectorQuery(layer.InnerLayerName, bbox, bboxCrs ?? "EPSG:4326", fids, count, startIndex,
+            internalFormat);
+        if (!string.IsNullOrEmpty(filterXml))
+        {
+            var filter = ParseFesFilter(filterXml!);
+            var sql = TranslateFilter(filter, gpkg, layer, bbox);
+            if (sql == null)
+                return EvaluateFilterHere(gpkg, query, filter, layer);
+
+            var filtered = query with
+            {
+                Where = sql.Where,
+                Bbox = sql.Bbox ?? query.Bbox,
+                BboxSrs = sql.Bbox != null ? sql.BboxCrs : query.BboxSrs
+            };
+            try
+            {
+                return QueryPage(gpkg, filtered, layer);
+            }
+            catch (DdbException ex)
+            {
+                _logger.LogWarning(ex, "WFS GetFeature: DroneDB could not evaluate {Where}; filtering in the Registry",
+                    filtered.Where);
+                return EvaluateFilterHere(gpkg, query, filter, layer);
+            }
+        }
+
+        return QueryPage(gpkg, query, layer);
+    }
+
+    /// <summary>The page <paramref name="query"/> selects; GML with numberMatched from DroneDB's count.</summary>
+    private string QueryPage(string gpkg, VectorQuery query, OgcLayerDto layer)
+    {
         var raw = DdbWrapper.QueryVector(gpkg, query);
-        if (internalFormat != "gml") return raw;
-        if (hasFilter)
-            return ApplyFesFilter(WfsFeatureCollectionWriter.ToFeatureCollection(raw, layer.Name), filterXml!);
+        if (query.OutputFormat != "gml") return raw;
         return WfsFeatureCollectionWriter.ToFeatureCollection(raw, layer.Name, DdbWrapper.CountVector(gpkg, query));
+    }
+
+    /// <summary>
+    /// The SQL form of <paramref name="filter"/> for the layer, or null when DroneDB cannot evaluate it
+    /// (see <see cref="FesSqlTranslator"/>) or it has a BBOX while the request has one too.
+    /// </summary>
+    private FesSqlFilter? TranslateFilter(XmlElement filter, string gpkg, OgcLayerDto layer, double[]? bbox)
+    {
+        ValidateValueReferences(filter);
+        var fieldNames = (LayerFields(gpkg, layer) ?? [])
+            .OfType<JObject>()
+            .Select(f => f["name"]?.Value<string>())
+            .OfType<string>()
+            .ToHashSet(StringComparer.Ordinal);
+        var sql = FesSqlTranslator.Translate(filter, fieldNames);
+        return sql?.Bbox != null && bbox != null ? null : sql;
+    }
+
+    /// <summary>
+    /// A filter DroneDB cannot evaluate: up to 10 000 features are read as GML and filtered here,
+    /// then <paramref name="query"/>'s page of the matches is returned in its format.
+    /// </summary>
+    private string EvaluateFilterHere(string gpkg, VectorQuery query, XmlElement filter, OgcLayerDto layer)
+    {
+        var all = DdbWrapper.QueryVector(gpkg, query with { MaxFeatures = 10000, StartIndex = 0, OutputFormat = "gml" });
+        var collection = new XmlDocument();
+        collection.LoadXml(WfsFeatureCollectionWriter.ToFeatureCollection(all, layer.Name));
+        var matches = FilterMembers(collection, filter);
+
+        if (query.OutputFormat == "gml")
+            return PageMembers(collection, matches, query.StartIndex, query.MaxFeatures);
+
+        // Other formats are written by DroneDB: read the page of matches by feature id
+        var page = matches.Skip(query.StartIndex).Take(query.MaxFeatures)
+            .Select(m => WfsFeatureIds.TryParse(FeatureOf(m)?.GetAttribute("id", NsGml), out _, out var fid) ? fid : -1)
+            .Where(fid => fid >= 0)
+            .ToArray();
+        return DdbWrapper.QueryVector(gpkg, query with
+        {
+            Fids = page.Length > 0 ? page : [-1],
+            StartIndex = 0
+        });
+    }
+
+    /// <summary>The fields of the layer from DroneDB's description, or null when it lists none.</summary>
+    private JArray? LayerFields(string gpkg, OgcLayerDto layer)
+    {
+        var describe = JObject.Parse(DdbWrapper.DescribeVector(gpkg, layer.InnerLayerName));
+        return describe["layers"] is JArray layers && layers.Count > 0 ? layers[0]["fields"] as JArray : null;
     }
 
     /// <summary>An OGR GML response without features.</summary>
@@ -628,72 +700,56 @@ public class WfsManager : OgcManagerBase, IWfsManager
     // =====================================================================================
     private const string NsFes = OgcNamespaces.Fes;
 
-    /// <summary>Apply an FES Filter (as raw XML) to a wfs:FeatureCollection. Returns the
-    /// filtered FC as XML (with updated numberReturned/numberMatched).</summary>
-    private static string ApplyFesFilter(string fcXml, string filterXml)
+    /// <summary>Parses a FES filter (fes:Filter, or a predicate, which is wrapped in one).</summary>
+    private static XmlElement ParseFesFilter(string filterXml)
     {
-        if (string.IsNullOrWhiteSpace(filterXml)) return fcXml;
-        XmlElement? filterEl;
         try
         {
-            var fdoc = new XmlDocument();
-            fdoc.LoadXml(filterXml);
-            filterEl = fdoc.DocumentElement;
-            if (filterEl == null) return fcXml;
-            // If wrapped element is not fes:Filter (e.g. the predicate itself), wrap it.
-            if (filterEl.LocalName != "Filter")
-            {
-                var wrap = fdoc.CreateElement("fes", "Filter", NsFes);
-                wrap.AppendChild(filterEl.CloneNode(true));
-                filterEl = wrap;
-            }
+            var doc = new XmlDocument();
+            doc.LoadXml(filterXml);
+            var filter = doc.DocumentElement
+                         ?? throw new OgcException("OperationProcessingFailed", "Empty fes:Filter", 400, "Filter");
+            if (filter.LocalName == "Filter")
+                return filter;
+
+            var wrap = doc.CreateElement("fes", "Filter", NsFes);
+            wrap.AppendChild(filter.CloneNode(true));
+            return wrap;
         }
         catch (XmlException ex)
         {
             throw new OgcException("OperationProcessingFailed", "Malformed fes:Filter: " + ex.Message, 400, "Filter");
         }
+    }
 
-        XmlDocument doc;
-        try
+    /// <summary>The wfs:member elements of <paramref name="collection"/> whose feature matches the filter.</summary>
+    private static List<XmlElement> FilterMembers(XmlDocument collection, XmlElement filter)
+    {
+        var matches = new List<XmlElement>();
+        var predicate = filter.ChildNodes.OfType<XmlElement>().FirstOrDefault();
+        var root = collection.DocumentElement;
+        if (root == null)
+            return matches;
+
+        // FES 2.0 §8.3: references outside the service's namespaces are InvalidParameterValue
+        if (predicate != null)
+            ValidateValueReferences(predicate);
+
+        foreach (var member in Members(root))
         {
-            doc = new XmlDocument();
-            doc.LoadXml(fcXml);
-        }
-        catch (Exception ex)
-        {
-            System.Diagnostics.Debug.WriteLine($"WFS ApplyFesFilter: failed to parse FeatureCollection XML ({ex.Message}); returning unfiltered");
-            return fcXml;
-        }
-        var root = doc.DocumentElement;
-        if (root == null) return fcXml;
+            var feature = FeatureOf(member);
+            if (feature == null)
+                continue;
+            if (predicate == null)
+            {
+                matches.Add(member);
+                continue;
+            }
 
-        const string nsWfs = "http://www.opengis.net/wfs/2.0";
-
-        // Build predicate from filter's first child (skip text/whitespace).
-        XmlElement? predicate = null;
-        foreach (XmlNode c in filterEl.ChildNodes)
-            if (c is XmlElement e) { predicate = e; break; }
-        if (predicate == null) return fcXml;
-
-        // Pre-validate the filter: any fes:ValueReference must reference a property
-        // recognized by the service (i.e. in the ddb or gml namespace, or unprefixed).
-        // FES 2.0 \u00a78.3 requires servers to raise InvalidParameterValue for invalid refs.
-        ValidateValueReferences(predicate);
-
-        var toRemove = new List<XmlNode>();
-        int kept = 0;
-        foreach (XmlNode child in root.ChildNodes)
-        {
-            if (child is not XmlElement m) continue;
-            if (m.LocalName != "member" || m.NamespaceURI != nsWfs) continue;
-            XmlElement? feat = null;
-            foreach (XmlNode fc in m.ChildNodes)
-                if (fc is XmlElement fe) { feat = fe; break; }
-            if (feat == null) { toRemove.Add(m); continue; }
             bool match;
             try
             {
-                match = EvalPredicate(predicate, feat);
+                match = EvalPredicate(predicate, feature);
             }
             catch (OgcException) { throw; }
             catch (Exception ex)
@@ -701,17 +757,36 @@ public class WfsManager : OgcManagerBase, IWfsManager
                 System.Diagnostics.Debug.WriteLine($"WFS EvalPredicate: error evaluating predicate ({ex.Message}); excluding feature");
                 match = false;
             }
-            if (match) kept++; else toRemove.Add(m);
+            if (match) matches.Add(member);
         }
-        foreach (var n in toRemove) root.RemoveChild(n);
-        ((XmlElement)root).SetAttribute("numberReturned", kept.ToString());
-        ((XmlElement)root).SetAttribute("numberMatched", kept.ToString());
+        return matches;
+    }
+
+    /// <summary>
+    /// <paramref name="collection"/> with only the page [startIndex, startIndex + count) of
+    /// <paramref name="matches"/>: numberMatched counts every match, numberReturned the page. The
+    /// features keep the ddbSeq of the unfiltered collection, which filters may have referenced.
+    /// </summary>
+    private static string PageMembers(XmlDocument collection, List<XmlElement> matches, int startIndex, int count)
+    {
+        var root = collection.DocumentElement!;
+        var page = matches.Skip(startIndex).Take(count).ToHashSet();
+        foreach (var member in Members(root).ToList())
+            if (!page.Contains(member))
+                root.RemoveChild(member);
+        root.SetAttribute("numberReturned", page.Count.ToString(CultureInfo.InvariantCulture));
+        root.SetAttribute("numberMatched", matches.Count.ToString(CultureInfo.InvariantCulture));
 
         using var ms = new MemoryStream();
         using (var xw = XmlWriter.Create(ms, new XmlWriterSettings { Indent = false, OmitXmlDeclaration = false, Encoding = new UTF8Encoding(false) }))
-            doc.Save(xw);
+            collection.Save(xw);
         return Encoding.UTF8.GetString(ms.ToArray());
     }
+
+    private static IEnumerable<XmlElement> Members(XmlElement root) =>
+        root.ChildNodes.OfType<XmlElement>().Where(m => m.LocalName == "member" && m.NamespaceURI == OgcNamespaces.Wfs);
+
+    private static XmlElement? FeatureOf(XmlElement member) => member.ChildNodes.OfType<XmlElement>().FirstOrDefault();
 
     /// <summary>Evaluate a FES predicate element against a feature element.</summary>
     private static bool EvalPredicate(XmlElement pred, XmlElement feature)
@@ -990,15 +1065,9 @@ public class WfsManager : OgcManagerBase, IWfsManager
         if (string.IsNullOrEmpty(path))
             throw new OgcException("OperationProcessingFailed", "Empty fes:ValueReference", 400, "ValueReference");
 
-        // Drop leading namespace prefix(es). FES allows xpath-like paths; we treat them as
-        // simple property names (no nested traversal beyond first step).
-        // Examples: "ddb:ddbSeq", "ddbSeq", "ddb:foo/ddb:bar" -> last step.
+        // Simple property names: the last step, without prefix or predicate (FesSqlTranslator)
         var step = path.Split('/').Last();
-        var local = step.Contains(':') ? step[(step.IndexOf(':') + 1)..] : step;
-
-        // Strip predicate brackets if any (e.g. "ddbSeq[1]").
-        var br = local.IndexOf('[');
-        if (br > 0) local = local[..br];
+        var local = FesSqlTranslator.PropertyName(path);
 
         foreach (XmlNode c in feature.ChildNodes)
             if (c is XmlElement e && e.LocalName == local)

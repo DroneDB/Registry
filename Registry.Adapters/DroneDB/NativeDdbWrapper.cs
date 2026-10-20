@@ -3014,6 +3014,7 @@ public class NativeDdbWrapper : IDdbWrapper
         [In] double[]? bbox,
         [MarshalAs(UnmanagedType.LPUTF8Str)] string? bboxSrs,
         [In] long[]? fids, int numFids,
+        [MarshalAs(UnmanagedType.LPUTF8Str)] string? where,
         int maxFeatures, int startIndex,
         [MarshalAs(UnmanagedType.LPUTF8Str)] string outputFormat,
         out IntPtr output);
@@ -3025,6 +3026,7 @@ public class NativeDdbWrapper : IDdbWrapper
         [In] double[]? bbox,
         [MarshalAs(UnmanagedType.LPUTF8Str)] string? bboxSrs,
         [In] long[]? fids, int numFids,
+        [MarshalAs(UnmanagedType.LPUTF8Str)] string? where,
         out long count);
 
     private static void ValidateVectorQuery(string vectorPath, VectorQuery query)
@@ -3044,7 +3046,8 @@ public class NativeDdbWrapper : IDdbWrapper
         return CallVector("query vector", () =>
         {
             var result = _QueryVectorEx(vectorPath, query.LayerName, query.Bbox, query.BboxSrs, fids,
-                fids?.Length ?? 0, query.MaxFeatures, query.StartIndex, query.OutputFormat ?? "application/json",
+                fids?.Length ?? 0, query.Where, query.MaxFeatures, query.StartIndex,
+                query.OutputFormat ?? "application/json",
                 out var output);
             ThrowForFinalResult(result, "query vector");
             var data = MarshalAndFreeUtf8(output);
@@ -3062,7 +3065,7 @@ public class NativeDdbWrapper : IDdbWrapper
         return CallVector("count vector", () =>
         {
             var result = _CountVector(vectorPath, query.LayerName, query.Bbox, query.BboxSrs, fids,
-                fids?.Length ?? 0, out var count);
+                fids?.Length ?? 0, query.Where, out var count);
             ThrowForFinalResult(result, "count vector");
             return count;
         });
