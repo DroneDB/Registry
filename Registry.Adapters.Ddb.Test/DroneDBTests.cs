@@ -69,6 +69,15 @@ public class NativeDdbWrapperTests : TestBase
         DdbWrapper.GetVersion().Length.ShouldBeGreaterThan(0, "Can call GetVersion()");
     }
 
+    // DDB-12: the .prj the Hub's "Set coordinate system" writes
+    [Test]
+    public void MakeCadPrj_WritesEsriWktOrLocal()
+    {
+        DdbWrapper.MakeCadPrj("EPSG:32632").ShouldContain("WGS_1984_UTM_Zone_32N");
+        DdbWrapper.MakeCadPrj("local").ShouldBe("LOCAL_CS[\"Drawing\"]");
+        Should.Throw<ArgumentException>(() => DdbWrapper.MakeCadPrj("nonsense")).Message.ShouldContain("nonsense");
+    }
+
     [Test]
     public void Init_NonExistant_Exception()
     {

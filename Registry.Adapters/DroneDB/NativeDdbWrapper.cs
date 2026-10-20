@@ -3090,6 +3090,29 @@ public class NativeDdbWrapper : IDdbWrapper
         }
     }
 
+    [DllImport("ddb", EntryPoint = "DDBMakeCadPrj")]
+    private static extern DdbResult _MakeCadPrj([MarshalAs(UnmanagedType.LPUTF8Str)] string crs, out IntPtr output);
+
+    public string MakeCadPrj(string crs)
+    {
+        ArgumentNullException.ThrowIfNull(crs);
+
+        DdbResult result;
+        IntPtr output;
+        try
+        {
+            result = _MakeCadPrj(crs, out output);
+        }
+        catch (EntryPointNotFoundException ex)
+        {
+            throw new DdbException($"Error in calling ddb lib: incompatible versions ({ex.Message})", ex);
+        }
+
+        if (result != DdbResult.Success)
+            throw new ArgumentException(SafeGetLastError("make CAD prj"));
+        return MarshalAndFreeUtf8(output);
+    }
+
     [DllImport("ddb", EntryPoint = "DDBDescribeVector")]
     private static extern DdbResult _DescribeVector(
         [MarshalAs(UnmanagedType.LPUTF8Str)] string vectorPath,

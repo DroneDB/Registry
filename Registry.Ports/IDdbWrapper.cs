@@ -416,4 +416,11 @@ public interface IDdbWrapper
     /// <param name="layerName">Layer to describe; null = all layers.</param>
     /// <returns>JSON describing driver, layers, fields, geometryType, srs, extent and feature count.</returns>
     public string DescribeVector(string vectorPath, string? layerName = null);
+
+    /// <summary>
+    /// Content of a .prj that gives a CAD drawing the coordinate system <paramref name="crs"/>
+    /// (DDBMakeCadPrj): ESRI WKT for an authority code, WKT or PROJ string; LOCAL_CS for "local".
+    /// </summary>
+    /// <exception cref="ArgumentException"><paramref name="crs"/> is not a coordinate system.</exception>
+    public string MakeCadPrj(string crs);
 }

@@ -307,6 +307,7 @@ public class Startup
         services.AddScoped<IDatasetsManager, DatasetsManager>();
         services.AddScoped<IStacManager, StacManager>();
         services.AddScoped<IObjectsManager, ObjectsManager>();
+        services.AddScoped<ICadCrsManager, CadCrsManager>();
         services.AddScoped<IShareManager, ShareManager>();
         services.AddScoped<IPushManager, PushManager>();
         services.AddSingleton<IPushSessionStore, PushSessionStore>();

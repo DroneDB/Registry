@@ -1,0 +1,57 @@
+#nullable enable
+using System;
+using System.IO;
+using System.Text;
+using System.Threading.Tasks;
+using Microsoft.Extensions.Logging;
+using Registry.Ports;
+using Registry.Web.Exceptions;
+using Registry.Web.Models;
+using Registry.Web.Models.DTO;
+using Registry.Web.Services.Ports;
+
+namespace Registry.Web.Services.Managers;
+
+/// <inheritdoc />
+public sealed class CadCrsManager(
+    IUtils utils,
+    IAuthManager authManager,
+    IDdbManager ddbManager,
+    IDdbWrapper ddbWrapper,
+    IObjectsManager objectsManager,
+    ILogger<CadCrsManager> logger) : ICadCrsManager
+{
+    public async Task<EntryDto> SetAsync(string orgSlug, string dsSlug, string path, string crs)
+    {
+        if (string.IsNullOrWhiteSpace(path))
+            throw new BadRequestException("Missing path");
+        if (string.IsNullOrWhiteSpace(crs))
+            throw new BadRequestException("Missing coordinate system");
+        if (Path.GetExtension(path).ToLowerInvariant() is not (".dxf" or ".dwg"))
+            throw new BadRequestException("Only CAD drawings (.dxf, .dwg) take a coordinate system");
+
+        var ds = utils.GetDataset(orgSlug, dsSlug);
+        if (!await authManager.RequestAccess(ds, AccessType.Write))
+            throw new UnauthorizedException("The current user is not allowed to change this dataset");
+
+        var entry = ddbManager.Get(orgSlug, ds.InternalRef).GetEntry(path)
+                    ?? throw new NotFoundException($"Cannot find '{path}'");
+
+        string prj;
+        try
+        {
+            prj = ddbWrapper.MakeCadPrj(crs);
+        }
+        catch (ArgumentException ex)
+        {
+            throw new BadRequestException(ex.Message);
+        }
+
+        var prjPath = Path.ChangeExtension(entry.Path, ".prj");
+        logger.LogInformation("Setting the coordinate system of {Org}/{Ds}/{Path} to {Crs}", orgSlug, dsSlug,
+            entry.Path, crs);
+
+        await using var stream = new MemoryStream(Encoding.UTF8.GetBytes(prj));
+        return await objectsManager.AddNew(orgSlug, dsSlug, prjPath, stream);
+    }
+}
