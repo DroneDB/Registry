@@ -160,7 +160,7 @@ internal class DatabaseInitializer
         }
         else
         {
-            await UpdateAdminUserAsync(userManager, adminUser, defaultAdmin, context, token);
+            await UpdateAdminUserAsync(userManager, adminUser, defaultAdmin);
         }
 
         // Ensure admin organization exists
@@ -208,7 +208,13 @@ internal class DatabaseInitializer
         return adminUser;
     }
 
-    private async Task UpdateAdminUserAsync(UserManager<User> userManager, User adminUser, AdminInfo defaultAdmin, RegistryContext context, CancellationToken token)
+    /// <summary>
+    /// Brings an existing default admin in line with the configuration: admin role and email.
+    /// The password is seeded only when the admin is created (<see cref="CreateAdminUserAsync"/>):
+    /// resetting it here on every start would undo the admin's own password change and rotate the
+    /// security stamp, which logs the admin out.
+    /// </summary>
+    private async Task UpdateAdminUserAsync(UserManager<User> userManager, User adminUser, AdminInfo defaultAdmin)
     {
         _logger.LogDebug("Updating existing admin user '{Username}'", defaultAdmin.UserName);
 
@@ -222,20 +228,18 @@ internal class DatabaseInitializer
                 throw new InvalidOperationException($"Cannot add admin to admin role: {result.Errors?.ToErrorString()}");
         }
 
-        // Update password
-        var removeResult = await userManager.RemovePasswordAsync(adminUser);
+        // Update email through the identity store (the user belongs to ApplicationDbContext, not
+        // RegistryContext). UpdateAsync refreshes NormalizedEmail and keeps the security stamp.
+        if (!string.Equals(adminUser.Email, defaultAdmin.Email, StringComparison.Ordinal))
+        {
+            _logger.LogInformation("Updating email of admin user '{Username}'", defaultAdmin.UserName);
+            adminUser.Email = defaultAdmin.Email;
 
-        if (!removeResult.Succeeded)
-            throw new InvalidOperationException($"Cannot remove password for admin: {removeResult.Errors?.ToErrorString()}");
+            var updateResult = await userManager.UpdateAsync(adminUser);
 
-        var addResult = await userManager.AddPasswordAsync(adminUser, defaultAdmin.Password);
-
-        if (!addResult.Succeeded)
-            throw new InvalidOperationException($"Cannot set password for admin: {addResult.Errors?.ToErrorString()}");
-
-        // Update email
-        adminUser.Email = defaultAdmin.Email;
-        await context.SaveChangesAsync(token);
+            if (!updateResult.Succeeded)
+                throw new InvalidOperationException($"Cannot update admin email: {updateResult.Errors?.ToErrorString()}");
+        }
     }
 
     private async Task EnsureAdminOrganizationAsync(RegistryContext context, User adminUser, AdminInfo defaultAdmin, CancellationToken token)

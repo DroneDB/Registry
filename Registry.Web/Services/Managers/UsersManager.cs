@@ -40,7 +40,6 @@ public class UsersManager : IUsersManager
     private readonly AppSettings _appSettings;
     private readonly ApplicationDbContext _applicationDbContext;
     private readonly RegistryContext _registryContext;
-    private readonly IConfigurationHelper<AppSettings> _configurationHelper;
     private readonly IPasswordPolicyValidator _passwordPolicyValidator;
 
     public UsersManager(
@@ -54,7 +53,6 @@ public class UsersManager : IUsersManager
         IUtils utils,
         ILogger<UsersManager> logger,
         RegistryContext registryContext,
-        IConfigurationHelper<AppSettings> configurationHelper,
         IPasswordPolicyValidator passwordPolicyValidator)
     {
         _roleManager = roleManager;
@@ -63,7 +61,6 @@ public class UsersManager : IUsersManager
         _utils = utils;
         _logger = logger;
         _registryContext = registryContext;
-        _configurationHelper = configurationHelper;
         _passwordPolicyValidator = passwordPolicyValidator;
         _applicationDbContext = applicationDbContext;
         _loginManager = loginManager;
@@ -380,13 +377,6 @@ public class UsersManager : IUsersManager
             _logger.LogWarning("Errors in changing user password: {Errors}", errors);
 
             throw new InvalidOperationException("Cannot change user password: " + errors);
-        }
-
-        // If this is the default admin password, we should persist it in the config
-        if (user.UserName == _appSettings.DefaultAdmin.UserName)
-        {
-            _appSettings.DefaultAdmin.Password = newPassword;
-            _configurationHelper.SaveConfiguration(_appSettings);
         }
 
         _logger.LogInformation("User {UserName} changed password", user.UserName);

@@ -158,6 +158,13 @@ public class AppSettings
     public string RemoteThumbnailGeneratorUrl { get; set; }
 
     /// <summary>
+    /// Shared secret between the web server and the ThumbnailGenerator host (header
+    /// <c>X-Thumbnail-Token</c>). Generated on first start when empty and stored in appsettings.json,
+    /// like <see cref="Secret"/>; the ThumbnailGenerator host refuses to start without it.
+    /// </summary>
+    public string ThumbnailGeneratorToken { get; set; }
+
+    /// <summary>
     /// Default thumbnail size in pixels when no size is specified
     /// </summary>
     public int DefaultThumbnailSize { get; set; } = 512;

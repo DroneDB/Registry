@@ -380,7 +380,10 @@ public class Startup
         if (!string.IsNullOrWhiteSpace(appSettings.RemoteThumbnailGeneratorUrl))
         {
             services.Configure<RemoteThumbnailGeneratorSettings>(options =>
-                options.Url = appSettings.RemoteThumbnailGeneratorUrl);
+            {
+                options.Url = appSettings.RemoteThumbnailGeneratorUrl;
+                options.Token = appSettings.ThumbnailGeneratorToken;
+            });
             services.AddSingleton<RemoteThumbnailGenerator>();
             services.AddSingleton<IThumbnailGenerator>(sp => new GatedThumbnailGenerator(
                 sp.GetRequiredService<RemoteThumbnailGenerator>(), sp.GetRequiredService<INativeWorkGate>()));
@@ -669,39 +672,45 @@ public class Startup
         if (Log.IsEnabled(LogEventLevel.Information)) return;
 
         var env = app.ApplicationServices.GetService<IHostEnvironment>();
-        Console.WriteLine(" -> Application started in {0} mode", env?.EnvironmentName ?? "unknown");
-        Console.WriteLine(" ?> Version: {0}", Assembly.GetExecutingAssembly().GetName().Version);
-        Console.WriteLine(" ?> Application started at {0}", DateTime.Now);
-
         var serverAddresses = app.ServerFeatures.Get<IServerAddressesFeature>()?.Addresses;
-        if (serverAddresses != null)
-        {
-            foreach (var address in serverAddresses)
-            {
-                var addr = address.Replace("0.0.0.0", "localhost");
-                Console.WriteLine($" ?> Registry url: {addr}");
-            }
-        }
-
         var settingsOptions = app.ApplicationServices.GetService<IOptions<AppSettings>>();
 
         if (settingsOptions == null)
             throw new InvalidOperationException("AppSettings not found");
 
-        var settings = settingsOptions.Value;
+        WriteStartupInfo(Console.Out, env?.EnvironmentName, serverAddresses, settingsOptions.Value);
+    }
+
+    /// <summary>
+    /// Writes the start-up banner (mode, version, URLs, useful links) to <paramref name="output"/>.
+    /// Secrets (admin password, MonitorToken) are never written: stdout ends up in container logs.
+    /// </summary>
+    internal static void WriteStartupInfo(TextWriter output, string environmentName,
+        ICollection<string> serverAddresses, AppSettings settings)
+    {
+        output.WriteLine(" -> Application started in {0} mode", environmentName ?? "unknown");
+        output.WriteLine(" ?> Version: {0}", Assembly.GetExecutingAssembly().GetName().Version);
+        output.WriteLine(" ?> Application started at {0}", DateTime.Now);
+
+        if (serverAddresses != null)
+        {
+            foreach (var address in serverAddresses)
+            {
+                var addr = address.Replace("0.0.0.0", "localhost");
+                output.WriteLine($" ?> Registry url: {addr}");
+            }
+        }
 
         if (settings.DefaultAdmin == null)
             throw new InvalidOperationException("DefaultAdmin not found");
 
-        Console.WriteLine(" ?> Admin credentials: ");
-        Console.WriteLine(" ?> Username: {0}", settings.DefaultAdmin.UserName);
-        Console.WriteLine(" ?> Password: {0}", settings.DefaultAdmin.Password);
+        output.WriteLine(" ?> Default admin username: {0}", settings.DefaultAdmin.UserName);
 
         var url = serverAddresses?.FirstOrDefault();
 
         if (!string.IsNullOrWhiteSpace(settings.ExternalUrlOverride))
         {
-            Console.WriteLine($" ?> External URL: {settings.ExternalUrlOverride}");
+            output.WriteLine($" ?> External URL: {settings.ExternalUrlOverride}");
             url = settings.ExternalUrlOverride;
         }
 
@@ -711,32 +720,30 @@ public class Startup
 
             if (builder.Host == "0.0.0.0") builder.Host = "localhost";
             var baseUri = builder.Uri;
-            var monitorQuery = string.IsNullOrWhiteSpace(settings.MonitorToken)
-                ? string.Empty
-                : $"?token={settings.MonitorToken}";
-            var reqAuth = string.IsNullOrWhiteSpace(settings.MonitorToken) ? "(req auth)" : string.Empty;
+            // Health links need the MonitorToken (?token=...) or an admin login: the token is not printed
+            const string reqAuth = "(req auth)";
 
-            Console.WriteLine();
-            Console.WriteLine(" ?> Useful links:");
+            output.WriteLine();
+            output.WriteLine(" ?> Useful links:");
 
             var scalarUri = new Uri(baseUri, MagicStrings.ScalarUrl);
-            Console.WriteLine($" ?> API Docs (Scalar): {scalarUri}");
+            output.WriteLine($" ?> API Docs (Scalar): {scalarUri}");
 
             var versionUri = new Uri(baseUri, MagicStrings.VersionUrl);
-            Console.WriteLine($" ?> Version: {versionUri}");
+            output.WriteLine($" ?> Version: {versionUri}");
 
             var quickHealthUri = new Uri(baseUri, MagicStrings.QuickHealthUrl);
-            Console.WriteLine($" ?> {reqAuth} Quick Health: {quickHealthUri}{monitorQuery}");
+            output.WriteLine($" ?> {reqAuth} Quick Health: {quickHealthUri}");
 
             var healthUri = new Uri(baseUri, MagicStrings.HealthUrl);
-            Console.WriteLine($" ?> {reqAuth} Health: {healthUri}{monitorQuery}");
+            output.WriteLine($" ?> {reqAuth} Health: {healthUri}");
 
             var hangfireUri = new Uri(baseUri, MagicStrings.HangFireUrl);
-            Console.WriteLine($" ?> (req auth) Hangfire: {hangfireUri}");
+            output.WriteLine($" ?> (req auth) Hangfire: {hangfireUri}");
 
-            Console.WriteLine();
+            output.WriteLine();
         }
 
-        Console.WriteLine(" ?> Press Ctrl+C to quit");
+        output.WriteLine(" ?> Press Ctrl+C to quit");
     }
 }

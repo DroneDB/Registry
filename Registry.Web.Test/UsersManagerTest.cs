@@ -36,7 +36,6 @@ public class UsersManagerTest : TestBase
     private Mock<IDdbManager> _ddbManagerMock;
     private Mock<ILoginManager> _loginManagerMock;
     private Mock<RoleManager<IdentityRole>> _roleManagerMock;
-    private Mock<IConfigurationHelper<AppSettings>> _configurationHelperMock;
     private Mock<IPasswordPolicyValidator> _passwordPolicyValidatorMock;
     private ILogger<UsersManager> _logger;
     private UsersManager _usersManager;
@@ -58,7 +57,6 @@ public class UsersManagerTest : TestBase
         // ILoginManager.Capabilities has no default implementation; the tests in this fixture exercise
         // local user management, so default the mock to the local-provider capability set.
         _loginManagerMock.Setup(x => x.Capabilities).Returns(AuthProviderCapabilities.Local);
-        _configurationHelperMock = new Mock<IConfigurationHelper<AppSettings>>();
         _passwordPolicyValidatorMock = new Mock<IPasswordPolicyValidator>();
         _logger = CreateTestLogger<UsersManager>();
 
@@ -105,7 +103,6 @@ public class UsersManagerTest : TestBase
             _webUtils,
             _logger,
             _context,
-            _configurationHelperMock.Object,
             _passwordPolicyValidatorMock.Object);
     }
 

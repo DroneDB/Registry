@@ -196,80 +196,59 @@ public class Program
 
         var args = new[] { "--urls", $"http://{opts.Address}" };
 
-        var nativeDdbWrapper = new NativeDdbWrapper();
-
-        var host = Host.CreateDefaultBuilder(args)
+        using var host = Host.CreateDefaultBuilder(args)
             .UseSerilog((context, services, configuration) => configuration
                 .ReadFrom.Configuration(context.Configuration)
                 .ReadFrom.Services(services)
                 .Enrich.FromLogContext())
+            .ConfigureServices((context, services) =>
+                services.AddSingleton(sp => CreateThumbnailRequestHandler(context.Configuration,
+                    sp.GetRequiredService<ILogger<ThumbnailRequestHandler>>())))
             .ConfigureWebHostDefaults(webBuilder =>
             {
                 webBuilder.Configure(app =>
                 {
+                    var handler = app.ApplicationServices.GetRequiredService<ThumbnailRequestHandler>();
+
                     app.UseRouting();
 
-                    app.UseEndpoints(endpoints =>
-                    {
-                        // POST /generate-thumbnails accepts two parameters: filePath (string) and size (int)
-                        // Response is a bynary stream of the thumbnail taken from DDBWrapper.GenerateThumbnail
-                        endpoints.MapPost("/generate-thumbnail", async context =>
-                        {
-                            if (!context.Request.HasFormContentType || !context.Request.Form.ContainsKey("path") ||
-                                !context.Request.Form.ContainsKey("size"))
-                            {
-                                context.Response.StatusCode = StatusCodes.Status400BadRequest;
-                                return;
-                            }
-
-                            var filePath = context.Request.Form["path"];
-                            var size = context.Request.Form["size"];
-
-                            var logger = context.RequestServices.GetRequiredService<ILogger<Program>>();
-
-                            if (string.IsNullOrWhiteSpace(filePath) || !int.TryParse(size, out var sizeInt) ||
-                                sizeInt < 1)
-                            {
-                                context.Response.StatusCode = StatusCodes.Status400BadRequest;
-                                return;
-                            }
-
-                            if (!File.Exists(filePath))
-                            {
-                                logger.LogWarning("File {FilePath} not found", filePath);
-                                context.Response.StatusCode = StatusCodes.Status404NotFound;
-                                return;
-                            }
-
-                            logger.LogInformation("Generating thumbnail for {FilePath} with size {SizeInt}", filePath,
-                                sizeInt);
-
-                            try
-                            {
-                                var thumbnail = nativeDdbWrapper.GenerateThumbnail(filePath, sizeInt);
-
-                                if (thumbnail == null || thumbnail.Length == 0)
-                                {
-                                    logger.LogWarning("Thumbnail for {FilePath} with size {SizeInt} not found",
-                                        filePath, sizeInt);
-                                    context.Response.StatusCode = StatusCodes.Status404NotFound;
-                                    return;
-                                }
-
-                                context.Response.ContentType = nativeDdbWrapper.ThumbnailMimeType;
-                                await context.Response.Body.WriteAsync(thumbnail);
-                            }
-                            catch (Exception e)
-                            {
-                                logger.LogError(e, "Error while generating thumbnail: {Message}", e.Message);
-                                context.Response.StatusCode = StatusCodes.Status500InternalServerError;
-                            }
-                        });
-                    });
+                    // POST /generate-thumbnail (form: path, size; header: the shared token)
+                    // Response is a binary stream of the thumbnail taken from DDBWrapper.GenerateThumbnail
+                    app.UseEndpoints(endpoints => endpoints.MapPost(ThumbnailRequestHandler.Route, handler.HandleAsync));
                 });
-            });
+            })
+            .Build();
 
-        host.Build().Run();
+        // Fail closed: without the shared token the endpoint would read files for anyone
+        try
+        {
+            host.Services.GetRequiredService<ThumbnailRequestHandler>();
+        }
+        catch (ArgumentException ex)
+        {
+            CommonUtils.WriteLineColor(
+                $" !> Cannot start the thumbnail generator: {ex.Message} Set AppSettings:ThumbnailGeneratorToken " +
+                "to the value the web server uses (both read the same appsettings.json).", ConsoleColor.Red);
+            host.Services.GetRequiredService<ILogger<Program>>()
+                .LogCritical(ex, "Thumbnail generator not started: {Message}", ex.Message);
+            Environment.ExitCode = 1;
+            return;
+        }
+
+        host.Run();
+    }
+
+    /// <summary>
+    /// The thumbnail endpoint handler: the shared token and the readable roots (datasets and temp
+    /// folders) come from the <c>AppSettings</c> section.
+    /// </summary>
+    private static ThumbnailRequestHandler CreateThumbnailRequestHandler(IConfiguration configuration,
+        Microsoft.Extensions.Logging.ILogger logger)
+    {
+        var settings = configuration.GetSection("AppSettings").Get<AppSettings>() ?? new AppSettings();
+
+        return new ThumbnailRequestHandler(settings.ThumbnailGeneratorToken,
+            [settings.DatasetsPath, settings.TempPath], new NativeDdbWrapper(), logger);
     }
 
     /// <summary>
@@ -768,6 +747,10 @@ public class Program
         {
             if (string.IsNullOrWhiteSpace(settings.Secret))
                 settings.Secret = CommonUtils.RandomString(64);
+
+            // Shared by the web server and the ThumbnailGenerator host (same appsettings.json)
+            if (string.IsNullOrWhiteSpace(settings.ThumbnailGeneratorToken))
+                settings.ThumbnailGeneratorToken = CommonUtils.RandomString(64);
 
             var externalUrl = settings.ExternalUrlOverride;
 

@@ -292,30 +292,56 @@ public static class CommonUtils
                 throw new ArgumentException("Invalid path: path traversal is not allowed.", nameof(path));
         }
 
-        string baseFull;
         string combinedFull;
 
         try
         {
-            baseFull = Path.GetFullPath(baseDirectory);
-
-            // Ensure trailing separator (prevents prefix tricks: C:\base vs C:\baseX)
-            if (!baseFull.EndsWith(Path.DirectorySeparatorChar))
-                baseFull += Path.DirectorySeparatorChar;
-
-            combinedFull = Path.GetFullPath(Path.Combine(baseFull, path));
+            combinedFull = Path.GetFullPath(Path.Combine(Path.GetFullPath(baseDirectory), path));
         }
         catch (Exception ex) when (ex is ArgumentException or NotSupportedException or PathTooLongException)
         {
             throw new ArgumentException("Invalid path.", nameof(path), ex);
         }
 
+        if (!IsUnder(baseDirectory, combinedFull))
+            throw new ArgumentException("Invalid path: path traversal is not allowed.", nameof(path));
+    }
+
+    /// <summary>
+    /// True when <paramref name="fullPath"/> lies strictly inside <paramref name="root"/>. Both are
+    /// normalised with <see cref="Path.GetFullPath(string)"/> (so <c>..</c> segments are resolved and
+    /// relative paths are taken from the current directory) and compared per OS (case-insensitive on
+    /// Windows). The root ends with a separator before the comparison, so a sibling sharing the prefix
+    /// (<c>/data/datasets2</c> for root <c>/data/datasets</c>) is not inside. Symbolic links are not
+    /// resolved. Empty or invalid paths are never inside.
+    /// </summary>
+    public static bool IsUnder(string root, string fullPath)
+    {
+        if (string.IsNullOrWhiteSpace(root) || string.IsNullOrWhiteSpace(fullPath))
+            return false;
+
+        string rootFull;
+        string candidate;
+
+        try
+        {
+            rootFull = Path.GetFullPath(root);
+            candidate = Path.GetFullPath(fullPath);
+        }
+        catch (Exception ex) when (ex is ArgumentException or NotSupportedException or PathTooLongException)
+        {
+            return false;
+        }
+
+        // Ensure trailing separator (prevents prefix tricks: C:\base vs C:\baseX)
+        if (!Path.EndsInDirectorySeparator(rootFull))
+            rootFull += Path.DirectorySeparatorChar;
+
         var comparison = OperatingSystem.IsWindows()
             ? StringComparison.OrdinalIgnoreCase
             : StringComparison.Ordinal;
 
-        if (!combinedFull.StartsWith(baseFull, comparison))
-            throw new ArgumentException("Invalid path: path traversal is not allowed.", nameof(path));
+        return candidate.StartsWith(rootFull, comparison);
     }
 
     public static (string, Stream) GetTempStream(int bufferSize = 104857600)

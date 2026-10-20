@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Globalization;
 using System.IO;
 using System.Net.Http;
 using System.Threading.Tasks;
@@ -54,13 +55,10 @@ public class RemoteThumbnailGenerator : IThumbnailGenerator
 
         try
         {
-            var content = new FormUrlEncodedContent([
-                new KeyValuePair<string, string>("path", filePath),
-                new KeyValuePair<string, string>("size", size.ToString())
-            ]);
+            using var request = CreateRequest(_settings, filePath, size);
 
             _logger.LogDebug("Sending POST request to remote thumbnail generator: {Url}", _settings.Url);
-            var response = await _httpClient.PostAsync(_settings.Url, content);
+            using var response = await _httpClient.SendAsync(request);
 
             if (!response.IsSuccessStatusCode)
             {
@@ -86,4 +84,27 @@ public class RemoteThumbnailGenerator : IThumbnailGenerator
         }
     }
 
+    /// <summary>
+    /// Builds the <c>POST</c> request sent to the ThumbnailGenerator host for <paramref name="filePath"/>,
+    /// authenticated with <see cref="RemoteThumbnailGeneratorSettings.Token"/>.
+    /// </summary>
+    public static HttpRequestMessage CreateRequest(RemoteThumbnailGeneratorSettings settings, string filePath,
+        int size)
+    {
+        ArgumentNullException.ThrowIfNull(settings);
+
+        var request = new HttpRequestMessage(HttpMethod.Post, settings.Url)
+        {
+            Content = new FormUrlEncodedContent([
+                new KeyValuePair<string, string>("path", filePath),
+                new KeyValuePair<string, string>("size", size.ToString(CultureInfo.InvariantCulture))
+            ])
+        };
+
+        // The host answers 401 without the shared token
+        if (!string.IsNullOrEmpty(settings.Token))
+            request.Headers.Add(RemoteThumbnailGeneratorSettings.TokenHeaderName, settings.Token);
+
+        return request;
+    }
 }

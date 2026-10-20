@@ -685,6 +685,10 @@ public class ConfigurationDataBuilder : IConfigurationDataBuilder
                     "URL of a remote thumbnail generator service. Null uses the local generator.",
                     _settings.RemoteThumbnailGeneratorUrl, _defaults.RemoteThumbnailGeneratorUrl),
 
+                SensitiveField("ThumbnailGeneratorToken", "Thumbnail Generator Token",
+                    "Shared secret between the web server and the ThumbnailGenerator host. Generated on first start when empty.",
+                    _settings.ThumbnailGeneratorToken, _defaults.ThumbnailGeneratorToken),
+
                 NumberField("DefaultThumbnailSize", "Default Thumbnail Size",
                     "Default thumbnail size in pixels when no size is specified.",
                     _settings.DefaultThumbnailSize, _defaults.DefaultThumbnailSize,
