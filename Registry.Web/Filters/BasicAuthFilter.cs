@@ -11,6 +11,7 @@ using System.Text;
 using System.Threading.Tasks;
 using Registry.Web.Identity;
 using Registry.Web.Identity.Models;
+using Registry.Web.Utilities.Auth;
 
 namespace Registry.Web.Filters;
 
@@ -55,7 +56,8 @@ public class BasicAuthFilter : IAsyncAuthorizationFilter
             return;
         var isAdmin = await _userManager.IsInRoleAsync(user, ApplicationDbContext.AdminRoleName);
 
-        httpContext.Response.Cookies.Append(_settings.AuthCookieName, res.Token);
+        httpContext.Response.Cookies.Append(_settings.AuthCookieName, res.Token,
+            AuthCookieOptions.For(httpContext.Request));
 
         var identity = new ClaimsIdentity([
             new Claim(ClaimTypes.Name, user.Id),

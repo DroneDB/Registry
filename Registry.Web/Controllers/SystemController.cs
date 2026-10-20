@@ -20,6 +20,7 @@ using Registry.Web.Services.Hub;
 using Registry.Web.Services.Ports;
 using Registry.Web.Services.HeavyTasks.NodeOdx;
 using Registry.Web.Utilities;
+using Registry.Web.Utilities.Auth;
 
 namespace Registry.Web.Controllers;
 
@@ -456,8 +457,10 @@ public class SystemController : ControllerBaseEx
     /// <returns>The Hangfire job id of the enqueued scan.</returns>
     [HttpPost("check-artifact-completeness",
         Name = nameof(SystemController) + "." + nameof(CheckArtifactCompleteness))]
+    [Authorize(Policy = Policies.Admin)]
     [ProducesResponseType(StatusCodes.Status202Accepted)]
     [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status403Forbidden)]
     public IActionResult CheckArtifactCompleteness()
     {
         try
@@ -583,6 +586,7 @@ public class SystemController : ControllerBaseEx
     /// </summary>
     /// <returns>ConfigurationDataDto with all sections and fields.</returns>
     [HttpGet("config", Name = nameof(SystemController) + "." + nameof(GetConfig))]
+    [Authorize(Policy = Policies.Admin)]
     [ProducesResponseType(typeof(ConfigurationDataDto), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status403Forbidden)]

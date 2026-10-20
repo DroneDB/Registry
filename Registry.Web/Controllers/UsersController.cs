@@ -12,6 +12,7 @@ using Microsoft.Extensions.Options;
 using Registry.Web.Models.DTO;
 using Registry.Web.Services.Ports;
 using Registry.Web.Utilities;
+using Registry.Web.Utilities.Auth;
 
 namespace Registry.Web.Controllers;
 
@@ -68,6 +69,21 @@ public class UsersController : ControllerBaseEx
             _logger.LogError(ex, "Exception in Users controller Authenticate('{Username}')", model?.Username);
             throw;
         }
+    }
+
+    /// <summary>
+    /// Expires the auth cookie. The server may set it <c>HttpOnly</c> (Basic auth), and then the web client
+    /// cannot clear it from script: without this a signed-out browser would keep sending it. Anonymous, so an
+    /// expired or invalid cookie can always be cleared; the token itself stays valid until it expires.
+    /// </summary>
+    [AllowAnonymous]
+    [HttpPost("logout", Name = nameof(Logout))]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    public IActionResult Logout()
+    {
+        // Same name and attributes (Path, Secure, SameSite) it was set with, or the browser keeps it
+        Response.Cookies.Delete(_appSettings.AuthCookieName, AuthCookieOptions.For(Request));
+        return Ok();
     }
 
     /// <summary>

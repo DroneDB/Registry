@@ -192,6 +192,8 @@ public class Startup
                 };
             });
 
+        services.AddAuthorization(options => options.AddRegistryPolicies());
+
         services.Configure<IdentityOptions>(options =>
         {
             // Password settings - driven by PasswordPolicy configuration
@@ -407,7 +409,6 @@ public class Startup
         // To change
         services.AddSingleton<IDdbWrapper, NativeDdbWrapper>();
 
-        services.AddSingleton<IPasswordHasher, PasswordHasher>();
         services.AddSingleton<IBatchTokenGenerator, BatchTokenGenerator>();
         services.AddSingleton<INameGenerator, NameGenerator>();
         services.AddSingleton<ICacheManager, CacheManager>();

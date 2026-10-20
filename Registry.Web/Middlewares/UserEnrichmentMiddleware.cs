@@ -3,6 +3,7 @@ using System.Security.Claims;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Http;
 using Registry.Web.Services.Ports;
+using Registry.Web.Utilities.Auth;
 using Serilog.Context;
 
 namespace Registry.Web.Middlewares;
@@ -27,9 +28,7 @@ public class UserEnrichmentMiddleware : IMiddleware
             LogContext.PushProperty("UserId", userIdClaim);
 
             // Get admin claim
-            var isAdmin = context.User.Claims.Any(c => c.Type == "admin" && c.Value == "true");
-
-            if (isAdmin)
+            if (Policies.IsAdmin(context.User))
             {
                 LogContext.PushProperty("IsAdmin", true);
             }
