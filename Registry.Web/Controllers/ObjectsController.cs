@@ -163,7 +163,7 @@ public class ObjectsController : ControllerBaseEx
                     path.StartsWith('/') ? path[1..] : path);
 
                 cachePolicy = HashedContentCachePolicy.For(obj.Hash, v, "thumb",
-                    size ?? _appSettings.DefaultThumbnailSize);
+                    size ?? _appSettings.DefaultThumbnailSize, obj.SourceVersion);
                 if (cachePolicy.IsNotModified(Request))
                     return NotModified(cachePolicy);
 
@@ -236,7 +236,8 @@ public class ObjectsController : ControllerBaseEx
             // Access check and lookup only; the 304 below skips the cache and the native render.
             var obj = await _objectsManager.ResolveReadableObject(orgSlug, dsSlug, path);
 
-            var cachePolicy = HashedContentCachePolicy.For(obj.Hash, v, "tile", tz, tx, ty, retina ? 2 : 1);
+            var cachePolicy = HashedContentCachePolicy.For(obj.Hash, v, "tile", tz, tx, ty, retina ? 2 : 1,
+                obj.SourceVersion);
             if (cachePolicy.IsNotModified(Request))
                 return NotModified(cachePolicy);
 

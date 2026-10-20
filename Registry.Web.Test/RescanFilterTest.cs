@@ -72,6 +72,20 @@ public class RescanFilterTest
     }
 
     [Test]
+    public void ToEntryQuery_PushesTypesAndASingleAsciiExtension()
+    {
+        var query = RescanFilter.Parse("vector", "dwg").ToEntryQuery();
+        query.Types.ShouldBe([EntryType.Vector]);
+        query.NamePattern.ShouldBe("*.dwg");
+        query.Recursive.ShouldBeTrue();
+
+        // Several extensions, or one the native pattern would compare case-sensitively: types only
+        RescanFilter.Parse("vector", "dwg,dxf").ToEntryQuery().NamePattern.ShouldBeNull();
+        RescanFilter.Parse((string?)null, "éxt").ToEntryQuery().NamePattern.ShouldBeNull();
+        RescanFilter.Parse((string?)null, "dwg").ToEntryQuery().Types.ShouldBeNull();
+    }
+
+    [Test]
     public void Matches_TypeAndExtensionMustBothMatch()
     {
         var filter = RescanFilter.Parse("vector", "dwg");

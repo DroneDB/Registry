@@ -201,9 +201,8 @@ public class RescanManagerTest : TestBase
                 new RescanResult { Path = "notes.dwg", Success = true, Hash = "h2" },
                 new RescanResult { Path = "broken.dxf", Success = false, Error = "bad file" }
             ]);
-        ddbMock.Setup(x => x.IsBuildable("site.dwg")).Returns(true);
-        ddbMock.Setup(x => x.IsBuildable("notes.dwg")).Returns(false);
-        ddbMock.Setup(x => x.IsBuildable("broken.dxf")).Returns(true);
+        ddbMock.Setup(x => x.GetBuildStatus(It.IsAny<string[]>())).Returns((string[] paths) => paths
+            .Select(p => new EntryBuildStatus { Path = p, Exists = true, Buildable = p != "notes.dwg" }).ToArray());
         _ddbManagerMock.Setup(x => x.Get(It.IsAny<string>(), It.IsAny<Guid>())).Returns(ddbMock.Object);
         var payloads = CaptureIndexedPayloads();
 

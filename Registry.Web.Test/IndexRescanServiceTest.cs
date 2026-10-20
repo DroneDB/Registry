@@ -52,7 +52,8 @@ public class IndexRescanServiceTest : TestBase
                 if (!_entries.TryGetValue(internalRef, out var entries))
                     throw new DirectoryNotFoundException("Dataset folder is missing");
                 var ddb = new Mock<IDDB>();
-                ddb.Setup(d => d.FindSummaries(EntryQuery.All)).Returns(entries);
+                // Returns every entry: SubmitAsync must still count only the matching ones
+                ddb.Setup(d => d.FindSummaries(It.IsAny<EntryQuery>())).Returns(entries);
                 return ddb.Object;
             });
     }

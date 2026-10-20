@@ -90,27 +90,56 @@ public class WcsCoverageService : OgcManagerBase, IWcsCoverageService
 
     public async Task<WcsRasterInfo> ProbeRasterAsync(IDDB ddb, OgcLayerDto layer)
     {
+        string src, key;
+        WcsRasterInfo info;
         try
         {
-            var src = ResolveRasterArtifact(ddb, layer);
+            src = ResolveRasterArtifact(ddb, layer);
             // The build COG and the source it falls back to are probed separately
-            var key = $"ogc-wcs-probe-{layer.EntryHash}-{(src == Artifacts.GetCogPath(ddb, layer.EntryHash) ? "cog" : "src")}";
-
-            var cached = await Cache.GetRecordAsync<WcsRasterInfo>(key);
-            if (cached != null)
-                return cached;
-
-            var info = ParseRasterInfo(DdbWrapper.GetRasterInfo(src));
-            if (info.Width > 0 && info.Height > 0)
-                await Cache.SetRecordAsync(key, info, unusedExpireTime: ProbeCacheExpiration,
-                    absoluteExpireTime: ProbeCacheExpiration);
-            return info;
+            key = $"ogc-wcs-probe-{layer.EntryHash}-{(src == Artifacts.GetCogPath(ddb, layer.EntryHash) ? "cog" : "src")}";
         }
         catch (Exception ex)
         {
             _logger.LogWarning(ex, "WCS: probing raster info failed");
             return WcsRasterInfo.Empty;
         }
+
+        // The cache only saves the native probe: when it fails, probe anyway
+        try
+        {
+            var cached = await Cache.GetRecordAsync<WcsRasterInfo>(key);
+            if (cached != null)
+                return cached;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "WCS: cannot read the cached raster info of {Key}", key);
+        }
+
+        try
+        {
+            info = ParseRasterInfo(DdbWrapper.GetRasterInfo(src));
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "WCS: probing raster info failed");
+            return WcsRasterInfo.Empty;
+        }
+
+        if (info.Width > 0 && info.Height > 0)
+        {
+            try
+            {
+                await Cache.SetRecordAsync(key, info, unusedExpireTime: ProbeCacheExpiration,
+                    absoluteExpireTime: ProbeCacheExpiration);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "WCS: cannot cache the raster info of {Key}", key);
+            }
+        }
+
+        return info;
     }
 
     private static WcsRasterInfo ParseRasterInfo(string info)

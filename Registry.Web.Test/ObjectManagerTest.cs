@@ -252,6 +252,42 @@ public class ObjectManagerTest : TestBase
         wrapper.VerifyNoOtherCalls();
     }
 
+    /// <summary>
+    /// The native name pattern ignores case only for ASCII letters and has no escapes: such
+    /// queries are matched in C# only, or DroneDB would drop entries the expression accepts.
+    /// </summary>
+    [TestCase("DJÌ_003?.JPG")]
+    [TestCase(@"dji_003\?.jpg")]
+    public async Task Search_NonAsciiOrEscapedQuery_IsNotPushedToDroneDb(string query)
+    {
+        using var test = new TestFS(Test4ArchiveUrl, BaseTestFolder);
+        await using var context = GetTest1Context();
+
+        var settings = JsonConvert.DeserializeObject<AppSettings>(_settingsJson);
+        settings.DatasetsPath = test.TestFolder;
+        _appSettingsMock.Setup(o => o.Value).Returns(settings);
+        _authManagerMock.Setup(o => o.RequestAccess(It.IsAny<Dataset>(),
+            It.IsAny<AccessType>())).Returns(Task.FromResult(true));
+
+        var wrapper = new Mock<IDdbWrapper>(MockBehavior.Strict);
+        wrapper.Setup(w => w.ListEntries(It.IsAny<string>(), It.IsAny<EntryQuery>()))
+            .Returns((string ddbPath, EntryQuery q) => DdbWrapper.ListEntries(ddbPath, q));
+
+        var webUtils = new WebUtils(_authManagerMock.Object, context, _appSettingsMock.Object,
+            _httpContextAccessorMock.Object, TestCaches.Summaries(_ddbFactoryMock.Object));
+        var objectManager = new ObjectsManager(_objectManagerLogger, context,
+            _appSettingsMock.Object,
+            new DdbManager(_appSettingsMock.Object, _ddbFactoryLogger, wrapper.Object), webUtils,
+            _authManagerMock.Object, _cacheManager, _fileSystem, _backgroundJobsProcessor, wrapper.Object,
+            _thumbnailGeneratorMock.Object, _jobIndexQueryMock.Object, _buildPendingService);
+
+        await objectManager.Search(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug,
+            query, null, true, EntryType.GeoImage);
+
+        wrapper.Verify(w => w.ListEntries(It.IsAny<string>(), It.Is<EntryQuery>(q =>
+            q.NamePattern == null && q.Types != null && q.Types.Single() == EntryType.GeoImage)), Times.Once);
+    }
+
     [Test]
     public async Task Get_MissingFile_NotFound()
     {

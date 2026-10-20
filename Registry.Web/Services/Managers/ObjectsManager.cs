@@ -158,9 +158,9 @@ public class ObjectsManager : IObjectsManager
         _logger.LogInformation("Searching in '{Path}' -> {Query} ({Recursive}", path, query, recursive ? 'r' : 'n');
 
         // DroneDB selects by folder, name and type; the expression check keeps the exact
-        // FileSystemName rules (non-ASCII case, '\' escapes) on what it returns
-        var entities = ddb.Find(new EntryQuery(path, recursive, string.IsNullOrEmpty(query) ? null : query,
-            TypesOf(type)));
+        // FileSystemName rules on what it returns. The native pattern ignores case only for ASCII
+        // letters and has no escapes, so other queries are matched in managed code only.
+        var entities = ddb.Find(new EntryQuery(path, recursive, NativeNamePattern(query), TypesOf(type)));
 
         var files = (from entry in entities
             let name = Path.GetFileName(entry.Path)
@@ -176,6 +176,14 @@ public class ObjectsManager : IObjectsManager
     }
 
     private static EntryType[]? TypesOf(EntryType? type) => type is { } t ? [t] : null;
+
+    /// <summary>
+    /// The query as a DroneDB name pattern when DroneDB selects at least every name that
+    /// <see cref="FileSystemName.MatchesSimpleExpression(ReadOnlySpan{char}, ReadOnlySpan{char}, bool)"/>
+    /// accepts (ASCII only, no '\' escapes), otherwise null.
+    /// </summary>
+    private static string NativeNamePattern(string query) =>
+        !string.IsNullOrEmpty(query) && query.All(c => c < 128 && c != '\\') ? query : null;
 
     public async Task<StorageEntryDto> Get(string orgSlug, string dsSlug, string path)
     {
@@ -1345,6 +1353,10 @@ public class ObjectsManager : IObjectsManager
         _logger.LogInformation("Deletion complete");
     }
 
+    // Main files a .prj sidecar georeferences
+    private static readonly HashSet<string> SidecarMainExtensions =
+        new([".shp", ".dxf", ".dwg"], StringComparer.OrdinalIgnoreCase);
+
     // A .prj gives its shapefile or CAD drawing a coordinate system. Removing it makes
     // DroneDB re-read the main file (local, without a CRS) and drop its stale vector
     // artifacts, so the main file needs a rebuild now rather than at the next nightly
@@ -1358,13 +1370,34 @@ public class ObjectsManager : IObjectsManager
         var user = await _authManager.GetCurrentUser();
         foreach (var prj in prjs)
         {
-            foreach (var ext in new[] { ".shp", ".SHP", ".dxf", ".DXF", ".dwg", ".DWG" })
+            EntrySummary[] mains;
+            EntryBuildStatus[] statuses;
+            try
             {
-                var mainPath = Path.ChangeExtension(prj, ext);
+                // Every casing of the main file's extension: one listing of the .prj's folder
+                // (the native pattern ignores ASCII case), then one batch buildability check
+                var slash = prj.LastIndexOf('/');
+                var folder = slash < 0 ? string.Empty : prj[..slash];
+                var stem = Path.GetFileNameWithoutExtension(prj[(slash + 1)..]);
+                mains = ddb.FindSummaries(new EntryQuery(folder, false, stem + ".*"))
+                    .Where(e => Path.GetFileNameWithoutExtension(e.Path) == stem &&
+                                SidecarMainExtensions.Contains(Path.GetExtension(e.Path)))
+                    .ToArray();
+                statuses = mains.Length == 0 ? [] : ddb.GetBuildStatus(mains.Select(e => e.Path).ToArray());
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Cannot look up the main file of {Prj}", prj);
+                continue;
+            }
+
+            for (var i = 0; i < mains.Length; i++)
+            {
+                var main = mains[i];
+                var mainPath = main.Path;
                 try
                 {
-                    var main = ddb.GetEntry(mainPath);
-                    if (main == null || !ddb.IsBuildable(mainPath)) continue;
+                    if (i >= statuses.Length || !statuses[i].Buildable) continue;
 
                     await _buildPendingService.SetDatasetHasPendingBuilds(orgSlug, dsSlug, true);
                     var meta = new IndexPayload(orgSlug, dsSlug, main.Hash, user?.Id, null, mainPath);
@@ -1538,7 +1571,18 @@ public class ObjectsManager : IObjectsManager
         var entry = EnsurePathValidity(orgSlug, ds.InternalRef, path, out var ddb);
         var sourcePath = GetAvailableBuildSource(entry, ddb, path);
 
-        return new ReadableObject(orgSlug, dsSlug, path, entry.Hash, sourcePath, ddb);
+        // A rebuild rewrites the artifact but keeps the entry hash: its write time tells them apart
+        long sourceVersion = 0;
+        try
+        {
+            sourceVersion = _fs.GetLastWriteTime(ddb.GetLocalPath(sourcePath)).ToUniversalTime().Ticks;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogDebug(ex, "Cannot read the write time of '{SourcePath}'", sourcePath);
+        }
+
+        return new ReadableObject(orgSlug, dsSlug, path, entry.Hash, sourcePath, ddb, sourceVersion);
     }
 
     public async Task<StorageDataDto> GenerateThumbnailData(ReadableObject obj, int? sizeRaw)

@@ -82,21 +82,22 @@ public sealed class RescanRebuild
 
     private List<RescanResult> BuildableEntries(IDDB ddb, IEnumerable<RescanResult> results)
     {
-        var entries = new List<RescanResult>();
-        foreach (var result in results.Where(r => r.Success && !string.IsNullOrEmpty(r.Path))
-                     .DistinctBy(r => r.Path, StringComparer.Ordinal))
-        {
-            try
-            {
-                if (ddb.IsBuildable(result.Path))
-                    entries.Add(result);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogWarning(ex, "Cannot tell whether rescanned entry {Path} is buildable", result.Path);
-            }
-        }
+        var candidates = results.Where(r => r.Success && !string.IsNullOrEmpty(r.Path))
+            .DistinctBy(r => r.Path, StringComparer.Ordinal)
+            .ToList();
+        if (candidates.Count == 0)
+            return [];
 
-        return entries;
+        try
+        {
+            // One native call for every entry; statuses come back in input order
+            var statuses = ddb.GetBuildStatus(candidates.Select(r => r.Path).ToArray());
+            return candidates.Where((_, i) => i < statuses.Length && statuses[i].Buildable).ToList();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Cannot tell which of {Count} rescanned entries are buildable", candidates.Count);
+            return [];
+        }
     }
 }

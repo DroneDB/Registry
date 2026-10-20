@@ -1,5 +1,6 @@
 #nullable enable
 using System;
+using System.Linq;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
@@ -49,7 +50,8 @@ public class RescanIndexToolTest
                 new RescanResult { Path = "plain.dwg", Success = true, Hash = "h3" },
                 new RescanResult { Path = "broken.dwg", Success = false, Error = "bad file" }
             ]);
-        _ddb.Setup(x => x.IsBuildable(It.Is<string>(p => p != "plain.dwg"))).Returns(true);
+        _ddb.Setup(x => x.GetBuildStatus(It.IsAny<string[]>())).Returns((string[] paths) => paths
+            .Select(p => new EntryBuildStatus { Path = p, Exists = true, Buildable = p != "plain.dwg" }).ToArray());
         _ddb.Setup(x => x.Build("fails.dwg", null, true)).Throws(new InvalidOperationException("cannot build"));
 
         await Execute(new { extensions = ".DWG" });

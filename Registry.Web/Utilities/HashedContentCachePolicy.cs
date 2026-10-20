@@ -10,8 +10,9 @@ namespace Registry.Web.Utilities;
 
 /// <summary>
 /// HTTP caching policy for responses derived from one dataset entry (tiles, thumbnails).
-/// The ETag is the entry hash plus the response variant (coordinates, size...) plus the
-/// application version, so a rebuilt entry or a new renderer yields a new validator.
+/// The ETag is the entry hash plus the response variant (coordinates, size... and the write
+/// time of the rendered artifact) plus the application version, so a changed entry, a rebuilt
+/// artifact or a new renderer yields a new validator.
 /// <para>
 /// Responses are <c>private</c>: they sit behind dataset authorization and must never be
 /// stored by shared caches. When the URL carries the entry hash (<c>v=&lt;hash&gt;</c>) and it

@@ -92,6 +92,15 @@ public sealed class RescanFilter
         return new RescanFilter([.. parsedTypes], [.. parsedExtensions]);
     }
 
+    /// <summary>
+    /// The index query that selects at least every entry <see cref="Matches"/> accepts, so DroneDB
+    /// filters out the rest: the types, and a single ASCII extension as a name pattern (the native
+    /// pattern ignores case for ASCII letters only).
+    /// </summary>
+    public EntryQuery ToEntryQuery() => new(
+        NamePattern: Extensions.Count == 1 && Extensions[0].All(char.IsAscii) ? "*." + Extensions[0] : null,
+        Types: Types.Count > 0 ? Types : null);
+
     /// <summary>True if the rescan selects <paramref name="entry"/>. Directories never match.</summary>
     public bool Matches(EntrySummary entry)
     {

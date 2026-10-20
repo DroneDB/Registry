@@ -101,11 +101,42 @@ public class ArtifactCompletenessCheckerService
             $"queued {totals.Queued} rebuild(s), {totals.Failed} dataset failure(s)");
     }
 
+    /// <summary>
+    /// Buildability and completeness of every entry with one native call, or null when DroneDB
+    /// cannot answer in one go (the scan then asks entry by entry, isolating failures).
+    /// </summary>
+    private Dictionary<string, EntryBuildStatus>? GetBuildStatuses(IDDB ddb, IReadOnlyList<EntrySummary> entries,
+        string key)
+    {
+        var paths = entries.Select(e => e.Path).Where(p => !string.IsNullOrEmpty(p))
+            .Distinct(StringComparer.Ordinal).ToArray();
+        if (paths.Length == 0)
+            return null;
+
+        try
+        {
+            var statuses = ddb.GetBuildStatus(paths);
+            if (statuses == null || statuses.Length != paths.Length)
+                return null;
+
+            var byPath = new Dictionary<string, EntryBuildStatus>(paths.Length, StringComparer.Ordinal);
+            for (var i = 0; i < paths.Length; i++)
+                byPath[paths[i]] = statuses[i];
+            return byPath;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Batch build status failed for {Key}, checking entries one by one", key);
+            return null;
+        }
+    }
+
     private async Task<DatasetStats> ScanDatasetAsync(IDDB ddb, string orgSlug, string dsSlug, string key)
     {
         var stats = new DatasetStats();
         var entries = ddb.FindSummaries(EntryQuery.All);
         var candidates = new List<EntrySummary>();
+        var statuses = GetBuildStatuses(ddb, entries, key);
 
         foreach (var entry in entries)
         {
@@ -116,21 +147,23 @@ public class ArtifactCompletenessCheckerService
 
             try
             {
-                if (!ddb.IsBuildable(entry.Path))
+                var status = statuses?.GetValueOrDefault(entry.Path);
+                if (!(status?.Buildable ?? ddb.IsBuildable(entry.Path)))
                 {
                     stats.SkippedNotBuildable++;
+                    continue;
+                }
+
+                // Completeness first: the batch answers it, so only incomplete entries need a native call
+                if (status?.Complete ?? ddb.IsBuildComplete(entry.Path))
+                {
+                    stats.SkippedComplete++;
                     continue;
                 }
 
                 if (ddb.IsBuildActive(entry.Path))
                 {
                     stats.SkippedActive++;
-                    continue;
-                }
-
-                if (ddb.IsBuildComplete(entry.Path))
-                {
-                    stats.SkippedComplete++;
                     continue;
                 }
 

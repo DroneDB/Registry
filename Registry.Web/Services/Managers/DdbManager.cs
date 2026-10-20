@@ -79,9 +79,18 @@ public class DdbManager : IDdbManager
 
     public void ReleaseConnections(string folder)
     {
-        var closed = _ddbWrapper.ReleaseConnections(folder);
-        if (closed > 0)
-            _logger.LogDebug("Closed {Count} idle index connections under '{Folder}'", closed, folder);
+        // Best effort: the delete, move or wipe that follows must not fail because the index is
+        // busy or libddb predates DDBReleaseConnections (only Windows refuses open files anyway)
+        try
+        {
+            var closed = _ddbWrapper.ReleaseConnections(folder);
+            if (closed > 0)
+                _logger.LogDebug("Closed {Count} idle index connections under '{Folder}'", closed, folder);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Cannot release the index connections under '{Folder}'", folder);
+        }
     }
 
     private string GetDdbPath(string orgSlug, Guid internalRef)

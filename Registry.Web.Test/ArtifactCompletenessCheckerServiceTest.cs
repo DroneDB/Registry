@@ -96,7 +96,42 @@ public class ArtifactCompletenessCheckerServiceTest : TestBase
         _backgroundJobMock.Verify(
             x => x.EnqueueIndexed(It.IsAny<Expression<Action>>(), It.IsAny<IndexPayload>()),
             Times.Never);
+        ddbMock.Verify(x => x.IsBuildActive("ortho.tif"), Times.Once);
+    }
+
+    [Test]
+    public async Task CheckAndQueueAsync_BatchStatus_AsksActivityOnlyForIncompleteBuildableEntries()
+    {
+        await using var context = GetTest1Context();
+
+        var ddbMock = new Mock<IDDB>();
+        ddbMock.Setup(x => x.FindSummaries(It.IsAny<EntryQuery>())).Returns([
+            new DdbEntry { Path = "readme.txt", Hash = "h1" },
+            new DdbEntry { Path = "ortho.tif", Hash = "h2" },
+            new DdbEntry { Path = "layer.fgb", Hash = "h3" },
+            new DdbEntry { Path = "pc.laz", Hash = "h4" }
+        ]);
+        ddbMock.Setup(x => x.GetBuildStatus(It.IsAny<string[]>())).Returns((string[] paths) => paths
+            .Select(p => new EntryBuildStatus
+            {
+                Path = p, Exists = true, Buildable = p != "readme.txt", Complete = p == "ortho.tif"
+            }).ToArray());
+        ddbMock.Setup(x => x.IsBuildActive("pc.laz")).Returns(true);
+
+        _ddbManagerMock.Setup(x => x.Get(It.IsAny<string>(), It.IsAny<Guid>()))
+            .Returns(ddbMock.Object);
+
+        await new ArtifactCompletenessCheckerService(context, _ddbManagerMock.Object, _backgroundJobMock.Object,
+            _logger).CheckAndQueueAsync(null);
+
+        _backgroundJobMock.Verify(x => x.EnqueueIndexed(It.IsAny<Expression<Action>>(),
+            It.Is<IndexPayload>(p => p.Path == "layer.fgb" && p.Hash == "h3")), Times.Once);
+        _backgroundJobMock.Verify(x => x.EnqueueIndexed(It.IsAny<Expression<Action>>(),
+            It.IsAny<IndexPayload>()), Times.Once);
+        ddbMock.Verify(x => x.GetBuildStatus(It.IsAny<string[]>()), Times.Once);
+        ddbMock.Verify(x => x.IsBuildable(It.IsAny<string>()), Times.Never);
         ddbMock.Verify(x => x.IsBuildComplete(It.IsAny<string>()), Times.Never);
+        ddbMock.Verify(x => x.IsBuildActive(It.Is<string>(p => p != "layer.fgb" && p != "pc.laz")), Times.Never);
     }
 
     [Test]

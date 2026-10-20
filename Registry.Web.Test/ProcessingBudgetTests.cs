@@ -22,10 +22,10 @@ public class ProcessingBudgetTests
 {
     private const long GiB = 1024L * 1024 * 1024;
 
-    [TestCase(4, 8, 1, 4, 2)]
-    [TestCase(16, 32, 2, 8, 4)]
-    [TestCase(32, 128, 4, 8, 8)]
-    [TestCase(32, 8, 2, 8, 8)]    // memory-bound: one heavy worker per 4 GB
+    [TestCase(4, 8, 1, 4, 4)]
+    [TestCase(16, 32, 2, 8, 16)]
+    [TestCase(32, 128, 4, 8, 32)]
+    [TestCase(32, 8, 2, 8, 32)]    // memory-bound: one heavy worker per 4 GB
     [TestCase(2, 4, 1, 2, 2)]     // small host: at least one heavy and two light workers
     [TestCase(1, 1, 1, 2, 2)]
     public void Derive_DefaultsForHostSizes(int cores, int ramGb, int heavy, int threads, int light)

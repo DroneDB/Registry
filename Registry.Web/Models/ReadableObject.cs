@@ -15,4 +15,7 @@ namespace Registry.Web.Models;
 /// <param name="Hash">Entry hash: identifies the content.</param>
 /// <param name="SourcePath">Path rendered for this entry (the entry itself or its build artifact).</param>
 /// <param name="Ddb">Dataset the entry belongs to.</param>
-public sealed record ReadableObject(string OrgSlug, string DsSlug, string Path, string Hash, string SourcePath, IDDB Ddb);
+/// <param name="SourceVersion">Last write time (UTC ticks) of the rendered source: changes when a build
+/// artifact is rebuilt while the entry hash stays the same. 0 when unknown.</param>
+public sealed record ReadableObject(string OrgSlug, string DsSlug, string Path, string Hash, string SourcePath, IDDB Ddb,
+    long SourceVersion = 0);

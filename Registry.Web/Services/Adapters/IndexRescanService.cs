@@ -79,7 +79,7 @@ public class IndexRescanService
             try
             {
                 var ddb = _ddbManager.Get(ds.OrgSlug, ds.InternalRef);
-                var count = ddb.FindSummaries(EntryQuery.All).Count(filter.Matches);
+                var count = ddb.FindSummaries(filter.ToEntryQuery()).Count(filter.Matches);
                 if (count == 0)
                     continue;
 

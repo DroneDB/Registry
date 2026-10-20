@@ -12,7 +12,11 @@ namespace Registry.Web.Services.Adapters;
 /// </summary>
 public class DatasetSummaryProvider : IDatasetSummaryProvider
 {
-    private static readonly TimeSpan UnusedExpiration = TimeSpan.FromMinutes(30);
+    /// <summary>
+    /// The fingerprint misses a commit that leaves the WAL length unchanged (WAL reused after a
+    /// checkpoint) within the file system's write time resolution: bounds how long that lasts.
+    /// </summary>
+    private static readonly TimeSpan MaxAge = TimeSpan.FromMinutes(5);
 
     private readonly IMemoryCache _cache;
     private readonly IDdbManager _ddbManager;
@@ -42,7 +46,7 @@ public class DatasetSummaryProvider : IDatasetSummaryProvider
 
         if (fingerprint != null)
             _cache.Set(Key(internalRef), new CachedSummary(fingerprint, summary),
-                new MemoryCacheEntryOptions { SlidingExpiration = UnusedExpiration });
+                new MemoryCacheEntryOptions { AbsoluteExpirationRelativeToNow = MaxAge });
 
         return summary;
     }

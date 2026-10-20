@@ -48,9 +48,11 @@ public sealed record ProcessingBudget(
             ? settings.HeavyWorkers
             : Math.Clamp(byMemory, 1, Math.Max(1, cores / 8));
 
+        // Light jobs run no native builds but can hold a worker for hours (remote processing
+        // polls on "tasks"): as many as before the budget, so they cannot starve "default"
         var light = settings.LightWorkers > 0 ? settings.LightWorkers
             : legacyWorkerThreads > 0 ? legacyWorkerThreads
-            : Math.Max(2, cores / 4);
+            : Math.Max(2, cores);
 
         var threads = settings.BuildThreads > 0
             ? settings.BuildThreads
