@@ -1,6 +1,7 @@
-﻿using System;
+using System;
 using System.IO;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using Registry.Ports;
@@ -15,6 +16,11 @@ public enum FileDescriptorType
     Single, Multiple, Dataset
 }
 
+/// <summary>
+/// A download: one file, or a ZIP archive of a selection or of the whole dataset, written straight
+/// to the response (REG-04: nothing is buffered, the first bytes leave while later files are still
+/// being read).
+/// </summary>
 public class FileStreamDescriptor
 {
     private readonly string[] _paths;
@@ -23,7 +29,6 @@ public class FileStreamDescriptor
     private readonly ILogger<ObjectsManager> _logger;
     private readonly IDDB _ddb;
     private readonly IZipArchiveBuilder _zipBuilder;
-    private readonly long _maxZipMemoryThreshold;
 
     public string Name { get; }
 
@@ -36,127 +41,35 @@ public class FileStreamDescriptor
     public FileDescriptorType Type => _descriptorType;
 
     public FileStreamDescriptor(string name, string contentType, string orgSlug, Guid internalRef, string[] paths, string[] folders,
-        FileDescriptorType descriptorType, ILogger<ObjectsManager> logger, IDdbManager ddbManager, IZipArchiveBuilder zipBuilder, long maxZipMemoryThreshold)
+        FileDescriptorType descriptorType, ILogger<ObjectsManager> logger, IDdbManager ddbManager, IZipArchiveBuilder zipBuilder)
     {
         _paths = paths;
         _folders = folders;
         _descriptorType = descriptorType;
         _logger = logger;
         _zipBuilder = zipBuilder;
-        _maxZipMemoryThreshold = maxZipMemoryThreshold;
         Name = name;
         ContentType = contentType;
 
         _ddb = ddbManager.Get(orgSlug, internalRef);
     }
 
-    private long CalculateTotalSize()
+    /// <summary>Writes the download to <paramref name="stream"/>; stops when <paramref name="ct"/> is cancelled.</summary>
+    public async Task CopyToAsync(Stream stream, CancellationToken ct = default)
     {
-        if (_paths == null) return 0;
-
-        long totalSize = 0;
-        foreach (var path in _paths)
-        {
-            try
-            {
-                var localPath = _ddb.GetLocalPath(path);
-                var fileInfo = new FileInfo(localPath);
-
-                // NOTE: This could be optimized by caching file sizes during initial listing or using Length without checking existence (catch exception if not found)
-                if (fileInfo.Exists)
-                    totalSize += fileInfo.Length;
-
-            }
-            catch (Exception ex)
-            {
-                _logger.LogWarning(ex, "Could not get file size for path: '{Path}'", path);
-            }
-        }
-
-        _logger.LogDebug("Total size for {PathCount} files: {TotalSize} bytes", _paths.Length, totalSize);
-        return totalSize;
-    }
-
-    private async Task CreateZipInMemory(Stream outputStream)
-    {
-        // Use MemoryStream to avoid synchronous operations with ZipArchive directly on HTTP response stream
-        using var memoryStream = new MemoryStream();
-
-        await _zipBuilder.WriteZipAsync(_ddb, _paths, _folders,
-            _descriptorType == FileDescriptorType.Dataset, memoryStream);
-
-        // Copy the completed ZIP data to the response stream asynchronously
-        memoryStream.Seek(0, SeekOrigin.Begin);
-        await memoryStream.CopyToAsync(outputStream);
-    }
-
-    private async Task CreateZipWithTempFile(Stream outputStream)
-    {
-        var tempFilePath = Path.GetTempFileName();
-        try
-        {
-            // Create ZIP in temporary file
-            await using (var fileStream = new FileStream(tempFilePath, FileMode.Create, FileAccess.Write))
-            {
-                await _zipBuilder.WriteZipAsync(_ddb, _paths, _folders,
-                    _descriptorType == FileDescriptorType.Dataset, fileStream);
-            }
-
-            // Stream the temporary file to the response stream
-            await using var tempFileStream = new FileStream(tempFilePath, FileMode.Open, FileAccess.Read);
-            await tempFileStream.CopyToAsync(outputStream);
-        }
-        finally
-        {
-            // Clean up temporary file
-            try
-            {
-                if (File.Exists(tempFilePath))
-                {
-                    File.Delete(tempFilePath);
-                }
-            }
-            catch (Exception ex)
-            {
-                _logger.LogWarning(ex, "Failed to delete temporary file: {TempFilePath}", tempFilePath);
-            }
-        }
-    }
-
-    public async Task CopyToAsync(Stream stream)
-    {
-        // If there is just one file we return it
         if (_descriptorType == FileDescriptorType.Single)
         {
             var filePath = _paths.First();
-
             _logger.LogInformation("Only one path found: '{FilePath}'", filePath);
 
-            var localPath = _ddb.GetLocalPath(filePath);
-
-            await using var fileStream = new FileStream(localPath, FileMode.Open, FileAccess.Read);
-            await fileStream.CopyToAsync(stream);
-
-        }
-        // Otherwise we zip everything together and return the package
-        else
-        {
-            var totalSize = CalculateTotalSize();
-            var useMemoryStream = totalSize <= _maxZipMemoryThreshold;
-
-            _logger.LogInformation("Creating ZIP archive for {PathCount} files, total size: {TotalSize} bytes, using {Method}",
-                _paths?.Length ?? 0, totalSize, useMemoryStream ? "memory" : "temporary file");
-
-            if (useMemoryStream)
-            {
-                await CreateZipInMemory(stream);
-            }
-            else
-            {
-                await CreateZipWithTempFile(stream);
-            }
+            await using var fileStream = new FileStream(_ddb.GetLocalPath(filePath), FileMode.Open, FileAccess.Read,
+                FileShare.Read, 81920, FileOptions.Asynchronous | FileOptions.SequentialScan);
+            await fileStream.CopyToAsync(stream, ct);
+            return;
         }
 
+        _logger.LogInformation("Streaming a ZIP archive of {PathCount} files", _paths?.Length ?? 0);
+        await _zipBuilder.WriteZipAsync(_ddb, _paths ?? [], _folders ?? [],
+            _descriptorType == FileDescriptorType.Dataset, stream, progress: null, ct);
     }
-
 }

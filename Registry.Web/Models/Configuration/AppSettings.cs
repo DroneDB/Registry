@@ -206,13 +206,6 @@ public class AppSettings
     public string MonitorToken { get; set; }
 
     /// <summary>
-    /// Maximum size in bytes for keeping ZIP creation in memory.
-    /// Files larger than this will use temporary files on disk.
-    /// Default: 1GB (1073741824 bytes)
-    /// </summary>
-    public long MaxZipMemoryThreshold { get; set; } = 1073741824; // 1GB
-
-    /// <summary>
     /// Maximum size in bytes for GeoTIFF raster export operations (multispectral and thermal).
     /// Estimated as width × height × bytesPerPixel × bandCount of the source raster.
     /// Null means unlimited (no enforcement, backwards compatible).

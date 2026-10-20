@@ -98,15 +98,7 @@ public class ObjectsController : ControllerBaseEx
             _logger.LogDebug("Objects controller GetDdb('{OrgSlug}', '{DsSlug}')", orgSlug, dsSlug);
 
             var res = await _objectsManager.GetDdb(orgSlug, dsSlug);
-
-            Response.StatusCode = 200;
-            Response.ContentType = res.ContentType;
-
-            Response.Headers.Append("Content-Disposition", $"attachment; filename=\"{res.Name}\"");
-
-            await res.CopyToAsync(Response.Body);
-
-            return new EmptyResult();
+            return await SendDownload(res, $"attachment; filename=\"{res.Name}\"", cancellationToken);
         }
         catch (OperationCanceledException)
         {
@@ -263,6 +255,21 @@ public class ObjectsController : ControllerBaseEx
 
     #region Downloads
 
+    // Writes a download straight to the response as it is produced (REG-04): no Content-Length
+    // (chunked), no buffering on the way out, and the work stops when the client goes away
+    private async Task<IActionResult> SendDownload(FileStreamDescriptor download, string contentDisposition,
+        CancellationToken cancellationToken)
+    {
+        Response.StatusCode = StatusCodes.Status200OK;
+        Response.ContentType = download.ContentType;
+        Response.Headers.Append("Content-Disposition", contentDisposition);
+        Response.Headers.CacheControl = "no-store";
+        HttpContext.Features.Get<IHttpResponseBodyFeature>()?.DisableBuffering();
+
+        await download.CopyToAsync(Response.Body, cancellationToken);
+        return new EmptyResult();
+    }
+
     private async Task<IActionResult> InternalDownload(string orgSlug, string dsSlug, string[] paths, bool isInline,
         CancellationToken cancellationToken = default)
     {
@@ -277,16 +284,8 @@ public class ObjectsController : ControllerBaseEx
             }
 
             var res = await _objectsManager.DownloadStream(orgSlug, dsSlug, paths);
-
-            Response.StatusCode = 200;
-            Response.ContentType = res.ContentType;
-
-            Response.Headers.Append("Content-Disposition",
-                isInline ? "inline" : $"attachment; filename=\"{res.Name}\"");
-
-            await res.CopyToAsync(Response.Body);
-
-            return new EmptyResult();
+            return await SendDownload(res, isInline ? "inline" : $"attachment; filename=\"{res.Name}\"",
+                cancellationToken);
         }
         catch (OperationCanceledException)
         {

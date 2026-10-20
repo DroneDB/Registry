@@ -1793,7 +1793,7 @@ public class ObjectsManager : IObjectsManager
             streamDescriptor = new FileStreamDescriptor(Path.GetFileName(filePath),
                 MimeUtility.GetMimeMapping(filePath),
                 orgSlug, internalRef, files, null, FileDescriptorType.Single, _logger, _ddbManager,
-                _zipArchiveBuilder, _settings.MaxZipMemoryThreshold);
+                _zipArchiveBuilder);
         }
         // Otherwise we zip everything together and return the package
         else
@@ -1801,7 +1801,7 @@ public class ObjectsManager : IObjectsManager
             streamDescriptor = new FileStreamDescriptor($"{orgSlug}-{dsSlug}-{CommonUtils.RandomString(8)}.zip",
                 "application/zip", orgSlug, internalRef, files, folders,
                 includeDdb ? FileDescriptorType.Dataset : FileDescriptorType.Multiple, _logger, _ddbManager,
-                _zipArchiveBuilder, _settings.MaxZipMemoryThreshold);
+                _zipArchiveBuilder);
         }
 
         return streamDescriptor;
@@ -1875,7 +1875,7 @@ public class ObjectsManager : IObjectsManager
 
         return new FileStreamDescriptor($"{orgSlug}-{dsSlug}-ddb.zip",
             "application/zip", orgSlug, ds.InternalRef, [], [],
-            FileDescriptorType.Dataset, _logger, _ddbManager, _zipArchiveBuilder, _settings.MaxZipMemoryThreshold);
+            FileDescriptorType.Dataset, _logger, _ddbManager, _zipArchiveBuilder);
     }
 
     #region Build

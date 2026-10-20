@@ -670,13 +670,8 @@ public class ConfigurationDataBuilder : IConfigurationDataBuilder
     private ConfigurationSectionDataDto BuildExportZipSection()
     {
         return Section("ExportZip", "Export & Zip",
-            "Memory thresholds for ZIP creation and maximum GeoTIFF export sizes.",
+            "Maximum GeoTIFF export sizes. ZIP downloads are streamed and need no memory threshold.",
             [
-                NumberField("MaxZipMemoryThreshold", "Max ZIP Memory Threshold",
-                    "Maximum size in bytes for keeping ZIP creation in memory. Larger archives use disk.",
-                    _settings.MaxZipMemoryThreshold, _defaults.MaxZipMemoryThreshold,
-                    unit: "bytes"),
-
                 NullableNumberField("MaxExportSizeBytes", "Max Export Size",
                     "Maximum estimated output size for GeoTIFF raster export. Null = unlimited.",
                     _settings.MaxExportSizeBytes, _defaults.MaxExportSizeBytes,
