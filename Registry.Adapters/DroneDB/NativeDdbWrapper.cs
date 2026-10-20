@@ -206,26 +206,94 @@ public class NativeDdbWrapper : IDdbWrapper
     private static extern DdbResult _AddWithOptions([MarshalAs(UnmanagedType.LPUTF8Str)] string ddbPath,
         IntPtr[] paths, int numPaths, ref NativeAddOptions options, out IntPtr output);
 
+    // Fixed policy (not caller-configurable): never recurse (a recursive native walk would report
+    // paths the caller never provided, breaking the completeness contract) and keep the native
+    // conflict-retry budget at its default of 2. The NativeAddOptions struct and the
+    // DDBAddWithOptions ABI are unchanged.
+    private static NativeAddOptions BatchAddOptions(bool stopOnError) =>
+        new() { Recursive = false, StopOnError = stopOnError, MaxConflictRetries = 2 };
+
     public BatchAddResult AddWithOptions(string ddbPath, string[] paths, bool stopOnError = false)
     {
-        paths = paths.Select(p => p?.Replace('\\', '/')).ToArray();
+        paths = paths.Select(p => p == null ? null! : NormalizeSeparators(p)).ToArray();
         var utf8Ptrs = MarshalStringArrayToUtf8(paths);
-        // Fixed policy (not caller-configurable): never recurse (a recursive native walk would
-        // report paths the caller never provided, breaking the completeness contract) and keep
-        // the native conflict-retry budget at its default of 2. The NativeAddOptions struct and
-        // the DDBAddWithOptions ABI are unchanged.
-        var options = new NativeAddOptions
+        var options = BatchAddOptions(stopOnError);
+        try
         {
-            Recursive = false, StopOnError = stopOnError, MaxConflictRetries = 2
-        };
+            return RunBatchAdd("addWithOptions",
+                (out IntPtr output) => _AddWithOptions(ddbPath, utf8Ptrs, paths.Length, ref options, out output));
+        }
+        finally
+        {
+            FreeUtf8StringArray(utf8Ptrs);
+        }
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct NativeAddHint
+    {
+        public IntPtr Path;
+        public IntPtr Sha256;
+        public long Size;
+        public double Mtime;
+    }
+
+    [DllImport("ddb", EntryPoint = "DDBAddWithHints")]
+    private static extern DdbResult _AddWithHints([MarshalAs(UnmanagedType.LPUTF8Str)] string ddbPath,
+        [In] NativeAddHint[] files, int numFiles, ref NativeAddOptions options, out IntPtr output);
+
+    private static int _hintsUnsupported;
+
+    public BatchAddResult AddWithHints(string ddbPath, IReadOnlyList<AddItem> files, bool stopOnError = false)
+    {
+        // An older libddb has no DDBAddWithHints: the hints only save a re-read, so add as before
+        if (Volatile.Read(ref _hintsUnsupported) != 0 || files.All(f => f.Hint == null))
+            return AddWithOptions(ddbPath, files.Select(f => f.Path).ToArray(), stopOnError);
+
+        var paths = MarshalStringArrayToUtf8(files.Select(f => NormalizeSeparators(f.Path)).ToArray());
+        var hashes = MarshalStringArrayToUtf8(files.Select(f => f.Hint?.Sha256 ?? string.Empty).ToArray());
+        var hints = new NativeAddHint[files.Count];
+        for (var i = 0; i < files.Count; i++)
+        {
+            var hint = files[i].Hint;
+            hints[i] = new NativeAddHint
+            {
+                Path = paths[i],
+                Sha256 = hashes[i],
+                Size = hint?.Size ?? -1,
+                Mtime = hint == null ? 0 : (hint.ModifiedUtc.ToUniversalTime() - DateTime.UnixEpoch).TotalSeconds
+            };
+        }
+
+        var options = BatchAddOptions(stopOnError);
+        try
+        {
+            return RunBatchAdd("addWithHints",
+                (out IntPtr output) => _AddWithHints(ddbPath, hints, hints.Length, ref options, out output));
+        }
+        catch (DdbException ex) when (ex.InnerException is EntryPointNotFoundException)
+        {
+            Interlocked.Exchange(ref _hintsUnsupported, 1);
+            return AddWithOptions(ddbPath, files.Select(f => f.Path).ToArray(), stopOnError);
+        }
+        finally
+        {
+            FreeUtf8StringArray(paths);
+            FreeUtf8StringArray(hashes);
+        }
+    }
+
+    private delegate DdbResult BatchAddCall(out IntPtr output);
+
+    // Runs a native batch add and maps its JSON result, translating failures as the other calls do
+    private static BatchAddResult RunBatchAdd(string operation, BatchAddCall call)
+    {
         var result = DdbResult.Exception;
         try
         {
-            result = _AddWithOptions(ddbPath, utf8Ptrs, paths.Length, ref options, out var output);
+            result = call(out var output);
             if (result == DdbResult.Success)
-            {
                 return DeserializeAndFree<BatchAddResult>(output, "Unable to add");
-            }
         }
         catch (EntryPointNotFoundException ex)
         {
@@ -238,19 +306,17 @@ public class NativeDdbWrapper : IDdbWrapper
         catch (Exception ex)
         {
             throw new DdbException(
-                $"Error in calling ddb lib. Last error: \"{SafeGetLastError("addWithOptions")}\", check inner exception for details",
+                $"Error in calling ddb lib. Last error: \"{SafeGetLastError(operation)}\", check inner exception for details",
                 ex);
         }
-        finally
-        {
-            FreeUtf8StringArray(utf8Ptrs);
-        }
 
-        ThrowForFinalResult(result, "addWithOptions");
+        ThrowForFinalResult(result, operation);
 
         // Unreachable in practice (Success bails above); kept for exhaustiveness.
-        throw new DdbException(SafeGetLastError("addWithOptions"));
+        throw new DdbException(SafeGetLastError(operation));
     }
+
+    private static string NormalizeSeparators(string path) => path.Replace('\\', '/');
 
     [DllImport("ddb", EntryPoint = "DDBRemove")]
     private static extern DdbResult _Remove([MarshalAs(UnmanagedType.LPUTF8Str)] string ddbPath,
@@ -363,6 +429,35 @@ public class NativeDdbWrapper : IDdbWrapper
         catch (EntryPointNotFoundException ex)
         {
             throw new DdbException($"Error in calling ddb lib: incompatible versions ({ex.Message})", ex);
+        }
+    }
+
+    [DllImport("ddb", EntryPoint = "DDBCheckpoint")]
+    private static extern DdbResult _Checkpoint([MarshalAs(UnmanagedType.LPUTF8Str)] string ddbPath,
+        out int complete);
+
+    private static int _checkpointUnsupported;
+
+    public bool Checkpoint(string ddbPath)
+    {
+        if (string.IsNullOrWhiteSpace(ddbPath))
+            throw new ArgumentException("DDB path is null or empty");
+
+        // A libddb without DDBCheckpoint checkpoints every connection that wrote when it is
+        // released: its database file already holds the data
+        if (Volatile.Read(ref _checkpointUnsupported) != 0)
+            return true;
+
+        try
+        {
+            var result = _Checkpoint(ddbPath, out var complete);
+            ThrowForFinalResult(result, "checkpoint");
+            return complete != 0;
+        }
+        catch (EntryPointNotFoundException)
+        {
+            Interlocked.Exchange(ref _checkpointUnsupported, 1);
+            return true;
         }
     }
 

@@ -23,6 +23,15 @@ public interface IDdbWrapper
     /// </summary>
     public BatchAddResult AddWithOptions(string ddbPath, string[] paths, bool stopOnError = false);
 
+    /// <summary>
+    /// <see cref="AddWithOptions"/> for files with the hash their writer computed
+    /// (DDBAddWithHints): DroneDB uses a hint only while the file still has its size and write
+    /// time, so a stale hint is never indexed. Paths are absolute; folders are not expanded.
+    /// With a libddb that predates DDBAddWithHints the files are added (and hashed) through
+    /// <see cref="AddWithOptions"/>.
+    /// </summary>
+    public BatchAddResult AddWithHints(string ddbPath, IReadOnlyList<AddItem> files, bool stopOnError = false);
+
     public void Remove(string ddbPath, string path);
 
     public void Remove(string ddbPath, string[] paths);
@@ -36,6 +45,12 @@ public interface IDdbWrapper
     /// (DDBReleaseConnections). Returns how many were closed.
     /// </summary>
     public int ReleaseConnections(string path);
+
+    /// <summary>
+    /// Moves the committed changes of the index of a dataset folder from its WAL into the database
+    /// file (DDBCheckpoint). False when another connection kept it from completing.
+    /// </summary>
+    public bool Checkpoint(string ddbPath);
 
     /// <summary>
     /// Exact lookup of one entry (file or folder), including its metadata.

@@ -743,6 +743,53 @@ public class NativeDdbWrapperTests : TestBase
     }
 
     [Test]
+    public void AddWithHints_UsesAMatchingHint_AndHashesAStaleOne()
+    {
+        using var area = new TestArea(nameof(AddWithHints_UsesAMatchingHint_AndHashesAStaleOne));
+        DdbWrapper.Init(area.TestFolder);
+
+        var trusted = Path.Join(area.TestFolder, "trusted.bin");
+        var stale = Path.Join(area.TestFolder, "stale.bin");
+        File.WriteAllText(trusted, "trusted content");
+        File.WriteAllText(stale, "stale content");
+        var fakeHash = new string('0', 64);
+
+        FileHashHint HintFor(string path, long sizeDelta) =>
+            new(fakeHash, new FileInfo(path).Length + sizeDelta, File.GetLastWriteTimeUtc(path));
+
+        // UPL-01 E.1: the Registry hashes uploads while streaming them; a hint whose size and
+        // write time still match the file is used as is (the fake digest proves no re-read)
+        var result = DdbWrapper.AddWithHints(area.TestFolder,
+            [new AddItem(trusted, HintFor(trusted, 0)), new AddItem(stale, HintFor(stale, 1))]);
+
+        result.Errors.ShouldBeEmpty();
+        result.Entries.Single(e => e.Path == "trusted.bin").Hash.ShouldBe(fakeHash);
+        result.Entries.Single(e => e.Path == "stale.bin").Hash
+            .ShouldBe(Convert.ToHexStringLower(System.Security.Cryptography.SHA256.HashData(File.ReadAllBytes(stale))));
+    }
+
+    [Test]
+    public void Checkpoint_MovesTheWritesFromTheWalIntoTheDatabaseFile()
+    {
+        using var area = new TestArea(nameof(Checkpoint_MovesTheWritesFromTheWalIntoTheDatabaseFile));
+        DdbWrapper.Init(area.TestFolder);
+        var file = Path.Join(area.TestFolder, "a.txt");
+        File.WriteAllText(file, "alpha");
+        DdbWrapper.AddWithHints(area.TestFolder, [new AddItem(file)]).Errors.ShouldBeEmpty();
+
+        // Index writes no longer checkpoint (no fsyncs per write): the change sits in the WAL
+        var wal = new FileInfo(Path.Join(area.TestFolder, IDDB.DatabaseFolderName, IDDB.DatabaseFileName + "-wal"));
+        wal.Refresh();
+        wal.Length.ShouldBeGreaterThan(0);
+
+        new DDB(area.TestFolder, DdbWrapper).Checkpoint().ShouldBeTrue();
+
+        wal.Refresh();
+        wal.Length.ShouldBe(0);
+        DdbWrapper.GetEntry(area.TestFolder, "a.txt").ShouldNotBeNull();
+    }
+
+    [Test]
     public void MoveEntry_SimpleRename_Ok()
     {
         using var test = new TestFS(TestDelta2ArchiveUrl, BaseTestFolder);

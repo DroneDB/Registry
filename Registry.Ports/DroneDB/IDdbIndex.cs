@@ -56,6 +56,12 @@ public interface IDdbIndex
     /// </summary>
     BatchAddResult AddRawBatchWithOptions(IReadOnlyList<string> paths, bool stopOnError = false);
 
+    /// <summary>
+    /// <see cref="AddRawBatchWithOptions(IReadOnlyList{string},bool)"/> for files whose hash was
+    /// computed while they were written: a hint that still matches the file saves reading it again.
+    /// </summary>
+    BatchAddResult AddRawBatchWithOptions(IReadOnlyList<AddItem> items, bool stopOnError = false);
+
     void Remove(string path);
     void Move(string source, string dest);
     void Init();

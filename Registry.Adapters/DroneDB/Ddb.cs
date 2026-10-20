@@ -120,6 +120,8 @@ public class DDB : IDDB
         return Convert.ToInt64(entries) == 0;
     }
 
+    public bool Checkpoint() => _ddbWrapper.Checkpoint(DatasetFolderPath);
+
     public string? GetIndexFingerprint()
     {
         try
@@ -476,24 +478,27 @@ public class DDB : IDDB
         }
     }
 
-    public BatchAddResult AddRawBatchWithOptions(IReadOnlyList<string> paths, bool stopOnError = false)
+    public BatchAddResult AddRawBatchWithOptions(IReadOnlyList<string> paths, bool stopOnError = false) =>
+        AddRawBatchWithOptions(paths.Select(p => new AddItem(p)).ToArray(), stopOnError);
+
+    public BatchAddResult AddRawBatchWithOptions(IReadOnlyList<AddItem> items, bool stopOnError = false)
     {
-        if (paths == null || paths.Count == 0)
+        if (items == null || items.Count == 0)
             return new BatchAddResult();
 
         try
         {
-            var fullPaths = new string[paths.Count];
-            for (var i = 0; i < paths.Count; i++)
-                fullPaths[i] = GetLocalPath(paths[i]);
+            var files = new AddItem[items.Count];
+            for (var i = 0; i < items.Count; i++)
+                files[i] = items[i] with { Path = GetLocalPath(items[i].Path) };
 
-            return _ddbWrapper.AddWithOptions(DatasetFolderPath, fullPaths, stopOnError);
+            return _ddbWrapper.AddWithHints(DatasetFolderPath, files, stopOnError);
         }
         catch (DdbException ex) when (ex is not DdbBusyException && ex is not DdbBuildInProgressException)
         {
             // Transient DdbBusyException passes through unfiltered (see AddRaw).
             throw new InvalidOperationException(
-                $"Cannot batch-add {paths.Count} file(s) (with options) to ddb '{DatasetFolderPath}'", ex);
+                $"Cannot batch-add {items.Count} file(s) (with options) to ddb '{DatasetFolderPath}'", ex);
         }
     }
 
