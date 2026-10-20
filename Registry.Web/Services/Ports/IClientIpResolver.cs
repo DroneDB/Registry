@@ -7,7 +7,7 @@ namespace Registry.Web.Services.Ports;
 /// <summary>
 /// The address of the client that made a request, for per-client limits (rate limiting, download
 /// concurrency). Behind a reverse proxy this is the address the proxy forwarded, but only when the
-/// TCP peer is one of the configured <c>KnownProxies</c>: the forwarded headers are applied by
+/// TCP peer is one of the configured <c>KnownProxies</c> or inside <c>KnownNetworks</c>: the forwarded headers are applied by
 /// <c>UseForwardedHeaders</c> at the start of the pipeline, never read here, so a client cannot
 /// spoof its address with an <c>X-Forwarded-For</c> header.
 /// </summary>

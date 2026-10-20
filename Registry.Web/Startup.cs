@@ -435,7 +435,9 @@ public class Startup
 
         // Behind a reverse proxy the client address and scheme come from its forwarded headers
         var knownProxies = ParseKnownProxies(appSettings.KnownProxies);
-        services.Configure<ForwardedHeadersOptions>(options => ConfigureForwardedHeaders(options, knownProxies));
+        var knownNetworks = ParseKnownNetworks(appSettings.KnownNetworks);
+        services.Configure<ForwardedHeadersOptions>(options =>
+            ConfigureForwardedHeaders(options, knownProxies, knownNetworks));
 
         if (appSettings.MaxRequestBodySize.HasValue)
         {
@@ -642,33 +644,55 @@ public class Startup
     }
 
     /// <summary>
-    /// Trusts <c>X-Forwarded-For</c> and <c>X-Forwarded-Proto</c> only from <paramref name="knownProxies"/>.
-    /// The framework defaults (loopback) are cleared first, so configured proxies replace them instead
-    /// of adding to them. <c>ForwardLimit</c> stays 1: one proxy (nginx) in front of the app, so only
-    /// the address it appended is used, never entries the client sent itself.
+    /// Trusts <c>X-Forwarded-For</c> and <c>X-Forwarded-Proto</c> only from <paramref name="knownProxies"/>
+    /// and peers inside <paramref name="knownNetworks"/>. The framework defaults (loopback) are cleared
+    /// first, so configured proxies replace them instead of adding to them. <c>ForwardLimit</c> stays 1:
+    /// one proxy (nginx) in front of the app, so only the address it appended is used, never entries the
+    /// client sent itself.
     /// </summary>
     private static void ConfigureForwardedHeaders(ForwardedHeadersOptions options,
-        IReadOnlyList<IPAddress> knownProxies)
+        IReadOnlyList<IPAddress> knownProxies, IReadOnlyList<System.Net.IPNetwork> knownNetworks)
     {
         options.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto;
         options.KnownIPNetworks.Clear();
         options.KnownProxies.Clear();
         foreach (var proxy in knownProxies)
             options.KnownProxies.Add(proxy);
+        foreach (var network in knownNetworks)
+            options.KnownIPNetworks.Add(network);
     }
 
     /// <summary>
     /// <see cref="AppSettings.KnownProxies"/> as addresses (<see cref="AppSettings.DefaultKnownProxies"/>
-    /// when not set). An invalid entry stops the start-up: ignoring it would silently stop trusting the
-    /// proxy and key every client on the proxy address.
+    /// when not set).
     /// </summary>
     private static IPAddress[] ParseKnownProxies(string[] configured) =>
-        (configured is { Length: > 0 } ? configured : AppSettings.DefaultKnownProxies)
-        .Select(entry => IPAddress.TryParse(entry?.Trim(), out var address)
-            ? address
-            : throw new InvalidOperationException(
-                $"AppSettings:KnownProxies contains an invalid IP address: '{entry}'"))
-        .ToArray();
+        ParseTrustedEntries<IPAddress>(
+            configured is { Length: > 0 } ? configured : AppSettings.DefaultKnownProxies,
+            nameof(AppSettings.KnownProxies), "IP address", IPAddress.TryParse);
+
+    /// <summary>
+    /// <see cref="AppSettings.KnownNetworks"/> as CIDR networks (none when not set).
+    /// </summary>
+    private static System.Net.IPNetwork[] ParseKnownNetworks(string[] configured) =>
+        ParseTrustedEntries<System.Net.IPNetwork>(configured ?? [],
+            nameof(AppSettings.KnownNetworks), "CIDR network", System.Net.IPNetwork.TryParse);
+
+    private delegate bool TryParseEntry<T>(string entry, out T value);
+
+    /// <summary>
+    /// Parses the trusted-proxy entries of the <c>AppSettings:<paramref name="setting"/></c> list. An
+    /// invalid entry stops the start-up: ignoring it would silently stop trusting the proxy and key
+    /// every client on the proxy address.
+    /// </summary>
+    private static T[] ParseTrustedEntries<T>(IEnumerable<string> entries, string setting, string kind,
+        TryParseEntry<T> tryParse) =>
+        entries
+            .Select(entry => entry != null && tryParse(entry.Trim(), out var value)
+                ? value
+                : throw new InvalidOperationException(
+                    $"AppSettings:{setting} contains an invalid {kind}: '{entry}'"))
+            .ToArray();
 
     private static void PrintStartupInfo(IApplicationBuilder app)
     {

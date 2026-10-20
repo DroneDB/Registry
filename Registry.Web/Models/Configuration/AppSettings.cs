@@ -364,6 +364,16 @@ public class AppSettings
     public static readonly string[] DefaultKnownProxies = ["127.0.0.1", "::1"];
 
     /// <summary>
+    /// Networks (CIDR, e.g. <c>172.16.0.0/12</c>) whose addresses are trusted as reverse proxies, in
+    /// addition to <see cref="KnownProxies"/>. Needed when the proxy's address is not fixed: behind a
+    /// port published by Docker the app sees the bridge gateway (<c>172.x.0.1</c>) as the peer, not
+    /// loopback. Null or empty: no network is trusted.
+    /// </summary>
+#nullable enable
+    public string[]? KnownNetworks { get; set; }
+#nullable restore
+
+    /// <summary>
     /// Processing Platform (Layer 1 task substrate) settings. When null, defaults apply.
     /// </summary>
 #nullable enable

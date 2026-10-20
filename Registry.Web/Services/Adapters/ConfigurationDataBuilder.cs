@@ -1118,6 +1118,10 @@ public class ConfigurationDataBuilder : IConfigurationDataBuilder
                     "IP addresses of the reverse proxies whose X-Forwarded-For/X-Forwarded-Proto headers are trusted. Null or empty = loopback (127.0.0.1, ::1). When set, it replaces loopback.",
                     _settings.KnownProxies, _defaults.KnownProxies),
 
+                ArrayField("KnownNetworks", "Known Networks",
+                    "Networks (CIDR, e.g. 172.16.0.0/12) whose addresses are trusted as reverse proxies, in addition to Known Proxies. Needed behind a port published by Docker, where the peer is the bridge gateway. Null or empty = none.",
+                    _settings.KnownNetworks, _defaults.KnownNetworks),
+
                 StringField("ExternalUrlOverride", "External URL Override",
                     "Overrides the external URL used in generated links and redirects.",
                     _settings.ExternalUrlOverride, _defaults.ExternalUrlOverride),

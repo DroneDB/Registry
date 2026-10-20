@@ -80,6 +80,9 @@ services:
             registry_webserver:
                 condition: service_healthy
         image: dronedb/registry:latest
+        # Fixed host name: the node's log file is logs/registry-node-<host name>.txt (the nodes share
+        # ./data), so it must not change when the container is recreated
+        hostname: node-a
         # Healthcheck: the image HEALTHCHECK (docker/healthcheck.sh: the Registry process is alive)
         environment:
             - INSTANCE_TYPE=1
@@ -107,6 +110,9 @@ services:
             registry_webserver:
                 condition: service_healthy
         image: dronedb/registry:latest
+        # Fixed host name: the node's log file is logs/registry-node-<host name>.txt (the nodes share
+        # ./data), so it must not change when the container is recreated
+        hostname: node-b
         # Healthcheck: the image HEALTHCHECK (docker/healthcheck.sh: the Registry process is alive)
         environment:
             - INSTANCE_TYPE=1

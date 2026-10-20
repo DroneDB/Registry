@@ -29,6 +29,8 @@ namespace Registry.Web.Test.ImprovementBaselines;
 /// <item>a spoofed <c>X-Forwarded-For</c> from any other peer does not change the limiter key;</item>
 /// <item>the client address forwarded by the proxy becomes the limiter key;</item>
 /// <item>configured <c>KnownProxies</c> replace the framework defaults (loopback is no longer trusted);</item>
+/// <item>configured <c>KnownNetworks</c> (CIDR) are trusted too: behind a published Docker port the
+/// peer is the bridge gateway (<c>172.x.0.1</c>), not loopback; an invalid CIDR stops the start-up;</item>
 /// <item><c>X-Forwarded-Proto: https</c> from the proxy makes the request HTTPS: the auth cookie is
 /// <c>Secure</c> and HSTS is sent.</item>
 /// </list>
@@ -46,6 +48,10 @@ public class Rq01ClientIpTests
     private const string DirectPeer = "203.0.113.5";
     private const string ForwardedClient = "198.51.100.7";
     private const string ConfiguredProxy = "10.0.0.2";
+
+    // Host nginx -> published port 5000 -> container: the peer is the Docker bridge gateway
+    private const string DockerGatewayPeer = "172.18.0.1";
+    private const string DockerBridgePool = "172.16.0.0/12";
     private const string PublicHost = "http://hub.example.org";
 
     private const string AuthCookieName = "jwtToken";
@@ -187,6 +193,47 @@ public class Rq01ClientIpTests
 
         fromLoopback.ShouldBe("ip:" + ProxyPeer, "loopback is no longer a known proxy once KnownProxies is set");
         fromConfigured.ShouldBe("ip:" + ForwardedClient);
+    }
+
+    [Test]
+    public async Task ConfiguredKnownNetworks_TrustTheDockerGatewayPeer()
+    {
+        var limiter = new RecordingDownloadLimiter();
+        using var factory = CreateFactory(limiter, new Dictionary<string, string>
+        {
+            ["AppSettings:KnownNetworks:0"] = DockerBridgePool
+        });
+
+        var fromGateway = await LimiterKeyAsync(factory, limiter, DockerGatewayPeer, ForwardedClient);
+        limiter.Keys.Clear();
+        var fromLoopback = await LimiterKeyAsync(factory, limiter, ProxyPeer, ForwardedClient);
+
+        fromGateway.ShouldBe("ip:" + ForwardedClient, "a peer inside a KnownNetworks range is a trusted proxy");
+        fromLoopback.ShouldBe("ip:" + ForwardedClient, "KnownNetworks add to KnownProxies (loopback by default)");
+    }
+
+    [Test]
+    public async Task DockerGatewayPeer_WithoutKnownNetworks_ForwardedForIsIgnored()
+    {
+        var key = await LimiterKeyAsync(_factory, _limiter, DockerGatewayPeer, ForwardedClient);
+
+        key.ShouldBe("ip:" + DockerGatewayPeer);
+    }
+
+    [TestCase("not-a-network")]
+    [TestCase("172.16.0.0/33")]
+    [TestCase("172.18.0.1")]
+    public void InvalidKnownNetwork_StopsTheStartUp(string network)
+    {
+        using var factory = CreateFactory(new RecordingDownloadLimiter(), new Dictionary<string, string>
+        {
+            ["AppSettings:KnownNetworks:0"] = network
+        });
+
+        var error = Should.Throw<InvalidOperationException>(() => factory.CreateClient());
+
+        error.Message.ShouldContain("AppSettings:KnownNetworks");
+        error.Message.ShouldContain(network);
     }
 
     // X-Forwarded-Proto: Secure cookie and HSTS behind the proxy
