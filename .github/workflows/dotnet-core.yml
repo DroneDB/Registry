@@ -15,13 +15,11 @@ jobs:
   build:
     runs-on: ubuntu-24.04
     steps:
+    # The Hub is the commit this Registry pins, never Hub master
     - uses: actions/checkout@v4
       with:
         path: registry
-    - name: Submodules
-      run: |
-        cd registry
-        git submodule update --force --recursive --init --remote
+        submodules: recursive
     - name: Setup .NET Core
       uses: actions/setup-dotnet@v4
       with:
