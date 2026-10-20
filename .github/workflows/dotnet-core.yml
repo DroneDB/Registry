@@ -6,6 +6,11 @@ on:
   pull_request:
     branches: [ master ]
 
+# A new push to a PR supersedes the run in progress; master and tag runs always finish.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   build:
     runs-on: ubuntu-24.04
