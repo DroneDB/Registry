@@ -37,7 +37,10 @@ public static class StartupExtenders
     {
         var connectionString = configuration.GetConnectionString(connectionStringName);
 
-        services.AddDbContext<T>(options =>
+        services.AddDbContext<T>((sp, options) =>
+        {
+            // Hooks on saved changes (e.g. DatasetChangeInterceptor) registered by the host
+            options.AddInterceptors(sp.GetServices<Microsoft.EntityFrameworkCore.Diagnostics.ISaveChangesInterceptor>());
             _ = provider switch
             {
                 DbProvider.Sqlite => options.UseSqlite(connectionString,
@@ -49,7 +52,8 @@ public static class StartupExtenders
                         x.MigrationsAssembly($"Registry.Web.{migrationsNamespace}.MySqlMigrations");
                     }),
                 _ => throw new ArgumentOutOfRangeException(nameof(provider), $"Unrecognised provider: '{provider}'")
-            });
+            };
+        });
     }
 
     public static void AddHangfireProvider(this IServiceCollection services, AppSettings appSettings,

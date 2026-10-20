@@ -17,17 +17,25 @@ public class DdbManager : IDdbManager
     private readonly ILogger<DdbManager> _logger;
     private readonly IDdbWrapper _ddbWrapper;
     private readonly AppSettings _settings;
+    private readonly InitializedDatasetFolders _initialized;
 
-    public DdbManager(IOptions<AppSettings> settings, ILogger<DdbManager> logger, IDdbWrapper ddbWrapper)
+    public DdbManager(IOptions<AppSettings> settings, ILogger<DdbManager> logger, IDdbWrapper ddbWrapper,
+        InitializedDatasetFolders? initialized = null)
     {
         _logger = logger;
         _ddbWrapper = ddbWrapper;
         _settings = settings.Value;
+        _initialized = initialized ?? new InitializedDatasetFolders();
     }
 
     public IDDB Get(string orgSlug, Guid internalRef)
     {
         var baseDdbPath = GetDdbPath(orgSlug, internalRef);
+
+        // Every request opens its dataset: check the folder and the index once per process, not
+        // with two file system calls per open (REG-05 item 4)
+        if (_initialized.Contains(baseDdbPath))
+            return new DDB(baseDdbPath, _ddbWrapper);
 
         Directory.CreateDirectory(baseDdbPath);
 
@@ -42,6 +50,7 @@ public class DdbManager : IDdbManager
         else
             _logger.LogDebug("Opened ddb in '{BaseDdbPath}'", baseDdbPath);
 
+        _initialized.Add(baseDdbPath);
         return ddb;
     }
 
@@ -79,6 +88,9 @@ public class DdbManager : IDdbManager
 
     public void ReleaseConnections(string folder)
     {
+        // Every delete, move or wipe of dataset folders comes through here first
+        _initialized.Forget(folder);
+
         // Best effort: the delete, move or wipe that follows must not fail because the index is
         // busy or libddb predates DDBReleaseConnections (only Windows refuses open files anyway)
         try

@@ -196,6 +196,13 @@ public class AppSettings
     public TimeSpan? AuthorizationCacheExpiration { get; set; }
 
     /// <summary>
+    /// How long a dataset lookup by slug (dataset + organization row) is reused across requests.
+    /// Changes saved by this instance take effect at once; the expiration bounds changes made
+    /// elsewhere (processing nodes, direct database edits). Zero disables it. Default: 30 seconds.
+    /// </summary>
+    public TimeSpan? DatasetLookupCacheExpiration { get; set; }
+
+    /// <summary>
     /// Clear cache interval
     /// </summary>
     public TimeSpan? ClearCacheInterval { get; set; }

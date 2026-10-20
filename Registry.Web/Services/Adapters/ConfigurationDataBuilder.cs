@@ -461,6 +461,10 @@ public class ConfigurationDataBuilder : IConfigurationDataBuilder
                     "How long a user's roles and existence are reused across requests for access checks.",
                     _settings.AuthorizationCacheExpiration, _defaults.AuthorizationCacheExpiration),
 
+                TimeSpanField("DatasetLookupCacheExpiration", "Dataset Lookup Cache Expiration",
+                    "How long a dataset lookup by slug is reused across requests. Changes made on this instance apply at once.",
+                    _settings.DatasetLookupCacheExpiration, _defaults.DatasetLookupCacheExpiration),
+
                 TimeSpanField("ClearCacheInterval", "Clear Cache Interval",
                     "How often the file cache is scanned and stale entries are removed.",
                     _settings.ClearCacheInterval, _defaults.ClearCacheInterval)

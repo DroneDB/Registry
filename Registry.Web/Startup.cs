@@ -295,6 +295,8 @@ public class Startup
         services.AddSingleton<IHttpContextAccessor, HttpContextAccessor>();
 
         services.AddScoped<IUtils, WebUtils>();
+        services.AddSingleton<IDatasetLookupCache, DatasetLookupCache>();
+        services.AddSingleton<Microsoft.EntityFrameworkCore.Diagnostics.ISaveChangesInterceptor, DatasetChangeInterceptor>();
         services.AddScoped<IDatasetSummaryProvider, DatasetSummaryProvider>();
         services.AddSingleton<UserAuthSnapshotCache>();
         services.AddScoped<IUserAuthSnapshotProvider, UserAuthSnapshotProvider>();
@@ -309,6 +311,7 @@ public class Startup
         services.AddScoped<IPushManager, PushManager>();
         services.AddSingleton<IPushSessionStore, PushSessionStore>();
         services.AddScoped<IDdbManager, DdbManager>();
+        services.AddSingleton<InitializedDatasetFolders>();
         services.AddScoped<ISystemManager, SystemManager>();
         services.AddScoped<IRescanManager, RescanManager>();
         services.AddScoped<IBackgroundJobsProcessor, BackgroundJobsProcessor>();

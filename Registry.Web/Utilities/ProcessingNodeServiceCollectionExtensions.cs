@@ -67,6 +67,7 @@ public static class ProcessingNodeServiceCollectionExtensions
 
         // Register scoped services required by background jobs
         services.AddScoped<IDdbManager, DdbManager>();
+        services.AddSingleton<InitializedDatasetFolders>();
         services.AddScoped<IBackgroundJobsProcessor, BackgroundJobsProcessor>();
         services.AddScoped<BuildPendingService>();
         services.AddScoped<JobIndexSyncService>();
