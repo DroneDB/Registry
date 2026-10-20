@@ -57,6 +57,8 @@ public class PushPipelineTests : TestBase
     private string _checksum = "c1";
     private bool _quotaExceeded;
     private int _quotaChecks;
+    private UserStorageInfo? _quota;
+    private UploadQuotaLedger _ledger = null!;
 
     [SetUp]
     public void Setup()
@@ -66,6 +68,8 @@ public class PushPipelineTests : TestBase
         _checksum = "c1";
         _quotaExceeded = false;
         _quotaChecks = 0;
+        _quota = null;
+        _ledger = new UploadQuotaLedger(TimeSpan.FromMinutes(1));
 
         var org = new Organization { Slug = "org", Name = "Org", OwnerId = "u", CreationDate = DateTime.UtcNow };
         _ds = new Dataset { Id = 1, Slug = "ds", InternalRef = Guid.NewGuid(), CreationDate = DateTime.UtcNow, Organization = org };
@@ -104,10 +108,11 @@ public class PushPipelineTests : TestBase
 
         _utils = new Mock<IUtils>();
         _utils.Setup(u => u.GetDataset("org", "ds", It.IsAny<bool>(), It.IsAny<bool>())).Returns(_ds);
-        _utils.Setup(u => u.CheckCurrentUserStorage(It.IsAny<long>())).Returns(() =>
+        // The storage evaluation behind the quota guard
+        _utils.Setup(u => u.GetCurrentUserStorageLimit()).ReturnsAsync(() =>
         {
             _quotaChecks++;
-            return _quotaExceeded ? throw new InvalidOperationException("Quota exceeded") : Task.CompletedTask;
+            return _quotaExceeded ? new UserStorageInfo { Used = 10, Total = 10 } : _quota;
         });
 
         _objects = new Mock<IObjectsManager>();
@@ -129,6 +134,7 @@ public class PushPipelineTests : TestBase
         var auth = new Mock<IAuthManager>();
         auth.Setup(a => a.RequestAccess(It.IsAny<Dataset>(), It.IsAny<AccessType>())).ReturnsAsync(true);
         auth.Setup(a => a.GetCurrentUser()).ReturnsAsync(new User { Id = "u", UserName = "u" });
+        auth.Setup(a => a.GetCurrentUserId()).ReturnsAsync("u");
         var cache = new Mock<ICacheManager>();
         var settings = Microsoft.Extensions.Options.Options.Create(new AppSettings { DatasetsPath = _root });
         var fileSystem = new FileSystem();
@@ -137,7 +143,7 @@ public class PushPipelineTests : TestBase
         return new PushManager(_utils.Object, ddbManager.Object, _objects.Object,
             CreateTestLogger<PushManager>(Serilog.Events.LogEventLevel.Warning), Mock.Of<IDatasetsManager>(),
             auth.Object, _wrapper.Object, _jobs.Object, settings, cache.Object, fileSystem, buildPending,
-            new PushSessionStore(fileSystem));
+            new PushSessionStore(fileSystem), new UploadQuotaGuard(_ledger, _utils.Object));
     }
 
     private static StampDto ClientStamp() => new() { Checksum = "client", Entries = [], Meta = [] };
@@ -275,7 +281,7 @@ public class PushPipelineTests : TestBase
     {
         _quotaExceeded = true;
 
-        await Should.ThrowAsync<InvalidOperationException>(() =>
+        await Should.ThrowAsync<QuotaExceededException>(() =>
             CreateManager().StreamUploadAsync("org", "ds", new MemoryStream([1, 2, 3]), 3));
 
         Directory.Exists(Path.Combine(_root, IDDB.UploadsFolderName)).ShouldBeFalse("nothing was written");
@@ -286,11 +292,27 @@ public class PushPipelineTests : TestBase
     {
         _quotaExceeded = true;
 
-        await Should.ThrowAsync<InvalidOperationException>(() =>
+        await Should.ThrowAsync<QuotaExceededException>(() =>
             CreateManager().StreamUploadAsync("org", "ds", new MemoryStream([1, 2, 3]), null));
 
-        _utils.Verify(u => u.CheckCurrentUserStorage(3), Times.Once);
+        _quotaChecks.ShouldBe(1);
         Directory.GetFiles(Path.Combine(_root, IDDB.UploadsFolderName)).ShouldBeEmpty();
+    }
+
+    // REG-10: the files of a push add up against one storage evaluation (it used to check each
+    // file against the stored use alone, with a user query and a query per owned dataset per file)
+    [Test]
+    public async Task StreamUpload_FilesOfAPushAddUpAgainstOneEvaluation()
+    {
+        _quota = new UserStorageInfo { Used = 0, Total = 10 };
+        var mgr = CreateManager();
+
+        for (var i = 0; i < 3; i++)
+            (await mgr.StreamUploadAsync("org", "ds", new MemoryStream([1, 2, 3]), 3)).Bytes.ShouldBe(3);
+
+        await Should.ThrowAsync<QuotaExceededException>(() =>
+            mgr.StreamUploadAsync("org", "ds", new MemoryStream([1, 2, 3]), 3));
+        _quotaChecks.ShouldBe(1, "one storage evaluation for the whole push");
     }
 
     [Test]

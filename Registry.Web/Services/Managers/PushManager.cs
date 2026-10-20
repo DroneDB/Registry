@@ -42,12 +42,14 @@ public class PushManager : IPushManager
     private readonly BuildPendingService _buildPendingService;
     private readonly ImportSettings _importSettings;
     private readonly IPushSessionStore _sessionStore;
+    private readonly IUploadQuotaGuard _quota;
 
     public PushManager(IUtils utils, IDdbManager ddbManager,
         IObjectsManager objectsManager, ILogger<PushManager> logger, IDatasetsManager datasetsManager,
         IAuthManager authManager, IDdbWrapper ddbWrapper,
         IBackgroundJobsProcessor backgroundJob, IOptions<AppSettings> settings, ICacheManager cacheManager,
-        IFileSystem fileSystem, BuildPendingService buildPendingService, IPushSessionStore sessionStore)
+        IFileSystem fileSystem, BuildPendingService buildPendingService, IPushSessionStore sessionStore,
+        IUploadQuotaGuard quota)
     {
         _utils = utils;
         _ddbManager = ddbManager;
@@ -63,6 +65,7 @@ public class PushManager : IPushManager
         _buildPendingService = buildPendingService;
         _importSettings = settings.Value.Import ?? new ImportSettings();
         _sessionStore = sessionStore;
+        _quota = quota;
     }
 
     public async Task<PushInitResultDto> Init(string orgSlug, string dsSlug, string checksum, StampDto stamp)
@@ -158,27 +161,37 @@ public class PushManager : IPushManager
         if (!await _authManager.RequestAccess(ds, AccessType.Write))
             throw new UnauthorizedException("The current user is not allowed to upload to this dataset");
 
-        // Check if user has enough space to upload this: before writing when the size is known
-        if (expectedBytes is { } expected)
-            await _utils.CheckCurrentUserStorage(expected);
-
-        var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
-        var (tempPath, bytes, _) = await DatasetUploads.StreamToTempAsync(_fileSystem, ddb.DatasetFolderPath, source);
-
-        if (expectedBytes is null)
+        // Reserved against one storage evaluation per window, as uploads are (the files of a push
+        // add up): before writing when the size is known
+        var userId = await _authManager.GetCurrentUserId() ?? string.Empty;
+        var reservation = expectedBytes is { } expected ? await _quota.ReserveAsync(userId, expected) : null;
+        try
         {
+            var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
+            var (tempPath, bytes, _) =
+                await DatasetUploads.StreamToTempAsync(_fileSystem, ddb.DatasetFolderPath, source);
+
             try
             {
-                await _utils.CheckCurrentUserStorage(bytes);
+                if (reservation == null)
+                    reservation = await _quota.ReserveAsync(userId, bytes);
+                else
+                    reservation.Resize(bytes);
             }
             catch
             {
                 _fileSystem.Delete(tempPath);
                 throw;
             }
-        }
 
-        return new PushUpload(ddb, tempPath, bytes);
+            // On disk until the push commits or is abandoned: it counts as stored
+            reservation.Commit();
+            return new PushUpload(ddb, tempPath, bytes);
+        }
+        finally
+        {
+            reservation?.Dispose();
+        }
     }
 
     public void Upload(PushUpload upload, string path, string token)

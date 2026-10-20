@@ -77,6 +77,8 @@ public class AuthManager : IAuthManager
 
     public Task<User> GetCurrentUser() => _currentUserLazy.Value;
 
+    public Task<string> GetCurrentUserId() => _currentUserIdLazy.Value;
+
     public async Task<string> SafeGetCurrentUserName()
     {
         return (await GetCurrentUser())?.UserName ?? MagicStrings.AnonymousUserName;
