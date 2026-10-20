@@ -21,6 +21,7 @@ using Registry.Web.Models.Configuration;
 using Registry.Web.Models.DTO;
 using Registry.Web.Services.Adapters;
 using Registry.Web.Services.Ports;
+using Registry.Web.Services.Uploads;
 using Registry.Web.Utilities;
 using static Registry.Web.Services.CacheCategories;
 
@@ -50,13 +51,10 @@ public class ObjectsManager : IObjectsManager
     private readonly IBuildArtifactResolver _buildArtifactResolver;
     private readonly ImportSettings _importSettings;
     private readonly IBuildStatusService _buildStatusService;
-    private readonly IDatasetIndexQueue? _indexQueue;
+    private readonly IUploadManager _uploads;
     private readonly INativeWorkGate _nativeGate;
 
-    private static bool IsReservedPath(string path)
-    {
-        return path.StartsWith(IDDB.DatabaseFolderName) || path.StartsWith(IDDB.UploadsFolderName);
-    }
+    private static bool IsReservedPath(string path) => UploadPathPolicy.IsReserved(path);
 
     public ObjectsManager(ILogger<ObjectsManager> logger,
         RegistryContext context,
@@ -77,6 +75,7 @@ public class ObjectsManager : IObjectsManager
         IBuildArtifactResolver buildArtifactResolver = null!,
         IBuildStatusService? buildStatusService = null,
         IDatasetIndexQueue? indexQueue = null,
+        IUploadManager? uploadManager = null,
         INativeWorkGate? nativeGate = null)
     {
         IOgcCacheKeys? fallbackOgcKeys = null;
@@ -108,9 +107,14 @@ public class ObjectsManager : IObjectsManager
             ?? new DatasetCacheInvalidator(NullLogger<DatasetCacheInvalidator>.Instance, cacheManager, FallbackOgcKeys());
         _buildArtifactResolver = buildArtifactResolver;
         _importSettings = settings.Value.Import ?? new ImportSettings();
-        // Optional: not supplied by most unit tests constructing this class directly. When
-        // absent, FinalizeAddedFileAsync falls back to the old direct AddRaw+GetEntry path.
-        _indexQueue = indexQueue;
+        // The DI-registered pipeline in production; tests constructing this class directly get one
+        // over the same collaborators (indexing with AddRaw when no queue is given).
+        _uploads = uploadManager ?? new UploadManager(NullLogger<UploadManager>.Instance, utils, authManager,
+            ddbManager, fs, settings, backgroundJob, buildPendingService,
+            new UploadQuotaGuard(new UploadQuotaLedger(settings), utils),
+            new DatasetChangeCoalescer(FallbackOgcKeys(), cacheManager, settings.Value.DatasetThumbnailCandidates,
+                TimeSpan.Zero, NullLogger<DatasetChangeCoalescer>.Instance),
+            indexQueue: indexQueue);
         return;
 
         // Only for the fallbacks of a direct construction (tests): production wires the shared keys
@@ -282,29 +286,19 @@ public class ObjectsManager : IObjectsManager
             };
         }
 
-        // File upload: stage the stream in the per-dataset temp folder, then run the exact same
-        // validation / atomic-move / index / quarantine flow as streamed uploads. The buffered
-        // path used to write straight to the final location with no compensation, leaving an
-        // untracked orphan on index failure (review round 2, finding 1); unifying it under
-        // CommitStreamedAsync guarantees quarantine compensation on every failure path.
-        // Path/auth/extension checks still run before anything is committed (inside the commit);
-        // storage quota is checked against the authoritative on-disk size, as in the streamed
-        // flow.
-        var (tempFilePath, writeBytes) = await StreamToTempAsync(orgSlug, dsSlug, stream);
-        return await CommitStreamedAsync(orgSlug, dsSlug, path, tempFilePath, writeBytes);
+        // File upload: the same pipeline as streamed uploads (validation, atomic move, index,
+        // quarantine on index failure, quota on the authoritative on-disk size).
+        using var ctx = await _uploads.BeginAsync(orgSlug, dsSlug);
+        var file = await _uploads.StreamAsync(ctx, stream);
+        return await _uploads.CommitAsync(ctx, path, file);
     }
 
     /// <summary>
     /// Streams a forward-only upload body to a temporary file located on the same storage
-    /// volume as the dataset, so it can later be moved (not copied) into its final place.
-    /// This avoids the IFormFile spool-to-temp + cross-volume copy of the buffered path.
+    /// volume as the dataset, so it can later be moved (not copied) into its final place,
+    /// hashing it on the way.
     /// </summary>
-    /// <param name="orgSlug">The organization slug.</param>
-    /// <param name="dsSlug">The dataset slug.</param>
-    /// <param name="source">The forward-only request body section stream.</param>
-    /// <returns>The temp file path and the number of bytes written.</returns>
-    public async Task<(string TempPath, long Bytes)> StreamToTempAsync(
-        string orgSlug, string dsSlug, Stream source)
+    public async Task<StreamedFile> StreamToTempAsync(string orgSlug, string dsSlug, Stream source)
     {
         var ds = _utils.GetDataset(orgSlug, dsSlug);
         var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
@@ -316,246 +310,41 @@ public class ObjectsManager : IObjectsManager
     /// Finalizes a streamed upload: validates access and quota, moves the already-written
     /// temporary file into its final dataset location and indexes it.
     /// </summary>
-    /// <param name="orgSlug">The organization slug.</param>
-    /// <param name="dsSlug">The dataset slug.</param>
-    /// <param name="path">The destination path within the dataset.</param>
-    /// <param name="tempFilePath">The temp file produced by <see cref="StreamToTempAsync"/>.</param>
-    /// <param name="writeBytes">Bytes written while streaming (used for the storage-quota check).</param>
-    /// <returns>The created entry.</returns>
-    public async Task<EntryDto> CommitStreamedAsync(string orgSlug, string dsSlug, string path,
-        string tempFilePath, long writeBytes)
+    public async Task<EntryDto> CommitStreamedAsync(string orgSlug, string dsSlug, string path, StreamedFile file)
     {
-        var ds = _utils.GetDataset(orgSlug, dsSlug);
-
         _logger.LogInformation("In CommitStreamedAsync('{OrgSlug}/{DsSlug}')", orgSlug, dsSlug);
 
-        var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
-
-        if (string.IsNullOrWhiteSpace(tempFilePath))
-            throw new InvalidOperationException("Missing temporary upload path");
-
-        // Defense-in-depth: the temp file must live inside this dataset's reserved uploads folder.
-        // Validate BEFORE the try/finally so an arbitrary/foreign path is never moved nor deleted.
-        var uploadsRoot = Path.GetFullPath(Path.Combine(ddb.DatasetFolderPath, IDDB.UploadsFolderName));
-        if (!uploadsRoot.EndsWith(Path.DirectorySeparatorChar))
-            uploadsRoot += Path.DirectorySeparatorChar;
-
-        var fullTempPath = Path.GetFullPath(tempFilePath);
-        var pathComparison = OperatingSystem.IsWindows()
-            ? StringComparison.OrdinalIgnoreCase
-            : StringComparison.Ordinal;
-
-        if (!fullTempPath.StartsWith(uploadsRoot, pathComparison))
-            throw new InvalidOperationException("Invalid temporary upload path");
-
+        UploadRequestContext ctx;
         try
         {
-            // Validate path to prevent path traversal attacks
-            CommonUtils.ValidateRelativePath(path, ddb.DatasetFolderPath);
-
-            if (IsReservedPath(path))
-                throw new InvalidOperationException($"'{path}' is a reserved path");
-
-            if (!await _authManager.RequestAccess(ds, AccessType.Write))
-                throw new UnauthorizedException("The current user is not allowed to write to this dataset");
-
-            // Extension policy gate - reject before moving into dataset
-            if (!_importSettings.IsExtensionAllowed(path))
-                throw new ExtensionBlockedException(path, _importSettings, _importSettings.AllowedFileExtensions.Length > 0);
-
-            // Authoritative size from disk: never trust the caller-provided count for the quota check
-            var actualBytes = _fs.GetFileSize(fullTempPath);
-            if (actualBytes != writeBytes)
-                _logger.LogWarning(
-                    "Streamed upload size mismatch for '{OrgSlug}/{DsSlug}': caller reported {Reported} bytes, temp file is {Actual} bytes",
-                    orgSlug, dsSlug, writeBytes, actualBytes);
-
-            // Check user storage space
-            await _utils.CheckCurrentUserStorage(actualBytes);
-
-            var localFilePath = ddb.GetLocalPath(path);
-            _fs.EnsureParentFolderExists(localFilePath);
-
-            // Same-volume atomic move: no extra full-file copy
-            File.Move(fullTempPath, localFilePath, overwrite: true);
-
-            // Index the file first, with quarantine compensation on failure.
-            // Post-index steps (auth, build scheduling, cache invalidation) are not quarantined:
-            // by the time they run, the entry is already committed to the index, so removing
-            // the file would orphan the index row. The reconciliation sweep handles any divergence.
-            Entry entry;
-            try
-            {
-                entry = await IndexFileAsync(orgSlug, ds.InternalRef, ddb, path);
-            }
-            catch (TransientException)
-            {
-                // Retryable index contention: the file on disk is healthy and was never
-                // committed to the index. Quarantining would lose a perfectly good upload;
-                // reconciliation + client retry (503 + Retry-After) is sufficient.
-                throw;
-            }
-            catch (DdbBusyException)
-            {
-                throw;
-            }
-            catch (Exception ex)
-            {
-                // File is on disk but failed to index: quarantine instead of leaving an
-                // untracked file behind.
-                Quarantine(ddb, orgSlug, dsSlug, path, localFilePath, ex);
-                throw;
-            }
-
-            // Post-index finalization (no quarantine risk — file is already committed to index)
-            return await FinalizeIndexedFileAsync(orgSlug, dsSlug, ddb, entry, path, localFilePath);
+            ctx = await _uploads.BeginAsync(orgSlug, dsSlug);
         }
-        finally
+        catch
         {
-            // If the move never happened (validation/auth error), drop the orphan temp file
-            if (File.Exists(fullTempPath))
-            {
-                try { File.Delete(fullTempPath); }
-                catch { /* ignore */ }
-            }
+            // Refused before the commit (access, dataset): drop our own temp file, never a foreign one
+            DeleteStreamedTemp(orgSlug, dsSlug, file.TempPath);
+            throw;
         }
+
+        using (ctx)
+            return await _uploads.CommitAsync(ctx, path, file);
     }
 
-    /// <summary>
-    /// Compensating action for the commit flow: moves a file that was placed on disk but failed
-    /// to index into a per-dataset quarantine folder, so it is neither lost nor left as an
-    /// untracked orphan. Synchronous by design (no awaitable dependency remains); never throws —
-    /// a failed compensation is logged for the reconciliation sweep to pick up.
-    /// </summary>
-    private void Quarantine(IDDB ddb, string orgSlug, string dsSlug, string path,
-        string localFilePath, Exception cause)
+    private void DeleteStreamedTemp(string orgSlug, string dsSlug, string tempFilePath)
     {
         try
         {
-            if (!File.Exists(localFilePath))
-                return;
-
-            var quarantineDir = Path.Combine(ddb.DatasetFolderPath, IDDB.UploadsFolderName, IDDB.QuarantineFolderName);
-            _fs.FolderCreate(quarantineDir);
-
-            var safeName = Path.GetFileName(path);
-            // GUID suffix for collision resistance: parallel failures for paths with the same
-            // basename (e.g. a/data.tif, b/data.tif) could otherwise generate the same target
-            // and overwrite silently.
-            var quarantinePath = Path.Combine(quarantineDir,
-                $"{DateTime.UtcNow:yyyyMMddTHHmmssfffZ}-{Guid.NewGuid():N}-{safeName}");
-
-            File.Move(localFilePath, quarantinePath, overwrite: true);
-
-            _logger.LogError(cause,
-                "Quarantined '{Path}' in dataset '{OrgSlug}/{DsSlug}' after index failure -> '{QuarantinePath}'",
-                path, orgSlug, dsSlug, quarantinePath);
+            var ds = _utils.GetDataset(orgSlug, dsSlug, safe: true);
+            if (ds == null || string.IsNullOrWhiteSpace(tempFilePath)) return;
+            var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
+            if (UploadManager.IsInUploadsFolder(ddb, tempFilePath) && File.Exists(tempFilePath))
+                File.Delete(tempFilePath);
         }
-        catch (Exception quarantineEx)
+        catch (Exception ex)
         {
-            _logger.LogError(quarantineEx,
-                "Failed to quarantine '{Path}' in dataset '{OrgSlug}/{DsSlug}' after index failure (original cause: {Cause})",
-                path, orgSlug, dsSlug, cause.Message);
+            _logger.LogDebug(ex, "Cannot delete the temp upload '{TempFile}'", tempFilePath);
         }
     }
-
-    /// <summary>
-    /// Index a single on-disk file in the dataset.
-    /// </summary>
-    private async Task<Entry> IndexFileAsync(string orgSlug, Guid internalRef, IDDB ddb, string path)
-    {
-        _logger.LogInformation("File saved, adding to DDB");
-
-        Entry? entry;
-        if (_indexQueue != null)
-        {
-            // Coalesces with other concurrent uploads to the same dataset into one native batch
-            // and one write transaction,
-            // and returns the committed entry directly instead of a second AddRaw+GetEntry round-trip.
-            entry = await _indexQueue.EnqueueAsync(new DatasetKey(orgSlug, internalRef), path);
-        }
-        else
-        {
-            // Fallback for callers/tests that construct ObjectsManager without DI wiring.
-            ddb.AddRaw(path);
-            entry = ddb.GetEntry(path);
-        }
-
-        if (entry == null)
-            throw new InvalidOperationException("Cannot find just added file!");
-
-        _logger.LogInformation("Entry OK");
-        return entry;
-    }
-
-    /// <summary>
-    /// Finalization after a file is successfully indexed: schedule build/thumbnail and invalidate caches.
-    /// Called after the index step — the entry is already committed, so failures here do not
-    /// quarantine the file (the index row would be orphaned).
-    /// </summary>
-    private async Task<EntryDto> FinalizeIndexedFileAsync(string orgSlug, string dsSlug, IDDB ddb,
-        Entry entry, string path, string localFilePath)
-    {
-        var user = await _authManager.GetCurrentUser();
-
-        if (ddb.IsBuildable(entry.Path))
-        {
-            _logger.LogInformation("This item is buildable, build it!");
-
-            // CRITICAL: Set pending flag BEFORE build starts
-            // This prevents race condition where build fails quickly and creates .pending
-            // but recurring job hasn't updated cache yet
-            await _buildPendingService.SetDatasetHasPendingBuilds(orgSlug, dsSlug, true);
-
-            var meta = new IndexPayload(orgSlug, dsSlug, entry.Hash, user.Id, null, entry.Path);
-            var jobId = _backgroundJob.EnqueueIndexed(() => HangfireUtils.BuildWrapper(ddb, path, false, null), meta);
-
-            _logger.LogInformation("Background job id is {JobId}", jobId);
-        }
-        else if (entry.Type is EntryType.Image or EntryType.GeoImage)
-        {
-            _logger.LogInformation("This item is an image, generate thumbnail");
-
-            // Run task in background (fire and forget)
-            _ = Task.Run(async () =>
-            {
-                try
-                {
-                    await _cacheManager.GetAsync(MagicStrings.ThumbnailCacheSeed, ForDataset(orgSlug, dsSlug),
-                        entry.Hash, _settings.DefaultThumbnailSize,
-                        new Func<Task<byte[]>>(async () =>
-                        {
-                            _logger.LogDebug("Background thumbnail generation for new file: '{LocalFilePath}'",
-                                localFilePath);
-                            using var s = new MemoryStream();
-                            await _thumbnailGenerator.GenerateThumbnailAsync(localFilePath,
-                                _settings.DefaultThumbnailSize, s);
-                            var result = s.ToArray();
-                            _logger.LogDebug("Background generated thumbnail of {Size} bytes for: '{LocalFilePath}'",
-                                result.Length, localFilePath);
-                            return result;
-                        }));
-                    _logger.LogInformation("Thumbnail generation completed for hash {Hash}", entry.Hash);
-                }
-                catch (Exception ex)
-                {
-                    _logger.LogError(ex, "Failed to generate thumbnail for hash {Hash}, file: '{LocalFilePath}'",
-                        entry.Hash, localFilePath);
-                }
-            });
-
-            _logger.LogInformation("Thumbnail generation task started");
-        }
-
-        // Invalidate dataset thumbnail cache if this file is a thumbnail candidate
-        await InvalidateDatasetThumbnailCacheIfNeeded(orgSlug, dsSlug, path);
-
-        // OGC layer catalog + capabilities depend on the entry set
-        await InvalidateOgcAsync(orgSlug, dsSlug);
-
-        return entry.ToDto();
-    }
-
 
     /// <summary>
     /// Validates that the specified entry (file or directory) does not have any active builds.
@@ -1676,18 +1465,8 @@ public class ObjectsManager : IObjectsManager
         };
     }
 
-    private bool IsDatasetThumbnailFile(string path)
-    {
-        if (string.IsNullOrEmpty(path))
-            return false;
-
-        // Only treat files in the dataset root (no directory component) as thumbnail candidates
-        if (path.Contains('/') || path.Contains('\\'))
-            return false;
-
-        var fileName = Path.GetFileName(path);
-        return _settings.DatasetThumbnailCandidates.Contains(fileName, StringComparer.OrdinalIgnoreCase);
-    }
+    private bool IsDatasetThumbnailFile(string path) =>
+        DatasetThumbnails.IsCandidateFile(path, _settings.DatasetThumbnailCandidates);
 
     /// <summary>
     /// Invalidates the dataset-level thumbnail cache unconditionally.

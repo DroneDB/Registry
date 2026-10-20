@@ -8,6 +8,7 @@ using Microsoft.AspNetCore.WebUtilities;
 using Microsoft.Net.Http.Headers;
 using Registry.Web.Exceptions;
 
+#nullable enable
 namespace Registry.Web.Utilities;
 // Ref https://docs.microsoft.com/it-IT/aspnet/core/mvc/models/file-uploads?view=aspnetcore-3.1#upload-large-files-with-streaming
 
@@ -62,7 +63,7 @@ public static class MultipartRequestHelper
     /// request is rejected before the temp file is committed (e.g. multiple file parts).
     /// </summary>
     /// <param name="path">The temp file path to delete; ignored when null or empty.</param>
-    public static void TryDeleteTempFile(string path)
+    public static void TryDeleteTempFile(string? path)
     {
         if (string.IsNullOrEmpty(path))
             return;
@@ -92,9 +93,33 @@ public static class MultipartRequestHelper
     public static async Task<StreamedMultipartForm> ReadSingleFileFormAsync(HttpRequest request,
         int boundaryLengthLimit, Func<Stream, Task<(string TempPath, long Bytes)>> streamFile)
     {
+        var files = await ReadFilesFormAsync(request, boundaryLengthLimit, 1,
+            part => streamFile(part.Body), file => file.TempPath);
+
+        var form = new StreamedMultipartForm();
+        foreach (var (key, value) in files.Fields)
+            form.Fields[key] = value;
+        if (files.Files.Count > 0)
+            (form.TempFile, form.Bytes) = files.Files[0].File;
+        return form;
+    }
+
+    /// <summary>
+    /// Reads a streamed <c>multipart/form-data</c> body with up to <paramref name="maxFiles"/> file
+    /// parts. Each file part is handed to <paramref name="streamFile"/> as it arrives, with the
+    /// <c>path</c> field sent just before it (null when there is none), so the destination can be
+    /// checked before the first byte of the file is written. The form fields are collected whatever
+    /// their order. On failure every temp file already written is deleted.
+    /// </summary>
+    /// <exception cref="BadRequestException">The body has more than <paramref name="maxFiles"/> file parts.</exception>
+    public static async Task<StreamedMultipartFiles<TFile>> ReadFilesFormAsync<TFile>(HttpRequest request,
+        int boundaryLengthLimit, int maxFiles, Func<MultipartFilePart, Task<TFile>> streamFile,
+        Func<TFile, string> tempPathOf)
+    {
         var boundary = GetBoundary(MediaTypeHeaderValue.Parse(request.ContentType), boundaryLengthLimit);
         var reader = new MultipartReader(boundary, request.Body);
-        var form = new StreamedMultipartForm();
+        var form = new StreamedMultipartFiles<TFile>();
+        string? pendingPath = null;
 
         try
         {
@@ -106,27 +131,54 @@ public static class MultipartRequestHelper
 
                 if (HasFileContentDisposition(contentDisposition))
                 {
-                    if (form.TempFile != null)
-                        throw new BadRequestException("Only a single file part is allowed per upload");
+                    if (form.Files.Count >= maxFiles)
+                        throw new BadRequestException(maxFiles == 1
+                            ? "Only a single file part is allowed per upload"
+                            : $"At most {maxFiles} file parts are allowed per upload");
 
-                    (form.TempFile, form.Bytes) = await streamFile(section.Body);
+                    var file = await streamFile(new MultipartFilePart(section.Body, pendingPath, form.Fields));
+                    form.Files.Add((pendingPath, file));
+                    pendingPath = null;
                 }
                 else if (HasFormDataContentDisposition(contentDisposition))
                 {
                     var key = HeaderUtilities.RemoveQuotes(contentDisposition.Name).Value;
                     using var sr = new StreamReader(section.Body, Encoding.UTF8);
-                    form.Fields[key] = await sr.ReadToEndAsync();
+                    var value = await sr.ReadToEndAsync();
+                    form.Fields[key] = value;
+                    if (string.Equals(key, "path", StringComparison.OrdinalIgnoreCase))
+                        pendingPath = value;
                 }
             }
         }
         catch
         {
-            TryDeleteTempFile(form.TempFile);
+            foreach (var (_, file) in form.Files)
+                TryDeleteTempFile(tempPathOf(file));
             throw;
         }
 
         return form;
     }
+}
+
+/// <summary>A file part of a streamed multipart body, with the <c>path</c> field sent before it.</summary>
+/// <param name="Body">The file content (forward-only).</param>
+/// <param name="Path">The <c>path</c> field that precedes the part, or null.</param>
+/// <param name="Fields">Every field sent before the part.</param>
+public sealed record MultipartFilePart(Stream Body, string? Path, IReadOnlyDictionary<string, string> Fields);
+
+/// <summary>The form fields and the file parts (already on disk) of a streamed multipart upload.</summary>
+public sealed class StreamedMultipartFiles<TFile>
+{
+    /// <summary>Form fields by name (case-insensitive; the last value of a repeated field).</summary>
+    public Dictionary<string, string> Fields { get; } = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>The file parts in order, with the <c>path</c> field sent just before each one (or null).</summary>
+    public List<(string? Path, TFile File)> Files { get; } = [];
+
+    /// <summary>The value of a form field, or null.</summary>
+    public string? GetField(string name) => Fields.TryGetValue(name, out var value) ? value : null;
 }
 
 /// <summary>
@@ -138,11 +190,11 @@ public sealed class StreamedMultipartForm
     public Dictionary<string, string> Fields { get; } = new(StringComparer.OrdinalIgnoreCase);
 
     /// <summary>The temp file holding the file part, or null when there was none.</summary>
-    public string TempFile { get; set; }
+    public string? TempFile { get; set; }
 
     /// <summary>Size of <see cref="TempFile"/>.</summary>
     public long Bytes { get; set; }
 
     /// <summary>The value of a form field, or null.</summary>
-    public string GetField(string name) => Fields.TryGetValue(name, out var value) ? value : null;
+    public string? GetField(string name) => Fields.TryGetValue(name, out var value) ? value : null;
 }

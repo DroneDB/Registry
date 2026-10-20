@@ -192,6 +192,8 @@ public class ConfigurationDataBuilder : IConfigurationDataBuilder
     // Helper: build a field from an int/long property comparison
     // ---------------------------------------------------------------------------
 
+    private static UploadSettings Uploads(AppSettings settings) => settings.Uploads ?? new UploadSettings();
+
     private static NativeConcurrencySettings Native(AppSettings settings) =>
         settings.NativeConcurrency ?? new NativeConcurrencySettings();
 
@@ -423,7 +425,27 @@ public class ConfigurationDataBuilder : IConfigurationDataBuilder
                 NumberField("BatchTokenLength", "Batch Token Length",
                     "Length of randomly generated batch upload tokens. Must be at least 8.",
                     _settings.BatchTokenLength, _defaults.BatchTokenLength,
-                    minValue: 8)
+                    minValue: 8),
+
+                NumberField("Uploads.MaxPartsPerRequest", "Max Files per Upload Request",
+                    "Most files the Hub may bundle in one upload request (small files are bundled to save round trips).",
+                    Uploads(_settings).MaxPartsPerRequest, Uploads(_defaults).MaxPartsPerRequest, minValue: 1),
+
+                NumberField("Uploads.MaxChunkBytes", "Max Upload Chunk Size",
+                    "Largest chunk accepted by the resumable upload of large files.",
+                    Uploads(_settings).MaxChunkBytes, Uploads(_defaults).MaxChunkBytes, minValue: 1048576, unit: "bytes"),
+
+                NumberField("Uploads.QuotaWindowSeconds", "Upload Quota Evaluation Window",
+                    "How long one evaluation of a user's storage use serves their uploads (their sizes are added to it).",
+                    Uploads(_settings).QuotaWindowSeconds, Uploads(_defaults).QuotaWindowSeconds, minValue: 0, unit: "s"),
+
+                NumberField("Uploads.InvalidationWindowMs", "Upload Invalidation Window",
+                    "How long the OGC and dataset-thumbnail invalidations of uploaded files are collected before they run once.",
+                    Uploads(_settings).InvalidationWindowMs, Uploads(_defaults).InvalidationWindowMs, minValue: 0, unit: "ms"),
+
+                NumberField("Uploads.ThumbnailPrecomputeWorkers", "Thumbnail Pre-generation Workers",
+                    "Background workers that generate the thumbnails of uploaded images ahead of their first view.",
+                    Uploads(_settings).ThumbnailPrecomputeWorkers, Uploads(_defaults).ThumbnailPrecomputeWorkers, minValue: 1)
             ]);
     }
 

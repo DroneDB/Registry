@@ -386,6 +386,21 @@ public class Startup
                 sp.GetRequiredService<LocalThumbnailGenerator>(), sp.GetRequiredService<INativeWorkGate>()));
         }
 
+        // Upload pipeline (UPL-01): per-request context, quota reservations, receipts, coalesced
+        // invalidation and bounded thumbnail pre-generation
+        services.AddScoped<IUploadManager, UploadManager>();
+        services.AddScoped<IChunkedUploadManager, ChunkedUploadManager>();
+        services.AddSingleton<IChunkStore, ChunkStore>();
+        services.AddSingleton<UploadQuotaLedger>();
+        services.AddScoped<IUploadQuotaGuard, UploadQuotaGuard>();
+        services.AddSingleton<IUploadReceiptStore, DistributedUploadReceiptStore>();
+        services.AddSingleton<DatasetChangeCoalescer>();
+        services.AddSingleton<IDatasetChangeCoalescer>(sp => sp.GetRequiredService<DatasetChangeCoalescer>());
+        services.AddHostedService(sp => sp.GetRequiredService<DatasetChangeCoalescer>());
+        services.AddSingleton<ThumbnailPrecomputeQueue>();
+        services.AddSingleton<IThumbnailPrecomputeQueue>(sp => sp.GetRequiredService<ThumbnailPrecomputeQueue>());
+        services.AddHostedService(sp => sp.GetRequiredService<ThumbnailPrecomputeQueue>());
+
         services.AddSingleton<IFileSystem, FileSystem>();
 
         // To change
@@ -408,6 +423,7 @@ public class Startup
                 .Concat(["application/geo+json", "application/vnd.mapbox-vector-tile", "image/svg+xml"])
                 .Where(t => t != "application/zip");
         });
+        services.AddRegistryRateLimiting();
 
         if (appSettings.MaxRequestBodySize.HasValue)
         {
@@ -504,6 +520,7 @@ public class Startup
 
         app.UseAuthentication();
         app.UseAuthorization();
+        app.UseRateLimiter();
 
         // STAC API responses must be served uncompressed: STAC validators (pystac/urllib)
         // send "Accept-Encoding: *" but cannot decode gzip/brotli, which breaks catalog

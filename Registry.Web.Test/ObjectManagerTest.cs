@@ -715,6 +715,10 @@ public class ObjectManagerTest : TestBase
             _jobIndexQueryMock.Object, _buildPendingService);
     }
 
+    // A streamed temp file without the hash computed while streaming (never trusted then)
+    private static StreamedFile Streamed(string tempPath, long bytes) =>
+        new(tempPath, bytes, new FileHashHint(string.Empty, bytes, default));
+
     [Test]
     public async Task StreamToTempAsync_StreamsFileUnderUploadsFolder()
     {
@@ -726,7 +730,7 @@ public class ObjectManagerTest : TestBase
         var data = Encoding.UTF8.GetBytes("hello streamed upload");
         await using var ms = new MemoryStream(data);
 
-        var (tempPath, bytes) = await objectManager.StreamToTempAsync(
+        var (tempPath, bytes, _) = await objectManager.StreamToTempAsync(
             MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug, ms);
 
         try
@@ -758,11 +762,11 @@ public class ObjectManagerTest : TestBase
         var data = CommonUtils.SmartDownloadData(newFileUrl);
 
         await using var ms = new MemoryStream(data);
-        var (tempPath, bytes) = await objectManager.StreamToTempAsync(
+        var (tempPath, bytes, _) = await objectManager.StreamToTempAsync(
             MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug, ms);
 
         var entry = await objectManager.CommitStreamedAsync(
-            MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug, destPath, tempPath, bytes);
+            MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug, destPath, Streamed(tempPath, bytes));
 
         entry.Path.ShouldBe(destPath);
         // The atomic move must consume the temp file
@@ -782,12 +786,12 @@ public class ObjectManagerTest : TestBase
 
         var data = Encoding.UTF8.GetBytes("reserved path payload");
         await using var ms = new MemoryStream(data);
-        var (tempPath, bytes) = await objectManager.StreamToTempAsync(
+        var (tempPath, bytes, _) = await objectManager.StreamToTempAsync(
             MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug, ms);
 
         // Committing onto the reserved uploads folder must be rejected
         var act = async () => await objectManager.CommitStreamedAsync(
-            MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug, ".uploads/evil.bin", tempPath, bytes);
+            MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug, ".uploads/evil.bin", Streamed(tempPath, bytes));
 
         await Should.ThrowAsync<InvalidOperationException>(act);
 
@@ -810,7 +814,7 @@ public class ObjectManagerTest : TestBase
         try
         {
             var act = async () => await objectManager.CommitStreamedAsync(
-                MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug, "x.bin", foreignFile, 10);
+                MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug, "x.bin", Streamed(foreignFile, 10));
 
             await Should.ThrowAsync<InvalidOperationException>(act);
 
@@ -846,9 +850,11 @@ public class ObjectManagerTest : TestBase
 
         // Simulates a native indexing failure after the file has already been moved into place.
         var failingIndexQueue = new Mock<IDatasetIndexQueue>();
-        failingIndexQueue.Setup(q => q.EnqueueAsync(It.IsAny<DatasetKey>(), It.IsAny<string>(),
-                It.IsAny<CancellationToken>()))
-            .ThrowsAsync(new InvalidOperationException("simulated index failure"));
+        failingIndexQueue.Setup(q => q.EnqueueAsync(It.IsAny<DatasetKey>(), It.IsAny<IReadOnlyList<AddItem>>(),
+                It.IsAny<UploadTicket?>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync((DatasetKey _, IReadOnlyList<AddItem> items, UploadTicket? _, CancellationToken _) =>
+                items.Select(_ => new IndexOutcome(null, new InvalidOperationException("simulated index failure")))
+                    .ToArray());
 
         var objectManager = new ObjectsManager(_objectManagerLogger, context, _appSettingsMock.Object,
             new DdbManager(_appSettingsMock.Object, _ddbFactoryLogger, DdbWrapper), webUtils, _authManagerMock.Object,
@@ -860,11 +866,11 @@ public class ObjectManagerTest : TestBase
         var data = CommonUtils.SmartDownloadData(newFileUrl);
 
         await using var ms = new MemoryStream(data);
-        var (tempPath, bytes) = await objectManager.StreamToTempAsync(
+        var (tempPath, bytes, _) = await objectManager.StreamToTempAsync(
             MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug, ms);
 
         var act = async () => await objectManager.CommitStreamedAsync(
-            MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug, destPath, tempPath, bytes);
+            MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug, destPath, Streamed(tempPath, bytes));
 
         await Should.ThrowAsync<InvalidOperationException>(act);
 
@@ -911,9 +917,11 @@ public class ObjectManagerTest : TestBase
             _httpContextAccessorMock.Object, TestCaches.Summaries(_ddbFactoryMock.Object));
 
         var failingIndexQueue = new Mock<IDatasetIndexQueue>();
-        failingIndexQueue.Setup(q => q.EnqueueAsync(It.IsAny<DatasetKey>(), It.IsAny<string>(),
-                It.IsAny<CancellationToken>()))
-            .ThrowsAsync(new InvalidOperationException("simulated index failure"));
+        failingIndexQueue.Setup(q => q.EnqueueAsync(It.IsAny<DatasetKey>(), It.IsAny<IReadOnlyList<AddItem>>(),
+                It.IsAny<UploadTicket?>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync((DatasetKey _, IReadOnlyList<AddItem> items, UploadTicket? _, CancellationToken _) =>
+                items.Select(_ => new IndexOutcome(null, new InvalidOperationException("simulated index failure")))
+                    .ToArray());
 
         var objectManager = new ObjectsManager(_objectManagerLogger, context, _appSettingsMock.Object,
             new DdbManager(_appSettingsMock.Object, _ddbFactoryLogger, DdbWrapper), webUtils, _authManagerMock.Object,
@@ -973,13 +981,16 @@ public class ObjectManagerTest : TestBase
         // fixture wrapper the dataset uses), so the path after commit is a valid database
         // entry for the real IsBuildable/EntryExists checks in finalization.
         okIndexQueue
-            .Setup(q => q.EnqueueAsync(It.IsAny<DatasetKey>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
-            .Returns((DatasetKey key, string p, CancellationToken _) =>
+            .Setup(q => q.EnqueueAsync(It.IsAny<DatasetKey>(), It.IsAny<IReadOnlyList<AddItem>>(),
+                It.IsAny<UploadTicket?>(), It.IsAny<CancellationToken>()))
+            .Returns((DatasetKey _, IReadOnlyList<AddItem> items, UploadTicket? _, CancellationToken _) =>
             {
                 // The native Add validates containment against the dataset folder, so it wants
                 // the fully-qualified on-disk path (mirrors DDB.AddRaw -> GetLocalPath()).
+                var p = items[0].Path;
                 DdbWrapper.Add(datasetFolder, Path.GetFullPath(Path.Combine(datasetFolder, p)));
-                return Task.FromResult(new Registry.Ports.DroneDB.Entry { Path = p, Size = payload.Length });
+                return Task.FromResult<IReadOnlyList<IndexOutcome>>(
+                    [new IndexOutcome(new Registry.Ports.DroneDB.Entry { Path = p, Size = payload.Length }, null)]);
             });
 
         var objectManager = new ObjectsManager(_objectManagerLogger, context, _appSettingsMock.Object,

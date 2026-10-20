@@ -136,18 +136,22 @@ public class ShareController : ControllerBaseEx
             // Resolve the dataset target so the file can be streamed straight onto its storage volume
             var (orgSlug, dsSlug) = await _shareManager.GetUploadTarget(token);
 
+            StreamedFile file = null;
             var form = await MultipartRequestHelper.ReadSingleFileFormAsync(Request,
                 _formOptions.MultipartBoundaryLengthLimit,
-                body => _objectsManager.StreamToTempAsync(orgSlug, dsSlug, body));
+                async body =>
+                {
+                    file = await _objectsManager.StreamToTempAsync(orgSlug, dsSlug, body);
+                    return (file.TempPath, file.Bytes);
+                });
             var path = form.GetField("path");
-            var tempFile = form.TempFile;
 
-            if (tempFile == null)
+            if (file == null)
                 return BadRequest(new ErrorResponse("No file uploaded"));
 
             _logger.LogDebug("Share controller Upload('{Token}', '{Path}')", token, path);
 
-            var res = await _shareManager.UploadStreamed(token, path, tempFile, form.Bytes);
+            var res = await _shareManager.UploadStreamed(token, path, file);
             return Ok(res);
         }
         catch (BadHttpRequestException bex) when (bex.StatusCode == StatusCodes.Status413PayloadTooLarge)
@@ -220,47 +224,49 @@ public class ShareController : ControllerBaseEx
     }
 
     /// <summary>
-    /// Uploads a chunk of a large file.
+    /// Uploads a chunk of a large file. The form fields (<c>fileId</c>, <c>chunkIndex</c>,
+    /// <c>totalChunks</c>, <c>totalFileSize</c>, <c>chunkSize</c> when there is more than one chunk,
+    /// <c>path</c>, <c>fileName</c>) come before the <c>chunk</c> file part, which is streamed
+    /// straight into the file at its offset. When the last chunk is stored the file is added to the
+    /// batch's dataset.
     /// </summary>
     /// <param name="token">The share token.</param>
-    /// <param name="chunkInfo">Information about the chunk being uploaded.</param>
-    /// <param name="chunk">The chunk data.</param>
     /// <returns>The chunk upload result, or the final upload result if this was the last chunk.</returns>
     [HttpPost("upload-chunk/{token}", Name = nameof(ShareController) + "." + nameof(UploadChunked))]
-    [DisableRequestSizeLimit]
+    [DisableFormValueModelBinding]
     [RequestFormLimits(ValueLengthLimit = int.MaxValue, MultipartBodyLengthLimit = long.MaxValue)]
+    [ConfigurableUploadSizeLimit]
     [ProducesResponseType(typeof(ChunkUploadResultDto), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(UploadResultDto), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> UploadChunked(
-        [FromRoute, Required] string token,
-        [FromForm, Required] ChunkUploadDto chunkInfo,
-        [Required] IFormFile chunk)
+    public async Task<IActionResult> UploadChunked([FromRoute, Required] string token)
     {
+        if (!MultipartRequestHelper.IsMultipartContentType(Request.ContentType))
+            return BadRequest(new ErrorResponse("Expected a multipart/form-data request"));
+
+        ChunkUploadDto chunkInfo = null;
+        ChunkUploadResultDto result = null;
         try
         {
-            _logger.LogDebug("Share controller UploadChunked('{Token}', ChunkIndex: {ChunkIndex}, TotalChunks: {TotalChunks}, FileId: {FileId})",
-                token, chunkInfo.ChunkIndex, chunkInfo.TotalChunks, chunkInfo.FileId);
+            await MultipartRequestHelper.ReadFilesFormAsync(Request, _formOptions.MultipartBoundaryLengthLimit, 1,
+                async part =>
+                {
+                    chunkInfo = ChunkFields.ToShareChunk(part.Fields);
+                    _logger.LogDebug("Share controller UploadChunked('{Token}', ChunkIndex: {ChunkIndex}, TotalChunks: {TotalChunks}, FileId: {FileId})",
+                        token, chunkInfo.ChunkIndex, chunkInfo.TotalChunks, chunkInfo.FileId);
+                    result = await _shareManager.UploadChunk(token, chunkInfo, part.Body);
+                    return result;
+                }, _ => null);
 
-            if (chunk == null)
+            if (result == null || chunkInfo == null)
                 throw new ArgumentException("No chunk uploaded");
 
-            if (string.IsNullOrEmpty(chunkInfo.FileId))
-                throw new ArgumentException("FileId is required");
-
-            await using var stream = chunk.OpenReadStream();
-
-            // Use a memory-efficient stream processing approach
-            var result = await _shareManager.UploadChunk(token, chunkInfo, stream);
-
-            // Checking if this was the last chunk and all chunks are received
             if (result.IsComplete)
             {
                 _logger.LogInformation("All chunks received for file {FileName}, finalizing upload", chunkInfo.FileName);
-                var finalResult = await _shareManager.FinalizeChunkedUpload(token, chunkInfo.FileId, chunkInfo.Path);
-                return Ok(finalResult);
+                return Ok(await _shareManager.FinalizeChunkedUpload(token, chunkInfo.FileId, chunkInfo.Path));
             }
 
             return Ok(result);
@@ -268,7 +274,7 @@ public class ShareController : ControllerBaseEx
         catch (Exception ex)
         {
             _logger.LogError(ex, "Exception in Share controller UploadChunked('{Token}', FileId: {FileId}, ChunkIndex: {ChunkIndex})",
-                token, chunkInfo.FileId, chunkInfo.ChunkIndex);
+                token, chunkInfo?.FileId, chunkInfo?.ChunkIndex);
 
             throw;
         }

@@ -23,7 +23,7 @@ namespace Registry.Web.Test;
 [TestFixture]
 public class DatasetIndexQueueTests
 {
-    private static (DatasetIndexQueue Queue, Mock<IDDB> Ddb) CreateQueue(IndexQueueSettings? opts = null)
+    internal static (DatasetIndexQueue Queue, Mock<IDDB> Ddb) CreateQueue(IndexQueueSettings? opts = null)
     {
         var ddb = new Mock<IDDB>();
         var ddbManager = new Mock<IDdbManager>();
@@ -45,7 +45,7 @@ public class DatasetIndexQueueTests
 
     private static Entry MakeEntry(string path) => new() { Path = path, Hash = "h_" + path, Type = EntryType.Generic };
 
-    private static BatchAddedEntry MakeAdded(string path, string status = "added") =>
+    internal static BatchAddedEntry MakeAdded(string path, string status = "added") =>
         new() { Path = path, Hash = "h_" + path, Type = EntryType.Generic, Status = status };
 
     [Test]

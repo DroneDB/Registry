@@ -358,6 +358,9 @@ public class AppSettings
 
     /// <summary>Concurrency of native renders (tiles, thumbnails, coverages) in this process.</summary>
     public NativeConcurrencySettings? NativeConcurrency { get; set; }
+
+    /// <summary>Tuning of the upload pipeline.</summary>
+    public UploadSettings? Uploads { get; set; }
 #nullable restore
 
     /// <summary>

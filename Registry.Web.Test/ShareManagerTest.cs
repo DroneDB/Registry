@@ -772,16 +772,16 @@ class ShareManagerTest : TestBase
         // Stream to a temp file on the dataset volume, then finalize via the streamed path
         var data = CommonUtils.SmartDownloadData(newFileUrl);
         await using var ms = new MemoryStream(data);
-        var (tempPath, bytes) = await objectManager.StreamToTempAsync(orgSlug, dsSlug, ms);
+        var streamed = await objectManager.StreamToTempAsync(orgSlug, dsSlug, ms);
 
-        var uploadRes = await shareManager.UploadStreamed(initRes.Token, fileName, tempPath, bytes);
+        var uploadRes = await shareManager.UploadStreamed(initRes.Token, fileName, streamed);
 
         uploadRes.Path.ShouldBe(fileName);
         uploadRes.Size.ShouldBe(fileSize);
         uploadRes.Hash.ShouldBe(fileHash);
 
         // The streamed temp file must be consumed by the commit
-        File.Exists(tempPath).ShouldBeFalse();
+        File.Exists(streamed.TempPath).ShouldBeFalse();
 
         // Commit
         var commitRes = await shareManager.Commit(initRes.Token);

@@ -7,6 +7,7 @@ using Registry.Common.Model;
 using Registry.Ports.DroneDB;
 using Registry.Web.Models;
 using Registry.Web.Models.DTO;
+using Registry.Web.Utilities;
 
 namespace Registry.Web.Services.Ports;
 
@@ -23,15 +24,15 @@ public interface IObjectsManager
     /// Streams a forward-only upload body to a temporary file on the dataset's storage volume,
     /// so it can later be moved (not copied) into place. Used by the streaming upload endpoint.
     /// </summary>
-    /// <returns>The temp file path and the bytes written.</returns>
-    Task<(string TempPath, long Bytes)> StreamToTempAsync(string orgSlug, string dsSlug, Stream source);
+    /// <returns>The temp file, its size and the SHA-256 computed while writing it.</returns>
+    Task<StreamedFile> StreamToTempAsync(string orgSlug, string dsSlug, Stream source);
 
     /// <summary>
     /// Finalizes a streamed upload produced by <see cref="StreamToTempAsync"/>: validates access
     /// and quota, atomically moves the temp file into its final location and indexes it.
     /// </summary>
     /// <returns>The created entry.</returns>
-    Task<EntryDto> CommitStreamedAsync(string orgSlug, string dsSlug, string path, string tempFilePath, long writeBytes);
+    Task<EntryDto> CommitStreamedAsync(string orgSlug, string dsSlug, string path, StreamedFile file);
 
     Task<EntryDto> Move(string orgSlug, string dsSlug, string source, string dest);
 

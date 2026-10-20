@@ -163,7 +163,7 @@ public class PushManager : IPushManager
             await _utils.CheckCurrentUserStorage(expected);
 
         var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
-        var (tempPath, bytes) = await DatasetUploads.StreamToTempAsync(_fileSystem, ddb.DatasetFolderPath, source);
+        var (tempPath, bytes, _) = await DatasetUploads.StreamToTempAsync(_fileSystem, ddb.DatasetFolderPath, source);
 
         if (expectedBytes is null)
         {

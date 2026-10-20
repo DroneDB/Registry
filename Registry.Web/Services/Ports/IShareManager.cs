@@ -30,10 +30,9 @@ public interface IShareManager
     /// </summary>
     /// <param name="token">The share batch token.</param>
     /// <param name="path">The destination path within the dataset.</param>
-    /// <param name="tempFilePath">The temp file produced by <c>IObjectsManager.StreamToTempAsync</c>.</param>
-    /// <param name="bytes">The number of bytes written while streaming (used for the storage-quota check).</param>
+    /// <param name="file">The temp file produced by <c>IObjectsManager.StreamToTempAsync</c>.</param>
     /// <returns>The upload result.</returns>
-    public Task<UploadResultDto> UploadStreamed(string token, string path, string tempFilePath, long bytes);
+    public Task<UploadResultDto> UploadStreamed(string token, string path, Registry.Web.Utilities.StreamedFile file);
 
     public Task<CommitResultDto> Commit(string token);
     public Task Rollback(string token);

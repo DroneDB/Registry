@@ -194,18 +194,25 @@ public class WebUtils : IUtils
         };
     }
 
-    public async Task CheckCurrentUserStorage(long size = 0)
+    public async Task<UserStorageInfo> GetCurrentUserStorageLimit()
     {
-        if (!_settings.EnableStorageLimiter) return;
+        if (!_settings.EnableStorageLimiter) return null;
 
         // Admins do not have limits
-        if (await _authManager.IsUserAdmin()) return;
+        if (await _authManager.IsUserAdmin()) return null;
 
         var storageInfo = GetUserStorage(await _authManager.GetCurrentUser());
+        return storageInfo.Total == null ? null : storageInfo;
+    }
+
+    public async Task CheckCurrentUserStorage(long size = 0)
+    {
+        var storageInfo = await GetCurrentUserStorageLimit();
+        if (storageInfo == null) return;
 
         var currentUsage = storageInfo.Used + size;
 
-        if (storageInfo.Total != null && currentUsage > storageInfo.Total)
+        if (currentUsage > storageInfo.Total)
             throw new QuotaExceededException(currentUsage, storageInfo.Total);
     }
 

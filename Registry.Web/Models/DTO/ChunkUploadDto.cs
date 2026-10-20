@@ -35,9 +35,10 @@ public class ChunkUploadDto
     public string Path { get; set; }
     
     /// <summary>
-    /// MD5 hash of the current chunk for integrity verification
+    /// Size of every chunk but the last (required when the file has more than one chunk): chunks
+    /// are written at their offset in the file as they arrive
     /// </summary>
-    public string ChunkMd5 { get; set; }
+    public long? ChunkSize { get; set; }
 }
 
 public class ChunkUploadResultDto
