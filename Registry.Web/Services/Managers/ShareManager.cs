@@ -288,7 +288,7 @@ public class ShareManager : IShareManager
                 Visibility = Visibility.Public
             });
 
-            dataset = _utils.GetDataset(orgSlug, dsSlug, false, true);
+            dataset = GetTrackedDataset(orgSlug, dsSlug);
 
             _logger.LogInformation("Created new dataset '{DsSlug}', creating batch", dsSlug);
         }
@@ -316,13 +316,13 @@ public class ShareManager : IShareManager
                     Visibility = Visibility.Public
                 });
 
-                dataset = _context.Datasets.First(ds => ds.Slug == dsSlug);
+                dataset = GetTrackedDataset(tag.OrganizationSlug, dsSlug);
 
                 _logger.LogInformation("Dataset created");
             }
             else
             {
-                dataset = _utils.GetDataset(tag.OrganizationSlug, tag.DatasetSlug, true, true);
+                dataset = GetTrackedDataset(tag.OrganizationSlug, tag.DatasetSlug, safe: true);
 
                 // Create dataset if not exists
                 if (dataset == null)
@@ -338,10 +338,14 @@ public class ShareManager : IShareManager
 
                     _logger.LogInformation("Dataset created");
 
-                    dataset = _context.Datasets.First(ds => ds.Slug == tag.DatasetSlug);
+                    dataset = GetTrackedDataset(tag.OrganizationSlug, tag.DatasetSlug);
                 }
                 else
                 {
+                    // A new batch replaces the running ones: only who may write to the dataset may do that
+                    if (!await _authManager.RequestAccess(dataset, AccessType.Write))
+                        throw new UnauthorizedException("The current user is not allowed to upload to this dataset");
+
                     _logger.LogInformation("Checking for running batches");
                     await _context.Entry(dataset).Collection(item => item.Batches).LoadAsync();
 
@@ -386,6 +390,10 @@ public class ShareManager : IShareManager
         };
     }
 
+    // Datasets are identified by organization and slug: the slug alone may match another organization's
+    private Dataset GetTrackedDataset(string orgSlug, string dsSlug, bool safe = false) =>
+        _utils.GetDataset(orgSlug, dsSlug, safe, withTracking: true);
+
     private string GetUniqueDatasetSlug()
     {
         // We are pretty sure this is unique but ALWAYS CHECK
@@ -403,6 +411,19 @@ public class ShareManager : IShareManager
     {
         _logger.LogInformation("Rolling back batch '{BatchToken}'", batch.Token);
 
+        await _context.Entry(batch).Reference(item => item.Dataset).LoadAsync();
+
+        var ds = batch.Dataset;
+
+        await _context.Entry(ds).Reference(item => item.Organization).LoadAsync();
+        var org = ds.Organization;
+
+        // Check the access the rollback needs (dropping the dataset or deleting its entries) before the status
+        // change below is committed: a denied rollback must leave the batch running
+        var requiredAccess = deleteDataset ? AccessType.Delete : AccessType.Write;
+        if (!await _authManager.RequestAccess(ds, requiredAccess))
+            throw new UnauthorizedException("The current user is not allowed to roll back this batch");
+
         // I know we will have concurrency problems here because we could be in the middle of the rollback when another client calls for another one
         // To mitigate this issue we are going to commit the status change of the batch as soon as possible
 
@@ -411,12 +432,6 @@ public class ShareManager : IShareManager
         await _context.SaveChangesAsync();
 
         await _context.Entry(batch).Collection(item => item.Entries).LoadAsync();
-        await _context.Entry(batch).Reference(item => item.Dataset).LoadAsync();
-
-        var ds = batch.Dataset;
-
-        await _context.Entry(ds).Reference(item => item.Organization).LoadAsync();
-        var org = ds.Organization;
 
         if (deleteDataset)
             await _datasetsManager.Delete(org.Slug, ds.Slug);
