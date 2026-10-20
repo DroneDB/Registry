@@ -467,9 +467,9 @@ public class ShareManager : IShareManager
         var orgSlug = batch.Dataset.Organization.Slug;
         var dsSlug = batch.Dataset.Slug;
 
-        await _objectsManager.AddNew(orgSlug, dsSlug, path, stream);
+        var added = await _objectsManager.AddNew(orgSlug, dsSlug, path, stream);
 
-        return await RegisterBatchEntry(batch, orgSlug, dsSlug, path);
+        return await RegisterBatchEntry(batch, path, added);
     }
 
     /// <summary>
@@ -511,9 +511,9 @@ public class ShareManager : IShareManager
             var dsSlug = batch.Dataset.Slug;
 
             // The commit reserves the quota on the authoritative size on disk
-            await _objectsManager.CommitStreamedAsync(orgSlug, dsSlug, path, file);
+            var added = await _objectsManager.CommitStreamedAsync(orgSlug, dsSlug, path, file);
 
-            return await RegisterBatchEntry(batch, orgSlug, dsSlug, path);
+            return await RegisterBatchEntry(batch, path, added);
         }
         finally
         {
@@ -527,12 +527,11 @@ public class ShareManager : IShareManager
     }
 
     /// <summary>
-    /// Shared tail of the share upload flow: looks up the freshly added entry and records it on the batch.
+    /// Shared tail of the share upload flow: records the entry the add just indexed on the batch
+    /// (no second lookup: the add returns the indexed type, hash and size).
     /// </summary>
-    private async Task<UploadResultDto> RegisterBatchEntry(Batch batch, string orgSlug, string dsSlug, string path)
+    private async Task<UploadResultDto> RegisterBatchEntry(Batch batch, string path, EntryDto info)
     {
-        var info = (await _objectsManager.List(orgSlug, dsSlug, path)).FirstOrDefault();
-
         if (info == null)
             throw new BadRequestException(
                 "Underlying object storage is not working correctly: cannot find object after adding it");
@@ -666,8 +665,9 @@ public class ShareManager : IShareManager
         var temp = Path.Combine(Path.GetDirectoryName(root)!, Guid.NewGuid().ToString("N") + DatasetUploads.TempFileExtension);
         var hint = await _chunks.TakeAsync(root, fileId, temp);
 
-        await _objectsManager.CommitStreamedAsync(orgSlug, dsSlug, path, new StreamedFile(temp, hint.Size, hint));
-        return await RegisterBatchEntry(batch, orgSlug, dsSlug, path);
+        var added = await _objectsManager.CommitStreamedAsync(orgSlug, dsSlug, path,
+            new StreamedFile(temp, hint.Size, hint));
+        return await RegisterBatchEntry(batch, path, added);
     }
 
     // Chunks of a share upload live where the dataset's other uploads do (same volume as the dataset)
