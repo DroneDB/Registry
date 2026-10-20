@@ -35,11 +35,12 @@ jobs:
         echo "Downloading DroneDB from $LATEST_RELEASE_URL"
         curl -L -o dronedb.deb $LATEST_RELEASE_URL
         sudo apt-get update && sudo apt-get install -y ./dronedb.deb
-    - name: Hub checks (tests, bundle budget, listener audit, ESLint)
+    - name: Hub checks (tests + coverage, types, bundle budget, listener audit, ESLint)
       run: |
         cd registry/Registry.Web/ClientApp
         npm ci
-        npm test
+        npm run test:coverage
+        npm run typecheck
         npm run build:stats
         npm run check:bundle
         npm run check:listeners

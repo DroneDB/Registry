@@ -31,7 +31,7 @@ jobs:
       - name: Build ClientApp
         run: |
           cd registry/Registry.Web/ClientApp
-          npm install && npm run build:prod
+          npm ci && npm run build:prod
       - name: Publish
         run: |
           cd registry
