@@ -61,7 +61,7 @@ jobs:
         run: cd registry/Registry.Web/bin/Release/net10.0/publish/osx-x64/ && zip -r ../../../../../../../Registry-${{ env.VERSION }}-Osx64.zip *
 
       - name: Release
-        uses: softprops/action-gh-release@v1
+        uses: softprops/action-gh-release@v3
         if: startsWith(github.ref, 'refs/tags/')
         with:
           files: |
