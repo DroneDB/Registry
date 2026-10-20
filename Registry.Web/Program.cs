@@ -346,22 +346,32 @@ public class Program
 
         var args = new[] { "--urls", $"http://{opts.Address}" };
 
-        var host = Host.CreateDefaultBuilder(args)
-            .UseSerilog((context, services, configuration) => configuration
-                .ReadFrom.Configuration(context.Configuration)
-                .ReadFrom.Services(services)
-                .Enrich.FromLogContext())
+        var host = CreateHostBuilder(args)
             .ConfigureAppConfiguration((hostContext, config) =>
             {
                 config.AddInMemoryCollection(new Dictionary<string, string>
                 {
                     { "InstanceType", opts.InstanceType.ToString() }
                 });
-            })
-            .ConfigureWebHostDefaults(webBuilder => webBuilder.UseStartup<Startup>());
+            });
 
         host.Build().Run();
     }
+
+    /// <summary>
+    /// Builds the web host (Startup pipeline + Serilog). Shared by <see cref="RunAsWebApplication"/>
+    /// and by the integration tests (WebApplicationFactory resolves this method by convention).
+    /// Instance-specific settings (e.g. InstanceType, --urls) are layered on top by the caller.
+    /// </summary>
+    /// <param name="args">Host arguments (e.g. <c>--urls</c>).</param>
+    /// <returns>The configured, not yet built, host builder.</returns>
+    public static IHostBuilder CreateHostBuilder(string[] args) =>
+        Host.CreateDefaultBuilder(args)
+            .UseSerilog((context, services, configuration) => configuration
+                .ReadFrom.Configuration(context.Configuration)
+                .ReadFrom.Services(services)
+                .Enrich.FromLogContext())
+            .ConfigureWebHostDefaults(webBuilder => webBuilder.UseStartup<Startup>());
 
     private static bool InitializeDdb()
     {

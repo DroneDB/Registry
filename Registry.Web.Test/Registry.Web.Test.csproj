@@ -22,6 +22,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <PackageReference Include="Microsoft.AspNetCore.Mvc.Testing" Version="10.0.7" />
     <PackageReference Include="Microsoft.Extensions.Options" Version="10.0.7" />
     <PackageReference Include="Shouldly" Version="4.3.0" />
     <PackageReference Include="Hangfire.Core" Version="1.8.23" />
