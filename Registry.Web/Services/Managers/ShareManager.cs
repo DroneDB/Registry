@@ -265,7 +265,7 @@ public class ShareManager : IShareManager
                 {
                     Name = currentUser.UserName,
                     IsPublic = false,
-                    CreationDate = DateTime.Now,
+                    CreationDate = DateTime.UtcNow,
                     Owner = currentUser.Id,
                     Slug = orgSlug
                 });

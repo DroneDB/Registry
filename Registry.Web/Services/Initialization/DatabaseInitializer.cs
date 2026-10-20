@@ -102,7 +102,7 @@ internal class DatabaseInitializer
         {
             Slug = MagicStrings.PublicOrganizationSlug,
             Name = MagicStrings.PublicOrganizationSlug.ToPascalCase(false, CultureInfo.InvariantCulture),
-            CreationDate = DateTime.Now,
+            CreationDate = DateTime.UtcNow,
             Description = "Organization",
             IsPublic = true,
             OwnerId = null
@@ -111,7 +111,7 @@ internal class DatabaseInitializer
         var ds = new Dataset
         {
             Slug = MagicStrings.DefaultDatasetSlug,
-            CreationDate = DateTime.Now,
+            CreationDate = DateTime.UtcNow,
             InternalRef = Guid.NewGuid()
         };
 
@@ -255,7 +255,7 @@ internal class DatabaseInitializer
         {
             Slug = adminOrgSlug,
             Name = $"{defaultAdmin.UserName} organization",
-            CreationDate = DateTime.Now,
+            CreationDate = DateTime.UtcNow,
             Description = null,
             IsPublic = false,
             OwnerId = adminUser.Id

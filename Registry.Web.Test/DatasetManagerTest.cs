@@ -118,6 +118,33 @@ public class DatasetManagerTest : TestBase
     }
 
     [Test]
+    public async Task AddNew_StoresTheCreationDateInUtc()
+    {
+        // The dates are sent as UTC (DateTimeZoneHandling.Utc): a local time stored here showed
+        // new datasets as created in the future on hosts east of UTC
+        await using var context = GetTest1Context();
+        _appSettingsMock.Setup(o => o.Value).Returns(_settings);
+        _authManagerMock.Setup(o => o.RequestAccess(It.IsAny<Organization>(), It.IsAny<AccessType>()))
+            .Returns(Task.FromResult(true));
+        var utils = new WebUtils(_authManagerMock.Object, context, _appSettingsMock.Object,
+            _httpContextAccessorMock.Object, TestCaches.Summaries(_ddbFactoryMock.Object));
+        var ddbMock = new Mock<IDDB>();
+        ddbMock.Setup(x => x.Meta).Returns(new Mock<Registry.Ports.DroneDB.IMetaManager>().Object);
+        ddbMock.Setup(x => x.GetInfo()).Returns(new Entry { Properties = new Dictionary<string, object>() });
+        _ddbFactoryMock.Setup(x => x.Get(It.IsAny<string>(), It.IsAny<Guid>())).Returns(ddbMock.Object);
+        var datasetsManager = new DatasetsManager(context, utils, _datasetsManagerLogger,
+            _objectsManagerMock.Object, _stacManagerMock.Object, _ddbFactoryMock.Object, _authManagerMock.Object,
+            _cacheManager, _fileSystem, _backgroundJobMock.Object, _appSettingsMock.Object,
+            TestCaches.Summaries(_ddbFactoryMock.Object));
+
+        var before = DateTime.UtcNow;
+        await datasetsManager.AddNew(MagicStrings.PublicOrganizationSlug, new DatasetNewDto { Slug = "utc-check" });
+
+        var stored = context.Datasets.Single(d => d.Slug == "utc-check").CreationDate;
+        stored.ShouldBeInRange(before.AddSeconds(-1), DateTime.UtcNow.AddSeconds(1));
+    }
+
+    [Test]
     public async Task Get_WithPermissions_PopulatesPermissionsProperty()
     {
         // Arrange

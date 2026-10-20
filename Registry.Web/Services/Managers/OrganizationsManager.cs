@@ -311,7 +311,7 @@ public class OrganizationsManager : IOrganizationsManager
         }
 
         var org = organization.ToEntity();
-        org.CreationDate = DateTime.Now;
+        org.CreationDate = DateTime.UtcNow;
 
         await _context.Organizations.AddAsync(org);
         await _context.SaveChangesAsync();

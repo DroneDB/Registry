@@ -309,7 +309,7 @@ public class UsersManager : IUsersManager
         {
             Name = user.UserName,
             IsPublic = false,
-            CreationDate = DateTime.Now,
+            CreationDate = DateTime.UtcNow,
             Owner = user.Id,
             Slug = orgSlug
         }, true);

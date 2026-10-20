@@ -217,7 +217,7 @@ public class DatasetsManager : IDatasetsManager
             Slug = dataset.Slug,
             Organization = org,
             InternalRef = Guid.NewGuid(),
-            CreationDate = DateTime.Now
+            CreationDate = DateTime.UtcNow
         };
 
         var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
