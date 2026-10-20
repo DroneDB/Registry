@@ -4,8 +4,11 @@ using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Caching.Distributed;
+using Microsoft.Extensions.Caching.Memory;
+using Microsoft.Extensions.Primitives;
 using Microsoft.Extensions.Logging;
 using Registry.Ports;
 
@@ -15,6 +18,7 @@ namespace Registry.Web.Services.Managers;
 /// Distributed cache wrapper with registration/unregistration of data providers and pattern-based invalidation.
 /// Concurrent misses for the same key share one generation (single-flight), and cache read/write
 /// failures fall back to generating the data instead of failing the request (fail-open).
+/// Seeds registered with a local expiration also keep their entries in process memory.
 /// </summary>
 public class CacheManager : ICacheManager
 {
@@ -22,6 +26,7 @@ public class CacheManager : ICacheManager
     {
         public required Func<object[], Task<byte[]>> GetDataAsync { get; init; }
         public TimeSpan Expiration { get; init; }
+        public TimeSpan LocalExpiration { get; init; }
     }
 
     /// <summary>
@@ -52,15 +57,22 @@ public class CacheManager : ICacheManager
     private readonly ConcurrentDictionary<string, Carrier> _providers = new();
     private readonly ConcurrentDictionary<string, Flight> _inFlight = new();
 
+    // Process-memory tier of the seeds registered with a local expiration. A category's entries
+    // share a token that RemoveByCategoryAsync cancels.
+    private readonly IMemoryCache? _local;
+    private readonly ConcurrentDictionary<string, CancellationTokenSource> _localCategories = new();
+
     public CacheManager(IDistributedCache cache, ILogger<CacheManager> logger,
-        ICacheKeyScanner keyScanner)
+        ICacheKeyScanner keyScanner, IMemoryCache? localCache = null)
     {
         _cache = cache ?? throw new ArgumentNullException(nameof(cache));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _keyScanner = keyScanner ?? throw new ArgumentNullException(nameof(keyScanner));
+        _local = localCache;
     }
 
-    public void Register(string seed, Func<object[], Task<byte[]>> getData, TimeSpan? expiration = null)
+    public void Register(string seed, Func<object[], Task<byte[]>> getData, TimeSpan? expiration = null,
+        TimeSpan? localExpiration = null)
     {
         ArgumentNullException.ThrowIfNull(seed);
         ArgumentNullException.ThrowIfNull(getData);
@@ -68,6 +80,7 @@ public class CacheManager : ICacheManager
         var carrier = new Carrier
         {
             Expiration = expiration ?? _defaultCacheExpiration,
+            LocalExpiration = localExpiration ?? TimeSpan.Zero,
             GetDataAsync = getData
         };
 
@@ -100,6 +113,7 @@ public class CacheManager : ICacheManager
         var key = MakeKey(seed, category, parameters);
         if (_inFlight.TryRemove(key, out var flight))
             flight.Invalidate();
+        _local?.Remove(key);
 
         try
         {
@@ -119,6 +133,11 @@ public class CacheManager : ICacheManager
         ArgumentNullException.ThrowIfNull(category);
 
         // Build pattern using the same key format: ":seed:category:*"
+        if (_localCategories.TryRemove(MakeKey(seed, category, null), out var local))
+        {
+            local.Cancel();
+            local.Dispose();
+        }
         var prefix = MakeKey(seed, category, null) + ":";
         foreach (var entry in _inFlight)
         {
@@ -151,19 +170,39 @@ public class CacheManager : ICacheManager
 
         var key = MakeKey(seed, category, parameters);
 
-        var cachedData = await TryGetCachedAsync(key);
-        if (cachedData != null)
-            return cachedData;
+        var useLocal = _local != null && carrier.LocalExpiration > TimeSpan.Zero;
+        if (useLocal && _local!.TryGetValue(key, out byte[]? local) && local != null)
+            return local;
 
-        var flight = new Flight();
-        var current = _inFlight.GetOrAdd(key, flight);
-        if (ReferenceEquals(current, flight))
-            await RunFlightAsync(key, carrier, parameters, flight);
-        else
-            _logger.LogDebug("Joining in-flight generation for key: {Key}", key);
+        // Taken before the read: an invalidation that runs meanwhile cancels it, so data read
+        // before the invalidation is never kept in memory
+        var token = useLocal ? LocalToken(seed, category) : CancellationToken.None;
 
-        return await current.Completion;
+        var data = await TryGetCachedAsync(key);
+        if (data == null)
+        {
+            var flight = new Flight();
+            var current = _inFlight.GetOrAdd(key, flight);
+            if (ReferenceEquals(current, flight))
+                await RunFlightAsync(key, carrier, parameters, flight);
+            else
+                _logger.LogDebug("Joining in-flight generation for key: {Key}", key);
+
+            data = await current.Completion;
+        }
+
+        if (useLocal && !token.IsCancellationRequested)
+            _local!.Set(key, data, new MemoryCacheEntryOptions
+            {
+                AbsoluteExpirationRelativeToNow = carrier.LocalExpiration,
+                ExpirationTokens = { new CancellationChangeToken(token) }
+            });
+
+        return data;
     }
+
+    private CancellationToken LocalToken(string seed, string category) =>
+        _localCategories.GetOrAdd(MakeKey(seed, category, null), _ => new CancellationTokenSource()).Token;
 
     /// <summary>
     /// Generates the data for <paramref name="key"/> once and completes <paramref name="flight"/>
@@ -261,6 +300,7 @@ public class CacheManager : ICacheManager
         }
 
         var key = MakeKey(seed, category, parameters);
+        _local?.Remove(key);
 
         try
         {

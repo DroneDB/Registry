@@ -226,4 +226,28 @@ public class CacheManagerSingleFlightTests
         (await _sut.GetAsync(Seed, Category, "a")).ShouldBe(Payload);
         (await _store.PeekAsync(Key("a"))).ShouldBeNull();
     }
+
+    // REG-05: seeds with a local expiration keep their entries in memory; invalidation drops them
+    [Test]
+    public async Task LocalTier_ServesFromMemory_UntilInvalidated()
+    {
+        var sut = new CacheManager(_store, NullLogger<CacheManager>.Instance,
+            new NullCacheKeyScanner(NullLogger<NullCacheKeyScanner>.Instance), new MemoryCache(new MemoryCacheOptions()));
+        var version = 1;
+        sut.Register(Seed, _ => Task.FromResult(new[] { (byte)version }), TimeSpan.FromMinutes(5), TimeSpan.FromMinutes(1));
+
+        (await sut.GetAsync(Seed, Category, "a")).ShouldBe([(byte)1]);
+        _store.FailGet = true; // memory only from here on
+        (await sut.GetAsync(Seed, Category, "a")).ShouldBe([(byte)1]);
+        _store.FailGet = false;
+
+        version = 2;
+        await sut.RemoveAsync(Seed, Category, "a");
+        (await sut.GetAsync(Seed, Category, "a")).ShouldBe([(byte)2]);
+
+        version = 3;
+        await sut.RemoveByCategoryAsync(Seed, Category);
+        await _store.RemoveAsync(Key("a")); // the in-memory test store has no pattern removal
+        (await sut.GetAsync(Seed, Category, "a")).ShouldBe([(byte)3]);
+    }
 }

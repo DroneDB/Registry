@@ -1,6 +1,7 @@
 #nullable enable
 using System;
 using System.Collections.Concurrent;
+using System.Linq;
 using System.Threading;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Options;
@@ -12,7 +13,8 @@ using Registry.Web.Services.Ports;
 namespace Registry.Web.Services.Adapters;
 
 /// <summary>
-/// Default <see cref="IDatasetLookupCache"/> in process memory, for
+/// Default <see cref="IDatasetLookupCache"/> in process memory (datasets with their organization and its
+/// members), for
 /// <see cref="AppSettings.DatasetLookupCacheExpiration"/> (default 30 s; zero disables it). An
 /// organization-wide invalidation cancels a change token shared by that organization's entries.
 /// Changes made by another process (a processing node) are seen when the entry expires.
@@ -102,7 +104,16 @@ public sealed class DatasetLookupCache : IDatasetLookupCache
                 Description = d.Organization.Description,
                 CreationDate = d.Organization.CreationDate,
                 OwnerId = d.Organization.OwnerId,
-                IsPublic = d.Organization.IsPublic
+                IsPublic = d.Organization.IsPublic,
+                // Null when the members were not loaded (the access check then loads them)
+                Users = d.Organization.Users?.Select(u => new OrganizationUser
+                {
+                    UserId = u.UserId,
+                    OrganizationSlug = u.OrganizationSlug,
+                    Permissions = u.Permissions,
+                    GrantedAt = u.GrantedAt,
+                    GrantedBy = u.GrantedBy
+                }).ToList()!
             }
     };
 }

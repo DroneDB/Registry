@@ -14,7 +14,8 @@ namespace Registry.Web.Services.Adapters;
 
 /// <summary>
 /// Drops the cached dataset lookups (<see cref="IDatasetLookupCache"/>) of every dataset or
-/// organization row a <c>SaveChanges</c> modifies or deletes: one hook for every EF write, so no
+/// organization row a <c>SaveChanges</c> modifies or deletes, and of every organization whose members
+/// it adds, changes or removes: one hook for every EF write, so no
 /// caller has to remember to invalidate. The lookups are dropped before the save and again after
 /// it, so a lookup that loads the old row while the save commits cannot keep it.
 /// </summary>
@@ -67,6 +68,14 @@ public sealed class DatasetChangeInterceptor(IDatasetLookupCache lookups) : Save
         var organizations = new HashSet<string>();
         foreach (var entry in context.ChangeTracker.Entries())
         {
+            // Cached lookups carry the organization's members: a new member counts too
+            if (entry.Entity is OrganizationUser member &&
+                entry.State is EntityState.Added or EntityState.Modified or EntityState.Deleted)
+            {
+                organizations.Add(member.OrganizationSlug ?? member.Organization?.Slug ?? All);
+                continue;
+            }
+
             if (entry.State is not (EntityState.Modified or EntityState.Deleted))
                 continue;
 

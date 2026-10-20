@@ -5,7 +5,15 @@ namespace Registry.Ports;
 
 public interface ICacheManager
 {
-    void Register(string seed, Func<object[], Task<byte[]>> getData, TimeSpan? expiration = null);
+    /// <param name="seed">Name of the cache.</param>
+    /// <param name="getData">Generates an entry on a miss.</param>
+    /// <param name="expiration">Sliding expiration in the distributed cache (default 30 minutes).</param>
+    /// <param name="localExpiration">When set, entries are also kept in this process's memory for this long, so a
+    /// hot entry costs no distributed-cache round trip. <see cref="RemoveAsync"/> and
+    /// <see cref="RemoveByCategoryAsync"/> drop them here at once; other processes see a change when their copy
+    /// expires.</param>
+    void Register(string seed, Func<object[], Task<byte[]>> getData, TimeSpan? expiration = null,
+        TimeSpan? localExpiration = null);
     void Unregister(string seed);
     Task<byte[]> GetAsync(string seed, string category, params object[] parameters);
 

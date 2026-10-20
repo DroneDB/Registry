@@ -9,6 +9,8 @@ using Registry.Web.Models.Configuration;
 using Registry.Web.Utilities;
 using ILogger = Microsoft.Extensions.Logging.ILogger;
 
+using Registry.Web.Services.Adapters;
+
 namespace Registry.Web.Services.Initialization;
 
 /// <summary>
@@ -89,10 +91,13 @@ internal class CacheInitializer
         _logger.LogDebug("Registered OGC render cache provider with expiration: {Expiration}", OgcRenderCacheExpiration);
 
         // Register dataset visibility cache provider
+        // Read on every request to a dataset (each COPC range request of a point cloud): kept in
+        // memory as long as dataset lookups, so a warm request makes no Redis round trip
         cacheManager.Register(
             MagicStrings.DatasetVisibilityCacheSeed,
             CacheProviderFactories.CreateDatasetVisibilityProvider(),
-            appSettings.DatasetVisibilityCacheExpiration);
+            appSettings.DatasetVisibilityCacheExpiration,
+            appSettings.DatasetLookupCacheExpiration ?? DatasetLookupCache.DefaultExpiration);
 
         _logger.LogDebug("Registered dataset visibility cache provider with expiration: {Expiration}",
             appSettings.DatasetVisibilityCacheExpiration?.ToString() ?? "default");

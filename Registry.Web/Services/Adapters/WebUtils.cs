@@ -96,9 +96,17 @@ public class WebUtils : IUtils
             return query.FirstOrDefault(item => item.Slug == dsSlug && item.Organization.Slug == orgSlug);
         }
 
+        // With the organization's members, which the access check of a member needs: a cached
+        // lookup then answers it without a query
+        Dataset LoadWithMembers() => _context.Datasets
+            .Include(item => item.Organization)
+            .ThenInclude(org => org.Users)
+            .AsNoTracking()
+            .FirstOrDefault(item => item.Slug == dsSlug && item.Organization.Slug == orgSlug);
+
         // Read-only lookups repeat on every request: reuse them (REG-05). A tracked entity is for
         // an update, so it always comes from the database.
-        var dataset = withTracking || _lookups == null ? Load() : _lookups.GetOrLoad(orgSlug, dsSlug, Load);
+        var dataset = withTracking || _lookups == null ? Load() : _lookups.GetOrLoad(orgSlug, dsSlug, LoadWithMembers);
 
         return dataset ?? (safe ? null : throw new NotFoundException($"Cannot find dataset {dsSlug} in organization {orgSlug}"));
     }
