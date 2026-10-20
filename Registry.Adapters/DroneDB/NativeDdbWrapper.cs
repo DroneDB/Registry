@@ -2352,12 +2352,7 @@ public class NativeDdbWrapper : IDdbWrapper
         ThrowForFinalResult(result, "export raster");
     }
 
-    // Native progress callback contract mirroring DDBProgressCallback in ddb.h:
-    //   int (*)(double fraction, const char *phase, void *userData)
-    // Returning a non-zero value requests cooperative cancellation.
-    [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
-    private delegate int DdbProgressCallbackNative(double fraction, IntPtr phase, IntPtr userData);
-
+    // Progress callback contract: DdbProgressCallbackNative (bridged by NativeProgressCallback)
     [DllImport("ddb", EntryPoint = "DDBExportRaster2")]
     private static extern DdbResult _ExportRaster2(
         [MarshalAs(UnmanagedType.LPUTF8Str)] string inputPath,
@@ -2390,47 +2385,19 @@ public class NativeDdbWrapper : IDdbWrapper
         if (string.IsNullOrWhiteSpace(outputPath))
             throw new ArgumentException("outputPath is null or empty");
 
-        // Bridge managed progress + cancellation to the native callback contract.
-        // We only allocate a native delegate when there is something to observe.
-        DdbProgressCallbackNative? nativeCallback = null;
-        if (progress != null || cancellationToken.CanBeCanceled)
-        {
-            nativeCallback = (fraction, phasePtr, _) =>
-            {
-                if (cancellationToken.IsCancellationRequested)
-                    return 1; // request cancellation
+        // Bridge managed progress + cancellation to the native callback contract; the bridge is
+        // only allocated when there is something to observe.
+        var callback = NativeProgressCallback.Create(progress, cancellationToken);
 
-                if (progress != null)
-                {
-                    var phase = phasePtr == IntPtr.Zero ? null : Marshal.PtrToStringUTF8(phasePtr);
-                    progress(fraction, phase);
-                }
-
-                return 0; // continue
-            };
-        }
-
+        DdbResult result;
         try
         {
-            var result = _ExportRaster2(inputPath, outputPath, preset, bands, formula,
-                bandFilter, colormap, rescale, tileSize, nativeCallback, IntPtr.Zero);
-
-            // Canceled → DdbCanceledException, all other non-success codes → typed exceptions
-            // (see ThrowForFinalResult); the explicit rethrow below keeps the canceled type
-            // from being re-wrapped by the generic catch.
-            ThrowForFinalResult(result, "export raster");
-        }
-        catch (DdbCanceledException)
-        {
-            throw;
+            result = _ExportRaster2(inputPath, outputPath, preset, bands, formula,
+                bandFilter, colormap, rescale, tileSize, callback?.Native, IntPtr.Zero);
         }
         catch (EntryPointNotFoundException ex)
         {
             throw new DdbException($"Error in calling ddb lib: incompatible versions ({ex.Message})", ex);
-        }
-        catch (DdbException)
-        {
-            throw;
         }
         catch (Exception ex)
         {
@@ -2440,8 +2407,13 @@ public class NativeDdbWrapper : IDdbWrapper
         finally
         {
             // Keep the delegate alive across the synchronous P/Invoke.
-            GC.KeepAlive(nativeCallback);
+            GC.KeepAlive(callback);
         }
+
+        // An exception thrown by the progress observer canceled the native call: it wins over the
+        // canceled result. Otherwise canceled -> DdbCanceledException, other failures -> typed exceptions.
+        callback?.ThrowIfFaulted();
+        ThrowForFinalResult(result, "export raster");
     }
 
     #endregion

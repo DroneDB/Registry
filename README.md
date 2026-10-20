@@ -95,7 +95,7 @@ Open [http://localhost:5000](http://localhost:5000) in your browser to start usi
 | [/hangfire](http://localhost:5000/hangfire)       | Background jobs dashboard (requires auth) |
 | [/stac](http://localhost:5000/stac)               | STAC Catalog root                         |
 
-The log file is located in `registry-data/logs/registry.txt`.
+The log files are in `registry-data/logs/` and roll daily: `registryYYYYMMDD.txt` for the default instance, `registry-webYYYYMMDD.txt`, `registry-nodeYYYYMMDD.txt` and `registry-thumbsYYYYMMDD.txt` for the web server, processing node and thumbnail generator instance types.
 
 ### Processing Platform
 

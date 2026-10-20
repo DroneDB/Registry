@@ -1,20 +1,23 @@
 #nullable enable
 using System;
 using System.Collections.Generic;
-using System.Text.Json;
 using System.Text.Json.Serialization;
 using Newtonsoft.Json.Linq;
 
 namespace Registry.Web.Models.DTO;
 
 /// <summary>Catalog entry describing an available tool (GET /tasks/tools).</summary>
+/// <remarks>
+/// <c>InputSchema</c> is a Newtonsoft <see cref="JToken"/> because MVC serializes with Newtonsoft: a
+/// System.Text.Json <c>JsonElement</c> would be written as its struct properties (<c>{"valueKind":1}</c>).
+/// </remarks>
 public sealed record TaskToolDto(
     string Id,
     string Version,
     string Title,
     string RequiredAccess,
     bool ProducesArtifact,
-    JsonElement InputSchema,
+    JToken InputSchema,
     bool Hidden,
     bool Disabled,
     string? DisabledMessage);

@@ -9,6 +9,7 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Caching.Distributed;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using Newtonsoft.Json.Linq;
 using Registry.Ports;
 using Registry.Web.Data.Models;
 using Registry.Web.Exceptions;
@@ -89,7 +90,7 @@ public sealed class TasksManager : ITasksManager
         {
             var st = await _gating.EvaluateAsync(t.Id, orgSlug);
             return new TaskToolDto(t.Id, t.Version, t.Title,
-                t.RequiredAccess.ToString(), t.ProducesArtifact, t.InputSchema.RootElement.Clone(),
+                t.RequiredAccess.ToString(), t.ProducesArtifact, JToken.Parse(t.InputSchema.RootElement.GetRawText()),
                 st.Hidden, st.Disabled, st.DisabledMessage);
         }));
     }

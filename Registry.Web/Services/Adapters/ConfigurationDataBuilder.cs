@@ -1094,7 +1094,9 @@ public class ConfigurationDataBuilder : IConfigurationDataBuilder
                     defaultMinLevel, defaultMinLevel),
 
                 StringField("LogPath", "Log File Path",
-                    "Path to the log file output.",
+                    "Path to the log file output. Each instance type writes its own file: the web server, " +
+                    "processing node and thumbnail generator add -web, -node and -thumbs to the file name " +
+                    "(e.g. registry-web.txt); the default all-in-one instance uses it as is. Files roll daily.",
                     defaultLogPath, defaultLogPath)
             ]);
     }
