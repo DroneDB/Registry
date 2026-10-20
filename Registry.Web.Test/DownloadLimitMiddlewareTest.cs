@@ -7,6 +7,7 @@ using Moq;
 using NUnit.Framework;
 using Registry.Test.Common;
 using Registry.Web.Middlewares;
+using Registry.Web.Services.Adapters;
 using Registry.Web.Services.Ports;
 using Shouldly;
 
@@ -26,7 +27,8 @@ public class DownloadLimitMiddlewareTest : TestBase
         _limiterMock = new Mock<IDownloadLimiter>();
         _authManagerMock = new Mock<IAuthManager>();
         _logger = CreateTestLogger<DownloadLimitMiddleware>();
-        _middleware = new DownloadLimitMiddleware(_limiterMock.Object, _authManagerMock.Object, _logger);
+        _middleware = new DownloadLimitMiddleware(_limiterMock.Object, _authManagerMock.Object,
+            new ClientIpResolver(), _logger);
     }
 
     private static DefaultHttpContext CreateContext(string path, string userId = null)

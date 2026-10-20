@@ -336,6 +336,20 @@ public class AppSettings
 #nullable restore
 
     /// <summary>
+    /// IP addresses of the reverse proxies whose <c>X-Forwarded-For</c> / <c>X-Forwarded-Proto</c>
+    /// headers are trusted (the client address and scheme they forward replace the connection's).
+    /// When null or empty, <see cref="DefaultKnownProxies"/> (loopback, a proxy on the same host)
+    /// applies. When set, it replaces the default: list loopback too if the proxy also connects
+    /// over it.
+    /// </summary>
+#nullable enable
+    public string[]? KnownProxies { get; set; }
+#nullable restore
+
+    /// <summary>The reverse proxies trusted when <see cref="KnownProxies"/> is not set.</summary>
+    public static readonly string[] DefaultKnownProxies = ["127.0.0.1", "::1"];
+
+    /// <summary>
     /// Processing Platform (Layer 1 task substrate) settings. When null, defaults apply.
     /// </summary>
 #nullable enable

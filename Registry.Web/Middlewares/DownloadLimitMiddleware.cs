@@ -23,6 +23,7 @@ public partial class DownloadLimitMiddleware : IMiddleware
 {
     private readonly IDownloadLimiter _downloadLimiter;
     private readonly IAuthManager _authManager;
+    private readonly IClientIpResolver _clientIpResolver;
     private readonly ILogger<DownloadLimitMiddleware> _logger;
 
     private const string PreflightHeader = "X-Download-Check";
@@ -39,10 +40,12 @@ public partial class DownloadLimitMiddleware : IMiddleware
     public DownloadLimitMiddleware(
         IDownloadLimiter downloadLimiter,
         IAuthManager authManager,
+        IClientIpResolver clientIpResolver,
         ILogger<DownloadLimitMiddleware> logger)
     {
         _downloadLimiter = downloadLimiter;
         _authManager = authManager;
+        _clientIpResolver = clientIpResolver;
         _logger = logger;
     }
 
@@ -162,27 +165,16 @@ public partial class DownloadLimitMiddleware : IMiddleware
 
     /// <summary>
     /// Gets the limiter key for the current request.
-    /// Uses the authenticated user ID if available, otherwise falls back to the remote IP address.
-    /// Considers X-Forwarded-For header for reverse proxy scenarios.
+    /// Uses the authenticated user ID if available, otherwise falls back to the client address
+    /// (the forwarded one behind a known proxy, see <see cref="IClientIpResolver"/>).
     /// </summary>
-    private static string GetLimiterKey(HttpContext context)
+    private string GetLimiterKey(HttpContext context)
     {
         // Try authenticated user ID first
         var userId = context.User.Claims.FirstOrDefault(c => c.Type == ClaimTypes.Name)?.Value;
         if (!string.IsNullOrEmpty(userId))
             return $"user:{userId}";
 
-        // Fall back to IP address (consider X-Forwarded-For for reverse proxy)
-        var forwardedFor = context.Request.Headers["X-Forwarded-For"].FirstOrDefault();
-        if (!string.IsNullOrEmpty(forwardedFor))
-        {
-            // Take the first IP in the chain (original client)
-            var clientIp = forwardedFor.Split(',')[0].Trim();
-            if (!string.IsNullOrEmpty(clientIp))
-                return $"ip:{clientIp}";
-        }
-
-        var remoteIp = context.Connection.RemoteIpAddress?.ToString() ?? "unknown";
-        return $"ip:{remoteIp}";
+        return _clientIpResolver.AnonymousKey(context);
     }
 }

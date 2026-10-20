@@ -1104,6 +1104,10 @@ public class ConfigurationDataBuilder : IConfigurationDataBuilder
                     "Allowed CORS origins. Null or empty = all origins allowed.",
                     _settings.AllowedOrigins, _defaults.AllowedOrigins),
 
+                ArrayField("KnownProxies", "Known Proxies",
+                    "IP addresses of the reverse proxies whose X-Forwarded-For/X-Forwarded-Proto headers are trusted. Null or empty = loopback (127.0.0.1, ::1). When set, it replaces loopback.",
+                    _settings.KnownProxies, _defaults.KnownProxies),
+
                 StringField("ExternalUrlOverride", "External URL Override",
                     "Overrides the external URL used in generated links and redirects.",
                     _settings.ExternalUrlOverride, _defaults.ExternalUrlOverride),

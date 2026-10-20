@@ -4,6 +4,7 @@ using System.Diagnostics;
 using System.Globalization;
 using System.IO;
 using System.Linq;
+using System.Net;
 using System.Reflection;
 using System.Text;
 using System.Threading;
@@ -21,6 +22,7 @@ using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Hosting.Server.Features;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Http.Features;
+using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Server.Kestrel.Core;
@@ -293,6 +295,7 @@ public class Startup
         services.AddTransient<DownloadLimitMiddleware>();
         services.AddTransient<SecurityHeadersMiddleware>();
         services.AddSingleton<IDownloadLimiter, DownloadLimiter>();
+        services.AddSingleton<IClientIpResolver, ClientIpResolver>();
         services.AddTransient<ITokenManager, TokenManager>();
         services.AddSingleton<IHttpContextAccessor, HttpContextAccessor>();
 
@@ -427,6 +430,10 @@ public class Startup
         });
         services.AddRegistryRateLimiting();
 
+        // Behind a reverse proxy the client address and scheme come from its forwarded headers
+        var knownProxies = ParseKnownProxies(appSettings.KnownProxies);
+        services.Configure<ForwardedHeadersOptions>(options => ConfigureForwardedHeaders(options, knownProxies));
+
         if (appSettings.MaxRequestBodySize.HasValue)
         {
             services.Configure<FormOptions>(options =>
@@ -455,6 +462,10 @@ public class Startup
 
     public void Configure(IApplicationBuilder app, IWebHostEnvironment env)
     {
+        // First: everything after it (HSTS, logging, auth cookies, limits) sees the real client
+        // address and scheme, taken from the headers of a known proxy only
+        app.UseForwardedHeaders();
+
         if (env.IsDevelopment())
         {
             app.UseDeveloperExceptionPage();
@@ -623,6 +634,35 @@ public class Startup
 
         PrintStartupInfo(app);
     }
+
+    /// <summary>
+    /// Trusts <c>X-Forwarded-For</c> and <c>X-Forwarded-Proto</c> only from <paramref name="knownProxies"/>.
+    /// The framework defaults (loopback) are cleared first, so configured proxies replace them instead
+    /// of adding to them. <c>ForwardLimit</c> stays 1: one proxy (nginx) in front of the app, so only
+    /// the address it appended is used, never entries the client sent itself.
+    /// </summary>
+    private static void ConfigureForwardedHeaders(ForwardedHeadersOptions options,
+        IReadOnlyList<IPAddress> knownProxies)
+    {
+        options.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto;
+        options.KnownIPNetworks.Clear();
+        options.KnownProxies.Clear();
+        foreach (var proxy in knownProxies)
+            options.KnownProxies.Add(proxy);
+    }
+
+    /// <summary>
+    /// <see cref="AppSettings.KnownProxies"/> as addresses (<see cref="AppSettings.DefaultKnownProxies"/>
+    /// when not set). An invalid entry stops the start-up: ignoring it would silently stop trusting the
+    /// proxy and key every client on the proxy address.
+    /// </summary>
+    private static IPAddress[] ParseKnownProxies(string[] configured) =>
+        (configured is { Length: > 0 } ? configured : AppSettings.DefaultKnownProxies)
+        .Select(entry => IPAddress.TryParse(entry?.Trim(), out var address)
+            ? address
+            : throw new InvalidOperationException(
+                $"AppSettings:KnownProxies contains an invalid IP address: '{entry}'"))
+        .ToArray();
 
     private static void PrintStartupInfo(IApplicationBuilder app)
     {
