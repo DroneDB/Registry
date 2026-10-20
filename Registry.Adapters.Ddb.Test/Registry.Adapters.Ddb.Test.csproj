@@ -8,8 +8,9 @@
         <Platforms>AnyCPU;x64</Platforms>
 
         <Configurations>Debug;Release;DebugEf</Configurations>
+        <!-- Nullable allow-list (build/nullable-allowlist.txt): it may only shrink. -->
+        <Nullable>disable</Nullable>
 
-        <LangVersion>13</LangVersion>
     </PropertyGroup>
 
     <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|AnyCPU'">
@@ -29,13 +30,13 @@
     </PropertyGroup>
 
     <ItemGroup>
-        <PackageReference Include="Shouldly" Version="4.3.0" />
-        <PackageReference Include="Moq" Version="4.20.72" />
-        <PackageReference Include="newtonsoft.json" Version="13.0.4" />
-        <PackageReference Include="NUnit3TestAdapter" Version="6.2.0" />
-        <PackageReference Include="Microsoft.NET.Test.Sdk" Version="18.5.1" />
-        <PackageReference Include="NUnit" Version="4.6.0" />
-        <PackageReference Include="SharpZipLib" Version="1.4.2" />
+        <PackageReference Include="Shouldly" />
+        <PackageReference Include="Moq" />
+        <PackageReference Include="Newtonsoft.Json" />
+        <PackageReference Include="NUnit3TestAdapter" />
+        <PackageReference Include="Microsoft.NET.Test.Sdk" />
+        <PackageReference Include="NUnit" />
+        <PackageReference Include="SharpZipLib" />
     </ItemGroup>
 
     <ItemGroup>

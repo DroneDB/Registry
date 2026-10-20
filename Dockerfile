@@ -7,8 +7,9 @@ LABEL Author="Luca Di Leo <ldileo@digipa.it>"
 ARG DEBIAN_FRONTEND=noninteractive
 RUN apt-get update && apt-get install -y --fix-missing --no-install-recommends git curl software-properties-common gpg-agent wget
 
-# Install dotnet and nodejs
-RUN curl -sSL https://dot.net/v1/dotnet-install.sh | bash /dev/stdin --channel 10.0 \
+# Install dotnet (the SDK band pinned by global.json) and nodejs
+COPY global.json /tmp/global.json
+RUN curl -sSL https://dot.net/v1/dotnet-install.sh | bash /dev/stdin --jsonfile /tmp/global.json \
     && curl -sL https://deb.nodesource.com/setup_24.x | bash - \
     && apt-get install -y nodejs \
     && apt-get clean && rm -rf /var/lib/apt/lists/*
@@ -24,7 +25,7 @@ WORKDIR /Registry
 COPY Registry.Web/ClientApp/package.json Registry.Web/ClientApp/package-lock.json Registry.Web/ClientApp/
 RUN cd Registry.Web/ClientApp && npm ci
 
-COPY Directory.Build.props ./
+COPY global.json Directory.Build.props Directory.Packages.props ./
 COPY Registry.Web/.config/dotnet-tools.json Registry.Web/.config/
 COPY Registry.Web/Registry.Web.csproj Registry.Web/
 COPY Registry.Adapters/Registry.Adapters.csproj Registry.Adapters/

@@ -12,8 +12,9 @@
         <Platforms>AnyCPU;x64</Platforms>
         <PackageVersion>2.7.1</PackageVersion>
         <Configurations>Debug;Release;DebugEf</Configurations>
+        <!-- Nullable allow-list (build/nullable-allowlist.txt): it may only shrink. -->
+        <Nullable>disable</Nullable>
         <DdbVersion>1.12.2</DdbVersion>
-        <LangVersion>13</LangVersion>
     </PropertyGroup>
 
     <ItemGroup>
@@ -44,53 +45,53 @@
     </ItemGroup>
 
     <ItemGroup>
-        <PackageReference Include="AspNetCore.HealthChecks.Hangfire" Version="9.0.0" />
-        <PackageReference Include="AspNetCore.HealthChecks.UI.Client" Version="9.0.0" />
-        <PackageReference Include="AspNetCore.HealthChecks.UI.Core" Version="9.0.0" />
-        <PackageReference Include="CommandLineParser" Version="2.9.1" />
-        <PackageReference Include="Hangfire.AspNetCore" Version="1.8.23" />
-        <PackageReference Include="Hangfire.Console" Version="1.4.3" />
-        <PackageReference Include="Hangfire.Core" Version="1.8.23" />
-        <PackageReference Include="Hangfire.InMemory" Version="1.0.0" />
-        <PackageReference Include="Hangfire.MySqlStorage" Version="2.0.3" />
-        <PackageReference Include="Microsoft.AspNetCore.Authentication.Core" Version="2.3.9" />
-        <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="10.0.7" />
-        <PackageReference Include="Microsoft.AspNetCore.Mvc.NewtonsoftJson" Version="10.0.7" />
-        <PackageReference Include="Microsoft.AspNetCore.ResponseCompression" Version="2.3.9" />
-        <PackageReference Include="Microsoft.AspNetCore.SpaServices" Version="3.1.32" />
-        <PackageReference Include="Microsoft.AspNetCore.SpaServices.Extensions" Version="10.0.7" />
-        <PackageReference Include="Microsoft.AspNetCore.DataProtection.StackExchangeRedis" Version="10.0.7" />
-        <PackageReference Include="Microsoft.EntityFrameworkCore" Version="10.0.7" />
-        <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="10.0.7" />
-        <PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" Version="10.0.7" />
-        <PackageReference Include="Microsoft.EntityFrameworkCore.Tools" Version="10.0.7">
+        <PackageReference Include="AspNetCore.HealthChecks.Hangfire" />
+        <PackageReference Include="AspNetCore.HealthChecks.UI.Client" />
+        <PackageReference Include="AspNetCore.HealthChecks.UI.Core" />
+        <PackageReference Include="CommandLineParser" />
+        <PackageReference Include="Hangfire.AspNetCore" />
+        <PackageReference Include="Hangfire.Console" />
+        <PackageReference Include="Hangfire.Core" />
+        <PackageReference Include="Hangfire.InMemory" />
+        <PackageReference Include="Hangfire.MySqlStorage" />
+        <PackageReference Include="Microsoft.AspNetCore.Authentication.Core" />
+        <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" />
+        <PackageReference Include="Microsoft.AspNetCore.Mvc.NewtonsoftJson" />
+        <PackageReference Include="Microsoft.AspNetCore.ResponseCompression" />
+        <PackageReference Include="Microsoft.AspNetCore.SpaServices" />
+        <PackageReference Include="Microsoft.AspNetCore.SpaServices.Extensions" />
+        <PackageReference Include="Microsoft.AspNetCore.DataProtection.StackExchangeRedis" />
+        <PackageReference Include="Microsoft.EntityFrameworkCore" />
+        <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" />
+        <PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" />
+        <PackageReference Include="Microsoft.EntityFrameworkCore.Tools">
             <PrivateAssets>all</PrivateAssets>
             <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
         </PackageReference>
-        <PackageReference Include="Microsoft.Extensions.Caching.StackExchangeRedis" Version="10.0.7" />
-        <PackageReference Include="Microsoft.Extensions.Diagnostics.HealthChecks.EntityFrameworkCore" Version="10.0.7" />
-        <PackageReference Include="Microsoft.Extensions.Hosting" Version="10.0.7" />
-        <PackageReference Include="Microsoft.VisualStudio.Web.CodeGeneration.Design" Version="10.0.2" />
-        <PackageReference Include="MimeMapping" Version="4.0.0" />
-        <PackageReference Include="Newtonsoft.Json" Version="13.0.4" />
-        <PackageReference Include="Scrutor" Version="7.0.0" />
-        <PackageReference Include="Scrutor.AspNetCore" Version="3.3.0" />
-        <PackageReference Include="System.DirectoryServices.Protocols" Version="9.0.0" />
-        <PackageReference Include="Serilog.AspNetCore" Version="10.0.0" />
-        <PackageReference Include="Serilog.Aspnetcore.Middleware" Version="1.0.0" />
-        <PackageReference Include="Serilog.Enrichers.AspNetCore" Version="1.0.0" />
-        <PackageReference Include="Serilog.Enrichers.Environment" Version="3.0.1" />
-        <PackageReference Include="Serilog.Enrichers.Thread" Version="4.0.0" />
-        <PackageReference Include="Serilog.Extensions.Hosting" Version="10.0.0" />
-        <PackageReference Include="Serilog.Sinks.File" Version="7.0.0" />
-        <PackageReference Include="Serilog.Sinks.Seq" Version="9.0.0" />
-        <PackageReference Include="SkiaSharp" Version="3.119.2" />
-        <PackageReference Include="SkiaSharp.NativeAssets.Linux" Version="3.119.2" />
-        <PackageReference Include="Scalar.AspNetCore" Version="2.14.11" />
-        <PackageReference Include="Swashbuckle.AspNetCore" Version="10.1.7" />
-        <PackageReference Include="System.IdentityModel.Tokens.Jwt" Version="8.18.0" />
-        <PackageReference Include="System.Text.Encoding.CodePages" Version="10.0.7" />
-        <PackageReference Include="System.Threading.Tasks.Dataflow" Version="10.0.7" />
+        <PackageReference Include="Microsoft.Extensions.Caching.StackExchangeRedis" />
+        <PackageReference Include="Microsoft.Extensions.Diagnostics.HealthChecks.EntityFrameworkCore" />
+        <PackageReference Include="Microsoft.Extensions.Hosting" />
+        <PackageReference Include="Microsoft.VisualStudio.Web.CodeGeneration.Design" />
+        <PackageReference Include="MimeMapping" />
+        <PackageReference Include="Newtonsoft.Json" />
+        <PackageReference Include="Scrutor" />
+        <PackageReference Include="Scrutor.AspNetCore" />
+        <PackageReference Include="System.DirectoryServices.Protocols" />
+        <PackageReference Include="Serilog.AspNetCore" />
+        <PackageReference Include="Serilog.Aspnetcore.Middleware" />
+        <PackageReference Include="Serilog.Enrichers.AspNetCore" />
+        <PackageReference Include="Serilog.Enrichers.Environment" />
+        <PackageReference Include="Serilog.Enrichers.Thread" />
+        <PackageReference Include="Serilog.Extensions.Hosting" />
+        <PackageReference Include="Serilog.Sinks.File" />
+        <PackageReference Include="Serilog.Sinks.Seq" />
+        <PackageReference Include="SkiaSharp" />
+        <PackageReference Include="SkiaSharp.NativeAssets.Linux" />
+        <PackageReference Include="Scalar.AspNetCore" />
+        <PackageReference Include="Swashbuckle.AspNetCore" />
+        <PackageReference Include="System.IdentityModel.Tokens.Jwt" />
+        <PackageReference Include="System.Text.Encoding.CodePages" />
+        <PackageReference Include="System.Threading.Tasks.Dataflow" />
     </ItemGroup>
 
     <ItemGroup>

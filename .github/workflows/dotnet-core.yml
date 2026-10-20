@@ -25,8 +25,7 @@ jobs:
     - name: Setup .NET Core
       uses: actions/setup-dotnet@v4
       with:
-        dotnet-version: |
-          10.0.x
+        global-json-file: global.json
     - name: Setup Node
       uses: actions/setup-node@v4
       with:
@@ -51,6 +50,15 @@ jobs:
       run: |
         cd registry
         dotnet build -c Release --verbosity minimal
+    - name: Nullable allow-list (may only shrink)
+      run: |
+        cd registry
+        bash scripts/check-nullable-allowlist.sh
+    # Rebuilds with --no-incremental: an up-to-date build reports no warnings
+    - name: Warning ratchet (no new compiler or analyzer warnings)
+      run: |
+        cd registry
+        bash scripts/check-warnings.sh
     - name: Run tests
       run: |
         cd registry

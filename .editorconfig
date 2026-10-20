@@ -41,7 +41,10 @@ dotnet_diagnostic.IDE0161.severity = warning
 # The violations are in RemoteThumbnailGenerator._httpClient, WmtsManager._transparentPng256
 # and the m_ fields of Registry.Common/EchoStream.cs.
 # Note: `dotnet build` reports IDE1006 only when EnforceCodeStyleInBuild is on and
-# dotnet_diagnostic.IDE1006.severity is set. Neither is set today.
+# dotnet_diagnostic.IDE1006.severity is set. Both are set (R2-2). The build reports every
+# naming violation at the IDE1006 severity: the suggestion severities above apply in the
+# IDE only. The 12 violations listed above are in build/warnings-baseline.txt.
+dotnet_diagnostic.IDE1006.severity = warning
 dotnet_naming_rule.private_constants_pascal.symbols = private_constants
 dotnet_naming_rule.private_constants_pascal.style = pascal_case
 dotnet_naming_rule.private_constants_pascal.severity = warning
@@ -69,6 +72,24 @@ dotnet_naming_style.pascal_case.capitalization = pascal_case
 
 dotnet_naming_style.underscore_camel_case.required_prefix = _
 dotnet_naming_style.underscore_camel_case.capitalization = camel_case
+
+# Analyzers (AnalysisLevel = latest-recommended, R2-2). The recommended rules are warnings,
+# and the warnings that exist today are in build/warnings-baseline.txt
+# (scripts/check-warnings.sh fails on a new one). These rules have hundreds of violations
+# each, so they are suggestions until a dedicated change fixes them:
+#   CA1848 (811) and CA1873 (384): logging performance. The fix is a LoggerMessage
+#     source-generator migration of the Registry.Web log calls.
+#   CA2101 (185): P/Invoke string marshaling. The fix is a LibraryImport migration of the
+#     libddb bindings, which changes the interop layer.
+# CA1707 (underscores in names) is a suggestion in the test projects only (see below).
+dotnet_diagnostic.CA1848.severity = suggestion
+dotnet_diagnostic.CA1873.severity = suggestion
+dotnet_diagnostic.CA2101.severity = suggestion
+
+# Test methods are named Method_Scenario_Result (1420 CA1707 hits, all in test projects).
+# Production code has 0 CA1707 violations, so the rule stays a warning there.
+[*Test/**.cs]
+dotnet_diagnostic.CA1707.severity = suggestion
 
 # EF Core scaffolds migrations with block-scoped namespaces. Do not edit them by hand.
 [**/Migrations/*.cs]

@@ -16,4 +16,17 @@
         <NoWarn>$(NoWarn);CS1591;CS1573</NoWarn>
     </PropertyGroup>
 
+    <!--
+        Analyzer and nullable ratchet (RQ-03, decision D7).
+
+        Nullable is on for every project. A project that is not annotated yet sets
+        <Nullable>disable</Nullable> in its csproj and is listed in build/nullable-allowlist.txt.
+        scripts/check-nullable-allowlist.sh fails when the two disagree, so the list can only shrink.
+    -->
+    <PropertyGroup>
+        <Nullable>enable</Nullable>
+        <AnalysisLevel>latest-recommended</AnalysisLevel>
+        <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
+    </PropertyGroup>
+
 </Project>
