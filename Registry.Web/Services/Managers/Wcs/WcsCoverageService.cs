@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Caching.Distributed;
@@ -26,12 +27,14 @@ namespace Registry.Web.Services.Managers.Wcs;
 public class WcsCoverageService : OgcManagerBase, IWcsCoverageService
 {
     private readonly ILogger<WcsCoverageService> _logger;
+    private readonly INativeWorkGate _gate;
 
     public WcsCoverageService(IUtils u, IAuthManager a, IDdbManager d, IBuildArtifactResolver ar,
         IDdbWrapper w, IOgcLayerCatalog c, IDistributedCache cache, IHttpContextAccessor ctx,
-        ILogger<WcsCoverageService> logger) : base(u, a, d, ar, w, c, cache, ctx)
+        ILogger<WcsCoverageService> logger, INativeWorkGate? gate = null) : base(u, a, d, ar, w, c, cache, ctx)
     {
         _logger = logger;
+        _gate = gate ?? Services.Adapters.NativeWorkGate.Default;
     }
 
     public async Task<(IDDB Ddb, IReadOnlyList<OgcLayerDto> Layers)> GetCoveragesAsync(
@@ -160,9 +163,9 @@ public class WcsCoverageService : OgcManagerBase, IWcsCoverageService
         return new WcsRasterInfo(width, height, bandCount, bandNames, nativeCrs);
     }
 
-    public byte[] RenderRegion(IDDB ddb, OgcLayerDto layer, double[] bboxWgs84,
+    public Task<byte[]> RenderRegionAsync(IDDB ddb, OgcLayerDto layer, double[] bboxWgs84,
         int width, int height, string mime,
-        int[]? bands = null, string? outputCrs = null)
+        int[]? bands = null, string? outputCrs = null, CancellationToken ct = default)
     {
         if (bboxWgs84 == null || bboxWgs84.Length < 4)
             throw new OgcException("InvalidParameterValue", "Invalid bbox", 400);
@@ -180,9 +183,13 @@ public class WcsCoverageService : OgcManagerBase, IWcsCoverageService
         height = Math.Clamp(height, targetMin, targetMax);
         var src = ResolveRasterArtifact(ddb, layer);
         var mimeNorm = string.IsNullOrWhiteSpace(mime) ? "image/tiff" : mime;
-        return DdbWrapper.RenderRasterRegion(src, bboxWgs84, "EPSG:4326",
-            width, height, mimeNorm, bands, outputCrs);
+        // Coverages can be large: they share the Heavy lane with thumbnails
+        return _gate.RunAsync(NativeLane.Heavy, () => DdbWrapper.RenderRasterRegion(src, bboxWgs84, "EPSG:4326",
+            width, height, mimeNorm, bands, outputCrs), ct);
     }
+
+    public Task<string> CacheKeyAsync(string orgSlug, string dsSlug, string kind, string? detail) =>
+        LayerCatalog.CacheKeyAsync(orgSlug, dsSlug, kind, detail);
 
     public string GetBaseUrl(string orgSlug, string dsSlug, string? folderPath)
         => GetServiceUrl(orgSlug, dsSlug, "wcs", folderPath);

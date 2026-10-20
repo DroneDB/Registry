@@ -192,6 +192,9 @@ public class ConfigurationDataBuilder : IConfigurationDataBuilder
     // Helper: build a field from an int/long property comparison
     // ---------------------------------------------------------------------------
 
+    private static NativeConcurrencySettings Native(AppSettings settings) =>
+        settings.NativeConcurrency ?? new NativeConcurrencySettings();
+
     private ConfigurationFieldDataDto NumberField(
         string key, string displayName, string description,
         long currentValue, long defaultValue,
@@ -667,7 +670,15 @@ public class ConfigurationDataBuilder : IConfigurationDataBuilder
 
                 ArrayField("DatasetThumbnailCandidates", "Dataset Thumbnail Candidates",
                     "File names (in dataset root) considered as dataset thumbnail candidates, in priority order.",
-                    _settings.DatasetThumbnailCandidates, _defaults.DatasetThumbnailCandidates)
+                    _settings.DatasetThumbnailCandidates, _defaults.DatasetThumbnailCandidates),
+
+                NumberField("NativeConcurrency.Tiles", "Concurrent Tile Renders",
+                    "Map tiles and map images rendered at once by this instance. 0 = half the CPU cores (at least 2).",
+                    Native(_settings).Tiles, Native(_defaults).Tiles, minValue: 0),
+
+                NumberField("NativeConcurrency.Heavy", "Concurrent Thumbnail Renders",
+                    "Thumbnails and coverages rendered at once by this instance. 0 = a quarter of the CPU cores (at least 1).",
+                    Native(_settings).Heavy, Native(_defaults).Heavy, minValue: 0)
             ]);
     }
 

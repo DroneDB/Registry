@@ -15,7 +15,7 @@ namespace Registry.Web.Services.Adapters;
 /// Default <see cref="IDatasetCacheInvalidator"/> implementation.
 /// </summary>
 /// <remarks>
-/// Observation caches use <see cref="ICacheManager"/> and <see cref="ICacheKeyScanner"/>.
+/// Observation caches use <see cref="ICacheManager"/>; OGC documents a new <see cref="IOgcCacheKeys"/> generation.
 /// Available legacy retry controls are preserved in configured Hangfire storage before
 /// their first tracker eviction. These services are available on processing nodes too.
 /// </remarks>
@@ -23,7 +23,7 @@ public sealed class DatasetCacheInvalidator : IDatasetCacheInvalidator
 {
     private readonly ILogger<DatasetCacheInvalidator> _logger;
     private readonly ICacheManager _cacheManager;
-    private readonly ICacheKeyScanner _keyScanner;
+    private readonly IOgcCacheKeys _ogcKeys;
     private readonly JobStorage? _storage;
     private readonly IConfiguration? _configuration;
 
@@ -32,19 +32,19 @@ public sealed class DatasetCacheInvalidator : IDatasetCacheInvalidator
     /// </summary>
     /// <param name="logger">The logger.</param>
     /// <param name="cacheManager">Cache manager used for category-based invalidation.</param>
-    /// <param name="keyScanner">Cache key scanner used for pattern-based (OGC) invalidation.</param>
+    /// <param name="ogcKeys">Generation of the OGC capabilities and layer caches.</param>
     /// <param name="storage">Configured Hangfire storage for preserving legacy retry controls.</param>
     /// <param name="configuration">Configured Hangfire MySQL connection source.</param>
     public DatasetCacheInvalidator(
         ILogger<DatasetCacheInvalidator> logger,
         ICacheManager cacheManager,
-        ICacheKeyScanner keyScanner,
+        IOgcCacheKeys ogcKeys,
         JobStorage? storage = null,
         IConfiguration? configuration = null)
     {
         _logger = logger;
         _cacheManager = cacheManager;
-        _keyScanner = keyScanner;
+        _ogcKeys = ogcKeys;
         _storage = storage;
         _configuration = configuration;
     }
@@ -69,11 +69,10 @@ public sealed class DatasetCacheInvalidator : IDatasetCacheInvalidator
         await _cacheManager.RemoveByCategoryAsync(MagicStrings.ThumbnailCacheSeed,
             ForDatasetThumbnail(orgSlug, dsSlug));
 
-        // OGC capabilities + layer enumeration caches (pattern-based, best-effort).
+        // OGC capabilities + layer enumeration caches (one new generation, best-effort).
         try
         {
-            await _keyScanner.RemoveByPatternAsync(ForOgcCapabilitiesPattern(orgSlug, dsSlug));
-            await _keyScanner.RemoveByPatternAsync(ForOgcLayersPattern(orgSlug, dsSlug));
+            await _ogcKeys.InvalidateAsync(orgSlug, dsSlug);
         }
         catch (Exception ex)
         {

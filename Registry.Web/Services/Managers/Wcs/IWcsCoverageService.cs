@@ -19,6 +19,9 @@ public interface IWcsCoverageService
     Task<(IDDB Ddb, IReadOnlyList<OgcLayerDto> Layers)> GetCoveragesAsync(
         string orgSlug, string dsSlug, string? folderPath);
 
+    /// <summary>Cache key of a WCS document of the dataset (see <c>IOgcLayerCatalog.CacheKeyAsync</c>).</summary>
+    Task<string> CacheKeyAsync(string orgSlug, string dsSlug, string kind, string? detail);
+
     /// <summary>Resolve a single coverage by id. Throws <see cref="Registry.Web.Exceptions.OgcException"/>
     /// with code <c>NoSuchCoverage</c> when the id is unknown.</summary>
     Task<(IDDB Ddb, OgcLayerDto Layer)> ResolveCoverageAsync(
@@ -45,8 +48,9 @@ public interface IWcsCoverageService
     /// preserves exactly these bands in the requested order.</param>
     /// <param name="outputCrs">Optional target CRS authority code (WCS 2.0 OUTPUTCRS /
     /// WCS 1.0 RESPONSE_CRS). Null/empty = EPSG:4326 (current behaviour).</param>
-    byte[] RenderRegion(IDDB ddb, OgcLayerDto layer, double[] bboxWgs84, int width, int height,
-        string mime, int[]? bands = null, string? outputCrs = null);
+    /// <param name="ct">Cancels waiting for a native render slot (not a running render).</param>
+    Task<byte[]> RenderRegionAsync(IDDB ddb, OgcLayerDto layer, double[] bboxWgs84, int width, int height,
+        string mime, int[]? bands = null, string? outputCrs = null, System.Threading.CancellationToken ct = default);
 
     /// <summary>Absolute base URL of the WCS endpoint for the current request (no trailing '?').</summary>
     string GetBaseUrl(string orgSlug, string dsSlug, string? folderPath);

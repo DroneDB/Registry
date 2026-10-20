@@ -30,20 +30,22 @@ public class WmsManager : OgcManagerBase, IWmsManager
 {
     private readonly ILogger<WmsManager> _logger;
     private readonly ICacheManager _cacheManager;
+    private readonly INativeWorkGate _gate;
 
     public WmsManager(IUtils u, IAuthManager a, IDdbManager d, IBuildArtifactResolver ar,
         IDdbWrapper w, IOgcLayerCatalog c, IDistributedCache cache, IHttpContextAccessor ctx, ILogger<WmsManager> logger,
-        ICacheManager cacheManager)
+        ICacheManager cacheManager, INativeWorkGate? gate = null)
         : base(u, a, d, ar, w, c, cache, ctx)
     {
         _logger = logger;
         _cacheManager = cacheManager;
+        _gate = gate ?? Services.Adapters.NativeWorkGate.Default;
     }
 
     public async Task<string> GetCapabilitiesAsync(string orgSlug, string dsSlug, string version,
         string? folderPath = null)
     {
-        var key = $"ogc-caps-wms-v2-{version}-{orgSlug}-{dsSlug}-{folderPath ?? ""}";
+        var key = await LayerCatalog.CacheKeyAsync(orgSlug, dsSlug, $"caps-wms-v2-{version}", folderPath);
         var cached = await Cache.GetRecordAsync<string>(key);
         if (cached != null) return cached;
 
@@ -221,7 +223,7 @@ public class WmsManager : OgcManagerBase, IWmsManager
         {
             return await _cacheManager.GetAsync(MagicStrings.OgcRenderCacheSeed,
                 CacheCategories.ForDataset(orgSlug, dsSlug), renderKey.Key,
-                new Func<Task<byte[]>>(() => Task.Run(() =>
+                new Func<Task<byte[]>>(() => _gate.RunAsync(NativeLane.Tiles, () =>
                     Render(ddb, rasters, renderKey.Bbox, crs, width, height, format, bgColor, transparent))));
         }
         catch (DegradedRenderException ex)

@@ -1,3 +1,4 @@
+using Registry.Web.Services.Ports;
 using System;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -18,18 +19,17 @@ namespace Registry.Web.Test;
 public class DatasetCacheInvalidatorTests
 {
     private Mock<ICacheManager> _cacheManager = null!;
-    private Mock<ICacheKeyScanner> _keyScanner = null!;
+    private Mock<IOgcCacheKeys> _ogcKeys = null!;
     private DatasetCacheInvalidator _sut = null!;
 
     [SetUp]
     public void SetUp()
     {
         _cacheManager = new Mock<ICacheManager>();
-        _keyScanner = new Mock<ICacheKeyScanner>();
-        _keyScanner.Setup(s => s.RemoveByPatternAsync(It.IsAny<string>())).ReturnsAsync(0);
+        _ogcKeys = new Mock<IOgcCacheKeys>();
 
         _sut = new DatasetCacheInvalidator(
-            NullLogger<DatasetCacheInvalidator>.Instance, _cacheManager.Object, _keyScanner.Object);
+            NullLogger<DatasetCacheInvalidator>.Instance, _cacheManager.Object, _ogcKeys.Object);
     }
 
     [Test]
@@ -53,21 +53,20 @@ public class DatasetCacheInvalidatorTests
     }
 
     [Test]
-    public async Task InvalidateAllDatasetCachesAsync_RemovesOgcKeyPatterns()
+    public async Task InvalidateAllDatasetCachesAsync_RenewsTheOgcGeneration()
     {
         const string org = "acme";
         const string ds = "survey-2024";
 
         await _sut.InvalidateAllDatasetCachesAsync(org, ds);
 
-        _keyScanner.Verify(s => s.RemoveByPatternAsync(CacheCategories.ForOgcCapabilitiesPattern(org, ds)), Times.Once);
-        _keyScanner.Verify(s => s.RemoveByPatternAsync(CacheCategories.ForOgcLayersPattern(org, ds)), Times.Once);
+        _ogcKeys.Verify(k => k.InvalidateAsync(org, ds), Times.Once);
     }
 
     [Test]
-    public async Task InvalidateAllDatasetCachesAsync_OgcScannerThrows_IsSwallowed()
+    public async Task InvalidateAllDatasetCachesAsync_OgcCacheThrows_IsSwallowed()
     {
-        _keyScanner.Setup(s => s.RemoveByPatternAsync(It.IsAny<string>()))
+        _ogcKeys.Setup(k => k.InvalidateAsync(It.IsAny<string>(), It.IsAny<string>()))
             .ThrowsAsync(new InvalidOperationException("cache backend unavailable"));
 
         await Should.NotThrowAsync(() => _sut.InvalidateAllDatasetCachesAsync("org", "ds"));

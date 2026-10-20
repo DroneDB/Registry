@@ -43,7 +43,7 @@ public sealed class WcsProtocol10Handler : IWcsProtocolHandler
 
     public async Task<string> GetCapabilitiesAsync(string orgSlug, string dsSlug, string? folderPath)
     {
-        var key = $"ogc-caps-wcs10-v1-{orgSlug}-{dsSlug}-{folderPath ?? ""}";
+        var key = await _svc.CacheKeyAsync(orgSlug, dsSlug, "caps-wcs10-v1", folderPath);
         var cached = await _cache.GetRecordAsync<string>(key);
         if (cached != null) return cached;
 
@@ -284,7 +284,7 @@ public sealed class WcsProtocol10Handler : IWcsProtocolHandler
         var outputCrs = WcsConformance.NormalizeCrs(
             OgcRequestParser.Get(q, "RESPONSE_CRS") ?? OgcRequestParser.Get(q, "RESPONSE_CRS_URI"));
 
-        var bytes = _svc.RenderRegion(ddb, layer, bbox, width, height, mime, bands,
+        var bytes = await _svc.RenderRegionAsync(ddb, layer, bbox, width, height, mime, bands,
             string.IsNullOrEmpty(outputCrs) ? null : outputCrs);
         return new WcsCoverageResult(bytes, mime);
     }

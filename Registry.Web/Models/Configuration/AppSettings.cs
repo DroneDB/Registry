@@ -355,6 +355,9 @@ public class AppSettings
     /// </summary>
 #nullable enable
     public IndexQueueSettings? IndexQueue { get; set; }
+
+    /// <summary>Concurrency of native renders (tiles, thumbnails, coverages) in this process.</summary>
+    public NativeConcurrencySettings? NativeConcurrency { get; set; }
 #nullable restore
 
     /// <summary>

@@ -200,6 +200,9 @@ public static class StartupExtenders
 
     public static void AddCacheProvider(this IServiceCollection services, AppSettings appSettings)
     {
+        // OGC document keys carry a per-dataset generation kept in the distributed cache
+        services.AddSingleton<Services.Ports.IOgcCacheKeys, OgcCacheKeys>();
+
         if (appSettings.CacheProvider == null)
         {
             // Use memory caching

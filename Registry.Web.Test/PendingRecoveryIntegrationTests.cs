@@ -527,7 +527,7 @@ public class PendingRecoveryIntegrationTests
             invalidatingCache.Register(MagicStrings.BuildPendingTrackerCacheSeed,
                 _ => Task.FromResult(Encoding.UTF8.GetBytes("{}")));
             await new DatasetCacheInvalidator(_provider.GetRequiredService<ILogger<DatasetCacheInvalidator>>(),
-                invalidatingCache, scanner.Object, _storage, _provider.GetRequiredService<IConfiguration>())
+                invalidatingCache, Mock.Of<IOgcCacheKeys>(), _storage, _provider.GetRequiredService<IConfiguration>())
                 .InvalidateAllDatasetCachesAsync(Org, ds);
         }
         // The first invalidation migrates the still-populated legacy cache

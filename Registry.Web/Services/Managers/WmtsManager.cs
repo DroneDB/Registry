@@ -56,7 +56,7 @@ public class WmtsManager : OgcManagerBase, IWmtsManager
             sectionsKey = string.Join("+", sectionsSet.OrderBy(s => s, StringComparer.OrdinalIgnoreCase));
         }
 
-        var key = $"ogc-caps-wmts-v5-1.0.0-{orgSlug}-{dsSlug}-{folderPath ?? ""}-{sectionsKey}";
+        var key = await LayerCatalog.CacheKeyAsync(orgSlug, dsSlug, "caps-wmts-v5-1.0.0", $"{folderPath}-{sectionsKey}");
         var cached = await Cache.GetRecordAsync<string>(key);
         if (cached != null) return cached;
 

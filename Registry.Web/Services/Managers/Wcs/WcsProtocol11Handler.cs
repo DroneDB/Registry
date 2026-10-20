@@ -42,7 +42,7 @@ public sealed class WcsProtocol11Handler : IWcsProtocolHandler
 
     public async Task<string> GetCapabilitiesAsync(string orgSlug, string dsSlug, string? folderPath)
     {
-        var key = $"ogc-caps-wcs11-v1-{orgSlug}-{dsSlug}-{folderPath ?? ""}";
+        var key = await _svc.CacheKeyAsync(orgSlug, dsSlug, "caps-wcs11-v1", folderPath);
         var cached = await _cache.GetRecordAsync<string>(key);
         if (cached != null) return cached;
 
@@ -239,7 +239,7 @@ public sealed class WcsProtocol11Handler : IWcsProtocolHandler
         var bands = WcsRangeSubsetParser.ParseRangeSubset11(
             OgcRequestParser.Get(q, "RangeSubset"), info);
 
-        var bytes = _svc.RenderRegion(ddb, layer, bbox, width, height, format, bands);
+        var bytes = await _svc.RenderRegionAsync(ddb, layer, bbox, width, height, format, bands);
         return new WcsCoverageResult(bytes, format);
     }
 

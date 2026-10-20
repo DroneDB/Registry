@@ -51,6 +51,7 @@ public class ObjectsManager : IObjectsManager
     private readonly ImportSettings _importSettings;
     private readonly IBuildStatusService _buildStatusService;
     private readonly IDatasetIndexQueue? _indexQueue;
+    private readonly INativeWorkGate _nativeGate;
 
     private static bool IsReservedPath(string path)
     {
@@ -75,8 +76,11 @@ public class ObjectsManager : IObjectsManager
         IDatasetCacheInvalidator? datasetCacheInvalidator = null,
         IBuildArtifactResolver buildArtifactResolver = null!,
         IBuildStatusService? buildStatusService = null,
-        IDatasetIndexQueue? indexQueue = null)
+        IDatasetIndexQueue? indexQueue = null,
+        INativeWorkGate? nativeGate = null)
     {
+        IOgcCacheKeys? fallbackOgcKeys = null;
+        _nativeGate = nativeGate ?? NativeWorkGate.Default;
         _logger = logger;
         _context = context;
         _ddbManager = ddbManager;
@@ -101,13 +105,18 @@ public class ObjectsManager : IObjectsManager
         // Stateless; the DI-registered singleton is injected in production, while a local
         // instance keeps direct (test) construction working without wiring.
         _datasetCacheInvalidator = datasetCacheInvalidator
-            ?? new DatasetCacheInvalidator(NullLogger<DatasetCacheInvalidator>.Instance, cacheManager,
-                new NullCacheKeyScanner(NullLogger<NullCacheKeyScanner>.Instance));
+            ?? new DatasetCacheInvalidator(NullLogger<DatasetCacheInvalidator>.Instance, cacheManager, FallbackOgcKeys());
         _buildArtifactResolver = buildArtifactResolver;
         _importSettings = settings.Value.Import ?? new ImportSettings();
         // Optional: not supplied by most unit tests constructing this class directly. When
         // absent, FinalizeAddedFileAsync falls back to the old direct AddRaw+GetEntry path.
         _indexQueue = indexQueue;
+        return;
+
+        // Only for the fallbacks of a direct construction (tests): production wires the shared keys
+        IOgcCacheKeys FallbackOgcKeys() => fallbackOgcKeys ??= new OgcCacheKeys(
+            new Microsoft.Extensions.Caching.Distributed.MemoryDistributedCache(
+                Microsoft.Extensions.Options.Options.Create(new Microsoft.Extensions.Caching.Memory.MemoryDistributedCacheOptions())));
     }
 
     /// <summary>
@@ -1719,8 +1728,8 @@ public class ObjectsManager : IObjectsManager
             var tileData =
                 await _cacheManager.GetAsync(MagicStrings.TileCacheSeed, ForDataset(obj.OrgSlug, obj.DsSlug), obj.Hash,
                     tx, ty, tz, retina,
-                    new Func<Task<byte[]>>(() =>
-                        Task.Run(() => obj.Ddb.GenerateTile(obj.SourcePath, tz, tx, ty, retina, obj.Hash, "webp"))));
+                    new Func<Task<byte[]>>(() => _nativeGate.RunAsync(NativeLane.Tiles,
+                        () => obj.Ddb.GenerateTile(obj.SourcePath, tz, tx, ty, retina, obj.Hash, "webp"))));
 
             return new StorageDataDto
             {
@@ -2253,7 +2262,7 @@ public class ObjectsManager : IObjectsManager
 
         var thumbData = await _cacheManager.GetAsync(MagicStrings.ThumbnailCacheSeed, ForDataset(orgSlug, dsSlug),
             entry.Hash, size, vizKey,
-            new Func<Task<byte[]>>(() => Task.Run(() =>
+            new Func<Task<byte[]>>(() => _nativeGate.RunAsync(NativeLane.Heavy, () =>
                 ddb.GenerateThumbnailEx(sourcePath, size, preset, bands, formula, bandFilter, colormap, rescale))));
 
         return new StorageDataDto
@@ -2285,7 +2294,7 @@ public class ObjectsManager : IObjectsManager
 
             var tileData = await _cacheManager.GetAsync(MagicStrings.TileCacheSeed, ForDataset(orgSlug, dsSlug),
                 entry.Hash, tx, ty, tz, retina, vizKey,
-                new Func<Task<byte[]>>(() => Task.Run(() =>
+                new Func<Task<byte[]>>(() => _nativeGate.RunAsync(NativeLane.Tiles, () =>
                     ddb.GenerateTileEx(sourcePath, tz, tx, ty, retina, entry.Hash,
                         preset, bands, formula, bandFilter, colormap, rescale).ToWebp(90))));
 

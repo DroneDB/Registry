@@ -368,15 +368,22 @@ public class Startup
         services.AddScoped<OgcAuthorizationFilter>();
         services.AddScoped<OgcExceptionFilter>();
 
+        // Native renders share a concurrency budget per lane (REG-07 §5.2); every thumbnail goes
+        // through the Heavy lane, whichever generator makes it
+        services.AddSingleton<INativeWorkGate, NativeWorkGate>();
         if (!string.IsNullOrWhiteSpace(appSettings.RemoteThumbnailGeneratorUrl))
         {
             services.Configure<RemoteThumbnailGeneratorSettings>(options =>
                 options.Url = appSettings.RemoteThumbnailGeneratorUrl);
-            services.AddSingleton<IThumbnailGenerator, RemoteThumbnailGenerator>();
+            services.AddSingleton<RemoteThumbnailGenerator>();
+            services.AddSingleton<IThumbnailGenerator>(sp => new GatedThumbnailGenerator(
+                sp.GetRequiredService<RemoteThumbnailGenerator>(), sp.GetRequiredService<INativeWorkGate>()));
         }
         else
         {
-            services.AddSingleton<IThumbnailGenerator, LocalThumbnailGenerator>();
+            services.AddSingleton<LocalThumbnailGenerator>();
+            services.AddSingleton<IThumbnailGenerator>(sp => new GatedThumbnailGenerator(
+                sp.GetRequiredService<LocalThumbnailGenerator>(), sp.GetRequiredService<INativeWorkGate>()));
         }
 
         services.AddSingleton<IFileSystem, FileSystem>();

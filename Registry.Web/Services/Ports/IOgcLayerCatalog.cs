@@ -28,7 +28,13 @@ public interface IOgcLayerCatalog
     /// <summary>
     /// Invalidate every OGC-related cache entry (layers + capabilities) for the given dataset.
     /// Call after add / remove / move / build operations so subsequent requests see fresh data.
-    /// No-op when the configured cache backend does not support pattern scanning (e.g. in-memory).
+    /// One cache write (a new generation of <see cref="CacheKeyAsync"/>), on every cache provider.
     /// </summary>
     System.Threading.Tasks.Task InvalidateAsync(string orgSlug, string dsSlug);
+
+    /// <summary>
+    /// The cache key of an OGC document of the dataset (capabilities and the like): stale as soon
+    /// as <see cref="InvalidateAsync"/> runs for the dataset.
+    /// </summary>
+    System.Threading.Tasks.Task<string> CacheKeyAsync(string orgSlug, string dsSlug, string kind, string? detail = null);
 }

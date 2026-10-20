@@ -25,7 +25,7 @@ public class OgcLayerCatalogTests
     private Mock<IDDB> _ddb = null!;
     private Mock<IBuildArtifactResolver> _artifacts = null!;
     private Mock<IDdbWrapper> _wrapper = null!;
-    private Mock<ICacheKeyScanner> _scanner = null!;
+    private Mock<IOgcCacheKeys> _keys = null!;
     private IDistributedCache _cache = null!;
     private OgcLayerCatalog _catalog = null!;
 
@@ -40,8 +40,7 @@ public class OgcLayerCatalogTests
         _ddb = new Mock<IDDB>();
         _artifacts = new Mock<IBuildArtifactResolver>();
         _wrapper = new Mock<IDdbWrapper>();
-        _scanner = new Mock<ICacheKeyScanner>();
-        _scanner.Setup(s => s.RemoveByPatternAsync(It.IsAny<string>())).ReturnsAsync(0);
+        _keys = new Mock<IOgcCacheKeys>();
 
         _cache = new MemoryDistributedCache(Microsoft.Extensions.Options.Options.Create(new MemoryDistributedCacheOptions()));
 
@@ -55,7 +54,7 @@ public class OgcLayerCatalogTests
             _cache,
             _artifacts.Object,
             _wrapper.Object,
-            _scanner.Object,
+            new OgcCacheKeys(_cache),
             NullLogger<OgcLayerCatalog>.Instance);
     }
 
@@ -214,30 +213,54 @@ public class OgcLayerCatalogTests
     }
 
     [Test]
-    public async Task InvalidateAsync_RemovesBothCapsAndLayerKeyPatterns()
+    public async Task InvalidateAsync_MakesCachedLayersAndKeysStale()
     {
+        var entry = VectorEntry();
+        _ddb.Setup(d => d.Find(It.IsAny<EntryQuery>())).Returns([entry]);
+        var capsKey = await _catalog.CacheKeyAsync(Org, Ds, "caps-wms-v2-1.3.0", "folder");
+
+        await _catalog.GetLayersAsync(Org, Ds);
+        await _catalog.GetLayersAsync(Org, Ds); // cached
+        _ddb.Verify(d => d.Find(It.IsAny<EntryQuery>()), Times.Once);
+
         await _catalog.InvalidateAsync(Org, Ds);
 
-        _scanner.Verify(s => s.RemoveByPatternAsync($"ogc-caps-*-{Org}-{Ds}-*"), Times.Once);
-        _scanner.Verify(s => s.RemoveByPatternAsync($"ogc-layers-{Org}-{Ds}-*"), Times.Once);
+        await _catalog.GetLayersAsync(Org, Ds);
+        _ddb.Verify(d => d.Find(It.IsAny<EntryQuery>()), Times.Exactly(2));
+        (await _catalog.CacheKeyAsync(Org, Ds, "caps-wms-v2-1.3.0", "folder")).ShouldNotBe(capsKey);
+    }
+
+    [Test]
+    public async Task CacheKeyAsync_IsStableUntilInvalidated_AndPerDataset()
+    {
+        var key = await _catalog.CacheKeyAsync(Org, Ds, "caps-wfs-v2-2.0.0", null);
+        (await _catalog.CacheKeyAsync(Org, Ds, "caps-wfs-v2-2.0.0", null)).ShouldBe(key);
+        (await _catalog.CacheKeyAsync(Org, Ds, "caps-wfs-v2-2.0.0", "sub")).ShouldNotBe(key);
+
+        await _catalog.InvalidateAsync(Org, "other-ds");
+        (await _catalog.CacheKeyAsync(Org, Ds, "caps-wfs-v2-2.0.0", null)).ShouldBe(key);
     }
 
     [Test]
     public async Task InvalidateAsync_NoOpOnBlankSlugs()
     {
-        await _catalog.InvalidateAsync("", Ds);
-        await _catalog.InvalidateAsync(Org, "  ");
-        _scanner.Verify(s => s.RemoveByPatternAsync(It.IsAny<string>()), Times.Never);
+        var catalog = CatalogWith(_keys.Object);
+        await catalog.InvalidateAsync("", Ds);
+        await catalog.InvalidateAsync(Org, "  ");
+        _keys.Verify(k => k.InvalidateAsync(It.IsAny<string>(), It.IsAny<string>()), Times.Never);
     }
 
     [Test]
-    public async Task InvalidateAsync_SwallowsScannerException()
+    public async Task InvalidateAsync_SwallowsCacheException()
     {
-        _scanner.Setup(s => s.RemoveByPatternAsync(It.IsAny<string>()))
+        _keys.Setup(k => k.InvalidateAsync(It.IsAny<string>(), It.IsAny<string>()))
             .ThrowsAsync(new InvalidOperationException("redis down"));
 
-        await Should.NotThrowAsync(() => _catalog.InvalidateAsync(Org, Ds));
+        await Should.NotThrowAsync(() => CatalogWith(_keys.Object).InvalidateAsync(Org, Ds));
     }
+
+    private OgcLayerCatalog CatalogWith(IOgcCacheKeys keys) => new(_ddbManager.Object, _utils.Object, _cache,
+        _artifacts.Object, _wrapper.Object, keys, NullLogger<OgcLayerCatalog>.Instance);
 
     [Test]
     public async Task ResolveAsync_ExactMatch_ReturnsInnerLayer()

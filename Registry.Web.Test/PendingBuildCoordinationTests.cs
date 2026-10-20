@@ -481,7 +481,7 @@ public class PendingBuildCoordinationTests
                 return Task.CompletedTask;
             });
         await new DatasetCacheInvalidator(Mock.Of<ILogger<DatasetCacheInvalidator>>(), _cache.Object,
-            Mock.Of<ICacheKeyScanner>()).InvalidateAllDatasetCachesAsync(Org, Ds);
+            Mock.Of<IOgcCacheKeys>()).InvalidateAllDatasetCachesAsync(Org, Ds);
         _cacheData.ShouldBeEmpty();
         await _service.ScheduleRetryIfPending(Org, Ds);
         _delays.ShouldBeEmpty();
@@ -661,7 +661,7 @@ public class PendingBuildCoordinationTests
                 return Task.CompletedTask;
             });
         await new DatasetCacheInvalidator(Mock.Of<ILogger<DatasetCacheInvalidator>>(), _cache.Object,
-            Mock.Of<ICacheKeyScanner>(), _storage).InvalidateAllDatasetCachesAsync(Org, Ds);
+            Mock.Of<IOgcCacheKeys>(), _storage).InvalidateAllDatasetCachesAsync(Org, Ds);
         _cacheData.ShouldBeEmpty();
         await _service.ScheduleRetryIfPending(Org, Ds);
         _delays.ShouldBeEmpty();
@@ -689,7 +689,7 @@ public class PendingBuildCoordinationTests
         var storage = new Mock<JobStorage>();
         storage.Setup(x => x.GetConnection()).Returns(connection.Object);
         await new DatasetCacheInvalidator(Mock.Of<ILogger<DatasetCacheInvalidator>>(), _cache.Object,
-            Mock.Of<ICacheKeyScanner>(), storage.Object).InvalidateAllDatasetCachesAsync(Org, Ds);
+            Mock.Of<IOgcCacheKeys>(), storage.Object).InvalidateAllDatasetCachesAsync(Org, Ds);
 
         _cache.Verify(x => x.RemoveByCategoryAsync(MagicStrings.BuildPendingTrackerCacheSeed,
             CacheCategories.ForDataset(Org, Ds)), Times.Never);

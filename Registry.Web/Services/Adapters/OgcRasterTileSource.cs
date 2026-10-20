@@ -1,3 +1,4 @@
+#nullable enable
 using System;
 using System.Threading.Tasks;
 using Registry.Ports;
@@ -16,10 +17,12 @@ namespace Registry.Web.Services.Adapters;
 public class OgcRasterTileSource : IOgcRasterTileSource
 {
     private readonly ICacheManager _cacheManager;
+    private readonly INativeWorkGate _gate;
 
-    public OgcRasterTileSource(ICacheManager cacheManager)
+    public OgcRasterTileSource(ICacheManager cacheManager, INativeWorkGate? gate = null)
     {
         _cacheManager = cacheManager;
+        _gate = gate ?? NativeWorkGate.Default;
     }
 
     public Task<byte[]> GetTileAsync(string orgSlug, string dsSlug, IDDB ddb, OgcLayerDto layer,
@@ -27,7 +30,7 @@ public class OgcRasterTileSource : IOgcRasterTileSource
     {
         return _cacheManager.GetAsync(MagicStrings.TileCacheSeed, CacheCategories.ForDataset(orgSlug, dsSlug),
             layer.EntryHash, x, y, z, false, outputFormat,
-            new Func<Task<byte[]>>(() => Task.Run(() => ddb.GenerateTile(layer.EntryPath, z, x, y,
+            new Func<Task<byte[]>>(() => _gate.RunAsync(NativeLane.Tiles, () => ddb.GenerateTile(layer.EntryPath, z, x, y,
                 retina: false, inputPathHash: layer.EntryHash, outputFormat: outputFormat))));
     }
 }

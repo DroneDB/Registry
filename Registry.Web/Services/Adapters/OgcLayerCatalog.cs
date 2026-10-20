@@ -18,7 +18,7 @@ namespace Registry.Web.Services.Adapters;
 
 /// <summary>
 /// Enumerates entries via <see cref="IDdbManager"/> and projects them to OGC layer descriptors.
-/// Cached 5 minutes in Redis under "ogc-layers-{org}-{ds}[-{folder}]".
+/// Cached 5 minutes under a generation-scoped key (<see cref="IOgcCacheKeys"/>).
 /// </summary>
 public class OgcLayerCatalog : IOgcLayerCatalog
 {
@@ -27,13 +27,13 @@ public class OgcLayerCatalog : IOgcLayerCatalog
     private readonly IDistributedCache _cache;
     private readonly IBuildArtifactResolver _artifacts;
     private readonly IDdbWrapper _ddbWrapper;
-    private readonly ICacheKeyScanner _keyScanner;
+    private readonly IOgcCacheKeys _keys;
     private readonly ILogger<OgcLayerCatalog> _logger;
     private static readonly TimeSpan Ttl = TimeSpan.FromMinutes(5);
 
     public OgcLayerCatalog(IDdbManager ddbManager, IUtils utils, IDistributedCache cache,
         IBuildArtifactResolver artifacts, IDdbWrapper ddbWrapper,
-        ICacheKeyScanner keyScanner,
+        IOgcCacheKeys keys,
         ILogger<OgcLayerCatalog> logger)
     {
         _ddbManager = ddbManager;
@@ -41,7 +41,7 @@ public class OgcLayerCatalog : IOgcLayerCatalog
         _cache = cache;
         _artifacts = artifacts;
         _ddbWrapper = ddbWrapper;
-        _keyScanner = keyScanner;
+        _keys = keys;
         _logger = logger;
     }
 
@@ -50,16 +50,17 @@ public class OgcLayerCatalog : IOgcLayerCatalog
         if (string.IsNullOrWhiteSpace(orgSlug) || string.IsNullOrWhiteSpace(dsSlug)) return;
         try
         {
-            // Capabilities keys: ogc-caps-{service}-v2-{version}-{org}-{ds}-{folder}
-            await _keyScanner.RemoveByPatternAsync(CacheCategories.ForOgcCapabilitiesPattern(orgSlug, dsSlug));
-            // Layer enumeration keys: ogc-layers-{org}-{ds}-{folder}
-            await _keyScanner.RemoveByPatternAsync(CacheCategories.ForOgcLayersPattern(orgSlug, dsSlug));
+            // Layer lists and every capabilities document use CacheKeyAsync: one new generation
+            await _keys.InvalidateAsync(orgSlug, dsSlug);
         }
         catch (Exception ex)
         {
             _logger.LogWarning(ex, "Failed to invalidate OGC caches for {Org}/{Ds}", orgSlug, dsSlug);
         }
     }
+
+    public Task<string> CacheKeyAsync(string orgSlug, string dsSlug, string kind, string? detail = null) =>
+        _keys.ForAsync(orgSlug, dsSlug, kind, detail);
 
     public async Task<IReadOnlyList<OgcLayerDto>> GetLayersAsync(string orgSlug, string dsSlug,
         string? folderPath = null, bool includeLocal = false)
@@ -70,7 +71,7 @@ public class OgcLayerCatalog : IOgcLayerCatalog
 
     private async Task<List<OgcLayerDto>> GetAllLayersAsync(string orgSlug, string dsSlug, string? folderPath)
     {
-        var key = $"ogc-layers-{orgSlug}-{dsSlug}-{folderPath ?? string.Empty}";
+        var key = await _keys.ForAsync(orgSlug, dsSlug, "layers", folderPath);
         var cached = await _cache.GetRecordAsync<List<OgcLayerDto>>(key);
         if (cached != null) return cached;
 

@@ -73,7 +73,7 @@ public class WfsManager : OgcManagerBase, IWfsManager
 
     public async Task<string> GetCapabilitiesAsync(string orgSlug, string dsSlug, string? folderPath = null)
     {
-        var key = $"ogc-caps-wfs-v2-2.0.0-{orgSlug}-{dsSlug}-{folderPath ?? ""}";
+        var key = await LayerCatalog.CacheKeyAsync(orgSlug, dsSlug, "caps-wfs-v2-2.0.0", folderPath);
         var cached = await Cache.GetRecordAsync<string>(key);
         if (cached != null) return cached;
 
