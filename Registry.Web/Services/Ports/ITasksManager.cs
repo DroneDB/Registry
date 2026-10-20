@@ -1,4 +1,5 @@
 #nullable enable
+using System;
 using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
@@ -34,6 +35,19 @@ public interface ITasksManager
     /// <returns>The requested page of task summaries.</returns>
     Task<TaskSummaryDto[]> ListAsync(string orgSlug, string dsSlug, string? toolId, string? state,
         int skip, int take, CancellationToken ct = default);
+
+    /// <summary>
+    /// <see cref="ListAsync"/> with an entity tag of the page (HUB-05): equal tags mean equal
+    /// pages, so a client that already has the page gets a 304 instead of the list again.
+    /// </summary>
+    Task<TaskListPage> ListPageAsync(string orgSlug, string dsSlug, string? toolId, string? state,
+        int skip, int take, CancellationToken ct = default);
+
+    /// <summary>
+    /// Calls <paramref name="onChange"/> whenever the dataset's task list changes, until disposed
+    /// (read access required).
+    /// </summary>
+    Task<IDisposable> SubscribeAsync(string orgSlug, string dsSlug, Action onChange);
 
     /// <summary>
     /// Permanently removes concluded tasks from the dataset history and purges their artifacts.
@@ -88,3 +102,6 @@ public interface ITasksManager
 /// <param name="ContentType">MIME type inferred from the file name.</param>
 /// <param name="ETag">Quoted ETag derived from the artifact checksum, or null when unknown.</param>
 public sealed record TaskArtifactFile(string FilePath, string FileName, string ContentType, string? ETag);
+
+/// <summary>A page of the task list and its entity tag.</summary>
+public sealed record TaskListPage(TaskSummaryDto[] Items, string ETag);

@@ -40,6 +40,7 @@ public sealed class TasksManager : ITasksManager
     private readonly IBackgroundJobsProcessor _processor;
     private readonly IDdbManager _ddbManager;
     private readonly IDistributedCache _cache;
+    private readonly ITaskChangeNotifier? _changes;
     private readonly IHttpContextAccessor _httpContextAccessor;
     private readonly ProcessingPlatformSettings _settings;
     private readonly string _tempPath;
@@ -58,8 +59,10 @@ public sealed class TasksManager : ITasksManager
         IDistributedCache cache,
         IHttpContextAccessor httpContextAccessor,
         IOptions<AppSettings> appSettings,
-        ILogger<TasksManager> logger)
+        ILogger<TasksManager> logger,
+        ITaskChangeNotifier? changes = null)
     {
+        _changes = changes;
         _runner = runner;
         _registry = registry;
         _gating = gating;
@@ -133,6 +136,10 @@ public sealed class TasksManager : ITasksManager
     }
 
     public async Task<TaskSummaryDto[]> ListAsync(string orgSlug, string dsSlug, string? toolId, string? state,
+        int skip, int take, CancellationToken ct = default) =>
+        (await ListPageAsync(orgSlug, dsSlug, toolId, state, skip, take, ct)).Items;
+
+    public async Task<TaskListPage> ListPageAsync(string orgSlug, string dsSlug, string? toolId, string? state,
         int skip, int take, CancellationToken ct = default)
     {
         var ds = _utils.GetDataset(orgSlug, dsSlug);
@@ -151,7 +158,8 @@ public sealed class TasksManager : ITasksManager
             var filter = new JobIndexQueryFilter(orgSlug, dsSlug, toolId, state,
                 Skip: Math.Max(0, skip), Take: clampedTake);
             var rows = await _query.QueryAsync(filter, ct);
-            return [.. rows.Select(ToSummary)];
+            TaskSummaryDto[] page = [.. rows.Select(ToSummary)];
+            return new TaskListPage(page, ETagOf(JsonSerializer.SerializeToUtf8Bytes(page), clampedTake));
         }
 
         // The cached payload is always the canonical page (first MaxTake rows) so that a
@@ -170,13 +178,30 @@ public sealed class TasksManager : ITasksManager
                 Skip: 0, Take: MaxTake);
             var rows = await _query.QueryAsync(filter, ct);
             canonical = [.. rows.Select(ToSummary)];
+            cachedBytes = JsonSerializer.SerializeToUtf8Bytes(canonical);
 
             var options = new DistributedCacheEntryOptions
                 { AbsoluteExpirationRelativeToNow = TimeSpan.FromSeconds(60) };
-            await _cache.SetAsync(cacheKey, JsonSerializer.SerializeToUtf8Bytes(canonical), options, ct);
+            await _cache.SetAsync(cacheKey, cachedBytes, options, ct);
         }
 
-        return canonical.Length > clampedTake ? canonical[..clampedTake] : canonical;
+        // The tag of a page of the canonical list: the canonical bytes and the page size
+        return new TaskListPage(canonical.Length > clampedTake ? canonical[..clampedTake] : canonical,
+            ETagOf(cachedBytes, clampedTake));
+    }
+
+    // Weak: equal tags mean the same tasks, not byte-identical bodies
+    private static string ETagOf(byte[] content, int take) =>
+        $"W/\"{Convert.ToHexStringLower(System.Security.Cryptography.SHA256.HashData(content).AsSpan(0, 12))}-{take}\"";
+
+    public async Task<IDisposable> SubscribeAsync(string orgSlug, string dsSlug, Action onChange)
+    {
+        var ds = _utils.GetDataset(orgSlug, dsSlug);
+        if (!await _authManager.RequestAccess(ds, AccessType.Read))
+            throw AccessDenied();
+
+        return _changes?.Subscribe(orgSlug, dsSlug, onChange)
+               ?? throw new InvalidOperationException("Task change notifications are not configured");
     }
 
     public async Task<int> ClearAsync(string orgSlug, string dsSlug, string? toolId, CancellationToken ct = default)

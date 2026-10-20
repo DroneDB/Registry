@@ -1,0 +1,89 @@
+#nullable enable
+using System;
+using System.IO;
+using System.Text;
+using System.Threading;
+using System.Threading.Tasks;
+using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Logging.Abstractions;
+using Moq;
+using NUnit.Framework;
+using Registry.Web.Controllers;
+using Registry.Web.Models.DTO;
+using Registry.Web.Services.Adapters;
+using Registry.Web.Services.Ports;
+using Shouldly;
+
+namespace Registry.Web.Test;
+
+/// <summary>HUB-05 server side: task change notifications, the event stream, and 304 on an unchanged list.</summary>
+[TestFixture]
+public class TaskEventsTests
+{
+    [Test]
+    public void Notifier_CallsTheListenersOfTheDatasetOnly_UntilDisposed()
+    {
+        var notifier = new InMemoryTaskChangeNotifier();
+        var calls = 0;
+        var subscription = notifier.Subscribe("org", "ds", () => calls++);
+
+        notifier.Publish("org", "other");
+        notifier.Publish("org", "ds");
+        calls.ShouldBe(1);
+
+        subscription.Dispose();
+        notifier.Publish("org", "ds");
+        calls.ShouldBe(1);
+    }
+
+    private static TasksController Controller(Mock<ITasksManager> manager, HttpContext context) =>
+        new(manager.Object, NullLogger<TasksController>.Instance)
+        {
+            ControllerContext = new ControllerContext { HttpContext = context }
+        };
+
+    [Test]
+    public async Task List_AnswersNotModified_WhenTheClientHasThePage()
+    {
+        var manager = new Mock<ITasksManager>();
+        manager.Setup(m => m.ListPageAsync("org", "ds", null, null, 0, 50, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new TaskListPage([], "W/\"abc-50\""));
+
+        var first = new DefaultHttpContext();
+        (await Controller(manager, first).List("org", "ds", null, null)).ShouldBeOfType<OkObjectResult>();
+        first.Response.Headers.ETag.ToString().ShouldBe("W/\"abc-50\"");
+
+        var again = new DefaultHttpContext();
+        again.Request.Headers.IfNoneMatch = "W/\"abc-50\"";
+        (await Controller(manager, again).List("org", "ds", null, null))
+            .ShouldBeOfType<StatusCodeResult>().StatusCode.ShouldBe(StatusCodes.Status304NotModified);
+    }
+
+    [Test]
+    public async Task Events_StreamsATasksEventOnEveryChange()
+    {
+        var notifier = new InMemoryTaskChangeNotifier();
+        var manager = new Mock<ITasksManager>();
+        manager.Setup(m => m.SubscribeAsync("org", "ds", It.IsAny<Action>()))
+            .Returns((string o, string d, Action a) => Task.FromResult(notifier.Subscribe(o, d, a)));
+
+        var context = new DefaultHttpContext();
+        var body = new MemoryStream();
+        context.Response.Body = body;
+        using var cts = new CancellationTokenSource();
+
+        var stream = Controller(manager, context).Events("org", "ds", cts.Token);
+        await Task.Delay(100);
+        notifier.Publish("org", "ds");
+        await Task.Delay(100);
+        await cts.CancelAsync();
+        await stream;
+
+        var text = Encoding.UTF8.GetString(body.ToArray());
+        text.ShouldStartWith("retry: 5000\n\n");
+        text.ShouldContain("event: tasks\n");
+        context.Response.ContentType.ShouldBe("text/event-stream");
+        context.Response.Headers["X-Accel-Buffering"].ToString().ShouldBe("no");
+    }
+}

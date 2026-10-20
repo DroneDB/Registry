@@ -208,6 +208,7 @@ public static class StartupExtenders
             // Use memory caching
             services.AddDistributedMemoryCache();
             services.AddSingleton<ICacheKeyScanner, NullCacheKeyScanner>();
+            services.AddSingleton<Services.Ports.ITaskChangeNotifier, InMemoryTaskChangeNotifier>();
             return;
         }
 
@@ -217,6 +218,7 @@ public static class StartupExtenders
 
                 services.AddDistributedMemoryCache();
                 services.AddSingleton<ICacheKeyScanner, NullCacheKeyScanner>();
+                services.AddSingleton<Services.Ports.ITaskChangeNotifier, InMemoryTaskChangeNotifier>();
 
                 break;
 
@@ -248,6 +250,13 @@ public static class StartupExtenders
                         sp.GetRequiredService<IConnectionMultiplexer>(),
                         settings.InstanceName,
                         sp.GetRequiredService<ILogger<RedisCacheKeyScanner>>()));
+
+                // Task changes made by processing nodes reach the web node's event streams
+                services.AddSingleton<Services.Ports.ITaskChangeNotifier>(sp =>
+                    new RedisTaskChangeNotifier(
+                        sp.GetRequiredService<IConnectionMultiplexer>(),
+                        settings.InstanceName ?? string.Empty,
+                        sp.GetRequiredService<ILogger<RedisTaskChangeNotifier>>()));
 
                 break;
 

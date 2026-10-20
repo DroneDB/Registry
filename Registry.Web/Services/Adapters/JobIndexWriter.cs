@@ -25,7 +25,7 @@ namespace Registry.Web.Services.Adapters;
 /// Also invalidates the per-dataset task-list cache after each mutation.
 /// </summary>
 public class JobIndexWriter(RegistryContext db, ILogger<JobIndexWriter> log,
-    IDistributedCache cache) : IJobIndexWriter
+    IDistributedCache cache, ITaskChangeNotifier? notifier = null) : IJobIndexWriter
 {
     public async Task UpsertOnEnqueueAsync(string jobId, IndexPayload meta, DateTime createdAtUtc,
         string? methodDisplay, CancellationToken ct = default)
@@ -608,5 +608,8 @@ public class JobIndexWriter(RegistryContext db, ILogger<JobIndexWriter> log,
         {
             log.LogDebug(ex, "Failed to invalidate task-list cache for {Org}/{Ds}", orgSlug, dsSlug);
         }
+
+        // After the invalidation: a listener that refreshes now reads the new list
+        notifier?.Publish(orgSlug, dsSlug);
     }
 }
