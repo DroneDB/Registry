@@ -12,6 +12,7 @@ using Registry.Web.Data;
 using Registry.Web.Data.Models;
 using Registry.Web.Exceptions;
 using Registry.Web.Models.Configuration;
+using Registry.Web.Models;
 using Registry.Web.Models.DTO;
 using Registry.Web.Services.Adapters;
 using Registry.Web.Services.Ports;
@@ -65,7 +66,11 @@ public class DatasetsManager : IDatasetsManager
         _summaries = summaries;
     }
 
-    public async Task<IEnumerable<DatasetDto>> List(string orgSlug, bool includeThumbnailCheck = false)
+    public async Task<IEnumerable<DatasetDto>> List(string orgSlug, bool includeThumbnailCheck = false) =>
+        (await ListPage(orgSlug, new DatasetListQuery(), includeThumbnailCheck)).Items;
+
+    public async Task<(IReadOnlyList<DatasetDto> Items, int Total)> ListPage(string orgSlug, DatasetListQuery query,
+        bool includeThumbnailCheck = false)
     {
         var org = _utils.GetOrganization(orgSlug, withDatasets: true);
 
@@ -81,7 +86,7 @@ public class DatasetsManager : IDatasetsManager
         if (!isOwnerOrAdmin && org.Users == null)
             await _context.Entry(org).Collection(o => o.Users).LoadAsync();
 
-        var result = new List<DatasetDto>();
+        var readable = new List<(DatasetDto Dto, Dataset Dataset)>();
 
         foreach (var ds in datasets)
         {
@@ -105,22 +110,31 @@ public class DatasetsManager : IDatasetsManager
                     continue;
             }
 
+            // Sizes and properties are cached per dataset until its index changes (REG-06)
             var summary = _summaries.Get(orgSlug, ds.InternalRef);
 
-            var dto = new DatasetDto
+            readable.Add((new DatasetDto
             {
                 Slug = ds.Slug,
                 CreationDate = ds.CreationDate,
                 Properties = summary.Properties,
                 Size = summary.Size,
-                Permissions = permissions,
-                HasThumbnail = includeThumbnailCheck ? CheckHasThumbnail(_ddbManager.Get(orgSlug, ds.InternalRef)) : null
-            };
-
-            result.Add(dto);
+                Permissions = permissions
+            }, ds));
         }
 
-        return result;
+        var bySlug = readable.ToDictionary(r => r.Dto.Slug, r => r.Dataset);
+        var matching = query.Apply(readable.Select(r => r.Dto)).ToList();
+        var total = string.IsNullOrWhiteSpace(query.Query)
+            ? readable.Count
+            : (query with { Skip = 0, Take = null }).Apply(readable.Select(r => r.Dto)).Count();
+
+        // The only per-dataset native call left: for the page shown, not the whole organization
+        if (includeThumbnailCheck)
+            foreach (var dto in matching)
+                dto.HasThumbnail = CheckHasThumbnail(_ddbManager.Get(orgSlug, bySlug[dto.Slug].InternalRef));
+
+        return (matching, total);
     }
 
     public async Task<DatasetDto> Get(string orgSlug, string dsSlug)

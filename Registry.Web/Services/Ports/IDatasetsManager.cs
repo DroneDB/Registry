@@ -11,6 +11,14 @@ namespace Registry.Web.Services.Ports;
 public interface IDatasetsManager
 {
     public Task<IEnumerable<DatasetDto>> List(string orgSlug, bool includeThumbnailCheck = false);
+
+    /// <summary>
+    /// A page of the datasets the current user can read, searched and sorted by the server; the
+    /// thumbnail check runs for the datasets of the page only.
+    /// </summary>
+    /// <returns>The page and the number of datasets that match the search.</returns>
+    public Task<(IReadOnlyList<DatasetDto> Items, int Total)> ListPage(string orgSlug, Models.DatasetListQuery query,
+        bool includeThumbnailCheck = false);
     public Task<DatasetDto> Get(string orgSlug, string dsSlug);
     public Task<EntryDto[]> GetEntry(string orgSlug, string dsSlug);
     public Task<DatasetDto> AddNew(string orgSlug, DatasetNewDto dataset);

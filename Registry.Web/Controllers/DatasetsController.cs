@@ -85,12 +85,23 @@ public class DatasetsController : ControllerBaseEx
     [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> GetAll([FromRoute, Required] string orgSlug, [FromQuery] bool includeThumbnailCheck = false)
+    public async Task<IActionResult> GetAll([FromRoute, Required] string orgSlug, [FromQuery] bool includeThumbnailCheck = false,
+        [FromQuery] int? skip = null, [FromQuery] int? take = null, [FromQuery] string q = null,
+        [FromQuery] string sort = null, [FromQuery] bool desc = false, [FromQuery] string slugs = null)
     {
         try
         {
             _logger.LogDebug("Dataset controller GetAll('{OrgSlug}')", orgSlug);
-            return Ok(await _datasetsManager.List(orgSlug, includeThumbnailCheck));
+
+            // Without paging parameters: the whole list, as before
+            if (skip == null && take == null && q == null && sort == null && slugs == null)
+                return Ok(await _datasetsManager.List(orgSlug, includeThumbnailCheck));
+
+            var slugList = slugs?.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+            var (items, total) = await _datasetsManager.ListPage(orgSlug,
+                new DatasetListQuery(skip ?? 0, take, q, sort, desc, slugList), includeThumbnailCheck);
+            Response.Headers["X-Total-Count"] = total.ToString(System.Globalization.CultureInfo.InvariantCulture);
+            return Ok(items);
         }
         catch (Exception ex)
         {
