@@ -1,4 +1,4 @@
-﻿#nullable enable
+#nullable enable
 using System;
 using Microsoft.Extensions.Caching.Memory;
 using Registry.Ports;

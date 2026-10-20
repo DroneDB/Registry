@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using Registry.Adapters.DroneDB;
 using Registry.Common;
 using Registry.Ports.DroneDB;

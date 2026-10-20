@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using Registry.Ports.DroneDB;
 
 namespace Registry.Ports;

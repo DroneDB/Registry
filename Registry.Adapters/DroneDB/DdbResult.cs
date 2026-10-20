@@ -1,4 +1,4 @@
-﻿namespace Registry.Adapters.DroneDB;
+namespace Registry.Adapters.DroneDB;
 
 public enum DdbResult
 {

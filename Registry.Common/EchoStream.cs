@@ -1,4 +1,4 @@
-﻿//
+//
 // EchoStream.cs
 //
 // Copyright © Stephen Quattlebaum 2003

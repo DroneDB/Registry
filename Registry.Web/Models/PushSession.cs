@@ -1,4 +1,4 @@
-﻿#nullable enable
+#nullable enable
 using Newtonsoft.Json;
 using Registry.Ports.DroneDB;
 

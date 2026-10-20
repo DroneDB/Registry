@@ -1,4 +1,4 @@
-﻿namespace Registry.Web.Models;
+namespace Registry.Web.Models;
 
 public class StorageFileDto
 {

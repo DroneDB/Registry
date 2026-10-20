@@ -1,4 +1,4 @@
-﻿namespace Registry.Adapters.Thumbnail;
+namespace Registry.Adapters.Thumbnail;
 
 /// <summary>
 /// Settings of the client of a remote ThumbnailGenerator host.

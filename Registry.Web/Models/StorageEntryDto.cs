@@ -1,4 +1,4 @@
-﻿using Registry.Common.Model;
+using Registry.Common.Model;
 using Registry.Ports.DroneDB;
 
 namespace Registry.Web.Models;

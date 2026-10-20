@@ -1,4 +1,4 @@
-﻿namespace Registry.Web.Models.Configuration;
+namespace Registry.Web.Models.Configuration;
 
 public enum DbProvider
 {

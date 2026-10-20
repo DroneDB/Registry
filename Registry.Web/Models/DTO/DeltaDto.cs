@@ -1,4 +1,4 @@
-﻿using Registry.Common;
+using Registry.Common;
 using System;
 using System.Collections.Generic;
 using System.Linq;
