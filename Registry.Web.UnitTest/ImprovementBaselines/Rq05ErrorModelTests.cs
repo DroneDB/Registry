@@ -125,6 +125,22 @@ public sealed class Rq05ErrorModelTests : IDisposable
     }
 
     [Test]
+    public async Task BasicAuthEndpoint_ChallengesAnonymousCallersOnly()
+    {
+        // [BasicAuthentication] endpoints (QGIS, scripts): a 401 carries the Basic challenge so the client
+        // asks for credentials; a signed-in caller without access gets a 403 and no challenge
+        var url = $"/orgs/{PrivateOrg}/ds/{PrivateDs}/mvt/abc/metadata.json";
+
+        var (anonymous, anonymousProblem) = await SendAsync(HttpMethod.Get, url);
+        ShouldBeProblem(anonymous, anonymousProblem, StatusCodes.Status401Unauthorized);
+        anonymous.Headers.WwwAuthenticate.Select(h => h.Scheme).ShouldContain("Basic");
+
+        var (user, userProblem) = await SendAsync(HttpMethod.Get, url, RegularUser);
+        ShouldBeProblem(user, userProblem, StatusCodes.Status403Forbidden);
+        user.Headers.WwwAuthenticate.ShouldBeEmpty();
+    }
+
+    [Test]
     public async Task FailedLogin_Anonymous_StaysA401ProblemDetails()
     {
         using var request = new HttpRequestMessage(HttpMethod.Post, "/users/authenticate")
