@@ -1,7 +1,6 @@
 #nullable enable
 using System;
 using System.IO;
-using System.Security.Cryptography;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
@@ -9,6 +8,7 @@ using Microsoft.Extensions.Options;
 using Registry.Web.Models.Configuration;
 using Registry.Web.Services.HeavyTasks.Models;
 using Registry.Web.Services.HeavyTasks.Ports;
+using Registry.Web.Utilities;
 
 namespace Registry.Web.Services.HeavyTasks.Tools;
 
@@ -139,7 +139,8 @@ public sealed class RasterExportTool : HeavyToolBase<RasterExportTool.Parameters
         if (!info.Exists)
             throw new InvalidOperationException("Raster export produced no output file.");
 
-        var sha = await ComputeSha256Async(outputPath, ct);
+        // libddb writes the GeoTIFF (blocks at random offsets): read back for its hash
+        var sha = await FileHash.Sha256Async(outputPath, ct);
         progress.Report(new HeavyToolProgress(1, "done", LogChunk: $"Export complete ({info.Length} bytes)"));
 
         return new HeavyToolArtifact(
@@ -159,11 +160,4 @@ public sealed class RasterExportTool : HeavyToolBase<RasterExportTool.Parameters
         return string.IsNullOrWhiteSpace(safe) ? fallback : safe;
     }
 
-    private static async Task<string> ComputeSha256Async(string path, CancellationToken ct)
-    {
-        await using var stream = File.OpenRead(path);
-        using var sha = SHA256.Create();
-        var hash = await sha.ComputeHashAsync(stream, ct);
-        return Convert.ToHexString(hash).ToLowerInvariant();
-    }
 }

@@ -2,13 +2,13 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
-using System.Security.Cryptography;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using Registry.Web.Services.HeavyTasks.Models;
 using Registry.Web.Services.HeavyTasks.Ports;
 using Registry.Web.Services.Ports;
+using Registry.Web.Utilities;
 
 namespace Registry.Web.Services.HeavyTasks.Tools;
 
@@ -131,9 +131,12 @@ public sealed class BulkDownloadTool : HeavyToolBase<BulkDownloadTool.Parameters
             progress.Report(new HeavyToolProgress(pct / 100.0, "archiving"));
         });
 
-        await using (var fs = File.Create(outputPath))
+        // Hashed while it is written (the zip writer never seeks): the archive is not read back
+        string sha;
+        await using (var archive = new HashingWriteStream(File.Create(outputPath)))
         {
-            await _zip.WriteZipAsync(ctx.Ddb, files, folders, includeDdb, fs, byteProgress, ct);
+            await _zip.WriteZipAsync(ctx.Ddb, files, folders, includeDdb, archive, byteProgress, ct);
+            sha = archive.GetHexDigest();
         }
 
         ct.ThrowIfCancellationRequested();
@@ -142,7 +145,6 @@ public sealed class BulkDownloadTool : HeavyToolBase<BulkDownloadTool.Parameters
         if (!info.Exists)
             throw new InvalidOperationException("Bulk download produced no archive file.");
 
-        var sha = await ComputeSha256Async(outputPath, ct);
         progress.Report(new HeavyToolProgress(1, "done", LogChunk: $"Archive complete ({info.Length} bytes)"));
 
         return new HeavyToolArtifact(
@@ -189,13 +191,6 @@ public sealed class BulkDownloadTool : HeavyToolBase<BulkDownloadTool.Parameters
 
 
 
-    private static async Task<string> ComputeSha256Async(string path, CancellationToken ct)
-    {
-        await using var stream = File.OpenRead(path);
-        using var sha = SHA256.Create();
-        var hash = await sha.ComputeHashAsync(stream, ct);
-        return Convert.ToHexString(hash).ToLowerInvariant();
-    }
 
     /// <summary>
     /// Synchronous <see cref="IProgress{T}"/> that invokes the handler on the
