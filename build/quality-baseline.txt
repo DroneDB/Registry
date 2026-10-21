@@ -1,0 +1,37 @@
+# Quality metrics baseline for scripts/quality-metrics.sh. Do not edit by hand:
+# run scripts/quality-metrics.sh --update after a metric went down.
+# Format: <metric><TAB><value>
+Raw X-Forwarded-For reads	0
+Admin password persisted to config	0
+Console dump of admin password	0
+Path.GetPathRoot disk checks	2
+ServerVersion.AutoDetect calls	3
+Files with UTF-8 BOM	0
+Projects/props pinning LangVersion	0
+PackageReference with inline Version (CPM)	0
+UseInMemoryDatabase (tests)	62
+new ObjectsManager( in tests	42
+Thread.Sleep / Task.Delay in tests	24
+Mock<IOptions<AppSettings>> in tests	36
+Test helpers in Registry.Common/Test	4
+Controller log+rethrow catch blocks	130
+catch (Exception ...) total	404
+new ErrorResponse( in controllers	66
+RequestAccess + throw blocks	81
+IsUserAdmin() guard + throw blocks	30
+Sync _utils.GetDataset/GetOrganization calls	102
+GetService/GetRequiredService calls	79
+Console.Write* in Program+Startup	41
+.Wait() calls	4
+[DllImport] in production code	85
+EntryPointNotFoundException catches	71
+Copied DDB AutomaticRetry attribute	6
+Recurring-job local WriteLine copies	7
+ReadString(JsonElement) copies	9
+Zip-slip normalizer copies	3
+Direct Path.GetTempPath()	8
+Ad-hoc backslash->slash normalizations	29
+Static File./Directory. calls	198
+DateTime.Now (local)	6
+Task.Run in managers	10
+Hand-built Content-Disposition	2

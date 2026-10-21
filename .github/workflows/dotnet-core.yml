@@ -22,10 +22,15 @@ jobs:
       with:
         path: registry
         submodules: recursive
+    # Counts of patterns the backend refactor removes may only go down (build/quality-baseline.txt)
+    - name: Quality metrics ratchet (no metric may grow)
+      run: |
+        cd registry
+        bash scripts/quality-metrics.sh --check
     - name: Setup .NET Core
       uses: actions/setup-dotnet@v4
       with:
-        global-json-file: global.json
+        global-json-file: registry/global.json
     - name: Setup Node
       uses: actions/setup-node@v4
       with:
@@ -59,9 +64,18 @@ jobs:
       run: |
         cd registry
         bash scripts/check-warnings.sh
-    - name: Run tests
+    # Coverage comes from the Microsoft.CodeCoverage collector that Microsoft.NET.Test.Sdk ships:
+    # one Cobertura file per test project, reported, not gated
+    - name: Run tests (with code coverage)
       run: |
         cd registry
         whereis ddb
         ddb --version --debug
-        dotnet test -c Release --verbosity minimal
+        dotnet test -c Release --verbosity minimal --collect "Code Coverage;Format=cobertura" --results-directory TestResults
+    - name: Upload code coverage
+      if: ${{ !cancelled() }}
+      uses: actions/upload-artifact@v4
+      with:
+        name: registry-coverage-cobertura
+        path: registry/TestResults/**/*.cobertura.xml
+        if-no-files-found: warn

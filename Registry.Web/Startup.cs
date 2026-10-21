@@ -337,8 +337,10 @@ public class Startup
         // Per-dataset Processing Platform task manager backing TasksController.
         services.AddScoped<ITasksManager, TasksManager>();
 
-        // Processing Platform task substrate (native tools incl. build/raster-export)
+        // Processing Platform task substrate (native tools incl. build/raster-export) and the
+        // web-only submission side (gating, quota, runner) used by the task/import managers
         services.AddProcessingPlatform();
+        services.AddProcessingPlatformSubmission();
 
         // Import Dataset feature: source infrastructure + the import-dataset heavy tool (shared with
         // the worker host) and the web-only orchestration manager.
