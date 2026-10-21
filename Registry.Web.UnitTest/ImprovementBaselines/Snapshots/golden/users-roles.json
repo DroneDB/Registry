@@ -1,0 +1,11 @@
+{
+  "request": "GET /users/roles",
+  "caller": "admin",
+  "status": 200,
+  "contentType": "application/json; charset=utf-8",
+  "bodyKind": "json",
+  "body": [
+    "admin",
+    "deactivated"
+  ]
+}

@@ -1,0 +1,11 @@
+{
+  "request": "GET /orgs/golden-org/ds/golden-ds",
+  "caller": "user (no membership)",
+  "status": 401,
+  "contentType": "application/json; charset=utf-8",
+  "bodyKind": "json",
+  "body": {
+    "error": "The current user cannot access this dataset",
+    "noRetry": true
+  }
+}

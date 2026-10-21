@@ -1,0 +1,11 @@
+{
+  "request": "GET /orgs/golden-org/ds/golden-missing",
+  "caller": "organization owner",
+  "status": 404,
+  "contentType": "application/json; charset=utf-8",
+  "bodyKind": "json",
+  "body": {
+    "error": "Cannot find dataset golden-missing in organization golden-org",
+    "noRetry": false
+  }
+}

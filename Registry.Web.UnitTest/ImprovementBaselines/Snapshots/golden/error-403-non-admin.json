@@ -1,0 +1,8 @@
+{
+  "request": "GET /sys/config",
+  "caller": "user (no membership)",
+  "status": 403,
+  "contentType": null,
+  "bodyKind": "empty",
+  "body": null
+}

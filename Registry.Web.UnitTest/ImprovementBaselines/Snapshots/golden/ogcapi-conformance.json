@@ -1,0 +1,16 @@
+{
+  "request": "GET /orgs/golden-org/ds/golden-ds/ogcapi/conformance?f=json",
+  "caller": "organization owner",
+  "status": 200,
+  "contentType": "application/json; charset=utf-8",
+  "bodyKind": "json",
+  "body": {
+    "conformsTo": [
+      "http://www.opengis.net/spec/ogcapi-features-1/1.0/conf/core",
+      "http://www.opengis.net/spec/ogcapi-features-1/1.0/conf/oas30",
+      "http://www.opengis.net/spec/ogcapi-features-1/1.0/conf/geojson",
+      "http://www.opengis.net/spec/ogcapi-tiles-1/1.0/conf/core",
+      "http://www.opengis.net/spec/ogcapi-tiles-1/1.0/conf/geodata-tilesets"
+    ]
+  }
+}

@@ -1,0 +1,194 @@
+{
+  "request": "GET /sys/features",
+  "caller": "anonymous",
+  "status": 200,
+  "contentType": "application/json; charset=utf-8",
+  "bodyKind": "json",
+  "body": {
+    "organizationMemberManagement": false,
+    "userManagement": true,
+    "storageLimiter": false,
+    "maxConcurrentDownloadsPerUser": null,
+    "disableAnonymousBulkDownloads": false,
+    "passwordPolicy": {
+      "minLength": 8,
+      "requireDigit": true,
+      "requireUppercase": false,
+      "requireLowercase": false,
+      "requireNonAlphanumeric": false
+    },
+    "datasetThumbnailCandidates": [
+      "thumbnail.webp",
+      "thumbnail.jpg",
+      "thumbnail.png",
+      "cover.webp",
+      "cover.jpg",
+      "cover.png",
+      "thumbnail.webp",
+      "thumbnail.jpg",
+      "thumbnail.png",
+      "cover.webp",
+      "cover.jpg",
+      "cover.png"
+    ],
+    "maxExportSizeBytes": 1073741824,
+    "bulkDownloadAsyncThresholdBytes": 524288000,
+    "taskTools": [
+      {
+        "id": "build",
+        "version": "1",
+        "title": "Build",
+        "requiredAccess": "Write",
+        "producesArtifact": false,
+        "resultExtension": null,
+        "hidden": false,
+        "disabled": false,
+        "disabledMessage": null
+      },
+      {
+        "id": "raster-export",
+        "version": "1",
+        "title": "Export raster (GeoTIFF)",
+        "requiredAccess": "Read",
+        "producesArtifact": true,
+        "resultExtension": "tif",
+        "hidden": false,
+        "disabled": false,
+        "disabledMessage": null
+      },
+      {
+        "id": "photogrammetry",
+        "version": "2",
+        "title": "Photogrammetry (NodeODX)",
+        "requiredAccess": "Write",
+        "producesArtifact": false,
+        "resultExtension": null,
+        "hidden": false,
+        "disabled": false,
+        "disabledMessage": null
+      },
+      {
+        "id": "bulk-download",
+        "version": "1",
+        "title": "Download archive (ZIP)",
+        "requiredAccess": "Read",
+        "producesArtifact": true,
+        "resultExtension": "zip",
+        "hidden": false,
+        "disabled": false,
+        "disabledMessage": null
+      },
+      {
+        "id": "merge-multispectral",
+        "version": "1",
+        "title": "Merge multispectral bands",
+        "requiredAccess": "Write",
+        "producesArtifact": false,
+        "resultExtension": null,
+        "hidden": false,
+        "disabled": false,
+        "disabledMessage": null
+      },
+      {
+        "id": "align-raster",
+        "version": "1",
+        "title": "Align GeoTIFF to reference",
+        "requiredAccess": "Write",
+        "producesArtifact": false,
+        "resultExtension": null,
+        "hidden": false,
+        "disabled": false,
+        "disabledMessage": null
+      },
+      {
+        "id": "rescan-index",
+        "version": "1",
+        "title": "Rescan index",
+        "requiredAccess": "Write",
+        "producesArtifact": false,
+        "resultExtension": null,
+        "hidden": false,
+        "disabled": false,
+        "disabledMessage": null
+      },
+      {
+        "id": "archive-extract",
+        "version": "1",
+        "title": "Extract archive",
+        "requiredAccess": "Write",
+        "producesArtifact": false,
+        "resultExtension": null,
+        "hidden": false,
+        "disabled": false,
+        "disabledMessage": null
+      },
+      {
+        "id": "import-dataset",
+        "version": "1",
+        "title": "Import dataset",
+        "requiredAccess": "Write",
+        "producesArtifact": false,
+        "resultExtension": null,
+        "hidden": false,
+        "disabled": false,
+        "disabledMessage": null
+      },
+      {
+        "id": "import-file",
+        "version": "1",
+        "title": "Import file from URL",
+        "requiredAccess": "Write",
+        "producesArtifact": false,
+        "resultExtension": null,
+        "hidden": false,
+        "disabled": false,
+        "disabledMessage": null
+      }
+    ],
+    "taskStates": [
+      {
+        "value": "Created",
+        "terminal": false
+      },
+      {
+        "value": "Indexing",
+        "terminal": false
+      },
+      {
+        "value": "Enqueued",
+        "terminal": false
+      },
+      {
+        "value": "Scheduled",
+        "terminal": false
+      },
+      {
+        "value": "Processing",
+        "terminal": false
+      },
+      {
+        "value": "Succeeded",
+        "terminal": true
+      },
+      {
+        "value": "Failed",
+        "terminal": true
+      },
+      {
+        "value": "Deleted",
+        "terminal": true
+      }
+    ],
+    "hubOptions": {
+      "appLogo": "/images/logo-banner.svg",
+      "showRegistrationLink": true,
+      "disableDatasetCreation": false,
+      "disableStorageInfo": false,
+      "disableAccountManagement": false,
+      "readOnlyOrgs": false
+    },
+    "hubVersion": "<version>",
+    "registryVersion": "<version>",
+    "ddbVersion": "<version>"
+  }
+}

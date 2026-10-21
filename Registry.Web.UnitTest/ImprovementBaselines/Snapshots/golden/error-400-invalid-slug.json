@@ -1,0 +1,11 @@
+{
+  "request": "POST /orgs/golden-write/ds",
+  "caller": "organization owner (write org)",
+  "status": 400,
+  "contentType": "application/json; charset=utf-8",
+  "bodyKind": "json",
+  "body": {
+    "error": "Dataset slug is invalid",
+    "noRetry": false
+  }
+}

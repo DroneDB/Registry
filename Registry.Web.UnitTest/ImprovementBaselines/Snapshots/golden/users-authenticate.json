@@ -1,0 +1,12 @@
+{
+  "request": "POST /users/authenticate",
+  "caller": "anonymous",
+  "status": 200,
+  "contentType": "application/json; charset=utf-8",
+  "bodyKind": "json",
+  "body": {
+    "username": "admin",
+    "token": "<token>",
+    "expires": 0
+  }
+}

@@ -1,0 +1,11 @@
+{
+  "request": "POST /orgs/golden-org/ds/golden-ds/meta/remove",
+  "caller": "organization owner",
+  "status": 400,
+  "contentType": "application/json; charset=utf-8",
+  "bodyKind": "json",
+  "body": {
+    "error": "The id field is required.",
+    "noRetry": false
+  }
+}
