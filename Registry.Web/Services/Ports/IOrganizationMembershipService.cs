@@ -33,4 +33,12 @@ public interface IOrganizationMembershipService
 
     /// <summary>Removes the member <paramref name="userName"/>.</summary>
     Task RemoveAsync(Organization organization, string userName, User removedBy, CancellationToken ct = default);
+
+    /// <summary>
+    /// Adds the members of <paramref name="sourceSlug"/> to <paramref name="targetSlug"/> (an organization
+    /// merge): each keeps its permissions and its recorded grant (the merge, by <paramref name="grantedBy"/>,
+    /// is the grant when none was recorded). A user who is already a member of the target, or its owner,
+    /// is skipped. Returns the number of members added.
+    /// </summary>
+    Task<int> CopyMembersAsync(string sourceSlug, string targetSlug, User grantedBy, CancellationToken ct = default);
 }

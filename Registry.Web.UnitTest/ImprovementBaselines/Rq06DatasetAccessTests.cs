@@ -468,7 +468,7 @@ public sealed class Rq06AdminPolicyTests : Rq06Fixture
 /// <summary>
 /// RQ-06 organization membership, through HTTP: one implementation (<c>OrganizationMembershipService</c>)
 /// with the same codes on the admin and organization routes, <c>GrantedAt</c>/<c>GrantedBy</c> on every
-/// grant.
+/// grant, merges that keep members and their permissions, and organization edits that keep the owner.
 /// Each test fails on <c>d3c2ea8e</c>.
 /// Run: dotnet test Registry.Web.UnitTest --filter "FullyQualifiedName~Rq06MembershipTests"
 /// </summary>
@@ -567,6 +567,48 @@ public sealed class Rq06MembershipTests : Rq06Fixture
         row.GrantedBy.ShouldBe(await AdminIdAsync());
         row.GrantedAt.ShouldNotBeNull();
         row.GrantedAt!.Value.ShouldBeGreaterThan(before);
+    }
+
+    [Test]
+    public async Task Merge_KeepsEachMembersPermission()
+    {
+        var (response, body, _) = await SendAsync(Request(HttpMethod.Post, "/sys/merge-organizations", Caller.Admin,
+            Json($"{{\"sourceOrgSlug\":\"{MergeSourceOrg}\",\"destinationOrgSlug\":\"{MergeDestOrg}\",\"deleteSourceOrganization\":false}}")));
+
+        ((int)response.StatusCode).ShouldBe(200, body);
+        var members = await WithContextAsync(c => c.OrganizationsUsers.AsNoTracking()
+            .Where(u => u.OrganizationSlug == MergeDestOrg).ToListAsync());
+        // Every transferred member used to get the entity default, ReadWrite
+        members.Single(u => u.UserId == UserIds[ReaderUser]).Permissions.ShouldBe(OrganizationPermissions.ReadOnly);
+        members.Single(u => u.UserId == UserIds[WriterUser]).Permissions.ShouldBe(OrganizationPermissions.Admin);
+        members.ShouldAllBe(u => u.GrantedAt != null && u.GrantedBy != null);
+    }
+
+    [Test]
+    public async Task EditOrganization_WithoutOwner_KeepsTheOwner()
+    {
+        // The Hub sends no owner: a read-write member and an administrator used to become the owner
+        foreach (var caller in new[] { Caller.Writer, Caller.Admin })
+        {
+            var (response, body, _) = await SendAsync(Request(HttpMethod.Put, "/orgs/" + EditOrg, caller,
+                Form(("slug", EditOrg), ("name", "Renamed by " + caller))));
+
+            ((int)response.StatusCode).ShouldBe(204, body);
+            var org = await WithContextAsync(c => c.Organizations.AsNoTracking().SingleAsync(o => o.Slug == EditOrg));
+            org.OwnerId.ShouldBe(UserIds[OwnerUser], $"after an edit by {caller}");
+            org.Name.ShouldBe("Renamed by " + caller);
+        }
+    }
+
+    [Test]
+    public async Task EditOrganization_MemberSettingItselfAsOwner_Is403()
+    {
+        var (response, _, problem) = await SendAsync(Request(HttpMethod.Put, "/orgs/" + EditOrg, Caller.Writer,
+            Form(("slug", EditOrg), ("name", "Taken over"), ("owner", UserIds[WriterUser]))));
+
+        ShouldBeProblem(response, problem, 403, "Only administrators can change the owner of an organization");
+        (await WithContextAsync(c => c.Organizations.AsNoTracking().SingleAsync(o => o.Slug == EditOrg)))
+            .OwnerId.ShouldBe(UserIds[OwnerUser]);
     }
 
     private async Task<string> AdminIdAsync()

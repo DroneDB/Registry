@@ -321,31 +321,19 @@ public class OrganizationsManager : IOrganizationsManager
     {
         var org = await _access.ResolveOrganizationAsync(orgSlug, AccessType.Write, withTracking: true);
 
-        var currentUser = await _authManager.GetCurrentUser();
-
-        if (!await _authManager.IsUserAdmin())
+        // The owner stays unless the request names another one, which only an administrator may do (the Hub
+        // sends no owner: a member who edited the organization, or an administrator, used to become its owner)
+        if (organization.Owner != null && organization.Owner != org.OwnerId)
         {
-            // If the owner is specified it should be the current user
-            if (organization.Owner != null && organization.Owner != currentUser.Id)
-                throw new ForbiddenException("Cannot create a new organization that belongs to a different user");
+            if (!await _authManager.IsUserAdmin())
+                throw new ForbiddenException("Only administrators can change the owner of an organization");
 
-            // The current user is the owner
-            organization.Owner = currentUser.Id;
-        }
-        else
-        {
-            // If no owner specified, the owner is the current user
-            if (organization.Owner == null)
-                organization.Owner = currentUser.Id;
-            else
-            {
-                // Otherwise check if user exists
-                if (!await _authManager.UserExists(organization.Owner))
-                    throw new BadRequestException($"Cannot find user with id '{organization.Owner}'");
-            }
+            if (!await _authManager.UserExists(organization.Owner))
+                throw new BadRequestException($"Cannot find user with id '{organization.Owner}'");
+
+            org.OwnerId = organization.Owner;
         }
 
-        org.OwnerId = organization.Owner;
         org.IsPublic = organization.IsPublic;
         org.Name = organization.Name;
         org.Description = organization.Description;
@@ -423,28 +411,9 @@ public class OrganizationsManager : IOrganizationsManager
             result.DatasetsFailedCount = 0;
         }
 
-        // Transfer OrganizationUsers to destination (avoiding duplicates)
-        var sourceUsers = sourceOrg.Users?.ToList() ?? [];
-        var destUserIds = destOrg.Users?.Select(u => u.UserId).ToHashSet() ?? [];
-
-        foreach (var sourceUser in sourceUsers)
-        {
-            if (destUserIds.Contains(sourceUser.UserId)) continue;
-
-            // Add user to destination organization
-            var newOrgUser = new OrganizationUser
-            {
-                Organization = destOrg,
-                OrganizationSlug = destOrgSlug,
-                UserId = sourceUser.UserId
-            };
-            destOrg.Users ??= new List<OrganizationUser>();
-            destOrg.Users.Add(newOrgUser);
-            _logger.LogInformation("Transferred user '{UserId}' from '{SourceOrgSlug}' to '{DestOrgSlug}'",
-                sourceUser.UserId, sourceOrgSlug, destOrgSlug);
-        }
-
-        await _context.SaveChangesAsync();
+        // The members of the source join the destination with their permissions (the source's members
+        // were never loaded here, so a merge used to drop every one of them)
+        await _memberships.CopyMembersAsync(sourceOrgSlug, destOrgSlug, await _authManager.GetCurrentUser());
 
         // Delete source organization if requested and all datasets were moved successfully
         if (deleteSourceOrganization)

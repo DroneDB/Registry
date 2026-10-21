@@ -98,6 +98,36 @@ public sealed class OrganizationMembershipService : IOrganizationMembershipServi
             userName, organization.Slug, removedBy.UserName);
     }
 
+    public async Task<int> CopyMembersAsync(string sourceSlug, string targetSlug, User grantedBy,
+        CancellationToken ct = default)
+    {
+        var source = await GetWithMembersAsync(sourceSlug, ct);
+        var target = await GetWithMembersAsync(targetSlug, ct);
+        var now = DateTime.UtcNow;
+
+        var added = 0;
+        foreach (var member in source.Users ?? [])
+        {
+            if (member.UserId == target.OwnerId || target.Users?.Any(u => u.UserId == member.UserId) == true)
+                continue;
+
+            _context.OrganizationsUsers.Add(new OrganizationUser
+            {
+                OrganizationSlug = target.Slug,
+                UserId = member.UserId,
+                Permissions = member.Permissions,
+                GrantedAt = member.GrantedAt ?? now,
+                GrantedBy = member.GrantedAt == null ? grantedBy.Id : member.GrantedBy
+            });
+            added++;
+            _logger.LogInformation("Member {UserId} of {SourceOrgSlug} joins {TargetOrgSlug} as {Permission}",
+                member.UserId, sourceSlug, targetSlug, member.Permissions);
+        }
+
+        await _context.SaveChangesAsync(ct);
+        return added;
+    }
+
     private async Task<User> FindUserAsync(string userName, CancellationToken ct)
     {
         var normalized = _normalizer.NormalizeName(userName);
