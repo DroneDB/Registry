@@ -39,7 +39,6 @@
     </PackageReference>
     <PackageReference Include="Newtonsoft.Json" />
     <PackageReference Include="Polly" />
-    <PackageReference Include="SharpZipLib" />
   </ItemGroup>
 
 </Project>
