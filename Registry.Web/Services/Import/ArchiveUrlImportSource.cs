@@ -10,6 +10,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using Registry.Web.Services.Ports;
 using Registry.Common;
 using Registry.Ports.Archives;
 using Registry.Ports.DroneDB;
@@ -38,6 +39,7 @@ public sealed class ArchiveUrlImportSource : IImportSource
     private readonly long _maxImportSizeBytes;
     private readonly long _diskSafetyMarginBytes;
     private readonly DatasetPathPolicy _paths;
+    private readonly IScratchFileProvider _scratch;
     private readonly ILogger<ArchiveUrlImportSource> _logger;
 
     /// <summary>
@@ -49,11 +51,14 @@ public sealed class ArchiveUrlImportSource : IImportSource
     /// <param name="downloader">The SSRF-hardened, disk- and speed-guarded single-file downloader.</param>
     /// <param name="appSettings">The application settings (import cap + disk safety margin).</param>
     /// <param name="paths">The dataset path rule (archive entry names, containment).</param>
+    /// <param name="scratch">Where the downloaded archive is written (the configured temp folder).</param>
     /// <param name="logger">The logger.</param>
     public ArchiveUrlImportSource(IArchiveExtractor extractor, SsrfGuard ssrfGuard,
         IHttpClientFactory httpClientFactory, GuardedHttpDownloader downloader,
-        IOptions<AppSettings> appSettings, DatasetPathPolicy paths, ILogger<ArchiveUrlImportSource> logger)
+        IOptions<AppSettings> appSettings, DatasetPathPolicy paths, IScratchFileProvider scratch,
+        ILogger<ArchiveUrlImportSource> logger)
     {
+        _scratch = scratch;
         _extractor = extractor;
         _paths = paths;
         _ssrfGuard = ssrfGuard;
@@ -114,27 +119,21 @@ public sealed class ArchiveUrlImportSource : IImportSource
 
         Directory.CreateDirectory(destFolder);
 
-        // Scratch file lives OUTSIDE the dataset folder so it is never indexed. Keep the original
-        // archive extension so the extractor can pick the right format.
-        var scratch = Path.Combine(Path.GetTempPath(), $"ddb-import-{Guid.NewGuid():N}{ArchiveExt(p.Url)}");
+        // The archive goes to the configured temp folder, OUTSIDE the dataset folder, so it is never
+        // indexed, and is deleted when the import ends. Keep the original archive extension so the
+        // extractor can pick the right format.
+        using var scratch = _scratch.Create("ddb-import-", ArchiveExt(p.Url));
 
-        try
-        {
-            await DownloadToFileAsync(p, scratch, progress, ct);
+        await DownloadToFileAsync(p, scratch.Path, progress, ct);
 
-            // Content-based guard: reject a non-archive served with an archive name (e.g. an HTML error
-            // page) BEFORE attempting extraction, instead of relying on Open() failing mid-stream.
-            if (!_extractor.IsValidArchive(scratch))
-                throw new InvalidOperationException(
-                    "The downloaded file is not a valid or supported archive.");
+        // Content-based guard: reject a non-archive served with an archive name (e.g. an HTML error
+        // page) BEFORE attempting extraction, instead of relying on Open() failing mid-stream.
+        if (!_extractor.IsValidArchive(scratch.Path))
+            throw new InvalidOperationException(
+                "The downloaded file is not a valid or supported archive.");
 
-            // _extractor.Open throws on a truly unsupported/corrupt archive (surfaced as a task failure).
-            await ExtractIntoAsync(scratch, destFolder, progress, ct);
-        }
-        finally
-        {
-            TryDelete(scratch);
-        }
+        // _extractor.Open throws on a truly unsupported/corrupt archive (surfaced as a task failure).
+        await ExtractIntoAsync(scratch.Path, destFolder, progress, ct);
     }
 
     private async Task DownloadToFileAsync(ArchiveParams p, string scratch, IProgress<ImportProgress> progress,
@@ -278,18 +277,6 @@ public sealed class ArchiveUrlImportSource : IImportSource
         if (el.ValueKind != JsonValueKind.String) return null;
         var s = el.GetString();
         return string.IsNullOrWhiteSpace(s) ? null : s;
-    }
-
-    private void TryDelete(string path)
-    {
-        try
-        {
-            if (File.Exists(path)) File.Delete(path);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogWarning(ex, "Could not delete import scratch file '{Path}'", path);
-        }
     }
 
     private readonly record struct ArchiveParams(

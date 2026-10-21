@@ -1,3 +1,5 @@
+using System;
+
 namespace Registry.Ports;
 
 /// <summary>
@@ -5,39 +7,32 @@ namespace Registry.Ports;
 /// </summary>
 public static class FileSystemExtensions
 {
-    #region Safe File Operations
-
     /// <summary>
-    /// Safely deletes a file, returning true if successful, false otherwise
+    /// Deletes the file, or the folder with everything in it, at <paramref name="path"/> when it
+    /// exists; never throws. The one best-effort delete of the Registry (RQ-10): scratch files,
+    /// rolled-back writes, abandoned uploads and task folders. A failure goes to
+    /// <paramref name="onError"/> (the caller logs it) and the caller carries on: what is left is
+    /// removed by the abandoned-file sweeps.
     /// </summary>
-    public static bool SafeDelete(this IFileSystem fs, string path)
+    /// <returns>True when nothing is left at <paramref name="path"/> (or it is null or empty).</returns>
+    public static bool TryDelete(this IFileSystem fs, string? path, Action<Exception>? onError = null)
     {
+        ArgumentNullException.ThrowIfNull(fs);
+        if (string.IsNullOrEmpty(path))
+            return true;
+
         try
         {
-            fs.Delete(path);
+            if (fs.Exists(path))
+                fs.Delete(path);
+            else if (fs.FolderExists(path))
+                fs.FolderDelete(path, true);
             return true;
         }
-        catch
+        catch (Exception ex)
         {
+            onError?.Invoke(ex);
             return false;
         }
     }
-
-    /// <summary>
-    /// Safely deletes a folder, returning true if successful, false otherwise
-    /// </summary>
-    public static bool SafeFolderDelete(this IFileSystem fs, string path, bool recursive = true)
-    {
-        try
-        {
-            fs.FolderDelete(path, recursive);
-            return true;
-        }
-        catch
-        {
-            return false;
-        }
-    }
-
-    #endregion
 }

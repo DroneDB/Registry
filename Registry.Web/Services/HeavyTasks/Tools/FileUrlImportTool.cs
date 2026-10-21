@@ -58,6 +58,7 @@ public sealed class FileUrlImportTool : IHeavyTool
     private readonly ImportSettings _importSettings;
     private readonly long _diskSafetyMarginBytes;
     private readonly DatasetPathPolicy _paths;
+    private readonly IScratchFileProvider _scratch;
     private readonly ILogger<FileUrlImportTool> _logger;
 
     /// <summary>
@@ -69,6 +70,7 @@ public sealed class FileUrlImportTool : IHeavyTool
     /// <param name="scopeFactory">Scope factory for per-execution scoped services.</param>
     /// <param name="appSettings">The application settings.</param>
     /// <param name="paths">The dataset path rule (destination folder and file).</param>
+    /// <param name="scratch">Where the download is written: the dataset's volume, so the move into place is a rename.</param>
     /// <param name="logger">The logger.</param>
     public FileUrlImportTool(
         GuardedHttpDownloader downloader,
@@ -77,8 +79,10 @@ public sealed class FileUrlImportTool : IHeavyTool
         IServiceScopeFactory scopeFactory,
         IOptions<AppSettings> appSettings,
         DatasetPathPolicy paths,
+        IScratchFileProvider scratch,
         ILogger<FileUrlImportTool> logger)
     {
+        _scratch = scratch;
         _downloader = downloader;
         _paths = paths;
         _ssrfGuard = ssrfGuard;
@@ -158,8 +162,10 @@ public sealed class FileUrlImportTool : IHeavyTool
         var password = DecryptPassword(ReadString(request.Params, "password"));
         var cap = _importSettings.EffectiveFileImportCapBytes();
 
-        // Scratch file lives OUTSIDE the dataset folder so it is never indexed.
-        var scratch = Path.Combine(Path.GetTempPath(), $"ddb-fileimport-{Guid.NewGuid():N}.part");
+        // The download goes to the dataset's uploads folder: never indexed, and on the dataset's volume,
+        // so the disk guard measures the volume it fills and the move into place is a rename, not a
+        // full copy from /tmp (RQ-10). Deleted on any failure (Dispose), kept once moved.
+        using var scratch = _scratch.CreateForDataset(ctx.Ddb.DatasetFolderPath);
 
         using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
         var transferTimeout = _importSettings.TransferTimeoutSeconds;
@@ -178,44 +184,31 @@ public sealed class FileUrlImportTool : IHeavyTool
         long downloaded;
         try
         {
-            downloaded = await _downloader.DownloadAsync(uri, scratch, username, password,
+            downloaded = await _downloader.DownloadAsync(uri, scratch.Path, username, password,
                 cap, _importSettings.MinDownloadSpeedBytesPerSec, _importSettings.LowSpeedGraceSeconds,
                 _diskSafetyMarginBytes, sink, linkedCts.Token);
         }
         catch (OperationCanceledException)
             when (transferTimeout > 0 && linkedCts.IsCancellationRequested && !ct.IsCancellationRequested)
         {
-            TryDelete(scratch);
             throw new TimeoutException(
                 $"The download exceeded the configured transfer timeout of {transferTimeout}s.");
         }
-        catch
-        {
-            TryDelete(scratch);
-            throw;
-        }
 
-        try
-        {
-            var localTarget = ctx.Ddb.GetLocalPath(target);
-            var parent = Path.GetDirectoryName(localTarget);
-            if (!string.IsNullOrEmpty(parent))
-                Directory.CreateDirectory(parent);
+        var localTarget = ctx.Ddb.GetLocalPath(target);
+        var parent = Path.GetDirectoryName(localTarget);
+        if (!string.IsNullOrEmpty(parent))
+            Directory.CreateDirectory(parent);
 
-            progress.Report(new HeavyToolProgress(-1, "indexing",
-                LogChunk: $"Adding {fileName} ({CommonUtils.GetBytesReadable(downloaded)}) to the dataset"));
+        progress.Report(new HeavyToolProgress(-1, "indexing",
+            LogChunk: $"Adding {fileName} ({CommonUtils.GetBytesReadable(downloaded)}) to the dataset"));
 
-            // Overwrite was already validated above; move the scratch file into place.
-            File.Move(scratch, localTarget, overwrite: true);
-            scratch = string.Empty; // moved: nothing to clean up
+        // Overwrite was already validated above; move the scratch file into place (a rename on the
+        // same volume, atomic over an existing file)
+        File.Move(scratch.Path, localTarget, overwrite: true);
+        scratch.Release();
 
-            ctx.Ddb.AddRaw(target);
-        }
-        catch
-        {
-            TryDelete(scratch);
-            throw;
-        }
+        ctx.Ddb.AddRaw(target);
 
         // Enqueue a build job when the imported file is buildable (mirrors ObjectsManager.AddNew).
         try
@@ -269,19 +262,6 @@ public sealed class FileUrlImportTool : IHeavyTool
     {
         if (string.IsNullOrEmpty(raw)) return string.Empty;
         return raw.StartsWith("ENC:", StringComparison.Ordinal) ? _protector.Unprotect(raw[4..]) : raw;
-    }
-
-    private void TryDelete(string path)
-    {
-        if (string.IsNullOrEmpty(path)) return;
-        try
-        {
-            if (File.Exists(path)) File.Delete(path);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogWarning(ex, "Could not delete file-import scratch file '{Path}'", path);
-        }
     }
 
     private static string? ReadString(JsonElement obj, string name)

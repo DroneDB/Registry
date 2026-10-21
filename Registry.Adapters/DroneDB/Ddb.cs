@@ -399,15 +399,7 @@ public class DDB : IDDB
         }
         finally
         {
-            if (stream == null)
-            {
-                if (Directory.Exists(localPath) && !FileSystem.SafeFolderDelete(localPath))
-                    Debug.WriteLine($"Cannot delete folder '{localPath}'");
-            }
-            else if (File.Exists(localPath) && !FileSystem.SafeDelete(localPath))
-            {
-                Debug.WriteLine($"Cannot delete file '{localPath}'");
-            }
+            FileSystem.TryDelete(localPath, ex => Debug.WriteLine($"Cannot delete '{localPath}': {ex.Message}"));
         }
     }
 

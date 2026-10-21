@@ -18,7 +18,8 @@ namespace Registry.Web.Services.Managers;
 /// under the dataset's uploads folder (<c>.uploads/chunks</c>, same volume as the dataset), and
 /// the finished file goes through the same commit as any upload (<see cref="IUploadManager"/>).
 /// </summary>
-public sealed class ChunkedUploadManager(IUploadManager uploads, IChunkStore store, IUploadQuotaGuard quota)
+public sealed class ChunkedUploadManager(IUploadManager uploads, IChunkStore store, IUploadQuotaGuard quota,
+    IScratchFileProvider scratch)
     : IChunkedUploadManager
 {
     /// <summary>Folder of the chunked uploads of a dataset, under its uploads folder.</summary>
@@ -70,11 +71,12 @@ public sealed class ChunkedUploadManager(IUploadManager uploads, IChunkStore sto
             var status = store.GetStatus(root, fileId) ?? throw new NotFoundException($"Unknown upload '{fileId}'");
             EnsureOwner(ctx, status.Manifest, fileId);
 
-            var temp = Path.Combine(ctx.Ddb.DatasetFolderPath, IDDB.UploadsFolderName,
-                Guid.NewGuid().ToString("N") + DatasetUploads.TempFileExtension);
-            var hint = await store.TakeAsync(root, fileId, temp);
+            // The chunks were written into one file: taking it is a rename onto the dataset volume
+            using var temp = scratch.CreateForDataset(ctx.Ddb.DatasetFolderPath, DatasetUploads.TempFileExtension);
+            var hint = await store.TakeAsync(root, fileId, temp.Path);
+            temp.Release(); // the commit moves it into place or deletes it
 
-            return await uploads.CommitAsync(ctx, status.Manifest.Path, new StreamedFile(temp, hint.Size, hint));
+            return await uploads.CommitAsync(ctx, status.Manifest.Path, new StreamedFile(temp.Path, hint.Size, hint));
         }
         catch (Exception ex)
         {

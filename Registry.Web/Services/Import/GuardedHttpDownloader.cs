@@ -146,8 +146,8 @@ public sealed class GuardedHttpDownloader
                 $"The file is too large ({CommonUtils.GetBytesReadable(total.Value)}); " +
                 $"the maximum allowed size is {CommonUtils.GetBytesReadable(maxBytes)}.");
 
-        var destFolder = Path.GetDirectoryName(destFile);
-        if (string.IsNullOrEmpty(destFolder)) destFolder = Path.GetTempPath();
+        // The folder of the destination: the disk guard measures the volume the download fills
+        var destFolder = Path.GetDirectoryName(Path.GetFullPath(destFile))!;
         Directory.CreateDirectory(destFolder);
 
         // Size cap (primary) + disk head-room (secondary) enforced per chunk, before each write.

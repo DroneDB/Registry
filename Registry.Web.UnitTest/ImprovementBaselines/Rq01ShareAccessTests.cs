@@ -130,7 +130,7 @@ public class Rq01ShareAccessTests
         _manager = new ShareManager(settings, NullLogger<ShareManager>.Instance, _objects.Object,
             _datasets.Object, Mock.Of<IOrganizationsManager>(), utils, _auth.Object,
             new DatasetAccessResolver(utils, _auth.Object, Mock.Of<IDdbManager>(), TestPaths.Policy), tokens.Object,
-            names.Object, _context, new FileSystem());
+            names.Object, _context, new FileSystem(), TestScratch.Provider);
     }
 
     [TearDown]

@@ -59,27 +59,6 @@ public static class MultipartRequestHelper
     }
 
     /// <summary>
-    /// Best-effort deletion of a streamed temporary upload file, used to clean up when a
-    /// request is rejected before the temp file is committed (e.g. multiple file parts).
-    /// </summary>
-    /// <param name="path">The temp file path to delete; ignored when null or empty.</param>
-    public static void TryDeleteTempFile(string? path)
-    {
-        if (string.IsNullOrEmpty(path))
-            return;
-
-        try
-        {
-            if (File.Exists(path))
-                File.Delete(path);
-        }
-        catch
-        {
-            /* ignore */
-        }
-    }
-
-    /// <summary>
     /// Reads a streamed <c>multipart/form-data</c> body with at most one file part. The file part is
     /// handed to <paramref name="streamFile"/> as soon as it arrives (it writes it to the dataset volume
     /// and returns the temp file); the form fields are collected whatever their order. On failure the
@@ -88,13 +67,14 @@ public static class MultipartRequestHelper
     /// <param name="request">The request (multipart content type checked by the caller).</param>
     /// <param name="boundaryLengthLimit">Maximum boundary length (<c>FormOptions.MultipartBoundaryLengthLimit</c>).</param>
     /// <param name="streamFile">Writes the file part body to a temp file and returns its path and size.</param>
+    /// <param name="discard">Deletes a temp file written by <paramref name="streamFile"/> (on failure).</param>
     /// <returns>The form fields and the temp file (null when the body has no file part).</returns>
     /// <exception cref="BadRequestException">The body has more than one file part.</exception>
     public static async Task<StreamedMultipartForm> ReadSingleFileFormAsync(HttpRequest request,
-        int boundaryLengthLimit, Func<Stream, Task<(string TempPath, long Bytes)>> streamFile)
+        int boundaryLengthLimit, Func<Stream, Task<(string TempPath, long Bytes)>> streamFile, Action<string> discard)
     {
         var files = await ReadFilesFormAsync(request, boundaryLengthLimit, 1,
-            part => streamFile(part.Body), file => file.TempPath);
+            part => streamFile(part.Body), file => discard(file.TempPath));
 
         var form = new StreamedMultipartForm();
         foreach (var (key, value) in files.Fields)
@@ -109,12 +89,12 @@ public static class MultipartRequestHelper
     /// parts. Each file part is handed to <paramref name="streamFile"/> as it arrives, with the
     /// <c>path</c> field sent just before it (null when there is none), so the destination can be
     /// checked before the first byte of the file is written. The form fields are collected whatever
-    /// their order. On failure every temp file already written is deleted.
+    /// their order. On failure every file already written is handed to <paramref name="discard"/>.
     /// </summary>
     /// <exception cref="BadRequestException">The body has more than <paramref name="maxFiles"/> file parts.</exception>
     public static async Task<StreamedMultipartFiles<TFile>> ReadFilesFormAsync<TFile>(HttpRequest request,
         int boundaryLengthLimit, int maxFiles, Func<MultipartFilePart, Task<TFile>> streamFile,
-        Func<TFile, string> tempPathOf)
+        Action<TFile> discard)
     {
         var boundary = GetBoundary(MediaTypeHeaderValue.Parse(request.ContentType), boundaryLengthLimit);
         var reader = new MultipartReader(boundary, request.Body);
@@ -154,7 +134,7 @@ public static class MultipartRequestHelper
         catch
         {
             foreach (var (_, file) in form.Files)
-                TryDeleteTempFile(tempPathOf(file));
+                discard(file);
             throw;
         }
 

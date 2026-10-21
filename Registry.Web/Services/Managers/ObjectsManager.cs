@@ -54,6 +54,7 @@ public class ObjectsManager : IObjectsManager
     private readonly IUploadManager _uploads;
     private readonly INativeWorkGate _nativeGate;
     private readonly DatasetPathPolicy _paths;
+    private readonly IScratchFileProvider _scratch;
 
     public ObjectsManager(ILogger<ObjectsManager> logger,
         RegistryContext context,
@@ -70,6 +71,7 @@ public class ObjectsManager : IObjectsManager
         IJobIndexQuery jobIndexQuery,
         BuildPendingService buildPendingService,
         DatasetPathPolicy paths,
+        IScratchFileProvider scratch,
         IZipArchiveBuilder? zipArchiveBuilder = null,
         IOgcLayerCatalog? ogcLayerCatalog = null,
         IDatasetCacheInvalidator? datasetCacheInvalidator = null,
@@ -96,6 +98,7 @@ public class ObjectsManager : IObjectsManager
         _jobIndexQuery = jobIndexQuery;
         _buildPendingService = buildPendingService;
         _paths = paths;
+        _scratch = scratch;
         // Stateless; the DI-registered singleton is injected in production, while a
         // local instance keeps direct (test) construction working without wiring.
         _zipArchiveBuilder = zipArchiveBuilder ?? new ZipArchiveBuilder();
@@ -117,7 +120,7 @@ public class ObjectsManager : IObjectsManager
             new UploadQuotaGuard(new UploadQuotaLedger(Microsoft.Extensions.Options.Options.Create(settings.Value.Uploads ?? new UploadSettings())), utils),
             new DatasetChangeCoalescer(FallbackOgcKeys(), cacheManager, settings.Value.EffectiveDatasetThumbnailCandidates(),
                 TimeSpan.Zero, NullLogger<DatasetChangeCoalescer>.Instance),
-            paths, indexQueue: indexQueue);
+            paths, scratch, indexQueue: indexQueue);
         return;
 
         // Only for the fallbacks of a direct construction (tests): production wires the shared keys
@@ -285,7 +288,7 @@ public class ObjectsManager : IObjectsManager
         var ds = await _utils.GetDatasetAsync(orgSlug, dsSlug);
         var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
 
-        return await DatasetUploads.StreamToTempAsync(_fs, ddb.DatasetFolderPath, source);
+        return await DatasetUploads.StreamToTempAsync(_scratch, _fs, ddb.DatasetFolderPath, source);
     }
 
     /// <summary>
@@ -319,8 +322,8 @@ public class ObjectsManager : IObjectsManager
             var ds = await _utils.GetDatasetAsync(orgSlug, dsSlug, safe: true);
             if (ds == null || string.IsNullOrWhiteSpace(tempFilePath)) return;
             var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
-            if (UploadManager.IsInUploadsFolder(ddb, tempFilePath) && File.Exists(tempFilePath))
-                File.Delete(tempFilePath);
+            if (UploadManager.IsInUploadsFolder(ddb, tempFilePath))
+                _fs.TryDelete(tempFilePath, ex => _logger.LogDebug(ex, "Cannot delete the temp upload '{TempFile}'", tempFilePath));
         }
         catch (Exception ex)
         {
@@ -2042,37 +2045,19 @@ public class ObjectsManager : IObjectsManager
         // Enforce export size limit (conservative upper bound based on raw input size)
         EnsureExportSizeWithinLimit(ddb, sourcePath);
 
-        var tempDir = Path.GetTempPath();
-        var tempOutputFileName =
-            Path.GetFileNameWithoutExtension(path) + "_export_" + Guid.NewGuid().ToString("N") + ".tif";
         var outputFileName = Path.GetFileNameWithoutExtension(path) + "_export.tif";
-        var outputPath = Path.Combine(tempDir, tempOutputFileName);
+        // The configured temp folder; deleted when the bytes are read
+        using var output = _scratch.Create(Path.GetFileNameWithoutExtension(path) + "_export_", ".tif");
 
-        try
+        await Task.Run(() => ddb.ExportRaster(sourcePath, output.Path, preset, bands, formula,
+            bandFilter, colormap, rescale));
+
+        return new StorageDataDto
         {
-            await Task.Run(() => ddb.ExportRaster(sourcePath, outputPath, preset, bands, formula,
-                bandFilter, colormap, rescale));
-
-            var data = await File.ReadAllBytesAsync(outputPath);
-
-            return new StorageDataDto
-            {
-                Name = outputFileName,
-                Data = data,
-                ContentType = "image/tiff"
-            };
-        }
-        finally
-        {
-            try
-            {
-                if (File.Exists(outputPath)) File.Delete(outputPath);
-            }
-            catch
-            {
-                /* ignore cleanup failures */
-            }
-        }
+            Name = outputFileName,
+            Data = await _fs.ReadAllBytesAsync(output.Path),
+            ContentType = "image/tiff"
+        };
     }
 
     public async Task<long> EstimateExportSize(string orgSlug, string dsSlug, string path)

@@ -129,6 +129,7 @@ public class UploadManagerTests
             new Registry.Adapters.FileSystem(), options, jobs, buildPending,
             new UploadQuotaGuard(new UploadQuotaLedger(TimeSpan.FromMinutes(1)), _utils.Object), _changes.Object,
             TestPaths.Policy,
+            TestScratch.Provider,
             _receipts, _queue.Object);
     }
 
@@ -323,7 +324,8 @@ public class UploadManagerTests
     // ---- resumable chunked uploads (E.5)
 
     private ChunkedUploadManager CreateChunks(UploadManager uploads) =>
-        new(uploads, new ChunkStore(), new UploadQuotaGuard(new UploadQuotaLedger(TimeSpan.FromMinutes(1)), _utils.Object));
+        new(uploads, new ChunkStore(), new UploadQuotaGuard(new UploadQuotaLedger(TimeSpan.FromMinutes(1)), _utils.Object),
+            TestScratch.Provider);
 
     private static ChunkRequest Chunk(int index, string path = "big.bin") => new("big-file-0001", index, 3, 25, 10, path);
 

@@ -46,6 +46,7 @@ public sealed class TasksManager : ITasksManager
     private readonly IHttpContextAccessor _httpContextAccessor;
     private readonly ProcessingPlatformSettings _settings;
     private readonly string _tempPath;
+    private readonly IFileSystem _fs;
     private readonly ILogger<TasksManager> _logger;
 
     public TasksManager(
@@ -62,6 +63,8 @@ public sealed class TasksManager : ITasksManager
         IDistributedCache cache,
         IHttpContextAccessor httpContextAccessor,
         IOptions<AppSettings> appSettings,
+        IScratchFileProvider scratch,
+        IFileSystem fs,
         ILogger<TasksManager> logger,
         ITaskChangeNotifier? changes = null)
     {
@@ -79,7 +82,8 @@ public sealed class TasksManager : ITasksManager
         _cache = cache;
         _httpContextAccessor = httpContextAccessor;
         _settings = appSettings.Value.ProcessingPlatform ?? new ProcessingPlatformSettings();
-        _tempPath = appSettings.Value.TempPath ?? Path.Combine(Path.GetTempPath(), "registry");
+        _tempPath = scratch.Root;
+        _fs = fs;
         _logger = logger;
     }
 
@@ -209,7 +213,7 @@ public sealed class TasksManager : ITasksManager
         // terminal "Deleted" state where they would linger in the list forever.
         var removedIds = await _writer.DeleteTerminalForDatasetAsync(orgSlug, dsSlug, toolId, ct);
         foreach (var jobId in removedIds)
-            TaskJobHelpers.TryDeleteArtifacts(jobId, _tempPath, _logger);
+            TaskJobHelpers.DeleteArtifacts(_fs, jobId, _tempPath, _logger);
 
         _logger.LogInformation("Cleared {Count} concluded task(s) for {Org}/{Ds}", removedIds.Count, orgSlug, dsSlug);
         return removedIds.Count;
@@ -256,7 +260,7 @@ public sealed class TasksManager : ITasksManager
         if (job.CurrentState != "Succeeded" || job.ArtifactSizeBytes is null)
             throw new NotFoundException("Task has no downloadable result");
 
-        var file = TaskJobHelpers.ResolveArtifactFile(id, _tempPath);
+        var file = TaskJobHelpers.ResolveArtifactFile(_fs, id, _tempPath);
         if (file is null)
             throw new NotFoundException("Artifact no longer available (expired or cleaned up)");
 
@@ -312,7 +316,7 @@ public sealed class TasksManager : ITasksManager
                 $"Task '{job.CurrentState}' cannot be deleted; only concluded tasks can be removed from history");
 
         // Best-effort artifact cleanup (same as Clear)
-        TaskJobHelpers.TryDeleteArtifacts(job.JobId, _tempPath, _logger);
+        TaskJobHelpers.DeleteArtifacts(_fs, job.JobId, _tempPath, _logger);
 
         _logger.LogInformation("Deleted terminal JobIndex record for job {JobId} in {Org}/{Ds}", job.JobId, orgSlug,
             dsSlug);

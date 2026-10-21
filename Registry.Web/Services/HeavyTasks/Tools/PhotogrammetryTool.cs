@@ -69,6 +69,7 @@ public sealed class PhotogrammetryTool : IHeavyTool
     private readonly ProcessingPlatformSettings _settings;
     private readonly ImportSettings _importSettings;
     private readonly DatasetPathPolicy _paths;
+    private readonly IScratchFileProvider _scratch;
     private readonly ILogger<PhotogrammetryTool> _logger;
     private readonly TimeSpan _pollInterval;
 
@@ -79,8 +80,10 @@ public sealed class PhotogrammetryTool : IHeavyTool
         IServiceScopeFactory scopeFactory,
         IOptions<AppSettings> appSettings,
         DatasetPathPolicy paths,
+        IScratchFileProvider scratch,
         ILogger<PhotogrammetryTool> logger)
     {
+        _scratch = scratch;
         _client = client;
         _paths = paths;
         _nodes = nodes;
@@ -220,95 +223,80 @@ public sealed class PhotogrammetryTool : IHeavyTool
             throw;
         }
 
-        // Download all.zip to a temp location for extraction.
-        var tempZipPath = Path.Combine(Path.GetTempPath(), $"photogrammetry_{Guid.NewGuid():N}.zip");
-        try
+        // Download all.zip to the configured temp folder for extraction; deleted at the end
+        using var tempZip = _scratch.Create("photogrammetry_", ".zip");
+        var tempZipPath = tempZip.Path;
+        progress.Report(new HeavyToolProgress(0.95, "downloading", LogChunk: "Downloading result bundle (all.zip)"));
+        await _client.DownloadAssetAsync(node, uuid, "all.zip", tempZipPath, ct);
+
+        var info = new FileInfo(tempZipPath);
+        if (!info.Exists || info.Length == 0)
+            throw new InvalidOperationException("NodeODX produced no downloadable result bundle.");
+
+        // Best-effort remote cleanup.
+        await _client.RemoveTaskAsync(node, uuid, CancellationToken.None);
+
+        // --- Phase 2: Determine output target ---
+        var createNewDataset = ReadBool(request.Params, "createNewDataset") ?? false;
+        var targetDdb = ctx.Ddb;
+        var targetRoot = ctx.Ddb.DatasetFolderPath;
+        var targetOrgSlug = request.OrgSlug;
+        var targetDsSlug = request.DsSlug;
+        var destPath = _paths.NormalizeFolder(ReadString(request.Params, "destPath"));
+
+        if (createNewDataset)
         {
-            progress.Report(new HeavyToolProgress(0.95, "downloading", LogChunk: "Downloading result bundle (all.zip)"));
-            await _client.DownloadAssetAsync(node, uuid, "all.zip", tempZipPath, ct);
+            ct.ThrowIfCancellationRequested();
+            progress.Report(new HeavyToolProgress(0.96, "creating-dataset",
+                LogChunk: "Creating new dataset for photogrammetry results"));
 
-            var info = new FileInfo(tempZipPath);
-            if (!info.Exists || info.Length == 0)
-                throw new InvalidOperationException("NodeODX produced no downloadable result bundle.");
+            var newDatasetName = ReadString(request.Params, "newDatasetName")
+                ?? $"photogrammetry-{DateTime.UtcNow:yyyyMMddHHmmss}";
+            var newDatasetOrgSlug = ReadString(request.Params, "newDatasetOrgSlug") ?? request.OrgSlug;
+            var visibilityStr = ReadString(request.Params, "newDatasetVisibility") ?? "PRIVATE";
+            var visibility = Enum.Parse<Visibility>(visibilityStr, true);
 
-            // Best-effort remote cleanup.
-            await _client.RemoveTaskAsync(node, uuid, CancellationToken.None);
+            targetOrgSlug = newDatasetOrgSlug;
 
-            // --- Phase 2: Determine output target ---
-            var createNewDataset = ReadBool(request.Params, "createNewDataset") ?? false;
-            var targetDdb = ctx.Ddb;
-            var targetRoot = ctx.Ddb.DatasetFolderPath;
-            var targetOrgSlug = request.OrgSlug;
-            var targetDsSlug = request.DsSlug;
-            var destPath = _paths.NormalizeFolder(ReadString(request.Params, "destPath"));
-
-            if (createNewDataset)
+            // This tool is a singleton; resolve the scoped IDatasetsManager and IDdbManager
+            // from a child scope at the point of use.
+            using (var scope = _scopeFactory.CreateScope())
             {
-                ct.ThrowIfCancellationRequested();
-                progress.Report(new HeavyToolProgress(0.96, "creating-dataset",
-                    LogChunk: "Creating new dataset for photogrammetry results"));
-
-                var newDatasetName = ReadString(request.Params, "newDatasetName")
-                    ?? $"photogrammetry-{DateTime.UtcNow:yyyyMMddHHmmss}";
-                var newDatasetOrgSlug = ReadString(request.Params, "newDatasetOrgSlug") ?? request.OrgSlug;
-                var visibilityStr = ReadString(request.Params, "newDatasetVisibility") ?? "PRIVATE";
-                var visibility = Enum.Parse<Visibility>(visibilityStr, true);
-
-                targetOrgSlug = newDatasetOrgSlug;
-
-                // This tool is a singleton; resolve the scoped IDatasetsManager and IDdbManager
-                // from a child scope at the point of use.
-                using (var scope = _scopeFactory.CreateScope())
+                var datasetsManager = scope.ServiceProvider.GetRequiredService<IDatasetsManager>();
+                var newDs = await datasetsManager.AddNew(newDatasetOrgSlug, new DatasetNewDto
                 {
-                    var datasetsManager = scope.ServiceProvider.GetRequiredService<IDatasetsManager>();
-                    var newDs = await datasetsManager.AddNew(newDatasetOrgSlug, new DatasetNewDto
-                    {
-                        Slug = newDatasetName,
-                        Name = newDatasetName.Replace("-", " "),
-                        Visibility = visibility,
-                        Tagline = "Photogrammetry results"
-                    });
+                    Slug = newDatasetName,
+                    Name = newDatasetName.Replace("-", " "),
+                    Visibility = visibility,
+                    Tagline = "Photogrammetry results"
+                });
 
-                    targetDsSlug = newDs.Slug;
-                    progress.Report(new HeavyToolProgress(0.96, "creating-dataset",
-                        LogChunk: $"Created new dataset '{newDs.Slug}' in organization '{newDatasetOrgSlug}'"));
+                targetDsSlug = newDs.Slug;
+                progress.Report(new HeavyToolProgress(0.96, "creating-dataset",
+                    LogChunk: $"Created new dataset '{newDs.Slug}' in organization '{newDatasetOrgSlug}'"));
 
-                    // Resolve the DDB for the new dataset.
-                    var ddbManager = scope.ServiceProvider.GetRequiredService<IDdbManager>();
-                    var internalRef = newDs.Properties.TryGetValue("internalRef", out var refVal)
-                        ? Guid.Parse(refVal.ToString()!)
-                        : throw new InvalidOperationException("New dataset is missing internalRef.");
-                    targetDdb = ddbManager.Get(newDatasetOrgSlug, internalRef);
-                    targetRoot = targetDdb.DatasetFolderPath;
-                }
-
-                // For a new dataset, extract to root (no subfolder).
-                destPath = string.Empty;
+                // Resolve the DDB for the new dataset.
+                var ddbManager = scope.ServiceProvider.GetRequiredService<IDdbManager>();
+                var internalRef = newDs.Properties.TryGetValue("internalRef", out var refVal)
+                    ? Guid.Parse(refVal.ToString()!)
+                    : throw new InvalidOperationException("New dataset is missing internalRef.");
+                targetDdb = ddbManager.Get(newDatasetOrgSlug, internalRef);
+                targetRoot = targetDdb.DatasetFolderPath;
             }
 
-            // --- Phase 3: Extract archive into target dataset ---
-            await ExtractArchiveIntoDataset(
-                tempZipPath, destPath, targetDdb, targetRoot, targetOrgSlug, targetDsSlug,
-                request, ctx.TaskId, progress, ct);
-
-            progress.Report(new HeavyToolProgress(1, "done",
-                LogChunk: $"Photogrammetry complete. Results extracted to '{destPath}' in dataset '{targetDsSlug}'."));
-
-            return null;
+            // For a new dataset, extract to root (no subfolder).
+            destPath = string.Empty;
         }
-        finally
-        {
-            // Clean up temp zip file.
-            try
-            {
-                if (File.Exists(tempZipPath))
-                    File.Delete(tempZipPath);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogWarning(ex, "Could not delete temporary zip file '{Path}'", tempZipPath);
-            }
-        }
+
+        // --- Phase 3: Extract archive into target dataset ---
+        await ExtractArchiveIntoDataset(
+            tempZipPath, destPath, targetDdb, targetRoot, targetOrgSlug, targetDsSlug,
+            request, ctx.TaskId, progress, ct);
+
+        progress.Report(new HeavyToolProgress(1, "done",
+            LogChunk: $"Photogrammetry complete. Results extracted to '{destPath}' in dataset '{targetDsSlug}'."));
+
+        return null;
     }
 
     /// <summary>

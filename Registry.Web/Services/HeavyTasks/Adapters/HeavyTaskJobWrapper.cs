@@ -18,6 +18,7 @@ using Registry.Web.Models.Configuration;
 using Registry.Web.Services.HeavyTasks.Models;
 using Registry.Web.Services.HeavyTasks.Ports;
 using Registry.Web.Services.Ports;
+using Registry.Web.Utilities;
 using Serilog;
 
 namespace Registry.Web.Services.HeavyTasks.Adapters;
@@ -34,18 +35,22 @@ public sealed class HeavyTaskJobWrapper
     private readonly IHeavyToolRegistry _registry;
     private readonly ProcessingPlatformSettings _settings;
     private readonly string _tempPath;
+    private readonly IFileSystem _fs;
     private readonly ILogger<HeavyTaskJobWrapper> _log;
 
     public HeavyTaskJobWrapper(
         IServiceScopeFactory scopeFactory,
         IHeavyToolRegistry registry,
         IOptions<AppSettings> appSettings,
+        IScratchFileProvider scratch,
+        IFileSystem fs,
         ILogger<HeavyTaskJobWrapper> log)
     {
         _scopeFactory = scopeFactory;
         _registry = registry;
         _settings = appSettings.Value.ProcessingPlatform ?? new ProcessingPlatformSettings();
-        _tempPath = appSettings.Value.TempPath ?? Path.Combine(Path.GetTempPath(), "registry");
+        _tempPath = scratch.Root;
+        _fs = fs;
         _log = log;
     }
 
@@ -71,8 +76,9 @@ public sealed class HeavyTaskJobWrapper
         string? workDir = null;
         if (tool.ProducesArtifact)
         {
-            workDir = Path.Combine(_tempPath, "tasks", taskId);
-            Directory.CreateDirectory(workDir);
+            workDir = TaskJobHelpers.ArtifactDirectory(taskId, _tempPath)
+                      ?? throw new InvalidOperationException($"Invalid task id '{taskId}'.");
+            _fs.FolderCreate(workDir);
         }
 
         using var scope = _scopeFactory.CreateScope();
@@ -107,7 +113,7 @@ public sealed class HeavyTaskJobWrapper
                 if (workDir is not null)
                 {
                     processor.Schedule(
-                        () => DeleteWorkDirJob(workDir),
+                        () => HangfireUtils.SafeDelete(workDir, null!),
                         TimeSpan.FromHours(Math.Max(1, _settings.ArtifactTtlHours)));
                 }
             }
@@ -115,7 +121,7 @@ public sealed class HeavyTaskJobWrapper
         catch (OperationCanceledException)
         {
             progress.FlushFinal();
-            if (workDir is not null) SafeDeleteDir(workDir);
+            DeleteWorkDir(workDir);
             throw;
         }
         catch (Exception ex)
@@ -123,25 +129,18 @@ public sealed class HeavyTaskJobWrapper
             progress.FlushFinal();
             try { await indexWriter.UpdateErrorAsync(taskId, ex.GetType().Name, cancellationToken); }
             catch { /* best effort */ }
-            if (workDir is not null) SafeDeleteDir(workDir);
+            DeleteWorkDir(workDir);
             throw;
         }
     }
 
-    /// <summary>Hangfire-scheduled TTL cleanup of a finished task's work directory.</summary>
+    /// <summary>
+    /// Hangfire-scheduled TTL cleanup of a finished task's work directory, kept for the jobs
+    /// scheduled before RQ-10: new schedules use the shared <see cref="HangfireUtils.SafeDelete"/>.
+    /// </summary>
     [AutomaticRetry(Attempts = 1, OnAttemptsExceeded = AttemptsExceededAction.Fail)]
-    public static void DeleteWorkDirJob(string workDir) => SafeDeleteDir(workDir);
+    public static void DeleteWorkDirJob(string workDir) => HangfireUtils.SafeDelete(workDir, null!);
 
-    private static void SafeDeleteDir(string dir)
-    {
-        try
-        {
-            if (!string.IsNullOrEmpty(dir) && Directory.Exists(dir))
-                Directory.Delete(dir, recursive: true);
-        }
-        catch (Exception ex)
-        {
-            Log.Warning(ex, "Failed to delete task work directory '{Dir}'", dir);
-        }
-    }
+    private void DeleteWorkDir(string? workDir) =>
+        _fs.TryDelete(workDir, ex => _log.LogWarning(ex, "Failed to delete task work directory '{Dir}'", workDir));
 }

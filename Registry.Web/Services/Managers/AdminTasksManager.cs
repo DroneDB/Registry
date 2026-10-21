@@ -8,6 +8,7 @@ using System.Threading.Tasks;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
+using Registry.Ports;
 using Registry.Web.Data.Models;
 using Registry.Web.Exceptions;
 using Registry.Web.Identity.Models;
@@ -30,20 +31,24 @@ public sealed class AdminTasksManager : IAdminTasksManager
     private readonly UserManager<User> _userManager;
     private readonly int _artifactTtlHours;
     private readonly string _tempPath;
+    private readonly IFileSystem _fs;
 
     public AdminTasksManager(
         IJobIndexQuery query,
         IJobIndexWriter writer,
         IAuthManager authManager,
         UserManager<User> userManager,
-        IOptions<AppSettings> appSettings)
+        IOptions<AppSettings> appSettings,
+        IScratchFileProvider scratch,
+        IFileSystem fs)
     {
         _query = query;
         _writer = writer;
         _authManager = authManager;
         _userManager = userManager;
         _artifactTtlHours = (appSettings.Value.ProcessingPlatform ?? new ProcessingPlatformSettings()).ArtifactTtlHours;
-        _tempPath = appSettings.Value.TempPath ?? Path.Combine(Path.GetTempPath(), "registry");
+        _tempPath = scratch.Root;
+        _fs = fs;
     }
 
     public async Task<bool> DeleteTaskAsync(string jobId, CancellationToken ct = default)
@@ -54,7 +59,7 @@ public sealed class AdminTasksManager : IAdminTasksManager
             return false;
 
         // Best-effort artifact cleanup
-        TaskJobHelpers.TryDeleteArtifacts(jobId, _tempPath);
+        TaskJobHelpers.DeleteArtifacts(_fs, jobId, _tempPath);
 
         return true;
     }

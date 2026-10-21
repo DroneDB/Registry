@@ -57,7 +57,7 @@ public class ThumbnailGeneratorHealthCheck : IHealthCheck
         }
         finally
         {
-            _fileSystem.SafeDelete(tempFile);
+            _fileSystem.TryDelete(tempFile);
         }
     }
 }

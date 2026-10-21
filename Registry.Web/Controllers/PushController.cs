@@ -1,3 +1,4 @@
+using Registry.Ports;
 using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
@@ -32,11 +33,13 @@ public class PushController : ControllerBaseEx
 {
     private readonly IPushManager _pushManager;
     private readonly FormOptions _formOptions;
+    private readonly IFileSystem _fs;
 
-    public PushController(IPushManager pushManager, IOptions<FormOptions> formOptions)
+    public PushController(IPushManager pushManager, IOptions<FormOptions> formOptions, IFileSystem fs)
     {
         _pushManager = pushManager;
         _formOptions = formOptions.Value;
+        _fs = fs;
     }
 
     /// <summary>
@@ -103,7 +106,7 @@ public class PushController : ControllerBaseEx
                 {
                     upload = await _pushManager.StreamUploadAsync(orgSlug, dsSlug, body, Request.ContentLength);
                     return (upload.TempPath, upload.Bytes);
-                });
+                }, _ => { /* the finally block deletes it */ });
 
             var path = form.GetField("path");
             var token = form.GetField("token");
@@ -119,7 +122,7 @@ public class PushController : ControllerBaseEx
         finally
         {
             // Moved into the push folder on success
-            MultipartRequestHelper.TryDeleteTempFile(upload?.TempPath);
+            _fs.TryDelete(upload?.TempPath);
         }
     }
 

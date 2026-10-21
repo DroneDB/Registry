@@ -1,3 +1,4 @@
+using Registry.Ports;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
@@ -39,14 +40,16 @@ public class ShareController : ControllerBaseEx
 
     private readonly ILogger<ShareController> _logger;
     private readonly FormOptions _formOptions;
+    private readonly IFileSystem _fs;
 
     public ShareController(IShareManager shareManager, IObjectsManager objectsManager,
-        ILogger<ShareController> logger, IOptions<FormOptions> formOptions)
+        ILogger<ShareController> logger, IOptions<FormOptions> formOptions, IFileSystem fs)
     {
         _shareManager = shareManager;
         _objectsManager = objectsManager;
         _logger = logger;
         _formOptions = formOptions.Value;
+        _fs = fs;
     }
 
     /// <summary>
@@ -113,7 +116,7 @@ public class ShareController : ControllerBaseEx
             {
                 file = await _objectsManager.StreamToTempAsync(orgSlug, dsSlug, body);
                 return (file.TempPath, file.Bytes);
-            });
+            }, temp => _fs.TryDelete(temp));
         var path = form.GetField("path");
 
         if (file == null)
@@ -189,7 +192,7 @@ public class ShareController : ControllerBaseEx
                 chunkInfo = ChunkFields.ToShareChunk(part.Fields);
                 result = await _shareManager.UploadChunk(token, chunkInfo, part.Body);
                 return result;
-            }, _ => null);
+            }, _ => { /* a chunk is stored by the chunk store, which owns it */ });
 
         if (result == null || chunkInfo == null)
             throw new BadRequestException("No chunk uploaded");

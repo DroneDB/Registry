@@ -37,6 +37,7 @@ public class ShareManager : IShareManager
     private readonly RegistryContext _context;
     private readonly IFileSystem _fileSystem;
     private readonly IChunkStore _chunks;
+    private readonly IScratchFileProvider _scratch;
     private readonly IDdbManager? _ddbManager;
 
     public ShareManager(
@@ -52,6 +53,7 @@ public class ShareManager : IShareManager
         INameGenerator nameGenerator,
         RegistryContext context,
         IFileSystem fileSystem,
+        IScratchFileProvider scratch,
         IChunkStore? chunkStore = null,
         IDdbManager? ddbManager = null)
     {
@@ -70,6 +72,7 @@ public class ShareManager : IShareManager
         // All its state is on disk: a local instance works the same as the shared one
         _chunks = chunkStore ?? new ChunkStore();
         _ddbManager = ddbManager;
+        _scratch = scratch;
     }
 
     public async Task<BatchDto> GetBatchInfo(string token)
@@ -674,21 +677,24 @@ public class ShareManager : IShareManager
 
         // The chunks were written into one file at their offsets: taking it is a rename, and its
         // hash was computed as the chunks arrived
-        var root = ChunksRoot(batch);
-        var temp = Path.Combine(Path.GetDirectoryName(root)!, Guid.NewGuid().ToString("N") + DatasetUploads.TempFileExtension);
-        var hint = await _chunks.TakeAsync(root, fileId, temp);
+        var ddb = DatasetOf(batch);
+        var root = ChunkedUploadManager.ChunksRoot(ddb);
+        using var temp = _scratch.CreateForDataset(ddb.DatasetFolderPath, DatasetUploads.TempFileExtension);
+        var hint = await _chunks.TakeAsync(root, fileId, temp.Path);
+        temp.Release(); // the commit moves it into place or deletes it
 
         var added = await _objectsManager.CommitStreamedAsync(orgSlug, dsSlug, path,
-            new StreamedFile(temp, hint.Size, hint));
+            new StreamedFile(temp.Path, hint.Size, hint));
         return await RegisterBatchEntry(batch, path, added);
     }
 
     // Chunks of a share upload live where the dataset's other uploads do (same volume as the dataset)
-    private string ChunksRoot(Batch batch)
+    private string ChunksRoot(Batch batch) => ChunkedUploadManager.ChunksRoot(DatasetOf(batch));
+
+    private IDDB DatasetOf(Batch batch)
     {
         if (_ddbManager == null)
             throw new InvalidOperationException("Chunked share uploads need the dataset manager");
-        var ddb = _ddbManager.Get(batch.Dataset.Organization.Slug, batch.Dataset.InternalRef);
-        return ChunkedUploadManager.ChunksRoot(ddb);
+        return _ddbManager.Get(batch.Dataset.Organization.Slug, batch.Dataset.InternalRef);
     }
 }

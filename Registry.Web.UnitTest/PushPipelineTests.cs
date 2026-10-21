@@ -144,7 +144,7 @@ public class PushPipelineTests : TestBase
         return new PushManager(_utils.Object, ddbManager.Object, _objects.Object,
             CreateTestLogger<PushManager>(Serilog.Events.LogEventLevel.Warning), Mock.Of<IDatasetsManager>(),
             auth.Object, new DatasetAccessResolver(_utils.Object, auth.Object, ddbManager.Object, TestPaths.Policy), _wrapper.Object, _jobs.Object, settings, cache.Object, fileSystem, buildPending,
-            new PushSessionStore(fileSystem), new UploadQuotaGuard(_ledger, _utils.Object), TestPaths.Policy);
+            new PushSessionStore(fileSystem), new UploadQuotaGuard(_ledger, _utils.Object), TestPaths.Policy, TestScratch.Provider);
     }
 
     private static StampDto ClientStamp() => new() { Checksum = "client", Entries = [], Meta = [] };
@@ -362,14 +362,15 @@ public class PushPipelineTests : TestBase
         // The CLI sends the file part first, then the fields
         var form = await MultipartRequestHelper.ReadSingleFileFormAsync(
             MultipartRequest(("file", "IMG.JPG", "jpeg"), ("path", null, "photos/IMG.JPG"), ("token", null, "t")),
-            70, streamFile);
+            70, streamFile, temp => new Registry.Adapters.FileSystem().TryDelete(temp));
         form.GetField("path").ShouldBe("photos/IMG.JPG");
         form.GetField("TOKEN").ShouldBe("t");
         form.Bytes.ShouldBe(4);
         File.ReadAllText(form.TempFile).ShouldBe("jpeg");
 
         await Should.ThrowAsync<BadRequestException>(() => MultipartRequestHelper.ReadSingleFileFormAsync(
-            MultipartRequest(("file", "a.jpg", "a"), ("file2", "b.jpg", "b")), 70, streamFile));
+            MultipartRequest(("file", "a.jpg", "a"), ("file2", "b.jpg", "b")), 70, streamFile,
+            temp => new Registry.Adapters.FileSystem().TryDelete(temp)));
         File.Exists(temps[1]).ShouldBeFalse("the first file of a rejected request is deleted");
     }
 

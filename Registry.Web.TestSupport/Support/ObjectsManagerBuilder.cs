@@ -106,6 +106,7 @@ public sealed class ObjectsManagerBuilder
             _jobIndexQuery ?? Mock.Of<IJobIndexQuery>(),
             buildPendingService,
             TestPaths.Policy,
+            TestScratch.Provider,
             _zipArchiveBuilder,
             _ogcLayerCatalog,
             _datasetCacheInvalidator,

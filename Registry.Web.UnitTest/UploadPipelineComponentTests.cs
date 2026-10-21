@@ -63,7 +63,8 @@ public class UploadPipelineComponentTests
         try
         {
             var content = Encoding.UTF8.GetBytes("hash me while you write me");
-            var file = await DatasetUploads.StreamToTempAsync(new FileSystem(), root, new MemoryStream(content));
+            var file = await DatasetUploads.StreamToTempAsync(TestScratch.Provider, new FileSystem(), root,
+                new MemoryStream(content));
 
             file.Bytes.ShouldBe(content.Length);
             file.Hash.Size.ShouldBe(content.Length);
@@ -239,7 +240,7 @@ public class UploadPipelineComponentTests
                 var content = await new StreamReader(part.Body).ReadToEndAsync();
                 seen.Add((part.Path, content));
                 return content;
-            }, _ => "");
+            }, _ => { });
 
         seen.ShouldBe([("a/1.jpg", "one"), ("a/2.jpg", "two"), (null, "three")]);
         form.Files.Select(f => f.Path).ShouldBe(["a/1.jpg", "a/2.jpg", null]);
@@ -257,7 +258,7 @@ public class UploadPipelineComponentTests
                 await using (var f = File.Create(temp)) await part.Body.CopyToAsync(f);
                 temps.Add(temp);
                 return temp;
-            }, temp => temp));
+            }, temp => new FileSystem().TryDelete(temp)));
 
         temps.Count.ShouldBe(2);
         temps.ShouldAllBe(t => !File.Exists(t));

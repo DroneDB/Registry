@@ -1,4 +1,5 @@
 #nullable enable
+using Registry.Ports;
 using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
@@ -40,11 +41,13 @@ public class ObjectUploadsController : ControllerBaseEx
     private readonly FormOptions _formOptions;
     private readonly UploadSettings _uploadSettings;
     private readonly ApiErrorResponder _errors;
+    private readonly IFileSystem _fs;
 
     public ObjectUploadsController(IUploadManager uploads, IChunkedUploadManager chunks, IObjectsManager objectsManager,
         ILogger<ObjectUploadsController> logger, IOptions<FormOptions> formOptions, IOptions<AppSettings> appSettings,
-        ApiErrorResponder errors)
+        ApiErrorResponder errors, IFileSystem fs)
     {
+        _fs = fs;
         _uploads = uploads;
         _chunks = chunks;
         _objectsManager = objectsManager;
@@ -105,7 +108,7 @@ public class ObjectUploadsController : ControllerBaseEx
                     // Refuse a destination before its first byte is written
                     if (part.Path != null) _uploads.ValidatePath(ctx, part.Path);
                     return await _uploads.StreamAsync(ctx, part.Body, HttpContext.RequestAborted);
-                }, file => file.TempPath);
+                }, file => _fs.TryDelete(file.TempPath));
         }
         catch (Exception ex)
         {
@@ -186,7 +189,7 @@ public class ObjectUploadsController : ControllerBaseEx
                 status = await _chunks.WriteChunkAsync(orgSlug, dsSlug, ChunkFields.ToDatasetChunk(part.Fields), part.Body,
                     HttpContext.RequestAborted);
                 return status;
-            }, _ => null!);
+            }, _ => { /* a chunk is stored by the chunk store, which owns it */ });
 
         return Ok(status ?? throw new BadRequestException("No chunk uploaded"));
     }

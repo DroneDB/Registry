@@ -45,13 +45,14 @@ public class PushManager : IPushManager
     private readonly IPushSessionStore _sessionStore;
     private readonly IUploadQuotaGuard _quota;
     private readonly DatasetPathPolicy _paths;
+    private readonly IScratchFileProvider _scratch;
 
     public PushManager(IUtils utils, IDdbManager ddbManager,
         IObjectsManager objectsManager, ILogger<PushManager> logger, IDatasetsManager datasetsManager,
         IAuthManager authManager, IDatasetAccessResolver access, IDdbWrapper ddbWrapper,
         IBackgroundJobsProcessor backgroundJob, IOptions<AppSettings> settings, ICacheManager cacheManager,
         IFileSystem fileSystem, BuildPendingService buildPendingService, IPushSessionStore sessionStore,
-        IUploadQuotaGuard quota, DatasetPathPolicy paths)
+        IUploadQuotaGuard quota, DatasetPathPolicy paths, IScratchFileProvider scratch)
     {
         _utils = utils;
         _ddbManager = ddbManager;
@@ -70,6 +71,7 @@ public class PushManager : IPushManager
         _sessionStore = sessionStore;
         _quota = quota;
         _paths = paths;
+        _scratch = scratch;
     }
 
     public async Task<PushInitResultDto> Init(string orgSlug, string dsSlug, string checksum, StampDto stamp)
@@ -169,7 +171,7 @@ public class PushManager : IPushManager
         {
             var ddb = access.Ddb;
             var (tempPath, bytes, _) =
-                await DatasetUploads.StreamToTempAsync(_fileSystem, ddb.DatasetFolderPath, source);
+                await DatasetUploads.StreamToTempAsync(_scratch, _fileSystem, ddb.DatasetFolderPath, source);
 
             try
             {

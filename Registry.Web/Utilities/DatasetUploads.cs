@@ -5,6 +5,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Registry.Ports;
 using Registry.Ports.DroneDB;
+using Registry.Web.Services.Ports;
 
 namespace Registry.Web.Utilities;
 
@@ -25,38 +26,31 @@ public static class DatasetUploads
     /// stream leaves no file behind.
     /// </summary>
     /// <returns>The temp file, its size and its SHA-256.</returns>
-    public static async Task<StreamedFile> StreamToTempAsync(IFileSystem fs, string datasetFolderPath, Stream source,
-        CancellationToken ct = default)
+    public static async Task<StreamedFile> StreamToTempAsync(IScratchFileProvider scratch, IFileSystem fs,
+        string datasetFolderPath, Stream source, CancellationToken ct = default)
     {
         // Temp lives under the dataset folder (same volume as the final file) -> a same-volume
         // File.Move at commit time is a genuine atomic rename (review round 2, finding 6).
-        var tempDir = Path.Combine(datasetFolderPath, IDDB.UploadsFolderName);
-        fs.FolderCreate(tempDir);
-        var tempPath = Path.Combine(tempDir, Guid.NewGuid().ToString("N") + TempFileExtension);
+        // An aborted or oversized stream drops the partial file (the scratch file's Dispose).
+        using var temp = scratch.CreateForDataset(datasetFolderPath, TempFileExtension);
 
         string sha256;
         long hashed;
-        try
+        // CreateNew, not Create: the path is new, and on ext4 truncating a file (what Create
+        // does) makes its close write back every dirty page first (auto_da_alloc), which
+        // measured 0.2 s per GiB after the last byte of an upload
+        await using (var ts = new HashingWriteStream(fs.OpenWrite(temp.Path, FileMode.CreateNew)))
         {
-            // CreateNew, not Create: the path is new, and on ext4 truncating a file (what Create
-            // does) makes its close write back every dirty page first (auto_da_alloc), which
-            // measured 0.2 s per GiB after the last byte of an upload
-            await using var ts = new HashingWriteStream(fs.OpenWrite(tempPath, FileMode.CreateNew));
             await source.CopyToAsync(ts, 1024 * 1024, ct);
             hashed = ts.BytesWritten;
             sha256 = ts.GetHexDigest();
         }
-        catch
-        {
-            // Aborted/oversized stream: drop the partial temp file
-            try { File.Delete(tempPath); }
-            catch { /* ignore */ }
-            throw;
-        }
 
         // The write time after the file is closed: DroneDB trusts the hash only while it is unchanged
-        var hint = new FileHashHint(sha256, hashed, fs.GetLastWriteTime(tempPath).ToUniversalTime());
-        return new StreamedFile(tempPath, fs.GetFileSize(tempPath), hint);
+        var hint = new FileHashHint(sha256, hashed, fs.GetLastWriteTime(temp.Path).ToUniversalTime());
+        var file = new StreamedFile(temp.Path, fs.GetFileSize(temp.Path), hint);
+        temp.Release(); // the commit moves it into place or deletes it
+        return file;
     }
 
     /// <summary>

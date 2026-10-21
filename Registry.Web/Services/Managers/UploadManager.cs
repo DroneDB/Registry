@@ -9,6 +9,7 @@ using System.Threading.Tasks;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using Registry.Common;
 using Registry.Ports;
 using Registry.Ports.DroneDB;
 using Registry.Web.Exceptions;
@@ -44,11 +45,13 @@ public sealed partial class UploadManager : IUploadManager
     private readonly IDatasetChangeCoalescer _changes;
     private readonly IThumbnailPrecomputeQueue? _thumbnails;
     private readonly DatasetPathPolicy _paths;
+    private readonly IScratchFileProvider _scratch;
 
     public UploadManager(ILogger<UploadManager> logger, IAuthManager authManager,
         IDatasetAccessResolver access, IDdbManager ddbManager, IFileSystem fs, IOptions<AppSettings> settings,
         IBackgroundJobsProcessor backgroundJob, BuildPendingService buildPendingService, IUploadQuotaGuard quota,
-        IDatasetChangeCoalescer changes, DatasetPathPolicy paths, IUploadReceiptStore? receipts = null,
+        IDatasetChangeCoalescer changes, DatasetPathPolicy paths, IScratchFileProvider scratch,
+        IUploadReceiptStore? receipts = null,
         IDatasetIndexQueue? indexQueue = null, IThumbnailPrecomputeQueue? thumbnails = null)
     {
         _logger = logger;
@@ -66,6 +69,7 @@ public sealed partial class UploadManager : IUploadManager
         _changes = changes;
         _thumbnails = thumbnails;
         _paths = paths;
+        _scratch = scratch;
     }
 
     // Client-generated ids: GUIDs or similar tokens, never anything that could shape a cache key
@@ -134,7 +138,7 @@ public sealed partial class UploadManager : IUploadManager
 
     public async Task<StreamedFile> StreamAsync(UploadRequestContext ctx, Stream body, CancellationToken ct = default)
     {
-        var file = await DatasetUploads.StreamToTempAsync(_fs, ctx.Ddb.DatasetFolderPath, body, ct);
+        var file = await DatasetUploads.StreamToTempAsync(_scratch, _fs, ctx.Ddb.DatasetFolderPath, body, ct);
         ctx.TrackTempFile(file.TempPath);
         return file;
     }
@@ -306,7 +310,7 @@ public sealed partial class UploadManager : IUploadManager
             // a path outside this dataset's uploads folder is never ours to delete
             foreach (var part in parts)
                 if (!string.IsNullOrWhiteSpace(part.File.TempPath) && IsInUploadsFolder(ctx.Ddb, part.File.TempPath))
-                    DeleteIfExists(part.File.TempPath);
+                    _fs.TryDelete(part.File.TempPath); // else the abandoned-upload sweep removes it
         }
 
         var results = outcomes.Select((o, i) => o ?? new PartOutcome(parts[i].Path, null,
@@ -351,27 +355,8 @@ public sealed partial class UploadManager : IUploadManager
             throw new InvalidOperationException("Invalid temporary upload path");
     }
 
-    internal static bool IsInUploadsFolder(IDDB ddb, string tempFilePath)
-    {
-        var uploadsRoot = Path.GetFullPath(Path.Combine(ddb.DatasetFolderPath, IDDB.UploadsFolderName));
-        if (!uploadsRoot.EndsWith(Path.DirectorySeparatorChar))
-            uploadsRoot += Path.DirectorySeparatorChar;
-
-        var comparison = OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
-        return Path.GetFullPath(tempFilePath).StartsWith(uploadsRoot, comparison);
-    }
-
-    private static void DeleteIfExists(string tempFilePath)
-    {
-        try
-        {
-            if (File.Exists(tempFilePath)) File.Delete(tempFilePath);
-        }
-        catch
-        {
-            /* the abandoned-upload sweep removes it */
-        }
-    }
+    internal static bool IsInUploadsFolder(IDDB ddb, string tempFilePath) =>
+        CommonUtils.IsUnder(Path.Combine(ddb.DatasetFolderPath, IDDB.UploadsFolderName), tempFilePath);
 
     // One index batch for every file of the request; each file gets its own entry or error
     private async Task IndexAsync(UploadRequestContext ctx, IReadOnlyList<MovedPart> parts)

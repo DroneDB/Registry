@@ -27,7 +27,7 @@ namespace Registry.Web.Utilities;
 
 public static class HangfireUtils
 {
-    private static readonly IFileSystem FileSystem = new FileSystem();
+    private static readonly FileSystem FileSystem = new();
 
     /// <summary>
     /// Builds the per-job log writer. When <see cref="BuildLogCaptureFilter"/>
@@ -438,20 +438,15 @@ public static class HangfireUtils
 
         writeLine($"In SafeDelete('{path}')");
 
-        if (File.Exists(path))
-        {
-            var result = FileSystem.SafeDelete(path);
-            writeLine(result ? "File deleted successfully" : "Cannot delete file");
-        }
-        else if (Directory.Exists(path))
-        {
-            var result = FileSystem.SafeFolderDelete(path);
-            writeLine(result ? "Folder deleted successfully" : "Cannot delete folder");
-        }
-        else
+        if (!FileSystem.Exists(path) && !FileSystem.FolderExists(path))
         {
             writeLine("No file or folder found");
+            return;
         }
+
+        writeLine(FileSystem.TryDelete(path, ex => writeLine($"Cannot delete: {ex.Message}"))
+            ? "Deleted successfully"
+            : "Cannot delete");
     }
 
     [AutomaticRetry(Attempts = 1, OnAttemptsExceeded = AttemptsExceededAction.Fail)]
