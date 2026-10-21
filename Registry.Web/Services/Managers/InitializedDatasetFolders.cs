@@ -3,6 +3,7 @@ using System;
 using System.Collections.Concurrent;
 using System.IO;
 using System.Linq;
+using Registry.Common;
 
 namespace Registry.Web.Services.Managers;
 
@@ -13,8 +14,7 @@ namespace Registry.Web.Services.Managers;
 /// </summary>
 public sealed class InitializedDatasetFolders
 {
-    private readonly ConcurrentDictionary<string, byte> _folders = new(
-        OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal);
+    private readonly ConcurrentDictionary<string, byte> _folders = new(PathComparison.Comparer);
 
     public bool Contains(string folder) => _folders.ContainsKey(Normalize(folder));
 
@@ -25,8 +25,8 @@ public sealed class InitializedDatasetFolders
     {
         var root = Normalize(folder);
         var prefix = root + Path.DirectorySeparatorChar;
-        var comparison = OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
-        foreach (var known in _folders.Keys.Where(k => k.Equals(root, comparison) || k.StartsWith(prefix, comparison)))
+        foreach (var known in _folders.Keys.Where(k =>
+                     k.Equals(root, PathComparison.Comparison) || k.StartsWith(prefix, PathComparison.Comparison)))
             _folders.TryRemove(known, out _);
     }
 

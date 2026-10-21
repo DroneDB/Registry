@@ -110,7 +110,7 @@ public static class CommonUtils
     /// <returns></returns>
     public static string SafeCombine(params string[] paths)
     {
-        return Path.Combine([.. paths.Where(item => item != null)]).Replace('\\', '/');
+        return Path.Combine([.. paths.Where(item => item != null)]).ToDdbPath();
     }
 
     /// <summary>
@@ -273,7 +273,7 @@ public static class CommonUtils
     {
         const uint LOAD_LIBRARY_SEARCH_DEFAULT_DIRS = 0x00001000;
 
-        if (Environment.OSVersion.Platform != PlatformID.Win32NT)
+        if (!OperatingSystem.IsWindows())
             return;
 
         if (!SetDefaultDllDirectories(LOAD_LIBRARY_SEARCH_DEFAULT_DIRS))
@@ -304,7 +304,7 @@ public static class CommonUtils
 
         var newPath = path.Split(Path.PathSeparator);
 
-        var libraryName = RuntimeInformation.IsOSPlatform(OSPlatform.Windows)
+        var libraryName = OperatingSystem.IsWindows()
             ? DroneDBDllNameWindows
             : DroneDBDllNameLinux;
 

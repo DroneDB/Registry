@@ -22,6 +22,9 @@ public interface IFileSystem
     void AppendAllLines(string path, IEnumerable<string> contents, Encoding encoding);
     void Copy(string sourceFileName, string destFileName, bool overwrite = true);
     void Move(string sourceFileName, string destFileName);
+
+    /// <summary>Moves a file, replacing <paramref name="destFileName"/> when <paramref name="overwrite"/> (a rename on one volume).</summary>
+    void Move(string sourceFileName, string destFileName, bool overwrite);
     void Replace(string sourceFileName, string destinationFileName, string destinationBackupFileName);
     void Replace(string sourceFileName, string destinationFileName, string destinationBackupFileName, bool ignoreMetadataErrors);
     void Delete(string path);

@@ -8,6 +8,7 @@ using System.Runtime.InteropServices.Marshalling;
 using System.Threading;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
+using Registry.Common;
 using Registry.Ports;
 using Registry.Ports.DroneDB;
 
@@ -802,7 +803,7 @@ public class NativeDdbWrapper : IDdbWrapper
 
     // ---------------------------------------------------------------- helpers
 
-    private static string NormalizeSeparators(string path) => path.Replace('\\', '/');
+    private static string NormalizeSeparators(string path) => path.ToDdbPath();
 
     private static string[] NormalizeSeparators(string[] paths)
     {

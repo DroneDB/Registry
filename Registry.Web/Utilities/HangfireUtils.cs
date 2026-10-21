@@ -1,3 +1,4 @@
+using Registry.Common;
 using System;
 using System.IO;
 using System.Linq;
@@ -109,8 +110,8 @@ public static class HangfireUtils
         if (trimmed.Length == 0) return value;
 
         return value
-            .Replace(trimmed.Replace('\\', '/'), "[dataset]", StringComparison.OrdinalIgnoreCase)
-            .Replace(trimmed.Replace('/', '\\'), "[dataset]", StringComparison.OrdinalIgnoreCase);
+            .Replace(trimmed.ToDdbPath(), "[dataset]", StringComparison.OrdinalIgnoreCase)
+            .Replace(trimmed.ToDdbPath().Replace('/', '\\'), "[dataset]", StringComparison.OrdinalIgnoreCase);
     }
 
     // Transient DDB contention gets a backoff retry chain; anything else fails fast without

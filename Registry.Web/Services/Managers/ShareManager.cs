@@ -534,11 +534,7 @@ public class ShareManager : IShareManager
         finally
         {
             // Backstop: drop the temp file if a pre-commit validation prevented the move
-            if (File.Exists(tempFilePath))
-            {
-                try { File.Delete(tempFilePath); }
-                catch { /* ignore */ }
-            }
+            _fileSystem.TryDelete(tempFilePath);
         }
     }
 

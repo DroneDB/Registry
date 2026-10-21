@@ -264,7 +264,7 @@ public sealed partial class UploadManager : IUploadManager
                 _fs.EnsureParentFolderExists(localFilePath);
 
                 // Same-volume atomic move: no extra full-file copy (keeps the write time the hash hint carries)
-                File.Move(part.File.TempPath, localFilePath, overwrite: true);
+                _fs.Move(part.File.TempPath, localFilePath, overwrite: true);
                 moved.Add((i, new MovedPart(part, localFilePath)));
             }
 
@@ -411,7 +411,7 @@ public sealed partial class UploadManager : IUploadManager
     {
         try
         {
-            if (!File.Exists(localFilePath))
+            if (!_fs.Exists(localFilePath))
                 return;
 
             var quarantineDir = Path.Combine(ctx.Ddb.DatasetFolderPath, IDDB.UploadsFolderName, IDDB.QuarantineFolderName);
@@ -423,7 +423,7 @@ public sealed partial class UploadManager : IUploadManager
             var quarantinePath = Path.Combine(quarantineDir,
                 $"{DateTime.UtcNow:yyyyMMddTHHmmssfffZ}-{Guid.NewGuid():N}-{Path.GetFileName(path)}");
 
-            File.Move(localFilePath, quarantinePath, overwrite: true);
+            _fs.Move(localFilePath, quarantinePath, overwrite: true);
 
             _logger.LogError(cause,
                 "Quarantined '{Path}' in dataset '{OrgSlug}/{DsSlug}' after index failure -> '{QuarantinePath}'",

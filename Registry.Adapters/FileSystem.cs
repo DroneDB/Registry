@@ -66,16 +66,18 @@ public class FileSystem : IFileSystem
         File.Copy(sourceFileName, destFileName, overwrite);
     }
 
-    public void Move(string sourceFileName, string destFileName)
+    public void Move(string sourceFileName, string destFileName) => Move(sourceFileName, destFileName, false);
+
+    public void Move(string sourceFileName, string destFileName, bool overwrite)
     {
         try
         {
-            File.Move(sourceFileName, destFileName);
+            File.Move(sourceFileName, destFileName, overwrite);
         }
         catch (IOException ex) when (ex.Message.Contains("cross-device") || ex.Message.Contains("Invalid cross-device link"))
         {
             // Cross-device move not supported on Linux, fall back to copy + delete
-            File.Copy(sourceFileName, destFileName, true);
+            File.Copy(sourceFileName, destFileName, overwrite);
             File.Delete(sourceFileName);
         }
     }
