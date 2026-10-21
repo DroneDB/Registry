@@ -52,6 +52,7 @@ public sealed class ArchiveExtractTool : IHeavyTool
         """);
 
     private readonly IArchiveExtractor _extractor;
+    private readonly DatasetArchiveExtractor _archives;
     private readonly IServiceScopeFactory _scopeFactory;
     private readonly ProcessingPlatformSettings _settings;
     private readonly ImportSettings _importSettings;
@@ -61,6 +62,7 @@ public sealed class ArchiveExtractTool : IHeavyTool
 
     public ArchiveExtractTool(
         IArchiveExtractor extractor,
+        DatasetArchiveExtractor archives,
         IServiceScopeFactory scopeFactory,
         IOptions<AppSettings> appSettings,
         DatasetPathPolicy paths,
@@ -69,6 +71,7 @@ public sealed class ArchiveExtractTool : IHeavyTool
     {
         _headroom = headroom;
         _extractor = extractor;
+        _archives = archives;
         _paths = paths;
         _scopeFactory = scopeFactory;
         _settings = appSettings.Value.ProcessingPlatform ?? new ProcessingPlatformSettings();
@@ -191,109 +194,19 @@ public sealed class ArchiveExtractTool : IHeavyTool
         var overwrite = ReadBool(request.Params, "overwrite") ?? false;
 
         var localArchive = ctx.Ddb.GetLocalPath(sourcePath);
-        var root = ctx.Ddb.DatasetFolderPath;
-        var done = 0;
-        var extracted = 0;
-        var skipped = 0;
-        int total;
-        var extractedPaths = new List<string>();
 
-        // For compressed tarballs the uncompressed size cannot be known without fully
-        // decompressing the archive (which we deliberately avoid), so instead of a
-        // submit-time guard we extract in a single streaming pass and enforce the space
-        // budget incrementally. If we run out of room we roll back everything extracted in
-        // this run and fail with a clear "not enough space" message. Indexing happens only
-        // AFTER the loop, so on abort nothing has been added to the index yet - we just
-        // delete the files written so far.
-        // Cap (primary) + disk head-room (secondary, re-sampled) consolidated in ExtractionBudget.
-        var budget = _headroom.CreateBudget(_settings.MaxArchiveExtractSizeBytes, root, _settings.DiskSafetyMarginBytes);
-
-        // The session (and its underlying file handle) is closed as soon as the
-        // extraction loop finishes, BEFORE indexing and deleteArchive. This is critical:
-        // keeping the session open through deleteArchive causes the OS to refuse the
-        // File.Delete because the handle is still held.
-        using (var session = _extractor.Open(localArchive))
-        {
-            // Null (=> 0) for compressed tarballs: the count is unknown without
-            // decompressing, so the progress bar is indeterminate during extraction.
-            total = session.FastFileEntryCount ?? 0;
-
-            progress.Report(new HeavyToolProgress(total > 0 ? 0 : -1, "extracting",
-                LogChunk: total > 0
-                    ? $"Extracting {total} file(s) from '{sourcePath}'"
-                    : $"Extracting '{sourcePath}'"));
-
-            foreach (var archiveEntry in session.Entries())
-            {
-                ct.ThrowIfCancellationRequested();
-                if (archiveEntry.IsDirectory) continue;
-
-                // libddb's path rule: an unsafe name fails the extraction (zip-slip); a folder
-                // entry or a reserved path (.ddb, the root .uploads) is skipped
-                var key = _paths.NormalizeArchiveKey(archiveEntry.Key);
-                var check = key.Path == null ? key : _paths.CheckIn(destPath, key.Path);
-                if (check.Path == null)
-                {
-                    if (check.Rejected == EntryPathRejection.Reserved)
-                        _logger.LogWarning("Skipping reserved path during extraction: '{Key}'", archiveEntry.Key);
-                    skipped++;
-                    done++;
-                    ReportProgress(progress, done, total, archiveEntry.Key);
-                    continue;
-                }
-
-                var target = check.Path;
-
-                // Extension policy (allow-list / block-list): skip disallowed types (e.g. executables
-                // or scripts) with a warning, mirroring the overwrite=false skip semantics.
-                if (!_importSettings.IsExtensionAllowed(target))
-                {
-                    _logger.LogWarning("Skipping disallowed file type during extraction: '{Path}'", target);
-                    skipped++;
-                    done++;
-                    ReportProgress(progress, done, total, archiveEntry.Key);
-                    continue;
-                }
-
-                // Overwrite / skip semantics.
-                if (ctx.Ddb.EntryExists(target) && !overwrite)
-                {
-                    skipped++;
-                    done++;
-                    ReportProgress(progress, done, total, archiveEntry.Key);
-                    continue;
-                }
-
-                var localTarget = ctx.Ddb.GetLocalPath(target);
-                var parent = Path.GetDirectoryName(localTarget);
-                if (!string.IsNullOrEmpty(parent))
-                    Directory.CreateDirectory(parent);
-
-                // Track the (possibly partial) file BEFORE writing so a rollback removes it too.
-                extractedPaths.Add(target);
-
-                // Stream the entry through the shared budget: the cap (primary) and disk head-room
-                // (secondary) are enforced BEFORE each chunk, so an under-reported or oversized entry
-                // cannot fill the volume mid-copy. File.Create truncates -> honors overwrite=true.
-                try
-                {
-                    await using var sourceStream = archiveEntry.OpenStream();
-                    await using var fileStream = File.Create(localTarget);
-                    await budget.CopyGuardedAsync(sourceStream, fileStream, ct);
-                }
-                catch (QuotaExceededException)
-                {
-                    progress.Report(new HeavyToolProgress(-1, "cleanup",
-                        LogChunk: $"Out of budget - rolling back {extractedPaths.Count} extracted file(s)"));
-                    CleanupExtracted(ctx, extractedPaths);
-                    throw;
-                }
-
-                extracted++;
-                done++;
-                ReportProgress(progress, done, total, archiveEntry.Key);
-            }
-        } // ← session.Dispose() - file handle released here
+        // One streaming pass through the shared extractor: the path rule decides every entry, the
+        // budget (cap, then disk head-room with libddb's floor) every chunk - compressed tarballs have
+        // no cheap uncompressed size, so the submit-time guard cannot cover them - and any failure
+        // leaves the dataset as it was. Indexing happens only AFTER the extraction, so a rollback has
+        // nothing to un-index. The archive is closed before indexing and deleteArchive.
+        var extraction = await _archives.ExtractAsync(
+            new ArchiveExtractionRequest(localArchive, ctx.Ddb.DatasetFolderPath, destPath,
+                _importSettings.IsExtensionAllowed,
+                target => !overwrite && ctx.Ddb.EntryExists(target),
+                _settings.MaxArchiveExtractSizeBytes, _settings.DiskSafetyMarginBytes),
+            new CallbackProgress<ArchiveExtractionProgress>(p => ReportProgress(progress, p, sourcePath)), ct);
+        var extractedPaths = extraction.Extracted.ToList();
 
         ct.ThrowIfCancellationRequested();
 
@@ -376,33 +289,27 @@ public sealed class ArchiveExtractTool : IHeavyTool
         }
 
         progress.Report(new HeavyToolProgress(1, "done",
-            LogChunk: $"Extraction complete: {extracted} extracted, {skipped} skipped"));
+            LogChunk: $"Extraction complete: {extraction.Extracted.Count} extracted, {extraction.Skipped} skipped"));
         return null;
     }
 
-    // Removes the files written during a failed extraction run. Index entries are added
-    // only after extraction completes, so on abort there is nothing to un-index.
-    private void CleanupExtracted(IHeavyToolExecutionContext ctx, List<string> paths)
+    private static void ReportProgress(IProgress<HeavyToolProgress> progress, ArchiveExtractionProgress p, string sourcePath)
     {
-        foreach (var p in paths)
+        if (p.Done == 0)
         {
-            try
-            {
-                var local = ctx.Ddb.GetLocalPath(p);
-                if (File.Exists(local))
-                    File.Delete(local);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogWarning(ex, "Could not delete partially extracted file '{Path}'", p);
-            }
+            // Total 0: a compressed tarball, the count is unknown without decompressing (indeterminate bar)
+            progress.Report(new HeavyToolProgress(p.Total > 0 ? 0 : -1, "extracting",
+                LogChunk: p.Total > 0 ? $"Extracting {p.Total} file(s) from '{sourcePath}'" : $"Extracting '{sourcePath}'"));
+            return;
         }
+
+        progress.Report(new HeavyToolProgress(p.Total > 0 ? (double)p.Done / p.Total : -1, "extracting", Message: p.Key));
     }
 
-    private static void ReportProgress(IProgress<HeavyToolProgress> progress, int done, int total, string currentKey)
+    // Reports inline (System.Progress<T> posts to the thread pool)
+    private sealed class CallbackProgress<T>(Action<T> report) : IProgress<T>
     {
-        var fraction = total > 0 ? (double)done / total : -1;
-        progress.Report(new HeavyToolProgress(fraction, "extracting", Message: currentKey));
+        public void Report(T value) => report(value);
     }
 
     private static string? ReadString(JsonElement obj, string name)

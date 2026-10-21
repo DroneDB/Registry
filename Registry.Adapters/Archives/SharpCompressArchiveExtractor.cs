@@ -1,4 +1,5 @@
 #nullable enable
+using Registry.Common;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -223,7 +224,7 @@ public sealed class SharpCompressArchiveExtractor : IArchiveExtractor
         private string NormalizeKey(string? key, bool isDirectory, ref int emptyKeyIndex)
         {
             if (!string.IsNullOrWhiteSpace(key))
-                return key!.Replace('\\', '/').TrimStart('/');
+                return key!.ToDdbPath().TrimStart('/');
 
             if (isDirectory)
                 return string.Empty; // directories are skipped by the consumer

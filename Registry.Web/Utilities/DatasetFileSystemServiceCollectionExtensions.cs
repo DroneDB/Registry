@@ -19,7 +19,8 @@ public static class DatasetFileSystemServiceCollectionExtensions
     /// <summary>
     /// Registers <see cref="DatasetPathPolicy"/> (libddb's dataset path rule, through
     /// <see cref="IDdbWrapper"/>), <see cref="IScratchFileProvider"/> (<see cref="ScratchOptions"/>) and
-    /// <see cref="VolumeHeadroom"/> (over <see cref="Registry.Ports.DroneDB.IDdbRuntime"/>).
+    /// <see cref="VolumeHeadroom"/> (over <see cref="Registry.Ports.DroneDB.IDdbRuntime"/>) and
+    /// <see cref="DatasetArchiveExtractor"/>.
     /// The host registers the adapters (<see cref="IFileSystem"/>, <see cref="IDdbWrapper"/>).
     /// </summary>
     public static IServiceCollection AddDatasetFileSystem(this IServiceCollection services)
@@ -33,6 +34,9 @@ public static class DatasetFileSystemServiceCollectionExtensions
 
         // The disk-space API: the path's own volume plus libddb's free-disk floor (IDdbRuntime)
         services.TryAddSingleton<VolumeHeadroom>();
+
+        // The one archive extraction into a dataset (the host registers IArchiveExtractor)
+        services.TryAddSingleton<DatasetArchiveExtractor>();
         return services;
     }
 }

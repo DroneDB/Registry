@@ -64,33 +64,30 @@ public sealed class PhotogrammetryTool : IHeavyTool
 
     private readonly INodeOdxClient _client;
     private readonly INodeOdxNodeRegistry _nodes;
-    private readonly IArchiveExtractor _extractor;
+    private readonly DatasetArchiveExtractor _archives;
     private readonly IServiceScopeFactory _scopeFactory;
     private readonly ProcessingPlatformSettings _settings;
     private readonly ImportSettings _importSettings;
     private readonly DatasetPathPolicy _paths;
     private readonly IScratchFileProvider _scratch;
-    private readonly VolumeHeadroom _headroom;
     private readonly ILogger<PhotogrammetryTool> _logger;
     private readonly TimeSpan _pollInterval;
 
     public PhotogrammetryTool(
         INodeOdxClient client,
         INodeOdxNodeRegistry nodes,
-        IArchiveExtractor extractor,
+        DatasetArchiveExtractor archives,
         IServiceScopeFactory scopeFactory,
         IOptions<AppSettings> appSettings,
         DatasetPathPolicy paths,
         IScratchFileProvider scratch,
-        VolumeHeadroom headroom,
         ILogger<PhotogrammetryTool> logger)
     {
-        _headroom = headroom;
         _scratch = scratch;
         _client = client;
         _paths = paths;
         _nodes = nodes;
-        _extractor = extractor;
+        _archives = archives;
         _scopeFactory = scopeFactory;
         _settings = appSettings.Value.ProcessingPlatform ?? new ProcessingPlatformSettings();
         _importSettings = appSettings.Value.Import ?? new ImportSettings();
@@ -312,90 +309,14 @@ public sealed class PhotogrammetryTool : IHeavyTool
         HeavyToolRequest request, string taskId,
         IProgress<HeavyToolProgress> progress, CancellationToken ct)
     {
-        var done = 0;
-        var extracted = 0;
-        var skipped = 0;
-        int total;
-        var extractedPaths = new List<string>();
-
-        var budget = _headroom.CreateBudget(_settings.MaxArchiveExtractSizeBytes, root, _settings.DiskSafetyMarginBytes);
-
-        using (var session = _extractor.Open(archivePath))
-        {
-            total = session.FastFileEntryCount ?? 0;
-
-            progress.Report(new HeavyToolProgress(total > 0 ? 0.96 : -1, "extracting",
-                LogChunk: total > 0
-                    ? $"Extracting {total} file(s) from photogrammetry results"
-                    : $"Extracting photogrammetry results"));
-
-            foreach (var archiveEntry in session.Entries())
-            {
-                ct.ThrowIfCancellationRequested();
-                if (archiveEntry.IsDirectory) continue;
-
-                // libddb's path rule: an unsafe name fails the extraction (zip-slip); a folder
-                // entry or a reserved path (.ddb, the root .uploads) is skipped
-                var key = _paths.NormalizeArchiveKey(archiveEntry.Key);
-                var check = key.Path == null ? key : _paths.CheckIn(destPath, key.Path);
-                if (check.Path == null)
-                {
-                    if (check.Rejected == EntryPathRejection.Reserved)
-                        _logger.LogWarning("Skipping reserved path during photogrammetry extraction: '{Key}'", archiveEntry.Key);
-                    skipped++;
-                    done++;
-                    ReportProgress(progress, done, total, archiveEntry.Key, 0.96);
-                    continue;
-                }
-
-                var target = check.Path;
-
-                // Extension policy (allow-list / block-list): skip disallowed types with
-                // a warning, mirroring ArchiveExtractTool semantics.
-                if (!_importSettings.IsExtensionAllowed(target))
-                {
-                    _logger.LogWarning("Skipping disallowed file type during photogrammetry extraction: '{Path}'", target);
-                    skipped++;
-                    done++;
-                    ReportProgress(progress, done, total, archiveEntry.Key, 0.96);
-                    continue;
-                }
-
-                // Skip existing files (no overwrite for photogrammetry output).
-                if (ddb.EntryExists(target))
-                {
-                    skipped++;
-                    done++;
-                    ReportProgress(progress, done, total, archiveEntry.Key, 0.96);
-                    continue;
-                }
-
-                var localTarget = ddb.GetLocalPath(target);
-                var parent = Path.GetDirectoryName(localTarget);
-                if (!string.IsNullOrEmpty(parent))
-                    Directory.CreateDirectory(parent);
-
-                extractedPaths.Add(target);
-
-                try
-                {
-                    await using var sourceStream = archiveEntry.OpenStream();
-                    await using var fileStream = File.Create(localTarget);
-                    await budget.CopyGuardedAsync(sourceStream, fileStream, ct);
-                }
-                catch (QuotaExceededException)
-                {
-                    progress.Report(new HeavyToolProgress(-1, "cleanup",
-                        LogChunk: $"Out of budget - rolling back {extractedPaths.Count} extracted file(s)"));
-                    CleanupExtracted(ddb, extractedPaths);
-                    throw;
-                }
-
-                extracted++;
-                done++;
-                ReportProgress(progress, done, total, archiveEntry.Key, 0.96);
-            }
-        }
+        // The shared extractor: the path rule decides every entry, the budget every chunk, existing
+        // entries are kept (no overwrite for photogrammetry output) and any failure leaves the
+        // dataset as it was
+        var extraction = await _archives.ExtractAsync(
+            new ArchiveExtractionRequest(archivePath, root, destPath, _importSettings.IsExtensionAllowed,
+                ddb.EntryExists, _settings.MaxArchiveExtractSizeBytes, _settings.DiskSafetyMarginBytes),
+            new CallbackProgress<ArchiveExtractionProgress>(p => ReportProgress(progress, p)), ct);
+        var extractedPaths = extraction.Extracted.ToList();
 
         ct.ThrowIfCancellationRequested();
 
@@ -454,7 +375,7 @@ public sealed class PhotogrammetryTool : IHeavyTool
         }
 
         progress.Report(new HeavyToolProgress(0.99, "extracting",
-            LogChunk: $"Extraction complete: {extracted} extracted, {skipped} skipped"));
+            LogChunk: $"Extraction complete: {extraction.Extracted.Count} extracted, {extraction.Skipped} skipped"));
     }
 
     private async Task PollUntilDoneAsync(
@@ -531,27 +452,26 @@ public sealed class PhotogrammetryTool : IHeavyTool
         ];
     }
 
-    private static void ReportProgress(IProgress<HeavyToolProgress> progress, int done, int total, string currentKey, double baseFraction)
+    // The extraction is the 0.96..0.98 slice of the task
+    private static void ReportProgress(IProgress<HeavyToolProgress> progress, ArchiveExtractionProgress p)
     {
-        var fraction = total > 0 ? baseFraction + 0.02 * (double)done / total : -1;
-        progress.Report(new HeavyToolProgress(fraction, "extracting", Message: currentKey));
+        if (p.Done == 0)
+        {
+            progress.Report(new HeavyToolProgress(p.Total > 0 ? 0.96 : -1, "extracting",
+                LogChunk: p.Total > 0
+                    ? $"Extracting {p.Total} file(s) from photogrammetry results"
+                    : "Extracting photogrammetry results"));
+            return;
+        }
+
+        var fraction = p.Total > 0 ? 0.96 + 0.02 * p.Done / p.Total : -1;
+        progress.Report(new HeavyToolProgress(fraction, "extracting", Message: p.Key));
     }
 
-    private void CleanupExtracted(IDDB ddb, List<string> paths)
+    // Reports inline (System.Progress<T> posts to the thread pool)
+    private sealed class CallbackProgress<T>(Action<T> report) : IProgress<T>
     {
-        foreach (var p in paths)
-        {
-            try
-            {
-                var local = ddb.GetLocalPath(p);
-                if (File.Exists(local))
-                    File.Delete(local);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogWarning(ex, "Could not delete partially extracted file '{Path}'", p);
-            }
-        }
+        public void Report(T value) => report(value);
     }
 
     private static string? ReadString(JsonElement obj, string name)

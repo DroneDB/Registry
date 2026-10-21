@@ -38,9 +38,8 @@ public sealed class ArchiveUrlImportSource : IImportSource
     private readonly ImportSettings _settings;
     private readonly long _maxImportSizeBytes;
     private readonly long _diskSafetyMarginBytes;
-    private readonly DatasetPathPolicy _paths;
+    private readonly DatasetArchiveExtractor _archives;
     private readonly IScratchFileProvider _scratch;
-    private readonly VolumeHeadroom _headroom;
     private readonly ILogger<ArchiveUrlImportSource> _logger;
 
     /// <summary>
@@ -51,19 +50,17 @@ public sealed class ArchiveUrlImportSource : IImportSource
     /// <param name="httpClientFactory">The HTTP client factory.</param>
     /// <param name="downloader">The SSRF-hardened, disk- and speed-guarded single-file downloader.</param>
     /// <param name="appSettings">The application settings (import cap + disk safety margin).</param>
-    /// <param name="paths">The dataset path rule (archive entry names, containment).</param>
+    /// <param name="archives">The shared extraction into a dataset (path rule, budget, rollback).</param>
     /// <param name="scratch">Where the downloaded archive is written (the configured temp folder).</param>
-    /// <param name="headroom">The disk guard of the dataset volume (with libddb's free-disk floor).</param>
     /// <param name="logger">The logger.</param>
     public ArchiveUrlImportSource(IArchiveExtractor extractor, SsrfGuard ssrfGuard,
         IHttpClientFactory httpClientFactory, GuardedHttpDownloader downloader,
-        IOptions<AppSettings> appSettings, DatasetPathPolicy paths, IScratchFileProvider scratch,
-        VolumeHeadroom headroom, ILogger<ArchiveUrlImportSource> logger)
+        IOptions<AppSettings> appSettings, DatasetArchiveExtractor archives, IScratchFileProvider scratch,
+        ILogger<ArchiveUrlImportSource> logger)
     {
-        _headroom = headroom;
+        _archives = archives;
         _scratch = scratch;
         _extractor = extractor;
-        _paths = paths;
         _ssrfGuard = ssrfGuard;
         _httpClientFactory = httpClientFactory;
         _downloader = downloader;
@@ -167,58 +164,28 @@ public sealed class ArchiveUrlImportSource : IImportSource
             ct: ct);
     }
 
+    // The shared extractor, into the dataset root: the path rule decides every entry (an unsafe name
+    // fails the import, a reserved one is skipped), the budget every chunk (MaxImportSizeBytes, then
+    // the disk head-room with libddb's floor; the outer ImportDatasetTool sink still enforces the
+    // per-user quota). Files are overwritten (an interrupted import is run again from the start), and
+    // a failed import leaves the dataset as it was.
     private async Task ExtractIntoAsync(string scratch, string destFolder, IProgress<ImportProgress> progress,
         CancellationToken ct)
     {
-        using var session = _extractor.Open(scratch);
-        var total = session.FastFileEntryCount ?? 0;
-
-        // Cap (primary, MaxImportSizeBytes) + disk head-room (secondary, re-sampled) consolidated in
-        // ExtractionBudget: enforced per chunk, so a single entry whose header under-reports its size
-        // cannot fill the volume. The outer ImportDatasetTool sink still enforces the per-user quota.
-        var budget = _headroom.CreateBudget(_maxImportSizeBytes, destFolder, _diskSafetyMarginBytes);
-        var done = 0;
-
-        foreach (var entry in session.Entries())
-        {
-            ct.ThrowIfCancellationRequested();
-            if (entry.IsDirectory) continue;
-
-            // libddb's path rule: an unsafe name fails the import (zip-slip); a folder entry or a
-            // reserved path (.ddb, the root .uploads) is skipped
-            var key = _paths.NormalizeArchiveKey(entry.Key);
-            var check = key.Path == null ? key : _paths.Check(key.Path);
-            if (check.Path == null) continue;
-            var relative = check.Path;
-
-            // Extension policy (allow-list / block-list): skip disallowed types (e.g. executables
-            // or scripts) with a warning; the rest of the archive still extracts.
-            if (!_settings.IsExtensionAllowed(relative))
+        await _archives.ExtractAsync(
+            new ArchiveExtractionRequest(scratch, destFolder, string.Empty, _settings.IsExtensionAllowed, _ => false,
+                _maxImportSizeBytes, _diskSafetyMarginBytes),
+            new CallbackProgress<ArchiveExtractionProgress>(p =>
             {
-                _logger.LogWarning("Skipping disallowed file type during archive import: '{Path}'", relative);
-                done++;
-                continue;
-            }
-
-            // Containment checked again on the local path (defence in depth)
-            var localTarget = DatasetPathPolicy.ToLocalPath(destFolder, relative);
-            var parent = Path.GetDirectoryName(localTarget);
-            if (!string.IsNullOrEmpty(parent))
-                Directory.CreateDirectory(parent);
-
-            await using (var source = entry.OpenStream())
-            await using (var fileStream = File.Create(localTarget))
-                await budget.CopyGuardedAsync(source, fileStream, ct);
-
-            done++;
-            progress.Report(new ImportProgress(
-                total > 0 ? 0.5 + 0.5 * done / total : -1,
-                Phase: "extracting",
-                Message: entry.Key,
-                BytesSoFar: budget.BytesWritten,
-                FilesDone: done,
-                FilesTotal: total > 0 ? total : null));
-        }
+                if (p.Done == 0) return;
+                progress.Report(new ImportProgress(
+                    p.Total > 0 ? 0.5 + 0.5 * p.Done / p.Total : -1,
+                    Phase: "extracting",
+                    Message: p.Key,
+                    BytesSoFar: p.BytesWritten,
+                    FilesDone: p.Done,
+                    FilesTotal: p.Total > 0 ? p.Total : null));
+            }), ct);
     }
 
     private static void ApplyAuth(HttpRequestMessage request, ArchiveParams p)
