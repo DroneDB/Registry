@@ -16,6 +16,7 @@ using Registry.Ports.DroneDB;
 using Registry.Web.Data;
 using Registry.Web.Models.Configuration;
 using Registry.Web.Services.Ports;
+using Registry.Web.Utilities;
 
 namespace Registry.Web.Services.Adapters;
 
@@ -109,7 +110,9 @@ public class IndexReconciliationService
         //    folders during the walk (review round 2): Directory.EnumerateFiles with
         //    SearchOption.AllDirectories would recurse into .ddb, holding the live database,
         //    and scan every staged/quarantined upload; neither should ever count as
-        //    "unindexed". IsReservedPath remains as a belt-and-braces post-filter.
+        //    "unindexed". Both the prune and the per-file post-filter apply the one dataset rule,
+        //    DatasetPathRules.IsReserved: a ".ddb" folder at any depth (libddb never indexes it)
+        //    and ".uploads" only at the root (a nested ".uploads" is an ordinary user folder).
         var onDisk = new HashSet<string>(StringComparer.Ordinal);
         if (Directory.Exists(root))
         {
@@ -121,12 +124,12 @@ public class IndexReconciliationService
                 foreach (var file in Directory.EnumerateFiles(dir))
                 {
                     var rel = Path.GetRelativePath(root, file).Replace(Path.DirectorySeparatorChar, '/');
-                    if (!IsReservedPath(rel))
+                    if (!DatasetPathRules.IsReserved(rel))
                         onDisk.Add(rel);
                 }
                 foreach (var sub in Directory.EnumerateDirectories(dir))
                 {
-                    if (Path.GetFileName(sub) is IDDB.DatabaseFolderName or IDDB.UploadsFolderName)
+                    if (DatasetPathRules.IsReserved(Path.GetRelativePath(root, sub)))
                         continue; // Live database and upload staging/quarantine folders
                     stack.Push(sub);
                 }
@@ -201,11 +204,5 @@ public class IndexReconciliationService
         }
 
         return removed;
-    }
-
-    private static bool IsReservedPath(string relativePath)
-    {
-        return relativePath.StartsWith(IDDB.DatabaseFolderName, StringComparison.Ordinal)
-               || relativePath.StartsWith(IDDB.UploadsFolderName, StringComparison.Ordinal);
     }
 }

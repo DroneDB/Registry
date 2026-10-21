@@ -111,17 +111,18 @@ public sealed class RemoteRegistryClient : IRemoteRegistryClient
     {
         Directory.CreateDirectory(destFolder);
 
-        // Exclude internal index files - those are rebuilt locally during indexing/build.
-        // Extension policy (allow-list / block-list): a remote registry is untrusted, so disallowed
-        // file types (e.g. executables/scripts) are skipped here too, mirroring every other ingestion
-        // path (ArchiveExtractTool, ArchiveUrlImportSource, PhotogrammetryTool, FileUrlImportTool).
-        var toDownload = files
-            .Where(e => !e.Path.StartsWith(".ddb/", StringComparison.Ordinal)
-                        && !e.Path.StartsWith(".ddb\\", StringComparison.Ordinal))
-            .Where(e =>
+        // The remote registry is untrusted: every path is validated up front (rooted/".." paths fail
+        // the import before anything is downloaded, so a malicious/compromised remote cannot write
+        // outside the dataset folder), and reserved paths are skipped: ".ddb" index files are rebuilt
+        // locally during indexing/build, and the ".uploads" staging folder is the Registry's own.
+        // Extension policy (allow-list / block-list): disallowed file types (e.g. executables/scripts)
+        // are skipped here too, mirroring every other ingestion path (ArchiveExtractTool,
+        // ArchiveUrlImportSource, PhotogrammetryTool, FileUrlImportTool).
+        var toDownload = DatasetPathRules.ResolveUntrustedPaths(destFolder, files, e => e.Path)
+            .Where(t =>
             {
-                if (_settings.IsExtensionAllowed(e.Path)) return true;
-                _logger.LogWarning("Skipping disallowed file type during registry import: '{Path}'", e.Path);
+                if (_settings.IsExtensionAllowed(t.Item.Path)) return true;
+                _logger.LogWarning("Skipping disallowed file type during registry import: '{Path}'", t.Item.Path);
                 return false;
             })
             .ToArray();
@@ -143,13 +144,9 @@ public sealed class RemoteRegistryClient : IRemoteRegistryClient
         await Parallel.ForEachAsync(
             toDownload,
             new ParallelOptions { MaxDegreeOfParallelism = maxParallel, CancellationToken = ct },
-            async (entry, token) =>
+            async (target, token) =>
             {
-                // The remote registry is untrusted: reject rooted/".." paths before building a local
-                // path, so a malicious/compromised remote cannot write outside the dataset folder.
-                CommonUtils.ValidateRelativePath(entry.Path, destFolder);
-
-                var localPath = Path.Combine(destFolder, entry.Path.Replace('/', Path.DirectorySeparatorChar));
+                var (entry, localPath) = target;
 
                 // Resumability: a file already present at the expected size is treated as complete.
                 if (File.Exists(localPath) && new FileInfo(localPath).Length == entry.Size)

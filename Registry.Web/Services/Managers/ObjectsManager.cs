@@ -268,9 +268,6 @@ public class ObjectsManager : IObjectsManager
             if (ddb.EntryExists(path))
                 throw new InvalidOperationException("Cannot create a folder on another entry");
 
-            if (path == IDDB.DatabaseFolderName)
-                throw new InvalidOperationException($"'{IDDB.DatabaseFolderName}' is a reserved folder name");
-
             _logger.LogInformation("Adding folder to DDB");
 
             // Add to DDB

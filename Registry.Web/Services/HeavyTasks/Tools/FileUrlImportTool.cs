@@ -10,7 +10,6 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Registry.Common;
-using Registry.Ports.DroneDB;
 using Registry.Ports.Import;
 using Registry.Web.Models;
 using Registry.Web.Models.Configuration;
@@ -264,7 +263,9 @@ public sealed class FileUrlImportTool : IHeavyTool
         return string.IsNullOrEmpty(f) ? fileName : $"{f}/{fileName}";
     }
 
-    // Rejects rooted paths, ".." traversal and the reserved .ddb folder.
+    // Rejects rooted paths, "." / ".." segments and reserved paths (DatasetPathRules.IsReserved: a
+    // ".ddb" segment at any depth, ".uploads" at the root). The reserved rule is ordinal, as in
+    // libddb, so ".DDB" is an ordinary folder name, exactly as for uploads.
     private static void ValidateTarget(string target)
     {
         if (string.IsNullOrWhiteSpace(target) || Path.IsPathRooted(target))
@@ -273,9 +274,8 @@ public sealed class FileUrlImportTool : IHeavyTool
         if (target.Split('/').Any(s => s is "." or ".."))
             throw new ArgumentException("Invalid destination path.");
 
-        if (target.Equals(IDDB.DatabaseFolderName, StringComparison.OrdinalIgnoreCase) ||
-            target.StartsWith(IDDB.DatabaseFolderName + "/", StringComparison.OrdinalIgnoreCase))
-            throw new ArgumentException($"'{IDDB.DatabaseFolderName}' is a reserved folder name.");
+        if (DatasetPathRules.IsReserved(target))
+            throw new ArgumentException($"'{target}' is a reserved path.");
     }
 
     private string DecryptPassword(string? raw)

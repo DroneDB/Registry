@@ -296,17 +296,17 @@ public sealed class ImportDatasetTool : IHeavyTool
         return null;
     }
 
-    // Walks the dataset folder, returning forward-slash relative paths and excluding the reserved
-    // .ddb index folder.
-    private static IEnumerable<string> EnumerateRelativeFiles(string root)
+    // Walks the dataset folder, returning forward-slash relative paths and excluding reserved paths
+    // (DatasetPathRules.IsReserved): any ".ddb" folder, which libddb never indexes, and the root
+    // ".uploads" staging/quarantine folder, whose in-flight files must not be indexed or rolled back.
+    internal static IEnumerable<string> EnumerateRelativeFiles(string root)
     {
         if (!Directory.Exists(root)) yield break;
 
-        var reserved = IDDB.DatabaseFolderName + "/";
         foreach (var file in Directory.EnumerateFiles(root, "*", SearchOption.AllDirectories))
         {
             var rel = Path.GetRelativePath(root, file).Replace('\\', '/');
-            if (rel.StartsWith(reserved, StringComparison.Ordinal)) continue;
+            if (DatasetPathRules.IsReserved(rel)) continue;
             yield return rel;
         }
     }

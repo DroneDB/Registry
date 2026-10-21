@@ -212,7 +212,7 @@ Registry.Web/Services/Managers/OrganizationsManager.cs CA1859 1
 Registry.Web/Services/Managers/PushManager.cs CA1725 1
 Registry.Web/Services/Managers/ShareManager.cs CS8632 3
 Registry.Web/Services/Managers/StacManager.cs CA1859 1
-Registry.Web/Services/Managers/SystemManager.cs CA1310 3
+Registry.Web/Services/Managers/SystemManager.cs CA1310 1
 Registry.Web/Services/Managers/SystemManager.cs CA1822 1
 Registry.Web/Services/Managers/SystemManager.cs CS8632 1
 Registry.Web/Services/Managers/UsersManager.cs CA1725 1

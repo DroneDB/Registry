@@ -1,5 +1,6 @@
 #nullable enable
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using Registry.Common;
@@ -10,8 +11,8 @@ namespace Registry.Web.Utilities;
 
 /// <summary>
 /// The one set of dataset path rules every Registry path entry point applies: uploads and object
-/// operations (<see cref="UploadPathPolicy"/>) and the archive entry normalizers (archive extract,
-/// photogrammetry inputs, archive URL import).
+/// operations (<see cref="UploadPathPolicy"/>), the archive entry normalizers (archive extract,
+/// photogrammetry inputs, archive URL import) and the remote registry importers.
 /// </summary>
 /// <remarks>
 /// Interim rule (XI-09) until RQ-10's DatasetPathPolicy calls libddb's <c>DDBNormalizePath</c>.
@@ -51,6 +52,34 @@ public static class DatasetPathRules
     {
         if (path is not null && path.Contains('\0'))
             throw new ArgumentException($"Unsafe path (null byte): '{path.Replace("\0", "\\0")}'.", nameof(path));
+    }
+
+    /// <summary>
+    /// Resolves the dataset-relative paths of <paramref name="items"/>, received from an untrusted
+    /// source (a remote registry listing), to local paths under <paramref name="datasetFolder"/>.
+    /// Reserved paths (<see cref="IsReserved"/>) are skipped. Every path is validated before the
+    /// result is returned, so one unsafe path fails the whole batch before anything is written.
+    /// </summary>
+    /// <exception cref="ArgumentException">A path contains a NUL byte, is empty or rooted, has a "." or
+    /// ".." segment, or escapes <paramref name="datasetFolder"/> (<see cref="CommonUtils.ValidateRelativePath"/>).</exception>
+    public static IReadOnlyList<(T Item, string LocalPath)> ResolveUntrustedPaths<T>(string datasetFolder,
+        IEnumerable<T> items, Func<T, string> relativePath)
+    {
+        ArgumentNullException.ThrowIfNull(items);
+        ArgumentNullException.ThrowIfNull(relativePath);
+
+        var resolved = new List<(T Item, string LocalPath)>();
+        foreach (var item in items)
+        {
+            var path = relativePath(item);
+            EnsureNoNulByte(path);
+            CommonUtils.ValidateRelativePath(path, datasetFolder);
+
+            if (!IsReserved(path))
+                resolved.Add((item, Path.Combine(datasetFolder, path.Replace('/', Path.DirectorySeparatorChar))));
+        }
+
+        return resolved;
     }
 
     /// <summary>

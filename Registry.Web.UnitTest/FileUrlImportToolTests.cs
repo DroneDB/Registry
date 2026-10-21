@@ -102,6 +102,41 @@ public class FileUrlImportToolTests
             await tool.ValidateAsync(req, Ctx(), CancellationToken.None));
     }
 
+    /// <summary>
+    /// The destination applies the shared reserved rule (<see cref="Registry.Web.Utilities.DatasetPathRules.IsReserved"/>):
+    /// a ".ddb" segment at any depth (libddb never indexes it) and ".uploads" at the root. The old
+    /// check only matched ".ddb" at the root.
+    /// </summary>
+    [TestCase("sub/.ddb")]
+    [TestCase("a/b/.ddb/c")]
+    [TestCase(".uploads")]
+    [TestCase(".uploads/quarantine")]
+    public async Task ValidateAsync_ReservedFolder_Throws(string folder)
+    {
+        var tool = CreateTool();
+        var req = Req(new { url = "http://download.test/cloud.laz", fileName = "cloud.laz", folder, overwrite = false });
+
+        await Should.ThrowAsync<ArgumentException>(async () =>
+            await tool.ValidateAsync(req, Ctx(), CancellationToken.None));
+    }
+
+    /// <summary>
+    /// Only an exact ".ddb" segment is reserved, compared ordinally as libddb does
+    /// (<c>containsDdbSegment</c>): ".DDB" and ".ddbx" are ordinary folders libddb indexes, and a
+    /// nested ".uploads" is not the dataset's staging folder. The old check rejected ".DDB"
+    /// (case-insensitive), unlike uploads and libddb.
+    /// </summary>
+    [TestCase(".DDB")]
+    [TestCase(".ddbx")]
+    [TestCase("photos/.uploads")]
+    public async Task ValidateAsync_FolderResemblingReserved_DoesNotThrow(string folder)
+    {
+        var tool = CreateTool();
+        var req = Req(new { url = "http://download.test/cloud.laz", fileName = "cloud.laz", folder, overwrite = false });
+
+        await Should.NotThrowAsync(async () => await tool.ValidateAsync(req, Ctx(), CancellationToken.None));
+    }
+
     [Test]
     public async Task ValidateAsync_ExistingFileWithoutOverwrite_Throws()
     {

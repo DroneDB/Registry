@@ -1159,6 +1159,13 @@ public class SystemManager : ISystemManager
 
             // Get destination path
             var destPath = Path.Combine(_settings.DatasetsPath, destOrg, dataset.InternalRef.ToString());
+
+            // The remote registry is untrusted: validate every path before anything is downloaded
+            // (a rooted/".." path fails the import, as in RemoteRegistryClient, so the remote cannot
+            // write outside the dataset folder) and skip reserved paths: ".ddb" files - we'll handle
+            // metadata separately - and the ".uploads" staging folder.
+            var targets = DatasetPathRules.ResolveUntrustedPaths(destPath, remoteFiles, e => e.Path);
+
             _fileSystem.FolderCreate(destPath);
 
             // Get DDB instance for hash comparison and adding files
@@ -1288,13 +1295,8 @@ public class SystemManager : ISystemManager
             {
                 try
                 {
-                    foreach (var entry in remoteFiles)
+                    foreach (var (entry, localPath) in targets)
                     {
-                        // Skip .ddb folder files - we'll handle metadata separately
-                        if (entry.Path.StartsWith(".ddb/") || entry.Path.StartsWith(".ddb\\"))
-                            continue;
-
-                        var localPath = Path.Combine(destPath, entry.Path.Replace('/', Path.DirectorySeparatorChar));
                         var downloadUrl = $"{registryUrl.TrimEnd('/')}/orgs/{sourceOrg}/ds/{sourceDs}/download?path={Uri.EscapeDataString(entry.Path)}&inline=1";
 
                         await downloadBlock.SendAsync(new FileDownloadTask

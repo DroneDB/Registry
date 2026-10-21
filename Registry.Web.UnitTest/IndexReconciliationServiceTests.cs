@@ -178,6 +178,57 @@ public class IndexReconciliationServiceTests
         }
     }
 
+    /// <summary>
+    /// The scan classifies paths with the shared reserved rule
+    /// (<see cref="Registry.Web.Utilities.DatasetPathRules.IsReserved"/>): a ".ddb" segment at any
+    /// depth, ".uploads" only at the root. The old prefix test (StartsWith with no separator)
+    /// hid ".ddbx/..", ".ddb_notes.txt" and ".uploadsfoo.jpg", and the walk pruned a nested
+    /// ".uploads" folder, so those unindexed user files were never re-enqueued.
+    /// </summary>
+    [Test]
+    public async Task ReconcileAllDatasetsAsync_PathsResemblingReserved_AreReconciled()
+    {
+        using var context = CreateContext(out var orgSlug, out _, out var internalRef);
+        var root = Path.Combine(Path.GetTempPath(), "ddb_reconcile_test_" + Guid.NewGuid());
+        Directory.CreateDirectory(Path.Combine(root, ".ddbx"));
+        Directory.CreateDirectory(Path.Combine(root, "photos", IDDB.UploadsFolderName));
+        Directory.CreateDirectory(Path.Combine(root, "sub", IDDB.DatabaseFolderName));
+        try
+        {
+            File.WriteAllText(Path.Combine(root, ".ddbx", "a.jpg"), "x");
+            File.WriteAllText(Path.Combine(root, ".ddb_notes.txt"), "x");
+            File.WriteAllText(Path.Combine(root, ".uploadsfoo.jpg"), "x");
+            File.WriteAllText(Path.Combine(root, "photos", IDDB.UploadsFolderName, "b.jpg"), "x");
+            File.WriteAllText(Path.Combine(root, "sub", IDDB.DatabaseFolderName, "c.jpg"), "x");
+
+            var ddb = new Mock<IDDB>();
+            ddb.Setup(d => d.FindSummaries(EntryQuery.All)).Returns([]);
+
+            IReadOnlyList<string> enqueued = null;
+            var indexQueue = new Mock<IDatasetIndexQueue>();
+            indexQueue.Setup(q => q.EnqueueAsync(It.IsAny<DatasetKey>(), It.IsAny<IReadOnlyList<string>>(),
+                    It.IsAny<CancellationToken>()))
+                .Callback<DatasetKey, IReadOnlyList<string>, CancellationToken>((_, paths, _) => enqueued = paths)
+                .ReturnsAsync((IReadOnlyList<Entry>)Array.Empty<Entry>());
+
+            var service = CreateService(context, root, ddb, indexQueue);
+
+            await service.ReconcileAllDatasetsAsync();
+
+            indexQueue.Verify(q => q.EnqueueAsync(
+                It.Is<DatasetKey>(k => k.OrgSlug == orgSlug && k.InternalRef == internalRef),
+                It.IsAny<IReadOnlyList<string>>(), It.IsAny<CancellationToken>()), Times.Once);
+            // "sub/.ddb/c.jpg" stays excluded: libddb skips every ".ddb" segment.
+            enqueued.ShouldNotBeNull();
+            enqueued.OrderBy(p => p, StringComparer.Ordinal).ShouldBe(
+                [".ddb_notes.txt", ".ddbx/a.jpg", ".uploadsfoo.jpg", "photos/.uploads/b.jpg"]);
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
     [Test]
     public async Task ReconcileAllDatasetsAsync_EverythingIndexed_DoesNotEnqueueAnything()
     {
