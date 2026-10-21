@@ -9,7 +9,7 @@ using Microsoft.Extensions.Options;
 using Moq;
 using NUnit.Framework;
 using Registry.Adapters.DroneDB;
-using Registry.Common.Test;
+using Registry.Test.Common;
 using Registry.Ports;
 using Registry.Ports.DroneDB;
 using Registry.Web.Exceptions;

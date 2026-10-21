@@ -1,13 +1,12 @@
-using System;
 using System.Diagnostics;
-using System.IO;
+using Registry.Common;
 
-namespace Registry.Common.Test;
+namespace Registry.Test.Common;
 
 /// <summary>
 /// Temp directory creator for test isolation with auto-cleanup on dispose.
 /// </summary>
-public class TestArea : IDisposable
+public sealed class TestArea : IDisposable
 {
     public string Name { get; }
 
@@ -24,7 +23,7 @@ public class TestArea : IDisposable
 
     }
 
-    public TestArea() : this(new StackFrame(1).GetMethod()?.Name)
+    public TestArea() : this(new StackFrame(1).GetMethod()?.Name ?? nameof(TestArea))
     {
         //
     }

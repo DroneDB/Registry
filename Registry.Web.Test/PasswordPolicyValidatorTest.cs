@@ -5,6 +5,7 @@ using Registry.Web.Models.Configuration;
 using Registry.Web.Services.Adapters;
 using Registry.Web.Services.Ports;
 using Shouldly;
+using Registry.Web.Test.Support;
 
 namespace Registry.Web.Test;
 
@@ -264,10 +265,9 @@ public class PasswordPolicyValidatorTest
             PasswordPolicy = policy,
             DefaultAdmin = new AdminInfo { UserName = "admin", Password = "admin" }
         };
-        var options = new Mock<IOptions<AppSettings>>();
-        options.Setup(x => x.Value).Returns(appSettings);
+        var options = TestSettings.Options(appSettings);
 
-        return new PasswordPolicyValidator(options.Object);
+        return new PasswordPolicyValidator(options);
     }
 
     #endregion

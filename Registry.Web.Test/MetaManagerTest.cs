@@ -14,7 +14,6 @@ using Newtonsoft.Json.Linq;
 using NUnit.Framework;
 using Registry.Adapters.DroneDB;
 using Registry.Common;
-using Registry.Common.Test;
 using Registry.Ports;
 using Registry.Test.Common;
 using Registry.Web.Data;
@@ -33,7 +32,7 @@ internal class MetaManagerTest : TestBase
 {
     private ILogger<DdbManager> _ddbFactoryLogger;
     private ILogger<MetaManager> _metaManagerLogger;
-    private Mock<IOptions<AppSettings>> _appSettingsMock;
+    private MutableOptions<AppSettings> _settingsOptions;
     private Mock<IAuthManager> _authManagerMock;
     private Mock<IHttpContextAccessor> _httpContextAccessorMock;
     private ICacheManager _cacheManager;
@@ -55,7 +54,7 @@ internal class MetaManagerTest : TestBase
     [SetUp]
     public void Setup()
     {
-        _appSettingsMock = new Mock<IOptions<AppSettings>>();
+        _settingsOptions = TestSettings.Mutable();
         _authManagerMock = new Mock<IAuthManager>();
         _httpContextAccessorMock = new Mock<IHttpContextAccessor>();
         _cacheManager = CreateTestCacheManager();
@@ -72,19 +71,19 @@ internal class MetaManagerTest : TestBase
 
         using var test = new TestFS(Test4ArchiveUrl, BaseTestFolder);
 
-        var settings = JsonConvert.DeserializeObject<AppSettings>(_settingsJson);
+        var settings = TestSettings.Default;
 
         settings.DatasetsPath = Path.Combine(test.TestFolder, DdbFolder);
-        _appSettingsMock.Setup(o => o.Value).Returns(settings);
+        _settingsOptions.Value = settings;
         _authManagerMock.Setup(o => o.IsUserAdmin()).Returns(Task.FromResult(true));
         _authManagerMock.Setup(o => o.RequestAccess(It.IsAny<Dataset>(),
             It.IsAny<AccessType>())).Returns(Task.FromResult(true));
         _authManagerMock.Setup(o => o.RequestAccess(It.IsAny<Organization>(),
             It.IsAny<AccessType>())).Returns(Task.FromResult(true));
 
-        var ddbManager = new DdbManager(_appSettingsMock.Object, _ddbFactoryLogger, DdbWrapper);
+        var ddbManager = new DdbManager(_settingsOptions, _ddbFactoryLogger, DdbWrapper);
 
-        var webUtils = new WebUtils(_authManagerMock.Object, context, _appSettingsMock.Object,
+        var webUtils = new WebUtils(_authManagerMock.Object, context, _settingsOptions,
             _httpContextAccessorMock.Object, TestCaches.Summaries(ddbManager));
 
         var metaManager = new MetaManager(_metaManagerLogger, ddbManager, _authManagerMock.Object, webUtils, _cacheManager);
@@ -101,10 +100,10 @@ internal class MetaManagerTest : TestBase
 
         using var test = new TestFS(Test4ArchiveUrl, BaseTestFolder);
 
-        var settings = JsonConvert.DeserializeObject<AppSettings>(_settingsJson);
+        var settings = TestSettings.Default;
 
         settings.DatasetsPath = Path.Combine(test.TestFolder, DdbFolder);
-        _appSettingsMock.Setup(o => o.Value).Returns(settings);
+        _settingsOptions.Value = settings;
         _authManagerMock.Setup(o => o.IsUserAdmin()).Returns(Task.FromResult(true));
         _authManagerMock.Setup(o => o.IsOwnerOrAdmin(It.IsAny<Dataset>())).Returns(Task.FromResult(true));
         _authManagerMock.Setup(o => o.RequestAccess(It.IsAny<Dataset>(),
@@ -112,9 +111,9 @@ internal class MetaManagerTest : TestBase
         _authManagerMock.Setup(o => o.RequestAccess(It.IsAny<Organization>(),
             It.IsAny<AccessType>())).Returns(Task.FromResult(true));
 
-        var ddbManager = new DdbManager(_appSettingsMock.Object, _ddbFactoryLogger, DdbWrapper);
+        var ddbManager = new DdbManager(_settingsOptions, _ddbFactoryLogger, DdbWrapper);
 
-        var webUtils = new WebUtils(_authManagerMock.Object, context, _appSettingsMock.Object,
+        var webUtils = new WebUtils(_authManagerMock.Object, context, _settingsOptions,
             _httpContextAccessorMock.Object, TestCaches.Summaries(ddbManager));
 
         var metaManager = new MetaManager(_metaManagerLogger, ddbManager, _authManagerMock.Object, webUtils, _cacheManager);
@@ -154,35 +153,6 @@ internal class MetaManagerTest : TestBase
         (await metaManager.List(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug)).ShouldBeEmpty();
     }
 
-    #region Test Data
-
-    private readonly string _settingsJson = @"{
-    ""Secret"": ""a2780070a24cfcaf5a4a43f931200ba0d19d8b86b3a7bd5123d9ad75b125f480fcce1f9b7f41a53abe2ba8456bd142d38c455302e0081e5139bc3fc9bf614497"",
-    ""TokenExpirationInDays"": 7,
-    ""RevokedTokens"": [
-      """"
-    ],
-    ""AuthProvider"": ""Sqlite"",
-    ""RegistryProvider"": ""Sqlite"",
-    ""StorageProvider"": {
-      ""type"": ""Physical"",
-      ""settings"": {
-        ""path"": ""./temp""
-      }
-    },
-    ""DefaultAdmin"": {
-      ""Email"": ""admin@example.com"",
-      ""UserName"": ""admin"",
-      ""Password"": ""password""
-    },
-    ""DdbStoragePath"": ""./Data/Ddb"",
-    ""TempPath"": ""./temp"",
-    ""DdbPath"": ""./ddb""
-}
-  ";
-
-    #endregion
-
     #region TestContexts
 
     private static RegistryContext GetTest1Context()
@@ -190,48 +160,10 @@ internal class MetaManagerTest : TestBase
         // Insert seed data into the database using one instance of the context
         return TestDb.CreateContext<RegistryContext>(context =>
         {
-            var entity = new Organization
-            {
-                Slug = MagicStrings.PublicOrganizationSlug,
-                Name = "Public",
-                CreationDate = DateTime.Now,
-                Description = "Public organization",
-                IsPublic = true,
-                OwnerId = null
-            };
-            var ds = new Dataset
-            {
-                Slug = MagicStrings.DefaultDatasetSlug,
-                //Name = "Default",
-                //IsPublic = true,
-                CreationDate = DateTime.Now,
-                //LastUpdate = DateTime.Now,
-                InternalRef = Guid.Parse("0a223495-84a0-4c15-b425-c7ef88110e75")
-            };
-            entity.Datasets = new List<Dataset> { ds };
+            Seed.PublicDefaultDataset(context);
 
-            context.Organizations.Add(entity);
-
-            entity = new Organization
-            {
-                Slug = "admin",
-                Name = "admin",
-                CreationDate = DateTime.Now,
-                Description = "Admin",
-                IsPublic = true,
-                OwnerId = null
-            };
-            ds = new Dataset
-            {
-                Slug = "7kd0gxti9qoemsrk",
-                //Name = "7kd0gxti9qoemsrk",
-                //IsPublic = true,
-                CreationDate = DateTime.Now,
-                //LastUpdate = DateTime.Now,
-                InternalRef = Guid.Parse("6c1f5555-d001-4411-9308-42aa6ccd7fd6")
-            };
-            entity.Datasets = new List<Dataset> { ds };
-            context.Organizations.Add(entity);
+            var admin = Seed.Organization(context, "admin", description: "Admin", isPublic: true);
+            Seed.Dataset(context, admin, "7kd0gxti9qoemsrk", Guid.Parse("6c1f5555-d001-4411-9308-42aa6ccd7fd6"));
 
             context.SaveChanges();
         });

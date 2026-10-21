@@ -31,7 +31,7 @@ namespace Registry.Web.Test;
 public class SystemManagerTest : TestBase
 {
     private Mock<IAuthManager> _authManagerMock = null!;
-    private Mock<IOptions<AppSettings>> _appSettingsMock = null!;
+    private MutableOptions<AppSettings> _settingsOptions = null!;
     private Mock<IDdbManager> _ddbManagerMock = null!;
     private Mock<IObjectsManager> _objectsManagerMock = null!;
     private Mock<IHttpClientFactory> _httpClientFactoryMock = null!;
@@ -45,7 +45,7 @@ public class SystemManagerTest : TestBase
     public void Setup()
     {
         _authManagerMock = new Mock<IAuthManager>();
-        _appSettingsMock = new Mock<IOptions<AppSettings>>();
+        _settingsOptions = TestSettings.Mutable();
         _ddbManagerMock = new Mock<IDdbManager>();
         _objectsManagerMock = new Mock<IObjectsManager>();
         _httpClientFactoryMock = new Mock<IHttpClientFactory>();
@@ -58,7 +58,7 @@ public class SystemManagerTest : TestBase
         {
             DatasetsPath = "test-datasets"
         };
-        _appSettingsMock.Setup(o => o.Value).Returns(_settings);
+        _settingsOptions.Value = _settings;
     }
 
     private RegistryContext CreateInMemoryContext()
@@ -428,7 +428,7 @@ public class SystemManagerTest : TestBase
             _ddbManagerMock.Object,
             _logger,
             _objectsManagerMock.Object,
-            _appSettingsMock.Object,
+            _settingsOptions,
             buildPendingService,
             _httpClientFactoryMock.Object,
             _backgroundJobMock.Object,

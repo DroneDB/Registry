@@ -1,7 +1,4 @@
-using System;
-using System.Threading.Tasks;
-
-namespace Registry.Common.Test;
+namespace Registry.Test.Common;
 
 /// <summary>
 /// Async test helpers: time-bounded awaits that keep hanging operations from stalling the suite.
@@ -15,10 +12,7 @@ public static class TestUtils
     /// </summary>
     public static async Task<Task<T>> AwaitWithin<T>(Task<T> task, TimeSpan timeout)
     {
-        var completed = await Task.WhenAny(task, Task.Delay(timeout));
-        if (!ReferenceEquals(completed, task))
-            throw new TimeoutException($"Task did not complete within {timeout}");
-
+        await AwaitWithin((Task)task, timeout);
         return task;
     }
 
@@ -27,9 +21,18 @@ public static class TestUtils
     /// </summary>
     public static async Task<Task> AwaitWithin(Task task, TimeSpan timeout)
     {
-        var completed = await Task.WhenAny(task, Task.Delay(timeout));
-        if (!ReferenceEquals(completed, task))
+        try
+        {
+            await task.WaitAsync(timeout);
+        }
+        catch (TimeoutException) when (!task.IsCompleted)
+        {
             throw new TimeoutException($"Task did not complete within {timeout}");
+        }
+        catch when (task.IsCompleted)
+        {
+            // Finished by throwing: the caller awaits the returned task to observe the exception.
+        }
 
         return task;
     }

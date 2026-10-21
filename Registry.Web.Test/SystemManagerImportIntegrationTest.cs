@@ -90,8 +90,7 @@ public class SystemManagerImportIntegrationTest : TestBase
             DatasetsPath = _tempDatasetsPath,
             TempPath = _tempPath
         };
-        var appSettingsMock = new Mock<IOptions<AppSettings>>();
-        appSettingsMock.Setup(o => o.Value).Returns(settings);
+        var settingsOptions = TestSettings.Options(settings);
 
         var backgroundJobMock = new Mock<IBackgroundJobsProcessor>();
         backgroundJobMock.Setup(x => x.EnqueueIndexed(It.IsAny<System.Linq.Expressions.Expression<Action>>(), It.IsAny<IndexPayload>()))
@@ -116,7 +115,7 @@ public class SystemManagerImportIntegrationTest : TestBase
             ddbManagerMock.Object,
             _logger,
             objectsManagerMock.Object,
-            appSettingsMock.Object,
+            settingsOptions,
             buildPendingService,
             httpClientFactory,
             backgroundJobMock.Object,

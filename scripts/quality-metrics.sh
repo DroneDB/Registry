@@ -107,7 +107,7 @@ metrics() {
     m "new ObjectsManager( in tests"                 "$(tests | lines 'new ObjectsManager\(')"
     m "Thread.Sleep / Task.Delay in tests"           "$(tests | lines 'Thread\.Sleep|Task\.Delay')"
     m "Mock<IOptions<AppSettings>> in tests"         "$(tests | lines 'Mock<IOptions<AppSettings>>')"
-    m "Test helpers in Registry.Common/Test"         "$(paths ':(glob)Registry.Common/Test/*.cs' | files)"
+    m "Test helpers in Registry.Common/Test"         "$(paths ':(glob)Registry.Common/**/Test*.cs' | files)"
 
     # Error model (RQ-05)
     m "Controller log+rethrow catch blocks"          "$(paths ':(glob)Registry.Web/Controllers/**/*.cs' |

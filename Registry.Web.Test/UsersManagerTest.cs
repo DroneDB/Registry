@@ -31,7 +31,7 @@ namespace Registry.Web.Test;
 public class UsersManagerTest : TestBase
 {
     private Mock<IAuthManager> _authManagerMock;
-    private Mock<IOptions<AppSettings>> _appSettingsMock;
+    private MutableOptions<AppSettings> _settingsOptions;
     private Mock<IOrganizationsManager> _organizationsManagerMock;
     private Mock<IHttpContextAccessor> _httpContextAccessorMock;
     private Mock<IDdbManager> _ddbManagerMock;
@@ -50,7 +50,7 @@ public class UsersManagerTest : TestBase
     {
         // Initialize mocks
         _authManagerMock = new Mock<IAuthManager>();
-        _appSettingsMock = new Mock<IOptions<AppSettings>>();
+        _settingsOptions = TestSettings.Mutable();
         _organizationsManagerMock = new Mock<IOrganizationsManager>();
         _httpContextAccessorMock = new Mock<IHttpContextAccessor>();
         _ddbManagerMock = new Mock<IDdbManager>();
@@ -80,7 +80,7 @@ public class UsersManagerTest : TestBase
         {
             DefaultAdmin = new AdminInfo { UserName = "admin", Password = "admin123" }
         };
-        _appSettingsMock.Setup(x => x.Value).Returns(appSettings);
+        _settingsOptions.Value = appSettings;
 
         // Set up default auth manager behavior
         SetupDefaultAuthManagerBehavior();
@@ -90,11 +90,11 @@ public class UsersManagerTest : TestBase
             .Returns(PasswordValidationResult.Success());
 
         // Initialize utils
-        _webUtils = new WebUtils(_authManagerMock.Object, _context, _appSettingsMock.Object,
+        _webUtils = new WebUtils(_authManagerMock.Object, _context, _settingsOptions,
             _httpContextAccessorMock.Object, TestCaches.Summaries(_ddbManagerMock.Object));
 
         _usersManager = new UsersManager(
-            _appSettingsMock.Object,
+            _settingsOptions,
             _loginManagerMock.Object,
             _userManagerMock.Object,
             _roleManagerMock.Object,

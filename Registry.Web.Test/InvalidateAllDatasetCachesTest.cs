@@ -41,41 +41,25 @@ public class InvalidateAllDatasetCachesTest : TestBase
     {
         _cacheManagerMock = new Mock<ICacheManager>();
 
-        // Setup all necessary dependencies with mocks
-        var appSettingsMock = new Mock<IOptions<AppSettings>>();
-        appSettingsMock.Setup(o => o.Value).Returns(new AppSettings());
-
+        // Only the cache manager is observed; the rest are builder defaults (loose mocks, a real
+        // FileSystem, SimpleBackgroundJobsProcessor and BuildPendingService) or the fixture's wiring.
+        var context = TestDb.CreateContext<RegistryContext>();
+        var settingsOptions = TestSettings.Options(new AppSettings());
         var ddbFactoryMock = new Mock<IDdbManager>();
         var authManagerMock = new Mock<IAuthManager>();
-        var httpContextAccessorMock = new Mock<IHttpContextAccessor>();
-        var thumbnailGeneratorMock = new Mock<IThumbnailGenerator>();
-        var jobIndexQueryMock = new Mock<IJobIndexQuery>();
-        var backgroundJobsProcessor = new SimpleBackgroundJobsProcessor();
-        var fileSystem = new FileSystem();
 
-        var context = TestDb.CreateContext<RegistryContext>();
+        var webUtils = new WebUtils(authManagerMock.Object, context, settingsOptions,
+            Mock.Of<IHttpContextAccessor>(), TestCaches.Summaries(ddbFactoryMock.Object));
 
-        var webUtils = new WebUtils(authManagerMock.Object, context, appSettingsMock.Object,
-            httpContextAccessorMock.Object, TestCaches.Summaries(ddbFactoryMock.Object));
-
-        var buildPendingService = new BuildPendingService(
-            context, ddbFactoryMock.Object, backgroundJobsProcessor, _cacheManagerMock.Object,
-            Mock.Of<ILogger<BuildPendingService>>());
-
-        _objectsManager = new ObjectsManager(
-            CreateTestLogger<ObjectsManager>(),
-            context,
-            appSettingsMock.Object,
-            ddbFactoryMock.Object,
-            webUtils,
-            authManagerMock.Object,
-            _cacheManagerMock.Object,
-            fileSystem,
-            backgroundJobsProcessor,
-            DdbWrapper,
-            thumbnailGeneratorMock.Object,
-            jobIndexQueryMock.Object,
-            buildPendingService);
+        _objectsManager = new ObjectsManagerBuilder(context)
+            .WithLogger(CreateTestLogger<ObjectsManager>())
+            .WithSettings(settingsOptions)
+            .WithDdbManager(ddbFactoryMock.Object)
+            .WithUtils(webUtils)
+            .WithAuthManager(authManagerMock.Object)
+            .WithCacheManager(_cacheManagerMock.Object)
+            .WithDdbWrapper(DdbWrapper)
+            .Build();
     }
 
     [Test]

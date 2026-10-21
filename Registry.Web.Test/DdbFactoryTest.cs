@@ -12,19 +12,19 @@ using NUnit.Framework;
 using Registry.Adapters.DroneDB;
 using Registry.Common;
 using Registry.Common.Model;
-using Registry.Common.Test;
 using Registry.Ports;
 using Registry.Ports.DroneDB;
 using Registry.Test.Common;
 using Registry.Web.Models.Configuration;
 using Registry.Web.Services.Managers;
+using Registry.Web.Test.Support;
 
 namespace Registry.Web.Test;
 
 [TestFixture]
 public class DdbFactoryTest : TestBase
 {
-    private Mock<IOptions<AppSettings>> _appSettingsMock;
+    private MutableOptions<AppSettings> _settingsOptions;
     private ILogger<DdbManager> _ddbFactoryLogger;
 
     private const string TestDataFolder = @"Data/Ddb";
@@ -39,18 +39,18 @@ public class DdbFactoryTest : TestBase
     [SetUp]
     public void Setup()
     {
-        _appSettingsMock = new Mock<IOptions<AppSettings>>();
+        _settingsOptions = TestSettings.Mutable();
         _ddbFactoryLogger = CreateTestLogger<DdbManager>();
 
         _settings.DatasetsPath = TestDataFolder;
-        _appSettingsMock.Setup(o => o.Value).Returns(_settings);
+        _settingsOptions.Value = _settings;
     }
 
     [Test]
     public void Ctor_ExistingDatabase_Ok()
     {
 
-        var factory = new DdbManager(_appSettingsMock.Object, _ddbFactoryLogger, DdbWrapper);
+        var factory = new DdbManager(_settingsOptions, _ddbFactoryLogger, DdbWrapper);
 
         var ddb = factory.Get(MagicStrings.PublicOrganizationSlug, _datasetGuid);
 
@@ -60,7 +60,7 @@ public class DdbFactoryTest : TestBase
     [Test]
     public void Ctor_MissingDatabase_NoException()
     {
-        var factory = new DdbManager(_appSettingsMock.Object, _ddbFactoryLogger, DdbWrapper);
+        var factory = new DdbManager(_settingsOptions, _ddbFactoryLogger, DdbWrapper);
 
         Should.NotThrow(() => factory.Get("vlwefwef", _datasetGuid));
 
@@ -72,9 +72,9 @@ public class DdbFactoryTest : TestBase
         using var fs = new TestFS(DbTest1ArchiveUrl, nameof(DdbFactoryTest));
 
         _settings.DatasetsPath = fs.TestFolder;
-        _appSettingsMock.Setup(o => o.Value).Returns(_settings);
+        _settingsOptions.Value = _settings;
 
-        var factory = new DdbManager(_appSettingsMock.Object, _ddbFactoryLogger, DdbWrapper);
+        var factory = new DdbManager(_settingsOptions, _ddbFactoryLogger, DdbWrapper);
         var ddb = factory.Get(MagicStrings.PublicOrganizationSlug, _datasetGuid);
         ddb.GetEntry("Sub/20200610_144436.jpg").ShouldNotBeNull(); // leaves an idle native connection
 
@@ -91,9 +91,9 @@ public class DdbFactoryTest : TestBase
         using var fs = new TestFS(DbTest1ArchiveUrl, nameof(DdbFactoryTest));
 
         _settings.DatasetsPath = fs.TestFolder;
-        _appSettingsMock.Setup(o => o.Value).Returns(_settings);
+        _settingsOptions.Value = _settings;
 
-        var factory = new DdbManager(_appSettingsMock.Object, _ddbFactoryLogger, DdbWrapper);
+        var factory = new DdbManager(_settingsOptions, _ddbFactoryLogger, DdbWrapper);
 
         var ddb = factory.Get(MagicStrings.PublicOrganizationSlug, _datasetGuid);
 
@@ -111,7 +111,7 @@ public class DdbFactoryTest : TestBase
         using var fs = new TestFS(DbTest1ArchiveUrl, nameof(DdbFactoryTest));
 
         _settings.DatasetsPath = fs.TestFolder;
-        _appSettingsMock.Setup(o => o.Value).Returns(_settings);
+        _settingsOptions.Value = _settings;
 
         const string fileName = "Sub/20200610_144436.jpg";
         const int expectedDepth = 1;
@@ -125,7 +125,7 @@ public class DdbFactoryTest : TestBase
         const double expectedLongitude = 10.60667;
         const double expectedAltitude = 141;
 
-        var factory = new DdbManager(_appSettingsMock.Object, _ddbFactoryLogger, DdbWrapper);
+        var factory = new DdbManager(_settingsOptions, _ddbFactoryLogger, DdbWrapper);
 
         var ddb = factory.Get(MagicStrings.PublicOrganizationSlug, _datasetGuid);
 
@@ -157,7 +157,7 @@ public class DdbFactoryTest : TestBase
         using var fs = new TestFS(DbTest1ArchiveUrl, nameof(DdbFactoryTest));
 
         _settings.DatasetsPath = fs.TestFolder;
-        _appSettingsMock.Setup(o => o.Value).Returns(_settings);
+        _settingsOptions.Value = _settings;
 
         const string fileName = "DJI_0022.JPG";
         const int expectedDepth = 0;
@@ -180,7 +180,7 @@ public class DdbFactoryTest : TestBase
             [-91.99418833907131, 46.843311240786406, 158.51]
         ];
 
-        var factory = new DdbManager(_appSettingsMock.Object, _ddbFactoryLogger, DdbWrapper);
+        var factory = new DdbManager(_settingsOptions, _ddbFactoryLogger, DdbWrapper);
 
         var ddb = factory.Get(MagicStrings.PublicOrganizationSlug, _datasetGuid);
 
@@ -222,9 +222,9 @@ public class DdbFactoryTest : TestBase
         using var fs = new TestFS(DbTest1ArchiveUrl, nameof(DdbFactoryTest));
 
         _settings.DatasetsPath = fs.TestFolder;
-        _appSettingsMock.Setup(o => o.Value).Returns(_settings);
+        _settingsOptions.Value = _settings;
 
-        var factory = new DdbManager(_appSettingsMock.Object, _ddbFactoryLogger, DdbWrapper);
+        var factory = new DdbManager(_settingsOptions, _ddbFactoryLogger, DdbWrapper);
 
         var ddb = factory.Get(MagicStrings.PublicOrganizationSlug, _datasetGuid);
 
@@ -245,31 +245,7 @@ public class DdbFactoryTest : TestBase
 
     #region Test Data
 
-    private readonly AppSettings _settings = JsonConvert.DeserializeObject<AppSettings>(@"{
-    ""Secret"": ""a2780070a24cfcaf5a4a43f931200ba0d19d8b86b3a7bd5123d9ad75b125f480fcce1f9b7f41a53abe2ba8456bd142d38c455302e0081e5139bc3fc9bf614497"",
-    ""TokenExpirationInDays"": 7,
-    ""RevokedTokens"": [
-      """"
-    ],
-    ""AuthProvider"": ""Sqlite"",
-    ""RegistryProvider"": ""Sqlite"",
-    ""StorageProvider"": {
-      ""type"": ""Physical"",
-      ""settings"": {
-        ""path"": ""./temp""
-      }
-    },
-    ""DefaultAdmin"": {
-      ""Email"": ""admin@example.com"",
-      ""UserName"": ""admin"",
-      ""Password"": ""password""
-    },
-    ""DdbStoragePath"": ""./Data/Ddb"",
-    ""TempPath"": ""./temp"",
-    ""DdbPath"": ""./ddb""
-
-  }
-  ");
+    private readonly AppSettings _settings = TestSettings.Default;
 
     #endregion
 

@@ -29,6 +29,7 @@ using Registry.Web.Services.Managers;
 using Registry.Web.Services.Ports;
 using Registry.Web.Utilities;
 using Shouldly;
+using Registry.Web.Test.Support;
 
 namespace Registry.Web.Test;
 
@@ -376,8 +377,7 @@ public class SystemManagerFixSlugsTest : TestBase
 
     private SystemManager CreateManager(RegistryContext context)
     {
-        var settings = new Mock<IOptions<AppSettings>>();
-        settings.Setup(o => o.Value).Returns(new AppSettings { DatasetsPath = _datasetsPath });
+        var settings = TestSettings.Options(new AppSettings { DatasetsPath = _datasetsPath });
 
         var ddbManager = new Mock<IDdbManager>();
         var backgroundJob = new Mock<IBackgroundJobsProcessor>();
@@ -387,7 +387,7 @@ public class SystemManagerFixSlugsTest : TestBase
             cacheManager.Object, Mock.Of<ILogger<BuildPendingService>>());
 
         return new SystemManager(_authManagerMock.Object, context, ddbManager.Object,
-            CreateTestLogger<SystemManager>(), Mock.Of<IObjectsManager>(), settings.Object, buildPendingService,
+            CreateTestLogger<SystemManager>(), Mock.Of<IObjectsManager>(), settings, buildPendingService,
             Mock.Of<IHttpClientFactory>(), backgroundJob.Object, cacheManager.Object, new FileSystem(),
             Mock.Of<IJobIndexWriter>(), new SsrfGuard(new ImportSettings()));
     }

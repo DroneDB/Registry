@@ -50,8 +50,7 @@ public class SystemManagerGetVersionTests : TestBase
     private async Task<SystemManager> CreateSystemManager()
     {
         var authManagerMock = new Mock<IAuthManager>();
-        var appSettingsMock = new Mock<IOptions<AppSettings>>();
-        appSettingsMock.Setup(o => o.Value).Returns(new AppSettings
+        var settingsOptions = TestSettings.Options(new AppSettings
         {
             DatasetsPath = "test-datasets"
         });
@@ -78,7 +77,7 @@ public class SystemManagerGetVersionTests : TestBase
             ddbManagerMock.Object,
             _logger,
             objectsManagerMock.Object,
-            appSettingsMock.Object,
+            settingsOptions,
             buildPendingService,
             httpClientFactoryMock.Object,
             backgroundJobMock.Object,

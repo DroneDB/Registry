@@ -1,15 +1,13 @@
-using System;
 using System.Diagnostics;
-using System.IO;
 using System.IO.Compression;
-using System.Linq;
+using Registry.Common;
 
-namespace Registry.Common.Test;
+namespace Registry.Test.Common;
 
 /// <summary>
 /// This class is used to setup a test file system contained in a zip file
 /// </summary>
-public class TestFS : IDisposable
+public sealed class TestFS : IDisposable
 {
     /// <summary>
     /// Path of test archive (zip file)
@@ -26,7 +24,7 @@ public class TestFS : IDisposable
     /// </summary>
     public string BaseTestFolder { get; }
 
-    private readonly string _oldCurrentDirectory = null;
+    private readonly string? _oldCurrentDirectory;
 
     /// <summary>
     /// Creates a new instance of TestFS
@@ -45,27 +43,13 @@ public class TestFS : IDisposable
 
         if (!IsLocalPath(testArchivePath))
         {
-            var uri = new Uri(testArchivePath);
+            Debug.WriteLine("Archive path is an url");
 
-            Debug.WriteLine($"Archive path is an url");
+            // Downloaded archives are cached (atomically, hash-checked) next to the test folders.
+            var archive = TestDownloadCache.GetOrDownload(testArchivePath,
+                Path.Combine(Path.GetTempPath(), baseTestFolder));
 
-            var tempPath = Path.Combine(Path.GetTempPath(), baseTestFolder, uri.Segments.Last());
-
-            if (File.Exists(tempPath))
-            {
-                Debug.WriteLine("No need to download, using cached one");
-            }
-            else
-            {
-                Debug.WriteLine("Downloading archive");
-                HttpHelper.DownloadFileAsync(testArchivePath, tempPath).Wait();
-            }
-
-            ZipFile.ExtractToDirectory(tempPath, TestFolder);
-
-            // NOTE: Let's leverage the temp folder
-            // File.Delete(tempPath);
-
+            ZipFile.ExtractToDirectory(archive, TestFolder);
         }
         else
             ZipFile.ExtractToDirectory(TestArchivePath, TestFolder);
@@ -81,6 +65,7 @@ public class TestFS : IDisposable
         }
 
     }
+
     public void Dispose()
     {
 
@@ -104,8 +89,10 @@ public class TestFS : IDisposable
 
     private static bool IsLocalPath(string path)
     {
-        return path.StartsWith("file:/") ||
-               !path.StartsWith("http://") && (!path.StartsWith("https://") && !path.StartsWith("ftp://"));
+        return path.StartsWith("file:/", StringComparison.Ordinal) ||
+               !path.StartsWith("http://", StringComparison.Ordinal) &&
+               !path.StartsWith("https://", StringComparison.Ordinal) &&
+               !path.StartsWith("ftp://", StringComparison.Ordinal);
     }
 
     public static void ClearCache(string baseTestFolder)

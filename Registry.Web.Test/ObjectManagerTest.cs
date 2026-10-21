@@ -14,7 +14,6 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Moq;
-using Newtonsoft.Json;
 using NUnit.Framework;
 using Registry.Adapters;
 using Registry.Common;
@@ -30,7 +29,6 @@ using Registry.Web.Test.Adapters;
 using Registry.Web.Utilities;
 using Registry.Adapters.DroneDB;
 using Registry.Common.Model;
-using Registry.Common.Test;
 using Registry.Ports;
 using Registry.Ports.DroneDB;
 using Registry.Test.Common;
@@ -44,15 +42,12 @@ public class ObjectManagerTest : TestBase
 {
     private ILogger<DdbManager> _ddbFactoryLogger;
     private ILogger<ObjectsManager> _objectManagerLogger;
-    private Mock<IOptions<AppSettings>> _appSettingsMock;
+    private MutableOptions<AppSettings> _settingsOptions;
     private Mock<IDdbManager> _ddbFactoryMock;
     private Mock<IAuthManager> _authManagerMock;
     private Mock<IHttpContextAccessor> _httpContextAccessorMock;
     private ICacheManager _cacheManager;
-    private Mock<IThumbnailGenerator> _thumbnailGeneratorMock;
-    private Mock<IJobIndexQuery> _jobIndexQueryMock;
     private IBackgroundJobsProcessor _backgroundJobsProcessor;
-    private readonly IFileSystem _fileSystem = new FileSystem();
     private BuildPendingService _buildPendingService;
 
     //private const string DataFolder = "Data";
@@ -73,13 +68,12 @@ public class ObjectManagerTest : TestBase
     [SetUp]
     public void Setup()
     {
-        _appSettingsMock = new Mock<IOptions<AppSettings>>();
+        _settingsOptions = TestSettings.Mutable();
         _ddbFactoryMock = new Mock<IDdbManager>();
         _authManagerMock = new Mock<IAuthManager>();
         _httpContextAccessorMock = new Mock<IHttpContextAccessor>();
         _cacheManager = CreateTestCacheManager();
         RegisterDatasetVisibilityCacheProvider(_cacheManager);
-        _jobIndexQueryMock = new Mock<IJobIndexQuery>();
         _backgroundJobsProcessor = new SimpleBackgroundJobsProcessor();
 
         var bpsContext = TestDb.CreateContext<RegistryContext>();
@@ -102,23 +96,19 @@ public class ObjectManagerTest : TestBase
 
         _ddbFactoryMock.Setup(x => x.Get(It.IsAny<string>(), It.IsAny<Guid>())).Returns(ddbMock2.Object);
 
-        _thumbnailGeneratorMock = new Mock<IThumbnailGenerator>();
-
     }
 
     [Test]
     public async Task List_NullParameters_BadRequestException()
     {
         await using var context = GetTest1Context();
-        _appSettingsMock.Setup(o => o.Value).Returns(JsonConvert.DeserializeObject<AppSettings>(_settingsJson));
+        _settingsOptions.Value = TestSettings.Default;
         _authManagerMock.Setup(o => o.IsUserAdmin()).Returns(Task.FromResult(true));
 
-        var webUtils = new WebUtils(_authManagerMock.Object, context, _appSettingsMock.Object,
+        var webUtils = new WebUtils(_authManagerMock.Object, context, _settingsOptions,
             _httpContextAccessorMock.Object, TestCaches.Summaries(_ddbFactoryMock.Object));
 
-        var objectManager = new ObjectsManager(_objectManagerLogger, context, _appSettingsMock.Object,
-            _ddbFactoryMock.Object, webUtils, _authManagerMock.Object, _cacheManager,
-            _fileSystem, _backgroundJobsProcessor, DdbWrapper, _thumbnailGeneratorMock.Object, _jobIndexQueryMock.Object, _buildPendingService);
+        var objectManager = ObjectsManagerFor(context, webUtils, _ddbFactoryMock.Object).Build();
 
         await Should.ThrowAsync<BadRequestException>(async () => await objectManager.List(null, MagicStrings.DefaultDatasetSlug, "test"));
 
@@ -135,23 +125,20 @@ public class ObjectManagerTest : TestBase
         using var test = new TestFS(Test4ArchiveUrl, BaseTestFolder);
         await using var context = GetTest1Context();
 
-        var settings = JsonConvert.DeserializeObject<AppSettings>(_settingsJson);
+        var settings = TestSettings.Default;
 
         settings.DatasetsPath = test.TestFolder;
-        _appSettingsMock.Setup(o => o.Value).Returns(settings);
+        _settingsOptions.Value = settings;
         _authManagerMock.Setup(o => o.IsUserAdmin()).Returns(Task.FromResult(true));
         _authManagerMock.Setup(o => o.RequestAccess(It.IsAny<Dataset>(),
             It.IsAny<AccessType>())).Returns(Task.FromResult(true));
         _authManagerMock.Setup(o => o.RequestAccess(It.IsAny<Organization>(),
             It.IsAny<AccessType>())).Returns(Task.FromResult(true));
 
-        var webUtils = new WebUtils(_authManagerMock.Object, context, _appSettingsMock.Object,
+        var webUtils = new WebUtils(_authManagerMock.Object, context, _settingsOptions,
             _httpContextAccessorMock.Object, TestCaches.Summaries(_ddbFactoryMock.Object));
 
-        var objectManager = new ObjectsManager(_objectManagerLogger, context,
-            _appSettingsMock.Object,
-            new DdbManager(_appSettingsMock.Object, _ddbFactoryLogger, DdbWrapper), webUtils, _authManagerMock.Object,
-            _cacheManager, _fileSystem, _backgroundJobsProcessor, DdbWrapper, _thumbnailGeneratorMock.Object, _jobIndexQueryMock.Object, _buildPendingService);
+        var objectManager = ObjectsManagerFor(context, webUtils).Build();
 
         var res = await objectManager.List(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug,
             null, true);
@@ -170,22 +157,19 @@ public class ObjectManagerTest : TestBase
         using var test = new TestFS(Test4ArchiveUrl, BaseTestFolder);
         await using var context = GetTest1Context();
 
-        var settings = JsonConvert.DeserializeObject<AppSettings>(_settingsJson);
+        var settings = TestSettings.Default;
         settings.DatasetsPath = test.TestFolder;
-        _appSettingsMock.Setup(o => o.Value).Returns(settings);
+        _settingsOptions.Value = settings;
         _authManagerMock.Setup(o => o.IsUserAdmin()).Returns(Task.FromResult(true));
         _authManagerMock.Setup(o => o.RequestAccess(It.IsAny<Dataset>(),
             It.IsAny<AccessType>())).Returns(Task.FromResult(true));
         _authManagerMock.Setup(o => o.RequestAccess(It.IsAny<Organization>(),
             It.IsAny<AccessType>())).Returns(Task.FromResult(true));
 
-        var webUtils = new WebUtils(_authManagerMock.Object, context, _appSettingsMock.Object,
+        var webUtils = new WebUtils(_authManagerMock.Object, context, _settingsOptions,
             _httpContextAccessorMock.Object, TestCaches.Summaries(_ddbFactoryMock.Object));
 
-        var objectManager = new ObjectsManager(_objectManagerLogger, context,
-            _appSettingsMock.Object,
-            new DdbManager(_appSettingsMock.Object, _ddbFactoryLogger, DdbWrapper), webUtils, _authManagerMock.Object,
-            _cacheManager, _fileSystem, _backgroundJobsProcessor, DdbWrapper, _thumbnailGeneratorMock.Object, _jobIndexQueryMock.Object, _buildPendingService);
+        var objectManager = ObjectsManagerFor(context, webUtils).Build();
 
         var res = await objectManager.Search(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug,
             "DJI*");
@@ -219,9 +203,9 @@ public class ObjectManagerTest : TestBase
         using var test = new TestFS(Test4ArchiveUrl, BaseTestFolder);
         await using var context = GetTest1Context();
 
-        var settings = JsonConvert.DeserializeObject<AppSettings>(_settingsJson);
+        var settings = TestSettings.Default;
         settings.DatasetsPath = test.TestFolder;
-        _appSettingsMock.Setup(o => o.Value).Returns(settings);
+        _settingsOptions.Value = settings;
         _authManagerMock.Setup(o => o.IsUserAdmin()).Returns(Task.FromResult(true));
         _authManagerMock.Setup(o => o.RequestAccess(It.IsAny<Dataset>(),
             It.IsAny<AccessType>())).Returns(Task.FromResult(true));
@@ -231,13 +215,9 @@ public class ObjectManagerTest : TestBase
         wrapper.Setup(w => w.ListEntries(It.IsAny<string>(), It.IsAny<EntryQuery>()))
             .Returns((string ddbPath, EntryQuery query) => DdbWrapper.ListEntries(ddbPath, query));
 
-        var webUtils = new WebUtils(_authManagerMock.Object, context, _appSettingsMock.Object,
+        var webUtils = new WebUtils(_authManagerMock.Object, context, _settingsOptions,
             _httpContextAccessorMock.Object, TestCaches.Summaries(_ddbFactoryMock.Object));
-        var objectManager = new ObjectsManager(_objectManagerLogger, context,
-            _appSettingsMock.Object,
-            new DdbManager(_appSettingsMock.Object, _ddbFactoryLogger, wrapper.Object), webUtils,
-            _authManagerMock.Object, _cacheManager, _fileSystem, _backgroundJobsProcessor, wrapper.Object,
-            _thumbnailGeneratorMock.Object, _jobIndexQueryMock.Object, _buildPendingService);
+        var objectManager = ObjectsManagerFor(context, webUtils, ddbWrapper: wrapper.Object).Build();
 
         var res = (await objectManager.Search(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug,
             "dji_003?.jpg", null, true, EntryType.GeoImage)).ToArray();
@@ -261,9 +241,9 @@ public class ObjectManagerTest : TestBase
         using var test = new TestFS(Test4ArchiveUrl, BaseTestFolder);
         await using var context = GetTest1Context();
 
-        var settings = JsonConvert.DeserializeObject<AppSettings>(_settingsJson);
+        var settings = TestSettings.Default;
         settings.DatasetsPath = test.TestFolder;
-        _appSettingsMock.Setup(o => o.Value).Returns(settings);
+        _settingsOptions.Value = settings;
         _authManagerMock.Setup(o => o.RequestAccess(It.IsAny<Dataset>(),
             It.IsAny<AccessType>())).Returns(Task.FromResult(true));
 
@@ -271,13 +251,9 @@ public class ObjectManagerTest : TestBase
         wrapper.Setup(w => w.ListEntries(It.IsAny<string>(), It.IsAny<EntryQuery>()))
             .Returns((string ddbPath, EntryQuery q) => DdbWrapper.ListEntries(ddbPath, q));
 
-        var webUtils = new WebUtils(_authManagerMock.Object, context, _appSettingsMock.Object,
+        var webUtils = new WebUtils(_authManagerMock.Object, context, _settingsOptions,
             _httpContextAccessorMock.Object, TestCaches.Summaries(_ddbFactoryMock.Object));
-        var objectManager = new ObjectsManager(_objectManagerLogger, context,
-            _appSettingsMock.Object,
-            new DdbManager(_appSettingsMock.Object, _ddbFactoryLogger, wrapper.Object), webUtils,
-            _authManagerMock.Object, _cacheManager, _fileSystem, _backgroundJobsProcessor, wrapper.Object,
-            _thumbnailGeneratorMock.Object, _jobIndexQueryMock.Object, _buildPendingService);
+        var objectManager = ObjectsManagerFor(context, webUtils, ddbWrapper: wrapper.Object).Build();
 
         await objectManager.Search(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug,
             query, null, true, EntryType.GeoImage);
@@ -292,22 +268,20 @@ public class ObjectManagerTest : TestBase
         using var test = new TestFS(Test4ArchiveUrl, BaseTestFolder);
         await using var context = GetTest1Context();
 
-        var settings = JsonConvert.DeserializeObject<AppSettings>(_settingsJson);
+        var settings = TestSettings.Default;
 
         settings.DatasetsPath = test.TestFolder;
-        _appSettingsMock.Setup(o => o.Value).Returns(settings);
+        _settingsOptions.Value = settings;
         _authManagerMock.Setup(o => o.IsUserAdmin()).Returns(Task.FromResult(true));
         _authManagerMock.Setup(o => o.RequestAccess(It.IsAny<Dataset>(),
             It.IsAny<AccessType>())).Returns(Task.FromResult(true));
         _authManagerMock.Setup(o => o.RequestAccess(It.IsAny<Organization>(),
             It.IsAny<AccessType>())).Returns(Task.FromResult(true));
 
-        var webUtils = new WebUtils(_authManagerMock.Object, context, _appSettingsMock.Object,
+        var webUtils = new WebUtils(_authManagerMock.Object, context, _settingsOptions,
             _httpContextAccessorMock.Object, TestCaches.Summaries(_ddbFactoryMock.Object));
 
-        var objectManager = new ObjectsManager(_objectManagerLogger, context, _appSettingsMock.Object,
-            new DdbManager(_appSettingsMock.Object, _ddbFactoryLogger, DdbWrapper), webUtils, _authManagerMock.Object,
-            _cacheManager, _fileSystem, _backgroundJobsProcessor, DdbWrapper, _thumbnailGeneratorMock.Object, _jobIndexQueryMock.Object, _buildPendingService);
+        var objectManager = ObjectsManagerFor(context, webUtils).Build();
 
         await Should.ThrowAsync<NotFoundException>(async () => await objectManager.Get(MagicStrings.PublicOrganizationSlug,
                 MagicStrings.DefaultDatasetSlug, "weriufbgeiughegr"));
@@ -325,22 +299,20 @@ public class ObjectManagerTest : TestBase
         using var test = new TestFS(Test4ArchiveUrl, BaseTestFolder);
 
         await using var context = GetTest1Context();
-        var settings = JsonConvert.DeserializeObject<AppSettings>(_settingsJson);
+        var settings = TestSettings.Default;
 
         settings.DatasetsPath = test.TestFolder;
-        _appSettingsMock.Setup(o => o.Value).Returns(settings);
+        _settingsOptions.Value = settings;
         _authManagerMock.Setup(o => o.IsUserAdmin()).Returns(Task.FromResult(true));
         _authManagerMock.Setup(o => o.RequestAccess(It.IsAny<Dataset>(),
             It.IsAny<AccessType>())).Returns(Task.FromResult(true));
         _authManagerMock.Setup(o => o.RequestAccess(It.IsAny<Organization>(),
             It.IsAny<AccessType>())).Returns(Task.FromResult(true));
 
-        var webUtils = new WebUtils(_authManagerMock.Object, context, _appSettingsMock.Object,
+        var webUtils = new WebUtils(_authManagerMock.Object, context, _settingsOptions,
             _httpContextAccessorMock.Object, TestCaches.Summaries(_ddbFactoryMock.Object));
 
-        var objectManager = new ObjectsManager(_objectManagerLogger, context, _appSettingsMock.Object,
-            new DdbManager(_appSettingsMock.Object, _ddbFactoryLogger, DdbWrapper), webUtils, _authManagerMock.Object,
-            _cacheManager, _fileSystem, _backgroundJobsProcessor, DdbWrapper, _thumbnailGeneratorMock.Object, _jobIndexQueryMock.Object, _buildPendingService);
+        var objectManager = ObjectsManagerFor(context, webUtils).Build();
 
         var obj = await objectManager.Get(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug,
             "DJI_0019.JPG");
@@ -361,21 +333,19 @@ public class ObjectManagerTest : TestBase
         using var test = new TestFS(Test4ArchiveUrl, BaseTestFolder);
 
         await using var context = GetTest1Context();
-        var settings = JsonConvert.DeserializeObject<AppSettings>(_settingsJson);
+        var settings = TestSettings.Default;
 
         settings.DatasetsPath = test.TestFolder;
-        _appSettingsMock.Setup(o => o.Value).Returns(settings);
+        _settingsOptions.Value = settings;
         _authManagerMock.Setup(o => o.IsUserAdmin()).Returns(Task.FromResult(true));
         _authManagerMock.Setup(o => o.RequestAccess(It.IsAny<Dataset>(),
             It.IsAny<AccessType>())).Returns(Task.FromResult(true));
         _authManagerMock.Setup(o => o.RequestAccess(It.IsAny<Organization>(),
             It.IsAny<AccessType>())).Returns(Task.FromResult(true));
-        var webUtils = new WebUtils(_authManagerMock.Object, context, _appSettingsMock.Object,
+        var webUtils = new WebUtils(_authManagerMock.Object, context, _settingsOptions,
             _httpContextAccessorMock.Object, TestCaches.Summaries(_ddbFactoryMock.Object));
 
-        var objectManager = new ObjectsManager(_objectManagerLogger, context, _appSettingsMock.Object,
-            new DdbManager(_appSettingsMock.Object, _ddbFactoryLogger, DdbWrapper), webUtils, _authManagerMock.Object,
-            _cacheManager, _fileSystem, _backgroundJobsProcessor, DdbWrapper, _thumbnailGeneratorMock.Object, _jobIndexQueryMock.Object, _buildPendingService);
+        var objectManager = ObjectsManagerFor(context, webUtils).Build();
 
         var res = await objectManager.Get(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug,
             expectedName);
@@ -395,21 +365,19 @@ public class ObjectManagerTest : TestBase
         using var test = new TestFS(Test4ArchiveUrl, BaseTestFolder);
 
         await using var context = GetTest1Context();
-        var settings = JsonConvert.DeserializeObject<AppSettings>(_settingsJson);
+        var settings = TestSettings.Default;
 
         settings.DatasetsPath = test.TestFolder;
-        _appSettingsMock.Setup(o => o.Value).Returns(settings);
+        _settingsOptions.Value = settings;
         _authManagerMock.Setup(o => o.IsUserAdmin()).Returns(Task.FromResult(true));
         _authManagerMock.Setup(o => o.RequestAccess(It.IsAny<Dataset>(),
             It.IsAny<AccessType>())).Returns(Task.FromResult(true));
         _authManagerMock.Setup(o => o.RequestAccess(It.IsAny<Organization>(),
             It.IsAny<AccessType>())).Returns(Task.FromResult(true));
-        var webUtils = new WebUtils(_authManagerMock.Object, context, _appSettingsMock.Object,
+        var webUtils = new WebUtils(_authManagerMock.Object, context, _settingsOptions,
             _httpContextAccessorMock.Object, TestCaches.Summaries(_ddbFactoryMock.Object));
 
-        var objectManager = new ObjectsManager(_objectManagerLogger, context,  _appSettingsMock.Object,
-            new DdbManager(_appSettingsMock.Object, _ddbFactoryLogger, DdbWrapper), webUtils, _authManagerMock.Object,
-            _cacheManager, _fileSystem, _backgroundJobsProcessor, DdbWrapper, _thumbnailGeneratorMock.Object, _jobIndexQueryMock.Object, _buildPendingService);
+        var objectManager = ObjectsManagerFor(context, webUtils).Build();
 
         var res = await objectManager.DownloadStream(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug,
             fileNames);
@@ -451,21 +419,19 @@ public class ObjectManagerTest : TestBase
         using var test = new TestFS(Test5ArchiveUrl, BaseTestFolder);
 
         await using var context = GetTest1Context();
-        var settings = JsonConvert.DeserializeObject<AppSettings>(_settingsJson);
+        var settings = TestSettings.Default;
 
         settings.DatasetsPath = test.TestFolder;
-        _appSettingsMock.Setup(o => o.Value).Returns(settings);
+        _settingsOptions.Value = settings;
         _authManagerMock.Setup(o => o.IsUserAdmin()).Returns(Task.FromResult(true));
         _authManagerMock.Setup(o => o.RequestAccess(It.IsAny<Dataset>(),
             It.IsAny<AccessType>())).Returns(Task.FromResult(true));
         _authManagerMock.Setup(o => o.RequestAccess(It.IsAny<Organization>(),
             It.IsAny<AccessType>())).Returns(Task.FromResult(true));
-        var webUtils = new WebUtils(_authManagerMock.Object, context, _appSettingsMock.Object,
+        var webUtils = new WebUtils(_authManagerMock.Object, context, _settingsOptions,
             _httpContextAccessorMock.Object, TestCaches.Summaries(_ddbFactoryMock.Object));
 
-        var objectManager = new ObjectsManager(_objectManagerLogger, context, _appSettingsMock.Object,
-            new DdbManager(_appSettingsMock.Object, _ddbFactoryLogger, DdbWrapper), webUtils, _authManagerMock.Object,
-            _cacheManager, _fileSystem, _backgroundJobsProcessor, DdbWrapper, _thumbnailGeneratorMock.Object, _jobIndexQueryMock.Object, _buildPendingService);
+        var objectManager = ObjectsManagerFor(context, webUtils).Build();
 
         var res = await objectManager.DownloadStream(organizationSlug, datasetSlug,
             fileNames);
@@ -499,10 +465,10 @@ public class ObjectManagerTest : TestBase
     private ObjectsManager BuildObjectsManagerForBulkDownloadTest(string datasetsPath, RegistryContext context,
         bool disableAnonymousBulkDownloads, User currentUser)
     {
-        var settings = JsonConvert.DeserializeObject<AppSettings>(_settingsJson);
+        var settings = TestSettings.Default;
         settings.DatasetsPath = datasetsPath;
         settings.DisableAnonymousBulkDownloads = disableAnonymousBulkDownloads;
-        _appSettingsMock.Setup(o => o.Value).Returns(settings);
+        _settingsOptions.Value = settings;
 
         _authManagerMock.Setup(o => o.IsUserAdmin()).Returns(Task.FromResult(currentUser != null));
         _authManagerMock.Setup(o => o.RequestAccess(It.IsAny<Dataset>(),
@@ -511,13 +477,10 @@ public class ObjectManagerTest : TestBase
             It.IsAny<AccessType>())).Returns(Task.FromResult(true));
         _authManagerMock.Setup(o => o.GetCurrentUser()).Returns(Task.FromResult(currentUser));
 
-        var webUtils = new WebUtils(_authManagerMock.Object, context, _appSettingsMock.Object,
+        var webUtils = new WebUtils(_authManagerMock.Object, context, _settingsOptions,
             _httpContextAccessorMock.Object, TestCaches.Summaries(_ddbFactoryMock.Object));
 
-        return new ObjectsManager(_objectManagerLogger, context, _appSettingsMock.Object,
-            new DdbManager(_appSettingsMock.Object, _ddbFactoryLogger, DdbWrapper), webUtils,
-            _authManagerMock.Object, _cacheManager, _fileSystem, _backgroundJobsProcessor, DdbWrapper,
-            _thumbnailGeneratorMock.Object, _jobIndexQueryMock.Object, _buildPendingService);
+        return ObjectsManagerFor(context, webUtils).Build();
     }
 
     [Test]
@@ -610,22 +573,20 @@ public class ObjectManagerTest : TestBase
         await using var context = GetTest1Context();
         using var test = new TestFS(Test4ArchiveUrl, BaseTestFolder);
 
-        var settings = JsonConvert.DeserializeObject<AppSettings>(_settingsJson);
+        var settings = TestSettings.Default;
 
         settings.DatasetsPath = test.TestFolder;
-        _appSettingsMock.Setup(o => o.Value).Returns(settings);
+        _settingsOptions.Value = settings;
         _authManagerMock.Setup(o => o.IsUserAdmin()).Returns(Task.FromResult(true));
         _authManagerMock.Setup(o => o.IsOwnerOrAdmin(It.IsAny<Dataset>())).Returns(Task.FromResult(true));
         _authManagerMock.Setup(o => o.RequestAccess(It.IsAny<Dataset>(),
             It.IsAny<AccessType>())).Returns(Task.FromResult(true));
         _authManagerMock.Setup(o => o.RequestAccess(It.IsAny<Organization>(),
             It.IsAny<AccessType>())).Returns(Task.FromResult(true));
-        var webUtils = new WebUtils(_authManagerMock.Object, context, _appSettingsMock.Object,
+        var webUtils = new WebUtils(_authManagerMock.Object, context, _settingsOptions,
             _httpContextAccessorMock.Object, TestCaches.Summaries(_ddbFactoryMock.Object));
 
-        var objectManager = new ObjectsManager(_objectManagerLogger, context, _appSettingsMock.Object,
-            new DdbManager(_appSettingsMock.Object, _ddbFactoryLogger, DdbWrapper), webUtils, _authManagerMock.Object,
-            _cacheManager, _fileSystem, _backgroundJobsProcessor, DdbWrapper, _thumbnailGeneratorMock.Object, _jobIndexQueryMock.Object, _buildPendingService);
+        var objectManager = ObjectsManagerFor(context, webUtils).Build();
 
         var res = await objectManager.List(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug,
             fileName);
@@ -677,7 +638,7 @@ public class ObjectManagerTest : TestBase
         await objectManager.AddNew(org, ds, "site.dxf", CadAsset("utm32n_site.dxf"));
         await objectManager.AddNew(org, ds, "site.prj", CadAsset("utm32n_site.prj"));
 
-        var ddbManager = new DdbManager(_appSettingsMock.Object, _ddbFactoryLogger, DdbWrapper);
+        var ddbManager = new DdbManager(_settingsOptions, _ddbFactoryLogger, DdbWrapper);
         var ddb = ddbManager.Get(org, context.Datasets.First(d => d.Slug == ds).InternalRef);
         var hash = ddb.GetEntry("site.dxf")!.Hash;
         var build = Path.Combine(ddb.BuildFolderPath, hash);
@@ -693,9 +654,9 @@ public class ObjectManagerTest : TestBase
 
     private ObjectsManager BuildStreamedUploadObjectsManager(string datasetsPath, RegistryContext context)
     {
-        var settings = JsonConvert.DeserializeObject<AppSettings>(_settingsJson);
+        var settings = TestSettings.Default;
         settings.DatasetsPath = datasetsPath;
-        _appSettingsMock.Setup(o => o.Value).Returns(settings);
+        _settingsOptions.Value = settings;
 
         _authManagerMock.Setup(o => o.IsUserAdmin()).Returns(Task.FromResult(true));
         _authManagerMock.Setup(o => o.IsOwnerOrAdmin(It.IsAny<Dataset>())).Returns(Task.FromResult(true));
@@ -704,13 +665,10 @@ public class ObjectManagerTest : TestBase
         _authManagerMock.Setup(o => o.RequestAccess(It.IsAny<Organization>(),
             It.IsAny<AccessType>())).Returns(Task.FromResult(true));
 
-        var webUtils = new WebUtils(_authManagerMock.Object, context, _appSettingsMock.Object,
+        var webUtils = new WebUtils(_authManagerMock.Object, context, _settingsOptions,
             _httpContextAccessorMock.Object, TestCaches.Summaries(_ddbFactoryMock.Object));
 
-        return new ObjectsManager(_objectManagerLogger, context, _appSettingsMock.Object,
-            new DdbManager(_appSettingsMock.Object, _ddbFactoryLogger, DdbWrapper), webUtils, _authManagerMock.Object,
-            _cacheManager, _fileSystem, _backgroundJobsProcessor, DdbWrapper, _thumbnailGeneratorMock.Object,
-            _jobIndexQueryMock.Object, _buildPendingService);
+        return ObjectsManagerFor(context, webUtils).Build();
     }
 
     // A streamed temp file without the hash computed while streaming (never trusted then)
@@ -833,9 +791,9 @@ public class ObjectManagerTest : TestBase
         await using var context = GetTest1Context();
         using var test = new TestFS(Test4ArchiveUrl, BaseTestFolder);
 
-        var settings = JsonConvert.DeserializeObject<AppSettings>(_settingsJson);
+        var settings = TestSettings.Default;
         settings.DatasetsPath = test.TestFolder;
-        _appSettingsMock.Setup(o => o.Value).Returns(settings);
+        _settingsOptions.Value = settings;
         _authManagerMock.Setup(o => o.IsUserAdmin()).Returns(Task.FromResult(true));
         _authManagerMock.Setup(o => o.IsOwnerOrAdmin(It.IsAny<Dataset>())).Returns(Task.FromResult(true));
         _authManagerMock.Setup(o => o.RequestAccess(It.IsAny<Dataset>(),
@@ -843,7 +801,7 @@ public class ObjectManagerTest : TestBase
         _authManagerMock.Setup(o => o.RequestAccess(It.IsAny<Organization>(),
             It.IsAny<AccessType>())).Returns(Task.FromResult(true));
 
-        var webUtils = new WebUtils(_authManagerMock.Object, context, _appSettingsMock.Object,
+        var webUtils = new WebUtils(_authManagerMock.Object, context, _settingsOptions,
             _httpContextAccessorMock.Object, TestCaches.Summaries(_ddbFactoryMock.Object));
 
         // Simulates a native indexing failure after the file has already been moved into place.
@@ -854,10 +812,9 @@ public class ObjectManagerTest : TestBase
                 items.Select(_ => new IndexOutcome(null, new InvalidOperationException("simulated index failure")))
                     .ToArray());
 
-        var objectManager = new ObjectsManager(_objectManagerLogger, context, _appSettingsMock.Object,
-            new DdbManager(_appSettingsMock.Object, _ddbFactoryLogger, DdbWrapper), webUtils, _authManagerMock.Object,
-            _cacheManager, _fileSystem, _backgroundJobsProcessor, DdbWrapper, _thumbnailGeneratorMock.Object,
-            _jobIndexQueryMock.Object, _buildPendingService, indexQueue: failingIndexQueue.Object);
+        var objectManager = ObjectsManagerFor(context, webUtils)
+            .WithIndexQueue(failingIndexQueue.Object)
+            .Build();
 
         var newFileUrl =
             "https://github.com/DroneDB/test_data/raw/master/test-datasets/drone_dataset_brighton_beach/" + fileName;
@@ -901,9 +858,9 @@ public class ObjectManagerTest : TestBase
         await using var context = GetTest1Context();
         using var test = new TestFS(Test4ArchiveUrl, BaseTestFolder);
 
-        var settings = JsonConvert.DeserializeObject<AppSettings>(_settingsJson);
+        var settings = TestSettings.Default;
         settings.DatasetsPath = test.TestFolder;
-        _appSettingsMock.Setup(o => o.Value).Returns(settings);
+        _settingsOptions.Value = settings;
         _authManagerMock.Setup(o => o.IsUserAdmin()).Returns(Task.FromResult(true));
         _authManagerMock.Setup(o => o.IsOwnerOrAdmin(It.IsAny<Dataset>())).Returns(Task.FromResult(true));
         _authManagerMock.Setup(o => o.RequestAccess(It.IsAny<Dataset>(),
@@ -911,7 +868,7 @@ public class ObjectManagerTest : TestBase
         _authManagerMock.Setup(o => o.RequestAccess(It.IsAny<Organization>(),
             It.IsAny<AccessType>())).Returns(Task.FromResult(true));
 
-        var webUtils = new WebUtils(_authManagerMock.Object, context, _appSettingsMock.Object,
+        var webUtils = new WebUtils(_authManagerMock.Object, context, _settingsOptions,
             _httpContextAccessorMock.Object, TestCaches.Summaries(_ddbFactoryMock.Object));
 
         var failingIndexQueue = new Mock<IDatasetIndexQueue>();
@@ -921,10 +878,9 @@ public class ObjectManagerTest : TestBase
                 items.Select(_ => new IndexOutcome(null, new InvalidOperationException("simulated index failure")))
                     .ToArray());
 
-        var objectManager = new ObjectsManager(_objectManagerLogger, context, _appSettingsMock.Object,
-            new DdbManager(_appSettingsMock.Object, _ddbFactoryLogger, DdbWrapper), webUtils, _authManagerMock.Object,
-            _cacheManager, _fileSystem, _backgroundJobsProcessor, DdbWrapper, _thumbnailGeneratorMock.Object,
-            _jobIndexQueryMock.Object, _buildPendingService, indexQueue: failingIndexQueue.Object);
+        var objectManager = ObjectsManagerFor(context, webUtils)
+            .WithIndexQueue(failingIndexQueue.Object)
+            .Build();
 
         var stream = new MemoryStream(new byte[64 * 1024], 0, 64 * 1024, false, true);
 
@@ -957,9 +913,9 @@ public class ObjectManagerTest : TestBase
         await using var context = GetTest1Context();
         using var test = new TestFS(Test4ArchiveUrl, BaseTestFolder);
 
-        var settings = JsonConvert.DeserializeObject<AppSettings>(_settingsJson);
+        var settings = TestSettings.Default;
         settings.DatasetsPath = test.TestFolder;
-        _appSettingsMock.Setup(o => o.Value).Returns(settings);
+        _settingsOptions.Value = settings;
         _authManagerMock.Setup(o => o.IsUserAdmin()).Returns(Task.FromResult(true));
         _authManagerMock.Setup(o => o.IsOwnerOrAdmin(It.IsAny<Dataset>())).Returns(Task.FromResult(true));
         _authManagerMock.Setup(o => o.RequestAccess(It.IsAny<Dataset>(),
@@ -967,7 +923,7 @@ public class ObjectManagerTest : TestBase
         _authManagerMock.Setup(o => o.RequestAccess(It.IsAny<Organization>(),
             It.IsAny<AccessType>())).Returns(Task.FromResult(true));
 
-        var webUtils = new WebUtils(_authManagerMock.Object, context, _appSettingsMock.Object,
+        var webUtils = new WebUtils(_authManagerMock.Object, context, _settingsOptions,
             _httpContextAccessorMock.Object, TestCaches.Summaries(_ddbFactoryMock.Object));
 
         var payload = "ok"u8.ToArray(); // tiny file: finalization takes the Level-1 branch
@@ -991,10 +947,9 @@ public class ObjectManagerTest : TestBase
                     [new IndexOutcome(new Registry.Ports.DroneDB.Entry { Path = p, Size = payload.Length }, null)]);
             });
 
-        var objectManager = new ObjectsManager(_objectManagerLogger, context, _appSettingsMock.Object,
-            new DdbManager(_appSettingsMock.Object, _ddbFactoryLogger, DdbWrapper), webUtils, _authManagerMock.Object,
-            _cacheManager, _fileSystem, _backgroundJobsProcessor, DdbWrapper, _thumbnailGeneratorMock.Object,
-            _jobIndexQueryMock.Object, _buildPendingService, indexQueue: okIndexQueue.Object);
+        var objectManager = ObjectsManagerFor(context, webUtils)
+            .WithIndexQueue(okIndexQueue.Object)
+            .Build();
 
         var stream = new MemoryStream(payload, 0, payload.Length, false, true);
 
@@ -1034,10 +989,10 @@ public class ObjectManagerTest : TestBase
         await using var context = GetTest1Context();
         using var test = new TestFS(Test4ArchiveUrl, BaseTestFolder);
 
-        var settings = JsonConvert.DeserializeObject<AppSettings>(_settingsJson);
+        var settings = TestSettings.Default;
 
         settings.DatasetsPath = test.TestFolder;
-        _appSettingsMock.Setup(o => o.Value).Returns(settings);
+        _settingsOptions.Value = settings;
         _authManagerMock.Setup(o => o.IsUserAdmin()).Returns(Task.FromResult(true));
         _authManagerMock.Setup(o => o.IsOwnerOrAdmin(It.IsAny<Dataset>())).Returns(Task.FromResult(true));
         _authManagerMock.Setup(o => o.RequestAccess(It.IsAny<Dataset>(),
@@ -1045,12 +1000,10 @@ public class ObjectManagerTest : TestBase
         _authManagerMock.Setup(o => o.RequestAccess(It.IsAny<Organization>(),
             It.IsAny<AccessType>())).Returns(Task.FromResult(true));
 
-        var webUtils = new WebUtils(_authManagerMock.Object, context, _appSettingsMock.Object,
+        var webUtils = new WebUtils(_authManagerMock.Object, context, _settingsOptions,
             _httpContextAccessorMock.Object, TestCaches.Summaries(_ddbFactoryMock.Object));
 
-        var objectManager = new ObjectsManager(_objectManagerLogger, context, _appSettingsMock.Object,
-            new DdbManager(_appSettingsMock.Object, _ddbFactoryLogger, DdbWrapper), webUtils, _authManagerMock.Object,
-            _cacheManager, _fileSystem, _backgroundJobsProcessor, DdbWrapper, _thumbnailGeneratorMock.Object, _jobIndexQueryMock.Object, _buildPendingService);
+        var objectManager = ObjectsManagerFor(context, webUtils).Build();
 
         (await objectManager.List(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug)).Count().ShouldBe(20);
 
@@ -1099,32 +1052,27 @@ public class ObjectManagerTest : TestBase
     }
 
 
-    #region Test Data
+    #region SUT factories
 
-    private readonly string _settingsJson = @"{
-    ""Secret"": ""a2780070a24cfcaf5a4a43f931200ba0d19d8b86b3a7bd5123d9ad75b125f480fcce1f9b7f41a53abe2ba8456bd142d38c455302e0081e5139bc3fc9bf614497"",
-    ""TokenExpirationInDays"": 7,
-    ""RevokedTokens"": [
-      """"
-    ],
-    ""AuthProvider"": ""Sqlite"",
-    ""RegistryProvider"": ""Sqlite"",
-    ""StorageProvider"": {
-      ""type"": ""Physical"",
-      ""settings"": {
-        ""path"": ""./temp""
-      }
-    },
-    ""DefaultAdmin"": {
-      ""Email"": ""admin@example.com"",
-      ""UserName"": ""admin"",
-      ""Password"": ""password""
-    },
-    ""DdbStoragePath"": ""./Data/Ddb"",
-    ""DdbPath"": ""./ddb"",
-    ""TempPath"": ""./temp""
-}
-  ";
+    /// <summary>
+    /// The fixture's <see cref="ObjectsManager"/> wiring. <paramref name="ddbManager"/> defaults to a real
+    /// <see cref="DdbManager"/> on <paramref name="ddbWrapper"/> (the native wrapper by default).
+    /// </summary>
+    private ObjectsManagerBuilder ObjectsManagerFor(RegistryContext context, IUtils utils,
+        IDdbManager ddbManager = null, IDdbWrapper ddbWrapper = null)
+    {
+        ddbWrapper ??= DdbWrapper;
+        return new ObjectsManagerBuilder(context)
+            .WithLogger(_objectManagerLogger)
+            .WithSettings(_settingsOptions)
+            .WithDdbManager(ddbManager ?? new DdbManager(_settingsOptions, _ddbFactoryLogger, ddbWrapper))
+            .WithUtils(utils)
+            .WithAuthManager(_authManagerMock.Object)
+            .WithCacheManager(_cacheManager)
+            .WithBackgroundJobs(_backgroundJobsProcessor)
+            .WithDdbWrapper(ddbWrapper)
+            .WithBuildPendingService(_buildPendingService);
+    }
 
     #endregion
 
@@ -1135,48 +1083,10 @@ public class ObjectManagerTest : TestBase
         // Insert seed data into the database using one instance of the context
         return TestDb.CreateContext<RegistryContext>(context =>
         {
-            var entity = new Organization
-            {
-                Slug = MagicStrings.PublicOrganizationSlug,
-                Name = "Public",
-                CreationDate = DateTime.Now,
-                Description = "Public organization",
-                IsPublic = true,
-                OwnerId = null
-            };
-            var ds = new Dataset
-            {
-                Slug = MagicStrings.DefaultDatasetSlug,
-                //Name = "Default",
-                //IsPublic = true,
-                CreationDate = DateTime.Now,
-                //LastUpdate = DateTime.Now,
-                InternalRef = Guid.Parse("0a223495-84a0-4c15-b425-c7ef88110e75")
-            };
-            entity.Datasets = new List<Dataset> { ds };
+            Seed.PublicDefaultDataset(context);
 
-            context.Organizations.Add(entity);
-
-            entity = new Organization
-            {
-                Slug = "admin",
-                Name = "admin",
-                CreationDate = DateTime.Now,
-                Description = "Admin",
-                IsPublic = true,
-                OwnerId = null
-            };
-            ds = new Dataset
-            {
-                Slug = "7kd0gxti9qoemsrk",
-                //Name = "7kd0gxti9qoemsrk",
-                //IsPublic = true,
-                CreationDate = DateTime.Now,
-                //LastUpdate = DateTime.Now,
-                InternalRef = Guid.Parse("6c1f5555-d001-4411-9308-42aa6ccd7fd6")
-            };
-            entity.Datasets = new List<Dataset> { ds };
-            context.Organizations.Add(entity);
+            var admin = Seed.Organization(context, "admin", description: "Admin", isPublic: true);
+            Seed.Dataset(context, admin, "7kd0gxti9qoemsrk", Guid.Parse("6c1f5555-d001-4411-9308-42aa6ccd7fd6"));
 
             context.SaveChanges();
         });
@@ -1192,20 +1102,17 @@ public class ObjectManagerTest : TestBase
         using var test = new TestFS(Test4ArchiveUrl, BaseTestFolder);
         await using var context = GetTest1Context();
 
-        var settings = JsonConvert.DeserializeObject<AppSettings>(_settingsJson);
+        var settings = TestSettings.Default;
         settings.DatasetsPath = test.TestFolder;
-        _appSettingsMock.Setup(o => o.Value).Returns(settings);
+        _settingsOptions.Value = settings;
         _authManagerMock.Setup(o => o.IsUserAdmin()).Returns(Task.FromResult(true));
         _authManagerMock.Setup(o => o.RequestAccess(It.IsAny<Dataset>(), It.IsAny<AccessType>()))
             .Returns(Task.FromResult(true));
 
-        var webUtils = new WebUtils(_authManagerMock.Object, context, _appSettingsMock.Object,
+        var webUtils = new WebUtils(_authManagerMock.Object, context, _settingsOptions,
             _httpContextAccessorMock.Object, TestCaches.Summaries(_ddbFactoryMock.Object));
 
-        var objectManager = new ObjectsManager(_objectManagerLogger, context, _appSettingsMock.Object,
-            new DdbManager(_appSettingsMock.Object, _ddbFactoryLogger, DdbWrapper), webUtils,
-            _authManagerMock.Object, _cacheManager, _fileSystem, _backgroundJobsProcessor,
-            DdbWrapper, _thumbnailGeneratorMock.Object, _jobIndexQueryMock.Object, _buildPendingService);
+        var objectManager = ObjectsManagerFor(context, webUtils).Build();
 
         var ex = await Should.ThrowAsync<InvalidOperationException>(async () => await objectManager.Transfer(
             MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug, "DJI_0027.JPG",
@@ -1221,20 +1128,17 @@ public class ObjectManagerTest : TestBase
         using var test = new TestFS(Test4ArchiveUrl, BaseTestFolder);
         await using var context = GetTest1Context();
 
-        var settings = JsonConvert.DeserializeObject<AppSettings>(_settingsJson);
+        var settings = TestSettings.Default;
         settings.DatasetsPath = test.TestFolder;
-        _appSettingsMock.Setup(o => o.Value).Returns(settings);
+        _settingsOptions.Value = settings;
         _authManagerMock.Setup(o => o.IsUserAdmin()).Returns(Task.FromResult(true));
         _authManagerMock.Setup(o => o.RequestAccess(It.IsAny<Dataset>(), It.IsAny<AccessType>()))
             .Returns(Task.FromResult(true));
 
-        var webUtils = new WebUtils(_authManagerMock.Object, context, _appSettingsMock.Object,
+        var webUtils = new WebUtils(_authManagerMock.Object, context, _settingsOptions,
             _httpContextAccessorMock.Object, TestCaches.Summaries(_ddbFactoryMock.Object));
 
-        var objectManager = new ObjectsManager(_objectManagerLogger, context, _appSettingsMock.Object,
-            new DdbManager(_appSettingsMock.Object, _ddbFactoryLogger, DdbWrapper), webUtils,
-            _authManagerMock.Object, _cacheManager, _fileSystem, _backgroundJobsProcessor,
-            DdbWrapper, _thumbnailGeneratorMock.Object, _jobIndexQueryMock.Object, _buildPendingService);
+        var objectManager = ObjectsManagerFor(context, webUtils).Build();
 
         // Test path traversal
         var ex1 = await Should.ThrowAsync<ArgumentException>(async () => await objectManager.Transfer(
@@ -1259,20 +1163,17 @@ public class ObjectManagerTest : TestBase
         using var test = new TestFS(Test4ArchiveUrl, BaseTestFolder);
         await using var context = GetTest1Context();
 
-        var settings = JsonConvert.DeserializeObject<AppSettings>(_settingsJson);
+        var settings = TestSettings.Default;
         settings.DatasetsPath = test.TestFolder;
-        _appSettingsMock.Setup(o => o.Value).Returns(settings);
+        _settingsOptions.Value = settings;
         _authManagerMock.Setup(o => o.IsUserAdmin()).Returns(Task.FromResult(true));
         _authManagerMock.Setup(o => o.RequestAccess(It.IsAny<Dataset>(), It.IsAny<AccessType>()))
             .Returns(Task.FromResult(true));
 
-        var webUtils = new WebUtils(_authManagerMock.Object, context, _appSettingsMock.Object,
+        var webUtils = new WebUtils(_authManagerMock.Object, context, _settingsOptions,
             _httpContextAccessorMock.Object, TestCaches.Summaries(_ddbFactoryMock.Object));
 
-        var objectManager = new ObjectsManager(_objectManagerLogger, context, _appSettingsMock.Object,
-            new DdbManager(_appSettingsMock.Object, _ddbFactoryLogger, DdbWrapper), webUtils,
-            _authManagerMock.Object, _cacheManager, _fileSystem, _backgroundJobsProcessor,
-            DdbWrapper, _thumbnailGeneratorMock.Object, _jobIndexQueryMock.Object, _buildPendingService);
+        var objectManager = ObjectsManagerFor(context, webUtils).Build();
 
         var ex = await Should.ThrowAsync<InvalidOperationException>(async () => await objectManager.Transfer(
             MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug, "DJI_0027.JPG",
@@ -1288,20 +1189,17 @@ public class ObjectManagerTest : TestBase
         using var test = new TestFS(Test4ArchiveUrl, BaseTestFolder);
         await using var context = GetTest1Context();
 
-        var settings = JsonConvert.DeserializeObject<AppSettings>(_settingsJson);
+        var settings = TestSettings.Default;
         settings.DatasetsPath = test.TestFolder;
-        _appSettingsMock.Setup(o => o.Value).Returns(settings);
+        _settingsOptions.Value = settings;
         _authManagerMock.Setup(o => o.IsUserAdmin()).Returns(Task.FromResult(true));
         _authManagerMock.Setup(o => o.RequestAccess(It.IsAny<Dataset>(), It.IsAny<AccessType>()))
             .Returns(Task.FromResult(true));
 
-        var webUtils = new WebUtils(_authManagerMock.Object, context, _appSettingsMock.Object,
+        var webUtils = new WebUtils(_authManagerMock.Object, context, _settingsOptions,
             _httpContextAccessorMock.Object, TestCaches.Summaries(_ddbFactoryMock.Object));
 
-        var objectManager = new ObjectsManager(_objectManagerLogger, context, _appSettingsMock.Object,
-            new DdbManager(_appSettingsMock.Object, _ddbFactoryLogger, DdbWrapper), webUtils,
-            _authManagerMock.Object, _cacheManager, _fileSystem, _backgroundJobsProcessor,
-            DdbWrapper, _thumbnailGeneratorMock.Object, _jobIndexQueryMock.Object, _buildPendingService);
+        var objectManager = ObjectsManagerFor(context, webUtils).Build();
 
         var ex = await Should.ThrowAsync<InvalidOperationException>(async () => await objectManager.Transfer(
             MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug, "NonExistent.JPG",
@@ -1319,11 +1217,11 @@ public class ObjectManagerTest : TestBase
 
         await using var context = GetTest1Context();
 
-        var settings = JsonConvert.DeserializeObject<AppSettings>(_settingsJson);
+        var settings = TestSettings.Default;
         settings.DatasetsPath = test.TestFolder;
         settings.EnableStorageLimiter = false; // Disable storage limits for testing
 
-        _appSettingsMock.Setup(o => o.Value).Returns(settings);
+        _settingsOptions.Value = settings;
         _authManagerMock.Setup(o => o.IsUserAdmin()).Returns(Task.FromResult(true));
         _authManagerMock.Setup(o => o.RequestAccess(It.IsAny<Dataset>(), It.IsAny<AccessType>()))
             .Returns(Task.FromResult(true));
@@ -1334,14 +1232,12 @@ public class ObjectManagerTest : TestBase
             Email = "admin@test.com"
         }));
 
-        var webUtils = new WebUtils(_authManagerMock.Object, context, _appSettingsMock.Object,
+        var webUtils = new WebUtils(_authManagerMock.Object, context, _settingsOptions,
             _httpContextAccessorMock.Object, TestCaches.Summaries(_ddbFactoryMock.Object));
 
-        var ddbManager = new DdbManager(_appSettingsMock.Object, _ddbFactoryLogger, DdbWrapper);
+        var ddbManager = new DdbManager(_settingsOptions, _ddbFactoryLogger, DdbWrapper);
 
-        var objectManager = new ObjectsManager(_objectManagerLogger, context, _appSettingsMock.Object,
-            ddbManager, webUtils, _authManagerMock.Object, _cacheManager, _fileSystem,
-            _backgroundJobsProcessor, DdbWrapper, _thumbnailGeneratorMock.Object, _jobIndexQueryMock.Object, _buildPendingService);
+        var objectManager = ObjectsManagerFor(context, webUtils, ddbManager).Build();
 
         // Get the file info before transfer
         var sourceFiles = await objectManager.List(MagicStrings.PublicOrganizationSlug,
@@ -1375,11 +1271,11 @@ public class ObjectManagerTest : TestBase
 
         await using var context = GetTest1Context();
 
-        var settings = JsonConvert.DeserializeObject<AppSettings>(_settingsJson);
+        var settings = TestSettings.Default;
         settings.DatasetsPath = test.TestFolder;
         settings.EnableStorageLimiter = false;
 
-        _appSettingsMock.Setup(o => o.Value).Returns(settings);
+        _settingsOptions.Value = settings;
         _authManagerMock.Setup(o => o.IsUserAdmin()).Returns(Task.FromResult(true));
         _authManagerMock.Setup(o => o.RequestAccess(It.IsAny<Dataset>(), It.IsAny<AccessType>()))
             .Returns(Task.FromResult(true));
@@ -1390,14 +1286,12 @@ public class ObjectManagerTest : TestBase
             Email = "admin@test.com"
         }));
 
-        var webUtils = new WebUtils(_authManagerMock.Object, context, _appSettingsMock.Object,
+        var webUtils = new WebUtils(_authManagerMock.Object, context, _settingsOptions,
             _httpContextAccessorMock.Object, TestCaches.Summaries(_ddbFactoryMock.Object));
 
-        var ddbManager = new DdbManager(_appSettingsMock.Object, _ddbFactoryLogger, DdbWrapper);
+        var ddbManager = new DdbManager(_settingsOptions, _ddbFactoryLogger, DdbWrapper);
 
-        var objectManager = new ObjectsManager(_objectManagerLogger, context, _appSettingsMock.Object,
-            ddbManager, webUtils, _authManagerMock.Object, _cacheManager, _fileSystem,
-            _backgroundJobsProcessor, DdbWrapper, _thumbnailGeneratorMock.Object, _jobIndexQueryMock.Object, _buildPendingService);
+        var objectManager = ObjectsManagerFor(context, webUtils, ddbManager).Build();
 
         var fileToTransfer = "DJI_0027.JPG";
 
@@ -1433,11 +1327,11 @@ public class ObjectManagerTest : TestBase
 
         await using var context = GetTest1Context();
 
-        var settings = JsonConvert.DeserializeObject<AppSettings>(_settingsJson);
+        var settings = TestSettings.Default;
         settings.DatasetsPath = test.TestFolder;
         settings.EnableStorageLimiter = false;
 
-        _appSettingsMock.Setup(o => o.Value).Returns(settings);
+        _settingsOptions.Value = settings;
         _authManagerMock.Setup(o => o.IsUserAdmin()).Returns(Task.FromResult(true));
         _authManagerMock.Setup(o => o.RequestAccess(It.IsAny<Dataset>(), It.IsAny<AccessType>()))
             .Returns(Task.FromResult(true));
@@ -1448,14 +1342,12 @@ public class ObjectManagerTest : TestBase
             Email = "admin@test.com"
         }));
 
-        var webUtils = new WebUtils(_authManagerMock.Object, context, _appSettingsMock.Object,
+        var webUtils = new WebUtils(_authManagerMock.Object, context, _settingsOptions,
             _httpContextAccessorMock.Object, TestCaches.Summaries(_ddbFactoryMock.Object));
 
-        var ddbManager = new DdbManager(_appSettingsMock.Object, _ddbFactoryLogger, DdbWrapper);
+        var ddbManager = new DdbManager(_settingsOptions, _ddbFactoryLogger, DdbWrapper);
 
-        var objectManager = new ObjectsManager(_objectManagerLogger, context, _appSettingsMock.Object,
-            ddbManager, webUtils, _authManagerMock.Object, _cacheManager, _fileSystem,
-            _backgroundJobsProcessor, DdbWrapper, _thumbnailGeneratorMock.Object, _jobIndexQueryMock.Object, _buildPendingService);
+        var objectManager = ObjectsManagerFor(context, webUtils, ddbManager).Build();
 
         var fileToTransfer = "DJI_0028.JPG";
         var sourceDdb = ddbManager.Get(MagicStrings.PublicOrganizationSlug, _defaultDatasetGuid);
@@ -1485,11 +1377,11 @@ public class ObjectManagerTest : TestBase
         using var test = new TestFS(Test4ArchiveUrl, BaseTestFolder);
         await using var context = GetTest1Context();
 
-        var settings = JsonConvert.DeserializeObject<AppSettings>(_settingsJson);
+        var settings = TestSettings.Default;
         settings.DatasetsPath = test.TestFolder;
         settings.EnableStorageLimiter = false;
 
-        _appSettingsMock.Setup(o => o.Value).Returns(settings);
+        _settingsOptions.Value = settings;
         _authManagerMock.Setup(o => o.IsUserAdmin()).Returns(Task.FromResult(true));
         _authManagerMock.Setup(o => o.RequestAccess(It.IsAny<Dataset>(), It.IsAny<AccessType>()))
             .Returns(Task.FromResult(true));
@@ -1500,14 +1392,12 @@ public class ObjectManagerTest : TestBase
             Email = "admin@test.com"
         }));
 
-        var webUtils = new WebUtils(_authManagerMock.Object, context, _appSettingsMock.Object,
+        var webUtils = new WebUtils(_authManagerMock.Object, context, _settingsOptions,
             _httpContextAccessorMock.Object, TestCaches.Summaries(_ddbFactoryMock.Object));
 
-        var ddbManager = new DdbManager(_appSettingsMock.Object, _ddbFactoryLogger, DdbWrapper);
+        var ddbManager = new DdbManager(_settingsOptions, _ddbFactoryLogger, DdbWrapper);
 
-        var objectManager = new ObjectsManager(_objectManagerLogger, context, _appSettingsMock.Object,
-            ddbManager, webUtils, _authManagerMock.Object, _cacheManager, _fileSystem,
-            _backgroundJobsProcessor, DdbWrapper, _thumbnailGeneratorMock.Object, _jobIndexQueryMock.Object, _buildPendingService);
+        var objectManager = ObjectsManagerFor(context, webUtils, ddbManager).Build();
 
         // First, copy a file to the destination manually
         var sourcePath = Path.Combine(test.TestFolder, MagicStrings.PublicOrganizationSlug,
@@ -1538,11 +1428,11 @@ public class ObjectManagerTest : TestBase
         using var test = new TestFS(Test4ArchiveUrl, BaseTestFolder);
         await using var context = GetTest1Context();
 
-        var settings = JsonConvert.DeserializeObject<AppSettings>(_settingsJson);
+        var settings = TestSettings.Default;
         settings.DatasetsPath = test.TestFolder;
         settings.EnableStorageLimiter = false;
 
-        _appSettingsMock.Setup(o => o.Value).Returns(settings);
+        _settingsOptions.Value = settings;
         _authManagerMock.Setup(o => o.IsUserAdmin()).Returns(Task.FromResult(true));
         _authManagerMock.Setup(o => o.RequestAccess(It.IsAny<Dataset>(), It.IsAny<AccessType>()))
             .Returns(Task.FromResult(true));
@@ -1553,14 +1443,12 @@ public class ObjectManagerTest : TestBase
             Email = "admin@test.com"
         }));
 
-        var webUtils = new WebUtils(_authManagerMock.Object, context, _appSettingsMock.Object,
+        var webUtils = new WebUtils(_authManagerMock.Object, context, _settingsOptions,
             _httpContextAccessorMock.Object, TestCaches.Summaries(_ddbFactoryMock.Object));
 
-        var ddbManager = new DdbManager(_appSettingsMock.Object, _ddbFactoryLogger, DdbWrapper);
+        var ddbManager = new DdbManager(_settingsOptions, _ddbFactoryLogger, DdbWrapper);
 
-        var objectManager = new ObjectsManager(_objectManagerLogger, context, _appSettingsMock.Object,
-            ddbManager, webUtils, _authManagerMock.Object, _cacheManager, _fileSystem,
-            _backgroundJobsProcessor, DdbWrapper, _thumbnailGeneratorMock.Object, _jobIndexQueryMock.Object, _buildPendingService);
+        var objectManager = ObjectsManagerFor(context, webUtils, ddbManager).Build();
 
         var fileToTransfer = "DJI_0027.JPG";
 
@@ -1591,11 +1479,11 @@ public class ObjectManagerTest : TestBase
         using var test = new TestFS(Test4ArchiveUrl, BaseTestFolder);
         await using var context = GetTest1Context();
 
-        var settings = JsonConvert.DeserializeObject<AppSettings>(_settingsJson);
+        var settings = TestSettings.Default;
         settings.DatasetsPath = test.TestFolder;
         settings.EnableStorageLimiter = false;
 
-        _appSettingsMock.Setup(o => o.Value).Returns(settings);
+        _settingsOptions.Value = settings;
         _authManagerMock.Setup(o => o.IsUserAdmin()).Returns(Task.FromResult(true));
         _authManagerMock.Setup(o => o.RequestAccess(It.IsAny<Dataset>(), It.IsAny<AccessType>()))
             .Returns(Task.FromResult(true));
@@ -1606,14 +1494,12 @@ public class ObjectManagerTest : TestBase
             Email = "admin@test.com"
         }));
 
-        var webUtils = new WebUtils(_authManagerMock.Object, context, _appSettingsMock.Object,
+        var webUtils = new WebUtils(_authManagerMock.Object, context, _settingsOptions,
             _httpContextAccessorMock.Object, TestCaches.Summaries(_ddbFactoryMock.Object));
 
-        var ddbManager = new DdbManager(_appSettingsMock.Object, _ddbFactoryLogger, DdbWrapper);
+        var ddbManager = new DdbManager(_settingsOptions, _ddbFactoryLogger, DdbWrapper);
 
-        var objectManager = new ObjectsManager(_objectManagerLogger, context, _appSettingsMock.Object,
-            ddbManager, webUtils, _authManagerMock.Object, _cacheManager, _fileSystem,
-            _backgroundJobsProcessor, DdbWrapper, _thumbnailGeneratorMock.Object, _jobIndexQueryMock.Object, _buildPendingService);
+        var objectManager = ObjectsManagerFor(context, webUtils, ddbManager).Build();
 
         var fileToTransfer = "DJI_0027.JPG";
 
@@ -1669,11 +1555,11 @@ public class ObjectManagerTest : TestBase
         using var test = new TestFS(Test4ArchiveUrl, BaseTestFolder);
         await using var context = GetTest1Context();
 
-        var settings = JsonConvert.DeserializeObject<AppSettings>(_settingsJson);
+        var settings = TestSettings.Default;
         settings.DatasetsPath = test.TestFolder;
         settings.EnableStorageLimiter = false;
 
-        _appSettingsMock.Setup(o => o.Value).Returns(settings);
+        _settingsOptions.Value = settings;
         _authManagerMock.Setup(o => o.IsUserAdmin()).Returns(Task.FromResult(true));
         _authManagerMock.Setup(o => o.RequestAccess(It.IsAny<Dataset>(), It.IsAny<AccessType>()))
             .Returns(Task.FromResult(true));
@@ -1684,14 +1570,12 @@ public class ObjectManagerTest : TestBase
             Email = "admin@test.com"
         }));
 
-        var webUtils = new WebUtils(_authManagerMock.Object, context, _appSettingsMock.Object,
+        var webUtils = new WebUtils(_authManagerMock.Object, context, _settingsOptions,
             _httpContextAccessorMock.Object, TestCaches.Summaries(_ddbFactoryMock.Object));
 
-        var ddbManager = new DdbManager(_appSettingsMock.Object, _ddbFactoryLogger, DdbWrapper);
+        var ddbManager = new DdbManager(_settingsOptions, _ddbFactoryLogger, DdbWrapper);
 
-        var objectManager = new ObjectsManager(_objectManagerLogger, context, _appSettingsMock.Object,
-            ddbManager, webUtils, _authManagerMock.Object, _cacheManager, _fileSystem,
-            _backgroundJobsProcessor, DdbWrapper, _thumbnailGeneratorMock.Object, _jobIndexQueryMock.Object, _buildPendingService);
+        var objectManager = ObjectsManagerFor(context, webUtils, ddbManager).Build();
 
         var fileToTransfer = "DJI_0027.JPG";
 
@@ -1736,11 +1620,11 @@ public class ObjectManagerTest : TestBase
         using var test = new TestFS(Test5ArchiveUrl, BaseTestFolder);
         await using var context = GetTest1Context();
 
-        var settings = JsonConvert.DeserializeObject<AppSettings>(_settingsJson);
+        var settings = TestSettings.Default;
         settings.DatasetsPath = test.TestFolder;
         settings.EnableStorageLimiter = false;
 
-        _appSettingsMock.Setup(o => o.Value).Returns(settings);
+        _settingsOptions.Value = settings;
         _authManagerMock.Setup(o => o.IsUserAdmin()).Returns(Task.FromResult(true));
         _authManagerMock.Setup(o => o.RequestAccess(It.IsAny<Dataset>(), It.IsAny<AccessType>()))
             .Returns(Task.FromResult(true));
@@ -1751,14 +1635,12 @@ public class ObjectManagerTest : TestBase
             Email = "admin@test.com"
         }));
 
-        var webUtils = new WebUtils(_authManagerMock.Object, context, _appSettingsMock.Object,
+        var webUtils = new WebUtils(_authManagerMock.Object, context, _settingsOptions,
             _httpContextAccessorMock.Object, TestCaches.Summaries(_ddbFactoryMock.Object));
 
-        var ddbManager = new DdbManager(_appSettingsMock.Object, _ddbFactoryLogger, DdbWrapper);
+        var ddbManager = new DdbManager(_settingsOptions, _ddbFactoryLogger, DdbWrapper);
 
-        var objectManager = new ObjectsManager(_objectManagerLogger, context, _appSettingsMock.Object,
-            ddbManager, webUtils, _authManagerMock.Object, _cacheManager, _fileSystem,
-            _backgroundJobsProcessor, DdbWrapper, _thumbnailGeneratorMock.Object, _jobIndexQueryMock.Object, _buildPendingService);
+        var objectManager = ObjectsManagerFor(context, webUtils, ddbManager).Build();
 
         const string folderToTransfer = "Sub";
 
@@ -1817,11 +1699,11 @@ public class ObjectManagerTest : TestBase
         using var test = new TestFS(Test4ArchiveUrl, BaseTestFolder);
         await using var context = GetTest1Context();
 
-        var settings = JsonConvert.DeserializeObject<AppSettings>(_settingsJson);
+        var settings = TestSettings.Default;
         settings.DatasetsPath = test.TestFolder;
         settings.EnableStorageLimiter = false;
 
-        _appSettingsMock.Setup(o => o.Value).Returns(settings);
+        _settingsOptions.Value = settings;
         _authManagerMock.Setup(o => o.IsUserAdmin()).Returns(Task.FromResult(true));
         _authManagerMock.Setup(o => o.RequestAccess(It.IsAny<Dataset>(), It.IsAny<AccessType>()))
             .Returns(Task.FromResult(true));
@@ -1832,14 +1714,12 @@ public class ObjectManagerTest : TestBase
             Email = "admin@test.com"
         }));
 
-        var webUtils = new WebUtils(_authManagerMock.Object, context, _appSettingsMock.Object,
+        var webUtils = new WebUtils(_authManagerMock.Object, context, _settingsOptions,
             _httpContextAccessorMock.Object, TestCaches.Summaries(_ddbFactoryMock.Object));
 
-        var ddbManager = new DdbManager(_appSettingsMock.Object, _ddbFactoryLogger, DdbWrapper);
+        var ddbManager = new DdbManager(_settingsOptions, _ddbFactoryLogger, DdbWrapper);
 
-        var objectManager = new ObjectsManager(_objectManagerLogger, context, _appSettingsMock.Object,
-            ddbManager, webUtils, _authManagerMock.Object, _cacheManager, _fileSystem,
-            _backgroundJobsProcessor, DdbWrapper, _thumbnailGeneratorMock.Object, _jobIndexQueryMock.Object, _buildPendingService);
+        var objectManager = ObjectsManagerFor(context, webUtils, ddbManager).Build();
 
         var fileToTransfer = "DJI_0027.JPG";
 
@@ -1904,11 +1784,11 @@ public class ObjectManagerTest : TestBase
         using var test = new TestFS(Test4ArchiveUrl, BaseTestFolder);
         await using var context = GetTest1Context();
 
-        var settings = JsonConvert.DeserializeObject<AppSettings>(_settingsJson);
+        var settings = TestSettings.Default;
         settings.DatasetsPath = test.TestFolder;
         settings.EnableStorageLimiter = false;
 
-        _appSettingsMock.Setup(o => o.Value).Returns(settings);
+        _settingsOptions.Value = settings;
         _authManagerMock.Setup(o => o.IsUserAdmin()).Returns(Task.FromResult(true));
         _authManagerMock.Setup(o => o.RequestAccess(It.IsAny<Dataset>(), It.IsAny<AccessType>()))
             .Returns(Task.FromResult(true));
@@ -1919,14 +1799,12 @@ public class ObjectManagerTest : TestBase
             Email = "admin@test.com"
         }));
 
-        var webUtils = new WebUtils(_authManagerMock.Object, context, _appSettingsMock.Object,
+        var webUtils = new WebUtils(_authManagerMock.Object, context, _settingsOptions,
             _httpContextAccessorMock.Object, TestCaches.Summaries(_ddbFactoryMock.Object));
 
-        var ddbManager = new DdbManager(_appSettingsMock.Object, _ddbFactoryLogger, DdbWrapper);
+        var ddbManager = new DdbManager(_settingsOptions, _ddbFactoryLogger, DdbWrapper);
 
-        var objectManager = new ObjectsManager(_objectManagerLogger, context, _appSettingsMock.Object,
-            ddbManager, webUtils, _authManagerMock.Object, _cacheManager, _fileSystem,
-            _backgroundJobsProcessor, DdbWrapper, _thumbnailGeneratorMock.Object, _jobIndexQueryMock.Object, _buildPendingService);
+        var objectManager = ObjectsManagerFor(context, webUtils, ddbManager).Build();
 
         var fileToTransfer = "DJI_0027.JPG";
 
@@ -1964,8 +1842,8 @@ public class ObjectManagerTest : TestBase
     public async Task Build_ActiveBuild_NoForce_ThrowsException()
     {
         await using var context = GetTest1Context();
-        var settings = JsonConvert.DeserializeObject<AppSettings>(_settingsJson);
-        _appSettingsMock.Setup(o => o.Value).Returns(settings);
+        var settings = TestSettings.Default;
+        _settingsOptions.Value = settings;
         _authManagerMock.Setup(o => o.IsUserAdmin()).Returns(Task.FromResult(true));
         _authManagerMock.Setup(o => o.RequestAccess(It.IsAny<Dataset>(), It.IsAny<AccessType>()))
             .Returns(Task.FromResult(true));
@@ -1979,13 +1857,10 @@ public class ObjectManagerTest : TestBase
 
         _ddbFactoryMock.Setup(x => x.Get(It.IsAny<string>(), It.IsAny<Guid>())).Returns(ddbMock.Object);
 
-        var webUtils = new WebUtils(_authManagerMock.Object, context, _appSettingsMock.Object,
+        var webUtils = new WebUtils(_authManagerMock.Object, context, _settingsOptions,
             _httpContextAccessorMock.Object, TestCaches.Summaries(_ddbFactoryMock.Object));
 
-        var objectManager = new ObjectsManager(_objectManagerLogger, context, _appSettingsMock.Object,
-            _ddbFactoryMock.Object, webUtils, _authManagerMock.Object, _cacheManager,
-            _fileSystem, _backgroundJobsProcessor, DdbWrapper, _thumbnailGeneratorMock.Object,
-            _jobIndexQueryMock.Object, _buildPendingService);
+        var objectManager = ObjectsManagerFor(context, webUtils, _ddbFactoryMock.Object).Build();
 
         var ex = await Should.ThrowAsync<InvalidOperationException>(
             async () => await objectManager.Build(
@@ -2001,8 +1876,8 @@ public class ObjectManagerTest : TestBase
     public async Task Build_ActiveBuild_WithForce_BypassesGuard()
     {
         await using var context = GetTest1Context();
-        var settings = JsonConvert.DeserializeObject<AppSettings>(_settingsJson);
-        _appSettingsMock.Setup(o => o.Value).Returns(settings);
+        var settings = TestSettings.Default;
+        _settingsOptions.Value = settings;
         _authManagerMock.Setup(o => o.IsUserAdmin()).Returns(Task.FromResult(true));
         _authManagerMock.Setup(o => o.RequestAccess(It.IsAny<Dataset>(), It.IsAny<AccessType>()))
             .Returns(Task.FromResult(true));
@@ -2022,13 +1897,10 @@ public class ObjectManagerTest : TestBase
 
         _ddbFactoryMock.Setup(x => x.Get(It.IsAny<string>(), It.IsAny<Guid>())).Returns(ddbMock.Object);
 
-        var webUtils = new WebUtils(_authManagerMock.Object, context, _appSettingsMock.Object,
+        var webUtils = new WebUtils(_authManagerMock.Object, context, _settingsOptions,
             _httpContextAccessorMock.Object, TestCaches.Summaries(_ddbFactoryMock.Object));
 
-        var objectManager = new ObjectsManager(_objectManagerLogger, context, _appSettingsMock.Object,
-            _ddbFactoryMock.Object, webUtils, _authManagerMock.Object, _cacheManager,
-            _fileSystem, _backgroundJobsProcessor, DdbWrapper, _thumbnailGeneratorMock.Object,
-            _jobIndexQueryMock.Object, _buildPendingService);
+        var objectManager = ObjectsManagerFor(context, webUtils, _ddbFactoryMock.Object).Build();
 
         // force=true should NOT throw even though IsBuildActive returns true
         await Should.NotThrowAsync(

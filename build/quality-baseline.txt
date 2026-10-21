@@ -10,10 +10,10 @@ Files with UTF-8 BOM	0
 Projects/props pinning LangVersion	0
 PackageReference with inline Version (CPM)	0
 UseInMemoryDatabase (tests)	0
-new ObjectsManager( in tests	42
+new ObjectsManager( in tests	1
 Thread.Sleep / Task.Delay in tests	1
-Mock<IOptions<AppSettings>> in tests	36
-Test helpers in Registry.Common/Test	4
+Mock<IOptions<AppSettings>> in tests	0
+Test helpers in Registry.Common/Test	0
 Controller log+rethrow catch blocks	130
 catch (Exception ...) total	402
 new ErrorResponse( in controllers	66
@@ -22,7 +22,7 @@ IsUserAdmin() guard + throw blocks	30
 Sync _utils.GetDataset/GetOrganization calls	102
 GetService/GetRequiredService calls	79
 Console.Write* in Program+Startup	41
-.Wait() calls	4
+.Wait() calls	2
 [DllImport] in production code	85
 EntryPointNotFoundException catches	71
 Copied DDB AutomaticRetry attribute	6

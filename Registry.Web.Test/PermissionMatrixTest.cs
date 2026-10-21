@@ -1164,7 +1164,7 @@ public class PermissionMatrixTest : TestBase
     #region OrganizationsManager Member Management Integration
 
     private Mock<IAuthManager> _authManagerMock;
-    private Mock<IOptions<AppSettings>> _appSettingsMock;
+    private MutableOptions<AppSettings> _settingsOptions;
     private Mock<IDatasetsManager> _datasetManagerMock;
     private Mock<IUtils> _utilsMock;
     private AppSettings _appSettings;
@@ -1173,8 +1173,8 @@ public class PermissionMatrixTest : TestBase
     {
         _authManagerMock = new Mock<IAuthManager>();
         _appSettings = new AppSettings { EnableOrganizationMemberManagement = true };
-        _appSettingsMock = new Mock<IOptions<AppSettings>>();
-        _appSettingsMock.Setup(x => x.Value).Returns(_appSettings);
+        _settingsOptions = TestSettings.Mutable();
+        _settingsOptions.Value = _appSettings;
         _datasetManagerMock = new Mock<IDatasetsManager>();
         _utilsMock = new Mock<IUtils>();
         var logger = CreateTestLogger<OrganizationsManager>();
@@ -1189,7 +1189,7 @@ public class PermissionMatrixTest : TestBase
             _utilsMock.Object,
             _datasetManagerMock.Object,
             _appContext,
-            _appSettingsMock.Object,
+            _settingsOptions,
             logger);
     }
 

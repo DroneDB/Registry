@@ -32,7 +32,7 @@ namespace Registry.Web.Test;
 public class OrganizationManagerTest : TestBase
 {
     private Mock<IAuthManager> _authManagerMock;
-    private Mock<IOptions<AppSettings>> _appSettingsMock;
+    private MutableOptions<AppSettings> _settingsOptions;
     private Mock<IDatasetsManager> _datasetManagerMock;
     private Mock<IHttpContextAccessor> _httpContextAccessorMock;
     private Mock<IDdbManager> _ddbManagerMock;
@@ -47,7 +47,7 @@ public class OrganizationManagerTest : TestBase
     {
         // Initialize mocks
         _authManagerMock = new Mock<IAuthManager>();
-        _appSettingsMock = new Mock<IOptions<AppSettings>>();
+        _settingsOptions = TestSettings.Mutable();
         _datasetManagerMock = new Mock<IDatasetsManager>();
         _httpContextAccessorMock = new Mock<IHttpContextAccessor>();
         _ddbManagerMock = new Mock<IDdbManager>();
@@ -61,7 +61,7 @@ public class OrganizationManagerTest : TestBase
         SetupDefaultAuthManagerBehavior();
 
         // Initialize utils and manager
-        _webUtils = new WebUtils(_authManagerMock.Object, _context, _appSettingsMock.Object,
+        _webUtils = new WebUtils(_authManagerMock.Object, _context, _settingsOptions,
             _httpContextAccessorMock.Object, TestCaches.Summaries(_ddbManagerMock.Object));
 
         _organizationsManager = new OrganizationsManager(
@@ -70,7 +70,7 @@ public class OrganizationManagerTest : TestBase
             _webUtils,
             _datasetManagerMock.Object,
             _appContext,
-            _appSettingsMock.Object,
+            _settingsOptions,
             _logger);
     }
 

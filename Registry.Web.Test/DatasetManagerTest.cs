@@ -34,7 +34,7 @@ public class DatasetManagerTest : TestBase
 {
 
     private Mock<IAuthManager> _authManagerMock;
-    private Mock<IOptions<AppSettings>> _appSettingsMock;
+    private MutableOptions<AppSettings> _settingsOptions;
     private Mock<IDatasetsManager> _datasetManagerMock;
     private ILogger<DatasetsManager> _datasetsManagerLogger;
     private Mock<IDdbManager> _ddbFactoryMock;
@@ -48,7 +48,7 @@ public class DatasetManagerTest : TestBase
     [SetUp]
     public void Setup()
     {
-        _appSettingsMock = new Mock<IOptions<AppSettings>>();
+        _settingsOptions = TestSettings.Mutable();
         _authManagerMock = new Mock<IAuthManager>();
         _datasetManagerMock = new Mock<IDatasetsManager>();
         _ddbFactoryMock = new Mock<IDdbManager>();
@@ -70,7 +70,7 @@ public class DatasetManagerTest : TestBase
 
 
         await using var context = GetTest1Context();
-        _appSettingsMock.Setup(o => o.Value).Returns(_settings);
+        _settingsOptions.Value = _settings;
         _authManagerMock.Setup(o => o.IsUserAdmin()).Returns(Task.FromResult(true));
         _authManagerMock.Setup(o => o.RequestAccess(It.IsAny<Dataset>(),
             It.IsAny<AccessType>())).Returns(Task.FromResult(true));
@@ -84,7 +84,7 @@ public class DatasetManagerTest : TestBase
                 CanDelete = true
             }));
 
-        var utils = new WebUtils(_authManagerMock.Object, context, _appSettingsMock.Object, _httpContextAccessorMock.Object, TestCaches.Summaries(_ddbFactoryMock.Object));
+        var utils = new WebUtils(_authManagerMock.Object, context, _settingsOptions, _httpContextAccessorMock.Object, TestCaches.Summaries(_ddbFactoryMock.Object));
 
         var ddbMock = new Mock<IDDB>();
         ddbMock.Setup(x => x.GetInfo()).Returns(new Entry{
@@ -101,7 +101,7 @@ public class DatasetManagerTest : TestBase
         _ddbFactoryMock.Setup(x => x.Get(It.IsAny<string>(), It.IsAny<Guid>())).Returns(ddbMock.Object);
 
         var datasetsManager = new DatasetsManager(context, utils, _datasetsManagerLogger,
-            _objectsManagerMock.Object, _stacManagerMock.Object, _ddbFactoryMock.Object, _authManagerMock.Object, _cacheManager, _fileSystem, _backgroundJobMock.Object, _appSettingsMock.Object, TestCaches.Summaries(_ddbFactoryMock.Object));
+            _objectsManagerMock.Object, _stacManagerMock.Object, _ddbFactoryMock.Object, _authManagerMock.Object, _cacheManager, _fileSystem, _backgroundJobMock.Object, _settingsOptions, TestCaches.Summaries(_ddbFactoryMock.Object));
 
         var list = (await datasetsManager.List(MagicStrings.PublicOrganizationSlug)).ToArray();
 
@@ -124,10 +124,10 @@ public class DatasetManagerTest : TestBase
         // The dates are sent as UTC (DateTimeZoneHandling.Utc): a local time stored here showed
         // new datasets as created in the future on hosts east of UTC
         await using var context = GetTest1Context();
-        _appSettingsMock.Setup(o => o.Value).Returns(_settings);
+        _settingsOptions.Value = _settings;
         _authManagerMock.Setup(o => o.RequestAccess(It.IsAny<Organization>(), It.IsAny<AccessType>()))
             .Returns(Task.FromResult(true));
-        var utils = new WebUtils(_authManagerMock.Object, context, _appSettingsMock.Object,
+        var utils = new WebUtils(_authManagerMock.Object, context, _settingsOptions,
             _httpContextAccessorMock.Object, TestCaches.Summaries(_ddbFactoryMock.Object));
         var ddbMock = new Mock<IDDB>();
         ddbMock.Setup(x => x.Meta).Returns(new Mock<Registry.Ports.DroneDB.IMetaManager>().Object);
@@ -135,7 +135,7 @@ public class DatasetManagerTest : TestBase
         _ddbFactoryMock.Setup(x => x.Get(It.IsAny<string>(), It.IsAny<Guid>())).Returns(ddbMock.Object);
         var datasetsManager = new DatasetsManager(context, utils, _datasetsManagerLogger,
             _objectsManagerMock.Object, _stacManagerMock.Object, _ddbFactoryMock.Object, _authManagerMock.Object,
-            _cacheManager, _fileSystem, _backgroundJobMock.Object, _appSettingsMock.Object,
+            _cacheManager, _fileSystem, _backgroundJobMock.Object, _settingsOptions,
             TestCaches.Summaries(_ddbFactoryMock.Object));
 
         var before = DateTime.UtcNow;
@@ -153,7 +153,7 @@ public class DatasetManagerTest : TestBase
         const string dsSlug = MagicStrings.DefaultDatasetSlug;
 
         await using var context = GetTest1Context();
-        _appSettingsMock.Setup(o => o.Value).Returns(_settings);
+        _settingsOptions.Value = _settings;
 
         // Setup auth manager to return specific permissions
         _authManagerMock.Setup(o => o.RequestAccess(It.IsAny<Dataset>(), AccessType.Read))
@@ -166,7 +166,7 @@ public class DatasetManagerTest : TestBase
                 CanDelete = false
             }));
 
-        var utils = new WebUtils(_authManagerMock.Object, context, _appSettingsMock.Object,
+        var utils = new WebUtils(_authManagerMock.Object, context, _settingsOptions,
             _httpContextAccessorMock.Object, TestCaches.Summaries(_ddbFactoryMock.Object));
 
         var ddbMock = new Mock<IDDB>();
@@ -187,7 +187,7 @@ public class DatasetManagerTest : TestBase
 
         var datasetsManager = new DatasetsManager(context, utils, _datasetsManagerLogger,
             _objectsManagerMock.Object, _stacManagerMock.Object, _ddbFactoryMock.Object,
-            _authManagerMock.Object, _cacheManager, _fileSystem, _backgroundJobMock.Object, _appSettingsMock.Object, TestCaches.Summaries(_ddbFactoryMock.Object));
+            _authManagerMock.Object, _cacheManager, _fileSystem, _backgroundJobMock.Object, _settingsOptions, TestCaches.Summaries(_ddbFactoryMock.Object));
 
         // Act
         var result = await datasetsManager.Get(orgSlug, dsSlug);
@@ -211,7 +211,7 @@ public class DatasetManagerTest : TestBase
         const string dsSlug = MagicStrings.DefaultDatasetSlug;
 
         await using var context = GetTest1Context();
-        _appSettingsMock.Setup(o => o.Value).Returns(_settings);
+        _settingsOptions.Value = _settings;
 
         // Setup auth manager to return full access
         _authManagerMock.Setup(o => o.RequestAccess(It.IsAny<Dataset>(), AccessType.Read))
@@ -224,7 +224,7 @@ public class DatasetManagerTest : TestBase
                 CanDelete = true
             }));
 
-        var utils = new WebUtils(_authManagerMock.Object, context, _appSettingsMock.Object,
+        var utils = new WebUtils(_authManagerMock.Object, context, _settingsOptions,
             _httpContextAccessorMock.Object, TestCaches.Summaries(_ddbFactoryMock.Object));
 
         var ddbMock = new Mock<IDDB>();
@@ -245,7 +245,7 @@ public class DatasetManagerTest : TestBase
 
         var datasetsManager = new DatasetsManager(context, utils, _datasetsManagerLogger,
             _objectsManagerMock.Object, _stacManagerMock.Object, _ddbFactoryMock.Object,
-            _authManagerMock.Object, _cacheManager, _fileSystem, _backgroundJobMock.Object, _appSettingsMock.Object, TestCaches.Summaries(_ddbFactoryMock.Object));
+            _authManagerMock.Object, _cacheManager, _fileSystem, _backgroundJobMock.Object, _settingsOptions, TestCaches.Summaries(_ddbFactoryMock.Object));
 
         // Act
         var result = await datasetsManager.Get(orgSlug, dsSlug);
@@ -266,7 +266,7 @@ public class DatasetManagerTest : TestBase
         const string dsSlug = MagicStrings.DefaultDatasetSlug;
 
         await using var context = GetTest1Context();
-        _appSettingsMock.Setup(o => o.Value).Returns(_settings);
+        _settingsOptions.Value = _settings;
 
         // Setup auth manager to return specific permissions
         _authManagerMock.Setup(o => o.RequestAccess(It.IsAny<Dataset>(), AccessType.Read))
@@ -279,7 +279,7 @@ public class DatasetManagerTest : TestBase
                 CanDelete = false
             }));
 
-        var utils = new WebUtils(_authManagerMock.Object, context, _appSettingsMock.Object,
+        var utils = new WebUtils(_authManagerMock.Object, context, _settingsOptions,
             _httpContextAccessorMock.Object, TestCaches.Summaries(_ddbFactoryMock.Object));
 
         var ddbMock = new Mock<IDDB>();
@@ -300,7 +300,7 @@ public class DatasetManagerTest : TestBase
 
         var datasetsManager = new DatasetsManager(context, utils, _datasetsManagerLogger,
             _objectsManagerMock.Object, _stacManagerMock.Object, _ddbFactoryMock.Object,
-            _authManagerMock.Object, _cacheManager, _fileSystem, _backgroundJobMock.Object, _appSettingsMock.Object, TestCaches.Summaries(_ddbFactoryMock.Object));
+            _authManagerMock.Object, _cacheManager, _fileSystem, _backgroundJobMock.Object, _settingsOptions, TestCaches.Summaries(_ddbFactoryMock.Object));
 
         // Act
         var result = await datasetsManager.GetEntry(orgSlug, dsSlug);
@@ -339,7 +339,7 @@ public class DatasetManagerTest : TestBase
         const string dsSlug = MagicStrings.DefaultDatasetSlug;
 
         await using var context = GetTest1Context();
-        _appSettingsMock.Setup(o => o.Value).Returns(_settings);
+        _settingsOptions.Value = _settings;
 
         // Setup auth manager to return read-only access
         _authManagerMock.Setup(o => o.RequestAccess(It.IsAny<Dataset>(), AccessType.Read))
@@ -352,7 +352,7 @@ public class DatasetManagerTest : TestBase
                 CanDelete = false
             }));
 
-        var utils = new WebUtils(_authManagerMock.Object, context, _appSettingsMock.Object,
+        var utils = new WebUtils(_authManagerMock.Object, context, _settingsOptions,
             _httpContextAccessorMock.Object, TestCaches.Summaries(_ddbFactoryMock.Object));
 
         var ddbMock = new Mock<IDDB>();
@@ -373,7 +373,7 @@ public class DatasetManagerTest : TestBase
 
         var datasetsManager = new DatasetsManager(context, utils, _datasetsManagerLogger,
             _objectsManagerMock.Object, _stacManagerMock.Object, _ddbFactoryMock.Object,
-            _authManagerMock.Object, _cacheManager, _fileSystem, _backgroundJobMock.Object, _appSettingsMock.Object, TestCaches.Summaries(_ddbFactoryMock.Object));
+            _authManagerMock.Object, _cacheManager, _fileSystem, _backgroundJobMock.Object, _settingsOptions, TestCaches.Summaries(_ddbFactoryMock.Object));
 
         // Act
         var result = await datasetsManager.GetEntry(orgSlug, dsSlug);
@@ -398,7 +398,7 @@ public class DatasetManagerTest : TestBase
         const string orgSlug = MagicStrings.PublicOrganizationSlug;
 
         await using var context = GetTest1Context();
-        _appSettingsMock.Setup(o => o.Value).Returns(_settings);
+        _settingsOptions.Value = _settings;
 
         // Setup auth manager to return specific permissions
         _authManagerMock.Setup(o => o.RequestAccess(It.IsAny<Organization>(), AccessType.Read))
@@ -411,7 +411,7 @@ public class DatasetManagerTest : TestBase
                 CanDelete = false
             }));
 
-        var utils = new WebUtils(_authManagerMock.Object, context, _appSettingsMock.Object,
+        var utils = new WebUtils(_authManagerMock.Object, context, _settingsOptions,
             _httpContextAccessorMock.Object, TestCaches.Summaries(_ddbFactoryMock.Object));
 
         var ddbMock = new Mock<IDDB>();
@@ -432,7 +432,7 @@ public class DatasetManagerTest : TestBase
 
         var datasetsManager = new DatasetsManager(context, utils, _datasetsManagerLogger,
             _objectsManagerMock.Object, _stacManagerMock.Object, _ddbFactoryMock.Object,
-            _authManagerMock.Object, _cacheManager, _fileSystem, _backgroundJobMock.Object, _appSettingsMock.Object, TestCaches.Summaries(_ddbFactoryMock.Object));
+            _authManagerMock.Object, _cacheManager, _fileSystem, _backgroundJobMock.Object, _settingsOptions, TestCaches.Summaries(_ddbFactoryMock.Object));
 
         // Act
         var result = await datasetsManager.List(orgSlug);
@@ -459,7 +459,7 @@ public class DatasetManagerTest : TestBase
         const string orgSlug = MagicStrings.PublicOrganizationSlug;
 
         await using var context = GetTest1Context();
-        _appSettingsMock.Setup(o => o.Value).Returns(_settings);
+        _settingsOptions.Value = _settings;
 
         // Setup auth manager to return read-only permissions
         _authManagerMock.Setup(o => o.RequestAccess(It.IsAny<Organization>(), AccessType.Read))
@@ -472,7 +472,7 @@ public class DatasetManagerTest : TestBase
                 CanDelete = false
             }));
 
-        var utils = new WebUtils(_authManagerMock.Object, context, _appSettingsMock.Object,
+        var utils = new WebUtils(_authManagerMock.Object, context, _settingsOptions,
             _httpContextAccessorMock.Object, TestCaches.Summaries(_ddbFactoryMock.Object));
 
         var ddbMock = new Mock<IDDB>();
@@ -493,7 +493,7 @@ public class DatasetManagerTest : TestBase
 
         var datasetsManager = new DatasetsManager(context, utils, _datasetsManagerLogger,
             _objectsManagerMock.Object, _stacManagerMock.Object, _ddbFactoryMock.Object,
-            _authManagerMock.Object, _cacheManager, _fileSystem, _backgroundJobMock.Object, _appSettingsMock.Object, TestCaches.Summaries(_ddbFactoryMock.Object));
+            _authManagerMock.Object, _cacheManager, _fileSystem, _backgroundJobMock.Object, _settingsOptions, TestCaches.Summaries(_ddbFactoryMock.Object));
 
         // Act
         var result = await datasetsManager.List(orgSlug);
@@ -517,7 +517,7 @@ public class DatasetManagerTest : TestBase
         const string orgSlug = MagicStrings.PublicOrganizationSlug;
 
         await using var context = GetContextWithMultipleDatasets();
-        _appSettingsMock.Setup(o => o.Value).Returns(_settings);
+        _settingsOptions.Value = _settings;
 
         // Setup auth manager to allow org access
         _authManagerMock.Setup(o => o.RequestAccess(It.IsAny<Organization>(), AccessType.Read))
@@ -535,7 +535,7 @@ public class DatasetManagerTest : TestBase
                     : new DatasetPermissionsDto { CanRead = false, CanWrite = false, CanDelete = false };
             });
 
-        var utils = new WebUtils(_authManagerMock.Object, context, _appSettingsMock.Object,
+        var utils = new WebUtils(_authManagerMock.Object, context, _settingsOptions,
             _httpContextAccessorMock.Object, TestCaches.Summaries(_ddbFactoryMock.Object));
 
         var ddbMock = new Mock<IDDB>();
@@ -556,7 +556,7 @@ public class DatasetManagerTest : TestBase
 
         var datasetsManager = new DatasetsManager(context, utils, _datasetsManagerLogger,
             _objectsManagerMock.Object, _stacManagerMock.Object, _ddbFactoryMock.Object,
-            _authManagerMock.Object, _cacheManager, _fileSystem, _backgroundJobMock.Object, _appSettingsMock.Object, TestCaches.Summaries(_ddbFactoryMock.Object));
+            _authManagerMock.Object, _cacheManager, _fileSystem, _backgroundJobMock.Object, _settingsOptions, TestCaches.Summaries(_ddbFactoryMock.Object));
 
         // Act
         var result = await datasetsManager.List(orgSlug);
@@ -576,7 +576,7 @@ public class DatasetManagerTest : TestBase
         const string orgSlug = MagicStrings.PublicOrganizationSlug;
 
         await using var context = GetTest1Context();
-        _appSettingsMock.Setup(o => o.Value).Returns(_settings);
+        _settingsOptions.Value = _settings;
 
         // Setup auth manager to allow org access but deny dataset read
         _authManagerMock.Setup(o => o.RequestAccess(It.IsAny<Organization>(), AccessType.Read))
@@ -589,12 +589,12 @@ public class DatasetManagerTest : TestBase
                 CanDelete = false
             }));
 
-        var utils = new WebUtils(_authManagerMock.Object, context, _appSettingsMock.Object,
+        var utils = new WebUtils(_authManagerMock.Object, context, _settingsOptions,
             _httpContextAccessorMock.Object, TestCaches.Summaries(_ddbFactoryMock.Object));
 
         var datasetsManager = new DatasetsManager(context, utils, _datasetsManagerLogger,
             _objectsManagerMock.Object, _stacManagerMock.Object, _ddbFactoryMock.Object,
-            _authManagerMock.Object, _cacheManager, _fileSystem, _backgroundJobMock.Object, _appSettingsMock.Object, TestCaches.Summaries(_ddbFactoryMock.Object));
+            _authManagerMock.Object, _cacheManager, _fileSystem, _backgroundJobMock.Object, _settingsOptions, TestCaches.Summaries(_ddbFactoryMock.Object));
 
         // Act
         var result = await datasetsManager.List(orgSlug);
@@ -619,7 +619,7 @@ public class DatasetManagerTest : TestBase
 
         var datasetsManager = new DatasetsManager(context, utils, _datasetsManagerLogger,
             _objectsManagerMock.Object, _stacManagerMock.Object, _ddbFactoryMock.Object,
-            _authManagerMock.Object, _cacheManager, fileSystemMock.Object, _backgroundJobMock.Object, _appSettingsMock.Object, TestCaches.Summaries(_ddbFactoryMock.Object));
+            _authManagerMock.Object, _cacheManager, fileSystemMock.Object, _backgroundJobMock.Object, _settingsOptions, TestCaches.Summaries(_ddbFactoryMock.Object));
 
         // Act & Assert
         var action = () => datasetsManager.MoveToOrganization("source-org", ["dataset-1"], "dest-org");
@@ -636,7 +636,7 @@ public class DatasetManagerTest : TestBase
 
         var datasetsManager = new DatasetsManager(context, utils, _datasetsManagerLogger,
             _objectsManagerMock.Object, _stacManagerMock.Object, _ddbFactoryMock.Object,
-            _authManagerMock.Object, _cacheManager, fileSystemMock.Object, _backgroundJobMock.Object, _appSettingsMock.Object, TestCaches.Summaries(_ddbFactoryMock.Object));
+            _authManagerMock.Object, _cacheManager, fileSystemMock.Object, _backgroundJobMock.Object, _settingsOptions, TestCaches.Summaries(_ddbFactoryMock.Object));
 
         // Act & Assert
         Task<IEnumerable<MoveDatasetResultDto>> Action() => datasetsManager.MoveToOrganization("", ["dataset-1"], "dest-org");
@@ -653,7 +653,7 @@ public class DatasetManagerTest : TestBase
 
         var datasetsManager = new DatasetsManager(context, utils, _datasetsManagerLogger,
             _objectsManagerMock.Object, _stacManagerMock.Object, _ddbFactoryMock.Object,
-            _authManagerMock.Object, _cacheManager, fileSystemMock.Object, _backgroundJobMock.Object, _appSettingsMock.Object, TestCaches.Summaries(_ddbFactoryMock.Object));
+            _authManagerMock.Object, _cacheManager, fileSystemMock.Object, _backgroundJobMock.Object, _settingsOptions, TestCaches.Summaries(_ddbFactoryMock.Object));
 
         // Act & Assert
         var action = () => datasetsManager.MoveToOrganization(null, ["dataset-1"], "dest-org");
@@ -670,7 +670,7 @@ public class DatasetManagerTest : TestBase
 
         var datasetsManager = new DatasetsManager(context, utils, _datasetsManagerLogger,
             _objectsManagerMock.Object, _stacManagerMock.Object, _ddbFactoryMock.Object,
-            _authManagerMock.Object, _cacheManager, fileSystemMock.Object, _backgroundJobMock.Object, _appSettingsMock.Object, TestCaches.Summaries(_ddbFactoryMock.Object));
+            _authManagerMock.Object, _cacheManager, fileSystemMock.Object, _backgroundJobMock.Object, _settingsOptions, TestCaches.Summaries(_ddbFactoryMock.Object));
 
         // Act & Assert
         var action = () => datasetsManager.MoveToOrganization("source-org", ["dataset-1"], "");
@@ -687,7 +687,7 @@ public class DatasetManagerTest : TestBase
 
         var datasetsManager = new DatasetsManager(context, utils, _datasetsManagerLogger,
             _objectsManagerMock.Object, _stacManagerMock.Object, _ddbFactoryMock.Object,
-            _authManagerMock.Object, _cacheManager, fileSystemMock.Object, _backgroundJobMock.Object, _appSettingsMock.Object, TestCaches.Summaries(_ddbFactoryMock.Object));
+            _authManagerMock.Object, _cacheManager, fileSystemMock.Object, _backgroundJobMock.Object, _settingsOptions, TestCaches.Summaries(_ddbFactoryMock.Object));
 
         // Act & Assert
         var action = () => datasetsManager.MoveToOrganization("source-org", null, "dest-org");
@@ -704,7 +704,7 @@ public class DatasetManagerTest : TestBase
 
         var datasetsManager = new DatasetsManager(context, utils, _datasetsManagerLogger,
             _objectsManagerMock.Object, _stacManagerMock.Object, _ddbFactoryMock.Object,
-            _authManagerMock.Object, _cacheManager, fileSystemMock.Object, _backgroundJobMock.Object, _appSettingsMock.Object, TestCaches.Summaries(_ddbFactoryMock.Object));
+            _authManagerMock.Object, _cacheManager, fileSystemMock.Object, _backgroundJobMock.Object, _settingsOptions, TestCaches.Summaries(_ddbFactoryMock.Object));
 
         // Act & Assert
         var action = () => datasetsManager.MoveToOrganization("source-org", [], "dest-org");
@@ -721,7 +721,7 @@ public class DatasetManagerTest : TestBase
 
         var datasetsManager = new DatasetsManager(context, utils, _datasetsManagerLogger,
             _objectsManagerMock.Object, _stacManagerMock.Object, _ddbFactoryMock.Object,
-            _authManagerMock.Object, _cacheManager, fileSystemMock.Object, _backgroundJobMock.Object, _appSettingsMock.Object, TestCaches.Summaries(_ddbFactoryMock.Object));
+            _authManagerMock.Object, _cacheManager, fileSystemMock.Object, _backgroundJobMock.Object, _settingsOptions, TestCaches.Summaries(_ddbFactoryMock.Object));
 
         // Act & Assert
         var action = () => datasetsManager.MoveToOrganization("source-org", ["dataset-1"], "source-org");
@@ -743,7 +743,7 @@ public class DatasetManagerTest : TestBase
 
         var datasetsManager = new DatasetsManager(context, utils, _datasetsManagerLogger,
             _objectsManagerMock.Object, _stacManagerMock.Object, _ddbFactoryMock.Object,
-            _authManagerMock.Object, _cacheManager, fileSystemMock.Object, _backgroundJobMock.Object, _appSettingsMock.Object, TestCaches.Summaries(_ddbFactoryMock.Object));
+            _authManagerMock.Object, _cacheManager, fileSystemMock.Object, _backgroundJobMock.Object, _settingsOptions, TestCaches.Summaries(_ddbFactoryMock.Object));
 
         // Act
         var results = (await datasetsManager.MoveToOrganization("source-org", ["dataset-1"], "dest-org")).ToArray();
@@ -781,7 +781,7 @@ public class DatasetManagerTest : TestBase
 
         var datasetsManager = new DatasetsManager(context, utils, _datasetsManagerLogger,
             _objectsManagerMock.Object, _stacManagerMock.Object, _ddbFactoryMock.Object,
-            _authManagerMock.Object, _cacheManager, fileSystemMock.Object, _backgroundJobMock.Object, _appSettingsMock.Object, TestCaches.Summaries(_ddbFactoryMock.Object));
+            _authManagerMock.Object, _cacheManager, fileSystemMock.Object, _backgroundJobMock.Object, _settingsOptions, TestCaches.Summaries(_ddbFactoryMock.Object));
 
         // Act
         var results = (await datasetsManager.MoveToOrganization("source-org", ["dataset-1", "dataset-2"], "dest-org")).ToArray();
@@ -809,7 +809,7 @@ public class DatasetManagerTest : TestBase
 
         var datasetsManager = new DatasetsManager(context, utils, _datasetsManagerLogger,
             _objectsManagerMock.Object, _stacManagerMock.Object, _ddbFactoryMock.Object,
-            _authManagerMock.Object, _cacheManager, fileSystemMock.Object, _backgroundJobMock.Object, _appSettingsMock.Object, TestCaches.Summaries(_ddbFactoryMock.Object));
+            _authManagerMock.Object, _cacheManager, fileSystemMock.Object, _backgroundJobMock.Object, _settingsOptions, TestCaches.Summaries(_ddbFactoryMock.Object));
 
         // Act
         var results = (await datasetsManager.MoveToOrganization("source-org", ["non-existent-dataset"], "dest-org")).ToArray();
@@ -836,7 +836,7 @@ public class DatasetManagerTest : TestBase
 
         var datasetsManager = new DatasetsManager(context, utils, _datasetsManagerLogger,
             _objectsManagerMock.Object, _stacManagerMock.Object, _ddbFactoryMock.Object,
-            _authManagerMock.Object, _cacheManager, fileSystemMock.Object, _backgroundJobMock.Object, _appSettingsMock.Object, TestCaches.Summaries(_ddbFactoryMock.Object));
+            _authManagerMock.Object, _cacheManager, fileSystemMock.Object, _backgroundJobMock.Object, _settingsOptions, TestCaches.Summaries(_ddbFactoryMock.Object));
 
         // Act - Mix of existing and non-existing datasets
         var results = (await datasetsManager.MoveToOrganization("source-org",
@@ -859,7 +859,7 @@ public class DatasetManagerTest : TestBase
 
         var datasetsManager = new DatasetsManager(context, utils, _datasetsManagerLogger,
             _objectsManagerMock.Object, _stacManagerMock.Object, _ddbFactoryMock.Object,
-            _authManagerMock.Object, _cacheManager, fileSystemMock.Object, _backgroundJobMock.Object, _appSettingsMock.Object, TestCaches.Summaries(_ddbFactoryMock.Object));
+            _authManagerMock.Object, _cacheManager, fileSystemMock.Object, _backgroundJobMock.Object, _settingsOptions, TestCaches.Summaries(_ddbFactoryMock.Object));
 
         // Act
         var results = (await datasetsManager.MoveToOrganization("source-org",
@@ -886,7 +886,7 @@ public class DatasetManagerTest : TestBase
 
         var datasetsManager = new DatasetsManager(context, utils, _datasetsManagerLogger,
             _objectsManagerMock.Object, _stacManagerMock.Object, _ddbFactoryMock.Object,
-            _authManagerMock.Object, _cacheManager, fileSystemMock.Object, _backgroundJobMock.Object, _appSettingsMock.Object, TestCaches.Summaries(_ddbFactoryMock.Object));
+            _authManagerMock.Object, _cacheManager, fileSystemMock.Object, _backgroundJobMock.Object, _settingsOptions, TestCaches.Summaries(_ddbFactoryMock.Object));
 
         // Act
         var results = (await datasetsManager.MoveToOrganization("source-org",
@@ -921,7 +921,7 @@ public class DatasetManagerTest : TestBase
 
         var datasetsManager = new DatasetsManager(context, utils, _datasetsManagerLogger,
             _objectsManagerMock.Object, _stacManagerMock.Object, _ddbFactoryMock.Object,
-            _authManagerMock.Object, _cacheManager, fileSystemMock.Object, _backgroundJobMock.Object, _appSettingsMock.Object, TestCaches.Summaries(_ddbFactoryMock.Object));
+            _authManagerMock.Object, _cacheManager, fileSystemMock.Object, _backgroundJobMock.Object, _settingsOptions, TestCaches.Summaries(_ddbFactoryMock.Object));
 
         // Act
         var results = (await datasetsManager.MoveToOrganization("source-org",
@@ -950,7 +950,7 @@ public class DatasetManagerTest : TestBase
 
         var datasetsManager = new DatasetsManager(context, utils, _datasetsManagerLogger,
             _objectsManagerMock.Object, _stacManagerMock.Object, _ddbFactoryMock.Object,
-            _authManagerMock.Object, _cacheManager, fileSystemMock.Object, _backgroundJobMock.Object, _appSettingsMock.Object, TestCaches.Summaries(_ddbFactoryMock.Object));
+            _authManagerMock.Object, _cacheManager, fileSystemMock.Object, _backgroundJobMock.Object, _settingsOptions, TestCaches.Summaries(_ddbFactoryMock.Object));
 
         // Act
         var results = (await datasetsManager.MoveToOrganization("source-org",
@@ -985,7 +985,7 @@ public class DatasetManagerTest : TestBase
 
         var datasetsManager = new DatasetsManager(context, utils, _datasetsManagerLogger,
             _objectsManagerMock.Object, _stacManagerMock.Object, _ddbFactoryMock.Object,
-            _authManagerMock.Object, _cacheManager, fileSystemMock.Object, _backgroundJobMock.Object, _appSettingsMock.Object, TestCaches.Summaries(_ddbFactoryMock.Object));
+            _authManagerMock.Object, _cacheManager, fileSystemMock.Object, _backgroundJobMock.Object, _settingsOptions, TestCaches.Summaries(_ddbFactoryMock.Object));
 
         // Act
         var results = (await datasetsManager.MoveToOrganization("source-org", ["dataset-1"], "dest-org")).ToArray();
@@ -1009,7 +1009,7 @@ public class DatasetManagerTest : TestBase
 
         var datasetsManager = new DatasetsManager(context, utils, _datasetsManagerLogger,
             _objectsManagerMock.Object, _stacManagerMock.Object, _ddbFactoryMock.Object,
-            _authManagerMock.Object, _cacheManager, fileSystemMock.Object, _backgroundJobMock.Object, _appSettingsMock.Object, TestCaches.Summaries(_ddbFactoryMock.Object));
+            _authManagerMock.Object, _cacheManager, fileSystemMock.Object, _backgroundJobMock.Object, _settingsOptions, TestCaches.Summaries(_ddbFactoryMock.Object));
 
         // Act & Assert
         var action = () => datasetsManager.MoveToOrganization("non-existent-org", ["dataset-1"], "dest-org");
@@ -1026,7 +1026,7 @@ public class DatasetManagerTest : TestBase
 
         var datasetsManager = new DatasetsManager(context, utils, _datasetsManagerLogger,
             _objectsManagerMock.Object, _stacManagerMock.Object, _ddbFactoryMock.Object,
-            _authManagerMock.Object, _cacheManager, fileSystemMock.Object, _backgroundJobMock.Object, _appSettingsMock.Object, TestCaches.Summaries(_ddbFactoryMock.Object));
+            _authManagerMock.Object, _cacheManager, fileSystemMock.Object, _backgroundJobMock.Object, _settingsOptions, TestCaches.Summaries(_ddbFactoryMock.Object));
 
         // Act & Assert
         var action = () => datasetsManager.MoveToOrganization("source-org", ["dataset-1"], "non-existent-org");
@@ -1048,7 +1048,7 @@ public class DatasetManagerTest : TestBase
 
         var datasetsManager = new DatasetsManager(context, utils, _datasetsManagerLogger,
             _objectsManagerMock.Object, _stacManagerMock.Object, _ddbFactoryMock.Object,
-            _authManagerMock.Object, _cacheManager, fileSystemMock.Object, _backgroundJobMock.Object, _appSettingsMock.Object, TestCaches.Summaries(_ddbFactoryMock.Object));
+            _authManagerMock.Object, _cacheManager, fileSystemMock.Object, _backgroundJobMock.Object, _settingsOptions, TestCaches.Summaries(_ddbFactoryMock.Object));
 
         // Act
         await datasetsManager.MoveToOrganization("source-org", ["dataset-1", "dataset-2"], "dest-org");
@@ -1072,7 +1072,7 @@ public class DatasetManagerTest : TestBase
 
         var datasetsManager = new DatasetsManager(context, utils, _datasetsManagerLogger,
             _objectsManagerMock.Object, _stacManagerMock.Object, _ddbFactoryMock.Object,
-            _authManagerMock.Object, _cacheManager, fileSystemMock.Object, _backgroundJobMock.Object, _appSettingsMock.Object, TestCaches.Summaries(_ddbFactoryMock.Object));
+            _authManagerMock.Object, _cacheManager, fileSystemMock.Object, _backgroundJobMock.Object, _settingsOptions, TestCaches.Summaries(_ddbFactoryMock.Object));
 
         // Act - Move datasets, some will conflict, some won't
         var results = (await datasetsManager.MoveToOrganization("source-org",
@@ -1121,161 +1121,43 @@ public class DatasetManagerTest : TestBase
 
     private (IUtils utils, Mock<IFileSystem> fileSystemMock) SetupMoveTestDependencies(RegistryContext context)
     {
-        _appSettingsMock.Setup(o => o.Value).Returns(_settings);
+        _settingsOptions.Value = _settings;
         var fileSystemMock = new Mock<IFileSystem>();
-        var utils = new WebUtils(_authManagerMock.Object, context, _appSettingsMock.Object,
+        var utils = new WebUtils(_authManagerMock.Object, context, _settingsOptions,
             _httpContextAccessorMock.Object, TestCaches.Summaries(_ddbFactoryMock.Object));
         return (utils, fileSystemMock);
     }
 
-    private static RegistryContext GetMoveTestContext()
+    /// <summary>A private source and destination organization (owner "admin-id") with the given datasets.</summary>
+    private static RegistryContext GetMoveTestContext(string[] sourceDatasets, string[] destDatasets)
     {
         return TestDb.CreateContext<RegistryContext>(context =>
         {
-            var sourceOrg = new Organization
-            {
-                Slug = "source-org",
-                Name = "Source Organization",
-                CreationDate = DateTime.Now,
-                Description = "Source organization for testing",
-                IsPublic = false,
-                OwnerId = "admin-id",
-                Datasets = new List<Dataset>
-                {
-                    new Dataset { Slug = "dataset-1", CreationDate = DateTime.Now, InternalRef = Guid.NewGuid() },
-                    new Dataset { Slug = "dataset-2", CreationDate = DateTime.Now, InternalRef = Guid.NewGuid() }
-                }
-            };
+            var sourceOrg = Seed.Organization(context, "source-org", "Source Organization", ownerId: "admin-id",
+                description: "Source organization for testing");
+            foreach (var slug in sourceDatasets)
+                Seed.Dataset(context, sourceOrg, slug);
 
-            var destOrg = new Organization
-            {
-                Slug = "dest-org",
-                Name = "Destination Organization",
-                CreationDate = DateTime.Now,
-                Description = "Destination organization for testing",
-                IsPublic = false,
-                OwnerId = "admin-id",
-                Datasets = new List<Dataset>()
-            };
+            var destOrg = Seed.Organization(context, "dest-org", "Destination Organization", ownerId: "admin-id",
+                description: "Destination organization for testing");
+            foreach (var slug in destDatasets)
+                Seed.Dataset(context, destOrg, slug);
 
-            context.Organizations.AddRange(sourceOrg, destOrg);
             context.SaveChanges();
         });
     }
 
-    private static RegistryContext GetMoveTestContextWithConflict()
-    {
-        return TestDb.CreateContext<RegistryContext>(context =>
-        {
-            var sourceOrg = new Organization
-            {
-                Slug = "source-org",
-                Name = "Source Organization",
-                CreationDate = DateTime.Now,
-                Description = "Source organization for testing",
-                IsPublic = false,
-                OwnerId = "admin-id",
-                Datasets = new List<Dataset>
-                {
-                    new Dataset { Slug = "conflicting-dataset", CreationDate = DateTime.Now, InternalRef = Guid.NewGuid() }
-                }
-            };
+    private static RegistryContext GetMoveTestContext() =>
+        GetMoveTestContext(["dataset-1", "dataset-2"], Array.Empty<string>());
 
-            var destOrg = new Organization
-            {
-                Slug = "dest-org",
-                Name = "Destination Organization",
-                CreationDate = DateTime.Now,
-                Description = "Destination organization for testing",
-                IsPublic = false,
-                OwnerId = "admin-id",
-                Datasets = new List<Dataset>
-                {
-                    new Dataset { Slug = "conflicting-dataset", CreationDate = DateTime.Now, InternalRef = Guid.NewGuid() }
-                }
-            };
+    private static RegistryContext GetMoveTestContextWithConflict() =>
+        GetMoveTestContext(["conflicting-dataset"], ["conflicting-dataset"]);
 
-            context.Organizations.AddRange(sourceOrg, destOrg);
-            context.SaveChanges();
-        });
-    }
+    private static RegistryContext GetMoveTestContextWithMultipleConflicts() =>
+        GetMoveTestContext(["conflicting-dataset"], ["conflicting-dataset", "conflicting-dataset_1", "conflicting-dataset_2"]);
 
-    private static RegistryContext GetMoveTestContextWithMultipleConflicts()
-    {
-        return TestDb.CreateContext<RegistryContext>(context =>
-        {
-            var sourceOrg = new Organization
-            {
-                Slug = "source-org",
-                Name = "Source Organization",
-                CreationDate = DateTime.Now,
-                Description = "Source organization for testing",
-                IsPublic = false,
-                OwnerId = "admin-id",
-                Datasets = new List<Dataset>
-                {
-                    new Dataset { Slug = "conflicting-dataset", CreationDate = DateTime.Now, InternalRef = Guid.NewGuid() }
-                }
-            };
-
-            var destOrg = new Organization
-            {
-                Slug = "dest-org",
-                Name = "Destination Organization",
-                CreationDate = DateTime.Now,
-                Description = "Destination organization for testing",
-                IsPublic = false,
-                OwnerId = "admin-id",
-                Datasets = new List<Dataset>
-                {
-                    new Dataset { Slug = "conflicting-dataset", CreationDate = DateTime.Now, InternalRef = Guid.NewGuid() },
-                    new Dataset { Slug = "conflicting-dataset_1", CreationDate = DateTime.Now, InternalRef = Guid.NewGuid() },
-                    new Dataset { Slug = "conflicting-dataset_2", CreationDate = DateTime.Now, InternalRef = Guid.NewGuid() }
-                }
-            };
-
-            context.Organizations.AddRange(sourceOrg, destOrg);
-            context.SaveChanges();
-        });
-    }
-
-    private static RegistryContext GetMoveTestContextWithMixedConflicts()
-    {
-        return TestDb.CreateContext<RegistryContext>(context =>
-        {
-            var sourceOrg = new Organization
-            {
-                Slug = "source-org",
-                Name = "Source Organization",
-                CreationDate = DateTime.Now,
-                Description = "Source organization for testing",
-                IsPublic = false,
-                OwnerId = "admin-id",
-                Datasets = new List<Dataset>
-                {
-                    new Dataset { Slug = "unique-dataset", CreationDate = DateTime.Now, InternalRef = Guid.NewGuid() },
-                    new Dataset { Slug = "conflicting-dataset", CreationDate = DateTime.Now, InternalRef = Guid.NewGuid() }
-                }
-            };
-
-            var destOrg = new Organization
-            {
-                Slug = "dest-org",
-                Name = "Destination Organization",
-                CreationDate = DateTime.Now,
-                Description = "Destination organization for testing",
-                IsPublic = false,
-                OwnerId = "admin-id",
-                Datasets = new List<Dataset>
-                {
-                    new Dataset { Slug = "conflicting-dataset", CreationDate = DateTime.Now, InternalRef = Guid.NewGuid() }
-                }
-            };
-
-            context.Organizations.AddRange(sourceOrg, destOrg);
-            context.SaveChanges();
-        });
-    }
+    private static RegistryContext GetMoveTestContextWithMixedConflicts() =>
+        GetMoveTestContext(["unique-dataset", "conflicting-dataset"], ["conflicting-dataset"]);
 
     #endregion
 
@@ -1284,31 +1166,7 @@ public class DatasetManagerTest : TestBase
 
     #region Test Data
 
-    private readonly AppSettings _settings = JsonConvert.DeserializeObject<AppSettings>(@"{
-    ""Secret"": ""a2780070a24cfcaf5a4a43f931200ba0d19d8b86b3a7bd5123d9ad75b125f480fcce1f9b7f41a53abe2ba8456bd142d38c455302e0081e5139bc3fc9bf614497"",
-    ""TokenExpirationInDays"": 7,
-    ""RevokedTokens"": [
-      """"
-    ],
-    ""AuthProvider"": ""Sqlite"",
-    ""RegistryProvider"": ""Sqlite"",
-    ""StorageProvider"": {
-      ""type"": ""Physical"",
-      ""settings"": {
-        ""path"": ""./temp""
-      }
-    },
-    ""DefaultAdmin"": {
-      ""Email"": ""admin@example.com"",
-      ""UserName"": ""admin"",
-      ""Password"": ""password""
-    },
-    ""DdbStoragePath"": ""./Data/Ddb"",
-    ""DatasetsPath"": ""./test-datasets"",
-    ""TempPath"": ""./temp"",
-    ""DdbPath"": ""./ddb""
-}
-  ");
+    private readonly AppSettings _settings = TestSettings.Create(s => s.DatasetsPath = "./test-datasets");
 
     #endregion
 
@@ -1319,29 +1177,7 @@ public class DatasetManagerTest : TestBase
         // Insert seed data into the database using one instance of the context
         return TestDb.CreateContext<RegistryContext>(context =>
         {
-
-            var entity = new Organization
-            {
-                Slug = MagicStrings.PublicOrganizationSlug,
-                Name = "Public",
-                CreationDate = DateTime.Now,
-                Description = "Public organization",
-                IsPublic = true,
-                OwnerId = null
-            };
-            var ds = new Dataset
-            {
-                Slug = MagicStrings.DefaultDatasetSlug,
-                //Name = "Default",
-                //IsPublic = true,
-                CreationDate = DateTime.Now,
-                //LastUpdate = DateTime.Now,
-                InternalRef = Guid.Parse("0a223495-84a0-4c15-b425-c7ef88110e75")
-            };
-
-            entity.Datasets = new List<Dataset> { ds };
-
-            context.Organizations.Add(entity);
+            Seed.PublicDefaultDataset(context);
 
             context.SaveChanges();
         });
@@ -1351,34 +1187,11 @@ public class DatasetManagerTest : TestBase
     {
         return TestDb.CreateContext<RegistryContext>(context =>
         {
-            var entity = new Organization
-            {
-                Slug = MagicStrings.PublicOrganizationSlug,
-                Name = "Public",
-                CreationDate = DateTime.Now,
-                Description = "Public organization",
-                IsPublic = true,
-                OwnerId = null
-            };
+            var organization = Seed.PublicOrganization(context);
 
             // One public dataset and one private dataset
-            var publicDs = new Dataset
-            {
-                Slug = "public-dataset",
-                CreationDate = DateTime.Now,
-                InternalRef = Guid.NewGuid()
-            };
-
-            var privateDs = new Dataset
-            {
-                Slug = "private-dataset",
-                CreationDate = DateTime.Now,
-                InternalRef = Guid.NewGuid()
-            };
-
-            entity.Datasets = new List<Dataset> { publicDs, privateDs };
-
-            context.Organizations.Add(entity);
+            Seed.Dataset(context, organization, "public-dataset");
+            Seed.Dataset(context, organization, "private-dataset");
             context.SaveChanges();
         });
     }

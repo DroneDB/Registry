@@ -19,11 +19,6 @@ Registry.Common/CommonUtils.cs CA1305 2
 Registry.Common/CommonUtils.cs CS8632 1
 Registry.Common/EfCoreExtenders.cs CA1860 2
 Registry.Common/HttpHelper.cs CA1068 1
-Registry.Common/Test/TempFile.cs CA1816 1
-Registry.Common/Test/TestArea.cs CA1816 1
-Registry.Common/Test/TestFS.cs CA1310 4
-Registry.Common/Test/TestFS.cs CA1805 1
-Registry.Common/Test/TestFS.cs CA1816 1
 Registry.Ports/DroneDB/BatchAddResult.cs CS8618 5
 Registry.Ports/DroneDB/Delta.cs CS8618 4
 Registry.Ports/DroneDB/Entry.cs CS8618 3

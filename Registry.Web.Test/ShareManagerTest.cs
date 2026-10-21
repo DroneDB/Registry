@@ -16,12 +16,10 @@ using Microsoft.Extensions.Caching.Distributed;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Moq;
-using Newtonsoft.Json;
 using NUnit.Framework;
 using Registry.Adapters;
 using Registry.Adapters.DroneDB;
 using Registry.Common;
-using Registry.Common.Test;
 using Registry.Ports;
 using Registry.Ports.DroneDB;
 using Registry.Web.Data;
@@ -55,7 +53,7 @@ class ShareManagerTest : TestBase
     private ILogger<BatchTokenGenerator> _batchTokenGeneratorLogger;
     private ILogger<NameGenerator> _nameGeneratorLogger;
 
-    private Mock<IOptions<AppSettings>> _appSettingsMock;
+    private MutableOptions<AppSettings> _settingsOptions;
     private Mock<IDdbManager> _ddbFactoryMock;
     private Mock<IAuthManager> _authManagerMock;
     private Mock<IUtils> _utilsMock;
@@ -65,8 +63,6 @@ class ShareManagerTest : TestBase
     private Mock<IHttpContextAccessor> _httpContextAccessorMock;
     private ICacheManager _cacheManager;
     private Mock<IStacManager> _stacManagerMock;
-    private Mock<IThumbnailGenerator> _thumbnailGeneratorMock;
-    private Mock<IJobIndexQuery> _jobIndexQueryMock;
 
     private IBackgroundJobsProcessor _backgroundJobsProcessor;
     private BuildPendingService _buildPendingService;
@@ -87,7 +83,7 @@ class ShareManagerTest : TestBase
     [SetUp]
     public void Setup()
     {
-        _appSettingsMock = new Mock<IOptions<AppSettings>>();
+        _settingsOptions = TestSettings.Mutable();
         _ddbFactoryMock = new Mock<IDdbManager>();
         _authManagerMock = new Mock<IAuthManager>();
         _utilsMock = new Mock<IUtils>();
@@ -100,8 +96,6 @@ class ShareManagerTest : TestBase
         _cacheManager = CreateTestCacheManager();
         RegisterDatasetVisibilityCacheProvider(_cacheManager);
         _stacManagerMock = new Mock<IStacManager>();
-        _thumbnailGeneratorMock = new Mock<IThumbnailGenerator>();
-        _jobIndexQueryMock = new Mock<IJobIndexQuery>();
 
         var bpsContext = TestDb.CreateContext<RegistryContext>();
         _buildPendingService = new BuildPendingService(
@@ -133,13 +127,13 @@ class ShareManagerTest : TestBase
         _authManagerMock.Setup(o => o.SafeGetCurrentUserName()).Returns(Task.FromResult(userName));
 
         var settings = JsonConvert.DeserializeObject<AppSettings>(_settingsJson);
-        _appSettingsMock.Setup(o => o.Value).Returns(settings);
+        _settingsOptions.Value = settings;
 
-        var manager = new ShareManager(_appSettingsMock.Object, _shareManagerLogger, _objectsManagerMock.Object,
+        var manager = new ShareManager(_settingsOptions, _shareManagerLogger, _objectsManagerMock.Object,
             _datasetsManagerMock.Object,
             _organizationsManagerMock.Object, _utilsMock.Object, _authManagerMock.Object,
-            new BatchTokenGenerator(_appSettingsMock.Object, _batchTokenGeneratorLogger),
-            new NameGenerator(_appSettingsMock.Object, _nameGeneratorLogger), GetTest1Context());
+            new BatchTokenGenerator(_settingsOptions, _batchTokenGeneratorLogger),
+            new NameGenerator(_settingsOptions, _nameGeneratorLogger), GetTest1Context());
 
         await Should.ThrowAsync<BadRequestException>(async () => await manager.Initialize(null));
 
@@ -159,9 +153,9 @@ class ShareManagerTest : TestBase
         await using var context = GetTest1Context();
         await using var appContext = GetAppTest1Context();
 
-        var settings = JsonConvert.DeserializeObject<AppSettings>(SettingsJson);
+        var settings = ShareSettings();
         settings.DatasetsPath = test.TestFolder;
-        _appSettingsMock.Setup(o => o.Value).Returns(settings);
+        _settingsOptions.Value = settings;
 
         _authManagerMock.Setup(o => o.IsUserAdmin()).Returns(Task.FromResult(true));
         _authManagerMock.Setup(o => o.IsOwnerOrAdmin(It.IsAny<Organization>())).Returns(Task.FromResult(true));
@@ -201,23 +195,21 @@ class ShareManagerTest : TestBase
 
         _ddbFactoryMock.Setup(x => x.Get(It.IsAny<string>(), It.IsAny<Guid>())).Returns(ddbMock.Object);
 
-        var ddbFactory = new DdbManager(_appSettingsMock.Object, _ddbFactoryLogger, DdbWrapper);
-        var webUtils = new WebUtils(_authManagerMock.Object, context, _appSettingsMock.Object,
+        var ddbFactory = new DdbManager(_settingsOptions, _ddbFactoryLogger, DdbWrapper);
+        var webUtils = new WebUtils(_authManagerMock.Object, context, _settingsOptions,
             _httpContextAccessorMock.Object, TestCaches.Summaries(_ddbFactoryMock.Object));
 
-        var objectManager = new ObjectsManager(_objectManagerLogger, context,
-            _appSettingsMock.Object, ddbFactory, webUtils, _authManagerMock.Object, _cacheManager,
-            _fileSystem, _backgroundJobsProcessor, DdbWrapper, _thumbnailGeneratorMock.Object, _jobIndexQueryMock.Object, _buildPendingService);
+        var objectManager = ObjectsManagerFor(context, webUtils, ddbFactory);
 
         var datasetManager = new DatasetsManager(context, webUtils, _datasetsManagerLogger, objectManager,
-            _stacManagerMock.Object, _ddbFactoryMock.Object, _authManagerMock.Object, _cacheManager, _fileSystem, _backgroundJobsProcessor, _appSettingsMock.Object, TestCaches.Summaries(_ddbFactoryMock.Object));
+            _stacManagerMock.Object, _ddbFactoryMock.Object, _authManagerMock.Object, _cacheManager, _fileSystem, _backgroundJobsProcessor, _settingsOptions, TestCaches.Summaries(_ddbFactoryMock.Object));
         var organizationsManager = new OrganizationsManager(_authManagerMock.Object, context, webUtils,
-            datasetManager, appContext, _appSettingsMock.Object, _organizationsManagerLogger);
+            datasetManager, appContext, _settingsOptions, _organizationsManagerLogger);
 
-        var shareManager = new ShareManager(_appSettingsMock.Object, _shareManagerLogger, objectManager,
+        var shareManager = new ShareManager(_settingsOptions, _shareManagerLogger, objectManager,
             datasetManager, organizationsManager, webUtils, _authManagerMock.Object,
-            new BatchTokenGenerator(_appSettingsMock.Object, _batchTokenGeneratorLogger),
-            new NameGenerator(_appSettingsMock.Object, _nameGeneratorLogger), context, _fileSystem);
+            new BatchTokenGenerator(_settingsOptions, _batchTokenGeneratorLogger),
+            new NameGenerator(_settingsOptions, _nameGeneratorLogger), context, _fileSystem);
 
         // TEST
 
@@ -267,9 +259,9 @@ class ShareManagerTest : TestBase
         await using var context = GetTest1Context();
         await using var appContext = GetAppTest1Context();
 
-        var settings = JsonConvert.DeserializeObject<AppSettings>(SettingsJson);
+        var settings = ShareSettings();
         settings.DatasetsPath = test.TestFolder;
-        _appSettingsMock.Setup(o => o.Value).Returns(settings);
+        _settingsOptions.Value = settings;
 
         _authManagerMock.Setup(o => o.IsUserAdmin()).Returns(Task.FromResult(true));
         _authManagerMock.Setup(o => o.IsOwnerOrAdmin(It.IsAny<Organization>())).Returns(Task.FromResult(true));
@@ -307,23 +299,21 @@ class ShareManagerTest : TestBase
 
         _ddbFactoryMock.Setup(x => x.Get(It.IsAny<string>(), It.IsAny<Guid>())).Returns(ddbMock.Object);
 
-        var ddbFactory = new DdbManager(_appSettingsMock.Object, _ddbFactoryLogger, DdbWrapper);
-        var webUtils = new WebUtils(_authManagerMock.Object, context, _appSettingsMock.Object,
+        var ddbFactory = new DdbManager(_settingsOptions, _ddbFactoryLogger, DdbWrapper);
+        var webUtils = new WebUtils(_authManagerMock.Object, context, _settingsOptions,
             _httpContextAccessorMock.Object, TestCaches.Summaries(_ddbFactoryMock.Object));
 
-        var objectManager = new ObjectsManager(_objectManagerLogger, context,
-            _appSettingsMock.Object, ddbFactory, webUtils, _authManagerMock.Object, _cacheManager,
-            _fileSystem, _backgroundJobsProcessor, DdbWrapper, _thumbnailGeneratorMock.Object, _jobIndexQueryMock.Object, _buildPendingService);
+        var objectManager = ObjectsManagerFor(context, webUtils, ddbFactory);
 
         var datasetManager = new DatasetsManager(context, webUtils, _datasetsManagerLogger, objectManager,
-            _stacManagerMock.Object, _ddbFactoryMock.Object, _authManagerMock.Object, _cacheManager, _fileSystem, _backgroundJobsProcessor, _appSettingsMock.Object, TestCaches.Summaries(_ddbFactoryMock.Object));
+            _stacManagerMock.Object, _ddbFactoryMock.Object, _authManagerMock.Object, _cacheManager, _fileSystem, _backgroundJobsProcessor, _settingsOptions, TestCaches.Summaries(_ddbFactoryMock.Object));
         var organizationsManager = new OrganizationsManager(_authManagerMock.Object, context, webUtils,
-            datasetManager, appContext, _appSettingsMock.Object, _organizationsManagerLogger);
+            datasetManager, appContext, _settingsOptions, _organizationsManagerLogger);
 
-        var shareManager = new ShareManager(_appSettingsMock.Object, _shareManagerLogger, objectManager,
+        var shareManager = new ShareManager(_settingsOptions, _shareManagerLogger, objectManager,
             datasetManager, organizationsManager, webUtils, _authManagerMock.Object,
-            new BatchTokenGenerator(_appSettingsMock.Object, _batchTokenGeneratorLogger),
-            new NameGenerator(_appSettingsMock.Object, _nameGeneratorLogger), context, _fileSystem);
+            new BatchTokenGenerator(_settingsOptions, _batchTokenGeneratorLogger),
+            new NameGenerator(_settingsOptions, _nameGeneratorLogger), context, _fileSystem);
 
         // TEST
 
@@ -383,9 +373,9 @@ class ShareManagerTest : TestBase
         await using var context = GetTest1Context();
         await using var appContext = GetAppTest1Context();
 
-        var settings = JsonConvert.DeserializeObject<AppSettings>(SettingsJson);
+        var settings = ShareSettings();
         settings.DatasetsPath = test.TestFolder;
-        _appSettingsMock.Setup(o => o.Value).Returns(settings);
+        _settingsOptions.Value = settings;
 
         _authManagerMock.Setup(o => o.IsUserAdmin()).Returns(Task.FromResult(true));
         _authManagerMock.Setup(o => o.IsOwnerOrAdmin(It.IsAny<Dataset>())).Returns(Task.FromResult(true));
@@ -423,23 +413,21 @@ class ShareManagerTest : TestBase
 
         _ddbFactoryMock.Setup(x => x.Get(It.IsAny<string>(), It.IsAny<Guid>())).Returns(ddbMock.Object);
 
-        var ddbFactory = new DdbManager(_appSettingsMock.Object, _ddbFactoryLogger, DdbWrapper);
-        var webUtils = new WebUtils(_authManagerMock.Object, context, _appSettingsMock.Object,
+        var ddbFactory = new DdbManager(_settingsOptions, _ddbFactoryLogger, DdbWrapper);
+        var webUtils = new WebUtils(_authManagerMock.Object, context, _settingsOptions,
             _httpContextAccessorMock.Object, TestCaches.Summaries(_ddbFactoryMock.Object));
 
-        var objectManager = new ObjectsManager(_objectManagerLogger, context,
-            _appSettingsMock.Object, ddbFactory, webUtils, _authManagerMock.Object, _cacheManager,
-            _fileSystem, _backgroundJobsProcessor, DdbWrapper, _thumbnailGeneratorMock.Object, _jobIndexQueryMock.Object, _buildPendingService);
+        var objectManager = ObjectsManagerFor(context, webUtils, ddbFactory);
 
         var datasetManager = new DatasetsManager(context, webUtils, _datasetsManagerLogger, objectManager,
-            _stacManagerMock.Object, _ddbFactoryMock.Object, _authManagerMock.Object, _cacheManager, _fileSystem, _backgroundJobsProcessor, _appSettingsMock.Object, TestCaches.Summaries(_ddbFactoryMock.Object));
+            _stacManagerMock.Object, _ddbFactoryMock.Object, _authManagerMock.Object, _cacheManager, _fileSystem, _backgroundJobsProcessor, _settingsOptions, TestCaches.Summaries(_ddbFactoryMock.Object));
         var organizationsManager = new OrganizationsManager(_authManagerMock.Object, context, webUtils,
-            datasetManager, appContext, _appSettingsMock.Object, _organizationsManagerLogger);
+            datasetManager, appContext, _settingsOptions, _organizationsManagerLogger);
 
-        var shareManager = new ShareManager(_appSettingsMock.Object, _shareManagerLogger, objectManager,
+        var shareManager = new ShareManager(_settingsOptions, _shareManagerLogger, objectManager,
             datasetManager, organizationsManager, webUtils, _authManagerMock.Object,
-            new BatchTokenGenerator(_appSettingsMock.Object, _batchTokenGeneratorLogger),
-            new NameGenerator(_appSettingsMock.Object, _nameGeneratorLogger), context, _fileSystem);
+            new BatchTokenGenerator(_settingsOptions, _batchTokenGeneratorLogger),
+            new NameGenerator(_settingsOptions, _nameGeneratorLogger), context, _fileSystem);
 
         // TEST
 
@@ -523,9 +511,9 @@ class ShareManagerTest : TestBase
         await using var context = GetTest1Context();
         await using var appContext = GetAppTest1Context();
 
-        var settings = JsonConvert.DeserializeObject<AppSettings>(SettingsJson);
+        var settings = ShareSettings();
         settings.DatasetsPath = test.TestFolder;
-        _appSettingsMock.Setup(o => o.Value).Returns(settings);
+        _settingsOptions.Value = settings;
 
         _authManagerMock.Setup(o => o.IsUserAdmin()).Returns(Task.FromResult(true));
         _authManagerMock.Setup(o => o.IsOwnerOrAdmin(It.IsAny<Dataset>())).Returns(Task.FromResult(true));
@@ -566,23 +554,21 @@ class ShareManagerTest : TestBase
 
         _ddbFactoryMock.Setup(x => x.Get(It.IsAny<string>(), It.IsAny<Guid>())).Returns(ddbMock.Object);
 
-        var ddbFactory = new DdbManager(_appSettingsMock.Object, _ddbFactoryLogger, DdbWrapper);
-        var webUtils = new WebUtils(_authManagerMock.Object, context, _appSettingsMock.Object,
+        var ddbFactory = new DdbManager(_settingsOptions, _ddbFactoryLogger, DdbWrapper);
+        var webUtils = new WebUtils(_authManagerMock.Object, context, _settingsOptions,
             _httpContextAccessorMock.Object, TestCaches.Summaries(_ddbFactoryMock.Object));
 
-        var objectManager = new ObjectsManager(_objectManagerLogger, context,
-            _appSettingsMock.Object, ddbFactory, webUtils, _authManagerMock.Object, _cacheManager,
-            _fileSystem, _backgroundJobsProcessor, DdbWrapper, _thumbnailGeneratorMock.Object, _jobIndexQueryMock.Object, _buildPendingService);
+        var objectManager = ObjectsManagerFor(context, webUtils, ddbFactory);
 
         var datasetManager = new DatasetsManager(context, webUtils, _datasetsManagerLogger, objectManager,
-            _stacManagerMock.Object, _ddbFactoryMock.Object, _authManagerMock.Object, _cacheManager, _fileSystem, _backgroundJobsProcessor, _appSettingsMock.Object, TestCaches.Summaries(_ddbFactoryMock.Object));
+            _stacManagerMock.Object, _ddbFactoryMock.Object, _authManagerMock.Object, _cacheManager, _fileSystem, _backgroundJobsProcessor, _settingsOptions, TestCaches.Summaries(_ddbFactoryMock.Object));
         var organizationsManager = new OrganizationsManager(_authManagerMock.Object, context, webUtils,
-            datasetManager, appContext, _appSettingsMock.Object, _organizationsManagerLogger);
+            datasetManager, appContext, _settingsOptions, _organizationsManagerLogger);
 
-        var shareManager = new ShareManager(_appSettingsMock.Object, _shareManagerLogger, objectManager,
+        var shareManager = new ShareManager(_settingsOptions, _shareManagerLogger, objectManager,
             datasetManager, organizationsManager, webUtils, _authManagerMock.Object,
-            new BatchTokenGenerator(_appSettingsMock.Object, _batchTokenGeneratorLogger),
-            new NameGenerator(_appSettingsMock.Object, _nameGeneratorLogger), context, _fileSystem);
+            new BatchTokenGenerator(_settingsOptions, _batchTokenGeneratorLogger),
+            new NameGenerator(_settingsOptions, _nameGeneratorLogger), context, _fileSystem);
 
         // TEST
 
@@ -678,9 +664,9 @@ class ShareManagerTest : TestBase
         await using var context = GetTest1Context();
         await using var appContext = GetAppTest1Context();
 
-        var settings = JsonConvert.DeserializeObject<AppSettings>(SettingsJson);
+        var settings = ShareSettings();
         settings.DatasetsPath = test.TestFolder;
-        _appSettingsMock.Setup(o => o.Value).Returns(settings);
+        _settingsOptions.Value = settings;
 
         _authManagerMock.Setup(o => o.IsUserAdmin()).Returns(Task.FromResult(true));
         _authManagerMock.Setup(o => o.IsOwnerOrAdmin(It.IsAny<Dataset>())).Returns(Task.FromResult(true));
@@ -714,25 +700,22 @@ class ShareManagerTest : TestBase
 
         _ddbFactoryMock.Setup(x => x.Get(It.IsAny<string>(), It.IsAny<Guid>())).Returns(ddbMock.Object);
 
-        var ddbFactory = new DdbManager(_appSettingsMock.Object, _ddbFactoryLogger, DdbWrapper);
-        var webUtils = new WebUtils(_authManagerMock.Object, context, _appSettingsMock.Object,
+        var ddbFactory = new DdbManager(_settingsOptions, _ddbFactoryLogger, DdbWrapper);
+        var webUtils = new WebUtils(_authManagerMock.Object, context, _settingsOptions,
             _httpContextAccessorMock.Object, TestCaches.Summaries(_ddbFactoryMock.Object));
 
-        var objectManager = new ObjectsManager(_objectManagerLogger, context,
-            _appSettingsMock.Object, ddbFactory, webUtils, _authManagerMock.Object, _cacheManager,
-            _fileSystem, _backgroundJobsProcessor, DdbWrapper, _thumbnailGeneratorMock.Object,
-            _jobIndexQueryMock.Object, _buildPendingService);
+        var objectManager = ObjectsManagerFor(context, webUtils, ddbFactory);
 
         var datasetManager = new DatasetsManager(context, webUtils, _datasetsManagerLogger, objectManager,
             _stacManagerMock.Object, _ddbFactoryMock.Object, _authManagerMock.Object, _cacheManager, _fileSystem,
-            _backgroundJobsProcessor, _appSettingsMock.Object, TestCaches.Summaries(_ddbFactoryMock.Object));
+            _backgroundJobsProcessor, _settingsOptions, TestCaches.Summaries(_ddbFactoryMock.Object));
         var organizationsManager = new OrganizationsManager(_authManagerMock.Object, context, webUtils,
-            datasetManager, appContext, _appSettingsMock.Object, _organizationsManagerLogger);
+            datasetManager, appContext, _settingsOptions, _organizationsManagerLogger);
 
-        var shareManager = new ShareManager(_appSettingsMock.Object, _shareManagerLogger, objectManager,
+        var shareManager = new ShareManager(_settingsOptions, _shareManagerLogger, objectManager,
             datasetManager, organizationsManager, webUtils, _authManagerMock.Object,
-            new BatchTokenGenerator(_appSettingsMock.Object, _batchTokenGeneratorLogger),
-            new NameGenerator(_appSettingsMock.Object, _nameGeneratorLogger), context, _fileSystem);
+            new BatchTokenGenerator(_settingsOptions, _batchTokenGeneratorLogger),
+            new NameGenerator(_settingsOptions, _nameGeneratorLogger), context, _fileSystem);
 
         // TEST
         const string fileName = "DJI_0028.JPG";
@@ -808,9 +791,9 @@ class ShareManagerTest : TestBase
         await using var context = GetTest1Context();
         await using var appContext = GetAppTest1Context();
 
-        var settings = JsonConvert.DeserializeObject<AppSettings>(SettingsJson);
+        var settings = ShareSettings();
         settings.DatasetsPath = test.TestFolder;
-        _appSettingsMock.Setup(o => o.Value).Returns(settings);
+        _settingsOptions.Value = settings;
 
         _authManagerMock.Setup(o => o.IsUserAdmin()).Returns(Task.FromResult(true));
         _authManagerMock.Setup(o => o.IsOwnerOrAdmin(It.IsAny<Dataset>())).Returns(Task.FromResult(true));
@@ -848,23 +831,21 @@ class ShareManagerTest : TestBase
 
         _ddbFactoryMock.Setup(x => x.Get(It.IsAny<string>(), It.IsAny<Guid>())).Returns(ddbMock.Object);
 
-        var ddbFactory = new DdbManager(_appSettingsMock.Object, _ddbFactoryLogger, DdbWrapper);
-        var webUtils = new WebUtils(_authManagerMock.Object, context, _appSettingsMock.Object,
+        var ddbFactory = new DdbManager(_settingsOptions, _ddbFactoryLogger, DdbWrapper);
+        var webUtils = new WebUtils(_authManagerMock.Object, context, _settingsOptions,
             _httpContextAccessorMock.Object, TestCaches.Summaries(_ddbFactoryMock.Object));
 
-        var objectManager = new ObjectsManager(_objectManagerLogger, context,
-            _appSettingsMock.Object, ddbFactory, webUtils, _authManagerMock.Object, _cacheManager,
-            _fileSystem, _backgroundJobsProcessor, DdbWrapper, _thumbnailGeneratorMock.Object, _jobIndexQueryMock.Object, _buildPendingService);
+        var objectManager = ObjectsManagerFor(context, webUtils, ddbFactory);
 
         var datasetManager = new DatasetsManager(context, webUtils, _datasetsManagerLogger, objectManager,
-            _stacManagerMock.Object, _ddbFactoryMock.Object, _authManagerMock.Object, _cacheManager, _fileSystem, _backgroundJobsProcessor, _appSettingsMock.Object, TestCaches.Summaries(_ddbFactoryMock.Object));
+            _stacManagerMock.Object, _ddbFactoryMock.Object, _authManagerMock.Object, _cacheManager, _fileSystem, _backgroundJobsProcessor, _settingsOptions, TestCaches.Summaries(_ddbFactoryMock.Object));
         var organizationsManager = new OrganizationsManager(_authManagerMock.Object, context, webUtils,
-            datasetManager, appContext, _appSettingsMock.Object, _organizationsManagerLogger);
+            datasetManager, appContext, _settingsOptions, _organizationsManagerLogger);
 
-        var shareManager = new ShareManager(_appSettingsMock.Object, _shareManagerLogger, objectManager,
+        var shareManager = new ShareManager(_settingsOptions, _shareManagerLogger, objectManager,
             datasetManager, organizationsManager, webUtils, _authManagerMock.Object,
-            new BatchTokenGenerator(_appSettingsMock.Object, _batchTokenGeneratorLogger),
-            new NameGenerator(_appSettingsMock.Object, _nameGeneratorLogger), context, _fileSystem);
+            new BatchTokenGenerator(_settingsOptions, _batchTokenGeneratorLogger),
+            new NameGenerator(_settingsOptions, _nameGeneratorLogger), context, _fileSystem);
 
         // TEST
 
@@ -984,29 +965,33 @@ class ShareManagerTest : TestBase
 
     #region Test Data
 
-    private const string SettingsJson = @"{
-    ""Secret"": ""a2780070a24cfcaf5a4a43f931200ba0d19d8b86b3a7bd5123d9ad75b125f480fcce1f9b7f41a53abe2ba8456bd142d38c455302e0081e5139bc3fc9bf614497"",
-    ""TokenExpirationInDays"": 7,
-    ""RevokedTokens"": [
-      """"
-    ],
-    ""AuthProvider"": ""Sqlite"",
-    ""RegistryProvider"": ""Sqlite"",
-    ""DefaultAdmin"": {
-      ""Email"": ""admin@example.com"",
-      ""UserName"": ""admin"",
-      ""Password"": ""password""
-    },
-    ""StoragePath"": ""./Data/Ddb"",
-    ""TempPath"": ""./temp"",
-    ""DdbPath"": """",
-    ""MaxUploadChunkSize"": 512000,
-    ""MaxRequestBodySize"": 52428800,
-    ""BatchTokenLength"": 32,
-    ""RandomDatasetNameLength"": 16,
-    ""CachePath"": ""./cache""
-}
-  ";
+    // The manager-test defaults plus the share/batch settings these tests exercise.
+    private static AppSettings ShareSettings() => TestSettings.Create(s =>
+    {
+        s.StoragePath = "./Data/Ddb";
+        s.MaxRequestBodySize = 52428800;
+        s.BatchTokenLength = 32;
+        s.RandomDatasetNameLength = 16;
+        s.CachePath = "./cache";
+    });
+
+    #endregion
+
+    #region SUT factories
+
+    private ObjectsManager ObjectsManagerFor(RegistryContext context, IUtils utils, IDdbManager ddbManager) =>
+        new ObjectsManagerBuilder(context)
+            .WithLogger(_objectManagerLogger)
+            .WithSettings(_settingsOptions)
+            .WithDdbManager(ddbManager)
+            .WithUtils(utils)
+            .WithAuthManager(_authManagerMock.Object)
+            .WithCacheManager(_cacheManager)
+            .WithFileSystem(_fileSystem)
+            .WithBackgroundJobs(_backgroundJobsProcessor)
+            .WithDdbWrapper(DdbWrapper)
+            .WithBuildPendingService(_buildPendingService)
+            .Build();
 
     #endregion
 
@@ -1017,28 +1002,7 @@ class ShareManagerTest : TestBase
         // Insert seed data into the database using one instance of the context
         return TestDb.CreateContext<RegistryContext>(context =>
         {
-            var entity = new Organization
-            {
-                Slug = MagicStrings.PublicOrganizationSlug,
-                Name = "Public",
-                CreationDate = DateTime.Now,
-                Description = "Public organization",
-                IsPublic = true,
-                OwnerId = null
-            };
-            var ds = new Dataset
-            {
-                Slug = MagicStrings.DefaultDatasetSlug,
-                //Name = "Default",
-                //IsPublic = true,
-                CreationDate = DateTime.Now,
-                //LastUpdate = DateTime.Now,
-                InternalRef = Guid.Parse("0a223495-84a0-4c15-b425-c7ef88110e75")
-            };
-
-            entity.Datasets = new List<Dataset> { ds };
-
-            context.Organizations.Add(entity);
+            Seed.PublicDefaultDataset(context);
 
             context.SaveChanges();
         });

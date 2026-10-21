@@ -4,7 +4,6 @@ using System.Threading;
 using NUnit.Framework;
 using Registry.Adapters.DroneDB;
 using Registry.Common;
-using Registry.Common.Test;
 using Registry.Ports;
 using Registry.Test.Common;
 using Shouldly;

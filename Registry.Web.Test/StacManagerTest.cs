@@ -33,7 +33,7 @@ namespace Registry.Web.Test;
 public class StacManagerTest : TestBase
 {
     private Mock<IAuthManager> _authManagerMock;
-    private Mock<IOptions<AppSettings>> _appSettingsMock;
+    private MutableOptions<AppSettings> _settingsOptions;
     private Mock<IDatasetsManager> _datasetManagerMock;
     private ILogger<StacManager> _stacManagerLogger;
     private Mock<IHttpContextAccessor> _httpContextAccessorMock;
@@ -42,7 +42,7 @@ public class StacManagerTest : TestBase
     [SetUp]
     public void Setup()
     {
-        _appSettingsMock = new Mock<IOptions<AppSettings>>();
+        _settingsOptions = TestSettings.Mutable();
         _authManagerMock = new Mock<IAuthManager>();
         _datasetManagerMock = new Mock<IDatasetsManager>();
         _httpContextAccessorMock = new Mock<IHttpContextAccessor>();
@@ -60,7 +60,7 @@ public class StacManagerTest : TestBase
         const string datasetStacUrl = "http://localhost/orgs/public/ds/default/stac/catalog.json";
         const string expectedName = "Default";
 
-        _appSettingsMock.Setup(o => o.Value).Returns(_settings);
+        _settingsOptions.Value = _settings;
 
         var utilsMock = new Mock<IUtils>();
         utilsMock.Setup(o => o.GenerateStacUrl()).Returns(stacUrl);
@@ -218,17 +218,9 @@ public class StacManagerTest : TestBase
     {
         return TestDb.CreateContext<RegistryContext>(context =>
         {
-            context.Organizations.Add(new Organization
-            {
-                Slug = MagicStrings.PublicOrganizationSlug,
-                Name = "Public",
-                CreationDate = DateTime.Now,
-                IsPublic = true,
-                Datasets = slugs.Select(s => new Dataset
-                {
-                    Slug = s, CreationDate = DateTime.Now, InternalRef = Guid.NewGuid()
-                }).ToList()
-            });
+            var organization = Seed.Organization(context, MagicStrings.PublicOrganizationSlug, "Public", isPublic: true);
+            foreach (var slug in slugs)
+                Seed.Dataset(context, organization, slug);
             context.SaveChanges();
         });
     }
@@ -236,29 +228,7 @@ public class StacManagerTest : TestBase
 
     #region Test Data
 
-    private readonly AppSettings _settings = JsonConvert.DeserializeObject<AppSettings>(@"{
-    ""Secret"": ""a2780070a24cfcaf5a4a43f931200ba0d19d8b86b3a7bd5123d9ad75b125f480fcce1f9b7f41a53abe2ba8456bd142d38c455302e0081e5139bc3fc9bf614497"",
-    ""TokenExpirationInDays"": 7,
-    ""RevokedTokens"": [
-      """"
-    ],
-    ""AuthProvider"": ""Sqlite"",
-    ""RegistryProvider"": ""Sqlite"",
-    ""StorageProvider"": {
-      ""type"": ""Physical"",
-      ""settings"": {
-        ""path"": ""./temp""
-      }
-    },
-    ""DefaultAdmin"": {
-      ""Email"": ""admin@example.com"",
-      ""UserName"": ""admin"",
-      ""Password"": ""password""
-    },
-    ""DdbStoragePath"": ""./Data/Ddb"",
-    ""TempPath"": ""./temp"",
-    ""DdbPath"": ""./ddb""}
-  ");
+    private readonly AppSettings _settings = TestSettings.Default;
 
     #endregion
 
@@ -269,27 +239,7 @@ public class StacManagerTest : TestBase
         // Insert seed data into the database using one instance of the context
         return TestDb.CreateContext<RegistryContext>(context =>
         {
-            var entity = new Organization
-            {
-                Slug = MagicStrings.PublicOrganizationSlug,
-                Name = "Public",
-                CreationDate = DateTime.Now,
-                Description = "Public organization",
-                IsPublic = true,
-                OwnerId = null
-            };
-            var ds = new Dataset
-            {
-                Slug = MagicStrings.DefaultDatasetSlug,
-                //Name = "Default",
-                //IsPublic = true,
-                CreationDate = DateTime.Now,
-                //LastUpdate = DateTime.Now,
-                InternalRef = Guid.Parse("0a223495-84a0-4c15-b425-c7ef88110e75")
-            };
-            entity.Datasets = new List<Dataset> { ds };
-
-            context.Organizations.Add(entity);
+            Seed.PublicDefaultDataset(context);
 
             context.SaveChanges();
         });

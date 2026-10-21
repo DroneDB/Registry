@@ -44,7 +44,7 @@ public class ObjectsManagerThumbnailTests : TestBase
     private Mock<IDdbWrapper> _ddbWrapperMock = null!;
     private Mock<IThumbnailGenerator> _thumbsMock = null!;
     private Mock<IJobIndexQuery> _jobIndexQueryMock = null!;
-    private Mock<IOptions<AppSettings>> _appSettingsMock = null!;
+    private IOptions<AppSettings> _settingsOptions = null!;
     private Mock<IDDB> _ddbMock = null!;
     private ILogger<ObjectsManager> _logger = null!;
 
@@ -68,10 +68,8 @@ public class ObjectsManagerThumbnailTests : TestBase
         _ddbWrapperMock = new Mock<IDdbWrapper>();
         _thumbsMock = new Mock<IThumbnailGenerator>();
         _jobIndexQueryMock = new Mock<IJobIndexQuery>();
-        _appSettingsMock = new Mock<IOptions<AppSettings>>();
 
-        var settings = new AppSettings { DatasetsPath = "/tmp/datasets", DefaultThumbnailSize = 128 };
-        _appSettingsMock.Setup(o => o.Value).Returns(settings);
+        _settingsOptions = TestSettings.Options(new AppSettings { DatasetsPath = "/tmp/datasets", DefaultThumbnailSize = 128 });
         _logger = CreateTestLogger<ObjectsManager>();
 
         _ddbWrapperMock.SetupGet(w => w.ThumbnailMimeType).Returns("image/webp");
@@ -108,27 +106,21 @@ public class ObjectsManagerThumbnailTests : TestBase
             .Returns(Task.CompletedTask);
     }
 
-    private ObjectsManager CreateManager()
-    {
-        var ctx = TestDb.CreateContext<RegistryContext>();
-        var buildPending = new BuildPendingService(
-            ctx, _ddbManagerMock.Object, _backgroundJobMock.Object,
-            _cacheManagerMock.Object, Mock.Of<ILogger<BuildPendingService>>());
-        return new ObjectsManager(
-            _logger,
-            ctx,
-            _appSettingsMock.Object,
-            _ddbManagerMock.Object,
-            _utilsMock.Object,
-            _authManagerMock.Object,
-            _cacheManagerMock.Object,
-            _fsMock.Object,
-            _backgroundJobMock.Object,
-            _ddbWrapperMock.Object,
-            _thumbsMock.Object,
-            _jobIndexQueryMock.Object,
-            buildPending);
-    }
+    // The build-pending service is the builder default: a real one on the SUT context and these mocks.
+    private ObjectsManager CreateManager() =>
+        new ObjectsManagerBuilder(TestDb.CreateContext<RegistryContext>())
+            .WithLogger(_logger)
+            .WithSettings(_settingsOptions)
+            .WithDdbManager(_ddbManagerMock.Object)
+            .WithUtils(_utilsMock.Object)
+            .WithAuthManager(_authManagerMock.Object)
+            .WithCacheManager(_cacheManagerMock.Object)
+            .WithFileSystem(_fsMock.Object)
+            .WithBackgroundJobs(_backgroundJobMock.Object)
+            .WithDdbWrapper(_ddbWrapperMock.Object)
+            .WithThumbnailGenerator(_thumbsMock.Object)
+            .WithJobIndexQuery(_jobIndexQueryMock.Object)
+            .Build();
 
     private void SetupEntry(string path, EntryType type, string hash)
     {

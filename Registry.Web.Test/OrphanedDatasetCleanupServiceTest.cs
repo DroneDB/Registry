@@ -21,14 +21,14 @@ namespace Registry.Web.Test;
 [TestFixture]
 public class OrphanedDatasetCleanupServiceTest : TestBase
 {
-    private Mock<IOptions<AppSettings>> _appSettingsMock;
+    private MutableOptions<AppSettings> _settingsOptions;
     private ILogger<OrphanedDatasetCleanupService> _logger;
     private string _testDatasetsPath;
 
     [SetUp]
     public void Setup()
     {
-        _appSettingsMock = new Mock<IOptions<AppSettings>>();
+        _settingsOptions = TestSettings.Mutable();
         _logger = CreateTestLogger<OrphanedDatasetCleanupService>();
         _testDatasetsPath = Path.Combine(Path.GetTempPath(), "orphaned-cleanup-test-" + Guid.NewGuid());
         Directory.CreateDirectory(_testDatasetsPath);
@@ -65,9 +65,9 @@ public class OrphanedDatasetCleanupServiceTest : TestBase
 
         await using var context = GetContextWithDataset(orgSlug, internalRef);
 
-        _appSettingsMock.Setup(x => x.Value).Returns(new AppSettings { DatasetsPath = _testDatasetsPath });
+        _settingsOptions.Value = new AppSettings { DatasetsPath = _testDatasetsPath };
 
-        var service = new OrphanedDatasetCleanupService(context, _appSettingsMock.Object, _logger);
+        var service = new OrphanedDatasetCleanupService(context, _settingsOptions, _logger);
 
         // Act
         await service.CleanupOrphanedFoldersAsync(null);
@@ -97,9 +97,9 @@ public class OrphanedDatasetCleanupServiceTest : TestBase
         // Only the valid dataset is in DB
         await using var context = GetContextWithDataset(orgSlug, validRef);
 
-        _appSettingsMock.Setup(x => x.Value).Returns(new AppSettings { DatasetsPath = _testDatasetsPath });
+        _settingsOptions.Value = new AppSettings { DatasetsPath = _testDatasetsPath };
 
-        var service = new OrphanedDatasetCleanupService(context, _appSettingsMock.Object, _logger);
+        var service = new OrphanedDatasetCleanupService(context, _settingsOptions, _logger);
 
         // Act
         await service.CleanupOrphanedFoldersAsync(null);
@@ -115,9 +115,9 @@ public class OrphanedDatasetCleanupServiceTest : TestBase
         // Arrange
         await using var context = GetEmptyContext();
 
-        _appSettingsMock.Setup(x => x.Value).Returns(new AppSettings { DatasetsPath = "" });
+        _settingsOptions.Value = new AppSettings { DatasetsPath = "" };
 
-        var service = new OrphanedDatasetCleanupService(context, _appSettingsMock.Object, _logger);
+        var service = new OrphanedDatasetCleanupService(context, _settingsOptions, _logger);
 
         // Act & Assert - Should not throw
         await Should.NotThrowAsync(async () => await service.CleanupOrphanedFoldersAsync(null));
@@ -129,9 +129,9 @@ public class OrphanedDatasetCleanupServiceTest : TestBase
         // Arrange
         await using var context = GetEmptyContext();
 
-        _appSettingsMock.Setup(x => x.Value).Returns(new AppSettings { DatasetsPath = "/non/existent/path" });
+        _settingsOptions.Value = new AppSettings { DatasetsPath = "/non/existent/path" };
 
-        var service = new OrphanedDatasetCleanupService(context, _appSettingsMock.Object, _logger);
+        var service = new OrphanedDatasetCleanupService(context, _settingsOptions, _logger);
 
         // Act & Assert - Should not throw
         await Should.NotThrowAsync(async () => await service.CleanupOrphanedFoldersAsync(null));
@@ -150,9 +150,9 @@ public class OrphanedDatasetCleanupServiceTest : TestBase
 
         await using var context = GetEmptyContext();
 
-        _appSettingsMock.Setup(x => x.Value).Returns(new AppSettings { DatasetsPath = _testDatasetsPath });
+        _settingsOptions.Value = new AppSettings { DatasetsPath = _testDatasetsPath };
 
-        var service = new OrphanedDatasetCleanupService(context, _appSettingsMock.Object, _logger);
+        var service = new OrphanedDatasetCleanupService(context, _settingsOptions, _logger);
 
         // Act
         await service.CleanupOrphanedFoldersAsync(null);
@@ -174,9 +174,9 @@ public class OrphanedDatasetCleanupServiceTest : TestBase
         // No datasets in DB for this org
         await using var context = GetEmptyContext();
 
-        _appSettingsMock.Setup(x => x.Value).Returns(new AppSettings { DatasetsPath = _testDatasetsPath });
+        _settingsOptions.Value = new AppSettings { DatasetsPath = _testDatasetsPath };
 
-        var service = new OrphanedDatasetCleanupService(context, _appSettingsMock.Object, _logger);
+        var service = new OrphanedDatasetCleanupService(context, _settingsOptions, _logger);
 
         // Act
         await service.CleanupOrphanedFoldersAsync(null);
@@ -203,9 +203,9 @@ public class OrphanedDatasetCleanupServiceTest : TestBase
         // Only one dataset is in DB
         await using var context = GetContextWithDataset(org1, validRef1);
 
-        _appSettingsMock.Setup(x => x.Value).Returns(new AppSettings { DatasetsPath = _testDatasetsPath });
+        _settingsOptions.Value = new AppSettings { DatasetsPath = _testDatasetsPath };
 
-        var service = new OrphanedDatasetCleanupService(context, _appSettingsMock.Object, _logger);
+        var service = new OrphanedDatasetCleanupService(context, _settingsOptions, _logger);
 
         // Act
         await service.CleanupOrphanedFoldersAsync(null);

@@ -90,8 +90,7 @@ public class RetryEndpointTest : IDisposable
         var writer = new JobIndexWriter(_db, new Mock<ILogger<JobIndexWriter>>().Object,
             new Mock<IDistributedCache>().Object);
 
-        var appSettings = new Mock<IOptions<AppSettings>>();
-        appSettings.SetupGet(x => x.Value).Returns(new AppSettings { TempPath = Path.GetTempPath() });
+        var appSettings = TestSettings.Options(new AppSettings { TempPath = Path.GetTempPath() });
 
         _manager = new TasksManager(
             new Mock<IHeavyTaskRunner>().Object,
@@ -105,7 +104,7 @@ public class RetryEndpointTest : IDisposable
             ddbManager.Object,
             new Mock<IDistributedCache>().Object,
             new Mock<IHttpContextAccessor>().Object,
-            appSettings.Object,
+            appSettings,
             new Mock<ILogger<TasksManager>>().Object);
     }
 
