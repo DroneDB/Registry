@@ -140,6 +140,14 @@ metrics() {
     m "IsUserAdmin() guard + throw blocks"           "$(prod Registry.Web/Services |
         multiline 'if \(!await _authManager\.IsUserAdmin\(\)\)\s*\n\s*throw new')"
     m "Sync _utils.GetDataset/GetOrganization calls" "$(prod Registry.Web | lines '_utils\.(GetDataset|GetOrganization)\(')"
+    m "RequestAccess + throw blocks (any form)"      "$(prod Registry.Web |
+        multiline 'RequestAccess\([^;]*\)\)\s*\n\s*throw new (Unauthorized|Forbidden)Exception\(')"
+    m "RequestAccess calls in controllers"           "$(prod Registry.Web/Controllers | lines '\.RequestAccess\(')"
+    m "IsUserAdmin() + throw (any form)"             "$(prod Registry.Web |
+        multiline 'IsUserAdmin\(\)\)?[^;{\n]*\n(\s*[^;{\n]*\n)?\s*throw new')"
+    m "Sync IUtils lookups (any receiver)"           "$(prod Registry.Web | lines '\b\w*[Uu]tils\.(GetDataset|GetOrganization)\(')"
+    m "Raster prologue copies (EnsurePathValidity)"  "$(prod Registry.Web | lines '= EnsurePathValidity\(')"
+    m "new OrganizationUser in managers"             "$(prod Registry.Web/Services/Managers | lines 'new OrganizationUser\b')"
 
     # Composition root (RQ-07)
     m "GetService/GetRequiredService calls"          "$(prod '' | lines 'Get(Required)?Service<')"

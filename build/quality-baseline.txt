@@ -28,6 +28,12 @@ Web files importing Registry.Adapters	6
 RequestAccess + throw blocks	79
 IsUserAdmin() guard + throw blocks	30
 Sync _utils.GetDataset/GetOrganization calls	100
+RequestAccess + throw blocks (any form)	83
+RequestAccess calls in controllers	2
+IsUserAdmin() + throw (any form)	32
+Sync IUtils lookups (any receiver)	102
+Raster prologue copies (EnsurePathValidity)	15
+new OrganizationUser in managers	4
 GetService/GetRequiredService calls	79
 Console.Write* in Program+Startup	37
 .Wait() calls	2
