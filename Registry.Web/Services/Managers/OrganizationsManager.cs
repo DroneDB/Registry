@@ -26,6 +26,7 @@ public class OrganizationsManager : IOrganizationsManager
 {
     private readonly IAuthManager _authManager;
     private readonly IDatasetAccessResolver _access;
+    private readonly IOrganizationMembershipService _memberships;
     private readonly RegistryContext _context;
     private readonly IUtils _utils;
     private readonly IDatasetsManager _datasetManager;
@@ -41,7 +42,8 @@ public class OrganizationsManager : IOrganizationsManager
         IDatasetsManager datasetManager,
         ApplicationDbContext appContext,
         IOptions<AppSettings> appSettings,
-        ILogger<OrganizationsManager> logger)
+        ILogger<OrganizationsManager> logger,
+        IOrganizationMembershipService memberships)
     {
         _authManager = authManager;
         _access = access;
@@ -51,6 +53,7 @@ public class OrganizationsManager : IOrganizationsManager
         _appContext = appContext;
         _appSettings = appSettings;
         _logger = logger;
+        _memberships = memberships;
     }
 
     public async Task<IEnumerable<OrganizationDto>> List(bool ownedOnly = false)
@@ -527,12 +530,7 @@ public class OrganizationsManager : IOrganizationsManager
     // check comes before the feature check, so an anonymous caller gets 401 and a stranger 403 (D2)
     private async Task<(Organization Org, User CurrentUser)> GetOrganizationToManageMembers(string orgSlug)
     {
-        var org = await _context.Organizations
-            .Include(o => o.Users)
-            .FirstOrDefaultAsync(o => o.Slug == orgSlug);
-
-        if (org == null)
-            throw new NotFoundException($"Organization '{orgSlug}' not found");
+        var org = await _memberships.GetWithMembersAsync(orgSlug);
 
         var currentUser = await _authManager.GetCurrentUser();
         if (!await CanManageMembers(org, currentUser))
@@ -547,78 +545,19 @@ public class OrganizationsManager : IOrganizationsManager
     public async Task AddMember(string orgSlug, string userName, OrganizationPermissions permissions = OrganizationPermissions.ReadWrite)
     {
         var (org, currentUser) = await GetOrganizationToManageMembers(orgSlug);
-
-        // Check if user exists
-        var userToAdd = await _appContext.Users.FirstOrDefaultAsync(u => u.UserName == userName);
-        if (userToAdd == null)
-            throw new NotFoundException($"User '{userName}' not found");
-
-        // Check if already a member
-        if (org.Users?.Any(u => u.UserId == userToAdd.Id) == true)
-            throw new ConflictException("User is already a member of this organization");
-
-        // Cannot add owner as member
-        if (org.OwnerId == userToAdd.Id)
-            throw new BadRequestException("Cannot add owner as a member");
-
-        var orgUser = new OrganizationUser
-        {
-            OrganizationSlug = orgSlug,
-            UserId = userToAdd.Id,
-            Permissions = permissions,
-            GrantedAt = DateTime.UtcNow,
-            GrantedBy = currentUser?.Id
-        };
-
-        _context.Set<OrganizationUser>().Add(orgUser);
-        await _context.SaveChangesAsync();
-
-        _logger.LogInformation("User {UserName} added to organization {OrgSlug} with permission {Permission} by {GrantedBy}",
-            userName, orgSlug, permissions, currentUser?.UserName);
+        await _memberships.AddAsync(org, userName, permissions, currentUser);
     }
 
     public async Task UpdateMemberPermission(string orgSlug, string userName, OrganizationPermissions permission)
     {
         var (org, currentUser) = await GetOrganizationToManageMembers(orgSlug);
-
-        // Find user by userName
-        var user = await _appContext.Users.FirstOrDefaultAsync(u => u.UserName == userName);
-        if (user == null)
-            throw new NotFoundException($"User '{userName}' not found");
-
-        var orgUser = org.Users?.FirstOrDefault(u => u.UserId == user.Id);
-        if (orgUser == null)
-            throw new NotFoundException("User is not a member of this organization");
-
-        var oldPermission = orgUser.Permissions;
-        orgUser.Permissions = permission;
-        orgUser.GrantedAt = DateTime.UtcNow;
-        orgUser.GrantedBy = currentUser?.Id;
-
-        await _context.SaveChangesAsync();
-
-        _logger.LogInformation("User {UserName} permission in organization {OrgSlug} changed from {OldPermission} to {NewPermission} by {ChangedBy}",
-            userName, orgSlug, oldPermission, permission, currentUser?.UserName);
+        await _memberships.UpdateAsync(org, userName, permission, currentUser);
     }
 
     public async Task RemoveMember(string orgSlug, string userName)
     {
         var (org, currentUser) = await GetOrganizationToManageMembers(orgSlug);
-
-        // Find user by userName
-        var user = await _appContext.Users.FirstOrDefaultAsync(u => u.UserName == userName);
-        if (user == null)
-            throw new NotFoundException($"User '{userName}' not found");
-
-        var orgUser = org.Users?.FirstOrDefault(u => u.UserId == user.Id);
-        if (orgUser == null)
-            throw new NotFoundException("User is not a member of this organization");
-
-        _context.Set<OrganizationUser>().Remove(orgUser);
-        await _context.SaveChangesAsync();
-
-        _logger.LogInformation("User {UserName} removed from organization {OrgSlug} by {RemovedBy}",
-            userName, orgSlug, currentUser?.UserName);
+        await _memberships.RemoveAsync(org, userName, currentUser);
     }
 
     private async Task<bool> CanManageMembers(Organization org, User user)

@@ -4,6 +4,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Moq;
+using Microsoft.Extensions.Logging.Abstractions;
 using NUnit.Framework;
 using Registry.Common;
 using Registry.Ports;
@@ -107,13 +108,13 @@ public class PermissionMatrixTest : TestBase
 
     private async Task SetupUsers()
     {
-        _ownerUser = new User { Id = "owner-id", UserName = "owner", Email = "owner@test.com" };
-        _nonMemberUser = new User { Id = "nonmember-id", UserName = "nonmember", Email = "nonmember@test.com" };
-        _readOnlyMember = new User { Id = "readonly-id", UserName = "readonly", Email = "readonly@test.com" };
-        _readWriteMember = new User { Id = "readwrite-id", UserName = "readwrite", Email = "readwrite@test.com" };
-        _readWriteDeleteMember = new User { Id = "rwdelete-id", UserName = "rwdelete", Email = "rwdelete@test.com" };
-        _adminMember = new User { Id = "adminmember-id", UserName = "adminmember", Email = "adminmember@test.com" };
-        _systemAdminUser = new User { Id = "sysadmin-id", UserName = "sysadmin", Email = "sysadmin@test.com" };
+        _ownerUser = new User { Id = "owner-id", UserName = "owner", NormalizedUserName = "owner".ToUpperInvariant(), Email = "owner@test.com" };
+        _nonMemberUser = new User { Id = "nonmember-id", UserName = "nonmember", NormalizedUserName = "nonmember".ToUpperInvariant(), Email = "nonmember@test.com" };
+        _readOnlyMember = new User { Id = "readonly-id", UserName = "readonly", NormalizedUserName = "readonly".ToUpperInvariant(), Email = "readonly@test.com" };
+        _readWriteMember = new User { Id = "readwrite-id", UserName = "readwrite", NormalizedUserName = "readwrite".ToUpperInvariant(), Email = "readwrite@test.com" };
+        _readWriteDeleteMember = new User { Id = "rwdelete-id", UserName = "rwdelete", NormalizedUserName = "rwdelete".ToUpperInvariant(), Email = "rwdelete@test.com" };
+        _adminMember = new User { Id = "adminmember-id", UserName = "adminmember", NormalizedUserName = "adminmember".ToUpperInvariant(), Email = "adminmember@test.com" };
+        _systemAdminUser = new User { Id = "sysadmin-id", UserName = "sysadmin", NormalizedUserName = "sysadmin".ToUpperInvariant(), Email = "sysadmin@test.com" };
         _deactivatedMember = new User
             { Id = "deactivated-id", UserName = "deactivated", Email = "deactivated@test.com" };
         _deactivatedOwner = new User
@@ -1191,7 +1192,9 @@ public class PermissionMatrixTest : TestBase
             _datasetManagerMock.Object,
             _appContext,
             _settingsOptions,
-            logger);
+            logger,
+            new OrganizationMembershipService(_context, _appContext, new UpperInvariantLookupNormalizer(),
+                NullLogger<OrganizationMembershipService>.Instance));
     }
 
     private void SetupManagerAsUser(User user)
@@ -1239,7 +1242,7 @@ public class PermissionMatrixTest : TestBase
     [Test]
     public async Task Manager_AddMember_AsAdminMember_Succeeds()
     {
-        var newUser = new User { Id = "brand-new-user-id", UserName = "brandnewuser", Email = "brandnew@test.com" };
+        var newUser = new User { Id = "brand-new-user-id", UserName = "brandnewuser", NormalizedUserName = "brandnewuser".ToUpperInvariant(), Email = "brandnew@test.com" };
         _appContext.Users.Add(newUser);
         await _appContext.SaveChangesAsync();
 
@@ -1258,7 +1261,7 @@ public class PermissionMatrixTest : TestBase
     [Test]
     public async Task Manager_AddMember_AsOwner_Succeeds()
     {
-        var newUser = new User { Id = "owner-adds-user-id", UserName = "owneraddsuser", Email = "owneradds@test.com" };
+        var newUser = new User { Id = "owner-adds-user-id", UserName = "owneraddsuser", NormalizedUserName = "owneraddsuser".ToUpperInvariant(), Email = "owneradds@test.com" };
         _appContext.Users.Add(newUser);
         await _appContext.SaveChangesAsync();
 
@@ -1277,7 +1280,7 @@ public class PermissionMatrixTest : TestBase
     [Test]
     public async Task Manager_AddMember_AsSystemAdmin_Succeeds()
     {
-        var newUser = new User { Id = "sysadmin-adds-id", UserName = "sysadminadds", Email = "sysadminadds@test.com" };
+        var newUser = new User { Id = "sysadmin-adds-id", UserName = "sysadminadds", NormalizedUserName = "sysadminadds".ToUpperInvariant(), Email = "sysadminadds@test.com" };
         _appContext.Users.Add(newUser);
         await _appContext.SaveChangesAsync();
 
@@ -1383,7 +1386,7 @@ public class PermissionMatrixTest : TestBase
     public async Task Manager_RemoveMember_AsAdminMember_Succeeds()
     {
         // Add a temporary member to remove
-        var tempUser = new User { Id = "temp-remove-id", UserName = "tempremove", Email = "tempremove@test.com" };
+        var tempUser = new User { Id = "temp-remove-id", UserName = "tempremove", NormalizedUserName = "tempremove".ToUpperInvariant(), Email = "tempremove@test.com" };
         _appContext.Users.Add(tempUser);
         await _appContext.SaveChangesAsync();
         _context.Set<OrganizationUser>().Add(new OrganizationUser
@@ -1486,7 +1489,7 @@ public class PermissionMatrixTest : TestBase
     public async Task DsAccess_RemovedMember_LosesAccess_ToPrivateDataset()
     {
         // A user who was a member but got removed should not have access
-        var exMember = new User { Id = "ex-member-id", UserName = "exmember", Email = "exmember@test.com" };
+        var exMember = new User { Id = "ex-member-id", UserName = "exmember", NormalizedUserName = "exmember".ToUpperInvariant(), Email = "exmember@test.com" };
         _appContext.Users.Add(exMember);
         await _appContext.SaveChangesAsync();
         _userManagerMock.Setup(x => x.FindByIdAsync(exMember.Id)).ReturnsAsync(exMember);

@@ -5,6 +5,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Moq;
+using Microsoft.Extensions.Logging.Abstractions;
 using NUnit.Framework;
 using Registry.Ports;
 using Registry.Test.Common;
@@ -104,7 +105,9 @@ public class UsersManagerTest : TestBase
             _webUtils,
             _logger,
             _context,
-            _passwordPolicyValidatorMock.Object);
+            _passwordPolicyValidatorMock.Object,
+            new OrganizationMembershipService(_context, _appContext, new UpperInvariantLookupNormalizer(),
+                NullLogger<OrganizationMembershipService>.Instance));
     }
 
     [TearDown]

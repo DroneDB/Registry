@@ -4,6 +4,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Moq;
+using Microsoft.Extensions.Logging.Abstractions;
 using NUnit.Framework;
 using Registry.Common;
 using Registry.Web.Data;
@@ -72,7 +73,9 @@ public class OrganizationManagerTest : TestBase
             _datasetManagerMock.Object,
             _appContext,
             _settingsOptions,
-            _logger);
+            _logger,
+            new OrganizationMembershipService(_context, _appContext, new UpperInvariantLookupNormalizer(),
+                NullLogger<OrganizationMembershipService>.Instance));
     }
 
     [TearDown]
@@ -149,7 +152,7 @@ public class OrganizationManagerTest : TestBase
 
     private async Task<User> AddUser(string id, string userName)
     {
-        var user = new User { Id = id, UserName = userName, Email = $"{userName}@example.com" };
+        var user = new User { Id = id, UserName = userName, NormalizedUserName = userName.ToUpperInvariant(), Email = $"{userName}@example.com" };
         await _appContext.Users.AddAsync(user);
         await _appContext.SaveChangesAsync();
         return user;

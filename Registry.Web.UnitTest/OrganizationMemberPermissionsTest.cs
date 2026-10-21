@@ -3,6 +3,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Moq;
+using Microsoft.Extensions.Logging.Abstractions;
 using NUnit.Framework;
 using Registry.Ports;
 using Registry.Web.Services.Adapters;
@@ -70,10 +71,10 @@ public class OrganizationMemberPermissionsTest : TestBase
     private async Task SetupTestData()
     {
         // Create users
-        _adminUser = new User { Id = "admin-id", UserName = "admin", Email = "admin@test.com" };
-        _ownerUser = new User { Id = "owner-id", UserName = "owner", Email = "owner@test.com" };
-        _memberUser = new User { Id = "member-id", UserName = "member", Email = "member@test.com" };
-        _readOnlyUser = new User { Id = "readonly-id", UserName = "readonly", Email = "readonly@test.com" };
+        _adminUser = new User { Id = "admin-id", UserName = "admin", NormalizedUserName = "admin".ToUpperInvariant(), Email = "admin@test.com" };
+        _ownerUser = new User { Id = "owner-id", UserName = "owner", NormalizedUserName = "owner".ToUpperInvariant(), Email = "owner@test.com" };
+        _memberUser = new User { Id = "member-id", UserName = "member", NormalizedUserName = "member".ToUpperInvariant(), Email = "member@test.com" };
+        _readOnlyUser = new User { Id = "readonly-id", UserName = "readonly", NormalizedUserName = "readonly".ToUpperInvariant(), Email = "readonly@test.com" };
 
         _appContext.Users.AddRange(_adminUser, _ownerUser, _memberUser, _readOnlyUser);
         await _appContext.SaveChangesAsync();
@@ -230,7 +231,7 @@ public class OrganizationMemberPermissionsTest : TestBase
     [Test]
     public async Task AddMember_AsOwner_Succeeds()
     {
-        var newUser = new User { Id = "new-user-id", UserName = "newuser", Email = "new@test.com" };
+        var newUser = new User { Id = "new-user-id", UserName = "newuser", NormalizedUserName = "newuser".ToUpperInvariant(), Email = "new@test.com" };
         _appContext.Users.Add(newUser);
         await _appContext.SaveChangesAsync();
 
@@ -414,7 +415,9 @@ public class OrganizationMemberPermissionsTest : TestBase
             _datasetManagerMock.Object,
             _appContext,
             _settingsOptions,
-            _logger
+            _logger,
+            new OrganizationMembershipService(_context, _appContext, new UpperInvariantLookupNormalizer(),
+                NullLogger<OrganizationMembershipService>.Instance)
         );
     }
 

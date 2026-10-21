@@ -326,6 +326,7 @@ public class Startup
         services.AddScoped<IUserAuthSnapshotProvider, UserAuthSnapshotProvider>();
         services.AddScoped<IAuthManager, AuthManager>();
         services.AddScoped<IDatasetAccessResolver, DatasetAccessResolver>();
+        services.AddScoped<IOrganizationMembershipService, OrganizationMembershipService>();
 
         services.AddScoped<IUsersManager, UsersManager>();
         services.AddScoped<IOrganizationsManager, OrganizationsManager>();

@@ -62,7 +62,7 @@ public abstract class Rq06Fixture : IDisposable
     [OneTimeSetUp]
     public async Task OneTimeSetUp()
     {
-        Factory = new RegistryWebFactory();
+        Factory = new RegistryWebFactory(FactorySettings);
 
         // A dataset without visibility metadata is private (native ddb throws on a missing key)
         Factory.DdbWrapper.Setup(d => d.MetaGet(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>()))
@@ -87,6 +87,9 @@ public abstract class Rq06Fixture : IDisposable
 
         await SeedAsync(context);
     }
+
+    /// <summary>Settings of the fixture's host (null: the defaults).</summary>
+    protected virtual IDictionary<string, string>? FactorySettings => null;
 
     /// <summary>More seed data of a fixture (saved by the fixture).</summary>
     protected virtual Task SeedAsync(RegistryContext context) => Task.CompletedTask;
@@ -459,5 +462,117 @@ public sealed class Rq06AdminPolicyTests : Rq06Fixture
         using var scope = Factory.Services.CreateScope();
         var users = scope.ServiceProvider.GetRequiredService<Microsoft.AspNetCore.Identity.UserManager<Registry.Web.Identity.Models.User>>();
         (await users.FindByNameAsync(StrangerUser))!.Email.ShouldBe(StrangerUser + "@example.com");
+    }
+}
+
+/// <summary>
+/// RQ-06 organization membership, through HTTP: one implementation (<c>OrganizationMembershipService</c>)
+/// with the same codes on the admin and organization routes, <c>GrantedAt</c>/<c>GrantedBy</c> on every
+/// grant.
+/// Each test fails on <c>d3c2ea8e</c>.
+/// Run: dotnet test Registry.Web.UnitTest --filter "FullyQualifiedName~Rq06MembershipTests"
+/// </summary>
+[TestFixture]
+[NonParallelizable]
+[Category(TestCategories.Baseline)]
+public sealed class Rq06MembershipTests : Rq06Fixture
+{
+    private const string MembershipOrg = "rq06-membership-org";
+    private const string MergeSourceOrg = "rq06-merge-source";
+    private const string MergeDestOrg = "rq06-merge-dest";
+    private const string EditOrg = "rq06-edit-org";
+    private const string LegacyMember = "rq06-legacy-member";
+
+    // The organization member routes are off by default
+    protected override IDictionary<string, string>? FactorySettings => new Dictionary<string, string>
+    {
+        ["AppSettings:EnableOrganizationMemberManagement"] = "true"
+    };
+
+    protected override async Task SeedAsync(RegistryContext context)
+    {
+        UserIds[LegacyMember] = (await Factory.CreateUserAsync(LegacyMember)).Id;
+
+        // A membership recorded before GrantedAt/GrantedBy existed (both null)
+        var membership = Seed.Organization(context, MembershipOrg, ownerId: UserIds[OwnerUser]);
+        membership.Users = new List<OrganizationUser>
+        {
+            new() { Organization = membership, OrganizationSlug = MembershipOrg, UserId = UserIds[LegacyMember], Permissions = OrganizationPermissions.ReadOnly }
+        };
+
+        var source = Seed.Organization(context, MergeSourceOrg, ownerId: UserIds[OwnerUser]);
+        source.Users = new List<OrganizationUser>
+        {
+            new() { Organization = source, OrganizationSlug = MergeSourceOrg, UserId = UserIds[ReaderUser], Permissions = OrganizationPermissions.ReadOnly },
+            new() { Organization = source, OrganizationSlug = MergeSourceOrg, UserId = UserIds[WriterUser], Permissions = OrganizationPermissions.Admin }
+        };
+        Seed.Organization(context, MergeDestOrg, ownerId: UserIds[StrangerUser]);
+
+        var edit = Seed.Organization(context, EditOrg, ownerId: UserIds[OwnerUser]);
+        edit.Users = new List<OrganizationUser>
+        {
+            new() { Organization = edit, OrganizationSlug = EditOrg, UserId = UserIds[WriterUser], Permissions = OrganizationPermissions.ReadWrite }
+        };
+
+        await context.SaveChangesAsync();
+    }
+
+    // ---- Membership ----
+
+    [Test]
+    public async Task AdminMembershipRoutes_UseTheOrganizationRouteCodes()
+    {
+        async Task<int> Status(HttpMethod method, string url, string? json = null) =>
+            (int)(await SendAsync(Request(method, url, Caller.Admin, json == null ? null : Json(json)))).Response.StatusCode;
+
+        // Missing organization, missing user, already a member, not a member: 400 before
+        (await Status(HttpMethod.Post, "/users/" + StrangerUser + "/orgs", "{\"orgSlug\":\"rq06-missing\",\"permissions\":0}")).ShouldBe(404);
+        (await Status(HttpMethod.Post, "/users/rq06-nobody/orgs", $"{{\"orgSlug\":\"{PrivateOrg}\",\"permissions\":0}}")).ShouldBe(404);
+        (await Status(HttpMethod.Post, "/users/" + ReaderUser + "/orgs", $"{{\"orgSlug\":\"{PrivateOrg}\",\"permissions\":0}}")).ShouldBe(409);
+        (await Status(HttpMethod.Delete, "/users/" + StrangerUser + "/orgs/" + PrivateOrg)).ShouldBe(404);
+        (await Status(HttpMethod.Put, "/users/" + StrangerUser + "/orgs/" + PrivateOrg, "{\"permissions\":1}")).ShouldBe(404);
+        // The owner: 400 on both routes, before and after
+        (await Status(HttpMethod.Post, "/users/" + OwnerUser + "/orgs", $"{{\"orgSlug\":\"{PrivateOrg}\",\"permissions\":0}}")).ShouldBe(400);
+    }
+
+    [Test]
+    public async Task OrganizationMemberRoutes_OwnerAsTarget_Is400LikeTheAdminRoutes()
+    {
+        // The owner is not a member: the organization routes answered 404 "not a member", the admin
+        // routes 400; both answer 400 now
+        var url = "/orgs/" + PrivateOrg + "/members/" + OwnerUser;
+
+        var (update, updateBody, _) = await SendAsync(Request(HttpMethod.Put, url, Caller.Owner, Json("{\"permissions\":1}")));
+        ((int)update.StatusCode).ShouldBe(400, updateBody);
+
+        var (remove, removeBody, _) = await SendAsync(Request(HttpMethod.Delete, url, Caller.Owner));
+        ((int)remove.StatusCode).ShouldBe(400, removeBody);
+
+        var (admin, adminBody, _) = await SendAsync(Request(HttpMethod.Delete, "/users/" + OwnerUser + "/orgs/" + PrivateOrg, Caller.Admin));
+        ((int)admin.StatusCode).ShouldBe(400, adminBody);
+    }
+
+    [Test]
+    public async Task AdminMembershipRoute_PermissionChange_RecordsTheGrant()
+    {
+        var before = DateTime.UtcNow.AddSeconds(-1);
+
+        var (response, body, _) = await SendAsync(Request(HttpMethod.Put,
+            "/users/" + LegacyMember + "/orgs/" + MembershipOrg, Caller.Admin, Json("{\"permissions\":2}")));
+
+        ((int)response.StatusCode).ShouldBe(200, body);
+        var row = await WithContextAsync(c => c.OrganizationsUsers.AsNoTracking()
+            .SingleAsync(u => u.OrganizationSlug == MembershipOrg && u.UserId == UserIds[LegacyMember]));
+        row.Permissions.ShouldBe(OrganizationPermissions.ReadWriteDelete);
+        row.GrantedBy.ShouldBe(await AdminIdAsync());
+        row.GrantedAt.ShouldNotBeNull();
+        row.GrantedAt!.Value.ShouldBeGreaterThan(before);
+    }
+
+    private async Task<string> AdminIdAsync()
+    {
+        using var scope = Factory.Services.CreateScope();
+        var users = scope.ServiceProvider.GetRequiredService<Microsoft.AspNetCore.Identity.UserManager<Registry.Web.Identity.Models.User>>();
+        return (await users.FindByNameAsync(RegistryWebFactory.AdminUserName))!.Id;
     }
 }

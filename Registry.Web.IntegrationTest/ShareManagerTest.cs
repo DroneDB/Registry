@@ -16,6 +16,7 @@ using Microsoft.Extensions.Caching.Distributed;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Moq;
+using Microsoft.Extensions.Logging.Abstractions;
 using NUnit.Framework;
 using Registry.Adapters;
 using Registry.Adapters.DroneDB;
@@ -208,7 +209,9 @@ class ShareManagerTest : TestBase
             new DatasetAccessResolver(webUtils, _authManagerMock.Object, _ddbFactoryMock.Object), _cacheManager, _fileSystem, _backgroundJobsProcessor, _settingsOptions, TestCaches.Summaries(_ddbFactoryMock.Object));
         var organizationsManager = new OrganizationsManager(_authManagerMock.Object,
             new DatasetAccessResolver(webUtils, _authManagerMock.Object, _ddbFactoryMock.Object), context, webUtils,
-            datasetManager, appContext, _settingsOptions, _organizationsManagerLogger);
+            datasetManager, appContext, _settingsOptions, _organizationsManagerLogger,
+            new OrganizationMembershipService(context, appContext, new UpperInvariantLookupNormalizer(),
+                NullLogger<OrganizationMembershipService>.Instance));
 
         var shareManager = new ShareManager(_settingsOptions, _shareManagerLogger, objectManager,
             datasetManager, organizationsManager, webUtils, _authManagerMock.Object,
@@ -315,7 +318,9 @@ class ShareManagerTest : TestBase
             new DatasetAccessResolver(webUtils, _authManagerMock.Object, _ddbFactoryMock.Object), _cacheManager, _fileSystem, _backgroundJobsProcessor, _settingsOptions, TestCaches.Summaries(_ddbFactoryMock.Object));
         var organizationsManager = new OrganizationsManager(_authManagerMock.Object,
             new DatasetAccessResolver(webUtils, _authManagerMock.Object, _ddbFactoryMock.Object), context, webUtils,
-            datasetManager, appContext, _settingsOptions, _organizationsManagerLogger);
+            datasetManager, appContext, _settingsOptions, _organizationsManagerLogger,
+            new OrganizationMembershipService(context, appContext, new UpperInvariantLookupNormalizer(),
+                NullLogger<OrganizationMembershipService>.Instance));
 
         var shareManager = new ShareManager(_settingsOptions, _shareManagerLogger, objectManager,
             datasetManager, organizationsManager, webUtils, _authManagerMock.Object,
@@ -432,7 +437,9 @@ class ShareManagerTest : TestBase
             new DatasetAccessResolver(webUtils, _authManagerMock.Object, _ddbFactoryMock.Object), _cacheManager, _fileSystem, _backgroundJobsProcessor, _settingsOptions, TestCaches.Summaries(_ddbFactoryMock.Object));
         var organizationsManager = new OrganizationsManager(_authManagerMock.Object,
             new DatasetAccessResolver(webUtils, _authManagerMock.Object, _ddbFactoryMock.Object), context, webUtils,
-            datasetManager, appContext, _settingsOptions, _organizationsManagerLogger);
+            datasetManager, appContext, _settingsOptions, _organizationsManagerLogger,
+            new OrganizationMembershipService(context, appContext, new UpperInvariantLookupNormalizer(),
+                NullLogger<OrganizationMembershipService>.Instance));
 
         var shareManager = new ShareManager(_settingsOptions, _shareManagerLogger, objectManager,
             datasetManager, organizationsManager, webUtils, _authManagerMock.Object,
@@ -574,7 +581,9 @@ class ShareManagerTest : TestBase
             new DatasetAccessResolver(webUtils, _authManagerMock.Object, _ddbFactoryMock.Object), _cacheManager, _fileSystem, _backgroundJobsProcessor, _settingsOptions, TestCaches.Summaries(_ddbFactoryMock.Object));
         var organizationsManager = new OrganizationsManager(_authManagerMock.Object,
             new DatasetAccessResolver(webUtils, _authManagerMock.Object, _ddbFactoryMock.Object), context, webUtils,
-            datasetManager, appContext, _settingsOptions, _organizationsManagerLogger);
+            datasetManager, appContext, _settingsOptions, _organizationsManagerLogger,
+            new OrganizationMembershipService(context, appContext, new UpperInvariantLookupNormalizer(),
+                NullLogger<OrganizationMembershipService>.Instance));
 
         var shareManager = new ShareManager(_settingsOptions, _shareManagerLogger, objectManager,
             datasetManager, organizationsManager, webUtils, _authManagerMock.Object,
@@ -722,7 +731,9 @@ class ShareManagerTest : TestBase
             _backgroundJobsProcessor, _settingsOptions, TestCaches.Summaries(_ddbFactoryMock.Object));
         var organizationsManager = new OrganizationsManager(_authManagerMock.Object,
             new DatasetAccessResolver(webUtils, _authManagerMock.Object, _ddbFactoryMock.Object), context, webUtils,
-            datasetManager, appContext, _settingsOptions, _organizationsManagerLogger);
+            datasetManager, appContext, _settingsOptions, _organizationsManagerLogger,
+            new OrganizationMembershipService(context, appContext, new UpperInvariantLookupNormalizer(),
+                NullLogger<OrganizationMembershipService>.Instance));
 
         var shareManager = new ShareManager(_settingsOptions, _shareManagerLogger, objectManager,
             datasetManager, organizationsManager, webUtils, _authManagerMock.Object,
@@ -854,7 +865,9 @@ class ShareManagerTest : TestBase
             new DatasetAccessResolver(webUtils, _authManagerMock.Object, _ddbFactoryMock.Object), _cacheManager, _fileSystem, _backgroundJobsProcessor, _settingsOptions, TestCaches.Summaries(_ddbFactoryMock.Object));
         var organizationsManager = new OrganizationsManager(_authManagerMock.Object,
             new DatasetAccessResolver(webUtils, _authManagerMock.Object, _ddbFactoryMock.Object), context, webUtils,
-            datasetManager, appContext, _settingsOptions, _organizationsManagerLogger);
+            datasetManager, appContext, _settingsOptions, _organizationsManagerLogger,
+            new OrganizationMembershipService(context, appContext, new UpperInvariantLookupNormalizer(),
+                NullLogger<OrganizationMembershipService>.Instance));
 
         var shareManager = new ShareManager(_settingsOptions, _shareManagerLogger, objectManager,
             datasetManager, organizationsManager, webUtils, _authManagerMock.Object,
