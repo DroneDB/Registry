@@ -154,6 +154,21 @@ public class Rq07HostBudgetTests
         budget.Processing.BuildThreads.ShouldBe(2);
     }
 
+    /// <summary>The production compose file declares its own processes, on every Registry service.</summary>
+    [Test]
+    public void ProductionCompose_DeclaresTheProcessesItRuns()
+    {
+        Assume.That(RepositoryFiles.Root, Is.Not.Null, "repository sources not available next to the test output");
+        var compose = System.IO.File.ReadAllText(RepositoryFiles.PathOf("docker/production/docker-compose.yml"));
+
+        var nodes = System.Text.RegularExpressions.Regex.Count(compose, @"- INSTANCE_TYPE=1\b");
+        var webServers = System.Text.RegularExpressions.Regex.Count(compose, @"- INSTANCE_TYPE=2\b");
+        var services = nodes + webServers;
+
+        System.Text.RegularExpressions.Regex.Count(compose, $@"- AppSettings__HostBudget__ProcessingNodes={nodes}\b").ShouldBe(services);
+        System.Text.RegularExpressions.Regex.Count(compose, $@"- AppSettings__HostBudget__WebServers={webServers}\b").ShouldBe(services);
+    }
+
     /// <summary>The runtime service passes the budget to libddb, and sets the per-build environment of a job host only.</summary>
     [TestCase(InstanceType.ProcessingNode, true)]
     [TestCase(InstanceType.WebServer, false)]

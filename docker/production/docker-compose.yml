@@ -54,6 +54,11 @@ services:
             start_period: 10m
         environment:
             - INSTANCE_TYPE=2
+            # The Registry processes sharing this machine (XI-06): each takes its share of the cores and
+            # memory (web 1/5, each node 2/5) instead of planning the whole machine. Keep these in step
+            # with the services below; an empty or removed value plans the whole machine, as before.
+            - AppSettings__HostBudget__WebServers=1
+            - AppSettings__HostBudget__ProcessingNodes=2
             # The image runs in UTC; keep the local time these deployments always used
             - TZ=Europe/Rome
             # OpenTopography API key for DSM altitude lookups (libddb); without it the relative
@@ -95,6 +100,9 @@ services:
         # Healthcheck: the image HEALTHCHECK (docker/healthcheck.sh: the Registry process is alive)
         environment:
             - INSTANCE_TYPE=1
+            # The Registry processes sharing this machine (XI-06), see registry_webserver
+            - AppSettings__HostBudget__WebServers=1
+            - AppSettings__HostBudget__ProcessingNodes=2
             - TZ=Europe/Rome
             # OpenTopography API key for DSM altitude lookups (libddb); without it the relative
             # altitude of images without one in their EXIF falls back to the GPS altitude
@@ -131,6 +139,9 @@ services:
         # Healthcheck: the image HEALTHCHECK (docker/healthcheck.sh: the Registry process is alive)
         environment:
             - INSTANCE_TYPE=1
+            # The Registry processes sharing this machine (XI-06), see registry_webserver
+            - AppSettings__HostBudget__WebServers=1
+            - AppSettings__HostBudget__ProcessingNodes=2
             - TZ=Europe/Rome
             # OpenTopography API key for DSM altitude lookups (libddb); without it the relative
             # altitude of images without one in their EXIF falls back to the GPS altitude
