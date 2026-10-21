@@ -34,8 +34,18 @@ namespace Registry.Web.Services.HeavyTasks.Tools;
 /// buildable entry (mirrors <c>ObjectsManager.AddNew</c>). Mutates the dataset in
 /// place, so it produces no downloadable artifact.
 /// </summary>
-public sealed class ArchiveExtractTool : IHeavyTool
+public sealed class ArchiveExtractTool : HeavyToolBase<ArchiveExtractTool.Parameters>
 {
+    /// <summary>The tool's parameters as the request carries them (absent or ill-typed: null).</summary>
+    public sealed record Parameters(string? SourcePath, string? DestPath, bool? DeleteArchive, bool? Overwrite);
+
+    protected override Parameters ReadParams(ToolParameters p) => new(
+        p.String("sourcePath"),
+        p.String("destPath"),
+        p.Bool("deleteArchive"),
+        p.Bool("overwrite"));
+
+
     private static readonly JsonDocument Schema = JsonDocument.Parse(
         """
         {
@@ -80,27 +90,28 @@ public sealed class ArchiveExtractTool : IHeavyTool
         _logger = logger;
     }
 
-    public string Id => "archive-extract";
-    public string Version => "1";
-    public string Title => "Extract archive";
-    public HeavyToolPermission RequiredAccess => HeavyToolPermission.Write;
-    public bool ProducesArtifact => false;
-    public JsonDocument InputSchema => Schema;
+    public override string Id => "archive-extract";
+    public override string Version => "1";
+    public override string Title => "Extract archive";
+    public override HeavyToolPermission RequiredAccess => HeavyToolPermission.Write;
+    public override bool ProducesArtifact => false;
+    public override JsonDocument InputSchema => Schema;
 
     // Files are indexed in batches of this size: bounds the per-transaction lock time and
     // lets progress be reported between chunks while still collapsing the per-file native
     // database opens into one-per-chunk.
     private const int IndexChunkSize = 250;
 
-    public async Task ValidateAsync(HeavyToolRequest request, IHeavyToolValidationContext ctx, CancellationToken ct)
+    protected override async Task ValidateAsync(HeavyToolRequest request, Parameters args,
+        IHeavyToolValidationContext ctx, CancellationToken ct)
     {
-        var sourcePath = ReadString(request.Params, "sourcePath");
+        var sourcePath = args.SourcePath;
         if (string.IsNullOrWhiteSpace(sourcePath))
             throw new ArgumentException("A source archive path is required.");
         sourcePath = _paths.Normalize(sourcePath, "archive path");
 
         // Destination: libddb's path rule ("" is the dataset root)
-        var destPath = _paths.NormalizeFolder(ReadString(request.Params, "destPath"));
+        var destPath = _paths.NormalizeFolder(args.DestPath);
 
         // Source must exist, be a file (not a directory) and a supported archive.
         var entry = ctx.Ddb.GetEntry(sourcePath)
@@ -161,12 +172,12 @@ public sealed class ArchiveExtractTool : IHeavyTool
         }
     }
 
-    public HeavyToolPlan Plan(HeavyToolRequest request, IHeavyToolValidationContext ctx)
+    protected override HeavyToolPlan Plan(HeavyToolRequest request, Parameters args, IHeavyToolValidationContext ctx)
     {
         long? estimate = null;
         try
         {
-            var sourcePath = ReadString(request.Params, "sourcePath");
+            var sourcePath = args.SourcePath;
             if (!string.IsNullOrWhiteSpace(sourcePath))
             {
                 var localArchive = ctx.Ddb.GetLocalPath(sourcePath);
@@ -183,16 +194,17 @@ public sealed class ArchiveExtractTool : IHeavyTool
             DefaultFileName: null, ContentType: null);
     }
 
-    public async Task<HeavyToolArtifact?> ExecuteAsync(
+    protected override async Task<HeavyToolArtifact?> ExecuteAsync(
         HeavyToolRequest request,
+        Parameters args,
         IHeavyToolExecutionContext ctx,
         IProgress<HeavyToolProgress> progress,
         CancellationToken ct)
     {
-        var sourcePath = _paths.Normalize(ReadString(request.Params, "sourcePath"), "archive path");
-        var destPath = _paths.NormalizeFolder(ReadString(request.Params, "destPath"));
-        var deleteArchive = ReadBool(request.Params, "deleteArchive") ?? false;
-        var overwrite = ReadBool(request.Params, "overwrite") ?? false;
+        var sourcePath = _paths.Normalize(args.SourcePath, "archive path");
+        var destPath = _paths.NormalizeFolder(args.DestPath);
+        var deleteArchive = args.DeleteArchive ?? false;
+        var overwrite = args.Overwrite ?? false;
 
         var localArchive = ctx.Ddb.GetLocalPath(sourcePath);
 
@@ -310,22 +322,5 @@ public sealed class ArchiveExtractTool : IHeavyTool
         public void Report(T value) => report(value);
     }
 
-    private static string? ReadString(JsonElement obj, string name)
-    {
-        if (obj.ValueKind != JsonValueKind.Object) return null;
-        if (!obj.TryGetProperty(name, out var el)) return null;
-        return el.ValueKind == JsonValueKind.String ? el.GetString() : null;
-    }
 
-    private static bool? ReadBool(JsonElement obj, string name)
-    {
-        if (obj.ValueKind != JsonValueKind.Object) return null;
-        if (!obj.TryGetProperty(name, out var el)) return null;
-        return el.ValueKind switch
-        {
-            JsonValueKind.True => true,
-            JsonValueKind.False => false,
-            _ => null
-        };
-    }
 }

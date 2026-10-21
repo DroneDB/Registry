@@ -31,8 +31,21 @@ namespace Registry.Web.Services.HeavyTasks.Tools;
 /// enqueued (mirrors <see cref="ImportDatasetTool"/>). Mutates the dataset in place, so it produces no
 /// downloadable artifact.
 /// </summary>
-public sealed class FileUrlImportTool : IHeavyTool
+public sealed class FileUrlImportTool : HeavyToolBase<FileUrlImportTool.Parameters>
 {
+    /// <summary>The tool's parameters as the request carries them (absent or ill-typed: null).</summary>
+    public sealed record Parameters(string? Url, string? FileName, string? Folder, bool? Overwrite, long? SizeBytes, string? Username, string? Password);
+
+    protected override Parameters ReadParams(ToolParameters p) => new(
+        p.String("url"),
+        p.String("fileName"),
+        p.String("folder"),
+        p.Bool("overwrite"),
+        p.Long("sizeBytes"),
+        p.String("username"),
+        p.String("password"));
+
+
     private static readonly JsonDocument Schema = JsonDocument.Parse(
         """
         {
@@ -97,71 +110,73 @@ public sealed class FileUrlImportTool : IHeavyTool
     }
 
     /// <inheritdoc />
-    public string Id => "import-file";
+    public override string Id => "import-file";
 
     /// <inheritdoc />
-    public string Version => "1";
+    public override string Version => "1";
 
     /// <inheritdoc />
-    public string Title => "Import file from URL";
+    public override string Title => "Import file from URL";
 
     /// <inheritdoc />
-    public HeavyToolPermission RequiredAccess => HeavyToolPermission.Write;
+    public override HeavyToolPermission RequiredAccess => HeavyToolPermission.Write;
 
     /// <inheritdoc />
-    public bool ProducesArtifact => false;
+    public override bool ProducesArtifact => false;
 
     /// <inheritdoc />
-    public JsonDocument InputSchema => Schema;
+    public override JsonDocument InputSchema => Schema;
 
     /// <inheritdoc />
-    public async Task ValidateAsync(HeavyToolRequest request, IHeavyToolValidationContext ctx, CancellationToken ct)
+    protected override async Task ValidateAsync(HeavyToolRequest request, Parameters args,
+        IHeavyToolValidationContext ctx, CancellationToken ct)
     {
-        var uri = FileImportPolicy.ParseHttpUrl(ReadString(request.Params, "url"));
+        var uri = FileImportPolicy.ParseHttpUrl(args.Url);
 
         // Fast SSRF rejection at submit time (re-validated at connect time during download).
         await _ssrfGuard.AssertAllowedAsync(uri.Host, ct);
 
-        var fileName = FileImportPolicy.SanitizeFileName(ReadString(request.Params, "fileName"));
+        var fileName = FileImportPolicy.SanitizeFileName(args.FileName);
         if (!_importSettings.IsExtensionAllowed(fileName))
             throw new ArgumentException($"Files of type '{Path.GetExtension(fileName)}' are not allowed.");
 
-        var target = TargetPath(ReadString(request.Params, "folder"), fileName);
+        var target = TargetPath(args.Folder, fileName);
 
-        var overwrite = ReadBool(request.Params, "overwrite");
+        var overwrite = args.Overwrite == true;
         if (!overwrite && ctx.Ddb.EntryExists(target))
             throw new ArgumentException(
                 $"'{target}' already exists. Enable overwrite to replace it.");
     }
 
     /// <inheritdoc />
-    public HeavyToolPlan Plan(HeavyToolRequest request, IHeavyToolValidationContext ctx)
-        => new(ReadLong(request.Params, "sizeBytes"), QuotaKey: "import-file",
+    protected override HeavyToolPlan Plan(HeavyToolRequest request, Parameters args, IHeavyToolValidationContext ctx)
+        => new(args.SizeBytes, QuotaKey: "import-file",
             DefaultFileName: null, ContentType: null);
 
     /// <inheritdoc />
-    public async Task<HeavyToolArtifact?> ExecuteAsync(
+    protected override async Task<HeavyToolArtifact?> ExecuteAsync(
         HeavyToolRequest request,
+        Parameters args,
         IHeavyToolExecutionContext ctx,
         IProgress<HeavyToolProgress> progress,
         CancellationToken ct)
     {
-        var uri = FileImportPolicy.ParseHttpUrl(ReadString(request.Params, "url"));
-        var fileName = FileImportPolicy.SanitizeFileName(ReadString(request.Params, "fileName"));
+        var uri = FileImportPolicy.ParseHttpUrl(args.Url);
+        var fileName = FileImportPolicy.SanitizeFileName(args.FileName);
 
         // Defense in depth: re-check the extension policy on the worker so a job enqueued before the
         // allow/block-list was tightened (or a crafted job) cannot import a now-disallowed type.
         if (!_importSettings.IsExtensionAllowed(fileName))
             throw new InvalidOperationException($"Files of type '{Path.GetExtension(fileName)}' are not allowed.");
 
-        var target = TargetPath(ReadString(request.Params, "folder"), fileName);
+        var target = TargetPath(args.Folder, fileName);
 
-        var overwrite = ReadBool(request.Params, "overwrite");
+        var overwrite = args.Overwrite == true;
         if (!overwrite && ctx.Ddb.EntryExists(target))
             throw new InvalidOperationException($"'{target}' already exists.");
 
-        var username = ReadString(request.Params, "username");
-        var password = DecryptPassword(ReadString(request.Params, "password"));
+        var username = args.Username;
+        var password = DecryptPassword(args.Password);
         var cap = _importSettings.EffectiveFileImportCapBytes();
 
         // The download goes to the dataset's uploads folder: never indexed, and on the dataset's volume,
@@ -263,26 +278,8 @@ public sealed class FileUrlImportTool : IHeavyTool
         return raw.StartsWith("ENC:", StringComparison.Ordinal) ? _protector.Unprotect(raw[4..]) : raw;
     }
 
-    private static string? ReadString(JsonElement obj, string name)
-    {
-        if (obj.ValueKind != JsonValueKind.Object) return null;
-        if (!obj.TryGetProperty(name, out var el)) return null;
-        return el.ValueKind == JsonValueKind.String ? el.GetString() : null;
-    }
 
-    private static bool ReadBool(JsonElement obj, string name)
-    {
-        if (obj.ValueKind != JsonValueKind.Object) return false;
-        if (!obj.TryGetProperty(name, out var el)) return false;
-        return el.ValueKind == JsonValueKind.True;
-    }
 
-    private static long? ReadLong(JsonElement obj, string name)
-    {
-        if (obj.ValueKind != JsonValueKind.Object) return null;
-        if (!obj.TryGetProperty(name, out var el)) return null;
-        return el.ValueKind == JsonValueKind.Number && el.TryGetInt64(out var v) ? v : null;
-    }
 
     private sealed class CallbackProgress<T>(Action<T> callback) : IProgress<T>
     {

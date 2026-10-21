@@ -35,8 +35,17 @@ namespace Registry.Web.Services.HeavyTasks.Tools;
 /// enqueues a per-file build job for every buildable entry (mirrors <see cref="ArchiveExtractTool"/>).
 /// Mutates the dataset in place, so it produces no downloadable artifact.
 /// </summary>
-public sealed class ImportDatasetTool : IHeavyTool
+public sealed class ImportDatasetTool : HeavyToolBase<ImportDatasetTool.Parameters>
 {
+    /// <summary>The tool's parameters as the request carries them (absent or ill-typed: null).</summary>
+    public sealed record Parameters(string? SourceType, long? BudgetBytes, JsonElement? SourceParams);
+
+    protected override Parameters ReadParams(ToolParameters p) => new(
+        p.String("sourceType"),
+        p.Long("budgetBytes"),
+        p.Object("params"));
+
+
     private static readonly JsonDocument Schema = JsonDocument.Parse(
         """
         {
@@ -94,30 +103,31 @@ public sealed class ImportDatasetTool : IHeavyTool
     }
 
     /// <inheritdoc />
-    public string Id => "import-dataset";
+    public override string Id => "import-dataset";
 
     /// <inheritdoc />
-    public string Version => "1";
+    public override string Version => "1";
 
     /// <inheritdoc />
-    public string Title => "Import dataset";
+    public override string Title => "Import dataset";
 
     /// <inheritdoc />
-    public HeavyToolPermission RequiredAccess => HeavyToolPermission.Write;
+    public override HeavyToolPermission RequiredAccess => HeavyToolPermission.Write;
 
     /// <inheritdoc />
-    public bool ProducesArtifact => false;
+    public override bool ProducesArtifact => false;
 
     /// <inheritdoc />
-    public JsonDocument InputSchema => Schema;
+    public override JsonDocument InputSchema => Schema;
 
     // One DDB transaction (and one native connection open) per chunk instead of one-per-file.
     private const int IndexChunkSize = 250;
 
     /// <inheritdoc />
-    public Task ValidateAsync(HeavyToolRequest request, IHeavyToolValidationContext ctx, CancellationToken ct)
+    protected override Task ValidateAsync(HeavyToolRequest request, Parameters args,
+        IHeavyToolValidationContext ctx, CancellationToken ct)
     {
-        var sourceType = ReadString(request.Params, "sourceType");
+        var sourceType = args.SourceType;
         if (string.IsNullOrWhiteSpace(sourceType))
             throw new ArgumentException("A source type is required.");
 
@@ -127,26 +137,26 @@ public sealed class ImportDatasetTool : IHeavyTool
         if (!_settings.IsSourceTypeAllowed(sourceType))
             throw new ArgumentException($"The import source type '{sourceType}' is disabled on this server.");
 
-        if (request.Params.ValueKind != JsonValueKind.Object ||
-            !request.Params.TryGetProperty("params", out var p) || p.ValueKind != JsonValueKind.Object)
+        if (args.SourceParams is null)
             throw new ArgumentException("Source parameters are required.");
 
         return Task.CompletedTask;
     }
 
     /// <inheritdoc />
-    public HeavyToolPlan Plan(HeavyToolRequest request, IHeavyToolValidationContext ctx)
-        => new(ReadLong(request.Params, "budgetBytes"), QuotaKey: "import-dataset",
+    protected override HeavyToolPlan Plan(HeavyToolRequest request, Parameters args, IHeavyToolValidationContext ctx)
+        => new(args.BudgetBytes, QuotaKey: "import-dataset",
             DefaultFileName: null, ContentType: null);
 
     /// <inheritdoc />
-    public async Task<HeavyToolArtifact?> ExecuteAsync(
+    protected override async Task<HeavyToolArtifact?> ExecuteAsync(
         HeavyToolRequest request,
+        Parameters args,
         IHeavyToolExecutionContext ctx,
         IProgress<HeavyToolProgress> progress,
         CancellationToken ct)
     {
-        var sourceType = ReadString(request.Params, "sourceType")
+        var sourceType = args.SourceType
                          ?? throw new InvalidOperationException("A source type is required.");
 
         // Defense in depth: re-check the allow-list on the worker, so a job enqueued before the
@@ -155,11 +165,9 @@ public sealed class ImportDatasetTool : IHeavyTool
             throw new InvalidOperationException(
                 $"The import source type '{sourceType}' is disabled on this server.");
 
-        var budgetBytes = ReadLong(request.Params, "budgetBytes");
+        var budgetBytes = args.BudgetBytes;
 
-        if (!request.Params.TryGetProperty("params", out var rawParams) ||
-            rawParams.ValueKind != JsonValueKind.Object)
-            throw new InvalidOperationException("Source parameters are required.");
+        var rawParams = args.SourceParams ?? throw new InvalidOperationException("Source parameters are required.");
 
         var sourceParams = DecryptParams(sourceType, rawParams, _protector);
         var source = _factory.Resolve(sourceType);
@@ -358,19 +366,7 @@ public sealed class ImportDatasetTool : IHeavyTool
         return doc.RootElement.Clone();
     }
 
-    private static string? ReadString(JsonElement obj, string name)
-    {
-        if (obj.ValueKind != JsonValueKind.Object) return null;
-        if (!obj.TryGetProperty(name, out var el)) return null;
-        return el.ValueKind == JsonValueKind.String ? el.GetString() : null;
-    }
 
-    private static long? ReadLong(JsonElement obj, string name)
-    {
-        if (obj.ValueKind != JsonValueKind.Object) return null;
-        if (!obj.TryGetProperty(name, out var el)) return null;
-        return el.ValueKind == JsonValueKind.Number && el.TryGetInt64(out var v) ? v : null;
-    }
 
     private sealed class CallbackProgress<T>(Action<T> callback) : IProgress<T>
     {

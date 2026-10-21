@@ -19,8 +19,18 @@ namespace Registry.Web.Services.HeavyTasks.Tools;
 /// artifact is produced. The caller (frontend) is responsible for submitting a
 /// separate "build" task for the output file after this task succeeds.
 /// </summary>
-public sealed class AlignRasterTool(DatasetPathPolicy paths) : IHeavyTool
+public sealed class AlignRasterTool(DatasetPathPolicy paths) : HeavyToolBase<AlignRasterTool.Parameters>
 {
+    /// <summary>The tool's parameters as the request carries them (absent or ill-typed: null).</summary>
+    public sealed record Parameters(string? SourcePath, string? ReferencePath, string? OutputPath, string? Mode);
+
+    protected override Parameters ReadParams(ToolParameters p) => new(
+        p.String("sourcePath"),
+        p.String("referencePath"),
+        p.String("outputPath"),
+        p.String("mode"));
+
+
     private static readonly JsonDocument Schema = JsonDocument.Parse(
         """
         {
@@ -38,19 +48,20 @@ public sealed class AlignRasterTool(DatasetPathPolicy paths) : IHeavyTool
         }
         """);
 
-    public string Id => "align-raster";
-    public string Version => "1";
-    public string Title => "Align GeoTIFF to reference";
-    public HeavyToolPermission RequiredAccess => HeavyToolPermission.Write;
-    public bool ProducesArtifact => false;
-    public bool RunsNativeBuild => true;
-    public JsonDocument InputSchema => Schema;
+    public override string Id => "align-raster";
+    public override string Version => "1";
+    public override string Title => "Align GeoTIFF to reference";
+    public override HeavyToolPermission RequiredAccess => HeavyToolPermission.Write;
+    public override bool ProducesArtifact => false;
+    public override bool RunsNativeBuild => true;
+    public override JsonDocument InputSchema => Schema;
 
-    public Task ValidateAsync(HeavyToolRequest request, IHeavyToolValidationContext ctx, CancellationToken ct)
+    protected override Task ValidateAsync(HeavyToolRequest request, Parameters args,
+        IHeavyToolValidationContext ctx, CancellationToken ct)
     {
-        var sourcePath = ReadString(request.Params, "sourcePath");
-        var referencePath = ReadString(request.Params, "referencePath");
-        var outputPath = ReadString(request.Params, "outputPath");
+        var sourcePath = args.SourcePath;
+        var referencePath = args.ReferencePath;
+        var outputPath = args.OutputPath;
 
         if (string.IsNullOrWhiteSpace(sourcePath))
             throw new ArgumentException("sourcePath is required.");
@@ -88,12 +99,12 @@ public sealed class AlignRasterTool(DatasetPathPolicy paths) : IHeavyTool
         return Task.CompletedTask;
     }
 
-    public HeavyToolPlan Plan(HeavyToolRequest request, IHeavyToolValidationContext ctx)
+    protected override HeavyToolPlan Plan(HeavyToolRequest request, Parameters args, IHeavyToolValidationContext ctx)
     {
         long? estimate = null;
         try
         {
-            var sourcePath = ReadString(request.Params, "sourcePath");
+            var sourcePath = args.SourcePath;
             if (!string.IsNullOrWhiteSpace(sourcePath))
             {
                 var entry = ctx.Ddb.GetEntry(sourcePath);
@@ -109,17 +120,18 @@ public sealed class AlignRasterTool(DatasetPathPolicy paths) : IHeavyTool
             DefaultFileName: null, ContentType: null);
     }
 
-    public async Task<HeavyToolArtifact?> ExecuteAsync(
+    protected override async Task<HeavyToolArtifact?> ExecuteAsync(
         HeavyToolRequest request,
+        Parameters args,
         IHeavyToolExecutionContext ctx,
         IProgress<HeavyToolProgress> progress,
         CancellationToken ct)
     {
         // Validated at submit; normalized again on the worker (a job enqueued by an older version)
-        var sourcePath = paths.Normalize(ReadString(request.Params, "sourcePath"), "source path");
-        var referencePath = paths.Normalize(ReadString(request.Params, "referencePath"), "reference path");
-        var outputPath = paths.Normalize(ReadString(request.Params, "outputPath"), "output path");
-        var mode = ReadString(request.Params, "mode") ?? "similarity";
+        var sourcePath = paths.Normalize(args.SourcePath, "source path");
+        var referencePath = paths.Normalize(args.ReferencePath, "reference path");
+        var outputPath = paths.Normalize(args.OutputPath, "output path");
+        var mode = args.Mode ?? "similarity";
 
         progress.Report(new HeavyToolProgress(-1, "aligning",
             LogChunk: $"Aligning '{sourcePath}' → '{outputPath}' (mode: {mode})"));
@@ -163,10 +175,4 @@ public sealed class AlignRasterTool(DatasetPathPolicy paths) : IHeavyTool
         ];
     }
 
-    private static string? ReadString(JsonElement obj, string name)
-    {
-        if (obj.ValueKind != JsonValueKind.Object) return null;
-        if (!obj.TryGetProperty(name, out var el)) return null;
-        return el.ValueKind == JsonValueKind.String ? el.GetString() : null;
-    }
 }

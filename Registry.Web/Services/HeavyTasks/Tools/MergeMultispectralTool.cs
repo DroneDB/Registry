@@ -18,8 +18,16 @@ namespace Registry.Web.Services.HeavyTasks.Tools;
 /// place (re-indexes the merged output) so it produces no downloadable artifact.
 /// Mirrors the legacy <c>ObjectsManager.MergeMultispectral</c> behaviour exactly.
 /// </summary>
-public sealed class MergeMultispectralTool(DatasetPathPolicy pathPolicy) : IHeavyTool
+public sealed class MergeMultispectralTool(DatasetPathPolicy pathPolicy) : HeavyToolBase<MergeMultispectralTool.Parameters>
 {
+    /// <summary>The tool's parameters as the request carries them (absent or ill-typed: null).</summary>
+    public sealed record Parameters(string[]? Paths, string? OutputPath);
+
+    protected override Parameters ReadParams(ToolParameters p) => new(
+        p.NonBlankStrings("paths"),
+        p.String("outputPath"));
+
+
     private static readonly JsonDocument Schema = JsonDocument.Parse(
         """
         {
@@ -34,21 +42,22 @@ public sealed class MergeMultispectralTool(DatasetPathPolicy pathPolicy) : IHeav
         }
         """);
 
-    public string Id => "merge-multispectral";
-    public string Version => "1";
-    public string Title => "Merge multispectral bands";
-    public HeavyToolPermission RequiredAccess => HeavyToolPermission.Write;
-    public bool ProducesArtifact => false;
-    public bool RunsNativeBuild => true;
-    public JsonDocument InputSchema => Schema;
+    public override string Id => "merge-multispectral";
+    public override string Version => "1";
+    public override string Title => "Merge multispectral bands";
+    public override HeavyToolPermission RequiredAccess => HeavyToolPermission.Write;
+    public override bool ProducesArtifact => false;
+    public override bool RunsNativeBuild => true;
+    public override JsonDocument InputSchema => Schema;
 
-    public Task ValidateAsync(HeavyToolRequest request, IHeavyToolValidationContext ctx, CancellationToken ct)
+    protected override Task ValidateAsync(HeavyToolRequest request, Parameters args,
+        IHeavyToolValidationContext ctx, CancellationToken ct)
     {
-        var paths = ReadStringArray(request.Params, "paths");
+        var paths = args.Paths;
         if (paths == null || paths.Length < 2)
             throw new ArgumentException("At least two band paths are required.");
 
-        var outputPath = ReadString(request.Params, "outputPath");
+        var outputPath = args.OutputPath;
         if (string.IsNullOrWhiteSpace(outputPath))
             throw new ArgumentException("An output path is required.");
 
@@ -82,12 +91,12 @@ public sealed class MergeMultispectralTool(DatasetPathPolicy pathPolicy) : IHeav
         return Task.CompletedTask;
     }
 
-    public HeavyToolPlan Plan(HeavyToolRequest request, IHeavyToolValidationContext ctx)
+    protected override HeavyToolPlan Plan(HeavyToolRequest request, Parameters args, IHeavyToolValidationContext ctx)
     {
         long? estimate = null;
         try
         {
-            var paths = ReadStringArray(request.Params, "paths") ?? [];
+            var paths = args.Paths ?? [];
             long total = 0;
             foreach (var p in paths)
             {
@@ -105,16 +114,17 @@ public sealed class MergeMultispectralTool(DatasetPathPolicy pathPolicy) : IHeav
             DefaultFileName: null, ContentType: null);
     }
 
-    public async Task<HeavyToolArtifact?> ExecuteAsync(
+    protected override async Task<HeavyToolArtifact?> ExecuteAsync(
         HeavyToolRequest request,
+        Parameters args,
         IHeavyToolExecutionContext ctx,
         IProgress<HeavyToolProgress> progress,
         CancellationToken ct)
     {
         // Validated at submit; normalized again on the worker (a job enqueued by an older version)
-        var paths = Array.ConvertAll(ReadStringArray(request.Params, "paths")
+        var paths = Array.ConvertAll(args.Paths
                     ?? throw new InvalidOperationException("Band paths are required."), p => pathPolicy.Normalize(p));
-        var outputPath = pathPolicy.Normalize(ReadString(request.Params, "outputPath"), "output path");
+        var outputPath = pathPolicy.Normalize(args.OutputPath, "output path");
 
         progress.Report(new HeavyToolProgress(-1, "merging",
             LogChunk: $"Merging {paths.Length} bands → {outputPath}"));
@@ -152,26 +162,5 @@ public sealed class MergeMultispectralTool(DatasetPathPolicy pathPolicy) : IHeav
         return [.. list];
     }
 
-    private static string[]? ReadStringArray(JsonElement obj, string name)
-    {
-        if (obj.ValueKind != JsonValueKind.Object) return null;
-        if (!obj.TryGetProperty(name, out var el) || el.ValueKind != JsonValueKind.Array) return null;
 
-        var list = new List<string>();
-        foreach (var item in el.EnumerateArray())
-        {
-            if (item.ValueKind != JsonValueKind.String) continue;
-            var s = item.GetString();
-            if (!string.IsNullOrWhiteSpace(s)) list.Add(s!);
-        }
-
-        return list.Count > 0 ? [.. list] : null;
-    }
-
-    private static string? ReadString(JsonElement obj, string name)
-    {
-        if (obj.ValueKind != JsonValueKind.Object) return null;
-        if (!obj.TryGetProperty(name, out var el)) return null;
-        return el.ValueKind == JsonValueKind.String ? el.GetString() : null;
-    }
 }

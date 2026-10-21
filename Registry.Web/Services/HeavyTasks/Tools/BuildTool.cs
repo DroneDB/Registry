@@ -13,8 +13,13 @@ namespace Registry.Web.Services.HeavyTasks.Tools;
 /// downloadable artifact; it mutates the dataset build cache in place. It runs the build
 /// inline in its task's job, as the build jobs do (<see cref="IDatasetBuilds"/>).
 /// </summary>
-public sealed class BuildTool : IHeavyTool
+public sealed class BuildTool : HeavyToolBase<BuildTool.Parameters>
 {
+    /// <summary>Rebuild an entry that is already built.</summary>
+    public sealed record Parameters(bool? Force);
+
+    protected override Parameters ReadParams(ToolParameters p) => new(p.Bool("force"));
+
     private static readonly JsonDocument Schema = JsonDocument.Parse(
         """
         {
@@ -28,33 +33,28 @@ public sealed class BuildTool : IHeavyTool
         }
         """);
 
-    public string Id => "build";
-    public string Version => "1";
-    public string Title => "Build";
-    public HeavyToolPermission RequiredAccess => HeavyToolPermission.Write;
-    public bool ProducesArtifact => false;
-    public bool RunsNativeBuild => true;
-    public JsonDocument InputSchema => Schema;
+    public override string Id => "build";
+    public override string Version => "1";
+    public override string Title => "Build";
+    public override HeavyToolPermission RequiredAccess => HeavyToolPermission.Write;
+    public override bool ProducesArtifact => false;
+    public override bool RunsNativeBuild => true;
+    public override JsonDocument InputSchema => Schema;
 
-    public Task ValidateAsync(HeavyToolRequest request, IHeavyToolValidationContext ctx, CancellationToken ct)
-        => Task.CompletedTask;
+    protected override Task ValidateAsync(HeavyToolRequest request, Parameters args, IHeavyToolValidationContext ctx,
+        CancellationToken ct) => Task.CompletedTask;
 
-    public HeavyToolPlan Plan(HeavyToolRequest request, IHeavyToolValidationContext ctx)
+    protected override HeavyToolPlan Plan(HeavyToolRequest request, Parameters args, IHeavyToolValidationContext ctx)
         => new(EstimatedOutputBytes: null, QuotaKey: "build", DefaultFileName: null, ContentType: null);
 
-    public Task<HeavyToolArtifact?> ExecuteAsync(
+    protected override Task<HeavyToolArtifact?> ExecuteAsync(
         HeavyToolRequest request,
+        Parameters args,
         IHeavyToolExecutionContext ctx,
         System.IProgress<HeavyToolProgress> progress,
         CancellationToken ct)
     {
-        var force = false;
-        if (request.Params.ValueKind == JsonValueKind.Object &&
-            request.Params.TryGetProperty("force", out var forceEl) &&
-            (forceEl.ValueKind == JsonValueKind.True || forceEl.ValueKind == JsonValueKind.False))
-        {
-            force = forceEl.GetBoolean();
-        }
+        var force = args.Force ?? false;
 
         var path = request.Path;
 

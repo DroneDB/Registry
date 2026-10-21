@@ -37,8 +37,24 @@ namespace Registry.Web.Services.HeavyTasks.Tools;
 /// per-file build jobs are enqueued automatically. No downloadable artifact is produced.
 /// Cooperatively cancellable - cancellation propagates to the remote NodeODX task.
 /// </summary>
-public sealed class PhotogrammetryTool : IHeavyTool
+public sealed class PhotogrammetryTool : HeavyToolBase<PhotogrammetryTool.Parameters>
 {
+    /// <summary>The tool's parameters as the request carries them (absent or ill-typed: null).</summary>
+    public sealed record Parameters(string? NodeId, string? Folder, List<string>? Images, bool? CreateNewDataset, string? DestPath, string? NewDatasetName, string? NewDatasetOrgSlug, string? NewDatasetVisibility, string? Name, string? Options);
+
+    protected override Parameters ReadParams(ToolParameters p) => new(
+        p.String("nodeId"),
+        p.String("folder"),
+        p.Strings("images"),
+        p.Bool("createNewDataset"),
+        p.String("destPath"),
+        p.String("newDatasetName"),
+        p.String("newDatasetOrgSlug"),
+        p.String("newDatasetVisibility"),
+        p.String("name"),
+        p.RawArray("options"));
+
+
     private static readonly JsonDocument Schema = JsonDocument.Parse(
         """
         {
@@ -97,28 +113,29 @@ public sealed class PhotogrammetryTool : IHeavyTool
         _pollInterval = TimeSpan.FromSeconds(Math.Max(1, seconds));
     }
 
-    public string Id => "photogrammetry";
-    public string Version => "2";
-    public string Title => "Photogrammetry (NodeODX)";
-    public HeavyToolPermission RequiredAccess => HeavyToolPermission.Write;
-    public bool ProducesArtifact => false;
-    public JsonDocument InputSchema => Schema;
+    public override string Id => "photogrammetry";
+    public override string Version => "2";
+    public override string Title => "Photogrammetry (NodeODX)";
+    public override HeavyToolPermission RequiredAccess => HeavyToolPermission.Write;
+    public override bool ProducesArtifact => false;
+    public override JsonDocument InputSchema => Schema;
 
-    public async Task ValidateAsync(HeavyToolRequest request, IHeavyToolValidationContext ctx, CancellationToken ct)
+    protected override async Task ValidateAsync(HeavyToolRequest request, Parameters args,
+        IHeavyToolValidationContext ctx, CancellationToken ct)
     {
         if (!_nodes.HasNodes)
             throw new InvalidOperationException("No NodeODX processing node is configured.");
 
-        var nodeId = ReadString(request.Params, "nodeId");
+        var nodeId = args.NodeId;
         if (_nodes.Resolve(nodeId) is null)
             throw new ArgumentException($"NodeODX node '{nodeId}' is not configured.");
 
         // Validate the optional image folder path (empty = whole dataset). Reject
         // rooted paths and traversal so a clean dataset-relative path is required.
-        _paths.NormalizeFolder(ReadString(request.Params, "folder"));
+        _paths.NormalizeFolder(args.Folder);
 
         // Validate explicit image list before collecting.
-        var explicitImages = ReadStringArray(request.Params, "images");
+        var explicitImages = args.Images;
         if (explicitImages is { Count: > 0 })
         {
             var missing = explicitImages.Where(p => !ctx.Ddb.EntryExists(_paths.Normalize(p))).ToList();
@@ -127,18 +144,18 @@ public sealed class PhotogrammetryTool : IHeavyTool
                     $"The following image paths do not exist in the dataset: {string.Join(", ", missing.Select(p => $"'{p}'"))}");
         }
 
-        var images = CollectImageEntries(request, ctx.Ddb);
+        var images = CollectImageEntries(request, args, ctx.Ddb);
         if (images.Count < 2)
             throw new ArgumentException("Photogrammetry requires at least 2 images.");
 
         // Validate output destination parameters.
-        var createNewDataset = ReadBool(request.Params, "createNewDataset") ?? false;
-        var destPath = ReadString(request.Params, "destPath") ?? string.Empty;
+        var createNewDataset = args.CreateNewDataset ?? false;
+        var destPath = args.DestPath ?? string.Empty;
 
         if (createNewDataset)
         {
             // Validate new dataset name when explicitly provided; omit to auto-generate a timestamped slug.
-            var newDatasetName = ReadString(request.Params, "newDatasetName");
+            var newDatasetName = args.NewDatasetName;
             if (!string.IsNullOrWhiteSpace(newDatasetName))
             {
                 if (newDatasetName.Length > 128)
@@ -150,7 +167,7 @@ public sealed class PhotogrammetryTool : IHeavyTool
             }
 
             // Validate visibility.
-            var visibilityStr = ReadString(request.Params, "newDatasetVisibility") ?? "PRIVATE";
+            var visibilityStr = args.NewDatasetVisibility ?? "PRIVATE";
             if (!Enum.TryParse<Visibility>(visibilityStr, true, out _))
                 throw new ArgumentException($"Invalid visibility '{visibilityStr}'. Must be PRIVATE, UNLISTED, or PUBLIC.");
         }
@@ -169,12 +186,12 @@ public sealed class PhotogrammetryTool : IHeavyTool
         }
     }
 
-    public HeavyToolPlan Plan(HeavyToolRequest request, IHeavyToolValidationContext ctx)
+    protected override HeavyToolPlan Plan(HeavyToolRequest request, Parameters args, IHeavyToolValidationContext ctx)
     {
         long? estimate = null;
         try
         {
-            var images = CollectImageEntries(request, ctx.Ddb);
+            var images = CollectImageEntries(request, args, ctx.Ddb);
             var inputBytes = images.Sum(e => Math.Max(0, e.Size));
             // ODM products (ortho + DSM/DTM + point cloud + model) are typically a
             // fraction of the raw image payload; rough upper-bound heuristic.
@@ -189,24 +206,25 @@ public sealed class PhotogrammetryTool : IHeavyTool
             DefaultFileName: null, ContentType: null);
     }
 
-    public async Task<HeavyToolArtifact?> ExecuteAsync(
+    protected override async Task<HeavyToolArtifact?> ExecuteAsync(
         HeavyToolRequest request,
+        Parameters args,
         IHeavyToolExecutionContext ctx,
         IProgress<HeavyToolProgress> progress,
         CancellationToken ct)
     {
         // --- Phase 1: Submit to NodeODX and download results ---
-        var nodeId = ReadString(request.Params, "nodeId");
+        var nodeId = args.NodeId;
         var node = _nodes.Resolve(nodeId)
                    ?? throw new InvalidOperationException($"NodeODX node '{nodeId}' is not configured.");
 
-        var entries = CollectImageEntries(request, ctx.Ddb);
+        var entries = CollectImageEntries(request, args, ctx.Ddb);
         if (entries.Count < 2)
             throw new InvalidOperationException("Photogrammetry requires at least 2 images.");
 
         var imagePaths = entries.Select(e => ctx.Ddb.GetLocalPath(e.Path)).ToList();
-        var taskName = ReadString(request.Params, "name") ?? $"{request.OrgSlug}/{request.DsSlug}";
-        var optionsJson = ReadRawJsonArray(request.Params, "options");
+        var taskName = args.Name ?? $"{request.OrgSlug}/{request.DsSlug}";
+        var optionsJson = args.Options;
 
         progress.Report(new HeavyToolProgress(0, "submitting",
             LogChunk: $"Submitting {imagePaths.Count} images to NodeODX node '{node.Id}'"));
@@ -238,13 +256,13 @@ public sealed class PhotogrammetryTool : IHeavyTool
         await _client.RemoveTaskAsync(node, uuid, CancellationToken.None);
 
         // --- Phase 2: Determine output target ---
-        var createNewDataset = ReadBool(request.Params, "createNewDataset") ?? false;
+        var createNewDataset = args.CreateNewDataset ?? false;
         var targetDdb = ctx.Ddb;
         var targetDataset = ctx.Dataset;
         var targetRoot = ctx.Ddb.DatasetFolderPath;
         var targetOrgSlug = request.OrgSlug;
         var targetDsSlug = request.DsSlug;
-        var destPath = _paths.NormalizeFolder(ReadString(request.Params, "destPath"));
+        var destPath = _paths.NormalizeFolder(args.DestPath);
 
         if (createNewDataset)
         {
@@ -252,10 +270,10 @@ public sealed class PhotogrammetryTool : IHeavyTool
             progress.Report(new HeavyToolProgress(0.96, "creating-dataset",
                 LogChunk: "Creating new dataset for photogrammetry results"));
 
-            var newDatasetName = ReadString(request.Params, "newDatasetName")
+            var newDatasetName = args.NewDatasetName
                 ?? $"photogrammetry-{DateTime.UtcNow:yyyyMMddHHmmss}";
-            var newDatasetOrgSlug = ReadString(request.Params, "newDatasetOrgSlug") ?? request.OrgSlug;
-            var visibilityStr = ReadString(request.Params, "newDatasetVisibility") ?? "PRIVATE";
+            var newDatasetOrgSlug = args.NewDatasetOrgSlug ?? request.OrgSlug;
+            var visibilityStr = args.NewDatasetVisibility ?? "PRIVATE";
             var visibility = Enum.Parse<Visibility>(visibilityStr, true);
 
             targetOrgSlug = newDatasetOrgSlug;
@@ -427,9 +445,9 @@ public sealed class PhotogrammetryTool : IHeavyTool
         _ => "processing"
     };
 
-    private List<Entry> CollectImageEntries(HeavyToolRequest request, IDDB ddb)
+    private List<Entry> CollectImageEntries(HeavyToolRequest request, Parameters args, IDDB ddb)
     {
-        var explicitImages = ReadStringArray(request.Params, "images");
+        var explicitImages = args.Images;
         IEnumerable<Entry> entries;
 
         if (explicitImages is { Count: > 0 })
@@ -441,7 +459,7 @@ public sealed class PhotogrammetryTool : IHeavyTool
         }
         else
         {
-            var folder = _paths.NormalizeFolder(ReadString(request.Params, "folder") ?? request.Path);
+            var folder = _paths.NormalizeFolder(args.Folder ?? request.Path);
             entries = ddb.Find(EntryQuery.OfTypes(folder, EntryType.Image, EntryType.GeoImage));
         }
 
@@ -474,41 +492,7 @@ public sealed class PhotogrammetryTool : IHeavyTool
         public void Report(T value) => report(value);
     }
 
-    private static string? ReadString(JsonElement obj, string name)
-    {
-        if (obj.ValueKind != JsonValueKind.Object) return null;
-        if (!obj.TryGetProperty(name, out var el)) return null;
-        return el.ValueKind == JsonValueKind.String ? el.GetString() : null;
-    }
 
-    private static bool? ReadBool(JsonElement obj, string name)
-    {
-        if (obj.ValueKind != JsonValueKind.Object) return null;
-        if (!obj.TryGetProperty(name, out var el)) return null;
-        return el.ValueKind switch
-        {
-            JsonValueKind.True => true,
-            JsonValueKind.False => false,
-            _ => null
-        };
-    }
 
-    private static List<string>? ReadStringArray(JsonElement obj, string name)
-    {
-        if (obj.ValueKind != JsonValueKind.Object) return null;
-        if (!obj.TryGetProperty(name, out var el) || el.ValueKind != JsonValueKind.Array) return null;
-        return
-        [
-            .. el.EnumerateArray()
-                .Where(x => x.ValueKind == JsonValueKind.String)
-                .Select(x => x.GetString()!)
-        ];
-    }
 
-    private static string? ReadRawJsonArray(JsonElement obj, string name)
-    {
-        if (obj.ValueKind != JsonValueKind.Object) return null;
-        if (!obj.TryGetProperty(name, out var el) || el.ValueKind != JsonValueKind.Array) return null;
-        return el.GetRawText();
-    }
 }

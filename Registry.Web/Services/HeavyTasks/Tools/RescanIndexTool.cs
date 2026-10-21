@@ -24,8 +24,17 @@ namespace Registry.Web.Services.HeavyTasks.Tools;
 /// With a type or extension filter only the rescanned entries are rebuilt
 /// (see <see cref="RescanRebuild"/>, resolved through <see cref="IServiceScopeFactory"/>).
 /// </summary>
-public sealed class RescanIndexTool : IHeavyTool
+public sealed class RescanIndexTool : HeavyToolBase<RescanIndexTool.Parameters>
 {
+    /// <summary>The tool's parameters as the request carries them (absent or ill-typed: null).</summary>
+    public sealed record Parameters(string? Types, string? Extensions, bool? StopOnError);
+
+    protected override Parameters ReadParams(ToolParameters p) => new(
+        p.String("types"),
+        p.String("extensions"),
+        p.Bool("stopOnError"));
+
+
     private static readonly JsonDocument Schema = JsonDocument.Parse(
         """
         {
@@ -48,13 +57,13 @@ public sealed class RescanIndexTool : IHeavyTool
 
     public RescanIndexTool(IServiceScopeFactory scopeFactory) => _scopeFactory = scopeFactory;
 
-    public string Id => HeavyToolIds.RescanIndex;
-    public string Version => "1";
-    public string Title => "Rescan index";
-    public HeavyToolPermission RequiredAccess => HeavyToolPermission.Write;
-    public bool ProducesArtifact => false;
-    public bool RunsNativeBuild => true;
-    public JsonDocument InputSchema => Schema;
+    public override string Id => HeavyToolIds.RescanIndex;
+    public override string Version => "1";
+    public override string Title => "Rescan index";
+    public override HeavyToolPermission RequiredAccess => HeavyToolPermission.Write;
+    public override bool ProducesArtifact => false;
+    public override bool RunsNativeBuild => true;
+    public override JsonDocument InputSchema => Schema;
 
     /// <summary>The params of a request that rescans the entries <paramref name="filter"/> selects.</summary>
     public static JsonElement CreateParams(RescanFilter filter, bool stopOnError) =>
@@ -65,23 +74,25 @@ public sealed class RescanIndexTool : IHeavyTool
             [StopOnErrorParam] = stopOnError
         });
 
-    public Task ValidateAsync(HeavyToolRequest request, IHeavyToolValidationContext ctx, CancellationToken ct)
+    protected override Task ValidateAsync(HeavyToolRequest request, Parameters args,
+        IHeavyToolValidationContext ctx, CancellationToken ct)
     {
-        ReadFilter(request); // throws ArgumentException (400) on an unknown type or an invalid extension
+        ReadFilter(args); // throws ArgumentException (400) on an unknown type or an invalid extension
         return Task.CompletedTask;
     }
 
-    public HeavyToolPlan Plan(HeavyToolRequest request, IHeavyToolValidationContext ctx)
+    protected override HeavyToolPlan Plan(HeavyToolRequest request, Parameters args, IHeavyToolValidationContext ctx)
         => new(EstimatedOutputBytes: null, QuotaKey: HeavyToolIds.RescanIndex, DefaultFileName: null, ContentType: null);
 
-    public async Task<HeavyToolArtifact?> ExecuteAsync(
+    protected override async Task<HeavyToolArtifact?> ExecuteAsync(
         HeavyToolRequest request,
+        Parameters args,
         IHeavyToolExecutionContext ctx,
         IProgress<HeavyToolProgress> progress,
         CancellationToken ct)
     {
-        var filter = ReadFilter(request);
-        var stopOnError = ReadBool(request.Params, StopOnErrorParam) ?? false;
+        var filter = ReadFilter(args);
+        var stopOnError = args.StopOnError ?? false;
 
         progress.Report(new HeavyToolProgress(-1, "rescanning",
             LogChunk: $"Rescanning index ({filter})"));
@@ -117,25 +128,7 @@ public sealed class RescanIndexTool : IHeavyTool
         public void BuildPending() => ctx.Builds.BuildPendingNow(ctx.Ddb, ctx.Hangfire);
     }
 
-    private static RescanFilter ReadFilter(HeavyToolRequest request) =>
-        RescanFilter.Parse(ReadString(request.Params, TypesParam), ReadString(request.Params, ExtensionsParam));
+    private static RescanFilter ReadFilter(Parameters args) => RescanFilter.Parse(args.Types, args.Extensions);
 
-    private static string? ReadString(JsonElement obj, string name)
-    {
-        if (obj.ValueKind != JsonValueKind.Object) return null;
-        if (!obj.TryGetProperty(name, out var el)) return null;
-        return el.ValueKind == JsonValueKind.String ? el.GetString() : null;
-    }
 
-    private static bool? ReadBool(JsonElement obj, string name)
-    {
-        if (obj.ValueKind != JsonValueKind.Object) return null;
-        if (!obj.TryGetProperty(name, out var el)) return null;
-        return el.ValueKind switch
-        {
-            JsonValueKind.True => true,
-            JsonValueKind.False => false,
-            _ => null
-        };
-    }
 }
