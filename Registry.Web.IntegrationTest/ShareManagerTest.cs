@@ -131,7 +131,7 @@ class ShareManagerTest : TestBase
         var settings = JsonConvert.DeserializeObject<AppSettings>(_settingsJson);
         _settingsOptions.Value = settings;
 
-        var manager = new ShareManager(_settingsOptions, _shareManagerLogger, _objectsManagerMock.Object,
+        var manager = new ShareManager(_shareManagerLogger, _objectsManagerMock.Object,
             _datasetsManagerMock.Object,
             _organizationsManagerMock.Object, _utilsMock.Object, _authManagerMock.Object,
             new DatasetAccessResolver(_utilsMock.Object, _authManagerMock.Object, _ddbFactoryMock.Object, TestPaths.Policy),
@@ -213,7 +213,7 @@ class ShareManagerTest : TestBase
             new OrganizationMembershipService(context, appContext, new UpperInvariantLookupNormalizer(),
                 NullLogger<OrganizationMembershipService>.Instance));
 
-        var shareManager = new ShareManager(_settingsOptions, _shareManagerLogger, objectManager,
+        var shareManager = new ShareManager(_shareManagerLogger, objectManager,
             datasetManager, organizationsManager, webUtils, _authManagerMock.Object,
             new DatasetAccessResolver(webUtils, _authManagerMock.Object, _ddbFactoryMock.Object, TestPaths.Policy),
             new BatchTokenGenerator(TestSettings.Options<ShareOptions>(_settingsOptions), _batchTokenGeneratorLogger),
@@ -322,7 +322,7 @@ class ShareManagerTest : TestBase
             new OrganizationMembershipService(context, appContext, new UpperInvariantLookupNormalizer(),
                 NullLogger<OrganizationMembershipService>.Instance));
 
-        var shareManager = new ShareManager(_settingsOptions, _shareManagerLogger, objectManager,
+        var shareManager = new ShareManager(_shareManagerLogger, objectManager,
             datasetManager, organizationsManager, webUtils, _authManagerMock.Object,
             new DatasetAccessResolver(webUtils, _authManagerMock.Object, _ddbFactoryMock.Object, TestPaths.Policy),
             new BatchTokenGenerator(TestSettings.Options<ShareOptions>(_settingsOptions), _batchTokenGeneratorLogger),
@@ -441,7 +441,7 @@ class ShareManagerTest : TestBase
             new OrganizationMembershipService(context, appContext, new UpperInvariantLookupNormalizer(),
                 NullLogger<OrganizationMembershipService>.Instance));
 
-        var shareManager = new ShareManager(_settingsOptions, _shareManagerLogger, objectManager,
+        var shareManager = new ShareManager(_shareManagerLogger, objectManager,
             datasetManager, organizationsManager, webUtils, _authManagerMock.Object,
             new DatasetAccessResolver(webUtils, _authManagerMock.Object, _ddbFactoryMock.Object, TestPaths.Policy),
             new BatchTokenGenerator(TestSettings.Options<ShareOptions>(_settingsOptions), _batchTokenGeneratorLogger),
@@ -585,7 +585,7 @@ class ShareManagerTest : TestBase
             new OrganizationMembershipService(context, appContext, new UpperInvariantLookupNormalizer(),
                 NullLogger<OrganizationMembershipService>.Instance));
 
-        var shareManager = new ShareManager(_settingsOptions, _shareManagerLogger, objectManager,
+        var shareManager = new ShareManager(_shareManagerLogger, objectManager,
             datasetManager, organizationsManager, webUtils, _authManagerMock.Object,
             new DatasetAccessResolver(webUtils, _authManagerMock.Object, _ddbFactoryMock.Object, TestPaths.Policy),
             new BatchTokenGenerator(TestSettings.Options<ShareOptions>(_settingsOptions), _batchTokenGeneratorLogger),
@@ -735,7 +735,7 @@ class ShareManagerTest : TestBase
             new OrganizationMembershipService(context, appContext, new UpperInvariantLookupNormalizer(),
                 NullLogger<OrganizationMembershipService>.Instance));
 
-        var shareManager = new ShareManager(_settingsOptions, _shareManagerLogger, objectManager,
+        var shareManager = new ShareManager(_shareManagerLogger, objectManager,
             datasetManager, organizationsManager, webUtils, _authManagerMock.Object,
             new DatasetAccessResolver(webUtils, _authManagerMock.Object, _ddbFactoryMock.Object, TestPaths.Policy),
             new BatchTokenGenerator(TestSettings.Options<ShareOptions>(_settingsOptions), _batchTokenGeneratorLogger),
@@ -869,7 +869,7 @@ class ShareManagerTest : TestBase
             new OrganizationMembershipService(context, appContext, new UpperInvariantLookupNormalizer(),
                 NullLogger<OrganizationMembershipService>.Instance));
 
-        var shareManager = new ShareManager(_settingsOptions, _shareManagerLogger, objectManager,
+        var shareManager = new ShareManager(_shareManagerLogger, objectManager,
             datasetManager, organizationsManager, webUtils, _authManagerMock.Object,
             new DatasetAccessResolver(webUtils, _authManagerMock.Object, _ddbFactoryMock.Object, TestPaths.Policy),
             new BatchTokenGenerator(TestSettings.Options<ShareOptions>(_settingsOptions), _batchTokenGeneratorLogger),

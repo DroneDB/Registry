@@ -67,13 +67,14 @@ public sealed class ImportDatasetTool : IHeavyTool
     /// <param name="factory">The import source factory.</param>
     /// <param name="protector">The credential protector used to decrypt stored secrets.</param>
     /// <param name="scopeFactory">Scope factory for per-execution scoped services.</param>
-    /// <param name="appSettings">The application settings.</param>
+    /// <param name="importSettings">The import settings.</param>
+    /// <param name="platformSettings">The processing platform settings (size cap, disk safety margin).</param>
     /// <param name="logger">The logger.</param>
     public ImportDatasetTool(
         IImportSourceFactory factory,
         IImportCredentialProtector protector,
         IServiceScopeFactory scopeFactory,
-        IOptions<AppSettings> appSettings,
+        IOptions<ImportSettings> importSettings, IOptions<ProcessingPlatformSettings> platformSettings,
         IFileSystem fs,
         DatasetPathPolicy paths,
         VolumeHeadroom headroom,
@@ -85,9 +86,9 @@ public sealed class ImportDatasetTool : IHeavyTool
         _paths = paths;
         _protector = protector;
         _scopeFactory = scopeFactory;
-        _settings = appSettings.Value.Import ?? new ImportSettings();
+        _settings = importSettings.Value;
         _diskSafetyMarginBytes =
-            (appSettings.Value.ProcessingPlatform ?? new ProcessingPlatformSettings()).DiskSafetyMarginBytes;
+            platformSettings.Value.DiskSafetyMarginBytes;
         _logger = logger;
     }
 

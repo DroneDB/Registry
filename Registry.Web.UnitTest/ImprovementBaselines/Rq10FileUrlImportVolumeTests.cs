@@ -96,7 +96,7 @@ public sealed class Rq10FileUrlImportVolumeTests
         });
 
         return new FileUrlImportTool(downloader, guard, Mock.Of<IImportCredentialProtector>(),
-            Mock.Of<IServiceScopeFactory>(), options, TestPaths.Policy, TestScratch.Provider,
+            Mock.Of<IServiceScopeFactory>(), TestSettings.Options<ImportSettings>(options), TestSettings.Options<ProcessingPlatformSettings>(options), TestPaths.Policy, TestScratch.Provider,
             NullLogger<FileUrlImportTool>.Instance);
     }
 

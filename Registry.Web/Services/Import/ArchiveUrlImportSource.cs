@@ -49,13 +49,14 @@ public sealed class ArchiveUrlImportSource : IImportSource
     /// <param name="ssrfGuard">The SSRF guard.</param>
     /// <param name="httpClientFactory">The HTTP client factory.</param>
     /// <param name="downloader">The SSRF-hardened, disk- and speed-guarded single-file downloader.</param>
-    /// <param name="appSettings">The application settings (import cap + disk safety margin).</param>
+    /// <param name="importSettings">The import settings.</param>
+    /// <param name="platformSettings">The processing platform settings (size cap, disk safety margin).</param>
     /// <param name="archives">The shared extraction into a dataset (path rule, budget, rollback).</param>
     /// <param name="scratch">Where the downloaded archive is written (the configured temp folder).</param>
     /// <param name="logger">The logger.</param>
     public ArchiveUrlImportSource(IArchiveExtractor extractor, SsrfGuard ssrfGuard,
         IHttpClientFactory httpClientFactory, GuardedHttpDownloader downloader,
-        IOptions<AppSettings> appSettings, DatasetArchiveExtractor archives, IScratchFileProvider scratch,
+        IOptions<ImportSettings> importSettings, IOptions<ProcessingPlatformSettings> platformSettings, DatasetArchiveExtractor archives, IScratchFileProvider scratch,
         ILogger<ArchiveUrlImportSource> logger)
     {
         _archives = archives;
@@ -64,10 +65,10 @@ public sealed class ArchiveUrlImportSource : IImportSource
         _ssrfGuard = ssrfGuard;
         _httpClientFactory = httpClientFactory;
         _downloader = downloader;
-        _settings = appSettings.Value.Import ?? new ImportSettings();
+        _settings = importSettings.Value;
         _maxImportSizeBytes = _settings.MaxImportSizeBytes;
         _diskSafetyMarginBytes =
-            (appSettings.Value.ProcessingPlatform ?? new ProcessingPlatformSettings()).DiskSafetyMarginBytes;
+            platformSettings.Value.DiskSafetyMarginBytes;
         _logger = logger;
     }
 

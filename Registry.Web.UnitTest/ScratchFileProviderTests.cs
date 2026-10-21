@@ -72,7 +72,7 @@ public class ScratchFileProviderTests
     [Test]
     public void Root_WithoutATempPath_FailsWithAClearMessage()
     {
-        var scratch = new ScratchFileProvider(Microsoft.Extensions.Options.Options.Create(new ScratchOptions()),
+        var scratch = new ScratchFileProvider(Microsoft.Extensions.Options.Options.Create(new StorageOptions()),
             new FileSystem(), NullLogger<ScratchFileProvider>.Instance);
 
         Should.Throw<InvalidOperationException>(() => scratch.Root).Message.ShouldContain("TempPath");

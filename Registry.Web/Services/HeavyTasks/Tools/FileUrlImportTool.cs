@@ -68,7 +68,8 @@ public sealed class FileUrlImportTool : IHeavyTool
     /// <param name="ssrfGuard">The SSRF guard (fast pre-validation at submit time).</param>
     /// <param name="protector">The credential protector used to decrypt the basic-auth password.</param>
     /// <param name="scopeFactory">Scope factory for per-execution scoped services.</param>
-    /// <param name="appSettings">The application settings.</param>
+    /// <param name="importSettings">The import settings.</param>
+    /// <param name="platformSettings">The processing platform settings (size cap, disk safety margin).</param>
     /// <param name="paths">The dataset path rule (destination folder and file).</param>
     /// <param name="scratch">Where the download is written: the dataset's volume, so the move into place is a rename.</param>
     /// <param name="logger">The logger.</param>
@@ -77,7 +78,7 @@ public sealed class FileUrlImportTool : IHeavyTool
         SsrfGuard ssrfGuard,
         IImportCredentialProtector protector,
         IServiceScopeFactory scopeFactory,
-        IOptions<AppSettings> appSettings,
+        IOptions<ImportSettings> importSettings, IOptions<ProcessingPlatformSettings> platformSettings,
         DatasetPathPolicy paths,
         IScratchFileProvider scratch,
         ILogger<FileUrlImportTool> logger)
@@ -88,9 +89,9 @@ public sealed class FileUrlImportTool : IHeavyTool
         _ssrfGuard = ssrfGuard;
         _protector = protector;
         _scopeFactory = scopeFactory;
-        _importSettings = appSettings.Value.Import ?? new ImportSettings();
+        _importSettings = importSettings.Value;
         _diskSafetyMarginBytes =
-            (appSettings.Value.ProcessingPlatform ?? new ProcessingPlatformSettings()).DiskSafetyMarginBytes;
+            platformSettings.Value.DiskSafetyMarginBytes;
         _logger = logger;
     }
 

@@ -126,7 +126,7 @@ public class UploadManagerTests
 
         return new UploadManager(NullLogger<UploadManager>.Instance, _auth.Object,
             new DatasetAccessResolver(_utils.Object, _auth.Object, ddbManager.Object, TestPaths.Policy), ddbManager.Object,
-            new Registry.Adapters.FileSystem(), options, jobs, buildPending,
+            new Registry.Adapters.FileSystem(), TestSettings.Options<ThumbnailOptions>(options), TestSettings.Options<ImportSettings>(options), jobs, buildPending,
             new UploadQuotaGuard(new UploadQuotaLedger(TimeSpan.FromMinutes(1)), _utils.Object), _changes.Object,
             TestPaths.Policy,
             TestScratch.Provider,

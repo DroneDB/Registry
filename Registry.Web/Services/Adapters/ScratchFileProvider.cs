@@ -12,7 +12,7 @@ namespace Registry.Web.Services.Adapters;
 
 /// <summary>
 /// <see cref="IScratchFileProvider"/> over <see cref="IFileSystem"/>: the configured temp folder
-/// (<see cref="ScratchOptions.TempPath"/>) and the dataset uploads folder. Generalizes the upload
+/// (<see cref="StorageOptions.TempPath"/>, <c>AppSettings:TempPath</c>) and the dataset uploads folder. Generalizes the upload
 /// pipeline's temp files (same volume as the dataset, a new name every time).
 /// </summary>
 public sealed class ScratchFileProvider : IScratchFileProvider
@@ -21,7 +21,7 @@ public sealed class ScratchFileProvider : IScratchFileProvider
     private readonly ILogger<ScratchFileProvider> _logger;
     private readonly Lazy<string> _root;
 
-    public ScratchFileProvider(IOptions<ScratchOptions> options, IFileSystem fs, ILogger<ScratchFileProvider> logger)
+    public ScratchFileProvider(IOptions<StorageOptions> options, IFileSystem fs, ILogger<ScratchFileProvider> logger)
     {
         ArgumentNullException.ThrowIfNull(options);
         _fs = fs;

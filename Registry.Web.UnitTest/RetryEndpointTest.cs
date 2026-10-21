@@ -105,7 +105,7 @@ public class RetryEndpointTest : IDisposable
             ddbManager.Object,
             new Mock<IDistributedCache>().Object,
             new Mock<IHttpContextAccessor>().Object,
-            appSettings,
+            TestSettings.Options<ProcessingPlatformSettings>(appSettings),
             TestScratch.Provider,
             new Registry.Adapters.FileSystem(),
             new Mock<ILogger<TasksManager>>().Object);

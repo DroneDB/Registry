@@ -27,7 +27,6 @@ public class ShareManager : IShareManager
 {    private readonly IOrganizationsManager _organizationsManager;
     private readonly IDatasetsManager _datasetsManager;
     private readonly IObjectsManager _objectsManager;
-    private readonly IOptions<AppSettings> _settings;
     private readonly ILogger<ShareManager> _logger;
     private readonly IUtils _utils;
     private readonly IAuthManager _authManager;
@@ -42,7 +41,6 @@ public class ShareManager : IShareManager
     private readonly IDdbManager? _ddbManager;
 
     public ShareManager(
-        IOptions<AppSettings> settings,
         ILogger<ShareManager> logger,
         IObjectsManager objectsManager,
         IDatasetsManager datasetsManager,
@@ -59,7 +57,6 @@ public class ShareManager : IShareManager
         IChunkStore? chunkStore = null,
         IDdbManager? ddbManager = null)
     {
-        _settings = settings;
         _logger = logger;
         _objectsManager = objectsManager;
         _datasetsManager = datasetsManager;

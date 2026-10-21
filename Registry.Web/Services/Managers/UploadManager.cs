@@ -35,7 +35,7 @@ public sealed partial class UploadManager : IUploadManager
     private readonly IDatasetAccessResolver _access;
     private readonly IDdbManager _ddbManager;
     private readonly IFileSystem _fs;
-    private readonly AppSettings _settings;
+    private readonly int _defaultThumbnailSize;
     private readonly ImportSettings _import;
     private readonly IBackgroundJobsProcessor _backgroundJob;
     private readonly BuildPendingService _buildPendingService;
@@ -48,7 +48,8 @@ public sealed partial class UploadManager : IUploadManager
     private readonly IScratchFileProvider _scratch;
 
     public UploadManager(ILogger<UploadManager> logger, IAuthManager authManager,
-        IDatasetAccessResolver access, IDdbManager ddbManager, IFileSystem fs, IOptions<AppSettings> settings,
+        IDatasetAccessResolver access, IDdbManager ddbManager, IFileSystem fs, IOptions<ThumbnailOptions> thumbnailOptions,
+        IOptions<ImportSettings> importSettings,
         IBackgroundJobsProcessor backgroundJob, BuildPendingService buildPendingService, IUploadQuotaGuard quota,
         IDatasetChangeCoalescer changes, DatasetPathPolicy paths, IScratchFileProvider scratch,
         IUploadReceiptStore? receipts = null,
@@ -59,8 +60,8 @@ public sealed partial class UploadManager : IUploadManager
         _access = access;
         _ddbManager = ddbManager;
         _fs = fs;
-        _settings = settings.Value;
-        _import = _settings.Import ?? new ImportSettings();
+        _defaultThumbnailSize = thumbnailOptions.Value.DefaultThumbnailSize;
+        _import = importSettings.Value;
         _backgroundJob = backgroundJob;
         _buildPendingService = buildPendingService;
         _quota = quota;
@@ -471,7 +472,7 @@ public sealed partial class UploadManager : IUploadManager
                 continue;
 
             _thumbnails.TryEnqueue(new ThumbnailPrecomputeRequest(ctx.OrgSlug, ctx.DsSlug, part.Entry.Hash,
-                part.LocalPath, _settings.DefaultThumbnailSize));
+                part.LocalPath, _defaultThumbnailSize));
         }
 
         // OGC documents and the dataset thumbnail: once per dataset per window, not per file

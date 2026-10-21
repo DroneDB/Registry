@@ -8,7 +8,7 @@ namespace Registry.Web.Services.Ports;
 /// Where the Registry writes files that are not (yet) part of a dataset (RQ-10). Two places, by what
 /// happens to the file next:
 /// <list type="bullet">
-/// <item><see cref="Create"/>: under the configured temp folder (<c>AppSettings.TempPath</c>), for a
+/// <item><see cref="Create"/>: under the configured temp folder (<c>StorageOptions.TempPath</c>), for a
 /// file that is read and deleted (a downloaded archive, an export, a task folder).</item>
 /// <item><see cref="CreateForDataset"/>: in the dataset's uploads folder, the same volume as the
 /// dataset, for a file that is moved into it later: the move is a rename, never a copy.</item>

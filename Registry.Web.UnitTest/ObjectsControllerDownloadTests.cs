@@ -71,7 +71,7 @@ public class ObjectsControllerDownloadTests
             CreateManager().Object,
             Mock.Of<ILogger<ObjectsController>>(),
             MSOptions.Create(new FormOptions()),
-            MSOptions.Create(new AppSettings()), TestPaths.Policy)
+            TestSettings.Options<ThumbnailOptions>(MSOptions.Create(new AppSettings())), TestPaths.Policy)
         {
             ControllerContext = new ControllerContext { HttpContext = httpContext }
         };

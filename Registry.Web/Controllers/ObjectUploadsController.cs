@@ -44,7 +44,7 @@ public class ObjectUploadsController : ControllerBaseEx
     private readonly IFileSystem _fs;
 
     public ObjectUploadsController(IUploadManager uploads, IChunkedUploadManager chunks, IObjectsManager objectsManager,
-        ILogger<ObjectUploadsController> logger, IOptions<FormOptions> formOptions, IOptions<AppSettings> appSettings,
+        ILogger<ObjectUploadsController> logger, IOptions<FormOptions> formOptions, IOptions<UploadSettings> uploadSettings,
         ApiErrorResponder errors, IFileSystem fs)
     {
         _fs = fs;
@@ -53,7 +53,7 @@ public class ObjectUploadsController : ControllerBaseEx
         _objectsManager = objectsManager;
         _logger = logger;
         _formOptions = formOptions.Value;
-        _uploadSettings = appSettings.Value.Uploads ?? new UploadSettings();
+        _uploadSettings = uploadSettings.Value;
         _errors = errors;
     }
 

@@ -41,14 +41,14 @@ public sealed class HeavyTaskJobWrapper
     public HeavyTaskJobWrapper(
         IServiceScopeFactory scopeFactory,
         IHeavyToolRegistry registry,
-        IOptions<AppSettings> appSettings,
+        IOptions<ProcessingPlatformSettings> platformSettings,
         IScratchFileProvider scratch,
         IFileSystem fs,
         ILogger<HeavyTaskJobWrapper> log)
     {
         _scopeFactory = scopeFactory;
         _registry = registry;
-        _settings = appSettings.Value.ProcessingPlatform ?? new ProcessingPlatformSettings();
+        _settings = platformSettings.Value;
         _tempPath = scratch.Root;
         _fs = fs;
         _log = log;

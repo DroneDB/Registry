@@ -71,7 +71,7 @@ public class ArchiveExtractToolTests
         };
 
         var tool = new ArchiveExtractTool(
-            extractor, TestArchives.Extractor(extractor), scopeFactory, Microsoft.Extensions.Options.Options.Create(settings),
+            extractor, TestArchives.Extractor(extractor), scopeFactory, TestSettings.Options<ImportSettings>(Microsoft.Extensions.Options.Options.Create(settings)), TestSettings.Options<ProcessingPlatformSettings>(Microsoft.Extensions.Options.Options.Create(settings)),
             TestPaths.Policy,
             TestHeadroom.Default,
             NullLogger<ArchiveExtractTool>.Instance);

@@ -78,7 +78,7 @@ public sealed class PhotogrammetryTool : IHeavyTool
         INodeOdxNodeRegistry nodes,
         DatasetArchiveExtractor archives,
         IServiceScopeFactory scopeFactory,
-        IOptions<AppSettings> appSettings,
+        IOptions<ImportSettings> importSettings, IOptions<ProcessingPlatformSettings> platformSettings,
         DatasetPathPolicy paths,
         IScratchFileProvider scratch,
         ILogger<PhotogrammetryTool> logger)
@@ -89,10 +89,10 @@ public sealed class PhotogrammetryTool : IHeavyTool
         _nodes = nodes;
         _archives = archives;
         _scopeFactory = scopeFactory;
-        _settings = appSettings.Value.ProcessingPlatform ?? new ProcessingPlatformSettings();
-        _importSettings = appSettings.Value.Import ?? new ImportSettings();
+        _settings = platformSettings.Value;
+        _importSettings = importSettings.Value;
         _logger = logger;
-        var seconds = appSettings.Value.ProcessingPlatform?.RemoteNodePollIntervalSeconds ?? 2;
+        var seconds = platformSettings.Value.RemoteNodePollIntervalSeconds;
         _pollInterval = TimeSpan.FromSeconds(Math.Max(1, seconds));
     }
 

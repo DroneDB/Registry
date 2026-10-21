@@ -143,7 +143,7 @@ public class PushPipelineTests : TestBase
             Mock.Of<ILogger<BuildPendingService>>());
         return new PushManager(_utils.Object, ddbManager.Object, _objects.Object,
             CreateTestLogger<PushManager>(Serilog.Events.LogEventLevel.Warning), Mock.Of<IDatasetsManager>(),
-            auth.Object, new DatasetAccessResolver(_utils.Object, auth.Object, ddbManager.Object, TestPaths.Policy), _wrapper.Object, _jobs.Object, settings, cache.Object, fileSystem, buildPending,
+            auth.Object, new DatasetAccessResolver(_utils.Object, auth.Object, ddbManager.Object, TestPaths.Policy), _wrapper.Object, _jobs.Object, TestSettings.Options<ImportSettings>(settings), cache.Object, fileSystem, buildPending,
             new PushSessionStore(fileSystem), new UploadQuotaGuard(_ledger, _utils.Object), TestPaths.Policy, TestScratch.Provider);
     }
 

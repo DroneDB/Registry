@@ -42,9 +42,9 @@ public sealed class RasterExportTool : IHeavyTool
 
     private readonly int _defaultTileSize;
 
-    public RasterExportTool(IOptions<AppSettings> appSettings)
+    public RasterExportTool(IOptions<ProcessingPlatformSettings> platformSettings)
     {
-        _defaultTileSize = appSettings.Value.ProcessingPlatform?.DefaultRasterTileSize ?? 512;
+        _defaultTileSize = platformSettings.Value.DefaultRasterTileSize;
         if (_defaultTileSize < 1) _defaultTileSize = 512;
     }
 

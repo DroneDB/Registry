@@ -36,7 +36,6 @@ public class PushManager : IPushManager
     private readonly IDatasetAccessResolver _access;
     private readonly IDdbWrapper _ddbWrapper;
     private readonly ILogger<PushManager> _logger;
-    private readonly AppSettings _settings;
     private readonly IBackgroundJobsProcessor _backgroundJob;
     private readonly ICacheManager _cacheManager;
     private readonly IFileSystem _fileSystem;
@@ -50,7 +49,7 @@ public class PushManager : IPushManager
     public PushManager(IUtils utils, IDdbManager ddbManager,
         IObjectsManager objectsManager, ILogger<PushManager> logger, IDatasetsManager datasetsManager,
         IAuthManager authManager, IDatasetAccessResolver access, IDdbWrapper ddbWrapper,
-        IBackgroundJobsProcessor backgroundJob, IOptions<AppSettings> settings, ICacheManager cacheManager,
+        IBackgroundJobsProcessor backgroundJob, IOptions<ImportSettings> importSettings, ICacheManager cacheManager,
         IFileSystem fileSystem, BuildPendingService buildPendingService, IPushSessionStore sessionStore,
         IUploadQuotaGuard quota, DatasetPathPolicy paths, IScratchFileProvider scratch)
     {
@@ -63,11 +62,10 @@ public class PushManager : IPushManager
         _access = access;
         _ddbWrapper = ddbWrapper;
         _backgroundJob = backgroundJob;
-        _settings = settings.Value;
         _cacheManager = cacheManager;
         _fileSystem = fileSystem;
         _buildPendingService = buildPendingService;
-        _importSettings = settings.Value.Import ?? new ImportSettings();
+        _importSettings = importSettings.Value;
         _sessionStore = sessionStore;
         _quota = quota;
         _paths = paths;

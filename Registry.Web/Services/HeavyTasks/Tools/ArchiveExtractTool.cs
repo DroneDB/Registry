@@ -64,7 +64,7 @@ public sealed class ArchiveExtractTool : IHeavyTool
         IArchiveExtractor extractor,
         DatasetArchiveExtractor archives,
         IServiceScopeFactory scopeFactory,
-        IOptions<AppSettings> appSettings,
+        IOptions<ImportSettings> importSettings, IOptions<ProcessingPlatformSettings> platformSettings,
         DatasetPathPolicy paths,
         VolumeHeadroom headroom,
         ILogger<ArchiveExtractTool> logger)
@@ -74,8 +74,8 @@ public sealed class ArchiveExtractTool : IHeavyTool
         _archives = archives;
         _paths = paths;
         _scopeFactory = scopeFactory;
-        _settings = appSettings.Value.ProcessingPlatform ?? new ProcessingPlatformSettings();
-        _importSettings = appSettings.Value.Import ?? new ImportSettings();
+        _settings = platformSettings.Value;
+        _importSettings = importSettings.Value;
         _logger = logger;
     }
 

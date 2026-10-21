@@ -116,7 +116,10 @@ public class ObjectsManager : IObjectsManager
         // The DI-registered pipeline in production; tests constructing this class directly get one
         // over the same collaborators (indexing with AddRaw when no queue is given).
         _uploads = uploadManager ?? new UploadManager(NullLogger<UploadManager>.Instance, authManager,
-            access, ddbManager, fs, settings, backgroundJob, buildPendingService,
+            access, ddbManager, fs,
+            Microsoft.Extensions.Options.Options.Create(new ThumbnailOptions { DefaultThumbnailSize = settings.Value.DefaultThumbnailSize }),
+            Microsoft.Extensions.Options.Options.Create(settings.Value.Import ?? new ImportSettings()),
+            backgroundJob, buildPendingService,
             new UploadQuotaGuard(new UploadQuotaLedger(Microsoft.Extensions.Options.Options.Create(settings.Value.Uploads ?? new UploadSettings())), utils),
             new DatasetChangeCoalescer(FallbackOgcKeys(), cacheManager, settings.Value.EffectiveDatasetThumbnailCandidates(),
                 TimeSpan.Zero, NullLogger<DatasetChangeCoalescer>.Instance),

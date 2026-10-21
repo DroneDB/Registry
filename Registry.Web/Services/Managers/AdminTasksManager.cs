@@ -38,7 +38,7 @@ public sealed class AdminTasksManager : IAdminTasksManager
         IJobIndexWriter writer,
         IAuthManager authManager,
         UserManager<User> userManager,
-        IOptions<AppSettings> appSettings,
+        IOptions<ProcessingPlatformSettings> platformSettings,
         IScratchFileProvider scratch,
         IFileSystem fs)
     {
@@ -46,7 +46,7 @@ public sealed class AdminTasksManager : IAdminTasksManager
         _writer = writer;
         _authManager = authManager;
         _userManager = userManager;
-        _artifactTtlHours = (appSettings.Value.ProcessingPlatform ?? new ProcessingPlatformSettings()).ArtifactTtlHours;
+        _artifactTtlHours = platformSettings.Value.ArtifactTtlHours;
         _tempPath = scratch.Root;
         _fs = fs;
     }

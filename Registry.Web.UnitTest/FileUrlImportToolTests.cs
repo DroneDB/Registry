@@ -46,7 +46,7 @@ public class FileUrlImportToolTests
         });
 
         return new FileUrlImportTool(downloader, guard, Mock.Of<IImportCredentialProtector>(),
-            Mock.Of<IServiceScopeFactory>(), options, TestPaths.Policy, TestScratch.Provider, NullLogger<FileUrlImportTool>.Instance);
+            Mock.Of<IServiceScopeFactory>(), TestSettings.Options<ImportSettings>(options), TestSettings.Options<ProcessingPlatformSettings>(options), TestPaths.Policy, TestScratch.Provider, NullLogger<FileUrlImportTool>.Instance);
     }
 
     private static IHeavyToolValidationContext Ctx(bool entryExists = false)

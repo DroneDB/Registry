@@ -18,6 +18,6 @@ public static class TestScratch
 
     /// <summary>A provider whose temp folder is <paramref name="tempPath"/>.</summary>
     public static IScratchFileProvider For(string tempPath) =>
-        new ScratchFileProvider(Microsoft.Extensions.Options.Options.Create(new ScratchOptions { TempPath = tempPath }), new FileSystem(),
+        new ScratchFileProvider(Microsoft.Extensions.Options.Options.Create(new StorageOptions { TempPath = tempPath }), new FileSystem(),
             NullLogger<ScratchFileProvider>.Instance);
 }

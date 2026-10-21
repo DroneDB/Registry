@@ -62,7 +62,7 @@ public sealed class TasksManager : ITasksManager
         IDdbManager ddbManager,
         IDistributedCache cache,
         IHttpContextAccessor httpContextAccessor,
-        IOptions<AppSettings> appSettings,
+        IOptions<ProcessingPlatformSettings> platformSettings,
         IScratchFileProvider scratch,
         IFileSystem fs,
         ILogger<TasksManager> logger,
@@ -81,7 +81,7 @@ public sealed class TasksManager : ITasksManager
         _ddbManager = ddbManager;
         _cache = cache;
         _httpContextAccessor = httpContextAccessor;
-        _settings = appSettings.Value.ProcessingPlatform ?? new ProcessingPlatformSettings();
+        _settings = platformSettings.Value;
         _tempPath = scratch.Root;
         _fs = fs;
         _logger = logger;

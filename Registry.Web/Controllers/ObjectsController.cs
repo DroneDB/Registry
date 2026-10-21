@@ -43,16 +43,16 @@ public class ObjectsController : ControllerBaseEx
     private readonly IObjectsManager _objectsManager;
     private readonly ILogger<ObjectsController> _logger;
     private readonly FormOptions _formOptions;
-    private readonly AppSettings _appSettings;
+    private readonly ThumbnailOptions _thumbnails;
     private readonly DatasetPathPolicy _paths;
 
     public ObjectsController(IObjectsManager datasetsManager, ILogger<ObjectsController> logger,
-        IOptions<FormOptions> formOptions, IOptions<AppSettings> appSettings, DatasetPathPolicy paths)
+        IOptions<FormOptions> formOptions, IOptions<ThumbnailOptions> thumbnails, DatasetPathPolicy paths)
     {
         _objectsManager = datasetsManager;
         _logger = logger;
         _formOptions = formOptions.Value;
-        _appSettings = appSettings.Value;
+        _thumbnails = thumbnails.Value;
         _paths = paths;
     }
 
@@ -134,7 +134,7 @@ public class ObjectsController : ControllerBaseEx
                 path.StartsWith('/') ? path[1..] : path);
 
             cachePolicy = HashedContentCachePolicy.For(obj.Hash, v, "thumb",
-                size ?? _appSettings.DefaultThumbnailSize, obj.SourceVersion);
+                size ?? _thumbnails.DefaultThumbnailSize, obj.SourceVersion);
             if (cachePolicy.IsNotModified(Request))
                 return NotModified(cachePolicy);
 

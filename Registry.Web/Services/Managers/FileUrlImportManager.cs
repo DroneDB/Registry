@@ -49,7 +49,7 @@ public class FileUrlImportManager : IFileUrlImportManager
         IImportCredentialProtector protector,
         GuardedHttpDownloader downloader,
         IHttpContextAccessor httpContextAccessor,
-        IOptions<AppSettings> appSettings,
+        IOptions<ImportSettings> importSettings,
         DatasetPathPolicy paths,
         ILogger<FileUrlImportManager> logger)
     {
@@ -61,7 +61,7 @@ public class FileUrlImportManager : IFileUrlImportManager
         _protector = protector;
         _downloader = downloader;
         _httpContextAccessor = httpContextAccessor;
-        _settings = appSettings.Value.Import ?? new ImportSettings();
+        _settings = importSettings.Value;
         _logger = logger;
     }
 
