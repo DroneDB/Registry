@@ -1,4 +1,5 @@
 #nullable enable
+using Registry.Web.Services.Jobs;
 using System;
 using System.Collections.Concurrent;
 using System.IO;
@@ -200,8 +201,7 @@ public class ReservedPathCallSitesTests
 
         var manager = new SystemManager(auth.Object, context, ddbManager.Object,
             NullLogger<SystemManager>.Instance, Mock.Of<IObjectsManager>(), settings,
-            new BuildPendingService(context, ddbManager.Object, backgroundJob.Object, cache.Object,
-                Mock.Of<ILogger<BuildPendingService>>()),
+            new BuildPendingService(context, new DatasetSweep(context), ddbManager.Object, backgroundJob.Object, cache.Object, TestJobs.NewStorage(), Mock.Of<ILogger<BuildPendingService>>()),
             factory.Object, backgroundJob.Object, cache.Object, new FileSystem(), Mock.Of<IJobIndexWriter>(),
             new SsrfGuard(new ImportSettings { SsrfAllowPrivateNetworks = true }), TestPaths.Policy, TimeProvider.System);
 

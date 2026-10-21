@@ -1,4 +1,6 @@
 using System;
+using Registry.Ports;
+using Registry.Web.Services.Jobs;
 using System.Collections.Generic;
 using System.Linq;
 using System.Linq.Expressions;
@@ -274,7 +276,7 @@ public class BuildStatusServiceTest : TestBase
     public async Task AnnotateAsync_PendingRetryFailsForNonDependencyReason_MarksFailed()
     {
         // A pending OBJ was deferred by its original (succeeded) build job. The retry is the
-        // indexed BuildWrapper enqueued by HangfireUtils.BuildPendingWrapper; build the JobIndex
+        // indexed build enqueued by the pending-build job (PendingBuildEnqueuer); build the JobIndex
         // row from that exact payload so the Path BuildStatusService matches on is the real one.
         const string path = "sub/model.obj";
         var entry = Entry(path, EntryType.Model);
@@ -285,13 +287,19 @@ public class BuildStatusServiceTest : TestBase
 
         IndexPayload retryMeta = null;
         var jobs = new Mock<IBackgroundJobsProcessor>();
-        jobs.Setup(x => x.EnqueueIndexed(It.IsAny<Expression<Action>>(), It.IsAny<IndexPayload>()))
-            .Callback<Expression<Action>, IndexPayload>((_, meta) => retryMeta = meta)
+        jobs.Setup(x => x.EnqueueIndexed(It.IsAny<Expression<Action<DdbJobs>>>(), It.IsAny<IndexPayload>()))
+            .Callback<Expression<Action<DdbJobs>>, IndexPayload>((_, meta) => retryMeta = meta)
             .Returns("retry-1");
         AddJob(path, "Succeeded", DateTime.UtcNow.AddMinutes(-5));
 
-        HangfireUtils.BuildPendingWrapper(_ddbMock.Object, null, jobs.Object, _jobIndexQuery,
-            OrgSlug, DsSlug, () => 1_800_000_000, new InMemoryStorage());
+        var manager = new Mock<IDdbManager>();
+        var folderOrg = OrgSlug;
+        var internalRef = Guid.NewGuid();
+        manager.Setup(m => m.TryParseDatasetFolder(It.IsAny<string>(), out folderOrg, out internalRef)).Returns(true);
+        new PendingBuildEnqueuer(jobs.Object, _jobIndexQuery, manager.Object, new InMemoryStorage(),
+                new FakeTime(DateTimeOffset.FromUnixTimeSeconds(1_800_000_000).UtcDateTime))
+            .Run(_ddbMock.Object, OrgSlug, DsSlug,
+                JobConsole.For(Microsoft.Extensions.Logging.Abstractions.NullLogger.Instance, null));
 
         retryMeta.ShouldNotBeNull();
         var retry = new JobIndex

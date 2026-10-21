@@ -24,7 +24,8 @@ namespace Registry.Web.Test.Support;
 /// <item>DDB manager, utils, auth, cache, DDB wrapper, thumbnails, job index query: loose Moq mocks;</item>
 /// <item>build-pending service: a real <see cref="BuildPendingService"/> on the SUT context and the
 /// DDB manager, background jobs and cache above (resolved at <see cref="Build"/> time);</item>
-/// <item>the optional constructor dependencies: <c>null</c>, so the manager uses its own fallbacks.</item>
+/// <item>dataset cache invalidator: a real one over the cache above (<see cref="TestJobs.CacheInvalidator"/>);</item>
+/// <item>the other optional constructor dependencies: <c>null</c>, so the manager uses its own fallbacks.</item>
 /// </list>
 /// </summary>
 public sealed class ObjectsManagerBuilder
@@ -84,8 +85,8 @@ public sealed class ObjectsManagerBuilder
         var ddbManager = _ddbManager ?? Mock.Of<IDdbManager>();
         var backgroundJobs = _backgroundJobs ?? new SimpleBackgroundJobsProcessor();
         var cacheManager = _cacheManager ?? Mock.Of<ICacheManager>();
-        var buildPendingService = _buildPendingService ?? new BuildPendingService(
-            _context, ddbManager, backgroundJobs, cacheManager, NullLogger<BuildPendingService>.Instance);
+        var buildPendingService = _buildPendingService ??
+                                  TestJobs.BuildPendingService(_context, ddbManager, backgroundJobs, cacheManager);
 
         var utils = _utils ?? Mock.Of<IUtils>();
         var authManager = _authManager ?? Mock.Of<IAuthManager>();
@@ -109,7 +110,7 @@ public sealed class ObjectsManagerBuilder
             TestScratch.Provider,
             _zipArchiveBuilder,
             _ogcLayerCatalog,
-            _datasetCacheInvalidator,
+            _datasetCacheInvalidator ?? TestJobs.CacheInvalidator(cacheManager),
             _buildArtifactResolver!,
             _buildStatusService,
             _indexQueue,

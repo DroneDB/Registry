@@ -1,4 +1,6 @@
 #nullable enable
+using System.Threading;
+using Registry.Web.Services.Jobs;
 using System;
 using System.Linq;
 using System.Threading.Tasks;
@@ -59,9 +61,9 @@ public class IndexedJobPublicationTests
                 connection.GetStateData(id).Name.ShouldBe(IndexedJobEnqueuer.PreparationStateName);
             }).ThrowsAsync(new InvalidOperationException("index unavailable"));
         using var provider = new ServiceCollection().AddSingleton(writer.Object).BuildServiceProvider();
-        var enqueuer = new IndexedJobEnqueuer(new BackgroundJobClient(storage), provider,
+        var enqueuer = new IndexedJobEnqueuer(new BackgroundJobClient(storage), provider.GetRequiredService<IServiceScopeFactory>(),
             Mock.Of<ILogger<IndexedJobEnqueuer>>(), storage);
-        var jobId = enqueuer.Enqueue(() => HangfireUtils.DummyJob(null!),
+        var jobId = enqueuer.Enqueue<HealthCheckJob>(j => j.Ping(null),
             new IndexPayload("org", "ds", null, MagicStrings.AutoBuildServiceUserId));
         jobId.ShouldBe(stagedId);
         using var connection = storage.GetConnection();
@@ -85,8 +87,8 @@ public class IndexedJobPublicationTests
                 state is DeletedState && real.ChangeState(id, state, expected));
         var writer = new Mock<IJobIndexWriter>();
         using var provider = new ServiceCollection().AddSingleton(writer.Object).BuildServiceProvider();
-        var enqueuer = new IndexedJobEnqueuer(client.Object, provider, Mock.Of<ILogger<IndexedJobEnqueuer>>(), storage);
-        var jobId = enqueuer.Enqueue(() => HangfireUtils.DummyJob(null!),
+        var enqueuer = new IndexedJobEnqueuer(client.Object, provider.GetRequiredService<IServiceScopeFactory>(), Mock.Of<ILogger<IndexedJobEnqueuer>>(), storage);
+        var jobId = enqueuer.Enqueue<HealthCheckJob>(j => j.Ping(null),
             new IndexPayload("org", "ds", null, MagicStrings.AutoBuildServiceUserId));
         jobId.ShouldBe(stagedId);
         using var connection = storage.GetConnection();
@@ -104,7 +106,7 @@ public class IndexedJobPublicationTests
     {
         var provider = new ServiceCollection().AddSingleton(writer ?? env.Writer).BuildServiceProvider();
         env.Track(provider);
-        return new IndexedJobEnqueuer(client ?? env.Client, provider, Mock.Of<ILogger<IndexedJobEnqueuer>>(),
+        return new IndexedJobEnqueuer(client ?? env.Client, provider.GetRequiredService<IServiceScopeFactory>(), Mock.Of<ILogger<IndexedJobEnqueuer>>(),
             storage ?? env.Storage);
     }
 
@@ -126,9 +128,9 @@ public class IndexedJobPublicationTests
         var enqueuer = EnqueuerWith(env, client: client.Object);
 
         Should.Throw<InvalidOperationException>(() =>
-            enqueuer.Enqueue(() => HangfireUtils.DummyJob(null!), FullPayload()));
+            enqueuer.Enqueue<HealthCheckJob>(j => j.Ping(null), FullPayload()));
         Should.Throw<InvalidOperationException>(() =>
-            enqueuer.Schedule(() => HangfireUtils.DummyJob(null!), FullPayload(), TimeSpan.FromMinutes(1)));
+            enqueuer.Schedule<HealthCheckJob>(j => j.Ping(null), FullPayload(), TimeSpan.FromMinutes(1)));
 
         client.VerifyNoOtherCalls();
         env.JobCount().ShouldBe(0);
@@ -142,7 +144,7 @@ public class IndexedJobPublicationTests
         var enqueuer = EnqueuerWith(env);
 
         Should.Throw<ArgumentException>(() =>
-            enqueuer.Enqueue(() => HangfireUtils.DummyJob(null!), new IndexPayload("", "ds", null, null)));
+            enqueuer.Enqueue<HealthCheckJob>(j => j.Ping(null), new IndexPayload("", "ds", null, null)));
 
         env.JobCount().ShouldBe(0);
     }
@@ -157,7 +159,7 @@ public class IndexedJobPublicationTests
         var enqueuer = EnqueuerWith(env, writer.Object, client.Object);
 
         Should.Throw<InvalidOperationException>(() =>
-            enqueuer.Enqueue(() => HangfireUtils.DummyJob(null!), FullPayload()));
+            enqueuer.Enqueue<HealthCheckJob>(j => j.Ping(null), FullPayload()));
 
         writer.VerifyNoOtherCalls();
         client.Verify(x => x.ChangeState(It.IsAny<string>(), It.IsAny<IState>(), It.IsAny<string>()), Times.Never);
@@ -172,7 +174,7 @@ public class IndexedJobPublicationTests
         var enqueuer = EnqueuerWith(env, client: client.Object);
 
         Should.Throw<InvalidOperationException>(() =>
-            enqueuer.Enqueue(() => HangfireUtils.DummyJob(null!), FullPayload()));
+            enqueuer.Enqueue<HealthCheckJob>(j => j.Ping(null), FullPayload()));
     }
 
     [Test]
@@ -181,8 +183,8 @@ public class IndexedJobPublicationTests
         using var env = new PublicationEnv();
         var enqueuer = EnqueuerWith(env, FailingPrepareWriter());   // leaves the job in Indexing
 
-        var immediate = enqueuer.Enqueue(() => HangfireUtils.DummyJob(null!), FullPayload());
-        var scheduled = enqueuer.Schedule(() => HangfireUtils.DummyJob(null!), FullPayload(), TimeSpan.FromMinutes(45));
+        var immediate = enqueuer.Enqueue<HealthCheckJob>(j => j.Ping(null), FullPayload());
+        var scheduled = enqueuer.Schedule<HealthCheckJob>(j => j.Ping(null), FullPayload(), TimeSpan.FromMinutes(45));
 
         var imm = IndexedJobPublicationRecord.TryParse(env.StateData(immediate)!.Data);
         imm.Status.ShouldBe(IndexedJobRecordParseStatus.Valid);
@@ -207,7 +209,7 @@ public class IndexedJobPublicationTests
         using var env = new PublicationEnv();
         var enqueuer = EnqueuerWith(env, FailingPrepareWriter());
 
-        var id = enqueuer.Enqueue(() => HangfireUtils.DummyJob(null!), new IndexPayload("o", "d", null, null));
+        var id = enqueuer.Enqueue<HealthCheckJob>(j => j.Ping(null), new IndexPayload("o", "d", null, null));
 
         IndexedJobPublicationRecord.TryParse(env.StateData(id)!.Data).Record!.Queue.ShouldBe("default");
     }
@@ -218,7 +220,7 @@ public class IndexedJobPublicationTests
         using var env = new PublicationEnv();
         var enqueuer = EnqueuerWith(env);
 
-        var id = enqueuer.Enqueue(() => HangfireUtils.DummyJob(null!), FullPayload());
+        var id = enqueuer.Enqueue<HealthCheckJob>(j => j.Ping(null), FullPayload());
 
         var state = env.StateData(id)!;
         state.Name.ShouldBe("Enqueued");
@@ -245,7 +247,7 @@ public class IndexedJobPublicationTests
         using var env = new PublicationEnv();
         var enqueuer = EnqueuerWith(env);
 
-        var id = enqueuer.Schedule(() => HangfireUtils.DummyJob(null!), FullPayload(), TimeSpan.FromHours(1));
+        var id = enqueuer.Schedule<HealthCheckJob>(j => j.Ping(null), FullPayload(), TimeSpan.FromHours(1));
 
         var state = env.StateData(id)!;
         state.Name.ShouldBe("Scheduled");
@@ -261,7 +263,7 @@ public class IndexedJobPublicationTests
         using var env = new PublicationEnv();
         var enqueuer = EnqueuerWith(env);
 
-        var id = enqueuer.Schedule(() => HangfireUtils.DummyJob(null!), FullPayload(), TimeSpan.FromMinutes(-5));
+        var id = enqueuer.Schedule<HealthCheckJob>(j => j.Ping(null), FullPayload(), TimeSpan.FromMinutes(-5));
 
         env.State(id).ShouldBe("Scheduled");
         JobHelper.DeserializeDateTime(env.StateData(id)!.Data["EnqueueAt"]).ShouldBeLessThan(DateTime.UtcNow);
@@ -282,7 +284,7 @@ public class IndexedJobPublicationTests
             .Returns<Job, IState>((j, s) => env.Client.Create(j, s));
         var enqueuer = EnqueuerWith(env, client: client.Object, storage: faulty);
 
-        var id = enqueuer.Enqueue(() => HangfireUtils.DummyJob(null!), FullPayload());
+        var id = enqueuer.Enqueue<HealthCheckJob>(j => j.Ping(null), FullPayload());
 
         id.ShouldNotBeNullOrEmpty();
         env.State(id).ShouldBe("Indexing");
@@ -302,7 +304,7 @@ public class IndexedJobPublicationTests
             .Throws(new InvalidOperationException("lock timeout"));
         var enqueuer = EnqueuerWith(env, client: client.Object);
 
-        var id = enqueuer.Enqueue(() => HangfireUtils.DummyJob(null!), FullPayload());
+        var id = enqueuer.Enqueue<HealthCheckJob>(j => j.Ping(null), FullPayload());
 
         env.State(id).ShouldBe("Indexing");
         env.InSet(id).ShouldBeTrue();
@@ -315,7 +317,7 @@ public class IndexedJobPublicationTests
     {
         using var env = new PublicationEnv();
         var enqueuer = EnqueuerWith(env, FailingPrepareWriter());
-        var id = enqueuer.Enqueue(() => HangfireUtils.DummyJob(null!), FullPayload());
+        var id = enqueuer.Enqueue<HealthCheckJob>(j => j.Ping(null), FullPayload());
         env.State(id).ShouldBe("Indexing");
 
         env.Time.Set(FakeTime.CeilMinute(DateTime.UtcNow.AddMinutes(10)));

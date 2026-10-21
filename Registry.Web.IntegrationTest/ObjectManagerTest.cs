@@ -1,4 +1,5 @@
 using System;
+using Registry.Web.Services.Jobs;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
@@ -77,9 +78,7 @@ public class ObjectManagerTest : TestBase
         _backgroundJobsProcessor = new SimpleBackgroundJobsProcessor();
 
         var bpsContext = TestDb.CreateContext<RegistryContext>();
-        _buildPendingService = new BuildPendingService(
-            bpsContext, _ddbFactoryMock.Object, _backgroundJobsProcessor, _cacheManager,
-            Mock.Of<ILogger<BuildPendingService>>());
+        _buildPendingService = new BuildPendingService(bpsContext, new DatasetSweep(bpsContext), _ddbFactoryMock.Object, _backgroundJobsProcessor, _cacheManager, TestJobs.NewStorage(), Mock.Of<ILogger<BuildPendingService>>());
 
         _ddbFactoryLogger = CreateTestLogger<DdbManager>();
         _objectManagerLogger = CreateTestLogger<ObjectsManager>();

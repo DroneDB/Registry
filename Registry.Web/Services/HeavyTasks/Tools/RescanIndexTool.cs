@@ -11,6 +11,7 @@ using Registry.Web.Models;
 using Registry.Web.Services.Adapters;
 using Registry.Web.Services.HeavyTasks.Models;
 using Registry.Web.Services.HeavyTasks.Ports;
+using Registry.Web.Services.Jobs;
 using Registry.Web.Services.Ports;
 using Registry.Web.Utilities;
 
@@ -109,11 +110,11 @@ public sealed class RescanIndexTool : IHeavyTool
     // builds-queue worker, so a rescan across many datasets cannot flood the build queue.
     private sealed class InlineBuilds(IHeavyToolExecutionContext ctx) : IRescanBuildRunner
     {
-        public void BuildDataset() => HangfireUtils.BuildWrapper(ctx.Ddb, null, true, ctx.Hangfire);
+        public void BuildDataset() => ctx.Builds.BuildNow(ctx.Ddb, null, true, ctx.Hangfire);
 
-        public void BuildEntry(RescanResult entry) => HangfireUtils.BuildWrapper(ctx.Ddb, entry.Path, true, ctx.Hangfire);
+        public void BuildEntry(RescanResult entry) => ctx.Builds.BuildNow(ctx.Ddb, entry.Path, true, ctx.Hangfire);
 
-        public void BuildPending() => HangfireUtils.BuildPendingWrapper(ctx.Ddb, ctx.Hangfire);
+        public void BuildPending() => ctx.Builds.BuildPendingNow(ctx.Ddb, ctx.Hangfire);
     }
 
     private static RescanFilter ReadFilter(HeavyToolRequest request) =>

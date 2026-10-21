@@ -21,9 +21,13 @@ namespace Registry.Adapters.DroneDB;
 public class DDB : IDDB
 {
     private static readonly FileSystem FileSystem = new();
-    private IDdbWrapper _ddbWrapper;
+    private readonly IDdbWrapper _wrapper;
 
-    [JsonIgnore] public string Version => _ddbWrapper.GetVersion();
+    // Null only in a DDB read from job data stored before RQ-09 (D4): that one only names its folder
+    private IDdbWrapper Wrapper => _wrapper ?? throw new InvalidOperationException(
+        $"The dataset '{DatasetFolderPath}' was read from job data: it only names its folder (D4)");
+
+    [JsonIgnore] public string Version => Wrapper.GetVersion();
 
     [JsonProperty] public string DatasetFolderPath { get; private set; }
 
@@ -37,15 +41,15 @@ public class DDB : IDDB
         //
     }
 
+    /// <summary>
+    /// A DDB read from Hangfire job data stored before RQ-09 (D4): the job shims read only
+    /// <see cref="DatasetFolderPath"/> and open the dataset through DI, so no native wrapper is
+    /// created here and any other member throws.
+    /// </summary>
     [OnDeserialized]
     internal void OnDeserializedMethod(StreamingContext context)
     {
         BuildFolderPath = Path.Combine(DatasetFolderPath, IDDB.DatabaseFolderName, IDDB.BuildFolderName);
-
-        // NOTE: If this was deserialized it's from hangfire, so we need the native wrapper (libddb is
-        // initialized by the host at startup; D4/RQ-09 stops storing DDB in job data)
-        _ddbWrapper = new NativeDdbWrapper();
-        Meta = new MetaManager(this, _ddbWrapper);
     }
 
     public DDB(string ddbPath, IDdbWrapper ddbWrapper)
@@ -53,7 +57,7 @@ public class DDB : IDDB
         if (string.IsNullOrWhiteSpace(ddbPath))
             throw new ArgumentException("Path should not be null or empty");
 
-        _ddbWrapper = ddbWrapper;
+        _wrapper = ddbWrapper;
 
         if (!Directory.Exists(ddbPath))
             throw new ArgumentException($"Path '{ddbPath}' does not exist");
@@ -68,7 +72,7 @@ public class DDB : IDDB
         return Wrap(() =>
         {
             var fullPath = GetLocalPath(inputPath);
-            return _ddbWrapper.GenerateMemoryTile(fullPath, tz, tx, ty, retina ? 512 : 256, true, false,
+            return Wrapper.GenerateMemoryTile(fullPath, tz, tx, ty, retina ? 512 : 256, true, false,
                 inputPathHash);
         }, ex => $"Cannot generate tile of '{inputPath}'");
     }
@@ -78,7 +82,7 @@ public class DDB : IDDB
         return Wrap(() =>
         {
             var fullPath = GetLocalPath(inputPath);
-            return _ddbWrapper.GenerateMemoryTile(fullPath, tz, tx, ty, retina ? 512 : 256, true, false,
+            return Wrapper.GenerateMemoryTile(fullPath, tz, tx, ty, retina ? 512 : 256, true, false,
                 inputPathHash, outputFormat);
         }, ex => $"Cannot generate tile of '{inputPath}' (format={outputFormat})");
     }
@@ -87,7 +91,7 @@ public class DDB : IDDB
     {
         Wrap(() =>
         {
-            var res = _ddbWrapper.Init(DatasetFolderPath);
+            var res = Wrapper.Init(DatasetFolderPath);
             Debug.WriteLine(res);
         }, ex => $"Cannot initialize ddb in folder '{DatasetFolderPath}'");
     }
@@ -95,7 +99,7 @@ public class DDB : IDDB
 
     public long GetSize()
     {
-        return _ddbWrapper.Info(DatasetFolderPath).FirstOrDefault()?.Size ?? 0;
+        return Wrapper.Info(DatasetFolderPath).FirstOrDefault()?.Size ?? 0;
     }
 
     public bool IsEmpty()
@@ -108,7 +112,7 @@ public class DDB : IDDB
         return Convert.ToInt64(entries) == 0;
     }
 
-    public bool Checkpoint() => _ddbWrapper.Checkpoint(DatasetFolderPath);
+    public bool Checkpoint() => Wrapper.Checkpoint(DatasetFolderPath);
 
     public string? GetIndexFingerprint()
     {
@@ -155,7 +159,7 @@ public class DDB : IDDB
         if (string.IsNullOrEmpty(relativePath))
             return null;
 
-        return Wrap(() => _ddbWrapper.GetEntry(DatasetFolderPath, relativePath),
+        return Wrap(() => Wrapper.GetEntry(DatasetFolderPath, relativePath),
             ex => $"Cannot get '{path}' from ddb '{DatasetFolderPath}'");
     }
 
@@ -171,7 +175,7 @@ public class DDB : IDDB
         {
             var fullPath = path != null ? GetLocalPath(path) : DatasetFolderPath;
 
-            var entries = _ddbWrapper.List(DatasetFolderPath, fullPath, recursive);
+            var entries = Wrapper.List(DatasetFolderPath, fullPath, recursive);
 
             if (entries == null)
             {
@@ -183,10 +187,10 @@ public class DDB : IDDB
         }, ex => $"Cannot list '{path}' to ddb '{DatasetFolderPath}'");
     }
 
-    public IReadOnlyList<Entry> Find(EntryQuery query) => FindWith(query, _ddbWrapper.ListEntries);
+    public IReadOnlyList<Entry> Find(EntryQuery query) => FindWith(query, Wrapper.ListEntries);
 
     public IReadOnlyList<EntrySummary> FindSummaries(EntryQuery query) =>
-        FindWith(query, _ddbWrapper.ListEntrySummaries);
+        FindWith(query, Wrapper.ListEntrySummaries);
 
     private List<T> FindWith<T>(EntryQuery query, Func<string, EntryQuery, List<T>> list)
     {
@@ -209,31 +213,31 @@ public class DDB : IDDB
         {
             var fullPath = GetLocalPath(path);
 
-            _ddbWrapper.Remove(DatasetFolderPath, fullPath);
+            Wrapper.Remove(DatasetFolderPath, fullPath);
         }, ex => $"Cannot remove '{path}' from ddb '{DatasetFolderPath}'");
     }
 
     public void Move(string source, string dest)
     {
-        Wrap(() => _ddbWrapper.MoveEntry(DatasetFolderPath, source.ToDdbPath(), dest.ToDdbPath()),
+        Wrap(() => Wrapper.MoveEntry(DatasetFolderPath, source.ToDdbPath(), dest.ToDdbPath()),
             ex => $"Cannot move '{source}' to {dest} from ddb '{DatasetFolderPath}'");
     }
 
     public void Build(string path, string dest = null, bool force = false)
     {
-        Wrap(() => _ddbWrapper.Build(DatasetFolderPath, path?.ToDdbPath(), dest, force),
+        Wrap(() => Wrapper.Build(DatasetFolderPath, path?.ToDdbPath(), dest, force),
             ex => $"Cannot build '{path}' from ddb '{DatasetFolderPath}'");
     }
 
     public void BuildAll(string dest = null, bool force = false)
     {
-        Wrap(() => _ddbWrapper.Build(DatasetFolderPath, null, dest, force),
+        Wrap(() => Wrapper.Build(DatasetFolderPath, null, dest, force),
             ex => $"Cannot build all from ddb '{DatasetFolderPath}'");
     }
 
     public void BuildPending(string dest = null, bool force = false)
     {
-        Wrap(() => _ddbWrapper.Build(DatasetFolderPath, null, dest, force, true),
+        Wrap(() => Wrapper.Build(DatasetFolderPath, null, dest, force, true),
             ex => $"Cannot build pending from ddb '{DatasetFolderPath}'");
     }
 
@@ -258,7 +262,7 @@ public class DDB : IDDB
 
     public bool IsBuildPending()
     {
-        return Wrap(() => _ddbWrapper.IsBuildPending(DatasetFolderPath),
+        return Wrap(() => Wrapper.IsBuildPending(DatasetFolderPath),
             ex => $"Cannot call IsBuildPending from ddb '{DatasetFolderPath}'");
     }
 
@@ -284,19 +288,19 @@ public class DDB : IDDB
     private EntryBuildArtifacts[] GetBuildArtifacts(string[] paths, string operation)
     {
         var normalized = paths.Select(p => p.ToDdbPath()).ToArray();
-        return Wrap(() => _ddbWrapper.GetBuildArtifacts(DatasetFolderPath, normalized),
+        return Wrap(() => Wrapper.GetBuildArtifacts(DatasetFolderPath, normalized),
             ex => $"Cannot call {operation} from ddb '{DatasetFolderPath}'");
     }
 
     public PendingBuildInfo[] GetPendingBuildInfo()
     {
-        return Wrap(() => _ddbWrapper.GetPendingBuildInfo(DatasetFolderPath),
+        return Wrap(() => Wrapper.GetPendingBuildInfo(DatasetFolderPath),
             ex => $"Cannot call GetPendingBuildInfo from ddb '{DatasetFolderPath}'");
     }
 
     public DdbCleanupResult Cleanup()
     {
-        return Wrap(() => _ddbWrapper.Cleanup(DatasetFolderPath),
+        return Wrap(() => Wrapper.Cleanup(DatasetFolderPath),
             ex => $"Cannot call Cleanup from ddb '{DatasetFolderPath}'");
     }
 
@@ -310,7 +314,7 @@ public class DDB : IDDB
         if (string.IsNullOrWhiteSpace(path))
             throw new ArgumentException("Path cannot be null or empty");
 
-        var info = _ddbWrapper.Info(DatasetFolderPath);
+        var info = Wrapper.Info(DatasetFolderPath);
 
         var entry = info.FirstOrDefault();
 
@@ -322,7 +326,7 @@ public class DDB : IDDB
         return Wrap(() =>
         {
             var fullPath = GetLocalPath(imagePath);
-            return _ddbWrapper.GenerateThumbnail(fullPath, size);
+            return Wrapper.GenerateThumbnail(fullPath, size);
         }, ex => $"Cannot generate thumbnail of '{imagePath}' with size '{size}'");
     }
 
@@ -331,7 +335,7 @@ public class DDB : IDDB
         Wrap(() =>
         {
             var fullPath = GetLocalPath(path);
-            _ddbWrapper.Add(DatasetFolderPath, fullPath);
+            Wrapper.Add(DatasetFolderPath, fullPath);
         }, ex => $"Cannot add '{path}' to ddb '{DatasetFolderPath}'");
     }
 
@@ -349,7 +353,7 @@ public class DDB : IDDB
             for (var i = 0; i < paths.Count; i++)
                 fullPaths[i] = GetLocalPath(paths[i]);
 
-            return _ddbWrapper.Add(DatasetFolderPath, fullPaths);
+            return Wrapper.Add(DatasetFolderPath, fullPaths);
         }, ex => $"Cannot batch-add {paths.Count} file(s) to ddb '{DatasetFolderPath}'");
     }
 
@@ -367,7 +371,7 @@ public class DDB : IDDB
             for (var i = 0; i < items.Count; i++)
                 files[i] = items[i] with { Path = GetLocalPath(items[i].Path) };
 
-            return _ddbWrapper.AddWithHints(DatasetFolderPath, files, stopOnError);
+            return Wrapper.AddWithHints(DatasetFolderPath, files, stopOnError);
         }, ex => $"Cannot batch-add {items.Count} file(s) (with options) to ddb '{DatasetFolderPath}'");
     }
 
@@ -379,7 +383,7 @@ public class DDB : IDDB
             if (stream == null)
             {
                 Directory.CreateDirectory(localPath);
-                Wrap(() => _ddbWrapper.Add(DatasetFolderPath, localPath),
+                Wrap(() => Wrapper.Add(DatasetFolderPath, localPath),
                     ex => $"Cannot add folder '{path}' to ddb '{DatasetFolderPath}'");
             }
             else
@@ -392,7 +396,7 @@ public class DDB : IDDB
                     stream.CopyTo(writer);
                 }
 
-                Wrap(() => _ddbWrapper.Add(DatasetFolderPath, localPath),
+                Wrap(() => Wrapper.Add(DatasetFolderPath, localPath),
                     ex => $"Cannot add '{path}' to ddb '{DatasetFolderPath}'");
             }
         }
@@ -444,24 +448,24 @@ public class DDB : IDDB
 
     public Stamp GetStamp()
     {
-        return _ddbWrapper.GetStamp(DatasetFolderPath);
+        return Wrapper.GetStamp(DatasetFolderPath);
     }
 
     public JToken GetStac(string id, string stacCollectionRoot, string stacCatalogRoot, string path = null)
     {
-        return _ddbWrapper.Stac(DatasetFolderPath, path, stacCollectionRoot, id, stacCatalogRoot);
+        return Wrapper.Stac(DatasetFolderPath, path, stacCollectionRoot, id, stacCatalogRoot);
     }
 
     public JToken GetStacItemCollection(string id, string stacCollectionRoot, string stacCatalogRoot,
         string bbox = null, string datetime = null, int limit = 10, int offset = 0)
     {
-        return _ddbWrapper.StacItemCollection(DatasetFolderPath, stacCollectionRoot, id, stacCatalogRoot,
+        return Wrapper.StacItemCollection(DatasetFolderPath, stacCollectionRoot, id, stacCatalogRoot,
             bbox, datetime, limit, offset);
     }
 
     public List<RescanResult> RescanIndex(RescanOptions? options = null)
     {
-        return Wrap(() => _ddbWrapper.RescanIndex(DatasetFolderPath, options),
+        return Wrap(() => Wrapper.RescanIndex(DatasetFolderPath, options),
             ex => $"Cannot rescan index in folder '{DatasetFolderPath}'");
     }
 
@@ -480,7 +484,7 @@ public class DDB : IDDB
         return Wrap(() =>
         {
             var fullPath = GetLocalPath(path);
-            return _ddbWrapper.GetRasterInfo(fullPath);
+            return Wrapper.GetRasterInfo(fullPath);
         }, ex => $"Cannot get raster info of '{path}'");
     }
 
@@ -489,7 +493,7 @@ public class DDB : IDDB
         return Wrap(() =>
         {
             var fullPath = GetLocalPath(path);
-            return _ddbWrapper.GetRasterMetadata(fullPath, formula, bandFilter);
+            return Wrapper.GetRasterMetadata(fullPath, formula, bandFilter);
         }, ex => $"Cannot get raster metadata of '{path}'");
     }
 
@@ -500,7 +504,7 @@ public class DDB : IDDB
         return Wrap(() =>
         {
             var fullPath = GetLocalPath(imagePath);
-            return _ddbWrapper.GenerateThumbnailEx(fullPath, size, preset, bands, formula, bandFilter,
+            return Wrapper.GenerateThumbnailEx(fullPath, size, preset, bands, formula, bandFilter,
                 colormap, rescale);
         }, ex => $"Cannot generate thumbnail ex of '{imagePath}' with size '{size}'");
     }
@@ -512,7 +516,7 @@ public class DDB : IDDB
         return Wrap(() =>
         {
             var fullPath = GetLocalPath(inputPath);
-            return _ddbWrapper.GenerateMemoryTileEx(fullPath, tz, tx, ty, retina ? 512 : 256, true, false,
+            return Wrapper.GenerateMemoryTileEx(fullPath, tz, tx, ty, retina ? 512 : 256, true, false,
                 inputPathHash, preset, bands, formula, bandFilter, colormap, rescale);
         }, ex => $"Cannot generate tile ex of '{inputPath}'");
     }
@@ -522,7 +526,7 @@ public class DDB : IDDB
         return Wrap(() =>
         {
             var fullPaths = paths.Select(GetLocalPath).ToArray();
-            return _ddbWrapper.ValidateMergeMultispectral(fullPaths);
+            return Wrapper.ValidateMergeMultispectral(fullPaths);
         }, ex => "Cannot validate merge multispectral");
     }
 
@@ -531,7 +535,7 @@ public class DDB : IDDB
         return Wrap(() =>
         {
             var fullPaths = paths.Select(GetLocalPath).ToArray();
-            return _ddbWrapper.PreviewMergeMultispectral(fullPaths, previewBands, thumbSize);
+            return Wrapper.PreviewMergeMultispectral(fullPaths, previewBands, thumbSize);
         }, ex => "Cannot preview merge multispectral");
     }
 
@@ -541,13 +545,13 @@ public class DDB : IDDB
         {
             var fullPaths = paths.Select(GetLocalPath).ToArray();
             var fullOutputCog = GetLocalPath(outputCog);
-            _ddbWrapper.MergeMultispectral(fullPaths, fullOutputCog);
+            Wrapper.MergeMultispectral(fullPaths, fullOutputCog);
         }, ex => $"Cannot merge multispectral: {ex.Message}");
     }
 
     public string ValidateAlignRaster(string sourcePath, string referencePath)
     {
-        return Wrap(() => _ddbWrapper.ValidateAlignRaster(GetLocalPath(sourcePath), GetLocalPath(referencePath)),
+        return Wrap(() => Wrapper.ValidateAlignRaster(GetLocalPath(sourcePath), GetLocalPath(referencePath)),
             ex => "Cannot validate align raster");
     }
 
@@ -555,7 +559,7 @@ public class DDB : IDDB
     {
         return Wrap(() =>
         {
-            return _ddbWrapper.AlignRaster(GetLocalPath(sourcePath), GetLocalPath(referencePath),
+            return Wrapper.AlignRaster(GetLocalPath(sourcePath), GetLocalPath(referencePath),
                 GetLocalPath(outputPath), mode);
         }, ex => $"Cannot align raster: {ex.Message}");
     }
@@ -567,7 +571,7 @@ public class DDB : IDDB
         Wrap(() =>
         {
             var fullInputPath = GetLocalPath(inputPath);
-            _ddbWrapper.ExportRaster(fullInputPath, outputPath, preset, bands, formula, bandFilter, colormap, rescale);
+            Wrapper.ExportRaster(fullInputPath, outputPath, preset, bands, formula, bandFilter, colormap, rescale);
         }, ex => $"Cannot export raster '{inputPath}'");
     }
 
@@ -577,7 +581,7 @@ public class DDB : IDDB
         Action<double, string?>? progress, CancellationToken cancellationToken)
     {
         // A cancellation (DdbCanceledException) is not a DdbException: it passes through
-        Wrap(() => _ddbWrapper.ExportRaster(GetLocalPath(inputPath), outputPath, preset, bands, formula, bandFilter,
+        Wrap(() => Wrapper.ExportRaster(GetLocalPath(inputPath), outputPath, preset, bands, formula, bandFilter,
                 colormap, rescale, tileSize, progress, cancellationToken),
             ex => $"Cannot export raster '{inputPath}'");
     }
@@ -587,7 +591,7 @@ public class DDB : IDDB
         return Wrap(() =>
         {
             var fullPath = GetLocalPath(path);
-            return _ddbWrapper.GetRasterValueInfo(fullPath);
+            return Wrapper.GetRasterValueInfo(fullPath);
         }, ex => "Could not read raster value info.");
     }
 
@@ -596,7 +600,7 @@ public class DDB : IDDB
         return Wrap(() =>
         {
             var fullPath = GetLocalPath(path);
-            return _ddbWrapper.GetRasterPointValue(fullPath, x, y);
+            return Wrapper.GetRasterPointValue(fullPath, x, y);
         }, ex => "Could not read raster value at the requested pixel.");
     }
 
@@ -605,7 +609,7 @@ public class DDB : IDDB
         return Wrap(() =>
         {
             var fullPath = GetLocalPath(path);
-            return _ddbWrapper.GetRasterAreaStats(fullPath, x0, y0, x1, y1);
+            return Wrapper.GetRasterAreaStats(fullPath, x0, y0, x1, y1);
         }, ex => "Could not compute raster area statistics.");
     }
 
@@ -614,7 +618,7 @@ public class DDB : IDDB
         return Wrap(() =>
         {
             var fullPath = GetLocalPath(path);
-            return _ddbWrapper.GetRasterProfile(fullPath, geoJsonLineString, samples);
+            return Wrapper.GetRasterProfile(fullPath, geoJsonLineString, samples);
         }, ex => "Could not compute raster profile for the requested line.");
     }
 
@@ -623,7 +627,7 @@ public class DDB : IDDB
         return Wrap(() =>
         {
             var fullPath = GetLocalPath(path);
-            return _ddbWrapper.CalculateVolume(fullPath, polygonGeoJson, baseMethod, flatElevation);
+            return Wrapper.CalculateVolume(fullPath, polygonGeoJson, baseMethod, flatElevation);
         }, ex => "Cannot calculate volume for this area. Make sure the polygon falls inside the raster and contains valid elevation data.");
     }
 
@@ -632,7 +636,7 @@ public class DDB : IDDB
         return Wrap(() =>
         {
             var fullPath = GetLocalPath(path);
-            return _ddbWrapper.DetectStockpile(fullPath, lat, lon, radiusMeters, sensitivity);
+            return Wrapper.DetectStockpile(fullPath, lat, lon, radiusMeters, sensitivity);
         }, ex => "No stockpile detected at the selected location. Try clicking closer to a clearly elevated area, increase the search radius, or lower the sensitivity.");
     }
 
@@ -641,7 +645,7 @@ public class DDB : IDDB
         return Wrap(() =>
         {
             var fullPath = GetLocalPath(path);
-            return _ddbWrapper.DetectAllStockpiles(fullPath, sensitivity, minAreaM2, maxResults);
+            return Wrapper.DetectAllStockpiles(fullPath, sensitivity, minAreaM2, maxResults);
         }, ex => "No stockpiles could be detected on this raster. Try lowering the sensitivity or reducing the minimum area.");
     }
 
@@ -657,7 +661,7 @@ public class DDB : IDDB
         return Wrap(() =>
         {
             var fullPath = GetLocalPath(path);
-            return _ddbWrapper.GenerateContours(fullPath, interval, count, baseOffset,
+            return Wrapper.GenerateContours(fullPath, interval, count, baseOffset,
                                                 minElev, maxElev, simplifyTolerance, bandIndex);
         }, ex => "Could not generate contour lines for this raster.");
     }
@@ -668,7 +672,7 @@ public class DDB : IDDB
         {
             var fullInput = GetLocalPath(input);
             var fullOutput = GetLocalPath(output);
-            _ddbWrapper.MaskBorders(fullInput, fullOutput, nearDist, white);
+            Wrapper.MaskBorders(fullInput, fullOutput, nearDist, white);
         }, ex => $"Cannot mask borders of '{input}'");
     }
 }

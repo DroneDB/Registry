@@ -1,4 +1,5 @@
 #nullable enable
+using Registry.Web.Services.Jobs;
 using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
@@ -64,12 +65,7 @@ public class SystemManagerGetVersionTests : TestBase
         var ddbManagerMock = new Mock<IDdbManager>();
         var objectsManagerMock = new Mock<IObjectsManager>();
 
-        var buildPendingService = new BuildPendingService(
-            context,
-            ddbManagerMock.Object,
-            backgroundJobMock.Object,
-            cacheManagerMock.Object,
-            Mock.Of<ILogger<BuildPendingService>>());
+        var buildPendingService = new BuildPendingService(context, new DatasetSweep(context), ddbManagerMock.Object, backgroundJobMock.Object, cacheManagerMock.Object, TestJobs.NewStorage(), Mock.Of<ILogger<BuildPendingService>>());
 
         return new SystemManager(
             authManagerMock.Object,

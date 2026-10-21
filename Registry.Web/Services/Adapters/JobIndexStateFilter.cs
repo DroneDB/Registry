@@ -11,13 +11,13 @@ namespace Registry.Web.Services.Adapters;
 /// <summary>
 /// Updates the JobIndex on every state change (Processing, Succeeded, Failed, Deleted, Scheduled, etc.).
 /// </summary>
-public sealed class JobIndexStateFilter(IServiceProvider sp, ILogger<JobIndexStateFilter> log) : IApplyStateFilter
+public sealed class JobIndexStateFilter(IServiceScopeFactory scopes, ILogger<JobIndexStateFilter> log) : IApplyStateFilter
 {
     public void OnStateApplied(ApplyStateContext context, IWriteOnlyTransaction transaction)
     {
         try
         {
-            using var scope = sp.CreateScope();
+            using var scope = scopes.CreateScope();
             var writer = scope.ServiceProvider.GetRequiredService<IJobIndexWriter>();
             writer.UpdateStateAsync(context.BackgroundJob.Id, context.NewState.Name, DateTime.UtcNow).GetAwaiter().GetResult();
         }

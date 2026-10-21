@@ -3,6 +3,8 @@ using System;
 using Hangfire.Common;
 using Hangfire.States;
 using Registry.Web.Services.HeavyTasks.Adapters;
+using Registry.Web.Services.HeavyTasks.Ports;
+using Registry.Web.Services.Jobs;
 
 namespace Registry.Web.Utilities;
 
@@ -32,6 +34,12 @@ public sealed class BuildQueueRoutingFilter : JobFilterAttribute, IElectStateFil
 {
     private readonly Func<string, string, bool> _toolRunsNativeBuild;
 
+    /// <param name="tools">The heavy tools: whether a tool runs a native build decides its queue.</param>
+    public BuildQueueRoutingFilter(IHeavyToolRegistry tools)
+        : this((toolId, version) => tools.Resolve(toolId, version)?.RunsNativeBuild == true)
+    {
+    }
+
     /// <param name="toolRunsNativeBuild">(toolId, toolVersion) => whether that heavy tool runs a native build.</param>
     public BuildQueueRoutingFilter(Func<string, string, bool> toolRunsNativeBuild)
     {
@@ -56,12 +64,8 @@ public sealed class BuildQueueRoutingFilter : JobFilterAttribute, IElectStateFil
         if (job == null)
             return null;
 
-        if (job.Type == typeof(HangfireUtils))
-        {
-            return job.Method.Name is nameof(HangfireUtils.BuildWrapper) or nameof(HangfireUtils.MaskBordersWrapper)
-                ? JobQueues.Builds
-                : null;
-        }
+        if (DdbJobDescriptor.Of(job) is { } ddbJob)
+            return ddbJob.RunsNativeBuild ? JobQueues.Builds : null;
 
         if (job.Type == typeof(HeavyTaskJobWrapper) && job.Method.Name == nameof(HeavyTaskJobWrapper.Run))
         {

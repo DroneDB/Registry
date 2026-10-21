@@ -1,4 +1,5 @@
 #nullable enable
+using Registry.Web.Services.Jobs;
 using System;
 using System.Threading;
 using System.Collections.Generic;
@@ -139,8 +140,7 @@ public class PushPipelineTests : TestBase
         var cache = new Mock<ICacheManager>();
         var settings = Microsoft.Extensions.Options.Options.Create(new AppSettings { DatasetsPath = _root });
         var fileSystem = new FileSystem();
-        var buildPending = new BuildPendingService(_ctx, ddbManager.Object, _jobs.Object, cache.Object,
-            Mock.Of<ILogger<BuildPendingService>>());
+        var buildPending = new BuildPendingService(_ctx, new DatasetSweep(_ctx), ddbManager.Object, _jobs.Object, cache.Object, TestJobs.NewStorage(), Mock.Of<ILogger<BuildPendingService>>());
         return new PushManager(_utils.Object, ddbManager.Object, _objects.Object,
             CreateTestLogger<PushManager>(Serilog.Events.LogEventLevel.Warning), Mock.Of<IDatasetsManager>(),
             auth.Object, new DatasetAccessResolver(_utils.Object, auth.Object, ddbManager.Object, TestPaths.Policy), _wrapper.Object, _jobs.Object, TestSettings.Options<ImportSettings>(settings), cache.Object, fileSystem, buildPending,
@@ -197,7 +197,7 @@ public class PushPipelineTests : TestBase
 
         _ddb.Verify(d => d.IsBuildable(It.IsAny<string>()), Times.Never);
         _ddb.Verify(d => d.GetBuildStatus(It.Is<string[]>(p => p.Length == Adds && p[0] == "photos/IMG_0.JPG")), Times.Once);
-        _jobs.Verify(j => j.EnqueueIndexed(It.IsAny<System.Linq.Expressions.Expression<Action>>(),
+        _jobs.Verify(j => j.EnqueueIndexed(It.IsAny<System.Linq.Expressions.Expression<Action<Registry.Web.Services.Jobs.DdbJobs>>>(),
             It.Is<IndexPayload>(m => m.Hash != null && m.Path!.StartsWith("photos/IMG_"))), Times.Exactly(Adds / 10));
     }
 

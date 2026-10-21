@@ -1,4 +1,5 @@
 using Registry.Web.Services.Ports;
+using Registry.Web.Test.Support;
 using System;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -29,7 +30,7 @@ public class DatasetCacheInvalidatorTests
         _ogcKeys = new Mock<IOgcCacheKeys>();
 
         _sut = new DatasetCacheInvalidator(
-            NullLogger<DatasetCacheInvalidator>.Instance, _cacheManager.Object, _ogcKeys.Object);
+            NullLogger<DatasetCacheInvalidator>.Instance, _cacheManager.Object, _ogcKeys.Object, TestJobs.NewStorage());
     }
 
     [Test]

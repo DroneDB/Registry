@@ -17,6 +17,7 @@ using Registry.Web.Data;
 using Registry.Web.Models.Configuration;
 using Registry.Web.Services.HeavyTasks.Models;
 using Registry.Web.Services.HeavyTasks.Ports;
+using Registry.Web.Services.Jobs;
 using Registry.Web.Services.Ports;
 using Registry.Web.Utilities;
 using Serilog;
@@ -29,13 +30,14 @@ namespace Registry.Web.Services.HeavyTasks.Adapters;
 /// progress/log to <c>JobIndex</c>, persists artifact/error metadata and schedules
 /// TTL cleanup of the work directory.
 /// </summary>
-public sealed class HeavyTaskJobWrapper
+public sealed class HeavyTaskJobWrapper : DdbRetriedJob
 {
     private readonly IServiceScopeFactory _scopeFactory;
     private readonly IHeavyToolRegistry _registry;
     private readonly ProcessingPlatformSettings _settings;
     private readonly string _tempPath;
     private readonly IFileSystem _fs;
+    private readonly FileJobs _files;
     private readonly ILogger<HeavyTaskJobWrapper> _log;
 
     public HeavyTaskJobWrapper(
@@ -44,6 +46,7 @@ public sealed class HeavyTaskJobWrapper
         IOptions<ProcessingPlatformSettings> platformSettings,
         IScratchFileProvider scratch,
         IFileSystem fs,
+        FileJobs files,
         ILogger<HeavyTaskJobWrapper> log)
     {
         _scopeFactory = scopeFactory;
@@ -51,16 +54,12 @@ public sealed class HeavyTaskJobWrapper
         _settings = platformSettings.Value;
         _tempPath = scratch.Root;
         _fs = fs;
+        _files = files;
         _log = log;
     }
 
-    // Transient DDB contention gets a backoff retry chain; anything else fails fast without
-    // burning worker slots.
-    // Same policy as the wrappers in the HangfireUtils class - intentionally duplicated inline
-    // because Hangfire discovers AutomaticRetry per-job-method via reflection (see there).
-    [AutomaticRetry(Attempts = 5, DelaysInSeconds = [15, 60, 180, 600, 1800],
-        OnAttemptsExceeded = AttemptsExceededAction.Fail,
-        OnlyOn = [typeof(DdbBusyException), typeof(DdbBuildInProgressException), typeof(DdbRetryableException)])]
+    // The retry policy is the class's (DdbRetriedJob): transient DroneDB contention gets a backoff
+    // chain, anything else fails fast.
     // No [Queue]: BuildQueueRoutingFilter routes this job to "tasks" or "builds" by tool.
     public async Task Run(string toolId, string toolVersion, string requestJson,
         PerformContext ctx, CancellationToken cancellationToken)
@@ -87,6 +86,7 @@ public sealed class HeavyTaskJobWrapper
         var ddbManager = sp.GetRequiredService<IDdbManager>();
         var indexWriter = sp.GetRequiredService<IJobIndexWriter>();
         var processor = sp.GetRequiredService<IBackgroundJobsProcessor>();
+        var builds = sp.GetRequiredService<DdbJobs>();
 
         var ds = await db.Datasets.AsNoTracking().Include(d => d.Organization)
                      .FirstOrDefaultAsync(d => d.Slug == request.DsSlug && d.Organization.Slug == request.OrgSlug,
@@ -95,7 +95,8 @@ public sealed class HeavyTaskJobWrapper
                      $"Dataset '{request.OrgSlug}/{request.DsSlug}' not found for task {taskId}.");
         var ddb = ddbManager.Get(request.OrgSlug, ds.InternalRef);
 
-        var execCtx = new HeavyToolExecutionContext(ddb, null, _log, taskId, workDir, ctx);
+        var execCtx = new HeavyToolExecutionContext(ddb, new DatasetKey(request.OrgSlug, ds.InternalRef), null, _log,
+            taskId, workDir, ctx, processor, builds);
         var logBuffer = new LogRingBuffer(_settings.LogTailMaxLines, _settings.LogTailMaxBytes);
         var progress = new HangfireProgressSink(ctx, indexWriter, logBuffer, taskId,
             _settings.ProgressUpdateThrottleSeconds);
@@ -112,8 +113,8 @@ public sealed class HeavyTaskJobWrapper
 
                 if (workDir is not null)
                 {
-                    processor.Schedule(
-                        () => HangfireUtils.SafeDelete(workDir, null!),
+                    processor.Schedule<FileJobs>(
+                        j => j.Delete(workDir, null),
                         TimeSpan.FromHours(Math.Max(1, _settings.ArtifactTtlHours)));
                 }
             }
@@ -136,10 +137,10 @@ public sealed class HeavyTaskJobWrapper
 
     /// <summary>
     /// Hangfire-scheduled TTL cleanup of a finished task's work directory, kept for the jobs
-    /// scheduled before RQ-10: new schedules use the shared <see cref="HangfireUtils.SafeDelete"/>.
+    /// scheduled before RQ-10 (D4): new schedules use <see cref="FileJobs.Delete"/>.
     /// </summary>
     [AutomaticRetry(Attempts = 1, OnAttemptsExceeded = AttemptsExceededAction.Fail)]
-    public static void DeleteWorkDirJob(string workDir) => HangfireUtils.SafeDelete(workDir, null!);
+    public void DeleteWorkDirJob(string workDir) => _files.Delete(workDir, null);
 
     private void DeleteWorkDir(string? workDir) =>
         _fs.TryDelete(workDir, ex => _log.LogWarning(ex, "Failed to delete task work directory '{Dir}'", workDir));

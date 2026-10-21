@@ -4,17 +4,16 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using Hangfire;
-using Hangfire.Console;
 using Hangfire.Server;
-using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Registry.Ports;
 using Registry.Ports.DroneDB;
-using Registry.Web.Data;
 using Registry.Web.Models.Configuration;
+using Registry.Web.Services.Jobs;
 using Registry.Web.Services.Ports;
 using Registry.Web.Utilities;
 
@@ -27,12 +26,20 @@ namespace Registry.Web.Services.Adapters;
 /// (see <see cref="Managers.ObjectsManager"/>'s <c>.uploads/quarantine</c> compensation).
 /// Scheduled via Hangfire (cron from <see cref="JobScheduleOptions.IndexReconciliationCron"/>).
 /// </summary>
+/// <remarks>
+/// One run at a time across the hosts: the hourly sweep walks every dataset folder and can outlast
+/// the hour on the HDD RAID5; a second run would queue the same unindexed files from another host.
+/// Timeout 0: the run in progress does the work, the next tick picks up the rest. Not retried as a
+/// whole: the next scheduled run is the retry for a failure in a single dataset.
+/// </remarks>
+[AutomaticRetry(Attempts = 0)]
+[DisableConcurrentExecution(timeoutInSeconds: 0)]
 public class IndexReconciliationService
 {
     private readonly record struct ReconcileSummary(
         int Unindexed, int Reindexed, int Missing, int QuarantineRemoved, long DurationMs);
 
-    private readonly RegistryContext _context;
+    private readonly DatasetSweep _sweep;
     private readonly IDdbManager _ddbManager;
     private readonly IDatasetIndexQueue _indexQueue;
     private readonly ReconciliationSettings _settings;
@@ -41,7 +48,7 @@ public class IndexReconciliationService
     private readonly ILogger<IndexReconciliationService> _logger;
 
     public IndexReconciliationService(
-        RegistryContext context,
+        DatasetSweep sweep,
         IDdbManager ddbManager,
         IDatasetIndexQueue indexQueue,
         IOptions<ReconciliationSettings> settings,
@@ -49,7 +56,7 @@ public class IndexReconciliationService
         DatasetPathPolicy paths,
         ILogger<IndexReconciliationService> logger)
     {
-        _context = context ?? throw new ArgumentNullException(nameof(context));
+        _sweep = sweep ?? throw new ArgumentNullException(nameof(sweep));
         _ddbManager = ddbManager ?? throw new ArgumentNullException(nameof(ddbManager));
         _indexQueue = indexQueue ?? throw new ArgumentNullException(nameof(indexQueue));
         _settings = (settings ?? throw new ArgumentNullException(nameof(settings))).Value;
@@ -58,54 +65,34 @@ public class IndexReconciliationService
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
-    /// <summary>
-    /// Runs the reconciliation sweep across every dataset of every organization. The next
-    /// scheduled run is the retry for a failure in a single dataset, so this is not automatically
-    /// retried as a whole (mirrors <see cref="BuildPendingService"/>/<see cref="RecurringDatasetCleanupService"/>).
-    /// </summary>
-    [AutomaticRetry(Attempts = 0)]
-    public async Task ReconcileAllDatasetsAsync(PerformContext? context = null)
+    /// <summary>The job as stored before RQ-09 (D4): runs with the context's shutdown token.</summary>
+    public Task ReconcileAllDatasetsAsync(PerformContext? context) =>
+        ReconcileAllDatasetsAsync(context, JobCancellation.Of(context));
+
+    /// <summary>Runs the reconciliation sweep across every dataset of every organization.</summary>
+    public async Task ReconcileAllDatasetsAsync(PerformContext? context, CancellationToken cancellationToken)
     {
-        void WriteLine(string message)
+        var console = JobConsole.For(_logger, context);
+        console.Info("Starting index reconciliation sweep across all organizations");
+
+        await _sweep.ForEachAsync(console, "Reconciliation", async (ds, ct) =>
         {
-            _logger.LogInformation(message);
-            context?.WriteLine(message);
-        }
+            // Narrowed to the index role interface - reconciliation only reads/writes the
+            // index, never build/meta/raster/analytics.
+            IDdbIndex ddb = _ddbManager.Get(ds.OrgSlug, ds.InternalRef);
+            var summary = await ReconcileDatasetAsync(ds.OrgSlug, ds.InternalRef, ddb, console, ct);
 
-        WriteLine("Starting index reconciliation sweep across all organizations");
+            console.Info("[{Dataset}] unindexed={Unindexed} reindexed={Reindexed} missing={Missing} " +
+                         "quarantineRemoved={QuarantineRemoved} durationMs={DurationMs}",
+                ds.Key, summary.Unindexed, summary.Reindexed, summary.Missing, summary.QuarantineRemoved,
+                summary.DurationMs);
+        }, cancellationToken);
 
-        var datasets = await _context.Datasets
-            .AsNoTracking()
-            .Include(d => d.Organization)
-            .Select(d => new { d.Slug, OrgSlug = d.Organization.Slug, d.InternalRef })
-            .ToArrayAsync();
-
-        foreach (var ds in datasets)
-        {
-            var key = $"{ds.OrgSlug}/{ds.Slug}";
-            try
-            {
-                // Narrowed to the index role interface - reconciliation only reads/writes the
-                // index, never build/meta/raster/analytics.
-                IDdbIndex ddb = _ddbManager.Get(ds.OrgSlug, ds.InternalRef);
-                var summary = await ReconcileDatasetAsync(ds.OrgSlug, ds.InternalRef, ddb, WriteLine);
-
-                WriteLine($"[{key}] unindexed={summary.Unindexed} reindexed={summary.Reindexed} " +
-                          $"missing={summary.Missing} quarantineRemoved={summary.QuarantineRemoved} " +
-                          $"durationMs={summary.DurationMs}");
-            }
-            catch (Exception ex)
-            {
-                _logger.LogWarning(ex, "Index reconciliation failed for dataset '{Key}'", key);
-                context?.WriteLine($"WARNING: reconciliation failed for '{key}': {ex.Message}");
-            }
-        }
-
-        WriteLine("Index reconciliation sweep completed");
+        console.Info("Index reconciliation sweep completed");
     }
 
     private async Task<ReconcileSummary> ReconcileDatasetAsync(string orgSlug, Guid internalRef, IDdbIndex ddb,
-        Action<string> writeLine)
+        JobConsole console, CancellationToken ct)
     {
         var sw = Stopwatch.StartNew();
         var root = ddb.DatasetFolderPath;
@@ -133,32 +120,31 @@ public class IndexReconciliationService
         {
             try
             {
-                await _indexQueue.EnqueueAsync(new DatasetKey(orgSlug, internalRef), toReindex);
+                await _indexQueue.EnqueueAsync(new DatasetKey(orgSlug, internalRef), toReindex, ct);
                 reindexed = toReindex.Length;
             }
-            catch (Exception ex)
+            catch (Exception ex) when (!ct.IsCancellationRequested)
             {
-                writeLine($"Failed to re-index {toReindex.Length} unindexed file(s): {ex.Message}");
+                console.Info("Failed to re-index {Count} unindexed file(s): {Error}", toReindex.Length, ex.Message);
             }
         }
 
         // 4. Indexed but missing on disk -> report only. Never destroy data automatically.
         if (missingPaths.Length > 0)
         {
-            var sample = string.Join(", ", missingPaths.Take(10));
-            writeLine($"{missingPaths.Length} indexed entries missing on disk (report only): {sample}" +
-                      (missingPaths.Length > 10 ? ", …" : ""));
+            var sample = string.Join(", ", missingPaths.Take(10)) + (missingPaths.Length > 10 ? ", …" : "");
+            console.Info("{Count} indexed entries missing on disk (report only): {Sample}", missingPaths.Length, sample);
         }
 
         // 5. Age out old quarantined files.
-        var quarantineRemoved = AgeOutQuarantine(root, writeLine);
+        var quarantineRemoved = AgeOutQuarantine(root, console);
 
         sw.Stop();
         return new ReconcileSummary(unindexedPaths.Length, reindexed, missingPaths.Length, quarantineRemoved,
             sw.ElapsedMilliseconds);
     }
 
-    private int AgeOutQuarantine(string datasetRoot, Action<string> writeLine)
+    private int AgeOutQuarantine(string datasetRoot, JobConsole console)
     {
         var quarantineDir = Path.Combine(datasetRoot, IDDB.UploadsFolderName, IDDB.QuarantineFolderName);
         if (!_fs.FolderExists(quarantineDir))
@@ -179,7 +165,7 @@ public class IndexReconciliationService
             }
             catch (Exception ex)
             {
-                writeLine($"Failed to remove aged quarantine file '{file}': {ex.Message}");
+                console.Info("Failed to remove aged quarantine file '{File}': {Error}", file, ex.Message);
             }
         }
 

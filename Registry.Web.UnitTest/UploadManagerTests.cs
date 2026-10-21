@@ -1,4 +1,5 @@
 #nullable enable
+using Registry.Web.Services.Jobs;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -121,8 +122,7 @@ public class UploadManagerTests
         var options = Microsoft.Extensions.Options.Options.Create(_settings);
         var context = TestDb.CreateContext<RegistryContext>();
         var jobs = Mock.Of<IBackgroundJobsProcessor>();
-        var buildPending = new BuildPendingService(context, ddbManager.Object, jobs, Mock.Of<ICacheManager>(),
-            NullLogger<BuildPendingService>.Instance);
+        var buildPending = new BuildPendingService(context, new DatasetSweep(context), ddbManager.Object, jobs, Mock.Of<ICacheManager>(), TestJobs.NewStorage(), NullLogger<BuildPendingService>.Instance);
 
         return new UploadManager(NullLogger<UploadManager>.Instance, _auth.Object,
             new DatasetAccessResolver(_utils.Object, _auth.Object, ddbManager.Object, TestPaths.Policy), ddbManager.Object,

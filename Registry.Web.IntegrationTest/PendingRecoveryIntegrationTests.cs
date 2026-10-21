@@ -1,4 +1,6 @@
 #nullable enable
+using Registry.Adapters;
+using Registry.Web.Services.Jobs;
 using System;
 using System.Collections.Concurrent;
 using System.IO;
@@ -107,6 +109,15 @@ public class PendingRecoveryIntegrationTests
         var manager = new Mock<IDdbManager>();
         manager.Setup(x => x.Get(Org, It.IsAny<Guid>()))
             .Returns<string, Guid>((_, id) => _datasets[id]);
+        manager.Setup(x => x.Open(Org, It.IsAny<Guid>()))
+            .Returns<string, Guid>((_, id) => _datasets[id]);
+        manager.Setup(x => x.TryParseDatasetFolder(It.IsAny<string>(), out It.Ref<string>.IsAny, out It.Ref<Guid>.IsAny))
+            .Returns(new TryParseFolder((string? folder, out string org, out Guid id) =>
+            {
+                id = _datasets.FirstOrDefault(d => d.Value.DatasetFolderPath == folder).Key;
+                org = id == Guid.Empty ? string.Empty : Org;
+                return id != Guid.Empty;
+            }));
 
         var services = new ServiceCollection();
         services.AddLogging();
@@ -126,6 +137,11 @@ public class PendingRecoveryIntegrationTests
         services.AddDbContext<RegistryContext>(options =>
             options.UseSqlite("Data Source=" + Path.Combine(_root, "registry.sqlite")));
         services.AddScoped<IJobIndexWriter, JobIndexWriter>();
+        services.AddSingleton<IFileSystem, FileSystem>();
+        services.AddSingleton(TimeProvider.System);
+        services.AddScoped<DatasetSweep>();
+        services.AddScoped<PendingBuildEnqueuer>();
+        services.AddScoped<DdbJobs>();
         services.AddScoped<BuildPendingService>();
         services.AddScoped<ArtifactCompletenessCheckerService>();
 
@@ -163,7 +179,7 @@ public class PendingRecoveryIntegrationTests
         }
         GlobalJobFilters.Filters.Add(new AutomaticRetryAttribute { Attempts = 1 });
         IndexingStateHandler.EnsureRegistered();
-        GlobalJobFilters.Filters.Add(new JobIndexStateFilter(_provider,
+        GlobalJobFilters.Filters.Add(new JobIndexStateFilter(_provider.GetRequiredService<IServiceScopeFactory>(),
             _provider.GetRequiredService<Microsoft.Extensions.Logging.ILogger<JobIndexStateFilter>>()));
         InstallFailureFilters(failureFirst: true);
         GlobalJobFilters.Filters.Add(_gate);
@@ -272,9 +288,9 @@ public class PendingRecoveryIntegrationTests
         var timestamp = ddb.GetPendingBuildInfo().Single().LastAttempt;
         using var scope = _provider.CreateScope();
         var index = scope.ServiceProvider.GetRequiredService<IJobIndexQuery>();
-        HangfireUtils.BuildPendingWrapper(ddb, null!, Jobs, index, Org, "boundary", () => timestamp + 59, _storage, _connection);
+        Enqueuer(Jobs, index, timestamp + 59).Run(ddb, Org, "boundary", NoConsole);
         (await Rows("boundary")).ShouldBeEmpty();
-        HangfireUtils.BuildPendingWrapper(ddb, null!, Jobs, index, Org, "boundary", () => timestamp + 60, _storage, _connection);
+        Enqueuer(Jobs, index, timestamp + 60).Run(ddb, Org, "boundary", NoConsole);
         var entry = (await Rows("boundary")).Single();
         entry.Path.ShouldBe("model.obj");
         StartWorkers();
@@ -347,7 +363,7 @@ public class PendingRecoveryIntegrationTests
         var retry = await WaitForRetry("transient", 1);
         ScheduledDelay(retry).ShouldBe(TimeSpan.FromMinutes(1), TimeSpan.FromSeconds(2));
         using (var scope = _provider.CreateScope())
-            await scope.ServiceProvider.GetRequiredService<BuildPendingService>().ProcessPendingBuilds();
+            await scope.ServiceProvider.GetRequiredService<BuildPendingService>().ProcessPendingBuilds(null, CancellationToken.None);
         (await CacheState("transient")).GetProperty("RetryAttempt").GetInt32().ShouldBe(1);
         (await CacheState("transient")).GetProperty("ScheduledRetryJobId").GetString().ShouldBe(retry);
 
@@ -409,7 +425,7 @@ public class PendingRecoveryIntegrationTests
         MakeDue(ddb, "model.obj");
         _environment.Set("DDB_MIN_FREE_DISK_MB", "0");
         using (var scope = _provider.CreateScope())
-            await scope.ServiceProvider.GetRequiredService<BuildPendingService>().ProcessPendingBuilds();
+            await scope.ServiceProvider.GetRequiredService<BuildPendingService>().ProcessPendingBuilds(null, CancellationToken.None);
         var restarted = await CacheState("budget");
         restarted.GetProperty("RetryEpoch").GetString().ShouldNotBe(epoch);
         // The coordinator's real OnStateApplied may already schedule attempt 1.
@@ -467,11 +483,11 @@ public class PendingRecoveryIntegrationTests
         ddb.IsBuildComplete("recover.obj").ShouldBeFalse();
         ddb.IsBuildComplete("ordinary.obj").ShouldBeTrue();
         using (var scope = _provider.CreateScope())
-            await scope.ServiceProvider.GetRequiredService<ArtifactCompletenessCheckerService>().CheckAndQueueAsync();
+            await scope.ServiceProvider.GetRequiredService<ArtifactCompletenessCheckerService>().CheckAndQueueAsync(null, CancellationToken.None);
         var row = (await Rows("tiles")).Single();
         row.Path.ShouldBe("recover.obj");
         using (var connection = _storage.GetConnection())
-            connection.GetJobData(row.JobId).Job.Args[2].ShouldBe(false);
+            connection.GetJobData(row.JobId).Job.Args[3].ShouldBe(false); // DdbJobs.Build(org, ref, path, force, ctx)
         StartWorkers();
         await WaitForState(row.JobId, "Succeeded");
         ddb.IsBuildComplete("recover.obj").ShouldBeTrue();
@@ -500,6 +516,7 @@ public class PendingRecoveryIntegrationTests
         services.AddSingleton(Jobs);
         services.AddDbContext<RegistryContext>(options =>
             options.UseSqlite("Data Source=" + Path.Combine(_root, "registry.sqlite")));
+        services.AddScoped<DatasetSweep>();
         services.AddScoped<BuildPendingService>();
         using var secondHost = services.BuildServiceProvider();
         var secondCache = secondHost.GetRequiredService<ICacheManager>();
@@ -583,13 +600,12 @@ public class PendingRecoveryIntegrationTests
                     .PrepareForPublicationAsync(id, meta, created, method, ct);
             });
         using var publicationProvider = new ServiceCollection().AddSingleton(writer.Object).BuildServiceProvider();
-        var indexed = new IndexedJobEnqueuer(Client, publicationProvider,
+        var indexed = new IndexedJobEnqueuer(Client, publicationProvider.GetRequiredService<IServiceScopeFactory>(),
             _provider.GetRequiredService<ILogger<IndexedJobEnqueuer>>(), _storage);
-        var jobs = new BackgroundJobsProcessor(Client, indexed);
+        var jobs = new BackgroundJobsProcessor(Client, indexed, _storage);
         StartWorkers();
-        var coordinator = Task.Run(() => HangfireUtils.BuildPendingWrapper(ddb, null!, jobs,
-            _provider.GetRequiredService<IJobIndexQuery>(), Org, ds, () => DateTimeOffset.UtcNow.ToUnixTimeSeconds(),
-            _storage, _connection));
+        var coordinator = Task.Run(() => Enqueuer(jobs, _provider.GetRequiredService<IJobIndexQuery>(),
+            DateTimeOffset.UtcNow.ToUnixTimeSeconds()).Run(ddb, Org, ds, NoConsole));
         try
         {
             beforeIndex.Wait(TimeSpan.FromSeconds(15)).ShouldBeTrue();
@@ -626,9 +642,9 @@ public class PendingRecoveryIntegrationTests
         foreach (var filter in GlobalJobFilters.Filters.ToArray())
             if (filter.Instance is BuildJobFailureFilter or BuildRetrySchedulerFilter)
                 GlobalJobFilters.Filters.Remove(filter.Instance);
-        var failure = new BuildJobFailureFilter(_provider,
+        var failure = new BuildJobFailureFilter(_provider.GetRequiredService<IServiceScopeFactory>(),
             _provider.GetRequiredService<Microsoft.Extensions.Logging.ILogger<BuildJobFailureFilter>>());
-        var retry = new BuildRetrySchedulerFilter(_provider,
+        var retry = new BuildRetrySchedulerFilter(_provider.GetRequiredService<IServiceScopeFactory>(),
             _provider.GetRequiredService<Microsoft.Extensions.Logging.ILogger<BuildRetrySchedulerFilter>>());
         GlobalJobFilters.Filters.Add(failure, failureFirst ? 1 : 2);
         GlobalJobFilters.Filters.Add(retry, failureFirst ? 2 : 1);
@@ -681,13 +697,25 @@ public class PendingRecoveryIntegrationTests
         ddb.AddRaw(path);
     }
 
-    private string StageEntry(IDDB ddb, string ds, string path) => Jobs.ScheduleIndexed(
-        () => HangfireUtils.BuildWrapper(ddb, path, false, null!),
+    private Guid IdOf(IDDB ddb) => _datasets.Single(d => ReferenceEquals(d.Value, ddb)).Key;
+
+    private delegate bool TryParseFolder(string? folder, out string orgSlug, out Guid internalRef);
+
+    // The production enqueue path with the clock at unixSeconds and the MySQL coordinator lock
+    private PendingBuildEnqueuer Enqueuer(IBackgroundJobsProcessor jobs, IJobIndexQuery index, long unixSeconds) =>
+        new(jobs, index, _provider.GetRequiredService<IDdbManager>(), _storage,
+            new FakeTime(DateTimeOffset.FromUnixTimeSeconds(unixSeconds).UtcDateTime),
+            _provider.GetRequiredService<IConfiguration>());
+
+    private static JobConsole NoConsole => JobConsole.For(Microsoft.Extensions.Logging.Abstractions.NullLogger.Instance, null);
+
+    private string StageEntry(IDDB ddb, string ds, string path) => Jobs.ScheduleIndexed<DdbJobs>(
+        j => j.Build(Org, IdOf(ddb), path, false, null),
         new IndexPayload(Org, ds, ddb.GetEntry(path)!.Hash, MagicStrings.AutoBuildServiceUserId, Path: path),
         TimeSpan.FromHours(1));
 
-    private string StageCoordinator(IDDB ddb, string ds) => Jobs.ScheduleIndexed(
-        () => HangfireUtils.BuildPendingWrapper(ddb, null!),
+    private string StageCoordinator(IDDB ddb, string ds) => Jobs.ScheduleIndexed<DdbJobs>(
+        j => j.BuildPending(Org, IdOf(ddb), null),
         new IndexPayload(Org, ds, null, MagicStrings.AutoBuildServiceUserId), TimeSpan.FromHours(1));
 
     // Assert the actual production ScheduledState first; then accelerate only
@@ -813,9 +841,10 @@ public class PendingRecoveryIntegrationTests
 
         public void OnPerforming(PerformingContext context)
         {
-            if (context.BackgroundJob.Job.Method.Name == nameof(HangfireUtils.BuildPendingWrapper))
+            var job = DdbJobDescriptor.Of(context.BackgroundJob.Job);
+            if (job?.Kind == DdbJobKind.BuildPending)
                 Interlocked.Increment(ref CoordinatorsStarted);
-            if (context.BackgroundJob.Job.Method.Name == nameof(HangfireUtils.BuildWrapper) &&
+            if (job?.Kind == DdbJobKind.Build &&
                 !ReleaseEntries.Wait(TimeSpan.FromSeconds(30))) throw new TimeoutException("Entry barrier not released.");
         }
 

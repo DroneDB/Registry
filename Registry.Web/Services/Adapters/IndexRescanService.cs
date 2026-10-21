@@ -3,7 +3,6 @@ using System;
 using System.Linq;
 using System.Threading.Tasks;
 using Hangfire;
-using Hangfire.Console;
 using Hangfire.Server;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
@@ -14,6 +13,7 @@ using Registry.Web.Models;
 using Registry.Web.Services.HeavyTasks;
 using Registry.Web.Services.HeavyTasks.Tools;
 using Registry.Web.Services.HeavyTasks.Ports;
+using Registry.Web.Services.Jobs;
 
 namespace Registry.Web.Services.Adapters;
 
@@ -54,11 +54,7 @@ public class IndexRescanService
     public async Task SubmitAsync(string? orgSlug, string? dsSlug, string? types, string? extensions,
         bool stopOnError, string? userId, PerformContext? context = null)
     {
-        void WriteLine(string message)
-        {
-            _logger.LogInformation(message);
-            context?.WriteLine(message);
-        }
+        var console = JobConsole.For(_logger, context);
 
         var scope = DatasetScope.Parse(orgSlug, dsSlug);
         var filter = RescanFilter.Parse(types, extensions).RequireNotEmpty();
@@ -68,7 +64,7 @@ public class IndexRescanService
             .Select(d => new { d.Slug, OrgSlug = d.Organization.Slug, d.InternalRef })
             .ToArrayAsync();
 
-        WriteLine($"Rescanning entries ({filter}) in {datasets.Length} dataset(s) of {scope}");
+        console.Info("Rescanning entries ({Filter}) in {Datasets} dataset(s) of {Scope}", filter, datasets.Length, scope);
 
         var prms = RescanIndexTool.CreateParams(filter, stopOnError);
 
@@ -86,17 +82,17 @@ public class IndexRescanService
                 var taskId = await _taskSubmitter.SubmitAsync(HeavyToolIds.RescanIndex, ds.OrgSlug, ds.Slug, ddb, null, prms, userId);
                 submitted++;
                 matched += count;
-                WriteLine($"{key}: {count} matching entries, task {taskId}");
+                console.Info("{Dataset}: {Count} matching entries, task {TaskId}", key, count, taskId);
             }
             catch (Exception ex)
             {
                 failed++;
-                _logger.LogWarning(ex, "Cannot submit the rescan of {Key}", key);
-                context?.WriteLine($"WARNING: cannot submit the rescan of {key}: {ex.Message}");
+                console.Warning(ex, "cannot submit the rescan of {Dataset}: {Error}", key, ex.Message);
             }
         }
 
-        WriteLine($"Rescan submitted: {submitted} task(s) for {matched} matching entries, " +
-                  $"{datasets.Length - submitted - failed} dataset(s) without matches, {failed} failure(s)");
+        console.Info("Rescan submitted: {Submitted} task(s) for {Matched} matching entries, " +
+                     "{WithoutMatches} dataset(s) without matches, {Failed} failure(s)",
+            submitted, matched, datasets.Length - submitted - failed, failed);
     }
 }

@@ -4,15 +4,14 @@ using System.Threading;
 using System.Threading.Tasks;
 using Registry.Web.Services.HeavyTasks.Models;
 using Registry.Web.Services.HeavyTasks.Ports;
-using Registry.Web.Utilities;
+using Registry.Web.Services.Jobs;
 
 namespace Registry.Web.Services.HeavyTasks.Tools;
 
 /// <summary>
 /// Native tool wrapping DroneDB derivative build. Produces no
-/// downloadable artifact; it mutates the dataset build cache in place. This is a
-/// thin forwarder over the pre-existing <see cref="HangfireUtils.BuildWrapper"/>
-/// so the migration of the 8 legacy enqueue sites is behaviour-preserving.
+/// downloadable artifact; it mutates the dataset build cache in place. It runs the build
+/// inline in its task's job, as the build jobs do (<see cref="IDatasetBuilds"/>).
 /// </summary>
 public sealed class BuildTool : IHeavyTool
 {
@@ -63,12 +62,12 @@ public sealed class BuildTool : IHeavyTool
 
         if (string.IsNullOrEmpty(path))
         {
-            HangfireUtils.BuildPendingWrapper(ctx.Ddb, ctx.Hangfire);
+            ctx.Builds.BuildPendingNow(ctx.Ddb, ctx.Hangfire);
             progress.Report(new HeavyToolProgress(1, "done", LogChunk: "Pending build check complete"));
             return Task.FromResult<HeavyToolArtifact?>(null);
         }
 
-        HangfireUtils.BuildWrapper(ctx.Ddb, path!, force, ctx.Hangfire);
+        ctx.Builds.BuildNow(ctx.Ddb, path, force, ctx.Hangfire);
 
         progress.Report(new HeavyToolProgress(1, "done", LogChunk: "Build complete"));
         return Task.FromResult<HeavyToolArtifact?>(null);

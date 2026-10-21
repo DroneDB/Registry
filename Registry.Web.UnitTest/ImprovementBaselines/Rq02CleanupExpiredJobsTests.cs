@@ -1,4 +1,5 @@
 #nullable enable
+using Registry.Web.Services.Jobs;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -109,7 +110,9 @@ public class Rq02CleanupExpiredJobsTests
         RecurringIds().ShouldBe(RecurringJobIds.Owned, ignoreOrder: true);
     }
 
-    private void Cleanup() => HangfireUtils.CleanupExpiredJobs(_storage, _time, _ => { });
+    private void Cleanup() =>
+        new ExpiredRecurringJobsSweep(_storage, _time, NullLogger<ExpiredRecurringJobsSweep>.Instance)
+            .Run(null, CancellationToken.None);
 
     private string[] RecurringIds()
     {

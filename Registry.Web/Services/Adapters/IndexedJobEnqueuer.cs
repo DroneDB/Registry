@@ -28,8 +28,8 @@ public static class JobParamKeys
 /// <summary>
 /// Publishes metadata and JobIndex before making an indexed Hangfire job runnable.
 /// </summary>
-public class IndexedJobEnqueuer(IBackgroundJobClient client, IServiceProvider sp, ILogger<IndexedJobEnqueuer> log,
-    JobStorage? storage = null)
+public class IndexedJobEnqueuer(IBackgroundJobClient client, IServiceScopeFactory scopes,
+    ILogger<IndexedJobEnqueuer> log, JobStorage storage)
     : IIndexedJobEnqueuer
 {
     public string Enqueue(Expression<Action> methodCall, IndexPayload meta) =>
@@ -90,9 +90,9 @@ public class IndexedJobEnqueuer(IBackgroundJobClient client, IServiceProvider sp
 
         try
         {
-            using var scope = sp.CreateScope();
+            using var scope = scopes.CreateScope();
             var writer = scope.ServiceProvider.GetRequiredService<IJobIndexWriter>();
-            var result = IndexedJobPublication.PublishAsync(jobId, record, storage ?? JobStorage.Current, client,
+            var result = IndexedJobPublication.PublishAsync(jobId, record, storage, client,
                 writer, job.ToString(), log).GetAwaiter().GetResult();
 
             if (result.Outcome != IndexedJobPublicationOutcome.Published)

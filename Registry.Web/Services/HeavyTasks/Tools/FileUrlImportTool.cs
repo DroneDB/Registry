@@ -16,6 +16,7 @@ using Registry.Web.Models.Configuration;
 using Registry.Web.Services.HeavyTasks.Models;
 using Registry.Web.Services.HeavyTasks.Ports;
 using Registry.Web.Services.Import;
+using Registry.Web.Services.Jobs;
 using Registry.Web.Services.Ports;
 using Registry.Web.Utilities;
 
@@ -216,15 +217,12 @@ public sealed class FileUrlImportTool : IHeavyTool
         {
             if (ctx.Ddb.IsBuildable(target))
             {
-                using var scope = _scopeFactory.CreateScope();
-                var processor = scope.ServiceProvider.GetRequiredService<IBackgroundJobsProcessor>();
                 var entry = ctx.Ddb.GetEntry(target);
                 var meta = new IndexPayload(
                     request.OrgSlug, request.DsSlug, entry?.Hash, null,
                     Path: target, ParentJobId: ctx.TaskId);
 
-                Expression<Action> buildJob = () => HangfireUtils.BuildWrapper(ctx.Ddb, target, false, null);
-                processor.EnqueueIndexed(buildJob, meta);
+                ctx.Jobs.EnqueueBuild(ctx.Dataset, target, false, meta);
                 _logger.LogInformation("Enqueued build job for imported file '{Path}' in {Org}/{Ds}",
                     target, request.OrgSlug, request.DsSlug);
             }

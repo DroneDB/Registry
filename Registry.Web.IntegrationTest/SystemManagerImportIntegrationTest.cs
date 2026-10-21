@@ -1,4 +1,5 @@
 #nullable enable
+using Registry.Web.Services.Jobs;
 using System;
 using System.IO;
 using System.Linq;
@@ -102,12 +103,7 @@ public class SystemManagerImportIntegrationTest : TestBase
         // Use real HttpClientFactory
         var httpClientFactory = new TestHttpClientFactory();
 
-        var buildPendingService = new BuildPendingService(
-            context,
-            ddbManagerMock.Object,
-            backgroundJobMock.Object,
-            cacheManagerMock.Object,
-            Mock.Of<ILogger<BuildPendingService>>());
+        var buildPendingService = new BuildPendingService(context, new DatasetSweep(context), ddbManagerMock.Object, backgroundJobMock.Object, cacheManagerMock.Object, TestJobs.NewStorage(), Mock.Of<ILogger<BuildPendingService>>());
 
         return new SystemManager(
             authManagerMock.Object,

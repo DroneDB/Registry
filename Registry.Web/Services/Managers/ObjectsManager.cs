@@ -19,6 +19,7 @@ using Registry.Web.Models;
 using Registry.Web.Models.Configuration;
 using Registry.Web.Models.DTO;
 using Registry.Web.Services.Adapters;
+using Registry.Web.Services.Jobs;
 using Registry.Web.Services.Ports;
 using Registry.Web.Services.Uploads;
 using Registry.Web.Utilities;
@@ -107,10 +108,8 @@ public class ObjectsManager : IObjectsManager
         // instance (backed by the same job index query) keeps direct (test) construction
         // working without wiring.
         _buildStatusService = buildStatusService;
-        // Stateless; the DI-registered singleton is injected in production, while a local
-        // instance keeps direct (test) construction working without wiring.
         _datasetCacheInvalidator = datasetCacheInvalidator
-            ?? new DatasetCacheInvalidator(NullLogger<DatasetCacheInvalidator>.Instance, cacheManager, FallbackOgcKeys());
+            ?? throw new ArgumentNullException(nameof(datasetCacheInvalidator));
         _buildArtifactResolver = buildArtifactResolver;
         _importSettings = settings.Value.Import ?? new ImportSettings();
         // The DI-registered pipeline in production; tests constructing this class directly get one
@@ -746,7 +745,7 @@ public class ObjectsManager : IObjectsManager
             await _buildPendingService.SetDatasetHasPendingBuilds(orgSlug, dsSlug, true);
             var user = await _authManager.GetCurrentUser();
             var meta = new IndexPayload(orgSlug, dsSlug, updatedEntry.Hash, user.Id, null, updatedEntry.Path);
-            _backgroundJob.EnqueueIndexed(() => HangfireUtils.BuildWrapper(ddb, dest, false, null), meta);
+            _backgroundJob.EnqueueBuild(access.Key, dest, false, meta);
         }
 
         // Invalidate dataset thumbnail cache if source or dest is a thumbnail candidate
@@ -1105,7 +1104,7 @@ public class ObjectsManager : IObjectsManager
 
         await InvalidateOgcAsync(orgSlug, dsSlug);
 
-        await RebuildAfterSidecarRemoval(orgSlug, dsSlug, ddb, paths);
+        await RebuildAfterSidecarRemoval(orgSlug, dsSlug, access, paths);
 
         _logger.LogInformation("Deletion complete");
     }
@@ -1118,9 +1117,10 @@ public class ObjectsManager : IObjectsManager
     // DroneDB re-read the main file (local, without a CRS) and drop its stale vector
     // artifacts, so the main file needs a rebuild now rather than at the next nightly
     // completeness sweep.
-    private async Task RebuildAfterSidecarRemoval(string orgSlug, string dsSlug, IDDB ddb,
+    private async Task RebuildAfterSidecarRemoval(string orgSlug, string dsSlug, DatasetAccess access,
         IEnumerable<string> deletedPaths)
     {
+        var ddb = access.Ddb;
         var prjs = deletedPaths.Where(p => p.EndsWith(".prj", StringComparison.OrdinalIgnoreCase)).ToArray();
         if (prjs.Length == 0) return;
 
@@ -1158,8 +1158,7 @@ public class ObjectsManager : IObjectsManager
 
                     await _buildPendingService.SetDatasetHasPendingBuilds(orgSlug, dsSlug, true);
                     var meta = new IndexPayload(orgSlug, dsSlug, main.Hash, user?.Id, null, mainPath);
-                    var jobId = _backgroundJob.EnqueueIndexed(
-                        () => HangfireUtils.BuildWrapper(ddb, mainPath, false, null), meta);
+                    var jobId = _backgroundJob.EnqueueBuild(access.Key, mainPath, false, meta);
                     _logger.LogInformation("Rebuilding {MainPath} after removing {Prj} (job {JobId})",
                         mainPath, prj, jobId);
                 }
@@ -1252,7 +1251,7 @@ public class ObjectsManager : IObjectsManager
         if (deleted.Count > 0)
             await InvalidateOgcAsync(orgSlug, dsSlug);
 
-        await RebuildAfterSidecarRemoval(orgSlug, dsSlug, ddb, deleted);
+        await RebuildAfterSidecarRemoval(orgSlug, dsSlug, access, deleted);
 
         response.Deleted = [.. deleted];
         response.Failed = failed;
@@ -1621,7 +1620,8 @@ public class ObjectsManager : IObjectsManager
     public async Task Build(string orgSlug, string dsSlug, string path, bool force = false)
     {
         // You need write access to build
-        var ddb = (await _access.ResolveAsync(orgSlug, dsSlug, AccessType.Write)).Ddb;
+        var access = await _access.ResolveAsync(orgSlug, dsSlug, AccessType.Write);
+        var ddb = access.Ddb;
 
         _logger.LogInformation("In Build('{OrgSlug}/{DsSlug}')", orgSlug, dsSlug);
 
@@ -1648,7 +1648,7 @@ public class ObjectsManager : IObjectsManager
 
         var user = await _authManager.GetCurrentUser();
         var meta = new IndexPayload(orgSlug, dsSlug, entry.Hash, user.Id, null, path);
-        var jobId = _backgroundJob.EnqueueIndexed(() => HangfireUtils.BuildWrapper(ddb, path, force, null), meta);
+        var jobId = _backgroundJob.EnqueueBuild(access.Key, path, force, meta);
 
         _logger.LogInformation("Background job id is {JobId}", jobId);
     }
@@ -2271,8 +2271,7 @@ public class ObjectsManager : IObjectsManager
 
         var user = await _authManager.GetCurrentUser();
         var meta = new IndexPayload(orgSlug, dsSlug, entry.Hash, user.Id, null, path);
-        var jobId = _backgroundJob.EnqueueIndexed(
-            () => HangfireUtils.MaskBordersWrapper(ddb, path, outputPath, nearDist, white, null), meta);
+        var jobId = _backgroundJob.EnqueueMaskBorders(access.Key, path, outputPath, nearDist, white, meta);
 
         _logger.LogInformation("Background job id is {JobId}", jobId);
     }

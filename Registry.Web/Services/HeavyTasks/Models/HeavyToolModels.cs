@@ -4,6 +4,8 @@ using System.Text.Json;
 using Hangfire.Server;
 using Microsoft.Extensions.Logging;
 using Registry.Ports.DroneDB;
+using Registry.Web.Services.Jobs;
+using Registry.Web.Services.Ports;
 
 namespace Registry.Web.Services.HeavyTasks.Models;
 
@@ -68,4 +70,13 @@ public interface IHeavyToolExecutionContext : IHeavyToolValidationContext
     string TaskId { get; }
     string? WorkDir { get; }    // null when ProducesArtifact = false
     PerformContext Hangfire { get; }
+
+    /// <summary>The task's dataset, as a background job names it.</summary>
+    DatasetKey Dataset { get; }
+
+    /// <summary>Queues follow-up jobs (the builds of what the tool added), in the task's scope.</summary>
+    IBackgroundJobsProcessor Jobs { get; }
+
+    /// <summary>Runs builds inline, in the task's own job (the build and rescan tools).</summary>
+    IDatasetBuilds Builds { get; }
 }

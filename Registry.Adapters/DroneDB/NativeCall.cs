@@ -11,7 +11,8 @@ namespace Registry.Adapters.DroneDB;
 /// generalized from the batch add. Each helper runs the native call, and on failure reads the last
 /// error and reason synchronously, on the same thread, before anything else (no await, no other
 /// libddb call in between), then throws the mapped exception (<see cref="DdbResultMapper"/>). An
-/// output is read only on success and freed in a finally block whenever it is not null.
+/// output is read only on success and freed in a finally block whenever it is not null. Each call
+/// runs under the current <see cref="DdbOperation"/> (<see cref="NativeOperation"/>, XI-08).
 /// </summary>
 internal static class NativeCall
 {
@@ -41,8 +42,11 @@ internal static class NativeCall
     }
 
     /// <summary>A call without output.</summary>
-    internal static void Invoke(string operation, Func<DdbResult> call, string? context = null) =>
+    internal static void Invoke(string operation, Func<DdbResult> call, string? context = null)
+    {
+        NativeOperation.Bind();
         Check(call(), operation, context);
+    }
 
     /// <summary>A call whose output is JSON, deserialized in place (<see cref="NativeJson"/>); a missing or null output fails.</summary>
     internal static T Invoke<T>(string operation, OutputCall call) where T : class
@@ -50,6 +54,7 @@ internal static class NativeCall
         var output = IntPtr.Zero;
         try
         {
+            NativeOperation.Bind();
             Check(call(out output), operation);
             return Deserialize<T>(operation, output) ?? throw new DdbException($"{operation} returned no output");
         }
@@ -68,6 +73,7 @@ internal static class NativeCall
         var output = IntPtr.Zero;
         try
         {
+            NativeOperation.Bind();
             var result = call(out output);
             if (result == DdbResult.NotFound)
                 return null;
@@ -87,6 +93,7 @@ internal static class NativeCall
         var output = IntPtr.Zero;
         try
         {
+            NativeOperation.Bind();
             var result = call(out output);
             if (result == DdbResult.NotFound)
                 return null;
@@ -106,6 +113,7 @@ internal static class NativeCall
         var output = IntPtr.Zero;
         try
         {
+            NativeOperation.Bind();
             Check(call(out output), operation);
             return Marshal.PtrToStringUTF8(output);
         }
@@ -128,6 +136,7 @@ internal static class NativeCall
         var buffer = IntPtr.Zero;
         try
         {
+            NativeOperation.Bind();
             Check(call(out buffer, out var size), operation, context);
             if (buffer == IntPtr.Zero || size < 0)
                 throw new DdbException($"{operation} returned no buffer");
@@ -153,6 +162,7 @@ internal static class NativeCall
         var output = IntPtr.Zero;
         try
         {
+            NativeOperation.Bind();
             Check(call(out output), operation);
             if (output == IntPtr.Zero)
                 throw new DdbException($"{operation} returned no output");

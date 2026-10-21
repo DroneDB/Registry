@@ -23,6 +23,7 @@ using Registry.Web.Services.HeavyTasks.Models;
 using Registry.Web.Services.HeavyTasks.NodeOdx;
 using Registry.Web.Services.HeavyTasks.Ports;
 using Registry.Web.Services.Import;
+using Registry.Web.Services.Jobs;
 using Registry.Web.Services.Ports;
 using Registry.Web.Utilities;
 
@@ -239,6 +240,7 @@ public sealed class PhotogrammetryTool : IHeavyTool
         // --- Phase 2: Determine output target ---
         var createNewDataset = ReadBool(request.Params, "createNewDataset") ?? false;
         var targetDdb = ctx.Ddb;
+        var targetDataset = ctx.Dataset;
         var targetRoot = ctx.Ddb.DatasetFolderPath;
         var targetOrgSlug = request.OrgSlug;
         var targetDsSlug = request.DsSlug;
@@ -281,6 +283,7 @@ public sealed class PhotogrammetryTool : IHeavyTool
                     ? Guid.Parse(refVal.ToString()!)
                     : throw new InvalidOperationException("New dataset is missing internalRef.");
                 targetDdb = ddbManager.Get(newDatasetOrgSlug, internalRef);
+                targetDataset = new DatasetKey(newDatasetOrgSlug, internalRef);
                 targetRoot = targetDdb.DatasetFolderPath;
             }
 
@@ -290,8 +293,8 @@ public sealed class PhotogrammetryTool : IHeavyTool
 
         // --- Phase 3: Extract archive into target dataset ---
         await ExtractArchiveIntoDataset(
-            tempZipPath, destPath, targetDdb, targetRoot, targetOrgSlug, targetDsSlug,
-            request, ctx.TaskId, progress, ct);
+            tempZipPath, destPath, targetDdb, targetDataset, targetRoot, targetOrgSlug, targetDsSlug,
+            request, ctx, progress, ct);
 
         progress.Report(new HeavyToolProgress(1, "done",
             LogChunk: $"Photogrammetry complete. Results extracted to '{destPath}' in dataset '{targetDsSlug}'."));
@@ -304,9 +307,9 @@ public sealed class PhotogrammetryTool : IHeavyTool
     /// Reuses the same pattern as ArchiveExtractTool.
     /// </summary>
     private async Task ExtractArchiveIntoDataset(
-        string archivePath, string destPath, IDDB ddb, string root,
+        string archivePath, string destPath, IDDB ddb, DatasetKey dataset, string root,
         string orgSlug, string dsSlug,
-        HeavyToolRequest request, string taskId,
+        HeavyToolRequest request, IHeavyToolExecutionContext ctx,
         IProgress<HeavyToolProgress> progress, CancellationToken ct)
     {
         // The shared extractor: the path rule decides every entry, the budget every chunk, existing
@@ -333,9 +336,7 @@ public sealed class PhotogrammetryTool : IHeavyTool
         }
 
         // Enqueue per-file build jobs for buildable entries.
-        using (var scope = _scopeFactory.CreateScope())
         {
-            var processor = scope.ServiceProvider.GetRequiredService<IBackgroundJobsProcessor>();
             var buildableCount = 0;
 
             foreach (var entry in indexed)
@@ -350,10 +351,9 @@ public sealed class PhotogrammetryTool : IHeavyTool
                     entry.Hash,
                     null,
                     Path: path,
-                    ParentJobId: taskId);
+                    ParentJobId: ctx.TaskId);
 
-                Expression<Action> buildJob = () => HangfireUtils.BuildWrapper(ddb, path, false, null);
-                processor.EnqueueIndexed(buildJob, meta);
+                ctx.Jobs.EnqueueBuild(dataset, path, false, meta);
                 buildableCount++;
             }
 

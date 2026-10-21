@@ -34,9 +34,9 @@ public class JobIndexSyncIndexingTests
     [TearDown]
     public void TearDown() => _env.Dispose();
 
-    private Task Sync(JobStorage storage, IJobIndexQuery? query = null, IJobIndexWriter? writer = null) =>
-        HangfireUtils.SyncJobIndexStatesAsync(query ?? new JobIndexQuery(_env.Db), writer ?? _env.Writer, storage,
-            Serilog.Core.Logger.None);
+    private Task<JobIndexSyncService.SyncResult> Sync(JobStorage storage, IJobIndexQuery? query = null, IJobIndexWriter? writer = null) =>
+        new JobIndexSyncService(query ?? new JobIndexQuery(_env.Db), writer ?? _env.Writer, storage,
+            Microsoft.Extensions.Logging.Abstractions.NullLogger<JobIndexSyncService>.Instance).SyncAsync();
 
     [Test]
     public async Task OrphanedIndexingRow_AfterInMemoryRestart_BecomesDeleted()
@@ -139,7 +139,7 @@ public class JobIndexSyncIndexingTests
 
     [Test]
     public void SyncedStates_ContainIndexingAndCreated() =>
-        HangfireUtils.SyncedJobIndexStates.ShouldBe(["Created", "Indexing"], ignoreOrder: true);
+        JobIndexSyncService.SyncedStates.ShouldBe(["Created", "Indexing"], ignoreOrder: true);
 
     [Test]
     public async Task OneFailingRow_DoesNotStopTheOthers()

@@ -19,6 +19,7 @@ using Registry.Web.Models.Configuration;
 using Registry.Web.Services.HeavyTasks.Models;
 using Registry.Web.Services.HeavyTasks.Ports;
 using Registry.Web.Services.Import;
+using Registry.Web.Services.Jobs;
 using Registry.Web.Services.Ports;
 using Registry.Web.Utilities;
 
@@ -228,9 +229,7 @@ public sealed class ArchiveExtractTool : IHeavyTool
         // Enqueue a per-file build job for every buildable extracted entry (mirrors
         // ObjectsManager.AddNew). Buildability is derived from the indexed entry type, so
         // no additional native calls are needed.
-        using (var scope = _scopeFactory.CreateScope())
         {
-            var processor = scope.ServiceProvider.GetRequiredService<IBackgroundJobsProcessor>();
             var buildableCount = 0;
 
             foreach (var entry in indexed)
@@ -247,8 +246,7 @@ public sealed class ArchiveExtractTool : IHeavyTool
                     Path: path,
                     ParentJobId: ctx.TaskId);
 
-                Expression<Action> buildJob = () => HangfireUtils.BuildWrapper(ctx.Ddb, path, false, null);
-                processor.EnqueueIndexed(buildJob, meta);
+                ctx.Jobs.EnqueueBuild(ctx.Dataset, path, false, meta);
                 buildableCount++;
             }
 

@@ -11,6 +11,7 @@ using Registry.Web.Exceptions;
 using Registry.Web.Models;
 using Registry.Web.Models.DTO;
 using Registry.Web.Services.Adapters;
+using Registry.Web.Services.Jobs;
 using Registry.Web.Services.Ports;
 using Registry.Web.Utilities;
 
@@ -74,7 +75,7 @@ public class RescanManager : IRescanManager
 
         var user = await _authManager.GetCurrentUser();
         var meta = new IndexPayload(orgSlug, dsSlug, null, user?.Id ?? MagicStrings.AutoBuildServiceUserId);
-        await _rebuild.RunAsync(orgSlug, dsSlug, ddb, filter, results, new QueuedBuilds(_backgroundJob, ddb, meta));
+        await _rebuild.RunAsync(orgSlug, dsSlug, ddb, filter, results, new QueuedBuilds(_backgroundJob, new DatasetKey(orgSlug, dataset.InternalRef), meta));
 
         var entries = results.Select(r => new RescanEntryResultDto
         {
@@ -122,19 +123,14 @@ public class RescanManager : IRescanManager
     }
 
     // Queued build jobs: a request must not run builds itself.
-    private sealed class QueuedBuilds(IBackgroundJobsProcessor jobs, IDDB ddb, IndexPayload meta) : IRescanBuildRunner
+    private sealed class QueuedBuilds(IBackgroundJobsProcessor jobs, DatasetKey dataset, IndexPayload meta)
+        : IRescanBuildRunner
     {
-        public void BuildDataset() =>
-            jobs.EnqueueIndexed(() => HangfireUtils.BuildWrapper(ddb, null, true, null), meta);
+        public void BuildDataset() => jobs.EnqueueBuild(dataset, null, true, meta);
 
-        public void BuildEntry(RescanResult entry)
-        {
-            var path = entry.Path;
-            jobs.EnqueueIndexed(() => HangfireUtils.BuildWrapper(ddb, path, true, null),
-                meta with { Hash = entry.Hash, Path = path });
-        }
+        public void BuildEntry(RescanResult entry) =>
+            jobs.EnqueueBuild(dataset, entry.Path, true, meta with { Hash = entry.Hash, Path = entry.Path });
 
-        public void BuildPending() =>
-            jobs.EnqueueIndexed(() => HangfireUtils.BuildPendingWrapper(ddb, null), meta);
+        public void BuildPending() => jobs.EnqueueBuildPending(dataset, meta);
     }
 }

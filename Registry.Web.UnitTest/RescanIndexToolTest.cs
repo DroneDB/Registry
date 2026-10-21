@@ -1,4 +1,5 @@
 #nullable enable
+using Registry.Web.Test.Support;
 using System;
 using System.Linq;
 using System.Text.Json;
@@ -106,7 +107,7 @@ public class RescanIndexToolTest
     {
         var request = new HeavyToolRequest("rescan-index", "1", "org", "ds", null,
             JsonSerializer.SerializeToElement(prms));
-        var ctx = new HeavyToolExecutionContext(_ddb.Object, null, NullLogger.Instance, "task-1", null, null!);
+        var ctx = TestJobs.ExecutionContext(_ddb.Object);
         return _tool.ExecuteAsync(request, ctx, new Progress<HeavyToolProgress>(), CancellationToken.None);
     }
 }

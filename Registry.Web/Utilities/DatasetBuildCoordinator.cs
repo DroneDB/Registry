@@ -33,10 +33,11 @@ internal static class DatasetBuildCoordinator
         return "ddb-pending:" + hash;
     }
 
-    internal static IDisposable Acquire(string orgSlug, string dsSlug, JobStorage? storage = null,
+    internal static IDisposable Acquire(string orgSlug, string dsSlug, JobStorage storage,
         IStorageConnection? connection = null, string? mysqlConnectionString = null)
     {
-        var configuredStorage = storage ?? JobStorage.Current;
+        ArgumentNullException.ThrowIfNull(storage);
+        var configuredStorage = storage;
         var resource = ResourceKey(orgSlug, dsSlug);
         MySqlConnection? session = null;
         string? sessionResource = null;

@@ -3,6 +3,7 @@ using System.IO;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Registry.Adapters.DroneDB;
+using Registry.Common;
 using Registry.Ports;
 using Registry.Ports.DroneDB;
 using Registry.Web.Models.Configuration;
@@ -52,6 +53,33 @@ public class DdbManager : IDdbManager
 
         _initialized.Add(baseDdbPath);
         return ddb;
+    }
+
+    public IDDB Open(string orgSlug, Guid internalRef)
+    {
+        var baseDdbPath = GetDdbPath(orgSlug, internalRef);
+
+        if (_initialized.Contains(baseDdbPath) || Directory.Exists(Path.Combine(baseDdbPath, IDDB.DatabaseFolderName)))
+            return new DDB(baseDdbPath, _ddbWrapper);
+
+        throw new DirectoryNotFoundException($"Dataset {orgSlug}/{internalRef} has no index (deleted?)");
+    }
+
+    public bool TryParseDatasetFolder(string datasetFolderPath, out string orgSlug, out Guid internalRef)
+    {
+        orgSlug = string.Empty;
+        internalRef = Guid.Empty;
+        if (string.IsNullOrWhiteSpace(datasetFolderPath) || string.IsNullOrWhiteSpace(_settings.DatasetsPath))
+            return false;
+
+        var relative = Path.GetRelativePath(Path.GetFullPath(_settings.DatasetsPath),
+            Path.GetFullPath(datasetFolderPath)).ToDdbPath().TrimEnd('/');
+        var segments = relative.Split('/');
+        if (segments.Length != 2 || segments[0] is "" or "." or ".." || !Guid.TryParse(segments[1], out internalRef))
+            return false;
+
+        orgSlug = segments[0];
+        return true;
     }
 
     public void Delete(string orgSlug, Guid internalRef)

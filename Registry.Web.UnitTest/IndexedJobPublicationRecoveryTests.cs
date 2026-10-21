@@ -1,4 +1,5 @@
 #nullable enable
+using Registry.Web.Services.Jobs;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -127,7 +128,7 @@ internal sealed class PublicationEnv : IDisposable
 
     public IndexedJobPublicationRecoveryService NewService(IJobIndexWriter? writer = null, JobStorage? storage = null,
         ILogger<IndexedJobPublicationRecoveryService>? log = null) =>
-        new(writer ?? Writer, log ?? Log, storage, Time);
+        new(writer ?? Writer, log ?? Log, storage ?? Storage, Time);
 
     public T Track<T>(T disposable) where T : IDisposable
     {
@@ -139,7 +140,7 @@ internal sealed class PublicationEnv : IDisposable
         string tool = "build", string? requestHash = "rh", string? parent = "parent-1", string? workflow = "wf-1") =>
         new(org, ds, "hash-1", "user-1", "pq", path, tool, "7", requestHash, parent, workflow);
 
-    public static Job NewJob() => Job.FromExpression(() => HangfireUtils.DummyJob(null!));
+    public static Job NewJob() => Job.FromExpression<HealthCheckJob>(j => j.Ping(null));
 
     /// <summary>Creates a job in Indexing, as the publisher does, without publishing it.</summary>
     public string CreateIndexing(IndexedJobPublicationRecord record, JobStorage? onStorage = null)
@@ -497,9 +498,9 @@ public class IndexedJobPublicationRecoveryTests
             });
         using var provider = new ServiceCollection()
             .AddSingleton(hooked.Object).BuildServiceProvider();
-        var enqueuer = new IndexedJobEnqueuer(_env.Client, provider, enqueuerLog, _env.Storage);
+        var enqueuer = new IndexedJobEnqueuer(_env.Client, provider.GetRequiredService<IServiceScopeFactory>(), enqueuerLog, _env.Storage);
 
-        var id = enqueuer.Enqueue(() => HangfireUtils.DummyJob(null!), PublicationEnv.Payload());
+        var id = enqueuer.Enqueue<HealthCheckJob>(j => j.Ping(null), PublicationEnv.Payload());
 
         id.ShouldBe(created.Single());
         _env.State(id).ShouldBe("Enqueued");
@@ -998,7 +999,7 @@ public class IndexedJobPublicationRecoveryTests
         var id = _env.CreateIndexing(record);   // on _env.Storage
 
         var service = new IndexedJobPublicationRecoveryService(_env.Writer, _env.Log, _env.Storage, _env.Time);
-        await service.RecoverPublications(null);
+        await service.RecoverPublications(null, CancellationToken.None);
 
         _env.State(id).ShouldBe("Enqueued");
         _env.JobCount(other).ShouldBe(0);

@@ -425,7 +425,7 @@ public class IndexedJobPublicationMySqlIntegrationTests
     public async Task EndToEnd_Enqueuer_PublishesJobAndRemovesMember()
     {
         using var sp = BuildApp();
-        var enqueuer = new IndexedJobEnqueuer(_client, sp, NullLogger<IndexedJobEnqueuer>.Instance, _storage);
+        var enqueuer = new IndexedJobEnqueuer(_client, sp.GetRequiredService<IServiceScopeFactory>(), NullLogger<IndexedJobEnqueuer>.Instance, _storage);
 
         var immediate = enqueuer.Enqueue(() => Noop(), new IndexPayload("org", "ds", null, "user"));
         var scheduled = enqueuer.Schedule(() => Noop(), new IndexPayload("org", "ds", null, "user"), TimeSpan.FromHours(1));
@@ -447,7 +447,7 @@ public class IndexedJobPublicationMySqlIntegrationTests
         var services = new ServiceCollection();
         services.AddScoped<IJobIndexWriter>(_ => throw new InvalidOperationException("index down"));
         using var sp = services.BuildServiceProvider();
-        var enqueuer = new IndexedJobEnqueuer(_client, sp, NullLogger<IndexedJobEnqueuer>.Instance, _storage);
+        var enqueuer = new IndexedJobEnqueuer(_client, sp.GetRequiredService<IServiceScopeFactory>(), NullLogger<IndexedJobEnqueuer>.Instance, _storage);
 
         var id = enqueuer.Enqueue(() => Noop(), new IndexPayload("org", "ds", null, "user"));
 
@@ -603,7 +603,7 @@ public class IndexedJobPublicationWorkerIntegrationTests
         GlobalJobFilters.Filters.Clear();
         GlobalJobFilters.Filters.Add(new AutomaticRetryAttribute { Attempts = 0 });
         IndexingStateHandler.EnsureRegistered();
-        GlobalJobFilters.Filters.Add(new JobIndexStateFilter(_provider,
+        GlobalJobFilters.Filters.Add(new JobIndexStateFilter(_provider.GetRequiredService<IServiceScopeFactory>(),
             _provider.GetRequiredService<ILogger<JobIndexStateFilter>>()));
 
         PubProbe.Inspect = ctx =>
@@ -745,7 +745,7 @@ public class IndexedJobPublicationWorkerIntegrationTests
     private static FakeTime TimeAt(TimeSpan fromNow) => new(FakeTime.CeilMinute(DateTime.UtcNow + fromNow));
 
     private IndexedJobEnqueuer EnqueuerWith(IBackgroundJobClient client, IServiceProvider sp) =>
-        new(client, sp, NullLogger<IndexedJobEnqueuer>.Instance, _storage);
+        new(client, sp.GetRequiredService<IServiceScopeFactory>(), NullLogger<IndexedJobEnqueuer>.Instance, _storage);
 
     // ------------------------------------------------------------------ A1
 

@@ -1,4 +1,5 @@
 #nullable enable
+using Registry.Web.Services.Jobs;
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
@@ -76,18 +77,21 @@ public class PendingBuildCoordinationTests
         _ddb.Setup(x => x.GetStamp()).Returns(new Stamp { Checksum = "unchanged", Entries = [], Meta = [] });
         _manager = new Mock<IDdbManager>();
         _manager.Setup(x => x.Get(Org, It.IsAny<Guid>())).Returns(_ddb.Object);
+        var folderOrg = Org;
+        var folderRef = Guid.NewGuid();
+        _manager.Setup(x => x.TryParseDatasetFolder(It.IsAny<string>(), out folderOrg, out folderRef)).Returns(true);
         _jobs = new Mock<IBackgroundJobsProcessor>();
         _jobs.Setup(x => x.GetJobStatus(It.IsAny<string>())).Returns<string>(id =>
             _statuses.GetValueOrDefault(id, JobStatus.Unknown));
-        _jobs.Setup(x => x.EnqueueIndexed(It.IsAny<Expression<Action>>(), It.IsAny<IndexPayload>()))
+        _jobs.Setup(x => x.EnqueueIndexed(It.IsAny<Expression<Action<DdbJobs>>>(), It.IsAny<IndexPayload>()))
             .Returns(() =>
             {
                 var id = "sweep-" + ++_enqueued;
                 _statuses[id] = JobStatus.Enqueued;
                 return id;
             });
-        _jobs.Setup(x => x.ScheduleIndexed(It.IsAny<Expression<Action>>(), It.IsAny<IndexPayload>(), It.IsAny<TimeSpan>()))
-            .Returns<Expression<Action>, IndexPayload, TimeSpan>((_, _, delay) =>
+        _jobs.Setup(x => x.ScheduleIndexed(It.IsAny<Expression<Action<DdbJobs>>>(), It.IsAny<IndexPayload>(), It.IsAny<TimeSpan>()))
+            .Returns<Expression<Action<DdbJobs>>, IndexPayload, TimeSpan>((_, _, delay) =>
             {
                 _delays.Add(delay);
                 var id = "retry-" + _delays.Count;
@@ -103,9 +107,13 @@ public class PendingBuildCoordinationTests
                 _cacheData[key] = value;
                 return Task.CompletedTask;
             });
-        _service = new BuildPendingService(_context, _manager.Object, _jobs.Object, _cache.Object,
-            Mock.Of<ILogger<BuildPendingService>>(), _storage);
+        _service = new BuildPendingService(_context, new DatasetSweep(_context), _manager.Object, _jobs.Object, _cache.Object, _storage, Mock.Of<ILogger<BuildPendingService>>());
     }
+
+    private PendingBuildEnqueuer Enqueuer(IBackgroundJobsProcessor jobs, IJobIndexQuery index, JobStorage storage) =>
+        new(jobs, index, _manager.Object, storage, new FakeTime(DateTimeOffset.FromUnixTimeSeconds(1_800_000_000).UtcDateTime));
+
+    private static JobConsole NoConsole => JobConsole.For(Microsoft.Extensions.Logging.Abstractions.NullLogger.Instance, null);
 
     [TearDown]
     public void TearDown() => _context.Dispose();
@@ -127,8 +135,8 @@ public class PendingBuildCoordinationTests
     {
         Seed(12, "old-job");
         _statuses["old-job"] = status;
-        await _service.ProcessPendingBuilds();
-        await _service.ProcessPendingBuilds();
+        await _service.ProcessPendingBuilds(null, CancellationToken.None);
+        await _service.ProcessPendingBuilds(null, CancellationToken.None);
         _enqueued.ShouldBe(1);
         State().GetProperty("RetryAttempt").GetInt32().ShouldBe(0);
         State().GetProperty("ScheduledRetryJobId").GetString().ShouldBe("sweep-1");
@@ -143,7 +151,7 @@ public class PendingBuildCoordinationTests
     {
         Seed(8, "live");
         _statuses["live"] = status;
-        await _service.ProcessPendingBuilds();
+        await _service.ProcessPendingBuilds(null, CancellationToken.None);
         _enqueued.ShouldBe(0);
         State().GetProperty("RetryAttempt").GetInt32().ShouldBe(8);
         State().GetProperty("ScheduledRetryJobId").GetString().ShouldBe("live");
@@ -171,8 +179,8 @@ public class PendingBuildCoordinationTests
     {
         Seed(9, "live");
         _ddb.Setup(x => x.IsBuildPending()).Returns(false);
-        await _service.ProcessPendingBuilds();
-        await _service.ProcessPendingBuilds();
+        await _service.ProcessPendingBuilds(null, CancellationToken.None);
+        await _service.ProcessPendingBuilds(null, CancellationToken.None);
         State().GetProperty("HasPending").GetBoolean().ShouldBeFalse();
         State().GetProperty("RetryAttempt").GetInt32().ShouldBe(0);
         State().GetProperty("ScheduledRetryJobId").ValueKind.ShouldBe(JsonValueKind.Null);
@@ -187,8 +195,8 @@ public class PendingBuildCoordinationTests
     public async Task MissingOrMalformedCacheStartsBoundedRecovery(string json)
     {
         _cacheData[CacheCategories.ForDataset(Org, Ds)] = Encoding.UTF8.GetBytes(json);
-        await _service.ProcessPendingBuilds();
-        await _service.ProcessPendingBuilds();
+        await _service.ProcessPendingBuilds(null, CancellationToken.None);
+        await _service.ProcessPendingBuilds(null, CancellationToken.None);
         _enqueued.ShouldBe(1);
         State().GetProperty("RetryAttempt").GetInt32().ShouldBe(0);
     }
@@ -198,7 +206,7 @@ public class PendingBuildCoordinationTests
     {
         Seed(pending: false);
         _ddb.Setup(x => x.GetStamp()).Throws(new DdbException("stamp unavailable"));
-        await _service.ProcessPendingBuilds();
+        await _service.ProcessPendingBuilds(null, CancellationToken.None);
         _enqueued.ShouldBe(1);
     }
 
@@ -206,9 +214,9 @@ public class PendingBuildCoordinationTests
     public async Task SweepEnqueueFailureDoesNotResetEpochOrConsumeBudget()
     {
         Seed(12, "old");
-        _jobs.Setup(x => x.EnqueueIndexed(It.IsAny<Expression<Action>>(), It.IsAny<IndexPayload>()))
+        _jobs.Setup(x => x.EnqueueIndexed(It.IsAny<Expression<Action<DdbJobs>>>(), It.IsAny<IndexPayload>()))
             .Throws(new InvalidOperationException("index storage unavailable"));
-        await _service.ProcessPendingBuilds();
+        await _service.ProcessPendingBuilds(null, CancellationToken.None);
         _service.GetStatus().Errors.ShouldBe(1);
         State().GetProperty("RetryAttempt").GetInt32().ShouldBe(12);
         State().GetProperty("RetryEpoch").GetString().ShouldBe("old-epoch");
@@ -218,7 +226,7 @@ public class PendingBuildCoordinationTests
     public async Task DelayedScheduleFailureDoesNotConsumeBudget()
     {
         Seed(4);
-        _jobs.Setup(x => x.ScheduleIndexed(It.IsAny<Expression<Action>>(), It.IsAny<IndexPayload>(), It.IsAny<TimeSpan>()))
+        _jobs.Setup(x => x.ScheduleIndexed(It.IsAny<Expression<Action<DdbJobs>>>(), It.IsAny<IndexPayload>(), It.IsAny<TimeSpan>()))
             .Throws(new InvalidOperationException("queue unavailable"));
         await _service.ScheduleRetryIfPending(Org, Ds);
         State().GetProperty("RetryAttempt").GetInt32().ShouldBe(4);
@@ -235,7 +243,7 @@ public class PendingBuildCoordinationTests
         }
         _delays.Select(d => d.TotalMinutes).ShouldBe(new double[] { 1, 2, 5, 10, 20, 40, 60, 60, 60, 60, 60, 60 });
         State().GetProperty("RetryAttempt").GetInt32().ShouldBe(12);
-        await _service.ProcessPendingBuilds();
+        await _service.ProcessPendingBuilds(null, CancellationToken.None);
         _enqueued.ShouldBe(1);
         State().GetProperty("RetryAttempt").GetInt32().ShouldBe(0);
     }
@@ -259,8 +267,8 @@ public class PendingBuildCoordinationTests
         _ddb.Setup(x => x.GetPendingBuildInfo()).Returns([new PendingBuildInfo { Path = "model.obj", Hash = "model-hash" }]);
         var writer = new Mock<IJobIndexWriter>();
         using var provider = new ServiceCollection().AddSingleton(_service).AddSingleton(writer.Object).BuildServiceProvider();
-        var failed = new BuildJobFailureFilter(provider, Mock.Of<ILogger<BuildJobFailureFilter>>());
-        var retry = new BuildRetrySchedulerFilter(provider, Mock.Of<ILogger<BuildRetrySchedulerFilter>>());
+        var failed = new BuildJobFailureFilter(provider.GetRequiredService<IServiceScopeFactory>(), Mock.Of<ILogger<BuildJobFailureFilter>>());
+        var retry = new BuildRetrySchedulerFilter(provider.GetRequiredService<IServiceScopeFactory>(), Mock.Of<ILogger<BuildRetrySchedulerFilter>>());
         var context = FilterContext("model.obj", "model-hash", new FailedState(new DdbException("timeout")));
         if (failureFirst)
         {
@@ -286,7 +294,7 @@ public class PendingBuildCoordinationTests
         Seed();
         _ddb.Setup(x => x.GetPendingBuildInfo()).Returns([new PendingBuildInfo { Path = pendingPath, Hash = pendingHash }]);
         using var provider = new ServiceCollection().AddSingleton(_service).BuildServiceProvider();
-        new BuildRetrySchedulerFilter(provider, Mock.Of<ILogger<BuildRetrySchedulerFilter>>())
+        new BuildRetrySchedulerFilter(provider.GetRequiredService<IServiceScopeFactory>(), Mock.Of<ILogger<BuildRetrySchedulerFilter>>())
             .OnStateApplied(FilterContext("model.obj", "model-hash", new FailedState(new DdbException("invalid input"))),
                 Mock.Of<IWriteOnlyTransaction>());
         _delays.ShouldBeEmpty();
@@ -298,7 +306,7 @@ public class PendingBuildCoordinationTests
         connection.Setup(x => x.GetJobParameter("entry-job", JobParamKeys.OrgSlug)).Returns(Org);
         connection.Setup(x => x.GetJobParameter("entry-job", JobParamKeys.DsSlug)).Returns(Ds);
         connection.Setup(x => x.GetJobParameter("entry-job", JobParamKeys.Hash)).Returns(hash);
-        var job = Job.FromExpression(() => HangfireUtils.BuildWrapper(_ddb.Object, path, false, null));
+        var job = Job.FromExpression<DdbJobs>(j => j.Build(Org, Guid.Empty, path, false, null));
         var background = new BackgroundJob("entry-job", job, DateTime.UtcNow);
         return new ApplyStateContext(_storage, connection.Object, Mock.Of<IWriteOnlyTransaction>(), background, state, "Processing");
     }
@@ -338,18 +346,17 @@ public class PendingBuildCoordinationTests
             .Returns(() => Task.FromResult(rows.ToArray()));
         var count = 0;
         var jobs = new Mock<IBackgroundJobsProcessor>();
-        jobs.Setup(x => x.EnqueueIndexed(It.IsAny<Expression<Action>>(), It.IsAny<IndexPayload>()))
-            .Returns<Expression<Action>, IndexPayload>((_, meta) =>
+        jobs.Setup(x => x.EnqueueIndexed(It.IsAny<Expression<Action<DdbJobs>>>(), It.IsAny<IndexPayload>()))
+            .Returns<Expression<Action<DdbJobs>>, IndexPayload>((_, meta) =>
             {
                 count++;
-                var id = new BackgroundJobClient(_storage).Create(Job.FromExpression(() => HangfireUtils.DummyJob(null)),
+                var id = new BackgroundJobClient(_storage).Create(Job.FromExpression<HealthCheckJob>(j => j.Ping(null)),
                     new EnqueuedState());
                 rows.Add(new JobIndex { JobId = id, OrgSlug = Org, DsSlug = Ds, Path = meta.Path,
                     ToolId = "build", CurrentState = "Enqueued" });
                 return id;
             });
-        void Run() => HangfireUtils.BuildPendingWrapper(ddb.Object, null, jobs.Object, index.Object, Org, Ds,
-            () => 1_800_000_000, storage);
+        void Run() => Enqueuer(jobs.Object, index.Object, storage).Run(ddb.Object, Org, Ds, NoConsole);
         var first = Task.Run(Run);
         firstReading.Wait(TimeSpan.FromSeconds(5)).ShouldBeTrue();
         var second = Task.Run(() => { isSecond.Value = true; Run(); });
@@ -391,10 +398,18 @@ public class PendingBuildCoordinationTests
             .Throws(new InvalidOperationException("storage unavailable"));
         Should.Throw<InvalidOperationException>(() =>
             DatasetBuildCoordinator.Acquire(Org, Ds, _storage, connection.Object));
-        var policy = typeof(HangfireUtils).GetMethod(nameof(HangfireUtils.BuildPendingWrapper))!
-            .GetCustomAttributes(typeof(AutomaticRetryAttribute), false).Cast<AutomaticRetryAttribute>().Single();
-        policy.OnlyOn.ShouldContain(typeof(PendingBuildCoordinatorContentionException));
-        policy.Attempts.ShouldBe(5);
+        // Both shapes of the pending-build job retry a coordinator contention (D4: the stored one too)
+        foreach (var job in new[]
+                 {
+                     Job.FromExpression<DdbJobs>(j => j.BuildPending(Org, Guid.Empty, null)),
+                     Job.FromExpression<HangfireUtils>(u => u.BuildPendingWrapper(null!, null!))
+                 })
+        {
+            var policy = JobFilterProviders.Providers.GetFilters(job).Select(f => f.Instance)
+                .OfType<AutomaticRetryAttribute>().Single();
+            policy.OnlyOn.ShouldContain(typeof(PendingBuildCoordinatorContentionException));
+            policy.Attempts.ShouldBe(5);
+        }
     }
     [Test]
     public void CoordinatorLockTimeoutDoesNotTakePendingOrActiveSnapshots()
@@ -406,12 +421,11 @@ public class PendingBuildCoordinationTests
         storage.Setup(x => x.GetConnection()).Returns(connection.Object);
         var index = new Mock<IJobIndexQuery>();
         Should.Throw<PendingBuildCoordinatorContentionException>(() =>
-            HangfireUtils.BuildPendingWrapper(_ddb.Object, null, _jobs.Object, index.Object, Org, Ds,
-                () => 1_800_000_000, storage.Object));
+            Enqueuer(_jobs.Object, index.Object, storage.Object).Run(_ddb.Object, Org, Ds, NoConsole));
         _ddb.Verify(x => x.GetPendingBuildInfo(), Times.Never);
         index.Verify(x => x.GetByOrgDsAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<int>(),
             It.IsAny<int>(), It.IsAny<CancellationToken>()), Times.Never);
-        _jobs.Verify(x => x.EnqueueIndexed(It.IsAny<Expression<Action>>(), It.IsAny<IndexPayload>()), Times.Never);
+        _jobs.Verify(x => x.EnqueueIndexed(It.IsAny<Expression<Action<DdbJobs>>>(), It.IsAny<IndexPayload>()), Times.Never);
     }
 
     [Test]
@@ -420,10 +434,9 @@ public class PendingBuildCoordinationTests
         _ddb.Setup(x => x.GetPendingBuildInfo()).Returns([new PendingBuildInfo { Path = "model.obj", Hash = "h", LastAttempt = 0 }]);
         var index = new Mock<IJobIndexQuery>();
         index.Setup(x => x.GetByOrgDsAsync(Org, Ds, 0, int.MaxValue, It.IsAny<CancellationToken>())).ReturnsAsync([]);
-        _jobs.Setup(x => x.EnqueueIndexed(It.IsAny<Expression<Action>>(), It.IsAny<IndexPayload>()))
+        _jobs.Setup(x => x.EnqueueIndexed(It.IsAny<Expression<Action<DdbJobs>>>(), It.IsAny<IndexPayload>()))
             .Throws(new InvalidOperationException("index storage unavailable"));
-        Should.Throw<InvalidOperationException>(() => HangfireUtils.BuildPendingWrapper(_ddb.Object, null,
-            _jobs.Object, index.Object, Org, Ds, () => 1_800_000_000, _storage));
+        Should.Throw<InvalidOperationException>(() => Enqueuer(_jobs.Object, index.Object, _storage).Run(_ddb.Object, Org, Ds, NoConsole));
         _ddb.Verify(x => x.BuildPending(It.IsAny<string>(), It.IsAny<bool>()), Times.Never);
     }
 
@@ -434,7 +447,7 @@ public class PendingBuildCoordinationTests
         var storage = new Mock<JobStorage>();
         storage.Setup(x => x.GetConnection()).Returns(connection.Object);
         using var scope = new JobStorageScope(storage.Object);
-        new BackgroundJobsProcessor(Mock.Of<IBackgroundJobClient>(), Mock.Of<IIndexedJobEnqueuer>())
+        new BackgroundJobsProcessor(Mock.Of<IBackgroundJobClient>(), Mock.Of<IIndexedJobEnqueuer>(), storage.Object)
             .GetJobStatus("missing").ShouldBe(JobStatus.Unknown);
     }
 
@@ -455,7 +468,7 @@ public class PendingBuildCoordinationTests
         ServiceProvider Host(ICacheManager cache) => new ServiceCollection()
             .AddSingleton(_context).AddSingleton(_manager.Object).AddSingleton(_jobs.Object).AddSingleton(cache)
             .AddSingleton<JobStorage>(_storage).AddSingleton(Mock.Of<ILogger<BuildPendingService>>())
-            .AddScoped<BuildPendingService>().BuildServiceProvider();
+            .AddScoped<DatasetSweep>().AddScoped<BuildPendingService>().BuildServiceProvider();
         using var firstHost = Host(_cache.Object);
         using var secondHost = Host(secondCache.Object);
         using var firstScope = firstHost.CreateScope();
@@ -492,7 +505,7 @@ public class PendingBuildCoordinationTests
                 return Task.CompletedTask;
             });
         await new DatasetCacheInvalidator(Mock.Of<ILogger<DatasetCacheInvalidator>>(), _cache.Object,
-            Mock.Of<IOgcCacheKeys>()).InvalidateAllDatasetCachesAsync(Org, Ds);
+            Mock.Of<IOgcCacheKeys>(), _storage).InvalidateAllDatasetCachesAsync(Org, Ds);
         _cacheData.ShouldBeEmpty();
         await _service.ScheduleRetryIfPending(Org, Ds);
         _delays.ShouldBeEmpty();
@@ -543,8 +556,7 @@ public class PendingBuildCoordinationTests
         index.Setup(x => x.GetByOrgDsAsync(Org, Ds, 0, int.MaxValue, It.IsAny<CancellationToken>())).ReturnsAsync([
             new JobIndex { JobId = "stale-job", OrgSlug = Org, DsSlug = Ds, Path = "model.obj", ToolId = "build", CurrentState = rowState }
         ]);
-        HangfireUtils.BuildPendingWrapper(_ddb.Object, null, _jobs.Object, index.Object, Org, Ds,
-            () => 1_800_000_000, storage.Object);
+        Enqueuer(_jobs.Object, index.Object, storage.Object).Run(_ddb.Object, Org, Ds, NoConsole);
     }
 
     [Test]
@@ -555,7 +567,7 @@ public class PendingBuildCoordinationTests
         _cache.Setup(x => x.GetAsync(It.IsAny<string>(), It.IsAny<string>()))
             .ThrowsAsync(new InvalidOperationException("observation cache unavailable"));
         await _service.ScheduleRetryIfPending(Org, Ds);
-        await _service.ProcessPendingBuilds();
+        await _service.ProcessPendingBuilds(null, CancellationToken.None);
         _delays.ShouldBe([TimeSpan.FromMinutes(10)]);
         _enqueued.ShouldBe(0);
         State().GetProperty("RetryAttempt").GetInt32().ShouldBe(4);
@@ -574,8 +586,8 @@ public class PendingBuildCoordinationTests
             .ThrowsAsync(new InvalidOperationException("observation cache unavailable"));
         await _service.ScheduleRetryIfPending(Org, Ds);
         _delays.ShouldBeEmpty();
-        await _service.ProcessPendingBuilds();
-        await _service.ProcessPendingBuilds();
+        await _service.ProcessPendingBuilds(null, CancellationToken.None);
+        await _service.ProcessPendingBuilds(null, CancellationToken.None);
         _enqueued.ShouldBe(1);
         State().GetProperty("RetryAttempt").GetInt32().ShouldBe(0);
         State().GetProperty("ScheduledRetryJobId").GetString().ShouldBe("sweep-1");
@@ -592,12 +604,11 @@ public class PendingBuildCoordinationTests
         secondCache.Setup(x => x.GetAsync(It.IsAny<string>(), It.IsAny<string>())).ReturnsAsync(stale);
         secondCache.Setup(x => x.SetAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<byte[]>()))
             .ThrowsAsync(new InvalidOperationException("second host observation cache write unavailable"));
-        var second = new BuildPendingService(_context, _manager.Object, _jobs.Object, secondCache.Object,
-            Mock.Of<ILogger<BuildPendingService>>(), _storage);
+        var second = new BuildPendingService(_context, new DatasetSweep(_context), _manager.Object, _jobs.Object, secondCache.Object, _storage, Mock.Of<ILogger<BuildPendingService>>());
 
         await _service.ScheduleRetryIfPending(Org, Ds);
         await second.ScheduleRetryIfPending(Org, Ds);
-        await _service.ProcessPendingBuilds();
+        await _service.ProcessPendingBuilds(null, CancellationToken.None);
         _delays.ShouldBe([TimeSpan.FromMinutes(10)]);
         _enqueued.ShouldBe(0);
         // Both cache snapshots remain stale; deduplication and accounting must
@@ -638,18 +649,18 @@ public class PendingBuildCoordinationTests
     public async Task PopulatedLegacyHostConservativelyMergesWithoutReplacingNewSharedLiveCoordinator()
     {
         var client = new BackgroundJobClient(_storage);
-        _jobs.Setup(x => x.ScheduleIndexed(It.IsAny<Expression<Action>>(), It.IsAny<IndexPayload>(), It.IsAny<TimeSpan>()))
-            .Returns<Expression<Action>, IndexPayload, TimeSpan>((_, _, delay) =>
+        _jobs.Setup(x => x.ScheduleIndexed(It.IsAny<Expression<Action<DdbJobs>>>(), It.IsAny<IndexPayload>(), It.IsAny<TimeSpan>()))
+            .Returns<Expression<Action<DdbJobs>>, IndexPayload, TimeSpan>((_, _, delay) =>
             {
                 _delays.Add(delay);
-                var id = client.Create(Job.FromExpression(() => HangfireUtils.DummyJob(null)), new ScheduledState(delay));
+                var id = client.Create(Job.FromExpression<HealthCheckJob>(j => j.Ping(null)), new ScheduledState(delay));
                 _statuses[id] = JobStatus.Scheduled;
                 return id;
             });
         await _service.ScheduleRetryIfPending(Org, Ds);
         var sharedLive = State().GetProperty("ScheduledRetryJobId").GetString();
         State().GetProperty("RetryControlsVersion").GetInt32().ShouldBe(1);
-        var legacyLive = client.Create(Job.FromExpression(() => HangfireUtils.DummyJob(null)),
+        var legacyLive = client.Create(Job.FromExpression<HealthCheckJob>(j => j.Ping(null)),
             new ScheduledState(TimeSpan.FromHours(1)));
         _statuses[legacyLive] = JobStatus.Scheduled;
         Seed(8, legacyLive);
@@ -720,7 +731,7 @@ public class PendingBuildCoordinationTests
     public async Task AuthoritativeNoPendingEndsImportSoOldHostCannotResurrectCompletedControls()
     {
         _ddb.Setup(x => x.IsBuildPending()).Returns(false);
-        await _service.ProcessPendingBuilds();
+        await _service.ProcessPendingBuilds(null, CancellationToken.None);
         Seed(8, "legacy-live");
         _statuses["legacy-live"] = JobStatus.Scheduled;
         _ddb.Setup(x => x.IsBuildPending()).Returns(true);

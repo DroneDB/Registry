@@ -25,6 +25,7 @@ using Registry.Web.Models.Configuration;
 using Registry.Web.Models.DTO;
 using Registry.Web.Services.Adapters;
 using Registry.Web.Services.Import;
+using Registry.Web.Services.Jobs;
 using Registry.Web.Services.Ports;
 using Registry.Web.Utilities;
 
@@ -990,10 +991,11 @@ public class SystemManager : ISystemManager
 
             // Schedule build of the imported dataset to ensure consistency
             _logger.LogInformation("Scheduling build for imported dataset {Org}/{Ds}", destOrg, destDs);
-            var ddb = _ddbManager.Get(destOrg, dataset.InternalRef);
+            // Opens (and initializes when needed) the imported dataset before its build is queued
+            _ddbManager.Get(destOrg, dataset.InternalRef);
             var user = await _authManager.GetCurrentUser();
             var meta = new IndexPayload(destOrg, destDs, null, user.Id);
-            var jobId = _backgroundJob.EnqueueIndexed(() => HangfireUtils.BuildWrapper(ddb, null, true, null), meta);
+            var jobId = _backgroundJob.EnqueueBuild(new DatasetKey(destOrg, dataset.InternalRef), null, true, meta);
             _logger.LogInformation("Build scheduled with job id {JobId} for {Org}/{Ds}", jobId, destOrg, destDs);
 
             importedItems.Add(new ImportedItemDto
@@ -1389,7 +1391,7 @@ public class SystemManager : ISystemManager
                 _logger.LogInformation("Scheduling build for imported dataset {Org}/{Ds}", destOrg, destDs);
                 var user = await _authManager.GetCurrentUser();
                 var meta = new IndexPayload(destOrg, destDs, null, user.Id);
-                var jobId = _backgroundJob.EnqueueIndexed(() => HangfireUtils.BuildWrapper(ddb, null, true, null), meta);
+                var jobId = _backgroundJob.EnqueueBuild(new DatasetKey(destOrg, dataset.InternalRef), null, true, meta);
                 _logger.LogInformation("Build scheduled with job id {JobId} for {Org}/{Ds}", jobId, destOrg, destDs);
             }
 
@@ -1682,10 +1684,8 @@ public class SystemManager : ISystemManager
             string? lastJobId = null;
             foreach (var ds in targets)
             {
-                var ddb = _ddbManager.Get(ds.Organization.Slug, ds.InternalRef);
                 var meta = new IndexPayload(ds.Organization.Slug, ds.Slug, null, userId);
-                lastJobId = _backgroundJob.EnqueueIndexed(
-                    () => HangfireUtils.CleanupWrapper(ddb, null), meta);
+                lastJobId = _backgroundJob.EnqueueCleanup(new DatasetKey(ds.Organization.Slug, ds.InternalRef), meta);
                 result.JobIds.Add(lastJobId);
             }
 

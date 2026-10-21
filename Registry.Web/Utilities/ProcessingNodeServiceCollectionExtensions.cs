@@ -10,6 +10,7 @@ using Registry.Web.Hosting;
 using Registry.Web.Models.Configuration;
 using Registry.Web.Services.Adapters;
 using Registry.Web.Services.Initialization;
+using Registry.Web.Services.Jobs;
 using Registry.Web.Services.Managers;
 using Registry.Web.Services.Ports;
 
@@ -78,6 +79,16 @@ public static class ProcessingNodeServiceCollectionExtensions
         services.AddScoped<ArtifactCompletenessCheckerService>();
         services.AddScoped<IndexRescanService>();
         services.AddScoped<IndexReconciliationService>();
+
+        // The job classes (Hangfire's DI activator creates them; registered so a missing dependency
+        // fails the container validation, not the first run) and what they share
+        services.AddScoped<DatasetSweep>();
+        services.AddScoped<PendingBuildEnqueuer>();
+        services.AddScoped<DdbJobs>();
+        services.AddScoped<FileJobs>();
+        services.AddScoped<HealthCheckJob>();
+        services.AddScoped<ExpiredRecurringJobsSweep>();
+        services.AddScoped<HangfireUtils>(); // the jobs stored before RQ-09 (D4)
 
         // Processing Platform task substrate (native tools incl. build/raster-export)
         services.AddProcessingPlatform();

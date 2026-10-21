@@ -17,6 +17,7 @@ using Registry.Web.Models;
 using Registry.Web.Models.Configuration;
 using Registry.Web.Models.DTO;
 using Registry.Web.Services.Adapters;
+using Registry.Web.Services.Jobs;
 using Registry.Web.Services.Ports;
 using Registry.Web.Services.Uploads;
 using Registry.Web.Utilities;
@@ -459,9 +460,7 @@ public sealed partial class UploadManager : IUploadManager
             {
                 var entry = part.Entry!;
                 var meta = new IndexPayload(ctx.OrgSlug, ctx.DsSlug, entry.Hash, ctx.User?.Id, null, entry.Path);
-                var ddb = ctx.Ddb;
-                var path = part.Part.Path;
-                var jobId = _backgroundJob.EnqueueIndexed(() => HangfireUtils.BuildWrapper(ddb, path, false, null), meta);
+                var jobId = _backgroundJob.EnqueueBuild(ctx.Key, part.Part.Path, false, meta);
                 _logger.LogInformation("Build of '{Path}' queued as job {JobId}", entry.Path, jobId);
             }
         }

@@ -1,4 +1,5 @@
 using System;
+using Registry.Web.Services.Jobs;
 using System.Data.Common;
 using System.Linq;
 using System.Threading;
@@ -285,7 +286,7 @@ public class JobIndexCleanupServiceTest : TestBase
         var totalBefore = await context.JobIndices.CountAsync();
 
         // Act
-        await service.CleanupOldJobIndicesAsync();
+        await service.CleanupOldJobIndicesAsync(null, CancellationToken.None);
 
         // Assert
         var totalAfter = await context.JobIndices.CountAsync();
@@ -325,7 +326,7 @@ public class JobIndexCleanupServiceTest : TestBase
         var service = new JobIndexCleanupService(writer, TestSettings.Options<JobScheduleOptions>(settings), _cleanupLogger);
 
         // Act
-        await service.CleanupOldJobIndicesAsync();
+        await service.CleanupOldJobIndicesAsync(null, CancellationToken.None);
 
         // Assert - The 2-day-old record should be deleted with 1-day retention
         var remaining = await context.JobIndices.ToArrayAsync();
@@ -343,7 +344,7 @@ public class JobIndexCleanupServiceTest : TestBase
 
         // Act - Should not throw and should use 60-day default
         await Should.NotThrowAsync(async () =>
-            await service.CleanupOldJobIndicesAsync());
+            await service.CleanupOldJobIndicesAsync(null, CancellationToken.None));
     }
 
     [Test]
@@ -357,7 +358,7 @@ public class JobIndexCleanupServiceTest : TestBase
 
         // Act - Should not throw
         await Should.NotThrowAsync(async () =>
-            await service.CleanupOldJobIndicesAsync());
+            await service.CleanupOldJobIndicesAsync(null, CancellationToken.None));
     }
 
     [Test]
@@ -371,7 +372,7 @@ public class JobIndexCleanupServiceTest : TestBase
 
         // Act & Assert
         await Should.NotThrowAsync(async () =>
-            await service.CleanupOldJobIndicesAsync());
+            await service.CleanupOldJobIndicesAsync(null, CancellationToken.None));
     }
 
     #endregion
@@ -441,7 +442,7 @@ public class JobIndexCleanupServiceTest : TestBase
         var writer = new JobIndexWriter(context, _writerLogger, _cache.Object);
         var service = new JobIndexCleanupService(writer, TestSettings.Options<JobScheduleOptions>(CreateSettings(30)), _cleanupLogger);
 
-        await Should.ThrowAsync<SqliteException>(() => service.CleanupOldJobIndicesAsync());
+        await Should.ThrowAsync<SqliteException>(() => service.CleanupOldJobIndicesAsync(null, CancellationToken.None));
     }
 
     #endregion

@@ -1,4 +1,5 @@
 #nullable enable
+using Registry.Web.Services.Jobs;
 using System;
 using System.Threading;
 using Hangfire;
@@ -71,7 +72,13 @@ public class ProcessingBudgetTests
     private static readonly BuildQueueRoutingFilter Filter =
         new((toolId, _) => toolId is "build" or "raster-export");
 
-    private static Job BuildJob() => Job.FromExpression(() => HangfireUtils.BuildWrapper(null!, "o.tif", false, null!));
+    private static readonly Guid Ref = Guid.NewGuid();
+
+    private static Job BuildJob() => Job.FromExpression<DdbJobs>(j => j.Build("org", Ref, "o.tif", false, null));
+
+    // The shape stored before RQ-09 (D4) routes the same way
+    private static Job LegacyBuildJob() =>
+        Job.FromExpression<HangfireUtils>(u => u.BuildWrapper(null!, "o.tif", false, null!));
 
     private static Job TaskJob(string toolId) =>
         Job.FromExpression<HeavyTaskJobWrapper>(w => w.Run(toolId, "1", "{}", null!, CancellationToken.None));
@@ -80,12 +87,16 @@ public class ProcessingBudgetTests
     public void QueueFor_ClassifiesJobs()
     {
         Filter.QueueFor(BuildJob()).ShouldBe(JobQueues.Builds);
-        Filter.QueueFor(Job.FromExpression(() => HangfireUtils.MaskBordersWrapper(null!, "a", "b", 15, false, null!)))
+        Filter.QueueFor(LegacyBuildJob()).ShouldBe(JobQueues.Builds);
+        Filter.QueueFor(Job.FromExpression<DdbJobs>(j => j.MaskBorders("org", Ref, "a", "b", 15, false, null)))
             .ShouldBe(JobQueues.Builds);
+        Filter.QueueFor(Job.FromExpression<HangfireUtils>(u => u.MaskBordersWrapper(null!, "a", "b", 15, false, null!)))
+            .ShouldBe(JobQueues.Builds);
+        Filter.QueueFor(Job.FromExpression<DdbJobs>(j => j.Cleanup("org", Ref, null))).ShouldBeNull();
         Filter.QueueFor(TaskJob("build")).ShouldBe(JobQueues.Builds);
         Filter.QueueFor(TaskJob("raster-export")).ShouldBe(JobQueues.Builds);
         Filter.QueueFor(TaskJob("bulk-download")).ShouldBe(JobQueues.Tasks);
-        Filter.QueueFor(Job.FromExpression(() => HangfireUtils.CleanupWrapper(null!, null!))).ShouldBeNull();
+        Filter.QueueFor(Job.FromExpression<HangfireUtils>(u => u.CleanupWrapper(null!, null!))).ShouldBeNull();
         Filter.QueueFor(null).ShouldBeNull();
     }
 
@@ -147,7 +158,7 @@ public class ProcessingBudgetTests
     public void Enqueue_OtherJobsKeepTheirQueue()
     {
         using var storage = new Storage();
-        var id = storage.Client.Create(Job.FromExpression(() => HangfireUtils.CleanupWrapper(null!, null!)),
+        var id = storage.Client.Create(Job.FromExpression<DdbJobs>(j => j.Cleanup("org", Ref, null)),
             new EnqueuedState(JobQueues.Default));
 
         storage.QueueOf(id).ShouldBe(JobQueues.Default);

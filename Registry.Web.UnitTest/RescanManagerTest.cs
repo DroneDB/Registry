@@ -300,8 +300,8 @@ public class RescanManagerTest : TestBase
     {
         var payloads = new List<IndexPayload>();
         _backgroundJobMock
-            .Setup(x => x.EnqueueIndexed(It.IsAny<Expression<Action>>(), It.IsAny<IndexPayload>()))
-            .Callback<Expression<Action>, IndexPayload>((_, p) => payloads.Add(p))
+            .Setup(x => x.EnqueueIndexed(It.IsAny<Expression<Action<Registry.Web.Services.Jobs.DdbJobs>>>(), It.IsAny<IndexPayload>()))
+            .Callback<Expression<Action<Registry.Web.Services.Jobs.DdbJobs>>, IndexPayload>((_, p) => payloads.Add(p))
             .Returns("job");
         return payloads;
     }

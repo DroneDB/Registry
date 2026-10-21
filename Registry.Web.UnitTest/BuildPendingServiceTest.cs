@@ -1,4 +1,5 @@
 using System;
+using Registry.Web.Services.Jobs;
 using System.Collections.Generic;
 using System.Linq;
 using Hangfire.InMemory;
@@ -37,9 +38,9 @@ public class BuildPendingServiceTest : TestBase
         _backgroundJobMock = new Mock<IBackgroundJobsProcessor>();
         _cacheManager = new Mock<ICacheManager>();
         _logger = CreateTestLogger<BuildPendingService>();
-        _backgroundJobMock.Setup(x => x.EnqueueIndexed(It.IsAny<System.Linq.Expressions.Expression<Action>>(),
+        _backgroundJobMock.Setup(x => x.EnqueueIndexed(It.IsAny<System.Linq.Expressions.Expression<Action<Registry.Web.Services.Jobs.DdbJobs>>>(),
             It.IsAny<IndexPayload>())).Returns(() => Guid.NewGuid().ToString());
-        _backgroundJobMock.Setup(x => x.ScheduleIndexed(It.IsAny<System.Linq.Expressions.Expression<Action>>(),
+        _backgroundJobMock.Setup(x => x.ScheduleIndexed(It.IsAny<System.Linq.Expressions.Expression<Action<Registry.Web.Services.Jobs.DdbJobs>>>(),
             It.IsAny<IndexPayload>(), It.IsAny<TimeSpan>())).Returns(() => Guid.NewGuid().ToString());
     }
 
@@ -52,19 +53,13 @@ public class BuildPendingServiceTest : TestBase
         // Arrange
         await using var context = GetEmptyContext();
 
-        var service = new BuildPendingService(
-            context,
-            _ddbManagerMock.Object,
-            _backgroundJobMock.Object,
-            _cacheManager.Object,
-            _logger
-        );
+        var service = new BuildPendingService(context, new DatasetSweep(context), _ddbManagerMock.Object, _backgroundJobMock.Object, _cacheManager.Object, TestJobs.NewStorage(), _logger);
 
         // Act
         await service.ProcessPendingBuilds(null);
 
         // Assert - Should complete without errors
-        _backgroundJobMock.Verify(x => x.EnqueueIndexed(It.IsAny<System.Linq.Expressions.Expression<Action>>(), It.IsAny<IndexPayload>()), Times.Never);
+        _backgroundJobMock.Verify(x => x.EnqueueIndexed(It.IsAny<System.Linq.Expressions.Expression<Action<Registry.Web.Services.Jobs.DdbJobs>>>(), It.IsAny<IndexPayload>()), Times.Never);
     }
 
     [Test]
@@ -89,13 +84,7 @@ public class BuildPendingServiceTest : TestBase
         _cacheManager.Setup(x => x.GetAsync(It.IsAny<string>(), It.IsAny<string>()))
             .ReturnsAsync((byte[])null);
 
-        var service = new BuildPendingService(
-            context,
-            _ddbManagerMock.Object,
-            _backgroundJobMock.Object,
-            _cacheManager.Object,
-            _logger
-        );
+        var service = new BuildPendingService(context, new DatasetSweep(context), _ddbManagerMock.Object, _backgroundJobMock.Object, _cacheManager.Object, TestJobs.NewStorage(), _logger);
 
         // Act
         await service.ProcessPendingBuilds(null);
@@ -103,7 +92,7 @@ public class BuildPendingServiceTest : TestBase
         // Assert - Should enqueue at least one job
         _backgroundJobMock.Verify(
             x => x.EnqueueIndexed(
-                It.IsAny<System.Linq.Expressions.Expression<Action>>(),
+                It.IsAny<System.Linq.Expressions.Expression<Action<Registry.Web.Services.Jobs.DdbJobs>>>(),
                 It.IsAny<IndexPayload>()
             ),
             Times.AtLeastOnce
@@ -132,13 +121,7 @@ public class BuildPendingServiceTest : TestBase
         _cacheManager.Setup(x => x.GetAsync(It.IsAny<string>(), It.IsAny<string>()))
             .ReturnsAsync((byte[])null);
 
-        var service = new BuildPendingService(
-            context,
-            _ddbManagerMock.Object,
-            _backgroundJobMock.Object,
-            _cacheManager.Object,
-            _logger
-        );
+        var service = new BuildPendingService(context, new DatasetSweep(context), _ddbManagerMock.Object, _backgroundJobMock.Object, _cacheManager.Object, TestJobs.NewStorage(), _logger);
 
         // Act
         await service.ProcessPendingBuilds(null);
@@ -146,7 +129,7 @@ public class BuildPendingServiceTest : TestBase
         // Assert - Should NOT enqueue any jobs
         _backgroundJobMock.Verify(
             x => x.EnqueueIndexed(
-                It.IsAny<System.Linq.Expressions.Expression<Action>>(),
+                It.IsAny<System.Linq.Expressions.Expression<Action<Registry.Web.Services.Jobs.DdbJobs>>>(),
                 It.IsAny<IndexPayload>()
             ),
             Times.Never
@@ -184,13 +167,7 @@ public class BuildPendingServiceTest : TestBase
         _cacheManager.Setup(x => x.GetAsync(It.IsAny<string>(), It.IsAny<string>()))
             .ReturnsAsync(cacheBytes);
 
-        var service = new BuildPendingService(
-            context,
-            _ddbManagerMock.Object,
-            _backgroundJobMock.Object,
-            _cacheManager.Object,
-            _logger
-        );
+        var service = new BuildPendingService(context, new DatasetSweep(context), _ddbManagerMock.Object, _backgroundJobMock.Object, _cacheManager.Object, TestJobs.NewStorage(), _logger);
 
         // Act
         await service.ProcessPendingBuilds(null);
@@ -199,7 +176,7 @@ public class BuildPendingServiceTest : TestBase
         ddbMock.Verify(x => x.IsBuildPending(), Times.AtLeastOnce);
         _backgroundJobMock.Verify(
             x => x.EnqueueIndexed(
-                It.IsAny<System.Linq.Expressions.Expression<Action>>(),
+                It.IsAny<System.Linq.Expressions.Expression<Action<Registry.Web.Services.Jobs.DdbJobs>>>(),
                 It.IsAny<IndexPayload>()
             ),
             Times.AtLeastOnce
@@ -237,13 +214,7 @@ public class BuildPendingServiceTest : TestBase
         _cacheManager.Setup(x => x.GetAsync(It.IsAny<string>(), It.IsAny<string>()))
             .ReturnsAsync(cacheBytes);
 
-        var service = new BuildPendingService(
-            context,
-            _ddbManagerMock.Object,
-            _backgroundJobMock.Object,
-            _cacheManager.Object,
-            _logger
-        );
+        var service = new BuildPendingService(context, new DatasetSweep(context), _ddbManagerMock.Object, _backgroundJobMock.Object, _cacheManager.Object, TestJobs.NewStorage(), _logger);
 
         // Act
         await service.ProcessPendingBuilds(null);
@@ -284,13 +255,7 @@ public class BuildPendingServiceTest : TestBase
         _cacheManager.Setup(x => x.GetAsync(It.IsAny<string>(), It.IsAny<string>()))
             .ReturnsAsync(cacheBytes);
 
-        var service = new BuildPendingService(
-            context,
-            _ddbManagerMock.Object,
-            _backgroundJobMock.Object,
-            _cacheManager.Object,
-            _logger
-        );
+        var service = new BuildPendingService(context, new DatasetSweep(context), _ddbManagerMock.Object, _backgroundJobMock.Object, _cacheManager.Object, TestJobs.NewStorage(), _logger);
 
         // Act
         await service.ProcessPendingBuilds(null);
@@ -331,13 +296,7 @@ public class BuildPendingServiceTest : TestBase
         _cacheManager.Setup(x => x.GetAsync(It.IsAny<string>(), It.IsAny<string>()))
             .ReturnsAsync(cacheBytes);
 
-        var service = new BuildPendingService(
-            context,
-            _ddbManagerMock.Object,
-            _backgroundJobMock.Object,
-            _cacheManager.Object,
-            _logger
-        );
+        var service = new BuildPendingService(context, new DatasetSweep(context), _ddbManagerMock.Object, _backgroundJobMock.Object, _cacheManager.Object, TestJobs.NewStorage(), _logger);
 
         // Act
         await service.ProcessPendingBuilds(null);
@@ -385,13 +344,7 @@ public class BuildPendingServiceTest : TestBase
         _cacheManager.Setup(x => x.GetAsync(It.IsAny<string>(), It.IsAny<string>()))
             .ReturnsAsync((byte[])null);
 
-        var service = new BuildPendingService(
-            context,
-            _ddbManagerMock.Object,
-            _backgroundJobMock.Object,
-            _cacheManager.Object,
-            _logger
-        );
+        var service = new BuildPendingService(context, new DatasetSweep(context), _ddbManagerMock.Object, _backgroundJobMock.Object, _cacheManager.Object, TestJobs.NewStorage(), _logger);
 
         // Act
         await service.ProcessPendingBuilds(null);
@@ -399,7 +352,7 @@ public class BuildPendingServiceTest : TestBase
         // Assert - Should still process second dataset despite first failing
         _backgroundJobMock.Verify(
             x => x.EnqueueIndexed(
-                It.IsAny<System.Linq.Expressions.Expression<Action>>(),
+                It.IsAny<System.Linq.Expressions.Expression<Action<Registry.Web.Services.Jobs.DdbJobs>>>(),
                 It.IsAny<IndexPayload>()
             ),
             Times.AtLeastOnce
@@ -428,13 +381,7 @@ public class BuildPendingServiceTest : TestBase
         _cacheManager.Setup(x => x.GetAsync(It.IsAny<string>(), It.IsAny<string>()))
             .ReturnsAsync((byte[])null);
 
-        var service = new BuildPendingService(
-            context,
-            _ddbManagerMock.Object,
-            _backgroundJobMock.Object,
-            _cacheManager.Object,
-            _logger
-        );
+        var service = new BuildPendingService(context, new DatasetSweep(context), _ddbManagerMock.Object, _backgroundJobMock.Object, _cacheManager.Object, TestJobs.NewStorage(), _logger);
 
         // Act
         await service.ProcessPendingBuilds(null);
@@ -481,13 +428,7 @@ public class BuildPendingServiceTest : TestBase
         _cacheManager.Setup(x => x.GetAsync(It.IsAny<string>(), It.IsAny<string>()))
             .ReturnsAsync(cacheBytes);
 
-        var service = new BuildPendingService(
-            context,
-            _ddbManagerMock.Object,
-            _backgroundJobMock.Object,
-            _cacheManager.Object,
-            _logger
-        );
+        var service = new BuildPendingService(context, new DatasetSweep(context), _ddbManagerMock.Object, _backgroundJobMock.Object, _cacheManager.Object, TestJobs.NewStorage(), _logger);
 
         // Act
         await service.ProcessPendingBuilds(null);
@@ -528,13 +469,7 @@ public class BuildPendingServiceTest : TestBase
         _cacheManager.Setup(x => x.GetAsync(It.IsAny<string>(), It.IsAny<string>()))
             .ReturnsAsync(cacheBytes);
 
-        var service = new BuildPendingService(
-            context,
-            _ddbManagerMock.Object,
-            _backgroundJobMock.Object,
-            _cacheManager.Object,
-            _logger
-        );
+        var service = new BuildPendingService(context, new DatasetSweep(context), _ddbManagerMock.Object, _backgroundJobMock.Object, _cacheManager.Object, TestJobs.NewStorage(), _logger);
 
         // Act
         await service.ProcessPendingBuilds(null);
@@ -543,7 +478,7 @@ public class BuildPendingServiceTest : TestBase
         ddbMock.Verify(x => x.IsBuildPending(), Times.AtLeastOnce);
         _backgroundJobMock.Verify(
             x => x.EnqueueIndexed(
-                It.IsAny<System.Linq.Expressions.Expression<Action>>(),
+                It.IsAny<System.Linq.Expressions.Expression<Action<Registry.Web.Services.Jobs.DdbJobs>>>(),
                 It.IsAny<IndexPayload>()
             ),
             Times.Once
@@ -582,13 +517,7 @@ public class BuildPendingServiceTest : TestBase
         _cacheManager.Setup(x => x.GetAsync(It.IsAny<string>(), It.IsAny<string>()))
             .ReturnsAsync(cacheBytes);
 
-        var service = new BuildPendingService(
-            context,
-            _ddbManagerMock.Object,
-            _backgroundJobMock.Object,
-            _cacheManager.Object,
-            _logger
-        );
+        var service = new BuildPendingService(context, new DatasetSweep(context), _ddbManagerMock.Object, _backgroundJobMock.Object, _cacheManager.Object, TestJobs.NewStorage(), _logger);
 
         // Act
         await service.ProcessPendingBuilds(null);
@@ -597,7 +526,7 @@ public class BuildPendingServiceTest : TestBase
         ddbMock.Verify(x => x.IsBuildPending(), Times.AtLeastOnce);
         _backgroundJobMock.Verify(
             x => x.EnqueueIndexed(
-                It.IsAny<System.Linq.Expressions.Expression<Action>>(),
+                It.IsAny<System.Linq.Expressions.Expression<Action<Registry.Web.Services.Jobs.DdbJobs>>>(),
                 It.IsAny<IndexPayload>()
             ),
             Times.AtLeastOnce
@@ -617,13 +546,12 @@ public class BuildPendingServiceTest : TestBase
         _ddbManagerMock.Setup(x => x.Get(It.IsAny<string>(), It.IsAny<Guid>())).Returns(ddbMock.Object);
         _cacheManager.Setup(x => x.GetAsync(It.IsAny<string>(), It.IsAny<string>())).ReturnsAsync((byte[])null);
 
-        var service = new BuildPendingService(context, _ddbManagerMock.Object, _backgroundJobMock.Object,
-            _cacheManager.Object, _logger);
+        var service = new BuildPendingService(context, new DatasetSweep(context), _ddbManagerMock.Object, _backgroundJobMock.Object, _cacheManager.Object, TestJobs.NewStorage(), _logger);
 
         await service.ScheduleRetryIfPending(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug);
 
         _backgroundJobMock.Verify(x => x.ScheduleIndexed(
-            It.IsAny<System.Linq.Expressions.Expression<Action>>(), It.IsAny<IndexPayload>(), It.IsAny<TimeSpan>()),
+            It.IsAny<System.Linq.Expressions.Expression<Action<Registry.Web.Services.Jobs.DdbJobs>>>(), It.IsAny<IndexPayload>(), It.IsAny<TimeSpan>()),
             Times.Never);
         _cacheManager.Verify(x => x.SetAsync(MagicStrings.BuildPendingTrackerCacheSeed, It.IsAny<string>(),
             It.IsAny<byte[]>()), Times.AtLeastOnce);
@@ -640,17 +568,16 @@ public class BuildPendingServiceTest : TestBase
         _ddbManagerMock.Setup(x => x.Get(It.IsAny<string>(), It.IsAny<Guid>())).Returns(ddbMock.Object);
         _cacheManager.Setup(x => x.GetAsync(It.IsAny<string>(), It.IsAny<string>())).ReturnsAsync((byte[])null);
         _backgroundJobMock.Setup(x => x.ScheduleIndexed(
-                It.IsAny<System.Linq.Expressions.Expression<Action>>(), It.IsAny<IndexPayload>(), It.IsAny<TimeSpan>()))
+                It.IsAny<System.Linq.Expressions.Expression<Action<Registry.Web.Services.Jobs.DdbJobs>>>(), It.IsAny<IndexPayload>(), It.IsAny<TimeSpan>()))
             .Returns("retry-1");
 
-        var service = new BuildPendingService(context, _ddbManagerMock.Object, _backgroundJobMock.Object,
-            _cacheManager.Object, _logger);
+        var service = new BuildPendingService(context, new DatasetSweep(context), _ddbManagerMock.Object, _backgroundJobMock.Object, _cacheManager.Object, TestJobs.NewStorage(), _logger);
 
         await service.ScheduleRetryIfPending(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug);
 
         // First attempt -> 1 minute backoff
         _backgroundJobMock.Verify(x => x.ScheduleIndexed(
-            It.IsAny<System.Linq.Expressions.Expression<Action>>(),
+            It.IsAny<System.Linq.Expressions.Expression<Action<Registry.Web.Services.Jobs.DdbJobs>>>(),
             It.IsAny<IndexPayload>(),
             It.Is<TimeSpan>(t => t == TimeSpan.FromMinutes(1))), Times.Once);
     }
@@ -676,11 +603,10 @@ public class BuildPendingServiceTest : TestBase
         _cacheManager.Setup(x => x.GetAsync(It.IsAny<string>(), It.IsAny<string>()))
             .ReturnsAsync(System.Text.Encoding.UTF8.GetBytes(cacheState));
         _backgroundJobMock.Setup(x => x.ScheduleIndexed(
-                It.IsAny<System.Linq.Expressions.Expression<Action>>(), It.IsAny<IndexPayload>(), It.IsAny<TimeSpan>()))
+                It.IsAny<System.Linq.Expressions.Expression<Action<Registry.Web.Services.Jobs.DdbJobs>>>(), It.IsAny<IndexPayload>(), It.IsAny<TimeSpan>()))
             .Returns("retry-3");
 
-        var service = new BuildPendingService(context, _ddbManagerMock.Object, _backgroundJobMock.Object,
-            _cacheManager.Object, _logger);
+        var service = new BuildPendingService(context, new DatasetSweep(context), _ddbManagerMock.Object, _backgroundJobMock.Object, _cacheManager.Object, TestJobs.NewStorage(), _logger);
 
         await service.ScheduleRetryIfPending(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug);
 
@@ -689,7 +615,7 @@ public class BuildPendingServiceTest : TestBase
         // successful BuildPendingWrapper run consumes an attempt here, including a no-op one
         // whose entries were all inside the 60 s backoff or already building.
         _backgroundJobMock.Verify(x => x.ScheduleIndexed(
-            It.IsAny<System.Linq.Expressions.Expression<Action>>(),
+            It.IsAny<System.Linq.Expressions.Expression<Action<Registry.Web.Services.Jobs.DdbJobs>>>(),
             It.IsAny<IndexPayload>(),
             It.Is<TimeSpan>(t => t == TimeSpan.FromMinutes(5))), Times.Once);
     }
@@ -716,13 +642,12 @@ public class BuildPendingServiceTest : TestBase
             .ReturnsAsync(System.Text.Encoding.UTF8.GetBytes(cacheState));
         _backgroundJobMock.Setup(x => x.GetJobStatus("in-flight-job")).Returns(JobStatus.Scheduled);
 
-        var service = new BuildPendingService(context, _ddbManagerMock.Object, _backgroundJobMock.Object,
-            _cacheManager.Object, _logger);
+        var service = new BuildPendingService(context, new DatasetSweep(context), _ddbManagerMock.Object, _backgroundJobMock.Object, _cacheManager.Object, TestJobs.NewStorage(), _logger);
 
         await service.ScheduleRetryIfPending(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug);
 
         _backgroundJobMock.Verify(x => x.ScheduleIndexed(
-            It.IsAny<System.Linq.Expressions.Expression<Action>>(), It.IsAny<IndexPayload>(), It.IsAny<TimeSpan>()),
+            It.IsAny<System.Linq.Expressions.Expression<Action<Registry.Web.Services.Jobs.DdbJobs>>>(), It.IsAny<IndexPayload>(), It.IsAny<TimeSpan>()),
             Times.Never);
     }
 
@@ -747,13 +672,12 @@ public class BuildPendingServiceTest : TestBase
         _cacheManager.Setup(x => x.GetAsync(It.IsAny<string>(), It.IsAny<string>()))
             .ReturnsAsync(System.Text.Encoding.UTF8.GetBytes(cacheState));
 
-        var service = new BuildPendingService(context, _ddbManagerMock.Object, _backgroundJobMock.Object,
-            _cacheManager.Object, _logger);
+        var service = new BuildPendingService(context, new DatasetSweep(context), _ddbManagerMock.Object, _backgroundJobMock.Object, _cacheManager.Object, TestJobs.NewStorage(), _logger);
 
         await service.ScheduleRetryIfPending(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug);
 
         _backgroundJobMock.Verify(x => x.ScheduleIndexed(
-            It.IsAny<System.Linq.Expressions.Expression<Action>>(), It.IsAny<IndexPayload>(), It.IsAny<TimeSpan>()),
+            It.IsAny<System.Linq.Expressions.Expression<Action<Registry.Web.Services.Jobs.DdbJobs>>>(), It.IsAny<IndexPayload>(), It.IsAny<TimeSpan>()),
             Times.Never);
     }
 
@@ -762,13 +686,12 @@ public class BuildPendingServiceTest : TestBase
     {
         await using var context = GetEmptyContext();
 
-        var service = new BuildPendingService(context, _ddbManagerMock.Object, _backgroundJobMock.Object,
-            _cacheManager.Object, _logger);
+        var service = new BuildPendingService(context, new DatasetSweep(context), _ddbManagerMock.Object, _backgroundJobMock.Object, _cacheManager.Object, TestJobs.NewStorage(), _logger);
 
         await service.ScheduleRetryIfPending("nonexistent-org", "nonexistent-ds");
 
         _backgroundJobMock.Verify(x => x.ScheduleIndexed(
-            It.IsAny<System.Linq.Expressions.Expression<Action>>(), It.IsAny<IndexPayload>(), It.IsAny<TimeSpan>()),
+            It.IsAny<System.Linq.Expressions.Expression<Action<Registry.Web.Services.Jobs.DdbJobs>>>(), It.IsAny<IndexPayload>(), It.IsAny<TimeSpan>()),
             Times.Never);
         _ddbManagerMock.Verify(x => x.Get(It.IsAny<string>(), It.IsAny<Guid>()), Times.Never);
     }

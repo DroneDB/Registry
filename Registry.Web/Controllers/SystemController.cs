@@ -4,6 +4,7 @@ using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using Hangfire;
 using Microsoft.AspNetCore.Authorization;
@@ -317,10 +318,10 @@ public class SystemController : ControllerBaseEx
     [ProducesResponseType(StatusCodes.Status202Accepted)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
-    public IActionResult CheckArtifactCompleteness()
+    public IActionResult CheckArtifactCompleteness([FromServices] IBackgroundJobsProcessor jobs)
     {
-        var jobId = BackgroundJob.Enqueue<ArtifactCompletenessCheckerService>(
-            s => s.CheckAndQueueAsync(null));
+        var jobId = jobs.Enqueue<ArtifactCompletenessCheckerService>(
+            s => s.CheckAndQueueAsync(null, CancellationToken.None));
 
         return Accepted(new { JobId = jobId });
     }

@@ -1,4 +1,5 @@
 #nullable enable
+using Registry.Web.Services.Jobs;
 using System;
 using System.Collections.Generic;
 using System.Data.Common;
@@ -374,8 +375,7 @@ public class SystemManagerFixSlugsTest : TestBase
         var backgroundJob = new Mock<IBackgroundJobsProcessor>();
         var cacheManager = new Mock<ICacheManager>();
 
-        var buildPendingService = new BuildPendingService(context, ddbManager.Object, backgroundJob.Object,
-            cacheManager.Object, Mock.Of<ILogger<BuildPendingService>>());
+        var buildPendingService = new BuildPendingService(context, new DatasetSweep(context), ddbManager.Object, backgroundJob.Object, cacheManager.Object, TestJobs.NewStorage(), Mock.Of<ILogger<BuildPendingService>>());
 
         return new SystemManager(_authManagerMock.Object, context, ddbManager.Object,
             CreateTestLogger<SystemManager>(), Mock.Of<IObjectsManager>(), settings, buildPendingService,

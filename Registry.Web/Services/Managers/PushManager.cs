@@ -14,6 +14,7 @@ using Registry.Web.Models;
 using Registry.Web.Models.Configuration;
 using Registry.Web.Models.DTO;
 using Registry.Web.Services.Adapters;
+using Registry.Web.Services.Jobs;
 using Registry.Web.Services.Ports;
 using Registry.Web.Utilities;
 using Stamp = Registry.Ports.DroneDB.Stamp;
@@ -310,8 +311,7 @@ public class PushManager : IPushManager
 
             hasBuildableFiles = true;
             var meta = new IndexPayload(orgSlug, dsSlug, item.Hash, user.Id, null, item.Path);
-            _backgroundJob.EnqueueIndexed(() =>
-                HangfireUtils.BuildWrapper(ddb, item.Path, false, null), meta);
+            _backgroundJob.EnqueueBuild(access.Key, item.Path, false, meta);
         }
 
         // If we enqueued any builds, mark dataset as having pending
@@ -323,7 +323,7 @@ public class PushManager : IPushManager
             _logger.LogInformation("Items are pending build, retriggering build");
 
             var meta = new IndexPayload(orgSlug, dsSlug, null, user.Id);
-            var jobId = _backgroundJob.EnqueueIndexed(() => HangfireUtils.BuildPendingWrapper(ddb, null), meta);
+            var jobId = _backgroundJob.EnqueueBuildPending(access.Key, meta);
 
             _logger.LogInformation("Background job id is {JobId}", jobId);
         }

@@ -49,6 +49,8 @@ public class ProcessingNodeDiCompletenessTests
         // As the processing-node host (RegistryHost): libddb's runtime first (the fake: no native library here)
         services.AddDdbRuntime<FakeDdbRuntime>();
         services.AddProcessingNodeServices(configuration);
+        // As AddRegistryJobs (Hangfire) on every job host: the configured job storage
+        services.AddSingleton<JobStorage>(new Hangfire.InMemory.InMemoryStorage());
         configure?.Invoke(services);
         return services.BuildServiceProvider();
     }
@@ -103,6 +105,22 @@ public class ProcessingNodeDiCompletenessTests
         var service = scope.ServiceProvider.GetService<Registry.Web.Services.Adapters.IndexReconciliationService>();
 
         service.ShouldNotBeNull();
+    }
+
+    [TestCase(typeof(Registry.Web.Services.Jobs.DdbJobs))]
+    [TestCase(typeof(Registry.Web.Services.Jobs.FileJobs))]
+    [TestCase(typeof(Registry.Web.Services.Jobs.ExpiredRecurringJobsSweep))]
+    [TestCase(typeof(Registry.Web.Services.Jobs.HealthCheckJob))]
+    [TestCase(typeof(HangfireUtils))]
+    [TestCase(typeof(Registry.Web.Services.HeavyTasks.Adapters.HeavyTaskJobWrapper))]
+    public void ProcessingNode_ActivatesTheJobClasses(Type jobClass)
+    {
+        // Hangfire's activator creates a job's class from the job scope: the stored shapes (D4) too
+        using var provider = BuildNodeProvider(s => s.AddSingleton(Mock.Of<IBackgroundJobClient>()));
+        using var scope = provider.CreateScope();
+
+        Microsoft.Extensions.DependencyInjection.ActivatorUtilities
+            .GetServiceOrCreateInstance(scope.ServiceProvider, jobClass).ShouldNotBeNull();
     }
 
     [Test]

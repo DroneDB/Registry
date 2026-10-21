@@ -1,4 +1,5 @@
 using Registry.Adapters;
+using Registry.Web.Services.Jobs;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -65,7 +66,7 @@ public class IndexReconciliationServiceTests
 
         var appSettings = Microsoft.Extensions.Options.Options.Create(new AppSettings { Reconciliation = settings ?? new ReconciliationSettings() });
 
-        return new IndexReconciliationService(context, ddbManager.Object, indexQueue.Object, TestSettings.Options<ReconciliationSettings>(appSettings),
+        return new IndexReconciliationService(new DatasetSweep(context), ddbManager.Object, indexQueue.Object, TestSettings.Options<ReconciliationSettings>(appSettings),
             new FileSystem(),
             TestPaths.Policy,
             NullLogger<IndexReconciliationService>.Instance);
@@ -91,7 +92,7 @@ public class IndexReconciliationServiceTests
 
             var service = CreateService(context, root, ddb, indexQueue);
 
-            await service.ReconcileAllDatasetsAsync();
+            await service.ReconcileAllDatasetsAsync(null, CancellationToken.None);
 
             indexQueue.Verify(q => q.EnqueueAsync(
                 It.Is<DatasetKey>(k => k.OrgSlug == orgSlug && k.InternalRef == internalRef),
@@ -123,7 +124,7 @@ public class IndexReconciliationServiceTests
 
             var service = CreateService(context, root, ddb, indexQueue);
 
-            await service.ReconcileAllDatasetsAsync();
+            await service.ReconcileAllDatasetsAsync(null, CancellationToken.None);
 
             // Nothing outside the reserved folders exists, so nothing should be re-enqueued
             indexQueue.Verify(q => q.EnqueueAsync(It.IsAny<DatasetKey>(), It.IsAny<IReadOnlyList<string>>(),
@@ -167,7 +168,7 @@ public class IndexReconciliationServiceTests
 
             var service = CreateService(context, root, ddb, indexQueue);
 
-            await service.ReconcileAllDatasetsAsync();
+            await service.ReconcileAllDatasetsAsync(null, CancellationToken.None);
 
             // Exactly the one real file is re-enqueued; nested reserved-folder paths never leak.
             indexQueue.Verify(q => q.EnqueueAsync(
@@ -216,7 +217,7 @@ public class IndexReconciliationServiceTests
 
             var service = CreateService(context, root, ddb, indexQueue);
 
-            await service.ReconcileAllDatasetsAsync();
+            await service.ReconcileAllDatasetsAsync(null, CancellationToken.None);
 
             indexQueue.Verify(q => q.EnqueueAsync(
                 It.Is<DatasetKey>(k => k.OrgSlug == orgSlug && k.InternalRef == internalRef),
@@ -250,7 +251,7 @@ public class IndexReconciliationServiceTests
 
             var service = CreateService(context, root, ddb, indexQueue);
 
-            await service.ReconcileAllDatasetsAsync();
+            await service.ReconcileAllDatasetsAsync(null, CancellationToken.None);
 
             indexQueue.Verify(q => q.EnqueueAsync(It.IsAny<DatasetKey>(), It.IsAny<IReadOnlyList<string>>(),
                 It.IsAny<CancellationToken>()), Times.Never);
@@ -279,7 +280,7 @@ public class IndexReconciliationServiceTests
             var service = CreateService(context, root, ddb, indexQueue);
 
             // Report-only: must not throw, must not touch the index queue or remove anything.
-            await Should.NotThrowAsync(async () => await service.ReconcileAllDatasetsAsync());
+            await Should.NotThrowAsync(async () => await service.ReconcileAllDatasetsAsync(null, CancellationToken.None));
 
             indexQueue.Verify(q => q.EnqueueAsync(It.IsAny<DatasetKey>(), It.IsAny<IReadOnlyList<string>>(),
                 It.IsAny<CancellationToken>()), Times.Never);
@@ -314,7 +315,7 @@ public class IndexReconciliationServiceTests
             var service = CreateService(context, root, ddb, indexQueue,
                 new ReconciliationSettings { QuarantineRetentionDays = 7 });
 
-            await service.ReconcileAllDatasetsAsync();
+            await service.ReconcileAllDatasetsAsync(null, CancellationToken.None);
 
             File.Exists(oldFile).ShouldBeFalse();
             File.Exists(recentFile).ShouldBeTrue();

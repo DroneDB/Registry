@@ -1,4 +1,5 @@
 #nullable enable
+using Registry.Web.Services.Jobs;
 using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
@@ -215,7 +216,7 @@ public class SystemManagerTest : TestBase
         _ddbManagerMock.Setup(x => x.Get(It.IsAny<string>(), It.IsAny<Guid>())).Returns(ddbMock.Object);
 
         _backgroundJobMock
-            .Setup(x => x.EnqueueIndexed(It.IsAny<System.Linq.Expressions.Expression<Action>>(), It.IsAny<Registry.Web.Models.IndexPayload>()))
+            .Setup(x => x.EnqueueIndexed(It.IsAny<System.Linq.Expressions.Expression<Action<Registry.Web.Services.Jobs.DdbJobs>>>(), It.IsAny<Registry.Web.Models.IndexPayload>()))
             .Returns("job-id-1");
 
         var systemManager = CreateSystemManager(context);
@@ -227,7 +228,7 @@ public class SystemManagerTest : TestBase
         result.JobId.ShouldBe("job-id-1");
         result.Datasets.Count.ShouldBe(0);
         _backgroundJobMock.Verify(
-            x => x.EnqueueIndexed(It.IsAny<System.Linq.Expressions.Expression<Action>>(), It.IsAny<Registry.Web.Models.IndexPayload>()),
+            x => x.EnqueueIndexed(It.IsAny<System.Linq.Expressions.Expression<Action<Registry.Web.Services.Jobs.DdbJobs>>>(), It.IsAny<Registry.Web.Models.IndexPayload>()),
             Times.Once);
         ddbMock.Verify(x => x.Cleanup(), Times.Never);
     }
@@ -244,7 +245,7 @@ public class SystemManagerTest : TestBase
         _ddbManagerMock.Setup(x => x.Get(It.IsAny<string>(), It.IsAny<Guid>())).Returns(ddbMock.Object);
 
         _backgroundJobMock
-            .Setup(x => x.EnqueueIndexed(It.IsAny<System.Linq.Expressions.Expression<Action>>(), It.IsAny<Registry.Web.Models.IndexPayload>()))
+            .Setup(x => x.EnqueueIndexed(It.IsAny<System.Linq.Expressions.Expression<Action<Registry.Web.Services.Jobs.DdbJobs>>>(), It.IsAny<Registry.Web.Models.IndexPayload>()))
             .Returns("job-id-2");
 
         var systemManager = CreateSystemManager(context);
@@ -287,7 +288,7 @@ public class SystemManagerTest : TestBase
         result.Datasets["test-org/test-dataset"].RemovedBuilds.ShouldBe(["abc123"]);
         result.Errors.Count.ShouldBe(0);
         _backgroundJobMock.Verify(
-            x => x.EnqueueIndexed(It.IsAny<System.Linq.Expressions.Expression<Action>>(), It.IsAny<Registry.Web.Models.IndexPayload>()),
+            x => x.EnqueueIndexed(It.IsAny<System.Linq.Expressions.Expression<Action<Registry.Web.Services.Jobs.DdbJobs>>>(), It.IsAny<Registry.Web.Models.IndexPayload>()),
             Times.Never);
     }
 
@@ -336,7 +337,7 @@ public class SystemManagerTest : TestBase
         result.Datasets.ShouldBeEmpty();
         result.Errors.ShouldBeEmpty();
         _backgroundJobMock.Verify(
-            x => x.EnqueueIndexed(It.IsAny<System.Linq.Expressions.Expression<Action>>(), It.IsAny<Registry.Web.Models.IndexPayload>()),
+            x => x.EnqueueIndexed(It.IsAny<System.Linq.Expressions.Expression<Action<Registry.Web.Services.Jobs.DdbJobs>>>(), It.IsAny<Registry.Web.Models.IndexPayload>()),
             Times.Never);
     }
 
@@ -363,7 +364,7 @@ public class SystemManagerTest : TestBase
 
         var seq = 0;
         _backgroundJobMock
-            .Setup(x => x.EnqueueIndexed(It.IsAny<System.Linq.Expressions.Expression<Action>>(), It.IsAny<Registry.Web.Models.IndexPayload>()))
+            .Setup(x => x.EnqueueIndexed(It.IsAny<System.Linq.Expressions.Expression<Action<Registry.Web.Services.Jobs.DdbJobs>>>(), It.IsAny<Registry.Web.Models.IndexPayload>()))
             .Returns(() => $"job-{++seq}");
 
         var systemManager = CreateSystemManager(context);
@@ -377,7 +378,7 @@ public class SystemManagerTest : TestBase
         // JobId is preserved for back-compat as the last enqueued id
         result.JobId.ShouldBe(result.JobIds[^1]);
         _backgroundJobMock.Verify(
-            x => x.EnqueueIndexed(It.IsAny<System.Linq.Expressions.Expression<Action>>(), It.IsAny<Registry.Web.Models.IndexPayload>()),
+            x => x.EnqueueIndexed(It.IsAny<System.Linq.Expressions.Expression<Action<Registry.Web.Services.Jobs.DdbJobs>>>(), It.IsAny<Registry.Web.Models.IndexPayload>()),
             Times.Exactly(2));
     }
 
@@ -409,12 +410,7 @@ public class SystemManagerTest : TestBase
     private SystemManager CreateSystemManager(RegistryContext context, TimeProvider? time = null)
     {
         // Create a real BuildPendingService instance with mocked dependencies
-        var buildPendingService = new BuildPendingService(
-            context,
-            _ddbManagerMock.Object,
-            _backgroundJobMock.Object,
-            _cacheManagerMock.Object,
-            Mock.Of<ILogger<BuildPendingService>>());
+        var buildPendingService = new BuildPendingService(context, new DatasetSweep(context), _ddbManagerMock.Object, _backgroundJobMock.Object, _cacheManagerMock.Object, TestJobs.NewStorage(), Mock.Of<ILogger<BuildPendingService>>());
 
         return new SystemManager(
             _authManagerMock.Object,

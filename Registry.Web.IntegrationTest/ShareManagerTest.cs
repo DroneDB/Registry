@@ -1,4 +1,5 @@
 using System;
+using Registry.Web.Services.Jobs;
 using System.Collections.Generic;
 using System.Dynamic;
 using System.IO;
@@ -100,9 +101,7 @@ class ShareManagerTest : TestBase
         _stacManagerMock = new Mock<IStacManager>();
 
         var bpsContext = TestDb.CreateContext<RegistryContext>();
-        _buildPendingService = new BuildPendingService(
-            bpsContext, _ddbFactoryMock.Object, _backgroundJobsProcessor, _cacheManager,
-            Mock.Of<ILogger<BuildPendingService>>());
+        _buildPendingService = new BuildPendingService(bpsContext, new DatasetSweep(bpsContext), _ddbFactoryMock.Object, _backgroundJobsProcessor, _cacheManager, TestJobs.NewStorage(), Mock.Of<ILogger<BuildPendingService>>());
 
         _shareManagerLogger = CreateTestLogger<ShareManager>();
         _objectManagerLogger = CreateTestLogger<ObjectsManager>();

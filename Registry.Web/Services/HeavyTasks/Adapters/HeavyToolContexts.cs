@@ -4,6 +4,8 @@ using Hangfire.Server;
 using Microsoft.Extensions.Logging;
 using Registry.Ports.DroneDB;
 using Registry.Web.Services.HeavyTasks.Models;
+using Registry.Web.Services.Jobs;
+using Registry.Web.Services.Ports;
 
 namespace Registry.Web.Services.HeavyTasks.Adapters;
 
@@ -26,16 +28,23 @@ public sealed class HeavyToolValidationContext : IHeavyToolValidationContext
 public sealed class HeavyToolExecutionContext : IHeavyToolExecutionContext
 {
     public HeavyToolExecutionContext(
-        IDDB ddb, ClaimsPrincipal? caller, ILogger logger,
-        string taskId, string? workDir, PerformContext hangfire)
+        IDDB ddb, DatasetKey dataset, ClaimsPrincipal? caller, ILogger logger,
+        string taskId, string? workDir, PerformContext hangfire, IBackgroundJobsProcessor jobs, IDatasetBuilds builds)
     {
         Ddb = ddb;
+        Dataset = dataset;
         Caller = caller;
         Logger = logger;
         TaskId = taskId;
         WorkDir = workDir;
         Hangfire = hangfire;
+        Jobs = jobs;
+        Builds = builds;
     }
+
+    public DatasetKey Dataset { get; }
+    public IBackgroundJobsProcessor Jobs { get; }
+    public IDatasetBuilds Builds { get; }
 
     public IDDB Ddb { get; }
     public ClaimsPrincipal? Caller { get; }

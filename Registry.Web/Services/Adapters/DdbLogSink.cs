@@ -2,13 +2,15 @@
 using System;
 using Microsoft.Extensions.Logging;
 using Registry.Ports.DroneDB;
+using Registry.Web.Services.Jobs;
 
 namespace Registry.Web.Services.Adapters;
 
 /// <summary>
 /// Writes libddb's log records and GDAL's messages to the host's logger (Serilog), category
-/// <c>DroneDB</c> (XI-08). Called on native threads: it never throws. The operation id maps to a
-/// dataset, job and trace once RQ-09's JobConsole sets it (<c>DDBSetThreadOperation</c>).
+/// <c>DroneDB</c> (XI-08). Called on native threads: it never throws. A record of a running job's
+/// operation (<see cref="JobOperations"/>) carries the job id and dataset, and its warnings and
+/// errors are queued for the job's console.
 /// </summary>
 public sealed class DdbLogSink : IDdbLogSink
 {
@@ -43,7 +45,15 @@ public sealed class DdbLogSink : IDdbLogSink
             if (!_logger.IsEnabled(logLevel))
                 return;
 
-            if (operationId == 0)
+            var job = JobOperations.Find(operationId);
+            if (job != null)
+            {
+                _logger.Log(logLevel, "[{DdbSource}] {DdbMessage} (job {JobId}, dataset {Dataset})", source, message,
+                    job.JobId, job.Dataset);
+                if (logLevel >= LogLevel.Warning)
+                    job.QueueNativeLine($"[{source}] {message}");
+            }
+            else if (operationId == 0)
                 _logger.Log(logLevel, "[{DdbSource}] {DdbMessage}", source, message);
             else
                 _logger.Log(logLevel, "[{DdbSource}] {DdbMessage} (operation {DdbOperationId})", source, message,

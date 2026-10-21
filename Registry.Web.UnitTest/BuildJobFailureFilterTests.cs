@@ -1,4 +1,6 @@
 #nullable enable
+using System.Linq;
+using Registry.Web.Services.Jobs;
 using System;
 using System.Threading;
 using Hangfire;
@@ -79,11 +81,10 @@ public class BuildJobFailureFilterTests
         var services = new ServiceCollection();
         services.AddSingleton(_cacheMock.Object);
         services.AddSingleton(_writerMock.Object);
-        services.AddSingleton(new BuildPendingService(_registryContext, Mock.Of<IDdbManager>(),
-            Mock.Of<IBackgroundJobsProcessor>(), _cacheMock.Object, Mock.Of<ILogger<BuildPendingService>>(), storage));
+        services.AddSingleton(new BuildPendingService(_registryContext, new DatasetSweep(_registryContext), Mock.Of<IDdbManager>(), Mock.Of<IBackgroundJobsProcessor>(), _cacheMock.Object, storage, Mock.Of<ILogger<BuildPendingService>>()));
         _provider = services.BuildServiceProvider();
 
-        _filter = new BuildJobFailureFilter(_provider, Mock.Of<ILogger<BuildJobFailureFilter>>());
+        _filter = new BuildJobFailureFilter(_provider.GetRequiredService<IServiceScopeFactory>(), Mock.Of<ILogger<BuildJobFailureFilter>>());
     }
 
     [TearDown]
@@ -94,13 +95,16 @@ public class BuildJobFailureFilterTests
         _registryContext.Dispose();
     }
 
-    private ApplyStateContext BuildContext(string methodName, IState newState)
+    // The job shape stored before RQ-09 (HangfireUtils, D4) unless jobType says otherwise
+    private ApplyStateContext BuildContext(string methodName, IState newState, Type? jobType = null)
     {
-        var method = typeof(HangfireUtils).GetMethod(methodName)!;
+        jobType ??= typeof(HangfireUtils);
+        var method = jobType.GetMethods().First(m => m.Name == methodName && m.ReturnType == typeof(void)
+                                                     && m.GetParameters().Any(p => p.ParameterType == typeof(Hangfire.Server.PerformContext)));
         // Hangfire validates args count == method parameter count; the filter only
         // reads Method.Name, so unpopulated (null) arguments of the right count suffice.
         var args = new object?[method.GetParameters().Length];
-        var job = new BackgroundJob(JobId, new Job(typeof(HangfireUtils), method, args), DateTime.UtcNow);
+        var job = new BackgroundJob(JobId, new Job(jobType, method, args), DateTime.UtcNow);
         // The public ctor resolves nothing eagerly; connection/transactions are only
         // touched by code paths we do not exercise from the filter.
         return new ApplyStateContext(
@@ -119,6 +123,27 @@ public class BuildJobFailureFilterTests
         _cacheMock.Verify(c => c.RemoveByCategoryAsync(
             MagicStrings.BuildPendingTrackerCacheSeed, It.IsAny<string>()), Times.Never);
         _cacheMock.Verify(c => c.GetAsync(MagicStrings.BuildPendingTrackerCacheSeed, It.IsAny<string>()), Times.Once);
+    }
+
+    [TestCase(nameof(DdbJobs.Build))]
+    [TestCase(nameof(DdbJobs.BuildPending))]
+    public void OnStateApplied_FailedBuildOfTheNewShape_WritesErrorTypeName(string method)
+    {
+        var ctx = BuildContext(method, new FailedState(new DdbException("gdal cannot open")), typeof(DdbJobs));
+
+        _filter.OnStateApplied(ctx, Mock.Of<IWriteOnlyTransaction>());
+
+        _writerMock.Verify(w => w.UpdateErrorAsync(JobId, "DdbException", default), Times.Once);
+    }
+
+    [Test]
+    public void OnStateApplied_FailedCleanupOfTheNewShape_TouchesNothing()
+    {
+        var ctx = BuildContext(nameof(DdbJobs.Cleanup), new FailedState(new DdbException("x")), typeof(DdbJobs));
+
+        _filter.OnStateApplied(ctx, Mock.Of<IWriteOnlyTransaction>());
+
+        _writerMock.Verify(w => w.UpdateErrorAsync(It.IsAny<string>(), It.IsAny<string>(), default), Times.Never);
     }
 
     [Test]

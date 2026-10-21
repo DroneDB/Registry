@@ -24,7 +24,7 @@ public sealed class DatasetCacheInvalidator : IDatasetCacheInvalidator
     private readonly ILogger<DatasetCacheInvalidator> _logger;
     private readonly ICacheManager _cacheManager;
     private readonly IOgcCacheKeys _ogcKeys;
-    private readonly JobStorage? _storage;
+    private readonly JobStorage _storage;
     private readonly IConfiguration? _configuration;
 
     /// <summary>
@@ -39,7 +39,7 @@ public sealed class DatasetCacheInvalidator : IDatasetCacheInvalidator
         ILogger<DatasetCacheInvalidator> logger,
         ICacheManager cacheManager,
         IOgcCacheKeys ogcKeys,
-        JobStorage? storage = null,
+        JobStorage storage,
         IConfiguration? configuration = null)
     {
         _logger = logger;
@@ -87,7 +87,7 @@ public sealed class DatasetCacheInvalidator : IDatasetCacheInvalidator
         {
             var observation = await _cacheManager.GetAsync(MagicStrings.BuildPendingTrackerCacheSeed, category);
             if (!PendingBuildRetryControlStore.HasLegacyControls(observation)) return true;
-            var storage = _storage ?? JobStorage.Current;
+            var storage = _storage;
             using var coordination = DatasetBuildCoordinator.Acquire(orgSlug, dsSlug, storage,
                 mysqlConnectionString: _configuration?.GetConnectionString(MagicStrings.HangfireConnectionName));
             using var connection = storage.GetConnection();

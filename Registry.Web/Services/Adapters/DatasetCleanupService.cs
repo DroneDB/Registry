@@ -3,13 +3,14 @@ using System;
 using System.Linq;
 using System.Threading.Tasks;
 using Hangfire;
-using Hangfire.Console;
 using Hangfire.Server;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Registry.Ports;
 using Registry.Web.Data;
 using Registry.Web.Services.Ports;
+
+using Registry.Web.Services.Jobs;
 
 namespace Registry.Web.Services.Adapters;
 
@@ -66,21 +67,17 @@ public class DatasetCleanupService
         Guid internalRef,
         PerformContext? context = null)
     {
-        void WriteLine(string message)
-        {
-            _logger.LogInformation(message);
-            context?.WriteLine(message);
-        }
-
-        WriteLine($"Starting cleanup for deleted dataset {orgSlug}/{dsSlug} (InternalRef: {internalRef})");
+        var console = JobConsole.For(_logger, context);
+        console.Info("Starting cleanup for deleted dataset {OrgSlug}/{DsSlug} (InternalRef: {InternalRef})",
+            orgSlug, dsSlug, internalRef);
 
         // 1. Cancel all active jobs for this dataset
-        var cancelledCount = await CancelActiveJobsAsync(orgSlug, dsSlug, context);
-        WriteLine($"Cancelled {cancelledCount} active jobs");
+        var cancelledCount = await CancelActiveJobsAsync(orgSlug, dsSlug, console);
+        console.Info("Cancelled {Count} active jobs", cancelledCount);
 
         // 2. Remove all JobIndex entries for this dataset
         var removedCount = await RemoveJobIndexEntriesAsync(orgSlug, dsSlug);
-        WriteLine($"Removed {removedCount} JobIndex entries");
+        console.Info("Removed {Count} JobIndex entries", removedCount);
 
         // 2.5. Release the dataset's per-dataset index lane so it is not retained after the
         //      dataset ceases to exist (new enqueues transparently recreate a fresh lane for
@@ -88,31 +85,29 @@ public class DatasetCleanupService
         if (_indexQueue != null)
         {
             _indexQueue.Release(new DatasetKey(orgSlug, internalRef));
-            WriteLine("Released index lane for the removed dataset");
+            console.Info("Released index lane for the removed dataset");
         }
 
         // 3. Delete filesystem folder
         try
         {
             _ddbManager.Delete(orgSlug, internalRef);
-            WriteLine($"Deleted filesystem folder for {orgSlug}/{internalRef}");
+            console.Info("Deleted filesystem folder for {OrgSlug}/{InternalRef}", orgSlug, internalRef);
         }
         catch (Exception ex)
         {
-            _logger.LogWarning(ex,
-                "Failed to delete filesystem folder for {OrgSlug}/{InternalRef}. Will be cleaned up by orphaned folder cleanup job",
-                orgSlug, internalRef);
-            context?.WriteLine($"WARNING: Failed to delete filesystem folder: {ex.Message}");
             // Don't rethrow - the orphaned folder cleanup job will handle it
+            console.Warning(ex, "Failed to delete filesystem folder for {OrgSlug}/{InternalRef}: {Error}. " +
+                                "Will be cleaned up by orphaned folder cleanup job", orgSlug, internalRef, ex.Message);
         }
 
-        WriteLine($"Cleanup completed for {orgSlug}/{dsSlug}");
+        console.Info("Cleanup completed for {OrgSlug}/{DsSlug}", orgSlug, dsSlug);
     }
 
     /// <summary>
     /// Cancels all active jobs for the specified dataset.
     /// </summary>
-    private async Task<int> CancelActiveJobsAsync(string orgSlug, string dsSlug, PerformContext? context)
+    private async Task<int> CancelActiveJobsAsync(string orgSlug, string dsSlug, JobConsole console)
     {
         var jobs = await _jobIndexQuery.GetByOrgDsAsync(orgSlug, dsSlug, take: int.MaxValue);
         var activeJobs = jobs.Where(j => ActiveJobStates.Contains(j.CurrentState)).ToList();
@@ -131,8 +126,7 @@ public class DatasetCleanupService
             }
             catch (Exception ex)
             {
-                _logger.LogWarning(ex, "Failed to cancel job {JobId}", job.JobId);
-                context?.WriteLine($"WARNING: Failed to cancel job {job.JobId}: {ex.Message}");
+                console.Warning(ex, "Failed to cancel job {JobId}: {Error}", job.JobId, ex.Message);
             }
         }
 

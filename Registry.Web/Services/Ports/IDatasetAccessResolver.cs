@@ -75,6 +75,9 @@ public sealed class DatasetAccess
     /// <summary>The dataset, with its organization (untracked).</summary>
     public Dataset Dataset { get; }
 
+    /// <summary>The dataset's organization and <c>InternalRef</c>: how a background job names it.</summary>
+    public DatasetKey Key => new(Dataset.Organization.Slug, Dataset.InternalRef);
+
     /// <summary>The dataset's index, opened on first use: a caller that never reads the index does not
     /// open (or initialize) it.</summary>
     public IDDB Ddb => _ddb.Value;

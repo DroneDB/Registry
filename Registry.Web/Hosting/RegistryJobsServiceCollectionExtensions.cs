@@ -11,8 +11,8 @@ using Microsoft.Extensions.Logging;
 using Registry.Web.Filters;
 using Registry.Web.Models.Configuration;
 using Registry.Web.Services.Adapters;
-using Registry.Web.Services.HeavyTasks.Ports;
 using Registry.Web.Services.Initialization;
+using Registry.Web.Services.Jobs;
 using Registry.Web.Utilities;
 
 namespace Registry.Web.Hosting;
@@ -49,16 +49,14 @@ public static class RegistryJobsServiceCollectionExtensions
 
             UseStorage(hangfire, store.HangfireProvider, schedule, hangfireConnection);
 
-            hangfire
-                .UseFilter(new JobIndexStateFilter(sp, sp.GetRequiredService<ILogger<JobIndexStateFilter>>()))
-                .UseFilter(new BuildJobFailureFilter(sp, sp.GetRequiredService<ILogger<BuildJobFailureFilter>>()))
-                .UseFilter(new BuildLogCaptureFilter(sp, sp.GetRequiredService<ILogger<BuildLogCaptureFilter>>()))
-                .UseFilter(new BuildRetrySchedulerFilter(sp, sp.GetRequiredService<ILogger<BuildRetrySchedulerFilter>>()))
-                .UseFilter(new BuildQueueRoutingFilter((toolId, version) =>
-                    sp.GetService<IHeavyToolRegistry>()?.Resolve(toolId, version)?.RunsNativeBuild == true));
-
+            InstallJobFilters(sp);
             UseGlobalRetryPolicy();
         });
+
+        // The Hangfire filters, built by DI with their real dependencies (InstallJobFilters)
+        foreach (var filter in JobFilterTypes)
+            services.AddSingleton(filter);
+
 
         // Registered eagerly (not in the lazy configuration callback above), so every host that creates
         // or transitions indexed jobs keeps Indexing jobs discoverable by recovery. Idempotent.
@@ -96,6 +94,35 @@ public static class RegistryJobsServiceCollectionExtensions
         });
 
         return services;
+    }
+
+    /// <summary>The filters every host installs, in order (<see cref="InstallJobFilters"/>).</summary>
+    internal static readonly Type[] JobFilterTypes =
+    [
+        typeof(JobIndexStateFilter), typeof(BuildJobFailureFilter), typeof(BuildLogCaptureFilter),
+        typeof(BuildRetrySchedulerFilter), typeof(BuildQueueRoutingFilter), typeof(JobOperationFilter)
+    ];
+
+    /// <summary>
+    /// Installs the DI-built instance of each <see cref="JobFilterTypes"/> filter into Hangfire's
+    /// global filters, replacing an instance of the same type: building another host (the web host
+    /// and a node in one process, tests) never adds a second copy.
+    /// </summary>
+    public static void InstallJobFilters(IServiceProvider services)
+    {
+        ArgumentNullException.ThrowIfNull(services);
+
+        var filters = GlobalJobFilters.Filters;
+        lock (filters)
+        {
+            foreach (var type in JobFilterTypes)
+            {
+                foreach (var existing in filters.Select(f => f.Instance).Where(i => i.GetType() == type).ToList())
+                    filters.Remove(existing);
+
+                filters.Add(services.GetRequiredService(type));
+            }
+        }
     }
 
     /// <summary>
