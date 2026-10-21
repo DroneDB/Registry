@@ -14,6 +14,11 @@
     </ItemGroup>
 
     <ItemGroup>
+      <!-- The ABI 1.1 contract tests call the internal NativeDdbAbi11 declarations (XI-01) -->
+      <InternalsVisibleTo Include="Registry.Adapters.Ddb.Test" />
+    </ItemGroup>
+
+    <ItemGroup>
       <PackageReference Include="Newtonsoft.Json" />
       <PackageReference Include="SharpCompress" />
     </ItemGroup>

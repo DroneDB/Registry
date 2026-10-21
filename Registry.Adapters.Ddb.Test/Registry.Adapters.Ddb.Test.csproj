@@ -10,6 +10,10 @@
         <Configurations>Debug;Release;DebugEf</Configurations>
         <!-- Nullable allow-list (build/nullable-allowlist.txt): it may only shrink. -->
         <Nullable>disable</Nullable>
+        <!-- The ABI 1.1 contract tests pass a function pointer to DDBSetLogCallback (Abi11ContractTests) -->
+        <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+        <!-- Program.Main (Abi11ShutdownProbe.cs) runs DDBShutdown in a child process -->
+        <GenerateProgramFile>false</GenerateProgramFile>
 
     </PropertyGroup>
 
