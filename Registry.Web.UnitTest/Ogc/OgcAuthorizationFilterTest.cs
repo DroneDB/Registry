@@ -1,12 +1,17 @@
 using System.Collections.Generic;
 using System.Security.Claims;
+using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Abstractions;
 using Microsoft.AspNetCore.Mvc.Filters;
 using Microsoft.AspNetCore.Routing;
+using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
+using Registry.Ports;
+using Registry.Web.Exceptions;
+using Registry.Web.Services.Adapters;
 using NUnit.Framework;
 using Registry.Web.Data.Models;
 using Registry.Web.Services.Managers;
@@ -32,8 +37,13 @@ public class OgcAuthorizationFilterTest
     {
         _utils = new Mock<IUtils>();
         _auth = new Mock<IAuthManager>();
-        _filter = new OgcAuthorizationFilter(_utils.Object, _auth.Object);
+        _filter = new OgcAuthorizationFilter(new DatasetAccessResolver(_utils.Object, _auth.Object, Mock.Of<IDdbManager>()),
+            NullLogger<OgcAuthorizationFilter>.Instance);
     }
+
+    private void SetupDataset(Dataset? ds) =>
+        _utils.Setup(u => u.GetDatasetAsync("org", "ds", false, false, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(ds ?? throw new System.ArgumentNullException(nameof(ds)));
 
     private static AuthorizationFilterContext MakeContext(string? orgSlug, string? dsSlug)
     {
@@ -59,7 +69,8 @@ public class OgcAuthorizationFilterTest
     [Test]
     public async Task UnknownDataset_Returns404NotFound()
     {
-        _utils.Setup(u => u.GetDataset("org", "ds", true, false)).Returns((Dataset?)null);
+        _utils.Setup(u => u.GetDatasetAsync("org", "ds", false, false, It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new NotFoundException("Cannot find dataset ds in organization org"));
         var ctx = MakeContext("org", "ds");
         await _filter.OnAuthorizationAsync(ctx);
         var r = (ContentResult)ctx.Result!;
@@ -71,7 +82,7 @@ public class OgcAuthorizationFilterTest
     public async Task ReadDenied_Anonymous_Returns401WithAuthenticationFailed()
     {
         var ds = new Dataset { Slug = "ds" };
-        _utils.Setup(u => u.GetDataset("org", "ds", true, false)).Returns(ds);
+        SetupDataset(ds);
         _auth.Setup(a => a.RequestAccess(ds, AccessType.Read)).ReturnsAsync(false);
         var ctx = MakeContext("org", "ds");
         await _filter.OnAuthorizationAsync(ctx);
@@ -86,7 +97,7 @@ public class OgcAuthorizationFilterTest
     {
         // D2 (RQ-05): signed-in OGC clients that lack access are not asked for credentials again
         var ds = new Dataset { Slug = "ds" };
-        _utils.Setup(u => u.GetDataset("org", "ds", true, false)).Returns(ds);
+        SetupDataset(ds);
         _auth.Setup(a => a.RequestAccess(ds, AccessType.Read)).ReturnsAsync(false);
         var ctx = MakeContext("org", "ds");
         ctx.HttpContext.User = new ClaimsPrincipal(new ClaimsIdentity([new Claim(ClaimTypes.Name, "user-id")], "test"));
@@ -98,10 +109,36 @@ public class OgcAuthorizationFilterTest
     }
 
     [Test]
+    public async Task InvalidSlug_Returns400NotAServerError()
+    {
+        // RQ-06: the lookup's BadRequestException used to fall into the catch-all and answer 500
+        _utils.Setup(u => u.GetDatasetAsync("Bad", "ds", false, false, It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new BadRequestException("Invalid organization id"));
+        var ctx = MakeContext("Bad", "ds");
+        await _filter.OnAuthorizationAsync(ctx);
+        var r = (ContentResult)ctx.Result!;
+        r.StatusCode.ShouldBe(400);
+        r.Content.ShouldContain("InvalidParameterValue");
+        r.Content.ShouldContain("Invalid organization id");
+    }
+
+    [Test]
+    public async Task UnexpectedFault_Returns500WithoutItsMessage()
+    {
+        _utils.Setup(u => u.GetDatasetAsync("org", "ds", false, false, It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new System.InvalidOperationException("connection string secret"));
+        var ctx = MakeContext("org", "ds");
+        await _filter.OnAuthorizationAsync(ctx);
+        var r = (ContentResult)ctx.Result!;
+        r.StatusCode.ShouldBe(500);
+        r.Content.ShouldNotContain("secret");
+    }
+
+    [Test]
     public async Task ReadAllowed_DoesNotShortCircuit()
     {
         var ds = new Dataset { Slug = "ds" };
-        _utils.Setup(u => u.GetDataset("org", "ds", true, false)).Returns(ds);
+        SetupDataset(ds);
         _auth.Setup(a => a.RequestAccess(ds, AccessType.Read)).ReturnsAsync(true);
         var ctx = MakeContext("org", "ds");
         await _filter.OnAuthorizationAsync(ctx);

@@ -14,9 +14,7 @@ namespace Registry.Web.Services.Managers;
 
 /// <inheritdoc />
 public sealed class CadCrsManager(
-    IUtils utils,
-    IAuthManager authManager,
-    IDdbManager ddbManager,
+    IDatasetAccessResolver access,
     IDdbWrapper ddbWrapper,
     IObjectsManager objectsManager,
     ILogger<CadCrsManager> logger) : ICadCrsManager
@@ -30,11 +28,9 @@ public sealed class CadCrsManager(
         if (Path.GetExtension(path).ToLowerInvariant() is not (".dxf" or ".dwg"))
             throw new BadRequestException("Only CAD drawings (.dxf, .dwg) take a coordinate system");
 
-        var ds = utils.GetDataset(orgSlug, dsSlug);
-        if (!await authManager.RequestAccess(ds, AccessType.Write))
-            throw new ForbiddenException("The current user is not allowed to change this dataset");
+        var ddb = (await access.ResolveAsync(orgSlug, dsSlug, AccessType.Write)).Ddb;
 
-        var entry = ddbManager.Get(orgSlug, ds.InternalRef).GetEntry(path)
+        var entry = ddb.GetEntry(path)
                     ?? throw new NotFoundException($"Cannot find '{path}'");
 
         string prj;

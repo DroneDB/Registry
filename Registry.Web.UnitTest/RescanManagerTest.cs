@@ -17,6 +17,7 @@ using Registry.Web.Models;
 using Registry.Web.Models.DTO;
 using Registry.Web.Services.Adapters;
 using Registry.Web.Services.Managers;
+using Registry.Web.Utilities.Auth;
 using Registry.Web.Services.Ports;
 using Shouldly;
 using Registry.Web.Test.Support;
@@ -54,7 +55,7 @@ public class RescanManagerTest : TestBase
 
         // Assert
         var ex = await Should.ThrowAsync<ForbiddenException>(act);
-        ex.Message.ShouldContain("Only admins or users with write access can rescan dataset index");
+        ex.Message.ShouldBe(AccessDeniedMessages.Dataset(AccessType.Write));
     }
 
     [Test]
@@ -73,7 +74,7 @@ public class RescanManagerTest : TestBase
 
         // Assert
         var ex = await Should.ThrowAsync<ForbiddenException>(act);
-        ex.Message.ShouldContain("write access");
+        ex.Message.ShouldBe(AccessDeniedMessages.Dataset(AccessType.Write));
     }
 
     [Test]
@@ -82,6 +83,8 @@ public class RescanManagerTest : TestBase
         // Arrange
         await using var context = CreateInMemoryContext();
         _authManagerMock.Setup(x => x.IsUserAdmin()).ReturnsAsync(true);
+        // AuthManager grants an administrator every access
+        _authManagerMock.Setup(x => x.RequestAccess(It.IsAny<Dataset>(), It.IsAny<AccessType>())).ReturnsAsync(true);
 
         var ddbMock = new Mock<IDDB>();
         ddbMock.Setup(x => x.RescanIndex(It.IsAny<RescanOptions?>()))
@@ -115,6 +118,8 @@ public class RescanManagerTest : TestBase
         // Arrange
         await using var context = CreateInMemoryContext();
         _authManagerMock.Setup(x => x.IsUserAdmin()).ReturnsAsync(true);
+        // AuthManager grants an administrator every access
+        _authManagerMock.Setup(x => x.RequestAccess(It.IsAny<Dataset>(), It.IsAny<AccessType>())).ReturnsAsync(true);
 
         var ddbMock = new Mock<IDDB>();
         ddbMock.Setup(x => x.RescanIndex(new RescanOptions("image,geoimage", null, true)))
@@ -139,6 +144,8 @@ public class RescanManagerTest : TestBase
         // Arrange
         await using var context = CreateInMemoryContext();
         _authManagerMock.Setup(x => x.IsUserAdmin()).ReturnsAsync(true);
+        // AuthManager grants an administrator every access
+        _authManagerMock.Setup(x => x.RequestAccess(It.IsAny<Dataset>(), It.IsAny<AccessType>())).ReturnsAsync(true);
 
         var rescanManager = CreateRescanManager(context);
 
@@ -156,6 +163,8 @@ public class RescanManagerTest : TestBase
         // Arrange
         await using var context = CreateInMemoryContext();
         _authManagerMock.Setup(x => x.IsUserAdmin()).ReturnsAsync(true);
+        // AuthManager grants an administrator every access
+        _authManagerMock.Setup(x => x.RequestAccess(It.IsAny<Dataset>(), It.IsAny<AccessType>())).ReturnsAsync(true);
 
         var rescanManager = CreateRescanManager(context);
 
@@ -173,6 +182,8 @@ public class RescanManagerTest : TestBase
     {
         await using var context = CreateInMemoryContext();
         _authManagerMock.Setup(x => x.IsUserAdmin()).ReturnsAsync(true);
+        // AuthManager grants an administrator every access
+        _authManagerMock.Setup(x => x.RequestAccess(It.IsAny<Dataset>(), It.IsAny<AccessType>())).ReturnsAsync(true);
 
         var ddbMock = new Mock<IDDB>();
         ddbMock.Setup(x => x.RescanIndex(new RescanOptions(null, null, true)))
@@ -194,6 +205,8 @@ public class RescanManagerTest : TestBase
     {
         await using var context = CreateInMemoryContext();
         _authManagerMock.Setup(x => x.IsUserAdmin()).ReturnsAsync(true);
+        // AuthManager grants an administrator every access
+        _authManagerMock.Setup(x => x.RequestAccess(It.IsAny<Dataset>(), It.IsAny<AccessType>())).ReturnsAsync(true);
 
         var ddbMock = new Mock<IDDB>();
         ddbMock.Setup(x => x.RescanIndex(new RescanOptions(null, "dwg,dxf", true)))
@@ -223,6 +236,8 @@ public class RescanManagerTest : TestBase
     {
         await using var context = CreateInMemoryContext();
         _authManagerMock.Setup(x => x.IsUserAdmin()).ReturnsAsync(true);
+        // AuthManager grants an administrator every access
+        _authManagerMock.Setup(x => x.RequestAccess(It.IsAny<Dataset>(), It.IsAny<AccessType>())).ReturnsAsync(true);
 
         await Should.ThrowAsync<ArgumentException>(() =>
             CreateRescanManager(context).RescanDatasetIndex("test-org", "test-dataset", new RescanOptions(Extensions: "*.dwg")));
@@ -247,6 +262,8 @@ public class RescanManagerTest : TestBase
     {
         await using var context = CreateInMemoryContext();
         _authManagerMock.Setup(x => x.IsUserAdmin()).ReturnsAsync(true);
+        // AuthManager grants an administrator every access
+        _authManagerMock.Setup(x => x.RequestAccess(It.IsAny<Dataset>(), It.IsAny<AccessType>())).ReturnsAsync(true);
 
         await Should.ThrowAsync<ArgumentException>(() => CreateRescanManager(context).Rescan(new RescanRequestDto
         {
@@ -264,6 +281,8 @@ public class RescanManagerTest : TestBase
     {
         await using var context = CreateInMemoryContext();
         _authManagerMock.Setup(x => x.IsUserAdmin()).ReturnsAsync(true);
+        // AuthManager grants an administrator every access
+        _authManagerMock.Setup(x => x.RequestAccess(It.IsAny<Dataset>(), It.IsAny<AccessType>())).ReturnsAsync(true);
         _authManagerMock.Setup(x => x.GetCurrentUser())
             .ReturnsAsync(new Registry.Web.Identity.Models.User { Id = "admin-id" });
 
@@ -298,7 +317,8 @@ public class RescanManagerTest : TestBase
     }
 
     private RescanManager CreateRescanManager(RegistryContext context) =>
-        new(_authManagerMock.Object, context, _ddbManagerMock.Object, _backgroundJobMock.Object,
+        new(_authManagerMock.Object, new DatasetAccessResolver(Mock.Of<IUtils>(), _authManagerMock.Object, _ddbManagerMock.Object),
+            context, _ddbManagerMock.Object, _backgroundJobMock.Object,
             new RescanRebuild(_cacheInvalidatorMock.Object, CreateTestLogger<RescanRebuild>()),
             CreateTestLogger<RescanManager>());
 

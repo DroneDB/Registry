@@ -30,8 +30,8 @@ namespace Registry.Web.Services.Managers;
 public sealed partial class UploadManager : IUploadManager
 {
     private readonly ILogger<UploadManager> _logger;
-    private readonly IUtils _utils;
     private readonly IAuthManager _authManager;
+    private readonly IDatasetAccessResolver _access;
     private readonly IDdbManager _ddbManager;
     private readonly IFileSystem _fs;
     private readonly AppSettings _settings;
@@ -44,15 +44,15 @@ public sealed partial class UploadManager : IUploadManager
     private readonly IDatasetChangeCoalescer _changes;
     private readonly IThumbnailPrecomputeQueue? _thumbnails;
 
-    public UploadManager(ILogger<UploadManager> logger, IUtils utils, IAuthManager authManager,
-        IDdbManager ddbManager, IFileSystem fs, IOptions<AppSettings> settings,
+    public UploadManager(ILogger<UploadManager> logger, IAuthManager authManager,
+        IDatasetAccessResolver access, IDdbManager ddbManager, IFileSystem fs, IOptions<AppSettings> settings,
         IBackgroundJobsProcessor backgroundJob, BuildPendingService buildPendingService, IUploadQuotaGuard quota,
         IDatasetChangeCoalescer changes, IUploadReceiptStore? receipts = null, IDatasetIndexQueue? indexQueue = null,
         IThumbnailPrecomputeQueue? thumbnails = null)
     {
         _logger = logger;
-        _utils = utils;
         _authManager = authManager;
+        _access = access;
         _ddbManager = ddbManager;
         _fs = fs;
         _settings = settings.Value;
@@ -78,11 +78,9 @@ public sealed partial class UploadManager : IUploadManager
         if (uploadId != null && !IsValidUploadId(uploadId))
             throw new BadRequestException("Invalid upload id: use 8 to 64 letters, digits, '-' or '_'");
 
-        var ds = _utils.GetDataset(orgSlug, dsSlug);
-        var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
-
-        if (!await _authManager.RequestAccess(ds, AccessType.Write))
-            throw new ForbiddenException("The current user is not allowed to write to this dataset");
+        var access = await _access.ResolveAsync(orgSlug, dsSlug, AccessType.Write);
+        var ds = access.Dataset;
+        var ddb = access.Ddb;
 
         var user = await _authManager.GetCurrentUser();
         var ctx = new UploadRequestContext(orgSlug, dsSlug, ds, ddb, user, uploadId);
@@ -177,9 +175,7 @@ public sealed partial class UploadManager : IUploadManager
         if (!IsValidUploadId(uploadId))
             throw new BadRequestException("Invalid upload id");
 
-        var ds = _utils.GetDataset(orgSlug, dsSlug);
-        if (!await _authManager.RequestAccess(ds, AccessType.Write))
-            throw new ForbiddenException("The current user is not allowed to write to this dataset");
+        await _access.ResolveAsync(orgSlug, dsSlug, AccessType.Write);
 
         return _receipts == null ? null : await _receipts.GetAsync(orgSlug, dsSlug, uploadId);
     }

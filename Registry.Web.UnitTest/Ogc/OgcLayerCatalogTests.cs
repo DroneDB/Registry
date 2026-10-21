@@ -1,4 +1,5 @@
 using System;
+using System.Threading;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
@@ -45,7 +46,7 @@ public class OgcLayerCatalogTests
         _cache = new MemoryDistributedCache(Microsoft.Extensions.Options.Options.Create(new MemoryDistributedCacheOptions()));
 
         var dataset = new Dataset { InternalRef = Guid.NewGuid() };
-        _utils.Setup(u => u.GetDataset(Org, Ds, It.IsAny<bool>(), It.IsAny<bool>())).Returns(dataset);
+        _utils.Setup(u => u.GetDatasetAsync(Org, Ds, It.IsAny<bool>(), It.IsAny<bool>(), It.IsAny<CancellationToken>())).ReturnsAsync(dataset);
         _ddbManager.Setup(m => m.Get(Org, dataset.InternalRef)).Returns(_ddb.Object);
 
         _catalog = new OgcLayerCatalog(

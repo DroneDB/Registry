@@ -28,6 +28,7 @@ public class FileUrlImportManager : IFileUrlImportManager
 {
     private readonly IUtils _utils;
     private readonly IAuthManager _authManager;
+    private readonly IDatasetAccessResolver _access;
     private readonly IHeavyTaskRunner _runner;
     private readonly IImportCredentialProtector _protector;
     private readonly GuardedHttpDownloader _downloader;
@@ -41,6 +42,7 @@ public class FileUrlImportManager : IFileUrlImportManager
     public FileUrlImportManager(
         IUtils utils,
         IAuthManager authManager,
+        IDatasetAccessResolver access,
         IHeavyTaskRunner runner,
         IImportCredentialProtector protector,
         GuardedHttpDownloader downloader,
@@ -50,6 +52,7 @@ public class FileUrlImportManager : IFileUrlImportManager
     {
         _utils = utils;
         _authManager = authManager;
+        _access = access;
         _runner = runner;
         _protector = protector;
         _downloader = downloader;
@@ -64,9 +67,7 @@ public class FileUrlImportManager : IFileUrlImportManager
     {
         ArgumentNullException.ThrowIfNull(request);
 
-        var ds = _utils.GetDataset(orgSlug, dsSlug);
-        if (!await _authManager.RequestAccess(ds, AccessType.Write))
-            throw new ForbiddenException("The current user cannot import files into this dataset.");
+        await _access.ResolveAsync(orgSlug, dsSlug, AccessType.Write, ct: ct);
 
         var uri = FileImportPolicy.ParseHttpUrl(request.Url);
         var probe = await _downloader.ProbeAsync(uri, request.Username, request.Password, ct);
@@ -94,9 +95,8 @@ public class FileUrlImportManager : IFileUrlImportManager
     {
         ArgumentNullException.ThrowIfNull(request);
 
-        var ds = _utils.GetDataset(orgSlug, dsSlug);
-        if (!await _authManager.RequestAccess(ds, AccessType.Write))
-            throw new ForbiddenException("The current user cannot import files into this dataset.");
+        var access = await _access.ResolveAsync(orgSlug, dsSlug, AccessType.Write, ct: ct);
+        var ds = access.Dataset;
 
         var uri = FileImportPolicy.ParseHttpUrl(request.Url);
 

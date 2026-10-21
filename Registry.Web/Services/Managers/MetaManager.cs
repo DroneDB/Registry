@@ -20,26 +20,21 @@ public class MetaManager : IMetaManager
 {
     private readonly ILogger<MetaManager> _logger;
     private readonly IDdbManager _ddbManager;
-    private readonly IAuthManager _authManager;
-    private readonly IUtils _utils;
+    private readonly IDatasetAccessResolver _access;
     private readonly ICacheManager _cacheManager;
 
     public MetaManager(ILogger<MetaManager> logger,
-        IDdbManager ddbManager, IAuthManager authManager, IUtils utils, ICacheManager cacheManager)
+        IDdbManager ddbManager, IDatasetAccessResolver access, ICacheManager cacheManager)
     {
         _logger = logger;
         _ddbManager = ddbManager;
-        _utils = utils;
-        _authManager = authManager;
+        _access = access;
         _cacheManager = cacheManager;
     }
 
     public async Task<MetaDto> Add(string orgSlug, string dsSlug, string key, string data, string path = null)
     {
-        var ds = _utils.GetDataset(orgSlug, dsSlug);
-
-        if (!await _authManager.RequestAccess(ds, AccessType.Write))
-            throw new ForbiddenException("The current user is not allowed to write to this dataset");
+        var access = await _access.ResolveAsync(orgSlug, dsSlug, AccessType.Write);
 
         _logger.LogInformation("In Add('{OrgSlug}/{DsSlug}', {Key}, {Path})", orgSlug, dsSlug, key, path);
 
@@ -49,7 +44,7 @@ public class MetaManager : IMetaManager
         if (data == null)
             throw new BadRequestException("Data should not be null");
 
-        var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
+        var ddb = access.Ddb;
 
         if (path != null && !ddb.EntryExists(path))
             throw new BadRequestException($"Path '{path}' does not exist");
@@ -59,10 +54,8 @@ public class MetaManager : IMetaManager
 
     public async Task<MetaDto> Set(string orgSlug, string dsSlug, string key, string data, string path = null)
     {
-        var ds = _utils.GetDataset(orgSlug, dsSlug);
-
-        if (!await _authManager.RequestAccess(ds, AccessType.Write))
-            throw new ForbiddenException("The current user is not allowed to write to this dataset");
+        var access = await _access.ResolveAsync(orgSlug, dsSlug, AccessType.Write);
+        var ds = access.Dataset;
 
         _logger.LogInformation("In Set('{OrgSlug}/{DsSlug}', {Key}, {Path})", orgSlug, dsSlug, key, path);
 
@@ -72,7 +65,7 @@ public class MetaManager : IMetaManager
         if (data == null)
             throw new BadRequestException("Data should not be null");
 
-        var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
+        var ddb = access.Ddb;
 
         if (path != null && !ddb.EntryExists(path))
             throw new BadRequestException($"Path '{path}' does not exist");
@@ -98,34 +91,28 @@ public class MetaManager : IMetaManager
 
     public async Task<int> Remove(string orgSlug, string dsSlug, string id)
     {
-        var ds = _utils.GetDataset(orgSlug, dsSlug);
-
-        if (!await _authManager.RequestAccess(ds, AccessType.Write))
-            throw new ForbiddenException("The current user is not allowed to remove meta");
+        var access = await _access.ResolveAsync(orgSlug, dsSlug, AccessType.Write);
 
         _logger.LogInformation("In Remove('{OrgSlug}/{DsSlug}', {Id})", orgSlug, dsSlug, id);
 
         if (string.IsNullOrWhiteSpace(id))
             throw new BadRequestException("Id should not be null or empty");
 
-        var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
+        var ddb = access.Ddb;
 
         return ddb.Meta.Remove(id);
     }
 
     public async Task<JToken> Get(string orgSlug, string dsSlug, string key, string path = null)
     {
-        var ds = _utils.GetDataset(orgSlug, dsSlug);
-
-        if (!await _authManager.RequestAccess(ds, AccessType.Read))
-            throw new ForbiddenException("The current user is not allowed to read meta");
+        var access = await _access.ResolveAsync(orgSlug, dsSlug, AccessType.Read);
 
         _logger.LogInformation("In Get('{OrgSlug}/{DsSlug}', {Key}, {Path})", orgSlug, dsSlug, key, path);
 
         if (string.IsNullOrWhiteSpace(key))
             throw new BadRequestException("Key should not be null or empty");
 
-        var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
+        var ddb = access.Ddb;
 
         if (path != null && !ddb.EntryExists(path))
             throw new BadRequestException($"Path '{path}' does not exist");
@@ -136,17 +123,15 @@ public class MetaManager : IMetaManager
 
     public async Task<int> Unset(string orgSlug, string dsSlug, string key, string path = null)
     {
-        var ds = _utils.GetDataset(orgSlug, dsSlug);
-
-        if (!await _authManager.RequestAccess(ds, AccessType.Write))
-            throw new ForbiddenException("The current user is not allowed to unset meta");
+        var access = await _access.ResolveAsync(orgSlug, dsSlug, AccessType.Write);
+        var ds = access.Dataset;
 
         _logger.LogInformation("In Unset('{OrgSlug}/{DsSlug}', {Key}, {Path})", orgSlug, dsSlug, key, path);
 
         if (string.IsNullOrWhiteSpace(key))
             throw new BadRequestException("Key should not be null or empty");
 
-        var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
+        var ddb = access.Ddb;
 
         if (path != null && !ddb.EntryExists(path))
             throw new BadRequestException($"Path '{path}' does not exist");
@@ -173,14 +158,11 @@ public class MetaManager : IMetaManager
 
     public async Task<IEnumerable<MetaListItemDto>> List(string orgSlug, string dsSlug, string path = null)
     {
-        var ds = _utils.GetDataset(orgSlug, dsSlug);
-
-        if (!await _authManager.RequestAccess(ds, AccessType.Read))
-            throw new ForbiddenException("The current user is not allowed to list meta");
+        var access = await _access.ResolveAsync(orgSlug, dsSlug, AccessType.Read);
 
         _logger.LogInformation("In List('{OrgSlug}/{DsSlug}', {Path})", orgSlug, dsSlug, path);
 
-        var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
+        var ddb = access.Ddb;
 
         if (path != null && !ddb.EntryExists(path))
             throw new BadRequestException($"Path '{path}' does not exist");
@@ -190,14 +172,11 @@ public class MetaManager : IMetaManager
 
     public async Task<IEnumerable<MetaDumpDto>> Dump(string orgSlug, string dsSlug, string ids = null)
     {
-        var ds = _utils.GetDataset(orgSlug, dsSlug);
-
-        if (!await _authManager.RequestAccess(ds, AccessType.Read))
-            throw new ForbiddenException("The current user is not allowed to dump meta");
+        var access = await _access.ResolveAsync(orgSlug, dsSlug, AccessType.Read);
 
         _logger.LogInformation("In Dump('{OrgSlug}/{DsSlug}', {Ids})", orgSlug, dsSlug, ids);
 
-        var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
+        var ddb = access.Ddb;
 
         return ddb.Meta.Dump(ids).Select(item => item.ToDto());
     }

@@ -381,22 +381,22 @@ public class UploadPipelineComponentTests
     // ---- dataset lookups (REG-05 item 3) and initialized folders (item 4)
 
     [Test]
-    public void DatasetLookupCache_ServesCopies_AndForgetsAnOrganizationOnInvalidation()
+    public async Task DatasetLookupCache_ServesCopies_AndForgetsAnOrganizationOnInvalidation()
     {
         var cache = new DatasetLookupCache(new MemoryCache(new MemoryCacheOptions()), TimeSpan.FromMinutes(1));
         var loads = 0;
-        Data.Models.Dataset Load()
+        Task<Data.Models.Dataset> Load(CancellationToken _)
         {
             loads++;
-            return new Data.Models.Dataset
+            return Task.FromResult<Data.Models.Dataset>(new Data.Models.Dataset
             {
                 Slug = "ds", InternalRef = Guid.NewGuid(),
                 Organization = new Data.Models.Organization { Slug = "org", OwnerId = "u1" }
-            };
+            });
         }
 
-        var first = cache.GetOrLoad("org", "ds", Load)!;
-        var second = cache.GetOrLoad("org", "ds", Load)!;
+        var first = (await cache.GetOrLoadAsync("org", "ds", Load))!;
+        var second = (await cache.GetOrLoadAsync("org", "ds", Load))!;
         loads.ShouldBe(1);
         second.ShouldNotBeSameAs(first);
         second.InternalRef.ShouldBe(first.InternalRef);
@@ -404,33 +404,33 @@ public class UploadPipelineComponentTests
 
         // A change made to a returned copy never reaches the cache
         second.Organization.OwnerId = "u2";
-        cache.GetOrLoad("org", "ds", Load)!.Organization.OwnerId.ShouldBe("u1");
+        (await cache.GetOrLoadAsync("org", "ds", Load))!.Organization.OwnerId.ShouldBe("u1");
 
         cache.InvalidateOrganization("org");
-        cache.GetOrLoad("org", "ds", Load);
+        await cache.GetOrLoadAsync("org", "ds", Load);
         loads.ShouldBe(2);
 
         // Misses are not cached
-        cache.GetOrLoad("org", "missing", () => null).ShouldBeNull();
-        cache.GetOrLoad("org", "missing", Load).ShouldNotBeNull();
+        (await cache.GetOrLoadAsync("org", "missing", _ => Task.FromResult<Data.Models.Dataset>(null))).ShouldBeNull();
+        (await cache.GetOrLoadAsync("org", "missing", Load)).ShouldNotBeNull();
     }
 
     [Test]
-    public void DatasetLookupCache_InvalidationDuringALoad_IsNotCached()
+    public async Task DatasetLookupCache_InvalidationDuringALoad_IsNotCached()
     {
         var cache = new DatasetLookupCache(new MemoryCache(new MemoryCacheOptions()), TimeSpan.FromMinutes(1));
         var loads = 0;
 
-        cache.GetOrLoad("org", "ds", () =>
+        await cache.GetOrLoadAsync("org", "ds", _ =>
         {
             loads++;
             cache.InvalidateDataset("org", "ds"); // the row changes while it is being read
-            return new Data.Models.Dataset { Slug = "ds", Organization = new Data.Models.Organization { Slug = "org" } };
+            return Task.FromResult<Data.Models.Dataset>(new Data.Models.Dataset { Slug = "ds", Organization = new Data.Models.Organization { Slug = "org" } });
         });
-        cache.GetOrLoad("org", "ds", () =>
+        await cache.GetOrLoadAsync("org", "ds", _ =>
         {
             loads++;
-            return new Data.Models.Dataset { Slug = "ds", Organization = new Data.Models.Organization { Slug = "org" } };
+            return Task.FromResult<Data.Models.Dataset>(new Data.Models.Dataset { Slug = "ds", Organization = new Data.Models.Organization { Slug = "org" } });
         });
 
         loads.ShouldBe(2);

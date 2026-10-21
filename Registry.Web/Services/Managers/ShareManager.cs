@@ -31,6 +31,7 @@ public class ShareManager : IShareManager
     private readonly ILogger<ShareManager> _logger;
     private readonly IUtils _utils;
     private readonly IAuthManager _authManager;
+    private readonly IDatasetAccessResolver _access;
     private readonly IBatchTokenGenerator _batchTokenGenerator;
     private readonly INameGenerator _nameGenerator;
     private readonly RegistryContext _context;
@@ -46,6 +47,7 @@ public class ShareManager : IShareManager
         IOrganizationsManager organizationsManager,
         IUtils utils,
         IAuthManager authManager,
+        IDatasetAccessResolver access,
         IBatchTokenGenerator batchTokenGenerator,
         INameGenerator nameGenerator,
         RegistryContext context,
@@ -60,6 +62,7 @@ public class ShareManager : IShareManager
         _organizationsManager = organizationsManager;
         _utils = utils;
         _authManager = authManager;
+        _access = access;
         _batchTokenGenerator = batchTokenGenerator;
         _nameGenerator = nameGenerator;
         _context = context;
@@ -105,8 +108,7 @@ public class ShareManager : IShareManager
         if (batch == null)
             throw new NotFoundException("Cannot find batch");
 
-        if (!await _authManager.RequestAccess(batch.Dataset, AccessType.Read))
-            throw new ForbiddenException("The current user is not allowed to read token info");
+        await _access.EnsureAccessAsync(batch.Dataset, AccessType.Read);
 
         if (batch.Status != BatchStatus.Running)
             throw new BadRequestException("Only running batches can be rollbacked");
@@ -122,12 +124,10 @@ public class ShareManager : IShareManager
     public async Task<IEnumerable<BatchDto>> ListBatches(string orgSlug, string dsSlug)
     {
 
-        var ds = _utils.GetDataset(orgSlug, dsSlug);
+        var access = await _access.ResolveAsync(orgSlug, dsSlug, AccessType.Read);
+        var ds = access.Dataset;
 
         _logger.LogInformation("Listing batches of '{OrgSlug}/{DsSlug}'", orgSlug, dsSlug);
-
-        if (!await _authManager.RequestAccess(ds, AccessType.Read))
-            throw new ForbiddenException("The current user is not allowed to read dataset");
 
         var batches = from batch in _context.Batches
                 .Include(x => x.Entries)
@@ -288,14 +288,14 @@ public class ShareManager : IShareManager
                 Visibility = Visibility.Public
             });
 
-            dataset = GetTrackedDataset(orgSlug, dsSlug);
+            dataset = await GetTrackedDatasetAsync(orgSlug, dsSlug);
 
             _logger.LogInformation("Created new dataset '{DsSlug}', creating batch", dsSlug);
         }
         else
         {
             // Check if the requested organization exists
-            var organization = _utils.GetOrganization(tag.OrganizationSlug, true, true);
+            var organization = await _utils.GetOrganizationAsync(tag.OrganizationSlug, safe: true, withTracking: true);
 
             if (organization == null)
                 throw new BadRequestException($"Cannot find organization '{tag.OrganizationSlug}'");
@@ -316,13 +316,13 @@ public class ShareManager : IShareManager
                     Visibility = Visibility.Public
                 });
 
-                dataset = GetTrackedDataset(tag.OrganizationSlug, dsSlug);
+                dataset = await GetTrackedDatasetAsync(tag.OrganizationSlug, dsSlug);
 
                 _logger.LogInformation("Dataset created");
             }
             else
             {
-                dataset = GetTrackedDataset(tag.OrganizationSlug, tag.DatasetSlug, safe: true);
+                dataset = await GetTrackedDatasetAsync(tag.OrganizationSlug, tag.DatasetSlug, safe: true);
 
                 // Create dataset if not exists
                 if (dataset == null)
@@ -338,13 +338,12 @@ public class ShareManager : IShareManager
 
                     _logger.LogInformation("Dataset created");
 
-                    dataset = GetTrackedDataset(tag.OrganizationSlug, tag.DatasetSlug);
+                    dataset = await GetTrackedDatasetAsync(tag.OrganizationSlug, tag.DatasetSlug);
                 }
                 else
                 {
                     // A new batch replaces the running ones: only who may write to the dataset may do that
-                    if (!await _authManager.RequestAccess(dataset, AccessType.Write))
-                        throw new ForbiddenException("The current user is not allowed to upload to this dataset");
+                    await _access.EnsureAccessAsync(dataset, AccessType.Write);
 
                     _logger.LogInformation("Checking for running batches");
                     await _context.Entry(dataset).Collection(item => item.Batches).LoadAsync();
@@ -391,8 +390,8 @@ public class ShareManager : IShareManager
     }
 
     // Datasets are identified by organization and slug: the slug alone may match another organization's
-    private Dataset GetTrackedDataset(string orgSlug, string dsSlug, bool safe = false) =>
-        _utils.GetDataset(orgSlug, dsSlug, safe, withTracking: true);
+    private Task<Dataset> GetTrackedDatasetAsync(string orgSlug, string dsSlug, bool safe = false) =>
+        _utils.GetDatasetAsync(orgSlug, dsSlug, safe, withTracking: true);
 
     private string GetUniqueDatasetSlug()
     {
@@ -421,8 +420,7 @@ public class ShareManager : IShareManager
         // Check the access the rollback needs (dropping the dataset or deleting its entries) before the status
         // change below is committed: a denied rollback must leave the batch running
         var requiredAccess = deleteDataset ? AccessType.Delete : AccessType.Write;
-        if (!await _authManager.RequestAccess(ds, requiredAccess))
-            throw new ForbiddenException("The current user is not allowed to roll back this batch");
+        await _access.EnsureAccessAsync(ds, requiredAccess);
 
         // I know we will have concurrency problems here because we could be in the middle of the rollback when another client calls for another one
         // To mitigate this issue we are going to commit the status change of the batch as soon as possible

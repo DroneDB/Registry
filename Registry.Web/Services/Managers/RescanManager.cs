@@ -20,6 +20,7 @@ namespace Registry.Web.Services.Managers;
 public class RescanManager : IRescanManager
 {
     private readonly IAuthManager _authManager;
+    private readonly IDatasetAccessResolver _access;
     private readonly RegistryContext _context;
     private readonly IDdbManager _ddbManager;
     private readonly IBackgroundJobsProcessor _backgroundJob;
@@ -28,6 +29,7 @@ public class RescanManager : IRescanManager
 
     public RescanManager(
         IAuthManager authManager,
+        IDatasetAccessResolver access,
         RegistryContext context,
         IDdbManager ddbManager,
         IBackgroundJobsProcessor backgroundJob,
@@ -35,6 +37,7 @@ public class RescanManager : IRescanManager
         ILogger<RescanManager> logger)
     {
         _authManager = authManager;
+        _access = access;
         _context = context;
         _ddbManager = ddbManager;
         _backgroundJob = backgroundJob;
@@ -60,10 +63,8 @@ public class RescanManager : IRescanManager
         if (dataset == null)
             throw new BadRequestException($"Dataset '{orgSlug}/{dsSlug}' not found");
 
-        // Allow admins or users with write access to the dataset
-        if (!await _authManager.IsUserAdmin() &&
-            !await _authManager.RequestAccess(dataset, AccessType.Write))
-            throw new ForbiddenException("Only admins or users with write access can rescan dataset index");
+        // Write access (administrators have it on every dataset)
+        await _access.EnsureAccessAsync(dataset, AccessType.Write);
 
         _logger.LogInformation("Rescanning index for dataset {OrgSlug}/{DsSlug} ({Filter})",
             orgSlug, dsSlug, filter);

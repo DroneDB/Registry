@@ -34,9 +34,7 @@ public abstract class OgcManagerBase
     protected const string NsXsd   = OgcNamespaces.Xsd;
     protected const string NsDdb   = OgcNamespaces.Ddb;
 
-    protected readonly IUtils Utils;
-    protected readonly IAuthManager AuthManager;
-    protected readonly IDdbManager DdbManager;
+    protected readonly IDatasetAccessResolver Access;
     protected readonly IBuildArtifactResolver Artifacts;
     protected readonly IDdbWrapper DdbWrapper;
     protected readonly IOgcLayerCatalog LayerCatalog;
@@ -53,11 +51,11 @@ public abstract class OgcManagerBase
     protected static XmlWriter CreateXmlWriter(StringBuilder sb) =>
         XmlWriter.Create(sb, new XmlWriterSettings { Indent = true, Async = true, OmitXmlDeclaration = true });
 
-    protected OgcManagerBase(IUtils utils, IAuthManager authManager, IDdbManager ddbManager,
+    protected OgcManagerBase(IDatasetAccessResolver access,
         IBuildArtifactResolver artifacts, IDdbWrapper ddbWrapper, IOgcLayerCatalog catalog,
         IDistributedCache cache, IHttpContextAccessor httpContext)
     {
-        Utils = utils; AuthManager = authManager; DdbManager = ddbManager;
+        Access = access;
         Artifacts = artifacts; DdbWrapper = ddbWrapper; LayerCatalog = catalog; Cache = cache;
         HttpContext = httpContext;
     }
@@ -90,18 +88,11 @@ public abstract class OgcManagerBase
 
     protected async Task<(Registry.Web.Data.Models.Dataset ds, IDDB ddb)> ResolveAsync(string orgSlug, string dsSlug)
     {
-        // OgcAuthorizationFilter (applied at controller level) already resolved the dataset and
-        // enforced AccessType.Read for this request: reuse its grant. A manager invoked outside
-        // an authorized OGC request resolves and checks access itself.
-        var ds = OgcAuthorizedDataset.Find(HttpContext?.HttpContext, orgSlug, dsSlug);
-        if (ds == null)
-        {
-            ds = Utils.GetDataset(orgSlug, dsSlug);
-            if (!await AuthManager.RequestAccess(ds, AccessType.Read))
-                throw new ForbiddenException("Read access denied");
-        }
-        var ddb = DdbManager.Get(orgSlug, ds.InternalRef);
-        return (ds, ddb);
+        // OgcAuthorizationFilter (applied at controller level) granted read access to this request's
+        // dataset through the same scoped resolver, which reuses the grant. A manager invoked outside an
+        // authorized OGC request is checked here.
+        var access = await Access.ResolveAsync(orgSlug, dsSlug, AccessType.Read);
+        return (access.Dataset, access.Ddb);
     }
 
     protected static double[]? AggregateBbox(IReadOnlyList<OgcLayerDto> layers)

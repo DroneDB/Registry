@@ -35,6 +35,7 @@ public class ObjectsManager : IObjectsManager
     private readonly IDdbManager _ddbManager;
     private readonly IUtils _utils;
     private readonly IAuthManager _authManager;
+    private readonly IDatasetAccessResolver _access;
     private readonly ICacheManager _cacheManager;
     private readonly IFileSystem _fs;
     private readonly IBackgroundJobsProcessor _backgroundJob;
@@ -61,6 +62,7 @@ public class ObjectsManager : IObjectsManager
         IDdbManager ddbManager,
         IUtils utils,
         IAuthManager authManager,
+        IDatasetAccessResolver access,
         ICacheManager cacheManager,
         IFileSystem fs,
         IBackgroundJobsProcessor backgroundJob,
@@ -84,6 +86,7 @@ public class ObjectsManager : IObjectsManager
         _ddbManager = ddbManager;
         _utils = utils;
         _authManager = authManager;
+        _access = access;
         _cacheManager = cacheManager;
         _fs = fs;
         _backgroundJob = backgroundJob;
@@ -108,8 +111,8 @@ public class ObjectsManager : IObjectsManager
         _importSettings = settings.Value.Import ?? new ImportSettings();
         // The DI-registered pipeline in production; tests constructing this class directly get one
         // over the same collaborators (indexing with AddRaw when no queue is given).
-        _uploads = uploadManager ?? new UploadManager(NullLogger<UploadManager>.Instance, utils, authManager,
-            ddbManager, fs, settings, backgroundJob, buildPendingService,
+        _uploads = uploadManager ?? new UploadManager(NullLogger<UploadManager>.Instance, authManager,
+            access, ddbManager, fs, settings, backgroundJob, buildPendingService,
             new UploadQuotaGuard(new UploadQuotaLedger(settings), utils),
             new DatasetChangeCoalescer(FallbackOgcKeys(), cacheManager, settings.Value.EffectiveDatasetThumbnailCandidates(),
                 TimeSpan.Zero, NullLogger<DatasetChangeCoalescer>.Instance),
@@ -132,14 +135,11 @@ public class ObjectsManager : IObjectsManager
     public async Task<IEnumerable<EntryDto>> List(string orgSlug, string dsSlug, string path = null,
         bool recursive = false, EntryType? type = null)
     {
-        var ds = _utils.GetDataset(orgSlug, dsSlug);
+        var access = await _access.ResolveAsync(orgSlug, dsSlug, AccessType.Read);
 
         _logger.LogInformation("In List('{OrgSlug}/{DsSlug}')", orgSlug, dsSlug);
 
-        if (!await _authManager.RequestAccess(ds, AccessType.Read))
-            throw new ForbiddenException("The current user is not allowed to list this dataset");
-
-        var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
+        var ddb = access.Ddb;
 
         _logger.LogInformation("Searching in '{Path}'", path);
 
@@ -158,14 +158,11 @@ public class ObjectsManager : IObjectsManager
     public async Task<IEnumerable<EntryDto>> Search(string orgSlug, string dsSlug, string query = null,
         string path = null, bool recursive = true, EntryType? type = null)
     {
-        var ds = _utils.GetDataset(orgSlug, dsSlug);
+        var access = await _access.ResolveAsync(orgSlug, dsSlug, AccessType.Read);
 
         _logger.LogInformation("In Search('{OrgSlug}/{DsSlug}')", orgSlug, dsSlug);
 
-        if (!await _authManager.RequestAccess(ds, AccessType.Read))
-            throw new ForbiddenException("The current user is not allowed to search this dataset");
-
-        var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
+        var ddb = access.Ddb;
 
         _logger.LogInformation("Searching in '{Path}' -> {Query} ({Recursive}", path, query, recursive ? 'r' : 'n');
 
@@ -199,23 +196,18 @@ public class ObjectsManager : IObjectsManager
 
     public async Task<StorageEntryDto> Get(string orgSlug, string dsSlug, string path)
     {
-        var ds = _utils.GetDataset(orgSlug, dsSlug);
+        var access = await _access.ResolveAsync(orgSlug, dsSlug, AccessType.Read);
 
         _logger.LogInformation("In Get('{OrgSlug}/{DsSlug}', {Path})", orgSlug, dsSlug, path);
 
         if (string.IsNullOrWhiteSpace(path))
             throw new BadRequestException("Path should not be null");
 
-        if (!await _authManager.RequestAccess(ds, AccessType.Read))
-            throw new ForbiddenException("The current user is not allowed to read this dataset");
-
-        return InternalGet(orgSlug, ds.InternalRef, path);
+        return InternalGet(access.Ddb, path);
     }
 
-    private StorageEntryDto InternalGet(string orgSlug, Guid internalRef, string path)
+    private static StorageEntryDto InternalGet(IDDB ddb, string path)
     {
-        var ddb = _ddbManager.Get(orgSlug, internalRef);
-
         var entry = ddb.GetEntry(path);
 
         if (entry == null)
@@ -251,18 +243,13 @@ public class ObjectsManager : IObjectsManager
         // directly (the upload/quarantine flow does not apply).
         if (stream == null)
         {
-            var ds = _utils.GetDataset(orgSlug, dsSlug);
-
-            var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
+            var ddb = (await _access.ResolveAsync(orgSlug, dsSlug, AccessType.Write)).Ddb;
 
             // Validate path to prevent path traversal attacks
             CommonUtils.ValidateRelativePath(path, ddb.DatasetFolderPath);
 
             if (IsReservedPath(path))
                 throw new BadRequestException($"'{path}' is a reserved path");
-
-            if (!await _authManager.RequestAccess(ds, AccessType.Write))
-                throw new ForbiddenException("The current user is not allowed to write to this dataset");
 
             if (ddb.EntryExists(path))
                 throw new ConflictException("Cannot create a folder on another entry");
@@ -296,7 +283,8 @@ public class ObjectsManager : IObjectsManager
     /// </summary>
     public async Task<StreamedFile> StreamToTempAsync(string orgSlug, string dsSlug, Stream source)
     {
-        var ds = _utils.GetDataset(orgSlug, dsSlug);
+        // No access check here: the commit checks write access and deletes this file when refused
+        var ds = await _utils.GetDatasetAsync(orgSlug, dsSlug);
         var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
 
         return await DatasetUploads.StreamToTempAsync(_fs, ddb.DatasetFolderPath, source);
@@ -318,7 +306,7 @@ public class ObjectsManager : IObjectsManager
         catch
         {
             // Refused before the commit (access, dataset): drop our own temp file, never a foreign one
-            DeleteStreamedTemp(orgSlug, dsSlug, file.TempPath);
+            await DeleteStreamedTempAsync(orgSlug, dsSlug, file.TempPath);
             throw;
         }
 
@@ -326,11 +314,11 @@ public class ObjectsManager : IObjectsManager
             return await _uploads.CommitAsync(ctx, path, file);
     }
 
-    private void DeleteStreamedTemp(string orgSlug, string dsSlug, string tempFilePath)
+    private async Task DeleteStreamedTempAsync(string orgSlug, string dsSlug, string tempFilePath)
     {
         try
         {
-            var ds = _utils.GetDataset(orgSlug, dsSlug, safe: true);
+            var ds = await _utils.GetDatasetAsync(orgSlug, dsSlug, safe: true);
             if (ds == null || string.IsNullOrWhiteSpace(tempFilePath)) return;
             var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
             if (UploadManager.IsInUploadsFolder(ddb, tempFilePath) && File.Exists(tempFilePath))
@@ -379,9 +367,6 @@ public class ObjectsManager : IObjectsManager
     public async Task Transfer(string sourceOrgSlug, string sourceDsSlug, string sourcePath, string destOrgSlug,
         string destDsSlug, string destPath = null, bool overwrite = false, bool keepSource = false)
     {
-        var sourceDs = _utils.GetDataset(sourceOrgSlug, sourceDsSlug);
-        var destDs = _utils.GetDataset(destOrgSlug, destDsSlug);
-
         _logger.LogInformation(
             "In Transfer('{SourceOrgSlug}/{SourceDsSlug}, {SourcePath}' -> '{DestOrgSlug}/{DestDsSlug}', {DestPath}; overwrite={Overwrite}; keepSource={KeepSource})",
             sourceOrgSlug, sourceDsSlug, sourcePath, destOrgSlug, destDsSlug, destPath, overwrite, keepSource);
@@ -389,14 +374,10 @@ public class ObjectsManager : IObjectsManager
         if (sourceOrgSlug == destOrgSlug && sourceDsSlug == destDsSlug)
             throw new BadRequestException("Source and destination cannot be the same");
 
-        if (!await _authManager.RequestAccess(sourceDs, AccessType.Read))
-            throw new ForbiddenException("The current user is not allowed to read the source dataset");
-
-        if (!await _authManager.RequestAccess(destDs, AccessType.Write))
-            throw new ForbiddenException("The current user is not allowed to write to the destination dataset");
-
-        var sourceDdb = _ddbManager.Get(sourceOrgSlug, sourceDs.InternalRef);
-        var destDdb = _ddbManager.Get(destOrgSlug, destDs.InternalRef);
+        var source = await _access.ResolveAsync(sourceOrgSlug, sourceDsSlug, AccessType.Read);
+        var destination = await _access.ResolveAsync(destOrgSlug, destDsSlug, AccessType.Write);
+        var sourceDdb = source.Ddb;
+        var destDdb = destination.Ddb;
 
         var sourceEntry = sourceDdb.GetEntry(sourcePath);
 
@@ -673,14 +654,11 @@ public class ObjectsManager : IObjectsManager
 
     public async Task<EntryDto> Move(string orgSlug, string dsSlug, string source, string dest)
     {
-        var ds = _utils.GetDataset(orgSlug, dsSlug);
+        var access = await _access.ResolveAsync(orgSlug, dsSlug, AccessType.Write);
 
         _logger.LogInformation("In Move('{OrgSlug}/{DsSlug}')", orgSlug, dsSlug);
 
-        if (!await _authManager.RequestAccess(ds, AccessType.Write))
-            throw new ForbiddenException("The current user is not allowed to write to this dataset");
-
-        var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
+        var ddb = access.Ddb;
 
         var sourceEntry = ddb.GetEntry(source);
 
@@ -785,20 +763,17 @@ public class ObjectsManager : IObjectsManager
 
     public async Task<EntryDto> Copy(string orgSlug, string dsSlug, string source, string dest, bool overwrite = false)
     {
-        var ds = _utils.GetDataset(orgSlug, dsSlug);
+        var access = await _access.ResolveAsync(orgSlug, dsSlug, AccessType.Write);
 
         _logger.LogInformation("In Copy('{OrgSlug}/{DsSlug}', '{Source}' -> '{Dest}', overwrite={Overwrite})",
             orgSlug, dsSlug, source, dest, overwrite);
-
-        if (!await _authManager.RequestAccess(ds, AccessType.Write))
-            throw new ForbiddenException("The current user is not allowed to write to this dataset");
 
         if (string.IsNullOrWhiteSpace(source))
             throw new BadRequestException("Source path is required");
         if (string.IsNullOrWhiteSpace(dest))
             throw new BadRequestException("Destination path is required");
 
-        var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
+        var ddb = access.Ddb;
 
         // Validate paths to prevent path traversal attacks
         CommonUtils.ValidateRelativePath(source, ddb.DatasetFolderPath);
@@ -1075,17 +1050,14 @@ public class ObjectsManager : IObjectsManager
 
     public async Task Delete(string orgSlug, string dsSlug, string[] paths)
     {
-        var ds = _utils.GetDataset(orgSlug, dsSlug);
+        var access = await _access.ResolveAsync(orgSlug, dsSlug, AccessType.Write);
 
         _logger.LogInformation("In Delete('{OrgSlug}/{DsSlug}', {PathCount} paths)", orgSlug, dsSlug, paths.Length);
-
-        if (!await _authManager.RequestAccess(ds, AccessType.Write))
-            throw new ForbiddenException("The current user is not allowed to edit this dataset");
 
         if (paths.Any(IsReservedPath))
             throw new BadRequestException("One or more specified paths are reserved paths");
 
-        var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
+        var ddb = access.Ddb;
 
         foreach (var path in paths)
         {
@@ -1211,18 +1183,15 @@ public class ObjectsManager : IObjectsManager
 
     public async Task<DeleteBatchResponse> DeleteBatch(string orgSlug, string dsSlug, string[] paths)
     {
-        var ds = _utils.GetDataset(orgSlug, dsSlug);
+        var access = await _access.ResolveAsync(orgSlug, dsSlug, AccessType.Write);
 
         _logger.LogInformation("In DeleteBatch('{OrgSlug}/{DsSlug}', {Count} paths)", orgSlug, dsSlug, paths.Length);
-
-        if (!await _authManager.RequestAccess(ds, AccessType.Write))
-            throw new ForbiddenException("The current user is not allowed to edit this dataset");
 
         var response = new DeleteBatchResponse();
         var deleted = new List<string>();
         var failed = new Dictionary<string, string>();
 
-        var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
+        var ddb = access.Ddb;
 
         foreach (var path in paths)
         {
@@ -1296,12 +1265,10 @@ public class ObjectsManager : IObjectsManager
 
     public async Task DeleteAll(string orgSlug, string dsSlug)
     {
-        var ds = _utils.GetDataset(orgSlug, dsSlug);
+        var access = await _access.ResolveAsync(orgSlug, dsSlug, AccessType.Write);
+        var ds = access.Dataset;
 
         _logger.LogInformation("In DeleteAll('{OrgSlug}/{DsSlug}')", orgSlug, dsSlug);
-
-        if (!await _authManager.RequestAccess(ds, AccessType.Write))
-            throw new ForbiddenException("The current user is not allowed to edit this dataset");
 
         // Invalidate dataset thumbnail cache before deleting everything
         await InvalidateDatasetThumbnailCache(orgSlug, dsSlug);
@@ -1321,17 +1288,13 @@ public class ObjectsManager : IObjectsManager
         // Dataset thumbnail mode: path is null or empty
         if (string.IsNullOrWhiteSpace(path))
         {
-            var ds = _utils.GetDataset(orgSlug, dsSlug);
-            if (!await _authManager.RequestAccess(ds, AccessType.Read))
-                throw new ForbiddenException("The current user is not allowed to read dataset");
+            var access = await _access.ResolveAsync(orgSlug, dsSlug, AccessType.Read);
 
-            var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
+            var ddb = access.Ddb;
             return await GenerateDatasetThumbnailData(orgSlug, dsSlug, ddb, sizeRaw, recreate);
         }
 
-        // Fix fox '/img.png' -> 'img.png'
-        if (path.StartsWith('/')) path = path[1..];
-
+        // ResolveReadableObject normalizes the path ('/img.png' -> 'img.png')
         var obj = await ResolveReadableObject(orgSlug, dsSlug, path);
 
         if (recreate)
@@ -1349,16 +1312,7 @@ public class ObjectsManager : IObjectsManager
 
     public async Task<ReadableObject> ResolveReadableObject(string orgSlug, string dsSlug, string path)
     {
-        var ds = _utils.GetDataset(orgSlug, dsSlug);
-
-        if (!await _authManager.RequestAccess(ds, AccessType.Read))
-            throw new ForbiddenException("The current user is not allowed to read dataset");
-
-        if (Path.GetFileName(path) == null)
-            throw new BadRequestException("Path is not valid");
-
-        var entry = EnsurePathValidity(orgSlug, ds.InternalRef, path, out var ddb);
-        var sourcePath = GetAvailableBuildSource(entry, ddb, path);
+        (var entry, var ddb, path, var sourcePath) = await ResolveRasterSourceAsync(orgSlug, dsSlug, path);
 
         // A rebuild rewrites the artifact but keeps the entry hash: its write time tells them apart
         long sourceVersion = 0;
@@ -1523,12 +1477,10 @@ public class ObjectsManager : IObjectsManager
 
     public async Task<FileStreamDescriptor> DownloadStream(string orgSlug, string dsSlug, string[] paths)
     {
-        var ds = _utils.GetDataset(orgSlug, dsSlug);
+        var access = await _access.ResolveAsync(orgSlug, dsSlug, AccessType.Read);
+        var ds = access.Dataset;
 
         _logger.LogInformation("In DownloadStream('{OrgSlug}/{DsSlug}')", orgSlug, dsSlug);
-
-        if (!await _authManager.RequestAccess(ds, AccessType.Read))
-            throw new ForbiddenException("The current user is not allowed to read dataset");
 
         EnsurePathsValidity(orgSlug, ds.InternalRef, paths);
 
@@ -1590,22 +1542,31 @@ public class ObjectsManager : IObjectsManager
 
     #region Utils
 
-    private Entry EnsurePathValidity(string orgSlug, Guid internalRef, string path, out IDDB ddb)
+    /// <summary>The file a raster, thumbnail or tile request reads: its entry, the index, the normalized
+    /// request path and the file to read (the built artifact when there is one).</summary>
+    private sealed record RasterSource(Entry Entry, IDDB Ddb, string Path, string SourcePath);
+
+    /// <summary>
+    /// Resolves the file of a read request on <paramref name="path"/>: read access first (an anonymous
+    /// caller learns nothing about paths), then the path (no traversal, no wildcard, an existing entry that
+    /// is not a folder: 400 otherwise), then the file to read.
+    /// </summary>
+    private async Task<RasterSource> ResolveRasterSourceAsync(string orgSlug, string dsSlug, string path)
     {
-        EnsureNoWildcardOrEmptyPaths(path);
+        var access = await _access.ResolveAsync(orgSlug, dsSlug, AccessType.Read, path);
+        if (access.Path == null)
+            throw new BadRequestException("Path is not valid");
 
-        ddb = _ddbManager.Get(orgSlug, internalRef);
+        EnsureNoWildcardOrEmptyPaths(access.Path);
 
-        // Validate path to prevent path traversal
-        CommonUtils.ValidateRelativePath(path, ddb.DatasetFolderPath);
-
-        var entry = ddb.GetEntry(path) ?? throw new BadRequestException($"Invalid path: '{path}'");
+        var entry = access.Entry ?? throw new BadRequestException($"Invalid path: '{access.Path}'");
 
         // Every caller reads the file content (thumbnails, tiles, raster operations)
         if (entry.Type == EntryType.Directory)
-            throw new BadRequestException($"'{path}' is a folder");
+            throw new BadRequestException($"'{access.Path}' is a folder");
 
-        return entry;
+        return new RasterSource(entry, access.Ddb, access.Path,
+            GetAvailableBuildSource(entry, access.Ddb, access.Path));
     }
 
     private static void EnsureNoWildcardOrEmptyPaths(string path)
@@ -1645,12 +1606,10 @@ public class ObjectsManager : IObjectsManager
 
     public async Task<FileStreamDescriptor> GetDdb(string orgSlug, string dsSlug)
     {
-        var ds = _utils.GetDataset(orgSlug, dsSlug);
+        var access = await _access.ResolveAsync(orgSlug, dsSlug, AccessType.Read);
+        var ds = access.Dataset;
 
         _logger.LogInformation("In GetDdb('{OrgSlug}/{DsSlug}')", orgSlug, dsSlug);
-
-        if (!await _authManager.RequestAccess(ds, AccessType.Read))
-            throw new ForbiddenException("The current user is not allowed to read dataset");
 
         return new FileStreamDescriptor($"{orgSlug}-{dsSlug}-ddb.zip",
             "application/zip", orgSlug, ds.InternalRef, [], [],
@@ -1661,15 +1620,10 @@ public class ObjectsManager : IObjectsManager
 
     public async Task Build(string orgSlug, string dsSlug, string path, bool force = false)
     {
-        var ds = _utils.GetDataset(orgSlug, dsSlug);
+        // You need write access to build
+        var ddb = (await _access.ResolveAsync(orgSlug, dsSlug, AccessType.Write)).Ddb;
 
         _logger.LogInformation("In Build('{OrgSlug}/{DsSlug}')", orgSlug, dsSlug);
-
-        // You need write access to build
-        if (!await _authManager.RequestAccess(ds, AccessType.Write))
-            throw new ForbiddenException("The current user is not allowed to build dataset");
-
-        var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
 
         var entry = ddb.GetEntry(path);
 
@@ -1705,10 +1659,7 @@ public class ObjectsManager : IObjectsManager
         _logger.LogInformation("In GetBuildFile('{OrgSlug}/{DsSlug}', '{Hash}', '{Path}')", orgSlug, dsSlug, hash,
             path);
 
-        var ds = _utils.GetDataset(orgSlug, dsSlug);
-
-        if (!await _authManager.RequestAccess(ds, AccessType.Read))
-            throw new ForbiddenException("The current user is not allowed to read dataset");
+        var access = await _access.ResolveAsync(orgSlug, dsSlug, AccessType.Read);
 
         EnsureNoWildcardOrEmptyPaths(path);
 
@@ -1716,7 +1667,7 @@ public class ObjectsManager : IObjectsManager
         if (Path.IsPathRooted(path) || path.Contains(".."))
             throw new BadRequestException("Rooted or relative paths are not supported");
 
-        var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
+        var ddb = access.Ddb;
 
         var destPath = CommonUtils.SafeCombine(BuildBasePath, hash, path);
 
@@ -1733,13 +1684,10 @@ public class ObjectsManager : IObjectsManager
 
     public async Task<bool> CheckBuildFile(string orgSlug, string dsSlug, string hash, string path)
     {
-        var ds = _utils.GetDataset(orgSlug, dsSlug);
+        var access = await _access.ResolveAsync(orgSlug, dsSlug, AccessType.Read);
 
         _logger.LogInformation("In CheckBuildFile('{OrgSlug}/{DsSlug}', '{Hash}', '{Path}')", orgSlug, dsSlug, hash,
             path);
-
-        if (!await _authManager.RequestAccess(ds, AccessType.Read))
-            throw new ForbiddenException("The current user is not allowed to read dataset");
 
         EnsureNoWildcardOrEmptyPaths(path);
 
@@ -1747,7 +1695,7 @@ public class ObjectsManager : IObjectsManager
         if (Path.IsPathRooted(path) || path.Contains(".."))
             throw new BadRequestException("Rooted or relative paths are not supported");
 
-        var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
+        var ddb = access.Ddb;
 
         var destPath = CommonUtils.SafeCombine(BuildBasePath, hash, path);
 
@@ -1760,12 +1708,9 @@ public class ObjectsManager : IObjectsManager
         _logger.LogInformation("In GetBuildArtifactPath('{OrgSlug}/{DsSlug}', '{EntryPath}')",
             orgSlug, dsSlug, entryPath);
 
-        var ds = _utils.GetDataset(orgSlug, dsSlug);
+        var access = await _access.ResolveAsync(orgSlug, dsSlug, AccessType.Read);
 
-        if (!await _authManager.RequestAccess(ds, AccessType.Read))
-            throw new ForbiddenException("The current user is not allowed to read dataset");
-
-        var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
+        var ddb = access.Ddb;
         var entry = ddb.GetEntry(entryPath);
 
         if (entry is null)
@@ -1801,14 +1746,11 @@ public class ObjectsManager : IObjectsManager
 
     public async Task<EntryType?> GetEntryType(string orgSlug, string dsSlug, string path)
     {
-        var ds = _utils.GetDataset(orgSlug, dsSlug);
+        var access = await _access.ResolveAsync(orgSlug, dsSlug, AccessType.Read);
 
         _logger.LogInformation("In GetEntryType('{OrgSlug}/{DsSlug}')", orgSlug, dsSlug);
 
-        if (!await _authManager.RequestAccess(ds, AccessType.Read))
-            throw new ForbiddenException("The current user is not allowed to read dataset");
-
-        var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
+        var ddb = access.Ddb;
 
         var entry = ddb.GetEntry(path);
 
@@ -1890,14 +1832,11 @@ public class ObjectsManager : IObjectsManager
 
     public async Task<IEnumerable<PendingBuildInfoDto>> GetPendingBuilds(string orgSlug, string dsSlug)
     {
-        var ds = _utils.GetDataset(orgSlug, dsSlug);
+        var access = await _access.ResolveAsync(orgSlug, dsSlug, AccessType.Read);
 
         _logger.LogInformation("In GetPendingBuilds('{OrgSlug}/{DsSlug}')", orgSlug, dsSlug);
 
-        if (!await _authManager.RequestAccess(ds, AccessType.Read))
-            throw new ForbiddenException("The current user is not allowed to read dataset");
-
-        var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
+        var ddb = access.Ddb;
 
         return ddb.GetPendingBuildInfo().Select(p => new PendingBuildInfoDto
         {
@@ -1937,12 +1876,9 @@ public class ObjectsManager : IObjectsManager
 
     public async Task<int> ClearCompletedBuilds(string orgSlug, string dsSlug)
     {
-        var ds = _utils.GetDataset(orgSlug, dsSlug);
+        await _access.ResolveAsync(orgSlug, dsSlug, AccessType.Write);
 
         _logger.LogInformation("In ClearCompletedBuilds('{OrgSlug}/{DsSlug}')", orgSlug, dsSlug);
-
-        if (!await _authManager.RequestAccess(ds, AccessType.Write))
-            throw new ForbiddenException("The current user is not allowed to clear builds for this dataset");
 
         // Get all builds with Succeeded or Failed status
         var allBuilds = await _jobIndexQuery.GetByOrgDsAsync(orgSlug, dsSlug, 0, int.MaxValue);
@@ -1973,15 +1909,7 @@ public class ObjectsManager : IObjectsManager
 
     public async Task<string> GetRasterInfo(string orgSlug, string dsSlug, string path)
     {
-        var ds = _utils.GetDataset(orgSlug, dsSlug);
-
-        if (!await _authManager.RequestAccess(ds, AccessType.Read))
-            throw new ForbiddenException("The current user is not allowed to read dataset");
-
-        if (path.StartsWith('/')) path = path[1..];
-
-        var entry = EnsurePathValidity(orgSlug, ds.InternalRef, path, out var ddb);
-        var sourcePath = GetAvailableBuildSource(entry, ddb, path);
+        (var entry, var ddb, path, var sourcePath) = await ResolveRasterSourceAsync(orgSlug, dsSlug, path);
 
         return ddb.GetRasterInfo(sourcePath);
     }
@@ -1989,15 +1917,7 @@ public class ObjectsManager : IObjectsManager
     public async Task<string> GetRasterMetadata(string orgSlug, string dsSlug, string path, string? formula = null,
         string? bandFilter = null)
     {
-        var ds = _utils.GetDataset(orgSlug, dsSlug);
-
-        if (!await _authManager.RequestAccess(ds, AccessType.Read))
-            throw new ForbiddenException("The current user is not allowed to read dataset");
-
-        if (path.StartsWith('/')) path = path[1..];
-
-        var entry = EnsurePathValidity(orgSlug, ds.InternalRef, path, out var ddb);
-        var sourcePath = GetAvailableBuildSource(entry, ddb, path);
+        (var entry, var ddb, path, var sourcePath) = await ResolveRasterSourceAsync(orgSlug, dsSlug, path);
 
         return ddb.GetRasterMetadata(sourcePath, formula, bandFilter);
     }
@@ -2006,15 +1926,7 @@ public class ObjectsManager : IObjectsManager
         string? preset = null, string? bands = null, string? formula = null,
         string? bandFilter = null, string? colormap = null, string? rescale = null)
     {
-        var ds = _utils.GetDataset(orgSlug, dsSlug);
-
-        if (!await _authManager.RequestAccess(ds, AccessType.Read))
-            throw new ForbiddenException("The current user is not allowed to read dataset");
-
-        if (path.StartsWith('/')) path = path[1..];
-
-        var entry = EnsurePathValidity(orgSlug, ds.InternalRef, path, out var ddb);
-        var sourcePath = GetAvailableBuildSource(entry, ddb, path);
+        (var entry, var ddb, path, var sourcePath) = await ResolveRasterSourceAsync(orgSlug, dsSlug, path);
 
         var size = sizeRaw ?? _settings.DefaultThumbnailSize;
         var fileName = Path.GetFileName(path);
@@ -2040,15 +1952,7 @@ public class ObjectsManager : IObjectsManager
         string? preset = null, string? bands = null, string? formula = null,
         string? bandFilter = null, string? colormap = null, string? rescale = null)
     {
-        var ds = _utils.GetDataset(orgSlug, dsSlug);
-
-        if (!await _authManager.RequestAccess(ds, AccessType.Read))
-            throw new ForbiddenException("The current user is not allowed to read dataset");
-
-        if (path.StartsWith('/')) path = path[1..];
-
-        var entry = EnsurePathValidity(orgSlug, ds.InternalRef, path, out var ddb);
-        var sourcePath = GetAvailableBuildSource(entry, ddb, path);
+        (var entry, var ddb, path, var sourcePath) = await ResolveRasterSourceAsync(orgSlug, dsSlug, path);
 
         try
         {
@@ -2078,12 +1982,9 @@ public class ObjectsManager : IObjectsManager
 
     public async Task<string> ValidateMergeMultispectral(string orgSlug, string dsSlug, string[] paths)
     {
-        var ds = _utils.GetDataset(orgSlug, dsSlug);
+        var access = await _access.ResolveAsync(orgSlug, dsSlug, AccessType.Read);
 
-        if (!await _authManager.RequestAccess(ds, AccessType.Read))
-            throw new ForbiddenException("The current user is not allowed to read dataset");
-
-        var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
+        var ddb = access.Ddb;
 
         // Validate each input path to prevent path traversal
         CommonUtils.ValidateRelativePaths(paths, ddb.DatasetFolderPath);
@@ -2094,14 +1995,11 @@ public class ObjectsManager : IObjectsManager
     public async Task<byte[]> PreviewMergeMultispectral(string orgSlug, string dsSlug, string[] paths,
         string? previewBands = null, int thumbSize = 512)
     {
-        var ds = _utils.GetDataset(orgSlug, dsSlug);
-
-        if (!await _authManager.RequestAccess(ds, AccessType.Read))
-            throw new ForbiddenException("The current user is not allowed to read dataset");
+        var access = await _access.ResolveAsync(orgSlug, dsSlug, AccessType.Read);
 
         return await Task.Run(() =>
         {
-            var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
+            var ddb = access.Ddb;
 
             // Validate each input path to prevent path traversal
             CommonUtils.ValidateRelativePaths(paths, ddb.DatasetFolderPath);
@@ -2112,12 +2010,9 @@ public class ObjectsManager : IObjectsManager
 
     public async Task MergeMultispectral(string orgSlug, string dsSlug, string[] paths, string outputPath)
     {
-        var ds = _utils.GetDataset(orgSlug, dsSlug);
+        var access = await _access.ResolveAsync(orgSlug, dsSlug, AccessType.Write);
 
-        if (!await _authManager.RequestAccess(ds, AccessType.Write))
-            throw new ForbiddenException("The current user is not allowed to write to dataset");
-
-        var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
+        var ddb = access.Ddb;
 
         // Validate outputPath to prevent path traversal
         CommonUtils.ValidateRelativePath(outputPath, ddb.DatasetFolderPath);
@@ -2146,12 +2041,9 @@ public class ObjectsManager : IObjectsManager
 
     public async Task<string> ValidateAlignRaster(string orgSlug, string dsSlug, string sourcePath, string referencePath)
     {
-        var ds = _utils.GetDataset(orgSlug, dsSlug);
+        var access = await _access.ResolveAsync(orgSlug, dsSlug, AccessType.Read);
 
-        if (!await _authManager.RequestAccess(ds, AccessType.Read))
-            throw new ForbiddenException("The current user is not allowed to read dataset");
-
-        var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
+        var ddb = access.Ddb;
 
         // Validate input paths to prevent path traversal
         CommonUtils.ValidateRelativePath(sourcePath, ddb.DatasetFolderPath);
@@ -2164,15 +2056,7 @@ public class ObjectsManager : IObjectsManager
         string? preset = null, string? bands = null, string? formula = null,
         string? bandFilter = null, string? colormap = null, string? rescale = null)
     {
-        var ds = _utils.GetDataset(orgSlug, dsSlug);
-
-        if (!await _authManager.RequestAccess(ds, AccessType.Read))
-            throw new ForbiddenException("The current user is not allowed to read dataset");
-
-        if (path.StartsWith('/')) path = path[1..];
-
-        var entry = EnsurePathValidity(orgSlug, ds.InternalRef, path, out var ddb);
-        var sourcePath = GetAvailableBuildSource(entry, ddb, path);
+        (var entry, var ddb, path, var sourcePath) = await ResolveRasterSourceAsync(orgSlug, dsSlug, path);
 
         // Enforce export size limit (conservative upper bound based on raw input size)
         EnsureExportSizeWithinLimit(ddb, sourcePath);
@@ -2212,15 +2096,7 @@ public class ObjectsManager : IObjectsManager
 
     public async Task<long> EstimateExportSize(string orgSlug, string dsSlug, string path)
     {
-        var ds = _utils.GetDataset(orgSlug, dsSlug);
-
-        if (!await _authManager.RequestAccess(ds, AccessType.Read))
-            throw new ForbiddenException("The current user is not allowed to read dataset");
-
-        if (path.StartsWith('/')) path = path[1..];
-
-        var entry = EnsurePathValidity(orgSlug, ds.InternalRef, path, out var ddb);
-        var sourcePath = GetAvailableBuildSource(entry, ddb, path);
+        (var entry, var ddb, path, var sourcePath) = await ResolveRasterSourceAsync(orgSlug, dsSlug, path);
 
         return EstimateRasterOutputBytes(ddb, sourcePath);
     }
@@ -2279,30 +2155,14 @@ public class ObjectsManager : IObjectsManager
 
     public async Task<string> GetRasterValueInfo(string orgSlug, string dsSlug, string path)
     {
-        var ds = _utils.GetDataset(orgSlug, dsSlug);
-
-        if (!await _authManager.RequestAccess(ds, AccessType.Read))
-            throw new ForbiddenException("The current user is not allowed to read dataset");
-
-        if (path.StartsWith('/')) path = path[1..];
-
-        var entry = EnsurePathValidity(orgSlug, ds.InternalRef, path, out var ddb);
-        var sourcePath = GetAvailableBuildSource(entry, ddb, path);
+        (var entry, var ddb, path, var sourcePath) = await ResolveRasterSourceAsync(orgSlug, dsSlug, path);
 
         return ddb.GetRasterValueInfo(sourcePath);
     }
 
     public async Task<string> GetRasterPointValue(string orgSlug, string dsSlug, string path, int x, int y)
     {
-        var ds = _utils.GetDataset(orgSlug, dsSlug);
-
-        if (!await _authManager.RequestAccess(ds, AccessType.Read))
-            throw new ForbiddenException("The current user is not allowed to read dataset");
-
-        if (path.StartsWith('/')) path = path[1..];
-
-        var entry = EnsurePathValidity(orgSlug, ds.InternalRef, path, out var ddb);
-        var sourcePath = GetAvailableBuildSource(entry, ddb, path);
+        (var entry, var ddb, path, var sourcePath) = await ResolveRasterSourceAsync(orgSlug, dsSlug, path);
 
         return ddb.GetRasterPointValue(sourcePath, x, y);
     }
@@ -2310,15 +2170,7 @@ public class ObjectsManager : IObjectsManager
     public async Task<string> GetRasterAreaStats(string orgSlug, string dsSlug, string path, int x0, int y0, int x1,
         int y1)
     {
-        var ds = _utils.GetDataset(orgSlug, dsSlug);
-
-        if (!await _authManager.RequestAccess(ds, AccessType.Read))
-            throw new ForbiddenException("The current user is not allowed to read dataset");
-
-        if (path.StartsWith('/')) path = path[1..];
-
-        var entry = EnsurePathValidity(orgSlug, ds.InternalRef, path, out var ddb);
-        var sourcePath = GetAvailableBuildSource(entry, ddb, path);
+        (var entry, var ddb, path, var sourcePath) = await ResolveRasterSourceAsync(orgSlug, dsSlug, path);
 
         return ddb.GetRasterAreaStats(sourcePath, x0, y0, x1, y1);
     }
@@ -2329,15 +2181,7 @@ public class ObjectsManager : IObjectsManager
         if (string.IsNullOrWhiteSpace(geoJsonLineString))
             throw new BadRequestException("GeoJSON LineString is required");
 
-        var ds = _utils.GetDataset(orgSlug, dsSlug);
-
-        if (!await _authManager.RequestAccess(ds, AccessType.Read))
-            throw new ForbiddenException("The current user is not allowed to read dataset");
-
-        if (path.StartsWith('/')) path = path[1..];
-
-        var entry = EnsurePathValidity(orgSlug, ds.InternalRef, path, out var ddb);
-        var sourcePath = GetAvailableBuildSource(entry, ddb, path);
+        (var entry, var ddb, path, var sourcePath) = await ResolveRasterSourceAsync(orgSlug, dsSlug, path);
 
         return ddb.GetRasterProfile(sourcePath, geoJsonLineString, samples);
     }
@@ -2348,15 +2192,7 @@ public class ObjectsManager : IObjectsManager
         if (string.IsNullOrWhiteSpace(polygonGeoJson))
             throw new BadRequestException("Polygon GeoJSON is required");
 
-        var ds = _utils.GetDataset(orgSlug, dsSlug);
-
-        if (!await _authManager.RequestAccess(ds, AccessType.Read))
-            throw new ForbiddenException("The current user is not allowed to read dataset");
-
-        if (path.StartsWith('/')) path = path[1..];
-
-        var entry = EnsurePathValidity(orgSlug, ds.InternalRef, path, out var ddb);
-        var sourcePath = GetAvailableBuildSource(entry, ddb, path);
+        (var entry, var ddb, path, var sourcePath) = await ResolveRasterSourceAsync(orgSlug, dsSlug, path);
 
         return ddb.CalculateVolume(sourcePath, polygonGeoJson, baseMethod ?? string.Empty, flatElevation);
     }
@@ -2369,15 +2205,7 @@ public class ObjectsManager : IObjectsManager
         if (sensitivity < 0f) sensitivity = 0f;
         if (sensitivity > 1f) sensitivity = 1f;
 
-        var ds = _utils.GetDataset(orgSlug, dsSlug);
-
-        if (!await _authManager.RequestAccess(ds, AccessType.Read))
-            throw new ForbiddenException("The current user is not allowed to read dataset");
-
-        if (path.StartsWith('/')) path = path[1..];
-
-        var entry = EnsurePathValidity(orgSlug, ds.InternalRef, path, out var ddb);
-        var sourcePath = GetAvailableBuildSource(entry, ddb, path);
+        (var entry, var ddb, path, var sourcePath) = await ResolveRasterSourceAsync(orgSlug, dsSlug, path);
 
         return ddb.DetectStockpile(sourcePath, lat, lon, radiusMeters, sensitivity);
     }
@@ -2391,15 +2219,7 @@ public class ObjectsManager : IObjectsManager
         if (maxResults <= 0) throw new BadRequestException("maxResults must be > 0");
         if (maxResults > 500) maxResults = 500;
 
-        var ds = _utils.GetDataset(orgSlug, dsSlug);
-
-        if (!await _authManager.RequestAccess(ds, AccessType.Read))
-            throw new ForbiddenException("The current user is not allowed to read dataset");
-
-        if (path.StartsWith('/')) path = path[1..];
-
-        var entry = EnsurePathValidity(orgSlug, ds.InternalRef, path, out var ddb);
-        var sourcePath = GetAvailableBuildSource(entry, ddb, path);
+        (var entry, var ddb, path, var sourcePath) = await ResolveRasterSourceAsync(orgSlug, dsSlug, path);
 
         return ddb.DetectAllStockpiles(sourcePath, sensitivity, minAreaM2, maxResults);
     }
@@ -2423,15 +2243,7 @@ public class ObjectsManager : IObjectsManager
             throw new BadRequestException("'simplifyTolerance' must be >= 0");
         if (bandIndex <= 0) bandIndex = 1;
 
-        var ds = _utils.GetDataset(orgSlug, dsSlug);
-
-        if (!await _authManager.RequestAccess(ds, AccessType.Read))
-            throw new ForbiddenException("The current user is not allowed to read dataset");
-
-        if (path.StartsWith('/')) path = path[1..];
-
-        var entry = EnsurePathValidity(orgSlug, ds.InternalRef, path, out var ddb);
-        var sourcePath = GetAvailableBuildSource(entry, ddb, path);
+        (var entry, var ddb, path, var sourcePath) = await ResolveRasterSourceAsync(orgSlug, dsSlug, path);
 
         return ddb.GenerateContours(sourcePath, interval, count, baseOffset,
             minElev, maxElev, simplifyTolerance, bandIndex);
@@ -2443,12 +2255,9 @@ public class ObjectsManager : IObjectsManager
 
     public async Task<MaskBordersCheckResponseDto> CheckMaskedFileExists(string orgSlug, string dsSlug, string path)
     {
-        var ds = _utils.GetDataset(orgSlug, dsSlug);
+        var access = await _access.ResolveAsync(orgSlug, dsSlug, AccessType.Read);
 
-        if (!await _authManager.RequestAccess(ds, AccessType.Read))
-            throw new ForbiddenException("The current user is not allowed to read dataset");
-
-        var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
+        var ddb = access.Ddb;
 
         // Validate path to prevent path traversal
         CommonUtils.ValidateRelativePath(path, ddb.DatasetFolderPath);
@@ -2465,14 +2274,11 @@ public class ObjectsManager : IObjectsManager
 
     public async Task MaskBorders(string orgSlug, string dsSlug, string path, int nearDist, bool white)
     {
-        var ds = _utils.GetDataset(orgSlug, dsSlug);
-
-        if (!await _authManager.RequestAccess(ds, AccessType.Write))
-            throw new ForbiddenException("The current user is not allowed to write to dataset");
+        var access = await _access.ResolveAsync(orgSlug, dsSlug, AccessType.Write);
 
         await EnsureNoActiveJob(orgSlug, dsSlug, path, "MaskBorders");
 
-        var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
+        var ddb = access.Ddb;
 
         // Validate path
         CommonUtils.ValidateRelativePath(path, ddb.DatasetFolderPath);

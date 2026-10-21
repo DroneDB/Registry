@@ -1,11 +1,13 @@
 #nullable enable
 using System;
+using System.Threading;
 using System.IO;
 using System.Text;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
 using NUnit.Framework;
+using Registry.Web.Services.Adapters;
 using Registry.Ports;
 using Registry.Ports.DroneDB;
 using Registry.Web.Data.Models;
@@ -55,10 +57,10 @@ public class CadCrsManagerTests
     {
         var dataset = new Dataset { Slug = Ds, InternalRef = Guid.NewGuid() };
         var utils = new Mock<IUtils>();
-        utils.Setup(u => u.GetDataset(Org, Ds, It.IsAny<bool>(), It.IsAny<bool>())).Returns(dataset);
+        utils.Setup(u => u.GetDatasetAsync(Org, Ds, It.IsAny<bool>(), It.IsAny<bool>(), It.IsAny<CancellationToken>())).ReturnsAsync(dataset);
         var ddbManager = new Mock<IDdbManager>();
         ddbManager.Setup(m => m.Get(Org, dataset.InternalRef)).Returns(_ddb.Object);
-        return new CadCrsManager(utils.Object, _auth.Object, ddbManager.Object, _wrapper.Object, _objects.Object,
+        return new CadCrsManager(new DatasetAccessResolver(utils.Object, _auth.Object, ddbManager.Object), _wrapper.Object, _objects.Object,
             NullLogger<CadCrsManager>.Instance);
     }
 

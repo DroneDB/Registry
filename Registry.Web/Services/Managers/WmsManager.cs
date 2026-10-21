@@ -32,10 +32,10 @@ public class WmsManager : OgcManagerBase, IWmsManager
     private readonly ICacheManager _cacheManager;
     private readonly INativeWorkGate _gate;
 
-    public WmsManager(IUtils u, IAuthManager a, IDdbManager d, IBuildArtifactResolver ar,
+    public WmsManager(IDatasetAccessResolver access, IBuildArtifactResolver ar,
         IDdbWrapper w, IOgcLayerCatalog c, IDistributedCache cache, IHttpContextAccessor ctx, ILogger<WmsManager> logger,
         ICacheManager cacheManager, INativeWorkGate? gate = null)
-        : base(u, a, d, ar, w, c, cache, ctx)
+        : base(access, ar, w, c, cache, ctx)
     {
         _logger = logger;
         _cacheManager = cacheManager;

@@ -1,4 +1,5 @@
 using System;
+using System.Threading;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
@@ -82,8 +83,9 @@ public class StacManagerTest : TestBase
         var cache = new MemoryDistributedCache(
             Microsoft.Extensions.Options.Options.Create(new MemoryDistributedCacheOptions()));
 
-        var stacManager = new StacManager(_authManagerMock.Object, context, utilsMock.Object,
-            _ddbManagerMock.Object, cache, _stacManagerLogger, TestCaches.WithDatasetVisibility(cache));
+        var stacManager = new StacManager(_authManagerMock.Object,
+            new DatasetAccessResolver(utilsMock.Object, _authManagerMock.Object, _ddbManagerMock.Object), context,
+            utilsMock.Object, _ddbManagerMock.Object, cache, _stacManagerLogger, TestCaches.WithDatasetVisibility(cache));
 
         var catalog = await stacManager.GetCatalog();
 
@@ -113,8 +115,8 @@ public class StacManagerTest : TestBase
 
         result.Collections.Cast<JObject>().Select(c => c["id"]!.Value<string>())
             .ShouldBe(["public/listed"]);
-        utilsMock.Verify(o => o.GetDataset(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<bool>(),
-            It.IsAny<bool>()), Times.Never);
+        utilsMock.Verify(o => o.GetDatasetAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<bool>(),
+            It.IsAny<bool>(), It.IsAny<CancellationToken>()), Times.Never);
     }
 
     [Test]
@@ -185,7 +187,7 @@ public class StacManagerTest : TestBase
         utilsMock.Setup(o => o.GetLocalHost(It.IsAny<bool>())).Returns("http://localhost");
         utilsMock.Setup(o => o.GenerateDatasetUrl(It.IsAny<Dataset>(), It.IsAny<bool>()))
             .Returns((Dataset d, bool _) => $"http://localhost/orgs/public/ds/{d.Slug}");
-        utilsMock.Setup(o => o.GetDataset(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<bool>(), It.IsAny<bool>()))
+        utilsMock.Setup(o => o.GetDatasetAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<bool>(), It.IsAny<bool>(), It.IsAny<CancellationToken>()))
             .Throws(new InvalidOperationException("GetDataset must not be called"));
 
         foreach (var ds in context.Datasets.Include(d => d.Organization).ToArray())
@@ -210,7 +212,9 @@ public class StacManagerTest : TestBase
         var cache = new MemoryDistributedCache(
             Microsoft.Extensions.Options.Options.Create(new MemoryDistributedCacheOptions()));
 
-        return (new StacManager(_authManagerMock.Object, context, utilsMock.Object, _ddbManagerMock.Object,
+        return (new StacManager(_authManagerMock.Object,
+            new DatasetAccessResolver(utilsMock.Object, _authManagerMock.Object, _ddbManagerMock.Object), context,
+            utilsMock.Object, _ddbManagerMock.Object,
             cache, _stacManagerLogger, TestCaches.WithDatasetVisibility(cache)), utilsMock, cache);
     }
 

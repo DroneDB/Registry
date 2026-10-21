@@ -31,10 +31,10 @@ public class WmtsManager : OgcManagerBase, IWmtsManager
     private readonly ILogger<WmtsManager> _logger;
     private readonly IOgcRasterTileSource _rasterTiles;
 
-    public WmtsManager(IUtils u, IAuthManager a, IDdbManager d, IBuildArtifactResolver ar,
+    public WmtsManager(IDatasetAccessResolver access, IBuildArtifactResolver ar,
         IDdbWrapper w, IOgcLayerCatalog c, IDistributedCache cache, IHttpContextAccessor ctx, ILogger<WmtsManager> logger,
         IOgcRasterTileSource rasterTiles)
-        : base(u, a, d, ar, w, c, cache, ctx)
+        : base(access, ar, w, c, cache, ctx)
     {
         _logger = logger;
         _rasterTiles = rasterTiles;

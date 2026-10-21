@@ -87,13 +87,17 @@ public sealed class ObjectsManagerBuilder
         var buildPendingService = _buildPendingService ?? new BuildPendingService(
             _context, ddbManager, backgroundJobs, cacheManager, NullLogger<BuildPendingService>.Instance);
 
+        var utils = _utils ?? Mock.Of<IUtils>();
+        var authManager = _authManager ?? Mock.Of<IAuthManager>();
+
         return new ObjectsManager(
             _logger,
             _context,
             _settings ?? TestSettings.Options(),
             ddbManager,
-            _utils ?? Mock.Of<IUtils>(),
-            _authManager ?? Mock.Of<IAuthManager>(),
+            utils,
+            authManager,
+            new DatasetAccessResolver(utils, authManager, ddbManager),
             cacheManager,
             _fileSystem ?? new FileSystem(),
             backgroundJobs,

@@ -69,7 +69,7 @@ public class UploadManagerTests
         };
 
         _utils = new Mock<IUtils>();
-        _utils.Setup(u => u.GetDataset(Org, Ds, It.IsAny<bool>(), It.IsAny<bool>())).Returns(_dataset);
+        _utils.Setup(u => u.GetDatasetAsync(Org, Ds, It.IsAny<bool>(), It.IsAny<bool>(), It.IsAny<CancellationToken>())).ReturnsAsync(_dataset);
         _utils.Setup(u => u.GetCurrentUserStorageLimit()).Returns(() =>
         {
             Interlocked.Increment(ref _evaluations);
@@ -124,7 +124,8 @@ public class UploadManagerTests
         var buildPending = new BuildPendingService(context, ddbManager.Object, jobs, Mock.Of<ICacheManager>(),
             NullLogger<BuildPendingService>.Instance);
 
-        return new UploadManager(NullLogger<UploadManager>.Instance, _utils.Object, _auth.Object, ddbManager.Object,
+        return new UploadManager(NullLogger<UploadManager>.Instance, _auth.Object,
+            new DatasetAccessResolver(_utils.Object, _auth.Object, ddbManager.Object), ddbManager.Object,
             new Registry.Adapters.FileSystem(), options, jobs, buildPending,
             new UploadQuotaGuard(new UploadQuotaLedger(TimeSpan.FromMinutes(1)), _utils.Object), _changes.Object,
             _receipts, _queue.Object);
@@ -392,18 +393,18 @@ public class UploadManagerTests
             Mock.Of<IHttpContextAccessor>(), Mock.Of<IDatasetSummaryProvider>(), lookups);
 
         counter.Reset();
-        utils.GetDataset("acme", "survey").Slug.ShouldBe("survey");
-        utils.GetDataset("acme", "survey");
-        utils.GetDataset("acme", "survey");
+        (await utils.GetDatasetAsync("acme", "survey")).Slug.ShouldBe("survey");
+        await utils.GetDatasetAsync("acme", "survey");
+        await utils.GetDatasetAsync("acme", "survey");
         counter.Queries.ShouldBe(1);
 
         // A rename through EF drops the cached lookup: the old slug is gone at once
-        var tracked = utils.GetDataset("acme", "survey", withTracking: true);
+        var tracked = await utils.GetDatasetAsync("acme", "survey", withTracking: true);
         tracked.Slug = "survey-2";
         await context.SaveChangesAsync();
 
-        utils.GetDataset("acme", "survey", safe: true).ShouldBeNull();
-        utils.GetDataset("acme", "survey-2").ShouldNotBeNull();
+        (await utils.GetDatasetAsync("acme", "survey", safe: true)).ShouldBeNull();
+        (await utils.GetDatasetAsync("acme", "survey-2")).ShouldNotBeNull();
     }
 
     private sealed class QueryCounter : Microsoft.EntityFrameworkCore.Diagnostics.IMaterializationInterceptor

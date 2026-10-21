@@ -26,6 +26,7 @@ namespace Registry.Web.Services.Managers;
 public class StacManager : IStacManager
 {
     private readonly IAuthManager _authManager;
+    private readonly IDatasetAccessResolver _access;
     private readonly RegistryContext _context;
     private readonly IUtils _utils;
     private readonly IDdbManager _ddbManager;
@@ -63,6 +64,7 @@ public class StacManager : IStacManager
 
     public StacManager(
         IAuthManager authManager,
+        IDatasetAccessResolver access,
         RegistryContext context,
         IUtils utils,
         IDdbManager ddbManager,
@@ -71,6 +73,7 @@ public class StacManager : IStacManager
         ICacheManager cacheManager)
     {
         _authManager = authManager;
+        _access = access;
         _context = context;
         _utils = utils;
         _ddbManager = ddbManager;
@@ -156,14 +159,12 @@ public class StacManager : IStacManager
 
     public async Task<JToken> GetStacChild(string orgSlug, string dsSlug, string path = null)
     {
-        var ds = _utils.GetDataset(orgSlug, dsSlug);
+        var access = await _access.ResolveAsync(orgSlug, dsSlug, AccessType.Read);
+        var ds = access.Dataset;
 
         _logger.LogInformation("In GetStacChild('{OrgSlug}/{DsSlug}', {Path})", orgSlug, dsSlug, path);
 
-        if (!await _authManager.RequestAccess(ds, AccessType.Read))
-            throw new ForbiddenException("The current user is not allowed to list this dataset");
-
-        var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
+        var ddb = access.Ddb;
 
         if (path != null && !ddb.EntryExists(path))
             throw new BadRequestException("Entry does not exist");
@@ -291,10 +292,8 @@ public class StacManager : IStacManager
 
     public async Task<JToken> GetCollection(string orgSlug, string dsSlug)
     {
-        var ds = _utils.GetDataset(orgSlug, dsSlug);
-
-        if (!await _authManager.RequestAccess(ds, AccessType.Read))
-            throw new ForbiddenException("The current user is not allowed to access this dataset");
+        var access = await _access.ResolveAsync(orgSlug, dsSlug, AccessType.Read);
+        var ds = access.Dataset;
 
         return GetCollectionInternal(ds);
     }
@@ -302,16 +301,14 @@ public class StacManager : IStacManager
     public async Task<JToken> GetCollectionItems(string orgSlug, string dsSlug, double[] bbox = null,
         string datetime = null, int? limit = null, int? offset = null)
     {
-        var ds = _utils.GetDataset(orgSlug, dsSlug);
-
-        if (!await _authManager.RequestAccess(ds, AccessType.Read))
-            throw new ForbiddenException("The current user is not allowed to access this dataset");
+        var access = await _access.ResolveAsync(orgSlug, dsSlug, AccessType.Read);
+        var ds = access.Dataset;
 
         var collectionId = $"{orgSlug}/{dsSlug}";
         var lim = Math.Clamp(limit ?? DefaultLimit, 1, MaxLimit);
         var off = Math.Max(offset ?? 0, 0);
 
-        var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
+        var ddb = access.Ddb;
         var bboxStr = BboxToString(bbox);
 
         if (ddb.GetStacItemCollection(collectionId, _utils.GenerateDatasetUrl(ds), _utils.GetLocalHost(),
@@ -344,10 +341,8 @@ public class StacManager : IStacManager
 
     public async Task<JToken> GetCollectionItem(string orgSlug, string dsSlug, string featureId)
     {
-        var ds = _utils.GetDataset(orgSlug, dsSlug);
-
-        if (!await _authManager.RequestAccess(ds, AccessType.Read))
-            throw new ForbiddenException("The current user is not allowed to access this dataset");
+        var access = await _access.ResolveAsync(orgSlug, dsSlug, AccessType.Read);
+        var ds = access.Dataset;
 
         var collectionId = $"{orgSlug}/{dsSlug}";
 
@@ -356,7 +351,7 @@ public class StacManager : IStacManager
         if (!TryDecodeFeatureId(featureId, out var path))
             throw new NotFoundException("Feature does not exist");
 
-        var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
+        var ddb = access.Ddb;
 
         if (!ddb.EntryExists(path))
             throw new NotFoundException("Feature does not exist");

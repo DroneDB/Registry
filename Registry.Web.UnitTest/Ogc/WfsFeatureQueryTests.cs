@@ -1,5 +1,6 @@
 #nullable enable
 using System;
+using System.Threading;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -12,6 +13,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
 using NUnit.Framework;
 using Newtonsoft.Json.Linq;
+using Registry.Web.Services.Adapters;
 using Registry.Ports;
 using Registry.Ports.DroneDB;
 using Registry.Web.Data.Models;
@@ -59,7 +61,7 @@ public class WfsFeatureQueryTests
 
         var dataset = new Dataset { Slug = Ds, InternalRef = Guid.NewGuid() };
         _utils = new Mock<IUtils>();
-        _utils.Setup(u => u.GetDataset(Org, Ds, It.IsAny<bool>(), It.IsAny<bool>())).Returns(dataset);
+        _utils.Setup(u => u.GetDatasetAsync(Org, Ds, It.IsAny<bool>(), It.IsAny<bool>(), It.IsAny<CancellationToken>())).ReturnsAsync(dataset);
         _auth = new Mock<IAuthManager>();
         _auth.Setup(a => a.RequestAccess(dataset, AccessType.Read)).ReturnsAsync(true);
         _ddbManager = new Mock<IDdbManager>();
@@ -94,11 +96,11 @@ public class WfsFeatureQueryTests
     private IDistributedCache Cache() =>
         new MemoryDistributedCache(Microsoft.Extensions.Options.Options.Create(new MemoryDistributedCacheOptions()));
 
-    private WfsManager CreateWfs() => new(_utils.Object, _auth.Object, _ddbManager.Object, _artifacts.Object,
+    private WfsManager CreateWfs() => new(new DatasetAccessResolver(_utils.Object, _auth.Object, _ddbManager.Object), _artifacts.Object,
         _wrapper.Object, _catalog.Object, Cache(), new HttpContextAccessor { HttpContext = new DefaultHttpContext() },
         NullLogger<WfsManager>.Instance);
 
-    private OgcApiFeaturesManager CreateFeatures() => new(_utils.Object, _auth.Object, _ddbManager.Object,
+    private OgcApiFeaturesManager CreateFeatures() => new(new DatasetAccessResolver(_utils.Object, _auth.Object, _ddbManager.Object),
         _artifacts.Object, _wrapper.Object, _catalog.Object, Cache(),
         new HttpContextAccessor { HttpContext = new DefaultHttpContext() }, NullLogger<OgcApiFeaturesManager>.Instance);
 

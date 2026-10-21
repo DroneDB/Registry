@@ -8,7 +8,7 @@
     "type": "https://tools.ietf.org/html/rfc9110#section-15.5.2",
     "title": "Unauthorized",
     "status": 401,
-    "detail": "The current user cannot access this organization",
+    "detail": "The current user is not allowed to read this organization",
     "traceId": "<trace-id>",
     "noRetry": true
   }

@@ -1,3 +1,4 @@
+using System.Threading;
 using System.Threading.Tasks;
 using Registry.Web.Data.Models;
 using Registry.Web.Identity.Models;
@@ -11,8 +12,24 @@ namespace Registry.Web.Services.Ports;
 /// </summary>
 public interface IUtils
 {
-    Organization GetOrganization(string orgSlug, bool safe = false, bool withTracking = false, bool withDatasets = false);
-    Dataset GetDataset(string orgSlug, string dsSlug, bool safe = false, bool withTracking = false);
+    /// <summary>
+    /// The organization <paramref name="orgSlug"/>. Throws <c>BadRequestException</c> for a missing or
+    /// invalid slug and <c>NotFoundException</c> when there is no such organization, unless
+    /// <paramref name="safe"/> (then null). Untracked unless <paramref name="withTracking"/>; its datasets
+    /// are loaded only with <paramref name="withDatasets"/>. No access check: see
+    /// <see cref="IDatasetAccessResolver"/>.
+    /// </summary>
+    Task<Organization> GetOrganizationAsync(string orgSlug, bool safe = false, bool withTracking = false,
+        bool withDatasets = false, CancellationToken ct = default);
+
+    /// <summary>
+    /// The dataset <paramref name="dsSlug"/> of <paramref name="orgSlug"/>, with its organization. Same
+    /// errors as <see cref="GetOrganizationAsync"/>. A read-only lookup (the default) may come from the
+    /// short-lived lookup cache, with the organization's members; a tracked one always queries. No access
+    /// check: see <see cref="IDatasetAccessResolver"/>.
+    /// </summary>
+    Task<Dataset> GetDatasetAsync(string orgSlug, string dsSlug, bool safe = false, bool withTracking = false,
+        CancellationToken ct = default);
 
     string GetFreeOrganizationSlug(string orgName);
     string GenerateDatasetUrl(Dataset dataset, bool useDdbScheme = false);

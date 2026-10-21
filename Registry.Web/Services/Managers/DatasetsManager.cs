@@ -32,6 +32,7 @@ public class DatasetsManager : IDatasetsManager
     private readonly IStacManager _stacManager;
     private readonly IDdbManager _ddbManager;
     private readonly IAuthManager _authManager;
+    private readonly IDatasetAccessResolver _access;
     private readonly ICacheManager _cacheManager;
     private readonly IFileSystem _fileSystem;
     private readonly IBackgroundJobsProcessor _backgroundJob;
@@ -46,6 +47,7 @@ public class DatasetsManager : IDatasetsManager
         IStacManager stacManager,
         IDdbManager ddbManager,
         IAuthManager authManager,
+        IDatasetAccessResolver access,
         ICacheManager cacheManager,
         IFileSystem fileSystem,
         IBackgroundJobsProcessor backgroundJob,
@@ -59,6 +61,7 @@ public class DatasetsManager : IDatasetsManager
         _stacManager = stacManager;
         _ddbManager = ddbManager;
         _authManager = authManager;
+        _access = access;
         _cacheManager = cacheManager;
         _fileSystem = fileSystem;
         _backgroundJob = backgroundJob;
@@ -72,10 +75,7 @@ public class DatasetsManager : IDatasetsManager
     public async Task<(IReadOnlyList<DatasetDto> Items, int Total)> ListPage(string orgSlug, DatasetListQuery query,
         bool includeThumbnailCheck = false)
     {
-        var org = _utils.GetOrganization(orgSlug, withDatasets: true);
-
-        if (!await _authManager.RequestAccess(org, AccessType.Read))
-            throw new ForbiddenException("The current user cannot access this organization");
+        var org = await _access.ResolveOrganizationAsync(orgSlug, AccessType.Read, withDatasets: true);
 
         var datasets = org.Datasets.ToArray();
 
@@ -139,12 +139,10 @@ public class DatasetsManager : IDatasetsManager
 
     public async Task<DatasetDto> Get(string orgSlug, string dsSlug)
     {
-        var dataset = _utils.GetDataset(orgSlug, dsSlug);
+        var access = await _access.ResolveAsync(orgSlug, dsSlug, AccessType.Read);
+        var dataset = access.Dataset;
 
-        if (!await _authManager.RequestAccess(dataset, AccessType.Read))
-            throw new ForbiddenException("The current user cannot access this dataset");
-
-        var ddb = _ddbManager.Get(orgSlug, dataset.InternalRef);
+        var ddb = access.Ddb;
 
         var dto = dataset.ToDto(ddb.GetInfo());
         dto.Permissions = await _authManager.GetDatasetPermissions(dataset);
@@ -164,12 +162,10 @@ public class DatasetsManager : IDatasetsManager
 
     public async Task<EntryDto[]> GetEntry(string orgSlug, string dsSlug)
     {
-        var dataset = _utils.GetDataset(orgSlug, dsSlug);
+        var access = await _access.ResolveAsync(orgSlug, dsSlug, AccessType.Read);
+        var dataset = access.Dataset;
 
-        if (!await _authManager.RequestAccess(dataset, AccessType.Read))
-            throw new ForbiddenException("The current user cannot access this dataset");
-
-        var ddb = _ddbManager.Get(orgSlug, dataset.InternalRef);
+        var ddb = access.Ddb;
 
         var info = ddb.GetInfo();
         info.Depth = 0;
@@ -194,10 +190,8 @@ public class DatasetsManager : IDatasetsManager
 
     public async Task<DatasetDto> AddNew(string orgSlug, DatasetNewDto dataset)
     {
-        var org = _utils.GetOrganization(orgSlug, withTracking: true, withDatasets: true);
-
-        if (!await _authManager.RequestAccess(org, AccessType.Write))
-            throw new ForbiddenException("The current user cannot add datasets to this organization");
+        var org = await _access.ResolveOrganizationAsync(orgSlug, AccessType.Write, withTracking: true,
+            withDatasets: true);
 
         if (dataset == null)
             throw new BadRequestException("Dataset is null");
@@ -243,10 +237,8 @@ public class DatasetsManager : IDatasetsManager
         if (dataset == null)
             throw new BadRequestException("Dataset is null");
 
-        var ds = _utils.GetDataset(orgSlug, dsSlug, withTracking: true);
-
-        if (!await _authManager.RequestAccess(ds, AccessType.Write))
-            throw new ForbiddenException("The current user cannot edit this dataset");
+        var ds = await _utils.GetDatasetAsync(orgSlug, dsSlug, withTracking: true);
+        await _access.EnsureAccessAsync(ds, AccessType.Write);
 
         var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
         var meta = ddb.Meta.GetSafe();
@@ -276,10 +268,8 @@ public class DatasetsManager : IDatasetsManager
 
     public async Task Delete(string orgSlug, string dsSlug)
     {
-        var ds = _utils.GetDataset(orgSlug, dsSlug, withTracking: true);
-
-        if (!await _authManager.RequestAccess(ds, AccessType.Delete))
-            throw new ForbiddenException("The current user cannot delete this dataset");
+        var ds = await _utils.GetDatasetAsync(orgSlug, dsSlug, withTracking: true);
+        await _access.EnsureAccessAsync(ds, AccessType.Delete);
 
         // Save references before removing from DB
         var internalRef = ds.InternalRef;
@@ -333,13 +323,12 @@ public class DatasetsManager : IDatasetsManager
 
         if (dsSlug == newSlug) return; // Nothing to do
 
-        if (_utils.GetDataset(orgSlug, newSlug, true) != null)
+        // Access first: a caller who may not rename learns nothing about the other slugs
+        var ds = await _utils.GetDatasetAsync(orgSlug, dsSlug, withTracking: true);
+        await _access.EnsureAccessAsync(ds, AccessType.Write);
+
+        if (await _utils.GetDatasetAsync(orgSlug, newSlug, safe: true) != null)
             throw new BadRequestException($"Dataset '{newSlug}' already exists");
-
-        var ds = _utils.GetDataset(orgSlug, dsSlug, withTracking: true);
-
-        if (!await _authManager.RequestAccess(ds, AccessType.Write))
-            throw new ForbiddenException("The current user cannot rename this dataset");
 
         ds.Slug = newSlug;
 
@@ -353,12 +342,10 @@ public class DatasetsManager : IDatasetsManager
         if (attributes == null)
             throw new BadRequestException("Attributes are null");
 
-        var ds = _utils.GetDataset(orgSlug, dsSlug);
+        var access = await _access.ResolveAsync(orgSlug, dsSlug, AccessType.Write);
+        var ds = access.Dataset;
 
-        if (!await _authManager.RequestAccess(ds, AccessType.Write))
-            throw new ForbiddenException("The current user is not allowed to change attributes");
-
-        var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
+        var ddb = access.Ddb;
         var meta = ddb.Meta.GetSafe();
         meta.IsPublic = attributes.IsPublic;
 
@@ -378,12 +365,9 @@ public class DatasetsManager : IDatasetsManager
 
     public async Task<StampDto> GetStamp(string orgSlug, string dsSlug)
     {
-        var ds = _utils.GetDataset(orgSlug, dsSlug);
+        var access = await _access.ResolveAsync(orgSlug, dsSlug, AccessType.Read);
 
-        if (!await _authManager.RequestAccess(ds, AccessType.Read))
-            throw new ForbiddenException("The current user cannot access this dataset");
-
-        return _ddbManager.Get(orgSlug, ds.InternalRef).GetStamp().ToDto();
+        return access.Ddb.GetStamp().ToDto();
     }
 
     public async Task<IEnumerable<MoveDatasetResultDto>> MoveToOrganization(
@@ -408,8 +392,8 @@ public class DatasetsManager : IDatasetsManager
         if (sourceOrgSlug == destOrgSlug)
             throw new BadRequestException("Source and destination organizations cannot be the same");
 
-        var sourceOrg = _utils.GetOrganization(sourceOrgSlug, withTracking: true);
-        var destOrg = _utils.GetOrganization(destOrgSlug, withTracking: true);
+        var sourceOrg = await _utils.GetOrganizationAsync(sourceOrgSlug, withTracking: true);
+        var destOrg = await _utils.GetOrganizationAsync(destOrgSlug, withTracking: true);
 
         var results = new List<MoveDatasetResultDto>();
 
@@ -430,7 +414,7 @@ public class DatasetsManager : IDatasetsManager
 
             try
             {
-                var dataset = _utils.GetDataset(sourceOrgSlug, dsSlug, safe: true, withTracking: true);
+                var dataset = await _utils.GetDatasetAsync(sourceOrgSlug, dsSlug, safe: true, withTracking: true);
 
                 if (dataset == null)
                 {

@@ -30,9 +30,9 @@ public class OgcApiFeaturesManager : OgcManagerBase, IOgcApiFeaturesManager
 {
     private readonly ILogger<OgcApiFeaturesManager> _logger;
 
-    public OgcApiFeaturesManager(IUtils u, IAuthManager a, IDdbManager d, IBuildArtifactResolver ar,
+    public OgcApiFeaturesManager(IDatasetAccessResolver access, IBuildArtifactResolver ar,
         IDdbWrapper w, IOgcLayerCatalog c, IDistributedCache cache, IHttpContextAccessor ctx, ILogger<OgcApiFeaturesManager> logger)
-        : base(u, a, d, ar, w, c, cache, ctx)
+        : base(access, ar, w, c, cache, ctx)
     {
         _logger = logger;
     }

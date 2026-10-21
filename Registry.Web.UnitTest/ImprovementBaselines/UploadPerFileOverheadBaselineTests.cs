@@ -67,8 +67,8 @@ public class UploadPerFileOverheadBaselineTests : TestBase
         _ds = new Dataset { Slug = DsSlug, InternalRef = Guid.NewGuid(), CreationDate = DateTime.UtcNow, Organization = org };
 
         _utils = new Mock<IUtils>();
-        _utils.Setup(u => u.GetDataset(OrgSlug, DsSlug, It.IsAny<bool>(), It.IsAny<bool>()))
-            .Returns(() => { Interlocked.Increment(ref _getDatasetCalls); return _ds; });
+        _utils.Setup(u => u.GetDatasetAsync(OrgSlug, DsSlug, It.IsAny<bool>(), It.IsAny<bool>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(() => { Interlocked.Increment(ref _getDatasetCalls); return _ds; });
         _utils.Setup(u => u.GetCurrentUserStorageLimit())
             .Returns(() =>
             {
@@ -143,8 +143,8 @@ public class UploadPerFileOverheadBaselineTests : TestBase
         var thumbnails = new ThumbnailPrecomputeQueue(_cache.Object, _thumbs.Object, new UploadSettings(),
             NullLogger<ThumbnailPrecomputeQueue>.Instance);
 
-        var uploads = new UploadManager(NullLogger<UploadManager>.Instance, _utils.Object, _auth.Object,
-            _ddbManager.Object, new Registry.Adapters.FileSystem(), settings, jobs.Object, buildPending,
+        var uploads = new UploadManager(NullLogger<UploadManager>.Instance, _auth.Object,
+            new DatasetAccessResolver(_utils.Object, _auth.Object, _ddbManager.Object), _ddbManager.Object, new Registry.Adapters.FileSystem(), settings, jobs.Object, buildPending,
             new UploadQuotaGuard(new UploadQuotaLedger(settings), _utils.Object), changes, thumbnails: thumbnails);
         return (uploads, changes, thumbnails);
     }

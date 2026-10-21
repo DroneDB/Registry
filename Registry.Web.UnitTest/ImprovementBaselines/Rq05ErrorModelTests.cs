@@ -100,7 +100,7 @@ public sealed class Rq05ErrorModelTests : IDisposable
         var (response, problem) = await SendAsync(HttpMethod.Get, $"/orgs/{PrivateOrg}/ds/{PrivateDs}", RegularUser);
 
         ShouldBeProblem(response, problem, StatusCodes.Status403Forbidden);
-        problem["detail"]!.GetValue<string>().ShouldBe("The current user cannot access this dataset");
+        problem["detail"]!.GetValue<string>().ShouldBe("The current user is not allowed to read this dataset"); // RQ-06 message
         problem["noRetry"]!.GetValue<bool>().ShouldBeTrue();
     }
 
@@ -110,7 +110,7 @@ public sealed class Rq05ErrorModelTests : IDisposable
         var (response, problem) = await SendAsync(HttpMethod.Get, $"/orgs/{PrivateOrg}/ds/{PrivateDs}");
 
         ShouldBeProblem(response, problem, StatusCodes.Status401Unauthorized);
-        problem["detail"]!.GetValue<string>().ShouldBe("The current user cannot access this dataset");
+        problem["detail"]!.GetValue<string>().ShouldBe("The current user is not allowed to read this dataset"); // RQ-06 message
         problem["noRetry"]!.GetValue<bool>().ShouldBeTrue();
     }
 
@@ -128,8 +128,9 @@ public sealed class Rq05ErrorModelTests : IDisposable
     public async Task BasicAuthEndpoint_ChallengesAnonymousCallersOnly()
     {
         // [BasicAuthentication] endpoints (QGIS, scripts): a 401 carries the Basic challenge so the client
-        // asks for credentials; a signed-in caller without access gets a 403 and no challenge
-        var url = $"/orgs/{PrivateOrg}/ds/{PrivateDs}/mvt/abc/metadata.json";
+        // asks for credentials; a signed-in caller without access gets a 403 and no challenge. (MVT, the
+        // other [BasicAuthentication] controller, answers in the OGC envelope since RQ-06: Rq06AccessBehaviourTests)
+        var url = $"/orgs/{PrivateOrg}/ds/{PrivateDs}/build/abc/file.bin";
 
         var (anonymous, anonymousProblem) = await SendAsync(HttpMethod.Get, url);
         ShouldBeProblem(anonymous, anonymousProblem, StatusCodes.Status401Unauthorized);

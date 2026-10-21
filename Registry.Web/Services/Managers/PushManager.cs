@@ -33,6 +33,7 @@ public class PushManager : IPushManager
     private readonly IObjectsManager _objectsManager;
     private readonly IDatasetsManager _datasetsManager;
     private readonly IAuthManager _authManager;
+    private readonly IDatasetAccessResolver _access;
     private readonly IDdbWrapper _ddbWrapper;
     private readonly ILogger<PushManager> _logger;
     private readonly AppSettings _settings;
@@ -46,7 +47,7 @@ public class PushManager : IPushManager
 
     public PushManager(IUtils utils, IDdbManager ddbManager,
         IObjectsManager objectsManager, ILogger<PushManager> logger, IDatasetsManager datasetsManager,
-        IAuthManager authManager, IDdbWrapper ddbWrapper,
+        IAuthManager authManager, IDatasetAccessResolver access, IDdbWrapper ddbWrapper,
         IBackgroundJobsProcessor backgroundJob, IOptions<AppSettings> settings, ICacheManager cacheManager,
         IFileSystem fileSystem, BuildPendingService buildPendingService, IPushSessionStore sessionStore,
         IUploadQuotaGuard quota)
@@ -57,6 +58,7 @@ public class PushManager : IPushManager
         _logger = logger;
         _datasetsManager = datasetsManager;
         _authManager = authManager;
+        _access = access;
         _ddbWrapper = ddbWrapper;
         _backgroundJob = backgroundJob;
         _settings = settings.Value;
@@ -70,7 +72,7 @@ public class PushManager : IPushManager
 
     public async Task<PushInitResultDto> Init(string orgSlug, string dsSlug, string checksum, StampDto stamp)
     {
-        var ds = _utils.GetDataset(orgSlug, dsSlug, true);
+        var ds = await _utils.GetDatasetAsync(orgSlug, dsSlug, safe: true);
 
         var validateChecksum = false;
 
@@ -84,13 +86,12 @@ public class PushManager : IPushManager
             });
 
             _logger.LogInformation("New dataset {OrgSlug}/{DsSlug} created", orgSlug, dsSlug);
-            ds = _utils.GetDataset(orgSlug, dsSlug);
+            ds = await _utils.GetDatasetAsync(orgSlug, dsSlug);
 
         }
         else
         {
-            if (!await _authManager.RequestAccess(ds, AccessType.Write))
-                throw new ForbiddenException("The current user is not allowed to init push");
+            await _access.EnsureAccessAsync(ds, AccessType.Write);
 
             validateChecksum = true;
         }
@@ -156,10 +157,7 @@ public class PushManager : IPushManager
     public async Task<PushUpload> StreamUploadAsync(string orgSlug, string dsSlug, Stream source,
         long? expectedBytes)
     {
-        var ds = _utils.GetDataset(orgSlug, dsSlug);
-
-        if (!await _authManager.RequestAccess(ds, AccessType.Write))
-            throw new ForbiddenException("The current user is not allowed to upload to this dataset");
+        var access = await _access.ResolveAsync(orgSlug, dsSlug, AccessType.Write);
 
         // Reserved against one storage evaluation per window, as uploads are (the files of a push
         // add up): before writing when the size is known
@@ -167,7 +165,7 @@ public class PushManager : IPushManager
         var reservation = expectedBytes is { } expected ? await _quota.ReserveAsync(userId, expected) : null;
         try
         {
-            var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
+            var ddb = access.Ddb;
             var (tempPath, bytes, _) =
                 await DatasetUploads.StreamToTempAsync(_fileSystem, ddb.DatasetFolderPath, source);
 
@@ -219,12 +217,9 @@ public class PushManager : IPushManager
 
     public async Task SaveMeta(string orgSlug, string dsSlug, string token, string meta)
     {
-        var ds = _utils.GetDataset(orgSlug, dsSlug);
+        var access = await _access.ResolveAsync(orgSlug, dsSlug, AccessType.Write);
 
-        if (!await _authManager.RequestAccess(ds, AccessType.Write))
-            throw new ForbiddenException("The current user is not allowed to upload to this dataset");
-
-        var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
+        var ddb = access.Ddb;
 
         var baseTempFolder = GetPushFolder(ddb, token);
 
@@ -242,12 +237,9 @@ public class PushManager : IPushManager
 
     public async Task Commit(string orgSlug, string dsSlug, string token)
     {
-        var ds = _utils.GetDataset(orgSlug, dsSlug);
+        var access = await _access.ResolveAsync(orgSlug, dsSlug, AccessType.Write);
 
-        if (!await _authManager.RequestAccess(ds, AccessType.Write))
-            throw new ForbiddenException("The current user is not allowed to commit to this dataset");
-
-        var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
+        var ddb = access.Ddb;
 
         var baseTempFolder = GetPushFolder(ddb, token);
         var addTempFolder = Path.Combine(baseTempFolder, AddsTempFolder);

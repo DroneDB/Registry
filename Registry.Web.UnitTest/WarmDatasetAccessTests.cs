@@ -131,7 +131,7 @@ public class WarmDatasetAccessTests
         var utils = new WebUtils(Mock.Of<IAuthManager>(), context, Microsoft.Extensions.Options.Options.Create(new AppSettings()),
             Mock.Of<IHttpContextAccessor>(), Mock.Of<IDatasetSummaryProvider>(), _lookups);
         var access = new DatasetAccessControl(new Snapshots(), context, NullLogger.Instance, _ddb, _cache);
-        return await access.CanAccessDataset(utils.GetDataset(Org, Ds), AccessType.Read, userId);
+        return await access.CanAccessDataset(await utils.GetDatasetAsync(Org, Ds), AccessType.Read, userId);
     }
 
     [TearDown]

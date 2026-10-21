@@ -1185,6 +1185,7 @@ public class PermissionMatrixTest : TestBase
 
         return new OrganizationsManager(
             _authManagerMock.Object,
+            new DatasetAccessResolver(_utilsMock.Object, _authManagerMock.Object, Mock.Of<IDdbManager>()),
             _context,
             _utilsMock.Object,
             _datasetManagerMock.Object,

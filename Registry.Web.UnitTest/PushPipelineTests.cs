@@ -1,5 +1,6 @@
 #nullable enable
 using System;
+using System.Threading;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -107,7 +108,7 @@ public class PushPipelineTests : TestBase
         _ddb.Setup(d => d.IsBuildPending()).Returns(false);
 
         _utils = new Mock<IUtils>();
-        _utils.Setup(u => u.GetDataset("org", "ds", It.IsAny<bool>(), It.IsAny<bool>())).Returns(_ds);
+        _utils.Setup(u => u.GetDatasetAsync("org", "ds", It.IsAny<bool>(), It.IsAny<bool>(), It.IsAny<CancellationToken>())).ReturnsAsync(_ds);
         // The storage evaluation behind the quota guard
         _utils.Setup(u => u.GetCurrentUserStorageLimit()).ReturnsAsync(() =>
         {
@@ -142,7 +143,7 @@ public class PushPipelineTests : TestBase
             Mock.Of<ILogger<BuildPendingService>>());
         return new PushManager(_utils.Object, ddbManager.Object, _objects.Object,
             CreateTestLogger<PushManager>(Serilog.Events.LogEventLevel.Warning), Mock.Of<IDatasetsManager>(),
-            auth.Object, _wrapper.Object, _jobs.Object, settings, cache.Object, fileSystem, buildPending,
+            auth.Object, new DatasetAccessResolver(_utils.Object, auth.Object, ddbManager.Object), _wrapper.Object, _jobs.Object, settings, cache.Object, fileSystem, buildPending,
             new PushSessionStore(fileSystem), new UploadQuotaGuard(_ledger, _utils.Object));
     }
 

@@ -79,8 +79,8 @@ public class RetryEndpointTest : IDisposable
         authManager.Setup(x => x.IsOwnerOrAdmin(It.IsAny<Dataset>())).ReturnsAsync(true);
 
         _utils = new Mock<IUtils>();
-        _utils.Setup(x => x.GetDataset(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<bool>(), It.IsAny<bool>()))
-            .Returns(new Dataset { Slug = Ds, InternalRef = Guid.NewGuid() });
+        _utils.Setup(x => x.GetDatasetAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<bool>(), It.IsAny<bool>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new Dataset { Slug = Ds, InternalRef = Guid.NewGuid() });
 
         _ddb = new Mock<IDDB>();
         _ddb.Setup(x => x.IsBuildPending()).Returns(false);
@@ -99,6 +99,7 @@ public class RetryEndpointTest : IDisposable
             new JobIndexQuery(_db),
             writer,
             authManager.Object,
+            new DatasetAccessResolver(_utils.Object, authManager.Object, ddbManager.Object),
             _utils.Object,
             new BackgroundJobsProcessor(_client.Object, NullIndexedEnqueuer.Create(), _storage.Object),
             ddbManager.Object,

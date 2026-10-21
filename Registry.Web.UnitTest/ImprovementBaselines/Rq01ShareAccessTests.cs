@@ -128,7 +128,8 @@ public class Rq01ShareAccessTests
         names.Setup(n => n.GenerateName()).Returns(() => "gen-" + Guid.NewGuid().ToString("N")[..8]);
 
         _manager = new ShareManager(settings, NullLogger<ShareManager>.Instance, _objects.Object,
-            _datasets.Object, Mock.Of<IOrganizationsManager>(), utils, _auth.Object, tokens.Object,
+            _datasets.Object, Mock.Of<IOrganizationsManager>(), utils, _auth.Object,
+            new DatasetAccessResolver(utils, _auth.Object, Mock.Of<IDdbManager>()), tokens.Object,
             names.Object, _context, new FileSystem());
     }
 

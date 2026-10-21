@@ -75,7 +75,8 @@ public class OgcLayerCatalog : IOgcLayerCatalog
         var cached = await _cache.GetRecordAsync<List<OgcLayerDto>>(key);
         if (cached != null) return cached;
 
-        var ds = _utils.GetDataset(orgSlug, dsSlug);
+        // Callers are the OGC managers, after the request was authorized (OgcAuthorizationFilter)
+        var ds = await _utils.GetDatasetAsync(orgSlug, dsSlug);
         var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
 
         var entries = ddb.Find(EntryQuery.OfTypes(folderPath, EntryType.GeoRaster, EntryType.Vector));

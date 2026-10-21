@@ -1,5 +1,6 @@
 #nullable enable
 using System;
+using System.Threading;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
@@ -55,9 +56,10 @@ public class OgcRenderCachingTests
     [SetUp]
     public void SetUp()
     {
+        _resolver = null;
         _dataset = new Dataset { Slug = Ds, InternalRef = Guid.NewGuid() };
         _utils = new Mock<IUtils>();
-        _utils.Setup(u => u.GetDataset(Org, Ds, It.IsAny<bool>(), It.IsAny<bool>())).Returns(_dataset);
+        _utils.Setup(u => u.GetDatasetAsync(Org, Ds, It.IsAny<bool>(), It.IsAny<bool>(), It.IsAny<CancellationToken>())).ReturnsAsync(_dataset);
         _auth = new Mock<IAuthManager>();
         _auth.Setup(a => a.RequestAccess(_dataset, AccessType.Read)).ReturnsAsync(true);
 
@@ -94,7 +96,11 @@ public class OgcRenderCachingTests
 
     private Mock<IDdbManager> _ddbManager = null!;
 
-    private WmsManager CreateWms() => new(_utils.Object, _auth.Object, _ddbManager.Object, _artifacts.Object,
+    // One per test (a request scope): the filter and the managers of a request share its grants
+    private IDatasetAccessResolver? _resolver;
+    private IDatasetAccessResolver Resolver => _resolver ??= new DatasetAccessResolver(_utils.Object, _auth.Object, _ddbManager.Object);
+
+    private WmsManager CreateWms() => new(Resolver, _artifacts.Object,
         _wrapper.Object, _catalog.Object, _cache, new HttpContextAccessor { HttpContext = _http },
         NullLogger<WmsManager>.Instance, _cacheManager);
 
@@ -173,12 +179,12 @@ public class OgcRenderCachingTests
         var filterContext = new AuthorizationFilterContext(new ActionContext(_http, routeData, new ActionDescriptor()),
             new List<IFilterMetadata>());
 
-        await new OgcAuthorizationFilter(_utils.Object, _auth.Object).OnAuthorizationAsync(filterContext);
+        await new OgcAuthorizationFilter(Resolver, NullLogger<OgcAuthorizationFilter>.Instance).OnAuthorizationAsync(filterContext);
         filterContext.Result.ShouldBeNull();
         await GetMap(CreateWms(), View);
 
         _auth.Verify(a => a.RequestAccess(It.IsAny<Dataset>(), It.IsAny<AccessType>()), Times.Once);
-        _utils.Verify(u => u.GetDataset(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<bool>(), It.IsAny<bool>()),
+        _utils.Verify(u => u.GetDatasetAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<bool>(), It.IsAny<bool>(), It.IsAny<CancellationToken>()),
             Times.Once);
     }
 
@@ -220,7 +226,7 @@ public class OgcRenderCachingTests
     {
         _wrapper.Setup(w => w.GetRasterInfo("/data/cog.tif"))
             .Returns("{\"width\":2516,\"height\":1956,\"bandCount\":4,\"crs\":\"EPSG:32630\",\"bands\":[{\"name\":\"red\"}]}");
-        var svc = new WcsCoverageService(_utils.Object, _auth.Object, _ddbManager.Object, _artifacts.Object,
+        var svc = new WcsCoverageService(Resolver, _artifacts.Object,
             _wrapper.Object, _catalog.Object, _cache, new HttpContextAccessor(), NullLogger<WcsCoverageService>.Instance);
         var layer = new OgcLayerDto { Name = "ortho", EntryType = EntryType.GeoRaster, EntryPath = "ortho.tif", EntryHash = "h1" };
 

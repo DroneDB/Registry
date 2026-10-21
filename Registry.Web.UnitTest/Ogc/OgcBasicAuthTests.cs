@@ -1,5 +1,6 @@
 #nullable enable
 using System;
+using System.Threading;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
@@ -23,6 +24,8 @@ using Registry.Web.Filters;
 using Registry.Web.Identity.Models;
 using Registry.Web.Models;
 using Registry.Web.Models.Configuration;
+using Registry.Web.Services.Adapters;
+using Registry.Ports;
 using Registry.Web.Services.Managers;
 using Registry.Web.Services.Ports;
 using Registry.Web.Utilities.Ogc;
@@ -45,6 +48,7 @@ public class OgcBasicAuthTests
     private Dataset _dataset = null!;
     private ServiceProvider _services = null!;
     private DefaultHttpContext _http = null!;
+    private Mock<IAuthManager> _auth = null!;
 
     [SetUp]
     public void SetUp()
@@ -62,11 +66,11 @@ public class OgcBasicAuthTests
         userManager.Setup(m => m.IsInRoleAsync(user, It.IsAny<string>())).ReturnsAsync(false);
 
         var utils = new Mock<IUtils>();
-        utils.Setup(u => u.GetDataset(Org, Ds, It.IsAny<bool>(), It.IsAny<bool>())).Returns(_dataset);
+        utils.Setup(u => u.GetDatasetAsync(Org, Ds, It.IsAny<bool>(), It.IsAny<bool>(), It.IsAny<CancellationToken>())).ReturnsAsync(_dataset);
 
         // A private dataset: readable by the authenticated user only, as AuthManager decides
         // from the request's user
-        var auth = new Mock<IAuthManager>();
+        var auth = _auth = new Mock<IAuthManager>();
         auth.Setup(a => a.RequestAccess(_dataset, AccessType.Read)).ReturnsAsync(() =>
             _http.User.FindFirst(ClaimTypes.Name)?.Value == UserId);
 
@@ -77,6 +81,8 @@ public class OgcBasicAuthTests
             .AddSingleton(Microsoft.Extensions.Options.Options.Create(new AppSettings { AuthCookieName = "jwtToken" }))
             .AddSingleton(utils.Object)
             .AddSingleton(auth.Object)
+            .AddSingleton(Mock.Of<IDdbManager>())
+            .AddScoped<IDatasetAccessResolver, DatasetAccessResolver>()
             .AddScoped<BasicAuthFilter>()
             .AddScoped<OgcAuthorizationFilter>()
             .BuildServiceProvider();
@@ -89,7 +95,7 @@ public class OgcBasicAuthTests
     private static IEnumerable<Type> OgcControllers() =>
     [
         typeof(WmsController), typeof(WmtsController), typeof(WcsController), typeof(WfsController),
-        typeof(OgcApiController)
+        typeof(OgcApiController), typeof(MvtController)
     ];
 
     /// <summary>
@@ -139,7 +145,10 @@ public class OgcBasicAuthTests
 
         result.ShouldBeNull("valid Basic credentials must pass the OGC access check");
         _http.User.FindFirst(ClaimTypes.Name)?.Value.ShouldBe(UserId);
-        OgcAuthorizedDataset.Find(_http, Org, Ds).ShouldBe(_dataset);
+        // The managers of the request reuse the filter's grant (the scoped resolver): no second check
+        var access = await _services.GetRequiredService<IDatasetAccessResolver>().ResolveAsync(Org, Ds, AccessType.Read);
+        access.Dataset.ShouldBe(_dataset);
+        _auth.Verify(a => a.RequestAccess(_dataset, AccessType.Read), Times.Once);
     }
 
     [TestCaseSource(nameof(OgcControllers))]

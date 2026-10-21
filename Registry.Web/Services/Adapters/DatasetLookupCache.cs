@@ -3,6 +3,7 @@ using System;
 using System.Collections.Concurrent;
 using System.Linq;
 using System.Threading;
+using System.Threading.Tasks;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Options;
 using Microsoft.Extensions.Primitives;
@@ -38,10 +39,11 @@ public sealed class DatasetLookupCache : IDatasetLookupCache
         _expiration = expiration;
     }
 
-    public Dataset? GetOrLoad(string orgSlug, string dsSlug, Func<Dataset?> load)
+    public async Task<Dataset?> GetOrLoadAsync(string orgSlug, string dsSlug,
+        Func<CancellationToken, Task<Dataset?>> load, CancellationToken ct = default)
     {
         if (_expiration <= TimeSpan.Zero)
-            return load();
+            return await load(ct);
 
         var key = Key(orgSlug, dsSlug);
         if (_cache.TryGetValue(key, out Dataset? cached) && cached != null)
@@ -52,7 +54,7 @@ public sealed class DatasetLookupCache : IDatasetLookupCache
         var organization = _organizations.GetOrAdd(orgSlug, _ => new CancellationTokenSource());
         var token = organization.Token;
 
-        var dataset = load();
+        var dataset = await load(ct);
         if (dataset == null)
             return null;
 

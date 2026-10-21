@@ -57,8 +57,8 @@ POST /orgs/{orgSlug}/ds/{dsSlug}/meta/set -> none [open] @ MetaController.SetAlt
 POST /orgs/{orgSlug}/ds/{dsSlug}/meta/set/{key} -> none [open] @ MetaController.Set
 POST /orgs/{orgSlug}/ds/{dsSlug}/meta/unset -> none [open] @ MetaController.UnsetAlt
 DELETE /orgs/{orgSlug}/ds/{dsSlug}/meta/unset/{key} -> none [open] @ MetaController.Unset
-GET /orgs/{orgSlug}/ds/{dsSlug}/mvt/{hash}/metadata.json -> Filter(BasicAuthFilter) [open] @ MvtController.GetMetadata
-GET /orgs/{orgSlug}/ds/{dsSlug}/mvt/{hash}/{z:int}/{x:int}/{y:int}.pbf -> Filter(BasicAuthFilter) [open] @ MvtController.GetTile
+GET /orgs/{orgSlug}/ds/{dsSlug}/mvt/{hash}/metadata.json -> Filter(BasicAuthFilter) + Filter(OgcAuthorizationFilter) [open] @ MvtController.GetMetadata
+GET /orgs/{orgSlug}/ds/{dsSlug}/mvt/{hash}/{z:int}/{x:int}/{y:int}.pbf -> Filter(BasicAuthFilter) + Filter(OgcAuthorizationFilter) [open] @ MvtController.GetTile
 DELETE /orgs/{orgSlug}/ds/{dsSlug}/obj -> none [open] @ ObjectsController.Delete
 GET /orgs/{orgSlug}/ds/{dsSlug}/obj -> none [open] @ ObjectsController.Get
 POST /orgs/{orgSlug}/ds/{dsSlug}/obj -> none [open] @ ObjectUploadsController.Post

@@ -66,6 +66,7 @@ public class OrganizationManagerTest : TestBase
 
         _organizationsManager = new OrganizationsManager(
             _authManagerMock.Object,
+            new DatasetAccessResolver(_webUtils, _authManagerMock.Object, Mock.Of<IDdbManager>()),
             _context,
             _webUtils,
             _datasetManagerMock.Object,

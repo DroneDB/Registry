@@ -28,10 +28,10 @@ namespace Registry.Web.Services.Managers;
 /// </summary>
 public class ImportManager : IImportManager
 {
-    private const string CannotImportMessage = "The current user cannot import datasets into this organization.";
 
     private readonly IUtils _utils;
     private readonly IAuthManager _authManager;
+    private readonly IDatasetAccessResolver _access;
     private readonly IDatasetsManager _datasetsManager;
     private readonly IImportSourceFactory _factory;
     private readonly IImportCredentialProtector _protector;
@@ -46,6 +46,7 @@ public class ImportManager : IImportManager
     public ImportManager(
         IUtils utils,
         IAuthManager authManager,
+        IDatasetAccessResolver access,
         IDatasetsManager datasetsManager,
         IImportSourceFactory factory,
         IImportCredentialProtector protector,
@@ -56,6 +57,7 @@ public class ImportManager : IImportManager
     {
         _utils = utils;
         _authManager = authManager;
+        _access = access;
         _datasetsManager = datasetsManager;
         _factory = factory;
         _protector = protector;
@@ -68,17 +70,13 @@ public class ImportManager : IImportManager
     /// <inheritdoc />
     public async Task<IReadOnlyList<string>> GetAvailableSourceTypes(string orgSlug)
     {
-        await RequireImportAccess(orgSlug, CannotImportMessage);
+        await RequireImportAccess(orgSlug, CancellationToken.None);
         return [.. _factory.AvailableTypes.Where(IsSourceAllowed)];
     }
 
     // Every import operation needs write access to the destination organization
-    private async Task RequireImportAccess(string orgSlug, string deniedMessage)
-    {
-        var org = _utils.GetOrganization(orgSlug);
-        if (!await _authManager.RequestAccess(org, AccessType.Write))
-            throw new ForbiddenException(deniedMessage);
-    }
+    private async Task RequireImportAccess(string orgSlug, CancellationToken ct) =>
+        await _access.ResolveOrganizationAsync(orgSlug, AccessType.Write, ct: ct);
 
     /// <inheritdoc />
     public async Task<ImportVerifyResultDto> VerifyAsync(string orgSlug, VerifyImportRequestDto request,
@@ -86,7 +84,7 @@ public class ImportManager : IImportManager
     {
         ArgumentNullException.ThrowIfNull(request);
 
-        await RequireImportAccess(orgSlug, CannotImportMessage);
+        await RequireImportAccess(orgSlug, ct);
 
         EnsureSourceAllowed(request.SourceType);
 
@@ -110,7 +108,7 @@ public class ImportManager : IImportManager
     {
         ArgumentNullException.ThrowIfNull(request);
 
-        await RequireImportAccess(orgSlug, CannotImportMessage);
+        await RequireImportAccess(orgSlug, ct);
 
         EnsureSourceAllowed(request.SourceType);
 
@@ -160,7 +158,7 @@ public class ImportManager : IImportManager
             string? url = null;
             try
             {
-                url = _utils.GenerateDatasetUrl(_utils.GetDataset(orgSlug, ds.Slug));
+                url = _utils.GenerateDatasetUrl(await _utils.GetDatasetAsync(orgSlug, ds.Slug, ct: ct));
             }
             catch (Exception ex)
             {
@@ -199,8 +197,7 @@ public class ImportManager : IImportManager
     {
         ArgumentNullException.ThrowIfNull(request);
 
-        await RequireImportAccess(orgSlug,
-            "The current user cannot browse import sources for this organization.");
+        await RequireImportAccess(orgSlug, ct);
 
         EnsureSourceAllowed(request.SourceType);
 

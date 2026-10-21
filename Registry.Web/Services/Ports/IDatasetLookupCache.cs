@@ -1,5 +1,7 @@
 #nullable enable
 using System;
+using System.Threading;
+using System.Threading.Tasks;
 using Registry.Web.Data.Models;
 
 namespace Registry.Web.Services.Ports;
@@ -16,7 +18,8 @@ public interface IDatasetLookupCache
     /// from the cache or from <paramref name="load"/>. Never shared: each call gets its own copy.
     /// Null results are not cached.
     /// </summary>
-    Dataset? GetOrLoad(string orgSlug, string dsSlug, Func<Dataset?> load);
+    Task<Dataset?> GetOrLoadAsync(string orgSlug, string dsSlug, Func<CancellationToken, Task<Dataset?>> load,
+        CancellationToken ct = default);
 
     /// <summary>Drops the cached lookup of one dataset.</summary>
     void InvalidateDataset(string orgSlug, string dsSlug);

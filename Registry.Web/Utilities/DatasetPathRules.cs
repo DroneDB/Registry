@@ -44,6 +44,24 @@ public static class DatasetPathRules
     }
 
     /// <summary>
+    /// The dataset-relative form of a path received in a request (an entry path of an object action):
+    /// one leading '/' is dropped ("/img.jpg" names "img.jpg"). This is the one normalization seam for
+    /// request paths (<c>IDatasetAccessResolver</c> is its caller): RQ-10 replaces the body with libddb's
+    /// <c>DDBNormalizePath</c> and its golden vectors (XI-09), so both sides accept the same paths.
+    /// </summary>
+    /// <exception cref="ArgumentException">The path contains a NUL byte, is empty, is rooted, has a "." or
+    /// ".." segment, or escapes <paramref name="datasetFolder"/> (<see cref="CommonUtils.ValidateRelativePath"/>).</exception>
+    public static string NormalizeRequestPath(string path, string datasetFolder)
+    {
+        ArgumentNullException.ThrowIfNull(path);
+        EnsureNoNulByte(path);
+
+        var relative = path.StartsWith('/') ? path[1..] : path;
+        CommonUtils.ValidateRelativePath(relative, datasetFolder);
+        return relative;
+    }
+
+    /// <summary>
     /// Throws <see cref="ArgumentException"/> when <paramref name="path"/> contains a NUL byte. A NUL
     /// truncates the string on native paths, so it could sidestep every other check. A null path
     /// passes: the caller's empty-path check reports it.

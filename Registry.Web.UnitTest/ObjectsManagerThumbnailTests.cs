@@ -1,5 +1,6 @@
 #nullable enable
 using System;
+using System.Threading;
 using System.IO;
 using System.Linq;
 using System.Linq.Expressions;
@@ -83,7 +84,7 @@ public class ObjectsManagerThumbnailTests : TestBase
             Organization = org
         };
 
-        _utilsMock.Setup(x => x.GetDataset(OrgSlug, DsSlug, It.IsAny<bool>(), It.IsAny<bool>())).Returns(_ds);
+        _utilsMock.Setup(x => x.GetDatasetAsync(OrgSlug, DsSlug, It.IsAny<bool>(), It.IsAny<bool>(), It.IsAny<CancellationToken>())).ReturnsAsync(_ds);
         _authManagerMock.Setup(x => x.RequestAccess(It.IsAny<Dataset>(), It.IsAny<AccessType>())).ReturnsAsync(true);
 
         _ddbMock = new Mock<IDDB>();

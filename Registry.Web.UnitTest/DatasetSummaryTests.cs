@@ -136,7 +136,9 @@ public class DatasetSummaryTests : TestBase
         utils.Setup(u => u.GenerateStacUrl()).Returns("http://localhost/stac");
         var cache = new MemoryDistributedCache(
             Microsoft.Extensions.Options.Options.Create(new MemoryDistributedCacheOptions()));
-        var stac = new StacManager(Mock.Of<IAuthManager>(), _ctx, utils.Object, ddbManager.Object, cache,
+        var auth = Mock.Of<IAuthManager>();
+        var stac = new StacManager(auth, new DatasetAccessResolver(utils.Object, auth, ddbManager.Object), _ctx, utils.Object,
+            ddbManager.Object, cache,
             CreateTestLogger<StacManager>(), TestCaches.WithDatasetVisibility(cache));
 
         (await stac.GetCatalog()).Links.ShouldNotContain(l => l.Relationship == "child");

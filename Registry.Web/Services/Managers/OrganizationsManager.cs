@@ -25,6 +25,7 @@ namespace Registry.Web.Services.Managers;
 public class OrganizationsManager : IOrganizationsManager
 {
     private readonly IAuthManager _authManager;
+    private readonly IDatasetAccessResolver _access;
     private readonly RegistryContext _context;
     private readonly IUtils _utils;
     private readonly IDatasetsManager _datasetManager;
@@ -34,6 +35,7 @@ public class OrganizationsManager : IOrganizationsManager
 
     public OrganizationsManager(
         IAuthManager authManager,
+        IDatasetAccessResolver access,
         RegistryContext context,
         IUtils utils,
         IDatasetsManager datasetManager,
@@ -42,6 +44,7 @@ public class OrganizationsManager : IOrganizationsManager
         ILogger<OrganizationsManager> logger)
     {
         _authManager = authManager;
+        _access = access;
         _context = context;
         _utils = utils;
         _datasetManager = datasetManager;
@@ -215,10 +218,7 @@ public class OrganizationsManager : IOrganizationsManager
 
     public async Task<OrganizationDto> Get(string orgSlug)
     {
-        var org = _utils.GetOrganization(orgSlug);
-
-        if (!await _authManager.RequestAccess(org, AccessType.Read))
-            throw new ForbiddenException("Invalid user");
+        var org = await _access.ResolveOrganizationAsync(orgSlug, AccessType.Read);
 
         var dto = await ToDtoWithOwnerNameAsync(org);
 
@@ -316,10 +316,7 @@ public class OrganizationsManager : IOrganizationsManager
 
     public async Task Edit(string orgSlug, OrganizationDto organization)
     {
-        var org = _utils.GetOrganization(orgSlug, withTracking: true);
-
-        if (!await _authManager.RequestAccess(org, AccessType.Write))
-            throw new ForbiddenException("Invalid user");
+        var org = await _access.ResolveOrganizationAsync(orgSlug, AccessType.Write, withTracking: true);
 
         var currentUser = await _authManager.GetCurrentUser();
 
@@ -355,10 +352,8 @@ public class OrganizationsManager : IOrganizationsManager
 
     public async Task Delete(string orgSlug)
     {
-        var org = _utils.GetOrganization(orgSlug, withTracking: true, withDatasets: true);
-
-        if (!await _authManager.RequestAccess(org, AccessType.Delete))
-            throw new ForbiddenException("Invalid user");
+        var org = await _access.ResolveOrganizationAsync(orgSlug, AccessType.Delete, withTracking: true,
+            withDatasets: true);
 
         foreach (var ds in org.Datasets.ToArray())
         {
@@ -393,8 +388,8 @@ public class OrganizationsManager : IOrganizationsManager
         if (sourceOrgSlug == MagicStrings.PublicOrganizationSlug)
             throw new BadRequestException("Cannot merge the public organization");
 
-        var sourceOrg = _utils.GetOrganization(sourceOrgSlug, withTracking: true, withDatasets: true);
-        var destOrg = _utils.GetOrganization(destOrgSlug, withTracking: true);
+        var sourceOrg = await _utils.GetOrganizationAsync(sourceOrgSlug, withTracking: true, withDatasets: true);
+        var destOrg = await _utils.GetOrganizationAsync(destOrgSlug, withTracking: true);
 
         _logger.LogInformation("Starting merge of organization '{SourceOrgSlug}' into '{DestOrgSlug}'",
             sourceOrgSlug, destOrgSlug);
@@ -460,7 +455,7 @@ public class OrganizationsManager : IOrganizationsManager
                 _logger.LogInformation("Deleting source organization '{SourceOrgSlug}' after successful merge", sourceOrgSlug);
 
                 // Reload the organization to ensure we have the latest state
-                sourceOrg = _utils.GetOrganization(sourceOrgSlug, withTracking: true);
+                sourceOrg = await _utils.GetOrganizationAsync(sourceOrgSlug, withTracking: true);
 
                 // Clear remaining users
                 sourceOrg.Users?.Clear();

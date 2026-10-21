@@ -37,6 +37,7 @@ public sealed class TasksManager : ITasksManager
     private readonly IJobIndexQuery _query;
     private readonly IJobIndexWriter _writer;
     private readonly IAuthManager _authManager;
+    private readonly IDatasetAccessResolver _access;
     private readonly IUtils _utils;
     private readonly IBackgroundJobsProcessor _processor;
     private readonly IDdbManager _ddbManager;
@@ -54,6 +55,7 @@ public sealed class TasksManager : ITasksManager
         IJobIndexQuery query,
         IJobIndexWriter writer,
         IAuthManager authManager,
+        IDatasetAccessResolver access,
         IUtils utils,
         IBackgroundJobsProcessor processor,
         IDdbManager ddbManager,
@@ -70,6 +72,7 @@ public sealed class TasksManager : ITasksManager
         _query = query;
         _writer = writer;
         _authManager = authManager;
+        _access = access;
         _utils = utils;
         _processor = processor;
         _ddbManager = ddbManager;
@@ -82,9 +85,7 @@ public sealed class TasksManager : ITasksManager
 
     public async Task<TaskToolDto[]> GetToolsAsync(string orgSlug, string dsSlug, CancellationToken ct = default)
     {
-        var ds = _utils.GetDataset(orgSlug, dsSlug);
-        if (!await _authManager.RequestAccess(ds, AccessType.Read))
-            throw AccessDenied();
+        await _access.ResolveAsync(orgSlug, dsSlug, AccessType.Read, ct: ct);
 
         return await Task.WhenAll(_registry.All.Select(async t =>
         {
@@ -112,10 +113,8 @@ public sealed class TasksManager : ITasksManager
             throw new ForbiddenException(
                 gatingState.DisabledMessage ?? $"Tool '{tool.Id}' is not available.", noRetry: true);
 
-        var ds = _utils.GetDataset(orgSlug, dsSlug);
         var requiredAccess = tool.RequiredAccess == HeavyToolPermission.Write ? AccessType.Write : AccessType.Read;
-        if (!await _authManager.RequestAccess(ds, requiredAccess))
-            throw AccessDenied();
+        await _access.ResolveAsync(orgSlug, dsSlug, requiredAccess, ct: ct);
 
         var user = await _authManager.GetCurrentUser();
 
@@ -143,9 +142,7 @@ public sealed class TasksManager : ITasksManager
     public async Task<TaskListPage> ListPageAsync(string orgSlug, string dsSlug, string? toolId, string? state,
         int skip, int take, CancellationToken ct = default)
     {
-        var ds = _utils.GetDataset(orgSlug, dsSlug);
-        if (!await _authManager.RequestAccess(ds, AccessType.Read))
-            throw AccessDenied();
+        await _access.ResolveAsync(orgSlug, dsSlug, AccessType.Read, ct: ct);
 
         var clampedTake = Math.Clamp(take, 1, MaxTake);
 
@@ -197,9 +194,7 @@ public sealed class TasksManager : ITasksManager
 
     public async Task<IDisposable> SubscribeAsync(string orgSlug, string dsSlug, Action onChange)
     {
-        var ds = _utils.GetDataset(orgSlug, dsSlug);
-        if (!await _authManager.RequestAccess(ds, AccessType.Read))
-            throw AccessDenied();
+        await _access.ResolveAsync(orgSlug, dsSlug, AccessType.Read);
 
         return _changes?.Subscribe(orgSlug, dsSlug, onChange)
                ?? throw new InvalidOperationException("Task change notifications are not configured");
@@ -207,9 +202,7 @@ public sealed class TasksManager : ITasksManager
 
     public async Task<int> ClearAsync(string orgSlug, string dsSlug, string? toolId, CancellationToken ct = default)
     {
-        var ds = _utils.GetDataset(orgSlug, dsSlug);
-        if (!await _authManager.RequestAccess(ds, AccessType.Write))
-            throw AccessDenied();
+        await _access.ResolveAsync(orgSlug, dsSlug, AccessType.Write, ct: ct);
 
         // Permanently remove concluded (Succeeded/Failed/Deleted) tasks from the history
         // and purge any artifacts they produced, instead of merely flipping them to a
@@ -284,7 +277,7 @@ public sealed class TasksManager : ITasksManager
 
         // Sweep-ownership rule: dependency-gated builds are re-run by the pending-build sweep;
         // the Retry button must not start a competing run while a .pending marker exists.
-        if (job.ToolId == HeavyToolIds.Build && IsBuildPendingSafe(orgSlug, dsSlug))
+        if (job.ToolId == HeavyToolIds.Build && await IsBuildPendingSafeAsync(orgSlug, dsSlug, ct))
             throw new ConflictException(
                 "A pending build retry is already scheduled for this dataset; the pending-build sweep owns that retry");
 
@@ -334,10 +327,7 @@ public sealed class TasksManager : ITasksManager
     {
         // A missing/unknown dataset surfaces as an unhandled exception; the global
         // classifier maps it to the same 404 the per-action build used to produce.
-        var ds = _utils.GetDataset(orgSlug, dsSlug);
-
-        if (!await _authManager.RequestAccess(ds, access))
-            throw AccessDenied();
+        var ds = (await _access.ResolveAsync(orgSlug, dsSlug, access, ct: ct)).Dataset;
 
         var job = await _query.GetByJobIdAsync(orgSlug, dsSlug, id, ct)
                   ?? throw new NotFoundException("Task not found");
@@ -358,15 +348,15 @@ public sealed class TasksManager : ITasksManager
     /// DroneDB build rethrow leaves behind). Any failure returns false so that a ddb
     /// availability hiccup never blocks the user-initiated retry.
     /// </summary>
-    private bool IsBuildPendingSafe(string orgSlug, string dsSlug)
+    private async Task<bool> IsBuildPendingSafeAsync(string orgSlug, string dsSlug, CancellationToken ct)
     {
         try
         {
-            var ds = _utils.GetDataset(orgSlug, dsSlug);
+            var ds = await _utils.GetDatasetAsync(orgSlug, dsSlug, ct: ct);
             var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
             return ddb.IsBuildPending();
         }
-        catch (Exception ex)
+        catch (Exception ex) when (ex is not OperationCanceledException)
         {
             _logger.LogWarning(ex, "Retry: IsBuildPending check failed for {Org}/{Ds}, continuing retry", orgSlug,
                 dsSlug);
@@ -384,8 +374,5 @@ public sealed class TasksManager : ITasksManager
             ? new TaskArtifactDto(size, j.ArtifactSha256, $"/orgs/{orgSlug}/ds/{dsSlug}/tasks/{j.JobId}/result",
                 TaskJobHelpers.ArtifactExpiresAt(j, _settings.ArtifactTtlHours))
             : null;
-
-    // noRetry:false, matching the response the controller produced before the manager split; the
-    // status follows D2 (403 when signed in, 401 when anonymous)
-    private static ForbiddenException AccessDenied() => new("Access denied", noRetry: false);
 }
+
