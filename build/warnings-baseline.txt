@@ -6,7 +6,6 @@ Registry.Adapters.Ddb.Test/DroneDBTests.cs CA2201 1
 Registry.Adapters.Ddb.Test/Rq02ProgressCallbackTests.cs CA1859 1
 Registry.Adapters.Ddb.Test/Rq02ProgressCallbackTests.cs CA2201 1
 Registry.Adapters/DroneDB/Ddb.cs CA1305 1
-Registry.Adapters/DroneDB/Ddb.cs CA1310 1
 Registry.Adapters/DroneDB/Ddb.cs CA1725 1
 Registry.Adapters/DroneDB/Ddb.cs CS8618 1
 Registry.Adapters/DroneDB/Ddb.cs CS8625 6
