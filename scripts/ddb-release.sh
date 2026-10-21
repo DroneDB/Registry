@@ -30,7 +30,8 @@
 # Usage:
 #   scripts/ddb-release.sh get <Property>        print a property of Directory.Build.props
 #   scripts/ddb-release.sh describe              one line naming the pinned build
-#   scripts/ddb-release.sh fetch-deb <dir>       download the pinned ddb_<DdbVersion>_amd64.deb into
+#   scripts/ddb-release.sh fetch-deb <dir>       download the pinned ddb_<DdbVersion>_amd64.deb (CI
+#                                                build: ddb_<DdbDebFileVersion>_amd64.deb when set) into
 #                                                <dir>, verify it and print its path
 #   scripts/ddb-release.sh fetch-windows-zip <dir>
 #                                                the same for ddb-<DdbVersion>-Windows.zip
@@ -63,10 +64,15 @@ die() {
     exit 1
 }
 
+# Value of <$1>...</$1> in Directory.Build.props, or nothing when it is not set
+optional_prop() {
+    sed -n "s:.*<$1>\([^<]*\)</$1>.*:\1:p" "$PROPS" | head -n 1 | tr -d '\r'
+}
+
 # Value of <$1>...</$1> in Directory.Build.props (one line, first occurrence)
 prop() {
     local value
-    value="$(sed -n "s:.*<$1>\([^<]*\)</$1>.*:\1:p" "$PROPS" | head -n 1 | tr -d '\r')"
+    value="$(optional_prop "$1")"
     if [[ -z "$value" ]]; then
         echo "error: <$1> is not set in Directory.Build.props" >&2
         exit 2
@@ -135,12 +141,24 @@ verify() {
     fi
 }
 
+# The version in the .deb file name: DdbVersion, except for a CI build whose .deb is named after
+# the last DroneDB tag (DdbDebFileVersion; DroneDB names a non-tag .deb after `git describe`)
+deb_file_version() {
+    local version
+    version="$(optional_prop DdbDebFileVersion)"
+    if [[ -n "$version" && "$(prop DdbSource)" == "ci" ]]; then
+        printf '%s\n' "$version"
+    else
+        prop DdbVersion
+    fi
+}
+
 # Downloads the pinned file of kind $1 (deb|windows) into $2, verifies it and prints its path
 fetch_pinned() {
     local kind="$1" dir="$2" version file sha_prop artifact_prop local_ext
     version="$(prop DdbVersion)"
     case "$kind" in
-        deb) file="ddb_${version}_amd64.deb"; sha_prop=DdbDebSha256; artifact_prop=DdbDebArtifactId; local_ext=deb ;;
+        deb) file="ddb_$(deb_file_version)_amd64.deb"; sha_prop=DdbDebSha256; artifact_prop=DdbDebArtifactId; local_ext=deb ;;
         windows) file="ddb-${version}-Windows.zip"; sha_prop=DdbWindowsZipSha256; artifact_prop=DdbWindowsArtifactId; local_ext=zip ;;
     esac
     mkdir -p "$dir"
@@ -224,7 +242,9 @@ cmd_check() {
 
     source="$(prop DdbSource)"
     case "$source" in
-        release) ;;
+        release)
+            [[ -z "$(optional_prop DdbDebFileVersion)" ]] || fail "DdbDebFileVersion is for a CI build only: a release names its .deb after DdbVersion"
+            ;;
         ci)
             [[ "$(prop DdbCiCommit)" =~ ^[0-9a-f]{40}$ ]] || fail "DdbCiCommit must be a full lowercase commit SHA"
             for name in DdbCiRunId DdbDebArtifactId DdbWindowsArtifactId; do
@@ -235,6 +255,7 @@ cmd_check() {
     esac
 
     [[ "$(prop DdbVersion)" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || fail "DdbVersion must be major.minor.patch"
+    [[ "$(deb_file_version)" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || fail "DdbDebFileVersion must be major.minor.patch"
 
     for name in DdbDebSha256 DdbWindowsZipSha256; do
         [[ "$(prop "$name")" =~ ^[0-9a-f]{64}$ ]] || fail "$name in Directory.Build.props is not a lowercase SHA256"
@@ -242,7 +263,7 @@ cmd_check() {
 
     # The pin is written only in Directory.Build.props
     hits="$(cd "$ROOT" && git ls-files -- '*.csproj' '*.props' '*.targets' \
-        | grep -vx 'Directory.Build.props' | xargs -r grep -lE '<Ddb(Version|Source|CiCommit|CiRunId|DebArtifactId|WindowsArtifactId|DebSha256|WindowsZipSha256)>' || true)"
+        | grep -vx 'Directory.Build.props' | xargs -r grep -lE '<Ddb(Version|DebFileVersion|Source|CiCommit|CiRunId|DebArtifactId|WindowsArtifactId|DebSha256|WindowsZipSha256)>' || true)"
     [[ -z "$hits" ]] || fail "the DroneDB pin is set outside Directory.Build.props: $hits"
 
     # The image installs the pinned build, through this script
