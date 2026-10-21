@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 using System.Threading.Tasks;
+using Registry.Web.Exceptions;
 using Registry.Web.Models;
 using Registry.Web.Models.Configuration;
 using Microsoft.AspNetCore.Authorization;
@@ -26,13 +27,11 @@ namespace Registry.Web.Controllers;
 public class UsersController : ControllerBaseEx
 {
     private readonly IUsersManager _usersManager;
-    private readonly ILogger<UsersController> _logger;
     private readonly AppSettings _appSettings;
 
-    public UsersController(IUsersManager usersManager, ILogger<UsersController> logger, IOptions<AppSettings> appSettings)
+    public UsersController(IUsersManager usersManager, IOptions<AppSettings> appSettings)
     {
         _usersManager = usersManager;
-        _logger = logger;
         _appSettings = appSettings.Value;
     }
 
@@ -44,31 +43,22 @@ public class UsersController : ControllerBaseEx
     [AllowAnonymous]
     [HttpPost("authenticate", Name = nameof(Authenticate))]
     [ProducesResponseType(typeof(AuthenticateResponse), StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
-    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
     public async Task<IActionResult> Authenticate([FromForm] AuthenticateRequest model)
     {
-        try
-        {
-            if (model == null)
-                return BadRequest(new ErrorResponse("No auth data provided"));
+        if (model == null)
+            throw new BadRequestException("No auth data provided");
 
-            _logger.LogDebug("Users controller Authenticate('{Username}')", model.Username);
 
-            var res = string.IsNullOrWhiteSpace(model.Token)
-                ? await _usersManager.Authenticate(model.Username, model.Password)
-                : await _usersManager.Authenticate(model.Token);
+        var res = string.IsNullOrWhiteSpace(model.Token)
+            ? await _usersManager.Authenticate(model.Username, model.Password)
+            : await _usersManager.Authenticate(model.Token);
 
-            if (res == null)
-                return Unauthorized(new ErrorResponse("Unauthorized"));
+        if (res == null)
+            throw new UnauthorizedException("Unauthorized", noRetry: false);
 
-            return Ok(res);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Exception in Users controller Authenticate('{Username}')", model?.Username);
-            throw;
-        }
+        return Ok(res);
     }
 
     /// <summary>
@@ -92,25 +82,15 @@ public class UsersController : ControllerBaseEx
     /// <returns>The new authentication response with refreshed JWT token.</returns>
     [HttpPost("authenticate/refresh", Name = nameof(Refresh))]
     [ProducesResponseType(typeof(AuthenticateResponse), StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
     public async Task<IActionResult> Refresh()
     {
-        try
-        {
-            _logger.LogDebug("Users controller Refresh()");
+        var res = await _usersManager.Refresh();
 
-            var res = await _usersManager.Refresh();
+        if (res == null)
+            throw new UnauthorizedException("Unauthorized", noRetry: false);
 
-            if (res == null)
-                return Unauthorized(new ErrorResponse("Unauthorized"));
-
-            return Ok(res);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Exception in Users controller Refresh()");
-            throw;
-        }
+        return Ok(res);
     }
 
     /// <summary>
@@ -120,28 +100,16 @@ public class UsersController : ControllerBaseEx
     /// <returns>The created user information.</returns>
     [HttpPost(Name = nameof(CreateUser))]
     [ProducesResponseType(typeof(UserDto), StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
-    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
     public async Task<IActionResult> CreateUser([FromBody] CreateUserRequest model)
     {
-        try
-        {
-            _logger.LogDebug("Users controller CreateUser('{UserName}', '{Email}')", model?.UserName, model?.Email);
+        if (model == null)
+            throw new BadRequestException("No user data provided");
 
-            if (model == null)
-                return BadRequest(new ErrorResponse("No user data provided"));
+        var res = await _usersManager.CreateUser(model.UserName, model.Email, model.Password, model.Roles);
 
-            var res = await _usersManager.CreateUser(model.UserName, model.Email, model.Password, model.Roles);
-
-            return Ok(res);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Exception in Users controller CreateUser('{UserName}', '{Email}')",
-                model?.UserName, model?.Email);
-
-            throw;
-        }
+        return Ok(res);
     }
 
     /// <summary>
@@ -152,27 +120,16 @@ public class UsersController : ControllerBaseEx
     /// <returns>The authentication response with new JWT token.</returns>
     [HttpPost("changepwd", Name = nameof(ChangePasswordPost))]
     [ProducesResponseType(typeof(AuthenticateResponse), StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
-    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
     public async Task<IActionResult> ChangePasswordPost(
         [FromForm, Required] string oldPassword,
         [FromForm, Required] string newPassword)
     {
-        try
-        {
-            _logger.LogDebug("Users controller ChangePasswordPost('XXX','XXX')");
+        var res = await _usersManager.ChangePassword(oldPassword, newPassword);
+        var auth = await _usersManager.Authenticate(res.UserName, res.Password);
 
-            var res = await _usersManager.ChangePassword(oldPassword, newPassword);
-            var auth = await _usersManager.Authenticate(res.UserName, res.Password);
-
-            return Ok(auth);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Exception in Users controller ChangePasswordPost('XXX','XXX')");
-
-            throw;
-        }
+        return Ok(auth);
     }
 
     /// <summary>
@@ -183,29 +140,18 @@ public class UsersController : ControllerBaseEx
     /// <returns>No content on success.</returns>
     [HttpPut("{userName}/changepwd", Name = nameof(ChangePassword))]
     [ProducesResponseType(StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
-    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
     public async Task<IActionResult> ChangePassword(
         [FromRoute, Required] string userName,
         [FromBody, Required] ChangeUserPasswordRequestDto model)
     {
-        try
-        {
-            _logger.LogDebug("Users controller ChangePassword('{UserName}')", userName);
+        if (model == null)
+            throw new BadRequestException("No user data provided");
 
-            if (model == null)
-                return BadRequest(new ErrorResponse("No user data provided"));
+        await _usersManager.ChangePassword(userName, model.CurrentPassword, model.NewPassword);
 
-            await _usersManager.ChangePassword(userName, model.CurrentPassword, model.NewPassword);
-
-            return Ok();
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Exception in Users controller ChangePassword('{UserName}')", userName);
-
-            throw;
-        }
+        return Ok();
     }
 
     /// <summary>
@@ -218,26 +164,16 @@ public class UsersController : ControllerBaseEx
     /// <returns>The result of the deletion operation.</returns>
     [HttpDelete("{userName}", Name = nameof(DeleteUserRoute))]
     [ProducesResponseType(typeof(DeleteUserResultDto), StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
-    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
     public async Task<IActionResult> DeleteUserRoute(
         [FromRoute, Required] string userName,
         [FromQuery] string successor = null,
         [FromQuery] ConflictResolutionStrategy conflictResolution = ConflictResolutionStrategy.Rename)
     {
-        try
-        {
-            _logger.LogDebug("Users controller DeleteUserRoute('{UserName}', successor: '{Successor}')", userName, successor);
+        var result = await _usersManager.DeleteUser(userName, successor, conflictResolution);
 
-            var result = await _usersManager.DeleteUser(userName, successor, conflictResolution);
-
-            return Ok(result);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Exception in Users controller DeleteUserRoute('{UserName}')", userName);
-            throw;
-        }
+        return Ok(result);
     }
 
     /// <summary>
@@ -246,23 +182,13 @@ public class UsersController : ControllerBaseEx
     /// <returns>An array of role names.</returns>
     [HttpGet("roles", Name = nameof(GetRoles))]
     [ProducesResponseType(typeof(string[]), StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
-    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
     public async Task<IActionResult> GetRoles()
     {
-        try
-        {
-            _logger.LogDebug("Users controller GetRoles()");
+        var roles = await _usersManager.GetRoles();
 
-            var roles = await _usersManager.GetRoles();
-
-            return Ok(roles);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Users controller GetRoles()");
-            throw;
-        }
+        return Ok(roles);
     }
 
     /// <summary>
@@ -273,27 +199,16 @@ public class UsersController : ControllerBaseEx
     /// <returns>The result of the deletion operation.</returns>
     [HttpDelete(Name = nameof(DeleteUser))]
     [ProducesResponseType(typeof(DeleteUserResultDto), StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
-    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
     public async Task<IActionResult> DeleteUser([FromForm, Required] DeleteUserDto model)
     {
-        try
-        {
-            _logger.LogDebug("Users controller DeleteUser('{UserName}', successor: '{Successor}')",
-                model?.UserName, model?.Successor);
+        if (model == null)
+            throw new BadRequestException("No user data provided");
 
-            if (model == null)
-                return BadRequest(new ErrorResponse("No user data provided"));
+        var result = await _usersManager.DeleteUser(model.UserName, model.Successor, model.ConflictResolution);
 
-            var result = await _usersManager.DeleteUser(model.UserName, model.Successor, model.ConflictResolution);
-
-            return Ok(result);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Exception in Users controller DeleteUser('{UserName}')", model?.UserName);
-            throw;
-        }
+        return Ok(result);
     }
 
     /// <summary>
@@ -302,23 +217,13 @@ public class UsersController : ControllerBaseEx
     /// <returns>A list of all users.</returns>
     [HttpGet(Name = nameof(UsersController) + "." + nameof(GetAll))]
     [ProducesResponseType(typeof(IEnumerable<UserDto>), StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
-    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
     public async Task<IActionResult> GetAll()
     {
-        try
-        {
-            _logger.LogDebug("Users controller GetAll()");
+        var res = await _usersManager.GetAll();
 
-            var res = await _usersManager.GetAll();
-
-            return Ok(res);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Exception in Users controller GetAll()");
-            throw;
-        }
+        return Ok(res);
     }
 
     /// <summary>
@@ -327,23 +232,13 @@ public class UsersController : ControllerBaseEx
     /// <returns>A list of all users with detailed information including storage usage.</returns>
     [HttpGet("detailed", Name = nameof(GetAllDetailed))]
     [ProducesResponseType(typeof(IEnumerable<UserDetailDto>), StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
-    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
     public async Task<IActionResult> GetAllDetailed()
     {
-        try
-        {
-            _logger.LogDebug("Users controller GetAllDetailed()");
+        var res = await _usersManager.GetAllDetailed();
 
-            var res = await _usersManager.GetAllDetailed();
-
-            return Ok(res);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Exception in Users controller GetAllDetailed()");
-            throw;
-        }
+        return Ok(res);
     }
 
     /// <summary>
@@ -352,23 +247,13 @@ public class UsersController : ControllerBaseEx
     /// <returns>The user's storage information including total and used space.</returns>
     [HttpGet("storage", Name = nameof(GetCurrentUserStorageInfo))]
     [ProducesResponseType(typeof(UserStorageInfo), StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
-    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
     public async Task<IActionResult> GetCurrentUserStorageInfo()
     {
-        try
-        {
-            _logger.LogDebug("Users controller GetCurrentUserStorageInfo()");
+        var res = await _usersManager.GetUserStorageInfo();
 
-            var res = await _usersManager.GetUserStorageInfo();
-
-            return Ok(res);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Exception in Users controller GetCurrentUserStorageInfo()");
-            throw;
-        }
+        return Ok(res);
     }
 
     /// <summary>
@@ -378,23 +263,13 @@ public class UsersController : ControllerBaseEx
     /// <returns>The user's storage information including total and used space.</returns>
     [HttpGet("{userName}/storage", Name = nameof(GetUserStorageInfo))]
     [ProducesResponseType(typeof(UserStorageInfo), StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
-    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
     public async Task<IActionResult> GetUserStorageInfo([FromRoute, Required] string userName)
     {
-        try
-        {
-            _logger.LogDebug("Users controller GetUserStorageInfo('{UserName}')", userName);
+        var res = await _usersManager.GetUserStorageInfo(userName);
 
-            var res = await _usersManager.GetUserStorageInfo(userName);
-
-            return Ok(res);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Exception in Users controller GetUserStorageInfo('{UserName}')", userName);
-            throw;
-        }
+        return Ok(res);
     }
 
     /// <summary>
@@ -403,23 +278,13 @@ public class UsersController : ControllerBaseEx
     /// <returns>A dictionary containing the user's metadata.</returns>
     [HttpGet("meta", Name = nameof(GetCurrentUserMeta))]
     [ProducesResponseType(typeof(Dictionary<string, object>), StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
-    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
     public async Task<IActionResult> GetCurrentUserMeta()
     {
-        try
-        {
-            _logger.LogDebug("Users controller GetCurrentUserMeta()");
+        var meta = await _usersManager.GetUserMeta();
 
-            var meta = await _usersManager.GetUserMeta();
-
-            return Ok(meta);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Exception in Users controller GetCurrentUserMeta()");
-            throw;
-        }
+        return Ok(meta);
     }
 
     /// <summary>
@@ -429,23 +294,13 @@ public class UsersController : ControllerBaseEx
     /// <returns>A dictionary containing the user's metadata.</returns>
     [HttpGet("{userName}/meta", Name = nameof(GetUserMeta))]
     [ProducesResponseType(typeof(Dictionary<string, object>), StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
-    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
     public async Task<IActionResult> GetUserMeta([FromRoute, Required] string userName)
     {
-        try
-        {
-            _logger.LogDebug("Users controller GetUserMeta('{UserName}')", userName);
+        var meta = await _usersManager.GetUserMeta(userName);
 
-            var meta = await _usersManager.GetUserMeta(userName);
-
-            return Ok(meta);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Exception in Users controller GetUserMeta('{UserName}')", userName);
-            throw;
-        }
+        return Ok(meta);
     }
 
     /// <summary>
@@ -456,25 +311,15 @@ public class UsersController : ControllerBaseEx
     /// <returns>No content on success.</returns>
     [HttpPost("{userName}/meta", Name = nameof(SetUserMeta))]
     [ProducesResponseType(StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
-    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
     public async Task<IActionResult> SetUserMeta(
         [FromRoute, Required] string userName,
         [FromBody, Required] Dictionary<string, object> meta)
     {
-        try
-        {
-            _logger.LogDebug("Users controller SetUserMeta('{UserName}')", userName);
+        await _usersManager.SetUserMeta(userName, meta);
 
-            await _usersManager.SetUserMeta(userName, meta);
-
-            return Ok();
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Exception in Users controller SetUserMeta('{UserName}')", userName);
-            throw;
-        }
+        return Ok();
     }
 
     #region Organizations
@@ -486,23 +331,13 @@ public class UsersController : ControllerBaseEx
     /// <returns>An array of organizations the user belongs to with membership info.</returns>
     [HttpGet("{userName}/orgs", Name = nameof(GetOrganizations))]
     [ProducesResponseType(typeof(UserOrganizationMembershipDto[]), StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
-    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
     public async Task<IActionResult> GetOrganizations([FromRoute, Required] string userName)
     {
-        try
-        {
-            _logger.LogDebug("Users controller GetOrganizations('{UserName}')", userName);
+        var organizations = await _usersManager.GetUserOrganizations(userName);
 
-            var organizations = await _usersManager.GetUserOrganizations(userName);
-
-            return Ok(organizations);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Exception in Users controller GetOrganizations('{UserName}')", userName);
-            throw;
-        }
+        return Ok(organizations);
     }
 
     /// <summary>
@@ -513,25 +348,15 @@ public class UsersController : ControllerBaseEx
     /// <returns>No content on success.</returns>
     [HttpPost("{userName}/orgs", Name = nameof(AddUserToOrganization))]
     [ProducesResponseType(StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
-    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
     public async Task<IActionResult> AddUserToOrganization(
         [FromRoute, Required] string userName,
         [FromBody, Required] AddUserToOrganizationDto request)
     {
-        try
-        {
-            _logger.LogDebug("Users controller AddUserToOrganization('{UserName}', '{OrgSlug}')", userName, request.OrgSlug);
+        await _usersManager.AddUserToOrganization(userName, request.OrgSlug, request.Permissions);
 
-            await _usersManager.AddUserToOrganization(userName, request.OrgSlug, request.Permissions);
-
-            return Ok();
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Exception in Users controller AddUserToOrganization('{UserName}', '{OrgSlug}')", userName, request.OrgSlug);
-            throw;
-        }
+        return Ok();
     }
 
     /// <summary>
@@ -543,26 +368,16 @@ public class UsersController : ControllerBaseEx
     /// <returns>No content on success.</returns>
     [HttpPut("{userName}/orgs/{orgSlug}", Name = nameof(UpdateUserOrganizationPermissions))]
     [ProducesResponseType(StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
-    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
     public async Task<IActionResult> UpdateUserOrganizationPermissions(
         [FromRoute, Required] string userName,
         [FromRoute, Required] string orgSlug,
         [FromBody, Required] UpdateMemberPermissionsDto request)
     {
-        try
-        {
-            _logger.LogDebug("Users controller UpdateUserOrganizationPermissions('{UserName}', '{OrgSlug}')", userName, orgSlug);
+        await _usersManager.UpdateUserOrganizationPermissions(userName, orgSlug, request.Permissions);
 
-            await _usersManager.UpdateUserOrganizationPermissions(userName, orgSlug, request.Permissions);
-
-            return Ok();
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Exception in Users controller UpdateUserOrganizationPermissions('{UserName}', '{OrgSlug}')", userName, orgSlug);
-            throw;
-        }
+        return Ok();
     }
 
     /// <summary>
@@ -573,25 +388,15 @@ public class UsersController : ControllerBaseEx
     /// <returns>No content on success.</returns>
     [HttpDelete("{userName}/orgs/{orgSlug}", Name = nameof(RemoveUserFromOrganization))]
     [ProducesResponseType(StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
-    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
     public async Task<IActionResult> RemoveUserFromOrganization(
         [FromRoute, Required] string userName,
         [FromRoute, Required] string orgSlug)
     {
-        try
-        {
-            _logger.LogDebug("Users controller RemoveUserFromOrganization('{UserName}', '{OrgSlug}')", userName, orgSlug);
+        await _usersManager.RemoveUserFromOrganization(userName, orgSlug);
 
-            await _usersManager.RemoveUserFromOrganization(userName, orgSlug);
-
-            return Ok();
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Exception in Users controller RemoveUserFromOrganization('{UserName}', '{OrgSlug}')", userName, orgSlug);
-            throw;
-        }
+        return Ok();
     }
 
     #endregion
@@ -605,26 +410,16 @@ public class UsersController : ControllerBaseEx
     /// <returns>No content on success.</returns>
     [HttpPost("roles", Name = nameof(CreateRole))]
     [ProducesResponseType(StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
-    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
     public async Task<IActionResult> CreateRole([FromBody, Required] CreateRoleRequestDto request)
     {
-        try
-        {
-            _logger.LogDebug("Users controller CreateRole('{RoleName}')", request.RoleName);
+        if (string.IsNullOrWhiteSpace(request.RoleName))
+            throw new BadRequestException("Role name is required");
 
-            if (string.IsNullOrWhiteSpace(request.RoleName))
-                return BadRequest(new ErrorResponse("Role name is required"));
+        await _usersManager.CreateRole(request.RoleName);
 
-            await _usersManager.CreateRole(request.RoleName);
-
-            return Ok();
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Exception in Users controller CreateRole('{RoleName}')", request.RoleName);
-            throw;
-        }
+        return Ok();
     }
 
     /// <summary>
@@ -634,23 +429,13 @@ public class UsersController : ControllerBaseEx
     /// <returns>No content on success.</returns>
     [HttpDelete("roles/{roleName}", Name = nameof(DeleteRole))]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
-    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
-    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
     public async Task<IActionResult> DeleteRole([FromRoute, Required] string roleName)
     {
-        try
-        {
-            _logger.LogDebug("Users controller DeleteRole('{RoleName}')", roleName);
+        await _usersManager.DeleteRole(roleName);
 
-            await _usersManager.DeleteRole(roleName);
-
-            return NoContent();
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Exception in Users controller DeleteRole('{RoleName}')", roleName);
-            throw;
-        }
+        return NoContent();
     }
 
     /// <summary>
@@ -661,26 +446,16 @@ public class UsersController : ControllerBaseEx
     /// <returns>No content on success.</returns>
     [HttpPut("{userName}", Name = nameof(UpdateUser))]
     [ProducesResponseType(StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
-    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
     public async Task<IActionResult> UpdateUser(
         [FromRoute, Required] string userName,
         [FromBody, Required] EditUserRequestDto request)
     {
-        try
-        {
-            _logger.LogDebug("Users controller UpdateUser('{UserName}')", userName);
+        await _usersManager.UpdateUser(userName, request.Email);
+        await _usersManager.UpdateUserRoles(userName, request.Roles);
 
-            await _usersManager.UpdateUser(userName, request.Email);
-            await _usersManager.UpdateUserRoles(userName, request.Roles);
-
-            return Ok();
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Exception in Users controller UpdateUser('{UserName}')", userName);
-            throw;
-        }
+        return Ok();
     }
 }
 

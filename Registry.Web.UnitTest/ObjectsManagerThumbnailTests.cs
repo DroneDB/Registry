@@ -194,7 +194,7 @@ public class ObjectsManagerThumbnailTests : TestBase
         _ddbMock.Setup(x => x.Search("photos", It.IsAny<bool>())).Returns(new[] { child });
         _ddbMock.Setup(x => x.GetEntry("photos")).Returns(folder);
 
-        var ex = await Should.ThrowAsync<ArgumentException>(
+        var ex = await Should.ThrowAsync<BadRequestException>(
             () => CreateManager().GenerateThumbnailData(OrgSlug, DsSlug, "photos", null));
 
         ex.Message.ShouldContain("folder");
@@ -207,7 +207,7 @@ public class ObjectsManagerThumbnailTests : TestBase
     {
         _ddbMock.Setup(x => x.GetEntry("missing.jpg")).Returns((Entry?)null);
 
-        await Should.ThrowAsync<ArgumentException>(
+        await Should.ThrowAsync<BadRequestException>(
             () => CreateManager().GenerateThumbnailData(OrgSlug, DsSlug, "missing.jpg", null));
 
         _ddbMock.Verify(x => x.GetEntry("missing.jpg"), Times.Once);

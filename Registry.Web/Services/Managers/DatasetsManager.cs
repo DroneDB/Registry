@@ -75,7 +75,7 @@ public class DatasetsManager : IDatasetsManager
         var org = _utils.GetOrganization(orgSlug, withDatasets: true);
 
         if (!await _authManager.RequestAccess(org, AccessType.Read))
-            throw new UnauthorizedException("The current user cannot access this organization");
+            throw new ForbiddenException("The current user cannot access this organization");
 
         var datasets = org.Datasets.ToArray();
 
@@ -142,7 +142,7 @@ public class DatasetsManager : IDatasetsManager
         var dataset = _utils.GetDataset(orgSlug, dsSlug);
 
         if (!await _authManager.RequestAccess(dataset, AccessType.Read))
-            throw new UnauthorizedException("The current user cannot access this dataset");
+            throw new ForbiddenException("The current user cannot access this dataset");
 
         var ddb = _ddbManager.Get(orgSlug, dataset.InternalRef);
 
@@ -167,7 +167,7 @@ public class DatasetsManager : IDatasetsManager
         var dataset = _utils.GetDataset(orgSlug, dsSlug);
 
         if (!await _authManager.RequestAccess(dataset, AccessType.Read))
-            throw new UnauthorizedException("The current user cannot access this dataset");
+            throw new ForbiddenException("The current user cannot access this dataset");
 
         var ddb = _ddbManager.Get(orgSlug, dataset.InternalRef);
 
@@ -197,7 +197,7 @@ public class DatasetsManager : IDatasetsManager
         var org = _utils.GetOrganization(orgSlug, withTracking: true, withDatasets: true);
 
         if (!await _authManager.RequestAccess(org, AccessType.Write))
-            throw new UnauthorizedException("The current user cannot add datasets to this organization");
+            throw new ForbiddenException("The current user cannot add datasets to this organization");
 
         if (dataset == null)
             throw new BadRequestException("Dataset is null");
@@ -246,7 +246,7 @@ public class DatasetsManager : IDatasetsManager
         var ds = _utils.GetDataset(orgSlug, dsSlug, withTracking: true);
 
         if (!await _authManager.RequestAccess(ds, AccessType.Write))
-            throw new UnauthorizedException("The current user cannot edit this dataset");
+            throw new ForbiddenException("The current user cannot edit this dataset");
 
         var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
         var meta = ddb.Meta.GetSafe();
@@ -279,7 +279,7 @@ public class DatasetsManager : IDatasetsManager
         var ds = _utils.GetDataset(orgSlug, dsSlug, withTracking: true);
 
         if (!await _authManager.RequestAccess(ds, AccessType.Delete))
-            throw new UnauthorizedException("The current user cannot delete this dataset");
+            throw new ForbiddenException("The current user cannot delete this dataset");
 
         // Save references before removing from DB
         var internalRef = ds.InternalRef;
@@ -323,23 +323,23 @@ public class DatasetsManager : IDatasetsManager
     public async Task Rename(string orgSlug, string dsSlug, string newSlug)
     {
         if (string.IsNullOrWhiteSpace(newSlug))
-            throw new ArgumentException("New slug is empty");
+            throw new BadRequestException("New slug is empty");
 
         if (dsSlug == MagicStrings.DefaultDatasetSlug || newSlug == MagicStrings.DefaultDatasetSlug)
-            throw new ArgumentException("Cannot move default dataset");
+            throw new BadRequestException("Cannot move default dataset");
 
         if (!newSlug.IsValidSlug())
-            throw new ArgumentException($"Invalid slug '{newSlug}'");
+            throw new BadRequestException($"Invalid slug '{newSlug}'");
 
         if (dsSlug == newSlug) return; // Nothing to do
 
         if (_utils.GetDataset(orgSlug, newSlug, true) != null)
-            throw new ArgumentException($"Dataset '{newSlug}' already exists");
+            throw new BadRequestException($"Dataset '{newSlug}' already exists");
 
         var ds = _utils.GetDataset(orgSlug, dsSlug, withTracking: true);
 
         if (!await _authManager.RequestAccess(ds, AccessType.Write))
-            throw new UnauthorizedException("The current user cannot rename this dataset");
+            throw new ForbiddenException("The current user cannot rename this dataset");
 
         ds.Slug = newSlug;
 
@@ -356,7 +356,7 @@ public class DatasetsManager : IDatasetsManager
         var ds = _utils.GetDataset(orgSlug, dsSlug);
 
         if (!await _authManager.RequestAccess(ds, AccessType.Write))
-            throw new UnauthorizedException("The current user is not allowed to change attributes");
+            throw new ForbiddenException("The current user is not allowed to change attributes");
 
         var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
         var meta = ddb.Meta.GetSafe();
@@ -381,7 +381,7 @@ public class DatasetsManager : IDatasetsManager
         var ds = _utils.GetDataset(orgSlug, dsSlug);
 
         if (!await _authManager.RequestAccess(ds, AccessType.Read))
-            throw new UnauthorizedException("The current user cannot access this dataset");
+            throw new ForbiddenException("The current user cannot access this dataset");
 
         return _ddbManager.Get(orgSlug, ds.InternalRef).GetStamp().ToDto();
     }
@@ -394,7 +394,7 @@ public class DatasetsManager : IDatasetsManager
     {
         // Only admins can perform this operation
         if (!await _authManager.IsUserAdmin())
-            throw new UnauthorizedException("Only administrators can move datasets between organizations");
+            throw new ForbiddenException("Only administrators can move datasets between organizations");
 
         if (string.IsNullOrWhiteSpace(sourceOrgSlug))
             throw new BadRequestException("Source organization slug is required");

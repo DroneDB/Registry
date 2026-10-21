@@ -98,7 +98,7 @@ public abstract class OgcManagerBase
         {
             ds = Utils.GetDataset(orgSlug, dsSlug);
             if (!await AuthManager.RequestAccess(ds, AccessType.Read))
-                throw new UnauthorizedException("Read access denied");
+                throw new ForbiddenException("Read access denied");
         }
         var ddb = DdbManager.Get(orgSlug, ds.InternalRef);
         return (ds, ddb);

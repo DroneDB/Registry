@@ -16,8 +16,9 @@ namespace Registry.Web.Test;
 
 /// <summary>
 /// Tests for <see cref="RegistryImportSource"/> browse auth handling: a rejected remote credential must
-/// surface as a 401 (<see cref="Registry.Web.Exceptions.UnauthorizedException"/>), never as a raw
-/// <see cref="System.InvalidOperationException"/> that the classifier collapses into a generic 500.
+/// surface as a non-retryable 403 (<see cref="Registry.Web.Exceptions.ForbiddenException"/>), never as a raw
+/// <see cref="System.InvalidOperationException"/> that the classifier collapses into a generic 500, and
+/// never as a 401, which would sign the caller out of this Registry (plan decision D2).
 /// An SSRF-allowed IP literal is used as the registry host so no real DNS lookups occur.
 /// </summary>
 [TestFixture]
@@ -46,13 +47,13 @@ public class RegistryImportSourceTests
     }
 
     [Test]
-    public async Task BrowseOrganizations_WithRejectedCredentials_ThrowsUnauthorized()
+    public async Task BrowseOrganizations_WithRejectedCredentials_ThrowsForbidden()
     {
         var client = new Mock<IRemoteRegistryClient>();
         client.Setup(c => c.AuthenticateAsync(Url, "wrong", "wrong", CancellationToken.None))
             .ReturnsAsync((string?)null);
 
-        var ex = await Should.ThrowAsync<UnauthorizedException>(
+        var ex = await Should.ThrowAsync<ForbiddenException>(
             async () => await SourceOf(client.Object).BrowseOrganizationsAsync(
                 Params("wrong", "wrong"), CancellationToken.None));
         ex.Message.ShouldBe(RegistryImportSource.AuthFailureMessage);
@@ -62,13 +63,13 @@ public class RegistryImportSourceTests
     }
 
     [Test]
-    public async Task BrowseDatasets_WithRejectedCredentials_ThrowsUnauthorized()
+    public async Task BrowseDatasets_WithRejectedCredentials_ThrowsForbidden()
     {
         var client = new Mock<IRemoteRegistryClient>();
         client.Setup(c => c.AuthenticateAsync(Url, "wrong", "wrong", CancellationToken.None))
             .ReturnsAsync((string?)null);
 
-        var ex = await Should.ThrowAsync<UnauthorizedException>(
+        var ex = await Should.ThrowAsync<ForbiddenException>(
             async () => await SourceOf(client.Object).BrowseDatasetsAsync(
                 Params("wrong", "wrong", "some-org"), CancellationToken.None));
         ex.Message.ShouldBe(RegistryImportSource.AuthFailureMessage);
@@ -95,12 +96,12 @@ public class RegistryImportSourceTests
     }
 
     [Test]
-    public void UnauthorizedException_ClassifiesAs401NoRetry()
+    public void RemoteAuthFailure_ClassifiesAs403NoRetryForTheSignedInCaller()
     {
         var descriptor = ApiExceptionClassifier.Classify(
-            new UnauthorizedException(RegistryImportSource.AuthFailureMessage));
+            new ForbiddenException(RegistryImportSource.AuthFailureMessage), authenticated: true);
 
-        descriptor.StatusCode.ShouldBe(StatusCodes.Status401Unauthorized);
+        descriptor.StatusCode.ShouldBe(StatusCodes.Status403Forbidden);
         descriptor.NoRetry.ShouldBeTrue();
         descriptor.Message.ShouldBe(RegistryImportSource.AuthFailureMessage);
     }

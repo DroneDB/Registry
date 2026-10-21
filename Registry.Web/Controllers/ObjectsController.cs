@@ -60,21 +60,20 @@ public class ObjectsController : ControllerBaseEx
         Path.IsPathRooted(path) ||
         path.Split('/', '\\').Any(s => s is "." or "..");
 
-    private IActionResult? ValidatePath(string path) =>
-        IsTraversalPath(path) ? BadRequest(new ErrorResponse("Invalid path")) : null;
+    private static void EnsureValidPath(string path)
+    {
+        if (IsTraversalPath(path))
+            throw new BadRequestException("Invalid path");
+    }
 
-    private IActionResult? ValidatePaths(IReadOnlyCollection<string>? paths, string? outputPath = null)
+    private static void EnsureValidPaths(IReadOnlyCollection<string>? paths, string? outputPath = null)
     {
         if (paths == null || paths.Count == 0)
-            return BadRequest(new ErrorResponse("paths is required"));
+            throw new BadRequestException("paths is required");
         if (paths.Any(IsTraversalPath))
-        {
-            return BadRequest(new ErrorResponse("Invalid input path"));
-        }
-
+            throw new BadRequestException("Invalid input path");
         if (outputPath != null && IsTraversalPath(outputPath))
-            return BadRequest(new ErrorResponse("Invalid output path"));
-        return null;
+            throw new BadRequestException("Invalid output path");
     }
 
     /// <summary>
@@ -85,9 +84,9 @@ public class ObjectsController : ControllerBaseEx
     /// <returns>The DDB file as a downloadable attachment.</returns>
     [HttpGet("ddb", Name = nameof(ObjectsController) + "." + nameof(GetDdb))]
     [ProducesResponseType(StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
-    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status401Unauthorized)]
-    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetDdb(
         [FromRoute, Required] string orgSlug,
         [FromRoute, Required] string dsSlug,
@@ -95,8 +94,6 @@ public class ObjectsController : ControllerBaseEx
     {
         try
         {
-            _logger.LogDebug("Objects controller GetDdb('{OrgSlug}', '{DsSlug}')", orgSlug, dsSlug);
-
             var res = await _objectsManager.GetDdb(orgSlug, dsSlug);
             return await SendDownload(res, $"attachment; filename=\"{res.Name}\"", cancellationToken);
         }
@@ -105,12 +102,6 @@ public class ObjectsController : ControllerBaseEx
             // Client disconnected - not an error
             _logger.LogDebug("Download cancelled by client: GetDdb('{OrgSlug}', '{DsSlug}')", orgSlug, dsSlug);
             return new EmptyResult();
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Exception in Objects controller GetDdb('{OrgSlug}', '{DsSlug}')", orgSlug,
-                dsSlug);
-            throw;
         }
     }
 
@@ -126,9 +117,9 @@ public class ObjectsController : ControllerBaseEx
     [HttpGet("thumb", Name = nameof(ObjectsController) + "." + nameof(GenerateThumbnail))]
     [ProducesResponseType(typeof(FileResult), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status304NotModified)]
-    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
-    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status401Unauthorized)]
-    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GenerateThumbnail(
         [FromRoute, Required] string orgSlug,
         [FromRoute, Required] string dsSlug,
@@ -136,53 +127,40 @@ public class ObjectsController : ControllerBaseEx
         [FromQuery] int? size,
         [FromQuery] string v = null)
     {
-        try
+        StorageDataDto res;
+        HashedContentCachePolicy cachePolicy = null;
+
+        // Dataset thumbnails (no path) are not tied to one entry hash: no validator.
+        if (string.IsNullOrWhiteSpace(path))
         {
-            _logger.LogDebug("Objects controller GenerateThumbnail('{OrgSlug}', '{DsSlug}', '{Path}', '{Size}')",
-                orgSlug, dsSlug, path, size);
-
-            StorageDataDto res;
-            HashedContentCachePolicy cachePolicy = null;
-
-            // Dataset thumbnails (no path) are not tied to one entry hash: no validator.
-            if (string.IsNullOrWhiteSpace(path))
-            {
-                res = await _objectsManager.GenerateThumbnailData(orgSlug, dsSlug, path, size);
-            }
-            else
-            {
-                var obj = await _objectsManager.ResolveReadableObject(orgSlug, dsSlug,
-                    path.StartsWith('/') ? path[1..] : path);
-
-                cachePolicy = HashedContentCachePolicy.For(obj.Hash, v, "thumb",
-                    size ?? _appSettings.DefaultThumbnailSize, obj.SourceVersion);
-                if (cachePolicy.IsNotModified(Request))
-                    return NotModified(cachePolicy);
-
-                res = await _objectsManager.GenerateThumbnailData(obj, size);
-            }
-
-            if (res == null)
-            {
-                _logger.LogWarning("Thumbnail generation returned null for '{OrgSlug}/{DsSlug}' path: '{Path}'",
-                    orgSlug, dsSlug, path);
-                return NotFound();
-            }
-
-            _logger.LogInformation(
-                "Successfully generated thumbnail for '{OrgSlug}/{DsSlug}' path: '{Path}', size: {DataSize} bytes",
-                orgSlug, dsSlug, path, res.Data.Length);
-
-            cachePolicy?.Apply(Response);
-            return File(res.Data, res.ContentType, res.Name);
+            res = await _objectsManager.GenerateThumbnailData(orgSlug, dsSlug, path, size);
         }
-        catch (Exception ex)
+        else
         {
-            _logger.LogError(ex,
-                "Exception in Objects controller GenerateThumbnail('{OrgSlug}', '{DsSlug}', '{Path}', '{Size}')",
-                orgSlug, dsSlug, path, size);
-            throw;
+            var obj = await _objectsManager.ResolveReadableObject(orgSlug, dsSlug,
+                path.StartsWith('/') ? path[1..] : path);
+
+            cachePolicy = HashedContentCachePolicy.For(obj.Hash, v, "thumb",
+                size ?? _appSettings.DefaultThumbnailSize, obj.SourceVersion);
+            if (cachePolicy.IsNotModified(Request))
+                return NotModified(cachePolicy);
+
+            res = await _objectsManager.GenerateThumbnailData(obj, size);
         }
+
+        if (res == null)
+        {
+            _logger.LogWarning("Thumbnail generation returned null for '{OrgSlug}/{DsSlug}' path: '{Path}'",
+                orgSlug, dsSlug, path);
+            return NotFound();
+        }
+
+        _logger.LogInformation(
+            "Successfully generated thumbnail for '{OrgSlug}/{DsSlug}' path: '{Path}', size: {DataSize} bytes",
+            orgSlug, dsSlug, path, res.Data.Length);
+
+        cachePolicy?.Apply(Response);
+        return File(res.Data, res.ContentType, res.Name);
     }
 
     /// <summary>
@@ -201,9 +179,9 @@ public class ObjectsController : ControllerBaseEx
         Name = nameof(ObjectsController) + "." + nameof(GenerateTile))]
     [ProducesResponseType(typeof(FileResult), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status304NotModified)]
-    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
-    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status401Unauthorized)]
-    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GenerateTile(
         [FromRoute, Required] string orgSlug,
         [FromRoute, Required] string dsSlug,
@@ -214,37 +192,23 @@ public class ObjectsController : ControllerBaseEx
         [FromRoute, Required] string ext,
         [FromQuery] string v = null)
     {
-        try
-        {
-            _logger.LogDebug(
-                "Objects controller GenerateTile('{OrgSlug}', '{DsSlug}', '{Path}', '{Tz}', '{Tx}', '{TyRaw}', '{Ext}')",
-                orgSlug, dsSlug, path, tz, tx, tyRaw, ext);
+        var retina = tyRaw.EndsWith("@2x");
 
-            var retina = tyRaw.EndsWith("@2x");
+        if (!int.TryParse(retina ? tyRaw.Replace("@2x", string.Empty) : tyRaw, out var ty))
+            throw new BadRequestException("Invalid input parameters (retina indicator should be '@2x')");
 
-            if (!int.TryParse(retina ? tyRaw.Replace("@2x", string.Empty) : tyRaw, out var ty))
-                throw new ArgumentException("Invalid input parameters (retina indicator should be '@2x')");
+        // Access check and lookup only; the 304 below skips the cache and the native render.
+        var obj = await _objectsManager.ResolveReadableObject(orgSlug, dsSlug, path);
 
-            // Access check and lookup only; the 304 below skips the cache and the native render.
-            var obj = await _objectsManager.ResolveReadableObject(orgSlug, dsSlug, path);
+        var cachePolicy = HashedContentCachePolicy.For(obj.Hash, v, "tile", tz, tx, ty, retina ? 2 : 1,
+            obj.SourceVersion);
+        if (cachePolicy.IsNotModified(Request))
+            return NotModified(cachePolicy);
 
-            var cachePolicy = HashedContentCachePolicy.For(obj.Hash, v, "tile", tz, tx, ty, retina ? 2 : 1,
-                obj.SourceVersion);
-            if (cachePolicy.IsNotModified(Request))
-                return NotModified(cachePolicy);
+        var res = await _objectsManager.GenerateTileData(obj, tz, tx, ty, retina);
 
-            var res = await _objectsManager.GenerateTileData(obj, tz, tx, ty, retina);
-
-            cachePolicy.Apply(Response);
-            return File(res.Data, res.ContentType, res.Name);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex,
-                "Exception in Objects controller GenerateTile('{OrgSlug}', '{DsSlug}', '{Path}', '{Tz}', '{Tx}', '{TyRaw}')",
-                orgSlug, dsSlug, path, tz, tx, tyRaw);
-            throw;
-        }
+        cachePolicy.Apply(Response);
+        return File(res.Data, res.ContentType, res.Name);
     }
 
     private StatusCodeResult NotModified(HashedContentCachePolicy cachePolicy)
@@ -295,14 +259,6 @@ public class ObjectsController : ControllerBaseEx
                 orgSlug, dsSlug, paths != null ? string.Join("; ", paths) : string.Empty);
             return new EmptyResult();
         }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex,
-                "Exception in Objects controller Download('{OrgSlug}', '{DsSlug}', '{Paths}', '{IsInline}')",
-                orgSlug, dsSlug, paths != null ? string.Join("; ", paths) : string.Empty, isInline);
-
-            throw;
-        }
     }
 
     /// <summary>
@@ -316,9 +272,9 @@ public class ObjectsController : ControllerBaseEx
     /// <returns>The file(s) as a downloadable stream.</returns>
     [HttpGet("download", Name = nameof(ObjectsController) + "." + nameof(Download))]
     [ProducesResponseType(StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
-    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status401Unauthorized)]
-    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public Task<IActionResult> Download(
         [FromRoute, Required] string orgSlug,
         [FromRoute, Required] string dsSlug,
@@ -338,8 +294,6 @@ public class ObjectsController : ControllerBaseEx
             : pathsRaw?.Split(",", StringSplitOptions.RemoveEmptyEntries);
         var isInline = isInlineRaw == 1;
 
-        _logger.LogDebug("Objects controller Download('{OrgSlug}', '{DsSlug}', '{PathCount} path(s): {Paths}', '{IsInlineRaw}')",
-            orgSlug, dsSlug, paths?.Length ?? 0, paths != null ? string.Join("; ", paths) : string.Empty, isInlineRaw);
 
         return InternalDownload(orgSlug, dsSlug, paths, isInline, cancellationToken);
     }
@@ -354,9 +308,9 @@ public class ObjectsController : ControllerBaseEx
     /// <returns>The file(s) as a downloadable stream.</returns>
     [HttpPost("download", Name = nameof(ObjectsController) + "." + nameof(DownloadPost))]
     [ProducesResponseType(StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
-    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status401Unauthorized)]
-    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public Task<IActionResult> DownloadPost(
         [FromRoute, Required] string orgSlug,
         [FromRoute, Required] string dsSlug,
@@ -367,9 +321,6 @@ public class ObjectsController : ControllerBaseEx
         var paths = pathsRaw?.Split(",", StringSplitOptions.RemoveEmptyEntries);
         var isInline = isInlineRaw == 1;
 
-        _logger.LogDebug(
-            "Objects controller DownloadPost('{OrgSlug}', '{DsSlug}', '{PathsRaw}', '{IsInlineRaw}')", orgSlug,
-            dsSlug, pathsRaw, isInlineRaw);
 
         return InternalDownload(orgSlug, dsSlug, paths, isInline, cancellationToken);
     }
@@ -384,9 +335,9 @@ public class ObjectsController : ControllerBaseEx
     /// <returns>The file as a downloadable stream.</returns>
     [HttpGet("download/{*path}", Name = nameof(ObjectsController) + "." + nameof(DownloadExact))]
     [ProducesResponseType(StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
-    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status401Unauthorized)]
-    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> DownloadExact(
         [FromRoute, Required] string orgSlug,
         [FromRoute, Required] string dsSlug,
@@ -396,8 +347,6 @@ public class ObjectsController : ControllerBaseEx
     {
         var isInline = isInlineRaw == 1;
 
-        _logger.LogDebug("Objects controller DownloadExact('{OrgSlug}', '{DsSlug}', '{Path}', '{IsInlineRaw}')",
-            orgSlug, dsSlug, path, isInlineRaw);
 
         return await InternalDownload(orgSlug, dsSlug, [path], isInline, cancellationToken);
     }
@@ -413,28 +362,16 @@ public class ObjectsController : ControllerBaseEx
     /// <returns>The object file.</returns>
     [HttpGet(RoutesHelper.ObjectsRadix, Name = nameof(ObjectsController) + "." + nameof(Get))]
     [ProducesResponseType(typeof(FileResult), StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
-    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status401Unauthorized)]
-    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> Get(
         [FromRoute, Required] string orgSlug,
         [FromRoute, Required] string dsSlug,
         [FromForm] string path)
     {
-        try
-        {
-            _logger.LogDebug("Objects controller Get('{OrgSlug}', '{DsSlug}', '{Path}')", orgSlug, dsSlug, path);
-
-            var res = await _objectsManager.Get(orgSlug, dsSlug, path);
-            return PhysicalFile(res.PhysicalPath, res.ContentType, res.Name);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Exception in Objects controller Get('{OrgSlug}', '{DsSlug}', '{Path}')", orgSlug,
-                dsSlug, path);
-
-            throw;
-        }
+        var res = await _objectsManager.Get(orgSlug, dsSlug, path);
+        return PhysicalFile(res.PhysicalPath, res.ContentType, res.Name);
     }
 
     /// <summary>
@@ -447,31 +384,17 @@ public class ObjectsController : ControllerBaseEx
     /// <returns>A list of entries.</returns>
     [HttpGet("list", Name = nameof(ObjectsController) + "." + nameof(GetInfo))]
     [ProducesResponseType(typeof(IEnumerable<EntryDto>), StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
-    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status401Unauthorized)]
-    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetInfo(
         [FromRoute, Required] string orgSlug,
         [FromRoute, Required] string dsSlug,
         [FromQuery] string path,
         [FromQuery] EntryType? type = null)
     {
-        try
-        {
-            _logger.LogDebug("Objects controller GetInfo('{OrgSlug}', '{DsSlug}', '{Path}', '{Type}')", orgSlug,
-                dsSlug, path, type);
-
-            var res = await _objectsManager.List(orgSlug, dsSlug, path, false, type);
-            return Ok(res);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex,
-                "Exception in Objects controller GetInfo('{OrgSlug}', '{DsSlug}', '{Path}', '{Type}')", orgSlug,
-                dsSlug, path, type);
-
-            throw;
-        }
+        var res = await _objectsManager.List(orgSlug, dsSlug, path, false, type);
+        return Ok(res);
     }
 
     /// <summary>
@@ -484,30 +407,17 @@ public class ObjectsController : ControllerBaseEx
     /// <returns>A list of entries.</returns>
     [HttpPost("list", Name = nameof(ObjectsController) + "." + nameof(GetInfoEx))]
     [ProducesResponseType(typeof(IEnumerable<EntryDto>), StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
-    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status401Unauthorized)]
-    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetInfoEx(
         [FromRoute, Required] string orgSlug,
         [FromRoute, Required] string dsSlug,
         [FromForm] string path,
         [FromForm] EntryType? type = null)
     {
-        try
-        {
-            _logger.LogDebug("Objects controller GetInfoEx('{OrgSlug}', '{DsSlug}', '{Path}', {Type})", orgSlug,
-                dsSlug, path, type);
-
-            var res = await _objectsManager.List(orgSlug, dsSlug, path, false, type);
-            return Ok(res);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex,
-                "Exception in Objects controller GetInfoEx('{OrgSlug}', '{DsSlug}', '{Path}, {Type})", orgSlug,
-                dsSlug, path, type);
-            throw;
-        }
+        var res = await _objectsManager.List(orgSlug, dsSlug, path, false, type);
+        return Ok(res);
     }
 
 
@@ -523,9 +433,9 @@ public class ObjectsController : ControllerBaseEx
     /// <returns>A list of matching entries.</returns>
     [HttpPost("search", Name = nameof(ObjectsController) + "." + nameof(Search))]
     [ProducesResponseType(typeof(IEnumerable<EntryDto>), StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
-    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status401Unauthorized)]
-    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> Search(
         [FromRoute, Required] string orgSlug,
         [FromRoute, Required] string dsSlug,
@@ -534,21 +444,8 @@ public class ObjectsController : ControllerBaseEx
         [FromForm] bool recursive = true,
         [FromForm] EntryType? type = null)
     {
-        try
-        {
-            _logger.LogDebug("Objects controller Search('{OrgSlug}', '{DsSlug}', '{Path}', '{Type}')", orgSlug,
-                dsSlug, path, type);
-
-            var res = await _objectsManager.Search(orgSlug, dsSlug, query, path, recursive, type);
-            return Ok(res);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex,
-                "Exception in Objects controller Search('{OrgSlug}', '{DsSlug}', '{Path}', '{Type}')", orgSlug,
-                dsSlug, path, type);
-            throw;
-        }
+        var res = await _objectsManager.Search(orgSlug, dsSlug, query, path, recursive, type);
+        return Ok(res);
     }
 
     /// <summary>
@@ -560,28 +457,16 @@ public class ObjectsController : ControllerBaseEx
     /// <returns>No content on success.</returns>
     [HttpDelete(RoutesHelper.ObjectsRadix, Name = nameof(ObjectsController) + "." + nameof(Delete))]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
-    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
-    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status401Unauthorized)]
-    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> Delete(
         [FromRoute, Required] string orgSlug,
         [FromRoute, Required] string dsSlug,
         [FromForm] string path)
     {
-        try
-        {
-            _logger.LogDebug("Objects controller Delete('{OrgSlug}', '{DsSlug}', '{Path}')", orgSlug, dsSlug, path);
-
-            await _objectsManager.Delete(orgSlug, dsSlug, path);
-            return NoContent();
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Exception in Objects controller Delete('{OrgSlug}', '{DsSlug}', '{Path}')",
-                orgSlug, dsSlug, path);
-
-            throw;
-        }
+        await _objectsManager.Delete(orgSlug, dsSlug, path);
+        return NoContent();
     }
 
     /// <summary>
@@ -593,31 +478,18 @@ public class ObjectsController : ControllerBaseEx
     /// <returns>A response containing the list of successfully deleted paths and any failures.</returns>
     [HttpDelete(RoutesHelper.ObjectsRadix + "/batch", Name = nameof(ObjectsController) + "." + nameof(DeleteBatch))]
     [ProducesResponseType(typeof(DeleteBatchResponse), StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
-    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
     public async Task<IActionResult> DeleteBatch(
         [FromRoute, Required] string orgSlug,
         [FromRoute, Required] string dsSlug,
         [FromForm] string[] paths)
     {
-        try
-        {
-            _logger.LogDebug("Objects controller DeleteBatch('{OrgSlug}', '{DsSlug}', {Count} paths)",
-                orgSlug, dsSlug, paths?.Length ?? 0);
+        if (paths == null || paths.Length == 0)
+            throw new BadRequestException("No paths provided");
 
-            if (paths == null || paths.Length == 0)
-                return BadRequest(new ErrorResponse("No paths provided"));
-
-            var response = await _objectsManager.DeleteBatch(orgSlug, dsSlug, paths);
-            return Ok(response);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Exception in Objects controller DeleteBatch('{OrgSlug}', '{DsSlug}')",
-                orgSlug, dsSlug);
-
-            throw;
-        }
+        var response = await _objectsManager.DeleteBatch(orgSlug, dsSlug, paths);
+        return Ok(response);
     }
 
     /// <summary>
@@ -630,31 +502,17 @@ public class ObjectsController : ControllerBaseEx
     /// <returns>The updated entry on success.</returns>
     [HttpPut(RoutesHelper.ObjectsRadix, Name = nameof(ObjectsController) + "." + nameof(Move))]
     [ProducesResponseType(typeof(EntryDto), StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
-    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status401Unauthorized)]
-    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> Move(
         [FromRoute, Required] string orgSlug,
         [FromRoute, Required] string dsSlug,
         [FromForm] string source,
         [FromForm] string dest)
     {
-        try
-        {
-            _logger.LogDebug("Objects controller Move('{OrgSlug}', '{DsSlug}', '{Source}', '{Dest}')", orgSlug,
-                dsSlug, source, dest);
-
-            var entry = await _objectsManager.Move(orgSlug, dsSlug, source, dest);
-            return Ok(entry);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex,
-                "Exception in Objects controller Move('{OrgSlug}', '{DsSlug}', '{Source}', '{Dest}')", orgSlug,
-                dsSlug, source, dest);
-
-            throw;
-        }
+        var entry = await _objectsManager.Move(orgSlug, dsSlug, source, dest);
+        return Ok(entry);
     }
 
     /// <summary>
@@ -670,10 +528,10 @@ public class ObjectsController : ControllerBaseEx
     /// <returns>No content on success.</returns>
     [HttpPost("transfer", Name = nameof(ObjectsController) + "." + nameof(Transfer))]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
-    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
-    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status401Unauthorized)]
-    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status404NotFound)]
-    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status409Conflict)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status409Conflict)]
     public async Task<IActionResult> Transfer(
         [FromRoute, Required] string orgSlug,
         [FromRoute, Required] string dsSlug,
@@ -684,25 +542,8 @@ public class ObjectsController : ControllerBaseEx
         [FromForm] bool overwrite = false,
         [FromForm] bool keepSource = false)
     {
-        try
-        {
-            _logger.LogDebug(
-                "Objects controller Transfer('{SourceOrgSlug}', '{SourceDsSlug}', '{SourcePath}', '{DestOrgSlug}', '{DestDsSlug}', '{DestPath}', overwrite={Overwrite}, keepSource={KeepSource})",
-                orgSlug,
-                dsSlug, sourcePath, destOrgSlug, destDsSlug, destPath, overwrite, keepSource);
-
-            await _objectsManager.Transfer(orgSlug, dsSlug, sourcePath, destOrgSlug, destDsSlug, destPath, overwrite, keepSource);
-            return NoContent();
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex,
-                "Exception in Objects controller Transfer('{SourceOrgSlug}', '{SourceDsSlug}', '{SourcePath}', '{DestOrgSlug}', '{DestDsSlug}', '{DestPath}', overwrite={Overwrite}, keepSource={KeepSource})",
-                orgSlug,
-                dsSlug, sourcePath, destOrgSlug, destDsSlug, destPath, overwrite, keepSource);
-
-            throw;
-        }
+        await _objectsManager.Transfer(orgSlug, dsSlug, sourcePath, destOrgSlug, destDsSlug, destPath, overwrite, keepSource);
+        return NoContent();
     }
 
     /// <summary>
@@ -716,10 +557,10 @@ public class ObjectsController : ControllerBaseEx
     /// <returns>The created destination entry.</returns>
     [HttpPost(RoutesHelper.ObjectsRadix + "/copy", Name = nameof(ObjectsController) + "." + nameof(Copy))]
     [ProducesResponseType(typeof(EntryDto), StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
-    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status401Unauthorized)]
-    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status404NotFound)]
-    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status409Conflict)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status409Conflict)]
     public async Task<IActionResult> Copy(
         [FromRoute, Required] string orgSlug,
         [FromRoute, Required] string dsSlug,
@@ -727,23 +568,8 @@ public class ObjectsController : ControllerBaseEx
         [FromForm, Required] string dest,
         [FromForm] bool overwrite = false)
     {
-        try
-        {
-            _logger.LogDebug(
-                "Objects controller Copy('{OrgSlug}', '{DsSlug}', '{Source}' -> '{Dest}', overwrite={Overwrite})",
-                orgSlug, dsSlug, source, dest, overwrite);
-
-            var entry = await _objectsManager.Copy(orgSlug, dsSlug, source, dest, overwrite);
-            return Ok(entry);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex,
-                "Exception in Objects controller Copy('{OrgSlug}', '{DsSlug}', '{Source}' -> '{Dest}', overwrite={Overwrite})",
-                orgSlug, dsSlug, source, dest, overwrite);
-
-            throw;
-        }
+        var entry = await _objectsManager.Copy(orgSlug, dsSlug, source, dest, overwrite);
+        return Ok(entry);
     }
 
     /// <summary>
@@ -756,29 +582,17 @@ public class ObjectsController : ControllerBaseEx
     /// <returns>Ok on success.</returns>
     [HttpPost("build", Name = nameof(ObjectsController) + "." + nameof(Build))]
     [ProducesResponseType(StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
-    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status401Unauthorized)]
-    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> Build(
         [FromRoute, Required] string orgSlug,
         [FromRoute, Required] string dsSlug,
         [FromForm] string path,
         [FromForm] bool force = false)
     {
-        try
-        {
-            _logger.LogDebug("Objects controller Build('{OrgSlug}', '{DsSlug}', '{Path}')", orgSlug, dsSlug, path);
-
-            await _objectsManager.Build(orgSlug, dsSlug, path, force);
-            return Ok();
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Exception in Objects controller Build('{OrgSlug}', '{DsSlug}', '{Path}')",
-                orgSlug, dsSlug, path);
-
-            throw;
-        }
+        await _objectsManager.Build(orgSlug, dsSlug, path, force);
+        return Ok();
     }
 
     /// <summary>
@@ -792,32 +606,18 @@ public class ObjectsController : ControllerBaseEx
     [BasicAuthentication]
     [HttpGet("build/{hash}/{*path}", Name = nameof(ObjectsController) + "." + nameof(GetBuildFile))]
     [ProducesResponseType(typeof(FileResult), StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
-    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status401Unauthorized)]
-    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetBuildFile(
         [FromRoute, Required] string orgSlug,
         [FromRoute, Required] string dsSlug,
         [FromRoute, Required] string hash,
         [FromRoute] string path)
     {
-        try
-        {
-            _logger.LogDebug("Objects controller GetBuildFile('{OrgSlug}', '{DsSlug}', '{Hash}', '{Path}')", orgSlug,
-                dsSlug,
-                hash, path);
+        var res = await _objectsManager.GetBuildFile(orgSlug, dsSlug, hash, path);
 
-            var res = await _objectsManager.GetBuildFile(orgSlug, dsSlug, hash, path);
-
-            return PhysicalFile(res, MimeUtility.GetMimeMapping(res), true);
-        }
-        catch (UnauthorizedException)
-        {
-            // Attach the challenge header, then let the global classifier produce the
-            // canonical 401 body (the per-action result builder was removed during unification).
-            BasicAuthFilter.SendBasicAuthRequest(Response);
-            throw;
-        }
+        return PhysicalFile(res, MimeUtility.GetMimeMapping(res), true);
     }
 
     /// <summary>
@@ -831,38 +631,17 @@ public class ObjectsController : ControllerBaseEx
     [BasicAuthentication]
     [HttpHead("build/{hash}/{*path}", Name = nameof(ObjectsController) + "." + nameof(CheckBuildFile))]
     [ProducesResponseType(StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status401Unauthorized)]
-    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> CheckBuildFile(
         [FromRoute, Required] string orgSlug,
         [FromRoute, Required] string dsSlug,
         [FromRoute, Required] string hash,
         [FromRoute] string path)
     {
-        try
-        {
-            _logger.LogDebug("Objects controller CheckBuildFile('{OrgSlug}', '{DsSlug}', '{Path}')", orgSlug,
-                dsSlug, path);
+        var res = await _objectsManager.CheckBuildFile(orgSlug, dsSlug, hash, path);
 
-            var res = await _objectsManager.CheckBuildFile(orgSlug, dsSlug, hash, path);
-
-            return res ? Ok() : NotFound();
-        }
-        catch (UnauthorizedException)
-        {
-            // Attach the challenge header, then let the global classifier produce the
-            // canonical 401 body (the per-action result builder was removed during unification).
-            BasicAuthFilter.SendBasicAuthRequest(Response);
-            throw;
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex,
-                "Exception in Objects controller CheckBuildFile('{OrgSlug}', '{DsSlug}', '{Path}')", orgSlug,
-                dsSlug, path);
-
-            throw;
-        }
+        return res ? Ok() : NotFound();
     }
 
     /// <summary>
@@ -871,46 +650,20 @@ public class ObjectsController : ControllerBaseEx
     /// </summary>
     [HttpGet("build-artifact", Name = nameof(ObjectsController) + "." + nameof(DownloadBuildArtifact))]
     [ProducesResponseType(typeof(FileResult), StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
-    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status401Unauthorized)]
-    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> DownloadBuildArtifact(
         [FromRoute, Required] string orgSlug,
         [FromRoute, Required] string dsSlug,
         [FromQuery] string path)
     {
-        try
-        {
-            _logger.LogDebug("Objects controller DownloadBuildArtifact('{OrgSlug}', '{DsSlug}', '{Path}')",
-                orgSlug, dsSlug, path);
+        EnsureValidPath(path);
 
-            var validation = ValidatePath(path);
-            if (validation is not null)
-                return validation;
+        var (fullPath, contentType, fileName) =
+            await _objectsManager.GetBuildArtifactPath(orgSlug, dsSlug, path);
 
-            var (fullPath, contentType, fileName) =
-                await _objectsManager.GetBuildArtifactPath(orgSlug, dsSlug, path);
-
-            return PhysicalFile(fullPath, contentType, fileName, enableRangeProcessing: true);
-        }
-        catch (UnauthorizedException ex)
-        {
-            return Unauthorized(new ErrorResponse(ex.Message));
-        }
-        catch (FileNotFoundException ex)
-        {
-            return NotFound(new ErrorResponse(ex.Message));
-        }
-        catch (ArgumentException ex)
-        {
-            return BadRequest(new ErrorResponse(ex.Message));
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Exception in DownloadBuildArtifact('{OrgSlug}', '{DsSlug}', '{Path}')",
-                orgSlug, dsSlug, path);
-            throw;
-        }
+        return PhysicalFile(fullPath, contentType, fileName, enableRangeProcessing: true);
     }
 
     /// <summary>
@@ -927,28 +680,16 @@ public class ObjectsController : ControllerBaseEx
               "clients built against the pre-unified-viewer API (which returned BuildJobDto) and will " +
               "be removed in a future version.")]
     [ProducesResponseType(typeof(IEnumerable<PendingBuildInfoDto>), StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
-    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status401Unauthorized)]
-    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetPendingBuilds(
         [FromRoute, Required] string orgSlug,
         [FromRoute, Required] string dsSlug)
     {
-        try
-        {
-            _logger.LogDebug("Objects controller GetPendingBuilds('{OrgSlug}', '{DsSlug}')", orgSlug, dsSlug);
+        var pending = await _objectsManager.GetPendingBuilds(orgSlug, dsSlug);
 
-            var pending = await _objectsManager.GetPendingBuilds(orgSlug, dsSlug);
-
-            return Ok(pending);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Exception in Objects controller GetPendingBuilds('{OrgSlug}', '{DsSlug}')",
-                orgSlug, dsSlug);
-
-            throw;
-        }
+        return Ok(pending);
     }
 
     /// <summary>
@@ -959,28 +700,16 @@ public class ObjectsController : ControllerBaseEx
     /// <returns>The number of deleted build jobs.</returns>
     [HttpPost("builds/clear", Name = nameof(ObjectsController) + "." + nameof(ClearCompletedBuilds))]
     [ProducesResponseType(typeof(ClearCompletedBuildsResponse), StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
-    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status401Unauthorized)]
-    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> ClearCompletedBuilds(
         [FromRoute, Required] string orgSlug,
         [FromRoute, Required] string dsSlug)
     {
-        try
-        {
-            _logger.LogDebug("Objects controller ClearCompletedBuilds('{OrgSlug}', '{DsSlug}')", orgSlug, dsSlug);
+        var deletedCount = await _objectsManager.ClearCompletedBuilds(orgSlug, dsSlug);
 
-            var deletedCount = await _objectsManager.ClearCompletedBuilds(orgSlug, dsSlug);
-
-            return Ok(new ClearCompletedBuildsResponse { DeletedCount = deletedCount });
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex,
-                "Exception in Objects controller ClearCompletedBuilds('{OrgSlug}', '{DsSlug}')", orgSlug, dsSlug);
-
-            throw;
-        }
+        return Ok(new ClearCompletedBuildsResponse { DeletedCount = deletedCount });
     }
 
     #region Multispectral
@@ -988,34 +717,24 @@ public class ObjectsController : ControllerBaseEx
     /// <summary>Get raster info (bands, sensor profile, presets) for a file.</summary>
     [HttpGet("raster-info", Name = nameof(ObjectsController) + "." + nameof(GetRasterInfo))]
     [ProducesResponseType(StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
-    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
     public async Task<IActionResult> GetRasterInfo(
         [FromRoute, Required] string orgSlug,
         [FromRoute, Required] string dsSlug,
         [FromQuery, Required] string path)
     {
-        try
-        {
-            var pathError = ValidatePath(path);
-            if (pathError != null) return pathError;
+        EnsureValidPath(path);
 
-            var json = await _objectsManager.GetRasterInfo(orgSlug, dsSlug, path);
-            return Content(json, "application/json");
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Exception in GetRasterInfo('{OrgSlug}', '{DsSlug}', '{Path}')", orgSlug, dsSlug,
-                path);
-            throw;
-        }
+        var json = await _objectsManager.GetRasterInfo(orgSlug, dsSlug, path);
+        return Content(json, "application/json");
     }
 
     /// <summary>Get raster statistics/histogram for a band or formula.</summary>
     [HttpGet("raster-metadata", Name = nameof(ObjectsController) + "." + nameof(GetRasterMetadata))]
     [ProducesResponseType(StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
-    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
     public async Task<IActionResult> GetRasterMetadata(
         [FromRoute, Required] string orgSlug,
         [FromRoute, Required] string dsSlug,
@@ -1023,27 +742,17 @@ public class ObjectsController : ControllerBaseEx
         [FromQuery] string? formula,
         [FromQuery] string? bandFilter)
     {
-        try
-        {
-            var pathError = ValidatePath(path);
-            if (pathError != null) return pathError;
+        EnsureValidPath(path);
 
-            var json = await _objectsManager.GetRasterMetadata(orgSlug, dsSlug, path, formula, bandFilter);
-            return Content(json, "application/json");
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Exception in GetRasterMetadata('{OrgSlug}', '{DsSlug}', '{Path}')", orgSlug, dsSlug,
-                path);
-            throw;
-        }
+        var json = await _objectsManager.GetRasterMetadata(orgSlug, dsSlug, path, formula, bandFilter);
+        return Content(json, "application/json");
     }
 
     /// <summary>Generate thumbnail with extended visualization params.</summary>
     [HttpGet("thumb-ex", Name = nameof(ObjectsController) + "." + nameof(GenerateThumbnailEx))]
     [ProducesResponseType(typeof(FileResult), StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
-    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
     public async Task<IActionResult> GenerateThumbnailEx(
         [FromRoute, Required] string orgSlug,
         [FromRoute, Required] string dsSlug,
@@ -1056,31 +765,21 @@ public class ObjectsController : ControllerBaseEx
         [FromQuery] string? colormap,
         [FromQuery] string? rescale)
     {
-        try
-        {
-            var pathError = ValidatePath(path);
-            if (pathError != null) return pathError;
+        EnsureValidPath(path);
 
-            var res = await _objectsManager.GenerateThumbnailDataEx(orgSlug, dsSlug, path, size,
-                preset, bands, formula, bandFilter, colormap, rescale);
+        var res = await _objectsManager.GenerateThumbnailDataEx(orgSlug, dsSlug, path, size,
+            preset, bands, formula, bandFilter, colormap, rescale);
 
-            if (res == null) return NotFound();
-            return File(res.Data, res.ContentType, res.Name);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Exception in GenerateThumbnailEx('{OrgSlug}', '{DsSlug}', '{Path}')", orgSlug, dsSlug,
-                path);
-            throw;
-        }
+        if (res == null) return NotFound();
+        return File(res.Data, res.ContentType, res.Name);
     }
 
     /// <summary>Generate tile with extended visualization params.</summary>
     [HttpGet("tiles-ex/{tz:int}/{tx:int}/{tyRaw}.{ext:regex(^(png|webp)$)}",
         Name = nameof(ObjectsController) + "." + nameof(GenerateTileEx))]
     [ProducesResponseType(typeof(FileResult), StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
-    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
     public async Task<IActionResult> GenerateTileEx(
         [FromRoute, Required] string orgSlug,
         [FromRoute, Required] string dsSlug,
@@ -1096,33 +795,23 @@ public class ObjectsController : ControllerBaseEx
         [FromQuery] string? colormap,
         [FromQuery] string? rescale)
     {
-        try
-        {
-            var pathError = ValidatePath(path);
-            if (pathError != null) return pathError;
+        EnsureValidPath(path);
 
-            var retina = tyRaw.EndsWith("@2x");
-            if (!int.TryParse(retina ? tyRaw.Replace("@2x", string.Empty) : tyRaw, out var ty))
-                throw new ArgumentException("Invalid input parameters (retina indicator should be '@2x')");
+        var retina = tyRaw.EndsWith("@2x");
+        if (!int.TryParse(retina ? tyRaw.Replace("@2x", string.Empty) : tyRaw, out var ty))
+            throw new BadRequestException("Invalid input parameters (retina indicator should be '@2x')");
 
-            var res = await _objectsManager.GenerateTileDataEx(orgSlug, dsSlug, path, tz, tx, ty, retina,
-                preset, bands, formula, bandFilter, colormap, rescale);
+        var res = await _objectsManager.GenerateTileDataEx(orgSlug, dsSlug, path, tz, tx, ty, retina,
+            preset, bands, formula, bandFilter, colormap, rescale);
 
-            return File(res.Data, res.ContentType, res.Name);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Exception in GenerateTileEx('{OrgSlug}', '{DsSlug}', '{Path}')", orgSlug, dsSlug,
-                path);
-            throw;
-        }
+        return File(res.Data, res.ContentType, res.Name);
     }
 
     /// <summary>Export raster with visualization params applied as GeoTIFF.</summary>
     [HttpGet("export", Name = nameof(ObjectsController) + "." + nameof(ExportRaster))]
     [ProducesResponseType(typeof(FileResult), StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
-    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
     public async Task<IActionResult> ExportRaster(
         [FromRoute, Required] string orgSlug,
         [FromRoute, Required] string dsSlug,
@@ -1134,130 +823,85 @@ public class ObjectsController : ControllerBaseEx
         [FromQuery] string? colormap = null,
         [FromQuery] string? rescale = null)
     {
-        try
-        {
-            var pathError = ValidatePath(path);
-            if (pathError != null) return pathError;
+        EnsureValidPath(path);
 
-            var res = await _objectsManager.ExportRaster(orgSlug, dsSlug, path,
-                preset, bands, formula, bandFilter, colormap, rescale);
+        var res = await _objectsManager.ExportRaster(orgSlug, dsSlug, path,
+            preset, bands, formula, bandFilter, colormap, rescale);
 
-            return File(res.Data, res.ContentType, res.Name);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Exception in ExportRaster('{OrgSlug}', '{DsSlug}', '{Path}')", orgSlug, dsSlug, path);
-            throw;
-        }
+        return File(res.Data, res.ContentType, res.Name);
     }
 
     /// <summary>Validate merge-multispectral inputs.</summary>
     [HttpPost("merge-multispectral/validate",
         Name = nameof(ObjectsController) + "." + nameof(ValidateMergeMultispectral))]
     [ProducesResponseType(StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
     public async Task<IActionResult> ValidateMergeMultispectral(
         [FromRoute, Required] string orgSlug,
         [FromRoute, Required] string dsSlug,
         [FromBody, Required] MergeMultispectralRequestDto request)
     {
-        try
-        {
-            var validationError = ValidatePaths(request.Paths);
-            if (validationError != null) return validationError;
+        EnsureValidPaths(request.Paths);
 
-            var json = await _objectsManager.ValidateMergeMultispectral(orgSlug, dsSlug, request.Paths);
-            return Content(json, "application/json");
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Exception in ValidateMergeMultispectral('{OrgSlug}', '{DsSlug}')", orgSlug, dsSlug);
-            throw;
-        }
+        var json = await _objectsManager.ValidateMergeMultispectral(orgSlug, dsSlug, request.Paths);
+        return Content(json, "application/json");
     }
 
     /// <summary>Preview merge-multispectral result.</summary>
     [HttpPost("merge-multispectral/preview",
         Name = nameof(ObjectsController) + "." + nameof(PreviewMergeMultispectral))]
     [ProducesResponseType(typeof(FileResult), StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
     public async Task<IActionResult> PreviewMergeMultispectral(
         [FromRoute, Required] string orgSlug,
         [FromRoute, Required] string dsSlug,
         [FromBody, Required] MergeMultispectralRequestDto request)
     {
-        try
-        {
-            var validationError = ValidatePaths(request.Paths);
-            if (validationError != null) return validationError;
+        EnsureValidPaths(request.Paths);
 
-            var data = await _objectsManager.PreviewMergeMultispectral(orgSlug, dsSlug, request.Paths,
-                request.PreviewBands, request.ThumbSize ?? 512);
-            return File(data, "image/webp", "preview.webp");
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Exception in PreviewMergeMultispectral('{OrgSlug}', '{DsSlug}')", orgSlug, dsSlug);
-            throw;
-        }
+        var data = await _objectsManager.PreviewMergeMultispectral(orgSlug, dsSlug, request.Paths,
+            request.PreviewBands, request.ThumbSize ?? 512);
+        return File(data, "image/webp", "preview.webp");
     }
 
     /// <summary>Merge single-band rasters into a multi-band COG.</summary>
     [HttpPost("merge-multispectral", Name = nameof(ObjectsController) + "." + nameof(MergeMultispectral))]
     [ProducesResponseType(StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
     public async Task<IActionResult> MergeMultispectral(
         [FromRoute, Required] string orgSlug,
         [FromRoute, Required] string dsSlug,
         [FromBody, Required] MergeMultispectralRequestDto request)
     {
-        try
-        {
-            if (string.IsNullOrWhiteSpace(request.OutputPath))
-                return BadRequest(new ErrorResponse("outputPath is required"));
+        if (string.IsNullOrWhiteSpace(request.OutputPath))
+            throw new BadRequestException("outputPath is required");
 
-            var validationError = ValidatePaths(request.Paths, request.OutputPath);
-            if (validationError != null) return validationError;
+        EnsureValidPaths(request.Paths, request.OutputPath);
 
-            await _objectsManager.MergeMultispectral(orgSlug, dsSlug, request.Paths, request.OutputPath);
-            return Ok(new { ok = true });
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Exception in MergeMultispectral('{OrgSlug}', '{DsSlug}')", orgSlug, dsSlug);
-            throw;
-        }
+        await _objectsManager.MergeMultispectral(orgSlug, dsSlug, request.Paths, request.OutputPath);
+        return Ok(new { ok = true });
     }
 
     /// <summary>Validate that source and reference rasters are compatible for alignment.</summary>
     [HttpPost("align/validate",
         Name = nameof(ObjectsController) + "." + nameof(ValidateAlignRaster))]
     [ProducesResponseType(StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
     public async Task<IActionResult> ValidateAlignRaster(
         [FromRoute, Required] string orgSlug,
         [FromRoute, Required] string dsSlug,
         [FromBody, Required] AlignRasterRequestDto request)
     {
-        try
-        {
-            if (string.IsNullOrWhiteSpace(request.SourcePath))
-                return BadRequest(new ErrorResponse("sourcePath is required"));
-            if (string.IsNullOrWhiteSpace(request.ReferencePath))
-                return BadRequest(new ErrorResponse("referencePath is required"));
+        if (string.IsNullOrWhiteSpace(request.SourcePath))
+            throw new BadRequestException("sourcePath is required");
+        if (string.IsNullOrWhiteSpace(request.ReferencePath))
+            throw new BadRequestException("referencePath is required");
 
-            var validationError = ValidatePaths([request.SourcePath, request.ReferencePath]);
-            if (validationError != null) return validationError;
+        EnsureValidPaths([request.SourcePath, request.ReferencePath]);
 
-            var json = await _objectsManager.ValidateAlignRaster(orgSlug, dsSlug,
-                request.SourcePath, request.ReferencePath);
-            return Content(json, "application/json");
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Exception in ValidateAlignRaster('{OrgSlug}', '{DsSlug}')", orgSlug, dsSlug);
-            throw;
-        }
+        var json = await _objectsManager.ValidateAlignRaster(orgSlug, dsSlug,
+            request.SourcePath, request.ReferencePath);
+        return Content(json, "application/json");
     }
 
     #endregion
@@ -1267,34 +911,24 @@ public class ObjectsController : ControllerBaseEx
     /// <summary>Get raster value info (min/max/unit/dimensions), including thermal calibration if applicable.</summary>
     [HttpGet("raster-value-info", Name = nameof(ObjectsController) + "." + nameof(GetRasterValueInfo))]
     [ProducesResponseType(StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
-    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
     public async Task<IActionResult> GetRasterValueInfo(
         [FromRoute, Required] string orgSlug,
         [FromRoute, Required] string dsSlug,
         [FromQuery, Required] string path)
     {
-        try
-        {
-            var pathError = ValidatePath(path);
-            if (pathError != null) return pathError;
+        EnsureValidPath(path);
 
-            var json = await _objectsManager.GetRasterValueInfo(orgSlug, dsSlug, path);
-            return Content(json, "application/json");
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Exception in GetRasterValueInfo('{OrgSlug}', '{DsSlug}', '{Path}')", orgSlug, dsSlug,
-                path);
-            throw;
-        }
+        var json = await _objectsManager.GetRasterValueInfo(orgSlug, dsSlug, path);
+        return Content(json, "application/json");
     }
 
     /// <summary>Get raster value (temperature/elevation/etc.) at a specific pixel location.</summary>
     [HttpGet("raster-point-value", Name = nameof(ObjectsController) + "." + nameof(GetRasterPointValue))]
     [ProducesResponseType(StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
-    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
     public async Task<IActionResult> GetRasterPointValue(
         [FromRoute, Required] string orgSlug,
         [FromRoute, Required] string dsSlug,
@@ -1302,27 +936,17 @@ public class ObjectsController : ControllerBaseEx
         [FromQuery, Required] int x,
         [FromQuery, Required] int y)
     {
-        try
-        {
-            var pathError = ValidatePath(path);
-            if (pathError != null) return pathError;
+        EnsureValidPath(path);
 
-            var json = await _objectsManager.GetRasterPointValue(orgSlug, dsSlug, path, x, y);
-            return Content(json, "application/json");
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Exception in GetRasterPointValue('{OrgSlug}', '{DsSlug}', '{Path}')", orgSlug, dsSlug,
-                path);
-            throw;
-        }
+        var json = await _objectsManager.GetRasterPointValue(orgSlug, dsSlug, path, x, y);
+        return Content(json, "application/json");
     }
 
     /// <summary>Get raster value statistics for a rectangular area.</summary>
     [HttpGet("raster-area-stats", Name = nameof(ObjectsController) + "." + nameof(GetRasterAreaStats))]
     [ProducesResponseType(StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
-    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
     public async Task<IActionResult> GetRasterAreaStats(
         [FromRoute, Required] string orgSlug,
         [FromRoute, Required] string dsSlug,
@@ -1332,20 +956,10 @@ public class ObjectsController : ControllerBaseEx
         [FromQuery, Required] int x1,
         [FromQuery, Required] int y1)
     {
-        try
-        {
-            var pathError = ValidatePath(path);
-            if (pathError != null) return pathError;
+        EnsureValidPath(path);
 
-            var json = await _objectsManager.GetRasterAreaStats(orgSlug, dsSlug, path, x0, y0, x1, y1);
-            return Content(json, "application/json");
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Exception in GetRasterAreaStats('{OrgSlug}', '{DsSlug}', '{Path}')", orgSlug, dsSlug,
-                path);
-            throw;
-        }
+        var json = await _objectsManager.GetRasterAreaStats(orgSlug, dsSlug, path, x0, y0, x1, y1);
+        return Content(json, "application/json");
     }
 
     /// <summary>Sample raster values along a GeoJSON LineString (WGS84) and return a profile.</summary>
@@ -1355,35 +969,25 @@ public class ObjectsController : ControllerBaseEx
     /// </remarks>
     [HttpPost("raster-profile", Name = nameof(ObjectsController) + "." + nameof(GetRasterProfile))]
     [ProducesResponseType(StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
-    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
     public async Task<IActionResult> GetRasterProfile(
         [FromRoute, Required] string orgSlug,
         [FromRoute, Required] string dsSlug,
         [FromBody, Required] RasterProfileRequestDto request)
     {
-        try
-        {
-            if (request == null)
-                return BadRequest(new ErrorResponse("Request body is required"));
+        if (request == null)
+            throw new BadRequestException("Request body is required");
 
-            var pathError = ValidatePath(request.Path);
-            if (pathError != null) return pathError;
+        EnsureValidPath(request.Path);
 
-            if (string.IsNullOrWhiteSpace(request.LineString))
-                return BadRequest(new ErrorResponse("lineString (GeoJSON LineString) is required"));
+        if (string.IsNullOrWhiteSpace(request.LineString))
+            throw new BadRequestException("lineString (GeoJSON LineString) is required");
 
-            var samples = request.Samples ?? 256;
-            var json = await _objectsManager.GetRasterProfile(orgSlug, dsSlug, request.Path,
-                request.LineString, samples);
-            return Content(json, "application/json");
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Exception in GetRasterProfile('{OrgSlug}', '{DsSlug}', '{Path}')", orgSlug, dsSlug,
-                request?.Path);
-            throw;
-        }
+        var samples = request.Samples ?? 256;
+        var json = await _objectsManager.GetRasterProfile(orgSlug, dsSlug, request.Path,
+            request.LineString, samples);
+        return Content(json, "application/json");
     }
 
     #endregion
@@ -1395,35 +999,25 @@ public class ObjectsController : ControllerBaseEx
     /// </summary>
     [HttpPost("stockpile/calculate", Name = nameof(ObjectsController) + "." + nameof(CalculateStockpileVolume))]
     [ProducesResponseType(StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
-    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
     public async Task<IActionResult> CalculateStockpileVolume(
         [FromRoute, Required] string orgSlug,
         [FromRoute, Required] string dsSlug,
         [FromBody, Required] VolumeCalculationRequestDto request)
     {
-        try
-        {
-            if (request == null)
-                return BadRequest(new ErrorResponse("Request body is required"));
+        if (request == null)
+            throw new BadRequestException("Request body is required");
 
-            var pathError = ValidatePath(request.Path);
-            if (pathError != null) return pathError;
+        EnsureValidPath(request.Path);
 
-            if (string.IsNullOrWhiteSpace(request.Polygon))
-                return BadRequest(new ErrorResponse("polygon (GeoJSON Polygon) is required"));
+        if (string.IsNullOrWhiteSpace(request.Polygon))
+            throw new BadRequestException("polygon (GeoJSON Polygon) is required");
 
-            var json = await _objectsManager.CalculateVolume(orgSlug, dsSlug, request.Path,
-                request.Polygon, request.BaseMethod, request.FlatElevation);
+        var json = await _objectsManager.CalculateVolume(orgSlug, dsSlug, request.Path,
+            request.Polygon, request.BaseMethod, request.FlatElevation);
 
-            return Content(json, "application/json");
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Exception in CalculateStockpileVolume('{OrgSlug}', '{DsSlug}', '{Path}')",
-                orgSlug, dsSlug, request?.Path);
-            throw;
-        }
+        return Content(json, "application/json");
     }
 
     /// <summary>
@@ -1431,39 +1025,29 @@ public class ObjectsController : ControllerBaseEx
     /// </summary>
     [HttpPost("stockpile/detect", Name = nameof(ObjectsController) + "." + nameof(DetectStockpile))]
     [ProducesResponseType(StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
-    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
     public async Task<IActionResult> DetectStockpile(
         [FromRoute, Required] string orgSlug,
         [FromRoute, Required] string dsSlug,
         [FromBody, Required] StockpileDetectionRequestDto request)
     {
-        try
-        {
-            if (request == null)
-                return BadRequest(new ErrorResponse("Request body is required"));
+        if (request == null)
+            throw new BadRequestException("Request body is required");
 
-            var pathError = ValidatePath(request.Path);
-            if (pathError != null) return pathError;
+        EnsureValidPath(request.Path);
 
-            var radius = request.Radius ?? 50.0;
-            var sensitivity = request.Sensitivity ?? 0.5f;
-            if (sensitivity < 0f) sensitivity = 0f;
-            if (sensitivity > 1f) sensitivity = 1f;
-            if (!(radius > 0)) return BadRequest(new ErrorResponse("radius must be positive"));
-            if (!request.Lat.HasValue || !request.Lon.HasValue)
-                return BadRequest(new ErrorResponse("lat and lon are required"));
+        var radius = request.Radius ?? 50.0;
+        var sensitivity = request.Sensitivity ?? 0.5f;
+        if (sensitivity < 0f) sensitivity = 0f;
+        if (sensitivity > 1f) sensitivity = 1f;
+        if (!(radius > 0)) throw new BadRequestException("radius must be positive");
+        if (!request.Lat.HasValue || !request.Lon.HasValue)
+            throw new BadRequestException("lat and lon are required");
 
-            var json = await _objectsManager.DetectStockpile(orgSlug, dsSlug, request.Path,
-                request.Lat.Value, request.Lon.Value, radius, sensitivity);
-            return Content(json, "application/json");
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Exception in DetectStockpile('{OrgSlug}', '{DsSlug}', '{Path}')",
-                orgSlug, dsSlug, request?.Path);
-            throw;
-        }
+        var json = await _objectsManager.DetectStockpile(orgSlug, dsSlug, request.Path,
+            request.Lat.Value, request.Lon.Value, radius, sensitivity);
+        return Content(json, "application/json");
     }
 
     /// <summary>
@@ -1471,42 +1055,32 @@ public class ObjectsController : ControllerBaseEx
     /// </summary>
     [HttpPost("stockpile/detect-all", Name = nameof(ObjectsController) + "." + nameof(DetectAllStockpiles))]
     [ProducesResponseType(StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
-    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
     public async Task<IActionResult> DetectAllStockpiles(
         [FromRoute, Required] string orgSlug,
         [FromRoute, Required] string dsSlug,
         [FromBody, Required] StockpileBatchDetectionRequestDto request)
     {
-        try
-        {
-            if (request == null)
-                return BadRequest(new ErrorResponse("Request body is required"));
+        if (request == null)
+            throw new BadRequestException("Request body is required");
 
-            var pathError = ValidatePath(request.Path);
-            if (pathError != null) return pathError;
+        EnsureValidPath(request.Path);
 
-            var sensitivity = request.Sensitivity ?? 0.5f;
-            if (sensitivity < 0f) sensitivity = 0f;
-            if (sensitivity > 1f) sensitivity = 1f;
+        var sensitivity = request.Sensitivity ?? 0.5f;
+        if (sensitivity < 0f) sensitivity = 0f;
+        if (sensitivity > 1f) sensitivity = 1f;
 
-            var minAreaM2 = request.MinAreaM2 ?? 5.0;
-            if (minAreaM2 < 0) return BadRequest(new ErrorResponse("minAreaM2 must be >= 0"));
+        var minAreaM2 = request.MinAreaM2 ?? 5.0;
+        if (minAreaM2 < 0) throw new BadRequestException("minAreaM2 must be >= 0");
 
-            var maxResults = request.MaxResults ?? 50;
-            if (maxResults <= 0) return BadRequest(new ErrorResponse("maxResults must be > 0"));
-            if (maxResults > 500) maxResults = 500;
+        var maxResults = request.MaxResults ?? 50;
+        if (maxResults <= 0) throw new BadRequestException("maxResults must be > 0");
+        if (maxResults > 500) maxResults = 500;
 
-            var json = await _objectsManager.DetectAllStockpiles(orgSlug, dsSlug, request.Path,
-                sensitivity, minAreaM2, maxResults);
-            return Content(json, "application/json");
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Exception in DetectAllStockpiles('{OrgSlug}', '{DsSlug}', '{Path}')",
-                orgSlug, dsSlug, request?.Path);
-            throw;
-        }
+        var json = await _objectsManager.DetectAllStockpiles(orgSlug, dsSlug, request.Path,
+            sensitivity, minAreaM2, maxResults);
+        return Content(json, "application/json");
     }
 
     #endregion
@@ -1521,53 +1095,43 @@ public class ObjectsController : ControllerBaseEx
     /// </remarks>
     [HttpPost("contours", Name = nameof(ObjectsController) + "." + nameof(GenerateContours))]
     [ProducesResponseType(StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
-    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
     public async Task<IActionResult> GenerateContours(
         [FromRoute, Required] string orgSlug,
         [FromRoute, Required] string dsSlug,
         [FromBody, Required] ContourRequestDto request)
     {
-        try
-        {
-            if (request == null)
-                return BadRequest(new ErrorResponse("Request body is required"));
+        if (request == null)
+            throw new BadRequestException("Request body is required");
 
-            var pathError = ValidatePath(request.Path);
-            if (pathError != null) return pathError;
+        EnsureValidPath(request.Path);
 
-            if (!request.Interval.HasValue && !request.Count.HasValue)
-                return BadRequest(new ErrorResponse("Either 'interval' or 'count' must be specified"));
+        if (!request.Interval.HasValue && !request.Count.HasValue)
+            throw new BadRequestException("Either 'interval' or 'count' must be specified");
 
-            if (request.Interval.HasValue && request.Interval.Value <= 0)
-                return BadRequest(new ErrorResponse("'interval' must be > 0"));
+        if (request.Interval.HasValue && request.Interval.Value <= 0)
+            throw new BadRequestException("'interval' must be > 0");
 
-            if (request.Count.HasValue && request.Count.Value <= 0)
-                return BadRequest(new ErrorResponse("'count' must be > 0"));
+        if (request.Count.HasValue && request.Count.Value <= 0)
+            throw new BadRequestException("'count' must be > 0");
 
-            if (request.MinElev.HasValue && request.MaxElev.HasValue &&
-                request.MinElev.Value >= request.MaxElev.Value)
-                return BadRequest(new ErrorResponse("'minElev' must be less than 'maxElev'"));
+        if (request.MinElev.HasValue && request.MaxElev.HasValue &&
+            request.MinElev.Value >= request.MaxElev.Value)
+            throw new BadRequestException("'minElev' must be less than 'maxElev'");
 
-            if (request.SimplifyTolerance < 0)
-                return BadRequest(new ErrorResponse("'simplifyTolerance' must be >= 0"));
+        if (request.SimplifyTolerance < 0)
+            throw new BadRequestException("'simplifyTolerance' must be >= 0");
 
-            var bandIndex = request.BandIndex > 0 ? request.BandIndex : 1;
+        var bandIndex = request.BandIndex > 0 ? request.BandIndex : 1;
 
-            var json = await _objectsManager.GenerateContours(orgSlug, dsSlug, request.Path,
-                request.Interval, request.Count,
-                request.BaseOffset,
-                request.MinElev, request.MaxElev,
-                request.SimplifyTolerance,
-                bandIndex);
-            return Content(json, "application/json");
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Exception in GenerateContours('{OrgSlug}', '{DsSlug}', '{Path}')",
-                orgSlug, dsSlug, request?.Path);
-            throw;
-        }
+        var json = await _objectsManager.GenerateContours(orgSlug, dsSlug, request.Path,
+            request.Interval, request.Count,
+            request.BaseOffset,
+            request.MinElev, request.MaxElev,
+            request.SimplifyTolerance,
+            bandIndex);
+        return Content(json, "application/json");
     }
 
     #endregion
@@ -1577,58 +1141,32 @@ public class ObjectsController : ControllerBaseEx
     /// <summary>Check if a masked version of the file already exists.</summary>
     [HttpPost("mask-borders/check", Name = nameof(ObjectsController) + "." + nameof(CheckMaskBorders))]
     [ProducesResponseType(typeof(MaskBordersCheckResponseDto), StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
     public async Task<IActionResult> CheckMaskBorders(
         [FromRoute, Required] string orgSlug,
         [FromRoute, Required] string dsSlug,
         [FromBody, Required] MaskBordersRequestDto request)
     {
-        try
-        {
-            _logger.LogDebug("Objects controller CheckMaskBorders('{OrgSlug}', '{DsSlug}', '{Path}')",
-                orgSlug, dsSlug, request.Path);
+        EnsureValidPath(request.Path);
 
-            var pathError = ValidatePath(request.Path);
-            if (pathError != null) return pathError;
-
-            var result = await _objectsManager.CheckMaskedFileExists(orgSlug, dsSlug, request.Path);
-            return Ok(result);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Exception in CheckMaskBorders('{OrgSlug}', '{DsSlug}', '{Path}')",
-                orgSlug, dsSlug, request.Path);
-            throw;
-        }
+        var result = await _objectsManager.CheckMaskedFileExists(orgSlug, dsSlug, request.Path);
+        return Ok(result);
     }
 
     /// <summary>Start masking orthophoto borders to make them transparent.</summary>
     [HttpPost("mask-borders", Name = nameof(ObjectsController) + "." + nameof(MaskBorders))]
     [ProducesResponseType(StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
     public async Task<IActionResult> MaskBorders(
         [FromRoute, Required] string orgSlug,
         [FromRoute, Required] string dsSlug,
         [FromBody, Required] MaskBordersRequestDto request)
     {
-        try
-        {
-            _logger.LogDebug("Objects controller MaskBorders('{OrgSlug}', '{DsSlug}', '{Path}')",
-                orgSlug, dsSlug, request.Path);
+        // Early path traversal check
+        EnsureValidPath(request.Path);
 
-            // Early path traversal check
-            var pathError = ValidatePath(request.Path);
-            if (pathError != null) return pathError;
-
-            await _objectsManager.MaskBorders(orgSlug, dsSlug, request.Path, request.Near, request.White);
-            return Ok(new { ok = true });
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Exception in MaskBorders('{OrgSlug}', '{DsSlug}', '{Path}')",
-                orgSlug, dsSlug, request.Path);
-            throw;
-        }
+        await _objectsManager.MaskBorders(orgSlug, dsSlug, request.Path, request.Near, request.White);
+        return Ok(new { ok = true });
     }
 
     #endregion

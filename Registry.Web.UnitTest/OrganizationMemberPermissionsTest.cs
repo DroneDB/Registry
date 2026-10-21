@@ -252,7 +252,7 @@ public class OrganizationMemberPermissionsTest : TestBase
         SetupAsUser(_ownerUser);
         var manager = CreateManager();
 
-        var ex = await Should.ThrowAsync<InvalidOperationException>(
+        var ex = await Should.ThrowAsync<ForbiddenException>(
             manager.AddMember(_testOrg.Slug, "some-user-id", OrganizationPermissions.ReadWrite)
         );
 
@@ -260,12 +260,12 @@ public class OrganizationMemberPermissionsTest : TestBase
     }
 
     [Test]
-    public async Task AddMember_AsReadOnlyMember_ThrowsUnauthorized()
+    public async Task AddMember_AsReadOnlyMember_ThrowsForbidden()
     {
         SetupAsUser(_readOnlyUser);
         var manager = CreateManager();
 
-        await Should.ThrowAsync<UnauthorizedException>(
+        await Should.ThrowAsync<ForbiddenException>(
             manager.AddMember(_testOrg.Slug, "some-user-id", OrganizationPermissions.ReadWrite)
         );
     }
@@ -276,7 +276,7 @@ public class OrganizationMemberPermissionsTest : TestBase
         SetupAsUser(_ownerUser);
         var manager = CreateManager();
 
-        await Should.ThrowAsync<InvalidOperationException>(
+        await Should.ThrowAsync<BadRequestException>(
             manager.AddMember(_testOrg.Slug, _ownerUser.UserName, OrganizationPermissions.ReadWrite)
         );
     }
@@ -371,7 +371,7 @@ public class OrganizationMemberPermissionsTest : TestBase
         SetupAsUser(_ownerUser);
         var manager = CreateManager();
 
-        await Should.ThrowAsync<InvalidOperationException>(
+        await Should.ThrowAsync<ForbiddenException>(
             manager.RemoveMember(_testOrg.Slug, _memberUser.UserName)
         );
     }

@@ -127,7 +127,7 @@ GET /orgs/{orgSlug}/import/sources -> none [open] @ ImportController.GetImportSo
 POST /orgs/{orgSlug}/import/verify -> none [open] @ ImportController.VerifyImport
 GET /orgs/{orgSlug}/members -> none [open] @ OrganizationsController.GetMembers
 POST /orgs/{orgSlug}/members -> none [open] @ OrganizationsController.AddMember
-DELETE /orgs/{orgSlug}/members/{userName} -> none [open] @ OrganizationsController.RemoveMember  // FINDING (Anonymous, User -> 500): member management disabled (the default) throws InvalidOperationException before the access check (RQ-05)
+DELETE /orgs/{orgSlug}/members/{userName} -> none [open] @ OrganizationsController.RemoveMember
 PUT /orgs/{orgSlug}/members/{userName} -> none [open] @ OrganizationsController.UpdateMemberPermission
 ANY /quickhealth -> Authorize + Policy(inline: AssertionRequirement) [admin] @ Health checks
 GET /scalar/favicon.svg -> AllowAnonymous [anonymous] @ HTTP: GET /scalar/favicon.svg

@@ -123,15 +123,19 @@ The fixtures are stateless: `meta-set`/`meta-unset` do not change a later read, 
 | stac-collection, stac-item | GET …/stac, …/stac/{base64("ortho.tif")} | owner | 200 |
 | ogcapi-landing, ogcapi-conformance, ogcapi-collections | GET …/ogcapi[/conformance\|/collections]?f=json | owner | 200 |
 
-Error bodies (today's `ErrorResponse` `{error, noRetry}`, replaced by D1 on purpose):
+Error bodies: RFC 9457 `ProblemDetails` since RQ-05 (plan decision D1), `application/problem+json`
+with `type`, `title`, `status`, `detail` (the message), `traceId` (scrubbed to `<trace-id>`) and the
+`noRetry` extension member; a model-validation body is a `ValidationProblemDetails` (`errors` per
+field, `detail` with the joined field messages). 401 only for anonymous callers (D2). Until RQ-05 the
+bodies were `ErrorResponse` `{error, noRetry}` and `error-403-non-member` was `error-401-non-member`.
 
 | Golden | Request | Caller | Status | Body |
 |---|---|---|---|---|
 | error-400-invalid-slug | POST /orgs/{org}/ds slug="Not A Slug!" | owner | 400 | manager `BadRequestException` |
 | error-400-model-validation | POST …/meta/remove without `id` | owner | 400 | model validation |
 | error-401-anonymous-gate | GET /users/storage | anonymous | 401 | empty, no Content-Type (`[Authorize]` challenge) |
-| error-401-anonymous-private-org | GET /orgs/{org}/ds | anonymous | 401 | manager `UnauthorizedException` |
-| error-401-non-member | GET /orgs/{org}/ds/{ds} | user | 401 | manager `UnauthorizedException`; D2 turns it into 403 |
+| error-401-anonymous-private-org | GET /orgs/{org}/ds | anonymous | 401 | manager `ForbiddenException`, anonymous caller (D2) |
+| error-403-non-member | GET /orgs/{org}/ds/{ds} | user | 403 | manager `ForbiddenException`, authenticated caller (D2) |
 | error-403-non-admin | GET /sys/config | user | 403 | empty, no Content-Type (Admin policy) |
 | error-404-missing-dataset | GET /orgs/{org}/ds/golden-missing | owner | 404 | manager `NotFoundException` |
 | error-404-missing-organization | GET /orgs/golden-nowhere/ | owner | 404 | manager `NotFoundException` |

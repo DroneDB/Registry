@@ -161,12 +161,12 @@ public class StacManager : IStacManager
         _logger.LogInformation("In GetStacChild('{OrgSlug}/{DsSlug}', {Path})", orgSlug, dsSlug, path);
 
         if (!await _authManager.RequestAccess(ds, AccessType.Read))
-            throw new UnauthorizedException("The current user is not allowed to list this dataset");
+            throw new ForbiddenException("The current user is not allowed to list this dataset");
 
         var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
 
         if (path != null && !ddb.EntryExists(path))
-            throw new ArgumentException("Entry does not exist");
+            throw new BadRequestException("Entry does not exist");
 
         return ddb.GetStac($"{orgSlug}/{dsSlug}", _utils.GenerateDatasetUrl(ds),
             _utils.GetLocalHost(), path);
@@ -294,7 +294,7 @@ public class StacManager : IStacManager
         var ds = _utils.GetDataset(orgSlug, dsSlug);
 
         if (!await _authManager.RequestAccess(ds, AccessType.Read))
-            throw new UnauthorizedException("The current user is not allowed to access this dataset");
+            throw new ForbiddenException("The current user is not allowed to access this dataset");
 
         return GetCollectionInternal(ds);
     }
@@ -305,7 +305,7 @@ public class StacManager : IStacManager
         var ds = _utils.GetDataset(orgSlug, dsSlug);
 
         if (!await _authManager.RequestAccess(ds, AccessType.Read))
-            throw new UnauthorizedException("The current user is not allowed to access this dataset");
+            throw new ForbiddenException("The current user is not allowed to access this dataset");
 
         var collectionId = $"{orgSlug}/{dsSlug}";
         var lim = Math.Clamp(limit ?? DefaultLimit, 1, MaxLimit);
@@ -316,7 +316,7 @@ public class StacManager : IStacManager
 
         if (ddb.GetStacItemCollection(collectionId, _utils.GenerateDatasetUrl(ds), _utils.GetLocalHost(),
                 bboxStr, datetime, lim, off) is not JObject result)
-            throw new InvalidOperationException("Invalid STAC item collection result");
+            throw new DdbException("Invalid STAC item collection result");
 
         var features = result["features"] as JArray ?? [];
         foreach (var feature in features.OfType<JObject>())
@@ -347,7 +347,7 @@ public class StacManager : IStacManager
         var ds = _utils.GetDataset(orgSlug, dsSlug);
 
         if (!await _authManager.RequestAccess(ds, AccessType.Read))
-            throw new UnauthorizedException("The current user is not allowed to access this dataset");
+            throw new ForbiddenException("The current user is not allowed to access this dataset");
 
         var collectionId = $"{orgSlug}/{dsSlug}";
 
@@ -362,7 +362,7 @@ public class StacManager : IStacManager
             throw new NotFoundException("Feature does not exist");
 
         if (ddb.GetStac(collectionId, _utils.GenerateDatasetUrl(ds), _utils.GetLocalHost(), path) is not JObject item)
-            throw new InvalidOperationException("Invalid STAC item result");
+            throw new DdbException("Invalid STAC item result");
 
         RewriteItem(item, orgSlug, dsSlug, collectionId);
         return item;

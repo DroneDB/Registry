@@ -214,7 +214,7 @@ public class UploadManagerTests
     {
         _auth.Setup(a => a.RequestAccess(It.IsAny<Dataset>(), AccessType.Write)).ReturnsAsync(false);
 
-        await Should.ThrowAsync<UnauthorizedException>(() => CreateManager().BeginAsync(Org, Ds, 10));
+        await Should.ThrowAsync<ForbiddenException>(() => CreateManager().BeginAsync(Org, Ds, 10));
     }
 
     [Test]

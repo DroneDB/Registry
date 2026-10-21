@@ -77,7 +77,7 @@ public class SystemManager : ISystemManager
     public async Task<CleanupDatasetResultDto> CleanupEmptyDatasets()
     {
         if (!await _authManager.IsUserAdmin())
-            throw new UnauthorizedException("Only admins can perform system related tasks");
+            throw new ForbiddenException("Only admins can perform system related tasks");
 
         var datasets = _context.Datasets.Include(ds => ds.Organization).ToArray();
 
@@ -143,7 +143,7 @@ public class SystemManager : ISystemManager
     public async Task<FixInvalidSlugsResultDto> FixInvalidSlugs(bool dryRun = true)
     {
         if (!await _authManager.IsUserAdmin())
-            throw new UnauthorizedException("Only admins can perform system related tasks");
+            throw new ForbiddenException("Only admins can perform system related tasks");
 
         var result = new FixInvalidSlugsResultDto { DryRun = dryRun };
 
@@ -385,7 +385,7 @@ public class SystemManager : ISystemManager
         if (!string.Equals(from, to, StringComparison.OrdinalIgnoreCase))
         {
             if (_fileSystem.FolderExists(to))
-                throw new InvalidOperationException($"Folder '{to}' already exists");
+                throw new ConflictException($"Folder '{to}' already exists");
 
             _fileSystem.FolderMove(from, to);
             return;
@@ -408,7 +408,7 @@ public class SystemManager : ISystemManager
     {
 
         if (!await _authManager.IsUserAdmin())
-            throw new UnauthorizedException("Only admins can perform system related tasks");
+            throw new ForbiddenException("Only admins can perform system related tasks");
 
         var query = (from ds in _context.Datasets.Include(ds => ds.Organization)
             select new { ds = ds.Slug, ds.InternalRef, Org = ds.Organization.Slug }).ToArray();
@@ -457,7 +457,7 @@ public class SystemManager : ISystemManager
     public async Task<CleanupBatchesResultDto> CleanupBatches()
     {
         if (!await _authManager.IsUserAdmin())
-            throw new UnauthorizedException("Only admins can perform system related tasks");
+            throw new ForbiddenException("Only admins can perform system related tasks");
 
         var expiration = DateTime.Now - _settings.UploadBatchTimeout;
 
@@ -541,7 +541,7 @@ public class SystemManager : ISystemManager
     public async Task<BuildPendingStatusDto> GetBuildPendingStatus()
     {
         if (!await _authManager.IsUserAdmin())
-            throw new UnauthorizedException("Only admins can perform system related tasks");
+            throw new ForbiddenException("Only admins can perform system related tasks");
 
         return _buildPendingService.GetStatus();
     }
@@ -549,10 +549,10 @@ public class SystemManager : ISystemManager
     public async Task<ImportResultDto> ImportDataset(ImportDatasetRequestDto request)
     {
         if (!await _authManager.IsUserAdmin())
-            throw new UnauthorizedException("Only admins can perform system related tasks");
+            throw new ForbiddenException("Only admins can perform system related tasks");
 
         if (string.IsNullOrWhiteSpace(request.SourceRegistryUrl))
-            throw new ArgumentException("SourceRegistryUrl is required");
+            throw new BadRequestException("SourceRegistryUrl is required");
 
         ValidateRegistryUrl(request.SourceRegistryUrl);
 
@@ -561,10 +561,10 @@ public class SystemManager : ISystemManager
         await _ssrfGuard.AssertAllowedAsync(new Uri(request.SourceRegistryUrl).Host, CancellationToken.None);
 
         if (string.IsNullOrWhiteSpace(request.SourceOrganization))
-            throw new ArgumentException("SourceOrganization is required");
+            throw new BadRequestException("SourceOrganization is required");
 
         if (string.IsNullOrWhiteSpace(request.SourceDataset))
-            throw new ArgumentException("SourceDataset is required");
+            throw new BadRequestException("SourceDataset is required");
 
         var stopwatch = Stopwatch.StartNew();
         var importedItems = new List<ImportedItemDto>();
@@ -648,10 +648,10 @@ public class SystemManager : ISystemManager
     public async Task<ImportResultDto> ImportOrganization(ImportOrganizationRequestDto request)
     {
         if (!await _authManager.IsUserAdmin())
-            throw new UnauthorizedException("Only admins can perform system related tasks");
+            throw new ForbiddenException("Only admins can perform system related tasks");
 
         if (string.IsNullOrWhiteSpace(request.SourceRegistryUrl))
-            throw new ArgumentException("SourceRegistryUrl is required");
+            throw new BadRequestException("SourceRegistryUrl is required");
 
         ValidateRegistryUrl(request.SourceRegistryUrl);
 
@@ -660,7 +660,7 @@ public class SystemManager : ISystemManager
         await _ssrfGuard.AssertAllowedAsync(new Uri(request.SourceRegistryUrl).Host, CancellationToken.None);
 
         if (string.IsNullOrWhiteSpace(request.SourceOrganization))
-            throw new ArgumentException("SourceOrganization is required");
+            throw new BadRequestException("SourceOrganization is required");
 
         var stopwatch = Stopwatch.StartNew();
         var importedItems = new List<ImportedItemDto>();
@@ -1542,22 +1542,22 @@ public class SystemManager : ISystemManager
     private static void ValidateRegistryUrl(string url)
     {
         if (!Uri.TryCreate(url, UriKind.Absolute, out var uri))
-            throw new ArgumentException($"SourceRegistryUrl is not a valid URL: {url}");
+            throw new BadRequestException($"SourceRegistryUrl is not a valid URL: {url}");
 
         if (uri.Scheme != "http" && uri.Scheme != "https")
-            throw new ArgumentException($"SourceRegistryUrl must use http or https scheme: {url}");
+            throw new BadRequestException($"SourceRegistryUrl must use http or https scheme: {url}");
 
         if (!string.IsNullOrEmpty(uri.PathAndQuery) && uri.PathAndQuery != "/")
-            throw new ArgumentException($"SourceRegistryUrl must not contain path or query string, only scheme and host (e.g., https://hub.dronedb.app): {url}");
+            throw new BadRequestException($"SourceRegistryUrl must not contain path or query string, only scheme and host (e.g., https://hub.dronedb.app): {url}");
 
         if (!string.IsNullOrEmpty(uri.Fragment))
-            throw new ArgumentException($"SourceRegistryUrl must not contain fragment: {url}");
+            throw new BadRequestException($"SourceRegistryUrl must not contain fragment: {url}");
     }
 
     public async Task<CleanupJobIndicesResultDto> CleanupJobIndices(int? retentionDays = null)
     {
         if (!await _authManager.IsUserAdmin())
-            throw new UnauthorizedException("Only admins can perform system related tasks");
+            throw new ForbiddenException("Only admins can perform system related tasks");
 
         var days = retentionDays ?? _settings.JobIndexRetentionDays;
         if (days <= 0)
@@ -1582,7 +1582,7 @@ public class SystemManager : ISystemManager
     public async Task<GlobalReportDto> GetGlobalReport()
     {
         if (!await _authManager.IsUserAdmin())
-            throw new UnauthorizedException("Only admins can perform system related tasks");
+            throw new ForbiddenException("Only admins can perform system related tasks");
 
         var userName = await _authManager.SafeGetCurrentUserName();
 
@@ -1673,7 +1673,7 @@ public class SystemManager : ISystemManager
     public async Task<CleanupBuildResultDto> CleanupBuild(CleanupBuildRequestDto request)
     {
         if (!await _authManager.IsUserAdmin())
-            throw new UnauthorizedException("Only admins can perform system related tasks");
+            throw new ForbiddenException("Only admins can perform system related tasks");
 
         request ??= new CleanupBuildRequestDto();
         var scope = DatasetScope.Parse(request.OrganizationSlug, request.DatasetSlug);

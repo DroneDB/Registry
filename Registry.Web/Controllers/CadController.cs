@@ -29,9 +29,9 @@ public class CadController(ICadCrsManager crsManager) : ControllerBaseEx
     /// <returns>The .prj entry.</returns>
     [HttpPost("crs", Name = nameof(CadController) + "." + nameof(SetCrs))]
     [ProducesResponseType(typeof(EntryDto), StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
-    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status401Unauthorized)]
-    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> SetCrs(
         [FromRoute, Required] string orgSlug,
         [FromRoute, Required] string dsSlug,

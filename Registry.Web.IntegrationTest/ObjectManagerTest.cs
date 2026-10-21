@@ -1109,7 +1109,7 @@ public class ObjectManagerTest : TestBase
 
         var objectManager = ObjectsManagerFor(context, webUtils).Build();
 
-        var ex = await Should.ThrowAsync<InvalidOperationException>(async () => await objectManager.Transfer(
+        var ex = await Should.ThrowAsync<BadRequestException>(async () => await objectManager.Transfer(
             MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug, "DJI_0027.JPG",
             MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug, "DJI_0027_copy.JPG",
             false
@@ -1136,7 +1136,7 @@ public class ObjectManagerTest : TestBase
         var objectManager = ObjectsManagerFor(context, webUtils).Build();
 
         // Test path traversal
-        var ex1 = await Should.ThrowAsync<ArgumentException>(async () => await objectManager.Transfer(
+        var ex1 = await Should.ThrowAsync<BadRequestException>(async () => await objectManager.Transfer(
             MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug, "DJI_0027.JPG",
             "admin", "7kd0gxti9qoemsrk", "../../../etc/passwd",
             false
@@ -1144,7 +1144,7 @@ public class ObjectManagerTest : TestBase
         ex1.Message.ShouldContain("path traversal");
 
         // Test absolute path
-        var ex2 = await Should.ThrowAsync<ArgumentException>(async () => await objectManager.Transfer(
+        var ex2 = await Should.ThrowAsync<BadRequestException>(async () => await objectManager.Transfer(
             MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug, "DJI_0027.JPG",
             "admin", "7kd0gxti9qoemsrk", "/etc/passwd",
             false
@@ -1170,7 +1170,7 @@ public class ObjectManagerTest : TestBase
 
         var objectManager = ObjectsManagerFor(context, webUtils).Build();
 
-        var ex = await Should.ThrowAsync<InvalidOperationException>(async () => await objectManager.Transfer(
+        var ex = await Should.ThrowAsync<BadRequestException>(async () => await objectManager.Transfer(
             MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug, "DJI_0027.JPG",
             "admin", "7kd0gxti9qoemsrk", ".ddb/somefile.txt",
             false
@@ -1196,7 +1196,7 @@ public class ObjectManagerTest : TestBase
 
         var objectManager = ObjectsManagerFor(context, webUtils).Build();
 
-        var ex = await Should.ThrowAsync<InvalidOperationException>(async () => await objectManager.Transfer(
+        var ex = await Should.ThrowAsync<NotFoundException>(async () => await objectManager.Transfer(
             MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug, "NonExistent.JPG",
             "admin", "7kd0gxti9qoemsrk", "test.JPG",
             false
@@ -1409,7 +1409,7 @@ public class ObjectManagerTest : TestBase
         destDdb.AddRaw("DJI_0027.JPG");
 
         // Try to transfer with overwrite=false (should fail)
-        var ex = await Should.ThrowAsync<InvalidOperationException>(async () => await objectManager.Transfer(
+        var ex = await Should.ThrowAsync<ConflictException>(async () => await objectManager.Transfer(
             MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug, "DJI_0027.JPG",
             "admin", "7kd0gxti9qoemsrk", "DJI_0027.JPG",
             false
@@ -1857,7 +1857,7 @@ public class ObjectManagerTest : TestBase
 
         var objectManager = ObjectsManagerFor(context, webUtils, _ddbFactoryMock.Object).Build();
 
-        var ex = await Should.ThrowAsync<InvalidOperationException>(
+        var ex = await Should.ThrowAsync<ConflictException>(
             async () => await objectManager.Build(
                 MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug, "test.las", force: false));
         ex.Message.ShouldContain("already in progress");

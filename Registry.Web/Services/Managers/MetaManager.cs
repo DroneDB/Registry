@@ -39,20 +39,20 @@ public class MetaManager : IMetaManager
         var ds = _utils.GetDataset(orgSlug, dsSlug);
 
         if (!await _authManager.RequestAccess(ds, AccessType.Write))
-            throw new UnauthorizedException("The current user is not allowed to write to this dataset");
+            throw new ForbiddenException("The current user is not allowed to write to this dataset");
 
         _logger.LogInformation("In Add('{OrgSlug}/{DsSlug}', {Key}, {Path})", orgSlug, dsSlug, key, path);
 
         if (string.IsNullOrWhiteSpace(key))
-            throw new ArgumentException("Key should not be null or empty");
+            throw new BadRequestException("Key should not be null or empty");
 
         if (data == null)
-            throw new ArgumentException("Data should not be null");
+            throw new BadRequestException("Data should not be null");
 
         var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
 
         if (path != null && !ddb.EntryExists(path))
-            throw new ArgumentException($"Path '{path}' does not exist");
+            throw new BadRequestException($"Path '{path}' does not exist");
 
         return ddb.Meta.Add(key, data, path).ToDto();
     }
@@ -62,20 +62,20 @@ public class MetaManager : IMetaManager
         var ds = _utils.GetDataset(orgSlug, dsSlug);
 
         if (!await _authManager.RequestAccess(ds, AccessType.Write))
-            throw new UnauthorizedException("The current user is not allowed to write to this dataset");
+            throw new ForbiddenException("The current user is not allowed to write to this dataset");
 
         _logger.LogInformation("In Set('{OrgSlug}/{DsSlug}', {Key}, {Path})", orgSlug, dsSlug, key, path);
 
         if (string.IsNullOrWhiteSpace(key))
-            throw new ArgumentException("Key should not be null or empty");
+            throw new BadRequestException("Key should not be null or empty");
 
         if (data == null)
-            throw new ArgumentException("Data should not be null");
+            throw new BadRequestException("Data should not be null");
 
         var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
 
         if (path != null && !ddb.EntryExists(path))
-            throw new ArgumentException($"Path '{path}' does not exist");
+            throw new BadRequestException($"Path '{path}' does not exist");
 
         var result = ddb.Meta.Set(key, data, path).ToDto();
 
@@ -101,12 +101,12 @@ public class MetaManager : IMetaManager
         var ds = _utils.GetDataset(orgSlug, dsSlug);
 
         if (!await _authManager.RequestAccess(ds, AccessType.Write))
-            throw new UnauthorizedException("The current user is not allowed to remove meta");
+            throw new ForbiddenException("The current user is not allowed to remove meta");
 
         _logger.LogInformation("In Remove('{OrgSlug}/{DsSlug}', {Id})", orgSlug, dsSlug, id);
 
         if (string.IsNullOrWhiteSpace(id))
-            throw new ArgumentException("Id should not be null or empty");
+            throw new BadRequestException("Id should not be null or empty");
 
         var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
 
@@ -118,17 +118,17 @@ public class MetaManager : IMetaManager
         var ds = _utils.GetDataset(orgSlug, dsSlug);
 
         if (!await _authManager.RequestAccess(ds, AccessType.Read))
-            throw new UnauthorizedException("The current user is not allowed to read meta");
+            throw new ForbiddenException("The current user is not allowed to read meta");
 
         _logger.LogInformation("In Get('{OrgSlug}/{DsSlug}', {Key}, {Path})", orgSlug, dsSlug, key, path);
 
         if (string.IsNullOrWhiteSpace(key))
-            throw new ArgumentException("Key should not be null or empty");
+            throw new BadRequestException("Key should not be null or empty");
 
         var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
 
         if (path != null && !ddb.EntryExists(path))
-            throw new ArgumentException($"Path '{path}' does not exist");
+            throw new BadRequestException($"Path '{path}' does not exist");
 
         return ddb.Meta.Get(key, path);
 
@@ -139,17 +139,17 @@ public class MetaManager : IMetaManager
         var ds = _utils.GetDataset(orgSlug, dsSlug);
 
         if (!await _authManager.RequestAccess(ds, AccessType.Write))
-            throw new UnauthorizedException("The current user is not allowed to unset meta");
+            throw new ForbiddenException("The current user is not allowed to unset meta");
 
         _logger.LogInformation("In Unset('{OrgSlug}/{DsSlug}', {Key}, {Path})", orgSlug, dsSlug, key, path);
 
         if (string.IsNullOrWhiteSpace(key))
-            throw new ArgumentException("Key should not be null or empty");
+            throw new BadRequestException("Key should not be null or empty");
 
         var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
 
         if (path != null && !ddb.EntryExists(path))
-            throw new ArgumentException($"Path '{path}' does not exist");
+            throw new BadRequestException($"Path '{path}' does not exist");
 
         var result = ddb.Meta.Unset(key, path);
 
@@ -176,14 +176,14 @@ public class MetaManager : IMetaManager
         var ds = _utils.GetDataset(orgSlug, dsSlug);
 
         if (!await _authManager.RequestAccess(ds, AccessType.Read))
-            throw new UnauthorizedException("The current user is not allowed to list meta");
+            throw new ForbiddenException("The current user is not allowed to list meta");
 
         _logger.LogInformation("In List('{OrgSlug}/{DsSlug}', {Path})", orgSlug, dsSlug, path);
 
         var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
 
         if (path != null && !ddb.EntryExists(path))
-            throw new ArgumentException($"Path '{path}' does not exist");
+            throw new BadRequestException($"Path '{path}' does not exist");
 
         return ddb.Meta.List(path).Select(item => item.ToDto());
     }
@@ -193,7 +193,7 @@ public class MetaManager : IMetaManager
         var ds = _utils.GetDataset(orgSlug, dsSlug);
 
         if (!await _authManager.RequestAccess(ds, AccessType.Read))
-            throw new UnauthorizedException("The current user is not allowed to dump meta");
+            throw new ForbiddenException("The current user is not allowed to dump meta");
 
         _logger.LogInformation("In Dump('{OrgSlug}/{DsSlug}', {Ids})", orgSlug, dsSlug, ids);
 

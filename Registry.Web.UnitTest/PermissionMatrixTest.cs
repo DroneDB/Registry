@@ -1206,32 +1206,32 @@ public class PermissionMatrixTest : TestBase
     }
 
     [Test]
-    public async Task Manager_AddMember_AsReadOnlyMember_ThrowsUnauthorized()
+    public async Task Manager_AddMember_AsReadOnlyMember_ThrowsForbidden()
     {
         var manager = CreateOrganizationsManager();
         SetupManagerAsUser(_readOnlyMember);
 
-        await Should.ThrowAsync<UnauthorizedException>(
+        await Should.ThrowAsync<ForbiddenException>(
             manager.AddMember(_privateOrg.Slug, "someuser", OrganizationPermissions.ReadWrite));
     }
 
     [Test]
-    public async Task Manager_AddMember_AsReadWriteMember_ThrowsUnauthorized()
+    public async Task Manager_AddMember_AsReadWriteMember_ThrowsForbidden()
     {
         var manager = CreateOrganizationsManager();
         SetupManagerAsUser(_readWriteMember);
 
-        await Should.ThrowAsync<UnauthorizedException>(
+        await Should.ThrowAsync<ForbiddenException>(
             manager.AddMember(_privateOrg.Slug, "someuser", OrganizationPermissions.ReadWrite));
     }
 
     [Test]
-    public async Task Manager_AddMember_AsReadWriteDeleteMember_ThrowsUnauthorized()
+    public async Task Manager_AddMember_AsReadWriteDeleteMember_ThrowsForbidden()
     {
         var manager = CreateOrganizationsManager();
         SetupManagerAsUser(_readWriteDeleteMember);
 
-        await Should.ThrowAsync<UnauthorizedException>(
+        await Should.ThrowAsync<ForbiddenException>(
             manager.AddMember(_privateOrg.Slug, "someuser", OrganizationPermissions.ReadWrite));
     }
 
@@ -1293,42 +1293,42 @@ public class PermissionMatrixTest : TestBase
     }
 
     [Test]
-    public async Task Manager_AddMember_AsNonMember_ThrowsUnauthorized()
+    public async Task Manager_AddMember_AsNonMember_ThrowsForbidden()
     {
         var manager = CreateOrganizationsManager();
         SetupManagerAsUser(_nonMemberUser);
 
-        await Should.ThrowAsync<UnauthorizedException>(
+        await Should.ThrowAsync<ForbiddenException>(
             manager.AddMember(_privateOrg.Slug, "someuser", OrganizationPermissions.ReadWrite));
     }
 
     [Test]
-    public async Task Manager_UpdatePermission_AsReadOnlyMember_ThrowsUnauthorized()
+    public async Task Manager_UpdatePermission_AsReadOnlyMember_ThrowsForbidden()
     {
         var manager = CreateOrganizationsManager();
         SetupManagerAsUser(_readOnlyMember);
 
-        await Should.ThrowAsync<UnauthorizedException>(
+        await Should.ThrowAsync<ForbiddenException>(
             manager.UpdateMemberPermission(_privateOrg.Slug, _readWriteMember.UserName, OrganizationPermissions.Admin));
     }
 
     [Test]
-    public async Task Manager_UpdatePermission_AsReadWriteMember_ThrowsUnauthorized()
+    public async Task Manager_UpdatePermission_AsReadWriteMember_ThrowsForbidden()
     {
         var manager = CreateOrganizationsManager();
         SetupManagerAsUser(_readWriteMember);
 
-        await Should.ThrowAsync<UnauthorizedException>(
+        await Should.ThrowAsync<ForbiddenException>(
             manager.UpdateMemberPermission(_privateOrg.Slug, _readOnlyMember.UserName, OrganizationPermissions.Admin));
     }
 
     [Test]
-    public async Task Manager_UpdatePermission_AsReadWriteDeleteMember_ThrowsUnauthorized()
+    public async Task Manager_UpdatePermission_AsReadWriteDeleteMember_ThrowsForbidden()
     {
         var manager = CreateOrganizationsManager();
         SetupManagerAsUser(_readWriteDeleteMember);
 
-        await Should.ThrowAsync<UnauthorizedException>(
+        await Should.ThrowAsync<ForbiddenException>(
             manager.UpdateMemberPermission(_privateOrg.Slug, _readOnlyMember.UserName, OrganizationPermissions.Admin));
     }
 
@@ -1349,32 +1349,32 @@ public class PermissionMatrixTest : TestBase
     }
 
     [Test]
-    public async Task Manager_RemoveMember_AsReadOnlyMember_ThrowsUnauthorized()
+    public async Task Manager_RemoveMember_AsReadOnlyMember_ThrowsForbidden()
     {
         var manager = CreateOrganizationsManager();
         SetupManagerAsUser(_readOnlyMember);
 
-        await Should.ThrowAsync<UnauthorizedException>(
+        await Should.ThrowAsync<ForbiddenException>(
             manager.RemoveMember(_privateOrg.Slug, _readWriteMember.UserName));
     }
 
     [Test]
-    public async Task Manager_RemoveMember_AsReadWriteMember_ThrowsUnauthorized()
+    public async Task Manager_RemoveMember_AsReadWriteMember_ThrowsForbidden()
     {
         var manager = CreateOrganizationsManager();
         SetupManagerAsUser(_readWriteMember);
 
-        await Should.ThrowAsync<UnauthorizedException>(
+        await Should.ThrowAsync<ForbiddenException>(
             manager.RemoveMember(_privateOrg.Slug, _readOnlyMember.UserName));
     }
 
     [Test]
-    public async Task Manager_RemoveMember_AsReadWriteDeleteMember_ThrowsUnauthorized()
+    public async Task Manager_RemoveMember_AsReadWriteDeleteMember_ThrowsForbidden()
     {
         var manager = CreateOrganizationsManager();
         SetupManagerAsUser(_readWriteDeleteMember);
 
-        await Should.ThrowAsync<UnauthorizedException>(
+        await Should.ThrowAsync<ForbiddenException>(
             manager.RemoveMember(_privateOrg.Slug, _readOnlyMember.UserName));
     }
 
@@ -1407,12 +1407,12 @@ public class PermissionMatrixTest : TestBase
     }
 
     [Test]
-    public async Task Manager_GetMembers_AsNonMember_ThrowsUnauthorized()
+    public async Task Manager_GetMembers_AsNonMember_ThrowsForbidden()
     {
         var manager = CreateOrganizationsManager();
         SetupManagerAsUser(_nonMemberUser);
 
-        await Should.ThrowAsync<UnauthorizedException>(
+        await Should.ThrowAsync<ForbiddenException>(
             manager.GetMembers(_privateOrg.Slug));
     }
 
@@ -1622,7 +1622,7 @@ public class PermissionMatrixTest : TestBase
         // Even owner cannot add members when feature is disabled
         SetupManagerAsUser(_ownerUser);
 
-        await Should.ThrowAsync<InvalidOperationException>(
+        await Should.ThrowAsync<ForbiddenException>(
             manager.AddMember(_privateOrg.Slug, "someuser", OrganizationPermissions.ReadWrite));
     }
 
@@ -1634,7 +1634,7 @@ public class PermissionMatrixTest : TestBase
 
         SetupManagerAsUser(_ownerUser);
 
-        await Should.ThrowAsync<InvalidOperationException>(
+        await Should.ThrowAsync<ForbiddenException>(
             manager.RemoveMember(_privateOrg.Slug, _readOnlyMember.UserName));
     }
 
@@ -1646,17 +1646,17 @@ public class PermissionMatrixTest : TestBase
 
         SetupManagerAsUser(_ownerUser);
 
-        await Should.ThrowAsync<InvalidOperationException>(
+        await Should.ThrowAsync<ForbiddenException>(
             manager.UpdateMemberPermission(_privateOrg.Slug, _readOnlyMember.UserName, OrganizationPermissions.Admin));
     }
 
     [Test]
-    public async Task Manager_AddMember_OwnerAsTarget_ThrowsInvalidOperation()
+    public async Task Manager_AddMember_OwnerAsTarget_ThrowsBadRequest()
     {
         var manager = CreateOrganizationsManager();
         SetupManagerAsUser(_ownerUser);
 
-        await Should.ThrowAsync<InvalidOperationException>(
+        await Should.ThrowAsync<BadRequestException>(
             manager.AddMember(_privateOrg.Slug, _ownerUser.UserName, OrganizationPermissions.ReadWrite));
     }
 

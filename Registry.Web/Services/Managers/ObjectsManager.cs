@@ -137,7 +137,7 @@ public class ObjectsManager : IObjectsManager
         _logger.LogInformation("In List('{OrgSlug}/{DsSlug}')", orgSlug, dsSlug);
 
         if (!await _authManager.RequestAccess(ds, AccessType.Read))
-            throw new UnauthorizedException("The current user is not allowed to list this dataset");
+            throw new ForbiddenException("The current user is not allowed to list this dataset");
 
         var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
 
@@ -163,7 +163,7 @@ public class ObjectsManager : IObjectsManager
         _logger.LogInformation("In Search('{OrgSlug}/{DsSlug}')", orgSlug, dsSlug);
 
         if (!await _authManager.RequestAccess(ds, AccessType.Read))
-            throw new UnauthorizedException("The current user is not allowed to search this dataset");
+            throw new ForbiddenException("The current user is not allowed to search this dataset");
 
         var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
 
@@ -204,10 +204,10 @@ public class ObjectsManager : IObjectsManager
         _logger.LogInformation("In Get('{OrgSlug}/{DsSlug}', {Path})", orgSlug, dsSlug, path);
 
         if (string.IsNullOrWhiteSpace(path))
-            throw new ArgumentException("Path should not be null");
+            throw new BadRequestException("Path should not be null");
 
         if (!await _authManager.RequestAccess(ds, AccessType.Read))
-            throw new UnauthorizedException("The current user is not allowed to read this dataset");
+            throw new ForbiddenException("The current user is not allowed to read this dataset");
 
         return InternalGet(orgSlug, ds.InternalRef, path);
     }
@@ -222,7 +222,7 @@ public class ObjectsManager : IObjectsManager
             throw new NotFoundException($"Cannot find '{path}'");
 
         if (entry.Type == EntryType.Directory)
-            throw new InvalidOperationException("Cannot get a folder, we are supposed to deal with a file!");
+            throw new BadRequestException("Cannot get a folder, we are supposed to deal with a file!");
 
         Debug.Assert(entry.Path != null);
         return new StorageEntryDto
@@ -259,13 +259,13 @@ public class ObjectsManager : IObjectsManager
             CommonUtils.ValidateRelativePath(path, ddb.DatasetFolderPath);
 
             if (IsReservedPath(path))
-                throw new InvalidOperationException($"'{path}' is a reserved path");
+                throw new BadRequestException($"'{path}' is a reserved path");
 
             if (!await _authManager.RequestAccess(ds, AccessType.Write))
-                throw new UnauthorizedException("The current user is not allowed to write to this dataset");
+                throw new ForbiddenException("The current user is not allowed to write to this dataset");
 
             if (ddb.EntryExists(path))
-                throw new InvalidOperationException("Cannot create a folder on another entry");
+                throw new ConflictException("Cannot create a folder on another entry");
 
             _logger.LogInformation("Adding folder to DDB");
 
@@ -363,7 +363,7 @@ public class ObjectsManager : IObjectsManager
             if (filesWithActiveBuild.Length != 0)
             {
                 var filesList = string.Join(", ", filesWithActiveBuild.Select(f => f.Path));
-                throw new InvalidOperationException(
+                throw new ConflictException(
                     $"Cannot transfer directory '{path}' because the following files have an active build in progress: {filesList}");
             }
         }
@@ -371,7 +371,7 @@ public class ObjectsManager : IObjectsManager
         {
             // For single files, check if build is active
             if (ddb.IsBuildActive(path))
-                throw new InvalidOperationException(
+                throw new ConflictException(
                     $"Cannot transfer file '{path}' because it has an active build in progress");
         }
     }
@@ -387,13 +387,13 @@ public class ObjectsManager : IObjectsManager
             sourceOrgSlug, sourceDsSlug, sourcePath, destOrgSlug, destDsSlug, destPath, overwrite, keepSource);
 
         if (sourceOrgSlug == destOrgSlug && sourceDsSlug == destDsSlug)
-            throw new InvalidOperationException("Source and destination cannot be the same");
+            throw new BadRequestException("Source and destination cannot be the same");
 
         if (!await _authManager.RequestAccess(sourceDs, AccessType.Read))
-            throw new UnauthorizedException("The current user is not allowed to read the source dataset");
+            throw new ForbiddenException("The current user is not allowed to read the source dataset");
 
         if (!await _authManager.RequestAccess(destDs, AccessType.Write))
-            throw new UnauthorizedException("The current user is not allowed to write to the destination dataset");
+            throw new ForbiddenException("The current user is not allowed to write to the destination dataset");
 
         var sourceDdb = _ddbManager.Get(sourceOrgSlug, sourceDs.InternalRef);
         var destDdb = _ddbManager.Get(destOrgSlug, destDs.InternalRef);
@@ -402,7 +402,7 @@ public class ObjectsManager : IObjectsManager
 
         // Checking if source exists
         if (sourceEntry == null)
-            throw new InvalidOperationException("Cannot find source entry: '" + sourcePath + "'");
+            throw new NotFoundException("Cannot find source entry: '" + sourcePath + "'");
 
         // Validate that source has no active build
         ValidateNoBuildActive(sourceDdb, sourceEntry, sourcePath);
@@ -417,10 +417,10 @@ public class ObjectsManager : IObjectsManager
         // Validate destination path to prevent path traversal attacks
 
         if (destPath.Contains("..") || Path.IsPathRooted(destPath))
-            throw new ArgumentException("Invalid destination path: path traversal or absolute paths are not allowed");
+            throw new BadRequestException("Invalid destination path: path traversal or absolute paths are not allowed");
 
         if (IsReservedPath(destPath))
-            throw new InvalidOperationException($"'{destPath}' is a reserved path");
+            throw new BadRequestException($"'{destPath}' is a reserved path");
 
         // Calculate entry size for storage check
         var entrySize = await GetEntrySizeAsync(sourceDdb, sourceEntry);
@@ -438,13 +438,13 @@ public class ObjectsManager : IObjectsManager
         if (destEntry != null)
         {
             if (!overwrite)
-                throw new InvalidOperationException("Destination entry already exists and overwrite is false");
+                throw new ConflictException("Destination entry already exists and overwrite is false");
 
             if (sourceEntry.Type == EntryType.Directory && destEntry.Type != EntryType.Directory)
-                throw new ArgumentException("Cannot transfer a folder on a file");
+                throw new BadRequestException("Cannot transfer a folder on a file");
 
             if (sourceEntry.Type != EntryType.Directory && destEntry.Type == EntryType.Directory)
-                throw new ArgumentException("Cannot transfer a file on a folder");
+                throw new BadRequestException("Cannot transfer a file on a folder");
         }
 
         // Track progress for rollback
@@ -474,7 +474,7 @@ public class ObjectsManager : IObjectsManager
                     break;
                 }
                 case EntryType.DroneDB:
-                    throw new InvalidOperationException("Cannot transfer a DroneDB file");
+                    throw new BadRequestException("Cannot transfer a DroneDB file");
 
                 case EntryType.Undefined:
                 case EntryType.Generic:
@@ -511,7 +511,7 @@ public class ObjectsManager : IObjectsManager
             addedToDdb = true;
 
             if (!destDdb.EntryExists(destPath))
-                throw new InvalidOperationException(
+                throw new DdbException(
                     $"Cannot find destination '{destPath}' after transfer, something wrong with ddb");
 
             _logger.LogInformation("DDB add OK");
@@ -678,7 +678,7 @@ public class ObjectsManager : IObjectsManager
         _logger.LogInformation("In Move('{OrgSlug}/{DsSlug}')", orgSlug, dsSlug);
 
         if (!await _authManager.RequestAccess(ds, AccessType.Write))
-            throw new UnauthorizedException("The current user is not allowed to write to this dataset");
+            throw new ForbiddenException("The current user is not allowed to write to this dataset");
 
         var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
 
@@ -686,24 +686,24 @@ public class ObjectsManager : IObjectsManager
 
         // Checking if source exists
         if (sourceEntry == null)
-            throw new InvalidOperationException("Cannot find source entry: '" + source + "'");
+            throw new NotFoundException("Cannot find source entry: '" + source + "'");
 
         if (IsReservedPath(dest))
-            throw new InvalidOperationException($"'{dest}' is a reserved path");
+            throw new BadRequestException($"'{dest}' is a reserved path");
 
         // Short circuit!
         if ((dest + "/").StartsWith(source + "/"))
-            throw new InvalidOperationException("Cannot move a path onto itself or one of its descendants");
+            throw new BadRequestException("Cannot move a path onto itself or one of its descendants");
 
         var destEntry = ddb.GetEntry(dest);
 
         if (destEntry != null)
         {
             if (sourceEntry.Type == EntryType.Directory && destEntry.Type != EntryType.Directory)
-                throw new ArgumentException("Cannot move a folder on a file");
+                throw new BadRequestException("Cannot move a folder on a file");
 
             if (sourceEntry.Type != EntryType.Directory && destEntry.Type == EntryType.Directory)
-                throw new ArgumentException("Cannot move a file on a folder");
+                throw new BadRequestException("Cannot move a file on a folder");
         }
 
         switch (sourceEntry.Type)
@@ -721,7 +721,7 @@ public class ObjectsManager : IObjectsManager
                 break;
             }
             case EntryType.DroneDB:
-                throw new InvalidOperationException("Cannot move a DroneDB file");
+                throw new BadRequestException("Cannot move a DroneDB file");
             case EntryType.Undefined:
             case EntryType.Generic:
             case EntryType.GeoImage:
@@ -757,7 +757,7 @@ public class ObjectsManager : IObjectsManager
 
         var updatedEntry = ddb.GetEntry(dest);
         if (updatedEntry == null)
-            throw new InvalidOperationException($"Cannot find destination '{dest}' after move");
+            throw new DdbException($"Cannot find destination '{dest}' after move");
 
         // If the file extension changed and the new entry is buildable, trigger a build
         var sourceExt = Path.GetExtension(source);
@@ -791,12 +791,12 @@ public class ObjectsManager : IObjectsManager
             orgSlug, dsSlug, source, dest, overwrite);
 
         if (!await _authManager.RequestAccess(ds, AccessType.Write))
-            throw new UnauthorizedException("The current user is not allowed to write to this dataset");
+            throw new ForbiddenException("The current user is not allowed to write to this dataset");
 
         if (string.IsNullOrWhiteSpace(source))
-            throw new ArgumentException("Source path is required");
+            throw new BadRequestException("Source path is required");
         if (string.IsNullOrWhiteSpace(dest))
-            throw new ArgumentException("Destination path is required");
+            throw new BadRequestException("Destination path is required");
 
         var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
 
@@ -805,21 +805,21 @@ public class ObjectsManager : IObjectsManager
         CommonUtils.ValidateRelativePath(dest, ddb.DatasetFolderPath);
 
         if (IsReservedPath(dest))
-            throw new InvalidOperationException($"'{dest}' is a reserved path");
+            throw new BadRequestException($"'{dest}' is a reserved path");
 
         if (source == dest)
-            throw new InvalidOperationException("Source and destination cannot be the same");
+            throw new BadRequestException("Source and destination cannot be the same");
 
         // Cannot copy a folder into itself or one of its descendants
         if ((dest + "/").StartsWith(source + "/"))
-            throw new InvalidOperationException("Cannot copy a path onto itself or one of its descendants");
+            throw new BadRequestException("Cannot copy a path onto itself or one of its descendants");
 
         var sourceEntry = ddb.GetEntry(source);
         if (sourceEntry == null)
-            throw new InvalidOperationException("Cannot find source entry: '" + source + "'");
+            throw new NotFoundException("Cannot find source entry: '" + source + "'");
 
         if (sourceEntry.Type == EntryType.DroneDB)
-            throw new InvalidOperationException("Cannot copy a DroneDB file");
+            throw new BadRequestException("Cannot copy a DroneDB file");
 
         // Validate that source has no active build
         ValidateNoBuildActive(ddb, sourceEntry, source);
@@ -828,12 +828,12 @@ public class ObjectsManager : IObjectsManager
         if (destEntry != null)
         {
             if (!overwrite)
-                throw new InvalidOperationException("Destination entry already exists and overwrite is false");
+                throw new ConflictException("Destination entry already exists and overwrite is false");
 
             if (sourceEntry.Type == EntryType.Directory && destEntry.Type != EntryType.Directory)
-                throw new ArgumentException("Cannot copy a folder on a file");
+                throw new BadRequestException("Cannot copy a folder on a file");
             if (sourceEntry.Type != EntryType.Directory && destEntry.Type == EntryType.Directory)
-                throw new ArgumentException("Cannot copy a file on a folder");
+                throw new BadRequestException("Cannot copy a file on a folder");
         }
 
         // Calculate entry size for storage check. When overwriting, the existing destination
@@ -941,7 +941,7 @@ public class ObjectsManager : IObjectsManager
             ddb.AddRaw(dest);
             destDdbAdded = true;
 
-            var copiedEntry = ddb.GetEntry(dest) ?? throw new InvalidOperationException(
+            var copiedEntry = ddb.GetEntry(dest) ?? throw new DdbException(
                 $"Cannot find destination '{dest}' after copy, something wrong with ddb");
 
             // Commit: discard the trash copy of the previous destination.
@@ -1080,10 +1080,10 @@ public class ObjectsManager : IObjectsManager
         _logger.LogInformation("In Delete('{OrgSlug}/{DsSlug}', {PathCount} paths)", orgSlug, dsSlug, paths.Length);
 
         if (!await _authManager.RequestAccess(ds, AccessType.Write))
-            throw new UnauthorizedException("The current user is not allowed to edit this dataset");
+            throw new ForbiddenException("The current user is not allowed to edit this dataset");
 
         if (paths.Any(IsReservedPath))
-            throw new InvalidOperationException("One or more specified paths are reserved paths");
+            throw new BadRequestException("One or more specified paths are reserved paths");
 
         var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
 
@@ -1097,17 +1097,9 @@ public class ObjectsManager : IObjectsManager
         {
             var objs = ddb.FindSummaries(EntryQuery.Under(path)).ToArray();
 
-            // Let's delete from DDB first
-            try
-            {
-                _logger.LogInformation("Removing from DDB: {ObjPath}", path);
-                ddb.Remove(path);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogWarning("Cannot delete {ObjPath} from DDB: {Reason}", path, ex.Message);
-                throw new InvalidOperationException("Cannot delete object from database", ex);
-            }
+            // Let's delete from DDB first; a failure keeps its own type (busy: 503, other: 500)
+            _logger.LogInformation("Removing from DDB: {ObjPath}", path);
+            ddb.Remove(path);
 
             var filesToDelete = objs.Where(item => item.Type != EntryType.Directory).ToArray();
 
@@ -1120,17 +1112,20 @@ public class ObjectsManager : IObjectsManager
 
                 _logger.LogInformation("Deleting {ObjPath} in physical path {PhysicalPath}", obj.Path, objLocalPath);
 
+                // A missing or undeletable file is not critical: it is logged, a later cleanup removes it
+                if (!_fs.Exists(objLocalPath))
+                {
+                    _logger.LogWarning("Cannot delete local file {ObjPath}: {Reason}", objLocalPath,
+                        $"Cannot find local file '{objLocalPath}' for object '{obj.Path}'");
+                    continue;
+                }
+
                 try
                 {
-                    if (!_fs.Exists(objLocalPath))
-                        throw new InvalidOperationException(
-                            $"Cannot find local file '{objLocalPath}' for object '{obj.Path}'");
-
                     _fs.Delete(objLocalPath);
                 }
                 catch (Exception ex)
                 {
-                    // We basically ignore this error, it's not critical. We should perform a cleanup later
                     _logger.LogWarning("Cannot delete local file {ObjPath}: {Reason}", objLocalPath, ex.Message);
                 }
             }
@@ -1221,7 +1216,7 @@ public class ObjectsManager : IObjectsManager
         _logger.LogInformation("In DeleteBatch('{OrgSlug}/{DsSlug}', {Count} paths)", orgSlug, dsSlug, paths.Length);
 
         if (!await _authManager.RequestAccess(ds, AccessType.Write))
-            throw new UnauthorizedException("The current user is not allowed to edit this dataset");
+            throw new ForbiddenException("The current user is not allowed to edit this dataset");
 
         var response = new DeleteBatchResponse();
         var deleted = new List<string>();
@@ -1306,7 +1301,7 @@ public class ObjectsManager : IObjectsManager
         _logger.LogInformation("In DeleteAll('{OrgSlug}/{DsSlug}')", orgSlug, dsSlug);
 
         if (!await _authManager.RequestAccess(ds, AccessType.Write))
-            throw new UnauthorizedException("The current user is not allowed to edit this dataset");
+            throw new ForbiddenException("The current user is not allowed to edit this dataset");
 
         // Invalidate dataset thumbnail cache before deleting everything
         await InvalidateDatasetThumbnailCache(orgSlug, dsSlug);
@@ -1328,7 +1323,7 @@ public class ObjectsManager : IObjectsManager
         {
             var ds = _utils.GetDataset(orgSlug, dsSlug);
             if (!await _authManager.RequestAccess(ds, AccessType.Read))
-                throw new UnauthorizedException("The current user is not allowed to read dataset");
+                throw new ForbiddenException("The current user is not allowed to read dataset");
 
             var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
             return await GenerateDatasetThumbnailData(orgSlug, dsSlug, ddb, sizeRaw, recreate);
@@ -1357,10 +1352,10 @@ public class ObjectsManager : IObjectsManager
         var ds = _utils.GetDataset(orgSlug, dsSlug);
 
         if (!await _authManager.RequestAccess(ds, AccessType.Read))
-            throw new UnauthorizedException("The current user is not allowed to read dataset");
+            throw new ForbiddenException("The current user is not allowed to read dataset");
 
         if (Path.GetFileName(path) == null)
-            throw new ArgumentException("Path is not valid");
+            throw new BadRequestException("Path is not valid");
 
         var entry = EnsurePathValidity(orgSlug, ds.InternalRef, path, out var ddb);
         var sourcePath = GetAvailableBuildSource(entry, ddb, path);
@@ -1533,7 +1528,7 @@ public class ObjectsManager : IObjectsManager
         _logger.LogInformation("In DownloadStream('{OrgSlug}/{DsSlug}')", orgSlug, dsSlug);
 
         if (!await _authManager.RequestAccess(ds, AccessType.Read))
-            throw new UnauthorizedException("The current user is not allowed to read dataset");
+            throw new ForbiddenException("The current user is not allowed to read dataset");
 
         EnsurePathsValidity(orgSlug, ds.InternalRef, paths);
 
@@ -1604,11 +1599,11 @@ public class ObjectsManager : IObjectsManager
         // Validate path to prevent path traversal
         CommonUtils.ValidateRelativePath(path, ddb.DatasetFolderPath);
 
-        var entry = ddb.GetEntry(path) ?? throw new ArgumentException($"Invalid path: '{path}'");
+        var entry = ddb.GetEntry(path) ?? throw new BadRequestException($"Invalid path: '{path}'");
 
         // Every caller reads the file content (thumbnails, tiles, raster operations)
         if (entry.Type == EntryType.Directory)
-            throw new ArgumentException($"'{path}' is a folder");
+            throw new BadRequestException($"'{path}' is a folder");
 
         return entry;
     }
@@ -1616,7 +1611,7 @@ public class ObjectsManager : IObjectsManager
     private static void EnsureNoWildcardOrEmptyPaths(string path)
     {
         if (path.Contains('*') || path.Contains('?') || string.IsNullOrWhiteSpace(path))
-            throw new ArgumentException("Wildcards or empty paths are not supported");
+            throw new BadRequestException("Wildcards or empty paths are not supported");
     }
 
     private void EnsurePathsValidity(string orgSlug, Guid internalRef, string[] paths)
@@ -1633,16 +1628,16 @@ public class ObjectsManager : IObjectsManager
             return;
 
         if (paths.Any(path => path.Contains('*') || path.Contains('?') || string.IsNullOrWhiteSpace(path)))
-            throw new ArgumentException("Wildcards or empty paths are not supported");
+            throw new BadRequestException("Wildcards or empty paths are not supported");
 
         if (paths.Length != paths.Distinct().Count())
-            throw new ArgumentException("Duplicate paths");
+            throw new BadRequestException("Duplicate paths");
 
         ddb = _ddbManager.Get(orgSlug, internalRef);
 
         foreach (var path in paths)
             if (!ddb.EntryExists(path))
-                throw new ArgumentException($"Invalid path: '{path}'");
+                throw new BadRequestException($"Invalid path: '{path}'");
     }
 
     #endregion
@@ -1655,7 +1650,7 @@ public class ObjectsManager : IObjectsManager
         _logger.LogInformation("In GetDdb('{OrgSlug}/{DsSlug}')", orgSlug, dsSlug);
 
         if (!await _authManager.RequestAccess(ds, AccessType.Read))
-            throw new UnauthorizedException("The current user is not allowed to read dataset");
+            throw new ForbiddenException("The current user is not allowed to read dataset");
 
         return new FileStreamDescriptor($"{orgSlug}-{dsSlug}-ddb.zip",
             "application/zip", orgSlug, ds.InternalRef, [], [],
@@ -1672,7 +1667,7 @@ public class ObjectsManager : IObjectsManager
 
         // You need write access to build
         if (!await _authManager.RequestAccess(ds, AccessType.Write))
-            throw new UnauthorizedException("The current user is not allowed to build dataset");
+            throw new ForbiddenException("The current user is not allowed to build dataset");
 
         var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
 
@@ -1680,7 +1675,7 @@ public class ObjectsManager : IObjectsManager
 
         // Checking if path exists
         if (entry == null)
-            throw new InvalidOperationException($"Cannot find source entry: '{path}'");
+            throw new NotFoundException($"Cannot find source entry: '{path}'");
 
         // Nothing to do here
         if (!ddb.IsBuildable(entry.Path))
@@ -1692,7 +1687,7 @@ public class ObjectsManager : IObjectsManager
         // Let's check if a build is already active (skip check when force=true to allow
         // recovery from stale locks left behind by crashed/failed builds)
         if (!force && ddb.IsBuildActive(entry.Path))
-            throw new InvalidOperationException($"A build is already in progress for '{entry.Path}'");
+            throw new ConflictException($"A build is already in progress for '{entry.Path}'");
 
         // Always build asynchronously using background job
         _logger.LogInformation("Building '{Path}' asynchronously", path);
@@ -1713,13 +1708,13 @@ public class ObjectsManager : IObjectsManager
         var ds = _utils.GetDataset(orgSlug, dsSlug);
 
         if (!await _authManager.RequestAccess(ds, AccessType.Read))
-            throw new UnauthorizedException("The current user is not allowed to read dataset");
+            throw new ForbiddenException("The current user is not allowed to read dataset");
 
         EnsureNoWildcardOrEmptyPaths(path);
 
         Debug.Assert(path != null, nameof(path) + " != null");
         if (Path.IsPathRooted(path) || path.Contains(".."))
-            throw new ArgumentException("Rooted or relative paths are not supported");
+            throw new BadRequestException("Rooted or relative paths are not supported");
 
         var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
 
@@ -1744,13 +1739,13 @@ public class ObjectsManager : IObjectsManager
             path);
 
         if (!await _authManager.RequestAccess(ds, AccessType.Read))
-            throw new UnauthorizedException("The current user is not allowed to read dataset");
+            throw new ForbiddenException("The current user is not allowed to read dataset");
 
         EnsureNoWildcardOrEmptyPaths(path);
 
         Debug.Assert(path != null, nameof(path) + " != null");
         if (Path.IsPathRooted(path) || path.Contains(".."))
-            throw new ArgumentException("Rooted or relative paths are not supported");
+            throw new BadRequestException("Rooted or relative paths are not supported");
 
         var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
 
@@ -1768,13 +1763,13 @@ public class ObjectsManager : IObjectsManager
         var ds = _utils.GetDataset(orgSlug, dsSlug);
 
         if (!await _authManager.RequestAccess(ds, AccessType.Read))
-            throw new UnauthorizedException("The current user is not allowed to read dataset");
+            throw new ForbiddenException("The current user is not allowed to read dataset");
 
         var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
         var entry = ddb.GetEntry(entryPath);
 
         if (entry is null)
-            throw new FileNotFoundException($"Entry '{entryPath}' does not exist in the dataset.");
+            throw new NotFoundException($"Entry '{entryPath}' does not exist in the dataset.");
 
         // Resolve artifact path based on entry type
         var (artifactPath, fileName, contentType) = entry.Type switch
@@ -1791,16 +1786,15 @@ public class ObjectsManager : IObjectsManager
                 _buildArtifactResolver.GetVectorQueryPath(ddb, entry.Hash),
                 "source.gpkg",
                 "application/geopackage+sqlite"),
-            _ => throw new ArgumentException(
+            _ => throw new BadRequestException(
                 $"Entry type '{entry.Type}' does not have a downloadable build artifact.")
         };
 
         var fullPath = artifactPath;
 
         if (!_fs.Exists(fullPath))
-            throw new FileNotFoundException(
-                $"Build artifact not found for '{entryPath}'. The entry may not have been built yet.",
-                fullPath);
+            throw new NotFoundException(
+                $"Build artifact not found for '{entryPath}'. The entry may not have been built yet.");
 
         return (fullPath, contentType, fileName);
     }
@@ -1812,7 +1806,7 @@ public class ObjectsManager : IObjectsManager
         _logger.LogInformation("In GetEntryType('{OrgSlug}/{DsSlug}')", orgSlug, dsSlug);
 
         if (!await _authManager.RequestAccess(ds, AccessType.Read))
-            throw new UnauthorizedException("The current user is not allowed to read dataset");
+            throw new ForbiddenException("The current user is not allowed to read dataset");
 
         var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
 
@@ -1901,7 +1895,7 @@ public class ObjectsManager : IObjectsManager
         _logger.LogInformation("In GetPendingBuilds('{OrgSlug}/{DsSlug}')", orgSlug, dsSlug);
 
         if (!await _authManager.RequestAccess(ds, AccessType.Read))
-            throw new UnauthorizedException("The current user is not allowed to read dataset");
+            throw new ForbiddenException("The current user is not allowed to read dataset");
 
         var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
 
@@ -1933,15 +1927,8 @@ public class ObjectsManager : IObjectsManager
                 return 0;
             }
 
-            try
-            {
-                return await Task.Run(() => _fs.GetDirectorySize(localPath));
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Failed to calculate directory size for '{Path}'", entry.Path);
-                throw new InvalidOperationException($"Cannot calculate directory size: {ex.Message}", ex);
-            }
+            // A file system error is a server fault: it reaches the error handler (logged once, 500)
+            return await Task.Run(() => _fs.GetDirectorySize(localPath));
         }
 
         // For files, use the size from the entry
@@ -1955,7 +1942,7 @@ public class ObjectsManager : IObjectsManager
         _logger.LogInformation("In ClearCompletedBuilds('{OrgSlug}/{DsSlug}')", orgSlug, dsSlug);
 
         if (!await _authManager.RequestAccess(ds, AccessType.Write))
-            throw new UnauthorizedException("The current user is not allowed to clear builds for this dataset");
+            throw new ForbiddenException("The current user is not allowed to clear builds for this dataset");
 
         // Get all builds with Succeeded or Failed status
         var allBuilds = await _jobIndexQuery.GetByOrgDsAsync(orgSlug, dsSlug, 0, int.MaxValue);
@@ -1989,7 +1976,7 @@ public class ObjectsManager : IObjectsManager
         var ds = _utils.GetDataset(orgSlug, dsSlug);
 
         if (!await _authManager.RequestAccess(ds, AccessType.Read))
-            throw new UnauthorizedException("The current user is not allowed to read dataset");
+            throw new ForbiddenException("The current user is not allowed to read dataset");
 
         if (path.StartsWith('/')) path = path[1..];
 
@@ -2005,7 +1992,7 @@ public class ObjectsManager : IObjectsManager
         var ds = _utils.GetDataset(orgSlug, dsSlug);
 
         if (!await _authManager.RequestAccess(ds, AccessType.Read))
-            throw new UnauthorizedException("The current user is not allowed to read dataset");
+            throw new ForbiddenException("The current user is not allowed to read dataset");
 
         if (path.StartsWith('/')) path = path[1..];
 
@@ -2022,7 +2009,7 @@ public class ObjectsManager : IObjectsManager
         var ds = _utils.GetDataset(orgSlug, dsSlug);
 
         if (!await _authManager.RequestAccess(ds, AccessType.Read))
-            throw new UnauthorizedException("The current user is not allowed to read dataset");
+            throw new ForbiddenException("The current user is not allowed to read dataset");
 
         if (path.StartsWith('/')) path = path[1..];
 
@@ -2056,7 +2043,7 @@ public class ObjectsManager : IObjectsManager
         var ds = _utils.GetDataset(orgSlug, dsSlug);
 
         if (!await _authManager.RequestAccess(ds, AccessType.Read))
-            throw new UnauthorizedException("The current user is not allowed to read dataset");
+            throw new ForbiddenException("The current user is not allowed to read dataset");
 
         if (path.StartsWith('/')) path = path[1..];
 
@@ -2094,7 +2081,7 @@ public class ObjectsManager : IObjectsManager
         var ds = _utils.GetDataset(orgSlug, dsSlug);
 
         if (!await _authManager.RequestAccess(ds, AccessType.Read))
-            throw new UnauthorizedException("The current user is not allowed to read dataset");
+            throw new ForbiddenException("The current user is not allowed to read dataset");
 
         var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
 
@@ -2110,7 +2097,7 @@ public class ObjectsManager : IObjectsManager
         var ds = _utils.GetDataset(orgSlug, dsSlug);
 
         if (!await _authManager.RequestAccess(ds, AccessType.Read))
-            throw new UnauthorizedException("The current user is not allowed to read dataset");
+            throw new ForbiddenException("The current user is not allowed to read dataset");
 
         return await Task.Run(() =>
         {
@@ -2128,7 +2115,7 @@ public class ObjectsManager : IObjectsManager
         var ds = _utils.GetDataset(orgSlug, dsSlug);
 
         if (!await _authManager.RequestAccess(ds, AccessType.Write))
-            throw new UnauthorizedException("The current user is not allowed to write to dataset");
+            throw new ForbiddenException("The current user is not allowed to write to dataset");
 
         var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
 
@@ -2162,7 +2149,7 @@ public class ObjectsManager : IObjectsManager
         var ds = _utils.GetDataset(orgSlug, dsSlug);
 
         if (!await _authManager.RequestAccess(ds, AccessType.Read))
-            throw new UnauthorizedException("The current user is not allowed to read dataset");
+            throw new ForbiddenException("The current user is not allowed to read dataset");
 
         var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
 
@@ -2180,7 +2167,7 @@ public class ObjectsManager : IObjectsManager
         var ds = _utils.GetDataset(orgSlug, dsSlug);
 
         if (!await _authManager.RequestAccess(ds, AccessType.Read))
-            throw new UnauthorizedException("The current user is not allowed to read dataset");
+            throw new ForbiddenException("The current user is not allowed to read dataset");
 
         if (path.StartsWith('/')) path = path[1..];
 
@@ -2228,7 +2215,7 @@ public class ObjectsManager : IObjectsManager
         var ds = _utils.GetDataset(orgSlug, dsSlug);
 
         if (!await _authManager.RequestAccess(ds, AccessType.Read))
-            throw new UnauthorizedException("The current user is not allowed to read dataset");
+            throw new ForbiddenException("The current user is not allowed to read dataset");
 
         if (path.StartsWith('/')) path = path[1..];
 
@@ -2295,7 +2282,7 @@ public class ObjectsManager : IObjectsManager
         var ds = _utils.GetDataset(orgSlug, dsSlug);
 
         if (!await _authManager.RequestAccess(ds, AccessType.Read))
-            throw new UnauthorizedException("The current user is not allowed to read dataset");
+            throw new ForbiddenException("The current user is not allowed to read dataset");
 
         if (path.StartsWith('/')) path = path[1..];
 
@@ -2310,7 +2297,7 @@ public class ObjectsManager : IObjectsManager
         var ds = _utils.GetDataset(orgSlug, dsSlug);
 
         if (!await _authManager.RequestAccess(ds, AccessType.Read))
-            throw new UnauthorizedException("The current user is not allowed to read dataset");
+            throw new ForbiddenException("The current user is not allowed to read dataset");
 
         if (path.StartsWith('/')) path = path[1..];
 
@@ -2326,7 +2313,7 @@ public class ObjectsManager : IObjectsManager
         var ds = _utils.GetDataset(orgSlug, dsSlug);
 
         if (!await _authManager.RequestAccess(ds, AccessType.Read))
-            throw new UnauthorizedException("The current user is not allowed to read dataset");
+            throw new ForbiddenException("The current user is not allowed to read dataset");
 
         if (path.StartsWith('/')) path = path[1..];
 
@@ -2340,12 +2327,12 @@ public class ObjectsManager : IObjectsManager
         int samples)
     {
         if (string.IsNullOrWhiteSpace(geoJsonLineString))
-            throw new ArgumentException("GeoJSON LineString is required", nameof(geoJsonLineString));
+            throw new BadRequestException("GeoJSON LineString is required");
 
         var ds = _utils.GetDataset(orgSlug, dsSlug);
 
         if (!await _authManager.RequestAccess(ds, AccessType.Read))
-            throw new UnauthorizedException("The current user is not allowed to read dataset");
+            throw new ForbiddenException("The current user is not allowed to read dataset");
 
         if (path.StartsWith('/')) path = path[1..];
 
@@ -2359,12 +2346,12 @@ public class ObjectsManager : IObjectsManager
         string baseMethod, double flatElevation)
     {
         if (string.IsNullOrWhiteSpace(polygonGeoJson))
-            throw new ArgumentException("Polygon GeoJSON is required", nameof(polygonGeoJson));
+            throw new BadRequestException("Polygon GeoJSON is required");
 
         var ds = _utils.GetDataset(orgSlug, dsSlug);
 
         if (!await _authManager.RequestAccess(ds, AccessType.Read))
-            throw new UnauthorizedException("The current user is not allowed to read dataset");
+            throw new ForbiddenException("The current user is not allowed to read dataset");
 
         if (path.StartsWith('/')) path = path[1..];
 
@@ -2378,14 +2365,14 @@ public class ObjectsManager : IObjectsManager
         double radiusMeters, float sensitivity)
     {
         if (!(radiusMeters > 0))
-            throw new ArgumentException("radius must be positive", nameof(radiusMeters));
+            throw new BadRequestException("radius must be positive");
         if (sensitivity < 0f) sensitivity = 0f;
         if (sensitivity > 1f) sensitivity = 1f;
 
         var ds = _utils.GetDataset(orgSlug, dsSlug);
 
         if (!await _authManager.RequestAccess(ds, AccessType.Read))
-            throw new UnauthorizedException("The current user is not allowed to read dataset");
+            throw new ForbiddenException("The current user is not allowed to read dataset");
 
         if (path.StartsWith('/')) path = path[1..];
 
@@ -2400,14 +2387,14 @@ public class ObjectsManager : IObjectsManager
     {
         if (sensitivity < 0f) sensitivity = 0f;
         if (sensitivity > 1f) sensitivity = 1f;
-        if (minAreaM2 < 0) throw new ArgumentException("minAreaM2 must be >= 0", nameof(minAreaM2));
-        if (maxResults <= 0) throw new ArgumentException("maxResults must be > 0", nameof(maxResults));
+        if (minAreaM2 < 0) throw new BadRequestException("minAreaM2 must be >= 0");
+        if (maxResults <= 0) throw new BadRequestException("maxResults must be > 0");
         if (maxResults > 500) maxResults = 500;
 
         var ds = _utils.GetDataset(orgSlug, dsSlug);
 
         if (!await _authManager.RequestAccess(ds, AccessType.Read))
-            throw new UnauthorizedException("The current user is not allowed to read dataset");
+            throw new ForbiddenException("The current user is not allowed to read dataset");
 
         if (path.StartsWith('/')) path = path[1..];
 
@@ -2425,21 +2412,21 @@ public class ObjectsManager : IObjectsManager
         int bandIndex)
     {
         if (!interval.HasValue && !count.HasValue)
-            throw new ArgumentException("Either 'interval' or 'count' must be specified");
+            throw new BadRequestException("Either 'interval' or 'count' must be specified");
         if (interval.HasValue && interval.Value <= 0)
-            throw new ArgumentException("'interval' must be > 0", nameof(interval));
+            throw new BadRequestException("'interval' must be > 0");
         if (count.HasValue && count.Value <= 0)
-            throw new ArgumentException("'count' must be > 0", nameof(count));
+            throw new BadRequestException("'count' must be > 0");
         if (minElev.HasValue && maxElev.HasValue && minElev.Value >= maxElev.Value)
-            throw new ArgumentException("'minElev' must be less than 'maxElev'");
+            throw new BadRequestException("'minElev' must be less than 'maxElev'");
         if (simplifyTolerance < 0)
-            throw new ArgumentException("'simplifyTolerance' must be >= 0", nameof(simplifyTolerance));
+            throw new BadRequestException("'simplifyTolerance' must be >= 0");
         if (bandIndex <= 0) bandIndex = 1;
 
         var ds = _utils.GetDataset(orgSlug, dsSlug);
 
         if (!await _authManager.RequestAccess(ds, AccessType.Read))
-            throw new UnauthorizedException("The current user is not allowed to read dataset");
+            throw new ForbiddenException("The current user is not allowed to read dataset");
 
         if (path.StartsWith('/')) path = path[1..];
 
@@ -2459,7 +2446,7 @@ public class ObjectsManager : IObjectsManager
         var ds = _utils.GetDataset(orgSlug, dsSlug);
 
         if (!await _authManager.RequestAccess(ds, AccessType.Read))
-            throw new UnauthorizedException("The current user is not allowed to read dataset");
+            throw new ForbiddenException("The current user is not allowed to read dataset");
 
         var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
 
@@ -2481,7 +2468,7 @@ public class ObjectsManager : IObjectsManager
         var ds = _utils.GetDataset(orgSlug, dsSlug);
 
         if (!await _authManager.RequestAccess(ds, AccessType.Write))
-            throw new UnauthorizedException("The current user is not allowed to write to dataset");
+            throw new ForbiddenException("The current user is not allowed to write to dataset");
 
         await EnsureNoActiveJob(orgSlug, dsSlug, path, "MaskBorders");
 
@@ -2492,10 +2479,10 @@ public class ObjectsManager : IObjectsManager
 
         var entry = ddb.GetEntry(path);
         if (entry == null)
-            throw new InvalidOperationException($"Cannot find entry: '{path}'");
+            throw new NotFoundException($"Cannot find entry: '{path}'");
 
         if (entry.Type != EntryType.GeoRaster)
-            throw new InvalidOperationException($"Entry '{path}' is not a georaster");
+            throw new BadRequestException($"Entry '{path}' is not a georaster");
 
         var outputPath = GetMaskedOutputPath(path);
         var outputFullPath = ddb.GetLocalPath(outputPath);
@@ -2535,7 +2522,7 @@ public class ObjectsManager : IObjectsManager
             j.MethodDisplay != null && j.MethodDisplay.Contains(methodName));
 
         if (activeJob != null)
-            throw new InvalidOperationException(
+            throw new ConflictException(
                 $"A {methodName} operation is already in progress for '{path}'");
     }
 

@@ -201,20 +201,20 @@ public class UsersManager : IUsersManager
     public async Task<UserDto> CreateUser(string userName, string email, string password, string[] roles)
     {
         if (!await _authManager.IsUserAdmin())
-            throw new UnauthorizedException("Only admins can create new users");
+            throw new ForbiddenException("Only admins can create new users");
 
         if (!Caps.SupportsLocalUserManagement)
-            throw new InvalidOperationException(
+            throw new ForbiddenException(
                 "Manual user creation is disabled. Users are provisioned automatically on their first login " +
-                "via the configured identity provider.");
+                "via the configured identity provider.", noRetry: true);
 
         if (!IsValidUserName(userName))
-            throw new ArgumentException("The provided username is not valid");
+            throw new BadRequestException("The provided username is not valid");
 
         var user = await _userManager.FindByNameAsync(userName);
 
         if (user != null)
-            throw new InvalidOperationException("User already exists");
+            throw new ConflictException("User already exists");
 
         user = await CreateUserInternal(userName, email, password, roles);
 
@@ -257,7 +257,7 @@ public class UsersManager : IUsersManager
             var errors = string.Join(";", res.Errors.Select(item => $"{item.Code} - {item.Description}"));
             _logger.LogWarning("Errors in creating user: {Errors}", errors);
 
-            throw new InvalidOperationException("Error in creating user");
+            throw new BadRequestException("Error in creating user");
         }
 
         if (_appSettings.EnableDefaultUserOrganization)
@@ -299,7 +299,7 @@ public class UsersManager : IUsersManager
         foreach (var role in roles)
         {
             if (!await _roleManager.RoleExistsAsync(role))
-                throw new ArgumentException($"Role {role} does not exist");
+                throw new BadRequestException($"Role {role} does not exist");
         }
     }
 
@@ -341,9 +341,9 @@ public class UsersManager : IUsersManager
         string newPassword)
     {
         if (!Caps.SupportsPasswordChange)
-            throw new InvalidOperationException(
+            throw new ForbiddenException(
                 "Password changes are not supported for accounts managed by an external identity provider. " +
-                "Please use your organisation's directory service to change your password.");
+                "Please use your organisation's directory service to change your password.", noRetry: true);
 
         IdentityResult res;
 
@@ -351,7 +351,7 @@ public class UsersManager : IUsersManager
         {
             // Admin override: reset password without requiring the current one
             if (!await _authManager.IsUserAdmin())
-                throw new UnauthorizedException("Current password is required for non-admin users");
+                throw new ForbiddenException("Current password is required for non-admin users");
 
             if (newPassword == null)
                 throw new BadRequestException("New password cannot be null");
@@ -381,7 +381,7 @@ public class UsersManager : IUsersManager
             var errors = string.Join(";", res.Errors.Select(item => $"{item.Code} - {item.Description}"));
             _logger.LogWarning("Errors in changing user password: {Errors}", errors);
 
-            throw new InvalidOperationException("Cannot change user password: " + errors);
+            throw new BadRequestException("Cannot change user password: " + errors);
         }
 
         _logger.LogInformation("User {UserName} changed password", user.UserName);
@@ -417,7 +417,7 @@ public class UsersManager : IUsersManager
             return _utils.GetUserStorage(user);
 
         if (!await _authManager.IsUserAdmin())
-            throw new UnauthorizedException("Cannot get other user's storage info");
+            throw new ForbiddenException("Cannot get other user's storage info");
 
         user = await _userManager.FindByNameAsync(userName);
 
@@ -438,7 +438,7 @@ public class UsersManager : IUsersManager
             return user.Metadata;
 
         if (!await _authManager.IsUserAdmin())
-            throw new UnauthorizedException("Cannot get other user's meta");
+            throw new ForbiddenException("Cannot get other user's meta");
 
         user = await _userManager.FindByNameAsync(userName);
 
@@ -459,7 +459,7 @@ public class UsersManager : IUsersManager
             throw new BadRequestException("User name cannot be empty");
 
         if (!await _authManager.IsUserAdmin())
-            throw new UnauthorizedException("Cannot change user data");
+            throw new ForbiddenException("Cannot change user data");
 
         user = await _userManager.FindByNameAsync(userName);
 
@@ -494,7 +494,7 @@ public class UsersManager : IUsersManager
             // Check if the user is trying to update their own data
             var currentUser = await _authManager.GetCurrentUser();
             if (currentUser == null || currentUser.UserName != userName)
-                throw new UnauthorizedException("Only admins can update users");
+                throw new ForbiddenException("Only admins can update users");
         }
 
         var user = await _userManager.FindByNameAsync(userName);
@@ -503,8 +503,8 @@ public class UsersManager : IUsersManager
             throw new BadRequestException("User does not exist");
 
         if (Caps.ManagesProfileExternally)
-            throw new InvalidOperationException(
-                "Profile data (email) is synchronised from the identity provider and cannot be modified locally.");
+            throw new ForbiddenException(
+                "Profile data (email) is synchronised from the identity provider and cannot be modified locally.", noRetry: true);
 
         if (!string.IsNullOrWhiteSpace(email))
             user.Email = email;
@@ -521,7 +521,7 @@ public class UsersManager : IUsersManager
             throw new BadRequestException("User does not exist");
 
         if (!await _authManager.IsUserAdmin())
-            throw new UnauthorizedException("Cannot get other user's meta");
+            throw new ForbiddenException("Cannot get other user's meta");
 
         var user = await _userManager.FindByNameAsync(userName);
 
@@ -573,7 +573,7 @@ public class UsersManager : IUsersManager
             throw new BadRequestException("User does not exist");
 
         if (!await _authManager.IsUserAdmin())
-            throw new UnauthorizedException("Only admins can manage user organizations");
+            throw new ForbiddenException("Only admins can manage user organizations");
 
         var user = await _userManager.FindByNameAsync(userName);
         if (user == null)
@@ -619,7 +619,7 @@ public class UsersManager : IUsersManager
             throw new BadRequestException("User does not exist");
 
         if (!await _authManager.IsUserAdmin())
-            throw new UnauthorizedException("Only admins can manage user organizations");
+            throw new ForbiddenException("Only admins can manage user organizations");
 
         var user = await _userManager.FindByNameAsync(userName);
         if (user == null)
@@ -657,7 +657,7 @@ public class UsersManager : IUsersManager
             throw new BadRequestException("User does not exist");
 
         if (!await _authManager.IsUserAdmin())
-            throw new UnauthorizedException("Only admins can manage user organizations");
+            throw new ForbiddenException("Only admins can manage user organizations");
 
         var user = await _userManager.FindByNameAsync(userName);
         if (user == null)
@@ -693,16 +693,16 @@ public class UsersManager : IUsersManager
         ConflictResolutionStrategy conflictResolution = ConflictResolutionStrategy.Rename)
     {
         if (!await _authManager.IsUserAdmin())
-            throw new UnauthorizedException("Only admins can delete users");
+            throw new ForbiddenException("Only admins can delete users");
 
         if (string.IsNullOrWhiteSpace(userName))
             throw new BadRequestException("userName should not be empty");
 
         if (userName == MagicStrings.AnonymousUserName)
-            throw new UnauthorizedException("Cannot delete the anonymous user");
+            throw new ForbiddenException("Cannot delete the anonymous user");
 
         if (userName == _appSettings.DefaultAdmin.UserName)
-            throw new UnauthorizedException("Cannot delete the default admin");
+            throw new ForbiddenException("Cannot delete the default admin");
 
         var user = await _userManager.FindByNameAsync(userName);
 
@@ -850,7 +850,7 @@ public class UsersManager : IUsersManager
         {
             var errors = string.Join(";", identityResult.Errors.Select(item => $"{item.Code} - {item.Description}"));
             _logger.LogWarning("Errors in deleting user: {Errors}", errors);
-            throw new InvalidOperationException("Cannot delete user: " + errors);
+            throw new ConflictException("Cannot delete user: " + errors);
         }
 
         _logger.LogInformation("Successfully deleted user {UserName}{Successor}",
@@ -863,7 +863,7 @@ public class UsersManager : IUsersManager
     public async Task<IEnumerable<UserDto>> GetAll()
     {
         if (!await _authManager.IsUserAdmin())
-            throw new UnauthorizedException("User is not admin");
+            throw new ForbiddenException("User is not admin");
 
         var userOrgQuery = from orgusr in _registryContext.OrganizationsUsers
             group orgusr by orgusr.UserId
@@ -940,7 +940,7 @@ public class UsersManager : IUsersManager
     public async Task<IEnumerable<UserDetailDto>> GetAllDetailed()
     {
         if (!await _authManager.IsUserAdmin())
-            throw new UnauthorizedException("User is not admin");
+            throw new ForbiddenException("User is not admin");
 
         var userOrgQuery = from orgusr in _registryContext.OrganizationsUsers
             group orgusr by orgusr.UserId
@@ -1025,63 +1025,63 @@ public class UsersManager : IUsersManager
     public async Task CreateRole(string roleName)
     {
         if (!await _authManager.IsUserAdmin())
-            throw new UnauthorizedException("User is not admin");
+            throw new ForbiddenException("User is not admin");
 
         if (string.IsNullOrWhiteSpace(roleName))
-            throw new ArgumentException("Role name cannot be empty");
+            throw new BadRequestException("Role name cannot be empty");
 
         var roleExists = await _roleManager.RoleExistsAsync(roleName);
         if (roleExists)
-            throw new ArgumentException($"Role '{roleName}' already exists");
+            throw new BadRequestException($"Role '{roleName}' already exists");
 
         var result = await _roleManager.CreateAsync(new IdentityRole(roleName));
         if (!result.Succeeded)
-            throw new InvalidOperationException(
+            throw new BadRequestException(
                 $"Failed to create role: {string.Join(", ", result.Errors.Select(e => e.Description))}");
     }
 
     public async Task DeleteRole(string roleName)
     {
         if (!await _authManager.IsUserAdmin())
-            throw new UnauthorizedException("User is not admin");
+            throw new ForbiddenException("User is not admin");
 
         if (string.IsNullOrWhiteSpace(roleName))
-            throw new ArgumentException("Role name cannot be empty");
+            throw new BadRequestException("Role name cannot be empty");
 
         // Do not allow deletion of the admin role
         if (roleName.Equals(ApplicationDbContext.AdminRoleName, StringComparison.OrdinalIgnoreCase))
-            throw new ArgumentException("Cannot delete the admin role");
+            throw new BadRequestException("Cannot delete the admin role");
 
         var role = await _roleManager.FindByNameAsync(roleName);
         if (role == null)
-            throw new ArgumentException($"Role '{roleName}' does not exist");
+            throw new BadRequestException($"Role '{roleName}' does not exist");
 
         var result = await _roleManager.DeleteAsync(role);
         if (!result.Succeeded)
-            throw new InvalidOperationException(
+            throw new ConflictException(
                 $"Failed to delete role: {string.Join(", ", result.Errors.Select(e => e.Description))}");
     }
 
     public async Task UpdateUserRoles(string userName, string[] roles)
     {
         if (!await _authManager.IsUserAdmin())
-            throw new UnauthorizedException("User is not admin");
+            throw new ForbiddenException("User is not admin");
 
         var user = await _userManager.FindByNameAsync(userName);
         if (user == null)
-            throw new ArgumentException($"User '{userName}' not found");
+            throw new BadRequestException($"User '{userName}' not found");
 
         // Do not allow removing the admin role from the admin user
         if (userName.Equals("admin", StringComparison.OrdinalIgnoreCase))
         {
             if (!roles.Contains(ApplicationDbContext.AdminRoleName, StringComparer.OrdinalIgnoreCase))
-                throw new ArgumentException("Cannot remove admin role from admin user");
+                throw new BadRequestException("Cannot remove admin role from admin user");
         }
 
         if (Caps.ManagesRolesExternally)
-            throw new InvalidOperationException(
+            throw new ForbiddenException(
                 "Role assignments are managed by the identity provider (group membership) " +
-                "and cannot be modified locally.");
+                "and cannot be modified locally.", noRetry: true);
 
         var currentRoles = await _userManager.GetRolesAsync(user);
 
@@ -1090,7 +1090,7 @@ public class UsersManager : IUsersManager
         {
             var removeResult = await _userManager.RemoveFromRolesAsync(user, currentRoles);
             if (!removeResult.Succeeded)
-                throw new InvalidOperationException(
+                throw new BadRequestException(
                     $"Failed to remove current roles: {string.Join(", ", removeResult.Errors.Select(e => e.Description))}");
         }
 
@@ -1099,7 +1099,7 @@ public class UsersManager : IUsersManager
         {
             var addResult = await _userManager.AddToRolesAsync(user, roles);
             if (!addResult.Succeeded)
-                throw new InvalidOperationException(
+                throw new BadRequestException(
                     $"Failed to add new roles: {string.Join(", ", addResult.Errors.Select(e => e.Description))}");
         }
     }

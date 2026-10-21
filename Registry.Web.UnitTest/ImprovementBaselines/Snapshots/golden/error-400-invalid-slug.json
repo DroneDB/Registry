@@ -2,10 +2,14 @@
   "request": "POST /orgs/golden-write/ds",
   "caller": "organization owner (write org)",
   "status": 400,
-  "contentType": "application/json; charset=utf-8",
+  "contentType": "application/problem+json; charset=utf-8",
   "bodyKind": "json",
   "body": {
-    "error": "Dataset slug is invalid",
+    "type": "https://tools.ietf.org/html/rfc9110#section-15.5.1",
+    "title": "Bad Request",
+    "status": 400,
+    "detail": "Dataset slug is invalid",
+    "traceId": "<trace-id>",
     "noRetry": false
   }
 }

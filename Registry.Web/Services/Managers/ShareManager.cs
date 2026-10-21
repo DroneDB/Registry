@@ -106,7 +106,7 @@ public class ShareManager : IShareManager
             throw new NotFoundException("Cannot find batch");
 
         if (!await _authManager.RequestAccess(batch.Dataset, AccessType.Read))
-            throw new UnauthorizedException("The current user is not allowed to read token info");
+            throw new ForbiddenException("The current user is not allowed to read token info");
 
         if (batch.Status != BatchStatus.Running)
             throw new BadRequestException("Only running batches can be rollbacked");
@@ -127,7 +127,7 @@ public class ShareManager : IShareManager
         _logger.LogInformation("Listing batches of '{OrgSlug}/{DsSlug}'", orgSlug, dsSlug);
 
         if (!await _authManager.RequestAccess(ds, AccessType.Read))
-            throw new UnauthorizedException("The current user is not allowed to read dataset");
+            throw new ForbiddenException("The current user is not allowed to read dataset");
 
         var batches = from batch in _context.Batches
                 .Include(x => x.Entries)
@@ -344,7 +344,7 @@ public class ShareManager : IShareManager
                 {
                     // A new batch replaces the running ones: only who may write to the dataset may do that
                     if (!await _authManager.RequestAccess(dataset, AccessType.Write))
-                        throw new UnauthorizedException("The current user is not allowed to upload to this dataset");
+                        throw new ForbiddenException("The current user is not allowed to upload to this dataset");
 
                     _logger.LogInformation("Checking for running batches");
                     await _context.Entry(dataset).Collection(item => item.Batches).LoadAsync();
@@ -422,7 +422,7 @@ public class ShareManager : IShareManager
         // change below is committed: a denied rollback must leave the batch running
         var requiredAccess = deleteDataset ? AccessType.Delete : AccessType.Write;
         if (!await _authManager.RequestAccess(ds, requiredAccess))
-            throw new UnauthorizedException("The current user is not allowed to roll back this batch");
+            throw new ForbiddenException("The current user is not allowed to roll back this batch");
 
         // I know we will have concurrency problems here because we could be in the middle of the rollback when another client calls for another one
         // To mitigate this issue we are going to commit the status change of the batch as soon as possible

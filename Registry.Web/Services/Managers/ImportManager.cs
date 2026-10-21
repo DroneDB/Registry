@@ -28,6 +28,8 @@ namespace Registry.Web.Services.Managers;
 /// </summary>
 public class ImportManager : IImportManager
 {
+    private const string CannotImportMessage = "The current user cannot import datasets into this organization.";
+
     private readonly IUtils _utils;
     private readonly IAuthManager _authManager;
     private readonly IDatasetsManager _datasetsManager;
@@ -67,15 +69,21 @@ public class ImportManager : IImportManager
     public IReadOnlyList<string> GetAvailableSourceTypes()
         => [.. _factory.AvailableTypes.Where(IsSourceAllowed)];
 
+    // Every import operation needs write access to the destination organization
+    private async Task RequireImportAccess(string orgSlug, string deniedMessage)
+    {
+        var org = _utils.GetOrganization(orgSlug);
+        if (!await _authManager.RequestAccess(org, AccessType.Write))
+            throw new ForbiddenException(deniedMessage);
+    }
+
     /// <inheritdoc />
     public async Task<ImportVerifyResultDto> VerifyAsync(string orgSlug, VerifyImportRequestDto request,
         CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(request);
 
-        var org = _utils.GetOrganization(orgSlug);
-        if (!await _authManager.RequestAccess(org, AccessType.Write))
-            throw new UnauthorizedException("The current user cannot import datasets into this organization.");
+        await RequireImportAccess(orgSlug, CannotImportMessage);
 
         EnsureSourceAllowed(request.SourceType);
 
@@ -99,9 +107,7 @@ public class ImportManager : IImportManager
     {
         ArgumentNullException.ThrowIfNull(request);
 
-        var org = _utils.GetOrganization(orgSlug);
-        if (!await _authManager.RequestAccess(org, AccessType.Write))
-            throw new UnauthorizedException("The current user cannot import datasets into this organization.");
+        await RequireImportAccess(orgSlug, CannotImportMessage);
 
         EnsureSourceAllowed(request.SourceType);
 
@@ -190,9 +196,8 @@ public class ImportManager : IImportManager
     {
         ArgumentNullException.ThrowIfNull(request);
 
-        var org = _utils.GetOrganization(orgSlug);
-        if (!await _authManager.RequestAccess(org, AccessType.Write))
-            throw new UnauthorizedException("The current user cannot browse import sources for this organization.");
+        await RequireImportAccess(orgSlug,
+            "The current user cannot browse import sources for this organization.");
 
         EnsureSourceAllowed(request.SourceType);
 

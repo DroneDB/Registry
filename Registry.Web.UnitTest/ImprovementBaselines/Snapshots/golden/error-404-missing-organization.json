@@ -2,10 +2,14 @@
   "request": "GET /orgs/golden-nowhere/",
   "caller": "organization owner",
   "status": 404,
-  "contentType": "application/json; charset=utf-8",
+  "contentType": "application/problem+json; charset=utf-8",
   "bodyKind": "json",
   "body": {
-    "error": "Organization not found",
+    "type": "https://tools.ietf.org/html/rfc9110#section-15.5.5",
+    "title": "Not Found",
+    "status": 404,
+    "detail": "Organization not found",
+    "traceId": "<trace-id>",
     "noRetry": false
   }
 }

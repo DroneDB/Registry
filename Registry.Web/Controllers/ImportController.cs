@@ -93,7 +93,7 @@ public class ImportController : ControllerBaseEx
     /// <returns>The list of organizations or datasets available at the remote source.</returns>
     [HttpPost("browse", Name = nameof(BrowseImport))]
     [ProducesResponseType(typeof(ImportBrowseResultDto), StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
     public async Task<IActionResult> BrowseImport(
         [FromRoute, Required] string orgSlug,
         [FromBody, Required] BrowseImportRequestDto body,

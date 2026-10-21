@@ -81,6 +81,15 @@ public class Startup
         services.AddCors();
         services.AddControllers(o => o.Filters.Add<ApiExceptionFilter>());
 
+        // One error model (RQ-05, D1): RFC 9457 ProblemDetails written by ApiErrorResponder from the MVC
+        // filter, the model-state factory below and the pipeline-wide exception handler
+        // Every ProblemDetails carries noRetry, also the framework's own (e.g. a bare NotFound()); the
+        // responder sets the real value of a classified error after this default
+        services.AddProblemDetails(o => o.CustomizeProblemDetails = context =>
+            context.ProblemDetails.Extensions.TryAdd(ApiErrorResponder.NoRetryMember, false));
+        services.AddSingleton<ApiErrorResponder>();
+        services.AddExceptionHandler<ApiExceptionHandler>();
+
         services.AddSwaggerGen(c =>
         {
             c.SwaggerDoc("v1", new OpenApiInfo
@@ -229,11 +238,14 @@ public class Startup
             options.User.RequireUniqueEmail = false;
         });
 
-        // Error messages that make sense
+        // Model validation errors: ValidationProblemDetails whose detail carries the field messages. The
+        // responder is resolved per request: it needs ProblemDetailsFactory, which reads these options
         services.Configure<ApiBehaviorOptions>(o =>
         {
             o.InvalidModelStateResponseFactory = actionContext =>
-                new BadRequestObjectResult(new ErrorResponse(actionContext.ModelState));
+                ApiErrorResponder.ToActionResult(actionContext.HttpContext.RequestServices
+                    .GetRequiredService<ApiErrorResponder>()
+                    .CreateValidation(actionContext.HttpContext, actionContext.ModelState));
         });
 
         services.AddMemoryCache();
@@ -465,20 +477,18 @@ public class Startup
         services.AddHostedService<AppInitializer>();
     }
 
-    public void Configure(IApplicationBuilder app, IWebHostEnvironment env)
+    public void Configure(IApplicationBuilder app, IWebHostEnvironment env, ILogger<Startup> logger)
     {
         // First: everything after it (HSTS, logging, auth cookies, limits) sees the real client
         // address and scheme, taken from the headers of a known proxy only
         app.UseForwardedHeaders();
 
-        if (env.IsDevelopment())
-        {
-            app.UseDeveloperExceptionPage();
-        }
-        else
-        {
+        // Every error below answers ProblemDetails (ApiExceptionHandler), in every environment: the
+        // developer exception page would give the Hub an HTML body in Development only
+        app.UseExceptionHandler();
+
+        if (!env.IsDevelopment())
             app.UseHsts();
-        }
 
         app.UseSerilogRequestLogging(options =>
         {
@@ -524,7 +534,6 @@ public class Startup
         }
         else
         {
-            var logger = app.ApplicationServices.GetRequiredService<ILoggerFactory>().CreateLogger<Startup>();
             logger.LogWarning("CORS is configured to allow any origin. Consider setting AllowedOrigins in appsettings for production environments");
 
             app.UseCors(cors => cors

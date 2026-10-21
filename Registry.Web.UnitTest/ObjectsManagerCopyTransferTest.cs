@@ -13,6 +13,7 @@ using Registry.Ports.DroneDB;
 using Registry.Test.Common;
 using Registry.Web.Data;
 using Registry.Web.Data.Models;
+using Registry.Web.Exceptions;
 using Registry.Web.Models.Configuration;
 using Registry.Web.Services.Adapters;
 using Registry.Web.Services.Managers;
@@ -140,10 +141,10 @@ public class ObjectsManagerCopyTransferTest : TestBase
     // ---------------------------------------------------------------------
 
     [Test]
-    public async Task Copy_SameSourceAndDest_ThrowsInvalidOperation()
+    public async Task Copy_SameSourceAndDest_ThrowsBadRequest()
     {
         var mgr = CreateManager();
-        await Should.ThrowAsync<InvalidOperationException>(
+        await Should.ThrowAsync<BadRequestException>(
             () => mgr.Copy(OrgSlug, DsSlug, "a.jpg", "a.jpg"));
     }
 
@@ -156,7 +157,7 @@ public class ObjectsManagerCopyTransferTest : TestBase
             .Returns(new Entry { Path = "dst.jpg", Type = EntryType.Generic, Size = 5, Hash = "h2" });
 
         var mgr = CreateManager();
-        var ex = await Should.ThrowAsync<InvalidOperationException>(
+        var ex = await Should.ThrowAsync<ConflictException>(
             () => mgr.Copy(OrgSlug, DsSlug, "src.jpg", "dst.jpg"));
         ex.Message.ShouldContain("overwrite");
     }
@@ -165,7 +166,7 @@ public class ObjectsManagerCopyTransferTest : TestBase
     public async Task Copy_CannotCopyIntoDescendant()
     {
         var mgr = CreateManager();
-        var ex = await Should.ThrowAsync<InvalidOperationException>(
+        var ex = await Should.ThrowAsync<BadRequestException>(
             () => mgr.Copy(OrgSlug, DsSlug, "folder", "folder/inside"));
         ex.Message.ShouldContain("descendants");
     }

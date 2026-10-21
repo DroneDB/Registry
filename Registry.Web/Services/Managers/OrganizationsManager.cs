@@ -218,7 +218,7 @@ public class OrganizationsManager : IOrganizationsManager
         var org = _utils.GetOrganization(orgSlug);
 
         if (!await _authManager.RequestAccess(org, AccessType.Read))
-            throw new UnauthorizedException("Invalid user");
+            throw new ForbiddenException("Invalid user");
 
         var dto = await ToDtoWithOwnerNameAsync(org);
 
@@ -280,7 +280,7 @@ public class OrganizationsManager : IOrganizationsManager
             {
                 // If the owner is specified it should be the current user
                 if (organization.Owner != null && organization.Owner != currentUser.Id)
-                    throw new UnauthorizedException(
+                    throw new ForbiddenException(
                         "Cannot create a new organization that belongs to a different user");
 
                 // The current user is the owner
@@ -319,7 +319,7 @@ public class OrganizationsManager : IOrganizationsManager
         var org = _utils.GetOrganization(orgSlug, withTracking: true);
 
         if (!await _authManager.RequestAccess(org, AccessType.Write))
-            throw new UnauthorizedException("Invalid user");
+            throw new ForbiddenException("Invalid user");
 
         var currentUser = await _authManager.GetCurrentUser();
 
@@ -327,7 +327,7 @@ public class OrganizationsManager : IOrganizationsManager
         {
             // If the owner is specified it should be the current user
             if (organization.Owner != null && organization.Owner != currentUser.Id)
-                throw new UnauthorizedException("Cannot create a new organization that belongs to a different user");
+                throw new ForbiddenException("Cannot create a new organization that belongs to a different user");
 
             // The current user is the owner
             organization.Owner = currentUser.Id;
@@ -358,7 +358,7 @@ public class OrganizationsManager : IOrganizationsManager
         var org = _utils.GetOrganization(orgSlug, withTracking: true, withDatasets: true);
 
         if (!await _authManager.RequestAccess(org, AccessType.Delete))
-            throw new UnauthorizedException("Invalid user");
+            throw new ForbiddenException("Invalid user");
 
         foreach (var ds in org.Datasets.ToArray())
         {
@@ -378,7 +378,7 @@ public class OrganizationsManager : IOrganizationsManager
     {
         // Only admins can perform this operation
         if (!await _authManager.IsUserAdmin())
-            throw new UnauthorizedException("Only administrators can merge organizations");
+            throw new ForbiddenException("Only administrators can merge organizations");
 
         if (string.IsNullOrWhiteSpace(sourceOrgSlug))
             throw new BadRequestException("Source organization slug is required");
@@ -504,7 +504,7 @@ public class OrganizationsManager : IOrganizationsManager
             // Check if user is a member with sufficient permissions
             var userMembership = org.Users?.FirstOrDefault(u => u.UserId == currentUser?.Id);
             if (userMembership == null)
-                throw new UnauthorizedException("Access denied");
+                throw new ForbiddenException("Access denied");
         }
 
         var members = new List<OrganizationMemberDto>();
@@ -531,12 +531,11 @@ public class OrganizationsManager : IOrganizationsManager
         return members;
     }
 
-    public async Task AddMember(string orgSlug, string userName, OrganizationPermissions permissions = OrganizationPermissions.ReadWrite)
+    // The organization (with its members) whose members the current user is about to change: it must
+    // exist, the user must be allowed to manage its members, and the feature must be on. The access
+    // check comes before the feature check, so an anonymous caller gets 401 and a stranger 403 (D2)
+    private async Task<(Organization Org, User CurrentUser)> GetOrganizationToManageMembers(string orgSlug)
     {
-        // Validate feature is enabled
-        if (!IsMemberManagementEnabled)
-            throw new InvalidOperationException("Organization member management is disabled");
-
         var org = await _context.Organizations
             .Include(o => o.Users)
             .FirstOrDefaultAsync(o => o.Slug == orgSlug);
@@ -544,10 +543,19 @@ public class OrganizationsManager : IOrganizationsManager
         if (org == null)
             throw new NotFoundException($"Organization '{orgSlug}' not found");
 
-        // Check if current user can manage members
         var currentUser = await _authManager.GetCurrentUser();
         if (!await CanManageMembers(org, currentUser))
-            throw new UnauthorizedException("You don't have permission to manage members");
+            throw new ForbiddenException("You don't have permission to manage members");
+
+        if (!IsMemberManagementEnabled)
+            throw new ForbiddenException("Organization member management is disabled");
+
+        return (org, currentUser);
+    }
+
+    public async Task AddMember(string orgSlug, string userName, OrganizationPermissions permissions = OrganizationPermissions.ReadWrite)
+    {
+        var (org, currentUser) = await GetOrganizationToManageMembers(orgSlug);
 
         // Check if user exists
         var userToAdd = await _appContext.Users.FirstOrDefaultAsync(u => u.UserName == userName);
@@ -560,7 +568,7 @@ public class OrganizationsManager : IOrganizationsManager
 
         // Cannot add owner as member
         if (org.OwnerId == userToAdd.Id)
-            throw new InvalidOperationException("Cannot add owner as a member");
+            throw new BadRequestException("Cannot add owner as a member");
 
         var orgUser = new OrganizationUser
         {
@@ -580,21 +588,7 @@ public class OrganizationsManager : IOrganizationsManager
 
     public async Task UpdateMemberPermission(string orgSlug, string userName, OrganizationPermissions permission)
     {
-        // Validate feature is enabled
-        if (!IsMemberManagementEnabled)
-            throw new InvalidOperationException("Organization member management is disabled");
-
-        var org = await _context.Organizations
-            .Include(o => o.Users)
-            .FirstOrDefaultAsync(o => o.Slug == orgSlug);
-
-        if (org == null)
-            throw new NotFoundException($"Organization '{orgSlug}' not found");
-
-        // Check if current user can manage members
-        var currentUser = await _authManager.GetCurrentUser();
-        if (!await CanManageMembers(org, currentUser))
-            throw new UnauthorizedException("You don't have permission to manage members");
+        var (org, currentUser) = await GetOrganizationToManageMembers(orgSlug);
 
         // Find user by userName
         var user = await _appContext.Users.FirstOrDefaultAsync(u => u.UserName == userName);
@@ -618,21 +612,7 @@ public class OrganizationsManager : IOrganizationsManager
 
     public async Task RemoveMember(string orgSlug, string userName)
     {
-        // Validate feature is enabled
-        if (!IsMemberManagementEnabled)
-            throw new InvalidOperationException("Organization member management is disabled");
-
-        var org = await _context.Organizations
-            .Include(o => o.Users)
-            .FirstOrDefaultAsync(o => o.Slug == orgSlug);
-
-        if (org == null)
-            throw new NotFoundException($"Organization '{orgSlug}' not found");
-
-        // Check if current user can manage members
-        var currentUser = await _authManager.GetCurrentUser();
-        if (!await CanManageMembers(org, currentUser))
-            throw new UnauthorizedException("You don't have permission to manage members");
+        var (org, currentUser) = await GetOrganizationToManageMembers(orgSlug);
 
         // Find user by userName
         var user = await _appContext.Users.FirstOrDefaultAsync(u => u.UserName == userName);

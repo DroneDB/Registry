@@ -38,6 +38,7 @@ public sealed partial class JsonScrubber
     public const string OffsetDateTimePlaceholder = "<datetime:offset>";
     public const string VersionPlaceholder = "<version>";
     public const string RootPlaceholder = "<root>";
+    public const string TraceIdPlaceholder = "<trace-id>";
 
     private readonly Dictionary<string, JsonNode> _properties;
     private readonly List<KeyValuePair<string, string>> _substrings;

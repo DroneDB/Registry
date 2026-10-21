@@ -299,7 +299,7 @@ public class SystemManagerFixSlugsTest : TestBase
         _authManagerMock.Setup(o => o.IsUserAdmin()).ReturnsAsync(false);
         await using var context = CreateContext();
 
-        await Should.ThrowAsync<UnauthorizedException>(() => CreateManager(context).FixInvalidSlugs());
+        await Should.ThrowAsync<ForbiddenException>(() => CreateManager(context).FixInvalidSlugs());
     }
 
     #region Setup

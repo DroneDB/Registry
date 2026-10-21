@@ -2,10 +2,14 @@
   "request": "GET /orgs/golden-org/ds",
   "caller": "anonymous",
   "status": 401,
-  "contentType": "application/json; charset=utf-8",
+  "contentType": "application/problem+json; charset=utf-8",
   "bodyKind": "json",
   "body": {
-    "error": "The current user cannot access this organization",
+    "type": "https://tools.ietf.org/html/rfc9110#section-15.5.2",
+    "title": "Unauthorized",
+    "status": 401,
+    "detail": "The current user cannot access this organization",
+    "traceId": "<trace-id>",
     "noRetry": true
   }
 }

@@ -2,10 +2,19 @@
   "request": "POST /orgs/golden-org/ds/golden-ds/meta/remove",
   "caller": "organization owner",
   "status": 400,
-  "contentType": "application/json; charset=utf-8",
+  "contentType": "application/problem+json; charset=utf-8",
   "bodyKind": "json",
   "body": {
-    "error": "The id field is required.",
+    "errors": {
+      "id": [
+        "The id field is required."
+      ]
+    },
+    "type": "https://tools.ietf.org/html/rfc9110#section-15.5.1",
+    "title": "One or more validation errors occurred.",
+    "status": 400,
+    "detail": "The id field is required.",
+    "traceId": "<trace-id>",
     "noRetry": false
   }
 }

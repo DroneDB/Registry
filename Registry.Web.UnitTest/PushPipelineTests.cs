@@ -207,7 +207,7 @@ public class PushPipelineTests : TestBase
         var token = await InitAndStage(mgr);
         _checksum = "c2";
 
-        var ex = await Should.ThrowAsync<InvalidOperationException>(() => mgr.Commit("org", "ds", token));
+        var ex = await Should.ThrowAsync<ConflictException>(() => mgr.Commit("org", "ds", token));
 
         ex.Message.ShouldContain("changed by another user");
         _wrapper.Verify(w => w.ApplyDelta(It.IsAny<Delta>(), It.IsAny<string>(), It.IsAny<string>(),
@@ -221,14 +221,14 @@ public class PushPipelineTests : TestBase
         var token = await InitAndStage(mgr);
         File.Delete(Path.Combine(AddFolder(token), "photos", "IMG_5.JPG"));
 
-        var ex = await Should.ThrowAsync<InvalidOperationException>(() => mgr.Commit("org", "ds", token));
+        var ex = await Should.ThrowAsync<BadRequestException>(() => mgr.Commit("org", "ds", token));
         ex.Message.ShouldContain("photos/IMG_5.JPG");
     }
 
     [Test]
     public async Task Commit_WithoutSession_Throws()
     {
-        var ex = await Should.ThrowAsync<InvalidOperationException>(() =>
+        var ex = await Should.ThrowAsync<ConflictException>(() =>
             CreateManager().Commit("org", "ds", Guid.NewGuid().ToString()));
         ex.Message.ShouldContain("Push session not found");
     }
@@ -269,8 +269,8 @@ public class PushPipelineTests : TestBase
         var token = (await mgr.Init("org", "ds", "c1", ClientStamp())).Token;
         var upload = await mgr.StreamUploadAsync("org", "ds", new MemoryStream([1]), 1);
 
-        Should.Throw<InvalidOperationException>(() => mgr.Upload(upload, "a.jpg", Guid.NewGuid().ToString()));
-        Should.Throw<ArgumentException>(() => mgr.Upload(upload, "a.jpg", "../../x"));
+        Should.Throw<ConflictException>(() => mgr.Upload(upload, "a.jpg", Guid.NewGuid().ToString()));
+        Should.Throw<BadRequestException>(() => mgr.Upload(upload, "a.jpg", "../../x"));
         Should.Throw<ArgumentException>(() => mgr.Upload(upload, "../a.jpg", token));
         Should.Throw<ArgumentException>(() => mgr.Upload(upload, "/etc/a.jpg", token));
         File.Exists(upload.TempPath).ShouldBeTrue("a rejected upload does not move the file");

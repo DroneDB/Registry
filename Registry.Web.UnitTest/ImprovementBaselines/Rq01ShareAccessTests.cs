@@ -159,7 +159,7 @@ public class Rq01ShareAccessTests
     {
         _bobOnAliceOrg = bobPermissions;
 
-        await Should.ThrowAsync<UnauthorizedException>(() =>
+        await Should.ThrowAsync<ForbiddenException>(() =>
             _manager.Initialize(new ShareInitDto { Tag = $"{AliceOrg}/{SharedSlug}" }));
 
         AliceBatchStatus().ShouldBe(BatchStatus.Running);
@@ -210,7 +210,7 @@ public class Rq01ShareAccessTests
         _bobOnAliceOrg = OrganizationPermissions.ReadWrite;
         BobOwnsTheRunningBatch();
 
-        await Should.ThrowAsync<UnauthorizedException>(() => _manager.Rollback(AliceToken));
+        await Should.ThrowAsync<ForbiddenException>(() => _manager.Rollback(AliceToken));
 
         AliceBatchStatus().ShouldBe(BatchStatus.Running);
         BatchOf(AliceToken).End.ShouldBeNull();

@@ -10,6 +10,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Registry.Web.Attributes;
+using Registry.Web.Exceptions;
 using Registry.Web.Models;
 using Registry.Web.Models.Configuration;
 using Registry.Web.Models.DTO;
@@ -37,19 +38,20 @@ public class ObjectUploadsController : ControllerBaseEx
     private readonly IObjectsManager _objectsManager;
     private readonly ILogger<ObjectUploadsController> _logger;
     private readonly FormOptions _formOptions;
-    private readonly AppSettings _appSettings;
     private readonly UploadSettings _uploadSettings;
+    private readonly ApiErrorResponder _errors;
 
     public ObjectUploadsController(IUploadManager uploads, IChunkedUploadManager chunks, IObjectsManager objectsManager,
-        ILogger<ObjectUploadsController> logger, IOptions<FormOptions> formOptions, IOptions<AppSettings> appSettings)
+        ILogger<ObjectUploadsController> logger, IOptions<FormOptions> formOptions, IOptions<AppSettings> appSettings,
+        ApiErrorResponder errors)
     {
         _uploads = uploads;
         _chunks = chunks;
         _objectsManager = objectsManager;
         _logger = logger;
         _formOptions = formOptions.Value;
-        _appSettings = appSettings.Value;
         _uploadSettings = appSettings.Value.Uploads ?? new UploadSettings();
+        _errors = errors;
     }
 
     /// <summary>
@@ -70,83 +72,65 @@ public class ObjectUploadsController : ControllerBaseEx
     [DisableFormValueModelBinding]
     [RequestFormLimits(ValueLengthLimit = int.MaxValue, MultipartBodyLengthLimit = long.MaxValue)]
     [ConfigurableUploadSizeLimit]
+    [EnforceContentLength]
     [ProducesResponseType(typeof(EntryDto), StatusCodes.Status201Created)]
     [ProducesResponseType(typeof(UploadPartResultDto[]), StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
-    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status401Unauthorized)]
-    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status404NotFound)]
-    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status409Conflict)]
-    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status507InsufficientStorage)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status409Conflict)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status507InsufficientStorage)]
     public async Task<IActionResult> Post(
         [FromRoute, Required] string orgSlug,
         [FromRoute, Required] string dsSlug)
     {
         if (!MultipartRequestHelper.IsMultipartContentType(Request.ContentType ?? string.Empty))
-            return BadRequest(new ErrorResponse("Expected a multipart/form-data request"));
-
-        // Early reject oversized uploads (defence-in-depth; Kestrel also enforces the limit mid-stream)
-        if (_appSettings.MaxRequestBodySize is { } maxBody &&
-            Request.ContentLength is { } contentLength && contentLength > maxBody)
-            return StatusCode(StatusCodes.Status413PayloadTooLarge,
-                new ErrorResponse($"Upload exceeds the maximum allowed size of {maxBody} bytes"));
+            throw new BadRequestException("Expected a multipart/form-data request");
 
         var uploadId = Request.Headers[UploadIdHeader].FirstOrDefault();
 
+        using var ctx = await _uploads.BeginAsync(orgSlug, dsSlug, Request.ContentLength, uploadId);
+
+        // The same upload already went through (its response was lost): answer from its receipt
+        if (ctx.Receipt?.Results is { Count: > 0 } done)
+            return Respond(orgSlug, dsSlug, done, done.Count > 1);
+
+        StreamedMultipartFiles<StreamedFile> form;
         try
         {
-            using var ctx = await _uploads.BeginAsync(orgSlug, dsSlug, Request.ContentLength, uploadId);
-
-            // The same upload already went through (its response was lost): answer from its receipt
-            if (ctx.Receipt?.Results is { Count: > 0 } done)
-                return Respond(orgSlug, dsSlug, done, done.Count > 1);
-
-            StreamedMultipartFiles<StreamedFile> form;
-            try
-            {
-                form = await MultipartRequestHelper.ReadFilesFormAsync(Request,
-                    _formOptions.MultipartBoundaryLengthLimit, _uploadSettings.MaxPartsPerRequest,
-                    async part =>
-                    {
-                        // Refuse a destination before its first byte is written
-                        if (part.Path != null) _uploads.ValidatePath(ctx, part.Path);
-                        return await _uploads.StreamAsync(ctx, part.Body, HttpContext.RequestAborted);
-                    }, file => file.TempPath);
-            }
-            catch (Exception ex)
-            {
-                await _uploads.FailAsync(ctx, ex);
-                throw;
-            }
-
-            _logger.LogDebug("Upload to '{OrgSlug}/{DsSlug}': {Count} file(s)", orgSlug, dsSlug, form.Files.Count);
-
-            if (form.Files.Count == 0)
-            {
-                // No file part: folder creation (path provided as a form field)
-                var folder = await _objectsManager.AddNew(orgSlug, dsSlug, form.GetField("path"));
-                return Created(orgSlug, dsSlug, folder);
-            }
-
-            if (form.Files.Count == 1)
-            {
-                var (path, file) = form.Files[0];
-                var entry = await _uploads.CommitAsync(ctx, path ?? form.GetField("path") ?? string.Empty, file);
-                return Created(orgSlug, dsSlug, entry);
-            }
-
-            var parts = form.Files.Select(f => new StreamedPart(f.Path ?? string.Empty, f.File)).ToArray();
-            return Respond(orgSlug, dsSlug, await _uploads.CommitAsync(ctx, parts), bundle: true);
-        }
-        catch (BadHttpRequestException bex) when (bex.StatusCode == StatusCodes.Status413PayloadTooLarge)
-        {
-            return StatusCode(StatusCodes.Status413PayloadTooLarge,
-                new ErrorResponse("Upload exceeds the maximum allowed size"));
+            form = await MultipartRequestHelper.ReadFilesFormAsync(Request,
+                _formOptions.MultipartBoundaryLengthLimit, _uploadSettings.MaxPartsPerRequest,
+                async part =>
+                {
+                    // Refuse a destination before its first byte is written
+                    if (part.Path != null) _uploads.ValidatePath(ctx, part.Path);
+                    return await _uploads.StreamAsync(ctx, part.Body, HttpContext.RequestAborted);
+                }, file => file.TempPath);
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Exception in upload to '{OrgSlug}/{DsSlug}'", orgSlug, dsSlug);
+            await _uploads.FailAsync(ctx, ex);
             throw;
         }
+
+        _logger.LogDebug("Upload to '{OrgSlug}/{DsSlug}': {Count} file(s)", orgSlug, dsSlug, form.Files.Count);
+
+        if (form.Files.Count == 0)
+        {
+            // No file part: folder creation (path provided as a form field)
+            var folder = await _objectsManager.AddNew(orgSlug, dsSlug, form.GetField("path"));
+            return Created(orgSlug, dsSlug, folder);
+        }
+
+        if (form.Files.Count == 1)
+        {
+            var (path, file) = form.Files[0];
+            var entry = await _uploads.CommitAsync(ctx, path ?? form.GetField("path") ?? string.Empty, file);
+            return Created(orgSlug, dsSlug, entry);
+        }
+
+        var parts = form.Files.Select(f => new StreamedPart(f.Path ?? string.Empty, f.File)).ToArray();
+        return Respond(orgSlug, dsSlug, await _uploads.CommitAsync(ctx, parts), bundle: true);
     }
 
     /// <summary>
@@ -159,7 +143,7 @@ public class ObjectUploadsController : ControllerBaseEx
     [HttpGet(RoutesHelper.ObjectsRadix + "/uploads/{uploadId}", Name = nameof(ObjectUploadsController) + "." + nameof(GetUpload))]
     [ProducesResponseType(typeof(UploadReceipt), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(UploadReceipt), StatusCodes.Status202Accepted)]
-    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetUpload([FromRoute, Required] string orgSlug,
         [FromRoute, Required] string dsSlug, [FromRoute, Required] string uploadId)
     {
@@ -168,7 +152,7 @@ public class ObjectUploadsController : ControllerBaseEx
 
         return receipt switch
         {
-            null => NotFound(new ErrorResponse($"Unknown upload '{uploadId}'")),
+            null => throw new NotFoundException($"Unknown upload '{uploadId}'"),
             { State: UploadReceiptState.Receiving or UploadReceiptState.Committing } => Accepted(receipt),
             _ => Ok(receipt)
         };
@@ -185,18 +169,15 @@ public class ObjectUploadsController : ControllerBaseEx
     [DisableFormValueModelBinding]
     [RequestFormLimits(ValueLengthLimit = int.MaxValue, MultipartBodyLengthLimit = long.MaxValue)]
     [ConfigurableUploadSizeLimit]
+    [EnforceContentLength(ContentLengthLimit.Chunk)]
     [ProducesResponseType(typeof(ChunkStatusDto), StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
-    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status409Conflict)]
-    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status507InsufficientStorage)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status409Conflict)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status507InsufficientStorage)]
     public async Task<IActionResult> PostChunk([FromRoute, Required] string orgSlug, [FromRoute, Required] string dsSlug)
     {
         if (!MultipartRequestHelper.IsMultipartContentType(Request.ContentType ?? string.Empty))
-            return BadRequest(new ErrorResponse("Expected a multipart/form-data request"));
-
-        if (Request.ContentLength is { } length && length > _uploadSettings.MaxChunkBytes + 64 * 1024)
-            return StatusCode(StatusCodes.Status413PayloadTooLarge,
-                new ErrorResponse($"A chunk can be at most {_uploadSettings.MaxChunkBytes} bytes"));
+            throw new BadRequestException("Expected a multipart/form-data request");
 
         ChunkStatusDto? status = null;
         await MultipartRequestHelper.ReadFilesFormAsync(Request, _formOptions.MultipartBoundaryLengthLimit, 1,
@@ -207,13 +188,13 @@ public class ObjectUploadsController : ControllerBaseEx
                 return status;
             }, _ => null!);
 
-        return status == null ? BadRequest(new ErrorResponse("No chunk uploaded")) : Ok(status);
+        return Ok(status ?? throw new BadRequestException("No chunk uploaded"));
     }
 
     /// <summary>Which chunks of a resumable upload are stored and which are missing.</summary>
     [HttpGet(RoutesHelper.ObjectsRadix + "/chunk/{fileId}", Name = nameof(ObjectUploadsController) + "." + nameof(GetChunks))]
     [ProducesResponseType(typeof(ChunkStatusDto), StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetChunks([FromRoute, Required] string orgSlug, [FromRoute, Required] string dsSlug,
         [FromRoute, Required] string fileId)
     {
@@ -227,7 +208,7 @@ public class ObjectUploadsController : ControllerBaseEx
     /// </summary>
     [HttpPost(RoutesHelper.ObjectsRadix + "/chunk/{fileId}/commit", Name = nameof(ObjectUploadsController) + "." + nameof(CommitChunks))]
     [ProducesResponseType(typeof(EntryDto), StatusCodes.Status201Created)]
-    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status409Conflict)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status409Conflict)]
     public async Task<IActionResult> CommitChunks([FromRoute, Required] string orgSlug, [FromRoute, Required] string dsSlug,
         [FromRoute, Required] string fileId) =>
         Created(orgSlug, dsSlug, await _chunks.CommitAsync(orgSlug, dsSlug, fileId));
@@ -240,7 +221,8 @@ public class ObjectUploadsController : ControllerBaseEx
         var single = results[0];
         return single.Entry != null
             ? Created(orgSlug, dsSlug, single.Entry)
-            : StatusCode(single.Status, new ErrorResponse(single.Error ?? "Upload failed"));
+            : ApiErrorResponder.ToActionResult(
+                _errors.Create(HttpContext, single.Status, single.Error ?? "Upload failed", noRetry: false));
     }
 
     private IActionResult Created(string orgSlug, string dsSlug, EntryDto entry) =>

@@ -277,36 +277,36 @@ public class UsersManagerTest : TestBase
     }
 
     [Test]
-    public async Task DeleteUser_AnonymousUser_ThrowsUnauthorizedException()
+    public async Task DeleteUser_AnonymousUser_ThrowsForbiddenException()
     {
         // Arrange
         SetupAdminUser();
 
         // Act & Assert
         var action = () => _usersManager.DeleteUser(MagicStrings.AnonymousUserName);
-        await Should.ThrowAsync<UnauthorizedException>(action);
+        await Should.ThrowAsync<ForbiddenException>(action);
     }
 
     [Test]
-    public async Task DeleteUser_DefaultAdmin_ThrowsUnauthorizedException()
+    public async Task DeleteUser_DefaultAdmin_ThrowsForbiddenException()
     {
         // Arrange
         SetupAdminUser();
 
         // Act & Assert
         var action = () => _usersManager.DeleteUser("admin");
-        await Should.ThrowAsync<UnauthorizedException>(action);
+        await Should.ThrowAsync<ForbiddenException>(action);
     }
 
     [Test]
-    public async Task DeleteUser_NonAdmin_ThrowsUnauthorizedException()
+    public async Task DeleteUser_NonAdmin_ThrowsForbiddenException()
     {
         // Arrange
         _authManagerMock.Setup(x => x.IsUserAdmin()).ReturnsAsync(false);
 
         // Act & Assert
         var action = () => _usersManager.DeleteUser("anyuser");
-        await Should.ThrowAsync<UnauthorizedException>(action);
+        await Should.ThrowAsync<ForbiddenException>(action);
     }
 
     [Test]

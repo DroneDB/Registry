@@ -9,6 +9,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Newtonsoft.Json;
+using Registry.Web.Exceptions;
 using Registry.Web.Attributes;
 using Registry.Web.Models;
 using Registry.Web.Models.DTO;
@@ -30,13 +31,11 @@ namespace Registry.Web.Controllers;
 public class PushController : ControllerBaseEx
 {
     private readonly IPushManager _pushManager;
-    private readonly ILogger<PushController> _logger;
     private readonly FormOptions _formOptions;
 
-    public PushController(IPushManager pushManager, ILogger<PushController> logger, IOptions<FormOptions> formOptions)
+    public PushController(IPushManager pushManager, IOptions<FormOptions> formOptions)
     {
         _pushManager = pushManager;
-        _logger = logger;
         _formOptions = formOptions.Value;
     }
 
@@ -54,31 +53,20 @@ public class PushController : ControllerBaseEx
     [RequestFormLimits(ValueLengthLimit = int.MaxValue, MultipartBodyLengthLimit = long.MaxValue)]
     [HttpPost("init")]
     [ProducesResponseType(typeof(PushInitResultDto), StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
-    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status401Unauthorized)]
-    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> Init(
         [FromRoute, Required] string orgSlug,
         [FromRoute, Required] string dsSlug,
         [FromForm, Required] string checksum,
         [FromForm(Name="stamp"), Required] string stampJson)
     {
-        try
-        {
-            _logger.LogDebug("Push controller Init('{OrgSlug}', '{DsSlug}', '{Checksum}', '{StampJson}')", orgSlug, dsSlug, checksum, stampJson);
+        var stamp = JsonConvert.DeserializeObject<StampDto>(stampJson);
 
-            var stamp = JsonConvert.DeserializeObject<StampDto>(stampJson);
+        var res = await _pushManager.Init(orgSlug, dsSlug, checksum, stamp);
 
-            var res = await _pushManager.Init(orgSlug, dsSlug, checksum, stamp);
-
-            return Ok(res);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Exception in Push controller Init('{OrgSlug}', '{DsSlug}', '{Checksum}', '{StampJson}')", orgSlug, dsSlug, checksum, stampJson);
-
-            throw;
-        }
+        return Ok(res);
 
 
     }
@@ -96,9 +84,9 @@ public class PushController : ControllerBaseEx
     [RequestFormLimits(ValueLengthLimit = int.MaxValue, MultipartBodyLengthLimit = long.MaxValue)]
     [HttpPost("upload")]
     [ProducesResponseType(StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
-    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status401Unauthorized)]
-    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> Upload(
         [FromRoute, Required] string orgSlug,
         [FromRoute, Required] string dsSlug)
@@ -107,7 +95,7 @@ public class PushController : ControllerBaseEx
         try
         {
             if (!MultipartRequestHelper.IsMultipartContentType(Request.ContentType))
-                return BadRequest(new ErrorResponse("Expected a multipart/form-data request"));
+                throw new BadRequestException("Expected a multipart/form-data request");
 
             var form = await MultipartRequestHelper.ReadSingleFileFormAsync(Request,
                 _formOptions.MultipartBoundaryLengthLimit,
@@ -120,20 +108,13 @@ public class PushController : ControllerBaseEx
             var path = form.GetField("path");
             var token = form.GetField("token");
 
-            _logger.LogDebug("Push controller Upload('{OrgSlug}', '{DsSlug}', '{Token}', '{Path}')", orgSlug, dsSlug, token, path);
 
             if (upload == null)
-                throw new ArgumentException("No file uploaded");
+                throw new BadRequestException("No file uploaded");
 
             _pushManager.Upload(upload, path, token);
 
             return Ok();
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Exception in Push controller Upload('{OrgSlug}', '{DsSlug}')", orgSlug, dsSlug);
-
-            throw;
         }
         finally
         {
@@ -155,32 +136,21 @@ public class PushController : ControllerBaseEx
     [RequestFormLimits(ValueLengthLimit = int.MaxValue, MultipartBodyLengthLimit = long.MaxValue)]
     [HttpPost("meta")]
     [ProducesResponseType(StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
-    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status401Unauthorized)]
-    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> Meta(
         [FromRoute, Required] string orgSlug,
         [FromRoute, Required] string dsSlug,
         [FromForm, Required] string token,
         [FromForm, Required] string meta)
     {
-        try
-        {
-            _logger.LogDebug("Push controller Meta('{OrgSlug}', '{DsSlug}', '{Token}', '{Meta}')", orgSlug, dsSlug, token, meta);
+        if (meta == null)
+            throw new BadRequestException("No meta JSON in form");
 
-            if (meta == null)
-                throw new ArgumentException("No meta JSON in form");
+        await _pushManager.SaveMeta(orgSlug, dsSlug, token, meta);
 
-            await _pushManager.SaveMeta(orgSlug, dsSlug, token, meta);
-
-            return Ok();
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Exception in Push controller Meta('{OrgSlug}', '{DsSlug}', '{Token}', '{Meta}')", orgSlug, dsSlug, token, meta);
-
-            throw;
-        }
+        return Ok();
     }
 
     /// <summary>
@@ -192,28 +162,17 @@ public class PushController : ControllerBaseEx
     /// <returns>OK if the commit was successful.</returns>
     [HttpPost("commit")]
     [ProducesResponseType(StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
-    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status401Unauthorized)]
-    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> Commit(
         [FromRoute, Required] string orgSlug,
         [FromRoute, Required] string dsSlug,
         [FromForm, Required] string token)
     {
-        try
-        {
-            _logger.LogDebug("Push controller Commit('{OrgSlug}', '{DsSlug}', '{Token}')", orgSlug, dsSlug, token);
+        await _pushManager.Commit(orgSlug, dsSlug, token);
 
-            await _pushManager.Commit(orgSlug, dsSlug, token);
-
-            return Ok();
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Exception in Push controller Commit('{OrgSlug}', '{DsSlug}', '{Token}')", orgSlug, dsSlug, token);
-
-            throw;
-        }
+        return Ok();
     }
 
 

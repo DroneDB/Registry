@@ -32,7 +32,7 @@ public sealed class CadCrsManager(
 
         var ds = utils.GetDataset(orgSlug, dsSlug);
         if (!await authManager.RequestAccess(ds, AccessType.Write))
-            throw new UnauthorizedException("The current user is not allowed to change this dataset");
+            throw new ForbiddenException("The current user is not allowed to change this dataset");
 
         var entry = ddbManager.Get(orgSlug, ds.InternalRef).GetEntry(path)
                     ?? throw new NotFoundException($"Cannot find '{path}'");

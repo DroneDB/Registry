@@ -1,5 +1,6 @@
 using System;
 using System.Threading.Tasks;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Filters;
 using Registry.Web.Services.Managers;
@@ -56,9 +57,16 @@ public class OgcAuthorizationFilter : IAsyncAuthorizationFilter
             var allowed = await _authManager.RequestAccess(dataset, AccessType.Read);
             if (!allowed)
             {
-                BasicAuthFilter.SendBasicAuthRequest(context.HttpContext.Response);
-                Fail(context, service, version, 401, "AuthenticationFailed",
-                    "Authentication required to access this dataset");
+                // D2: a signed-in caller who lacks access gets 403; an anonymous one 401 with the Basic
+                // challenge, so the OGC client asks for credentials
+                var status = ApiExceptionClassifier.AccessDeniedStatus(
+                    context.HttpContext.User.Identity?.IsAuthenticated == true);
+                if (status == StatusCodes.Status401Unauthorized)
+                    BasicAuthFilter.SendBasicAuthRequest(context.HttpContext.Response);
+                Fail(context, service, version, status, OgcExceptionFilter.OgcCodeFor(status),
+                    status == StatusCodes.Status401Unauthorized
+                        ? "Authentication required to access this dataset"
+                        : "The current user cannot access this dataset");
                 return;
             }
 

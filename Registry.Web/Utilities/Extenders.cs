@@ -330,22 +330,6 @@ public static class Extenders
         return arr == null ? "[]" : $"[{string.Join(", ", arr)}]";
     }
 
-    public static async Task ErrorResult(this HttpResponse response, string message)
-    {
-        await Result(response, new ErrorResponse(message), StatusCodes.Status500InternalServerError);
-    }
-
-    public static async Task ErrorResult(this HttpResponse response, Exception ex)
-    {
-        await ErrorResult(response, ex.Message);
-    }
-
-    public static async Task Result<T>(this HttpResponse response, T result, int statusCode)
-    {
-        response.StatusCode = statusCode;
-        await response.WriteAsJsonAsync(result);
-    }
-
     public static byte[] ComputeHash(this HashAlgorithm hashAlgorithm, string inputFile)
     {
         using var stream = File.OpenRead(inputFile);

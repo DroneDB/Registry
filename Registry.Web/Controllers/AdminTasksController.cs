@@ -6,6 +6,7 @@ using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using Registry.Web.Exceptions;
 using Registry.Web.Models;
 using Registry.Web.Models.DTO;
 using Registry.Web.Services.Ports;
@@ -58,7 +59,7 @@ public class AdminTasksController : ControllerBaseEx
     {
         var deleted = await _admin.DeleteTaskAsync(id, ct);
         if (!deleted)
-            return NotFound(new ErrorResponse("Task not found or cannot be deleted (only concluded tasks can be removed from history)"));
+            throw new NotFoundException("Task not found or cannot be deleted (only concluded tasks can be removed from history)");
 
         return Ok(new { deleted });
     }

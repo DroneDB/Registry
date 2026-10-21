@@ -38,7 +38,7 @@ public class TaskEventsTests
     }
 
     private static TasksController Controller(Mock<ITasksManager> manager, HttpContext context) =>
-        new(manager.Object, NullLogger<TasksController>.Instance)
+        new(manager.Object)
         {
             ControllerContext = new ControllerContext { HttpContext = context }
         };

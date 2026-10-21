@@ -90,7 +90,7 @@ public class PushManager : IPushManager
         else
         {
             if (!await _authManager.RequestAccess(ds, AccessType.Write))
-                throw new UnauthorizedException("The current user is not allowed to init push");
+                throw new ForbiddenException("The current user is not allowed to init push");
 
             validateChecksum = true;
         }
@@ -101,7 +101,7 @@ public class PushManager : IPushManager
         if (validateChecksum)
         {
             if (string.IsNullOrEmpty(checksum))
-                throw new InvalidOperationException("Checksum parameter missing (dataset exists)");
+                throw new BadRequestException("Checksum parameter missing (dataset exists)");
 
             // Is a pull required? The checksum passed by client is the checksum of the stamp
             // of the last sync. If it's different, the client should pull first.
@@ -159,7 +159,7 @@ public class PushManager : IPushManager
         var ds = _utils.GetDataset(orgSlug, dsSlug);
 
         if (!await _authManager.RequestAccess(ds, AccessType.Write))
-            throw new UnauthorizedException("The current user is not allowed to upload to this dataset");
+            throw new ForbiddenException("The current user is not allowed to upload to this dataset");
 
         // Reserved against one storage evaluation per window, as uploads are (the files of a push
         // add up): before writing when the size is known
@@ -199,12 +199,12 @@ public class PushManager : IPushManager
         ArgumentNullException.ThrowIfNull(upload);
 
         if (string.IsNullOrWhiteSpace(path))
-            throw new ArgumentException("Path cannot be empty");
+            throw new BadRequestException("Path cannot be empty");
 
         var baseTempFolder = GetPushFolder(upload.Ddb, token);
 
         if (!_sessionStore.Exists(baseTempFolder))
-            throw new InvalidOperationException("Cannot upload file before initializing push");
+            throw new ConflictException("Cannot upload file before initializing push");
 
         var addTempFolder = Path.Combine(baseTempFolder, AddsTempFolder);
         CommonUtils.ValidateRelativePath(path, addTempFolder);
@@ -222,14 +222,14 @@ public class PushManager : IPushManager
         var ds = _utils.GetDataset(orgSlug, dsSlug);
 
         if (!await _authManager.RequestAccess(ds, AccessType.Write))
-            throw new UnauthorizedException("The current user is not allowed to upload to this dataset");
+            throw new ForbiddenException("The current user is not allowed to upload to this dataset");
 
         var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
 
         var baseTempFolder = GetPushFolder(ddb, token);
 
         if (!_sessionStore.Exists(baseTempFolder))
-            throw new InvalidOperationException("Cannot save meta before initializing push");
+            throw new ConflictException("Cannot save meta before initializing push");
 
         var metaFile = Path.Combine(baseTempFolder, MetaFile);
 
@@ -245,7 +245,7 @@ public class PushManager : IPushManager
         var ds = _utils.GetDataset(orgSlug, dsSlug);
 
         if (!await _authManager.RequestAccess(ds, AccessType.Write))
-            throw new UnauthorizedException("The current user is not allowed to commit to this dataset");
+            throw new ForbiddenException("The current user is not allowed to commit to this dataset");
 
         var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
 
@@ -254,7 +254,7 @@ public class PushManager : IPushManager
         var metaFile = Path.Combine(baseTempFolder, MetaFile);
 
         var session = await _sessionStore.LoadAsync(baseTempFolder) ??
-                      throw new InvalidOperationException("Push session not found, please push again");
+                      throw new ConflictException("Push session not found, please push again");
 
         // Check that the dataset has not changed since Init! If it has, another client
         // might have performed changes that could conflict with our operation
@@ -262,7 +262,7 @@ public class PushManager : IPushManager
         // the operation if no conflicts are detected.
         if (_ddbWrapper.GetStampChecksum(ddb.DatasetFolderPath) != session.OurChecksum)
         {
-            throw new InvalidOperationException("The dataset has been changed by another user while pushing. Please try again!");
+            throw new ConflictException("The dataset has been changed by another user while pushing. Please try again!");
         }
 
         // Unchanged dataset: the delta computed by Init still holds
@@ -273,7 +273,7 @@ public class PushManager : IPushManager
 
         foreach (var add in delta.Adds.Where(item => item.Hash.Length > 0))
             if (!_fileSystem.Exists(Path.Combine(addTempFolder, add.Path)))
-                throw new InvalidOperationException($"Cannot commit: missing '{add.Path}'");
+                throw new BadRequestException($"Cannot commit: missing '{add.Path}'");
 
         // Extension policy gate - check all files being committed
         var blockedFiles = delta.Adds
@@ -297,7 +297,7 @@ public class PushManager : IPushManager
         if (conflicts.Count > 0)
         {
             // This should never happen, since we merge conflicts using keep theirs
-            throw new InvalidOperationException("Merge conflicts detected, try pulling first.");
+            throw new ConflictException("Merge conflicts detected, try pulling first.");
         }
 
         // Delete temp folder
@@ -339,7 +339,7 @@ public class PushManager : IPushManager
     private static string GetPushFolder(IDDB ddb, string token)
     {
         if (!Guid.TryParse(token, out _))
-            throw new ArgumentException("Invalid push token");
+            throw new BadRequestException("Invalid push token");
 
         return ddb.GetTmpFolder(IDDB.PushFolderPrefix + token);
     }

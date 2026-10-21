@@ -2,10 +2,13 @@
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc.Filters;
+using Microsoft.AspNetCore.Mvc.Infrastructure;
+using Microsoft.Net.Http.Headers;
 using Microsoft.Extensions.Options;
 using Registry.Web.Models.Configuration;
 using Registry.Web.Services.Ports;
 using System;
+using System.Linq;
 using System.Security.Claims;
 using System.Text;
 using System.Threading.Tasks;
@@ -20,9 +23,12 @@ namespace Registry.Web.Filters;
 /// matching user. It runs as an authorization filter, declared with
 /// <see cref="BasicAuthenticationAttribute"/>, so that the user is known before any access check
 /// (<c>OgcAuthorizationFilter</c>, the action's own checks). Missing or wrong credentials leave
-/// the request anonymous: what an anonymous user may read stays readable.
+/// the request anonymous: what an anonymous user may read stays readable. Every 401 these endpoints
+/// answer (an anonymous caller denied access, from the error model or a filter) carries the Basic
+/// challenge, so OGC clients prompt for credentials; a signed-in caller who lacks access gets a 403
+/// without one (plan decision D2).
 /// </summary>
-public class BasicAuthFilter : IAsyncAuthorizationFilter
+public class BasicAuthFilter : IAsyncAuthorizationFilter, IAlwaysRunResultFilter
 {
     private readonly IUsersManager _usersManager;
     private readonly UserManager<User> _userManager;
@@ -35,10 +41,31 @@ public class BasicAuthFilter : IAsyncAuthorizationFilter
         _settings = settings.Value;
     }
 
+    private const string Challenge = "Basic realm=\"DroneDB\"";
+
     public static void SendBasicAuthRequest(HttpResponse response)
     {
-        response.Headers.Append("WWW-Authenticate", "Basic realm=\"DroneDB\"");
-        response.StatusCode = 401;
+        AddChallenge(response);
+        response.StatusCode = StatusCodes.Status401Unauthorized;
+    }
+
+    /// <summary>Runs for every result, including the ProblemDetails of the exception filter.</summary>
+    public void OnResultExecuting(ResultExecutingContext context)
+    {
+        var status = (context.Result as IStatusCodeActionResult)?.StatusCode ?? context.HttpContext.Response.StatusCode;
+        if (status == StatusCodes.Status401Unauthorized)
+            AddChallenge(context.HttpContext.Response);
+    }
+
+    public void OnResultExecuted(ResultExecutedContext context)
+    {
+        // Nothing to do after the result
+    }
+
+    private static void AddChallenge(HttpResponse response)
+    {
+        if (!response.Headers.WWWAuthenticate.ToArray().Contains(Challenge))
+            response.Headers.Append(HeaderNames.WWWAuthenticate, Challenge);
     }
 
     public async Task OnAuthorizationAsync(AuthorizationFilterContext context)

@@ -143,7 +143,7 @@ public class RetryEndpointTest : IDisposable
         {
             // The manager reports refusals as managed exceptions; the global filter turns them
             // into the very status codes the endpoint used to return inline.
-            return ApiExceptionClassifier.Classify(ex).StatusCode;
+            return ApiExceptionClassifier.Classify(ex, authenticated: true).StatusCode;
         }
     }
 

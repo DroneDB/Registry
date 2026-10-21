@@ -94,10 +94,10 @@ public class CadCrsManagerTests
     }
 
     [Test]
-    public async Task WithoutWriteAccess_IsUnauthorized()
+    public async Task WithoutWriteAccess_IsForbidden()
     {
         _auth.Setup(a => a.RequestAccess(It.IsAny<Dataset>(), AccessType.Write)).ReturnsAsync(false);
-        await Should.ThrowAsync<UnauthorizedException>(() => Create().SetAsync(Org, Ds, "site/plan.dwg", "EPSG:32632"));
+        await Should.ThrowAsync<ForbiddenException>(() => Create().SetAsync(Org, Ds, "site/plan.dwg", "EPSG:32632"));
         _objects.VerifyNoOtherCalls();
     }
 }

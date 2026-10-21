@@ -50,8 +50,8 @@ public class DatasetImportController : ControllerBaseEx
     /// <returns>The verification result.</returns>
     [HttpPost("verify-url", Name = nameof(VerifyUrlImport))]
     [ProducesResponseType(typeof(UrlImportVerifyResultDto), StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
-    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
     public async Task<IActionResult> VerifyUrlImport(
         [FromRoute, Required] string orgSlug,
         [FromRoute, Required] string dsSlug,
@@ -71,8 +71,8 @@ public class DatasetImportController : ControllerBaseEx
     /// <returns>The tracking task id.</returns>
     [HttpPost("url", Name = nameof(ImportUrl))]
     [ProducesResponseType(typeof(UrlImportResultDto), StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
-    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
     public async Task<IActionResult> ImportUrl(
         [FromRoute, Required] string orgSlug,
         [FromRoute, Required] string dsSlug,

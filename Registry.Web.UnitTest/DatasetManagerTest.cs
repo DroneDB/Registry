@@ -609,7 +609,7 @@ public class DatasetManagerTest : TestBase
     #region MoveToOrganization Tests
 
     [Test]
-    public async Task MoveToOrganization_NonAdminUser_ThrowsUnauthorizedException()
+    public async Task MoveToOrganization_NonAdminUser_ThrowsForbiddenException()
     {
         // Arrange
         await using var context = GetMoveTestContext();
@@ -622,7 +622,7 @@ public class DatasetManagerTest : TestBase
 
         // Act & Assert
         var action = () => datasetsManager.MoveToOrganization("source-org", ["dataset-1"], "dest-org");
-        await Should.ThrowAsync<UnauthorizedException>(action);
+        await Should.ThrowAsync<ForbiddenException>(action);
     }
 
     [Test]

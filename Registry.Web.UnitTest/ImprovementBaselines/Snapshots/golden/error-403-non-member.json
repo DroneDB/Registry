@@ -1,0 +1,15 @@
+{
+  "request": "GET /orgs/golden-org/ds/golden-ds",
+  "caller": "user (no membership)",
+  "status": 403,
+  "contentType": "application/problem+json; charset=utf-8",
+  "bodyKind": "json",
+  "body": {
+    "type": "https://tools.ietf.org/html/rfc9110#section-15.5.4",
+    "title": "Forbidden",
+    "status": 403,
+    "detail": "The current user cannot access this dataset",
+    "traceId": "<trace-id>",
+    "noRetry": true
+  }
+}

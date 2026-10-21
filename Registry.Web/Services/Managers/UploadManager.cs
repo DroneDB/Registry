@@ -82,7 +82,7 @@ public sealed partial class UploadManager : IUploadManager
         var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
 
         if (!await _authManager.RequestAccess(ds, AccessType.Write))
-            throw new UnauthorizedException("The current user is not allowed to write to this dataset");
+            throw new ForbiddenException("The current user is not allowed to write to this dataset");
 
         var user = await _authManager.GetCurrentUser();
         var ctx = new UploadRequestContext(orgSlug, dsSlug, ds, ddb, user, uploadId);
@@ -145,7 +145,7 @@ public sealed partial class UploadManager : IUploadManager
         IReadOnlyList<StreamedPart> parts)
     {
         var outcomes = await CommitPartsAsync(ctx, parts);
-        return outcomes.Select(o => o.ToDto()).ToArray();
+        return outcomes.Select(o => o.ToDto(authenticated: ctx.User != null)).ToArray();
     }
 
     public async Task FailAsync(UploadRequestContext ctx, Exception error)
@@ -162,7 +162,7 @@ public sealed partial class UploadManager : IUploadManager
                 return;
             }
 
-            var d = ApiExceptionClassifier.Classify(error);
+            var d = ApiExceptionClassifier.Classify(error, authenticated: ctx.User != null);
             await _receipts.SetAsync(ctx.OrgSlug, ctx.DsSlug, ctx.UploadId,
                 new UploadReceipt(UploadReceiptState.Failed, null, d.StatusCode, d.Message, DateTime.UtcNow));
         }
@@ -179,19 +179,19 @@ public sealed partial class UploadManager : IUploadManager
 
         var ds = _utils.GetDataset(orgSlug, dsSlug);
         if (!await _authManager.RequestAccess(ds, AccessType.Write))
-            throw new UnauthorizedException("The current user is not allowed to write to this dataset");
+            throw new ForbiddenException("The current user is not allowed to write to this dataset");
 
         return _receipts == null ? null : await _receipts.GetAsync(orgSlug, dsSlug, uploadId);
     }
 
     private sealed record PartOutcome(string Path, EntryDto? Entry, Exception? Error)
     {
-        public UploadPartResultDto ToDto()
+        public UploadPartResultDto ToDto(bool authenticated)
         {
             if (Error == null)
                 return new UploadPartResultDto { Path = Path, Status = StatusCodes.Status201Created, Entry = Entry };
 
-            var d = ApiExceptionClassifier.Classify(Error);
+            var d = ApiExceptionClassifier.Classify(Error, authenticated);
             return new UploadPartResultDto
             {
                 Path = Path,
@@ -305,7 +305,7 @@ public sealed partial class UploadManager : IUploadManager
         var results = outcomes.Select((o, i) => o ?? new PartOutcome(parts[i].Path, null,
             new InvalidOperationException("Upload part was not processed"))).ToArray();
 
-        var dtos = results.Select(r => r.ToDto()).ToArray();
+        var dtos = results.Select(r => r.ToDto(authenticated: ctx.User != null)).ToArray();
         if (results.All(r => r.Error != null))
             await FailAsync(ctx, results[0].Error!);
         else
@@ -400,7 +400,7 @@ public sealed partial class UploadManager : IUploadManager
             {
                 ctx.Ddb.AddRaw(part.Part.Path);
                 part.Entry = ctx.Ddb.GetEntry(part.Part.Path) ??
-                             throw new InvalidOperationException("Cannot find just added file!");
+                             throw new DdbException("Cannot find just added file!");
             }
             catch (Exception ex)
             {

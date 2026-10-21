@@ -27,12 +27,10 @@ namespace Registry.Web.Controllers;
 public class TasksController : ControllerBaseEx
 {
     private readonly ITasksManager _tasksManager;
-    private readonly ILogger<TasksController> _logger;
 
-    public TasksController(ITasksManager tasksManager, ILogger<TasksController> logger)
+    public TasksController(ITasksManager tasksManager)
     {
         _tasksManager = tasksManager;
-        _logger = logger;
     }
 
     // ---- GET /tasks/tools -------------------------------------------------
@@ -47,26 +45,15 @@ public class TasksController : ControllerBaseEx
     [HttpPost(Name = nameof(TasksController) + "." + nameof(Submit))]
     [ProducesResponseType(StatusCodes.Status202Accepted)]
     [ProducesResponseType(StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
     public async Task<IActionResult> Submit(
         [FromRoute, Required] string orgSlug, [FromRoute, Required] string dsSlug,
         [FromBody] SubmitTaskRequestDto body, CancellationToken ct)
     {
-        try
-        {
-            var response = await _tasksManager.SubmitAsync(orgSlug, dsSlug, body, ct);
+        var response = await _tasksManager.SubmitAsync(orgSlug, dsSlug, body, ct);
 
-            // Dedup hit returns 200; fresh enqueue returns 202.
-            return response.Deduplicated ? Ok(response) : Accepted(response.StatusUrl, response);
-        }
-        catch (Exception ex) when (ex is not (BadRequestException or ForbiddenException or UnauthorizedException))
-        {
-            // Managed client errors above replaced early returns that never logged; everything
-            // else is a genuine failure and keeps the tool context in the incident log.
-            _logger.LogError(ex, "Task submit failed for tool '{ToolId}' on {OrgSlug}/{DsSlug}", body?.ToolId, orgSlug,
-                dsSlug);
-            throw;
-        }
+        // Dedup hit returns 200; fresh enqueue returns 202.
+        return response.Deduplicated ? Ok(response) : Accepted(response.StatusUrl, response);
     }
 
     // ---- GET /tasks -------------------------------------------------------
@@ -211,7 +198,7 @@ public class TasksController : ControllerBaseEx
 
     [HttpPost("{id}/retry", Name = nameof(TasksController) + "." + nameof(Retry))]
     [ProducesResponseType(StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status409Conflict)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status409Conflict)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> Retry(
         [FromRoute, Required] string orgSlug, [FromRoute, Required] string dsSlug,

@@ -229,7 +229,7 @@ public sealed class Rq04GoldenJsonTests : IDisposable
         yield return new("ogcapi-conformance", Caller.Owner, get, DsApi + "/ogcapi/conformance?f=json", 200);
         yield return new("ogcapi-collections", Caller.Owner, get, DsApi + "/ogcapi/collections?f=json", 200);
 
-        // ---- errors: today's format, which D1 (ProblemDetails, RQ-05) replaces on purpose
+        // ---- errors: RFC 9457 ProblemDetails since RQ-05 (D1); 401 only for anonymous callers (D2)
         yield return new("error-400-invalid-slug", Caller.Writer, post, $"/orgs/{WriteOrg}/ds", 400)
         {
             Form = new Dictionary<string, string> { ["slug"] = "Not A Slug!" }
@@ -240,8 +240,8 @@ public sealed class Rq04GoldenJsonTests : IDisposable
         };
         yield return new("error-401-anonymous-gate", Caller.Anonymous, get, "/users/storage", 401);
         yield return new("error-401-anonymous-private-org", Caller.Anonymous, get, $"/orgs/{Org}/ds", 401);
-        // D2 (RQ-05) turns this one into a 403: an authenticated user without access
-        yield return new("error-401-non-member", Caller.User, get, DsApi, 401);
+        // D2 (RQ-05): an authenticated user without access gets 403 (it was a 401)
+        yield return new("error-403-non-member", Caller.User, get, DsApi, 403);
         yield return new("error-403-non-admin", Caller.User, get, "/sys/config", 403);
         yield return new("error-404-missing-dataset", Caller.Owner, get, $"/orgs/{Org}/ds/{MissingDs}", 404);
         yield return new("error-404-missing-organization", Caller.Owner, get, "/orgs/golden-nowhere/", 404);
@@ -413,6 +413,8 @@ public sealed class Rq04GoldenJsonTests : IDisposable
                 properties: new Dictionary<string, JsonNode>
                 {
                     ["token"] = JsonScrubber.TokenPlaceholder,
+                    // ProblemDetails: the W3C trace id of the request
+                    ["traceId"] = JsonScrubber.TraceIdPlaceholder,
                     // Token expiry: epoch seconds (a number), now + TokenExpirationInDays
                     ["expires"] = 0,
                     // HubInfo is process-wide: null or a version depending on what ran before

@@ -348,7 +348,7 @@ public sealed class TasksManager : ITasksManager
                       || (user is not null && job.UserId == user.Id)
                       || await _authManager.IsOwnerOrAdmin(ds);
         if (!isOwner)
-            throw new ForbiddenException("Forbidden");
+            throw new ForbiddenException("Forbidden", noRetry: false);
 
         return job;
     }
@@ -385,7 +385,7 @@ public sealed class TasksManager : ITasksManager
                 TaskJobHelpers.ArtifactExpiresAt(j, _settings.ArtifactTtlHours))
             : null;
 
-    // 401 with noRetry:false, matching the response the controller produced before the manager split.
-    private static UnauthorizedException AccessDenied() =>
-        new("Access denied") { NoRetry = false };
+    // noRetry:false, matching the response the controller produced before the manager split; the
+    // status follows D2 (403 when signed in, 401 when anonymous)
+    private static ForbiddenException AccessDenied() => new("Access denied", noRetry: false);
 }

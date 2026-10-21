@@ -89,7 +89,7 @@ public class SystemManagerTest : TestBase
     }
 
     [Test]
-    public async Task GetGlobalReport_NonAdmin_ThrowsUnauthorizedException()
+    public async Task GetGlobalReport_NonAdmin_ThrowsForbiddenException()
     {
         // Arrange
         await using var context = CreateInMemoryContext();
@@ -101,7 +101,7 @@ public class SystemManagerTest : TestBase
         Func<Task> act = async () => await systemManager.GetGlobalReport();
 
         // Assert
-        var ex = await Should.ThrowAsync<UnauthorizedException>(act);
+        var ex = await Should.ThrowAsync<ForbiddenException>(act);
         ex.Message.ShouldContain("Only admins");
     }
 
@@ -174,7 +174,7 @@ public class SystemManagerTest : TestBase
     // -----------------------------------------------------------------------
 
     [Test]
-    public async Task CleanupBuild_NonAdmin_ThrowsUnauthorizedException()
+    public async Task CleanupBuild_NonAdmin_ThrowsForbiddenException()
     {
         await using var context = CreateInMemoryContext();
         _authManagerMock.Setup(x => x.IsUserAdmin()).ReturnsAsync(false);
@@ -183,7 +183,7 @@ public class SystemManagerTest : TestBase
 
         Func<Task> act = async () => await systemManager.CleanupBuild(new Registry.Web.Models.DTO.CleanupBuildRequestDto());
 
-        var ex = await Should.ThrowAsync<UnauthorizedException>(act);
+        var ex = await Should.ThrowAsync<ForbiddenException>(act);
         ex.Message.ShouldContain("admins");
     }
 

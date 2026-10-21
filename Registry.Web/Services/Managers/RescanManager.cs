@@ -45,10 +45,10 @@ public class RescanManager : IRescanManager
     public async Task<RescanResultDto> RescanDatasetIndex(string orgSlug, string dsSlug, RescanOptions? options = null)
     {
         if (string.IsNullOrWhiteSpace(orgSlug))
-            throw new ArgumentException("Organization slug is required", nameof(orgSlug));
+            throw new BadRequestException("Organization slug is required");
 
         if (string.IsNullOrWhiteSpace(dsSlug))
-            throw new ArgumentException("Dataset slug is required", nameof(dsSlug));
+            throw new BadRequestException("Dataset slug is required");
 
         options ??= new RescanOptions();
         var filter = RescanFilter.Parse(options.Types, options.Extensions);
@@ -58,12 +58,12 @@ public class RescanManager : IRescanManager
             .FirstOrDefaultAsync(d => d.Organization.Slug == orgSlug && d.Slug == dsSlug);
 
         if (dataset == null)
-            throw new ArgumentException($"Dataset '{orgSlug}/{dsSlug}' not found");
+            throw new BadRequestException($"Dataset '{orgSlug}/{dsSlug}' not found");
 
         // Allow admins or users with write access to the dataset
         if (!await _authManager.IsUserAdmin() &&
             !await _authManager.RequestAccess(dataset, AccessType.Write))
-            throw new UnauthorizedException("Only admins or users with write access can rescan dataset index");
+            throw new ForbiddenException("Only admins or users with write access can rescan dataset index");
 
         _logger.LogInformation("Rescanning index for dataset {OrgSlug}/{DsSlug} ({Filter})",
             orgSlug, dsSlug, filter);
@@ -100,7 +100,7 @@ public class RescanManager : IRescanManager
     public async Task<RescanJobDto> Rescan(RescanRequestDto request)
     {
         if (!await _authManager.IsUserAdmin())
-            throw new UnauthorizedException("Only admins can perform system related tasks");
+            throw new ForbiddenException("Only admins can perform system related tasks");
 
         ArgumentNullException.ThrowIfNull(request);
         var scope = DatasetScope.Parse(request.OrganizationSlug, request.DatasetSlug);

@@ -244,7 +244,7 @@ public class OrganizationManagerTest : TestBase
 
         // Act & Assert
         var action = () => _organizationsManager.AddNew(newOrg);
-        await Should.ThrowAsync<UnauthorizedException>(action);
+        await Should.ThrowAsync<ForbiddenException>(action);
     }
 
     [Test]
@@ -336,7 +336,7 @@ public class OrganizationManagerTest : TestBase
     #region Merge Tests
 
     [Test]
-    public async Task Merge_NonAdminUser_ThrowsUnauthorizedException()
+    public async Task Merge_NonAdminUser_ThrowsForbiddenException()
     {
         // Arrange
         SetupStandardUser("standard-user");
@@ -345,7 +345,7 @@ public class OrganizationManagerTest : TestBase
 
         // Act & Assert
         var action = () => _organizationsManager.Merge("source-org", "dest-org");
-        await Should.ThrowAsync<UnauthorizedException>(action);
+        await Should.ThrowAsync<ForbiddenException>(action);
     }
 
     [Test]

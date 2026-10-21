@@ -41,7 +41,7 @@ public class RescanManagerTest : TestBase
     }
 
     [Test]
-    public async Task RescanDatasetIndex_NonAdmin_ThrowsUnauthorizedException()
+    public async Task RescanDatasetIndex_NonAdmin_ThrowsForbiddenException()
     {
         // Arrange
         await using var context = CreateInMemoryContext();
@@ -53,12 +53,12 @@ public class RescanManagerTest : TestBase
         Func<Task> act = async () => await rescanManager.RescanDatasetIndex("test-org", "test-dataset");
 
         // Assert
-        var ex = await Should.ThrowAsync<UnauthorizedException>(act);
+        var ex = await Should.ThrowAsync<ForbiddenException>(act);
         ex.Message.ShouldContain("Only admins or users with write access can rescan dataset index");
     }
 
     [Test]
-    public async Task RescanDatasetIndex_UserWithoutWriteAccess_ThrowsUnauthorizedException()
+    public async Task RescanDatasetIndex_UserWithoutWriteAccess_ThrowsForbiddenException()
     {
         // Arrange
         await using var context = CreateInMemoryContext();
@@ -72,7 +72,7 @@ public class RescanManagerTest : TestBase
         Func<Task> act = async () => await rescanManager.RescanDatasetIndex("test-org", "test-dataset");
 
         // Assert
-        var ex = await Should.ThrowAsync<UnauthorizedException>(act);
+        var ex = await Should.ThrowAsync<ForbiddenException>(act);
         ex.Message.ShouldContain("write access");
     }
 
@@ -134,7 +134,7 @@ public class RescanManagerTest : TestBase
     }
 
     [Test]
-    public async Task RescanDatasetIndex_EmptyOrgSlug_ThrowsArgumentException()
+    public async Task RescanDatasetIndex_EmptyOrgSlug_ThrowsBadRequestException()
     {
         // Arrange
         await using var context = CreateInMemoryContext();
@@ -146,12 +146,12 @@ public class RescanManagerTest : TestBase
         Func<Task> act = async () => await rescanManager.RescanDatasetIndex("", "test-dataset");
 
         // Assert
-        var ex = await Should.ThrowAsync<ArgumentException>(act);
+        var ex = await Should.ThrowAsync<BadRequestException>(act);
         ex.Message.ShouldContain("Organization slug");
     }
 
     [Test]
-    public async Task RescanDatasetIndex_EmptyDsSlug_ThrowsArgumentException()
+    public async Task RescanDatasetIndex_EmptyDsSlug_ThrowsBadRequestException()
     {
         // Arrange
         await using var context = CreateInMemoryContext();
@@ -163,7 +163,7 @@ public class RescanManagerTest : TestBase
         Func<Task> act = async () => await rescanManager.RescanDatasetIndex("test-org", "");
 
         // Assert
-        var ex = await Should.ThrowAsync<ArgumentException>(act);
+        var ex = await Should.ThrowAsync<BadRequestException>(act);
         ex.Message.ShouldContain("Dataset slug");
     }
 
@@ -229,12 +229,12 @@ public class RescanManagerTest : TestBase
     }
 
     [Test]
-    public async Task Rescan_NonAdmin_ThrowsUnauthorizedException()
+    public async Task Rescan_NonAdmin_ThrowsForbiddenException()
     {
         await using var context = CreateInMemoryContext();
         _authManagerMock.Setup(x => x.IsUserAdmin()).ReturnsAsync(false);
 
-        await Should.ThrowAsync<UnauthorizedException>(() =>
+        await Should.ThrowAsync<ForbiddenException>(() =>
             CreateRescanManager(context).Rescan(new RescanRequestDto { Extensions = ["dwg"] }));
     }
 

@@ -6,6 +6,7 @@ using Microsoft.Extensions.Logging;
 using Moq;
 using NUnit.Framework;
 using Registry.Test.Common;
+using Registry.Web.Exceptions;
 using Registry.Web.Middlewares;
 using Registry.Web.Services.Adapters;
 using Registry.Web.Services.Ports;
@@ -166,7 +167,7 @@ public class DownloadLimitMiddlewareTest : TestBase
     }
 
     [Test]
-    public async Task InvokeAsync_Preflight_NoSlot_Returns429()
+    public async Task InvokeAsync_Preflight_NoSlot_Raises429()
     {
         // Arrange
         _limiterMock.Setup(l => l.IsEnabled).Returns(true);
@@ -175,11 +176,13 @@ public class DownloadLimitMiddlewareTest : TestBase
         var context = CreateContext("/orgs/org1/ds/ds1/download", "user1");
         context.Request.Headers["X-Download-Check"] = "1";
 
-        // Act
-        await _middleware.InvokeAsync(context, NextDelegate());
+        // Act: the exception handler writes the ProblemDetails 429 (RQ-05)
+        var ex = await Should.ThrowAsync<TooManyRequestsException>(() =>
+            _middleware.InvokeAsync(context, NextDelegate()));
 
         // Assert
-        context.Response.StatusCode.ShouldBe(429);
+        ex.StatusCode.ShouldBe(429);
+        ex.RetryAfterSeconds.ShouldBe(10);
     }
 
     #endregion
@@ -205,7 +208,7 @@ public class DownloadLimitMiddlewareTest : TestBase
     }
 
     [Test]
-    public async Task InvokeAsync_SlotRejected_Returns429_DoesNotCallNext()
+    public async Task InvokeAsync_SlotRejected_Raises429_DoesNotCallNext()
     {
         // Arrange
         _limiterMock.Setup(l => l.IsEnabled).Returns(true);
@@ -215,11 +218,12 @@ public class DownloadLimitMiddlewareTest : TestBase
         var nextCalled = false;
 
         // Act
-        await _middleware.InvokeAsync(context, _ => { nextCalled = true; return Task.CompletedTask; });
+        var ex = await Should.ThrowAsync<TooManyRequestsException>(() =>
+            _middleware.InvokeAsync(context, _ => { nextCalled = true; return Task.CompletedTask; }));
 
         // Assert
         nextCalled.ShouldBeFalse();
-        context.Response.StatusCode.ShouldBe(429);
+        ex.StatusCode.ShouldBe(429);
         _limiterMock.Verify(l => l.ReleaseSlot(It.IsAny<string>()), Times.Never);
     }
 
@@ -281,13 +285,14 @@ public class DownloadLimitMiddlewareTest : TestBase
     #region Response format
 
     [Test]
-    public async Task InvokeAsync_429Response_HasRetryAfterHeader()
+    public async Task InvokeAsync_429ForABrowserNavigation_IsAnHtmlPageWithRetryAfter()
     {
         // Arrange
         _limiterMock.Setup(l => l.IsEnabled).Returns(true);
         _authManagerMock.Setup(a => a.IsUserAdmin()).ReturnsAsync(false);
         _limiterMock.Setup(l => l.TryAcquireSlot(It.IsAny<string>())).Returns(false);
         var context = CreateContext("/orgs/org1/ds/ds1/download", "user1");
+        context.Request.Headers.Accept = "text/html,application/xhtml+xml";
 
         // Act
         await _middleware.InvokeAsync(context, NextDelegate());
@@ -295,10 +300,11 @@ public class DownloadLimitMiddlewareTest : TestBase
         // Assert
         context.Response.StatusCode.ShouldBe(429);
         context.Response.Headers["Retry-After"].ToString().ShouldBe("10");
+        context.Response.ContentType.ShouldBe("text/html; charset=utf-8");
     }
 
     [Test]
-    public async Task InvokeAsync_429WithAcceptJson_ReturnsJsonContentType()
+    public async Task InvokeAsync_429WithAcceptJson_RaisesTheApiError()
     {
         // Arrange
         _limiterMock.Setup(l => l.IsEnabled).Returns(true);
@@ -307,11 +313,12 @@ public class DownloadLimitMiddlewareTest : TestBase
         var context = CreateContext("/orgs/org1/ds/ds1/download", "user1");
         context.Request.Headers.Accept = "application/json";
 
-        // Act
-        await _middleware.InvokeAsync(context, NextDelegate());
+        // Act: ProblemDetails with Retry-After, written by the exception handler (Rq05ErrorModelTests)
+        var ex = await Should.ThrowAsync<TooManyRequestsException>(() =>
+            _middleware.InvokeAsync(context, NextDelegate()));
 
         // Assert
-        context.Response.ContentType.ShouldBe("application/json");
+        ex.RetryAfterSeconds.ShouldBe(10);
     }
 
     #endregion

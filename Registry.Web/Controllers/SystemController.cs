@@ -10,6 +10,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Registry.Ports;
+using Registry.Web.Exceptions;
 using Registry.Web.Models;
 using Registry.Web.Models.Configuration;
 using Registry.Web.Models.DTO;
@@ -80,22 +81,11 @@ public class SystemController : ControllerBaseEx
     /// <returns>The version string.</returns>
     [HttpGet("version", Name = nameof(SystemController) + "." + nameof(GetVersion))]
     [ProducesResponseType(typeof(string), StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
-    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
     public IActionResult GetVersion()
     {
-        try
-        {
-            _logger.LogDebug("System controller GetVersion()");
-
-            return Ok(_systemManager.GetVersion());
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Exception in System controller GetVersion()");
-
-            throw;
-        }
+        return Ok(_systemManager.GetVersion());
     }
 
     /// <summary>
@@ -104,22 +94,11 @@ public class SystemController : ControllerBaseEx
     /// <returns>The cleanup result with removed batches and any errors encountered.</returns>
     [HttpPost("cleanupbatches", Name = nameof(SystemController) + "." + nameof(CleanupBatches))]
     [ProducesResponseType(typeof(CleanupBatchesResultDto), StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
-    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
     public async Task<IActionResult> CleanupBatches()
     {
-        try
-        {
-            _logger.LogDebug("System controller CleanupBatches()");
-
-            return Ok(await _systemManager.CleanupBatches());
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Exception in System controller CleanupBatches()");
-
-            throw;
-        }
+        return Ok(await _systemManager.CleanupBatches());
     }
 
 
@@ -129,22 +108,11 @@ public class SystemController : ControllerBaseEx
     /// <returns>The cleanup result with removed datasets and any errors encountered.</returns>
     [HttpPost("cleanupdatasets", Name = nameof(SystemController) + "." + nameof(CleanupDatasets))]
     [ProducesResponseType(typeof(CleanupDatasetResultDto), StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
-    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
     public async Task<IActionResult> CleanupDatasets()
     {
-        try
-        {
-            _logger.LogDebug("System controller CleanupDatasets()");
-
-            return Ok(await _systemManager.CleanupEmptyDatasets());
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Exception in System controller CleanupDatasets()");
-
-            throw;
-        }
+        return Ok(await _systemManager.CleanupEmptyDatasets());
     }
 
     /// <summary>
@@ -162,24 +130,12 @@ public class SystemController : ControllerBaseEx
     [HttpPost("cleanup", Name = nameof(SystemController) + "." + nameof(Cleanup))]
     [ProducesResponseType(typeof(CleanupBuildResultDto), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(CleanupBuildResultDto), StatusCodes.Status202Accepted)]
-    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
-    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
     public async Task<IActionResult> Cleanup([FromBody] CleanupBuildRequestDto? request)
     {
-        try
-        {
-            _logger.LogDebug("System controller Cleanup({OrgSlug}/{DsSlug})",
-                request?.OrganizationSlug, request?.DatasetSlug);
-
-            var result = await _systemManager.CleanupBuild(request ?? new CleanupBuildRequestDto());
-            return result.Async ? Accepted(result) : Ok(result);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Exception in System controller Cleanup()");
-
-            throw;
-        }
+        var result = await _systemManager.CleanupBuild(request ?? new CleanupBuildRequestDto());
+        return result.Async ? Accepted(result) : Ok(result);
     }
 
     /// <summary>
@@ -196,25 +152,11 @@ public class SystemController : ControllerBaseEx
     /// <returns>The id of the background job that submits the dataset tasks.</returns>
     [HttpPost("rescan", Name = nameof(SystemController) + "." + nameof(Rescan))]
     [ProducesResponseType(typeof(RescanJobDto), StatusCodes.Status202Accepted)]
-    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
-    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
     public async Task<IActionResult> Rescan([FromBody] RescanRequestDto request)
     {
-        try
-        {
-            _logger.LogDebug("System controller Rescan({OrgSlug}/{DsSlug}, types: {Types}, extensions: {Extensions})",
-                request?.OrganizationSlug, request?.DatasetSlug,
-                request?.Types == null ? "all" : string.Join(",", request.Types),
-                request?.Extensions == null ? "all" : string.Join(",", request.Extensions));
-
-            return Accepted(await _rescanManager.Rescan(request ?? new RescanRequestDto()));
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Exception in System controller Rescan()");
-
-            throw;
-        }
+        return Accepted(await _rescanManager.Rescan(request ?? new RescanRequestDto()));
     }
 
     /// <summary>
@@ -223,22 +165,11 @@ public class SystemController : ControllerBaseEx
     /// <returns>A list of migrated visibility entries.</returns>
     [HttpPost("migratevisibility", Name = nameof(SystemController) + "." + nameof(MigrateVisibility))]
     [ProducesResponseType(typeof(IEnumerable<MigrateVisibilityEntryDTO>), StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
-    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
     public async Task<IActionResult> MigrateVisibility()
     {
-        try
-        {
-            _logger.LogDebug("System controller MigrateVisibility()");
-
-            return Ok(await _systemManager.MigrateVisibility());
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Exception in System controller CleanupDatasets()");
-
-            throw;
-        }
+        return Ok(await _systemManager.MigrateVisibility());
     }
 
     /// <summary>
@@ -249,21 +180,10 @@ public class SystemController : ControllerBaseEx
     /// <param name="dryRun">When true (default) only returns the planned renames.</param>
     [HttpPost("fix-invalid-slugs", Name = nameof(SystemController) + "." + nameof(FixInvalidSlugs))]
     [ProducesResponseType(typeof(FixInvalidSlugsResultDto), StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
     public async Task<IActionResult> FixInvalidSlugs([FromQuery] bool dryRun = true)
     {
-        try
-        {
-            _logger.LogDebug("System controller FixInvalidSlugs(dryRun: {DryRun})", dryRun);
-
-            return Ok(await _systemManager.FixInvalidSlugs(dryRun));
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Exception in System controller FixInvalidSlugs()");
-
-            throw;
-        }
+        return Ok(await _systemManager.FixInvalidSlugs(dryRun));
     }
 
     /// <summary>
@@ -272,22 +192,11 @@ public class SystemController : ControllerBaseEx
     /// <returns>The current status of the build pending job including metrics and next scheduled run.</returns>
     [HttpGet("build-pending-status", Name = nameof(SystemController) + "." + nameof(GetBuildPendingStatus))]
     [ProducesResponseType(typeof(BuildPendingStatusDto), StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
-    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
     public async Task<IActionResult> GetBuildPendingStatus()
     {
-        try
-        {
-            _logger.LogDebug("System controller GetBuildPendingStatus()");
-
-            return Ok(await _systemManager.GetBuildPendingStatus());
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Exception in System controller GetBuildPendingStatus()");
-
-            throw;
-        }
+        return Ok(await _systemManager.GetBuildPendingStatus());
     }
 
     /// <summary>
@@ -297,25 +206,12 @@ public class SystemController : ControllerBaseEx
     /// <returns>The import result with imported items, errors, and statistics.</returns>
     [HttpPost("import-dataset", Name = nameof(SystemController) + "." + nameof(ImportDataset))]
     [ProducesResponseType(typeof(ImportResultDto), StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
-    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status401Unauthorized)]
-    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> ImportDataset([FromBody] ImportDatasetRequestDto request)
     {
-        try
-        {
-            _logger.LogDebug("System controller ImportDataset('{SourceOrg}/{SourceDs}' from '{SourceUrl}')",
-                request.SourceOrganization, request.SourceDataset, request.SourceRegistryUrl);
-
-            return Ok(await _systemManager.ImportDataset(request));
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Exception in System controller ImportDataset('{SourceOrg}/{SourceDs}' from '{SourceUrl}')",
-                request?.SourceOrganization, request?.SourceDataset, request?.SourceRegistryUrl);
-
-            throw;
-        }
+        return Ok(await _systemManager.ImportDataset(request));
     }
 
     /// <summary>
@@ -325,25 +221,12 @@ public class SystemController : ControllerBaseEx
     /// <returns>The import result with imported items, errors, and statistics.</returns>
     [HttpPost("import-organization", Name = nameof(SystemController) + "." + nameof(ImportOrganization))]
     [ProducesResponseType(typeof(ImportResultDto), StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
-    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status401Unauthorized)]
-    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> ImportOrganization([FromBody] ImportOrganizationRequestDto request)
     {
-        try
-        {
-            _logger.LogDebug("System controller ImportOrganization('{SourceOrg}' from '{SourceUrl}')",
-                request.SourceOrganization, request.SourceRegistryUrl);
-
-            return Ok(await _systemManager.ImportOrganization(request));
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Exception in System controller ImportOrganization('{SourceOrg}' from '{SourceUrl}')",
-                request?.SourceOrganization, request?.SourceRegistryUrl);
-
-            throw;
-        }
+        return Ok(await _systemManager.ImportOrganization(request));
     }
 
     /// <summary>
@@ -354,34 +237,20 @@ public class SystemController : ControllerBaseEx
     /// <returns>Results of the move operation for each dataset.</returns>
     [HttpPost("move-datasets", Name = nameof(SystemController) + "." + nameof(MoveDatasets))]
     [ProducesResponseType(typeof(IEnumerable<MoveDatasetResultDto>), StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
-    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status401Unauthorized)]
-    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status404NotFound)]
-    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status409Conflict)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status409Conflict)]
     public async Task<IActionResult> MoveDatasets(
         [FromBody, Required] MoveDatasetDto request)
     {
-        try
-        {
-            _logger.LogDebug("System controller MoveDatasets('{SourceOrgSlug}', datasets: [{DatasetSlugs}], destination: '{DestOrgSlug}', conflictResolution: {ConflictResolution})",
-                request?.SourceOrgSlug,
-                string.Join(", ", request?.DatasetSlugs ?? []),
-                request?.DestinationOrgSlug,
-                request?.ConflictResolution);
+        var results = await _datasetsManager.MoveToOrganization(
+            request?.SourceOrgSlug,
+            request?.DatasetSlugs,
+            request?.DestinationOrgSlug,
+            request!.ConflictResolution);
 
-            var results = await _datasetsManager.MoveToOrganization(
-                request?.SourceOrgSlug,
-                request?.DatasetSlugs,
-                request?.DestinationOrgSlug,
-                request!.ConflictResolution);
-
-            return Ok(results);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Exception in System controller MoveDatasets");
-            throw;
-        }
+        return Ok(results);
     }
 
     /// <summary>
@@ -393,34 +262,20 @@ public class SystemController : ControllerBaseEx
     /// <returns>Result of the merge operation.</returns>
     [HttpPost("merge-organizations", Name = nameof(SystemController) + "." + nameof(MergeOrganizations))]
     [ProducesResponseType(typeof(MergeOrganizationResultDto), StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
-    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status401Unauthorized)]
-    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status404NotFound)]
-    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status409Conflict)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status409Conflict)]
     public async Task<IActionResult> MergeOrganizations(
         [FromBody, Required] MergeOrganizationDto request)
     {
-        try
-        {
-            _logger.LogDebug("System controller MergeOrganizations('{SourceOrgSlug}' -> '{DestOrgSlug}', conflictResolution: {ConflictResolution}, deleteSource: {DeleteSource})",
-                request?.SourceOrgSlug,
-                request?.DestinationOrgSlug,
-                request?.ConflictResolution,
-                request?.DeleteSourceOrganization);
+        var result = await _organizationsManager.Merge(
+            request?.SourceOrgSlug,
+            request?.DestinationOrgSlug,
+            request!.ConflictResolution,
+            request!.DeleteSourceOrganization);
 
-            var result = await _organizationsManager.Merge(
-                request?.SourceOrgSlug,
-                request?.DestinationOrgSlug,
-                request!.ConflictResolution,
-                request!.DeleteSourceOrganization);
-
-            return Ok(result);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Exception in System controller MergeOrganizations");
-            throw;
-        }
+        return Ok(result);
     }
 
     /// <summary>
@@ -431,22 +286,11 @@ public class SystemController : ControllerBaseEx
     /// <returns>Cleanup result with the number of records deleted.</returns>
     [HttpPost("cleanup-jobindices", Name = nameof(SystemController) + "." + nameof(CleanupJobIndices))]
     [ProducesResponseType(typeof(CleanupJobIndicesResultDto), StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
-    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
     public async Task<IActionResult> CleanupJobIndices([FromQuery] int? retentionDays = null)
     {
-        try
-        {
-            _logger.LogDebug("System controller CleanupJobIndices(retentionDays: {RetentionDays})", retentionDays);
-
-            return Ok(await _systemManager.CleanupJobIndices(retentionDays));
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Exception in System controller CleanupJobIndices()");
-
-            throw;
-        }
+        return Ok(await _systemManager.CleanupJobIndices(retentionDays));
     }
 
     /// <summary>
@@ -459,25 +303,14 @@ public class SystemController : ControllerBaseEx
         Name = nameof(SystemController) + "." + nameof(CheckArtifactCompleteness))]
     [Authorize(Policy = Policies.Admin)]
     [ProducesResponseType(StatusCodes.Status202Accepted)]
-    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status401Unauthorized)]
-    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
     public IActionResult CheckArtifactCompleteness()
     {
-        try
-        {
-            _logger.LogDebug("System controller CheckArtifactCompleteness()");
+        var jobId = BackgroundJob.Enqueue<ArtifactCompletenessCheckerService>(
+            s => s.CheckAndQueueAsync(null));
 
-            var jobId = BackgroundJob.Enqueue<ArtifactCompletenessCheckerService>(
-                s => s.CheckAndQueueAsync(null));
-
-            return Accepted(new { JobId = jobId });
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Exception in System controller CheckArtifactCompleteness()");
-
-            throw;
-        }
+        return Accepted(new { JobId = jobId });
     }
 
     /// <summary>
@@ -561,22 +394,11 @@ public class SystemController : ControllerBaseEx
     /// <returns>Global report containing user, organizations, datasets, and file statistics.</returns>
     [HttpGet("report", Name = nameof(SystemController) + "." + nameof(GetGlobalReport))]
     [ProducesResponseType(typeof(GlobalReportDto), StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
-    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
     public async Task<IActionResult> GetGlobalReport()
     {
-        try
-        {
-            _logger.LogDebug("System controller GetGlobalReport()");
-
-            return Ok(await _systemManager.GetGlobalReport());
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Exception in System controller GetGlobalReport()");
-
-            throw;
-        }
+        return Ok(await _systemManager.GetGlobalReport());
     }
 
     /// <summary>
@@ -588,22 +410,11 @@ public class SystemController : ControllerBaseEx
     [HttpGet("config", Name = nameof(SystemController) + "." + nameof(GetConfig))]
     [Authorize(Policy = Policies.Admin)]
     [ProducesResponseType(typeof(ConfigurationDataDto), StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status401Unauthorized)]
-    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
     public IActionResult GetConfig()
     {
-        try
-        {
-            _logger.LogDebug("System controller GetConfig()");
-
-            return Ok(_configurationBuilder.Build());
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Exception in System controller GetConfig()");
-
-            throw;
-        }
+        return Ok(_configurationBuilder.Build());
     }
 
     /// <summary>
@@ -613,25 +424,14 @@ public class SystemController : ControllerBaseEx
     /// <returns>A list of processing node descriptors.</returns>
     [HttpGet("processingNodes", Name = nameof(SystemController) + "." + nameof(GetProcessingNodes))]
     [ProducesResponseType(typeof(IEnumerable<ProcessingNodeDto>), StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
     public IActionResult GetProcessingNodes()
     {
-        try
-        {
-            _logger.LogDebug("System controller GetProcessingNodes()");
+        var nodes = (_appSettings.ProcessingPlatform?.NodeOdx ?? [])
+            .Select(n => new ProcessingNodeDto(n.Id, n.Title ?? n.Id))
+            .ToArray();
 
-            var nodes = (_appSettings.ProcessingPlatform?.NodeOdx ?? [])
-                .Select(n => new ProcessingNodeDto(n.Id, n.Title ?? n.Id))
-                .ToArray();
-
-            return Ok(nodes);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Exception in System controller GetProcessingNodes()");
-
-            throw;
-        }
+        return Ok(nodes);
     }
 
     /// <summary>
@@ -643,33 +443,23 @@ public class SystemController : ControllerBaseEx
     /// <returns>A list of processing option descriptors.</returns>
     [HttpGet("processingNodes/{nodeId}/options", Name = nameof(SystemController) + "." + nameof(GetProcessingNodeOptions))]
     [ProducesResponseType(typeof(IEnumerable<NodeOdxOptionDto>), StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status401Unauthorized)]
-    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetProcessingNodeOptions([Required] string nodeId)
     {
-        try
-        {
-            _logger.LogDebug("System controller GetProcessingNodeOptions({NodeId})", nodeId);
+        var nodes = _appSettings.ProcessingPlatform?.NodeOdx ?? [];
+        var nodeConfig = nodes.FirstOrDefault(n => n.Id.Equals(nodeId, StringComparison.OrdinalIgnoreCase));
+        if (nodeConfig is null)
+            throw new NotFoundException($"Processing node '{nodeId}' not found.");
 
-            var nodes = _appSettings.ProcessingPlatform?.NodeOdx ?? [];
-            var nodeConfig = nodes.FirstOrDefault(n => n.Id.Equals(nodeId, StringComparison.OrdinalIgnoreCase));
-            if (nodeConfig is null)
-                return NotFound(new ErrorResponse($"Processing node '{nodeId}' not found."));
+        var node = new NodeOdxEndpoint(nodeConfig.Id, nodeConfig.Url, nodeConfig.Token, nodeConfig.Title);
 
-            var node = new NodeOdxEndpoint(nodeConfig.Id, nodeConfig.Url, nodeConfig.Token, nodeConfig.Title);
+        var options = await _nodeOdxClient.GetOptionsAsync(node, HttpContext.RequestAborted);
 
-            var options = await _nodeOdxClient.GetOptionsAsync(node, HttpContext.RequestAborted);
+        var dtos = options.Select(o => new NodeOdxOptionDto(
+            o.Name, o.Type, o.Domain, o.Help, o.Value)).ToArray();
 
-            var dtos = options.Select(o => new NodeOdxOptionDto(
-                o.Name, o.Type, o.Domain, o.Help, o.Value)).ToArray();
-
-            return Ok(dtos);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Exception in System controller GetProcessingNodeOptions({NodeId})", nodeId);
-            throw;
-        }
+        return Ok(dtos);
     }
 
     /// <summary>
@@ -682,39 +472,29 @@ public class SystemController : ControllerBaseEx
     /// <returns>The node status descriptor.</returns>
     [HttpGet("processingNodes/{nodeId}/status", Name = nameof(SystemController) + "." + nameof(GetProcessingNodeStatus))]
     [ProducesResponseType(typeof(ProcessingNodeStatusDto), StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status401Unauthorized)]
-    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetProcessingNodeStatus([Required] string nodeId)
     {
+        var nodes = _appSettings.ProcessingPlatform?.NodeOdx ?? [];
+        var nodeConfig = nodes.FirstOrDefault(n => n.Id.Equals(nodeId, StringComparison.OrdinalIgnoreCase));
+        if (nodeConfig is null)
+            throw new NotFoundException($"Processing node '{nodeId}' not found.");
+
+        var node = new NodeOdxEndpoint(nodeConfig.Id, nodeConfig.Url, nodeConfig.Token, nodeConfig.Title);
+
         try
         {
-            _logger.LogDebug("System controller GetProcessingNodeStatus({NodeId})", nodeId);
-
-            var nodes = _appSettings.ProcessingPlatform?.NodeOdx ?? [];
-            var nodeConfig = nodes.FirstOrDefault(n => n.Id.Equals(nodeId, StringComparison.OrdinalIgnoreCase));
-            if (nodeConfig is null)
-                return NotFound(new ErrorResponse($"Processing node '{nodeId}' not found."));
-
-            var node = new NodeOdxEndpoint(nodeConfig.Id, nodeConfig.Url, nodeConfig.Token, nodeConfig.Title);
-
-            try
-            {
-                var info = await _nodeOdxClient.GetInfoAsync(node, HttpContext.RequestAborted);
-                return Ok(new ProcessingNodeStatusDto(
-                    nodeConfig.Id, Reachable: true, info.Version, info.Engine, info.EngineVersion,
-                    info.TaskQueueCount, info.MaxParallelTasks, ErrorMessage: null));
-            }
-            catch (Exception ex) when (ex is not OperationCanceledException)
-            {
-                _logger.LogWarning(ex, "NodeODX node '{NodeId}' is unreachable", nodeId);
-                return Ok(new ProcessingNodeStatusDto(
-                    nodeConfig.Id, Reachable: false, null, null, null, 0, 0, ErrorMessage: ex.Message));
-            }
+            var info = await _nodeOdxClient.GetInfoAsync(node, HttpContext.RequestAborted);
+            return Ok(new ProcessingNodeStatusDto(
+                nodeConfig.Id, Reachable: true, info.Version, info.Engine, info.EngineVersion,
+                info.TaskQueueCount, info.MaxParallelTasks, ErrorMessage: null));
         }
-        catch (Exception ex)
+        catch (Exception ex) when (ex is not OperationCanceledException)
         {
-            _logger.LogError(ex, "Exception in System controller GetProcessingNodeStatus({NodeId})", nodeId);
-            throw;
+            _logger.LogWarning(ex, "NodeODX node '{NodeId}' is unreachable", nodeId);
+            return Ok(new ProcessingNodeStatusDto(
+                nodeConfig.Id, Reachable: false, null, null, null, 0, 0, ErrorMessage: ex.Message));
         }
     }
 

@@ -66,7 +66,7 @@ public class FileUrlImportManager : IFileUrlImportManager
 
         var ds = _utils.GetDataset(orgSlug, dsSlug);
         if (!await _authManager.RequestAccess(ds, AccessType.Write))
-            throw new UnauthorizedException("The current user cannot import files into this dataset.");
+            throw new ForbiddenException("The current user cannot import files into this dataset.");
 
         var uri = FileImportPolicy.ParseHttpUrl(request.Url);
         var probe = await _downloader.ProbeAsync(uri, request.Username, request.Password, ct);
@@ -96,7 +96,7 @@ public class FileUrlImportManager : IFileUrlImportManager
 
         var ds = _utils.GetDataset(orgSlug, dsSlug);
         if (!await _authManager.RequestAccess(ds, AccessType.Write))
-            throw new UnauthorizedException("The current user cannot import files into this dataset.");
+            throw new ForbiddenException("The current user cannot import files into this dataset.");
 
         var uri = FileImportPolicy.ParseHttpUrl(request.Url);
 

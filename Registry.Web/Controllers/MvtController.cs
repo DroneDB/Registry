@@ -34,23 +34,21 @@ public class MvtController : ControllerBaseEx
     private readonly IDdbManager _ddbManager;
     private readonly IBuildArtifactResolver _artifacts;
     private readonly IFileSystem _fs;
-    private readonly ILogger<MvtController> _logger;
 
     public MvtController(IUtils utils, IAuthManager authManager, IDdbManager ddbManager,
-        IBuildArtifactResolver artifacts, IFileSystem fs, ILogger<MvtController> logger)
+        IBuildArtifactResolver artifacts, IFileSystem fs)
     {
         _utils = utils;
         _authManager = authManager;
         _ddbManager = ddbManager;
         _artifacts = artifacts;
         _fs = fs;
-        _logger = logger;
     }
 
     [BasicAuthentication]
     [HttpGet("{hash}/{z:int}/{x:int}/{y:int}.pbf")]
     [ProducesResponseType(StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetTile(
         [FromRoute, Required] string orgSlug,
@@ -58,74 +56,43 @@ public class MvtController : ControllerBaseEx
         [FromRoute, Required] string hash,
         [FromRoute] int z, [FromRoute] int x, [FromRoute] int y)
     {
-        try
-        {
-            if (z < 0 || z > 24 || x < 0 || y < 0)
-                return BadRequest(new ErrorResponse("Invalid tile coordinates"));
+        if (z < 0 || z > 24 || x < 0 || y < 0)
+            throw new BadRequestException("Invalid tile coordinates");
 
-            var ds = _utils.GetDataset(orgSlug, dsSlug);
-            if (!await _authManager.RequestAccess(ds, AccessType.Read))
-            {
-                BasicAuthFilter.SendBasicAuthRequest(Response);
-                throw new UnauthorizedException("Authentication required");
-            }
+        var ds = _utils.GetDataset(orgSlug, dsSlug);
+        if (!await _authManager.RequestAccess(ds, AccessType.Read))
+            throw new ForbiddenException("Authentication required");
 
-            var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
-            var tilePath = _artifacts.GetMvtTilePath(ddb, hash, z, x, y);
+        var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
+        var tilePath = _artifacts.GetMvtTilePath(ddb, hash, z, x, y);
 
-            if (!_artifacts.ArtifactExists(tilePath))
-                return NotFound();
+        if (!_artifacts.ArtifactExists(tilePath))
+            return NotFound();
 
-            // Tiles are already gzip-compressed (COMPRESS=YES in MVT driver).
-            Response.Headers.ContentEncoding = "gzip";
-            Response.Headers.CacheControl = "public, max-age=31536000, immutable";
-            Response.Headers.ETag = $"\"{hash}-{z}-{x}-{y}\"";
-            return PhysicalFile(tilePath, "application/vnd.mapbox-vector-tile");
-        }
-        catch (UnauthorizedException)
-        {
-            // Attach the challenge header, then let the global classifier produce the
-            // canonical 401 body (the per-action result builder was removed during unification).
-            BasicAuthFilter.SendBasicAuthRequest(Response);
-            throw;
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Error in MVT GetTile {Org}/{Ds} {Hash} z={Z}", orgSlug, dsSlug, hash, z);
-            throw;
-        }
+        // Tiles are already gzip-compressed (COMPRESS=YES in MVT driver).
+        Response.Headers.ContentEncoding = "gzip";
+        Response.Headers.CacheControl = "public, max-age=31536000, immutable";
+        Response.Headers.ETag = $"\"{hash}-{z}-{x}-{y}\"";
+        return PhysicalFile(tilePath, "application/vnd.mapbox-vector-tile");
     }
 
     [BasicAuthentication]
     [HttpGet("{hash}/metadata.json")]
     [ProducesResponseType(StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetMetadata(
         [FromRoute, Required] string orgSlug,
         [FromRoute, Required] string dsSlug,
         [FromRoute, Required] string hash)
     {
-        try
-        {
-            var ds = _utils.GetDataset(orgSlug, dsSlug);
-            if (!await _authManager.RequestAccess(ds, AccessType.Read))
-            {
-                BasicAuthFilter.SendBasicAuthRequest(Response);
-                throw new UnauthorizedException("Authentication required");
-            }
+        var ds = _utils.GetDataset(orgSlug, dsSlug);
+        if (!await _authManager.RequestAccess(ds, AccessType.Read))
+            throw new ForbiddenException("Authentication required");
 
-            var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
-            var path = _artifacts.GetMvtMetadataPath(ddb, hash);
-            if (!_artifacts.ArtifactExists(path)) return NotFound();
-            return PhysicalFile(path, "application/json");
-        }
-        catch (UnauthorizedException)
-        {
-            // Attach the challenge header, then let the global classifier produce the
-            // canonical 401 body (the per-action result builder was removed during unification).
-            BasicAuthFilter.SendBasicAuthRequest(Response);
-            throw;
-        }
+        var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
+        var path = _artifacts.GetMvtMetadataPath(ddb, hash);
+        if (!_artifacts.ArtifactExists(path)) return NotFound();
+        return PhysicalFile(path, "application/json");
     }
 }
