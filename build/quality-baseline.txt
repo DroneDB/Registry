@@ -60,6 +60,17 @@ Direct Path.GetTempPath()	8
 Ad-hoc backslash->slash normalizations	11
 Static File./Directory. calls	196
 DateTime.Now (local)	5
+Archive key normalization call sites (zip-slip)	3
+Archive extraction loops	3
+Inline reserved-path checks	13
+Hand-written traversal checks	12
+ValidateRelativePath(s) call sites	26
+Delete-and-ignore helpers	9
+Separator rewrites (Replace with a separator)	16
+OS-specific path comparers	4
+OS-detection idioms other than OperatingSystem.Is*	2
+Static File./Directory. calls in files with an injected IFileSystem	17
+Disk-space call sites	10
 Unpinned test_data URLs	0
 Task.Run in managers	10
 Hand-built Content-Disposition	2

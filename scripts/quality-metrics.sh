@@ -105,6 +105,14 @@ redeclared_node_registrations() {
         <(regs Registry.Web/Utilities/ProcessingNodeServiceCollectionExtensions.cs) | wc -l | tr -d ' '
 }
 
+# Files (NUL-separated) in the given pathspecs (read NUL-separated from stdin) whose class takes an
+# IFileSystem (a constructor parameter or a field).
+files_with_injected_fs() {
+    local specs=()
+    mapfile -d '' specs
+    git grep --untracked -I -P -l -z -e 'IFileSystem \w+[,)]|IFileSystem _\w+' -- "${specs[@]}" || true
+}
+
 tests() { printf '%s\0' "${TEST_CODE[@]}"; }
 paths() { printf '%s\0' "$@"; }
 
@@ -195,6 +203,29 @@ metrics() {
     m "Ad-hoc backslash->slash normalizations"       "$(prod '' | lines 'Replace\(\x27\\\\\x27, \x27/\x27\)')"
     m "Static File./Directory. calls"                "$(prod Registry.Web Registry.Adapters | matches '\b(File|Directory)\.[A-Z]\w+\(')"
     m "DateTime.Now (local)"                         "$(prod '' | lines 'DateTime\.Now\b')"
+    # Added for RQ-10 (2026-10-21): one path rule (libddb's), one extraction loop, one disk API
+    m "Archive key normalization call sites (zip-slip)" "$(prod Registry.Web | lines '\w+\.(JoinArchiveEntry|NormalizeArchiveEntry|NormalizeArchiveKey)\(')"
+    m "Archive extraction loops"                     "$(prod Registry.Web | lines 'foreach \(var \w+ in \w+\.Entries\(\)\)')"
+    m "Inline reserved-path checks"                  "$({ prod Registry.Web; paths ':(exclude,glob)**/DatasetPathRules.cs' \
+        ':(exclude,glob)**/UploadPathPolicy.cs' ':(exclude,glob)**/DatasetPathPolicy.cs'; } |
+        lines '^(?!.*bool IsReserved).*IsReserved\w*\(')"
+    m "Hand-written traversal checks"                "$(prod Registry.Web Registry.Adapters Registry.Common |
+        lines 'IsPathRooted\(|\.Contains\("\.\."\)|is "\." or "\.\."|seg == "\.\."|relativePath == "\.\."')"
+    m "ValidateRelativePath(s) call sites"           "$(prod Registry.Web Registry.Adapters Registry.Common |
+        lines '^(?!.*static void ValidateRelativePath).*ValidateRelativePaths?\(')"
+    m "Delete-and-ignore helpers"                    "$(prod Registry.Web Registry.Ports Registry.Adapters |
+        lines '\b(void|bool) (TryDelete\w*|SafeDelete\w*|DeleteIfExists|SafeFolderDelete)\(')"
+    m "Separator rewrites (Replace with a separator)" "$(prod '' |
+        lines 'Replace\((Path\.(Alt)?DirectorySeparatorChar|\x27\\\\\x27|\x27/\x27), ?(Path\.(Alt)?DirectorySeparatorChar|\x27/\x27|\x27\\\\\x27)\)')"
+    m "OS-specific path comparers"                   "$(prod '' |
+        multiline 'OperatingSystem\.IsWindows\(\)\s*\?\s*String(Comparer|Comparison)\.OrdinalIgnoreCase')"
+    m "OS-detection idioms other than OperatingSystem.Is*" "$(prod '' | lines 'RuntimeInformation\.IsOSPlatform|Environment\.OSVersion\.Platform')"
+    m "Static File./Directory. calls in files with an injected IFileSystem" "$({ prod Registry.Web Registry.Adapters;
+        paths ':(exclude)Registry.Adapters/FileSystem.cs'; } | files_with_injected_fs |
+        xargs -0 -r grep -oP '\b(File|Directory)\.[A-Z]\w+\(' | wc -l | tr -d ' ')"
+    m "Disk-space call sites"                        "$({ prod Registry.Web Registry.Adapters Registry.Common;
+        paths ':(exclude,glob)**/VolumeInfo.cs'; } |
+        lines 'VolumeInfo\.For\(|GetStorageInfo\(|GetAvailableDiskBytes\(|new DriveInfo\(|DriveInfo\.GetDrives')"
 
     # Cross-repository contract (XI-09): test_data is downloaded only through TestData.Url, which
     # pins the commit of DroneDB's tests/test-data.sha; a branch URL (raw/master) is unpinned.
