@@ -16,7 +16,7 @@ Mock<IOptions<AppSettings>> in tests	0
 Test helpers in Registry.Common/Test	0
 Category string literals (use TestCategories)	0
 Controller log+rethrow catch blocks	0
-catch (Exception ...) total	193
+catch (Exception ...) total	192
 new ErrorResponse( in controllers	0
 ErrorResponse references (D1)	0
 Controller entry debug traces	0
@@ -24,7 +24,7 @@ Controller Content-Length pre-checks	0
 InvalidOperationException thrown by managers	6
 ArgumentException thrown by managers	3
 UnauthorizedException thrown by managers	5
-Web files importing Registry.Adapters	6
+Web files importing Registry.Adapters	5
 RequestAccess + throw blocks	0
 IsUserAdmin() guard + throw blocks	2
 Sync _utils.GetDataset/GetOrganization calls	0
@@ -34,7 +34,7 @@ IsUserAdmin() + throw (any form)	3
 Sync IUtils lookups (any receiver)	0
 Raster prologue copies (EnsurePathValidity)	0
 new OrganizationUser in managers	1
-GetService/GetRequiredService calls	54
+GetService/GetRequiredService calls	47
 Console.Write* in Program+Startup	0
 .Wait() calls	1
 Node registrations re-declared by the web host	0
@@ -52,24 +52,24 @@ Console helper calls in Program+Startup	0
 HostFacts.Current() call sites (XI-06)	1
 [DllImport] in production code	6
 EntryPointNotFoundException catches	0
-Copied DDB AutomaticRetry attribute	6
-Recurring-job local WriteLine copies	7
-ReadString(JsonElement) copies	9
-Recurring jobs without CancellationToken	8
-HangfireUtils static call sites	31
-JobStorage.Current uses	13
-context != null ? ... : Log copies	6
-Lenient JsonElement reader copies	19
-Job expressions passing an IDDB (D4)	21
-Hangfire filters taking IServiceProvider	4
-UseFilter(new ...) in the Hangfire configuration	5
-Hangfire static facade calls	2
-Read-after-write artifact hash copies	2
-ApplyDelta calls without verified hashes	1
+Copied DDB AutomaticRetry attribute	3
+Recurring-job local WriteLine copies	0
+ReadString(JsonElement) copies	0
+Recurring jobs without CancellationToken	0
+HangfireUtils static call sites	0
+JobStorage.Current uses	0
+context != null ? ... : Log copies	0
+Lenient JsonElement reader copies	0
+Job expressions passing an IDDB (D4)	0
+Hangfire filters taking IServiceProvider	0
+UseFilter(new ...) in the Hangfire configuration	0
+Hangfire static facade calls	0
+Read-after-write artifact hash copies	0
+ApplyDelta calls without verified hashes	0
 Zip-slip normalizer copies	0
 Direct Path.GetTempPath()	0
 Ad-hoc backslash->slash normalizations	1
-Static File./Directory. calls	138
+Static File./Directory. calls	137
 DateTime.Now (local)	0
 Archive key normalization call sites (zip-slip)	1
 Archive extraction loops	1

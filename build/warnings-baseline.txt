@@ -79,10 +79,6 @@ Registry.Web.UnitTest/DatasetIndexQueueUploadTests.cs CS8632 1
 Registry.Web.UnitTest/DatasetManagerTest.cs CA1829 3
 Registry.Web.UnitTest/DdbBuildBusyPassthroughTests.cs CS8632 2
 Registry.Web.UnitTest/DownloadPathsParameterFilterTests.cs CA1310 1
-Registry.Web.UnitTest/HangfireUtilsTests.cs CA1001 1
-Registry.Web.UnitTest/HangfireUtilsTests.cs CA1305 1
-Registry.Web.UnitTest/HangfireUtilsTests.cs CA2201 7
-Registry.Web.UnitTest/HangfireUtilsTests.cs CS8625 12
 Registry.Web.UnitTest/ImprovementBaselines/Rq01AdminPasswordTests.cs CA1001 1
 Registry.Web.UnitTest/ImprovementBaselines/Rq01AdminPolicyTests.cs CA1001 2
 Registry.Web.UnitTest/ImprovementBaselines/Rq01AuthHardeningTests.cs CA1001 2
@@ -159,9 +155,7 @@ Registry.Web/Models/DTO/Ogc/OgcApiDtos.cs CS8632 7
 Registry.Web/Models/DTO/Ogc/OgcLayerDto.cs CS8632 4
 Registry.Web/Models/RescanFilter.cs CA1870 1
 Registry.Web/Program.cs CA1309 1
-Registry.Web/Services/Adapters/ArtifactCompletenessCheckerService.cs CA2254 1
 Registry.Web/Services/Adapters/BuildArtifactResolver.cs CA1305 2
-Registry.Web/Services/Adapters/BuildPendingService.cs CA2254 2
 Registry.Web/Services/Adapters/BuildPendingService.cs CS0419 1
 Registry.Web/Services/Adapters/BuildStatusService.cs CA1859 1
 Registry.Web/Services/Adapters/ChunkStore.cs CA1001 1
@@ -169,14 +163,8 @@ Registry.Web/Services/Adapters/ChunkStore.cs CA2016 1
 Registry.Web/Services/Adapters/ConfigurationDataBuilder.cs CA1305 4
 Registry.Web/Services/Adapters/ConfigurationDataBuilder.cs CA1822 3
 Registry.Web/Services/Adapters/ConfigurationDataBuilder.cs CS8632 11
-Registry.Web/Services/Adapters/DatasetCleanupService.cs CA2254 1
 Registry.Web/Services/Adapters/DatasetIndexQueue.cs CA1711 1
-Registry.Web/Services/Adapters/IndexReconciliationService.cs CA2254 1
-Registry.Web/Services/Adapters/IndexRescanService.cs CA2254 1
-Registry.Web/Services/Adapters/JobIndexCleanupService.cs CA2254 1
 Registry.Web/Services/Adapters/OgcLayerCatalog.cs CS8632 11
-Registry.Web/Services/Adapters/OrphanedDatasetCleanupService.cs CA2254 1
-Registry.Web/Services/Adapters/RecurringDatasetCleanupService.cs CA2254 1
 Registry.Web/Services/Adapters/SafeMetaManager.cs CA1305 2
 Registry.Web/Services/Adapters/ThumbnailPrecomputeQueue.cs CA1711 1
 Registry.Web/Services/Adapters/UploadQuotaLedger.cs CA1001 1
@@ -185,7 +173,6 @@ Registry.Web/Services/Adapters/WebUtils.cs CA1309 1
 Registry.Web/Services/HeavyTasks/Models/HeavyToolModels.cs CA1711 1
 Registry.Web/Services/HeavyTasks/NodeOdm/NodeOdxClient.cs CA1305 1
 Registry.Web/Services/HeavyTasks/NodeOdm/NodeOdxClient.cs CA1859 1
-Registry.Web/Services/HeavyTasks/Tools/BulkDownloadTool.cs CA1822 1
 Registry.Web/Services/Import/ArchiveUrlImportSource.cs CA1822 1
 Registry.Web/Services/Initialization/HangfireJobsInitializer.cs CS8632 3
 Registry.Web/Services/Managers/AdminTasksManager.cs CA1859 1
@@ -236,7 +223,6 @@ Registry.Web/Services/Ports/IThumbnailPrecomputeQueue.cs CA1711 1
 Registry.Web/Services/Ports/IUploadManager.cs CA1716 1
 Registry.Web/Utilities/Auth/AccessControlBase.cs CA1051 3
 Registry.Web/Utilities/Auth/AuthorizationExtensions.cs CA1310 1
-Registry.Web/Utilities/HangfireUtils.cs CA1845 1
 Registry.Web/Utilities/MultipartRequestHelper.cs CA2249 1
 Registry.Web/Utilities/MultipartRequestHelper.cs CS8604 1
 Registry.Web/Utilities/Ogc/OgcExceptionFilter.cs CS8632 1
