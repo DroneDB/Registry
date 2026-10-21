@@ -12,9 +12,10 @@ namespace Registry.Web.Services.Ports;
 /// Push workflow interface (init, upload, save meta, commit).
 /// </summary>
 /// <summary>
-/// A file streamed to the uploads folder of a dataset the current user can write to.
+/// A file streamed to the uploads folder of a dataset the current user can write to, with the
+/// SHA-256 computed while it streamed.
 /// </summary>
-public sealed record PushUpload(IDDB Ddb, string TempPath, long Bytes);
+public sealed record PushUpload(IDDB Ddb, string TempPath, long Bytes, FileHashHint Hash);
 
 public interface IPushManager
 {
@@ -28,9 +29,12 @@ public interface IPushManager
 
     /// <summary>
     /// Moves a file streamed by <see cref="StreamUploadAsync"/> (dataset and access already checked)
-    /// to <paramref name="filePath"/> in the folder of the push <paramref name="token"/>.
+    /// to <paramref name="filePath"/> in the folder of the push <paramref name="token"/>, once its
+    /// streamed hash matches the one the push's delta gives that path (XI-05).
     /// </summary>
-    void Upload(PushUpload upload, string filePath, string token);
+    /// <exception cref="Exceptions.BadRequestException">The delta adds no file at that path, or the
+    /// bytes received are not the delta's (the file is not moved).</exception>
+    Task UploadAsync(PushUpload upload, string filePath, string token);
 
     Task SaveMeta(string orgSlug, string dsSlug, string token, string meta);
     Task Commit(string orgSlug, string dsSlug, string token);

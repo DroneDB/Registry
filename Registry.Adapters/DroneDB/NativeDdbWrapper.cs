@@ -272,6 +272,18 @@ public class NativeDdbWrapper : IDdbWrapper
                 metaDump, out output));
     }
 
+    public List<string> ApplyDelta(Delta delta, string sourcePath, string ddbPath, MergeStrategy mergeStrategy,
+        string? sourceMetaDump, IReadOnlyDictionary<string, string> verifiedHashes)
+    {
+        ArgumentNullException.ThrowIfNull(verifiedHashes);
+        var deltaJson = JsonConvert.SerializeObject(delta);
+        var metaDump = sourceMetaDump ?? "[]";
+        var verifiedJson = JsonConvert.SerializeObject(verifiedHashes);
+        return NativeCall.Invoke<List<string>>(nameof(NativeDdb.DDBApplyDeltaEx),
+            (out IntPtr output) => NativeDdb.DDBApplyDeltaEx(deltaJson, sourcePath, ddbPath, (int)mergeStrategy,
+                metaDump, verifiedJson, out output));
+    }
+
     public Dictionary<string, bool> ComputeDeltaLocals(Delta delta, string ddbPath, string hlDestFolder = "")
     {
         var deltaJson = JsonConvert.SerializeObject(delta);

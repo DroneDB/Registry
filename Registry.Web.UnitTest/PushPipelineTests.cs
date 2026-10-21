@@ -93,7 +93,7 @@ public class PushPipelineTests : TestBase
         _wrapper.Setup(w => w.ComputeDeltaLocals(It.IsAny<Delta>(), _root, It.IsAny<string>()))
             .Returns(new Dictionary<string, bool>());
         _wrapper.Setup(w => w.ApplyDelta(It.IsAny<Delta>(), It.IsAny<string>(), _root, It.IsAny<MergeStrategy>(),
-            It.IsAny<string>())).Returns([]);
+            It.IsAny<string>(), It.IsAny<IReadOnlyDictionary<string, string>>())).Returns([]);
 
         _ddb = new Mock<IDDB>();
         _ddb.SetupGet(d => d.DatasetFolderPath).Returns(_root);
@@ -182,8 +182,9 @@ public class PushPipelineTests : TestBase
         _wrapper.Verify(w => w.GetStamp(_root), Times.Once, "only Init builds the stamp");
         _wrapper.Verify(w => w.Delta(It.IsAny<Stamp>(), It.IsAny<Stamp>()), Times.Once, "only Init computes the delta");
         _wrapper.Verify(w => w.GetStampChecksum(_root), Times.Once);
+        // Staged by hand, not uploaded: nothing is verified, libddb hashes every file
         _wrapper.Verify(w => w.ApplyDelta(It.Is<Delta>(d => d.Adds.Length == Adds + 1), AddFolder(token), _root,
-            MergeStrategy.KeepTheirs, null), Times.Once);
+            MergeStrategy.KeepTheirs, null, It.Is<IReadOnlyDictionary<string, string>>(v => v.Count == 0)), Times.Once);
         Directory.Exists(Path.GetDirectoryName(AddFolder(token))).ShouldBeFalse("the push folder is deleted after commit");
     }
 
@@ -212,7 +213,7 @@ public class PushPipelineTests : TestBase
 
         ex.Message.ShouldContain("changed by another user");
         _wrapper.Verify(w => w.ApplyDelta(It.IsAny<Delta>(), It.IsAny<string>(), It.IsAny<string>(),
-            It.IsAny<MergeStrategy>(), It.IsAny<string>()), Times.Never);
+            It.IsAny<MergeStrategy>(), It.IsAny<string>(), It.IsAny<IReadOnlyDictionary<string, string>>()), Times.Never);
     }
 
     [Test]
@@ -243,38 +244,93 @@ public class PushPipelineTests : TestBase
         _wrapper.Verify(w => w.Delta(It.IsAny<Stamp>(), It.IsAny<Stamp>()), Times.Never);
     }
 
+    private static string Sha256(string text) =>
+        Convert.ToHexStringLower(System.Security.Cryptography.SHA256.HashData(Encoding.UTF8.GetBytes(text)));
+
+    // The delta adds photos/IMG_{i}.JPG with the hash of "photo {i}"
+    private void UseContentHashes()
+    {
+        _delta.Adds = [.. _delta.Adds.Select(a => a.Hash.Length == 0 ? a : new AddAction(a.Path, Sha256("photo " + a.Path)))];
+    }
+
+    private async Task<PushUpload> Stream(PushManager mgr, string text) =>
+        await mgr.StreamUploadAsync("org", "ds", new MemoryStream(Encoding.UTF8.GetBytes(text)), Encoding.UTF8.GetByteCount(text));
+
     [Test]
     public async Task Upload_MovesStreamedFileIntoPushFolder()
     {
+        UseContentHashes();
         var mgr = CreateManager();
         var token = (await mgr.Init("org", "ds", "c1", ClientStamp())).Token;
 
-        var upload = await mgr.StreamUploadAsync("org", "ds", new MemoryStream(Encoding.UTF8.GetBytes("jpeg")), 4);
-        upload.Bytes.ShouldBe(4);
+        var upload = await Stream(mgr, "photo photos/IMG_0.JPG");
+        upload.Bytes.ShouldBe(22);
+        upload.Hash.Sha256.ShouldBe(Sha256("photo photos/IMG_0.JPG"));
         Path.GetDirectoryName(upload.TempPath).ShouldBe(Path.Combine(_root, IDDB.UploadsFolderName));
-        mgr.Upload(upload, "photos/IMG_0.JPG", token);
+        await mgr.UploadAsync(upload, "photos/IMG_0.JPG", token);
 
         File.Exists(upload.TempPath).ShouldBeFalse();
-        File.ReadAllText(Path.Combine(AddFolder(token), "photos", "IMG_0.JPG")).ShouldBe("jpeg");
+        File.ReadAllText(Path.Combine(AddFolder(token), "photos", "IMG_0.JPG")).ShouldBe("photo photos/IMG_0.JPG");
 
         // A retried upload replaces the file
-        upload = await mgr.StreamUploadAsync("org", "ds", new MemoryStream(Encoding.UTF8.GetBytes("jpeg2")), 5);
-        mgr.Upload(upload, "photos/IMG_0.JPG", token);
-        File.ReadAllText(Path.Combine(AddFolder(token), "photos", "IMG_0.JPG")).ShouldBe("jpeg2");
+        upload = await Stream(mgr, "photo photos/IMG_0.JPG");
+        await mgr.UploadAsync(upload, "photos/IMG_0.JPG", token);
+        File.Exists(upload.TempPath).ShouldBeFalse();
     }
 
     [Test]
-    public async Task Upload_RejectsUnknownTokensAndUnsafePaths()
+    public async Task Upload_RejectsBytesThatAreNotTheDeltas_BeforeStagingThem()
     {
+        UseContentHashes();
         var mgr = CreateManager();
         var token = (await mgr.Init("org", "ds", "c1", ClientStamp())).Token;
-        var upload = await mgr.StreamUploadAsync("org", "ds", new MemoryStream([1]), 1);
+        var upload = await Stream(mgr, "a corrupted transfer");
 
-        Should.Throw<ConflictException>(() => mgr.Upload(upload, "a.jpg", Guid.NewGuid().ToString()));
-        Should.Throw<BadRequestException>(() => mgr.Upload(upload, "a.jpg", "../../x"));
-        Should.Throw<InvalidDatasetPathException>(() => mgr.Upload(upload, "../a.jpg", token));
-        Should.Throw<InvalidDatasetPathException>(() => mgr.Upload(upload, "/etc/a.jpg", token));
-        File.Exists(upload.TempPath).ShouldBeTrue("a rejected upload does not move the file");
+        var ex = await Should.ThrowAsync<BadRequestException>(() => mgr.UploadAsync(upload, "photos/IMG_0.JPG", token));
+
+        ex.Message.ShouldContain("does not match its hash");
+        File.Exists(upload.TempPath).ShouldBeTrue("the controller deletes the refused temp file");
+        File.Exists(Path.Combine(AddFolder(token), "photos", "IMG_0.JPG")).ShouldBeFalse();
+    }
+
+    [Test]
+    public async Task Upload_RejectsAPathThePushDoesNotAdd()
+    {
+        UseContentHashes();
+        var mgr = CreateManager();
+        var token = (await mgr.Init("org", "ds", "c1", ClientStamp())).Token;
+
+        (await Should.ThrowAsync<BadRequestException>(async () =>
+                await mgr.UploadAsync(await Stream(mgr, "x"), "photos/unknown.jpg", token)))
+            .Message.ShouldContain("is not a file of this push");
+        // A folder of the delta has no hash: not a file to upload
+        await Should.ThrowAsync<BadRequestException>(async () =>
+            await mgr.UploadAsync(await Stream(mgr, "x"), "photos", token));
+    }
+
+    [Test]
+    public async Task Commit_HandsTheVerifiedUploadsToLibddb_AndOnlyThem()
+    {
+        UseContentHashes();
+        var mgr = CreateManager();
+        var token = (await mgr.Init("org", "ds", "c1", ClientStamp())).Token;
+        StageUploads(token); // every file staged as before verification existed (or linked)
+        for (var i = 0; i < 3; i++)
+            await mgr.UploadAsync(await Stream(mgr, $"photo photos/IMG_{i}.JPG"), $"photos/IMG_{i}.JPG", token);
+        // A verified upload changed afterwards is not trusted any more
+        File.AppendAllText(Path.Combine(AddFolder(token), "photos", "IMG_2.JPG"), "tampered");
+        IReadOnlyDictionary<string, string>? verified = null;
+        _wrapper.Setup(w => w.ApplyDelta(It.IsAny<Delta>(), It.IsAny<string>(), _root, It.IsAny<MergeStrategy>(),
+                It.IsAny<string>(), It.IsAny<IReadOnlyDictionary<string, string>>()))
+            .Callback<Delta, string, string, MergeStrategy, string, IReadOnlyDictionary<string, string>>(
+                (_, _, _, _, _, v) => verified = v)
+            .Returns([]);
+
+        await mgr.Commit("org", "ds", token);
+
+        verified.ShouldNotBeNull();
+        verified.Keys.Order().ShouldBe(["photos/IMG_0.JPG", "photos/IMG_1.JPG"]);
+        verified["photos/IMG_0.JPG"].ShouldBe(Sha256("photo photos/IMG_0.JPG"));
     }
 
     [Test]

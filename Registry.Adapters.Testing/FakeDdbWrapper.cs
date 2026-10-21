@@ -401,6 +401,9 @@ public class FakeDdbWrapper : IDdbWrapper
     public virtual List<string> ApplyDelta(Delta delta, string sourcePath, string ddbPath, MergeStrategy mergeStrategy,
         string? sourceMetaDump = null) => throw Unsupported();
 
+    public virtual List<string> ApplyDelta(Delta delta, string sourcePath, string ddbPath, MergeStrategy mergeStrategy,
+        string? sourceMetaDump, IReadOnlyDictionary<string, string> verifiedHashes) => throw Unsupported();
+
     public virtual Delta Delta(Stamp source, Stamp target) => throw Unsupported();
 
     public virtual Dictionary<string, bool> ComputeDeltaLocals(Delta delta, string ddbPath, string hlDestFolder = "") =>

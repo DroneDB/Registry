@@ -1,4 +1,7 @@
 #nullable enable
+using System;
+using System.Collections.Generic;
+using System.Linq;
 using Newtonsoft.Json;
 using Registry.Ports.DroneDB;
 
@@ -19,4 +22,18 @@ public class PushSession
     /// <summary>Delta from the dataset to the client's stamp, computed once by Init.</summary>
     [JsonProperty("delta")]
     public required Delta Delta { get; init; }
+
+    private IReadOnlyDictionary<string, string>? _addedFiles;
+
+    /// <summary>
+    /// The SHA-256 the delta gives the file it adds at <paramref name="path"/> (the delta's exact
+    /// spelling), or null when the delta adds no file there (a folder has no hash).
+    /// </summary>
+    public string? AddedFileHash(string path)
+    {
+        _addedFiles ??= Delta.Adds.Where(a => a.Hash.Length > 0)
+            .GroupBy(a => a.Path, StringComparer.Ordinal)
+            .ToDictionary(g => g.Key, g => g.First().Hash, StringComparer.Ordinal);
+        return _addedFiles.GetValueOrDefault(path);
+    }
 }

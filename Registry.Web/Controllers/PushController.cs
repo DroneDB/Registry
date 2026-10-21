@@ -115,7 +115,7 @@ public class PushController : ControllerBaseEx
             if (upload == null)
                 throw new BadRequestException("No file uploaded");
 
-            _pushManager.Upload(upload, path, token);
+            await _pushManager.UploadAsync(upload, path, token);
 
             return Ok();
         }

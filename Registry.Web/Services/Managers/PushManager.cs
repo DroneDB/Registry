@@ -169,7 +169,7 @@ public class PushManager : IPushManager
         try
         {
             var ddb = access.Ddb;
-            var (tempPath, bytes, _) =
+            var (tempPath, bytes, hash) =
                 await DatasetUploads.StreamToTempAsync(_scratch, _fileSystem, ddb.DatasetFolderPath, source);
 
             try
@@ -187,7 +187,7 @@ public class PushManager : IPushManager
 
             // On disk until the push commits or is abandoned: it counts as stored
             reservation.Commit();
-            return new PushUpload(ddb, tempPath, bytes);
+            return new PushUpload(ddb, tempPath, bytes, hash);
         }
         finally
         {
@@ -195,7 +195,7 @@ public class PushManager : IPushManager
         }
     }
 
-    public void Upload(PushUpload upload, string path, string token)
+    public async Task UploadAsync(PushUpload upload, string path, string token)
     {
         ArgumentNullException.ThrowIfNull(upload);
 
@@ -204,11 +204,19 @@ public class PushManager : IPushManager
 
         var baseTempFolder = GetPushFolder(upload.Ddb, token);
 
-        if (!_sessionStore.Exists(baseTempFolder))
-            throw new ConflictException("Cannot upload file before initializing push");
+        var session = await _sessionStore.LoadAsync(baseTempFolder) ??
+                      throw new ConflictException("Cannot upload file before initializing push");
 
         // The entry path of the delta: libddb's path rule, as for any upload
         path = _paths.Normalize(path);
+
+        // XI-05: the hash computed while the file streamed must be the delta's for that path; a
+        // file the delta does not add, or whose bytes differ, is refused before it is staged
+        var expected = session.AddedFileHash(path) ??
+                       throw new BadRequestException($"'{path}' is not a file of this push");
+        if (!string.Equals(expected, upload.Hash.Sha256, StringComparison.OrdinalIgnoreCase))
+            throw new BadRequestException(
+                $"'{path}' does not match its hash in the push (the upload is corrupt): upload it again");
 
         // Move the streamed file (same volume) to its place in the push folder
         var filePath = DatasetPathPolicy.ToLocalPath(Path.Combine(baseTempFolder, AddsTempFolder), path);
@@ -216,6 +224,9 @@ public class PushManager : IPushManager
         if (_fileSystem.Exists(filePath))
             _fileSystem.Delete(filePath);
         _fileSystem.Move(upload.TempPath, filePath);
+
+        // Commit hands this hash to libddb, which then does not read the file again
+        await _sessionStore.MarkVerifiedAsync(baseTempFolder, path, expected, filePath);
     }
 
     public async Task SaveMeta(string orgSlug, string dsSlug, string token, string meta)
@@ -263,6 +274,10 @@ public class PushManager : IPushManager
         // Unchanged dataset: the delta computed by Init still holds
         var delta = session.Delta;
 
+        // The uploads checked against the delta when they arrived (XI-05), taken before the local
+        // files are linked in: libddb hashes the linked ones, and nothing it was not told about
+        var verifiedHashes = await _sessionStore.VerifiedHashesAsync(baseTempFolder, addTempFolder, session);
+
         // Create hard links for local files
         _ddbWrapper.ComputeDeltaLocals(delta, ddb.DatasetFolderPath, addTempFolder);
 
@@ -287,7 +302,8 @@ public class PushManager : IPushManager
         }
 
         // Applies delta
-        var conflicts = _ddbWrapper.ApplyDelta(delta, addTempFolder, ddb.DatasetFolderPath, MergeStrategy.KeepTheirs, metaDump);
+        var target = ddb.DatasetFolderPath;
+        var conflicts = _ddbWrapper.ApplyDelta(delta, addTempFolder, target, MergeStrategy.KeepTheirs, metaDump, verifiedHashes);
 
         if (conflicts.Count > 0)
         {

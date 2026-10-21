@@ -486,7 +486,8 @@ public class ObjectsManager : IObjectsManager
             fileSystemCopied = true;
 
             _logger.LogInformation("FS copy OK, performing ddb add");
-            destDdb.AddRaw(destPath);
+            // XI-05: the copy is indexed with the source hashes, not hashed again
+            CopiedEntries.Index(sourceDdb, sourceEntry, destDdb, destPath, _fs);
             addedToDdb = true;
 
             if (!destDdb.EntryExists(destPath))
@@ -908,7 +909,8 @@ public class ObjectsManager : IObjectsManager
 
             fileSystemCopied = true;
 
-            ddb.AddRaw(dest);
+            // XI-05: the copy is indexed with the source hashes, not hashed again
+            CopiedEntries.Index(ddb, sourceEntry, ddb, dest, _fs);
             destDdbAdded = true;
 
             var copiedEntry = ddb.GetEntry(dest) ?? throw new DdbException(

@@ -115,6 +115,17 @@ public interface IDdbWrapper
     public List<string> ApplyDelta(Delta delta, string sourcePath, string ddbPath, MergeStrategy mergeStrategy,
         string? sourceMetaDump = null);
 
+    /// <summary>
+    /// <see cref="ApplyDelta(Delta, string, string, MergeStrategy, string?)"/> for files whose hashes
+    /// the caller checked against the delta while it received them (<c>DDBApplyDeltaEx</c>, ABI 1.1,
+    /// XI-05): libddb does not read those files again. <paramref name="verifiedHashes"/> maps a delta
+    /// path (its exact spelling) to the lowercase hex SHA-256 the delta gives it; every other added file
+    /// is hashed by libddb. An entry that is not a file the delta adds, or has another hash, fails the
+    /// call (<see cref="DroneDB.DdbInvalidArgumentsException"/>) before anything changes.
+    /// </summary>
+    public List<string> ApplyDelta(Delta delta, string sourcePath, string ddbPath, MergeStrategy mergeStrategy,
+        string? sourceMetaDump, IReadOnlyDictionary<string, string> verifiedHashes);
+
     public Delta Delta(Stamp source, Stamp target);
     public Dictionary<string, bool> ComputeDeltaLocals(Delta delta, string ddbPath, string hlDestFolder = "");
 
